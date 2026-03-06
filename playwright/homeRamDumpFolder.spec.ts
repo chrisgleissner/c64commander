@@ -6,24 +6,24 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { test, expect } from '@playwright/test';
-import type { Page, TestInfo } from '@playwright/test';
-import { createMockC64Server } from '../tests/mocks/mockC64Server';
-import { seedUiMocks, uiFixtures } from './uiMocks';
-import { saveCoverageFromPage } from './withCoverage';
+import { test, expect } from "@playwright/test";
+import type { Page, TestInfo } from "@playwright/test";
+import { createMockC64Server } from "../tests/mocks/mockC64Server";
+import { seedUiMocks, uiFixtures } from "./uiMocks";
+import { saveCoverageFromPage } from "./withCoverage";
 import {
   attachStepScreenshot,
   assertNoUiIssues,
   finalizeEvidence,
   startStrictUiMonitoring,
-} from './testArtifacts';
-import { enforceDeviceTestMapping } from './layoutTest';
+} from "./testArtifacts";
+import { enforceDeviceTestMapping } from "./layoutTest";
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
 };
 
-test.describe('Home RAM dump folder display', () => {
+test.describe("Home RAM dump folder display", () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
   test.beforeEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
@@ -34,11 +34,11 @@ test.describe('Home RAM dump folder display', () => {
     await page.addInitScript(() => {
       const folder = {
         treeUri:
-          'content://com.android.externalstorage.documents/tree/primary%3ADownload%2Fc64',
-        rootName: 'c64',
+          "content://com.android.externalstorage.documents/tree/primary%3ADownload%2Fc64",
+        rootName: "c64",
         selectedAt: new Date().toISOString(),
       };
-      localStorage.setItem('c64u_ram_dump_folder:v1', JSON.stringify(folder));
+      localStorage.setItem("c64u_ram_dump_folder:v1", JSON.stringify(folder));
     });
   });
 
@@ -52,31 +52,31 @@ test.describe('Home RAM dump folder display', () => {
     }
   });
 
-  test('shows derived SAF display path @layout', async ({
+  test("shows derived SAF display path @layout", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
-    await page.goto('/');
-    await snap(page, testInfo, 'home-open');
+    await page.goto("/");
+    await snap(page, testInfo, "home-open");
 
-    await expect(page.getByTestId('home-quick-config')).toBeVisible();
+    await expect(page.getByTestId("home-quick-config")).toBeVisible();
 
     await page.evaluate(() => {
       const folder = {
         treeUri:
-          'content://com.android.externalstorage.documents/tree/primary%3ADownload%2Fc64',
-        rootName: 'c64',
+          "content://com.android.externalstorage.documents/tree/primary%3ADownload%2Fc64",
+        rootName: "c64",
         selectedAt: new Date().toISOString(),
       };
-      localStorage.setItem('c64u_ram_dump_folder:v1', JSON.stringify(folder));
+      localStorage.setItem("c64u_ram_dump_folder:v1", JSON.stringify(folder));
       window.dispatchEvent(
-        new CustomEvent('c64u-ram-dump-folder-updated', { detail: folder }),
+        new CustomEvent("c64u-ram-dump-folder-updated", { detail: folder }),
       );
     });
 
-    const label = page.getByTestId('ram-dump-folder-value');
+    const label = page.getByTestId("ram-dump-folder-value");
 
-    await expect(label).toHaveText('c64');
-    await expect(page.getByText('Internal storage/Download/c64')).toBeVisible();
-    await snap(page, testInfo, 'ram-dump-folder');
+    await expect(label).toHaveText("c64");
+    await expect(page.getByText("Internal storage/Download/c64")).toBeVisible();
+    await snap(page, testInfo, "ram-dump-folder");
   });
 });

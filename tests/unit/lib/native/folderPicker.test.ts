@@ -6,16 +6,16 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { FolderPicker } from '@/lib/native/folderPicker';
-import { getPlatform } from '@/lib/native/platform';
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { FolderPicker } from "@/lib/native/folderPicker";
+import { getPlatform } from "@/lib/native/platform";
 
 // Mock getPlatform to allow testing both android and web paths
-vi.mock('@/lib/native/platform', () => ({
+vi.mock("@/lib/native/platform", () => ({
   getPlatform: vi.fn(),
 }));
 
-vi.mock('@/lib/logging', () => ({
+vi.mock("@/lib/logging", () => ({
   addLog: vi.fn(),
 }));
 
@@ -29,7 +29,7 @@ const mocks = vi.hoisted(() => ({
   readFileFromTree: vi.fn(),
 }));
 
-vi.mock('@capacitor/core', () => ({
+vi.mock("@capacitor/core", () => ({
   registerPlugin: () => ({
     pickDirectory: mocks.pickDirectory,
     pickFile: mocks.pickFile,
@@ -40,7 +40,7 @@ vi.mock('@capacitor/core', () => ({
   }),
 }));
 
-describe('FolderPicker', () => {
+describe("FolderPicker", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     vi.unstubAllEnvs();
@@ -60,19 +60,19 @@ describe('FolderPicker', () => {
     delete win.__c64uAllowAndroidFolderPickerOverride;
   });
 
-  it('delegates to plugin by default', async () => {
-    mocks.pickDirectory.mockResolvedValue({ uri: 'content://foo' });
+  it("delegates to plugin by default", async () => {
+    mocks.pickDirectory.mockResolvedValue({ uri: "content://foo" });
 
     const result = await FolderPicker.pickDirectory();
 
     expect(mocks.pickDirectory).toHaveBeenCalled();
-    expect(result.uri).toBe('content://foo');
+    expect(result.uri).toBe("content://foo");
   });
 
-  describe('Android Override Protection', () => {
-    it('allows override on non-android platforms', async () => {
-      vi.mocked(getPlatform).mockReturnValue('web');
-      const overridePick = vi.fn().mockResolvedValue({ uri: 'overridden' });
+  describe("Android Override Protection", () => {
+    it("allows override on non-android platforms", async () => {
+      vi.mocked(getPlatform).mockReturnValue("web");
+      const overridePick = vi.fn().mockResolvedValue({ uri: "overridden" });
 
       const win = window as any;
       win.__c64uFolderPickerOverride = {
@@ -80,13 +80,13 @@ describe('FolderPicker', () => {
       };
 
       const result = await FolderPicker.pickDirectory();
-      expect(result.uri).toBe('overridden');
+      expect(result.uri).toBe("overridden");
       expect(mocks.pickDirectory).not.toHaveBeenCalled();
     });
 
-    it('blocks override on android by default', async () => {
-      vi.mocked(getPlatform).mockReturnValue('android');
-      const overridePick = vi.fn().mockResolvedValue({ uri: 'overridden' });
+    it("blocks override on android by default", async () => {
+      vi.mocked(getPlatform).mockReturnValue("android");
+      const overridePick = vi.fn().mockResolvedValue({ uri: "overridden" });
 
       const win = window as any;
       win.__c64uFolderPickerOverride = {
@@ -94,15 +94,15 @@ describe('FolderPicker', () => {
       };
 
       expect(() => FolderPicker.pickDirectory()).toThrow(
-        'Android SAF picker is required',
+        "Android SAF picker is required",
       );
     });
 
-    it('allows override on android if enabled via probe', async () => {
-      vi.mocked(getPlatform).mockReturnValue('android');
-      vi.stubEnv('VITE_ENABLE_TEST_PROBES', '1');
+    it("allows override on android if enabled via probe", async () => {
+      vi.mocked(getPlatform).mockReturnValue("android");
+      vi.stubEnv("VITE_ENABLE_TEST_PROBES", "1");
 
-      const overridePick = vi.fn().mockResolvedValue({ uri: 'overridden' });
+      const overridePick = vi.fn().mockResolvedValue({ uri: "overridden" });
 
       const win = window as any;
       win.__c64uFolderPickerOverride = {
@@ -111,25 +111,25 @@ describe('FolderPicker', () => {
       win.__c64uAllowAndroidFolderPickerOverride = true;
 
       const result = await FolderPicker.pickDirectory();
-      expect(result.uri).toBe('overridden');
+      expect(result.uri).toBe("overridden");
     });
   });
 
-  it('calls all proxy methods', async () => {
+  it("calls all proxy methods", async () => {
     // smoke test other methods
     await FolderPicker.pickFile();
     expect(mocks.pickFile).toHaveBeenCalled();
 
-    await FolderPicker.listChildren({ treeUri: '' });
+    await FolderPicker.listChildren({ treeUri: "" });
     expect(mocks.listChildren).toHaveBeenCalled();
 
     await FolderPicker.getPersistedUris();
     expect(mocks.getPersistedUris).toHaveBeenCalled();
 
-    await FolderPicker.readFile({ uri: '' });
+    await FolderPicker.readFile({ uri: "" });
     expect(mocks.readFile).toHaveBeenCalled();
 
-    await FolderPicker.readFileFromTree({ treeUri: '', path: '' });
+    await FolderPicker.readFileFromTree({ treeUri: "", path: "" });
     expect(mocks.readFileFromTree).toHaveBeenCalled();
   });
 });

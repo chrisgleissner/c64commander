@@ -6,10 +6,10 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import React from 'react';
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import React from "react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import {
   useC64AllConfig,
   useC64Categories,
@@ -21,10 +21,10 @@ import {
   useC64MachineControl,
   useC64SetConfig,
   useC64UpdateConfigBatch,
-} from '@/hooks/useC64Connection';
+} from "@/hooks/useC64Connection";
 
 const connectionSnapshot = {
-  state: 'REAL_CONNECTED' as const,
+  state: "REAL_CONNECTED" as const,
   lastDiscoveryTrigger: null as const,
   lastTransitionAtMs: 0,
   lastProbeAtMs: null as number | null,
@@ -34,7 +34,7 @@ const connectionSnapshot = {
   demoInterstitialVisible: false,
 };
 
-vi.mock('@/hooks/useConnectionState', () => ({
+vi.mock("@/hooks/useConnectionState", () => ({
   useConnectionState: () => connectionSnapshot,
 }));
 
@@ -62,32 +62,32 @@ const updateC64APIConfigMock = vi.fn();
 const updateHasChangesMock = vi.fn();
 const loadInitialSnapshotMock = vi.fn();
 const hasStoredPasswordFlagMock = vi.fn(() => false);
-const loadStoredPasswordMock = vi.fn(async () => '');
+const loadStoredPasswordMock = vi.fn(async () => "");
 
-vi.mock('@/lib/c64api', () => ({
+vi.mock("@/lib/c64api", () => ({
   getC64API: () => mockApi,
   updateC64APIConfig: (...args: unknown[]) => updateC64APIConfigMock(...args),
-  C64_DEFAULTS: { DEFAULT_DEVICE_HOST: 'c64u' },
-  getDefaultBaseUrl: () => 'http://default',
-  buildBaseUrlFromDeviceHost: (host?: string) => `http://${host ?? 'c64u'}`,
+  C64_DEFAULTS: { DEFAULT_DEVICE_HOST: "c64u" },
+  getDefaultBaseUrl: () => "http://default",
+  buildBaseUrlFromDeviceHost: (host?: string) => `http://${host ?? "c64u"}`,
   getDeviceHostFromBaseUrl: (baseUrl?: string) =>
-    baseUrl?.replace(/^https?:\/\//, '') ?? 'c64u',
-  normalizeDeviceHost: (host?: string) => host?.trim() || 'c64u',
-  resolveDeviceHostFromStorage: () => 'c64u',
+    baseUrl?.replace(/^https?:\/\//, "") ?? "c64u",
+  normalizeDeviceHost: (host?: string) => host?.trim() || "c64u",
+  resolveDeviceHostFromStorage: () => "c64u",
   getC64APIConfigSnapshot: () => ({
-    baseUrl: 'http://default',
+    baseUrl: "http://default",
     password: undefined,
-    deviceHost: 'c64u',
+    deviceHost: "c64u",
   }),
 }));
 
-vi.mock('@/lib/config/appConfigStore', () => ({
-  getActiveBaseUrl: () => 'http://default',
+vi.mock("@/lib/config/appConfigStore", () => ({
+  getActiveBaseUrl: () => "http://default",
   updateHasChanges: (...args: unknown[]) => updateHasChangesMock(...args),
   loadInitialSnapshot: (...args: unknown[]) => loadInitialSnapshotMock(...args),
 }));
 
-vi.mock('@/lib/secureStorage', () => ({
+vi.mock("@/lib/secureStorage", () => ({
   hasStoredPasswordFlag: () => hasStoredPasswordFlagMock(),
   getPassword: () => loadStoredPasswordMock(),
 }));
@@ -106,16 +106,16 @@ const createWrapper = () => {
   return { wrapper, client };
 };
 
-describe('useC64Connection', () => {
+describe("useC64Connection", () => {
   beforeEach(() => {
     mockApi.getInfo.mockResolvedValue({ errors: [] });
     mockApi.getCategories.mockResolvedValue({
-      categories: ['Audio'],
+      categories: ["Audio"],
       errors: [],
     });
     mockApi.getCategory.mockResolvedValue({ Audio: { items: {} }, errors: [] });
     mockApi.getConfigItem.mockResolvedValue({
-      Audio: { items: { Volume: { selected: '0 dB' } } },
+      Audio: { items: { Volume: { selected: "0 dB" } } },
       errors: [],
     });
     mockApi.getConfigItems.mockResolvedValue({
@@ -144,7 +144,7 @@ describe('useC64Connection', () => {
     hasStoredPasswordFlagMock.mockReset();
     hasStoredPasswordFlagMock.mockReturnValue(false);
     loadStoredPasswordMock.mockReset();
-    loadStoredPasswordMock.mockResolvedValue('');
+    loadStoredPasswordMock.mockResolvedValue("");
     localStorage.clear();
   });
 
@@ -168,78 +168,78 @@ describe('useC64Connection', () => {
     mockApi.resetConfig.mockReset();
   });
 
-  it('reports connection status and updates config', async () => {
+  it("reports connection status and updates config", async () => {
     const { wrapper } = createWrapper();
     const { result } = renderHook(() => useC64Connection(), { wrapper });
 
     await waitFor(() => expect(result.current.status.isConnected).toBe(true));
 
     act(() => {
-      result.current.updateConfig('host.local', 'pw');
+      result.current.updateConfig("host.local", "pw");
     });
     expect(updateC64APIConfigMock).toHaveBeenCalledWith(
-      'http://host.local',
-      'pw',
-      'host.local',
+      "http://host.local",
+      "pw",
+      "host.local",
     );
     await waitFor(() =>
-      expect(result.current.baseUrl).toBe('http://host.local'),
+      expect(result.current.baseUrl).toBe("http://host.local"),
     );
-    expect(result.current.password).toBe('pw');
-    expect(result.current.deviceHost).toBe('host.local');
+    expect(result.current.password).toBe("pw");
+    expect(result.current.deviceHost).toBe("host.local");
   });
 
-  it('responds to connection change events', async () => {
+  it("responds to connection change events", async () => {
     const { wrapper, client } = createWrapper();
-    const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
+    const invalidateSpy = vi.spyOn(client, "invalidateQueries");
     const { result } = renderHook(() => useC64Connection(), { wrapper });
 
     await waitFor(() => expect(result.current.status.isConnected).toBe(true));
 
     act(() => {
       window.dispatchEvent(
-        new CustomEvent('c64u-connection-change', {
+        new CustomEvent("c64u-connection-change", {
           detail: {
-            baseUrl: 'http://event',
-            password: 'evt',
-            deviceHost: 'host',
+            baseUrl: "http://event",
+            password: "evt",
+            deviceHost: "host",
           },
         }),
       );
     });
 
-    await waitFor(() => expect(result.current.baseUrl).toBe('http://event'));
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['c64-info'] });
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['c64-drives'] });
+    await waitFor(() => expect(result.current.baseUrl).toBe("http://event"));
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["c64-info"] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["c64-drives"] });
     expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: ['c64-categories'],
+      queryKey: ["c64-categories"],
     });
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['c64-category'] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["c64-category"] });
     expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: ['c64-config-item'],
-    });
-    expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: ['c64-config-items'],
+      queryKey: ["c64-config-item"],
     });
     expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: ['c64-all-config'],
+      queryKey: ["c64-config-items"],
     });
-    expect(invalidateSpy.mock.calls.some(([arg]) => 'predicate' in arg)).toBe(
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ["c64-all-config"],
+    });
+    expect(invalidateSpy.mock.calls.some(([arg]) => "predicate" in arg)).toBe(
       false,
     );
   });
 
-  it('ignores connection change events without effective settings delta', async () => {
+  it("ignores connection change events without effective settings delta", async () => {
     const { wrapper, client } = createWrapper();
-    const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
+    const invalidateSpy = vi.spyOn(client, "invalidateQueries");
     const { result } = renderHook(() => useC64Connection(), { wrapper });
 
     await waitFor(() => expect(result.current.status.isConnected).toBe(true));
 
     act(() => {
       window.dispatchEvent(
-        new CustomEvent('c64u-connection-change', {
-          detail: { baseUrl: 'http://c64u', password: '', deviceHost: 'c64u' },
+        new CustomEvent("c64u-connection-change", {
+          detail: { baseUrl: "http://c64u", password: "", deviceHost: "c64u" },
         }),
       );
     });
@@ -247,36 +247,36 @@ describe('useC64Connection', () => {
     expect(invalidateSpy).not.toHaveBeenCalled();
   });
 
-  it('fetches categories', async () => {
+  it("fetches categories", async () => {
     const { wrapper } = createWrapper();
     const { result } = renderHook(() => useC64Categories(), { wrapper });
 
     await waitFor(() =>
-      expect(result.current.data?.categories).toEqual(['Audio']),
+      expect(result.current.data?.categories).toEqual(["Audio"]),
     );
   });
 
-  it('marks config changes on mutation success', async () => {
+  it("marks config changes on mutation success", async () => {
     const { wrapper } = createWrapper();
     const { result } = renderHook(() => useC64SetConfig(), { wrapper });
 
-    result.current.mutate({ category: 'Audio', item: 'Volume', value: '0 dB' });
+    result.current.mutate({ category: "Audio", item: "Volume", value: "0 dB" });
     await waitFor(() => expect(updateHasChangesMock).toHaveBeenCalled());
   });
 
-  it('fetches all config and tolerates failures', async () => {
+  it("fetches all config and tolerates failures", async () => {
     const { wrapper } = createWrapper();
     mockApi.getCategories.mockResolvedValue({
-      categories: ['Audio', 'Video'],
+      categories: ["Audio", "Video"],
       errors: [],
     });
     mockApi.getCategory.mockImplementation(async (category: string) => {
-      if (category === 'Video') {
-        throw new Error('fail');
+      if (category === "Video") {
+        throw new Error("fail");
       }
       return { [category]: { items: {} }, errors: [] };
     });
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     const { result } = renderHook(() => useC64AllConfig(), { wrapper });
     await waitFor(() => expect(result.current.data?.Audio).toBeDefined());
@@ -285,34 +285,34 @@ describe('useC64Connection', () => {
     warnSpy.mockRestore();
   });
 
-  it('updates config batch and marks changes', async () => {
+  it("updates config batch and marks changes", async () => {
     const { wrapper } = createWrapper();
     const { result } = renderHook(() => useC64UpdateConfigBatch(), { wrapper });
 
-    result.current.mutate({ category: 'Audio', updates: { Volume: '0 dB' } });
+    result.current.mutate({ category: "Audio", updates: { Volume: "0 dB" } });
     await waitFor(() => expect(updateHasChangesMock).toHaveBeenCalled());
   });
 
-  it('fetches a config item when enabled', async () => {
+  it("fetches a config item when enabled", async () => {
     const { wrapper } = createWrapper();
-    const { result } = renderHook(() => useC64ConfigItem('Audio', 'Volume'), {
+    const { result } = renderHook(() => useC64ConfigItem("Audio", "Volume"), {
       wrapper,
     });
 
     await waitFor(() => expect(result.current.data).toBeDefined());
-    expect(mockApi.getConfigItem).toHaveBeenCalledWith('Audio', 'Volume');
+    expect(mockApi.getConfigItem).toHaveBeenCalledWith("Audio", "Volume");
   });
 
-  it('fetches drives', async () => {
+  it("fetches drives", async () => {
     const { wrapper } = createWrapper();
     const { result } = renderHook(() => useC64Drives(), { wrapper });
 
     await waitFor(() => expect(result.current.data?.drives).toBeDefined());
   });
 
-  it('invalidates and flags config loads and resets', async () => {
+  it("invalidates and flags config loads and resets", async () => {
     const { wrapper, client } = createWrapper();
-    const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
+    const invalidateSpy = vi.spyOn(client, "invalidateQueries");
     const { result } = renderHook(() => useC64MachineControl(), { wrapper });
 
     await act(async () => {
@@ -323,16 +323,16 @@ describe('useC64Connection', () => {
     });
 
     expect(updateHasChangesMock).toHaveBeenCalled();
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['c64-category'] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["c64-category"] });
     expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: ['c64-all-config'],
+      queryKey: ["c64-all-config"],
     });
   });
 
-  it('invalidates queries after reboot delay', async () => {
+  it("invalidates queries after reboot delay", async () => {
     vi.useFakeTimers();
     const { wrapper, client } = createWrapper();
-    const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
+    const invalidateSpy = vi.spyOn(client, "invalidateQueries");
     const { result } = renderHook(() => useC64MachineControl(), { wrapper });
 
     await act(async () => {
@@ -343,12 +343,12 @@ describe('useC64Connection', () => {
       vi.advanceTimersByTime(3000);
     });
 
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['c64'] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["c64"] });
     vi.useRealTimers();
   });
 
-  it('calls /v1/info in demo mode and reports isConnected as true', async () => {
-    connectionSnapshot.state = 'DEMO_ACTIVE' as const;
+  it("calls /v1/info in demo mode and reports isConnected as true", async () => {
+    connectionSnapshot.state = "DEMO_ACTIVE" as const;
     mockApi.getInfo.mockClear();
 
     const { wrapper } = createWrapper();
@@ -358,54 +358,54 @@ describe('useC64Connection', () => {
     // isConnected must be true in demo mode
     expect(result.current.status.isConnected).toBe(true);
     // deviceType must be 'demo'
-    expect(result.current.status.deviceType).toBe('demo');
+    expect(result.current.status.deviceType).toBe("demo");
     // /v1/info must still be called in demo mode
     await waitFor(() => expect(mockApi.getInfo).toHaveBeenCalled());
 
     // Restore for other tests
-    connectionSnapshot.state = 'REAL_CONNECTED' as const;
+    connectionSnapshot.state = "REAL_CONNECTED" as const;
   });
 
-  it('reports disconnected status in DISCOVERING state', async () => {
-    connectionSnapshot.state = 'DISCOVERING' as const;
+  it("reports disconnected status in DISCOVERING state", async () => {
+    connectionSnapshot.state = "DISCOVERING" as const;
     const { wrapper } = createWrapper();
     const { result } = renderHook(() => useC64Connection(), { wrapper });
 
     expect(result.current.status.isConnected).toBe(false);
     expect(result.current.status.isConnecting).toBe(true);
-    expect(result.current.status.connectionState).toBe('disconnected');
+    expect(result.current.status.connectionState).toBe("disconnected");
     expect(result.current.status.deviceType).toBeNull();
 
-    connectionSnapshot.state = 'REAL_CONNECTED' as const;
+    connectionSnapshot.state = "REAL_CONNECTED" as const;
   });
 
-  it('reports disconnected status in OFFLINE_NO_DEMO state', async () => {
-    connectionSnapshot.state = 'OFFLINE_NO_DEMO' as const;
+  it("reports disconnected status in OFFLINE_NO_DEMO state", async () => {
+    connectionSnapshot.state = "OFFLINE_NO_DEMO" as const;
     const { wrapper } = createWrapper();
     const { result } = renderHook(() => useC64Connection(), { wrapper });
 
     expect(result.current.status.isConnected).toBe(false);
     expect(result.current.status.isConnecting).toBe(false);
-    expect(result.current.status.connectionState).toBe('disconnected');
+    expect(result.current.status.connectionState).toBe("disconnected");
     expect(result.current.status.deviceType).toBeNull();
     expect(result.current.status.isDemo).toBe(false);
 
-    connectionSnapshot.state = 'REAL_CONNECTED' as const;
+    connectionSnapshot.state = "REAL_CONNECTED" as const;
   });
 
-  it('reports disconnected status in UNKNOWN state', async () => {
-    connectionSnapshot.state = 'UNKNOWN' as const;
+  it("reports disconnected status in UNKNOWN state", async () => {
+    connectionSnapshot.state = "UNKNOWN" as const;
     const { wrapper } = createWrapper();
     const { result } = renderHook(() => useC64Connection(), { wrapper });
 
     expect(result.current.status.isConnected).toBe(false);
-    expect(result.current.status.connectionState).toBe('disconnected');
+    expect(result.current.status.connectionState).toBe("disconnected");
     expect(result.current.status.deviceType).toBeNull();
 
-    connectionSnapshot.state = 'REAL_CONNECTED' as const;
+    connectionSnapshot.state = "REAL_CONNECTED" as const;
   });
 
-  it('updateConfig is a no-op when values have not changed', async () => {
+  it("updateConfig is a no-op when values have not changed", async () => {
     const { wrapper } = createWrapper();
     const { result } = renderHook(() => useC64Connection(), { wrapper });
 
@@ -413,49 +413,49 @@ describe('useC64Connection', () => {
 
     act(() => {
       // Same host and password
-      result.current.updateConfig('c64u', '');
+      result.current.updateConfig("c64u", "");
     });
 
     // Should not have called updateC64APIConfig since nothing changed
     expect(updateC64APIConfigMock).not.toHaveBeenCalled();
   });
 
-  it('ignores connection change events with null detail', async () => {
+  it("ignores connection change events with null detail", async () => {
     const { wrapper, client } = createWrapper();
-    const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
+    const invalidateSpy = vi.spyOn(client, "invalidateQueries");
     const { result } = renderHook(() => useC64Connection(), { wrapper });
 
     await waitFor(() => expect(result.current.status.isConnected).toBe(true));
 
     act(() => {
       window.dispatchEvent(
-        new CustomEvent('c64u-connection-change', { detail: null }),
+        new CustomEvent("c64u-connection-change", { detail: null }),
       );
     });
 
     expect(invalidateSpy).not.toHaveBeenCalled();
   });
 
-  it('handles connection change events with partial detail (only baseUrl)', async () => {
+  it("handles connection change events with partial detail (only baseUrl)", async () => {
     const { wrapper, client } = createWrapper();
-    const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
+    const invalidateSpy = vi.spyOn(client, "invalidateQueries");
     const { result } = renderHook(() => useC64Connection(), { wrapper });
 
     await waitFor(() => expect(result.current.status.isConnected).toBe(true));
 
     act(() => {
       window.dispatchEvent(
-        new CustomEvent('c64u-connection-change', {
-          detail: { baseUrl: 'http://new-host' },
+        new CustomEvent("c64u-connection-change", {
+          detail: { baseUrl: "http://new-host" },
         }),
       );
     });
 
-    await waitFor(() => expect(result.current.baseUrl).toBe('http://new-host'));
+    await waitFor(() => expect(result.current.baseUrl).toBe("http://new-host"));
     expect(invalidateSpy).toHaveBeenCalled();
   });
 
-  it('reports error as null when no query error exists', async () => {
+  it("reports error as null when no query error exists", async () => {
     const { wrapper } = createWrapper();
     const { result } = renderHook(() => useC64Connection(), { wrapper });
 
@@ -463,41 +463,41 @@ describe('useC64Connection', () => {
     expect(result.current.status.error).toBeNull();
   });
 
-  it('returns null deviceInfo before data loads', async () => {
-    connectionSnapshot.state = 'OFFLINE_NO_DEMO' as const;
+  it("returns null deviceInfo before data loads", async () => {
+    connectionSnapshot.state = "OFFLINE_NO_DEMO" as const;
     const { wrapper } = createWrapper();
     const { result } = renderHook(() => useC64Connection(), { wrapper });
 
     // Query is disabled in OFFLINE_NO_DEMO so deviceInfo remains null
     expect(result.current.status.deviceInfo).toBeNull();
 
-    connectionSnapshot.state = 'REAL_CONNECTED' as const;
+    connectionSnapshot.state = "REAL_CONNECTED" as const;
   });
 
-  it('returns runtimeBaseUrl from config snapshot', async () => {
+  it("returns runtimeBaseUrl from config snapshot", async () => {
     const { wrapper } = createWrapper();
     const { result } = renderHook(() => useC64Connection(), { wrapper });
 
     await waitFor(() => expect(result.current.status.isConnected).toBe(true));
-    expect(result.current.runtimeBaseUrl).toBe('http://default');
+    expect(result.current.runtimeBaseUrl).toBe("http://default");
   });
 
-  it('loads stored password when secure storage indicates one exists', async () => {
+  it("loads stored password when secure storage indicates one exists", async () => {
     hasStoredPasswordFlagMock.mockReturnValue(true);
-    loadStoredPasswordMock.mockResolvedValue('stored-secret');
+    loadStoredPasswordMock.mockResolvedValue("stored-secret");
     const { wrapper } = createWrapper();
     const { result } = renderHook(() => useC64Connection(), { wrapper });
 
-    await waitFor(() => expect(result.current.password).toBe('stored-secret'));
+    await waitFor(() => expect(result.current.password).toBe("stored-secret"));
   });
 
-  it('provides config-items placeholder data from snapshot and then queries API', async () => {
+  it("provides config-items placeholder data from snapshot and then queries API", async () => {
     loadInitialSnapshotMock.mockReturnValue({
       data: {
         Audio: {
           items: {
-            Volume: { selected: '0 dB' },
-            Balance: { selected: 'Center' },
+            Volume: { selected: "0 dB" },
+            Balance: { selected: "Center" },
           },
         },
       },
@@ -505,7 +505,7 @@ describe('useC64Connection', () => {
     mockApi.getConfigItems = vi.fn().mockResolvedValue({
       Audio: {
         items: {
-          Volume: { selected: '6 dB' },
+          Volume: { selected: "6 dB" },
         },
       },
       errors: [],
@@ -513,31 +513,31 @@ describe('useC64Connection', () => {
 
     const { wrapper } = createWrapper();
     const { result } = renderHook(
-      () => useC64ConfigItems('Audio', ['Volume']),
+      () => useC64ConfigItems("Audio", ["Volume"]),
       { wrapper },
     );
 
     expect(result.current.data).toEqual({
       Audio: {
         items: {
-          Volume: { selected: '0 dB' },
+          Volume: { selected: "0 dB" },
         },
       },
       errors: [],
     });
 
     await waitFor(() =>
-      expect(mockApi.getConfigItems).toHaveBeenCalledWith('Audio', ['Volume']),
+      expect(mockApi.getConfigItems).toHaveBeenCalledWith("Audio", ["Volume"]),
     );
   });
 
-  it('supports nested snapshot category blocks for config-items placeholder data', async () => {
+  it("supports nested snapshot category blocks for config-items placeholder data", async () => {
     loadInitialSnapshotMock.mockReturnValue({
       data: {
         Audio: {
           Audio: {
             items: {
-              Volume: { selected: 'Nested' },
+              Volume: { selected: "Nested" },
             },
           },
         },
@@ -549,48 +549,48 @@ describe('useC64Connection', () => {
 
     const { wrapper } = createWrapper();
     const { result } = renderHook(
-      () => useC64ConfigItems('Audio', ['Volume']),
+      () => useC64ConfigItems("Audio", ["Volume"]),
       { wrapper },
     );
 
     expect(result.current.data).toEqual({
       Audio: {
         items: {
-          Volume: { selected: 'Nested' },
+          Volume: { selected: "Nested" },
         },
       },
       errors: [],
     });
   });
 
-  it('does not query config-items when disabled or no items are requested', async () => {
+  it("does not query config-items when disabled or no items are requested", async () => {
     const { wrapper } = createWrapper();
-    renderHook(() => useC64ConfigItems('Audio', ['Volume'], false), {
+    renderHook(() => useC64ConfigItems("Audio", ["Volume"], false), {
       wrapper,
     });
-    renderHook(() => useC64ConfigItems('Audio', [], true), { wrapper });
+    renderHook(() => useC64ConfigItems("Audio", [], true), { wrapper });
 
     await waitFor(() => {
       expect(mockApi.getConfigItems).not.toHaveBeenCalled();
     });
   });
 
-  it('does not query useC64Category when category is empty or disabled', async () => {
+  it("does not query useC64Category when category is empty or disabled", async () => {
     const { wrapper } = createWrapper();
-    renderHook(() => useC64Category('', true), { wrapper });
-    renderHook(() => useC64Category('Audio', false), { wrapper });
+    renderHook(() => useC64Category("", true), { wrapper });
+    renderHook(() => useC64Category("Audio", false), { wrapper });
 
     await waitFor(() => {
       expect(mockApi.getCategory).not.toHaveBeenCalled();
     });
   });
 
-  it('throws when all categories fail in useC64AllConfig', async () => {
+  it("throws when all categories fail in useC64AllConfig", async () => {
     mockApi.getCategories.mockResolvedValue({
-      categories: ['Audio', 'Video'],
+      categories: ["Audio", "Video"],
       errors: [],
     });
-    mockApi.getCategory.mockRejectedValue(new Error('all failed'));
+    mockApi.getCategory.mockRejectedValue(new Error("all failed"));
 
     const { wrapper } = createWrapper();
     const { result } = renderHook(() => useC64AllConfig(), { wrapper });
@@ -598,7 +598,7 @@ describe('useC64Connection', () => {
     await waitFor(() => {
       expect(result.current.error).toBeTruthy();
       expect((result.current.error as Error).message).toContain(
-        'Failed to fetch configuration data for all categories',
+        "Failed to fetch configuration data for all categories",
       );
     });
   });

@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { resetActionTrace } from '@/lib/tracing/actionTrace';
+import { resetActionTrace } from "@/lib/tracing/actionTrace";
 import {
   clearTraceEvents,
   exportTraceZip,
@@ -15,8 +15,8 @@ import {
   replaceTraceEvents,
   resetTraceSession,
   restoreTracesFromSession,
-} from '@/lib/tracing/traceSession';
-import { resetTraceIds } from '@/lib/tracing/traceIds';
+} from "@/lib/tracing/traceSession";
+import { resetTraceIds } from "@/lib/tracing/traceIds";
 
 export type TraceBridge = {
   clearTraces: () => void;
@@ -30,14 +30,14 @@ export type TraceBridge = {
 };
 
 const isTestProbeEnabled = () => {
-  if (import.meta.env.VITE_ENABLE_TEST_PROBES === '1') return true;
-  if (typeof window !== 'undefined') {
+  if (import.meta.env.VITE_ENABLE_TEST_PROBES === "1") return true;
+  if (typeof window !== "undefined") {
     const win = window as Window & { __c64uTestProbeEnabled?: boolean };
     if (win.__c64uTestProbeEnabled) return true;
   }
   if (
-    typeof process !== 'undefined' &&
-    process.env?.VITE_ENABLE_TEST_PROBES === '1'
+    typeof process !== "undefined" &&
+    process.env?.VITE_ENABLE_TEST_PROBES === "1"
   )
     return true;
   return false;
@@ -50,7 +50,7 @@ declare global {
 }
 
 export const registerTraceBridge = () => {
-  if (typeof window === 'undefined') return;
+  if (typeof window === "undefined") return;
 
   if (window.__c64uTracing) {
     if (isTestProbeEnabled() && !window.__c64uTracing.seedTraces) {
@@ -66,7 +66,7 @@ export const registerTraceBridge = () => {
   restoreTracesFromSession();
 
   // Persist traces before page unload
-  window.addEventListener('beforeunload', () => {
+  window.addEventListener("beforeunload", () => {
     persistTracesToSession();
   });
 

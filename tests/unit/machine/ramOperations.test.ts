@@ -6,33 +6,33 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock('@/lib/logging', () => ({
+vi.mock("@/lib/logging", () => ({
   addErrorLog: vi.fn(),
   addLog: vi.fn(),
 }));
 
-vi.mock('@/lib/machine/c64Liveness', () => ({
+vi.mock("@/lib/machine/c64Liveness", () => ({
   checkC64Liveness: vi.fn(),
 }));
 
-vi.mock('@/lib/tracing/actionTrace', () => ({
-  createActionContext: vi.fn(() => ({ correlationId: 'test' })),
+vi.mock("@/lib/tracing/actionTrace", () => ({
+  createActionContext: vi.fn(() => ({ correlationId: "test" })),
   getActiveAction: vi.fn(() => null),
 }));
 
-vi.mock('@/lib/tracing/traceSession', () => ({
+vi.mock("@/lib/tracing/traceSession", () => ({
   recordDeviceGuard: vi.fn(),
 }));
 
-import { checkC64Liveness } from '@/lib/machine/c64Liveness';
+import { checkC64Liveness } from "@/lib/machine/c64Liveness";
 import {
   FULL_RAM_SIZE_BYTES,
   dumpFullRamImage,
   loadFullRamImage,
   clearRamAndReboot,
-} from '@/lib/machine/ramOperations';
+} from "@/lib/machine/ramOperations";
 
 type MockApi = {
   readMemory: ReturnType<typeof vi.fn>;
@@ -54,25 +54,25 @@ const buildMockApi = (): MockApi => ({
   machineResume: vi.fn(async () => undefined),
   machineReset: vi.fn(async () => undefined),
   machineReboot: vi.fn(async () => undefined),
-  getBaseUrl: vi.fn(() => 'http://localhost'),
-  getDeviceHost: vi.fn(() => 'localhost'),
+  getBaseUrl: vi.fn(() => "http://localhost"),
+  getDeviceHost: vi.fn(() => "localhost"),
 });
 
-describe('ramOperations', () => {
+describe("ramOperations", () => {
   let api: MockApi;
 
   beforeEach(() => {
     vi.clearAllMocks();
     api = buildMockApi();
     vi.mocked(checkC64Liveness).mockResolvedValue({
-      decision: 'healthy',
+      decision: "healthy",
       jiffyAdvanced: true,
       rasterChanged: true,
     } as any);
   });
 
-  describe('dumpFullRamImage', () => {
-    it('pauses, reads all chunks, then resumes', async () => {
+  describe("dumpFullRamImage", () => {
+    it("pauses, reads all chunks, then resumes", async () => {
       const image = await dumpFullRamImage(api as any);
 
       expect(image).toBeInstanceOf(Uint8Array);
@@ -82,34 +82,34 @@ describe('ramOperations', () => {
       expect(api.readMemory).toHaveBeenCalled();
     });
 
-    it('resumes on read failure and rethrows', async () => {
-      api.readMemory.mockRejectedValue(new Error('read failed'));
+    it("resumes on read failure and rethrows", async () => {
+      api.readMemory.mockRejectedValue(new Error("read failed"));
 
-      await expect(dumpFullRamImage(api as any)).rejects.toThrow('read failed');
+      await expect(dumpFullRamImage(api as any)).rejects.toThrow("read failed");
       expect(api.machineResume).toHaveBeenCalled();
     });
 
-    it('throws when liveness check reports wedged', async () => {
+    it("throws when liveness check reports wedged", async () => {
       vi.mocked(checkC64Liveness).mockResolvedValue({
-        decision: 'wedged',
+        decision: "wedged",
         jiffyAdvanced: false,
         rasterChanged: false,
       } as any);
 
-      await expect(dumpFullRamImage(api as any)).rejects.toThrow('wedged');
+      await expect(dumpFullRamImage(api as any)).rejects.toThrow("wedged");
     });
 
-    it('throws when read returns unexpected chunk size', async () => {
+    it("throws when read returns unexpected chunk size", async () => {
       api.readMemory.mockResolvedValue(new Uint8Array(100));
 
       await expect(dumpFullRamImage(api as any)).rejects.toThrow(
-        'Unexpected RAM chunk length',
+        "Unexpected RAM chunk length",
       );
     });
   });
 
-  describe('loadFullRamImage', () => {
-    it('pauses, writes in multiple chunks, then resumes', async () => {
+  describe("loadFullRamImage", () => {
+    it("pauses, writes in multiple chunks, then resumes", async () => {
       const image = new Uint8Array(FULL_RAM_SIZE_BYTES);
       await loadFullRamImage(api as any, image);
 
@@ -119,7 +119,7 @@ describe('ramOperations', () => {
       expect(api.machineResume).toHaveBeenCalledTimes(1);
     });
 
-    it('writes exactly 16 chunks for a 64 KiB image (chunk-count assertion)', async () => {
+    it("writes exactly 16 chunks for a 64 KiB image (chunk-count assertion)", async () => {
       const image = new Uint8Array(FULL_RAM_SIZE_BYTES);
       await loadFullRamImage(api as any, image);
 
@@ -128,37 +128,37 @@ describe('ramOperations', () => {
       expect(api.writeMemoryBlock).toHaveBeenCalledTimes(16);
     });
 
-    it('rejects invalid image size', async () => {
+    it("rejects invalid image size", async () => {
       const image = new Uint8Array(100);
       await expect(loadFullRamImage(api as any, image)).rejects.toThrow(
-        'Invalid RAM image size',
+        "Invalid RAM image size",
       );
     });
 
-    it('resumes on write failure', async () => {
-      api.writeMemoryBlock.mockRejectedValue(new Error('write failed'));
+    it("resumes on write failure", async () => {
+      api.writeMemoryBlock.mockRejectedValue(new Error("write failed"));
       const image = new Uint8Array(FULL_RAM_SIZE_BYTES);
 
       await expect(loadFullRamImage(api as any, image)).rejects.toThrow(
-        'write failed',
+        "write failed",
       );
       expect(api.machineResume).toHaveBeenCalled();
     });
 
-    it('retries per-chunk on mid-transfer failure and resumes after all retries exhausted', async () => {
+    it("retries per-chunk on mid-transfer failure and resumes after all retries exhausted", async () => {
       // Always fail - ensures all retries are exhausted for every chunk attempt
-      api.writeMemoryBlock.mockRejectedValue(new Error('chunk write failed'));
+      api.writeMemoryBlock.mockRejectedValue(new Error("chunk write failed"));
       const image = new Uint8Array(FULL_RAM_SIZE_BYTES);
 
       await expect(loadFullRamImage(api as any, image)).rejects.toThrow(
-        'chunk write failed',
+        "chunk write failed",
       );
       expect(api.machineResume).toHaveBeenCalled();
       // With DEFAULT_RETRY_ATTEMPTS=2 the chunk is retried once before final failure
       expect(api.writeMemoryBlock.mock.calls.length).toBeGreaterThanOrEqual(1);
     });
 
-    it('roundtrip integrity: each chunk payload matches corresponding image slice', async () => {
+    it("roundtrip integrity: each chunk payload matches corresponding image slice", async () => {
       const image = new Uint8Array(FULL_RAM_SIZE_BYTES);
       // Fill with non-trivial data
       for (let i = 0; i < image.length; i++) image[i] = i % 251;
@@ -182,8 +182,8 @@ describe('ramOperations', () => {
     });
   });
 
-  describe('clearRamAndReboot', () => {
-    it('pauses, writes zero blocks, then reboots', async () => {
+  describe("clearRamAndReboot", () => {
+    it("pauses, writes zero blocks, then reboots", async () => {
       await clearRamAndReboot(api as any);
 
       expect(api.machinePause).toHaveBeenCalledTimes(1);
@@ -191,25 +191,25 @@ describe('ramOperations', () => {
       expect(api.machineReboot).toHaveBeenCalled();
     });
 
-    it('resumes on failure if not yet rebooted', async () => {
-      api.writeMemoryBlock.mockRejectedValue(new Error('write failed'));
+    it("resumes on failure if not yet rebooted", async () => {
+      api.writeMemoryBlock.mockRejectedValue(new Error("write failed"));
 
       await expect(clearRamAndReboot(api as any)).rejects.toThrow(
-        'write failed',
+        "write failed",
       );
       expect(api.machineResume).toHaveBeenCalled();
     });
 
-    it('reports both operation and resume failures', async () => {
-      api.writeMemoryBlock.mockRejectedValue(new Error('write failed'));
-      api.machineResume.mockRejectedValue(new Error('resume failed'));
+    it("reports both operation and resume failures", async () => {
+      api.writeMemoryBlock.mockRejectedValue(new Error("write failed"));
+      api.machineResume.mockRejectedValue(new Error("resume failed"));
 
       await expect(clearRamAndReboot(api as any)).rejects.toThrow(
-        'resume failed',
+        "resume failed",
       );
     });
 
-    it('throws only resume error when clear succeeds but resume fails (line 323)', async () => {
+    it("throws only resume error when clear succeeds but resume fails (line 323)", async () => {
       // Simulate: pause succeeds, writes succeed, reboot succeeds, liveness ok — but
       // then paused stays false so the finally-resume path is NOT triggered.
       // Instead: use the machineResume mock after pause fails mid-write.
@@ -222,49 +222,49 @@ describe('ramOperations', () => {
       // line 323 is in the edge case where paused=true and !rebooted but resume throws.
       // That is covered by "reports both operation and resume failures" above.
       // This test exercises clearRamAndReboot with a non-Error thrown value (covers asError line 44).
-      api.writeMemoryBlock.mockRejectedValue('string-error');
+      api.writeMemoryBlock.mockRejectedValue("string-error");
 
       await expect(clearRamAndReboot(api as any)).rejects.toThrow(
-        'Reboot (Clear RAM) failed',
+        "Reboot (Clear RAM) failed",
       );
     });
   });
 
-  describe('asError coverage via non-Error thrown values', () => {
-    it('handles non-Error read failure throwing string (covers asError line 44)', async () => {
+  describe("asError coverage via non-Error thrown values", () => {
+    it("handles non-Error read failure throwing string (covers asError line 44)", async () => {
       // withRetry calls asError when the thrown value is not an Error
-      api.readMemory.mockRejectedValue('read-failed-as-string');
+      api.readMemory.mockRejectedValue("read-failed-as-string");
 
       await expect(dumpFullRamImage(api as any)).rejects.toThrow(
-        'failed after',
+        "failed after",
       );
     });
 
-    it('handles non-Error write failure in loadFullRamImage', async () => {
+    it("handles non-Error write failure in loadFullRamImage", async () => {
       api.writeMemoryBlock.mockRejectedValue(42); // throws a number
       const image = new Uint8Array(FULL_RAM_SIZE_BYTES);
 
       await expect(loadFullRamImage(api as any, image)).rejects.toThrow(
-        'failed after',
+        "failed after",
       );
     });
   });
 
-  describe('recoverFromLivenessFailure via retry path', () => {
-    it('recovery skips reboot when liveness check shows non-wedged after first chunk fails (line 110)', async () => {
+  describe("recoverFromLivenessFailure via retry path", () => {
+    it("recovery skips reboot when liveness check shows non-wedged after first chunk fails (line 110)", async () => {
       // First readMemory call fails (triggering retry with onRetry=recoverFromLivenessFailure)
       // In onRetry, checkC64Liveness returns 'healthy' → decision !== 'wedged' → return early
       let callCount = 0;
       api.readMemory.mockImplementation(
         async (_addr: string, length: number) => {
           callCount++;
-          if (callCount === 1) throw new Error('transient read error');
+          if (callCount === 1) throw new Error("transient read error");
           return new Uint8Array(length);
         },
       );
       // liveness returns healthy on all calls (non-wedged → line 110 TRUE branch)
       vi.mocked(checkC64Liveness).mockResolvedValue({
-        decision: 'healthy',
+        decision: "healthy",
         jiffyAdvanced: true,
         rasterChanged: true,
       } as any);
@@ -274,22 +274,22 @@ describe('ramOperations', () => {
       expect(image).toBeInstanceOf(Uint8Array);
     });
 
-    it('recovery catch block when liveness check throws during retry (line 101)', async () => {
+    it("recovery catch block when liveness check throws during retry (line 101)", async () => {
       // First readMemory fails → retry → recoverFromLivenessFailure → checkC64Liveness throws
       let readCount = 0;
       api.readMemory.mockImplementation(
         async (_addr: string, length: number) => {
           readCount++;
-          if (readCount === 1) throw new Error('transient');
+          if (readCount === 1) throw new Error("transient");
           return new Uint8Array(length);
         },
       );
       let livenessCall = 0;
       vi.mocked(checkC64Liveness).mockImplementation(async () => {
         livenessCall++;
-        if (livenessCall === 2) throw new Error('liveness check crashed');
+        if (livenessCall === 2) throw new Error("liveness check crashed");
         return {
-          decision: 'healthy',
+          decision: "healthy",
           jiffyAdvanced: true,
           rasterChanged: true,
         } as any;
@@ -298,7 +298,7 @@ describe('ramOperations', () => {
       // Must opt-in to recoveryMode to exercise recoverFromLivenessFailure on retry
       await expect(
         dumpFullRamImage(api as any, { recoveryMode: true }),
-      ).rejects.toThrow('liveness check crashed');
+      ).rejects.toThrow("liveness check crashed");
     });
   });
 });

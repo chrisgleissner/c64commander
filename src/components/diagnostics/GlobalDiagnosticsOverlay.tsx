@@ -6,11 +6,11 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation } from 'react-router-dom';
-import { Search, X } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
+import { Search, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,58 +21,58 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
+} from "@/components/ui/alert-dialog";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { toast } from '@/hooks/use-toast';
-import { useActionTrace } from '@/hooks/useActionTrace';
-import { reportUserError } from '@/lib/uiErrors';
-import { clearLogs, getErrorLogs, getLogs } from '@/lib/logging';
-import { clearTraceEvents, getTraceEvents } from '@/lib/tracing/traceSession';
-import { getTraceTitle } from '@/lib/tracing/traceFormatter';
-import { formatDiagnosticsTimestamp } from '@/lib/diagnostics/timeFormat';
-import { buildActionSummaries } from '@/lib/diagnostics/actionSummaries';
-import { DiagnosticsListItem } from '@/components/diagnostics/DiagnosticsListItem';
-import { ActionSummaryListItem } from '@/components/diagnostics/ActionSummaryListItem';
-import { shareDiagnosticsZip } from '@/lib/diagnostics/diagnosticsExport';
-import { resetDiagnosticsActivity } from '@/lib/diagnostics/diagnosticsActivity';
+} from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { toast } from "@/hooks/use-toast";
+import { useActionTrace } from "@/hooks/useActionTrace";
+import { reportUserError } from "@/lib/uiErrors";
+import { clearLogs, getErrorLogs, getLogs } from "@/lib/logging";
+import { clearTraceEvents, getTraceEvents } from "@/lib/tracing/traceSession";
+import { getTraceTitle } from "@/lib/tracing/traceFormatter";
+import { formatDiagnosticsTimestamp } from "@/lib/diagnostics/timeFormat";
+import { buildActionSummaries } from "@/lib/diagnostics/actionSummaries";
+import { DiagnosticsListItem } from "@/components/diagnostics/DiagnosticsListItem";
+import { ActionSummaryListItem } from "@/components/diagnostics/ActionSummaryListItem";
+import { shareDiagnosticsZip } from "@/lib/diagnostics/diagnosticsExport";
+import { resetDiagnosticsActivity } from "@/lib/diagnostics/diagnosticsActivity";
 import {
   consumeDiagnosticsOpenRequest,
   type DiagnosticsTabKey,
-} from '@/lib/diagnostics/diagnosticsOverlay';
+} from "@/lib/diagnostics/diagnosticsOverlay";
 import {
   setDiagnosticsOverlayActive,
   withDiagnosticsTraceOverride,
-} from '@/lib/diagnostics/diagnosticsOverlayState';
+} from "@/lib/diagnostics/diagnosticsOverlayState";
 import {
   resolveLogSeverity,
   resolveTraceSeverity,
-} from '@/lib/diagnostics/diagnosticsSeverity';
+} from "@/lib/diagnostics/diagnosticsSeverity";
 
 const diagnosticsTabTriggerClass =
-  'border border-transparent data-[state=active]:border-border data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm';
+  "border border-transparent data-[state=active]:border-border data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm";
 
 export const GlobalDiagnosticsOverlay = () => {
   const location = useLocation();
-  const trace = useActionTrace('GlobalDiagnosticsOverlay');
-  const isSettingsRoute = location.pathname === '/settings';
+  const trace = useActionTrace("GlobalDiagnosticsOverlay");
+  const isSettingsRoute = location.pathname === "/settings";
   const scrollRestoreRef = useRef<number | null>(null);
   const [logsDialogOpen, setLogsDialogOpen] = useState(false);
   const [diagnosticsTab, setDiagnosticsTab] =
-    useState<DiagnosticsTabKey>('actions');
+    useState<DiagnosticsTabKey>("actions");
   const [diagnosticsFilters, setDiagnosticsFilters] = useState<
     Record<DiagnosticsTabKey, string>
   >({
-    'error-logs': '',
-    logs: '',
-    traces: '',
-    actions: '',
+    "error-logs": "",
+    logs: "",
+    traces: "",
+    actions: "",
   });
   const [logs, setLogs] = useState(getLogs());
   const [errorLogs, setErrorLogs] = useState(getErrorLogs());
@@ -81,7 +81,7 @@ export const GlobalDiagnosticsOverlay = () => {
     () => buildActionSummaries(traceEvents),
     [traceEvents],
   );
-  const activeDiagnosticsFilter = diagnosticsFilters[diagnosticsTab] ?? '';
+  const activeDiagnosticsFilter = diagnosticsFilters[diagnosticsTab] ?? "";
 
   const setDiagnosticsDialogOpen = useCallback((open: boolean) => {
     setLogsDialogOpen(open);
@@ -93,16 +93,16 @@ export const GlobalDiagnosticsOverlay = () => {
       setLogs(getLogs());
       setErrorLogs(getErrorLogs());
     };
-    window.addEventListener('c64u-logs-updated', handler);
-    return () => window.removeEventListener('c64u-logs-updated', handler);
+    window.addEventListener("c64u-logs-updated", handler);
+    return () => window.removeEventListener("c64u-logs-updated", handler);
   }, []);
 
   useEffect(() => {
     const handler = () => {
       setTraceEvents(getTraceEvents());
     };
-    window.addEventListener('c64u-traces-updated', handler);
-    return () => window.removeEventListener('c64u-traces-updated', handler);
+    window.addEventListener("c64u-traces-updated", handler);
+    return () => window.removeEventListener("c64u-traces-updated", handler);
   }, []);
 
   useEffect(() => {
@@ -121,12 +121,12 @@ export const GlobalDiagnosticsOverlay = () => {
       setDiagnosticsDialogOpen(true);
     }
     window.addEventListener(
-      'c64u-diagnostics-open-request',
+      "c64u-diagnostics-open-request",
       handleDiagnosticsRequest,
     );
     return () =>
       window.removeEventListener(
-        'c64u-diagnostics-open-request',
+        "c64u-diagnostics-open-request",
         handleDiagnosticsRequest,
       );
   }, [isSettingsRoute, setDiagnosticsDialogOpen]);
@@ -162,12 +162,12 @@ export const GlobalDiagnosticsOverlay = () => {
   ) => {
     const normalized = normalizeDiagnosticsFilter(filterText);
     if (!normalized) return true;
-    const haystack = fields.filter(Boolean).join(' ').toLowerCase();
+    const haystack = fields.filter(Boolean).join(" ").toLowerCase();
     return haystack.includes(normalized);
   };
 
   const filteredErrorLogs = useMemo(() => {
-    const filterText = diagnosticsFilters['error-logs'] ?? '';
+    const filterText = diagnosticsFilters["error-logs"] ?? "";
     if (!normalizeDiagnosticsFilter(filterText)) return errorLogs;
     return errorLogs.filter((entry) =>
       matchesDiagnosticsFilter(filterText, [
@@ -180,7 +180,7 @@ export const GlobalDiagnosticsOverlay = () => {
   }, [diagnosticsFilters, errorLogs]);
 
   const filteredLogs = useMemo(() => {
-    const filterText = diagnosticsFilters.logs ?? '';
+    const filterText = diagnosticsFilters.logs ?? "";
     if (!normalizeDiagnosticsFilter(filterText)) return logs;
     return logs.filter((entry) =>
       matchesDiagnosticsFilter(filterText, [
@@ -194,7 +194,7 @@ export const GlobalDiagnosticsOverlay = () => {
   }, [diagnosticsFilters, logs]);
 
   const filteredTraces = useMemo(() => {
-    const filterText = diagnosticsFilters.traces ?? '';
+    const filterText = diagnosticsFilters.traces ?? "";
     if (!normalizeDiagnosticsFilter(filterText)) return traceEvents;
     return traceEvents.filter((entry) =>
       matchesDiagnosticsFilter(filterText, [
@@ -207,12 +207,12 @@ export const GlobalDiagnosticsOverlay = () => {
   }, [diagnosticsFilters, traceEvents]);
 
   const filteredActions = useMemo(() => {
-    const filterText = diagnosticsFilters.actions ?? '';
+    const filterText = diagnosticsFilters.actions ?? "";
     if (!normalizeDiagnosticsFilter(filterText)) return actionSummaries;
     return actionSummaries.filter((summary) => {
       const summaryTime = formatDiagnosticsTimestamp(summary.startTimestamp);
       const durationLabel =
-        summary.durationMs !== null ? `${summary.durationMs} ms` : 'Unknown';
+        summary.durationMs !== null ? `${summary.durationMs} ms` : "Unknown";
       return matchesDiagnosticsFilter(filterText, [
         summary.actionName,
         summary.correlationId,
@@ -228,19 +228,19 @@ export const GlobalDiagnosticsOverlay = () => {
 
   const handleShareDiagnostics = trace(async function handleShareDiagnostics() {
     const data =
-      diagnosticsTab === 'error-logs'
+      diagnosticsTab === "error-logs"
         ? errorLogs
-        : diagnosticsTab === 'logs'
+        : diagnosticsTab === "logs"
           ? logs
-          : diagnosticsTab === 'traces'
+          : diagnosticsTab === "traces"
             ? traceEvents
             : actionSummaries;
     try {
       await shareDiagnosticsZip(diagnosticsTab, data);
     } catch (error) {
       reportUserError({
-        operation: 'DIAGNOSTICS_EXPORT',
-        title: 'Unable to share',
+        operation: "DIAGNOSTICS_EXPORT",
+        title: "Unable to share",
         description: (error as Error).message,
         error,
       });
@@ -254,7 +254,7 @@ export const GlobalDiagnosticsOverlay = () => {
     setLogs([]);
     setErrorLogs([]);
     setTraceEvents([]);
-    toast({ title: 'Diagnostics cleared' });
+    toast({ title: "Diagnostics cleared" });
   };
 
   if (isSettingsRoute) return null;
@@ -317,7 +317,7 @@ export const GlobalDiagnosticsOverlay = () => {
               onClick={() =>
                 setDiagnosticsFilters((prev) => ({
                   ...prev,
-                  [diagnosticsTab]: '',
+                  [diagnosticsTab]: "",
                 }))
               }
               className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"

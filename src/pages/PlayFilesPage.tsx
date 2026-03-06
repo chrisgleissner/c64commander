@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { wrapUserEvent } from '@/lib/tracing/userTrace';
+import { wrapUserEvent } from "@/lib/tracing/userTrace";
 
 import {
   useCallback,
@@ -15,94 +15,94 @@ import {
   useReducer,
   useRef,
   useState,
-} from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
+} from "react";
+import { useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
 import {
   AddItemsProgressOverlay,
   type AddItemsProgressState,
-} from '@/components/itemSelection/AddItemsProgressOverlay';
+} from "@/components/itemSelection/AddItemsProgressOverlay";
 import {
   ItemSelectionDialog,
   type SourceGroup,
-} from '@/components/itemSelection/ItemSelectionDialog';
+} from "@/components/itemSelection/ItemSelectionDialog";
 import {
   useC64ConfigItems,
   useC64Connection,
   useC64UpdateConfigBatch,
-} from '@/hooks/useC64Connection';
-import { useFeatureFlags } from '@/hooks/useFeatureFlags';
-import { useListPreviewLimit } from '@/hooks/useListPreviewLimit';
-import { useLocalSources } from '@/hooks/useLocalSources';
-import { useActionTrace } from '@/hooks/useActionTrace';
-import { toast } from '@/hooks/use-toast';
-import { addErrorLog, addLog } from '@/lib/logging';
-import { reportUserError } from '@/lib/uiErrors';
-import { getC64API } from '@/lib/c64api';
-import type { TraceSourceKind } from '@/lib/tracing/types';
+} from "@/hooks/useC64Connection";
+import { useFeatureFlags } from "@/hooks/useFeatureFlags";
+import { useListPreviewLimit } from "@/hooks/useListPreviewLimit";
+import { useLocalSources } from "@/hooks/useLocalSources";
+import { useActionTrace } from "@/hooks/useActionTrace";
+import { toast } from "@/hooks/use-toast";
+import { addErrorLog, addLog } from "@/lib/logging";
+import { reportUserError } from "@/lib/uiErrors";
+import { getC64API } from "@/lib/c64api";
+import type { TraceSourceKind } from "@/lib/tracing/types";
 import {
   discoverConnection,
   getConnectionSnapshot,
-} from '@/lib/connection/connectionManager';
-import { getParentPath } from '@/lib/playback/localFileBrowser';
-import { type PlayRequest } from '@/lib/playback/playbackRouter';
+} from "@/lib/connection/connectionManager";
+import { getParentPath } from "@/lib/playback/localFileBrowser";
+import { type PlayRequest } from "@/lib/playback/playbackRouter";
 import {
   formatPlayCategory,
   getPlayCategory,
   isSupportedPlayFile,
   type PlayFileCategory,
-} from '@/lib/playback/fileTypes';
-import { PlaybackClock } from '@/lib/playback/playbackClock';
-import { calculatePlaylistTotals } from '@/lib/playback/playlistTotals';
-import { createUltimateSourceLocation } from '@/lib/sourceNavigation/ftpSourceAdapter';
-import { createHvscSourceLocation } from '@/lib/sourceNavigation/hvscSourceAdapter';
+} from "@/lib/playback/fileTypes";
+import { PlaybackClock } from "@/lib/playback/playbackClock";
+import { calculatePlaylistTotals } from "@/lib/playback/playlistTotals";
+import { createUltimateSourceLocation } from "@/lib/sourceNavigation/ftpSourceAdapter";
+import { createHvscSourceLocation } from "@/lib/sourceNavigation/hvscSourceAdapter";
 import {
   createLocalSourceLocation,
   resolveLocalRuntimeFile,
-} from '@/lib/sourceNavigation/localSourceAdapter';
-import { normalizeSourcePath } from '@/lib/sourceNavigation/paths';
-import { prepareDirectoryInput } from '@/lib/sourceNavigation/localSourcesStore';
+} from "@/lib/sourceNavigation/localSourceAdapter";
+import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
+import { prepareDirectoryInput } from "@/lib/sourceNavigation/localSourcesStore";
 
-import { buildEnabledSidMuteUpdates } from '@/lib/config/sidVolumeControl';
-import { getPlatform, isNativePlatform } from '@/lib/native/platform';
-import { FolderPicker } from '@/lib/native/folderPicker';
-import { redactTreeUri } from '@/lib/native/safUtils';
+import { buildEnabledSidMuteUpdates } from "@/lib/config/sidVolumeControl";
+import { getPlatform, isNativePlatform } from "@/lib/native/platform";
+import { FolderPicker } from "@/lib/native/folderPicker";
+import { redactTreeUri } from "@/lib/native/safUtils";
 import {
   startBackgroundExecution,
   stopBackgroundExecution,
-} from '@/lib/native/backgroundExecutionManager';
+} from "@/lib/native/backgroundExecutionManager";
 import {
   BackgroundExecution,
   onBackgroundAutoSkipDue,
-} from '@/lib/native/backgroundExecution';
+} from "@/lib/native/backgroundExecution";
 
-import { AppBar } from '@/components/AppBar';
-import { FileOriginIcon } from '@/components/FileOriginIcon';
-import { SOURCE_LABELS } from '@/lib/sourceNavigation/sourceTerms';
-import { VolumeControls } from '@/pages/playFiles/components/VolumeControls';
-import { PlaybackControlsCard } from '@/pages/playFiles/components/PlaybackControlsCard';
-import { PlaybackSettingsPanel } from '@/pages/playFiles/components/PlaybackSettingsPanel';
-import { PlaylistPanel } from '@/pages/playFiles/components/PlaylistPanel';
-import { HvscManager } from '@/pages/playFiles/components/HvscManager';
-import { useHvscLibrary } from '@/pages/playFiles/hooks/useHvscLibrary';
-import { usePlaylistListItems } from '@/pages/playFiles/hooks/usePlaylistListItems';
-import { useSonglengths } from '@/pages/playFiles/hooks/useSonglengths';
-import { usePlaybackPersistence } from '@/pages/playFiles/hooks/usePlaybackPersistence';
-import { usePlaylistManager } from '@/pages/playFiles/hooks/usePlaylistManager';
-import { useVolumeOverride } from '@/pages/playFiles/hooks/useVolumeOverride';
-import { useLocalEntries } from '@/pages/playFiles/hooks/useLocalEntries';
-import { usePlaybackController } from '@/pages/playFiles/hooks/usePlaybackController';
-import { usePlaybackResumeTriggers } from '@/pages/playFiles/hooks/usePlaybackResumeTriggers';
-import { setPlaybackTraceSnapshot } from '@/pages/playFiles/playbackTraceStore';
-import { getPlaylistDataRepository } from '@/lib/playlistRepository';
-import type { PlaylistItemRecord, TrackRecord } from '@/lib/playlistRepository';
-import { createAddFileSelectionsHandler } from '@/pages/playFiles/handlers/addFileSelections';
-import { resolveVolumeSyncDecision } from '@/pages/playFiles/playbackGuards';
+import { AppBar } from "@/components/AppBar";
+import { FileOriginIcon } from "@/components/FileOriginIcon";
+import { SOURCE_LABELS } from "@/lib/sourceNavigation/sourceTerms";
+import { VolumeControls } from "@/pages/playFiles/components/VolumeControls";
+import { PlaybackControlsCard } from "@/pages/playFiles/components/PlaybackControlsCard";
+import { PlaybackSettingsPanel } from "@/pages/playFiles/components/PlaybackSettingsPanel";
+import { PlaylistPanel } from "@/pages/playFiles/components/PlaylistPanel";
+import { HvscManager } from "@/pages/playFiles/components/HvscManager";
+import { useHvscLibrary } from "@/pages/playFiles/hooks/useHvscLibrary";
+import { usePlaylistListItems } from "@/pages/playFiles/hooks/usePlaylistListItems";
+import { useSonglengths } from "@/pages/playFiles/hooks/useSonglengths";
+import { usePlaybackPersistence } from "@/pages/playFiles/hooks/usePlaybackPersistence";
+import { usePlaylistManager } from "@/pages/playFiles/hooks/usePlaylistManager";
+import { useVolumeOverride } from "@/pages/playFiles/hooks/useVolumeOverride";
+import { useLocalEntries } from "@/pages/playFiles/hooks/useLocalEntries";
+import { usePlaybackController } from "@/pages/playFiles/hooks/usePlaybackController";
+import { usePlaybackResumeTriggers } from "@/pages/playFiles/hooks/usePlaybackResumeTriggers";
+import { setPlaybackTraceSnapshot } from "@/pages/playFiles/playbackTraceStore";
+import { getPlaylistDataRepository } from "@/lib/playlistRepository";
+import type { PlaylistItemRecord, TrackRecord } from "@/lib/playlistRepository";
+import { createAddFileSelectionsHandler } from "@/pages/playFiles/handlers/addFileSelections";
+import { resolveVolumeSyncDecision } from "@/pages/playFiles/playbackGuards";
 import type {
   PlaylistItem,
   StoredPlaybackSession,
   StoredPlaylistState,
-} from '@/pages/playFiles/types';
+} from "@/pages/playFiles/types";
 import {
   CATEGORY_OPTIONS,
   DEFAULT_SONG_DURATION_MS,
@@ -121,7 +121,7 @@ import {
   parseDurationInput,
   sliderToDurationSeconds,
   shuffleArray,
-} from '@/pages/playFiles/playFilesUtils';
+} from "@/pages/playFiles/playFilesUtils";
 
 export default function PlayFilesPage() {
   type AutoAdvanceGuard = {
@@ -171,7 +171,7 @@ export default function PlayFilesPage() {
   const [durationInput, setDurationInput] = useState(() =>
     formatDurationSeconds(Math.round(DEFAULT_SONG_DURATION_MS / 1000)),
   );
-  const [songNrInput, setSongNrInput] = useState('');
+  const [songNrInput, setSongNrInput] = useState("");
   const [currentSubsongCount, setCurrentSubsongCount] = useState<number | null>(
     null,
   );
@@ -191,7 +191,7 @@ export default function PlayFilesPage() {
   const [songPickerOpen, setSongPickerOpen] = useState(false);
   const [addItemsProgress, setAddItemsProgress] =
     useState<AddItemsProgressState>({
-      status: 'idle',
+      status: "idle",
       count: 0,
       elapsedMs: 0,
       total: null,
@@ -204,12 +204,12 @@ export default function PlayFilesPage() {
   >([]);
   const addItemsOverlayStartedAtRef = useRef<number | null>(null);
   const addItemsOverlayActiveRef = useRef(false);
-  const [addItemsSurface, setAddItemsSurface] = useState<'dialog' | 'page'>(
-    'dialog',
+  const [addItemsSurface, setAddItemsSurface] = useState<"dialog" | "page">(
+    "dialog",
   );
   const { limit: listPreviewLimit } = useListPreviewLimit();
-  const isAndroid = getPlatform() === 'android' && isNativePlatform();
-  const trace = useActionTrace('PlayFilesPage');
+  const isAndroid = getPlatform() === "android" && isNativePlatform();
+  const trace = useActionTrace("PlayFilesPage");
 
   const { flags, isLoaded } = useFeatureFlags();
   const hvscControlsEnabled = isLoaded && flags.hvsc_enabled;
@@ -281,13 +281,13 @@ export default function PlayFilesPage() {
 
   const ensurePlaybackConnection = useCallback(async () => {
     if (status.isConnected) return;
-    await discoverConnection('manual');
+    await discoverConnection("manual");
     const snapshot = getConnectionSnapshot();
     if (
-      snapshot.state !== 'REAL_CONNECTED' &&
-      snapshot.state !== 'DEMO_ACTIVE'
+      snapshot.state !== "REAL_CONNECTED" &&
+      snapshot.state !== "DEMO_ACTIVE"
     ) {
-      throw new Error('Device not connected. Check connection settings.');
+      throw new Error("Device not connected. Check connection settings.");
     }
   }, [status.isConnected]);
 
@@ -366,15 +366,15 @@ export default function PlayFilesPage() {
       if (backgroundExecutionActiveRef.current) return;
       backgroundExecutionActiveRef.current = true;
       void startBackgroundExecution({
-        source: 'playback-controller',
-        reason: 'play',
+        source: "playback-controller",
+        reason: "play",
         context: { trackInstanceId },
       }).catch((error) => {
         reportUserError({
-          operation: 'startBackgroundExecution',
-          title: 'Background playback unavailable',
+          operation: "startBackgroundExecution",
+          title: "Background playback unavailable",
           description:
-            'Foreground playback continues, but background auto-advance may be interrupted.',
+            "Foreground playback continues, but background auto-advance may be interrupted.",
           error,
           context: { trackInstanceId },
         });
@@ -385,16 +385,16 @@ export default function PlayFilesPage() {
     if (!backgroundExecutionActiveRef.current) return;
     backgroundExecutionActiveRef.current = false;
     void stopBackgroundExecution({
-      source: 'playback-controller',
-      reason: isPaused ? 'pause' : 'stop',
+      source: "playback-controller",
+      reason: isPaused ? "pause" : "stop",
       context: { trackInstanceId },
     }).catch((error) => {
       reportUserError({
-        operation: 'stopBackgroundExecution',
-        title: 'Background playback cleanup failed',
-        description: 'Background playback guard could not be fully stopped.',
+        operation: "stopBackgroundExecution",
+        title: "Background playback cleanup failed",
+        description: "Background playback guard could not be fully stopped.",
         error,
-        context: { trackInstanceId, reason: isPaused ? 'pause' : 'stop' },
+        context: { trackInstanceId, reason: isPaused ? "pause" : "stop" },
       });
     });
     void BackgroundExecution.setDueAtMs({ dueAtMs: null });
@@ -405,16 +405,16 @@ export default function PlayFilesPage() {
       if (!backgroundExecutionActiveRef.current) return;
       backgroundExecutionActiveRef.current = false;
       void stopBackgroundExecution({
-        source: 'playback-controller',
-        reason: 'cleanup',
+        source: "playback-controller",
+        reason: "cleanup",
         context: { trackInstanceId },
       }).catch((error) => {
         reportUserError({
-          operation: 'stopBackgroundExecution',
-          title: 'Background playback cleanup failed',
-          description: 'Background playback guard could not be fully stopped.',
+          operation: "stopBackgroundExecution",
+          title: "Background playback cleanup failed",
+          description: "Background playback guard could not be fully stopped.",
           error,
-          context: { trackInstanceId, reason: 'cleanup' },
+          context: { trackInstanceId, reason: "cleanup" },
         });
       });
       void BackgroundExecution.setDueAtMs({ dueAtMs: null });
@@ -424,12 +424,12 @@ export default function PlayFilesPage() {
 
   useEffect(() => {
     if (!backgroundExecutionActiveRef.current) return;
-    if (!isNativePlatform() || getPlatform() !== 'android') return;
+    if (!isNativePlatform() || getPlatform() !== "android") return;
     void BackgroundExecution.setDueAtMs({ dueAtMs: autoAdvanceDueAtMs });
   }, [autoAdvanceDueAtMs]);
 
   useEffect(() => {
-    if (addItemsProgress.status !== 'scanning') return undefined;
+    if (addItemsProgress.status !== "scanning") return undefined;
     const interval = window.setInterval(() => {
       const startedAt = addItemsStartedAtRef.current ?? Date.now();
       setAddItemsProgress((prev) => ({
@@ -442,37 +442,37 @@ export default function PlayFilesPage() {
 
   useEffect(() => {
     if (browserOpen) {
-      setAddItemsSurface('dialog');
+      setAddItemsSurface("dialog");
     }
   }, [browserOpen]);
 
   const [lastKnownDeviceId, setLastKnownDeviceId] = useState<string | null>(
     () => {
-      if (typeof localStorage === 'undefined') return null;
+      if (typeof localStorage === "undefined") return null;
       return localStorage.getItem(LAST_DEVICE_ID_KEY);
     },
   );
 
   useEffect(() => {
-    if (!deviceInfoId || typeof localStorage === 'undefined') return;
+    if (!deviceInfoId || typeof localStorage === "undefined") return;
     setLastKnownDeviceId(deviceInfoId);
     try {
       localStorage.setItem(LAST_DEVICE_ID_KEY, deviceInfoId);
     } catch (error) {
-      addErrorLog('Failed to persist last known device id', {
+      addErrorLog("Failed to persist last known device id", {
         error: (error as Error).message,
       });
     }
   }, [deviceInfoId]);
 
-  const resolvedDeviceId = deviceInfoId || lastKnownDeviceId || 'default';
+  const resolvedDeviceId = deviceInfoId || lastKnownDeviceId || "default";
   const playlistStorageKey = useMemo(
     () => buildPlaylistStorageKey(resolvedDeviceId),
     [resolvedDeviceId],
   );
 
   const handleAutoConfirmStart = useCallback(() => {
-    setAddItemsSurface('page');
+    setAddItemsSurface("page");
     setIsAddingItems(true);
     setShowAddItemsOverlay(true);
     addItemsOverlayStartedAtRef.current = Date.now();
@@ -481,9 +481,9 @@ export default function PlayFilesPage() {
 
   useEffect(() => {
     if (browserOpen) return;
-    if (addItemsProgress.status === 'scanning') return;
+    if (addItemsProgress.status === "scanning") return;
     setAddItemsProgress({
-      status: 'idle',
+      status: "idle",
       count: 0,
       elapsedMs: 0,
       total: null,
@@ -493,17 +493,17 @@ export default function PlayFilesPage() {
 
   useEffect(() => {
     if (browserOpen) return;
-    if (addItemsProgress.status !== 'scanning') return;
-    if (addItemsSurface !== 'page') {
-      setAddItemsSurface('page');
+    if (addItemsProgress.status !== "scanning") return;
+    if (addItemsSurface !== "page") {
+      setAddItemsSurface("page");
     }
   }, [addItemsProgress.status, addItemsSurface, browserOpen]);
 
   useEffect(() => {
-    if (addItemsProgress.status === 'scanning') return;
-    if (addItemsSurface === 'page' && isAddingItems) return;
-    if (addItemsSurface !== 'dialog') {
-      setAddItemsSurface('dialog');
+    if (addItemsProgress.status === "scanning") return;
+    if (addItemsSurface === "page" && isAddingItems) return;
+    if (addItemsSurface !== "dialog") {
+      setAddItemsSurface("dialog");
     }
   }, [addItemsProgress.status, addItemsSurface, isAddingItems]);
 
@@ -547,7 +547,7 @@ export default function PlayFilesPage() {
       if (!category) return null;
       const songNrValue =
         songNrOverride ??
-        (songNrInput.trim() === ''
+        (songNrInput.trim() === ""
           ? undefined
           : Math.max(1, Number(songNrInput)));
       const request: PlayRequest = {
@@ -557,10 +557,10 @@ export default function PlayFilesPage() {
         songNr: Number.isNaN(songNrValue) ? undefined : songNrValue,
       };
       const resolvedSourceId =
-        entry.sourceId ?? (entry.source === 'hvsc' ? 'hvsc-library' : null);
-      const idParts = [entry.source, resolvedSourceId ?? ''];
+        entry.sourceId ?? (entry.source === "hvsc" ? "hvsc-library" : null);
+      const idParts = [entry.source, resolvedSourceId ?? ""];
       return {
-        id: `${idParts.join(':')}:${entry.path}`,
+        id: `${idParts.join(":")}:${entry.path}`,
         request,
         category,
         label: entry.name,
@@ -570,7 +570,7 @@ export default function PlayFilesPage() {
         sizeBytes: entry.sizeBytes ?? null,
         modifiedAt: entry.modifiedAt ?? null,
         addedAt: addedAtOverride ?? new Date().toISOString(),
-        status: 'ready',
+        status: "ready",
         unavailableReason: null,
       };
     },
@@ -630,8 +630,8 @@ export default function PlayFilesPage() {
       now >= guard.dueAtMs
     ) {
       addLog(
-        'debug',
-        'Auto-advance due guard fired on timeline reconciliation',
+        "debug",
+        "Auto-advance due guard fired on timeline reconciliation",
         {
           trackInstanceId: guard.trackInstanceId,
           dueAtMs: guard.dueAtMs,
@@ -639,7 +639,7 @@ export default function PlayFilesPage() {
           overdueMs: now - guard.dueAtMs,
         },
       );
-      void handleNext('auto', guard.trackInstanceId);
+      void handleNext("auto", guard.trackInstanceId);
     }
   }, [currentIndex, handleNext, isPaused, isPlaying, playedClockRef]);
 
@@ -653,7 +653,7 @@ export default function PlayFilesPage() {
   usePlaybackResumeTriggers(syncPlaybackTimeline);
 
   useEffect(() => {
-    if (!isNativePlatform() || getPlatform() !== 'android') return;
+    if (!isNativePlatform() || getPlatform() !== "android") return;
     let cancelled = false;
     let handle: { remove: () => Promise<void> } | null = null;
 
@@ -683,12 +683,12 @@ export default function PlayFilesPage() {
     if (!currentItem) return null;
     return currentItem.request.source;
   }, [currentItem]);
-  const localAccessMode = useMemo<'entries' | 'saf' | null>(() => {
-    if (!currentItem || currentItem.request.source !== 'local') return null;
+  const localAccessMode = useMemo<"entries" | "saf" | null>(() => {
+    if (!currentItem || currentItem.request.source !== "local") return null;
     const treeUri = currentItem.sourceId
       ? localSourceTreeUris.get(currentItem.sourceId)
       : null;
-    return treeUri ? 'saf' : 'entries';
+    return treeUri ? "saf" : "entries";
   }, [currentItem, localSourceTreeUris]);
   const playbackTraceContext = useMemo(() => {
     if (!playlist.length) return null;
@@ -730,13 +730,13 @@ export default function PlayFilesPage() {
       ? Math.max(0, currentDurationMs - elapsedMs)
       : undefined;
   const remainingLabel =
-    currentDurationMs !== undefined ? `-${formatTime(remainingMs)}` : '—';
+    currentDurationMs !== undefined ? `-${formatTime(remainingMs)}` : "—";
   const canControlVolume =
     enabledSidVolumeItems.length > 0 && volumeSteps.length > 0;
-  const volumeLabel = volumeSteps[volumeIndex]?.label ?? '—';
+  const volumeLabel = volumeSteps[volumeIndex]?.label ?? "—";
   const knownSubsongCount =
     currentSubsongCount ??
-    (typeof currentItem?.subsongCount === 'number'
+    (typeof currentItem?.subsongCount === "number"
       ? currentItem.subsongCount
       : null);
   const subsongCount = knownSubsongCount ?? 1;
@@ -926,13 +926,13 @@ export default function PlayFilesPage() {
   useEffect(() => {
     if (isPlaying || isPaused) return;
     if (!volumeSessionActiveRef.current) return;
-    void restoreVolumeOverrides('playback-ended');
+    void restoreVolumeOverrides("playback-ended");
   }, [isPaused, isPlaying, restoreVolumeOverrides]);
 
   useEffect(
     () => () => {
-      void restoreVolumeOverrides('navigate').catch((error) => {
-        addErrorLog('Volume restore failed during navigation', {
+      void restoreVolumeOverrides("navigate").catch((error) => {
+        addErrorLog("Volume restore failed during navigation", {
           error: (error as Error).message,
         });
       });
@@ -969,7 +969,7 @@ export default function PlayFilesPage() {
 
   const buildTrackId = useCallback(
     (source: string, sourceId: string | null | undefined, path: string) =>
-      `${source}:${sourceId ?? ''}:${normalizeSourcePath(path)}`,
+      `${source}:${sourceId ?? ""}:${normalizeSourcePath(path)}`,
     [],
   );
 
@@ -1005,9 +1005,9 @@ export default function PlayFilesPage() {
           item.path,
         ),
         songNr: item.request.songNr ?? 1,
-        sortKey: String(index).padStart(8, '0'),
+        sortKey: String(index).padStart(8, "0"),
         durationOverrideMs: item.durationMs ?? null,
-        status: item.status ?? 'ready',
+        status: item.status ?? "ready",
         unavailableReason: item.unavailableReason ?? null,
         addedAt: item.addedAt ?? nowIso,
       }));
@@ -1042,7 +1042,7 @@ export default function PlayFilesPage() {
         categoryFilter: playlistTypeFilters,
         limit: Math.max(1, playlist.length),
         offset: 0,
-        sort: 'playlist-position',
+        sort: "playlist-position",
       });
       const byId = new Map(playlist.map((item) => [item.id, item]));
       const nextFiltered = result.rows
@@ -1055,7 +1055,7 @@ export default function PlayFilesPage() {
     };
 
     run().catch((error) => {
-      addErrorLog('Failed to query filtered playlist', {
+      addErrorLog("Failed to query filtered playlist", {
         playlistStorageKey,
         error: (error as Error).message,
       });
@@ -1113,12 +1113,12 @@ export default function PlayFilesPage() {
         title="Play Files"
         subtitle={
           status.isConnected
-            ? status.deviceType === 'demo'
-              ? 'Demo'
-              : 'Connected'
+            ? status.deviceType === "demo"
+              ? "Demo"
+              : "Connected"
             : status.isConnecting
-              ? 'Connecting…'
-              : 'Offline'
+              ? "Connecting…"
+              : "Offline"
         }
       />
       <main className="container max-w-3xl mx-auto px-4 py-6 pb-24 space-y-6">
@@ -1133,11 +1133,11 @@ export default function PlayFilesPage() {
               currentItem ? (
                 <FileOriginIcon
                   origin={
-                    currentItem.request.source === 'ultimate'
-                      ? 'ultimate'
-                      : currentItem.request.source === 'hvsc'
-                        ? 'hvsc'
-                        : 'local'
+                    currentItem.request.source === "ultimate"
+                      ? "ultimate"
+                      : currentItem.request.source === "hvsc"
+                        ? "hvsc"
+                        : "local"
                   }
                   className="h-3.5 w-3.5 shrink-0 opacity-70"
                 />
@@ -1181,7 +1181,7 @@ export default function PlayFilesPage() {
                 onVolumeCommit={(value) => void handleVolumeCommit(value)}
                 volumeLabel={volumeLabel}
                 volumeValueFormatter={(value) =>
-                  volumeSteps[Math.round(value)]?.label ?? '—'
+                  volumeSteps[Math.round(value)]?.label ?? "—"
                 }
               />
             }
@@ -1209,24 +1209,24 @@ export default function PlayFilesPage() {
               }
               try {
                 const result = await FolderPicker.pickFile({
-                  mimeTypes: ['text/plain', 'application/octet-stream'],
+                  mimeTypes: ["text/plain", "application/octet-stream"],
                 });
                 if (!result?.uri || !result?.permissionPersisted) {
-                  throw new Error('Songlengths file access was not granted.');
+                  throw new Error("Songlengths file access was not granted.");
                 }
                 handleSonglengthsPicked({
                   path: normalizeSourcePath(
-                    `/${result.name ?? 'songlengths.md5'}`,
+                    `/${result.name ?? "songlengths.md5"}`,
                   ),
                   uri: result.uri,
-                  name: result.name ?? 'songlengths.md5',
+                  name: result.name ?? "songlengths.md5",
                   sizeBytes: result.sizeBytes ?? null,
                   modifiedAt: result.modifiedAt ?? null,
                 });
               } catch (error) {
                 reportUserError({
-                  operation: 'SONGLENGTHS_PICK',
-                  title: 'Songlengths file selection failed',
+                  operation: "SONGLENGTHS_PICK",
+                  title: "Songlengths file selection failed",
                   description: (error as Error).message,
                   error,
                 });
@@ -1282,12 +1282,12 @@ export default function PlayFilesPage() {
                 ? Array.from(event.currentTarget.files)
                 : [];
               handleLocalSourceInput(selected.length ? selected : null);
-              event.currentTarget.value = '';
+              event.currentTarget.value = "";
             },
-            'upload',
-            'PlayFilesPage',
-            { type: 'file' },
-            'LocalInput',
+            "upload",
+            "PlayFilesPage",
+            { type: "file" },
+            "LocalInput",
           )}
         />
 
@@ -1299,12 +1299,12 @@ export default function PlayFilesPage() {
           onChange={wrapUserEvent(
             (event) => {
               handleSonglengthsInput(event.target.files);
-              event.currentTarget.value = '';
+              event.currentTarget.value = "";
             },
-            'upload',
-            'PlayFilesPage',
-            { type: 'file' },
-            'SonglengthsInput',
+            "upload",
+            "PlayFilesPage",
+            { type: "file" },
+            "SonglengthsInput",
           )}
         />
 
@@ -1319,12 +1319,12 @@ export default function PlayFilesPage() {
           }
           onConfirm={handleAddFileSelections}
           filterEntry={(entry) =>
-            entry.type === 'dir' || isSupportedPlayFile(entry.path)
+            entry.type === "dir" || isSupportedPlayFile(entry.path)
           }
           allowFolderSelection
           isConfirming={isAddingItems}
           progress={addItemsProgress}
-          showProgressFooter={addItemsSurface === 'dialog'}
+          showProgressFooter={addItemsSurface === "dialog"}
           autoConfirmCloseBefore={isAndroid}
           onAutoConfirmStart={handleAutoConfirmStart}
           autoConfirmLocalSource
@@ -1336,7 +1336,7 @@ export default function PlayFilesPage() {
             title="Adding items"
             testId="add-items-overlay"
             visible={
-              showAddItemsOverlay || addItemsProgress.status === 'scanning'
+              showAddItemsOverlay || addItemsProgress.status === "scanning"
             }
           />
         ) : null}

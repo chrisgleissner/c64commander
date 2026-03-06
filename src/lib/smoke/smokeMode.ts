@@ -6,18 +6,18 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { Capacitor } from '@capacitor/core';
-import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
-import { addLog } from '@/lib/logging';
-import { saveDebugLoggingEnabled } from '@/lib/config/appSettings';
-import { normalizeDeviceHost } from '@/lib/c64api';
+import { Capacitor } from "@capacitor/core";
+import { Filesystem, Directory, Encoding } from "@capacitor/filesystem";
+import { addLog } from "@/lib/logging";
+import { saveDebugLoggingEnabled } from "@/lib/config/appSettings";
+import { normalizeDeviceHost } from "@/lib/c64api";
 
-const SMOKE_CONFIG_STORAGE_KEY = 'c64u_smoke_config';
-const SMOKE_MODE_STORAGE_KEY = 'c64u_smoke_mode_enabled';
-const SMOKE_CONFIG_FILENAME = 'c64u-smoke.json';
-const SMOKE_STATUS_FILENAME = 'c64u-smoke-status.json';
+const SMOKE_CONFIG_STORAGE_KEY = "c64u_smoke_config";
+const SMOKE_MODE_STORAGE_KEY = "c64u_smoke_mode_enabled";
+const SMOKE_CONFIG_FILENAME = "c64u-smoke.json";
+const SMOKE_STATUS_FILENAME = "c64u-smoke-status.json";
 
-export type SmokeTarget = 'mock' | 'real';
+export type SmokeTarget = "mock" | "real";
 export type SmokeConfig = {
   target: SmokeTarget;
   host?: string;
@@ -32,46 +32,46 @@ type SmokeBootstrapWindow = Window & {
 };
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null;
+  typeof value === "object" && value !== null;
 
 const parseSmokeConfig = (raw: unknown): SmokeConfig | null => {
   if (!isObject(raw)) return null;
   const target =
-    raw.target === 'real' ? 'real' : raw.target === 'mock' ? 'mock' : null;
+    raw.target === "real" ? "real" : raw.target === "mock" ? "mock" : null;
   if (!target) return null;
   const host =
-    typeof raw.host === 'string' && raw.host.trim().length > 0
+    typeof raw.host === "string" && raw.host.trim().length > 0
       ? normalizeDeviceHost(raw.host)
       : undefined;
-  const readOnly = typeof raw.readOnly === 'boolean' ? raw.readOnly : true;
+  const readOnly = typeof raw.readOnly === "boolean" ? raw.readOnly : true;
   const debugLogging =
-    typeof raw.debugLogging === 'boolean' ? raw.debugLogging : true;
+    typeof raw.debugLogging === "boolean" ? raw.debugLogging : true;
   return { target, host, readOnly, debugLogging };
 };
 
 const getErrorMessage = (error: unknown) => {
-  if (typeof error === 'string') return error;
-  if (error && typeof error === 'object') {
+  if (typeof error === "string") return error;
+  if (error && typeof error === "object") {
     if (
-      'message' in error &&
-      typeof (error as { message?: unknown }).message === 'string'
+      "message" in error &&
+      typeof (error as { message?: unknown }).message === "string"
     ) {
       return (error as { message: string }).message;
     }
-    if ('error' in error) {
+    if ("error" in error) {
       const nested = (error as { error?: unknown }).error;
-      if (typeof nested === 'string') return nested;
+      if (typeof nested === "string") return nested;
       if (
         nested &&
-        typeof nested === 'object' &&
-        'message' in nested &&
-        typeof (nested as { message?: unknown }).message === 'string'
+        typeof nested === "object" &&
+        "message" in nested &&
+        typeof (nested as { message?: unknown }).message === "string"
       ) {
         return (nested as { message: string }).message;
       }
     }
   }
-  return String(error ?? '');
+  return String(error ?? "");
 };
 
 const isMissingFileError = (error: unknown) =>
@@ -81,26 +81,26 @@ const isMissingFileError = (error: unknown) =>
 
 const shouldReadSmokeConfigFromFilesystem = () => {
   if (!Capacitor.isNativePlatform()) return false;
-  if (import.meta.env.VITE_ENABLE_TEST_PROBES === '1') return true;
+  if (import.meta.env.VITE_ENABLE_TEST_PROBES === "1") return true;
   if (
-    typeof window !== 'undefined' &&
+    typeof window !== "undefined" &&
     (window as SmokeBootstrapWindow).__c64uReadSmokeConfigFromFilesystem ===
       true
   ) {
     return true;
   }
-  if (typeof localStorage === 'undefined') return false;
-  return localStorage.getItem(SMOKE_MODE_STORAGE_KEY) === '1';
+  if (typeof localStorage === "undefined") return false;
+  return localStorage.getItem(SMOKE_MODE_STORAGE_KEY) === "1";
 };
 
 const readSmokeConfigFromStorage = (): SmokeConfig | null => {
-  if (typeof localStorage === 'undefined') return null;
+  if (typeof localStorage === "undefined") return null;
   const raw = localStorage.getItem(SMOKE_CONFIG_STORAGE_KEY);
   if (!raw) return null;
   try {
     return parseSmokeConfig(JSON.parse(raw));
   } catch (error) {
-    addLog('warn', 'Failed to parse smoke config from storage', {
+    addLog("warn", "Failed to parse smoke config from storage", {
       error: (error as Error).message,
     });
     return null;
@@ -108,9 +108,9 @@ const readSmokeConfigFromStorage = (): SmokeConfig | null => {
 };
 
 const writeSmokeConfigToStorage = (config: SmokeConfig) => {
-  if (typeof localStorage === 'undefined') return;
+  if (typeof localStorage === "undefined") return;
   localStorage.setItem(SMOKE_CONFIG_STORAGE_KEY, JSON.stringify(config));
-  localStorage.setItem(SMOKE_MODE_STORAGE_KEY, '1');
+  localStorage.setItem(SMOKE_MODE_STORAGE_KEY, "1");
 };
 
 export const isSmokeModeEnabled = () => Boolean(cachedSmokeConfig);
@@ -136,14 +136,14 @@ export const initializeSmokeMode = async (): Promise<SmokeConfig | null> => {
     } catch (error) {
       if (isMissingFileError(error)) {
         addLog(
-          'debug',
-          'Smoke config file not found; skipping native bootstrap',
+          "debug",
+          "Smoke config file not found; skipping native bootstrap",
           {
             path: SMOKE_CONFIG_FILENAME,
           },
         );
       } else {
-        addLog('warn', 'Failed to read smoke config from filesystem', {
+        addLog("warn", "Failed to read smoke config from filesystem", {
           error: (error as Error).message,
         });
       }
@@ -160,17 +160,17 @@ export const initializeSmokeMode = async (): Promise<SmokeConfig | null> => {
     saveDebugLoggingEnabled(true);
   }
 
-  if (config.host && typeof localStorage !== 'undefined') {
-    localStorage.setItem('c64u_device_host', config.host);
+  if (config.host && typeof localStorage !== "undefined") {
+    localStorage.setItem("c64u_device_host", config.host);
   }
 
-  addLog('info', 'Smoke mode enabled', {
+  addLog("info", "Smoke mode enabled", {
     target: config.target,
     host: config.host,
     readOnly: config.readOnly,
   });
   console.info(
-    'C64U_SMOKE_ENABLED',
+    "C64U_SMOKE_ENABLED",
     JSON.stringify({
       target: config.target,
       host: config.host,
@@ -198,7 +198,7 @@ export const recordSmokeStatus = async (status: {
       encoding: Encoding.UTF8,
     });
   } catch (error) {
-    addLog('warn', 'Failed to write smoke status', {
+    addLog("warn", "Failed to write smoke status", {
       error: (error as Error).message,
     });
   }

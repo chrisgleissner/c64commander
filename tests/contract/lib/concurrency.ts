@@ -12,7 +12,7 @@ export class Semaphore {
 
   constructor(private readonly limit: number) {
     if (limit < 1) {
-      throw new Error('Semaphore limit must be >= 1');
+      throw new Error("Semaphore limit must be >= 1");
     }
   }
 

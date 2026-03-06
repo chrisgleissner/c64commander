@@ -6,30 +6,30 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { LocalSourceListingError } from '@/lib/sourceNavigation/localSourceErrors';
+import { LocalSourceListingError } from "@/lib/sourceNavigation/localSourceErrors";
 
 export type FailureCategory =
-  | 'network'
-  | 'timeout'
-  | 'cancelled'
-  | 'user'
-  | 'integration'
-  | 'storage'
-  | 'unknown';
+  | "network"
+  | "timeout"
+  | "cancelled"
+  | "user"
+  | "integration"
+  | "storage"
+  | "unknown";
 
 export type FailureClass =
-  | 'user-cancellation'
-  | 'network-transient'
-  | 'network-unreachable'
-  | 'io-read-failure'
-  | 'io-write-failure'
-  | 'parse-failure'
-  | 'metadata-absent'
-  | 'permission-denied'
-  | 'resource-exhausted'
-  | 'plugin-failure'
-  | 'playback-device-error'
-  | 'unknown';
+  | "user-cancellation"
+  | "network-transient"
+  | "network-unreachable"
+  | "io-read-failure"
+  | "io-write-failure"
+  | "parse-failure"
+  | "metadata-absent"
+  | "permission-denied"
+  | "resource-exhausted"
+  | "plugin-failure"
+  | "playback-device-error"
+  | "unknown";
 
 export type FailureClassification = {
   category: FailureCategory;
@@ -39,17 +39,17 @@ export type FailureClassification = {
 };
 
 const normalizeMessage = (error: unknown) => {
-  if (!error) return '';
-  if (typeof error === 'string') return error;
-  if (typeof error === 'object' && 'message' in error) {
+  if (!error) return "";
+  if (typeof error === "string") return error;
+  if (typeof error === "object" && "message" in error) {
     const message = (error as { message?: unknown }).message;
-    return typeof message === 'string' ? message : '';
+    return typeof message === "string" ? message : "";
   }
-  return '';
+  return "";
 };
 
 const isAbortError = (error: Error, message: string) =>
-  error.name === 'AbortError' || /aborted|canceled|cancelled/i.test(message);
+  error.name === "AbortError" || /aborted|canceled|cancelled/i.test(message);
 
 const isTimeoutError = (message: string) => /timed out|timeout/i.test(message);
 
@@ -64,7 +64,7 @@ const isUserError = (message: string) =>
   );
 
 const isStorageError = (error: Error, message: string) =>
-  error.name === 'QuotaExceededError' ||
+  error.name === "QuotaExceededError" ||
   /storage|filesystem|file system|no such file|not found/i.test(message);
 
 const isIntegrationError = (message: string) =>
@@ -81,7 +81,7 @@ const isWriteError = (message: string) =>
   );
 
 const isParseError = (error: Error, message: string) =>
-  error.name === 'SyntaxError' ||
+  error.name === "SyntaxError" ||
   /parse|malformed|invalid (json|yaml|format)|unexpected token/i.test(message);
 
 const isMetadataAbsentError = (message: string) =>
@@ -94,7 +94,7 @@ const resolveErrorType = (error: Error) => {
   if (error instanceof LocalSourceListingError) {
     return `LocalSourceListingError:${error.code}`;
   }
-  if (error.name && error.name !== 'Error') return error.name;
+  if (error.name && error.name !== "Error") return error.name;
   return null;
 };
 
@@ -105,71 +105,71 @@ export const classifyError = (
   const err =
     error instanceof Error
       ? error
-      : new Error(normalizeMessage(error) || 'Unknown error');
+      : new Error(normalizeMessage(error) || "Unknown error");
   const message = normalizeMessage(err).toLowerCase();
 
-  let category: FailureCategory = categoryHint ?? 'unknown';
+  let category: FailureCategory = categoryHint ?? "unknown";
 
   if (!categoryHint) {
     if (isAbortError(err, message)) {
-      category = 'cancelled';
+      category = "cancelled";
     } else if (isTimeoutError(message)) {
-      category = 'timeout';
+      category = "timeout";
     } else if (isNetworkError(message)) {
-      category = 'network';
+      category = "network";
     } else if (
       err instanceof LocalSourceListingError ||
       isStorageError(err, message)
     ) {
-      category = 'storage';
+      category = "storage";
     } else if (isUserError(message)) {
-      category = 'user';
+      category = "user";
     } else if (isIntegrationError(message)) {
-      category = 'integration';
+      category = "integration";
     }
   }
 
-  const isExpected = category === 'cancelled' || category === 'user';
+  const isExpected = category === "cancelled" || category === "user";
 
-  let failureClass: FailureClass = 'unknown';
+  let failureClass: FailureClass = "unknown";
   if (isAbortError(err, message)) {
-    failureClass = 'user-cancellation';
+    failureClass = "user-cancellation";
   } else if (isPermissionError(message)) {
-    failureClass = 'permission-denied';
+    failureClass = "permission-denied";
   } else if (isTimeoutError(message)) {
-    failureClass = 'network-transient';
+    failureClass = "network-transient";
   } else if (isNetworkError(message)) {
     failureClass =
       /unknown host|enotfound|dns|unreachable|ehostunreach|enetunreach/i.test(
         message,
       )
-        ? 'network-unreachable'
-        : 'network-transient';
+        ? "network-unreachable"
+        : "network-transient";
   } else if (
-    err.name === 'QuotaExceededError' ||
+    err.name === "QuotaExceededError" ||
     /no space|out of memory|oom|resource exhausted|insufficient storage/i.test(
       message,
     )
   ) {
-    failureClass = 'resource-exhausted';
+    failureClass = "resource-exhausted";
   } else if (isParseError(err, message)) {
-    failureClass = 'parse-failure';
+    failureClass = "parse-failure";
   } else if (isIntegrationError(message)) {
-    failureClass = 'plugin-failure';
+    failureClass = "plugin-failure";
   } else if (isWriteError(message)) {
-    failureClass = 'io-write-failure';
+    failureClass = "io-write-failure";
   } else if (err instanceof LocalSourceListingError) {
-    failureClass = err.code.startsWith('saf-')
-      ? 'permission-denied'
-      : 'io-read-failure';
+    failureClass = err.code.startsWith("saf-")
+      ? "permission-denied"
+      : "io-read-failure";
   } else if (isStorageError(err, message)) {
     failureClass = isWriteError(message)
-      ? 'io-write-failure'
-      : 'io-read-failure';
+      ? "io-write-failure"
+      : "io-read-failure";
   } else if (isMetadataAbsentError(message)) {
-    failureClass = 'metadata-absent';
+    failureClass = "metadata-absent";
   } else if (isDevicePlaybackError(message)) {
-    failureClass = 'playback-device-error';
+    failureClass = "playback-device-error";
   }
 
   return {

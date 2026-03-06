@@ -6,9 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import React from 'react';
-import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import React from "react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 interface SectionHeaderProps {
   title: string;
@@ -24,7 +24,7 @@ interface SectionHeaderProps {
 export function SectionHeader({
   title,
   resetAction,
-  resetLabel = 'Reset',
+  resetLabel = "Reset",
   resetDisabled = false,
   isResetting = false,
   className,
@@ -32,7 +32,7 @@ export function SectionHeader({
   resetTestId,
 }: SectionHeaderProps) {
   return (
-    <div className={cn('flex items-center justify-between gap-2', className)}>
+    <div className={cn("flex items-center justify-between gap-2", className)}>
       <h3 className="category-header">
         <span className="w-1.5 h-1.5 rounded-full bg-primary" />
         {title}
@@ -46,7 +46,7 @@ export function SectionHeader({
           disabled={resetDisabled}
           data-testid={resetTestId}
         >
-          {isResetting ? 'Resetting…' : resetLabel}
+          {isResetting ? "Resetting…" : resetLabel}
         </Button>
       )}
     </div>

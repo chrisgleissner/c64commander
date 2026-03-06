@@ -6,8 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { BackgroundExecutionPlugin } from './backgroundExecution';
-import { addLog } from '@/lib/logging';
+import type { BackgroundExecutionPlugin } from "./backgroundExecution";
+import { addLog } from "@/lib/logging";
 
 /**
  * Web fallback with best-effort parity:
@@ -29,22 +29,22 @@ export class BackgroundExecutionWeb implements BackgroundExecutionPlugin {
       navigator as Navigator & {
         wakeLock?: {
           request: (
-            type: 'screen',
+            type: "screen",
           ) => Promise<{ release: () => Promise<void> }>;
         };
       }
     ).wakeLock;
     if (!wakeLockApi) {
-      addLog('info', 'Background execution wake lock unavailable on web', {
-        source: 'background-execution-web',
+      addLog("info", "Background execution wake lock unavailable on web", {
+        source: "background-execution-web",
       });
       return;
     }
     try {
-      this.wakeLock = await wakeLockApi.request('screen');
+      this.wakeLock = await wakeLockApi.request("screen");
     } catch (error) {
-      addLog('warn', 'Web wake lock request failed', {
-        source: 'background-execution-web',
+      addLog("warn", "Web wake lock request failed", {
+        source: "background-execution-web",
         error: (error as Error).message,
       });
     }
@@ -62,8 +62,8 @@ export class BackgroundExecutionWeb implements BackgroundExecutionPlugin {
     try {
       await this.wakeLock.release();
     } catch (error) {
-      addLog('warn', 'Web wake lock release failed', {
-        source: 'background-execution-web',
+      addLog("warn", "Web wake lock release failed", {
+        source: "background-execution-web",
         error: (error as Error).message,
       });
     } finally {
@@ -92,8 +92,8 @@ export class BackgroundExecutionWeb implements BackgroundExecutionPlugin {
         try {
           listener(event);
         } catch (error) {
-          addLog('warn', 'Web background due listener failed', {
-            source: 'background-execution-web',
+          addLog("warn", "Web background due listener failed", {
+            source: "background-execution-web",
             error: (error as Error).message,
           });
         }
@@ -102,12 +102,12 @@ export class BackgroundExecutionWeb implements BackgroundExecutionPlugin {
   }
 
   async addListener(
-    eventName: 'backgroundAutoSkipDue',
+    eventName: "backgroundAutoSkipDue",
     listenerFunc: (event: { dueAtMs: number; firedAtMs: number }) => void,
   ): Promise<{ remove: () => Promise<void> }> {
-    if (eventName !== 'backgroundAutoSkipDue') {
-      addLog('warn', 'Unsupported web background execution listener event', {
-        source: 'background-execution-web',
+    if (eventName !== "backgroundAutoSkipDue") {
+      addLog("warn", "Unsupported web background execution listener event", {
+        source: "background-execution-web",
         eventName,
       });
     }

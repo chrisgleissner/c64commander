@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from "react";
 import {
   createLocalSourceFromFileList,
   createLocalSourceFromPicker,
@@ -14,7 +14,7 @@ import {
   saveLocalSources,
   setLocalSourceRuntimeFiles,
   type LocalSourceRecord,
-} from '@/lib/sourceNavigation/localSourcesStore';
+} from "@/lib/sourceNavigation/localSourcesStore";
 
 export type UseLocalSourcesState = {
   sources: LocalSourceRecord[];

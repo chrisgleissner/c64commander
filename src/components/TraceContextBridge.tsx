@@ -6,20 +6,20 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
-import { useFeatureFlags } from '@/hooks/useFeatureFlags';
-import { useC64Connection } from '@/hooks/useC64Connection';
+import { useEffect } from "react";
+import { useLocation } from "react-router-dom";
+import { useFeatureFlags } from "@/hooks/useFeatureFlags";
+import { useC64Connection } from "@/hooks/useC64Connection";
 import {
   setTraceDeviceContext,
   setTraceFeatureFlags,
   setTracePlaybackContext,
   setTracePlatformContext,
   setTraceUiContext,
-} from '@/lib/tracing/traceContext';
-import { getPlatform } from '@/lib/native/platform';
-import { registerTraceBridge } from '@/lib/tracing/traceBridge';
-import { usePlaybackTraceSnapshot } from '@/pages/playFiles/playbackTraceStore';
+} from "@/lib/tracing/traceContext";
+import { getPlatform } from "@/lib/native/platform";
+import { registerTraceBridge } from "@/lib/tracing/traceBridge";
+import { usePlaybackTraceSnapshot } from "@/pages/playFiles/playbackTraceStore";
 
 export const TraceContextBridge = () => {
   const location = useLocation();

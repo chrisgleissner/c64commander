@@ -6,18 +6,18 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
-import { ItemSelectionView } from '@/components/itemSelection/ItemSelectionView';
-import type { SourceEntry } from '@/lib/sourceNavigation/types';
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+import { ItemSelectionView } from "@/components/itemSelection/ItemSelectionView";
+import type { SourceEntry } from "@/lib/sourceNavigation/types";
 
 const entries: SourceEntry[] = [
-  { type: 'file', name: 'Track.sid', path: '/music/Track.sid' },
-  { type: 'dir', name: 'Demos', path: '/music/Demos' },
+  { type: "file", name: "Track.sid", path: "/music/Track.sid" },
+  { type: "dir", name: "Demos", path: "/music/Demos" },
 ];
 
-describe('ItemSelectionView', () => {
-  it('renders entries and wires navigation actions', () => {
+describe("ItemSelectionView", () => {
+  it("renders entries and wires navigation actions", () => {
     const onToggleSelect = vi.fn();
     const onOpen = vi.fn();
     const onNavigateUp = vi.fn();
@@ -45,17 +45,17 @@ describe('ItemSelectionView', () => {
       />,
     );
 
-    expect(screen.getByTestId('ftp-loading')).toBeInTheDocument();
-    fireEvent.click(screen.getByTestId('navigate-root'));
-    fireEvent.click(screen.getByRole('button', { name: /up/i }));
-    fireEvent.click(screen.getByRole('button', { name: /refresh/i }));
+    expect(screen.getByTestId("ftp-loading")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("navigate-root"));
+    fireEvent.click(screen.getByRole("button", { name: /up/i }));
+    fireEvent.click(screen.getByRole("button", { name: /refresh/i }));
 
-    const checkboxes = screen.getAllByRole('checkbox');
+    const checkboxes = screen.getAllByRole("checkbox");
     fireEvent.click(checkboxes[0]);
 
-    const openDemosRow = screen.getByRole('button', { name: /open demos/i });
+    const openDemosRow = screen.getByRole("button", { name: /open demos/i });
     fireEvent.click(openDemosRow);
-    fireEvent.keyDown(openDemosRow, { key: 'Enter' });
+    fireEvent.keyDown(openDemosRow, { key: "Enter" });
 
     expect(onNavigateRoot).toHaveBeenCalledTimes(1);
     expect(onNavigateUp).toHaveBeenCalledTimes(1);
@@ -64,11 +64,11 @@ describe('ItemSelectionView', () => {
     expect(onOpen).toHaveBeenNthCalledWith(1, entries[1].path);
     expect(onOpen).toHaveBeenNthCalledWith(2, entries[1].path);
     expect(
-      screen.queryByRole('button', { name: /^open$/i }),
+      screen.queryByRole("button", { name: /^open$/i }),
     ).not.toBeInTheDocument();
   });
 
-  it('disables selection and navigation at root when loading', () => {
+  it("disables selection and navigation at root when loading", () => {
     const onToggleSelect = vi.fn();
     const onOpen = vi.fn();
 
@@ -89,19 +89,19 @@ describe('ItemSelectionView', () => {
       />,
     );
 
-    expect(screen.getByTestId('navigate-root')).toBeDisabled();
-    expect(screen.getByRole('button', { name: /up/i })).toBeDisabled();
-    expect(screen.getByRole('button', { name: /loading/i })).toBeDisabled();
+    expect(screen.getByTestId("navigate-root")).toBeDisabled();
+    expect(screen.getByRole("button", { name: /up/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /loading/i })).toBeDisabled();
 
-    const [checkbox] = screen.getAllByRole('checkbox');
+    const [checkbox] = screen.getAllByRole("checkbox");
     expect(checkbox).toBeDisabled();
     fireEvent.click(checkbox);
 
     expect(onToggleSelect).not.toHaveBeenCalled();
-    const openDemosRow = screen.getByRole('button', { name: /open demos/i });
-    expect(openDemosRow).toHaveAttribute('aria-disabled', 'true');
+    const openDemosRow = screen.getByRole("button", { name: /open demos/i });
+    expect(openDemosRow).toHaveAttribute("aria-disabled", "true");
     fireEvent.click(openDemosRow);
-    fireEvent.keyDown(openDemosRow, { key: 'Enter' });
+    fireEvent.keyDown(openDemosRow, { key: "Enter" });
     expect(onOpen).not.toHaveBeenCalled();
   });
 });

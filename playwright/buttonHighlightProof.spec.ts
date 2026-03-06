@@ -1,24 +1,24 @@
-import { expect, test } from '@playwright/test';
-import { saveCoverageFromPage } from './withCoverage';
+import { expect, test } from "@playwright/test";
+import { saveCoverageFromPage } from "./withCoverage";
 
 test.afterEach(async ({ page }, testInfo) => {
   await saveCoverageFromPage(page, testInfo.title);
 });
 
-test.describe('CTA highlight proof', () => {
-  test('connectivity indicator flash clears after transient timeout', async ({
+test.describe("CTA highlight proof", () => {
+  test("connectivity indicator flash clears after transient timeout", async ({
     page,
   }, testInfo) => {
-    await page.goto('/');
+    await page.goto("/");
 
-    const continueDemo = page.getByRole('button', {
-      name: 'Continue in Demo Mode',
+    const continueDemo = page.getByRole("button", {
+      name: "Continue in Demo Mode",
     });
     if (await continueDemo.isVisible().catch(() => false)) {
       await continueDemo.click();
     }
 
-    const target = page.getByTestId('connectivity-indicator');
+    const target = page.getByTestId("connectivity-indicator");
     await expect(target).toBeVisible();
     await target.scrollIntoViewIfNeeded();
 
@@ -26,14 +26,14 @@ test.describe('CTA highlight proof', () => {
       return Promise.all([
         target.evaluate((element) => {
           return new Promise<boolean>((resolve) => {
-            const attr = 'data-c64-tap-flash';
-            if (element.getAttribute(attr) === 'true') {
+            const attr = "data-c64-tap-flash";
+            if (element.getAttribute(attr) === "true") {
               resolve(true);
               return;
             }
 
             const observer = new MutationObserver(() => {
-              if (element.getAttribute(attr) === 'true') {
+              if (element.getAttribute(attr) === "true") {
                 observer.disconnect();
                 resolve(true);
               }
@@ -45,7 +45,7 @@ test.describe('CTA highlight proof', () => {
             });
             setTimeout(() => {
               observer.disconnect();
-              resolve(element.getAttribute(attr) === 'true');
+              resolve(element.getAttribute(attr) === "true");
             }, 2500);
           });
         }),
@@ -63,22 +63,22 @@ test.describe('CTA highlight proof', () => {
 
     expect(sawFlash).toBe(true);
 
-    const activePath = testInfo.outputPath('button-highlight-active.png');
+    const activePath = testInfo.outputPath("button-highlight-active.png");
     await target.screenshot({ path: activePath });
-    await testInfo.attach('button-highlight-active', {
+    await testInfo.attach("button-highlight-active", {
       path: activePath,
-      contentType: 'image/png',
+      contentType: "image/png",
     });
 
     await page.waitForTimeout(400);
 
-    await expect(target).not.toHaveAttribute('data-c64-tap-flash', 'true');
+    await expect(target).not.toHaveAttribute("data-c64-tap-flash", "true");
 
-    const clearedPath = testInfo.outputPath('button-highlight-cleared.png');
+    const clearedPath = testInfo.outputPath("button-highlight-cleared.png");
     await target.screenshot({ path: clearedPath });
-    await testInfo.attach('button-highlight-cleared', {
+    await testInfo.attach("button-highlight-cleared", {
       path: clearedPath,
-      contentType: 'image/png',
+      contentType: "image/png",
     });
   });
 });

@@ -6,12 +6,12 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { registerPlugin } from '@capacitor/core';
-import { getActiveAction } from '@/lib/tracing/actionTrace';
+import { registerPlugin } from "@capacitor/core";
+import { getActiveAction } from "@/lib/tracing/actionTrace";
 import {
   resolveNativeTraceContext,
   type NativeTraceContext,
-} from '@/lib/native/nativeTraceContext';
+} from "@/lib/native/nativeTraceContext";
 
 export type HvscNativeIngestResult = {
   totalEntries: number;
@@ -40,7 +40,7 @@ export type HvscNativeProgressEvent = {
 type HvscIngestionPlugin = {
   ingestHvsc: (options: {
     relativeArchivePath: string;
-    mode: 'baseline' | 'update';
+    mode: "baseline" | "update";
     resetLibrary?: boolean;
     dbBatchSize?: number;
     minExpectedRows?: number;
@@ -55,17 +55,17 @@ type HvscIngestionPlugin = {
     traceContext?: NativeTraceContext;
   }) => Promise<{ metadataRows: number }>;
   addListener: (
-    eventName: 'hvscProgress',
+    eventName: "hvscProgress",
     listenerFunc: (event: HvscNativeProgressEvent) => void,
   ) => Promise<{ remove: () => Promise<void> }>;
 };
 
-const plugin = registerPlugin<HvscIngestionPlugin>('HvscIngestion');
+const plugin = registerPlugin<HvscIngestionPlugin>("HvscIngestion");
 
 export const HvscIngestion = {
   ingestHvsc: (options: {
     relativeArchivePath: string;
-    mode: 'baseline' | 'update';
+    mode: "baseline" | "update";
     resetLibrary?: boolean;
     dbBatchSize?: number;
     minExpectedRows?: number;
@@ -85,5 +85,5 @@ export const HvscIngestion = {
       traceContext: resolveNativeTraceContext(getActiveAction()),
     }),
   addProgressListener: (listener: (event: HvscNativeProgressEvent) => void) =>
-    plugin.addListener('hvscProgress', listener),
+    plugin.addListener("hvscProgress", listener),
 };

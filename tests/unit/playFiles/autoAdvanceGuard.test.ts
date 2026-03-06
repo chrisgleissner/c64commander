@@ -14,9 +14,9 @@
  *   3. Duplicate-advance prevention: autoFired flag blocks duplicate transitions.
  */
 
-import { describe, expect, it } from 'vitest';
-import { isSongCategory } from '@/pages/playFiles/playFilesUtils';
-import type { PlayFileCategory } from '@/lib/playback/fileTypes';
+import { describe, expect, it } from "vitest";
+import { isSongCategory } from "@/pages/playFiles/playFilesUtils";
+import type { PlayFileCategory } from "@/lib/playback/fileTypes";
 
 // ---------------------------------------------------------------------------
 // Types mirroring usePlaybackController AutoAdvanceGuard
@@ -36,7 +36,7 @@ function buildAutoAdvanceGuard(
   trackInstanceId: number,
   now: number,
 ): AutoAdvanceGuard | null {
-  if (typeof resolvedDuration !== 'number') return null;
+  if (typeof resolvedDuration !== "number") return null;
   return {
     trackInstanceId,
     dueAtMs: now + resolvedDuration,
@@ -56,7 +56,7 @@ function shouldAutoAdvance(
   if (!guard) return false;
   if (guard.autoFired || guard.userCancelled) return false;
   if (
-    typeof expectedTrackInstanceId === 'number' &&
+    typeof expectedTrackInstanceId === "number" &&
     guard.trackInstanceId !== expectedTrackInstanceId
   )
     return false;
@@ -67,16 +67,16 @@ function shouldAutoAdvance(
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('autoAdvanceGuard: format matrix (Issue 2)', () => {
+describe("autoAdvanceGuard: format matrix (Issue 2)", () => {
   const DURATION_MS = 5000;
   const NOW = Date.now();
 
   const allCategories: PlayFileCategory[] = [
-    'sid',
-    'mod',
-    'prg',
-    'crt',
-    'disk',
+    "sid",
+    "mod",
+    "prg",
+    "crt",
+    "disk",
   ];
 
   for (const category of allCategories) {
@@ -89,29 +89,29 @@ describe('autoAdvanceGuard: format matrix (Issue 2)', () => {
     });
   }
 
-  it('does NOT arm guard when resolvedDuration is undefined (no duration = no auto-advance)', () => {
+  it("does NOT arm guard when resolvedDuration is undefined (no duration = no auto-advance)", () => {
     const guard = buildAutoAdvanceGuard(undefined, 1, NOW);
     expect(guard).toBeNull();
   });
 
-  it('isSongCategory still classifies sid/mod correctly', () => {
-    expect(isSongCategory('sid')).toBe(true);
-    expect(isSongCategory('mod')).toBe(true);
-    expect(isSongCategory('prg')).toBe(false);
-    expect(isSongCategory('crt')).toBe(false);
-    expect(isSongCategory('disk')).toBe(false);
+  it("isSongCategory still classifies sid/mod correctly", () => {
+    expect(isSongCategory("sid")).toBe(true);
+    expect(isSongCategory("mod")).toBe(true);
+    expect(isSongCategory("prg")).toBe(false);
+    expect(isSongCategory("crt")).toBe(false);
+    expect(isSongCategory("disk")).toBe(false);
   });
 });
 
-describe('autoAdvanceGuard: lock/unlock overdue reconciliation (Issue 2)', () => {
-  it('fires when now >= dueAtMs (on-time case)', () => {
+describe("autoAdvanceGuard: lock/unlock overdue reconciliation (Issue 2)", () => {
+  it("fires when now >= dueAtMs (on-time case)", () => {
     const now = 10_000;
     const guard = buildAutoAdvanceGuard(100, 1, now - 100);
     expect(guard!.dueAtMs).toBe(now);
     expect(shouldAutoAdvance(guard, now)).toBe(true);
   });
 
-  it('fires when now > dueAtMs (overdue after lock/unlock)', () => {
+  it("fires when now > dueAtMs (overdue after lock/unlock)", () => {
     const now = 20_000;
     const guard = buildAutoAdvanceGuard(500, 1, now - 5000);
     // dueAtMs = now - 5000 + 500 = now - 4500, which is in the past
@@ -119,20 +119,20 @@ describe('autoAdvanceGuard: lock/unlock overdue reconciliation (Issue 2)', () =>
     expect(shouldAutoAdvance(guard, now)).toBe(true);
   });
 
-  it('does NOT fire when now < dueAtMs (track still playing)', () => {
+  it("does NOT fire when now < dueAtMs (track still playing)", () => {
     const now = 10_000;
     const guard = buildAutoAdvanceGuard(5000, 1, now);
     // dueAtMs = now + 5000; current time is still now
     expect(shouldAutoAdvance(guard, now)).toBe(false);
   });
 
-  it('does NOT fire when guard is null', () => {
+  it("does NOT fire when guard is null", () => {
     expect(shouldAutoAdvance(null, Date.now())).toBe(false);
   });
 });
 
-describe('autoAdvanceGuard: duplicate-advance prevention (Issue 2)', () => {
-  it('does NOT fire a second time once autoFired is true', () => {
+describe("autoAdvanceGuard: duplicate-advance prevention (Issue 2)", () => {
+  it("does NOT fire a second time once autoFired is true", () => {
     const now = 10_000;
     const guard = buildAutoAdvanceGuard(100, 1, now - 100);
     expect(shouldAutoAdvance(guard, now)).toBe(true);
@@ -144,27 +144,27 @@ describe('autoAdvanceGuard: duplicate-advance prevention (Issue 2)', () => {
     expect(shouldAutoAdvance(guard, now + 100)).toBe(false);
   });
 
-  it('does NOT fire when userCancelled is true', () => {
+  it("does NOT fire when userCancelled is true", () => {
     const now = 10_000;
     const guard = buildAutoAdvanceGuard(100, 1, now - 100);
     guard!.userCancelled = true;
     expect(shouldAutoAdvance(guard, now)).toBe(false);
   });
 
-  it('does NOT fire when trackInstanceId does not match expected', () => {
+  it("does NOT fire when trackInstanceId does not match expected", () => {
     const now = 10_000;
     const guard = buildAutoAdvanceGuard(100, 1, now - 100);
     // Guard's trackInstanceId=1 but caller expects 2 (stale guard)
     expect(shouldAutoAdvance(guard, now, 2)).toBe(false);
   });
 
-  it('fires when trackInstanceId matches expected', () => {
+  it("fires when trackInstanceId matches expected", () => {
     const now = 10_000;
     const guard = buildAutoAdvanceGuard(100, 5, now - 100);
     expect(shouldAutoAdvance(guard, now, 5)).toBe(true);
   });
 
-  it('fires when no expected trackInstanceId provided (no filter)', () => {
+  it("fires when no expected trackInstanceId provided (no filter)", () => {
     const now = 10_000;
     const guard = buildAutoAdvanceGuard(100, 7, now - 100);
     expect(shouldAutoAdvance(guard, now)).toBe(true);

@@ -6,4 +6,4 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-export * from '@/lib/tracing/failureTaxonomy';
+export * from "@/lib/tracing/failureTaxonomy";

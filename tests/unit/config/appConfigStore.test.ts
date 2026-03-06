@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from "vitest";
 import {
   createAppConfigEntry,
   getActiveBaseUrl,
@@ -17,78 +17,78 @@ import {
   saveInitialSnapshot,
   updateHasChanges,
   listAppConfigs,
-} from '@/lib/config/appConfigStore';
+} from "@/lib/config/appConfigStore";
 
-vi.mock('@/lib/c64api', () => ({
-  buildBaseUrlFromDeviceHost: (host?: string) => `http://${host ?? 'c64u'}`,
+vi.mock("@/lib/c64api", () => ({
+  buildBaseUrlFromDeviceHost: (host?: string) => `http://${host ?? "c64u"}`,
   resolveDeviceHostFromStorage: () =>
-    localStorage.getItem('c64u_device_host') || 'c64u',
+    localStorage.getItem("c64u_device_host") || "c64u",
 }));
 
-describe('appConfigStore', () => {
+describe("appConfigStore", () => {
   beforeEach(() => {
     localStorage.clear();
   });
 
-  it('uses stored base url or default', () => {
-    expect(getActiveBaseUrl()).toBe('http://c64u');
-    localStorage.setItem('c64u_device_host', 'custom-host');
-    expect(getActiveBaseUrl()).toBe('http://custom-host');
+  it("uses stored base url or default", () => {
+    expect(getActiveBaseUrl()).toBe("http://c64u");
+    localStorage.setItem("c64u_device_host", "custom-host");
+    expect(getActiveBaseUrl()).toBe("http://custom-host");
   });
 
-  it('stores and loads initial snapshots', () => {
+  it("stores and loads initial snapshots", () => {
     const snapshot = {
-      savedAt: 'now',
+      savedAt: "now",
       data: { Audio: { errors: [] as string[] } },
     };
-    expect(loadInitialSnapshot('http://device')).toBeNull();
-    saveInitialSnapshot('http://device', snapshot);
-    expect(loadInitialSnapshot('http://device')).toEqual(snapshot);
+    expect(loadInitialSnapshot("http://device")).toBeNull();
+    saveInitialSnapshot("http://device", snapshot);
+    expect(loadInitialSnapshot("http://device")).toEqual(snapshot);
   });
 
-  it('stores and updates has-changes flag with event dispatch', () => {
+  it("stores and updates has-changes flag with event dispatch", () => {
     const handler = vi.fn();
-    window.addEventListener('c64u-has-changes', handler as EventListener);
+    window.addEventListener("c64u-has-changes", handler as EventListener);
 
-    expect(loadHasChanges('http://device')).toBe(false);
-    updateHasChanges('http://device', true);
-    expect(loadHasChanges('http://device')).toBe(true);
+    expect(loadHasChanges("http://device")).toBe(false);
+    updateHasChanges("http://device", true);
+    expect(loadHasChanges("http://device")).toBe(true);
     expect(handler).toHaveBeenCalled();
 
-    updateHasChanges('http://device', false);
-    expect(loadHasChanges('http://device')).toBe(false);
+    updateHasChanges("http://device", false);
+    expect(loadHasChanges("http://device")).toBe(false);
 
-    window.removeEventListener('c64u-has-changes', handler as EventListener);
+    window.removeEventListener("c64u-has-changes", handler as EventListener);
   });
 
-  it('creates, saves, and lists app configs sorted by saved time', () => {
-    const entryA = createAppConfigEntry('http://device', 'Config A', {
+  it("creates, saves, and lists app configs sorted by saved time", () => {
+    const entryA = createAppConfigEntry("http://device", "Config A", {
       Audio: { errors: [] },
     });
-    const entryB = createAppConfigEntry('http://device', 'Config B', {
+    const entryB = createAppConfigEntry("http://device", "Config B", {
       Audio: { errors: [] },
     });
-    const entryOther = createAppConfigEntry('http://other', 'Other', {
+    const entryOther = createAppConfigEntry("http://other", "Other", {
       Audio: { errors: [] },
     });
 
     saveAppConfigs([entryA, entryOther, entryB]);
-    const listed = listAppConfigs('http://device');
+    const listed = listAppConfigs("http://device");
 
     expect(listed).toHaveLength(2);
     expect(listed[0].savedAt >= listed[1].savedAt).toBe(true);
   });
 
-  it('loads empty configs when storage is invalid', () => {
-    localStorage.setItem('c64u_app_configs', 'not-json');
+  it("loads empty configs when storage is invalid", () => {
+    localStorage.setItem("c64u_app_configs", "not-json");
     expect(loadAppConfigs()).toEqual([]);
   });
 
-  it('uses Date.now fallback ID when crypto is not available (lines 83-84)', () => {
+  it("uses Date.now fallback ID when crypto is not available (lines 83-84)", () => {
     // Covers: left side of || in createAppConfigEntry is falsy → fallback `${Date.now()}-...`
-    vi.stubGlobal('crypto', undefined);
+    vi.stubGlobal("crypto", undefined);
     try {
-      const entry = createAppConfigEntry('http://device', 'FallbackTest', {
+      const entry = createAppConfigEntry("http://device", "FallbackTest", {
         Audio: { errors: [] },
       });
       // ID must be the Date.now-based fallback format, not a UUID

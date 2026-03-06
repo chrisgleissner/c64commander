@@ -6,13 +6,13 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { SongLengthStoreBackend } from './songlengthBackend';
+import type { SongLengthStoreBackend } from "./songlengthBackend";
 import type {
   SongLengthBackendStats,
   SongLengthLoadInput,
   SongLengthResolution,
   SongLengthResolveQuery,
-} from './songlengthTypes';
+} from "./songlengthTypes";
 
 type ParsedSongLengthEntry = {
   fullPath: string | null;
@@ -46,10 +46,10 @@ const clampRawLine = (value: string) =>
   value.length <= 400 ? value : `${value.slice(0, 400)}...`;
 
 const normalizePath = (path: string) => {
-  const normalized = path.trim().replace(/\\/g, '/').replace(/\/+/g, '/');
-  if (!normalized) return '/';
-  const withSlash = normalized.startsWith('/') ? normalized : `/${normalized}`;
-  if (withSlash.length > 1 && withSlash.endsWith('/'))
+  const normalized = path.trim().replace(/\\/g, "/").replace(/\/+/g, "/");
+  if (!normalized) return "/";
+  const withSlash = normalized.startsWith("/") ? normalized : `/${normalized}`;
+  if (withSlash.length > 1 && withSlash.endsWith("/"))
     return withSlash.slice(0, -1);
   return withSlash;
 };
@@ -69,18 +69,18 @@ const normalizeFileName = (value: string | null | undefined) => {
 const normalizePartialPath = (value: string | null | undefined) => {
   if (!value) return null;
   const normalized = normalizePath(value).toLowerCase();
-  return normalized === '/' ? null : normalized;
+  return normalized === "/" ? null : normalized;
 };
 
 const extractFileName = (path: string) =>
-  normalizeFileName(path.split('/').pop() ?? null);
+  normalizeFileName(path.split("/").pop() ?? null);
 
 const parseDurationTokenToSeconds = (value: string): number | null => {
   const match = value.match(/^(\d+):(\d{2})(?:\.(\d{1,3}))?$/);
   if (!match) return null;
   const minutes = Number(match[1]);
   const seconds = Number(match[2]);
-  const fractional = Number((match[3] ?? '').padEnd(3, '0'));
+  const fractional = Number((match[3] ?? "").padEnd(3, "0"));
   if (
     !Number.isFinite(minutes) ||
     !Number.isFinite(seconds) ||
@@ -120,13 +120,13 @@ const parseSongLengthFile = (
     const firstChar = line.charCodeAt(0);
 
     if (firstChar === 59 || firstChar === 35 || firstChar === 58) {
-      const pathCandidate = line.replace(/^[:;#]+/, '').trim();
+      const pathCandidate = line.replace(/^[:;#]+/, "").trim();
       if (!pathCandidate) {
         onRejectedLine({
           sourceFile,
           line: lineNo,
           raw: clampRawLine(rawLine),
-          reason: 'empty comment path marker',
+          reason: "empty comment path marker",
         });
         return;
       }
@@ -136,7 +136,7 @@ const parseSongLengthFile = (
 
     if (firstChar === 91) return;
 
-    const eqIndex = line.indexOf('=');
+    const eqIndex = line.indexOf("=");
     if (eqIndex > 0) {
       const md5 = normalizeMd5(line.slice(0, eqIndex));
       const durations = parseDurations(line.slice(eqIndex + 1));
@@ -145,7 +145,7 @@ const parseSongLengthFile = (
           sourceFile,
           line: lineNo,
           raw: clampRawLine(rawLine),
-          reason: 'invalid md5 key',
+          reason: "invalid md5 key",
         });
         return;
       }
@@ -154,7 +154,7 @@ const parseSongLengthFile = (
           sourceFile,
           line: lineNo,
           raw: clampRawLine(rawLine),
-          reason: 'invalid duration payload',
+          reason: "invalid duration payload",
         });
         return;
       }
@@ -182,7 +182,7 @@ const parseSongLengthFile = (
         sourceFile,
         line: lineNo,
         raw: clampRawLine(rawLine),
-        reason: 'unsupported line format',
+        reason: "unsupported line format",
       });
       return;
     }
@@ -193,7 +193,7 @@ const parseSongLengthFile = (
         sourceFile,
         line: lineNo,
         raw: clampRawLine(rawLine),
-        reason: 'invalid duration payload',
+        reason: "invalid duration payload",
       });
       return;
     }
@@ -222,7 +222,7 @@ export type InMemorySongLengthSnapshot = {
 };
 
 export class InMemoryTextBackend implements SongLengthStoreBackend {
-  readonly backendId = 'in-memory-text';
+  readonly backendId = "in-memory-text";
 
   private configuredPath: string | null = null;
   private sourceLabel: string | null = null;
@@ -244,7 +244,7 @@ export class InMemoryTextBackend implements SongLengthStoreBackend {
 
   private intern(pool: string[], index: Map<string, number>, value: string) {
     const existing = index.get(value);
-    if (typeof existing === 'number') return existing;
+    if (typeof existing === "number") return existing;
     const next = pool.length;
     pool.push(value);
     index.set(value, next);
@@ -252,7 +252,7 @@ export class InMemoryTextBackend implements SongLengthStoreBackend {
   }
 
   private internDurations(value: number[]) {
-    const key = value.join(',');
+    const key = value.join(",");
     if (!this.durationIndex.has(key)) {
       this.durationIndex.set(key, this.durations.length);
       this.durations.push(value);
@@ -336,11 +336,11 @@ export class InMemoryTextBackend implements SongLengthStoreBackend {
 
   private toResolution(
     recordId: number,
-    strategy: SongLengthResolution['strategy'],
+    strategy: SongLengthResolution["strategy"],
     query: SongLengthResolveQuery,
   ): SongLengthResolution {
     const record = this.records[recordId];
-    if (!record) return { durationSeconds: null, strategy: 'not-found' };
+    if (!record) return { durationSeconds: null, strategy: "not-found" };
     const durations = this.durations[record.durationId] ?? null;
     const normalizedDurations = durations?.length ? durations : null;
     return {
@@ -356,7 +356,7 @@ export class InMemoryTextBackend implements SongLengthStoreBackend {
 
   resolve(query: SongLengthResolveQuery): SongLengthResolution {
     if (!this.records.length) {
-      return { durationSeconds: null, strategy: 'unavailable' };
+      return { durationSeconds: null, strategy: "unavailable" };
     }
 
     const normalizedVirtualPath = query.virtualPath
@@ -365,14 +365,14 @@ export class InMemoryTextBackend implements SongLengthStoreBackend {
     const normalizedMd5 = normalizeMd5(query.md5);
     const normalizedFileName =
       normalizeFileName(query.fileName) ??
-      normalizeFileName(normalizedVirtualPath?.split('/').pop() ?? null);
+      normalizeFileName(normalizedVirtualPath?.split("/").pop() ?? null);
     const normalizedPartialPath =
       normalizePartialPath(query.partialPath) ??
       normalizePartialPath(
-        normalizedVirtualPath && normalizedVirtualPath.includes('/')
+        normalizedVirtualPath && normalizedVirtualPath.includes("/")
           ? normalizedVirtualPath.slice(
               0,
-              normalizedVirtualPath.lastIndexOf('/'),
+              normalizedVirtualPath.lastIndexOf("/"),
             )
           : null,
       );
@@ -385,8 +385,8 @@ export class InMemoryTextBackend implements SongLengthStoreBackend {
     if (normalizedFileName) {
       const uniqueEntryId =
         this.uniqueFileNameToEntryId.get(normalizedFileName);
-      if (typeof uniqueEntryId === 'number') {
-        return this.toResolution(uniqueEntryId, 'filename-unique', query);
+      if (typeof uniqueEntryId === "number") {
+        return this.toResolution(uniqueEntryId, "filename-unique", query);
       }
 
       const duplicateEntryIds =
@@ -394,14 +394,14 @@ export class InMemoryTextBackend implements SongLengthStoreBackend {
       if (duplicateEntryIds?.length && normalizedPartialPath) {
         const candidates = duplicateEntryIds.filter((entryId) => {
           const path = (
-            this.fullPaths[this.records[entryId]?.fullPathId ?? -1] ?? ''
+            this.fullPaths[this.records[entryId]?.fullPathId ?? -1] ?? ""
           ).toLowerCase();
           return path.includes(normalizedPartialPath);
         });
         if (candidates.length === 1) {
           return this.toResolution(
             candidates[0],
-            'filename-partial-path',
+            "filename-partial-path",
             query,
           );
         }
@@ -417,15 +417,15 @@ export class InMemoryTextBackend implements SongLengthStoreBackend {
 
     if (normalizedVirtualPath) {
       const fullPathEntryId = this.fullPathToEntryId.get(normalizedVirtualPath);
-      if (typeof fullPathEntryId === 'number') {
-        return this.toResolution(fullPathEntryId, 'full-path', query);
+      if (typeof fullPathEntryId === "number") {
+        return this.toResolution(fullPathEntryId, "full-path", query);
       }
     }
 
     if (normalizedMd5) {
       const md5EntryId = this.md5ToEntryId.get(normalizedMd5);
-      if (typeof md5EntryId === 'number') {
-        return this.toResolution(md5EntryId, 'md5', query);
+      if (typeof md5EntryId === "number") {
+        return this.toResolution(md5EntryId, "md5", query);
       }
     }
 
@@ -436,12 +436,12 @@ export class InMemoryTextBackend implements SongLengthStoreBackend {
         candidateCount: pendingAmbiguity.candidateEntryIds.length,
         candidates: pendingAmbiguity.candidateEntryIds.map(
           (entryId) =>
-            this.fullPaths[this.records[entryId]?.fullPathId ?? -1] ?? '',
+            this.fullPaths[this.records[entryId]?.fullPathId ?? -1] ?? "",
         ),
       });
       return {
         durationSeconds: null,
-        strategy: 'ambiguous',
+        strategy: "ambiguous",
         fileName: pendingAmbiguity.fileName,
         candidateCount: pendingAmbiguity.candidateEntryIds.length,
       };
@@ -449,7 +449,7 @@ export class InMemoryTextBackend implements SongLengthStoreBackend {
 
     return {
       durationSeconds: null,
-      strategy: 'not-found',
+      strategy: "not-found",
       fileName: normalizedFileName,
     };
   }

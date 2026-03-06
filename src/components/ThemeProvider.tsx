@@ -6,15 +6,15 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { createContext, useContext, ReactNode } from 'react';
-import { useTheme } from '@/hooks/useTheme';
+import { createContext, useContext, ReactNode } from "react";
+import { useTheme } from "@/hooks/useTheme";
 
-type Theme = 'light' | 'dark' | 'system';
+type Theme = "light" | "dark" | "system";
 
 interface ThemeContextType {
   theme: Theme;
   setTheme: (theme: Theme) => void;
-  resolvedTheme: 'light' | 'dark';
+  resolvedTheme: "light" | "dark";
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -32,7 +32,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 export function useThemeContext() {
   const context = useContext(ThemeContext);
   if (!context) {
-    throw new Error('useThemeContext must be used within ThemeProvider');
+    throw new Error("useThemeContext must be used within ThemeProvider");
   }
   return context;
 }

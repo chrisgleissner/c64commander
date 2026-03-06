@@ -6,26 +6,26 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { test, expect } from '@playwright/test';
-import type { Page, TestInfo } from '@playwright/test';
-import { createMockC64Server } from '../tests/mocks/mockC64Server';
-import { uiFixtures } from './uiMocks';
+import { test, expect } from "@playwright/test";
+import type { Page, TestInfo } from "@playwright/test";
+import { createMockC64Server } from "../tests/mocks/mockC64Server";
+import { uiFixtures } from "./uiMocks";
 import {
   allowWarnings,
   assertNoUiIssues,
   attachStepScreenshot,
   finalizeEvidence,
   startStrictUiMonitoring,
-} from './testArtifacts';
-import { clearTraces, enableTraceAssertions } from './traceUtils';
-import { enableGoldenTrace } from './goldenTraceRegistry';
-import { saveCoverageFromPage } from './withCoverage';
+} from "./testArtifacts";
+import { clearTraces, enableTraceAssertions } from "./traceUtils";
+import { enableGoldenTrace } from "./goldenTraceRegistry";
+import { saveCoverageFromPage } from "./withCoverage";
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
 };
 
-test.describe('Config visibility across modes', () => {
+test.describe("Config visibility across modes", () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
   let demoServer: Awaited<ReturnType<typeof createMockC64Server>>;
 
@@ -40,14 +40,14 @@ test.describe('Config visibility across modes', () => {
     }
   });
 
-  test('config categories and values render in demo mode', async ({
+  test("config categories and values render in demo mode", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     enableTraceAssertions(testInfo);
     await startStrictUiMonitoring(page, testInfo);
     allowWarnings(
       testInfo,
-      'Expected probe failures during offline discovery.',
+      "Expected probe failures during offline discovery.",
     );
 
     server = await createMockC64Server(uiFixtures.configState);
@@ -70,11 +70,11 @@ test.describe('Config visibility across modes', () => {
         (
           window as Window & { __c64uMockServerBaseUrl?: string }
         ).__c64uMockServerBaseUrl = demoBaseUrl;
-        localStorage.setItem('c64u_startup_discovery_window_ms', '300');
-        localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
-        localStorage.setItem('c64u_device_host', hostArg);
-        localStorage.removeItem('c64u_password');
-        localStorage.removeItem('c64u_has_password');
+        localStorage.setItem("c64u_startup_discovery_window_ms", "300");
+        localStorage.setItem("c64u_automatic_demo_mode_enabled", "1");
+        localStorage.setItem("c64u_device_host", hostArg);
+        localStorage.removeItem("c64u_password");
+        localStorage.removeItem("c64u_has_password");
         delete (window as Window & { __c64uSecureStorageOverride?: unknown })
           .__c64uSecureStorageOverride;
         localStorage.setItem(
@@ -83,7 +83,7 @@ test.describe('Config visibility across modes', () => {
         );
         sessionStorage.setItem(
           `c64u_initial_snapshot_session:${serverBaseUrl}`,
-          '1',
+          "1",
         );
         localStorage.setItem(
           `c64u_initial_snapshot:${demoBaseUrl}`,
@@ -91,9 +91,9 @@ test.describe('Config visibility across modes', () => {
         );
         sessionStorage.setItem(
           `c64u_initial_snapshot_session:${demoBaseUrl}`,
-          '1',
+          "1",
         );
-        sessionStorage.setItem('c64u_demo_interstitial_shown', '1');
+        sessionStorage.setItem("c64u_demo_interstitial_shown", "1");
       },
       {
         host,
@@ -103,46 +103,46 @@ test.describe('Config visibility across modes', () => {
       },
     );
 
-    await page.goto('/config', { waitUntil: 'domcontentloaded' });
-    const demoButton = page.getByRole('button', {
-      name: 'Continue in Demo Mode',
+    await page.goto("/config", { waitUntil: "domcontentloaded" });
+    const demoButton = page.getByRole("button", {
+      name: "Continue in Demo Mode",
     });
     if (await demoButton.isVisible().catch(() => false)) {
       await demoButton.click();
     }
-    await expect(page.getByRole('dialog', { name: 'Demo Mode' })).toBeHidden();
-    const indicator = page.getByTestId('connectivity-indicator');
+    await expect(page.getByRole("dialog", { name: "Demo Mode" })).toBeHidden();
+    const indicator = page.getByTestId("connectivity-indicator");
     await expect(indicator).toBeVisible({ timeout: 15000 });
     await expect(indicator).toHaveAttribute(
-      'data-connection-state',
+      "data-connection-state",
       /DEMO_ACTIVE|REAL_CONNECTED/,
       { timeout: 10000 },
     );
-    await expect(indicator).toHaveAttribute('aria-label', /C64U( Demo)?/);
+    await expect(indicator).toHaveAttribute("aria-label", /C64U( Demo)?/);
 
-    await expect(page.getByText('Not connected', { exact: true })).toBeHidden();
+    await expect(page.getByText("Not connected", { exact: true })).toBeHidden();
     await expect(
-      page.getByRole('button', { name: 'Audio Mixer' }),
+      page.getByRole("button", { name: "Audio Mixer" }),
     ).toBeVisible();
     await expect(
-      page.getByRole('button', { name: 'U64 Specific Settings' }),
+      page.getByRole("button", { name: "U64 Specific Settings" }),
     ).toBeVisible();
     await expect(
       page.locator('[data-testid^="config-category-"]').first(),
     ).toBeVisible();
 
     await clearTraces(page);
-    await snap(page, testInfo, 'demo-connected-config');
+    await snap(page, testInfo, "demo-connected-config");
   });
 
-  test('config remains visible after switching demo → real', async ({
+  test("config remains visible after switching demo → real", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     enableGoldenTrace(testInfo);
     await startStrictUiMonitoring(page, testInfo);
     allowWarnings(
       testInfo,
-      'Expected probe failures during offline discovery.',
+      "Expected probe failures during offline discovery.",
     );
 
     server = await createMockC64Server(uiFixtures.configState);
@@ -165,11 +165,11 @@ test.describe('Config visibility across modes', () => {
         (
           window as Window & { __c64uMockServerBaseUrl?: string }
         ).__c64uMockServerBaseUrl = demoBaseUrl;
-        localStorage.setItem('c64u_startup_discovery_window_ms', '300');
-        localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
-        localStorage.setItem('c64u_device_host', hostArg);
-        localStorage.removeItem('c64u_password');
-        localStorage.removeItem('c64u_has_password');
+        localStorage.setItem("c64u_startup_discovery_window_ms", "300");
+        localStorage.setItem("c64u_automatic_demo_mode_enabled", "1");
+        localStorage.setItem("c64u_device_host", hostArg);
+        localStorage.removeItem("c64u_password");
+        localStorage.removeItem("c64u_has_password");
         delete (window as Window & { __c64uSecureStorageOverride?: unknown })
           .__c64uSecureStorageOverride;
         localStorage.setItem(
@@ -178,7 +178,7 @@ test.describe('Config visibility across modes', () => {
         );
         sessionStorage.setItem(
           `c64u_initial_snapshot_session:${serverBaseUrl}`,
-          '1',
+          "1",
         );
         localStorage.setItem(
           `c64u_initial_snapshot:${demoBaseUrl}`,
@@ -186,9 +186,9 @@ test.describe('Config visibility across modes', () => {
         );
         sessionStorage.setItem(
           `c64u_initial_snapshot_session:${demoBaseUrl}`,
-          '1',
+          "1",
         );
-        sessionStorage.setItem('c64u_demo_interstitial_shown', '1');
+        sessionStorage.setItem("c64u_demo_interstitial_shown", "1");
       },
       {
         host,
@@ -198,62 +198,62 @@ test.describe('Config visibility across modes', () => {
       },
     );
 
-    await page.goto('/config', { waitUntil: 'domcontentloaded' });
-    const demoButton = page.getByRole('button', {
-      name: 'Continue in Demo Mode',
+    await page.goto("/config", { waitUntil: "domcontentloaded" });
+    const demoButton = page.getByRole("button", {
+      name: "Continue in Demo Mode",
     });
     if (await demoButton.isVisible().catch(() => false)) {
       await demoButton.click();
     }
-    await expect(page.getByRole('dialog', { name: 'Demo Mode' })).toBeHidden();
-    const indicator = page.getByTestId('connectivity-indicator');
+    await expect(page.getByRole("dialog", { name: "Demo Mode" })).toBeHidden();
+    const indicator = page.getByTestId("connectivity-indicator");
     await expect(indicator).toBeVisible({ timeout: 15000 });
     await expect(indicator).toHaveAttribute(
-      'data-connection-state',
+      "data-connection-state",
       /DEMO_ACTIVE|REAL_CONNECTED/,
       { timeout: 10000 },
     );
-    await expect(page.getByText('Not connected', { exact: true })).toBeHidden();
+    await expect(page.getByText("Not connected", { exact: true })).toBeHidden();
     await expect(
-      page.getByRole('button', { name: 'Audio Mixer' }),
+      page.getByRole("button", { name: "Audio Mixer" }),
     ).toBeVisible();
 
     server.setReachable(true);
-    await page.goto('/settings', { waitUntil: 'domcontentloaded' });
+    await page.goto("/settings", { waitUntil: "domcontentloaded" });
     await page
-      .getByRole('button', { name: /Save & Connect|Save connection/i })
+      .getByRole("button", { name: /Save & Connect|Save connection/i })
       .click();
 
-    await page.goto('/config', { waitUntil: 'domcontentloaded' });
+    await page.goto("/config", { waitUntil: "domcontentloaded" });
     await expect(
-      page.getByRole('button', { name: 'Audio Mixer' }),
+      page.getByRole("button", { name: "Audio Mixer" }),
     ).toBeVisible();
     await expect(
-      page.getByRole('button', { name: 'U64 Specific Settings' }),
+      page.getByRole("button", { name: "U64 Specific Settings" }),
     ).toBeVisible();
 
-    await page.getByRole('button', { name: 'U64 Specific Settings' }).click();
+    await page.getByRole("button", { name: "U64 Specific Settings" }).click();
     await clearTraces(page);
 
-    const selectTrigger = page.getByLabel('System Mode select');
+    const selectTrigger = page.getByLabel("System Mode select");
     await selectTrigger.click();
-    await page.getByRole('option', { name: /^NTSC$/ }).click();
+    await page.getByRole("option", { name: /^NTSC$/ }).click();
 
-    const checkbox = page.getByLabel('HDMI Scan lines checkbox');
+    const checkbox = page.getByLabel("HDMI Scan lines checkbox");
     await checkbox.click();
 
     await expect
       .poll(
-        () => server.getState()['U64 Specific Settings']['System Mode'].value,
+        () => server.getState()["U64 Specific Settings"]["System Mode"].value,
       )
-      .toBe('NTSC');
+      .toBe("NTSC");
     await expect
       .poll(
         () =>
-          server.getState()['U64 Specific Settings']['HDMI Scan lines'].value,
+          server.getState()["U64 Specific Settings"]["HDMI Scan lines"].value,
       )
-      .toBe('Disabled');
+      .toBe("Disabled");
 
-    await snap(page, testInfo, 'config-visible-after-real');
+    await snap(page, testInfo, "config-visible-after-real");
   });
 });

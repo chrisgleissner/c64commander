@@ -6,9 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { wrapUserEvent } from '@/lib/tracing/userTrace';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
+import { wrapUserEvent } from "@/lib/tracing/userTrace";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { motion } from "framer-motion";
 import {
   Music,
   Shuffle,
@@ -17,16 +17,16 @@ import {
   Play,
   Folder,
   FolderOpen,
-} from 'lucide-react';
-import { Button, StatefulButton } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Input } from '@/components/ui/input';
-import { Progress } from '@/components/ui/progress';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useSidPlayer } from '@/hooks/useSidPlayer';
-import { toast } from '@/hooks/use-toast';
-import { addErrorLog, addLog } from '@/lib/logging';
-import { reportUserError } from '@/lib/uiErrors';
+} from "lucide-react";
+import { Button, StatefulButton } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useSidPlayer } from "@/hooks/useSidPlayer";
+import { toast } from "@/hooks/use-toast";
+import { addErrorLog, addLog } from "@/lib/logging";
+import { reportUserError } from "@/lib/uiErrors";
 import {
   addHvscProgressListener,
   checkForHvscUpdates,
@@ -39,36 +39,36 @@ import {
   type HvscStatus,
   type HvscUpdateStatus,
   HvscSongSource,
-} from '@/lib/hvsc';
-import { calculateHvscProgress } from '@/lib/hvsc/hvscProgress';
+} from "@/lib/hvsc";
+import { calculateHvscProgress } from "@/lib/hvsc/hvscProgress";
 import {
   createLocalFsSongSource,
   type LocalSidFile,
-} from '@/lib/sources/LocalFsSongSource';
-import { ingestLocalArchives } from '@/lib/sources/localArchiveIngestion';
+} from "@/lib/sources/LocalFsSongSource";
+import { ingestLocalArchives } from "@/lib/sources/localArchiveIngestion";
 import {
   browseLocalSidFiles,
   filterLocalInputFiles,
   prepareDirectoryInput,
-} from '@/lib/sources/localFsPicker';
+} from "@/lib/sources/localFsPicker";
 import type {
   SongEntry,
   SongFolder,
   SongSource,
-} from '@/lib/sources/SongSource';
+} from "@/lib/sources/SongSource";
 
 const formatTime = (ms?: number) => {
-  if (!ms && ms !== 0) return '—';
+  if (!ms && ms !== 0) return "—";
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
-  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 };
 
 const formatBytes = (bytes?: number | null) => {
-  if (bytes === null || bytes === undefined) return '—';
+  if (bytes === null || bytes === undefined) return "—";
   if (bytes < 1024) return `${bytes} B`;
-  const units = ['KB', 'MB', 'GB'];
+  const units = ["KB", "MB", "GB"];
   let value = bytes / 1024;
   let index = 0;
   while (value >= 1024 && index < units.length - 1) {
@@ -126,7 +126,7 @@ export default function MusicPlayerPage() {
   );
   const [hvscSongsDeleted, setHvscSongsDeleted] = useState<number | null>(null);
   const [hvscLastAction, setHvscLastAction] = useState<
-    'update' | 'ingest' | null
+    "update" | "ingest" | null
   >(null);
   const [hvscCacheBaseline, setHvscCacheBaseline] = useState<number | null>(
     null,
@@ -142,17 +142,17 @@ export default function MusicPlayerPage() {
     lastStage: null as string | null,
     lastProcessed: 0,
   });
-  const [hvscFolderFilter, setHvscFolderFilter] = useState('');
+  const [hvscFolderFilter, setHvscFolderFilter] = useState("");
   const [hvscFolders, setHvscFolders] = useState<SongFolder[]>([]);
   const [hvscSongs, setHvscSongs] = useState<SongEntry[]>([]);
-  const [selectedHvscFolder, setSelectedHvscFolder] = useState<string>('');
+  const [selectedHvscFolder, setSelectedHvscFolder] = useState<string>("");
   const [localFiles, setLocalFiles] = useState<LocalSidFile[]>([]);
-  const [localFolderFilter, setLocalFolderFilter] = useState('');
-  const [selectedLocalFolder, setSelectedLocalFolder] = useState('');
+  const [localFolderFilter, setLocalFolderFilter] = useState("");
+  const [selectedLocalFolder, setSelectedLocalFolder] = useState("");
   const [localFolderPaths, setLocalFolderPaths] = useState<SongFolder[]>([]);
   const [localSongs, setLocalSongs] = useState<SongEntry[]>([]);
   const localInputRef = useRef<HTMLInputElement | null>(null);
-  const selectedLocalFolderRef = useRef('');
+  const selectedLocalFolderRef = useRef("");
 
   useEffect(() => {
     selectedLocalFolderRef.current = selectedLocalFolder;
@@ -175,7 +175,7 @@ export default function MusicPlayerPage() {
     getHvscStatus()
       .then(setHvscStatus)
       .catch((error) => {
-        addErrorLog('HVSC status fetch failed', {
+        addErrorLog("HVSC status fetch failed", {
           error: (error as Error).message,
         });
         setHvscStatus(null);
@@ -190,7 +190,7 @@ export default function MusicPlayerPage() {
         setHvscCacheUpdates(cache.updateVersions ?? []);
       })
       .catch((error) => {
-        addErrorLog('HVSC cache status fetch failed', {
+        addErrorLog("HVSC cache status fetch failed", {
           error: (error as Error).message,
         });
         setHvscCacheBaseline(null);
@@ -207,9 +207,9 @@ export default function MusicPlayerPage() {
   ]);
 
   useEffect(() => {
-    if (hvscStatus?.ingestionState === 'error' && hvscStatus.ingestionError) {
+    if (hvscStatus?.ingestionState === "error" && hvscStatus.ingestionError) {
       setHvscErrorMessage(hvscStatus.ingestionError);
-      addErrorLog('HVSC ingestion error', {
+      addErrorLog("HVSC ingestion error", {
         error: hvscStatus.ingestionError,
         installedVersion: hvscStatus.installedVersion,
       });
@@ -252,7 +252,7 @@ export default function MusicPlayerPage() {
           setHvscProgress(0);
           setHvscCurrentFile(null);
           setHvscErrorMessage(null);
-          addLog('info', 'HVSC ingestion started', logPayload);
+          addLog("info", "HVSC ingestion started", logPayload);
         }
 
         if (event.stage) {
@@ -264,10 +264,10 @@ export default function MusicPlayerPage() {
         if (event.currentFile) {
           setHvscCurrentFile(event.currentFile);
         }
-        if (typeof event.processedCount === 'number') {
+        if (typeof event.processedCount === "number") {
           setHvscProcessedCount(event.processedCount);
         }
-        if (typeof event.totalCount === 'number') {
+        if (typeof event.totalCount === "number") {
           setHvscTotalCount(event.totalCount);
         }
 
@@ -280,54 +280,54 @@ export default function MusicPlayerPage() {
           setHvscProgress(derivedPercent);
         }
 
-        if (typeof event.downloadedBytes === 'number') {
+        if (typeof event.downloadedBytes === "number") {
           hvscStatsRef.current.downloadedBytes = event.downloadedBytes;
           setHvscDownloadedBytes(event.downloadedBytes);
-          if (event.stage === 'download' && event.percent === 100) {
-            addLog('info', 'HVSC download complete', {
+          if (event.stage === "download" && event.percent === 100) {
+            addLog("info", "HVSC download complete", {
               ...logPayload,
               bytes: event.downloadedBytes,
               totalBytes: event.totalBytes ?? event.downloadedBytes,
             });
           }
         }
-        if (typeof event.songsUpserted === 'number') {
+        if (typeof event.songsUpserted === "number") {
           hvscStatsRef.current.songsUpserted = event.songsUpserted;
           setHvscSongsUpserted(event.songsUpserted);
         }
-        if (typeof event.songsDeleted === 'number') {
+        if (typeof event.songsDeleted === "number") {
           hvscStatsRef.current.songsDeleted = event.songsDeleted;
           setHvscSongsDeleted(event.songsDeleted);
         }
 
         if (event.stage && event.stage !== hvscLogRef.current.lastStage) {
-          addLog('info', 'HVSC ingestion stage', logPayload);
+          addLog("info", "HVSC ingestion stage", logPayload);
           hvscLogRef.current.lastStage = event.stage;
         }
 
         if (
-          typeof event.processedCount === 'number' &&
-          typeof event.totalCount === 'number'
+          typeof event.processedCount === "number" &&
+          typeof event.totalCount === "number"
         ) {
           if (
             event.processedCount - hvscLogRef.current.lastProcessed >=
             HVSC_PROGRESS_LOG_INTERVAL
           ) {
             hvscLogRef.current.lastProcessed = event.processedCount;
-            addLog('info', 'HVSC ingestion progress', logPayload);
+            addLog("info", "HVSC ingestion progress", logPayload);
           }
         }
 
-        if (event.stage === 'error') {
+        if (event.stage === "error") {
           setHvscErrorMessage(event.errorCause || event.message);
-          addErrorLog('HVSC ingestion failed', logPayload);
+          addErrorLog("HVSC ingestion failed", logPayload);
         }
 
-        if (event.stage === 'complete') {
-          addLog('info', 'HVSC ingestion complete', logPayload);
+        if (event.stage === "complete") {
+          addLog("info", "HVSC ingestion complete", logPayload);
         }
       } catch (error) {
-        addErrorLog('HVSC progress handler failed', {
+        addErrorLog("HVSC progress handler failed", {
           error: {
             name: (error as Error).name,
             message: (error as Error).message,
@@ -340,7 +340,7 @@ export default function MusicPlayerPage() {
         removeListener = listener.remove;
       })
       .catch((error) => {
-        addErrorLog('HVSC listener registration failed', {
+        addErrorLog("HVSC listener registration failed", {
           error: (error as Error).message,
         });
       });
@@ -362,7 +362,7 @@ export default function MusicPlayerPage() {
   const hvscInstalled = Boolean(hvscStatus?.installedVersion);
   const hvscUpdating =
     hvscLoading ||
-    ['installing', 'updating'].includes(hvscStatus?.ingestionState ?? '');
+    ["installing", "updating"].includes(hvscStatus?.ingestionState ?? "");
   const hvscBridgeAvailable = isHvscBridgeAvailable();
   const hvscHasCache =
     Boolean(hvscCacheBaseline) || hvscCacheUpdates.length > 0;
@@ -382,7 +382,7 @@ export default function MusicPlayerPage() {
   );
   const hvscInlineError =
     hvscErrorMessage ||
-    (!hvscLoading && hvscStatus?.ingestionState === 'error'
+    (!hvscLoading && hvscStatus?.ingestionState === "error"
       ? hvscStatus.ingestionError
       : null);
 
@@ -410,10 +410,10 @@ export default function MusicPlayerPage() {
       return;
     }
     hvscSource
-      .listFolders('/')
+      .listFolders("/")
       .then(setHvscFolders)
       .catch((error) => {
-        addErrorLog('HVSC folder list failed', {
+        addErrorLog("HVSC folder list failed", {
           error: (error as Error).message,
         });
       });
@@ -428,7 +428,7 @@ export default function MusicPlayerPage() {
       .listSongs(selectedHvscFolder)
       .then(setHvscSongs)
       .catch((error) => {
-        addErrorLog('HVSC song list failed', {
+        addErrorLog("HVSC song list failed", {
           error: (error as Error).message,
         });
       });
@@ -436,10 +436,10 @@ export default function MusicPlayerPage() {
 
   useEffect(() => {
     localSource
-      .listFolders('/')
+      .listFolders("/")
       .then(setLocalFolderPaths)
       .catch((error) => {
-        addErrorLog('Local folder list failed', {
+        addErrorLog("Local folder list failed", {
           error: (error as Error).message,
         });
       });
@@ -454,7 +454,7 @@ export default function MusicPlayerPage() {
       .listSongs(selectedLocalFolder)
       .then(setLocalSongs)
       .catch((error) => {
-        addErrorLog('Local song list failed', {
+        addErrorLog("Local song list failed", {
           error: (error as Error).message,
         });
       });
@@ -471,7 +471,7 @@ export default function MusicPlayerPage() {
       setHvscProcessedCount(null);
       setHvscTotalCount(null);
       setHvscErrorMessage(null);
-      setHvscLastAction('update');
+      setHvscLastAction("update");
       hvscStatsRef.current = {
         downloadedBytes: null,
         songsUpserted: null,
@@ -480,14 +480,14 @@ export default function MusicPlayerPage() {
       setHvscDownloadedBytes(null);
       setHvscSongsUpserted(null);
       setHvscSongsDeleted(null);
-      addLog('info', 'HVSC update started', {
+      addLog("info", "HVSC update started", {
         installedVersion: hvscStatus?.installedVersion ?? 0,
         ingestionState: hvscStatus?.ingestionState,
       });
-      currentAction = 'Checking for updates…';
+      currentAction = "Checking for updates…";
       setHvscActionLabel(currentAction);
       const updateStatus: HvscUpdateStatus = await checkForHvscUpdates();
-      addLog('info', 'HVSC update check complete', {
+      addLog("info", "HVSC update check complete", {
         installedVersion: updateStatus.installedVersion,
         latestVersion: updateStatus.latestVersion,
         requiredUpdates: updateStatus.requiredUpdates,
@@ -498,10 +498,10 @@ export default function MusicPlayerPage() {
         updateStatus.installedVersion > 0
       ) {
         toast({
-          title: 'HVSC up to date',
-          description: 'No new updates detected.',
+          title: "HVSC up to date",
+          description: "No new updates detected.",
         });
-        addLog('info', 'HVSC up to date', {
+        addLog("info", "HVSC up to date", {
           installedVersion: updateStatus.installedVersion,
         });
         const status = await getHvscStatus();
@@ -510,10 +510,10 @@ export default function MusicPlayerPage() {
       }
       currentAction =
         updateStatus.installedVersion > 0
-          ? 'Applying updates…'
-          : 'Installing HVSC…';
+          ? "Applying updates…"
+          : "Installing HVSC…";
       setHvscActionLabel(currentAction);
-      await installOrUpdateHvsc('hvsc-install');
+      await installOrUpdateHvsc("hvsc-install");
       const status = await getHvscStatus();
       setHvscStatus(status);
       refreshHvscCacheStatus();
@@ -530,16 +530,16 @@ export default function MusicPlayerPage() {
           : null,
       ]
         .filter(Boolean)
-        .join(' · ');
+        .join(" · ");
       if (statsDescription) {
-        addLog('info', 'HVSC update details', {
+        addLog("info", "HVSC update details", {
           downloadedBytes: stats.downloadedBytes,
           songsUpserted: stats.songsUpserted,
           songsDeleted: stats.songsDeleted,
         });
       }
       toast({
-        title: 'HVSC ready',
+        title: "HVSC ready",
         description: statsDescription
           ? `Version ${status.installedVersion} installed. ${statsDescription}`
           : `Version ${status.installedVersion} installed.`,
@@ -547,8 +547,8 @@ export default function MusicPlayerPage() {
     } catch (error) {
       setHvscErrorMessage((error as Error).message);
       reportUserError({
-        operation: 'HVSC_DOWNLOAD',
-        title: 'Error',
+        operation: "HVSC_DOWNLOAD",
+        title: "Error",
         description: (error as Error).message,
         error,
         context: {
@@ -575,20 +575,20 @@ export default function MusicPlayerPage() {
       setHvscProcessedCount(null);
       setHvscTotalCount(null);
       setHvscErrorMessage(null);
-      setHvscLastAction('ingest');
-      setHvscActionLabel('Ingesting cached HVSC…');
-      await ingestCachedHvsc('hvsc-ingest');
+      setHvscLastAction("ingest");
+      setHvscActionLabel("Ingesting cached HVSC…");
+      await ingestCachedHvsc("hvsc-ingest");
       const status = await getHvscStatus();
       setHvscStatus(status);
       toast({
-        title: 'HVSC ready',
+        title: "HVSC ready",
         description: `Version ${status.installedVersion} installed.`,
       });
     } catch (error) {
       setHvscErrorMessage((error as Error).message);
       reportUserError({
-        operation: 'HVSC_INGEST',
-        title: 'Ingest failed',
+        operation: "HVSC_INGEST",
+        title: "Ingest failed",
         description: (error as Error).message,
         error,
         context: {
@@ -621,14 +621,14 @@ export default function MusicPlayerPage() {
     if (!hvscInstalled) return;
     try {
       await playFromSource(entry, hvscSource);
-      toast({ title: 'Playing', description: entry.title });
+      toast({ title: "Playing", description: entry.title });
     } catch (error) {
       reportUserError({
-        operation: 'PLAYBACK_START',
-        title: 'Playback failed',
+        operation: "PLAYBACK_START",
+        title: "Playback failed",
         description: (error as Error).message,
         error,
-        context: { path: entry.path, source: 'hvsc' },
+        context: { path: entry.path, source: "hvsc" },
       });
     }
   };
@@ -654,16 +654,16 @@ export default function MusicPlayerPage() {
       const queue = shuffle ? tracks.sort(() => Math.random() - 0.5) : tracks;
       await playQueue(queue);
       toast({
-        title: 'Playing folder',
+        title: "Playing folder",
         description: `${queue.length.toLocaleString()} tracks queued`,
       });
     } catch (error) {
       reportUserError({
-        operation: 'PLAYBACK_START',
-        title: 'Playback failed',
+        operation: "PLAYBACK_START",
+        title: "Playback failed",
         description: (error as Error).message,
         error,
-        context: { folder: selectedHvscFolder, source: 'hvsc' },
+        context: { folder: selectedHvscFolder, source: "hvsc" },
       });
     }
   };
@@ -676,8 +676,8 @@ export default function MusicPlayerPage() {
       }
     } catch (error) {
       reportUserError({
-        operation: 'LOCAL_FOLDER_PICK',
-        title: 'Folder selection failed',
+        operation: "LOCAL_FOLDER_PICK",
+        title: "Folder selection failed",
         description: (error as Error).message,
         error,
       });
@@ -691,15 +691,15 @@ export default function MusicPlayerPage() {
       const ingestion = await ingestLocalArchives(candidates);
       setLocalFiles(ingestion.files);
       if (ingestion.archiveCount > 0) {
-        addLog('info', 'Local archives ingested', {
+        addLog("info", "Local archives ingested", {
           archives: ingestion.archiveCount,
           extracted: ingestion.extractedCount,
         });
       }
     } catch (error) {
       reportUserError({
-        operation: 'LOCAL_ARCHIVE_INGEST',
-        title: 'Archive ingest failed',
+        operation: "LOCAL_ARCHIVE_INGEST",
+        title: "Archive ingest failed",
         description: (error as Error).message,
         error,
       });
@@ -731,16 +731,16 @@ export default function MusicPlayerPage() {
       const queue = shuffle ? tracks.sort(() => Math.random() - 0.5) : tracks;
       await playQueue(queue);
       toast({
-        title: 'Playing folder',
+        title: "Playing folder",
         description: `${queue.length} tracks queued`,
       });
     } catch (error) {
       reportUserError({
-        operation: 'PLAYBACK_START',
-        title: 'Playback failed',
+        operation: "PLAYBACK_START",
+        title: "Playback failed",
         description: (error as Error).message,
         error,
-        context: { folder: selectedLocalFolder, source: 'local' },
+        context: { folder: selectedLocalFolder, source: "local" },
       });
     }
   };
@@ -774,16 +774,16 @@ export default function MusicPlayerPage() {
         : queueTracks;
       await playQueue(queue);
       toast({
-        title: 'Playing random folder',
+        title: "Playing random folder",
         description: randomFolder.path,
       });
     } catch (error) {
       reportUserError({
-        operation: 'PLAYBACK_START',
-        title: 'Playback failed',
+        operation: "PLAYBACK_START",
+        title: "Playback failed",
         description: (error as Error).message,
         error,
-        context: { folder: randomFolder.path, source: 'local' },
+        context: { folder: randomFolder.path, source: "local" },
       });
     }
   };
@@ -791,20 +791,20 @@ export default function MusicPlayerPage() {
   const handlePlayLocalTrack = async (entry: SongEntry) => {
     try {
       await playFromSource(entry, localSource);
-      toast({ title: 'Playing', description: entry.title });
+      toast({ title: "Playing", description: entry.title });
     } catch (error) {
       reportUserError({
-        operation: 'PLAYBACK_START',
-        title: 'Playback failed',
+        operation: "PLAYBACK_START",
+        title: "Playback failed",
         description: (error as Error).message,
         error,
-        context: { file: entry.title, source: 'local' },
+        context: { file: entry.title, source: "local" },
       });
     }
   };
 
   const hvscRetryHandler =
-    hvscLastAction === 'ingest' ? handleHvscIngest : handleHvscUpdate;
+    hvscLastAction === "ingest" ? handleHvscIngest : handleHvscUpdate;
   const hvscCanRetry = Boolean(
     hvscInlineError && hvscLastAction && !hvscLoading,
   );
@@ -815,23 +815,23 @@ export default function MusicPlayerPage() {
   const remainingMs = durationMs
     ? Math.max(0, durationMs - elapsedMs)
     : undefined;
-  const remainingLabel = durationMs ? `-${formatTime(remainingMs)}` : '—';
+  const remainingLabel = durationMs ? `-${formatTime(remainingMs)}` : "—";
   const currentSubsongLabel =
     currentTrack?.subsongCount && currentTrack.subsongCount > 1
       ? `Song ${currentTrack.songNr ?? 1}/${currentTrack.subsongCount}`
       : null;
   const nowPlayingPathLabel =
-    currentTrack?.path ?? currentTrack?.source?.toUpperCase() ?? '—';
+    currentTrack?.path ?? currentTrack?.source?.toUpperCase() ?? "—";
 
   const handlePlayCurrentTrack = useCallback(async () => {
     if (!currentTrack) return;
     try {
       await playTrack(currentTrack);
-      toast({ title: 'Playing', description: currentTrack.title });
+      toast({ title: "Playing", description: currentTrack.title });
     } catch (error) {
       reportUserError({
-        operation: 'PLAYBACK_START',
-        title: 'Playback failed',
+        operation: "PLAYBACK_START",
+        title: "Playback failed",
         description: (error as Error).message,
         error,
         context: { track: currentTrack.title },
@@ -867,11 +867,11 @@ export default function MusicPlayerPage() {
             <div>
               <p className="text-xs text-muted-foreground">Now Playing</p>
               <p className="font-medium">
-                {currentTrack?.title ?? 'No track selected'}
+                {currentTrack?.title ?? "No track selected"}
               </p>
               <p className="text-xs text-muted-foreground">
                 {nowPlayingPathLabel}
-                {currentSubsongLabel ? ` · ${currentSubsongLabel}` : ''}
+                {currentSubsongLabel ? ` · ${currentSubsongLabel}` : ""}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -893,13 +893,13 @@ export default function MusicPlayerPage() {
               <SkipBack className="h-4 w-4" />
             </Button>
             <StatefulButton
-              variant={isPlaying ? 'default' : 'outline'}
+              variant={isPlaying ? "default" : "outline"}
               size="lg"
               onClick={handlePlayCurrentTrack}
               disabled={!currentTrack}
             >
               <Play className="h-4 w-4 mr-2" />
-              {isPlaying ? 'Restart' : 'Play'}
+              {isPlaying ? "Restart" : "Play"}
             </StatefulButton>
             <Button
               variant="outline"
@@ -933,8 +933,8 @@ export default function MusicPlayerPage() {
                   <p className="text-sm font-medium">HVSC Collection</p>
                   <p className="text-xs text-muted-foreground">
                     {hvscInstalled
-                      ? `HVSC v${hvscStatus?.installedVersion ?? '—'} installed`
-                      : 'No collection downloaded'}
+                      ? `HVSC v${hvscStatus?.installedVersion ?? "—"} installed`
+                      : "No collection downloaded"}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -947,10 +947,10 @@ export default function MusicPlayerPage() {
                     }
                   >
                     {hvscLoading
-                      ? 'Updating…'
+                      ? "Updating…"
                       : hvscInstalled
-                        ? 'Update'
-                        : 'Install'}
+                        ? "Update"
+                        : "Install"}
                   </Button>
                   {hvscCanIngest && (
                     <Button
@@ -981,7 +981,7 @@ export default function MusicPlayerPage() {
                     <span>
                       {hvscTotalCount !== null
                         ? `SID files: ${(hvscProcessedCount ?? 0).toLocaleString()} / ${hvscTotalCount.toLocaleString()}`
-                        : 'Discovering SID files…'}
+                        : "Discovering SID files…"}
                     </span>
                     {hvscProgressPercent !== null && (
                       <span>{hvscProgressPercent}%</span>
@@ -996,7 +996,7 @@ export default function MusicPlayerPage() {
               )}
               {hvscStatus?.lastUpdateCheckUtcMs && (
                 <p className="text-xs text-muted-foreground">
-                  Last checked:{' '}
+                  Last checked:{" "}
                   {new Date(hvscStatus.lastUpdateCheckUtcMs).toLocaleString()}
                 </p>
               )}
@@ -1010,7 +1010,7 @@ export default function MusicPlayerPage() {
                   Songs indexed: {hvscSongsUpserted.toLocaleString()}
                   {hvscSongsDeleted !== null
                     ? ` · Removed ${hvscSongsDeleted.toLocaleString()}`
-                    : ''}
+                    : ""}
                 </p>
               )}
               {hvscInlineError && (
@@ -1058,8 +1058,8 @@ export default function MusicPlayerPage() {
                     key={folder.path}
                     variant={
                       folder.path === selectedHvscFolder
-                        ? 'secondary'
-                        : 'outline'
+                        ? "secondary"
+                        : "outline"
                     }
                     className="justify-start min-w-0 whitespace-normal items-start"
                     onClick={() => setSelectedHvscFolder(folder.path)}
@@ -1079,7 +1079,7 @@ export default function MusicPlayerPage() {
                 <p className="text-xs text-muted-foreground">
                   {hvscSongs.length
                     ? `${hvscSongs.length} tracks`
-                    : 'Select a folder'}
+                    : "Select a folder"}
                 </p>
               </div>
               <div className="space-y-2 max-h-[320px] overflow-y-auto pr-2">
@@ -1096,7 +1096,7 @@ export default function MusicPlayerPage() {
                         {entry.path}
                         {entry.subsongCount && entry.subsongCount > 1
                           ? ` · Song ${entry.songNr ?? 1}/${entry.subsongCount}`
-                          : ''}
+                          : ""}
                       </p>
                     </div>
                     <Button
@@ -1127,7 +1127,7 @@ export default function MusicPlayerPage() {
                   <p className="text-xs text-muted-foreground">
                     {localFiles.length
                       ? `${localFiles.length} SID files selected`
-                      : 'Pick a folder on your device'}
+                      : "Pick a folder on your device"}
                   </p>
                 </div>
                 <div className="inline-flex">
@@ -1138,10 +1138,10 @@ export default function MusicPlayerPage() {
                     className="hidden"
                     onChange={wrapUserEvent(
                       (e) => void handleLocalFolderPick(e.target.files),
-                      'upload',
-                      'MusicPlayer',
-                      { type: 'file' },
-                      'LocalFolderInput',
+                      "upload",
+                      "MusicPlayer",
+                      { type: "file" },
+                      "LocalFolderInput",
                     )}
                   />
                   <Button
@@ -1195,8 +1195,8 @@ export default function MusicPlayerPage() {
                     key={folder.path}
                     variant={
                       folder.path === selectedLocalFolder
-                        ? 'secondary'
-                        : 'outline'
+                        ? "secondary"
+                        : "outline"
                     }
                     className="justify-start min-w-0 whitespace-normal items-start"
                     onClick={() => setSelectedLocalFolder(folder.path)}
@@ -1216,7 +1216,7 @@ export default function MusicPlayerPage() {
                 <p className="text-xs text-muted-foreground">
                   {localSongs.length
                     ? `${localSongs.length} tracks`
-                    : 'Select a folder'}
+                    : "Select a folder"}
                 </p>
               </div>
               <div className="space-y-2 max-h-[320px] overflow-y-auto pr-2">
@@ -1233,7 +1233,7 @@ export default function MusicPlayerPage() {
                         {entry.path}
                         {entry.subsongCount && entry.subsongCount > 1
                           ? ` · Song ${entry.songNr ?? 1}/${entry.subsongCount}`
-                          : ''}
+                          : ""}
                       </p>
                     </div>
                     <Button

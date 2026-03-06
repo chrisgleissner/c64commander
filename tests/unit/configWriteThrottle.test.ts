@@ -6,19 +6,19 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   scheduleConfigWrite,
   resetConfigWriteThrottle,
-} from '@/lib/config/configWriteThrottle';
-import { saveConfigWriteIntervalMs } from '@/lib/config/appSettings';
-import { addErrorLog } from '@/lib/logging';
+} from "@/lib/config/configWriteThrottle";
+import { saveConfigWriteIntervalMs } from "@/lib/config/appSettings";
+import { addErrorLog } from "@/lib/logging";
 
-vi.mock('@/lib/logging', () => ({
+vi.mock("@/lib/logging", () => ({
   addErrorLog: vi.fn(),
 }));
 
-describe('configWriteThrottle', () => {
+describe("configWriteThrottle", () => {
   beforeEach(() => {
     localStorage.clear();
     resetConfigWriteThrottle();
@@ -32,7 +32,7 @@ describe('configWriteThrottle', () => {
     vi.useRealTimers();
   });
 
-  it('spaces consecutive config writes by the configured interval', async () => {
+  it("spaces consecutive config writes by the configured interval", async () => {
     const times: number[] = [];
     const task = async () => {
       times.push(Date.now());
@@ -51,24 +51,24 @@ describe('configWriteThrottle', () => {
     expect(times).toEqual([1000, 1500]);
   });
 
-  it('logs failed tasks and continues the queue', async () => {
+  it("logs failed tasks and continues the queue", async () => {
     const failingTask = async () => {
-      throw new Error('write failed');
+      throw new Error("write failed");
     };
-    const successTask = async () => 'ok';
+    const successTask = async () => "ok";
 
     const first = scheduleConfigWrite(failingTask);
     const second = scheduleConfigWrite(successTask);
 
-    await expect(first).rejects.toThrow('write failed');
+    await expect(first).rejects.toThrow("write failed");
 
     await vi.advanceTimersByTimeAsync(500);
     const result = await second;
 
-    expect(result).toBe('ok');
+    expect(result).toBe("ok");
     expect(vi.mocked(addErrorLog)).toHaveBeenCalledWith(
-      'Config write queue: preceding task failed',
-      expect.objectContaining({ error: 'write failed' }),
+      "Config write queue: preceding task failed",
+      expect.objectContaining({ error: "write failed" }),
     );
   });
 });

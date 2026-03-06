@@ -1,11 +1,11 @@
-import { motion } from 'framer-motion';
-import { SectionHeader } from '@/components/SectionHeader';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { useSharedConfigActions } from '../hooks/ConfigActionsContext';
-import { useStreamData } from '../hooks/useStreamData';
-import { buildConfigKey } from '@/pages/home/utils/HomeConfigUtils';
-import { buildStreamEndpointLabel } from '@/lib/config/homeStreams';
+import { motion } from "framer-motion";
+import { SectionHeader } from "@/components/SectionHeader";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useSharedConfigActions } from "../hooks/ConfigActionsContext";
+import { useStreamData } from "../hooks/useStreamData";
+import { buildConfigKey } from "@/pages/home/utils/HomeConfigUtils";
+import { buildStreamEndpointLabel } from "@/lib/config/homeStreams";
 
 interface StreamStatusProps {
   isConnected: boolean;
@@ -48,7 +48,7 @@ export function StreamStatus({ isConnected }: StreamStatusProps) {
           const pending =
             Boolean(
               configWritePending[
-                buildConfigKey('Data Streams', entry.itemName)
+                buildConfigKey("Data Streams", entry.itemName)
               ],
             ) || Boolean(streamActionPending[entry.key]);
           return (

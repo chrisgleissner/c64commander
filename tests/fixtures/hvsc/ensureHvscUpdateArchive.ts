@@ -17,24 +17,24 @@
  * The real archive is NEVER committed to git (.gitignore covers it).
  * CI caches it via actions/cache@v4 with key `hvsc-update-84-<runner.os>`.
  */
-import { createWriteStream, existsSync } from 'node:fs';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
+import { createWriteStream, existsSync } from "node:fs";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 
-const DEFAULT_UPDATE_URL = 'https://hvsc.brona.dk/HVSC/HVSC_Update_84.7z';
+const DEFAULT_UPDATE_URL = "https://hvsc.brona.dk/HVSC/HVSC_Update_84.7z";
 const DEFAULT_CACHE_DIR = path.join(
   os.homedir(),
-  '.cache',
-  'c64commander',
-  'hvsc',
+  ".cache",
+  "c64commander",
+  "hvsc",
 );
 const LOCAL_MOCK_FIXTURE_PATH = path.resolve(
-  'android/app/src/test/fixtures/HVSC_Update_mock.7z',
+  "android/app/src/test/fixtures/HVSC_Update_mock.7z",
 );
 
 const downloadViaHttps = async (url: string, targetPath: string) => {
-  const { request } = await import('node:https');
+  const { request } = await import("node:https");
   await new Promise<void>((resolve, reject) => {
     const fileStream = createWriteStream(targetPath);
     const req = request(url, (res) => {
@@ -47,18 +47,18 @@ const downloadViaHttps = async (url: string, targetPath: string) => {
         return;
       }
       res.pipe(fileStream);
-      fileStream.on('finish', () => {
+      fileStream.on("finish", () => {
         fileStream.close();
         resolve();
       });
     });
-    req.on('error', reject);
+    req.on("error", reject);
     req.end();
   });
 };
 
 const downloadViaFetch = async (url: string, targetPath: string) => {
-  if (typeof fetch !== 'function') {
+  if (typeof fetch !== "function") {
     return downloadViaHttps(url, targetPath);
   }
   const response = await fetch(url);
@@ -78,7 +78,7 @@ const downloadViaFetch = async (url: string, targetPath: string) => {
  */
 export const ensureHvscUpdateArchive = async (): Promise<string> => {
   const cacheDir = process.env.HVSC_UPDATE_84_CACHE ?? DEFAULT_CACHE_DIR;
-  const archiveName = 'HVSC_Update_84.7z';
+  const archiveName = "HVSC_Update_84.7z";
   const archivePath = path.join(cacheDir, archiveName);
   if (!existsSync(archivePath)) {
     await mkdir(cacheDir, { recursive: true });

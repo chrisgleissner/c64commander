@@ -10,7 +10,7 @@ import type {
   PlayFileCategory,
   PlaySource,
   LocalPlayFile,
-} from './playbackRouter';
+} from "./playbackRouter";
 
 export type FileLibraryEntry = {
   id: string;

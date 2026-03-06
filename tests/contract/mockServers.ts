@@ -6,11 +6,11 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import { createMockFtpServer } from './mockFtpServer.js';
-import { createMockRestServer } from './mockRestServer.js';
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { createMockFtpServer } from "./mockFtpServer.js";
+import { createMockRestServer } from "./mockRestServer.js";
 
 export type ContractMockServers = {
   baseUrl: string;
@@ -20,9 +20,9 @@ export type ContractMockServers = {
 
 export async function startContractMockServers(): Promise<ContractMockServers> {
   const rootDir = await fs.promises.mkdtemp(
-    path.join(os.tmpdir(), 'c64u-contract-mock-'),
+    path.join(os.tmpdir(), "c64u-contract-mock-"),
   );
-  const scratchDir = path.join(rootDir, 'Temp', 'contract-test');
+  const scratchDir = path.join(rootDir, "Temp", "contract-test");
   await fs.promises.mkdir(scratchDir, { recursive: true });
 
   const ftpServer = await createMockFtpServer({

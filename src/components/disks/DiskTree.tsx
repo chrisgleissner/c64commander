@@ -6,9 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { HardDrive, Monitor, Smartphone, MoreVertical } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
+import { HardDrive, Monitor, Smartphone, MoreVertical } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,12 +16,12 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { cn } from '@/lib/utils';
-import type { DiskEntry } from '@/lib/disks/diskTypes';
-import { wrapUserEvent } from '@/lib/tracing/userTrace';
-import type { DiskTreeNode, DiskTreeState } from '@/lib/disks/diskTree';
-import { pickDiskGroupColor } from '@/lib/disks/diskGroupColors';
+} from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
+import type { DiskEntry } from "@/lib/disks/diskTypes";
+import { wrapUserEvent } from "@/lib/tracing/userTrace";
+import type { DiskTreeNode, DiskTreeState } from "@/lib/disks/diskTree";
+import { pickDiskGroupColor } from "@/lib/disks/diskGroupColors";
 
 const highlightText = (text: string, query: string) => {
   if (!query) return text;
@@ -43,8 +43,8 @@ const highlightText = (text: string, query: string) => {
   );
 };
 
-const LocationIcon = ({ location }: { location: DiskEntry['location'] }) =>
-  location === 'local' ? (
+const LocationIcon = ({ location }: { location: DiskEntry["location"] }) =>
+  location === "local" ? (
     <Smartphone className="h-4 w-4 text-primary/70" aria-label="Local disk" />
   ) : (
     <Monitor className="h-4 w-4 text-blue-500/70" aria-label="C64U disk" />
@@ -65,8 +65,8 @@ export type DiskTreeProps = {
 };
 
 const formatBytes = (value?: number | null) => {
-  if (!value || value <= 0) return '—';
-  const units = ['B', 'KB', 'MB', 'GB'];
+  if (!value || value <= 0) return "—";
+  const units = ["B", "KB", "MB", "GB"];
   let size = value;
   let unitIndex = 0;
   while (size >= 1024 && unitIndex < units.length - 1) {
@@ -77,13 +77,13 @@ const formatBytes = (value?: number | null) => {
 };
 
 const formatDate = (value?: string | null) => {
-  if (!value) return '—';
+  if (!value) return "—";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '—';
+  if (Number.isNaN(date.getTime())) return "—";
   return new Intl.DateTimeFormat(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: '2-digit',
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
   }).format(date);
 };
 
@@ -118,8 +118,8 @@ const DiskRow = ({
   return (
     <div
       className={cn(
-        'flex items-center gap-2 py-2 px-1 rounded-md min-w-0',
-        isDimmed ? 'opacity-40' : 'hover:bg-muted/40',
+        "flex items-center gap-2 py-2 px-1 rounded-md min-w-0",
+        isDimmed ? "opacity-40" : "hover:bg-muted/40",
       )}
     >
       <div className="flex items-center gap-1 shrink-0">
@@ -180,10 +180,10 @@ const DiskRow = ({
             className="text-sm font-medium text-left hover:underline break-words whitespace-normal max-w-full"
             onClick={wrapUserEvent(
               () => onMount?.(disk),
-              'click',
-              'Disk',
+              "click",
+              "Disk",
               { title: disk.name },
-              'DiskRow',
+              "DiskRow",
             )}
             disabled={isDimmed || disableActions}
           >
@@ -195,13 +195,13 @@ const DiskRow = ({
           {disk.group ? (
             <div className="text-[11px] text-muted-foreground flex items-center gap-1 min-w-0">
               <span
-                className={cn('h-2 w-2 rounded-full border', groupColor?.chip)}
+                className={cn("h-2 w-2 rounded-full border", groupColor?.chip)}
                 aria-hidden="true"
               />
               <span
                 className={cn(
                   groupColor?.text,
-                  'break-words whitespace-normal min-w-0',
+                  "break-words whitespace-normal min-w-0",
                 )}
               >
                 Group: {highlightText(disk.group, filter)}
@@ -253,7 +253,7 @@ const FolderNode = ({
   onDiskSelect?: (disk: DiskEntry, selected: boolean) => void;
   disableActions?: boolean;
 }) => {
-  if (node.type === 'disk') {
+  if (node.type === "disk") {
     const disk = node.diskId ? disksById[node.diskId] : null;
     if (!disk) return null;
     const matchInfo = node.diskId
@@ -285,16 +285,16 @@ const FolderNode = ({
   return (
     <div
       className={cn(
-        'space-y-1 min-w-0',
-        depth > 0 && 'border-l border-border/40 pl-3',
+        "space-y-1 min-w-0",
+        depth > 0 && "border-l border-border/40 pl-3",
       )}
       style={{ paddingLeft: indent }}
     >
-      {node.id !== 'root' && (
+      {node.id !== "root" && (
         <div
           className={cn(
-            'text-xs font-semibold text-muted-foreground py-1 break-words min-w-0',
-            isDimmed && 'opacity-40',
+            "text-xs font-semibold text-muted-foreground py-1 break-words min-w-0",
+            isDimmed && "opacity-40",
           )}
         >
           {highlightText(node.name, filter)}
@@ -303,11 +303,11 @@ const FolderNode = ({
       {node.children?.map((child, index) => {
         const prev = node.children?.[index - 1];
         const disk =
-          child.type === 'disk' && child.diskId
+          child.type === "disk" && child.diskId
             ? disksById[child.diskId]
             : null;
         const prevDisk =
-          prev?.type === 'disk' && prev.diskId ? disksById[prev.diskId] : null;
+          prev?.type === "disk" && prev.diskId ? disksById[prev.diskId] : null;
         const showSeparator =
           disk &&
           prevDisk &&
@@ -320,7 +320,7 @@ const FolderNode = ({
             ) : null}
             <FolderNode
               node={child}
-              depth={node.id === 'root' ? depth : depth + 1}
+              depth={node.id === "root" ? depth : depth + 1}
               tree={tree}
               disksById={disksById}
               filter={filter}

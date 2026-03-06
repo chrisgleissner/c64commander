@@ -6,9 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { DiskEntry } from './diskTypes';
+import type { DiskEntry } from "./diskTypes";
 
-const STORE_PREFIX = 'c64u_disk_library:';
+const STORE_PREFIX = "c64u_disk_library:";
 
 export type DiskLibraryState = {
   disks: DiskEntry[];
@@ -25,7 +25,7 @@ export const loadDiskLibrary = (uniqueId: string): DiskLibraryState => {
       disks: Array.isArray(parsed.disks) ? parsed.disks : [],
     };
   } catch (error) {
-    console.warn('Failed to load disk library', { uniqueId, error });
+    console.warn("Failed to load disk library", { uniqueId, error });
     return { disks: [] };
   }
 };

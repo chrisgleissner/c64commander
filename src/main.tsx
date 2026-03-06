@@ -6,33 +6,33 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { createRoot } from 'react-dom/client';
-import App from './App.tsx';
-import { installAsyncContextPropagation } from './lib/tracing/traceActionContextStore';
-import { registerFetchTrace } from './lib/tracing/fetchTrace';
-import { registerUserInteractionCapture } from './lib/tracing/userInteractionCapture';
-import { registerTraceBridge } from './lib/tracing/traceBridge';
-import { markStartupBootstrapComplete } from './lib/startup/startupMilestones';
-import { initializeRuntimeMotionMode } from './lib/startup/runtimeMotionBudget';
-import { addErrorLog } from './lib/logging';
-import { initializeSentry } from './lib/observability/sentry';
-import './index.css';
+import { createRoot } from "react-dom/client";
+import App from "./App.tsx";
+import { installAsyncContextPropagation } from "./lib/tracing/traceActionContextStore";
+import { registerFetchTrace } from "./lib/tracing/fetchTrace";
+import { registerUserInteractionCapture } from "./lib/tracing/userInteractionCapture";
+import { registerTraceBridge } from "./lib/tracing/traceBridge";
+import { markStartupBootstrapComplete } from "./lib/startup/startupMilestones";
+import { initializeRuntimeMotionMode } from "./lib/startup/runtimeMotionBudget";
+import { addErrorLog } from "./lib/logging";
+import { initializeSentry } from "./lib/observability/sentry";
+import "./index.css";
 
 const loadFonts = () => {
-  if (import.meta.env.VITE_ENABLE_TEST_PROBES === '1') return;
-  const link = document.createElement('link');
-  link.rel = 'stylesheet';
+  if (import.meta.env.VITE_ENABLE_TEST_PROBES === "1") return;
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
   link.href =
-    'https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap';
+    "https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap";
   document.head.appendChild(link);
 };
 
 const scheduleAfterFirstPaint = (work: () => void) => {
-  if (import.meta.env.VITE_ENABLE_TEST_PROBES === '1') {
+  if (import.meta.env.VITE_ENABLE_TEST_PROBES === "1") {
     work();
     return;
   }
-  if (typeof window === 'undefined') {
+  if (typeof window === "undefined") {
     work();
     return;
   }
@@ -43,7 +43,7 @@ const scheduleAfterFirstPaint = (work: () => void) => {
         options?: { timeout: number },
       ) => number;
     };
-    if (typeof win.requestIdleCallback === 'function') {
+    if (typeof win.requestIdleCallback === "function") {
       win.requestIdleCallback(() => work(), { timeout: 1200 });
       return;
     }
@@ -64,11 +64,11 @@ const startDeferredStartupBootstrap = () => {
   registerFetchTrace();
   registerUserInteractionCapture();
   markStartupBootstrapComplete();
-  void import('./lib/secureStorage')
+  void import("./lib/secureStorage")
     .then(({ primeStoredPassword }) => primeStoredPassword())
     .catch((error) => {
       const err = error as Error;
-      addErrorLog('Deferred secure storage bootstrap failed', {
+      addErrorLog("Deferred secure storage bootstrap failed", {
         error: {
           name: err.name,
           message: err.message,
@@ -79,13 +79,13 @@ const startDeferredStartupBootstrap = () => {
 };
 
 const registerServiceWorker = () => {
-  if (typeof window === 'undefined') return;
-  if (!('serviceWorker' in navigator)) return;
+  if (typeof window === "undefined") return;
+  if (!("serviceWorker" in navigator)) return;
   if (import.meta.env.DEV) return;
-  window.addEventListener('load', () => {
-    void navigator.serviceWorker.register('/sw.js').catch((error) => {
+  window.addEventListener("load", () => {
+    void navigator.serviceWorker.register("/sw.js").catch((error) => {
       const err = error as Error;
-      addErrorLog('Service worker registration failed', {
+      addErrorLog("Service worker registration failed", {
         error: {
           name: err.name,
           message: err.message,
@@ -99,5 +99,5 @@ const registerServiceWorker = () => {
 initializeRuntimeMotionMode();
 initializeSentry();
 registerServiceWorker();
-createRoot(document.getElementById('root')!).render(<App />);
+createRoot(document.getElementById("root")!).render(<App />);
 scheduleAfterFirstPaint(startDeferredStartupBootstrap);

@@ -6,10 +6,10 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { addLog } from '@/lib/logging';
-import { BackgroundExecution } from '@/lib/native/backgroundExecution';
-import { getLifecycleState } from '@/lib/appLifecycle';
-import { classifyError } from '@/lib/tracing/failureTaxonomy';
+import { addLog } from "@/lib/logging";
+import { BackgroundExecution } from "@/lib/native/backgroundExecution";
+import { getLifecycleState } from "@/lib/appLifecycle";
+import { classifyError } from "@/lib/tracing/failureTaxonomy";
 
 type BackgroundExecutionLogContext = {
   source: string;
@@ -37,7 +37,7 @@ const buildFailureDetails = (
   };
 };
 
-const buildOperationError = (operation: 'start' | 'stop', error: unknown) => {
+const buildOperationError = (operation: "start" | "stop", error: unknown) => {
   const normalizedError = toError(error);
   return new Error(
     `Background execution ${operation} failed: ${normalizedError.message}`,
@@ -54,11 +54,11 @@ export const startBackgroundExecution = async (
   } catch (error) {
     activeCount = Math.max(0, activeCount - 1);
     addLog(
-      'error',
-      'Background execution start failed',
+      "error",
+      "Background execution start failed",
       buildFailureDetails(error, logContext),
     );
-    throw buildOperationError('start', error);
+    throw buildOperationError("start", error);
   }
 };
 
@@ -72,11 +72,11 @@ export const stopBackgroundExecution = async (
     await BackgroundExecution.stop();
   } catch (error) {
     addLog(
-      'error',
-      'Background execution stop failed',
+      "error",
+      "Background execution stop failed",
       buildFailureDetails(error, logContext),
     );
-    throw buildOperationError('stop', error);
+    throw buildOperationError("stop", error);
   }
 };
 

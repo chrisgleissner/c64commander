@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { Capacitor, CapacitorHttp } from '@capacitor/core';
+import { Capacitor, CapacitorHttp } from "@capacitor/core";
 
 export type HvscReleaseStatus = {
   baselineVersion: number;
@@ -14,14 +14,14 @@ export type HvscReleaseStatus = {
   baseUrl: string;
 };
 
-const DEFAULT_BASE_URL = 'https://hvsc.brona.dk/HVSC/';
-const HVSC_BASE_URL_KEY = 'c64u_hvsc_base_url';
+const DEFAULT_BASE_URL = "https://hvsc.brona.dk/HVSC/";
+const HVSC_BASE_URL_KEY = "c64u_hvsc_base_url";
 
 const isNativePlatform = () => {
   try {
     return Capacitor.isNativePlatform();
   } catch (error) {
-    console.warn('Failed to detect native platform for HVSC release service', {
+    console.warn("Failed to detect native platform for HVSC release service", {
       error,
     });
     return false;
@@ -29,11 +29,11 @@ const isNativePlatform = () => {
 };
 
 const normalizeBaseUrl = (baseUrl: string) =>
-  baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+  baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
 
 const resolveHvscBaseUrl = (override?: string) => {
   if (override) return normalizeBaseUrl(override);
-  if (typeof localStorage !== 'undefined') {
+  if (typeof localStorage !== "undefined") {
     const stored = localStorage.getItem(HVSC_BASE_URL_KEY);
     if (stored) return normalizeBaseUrl(stored);
   }
@@ -43,14 +43,14 @@ const resolveHvscBaseUrl = (override?: string) => {
 export const getHvscBaseUrl = () => resolveHvscBaseUrl();
 
 export const getHvscBaseUrlOverride = () => {
-  if (typeof localStorage === 'undefined') return null;
+  if (typeof localStorage === "undefined") return null;
   const stored = localStorage.getItem(HVSC_BASE_URL_KEY);
   return stored ? normalizeBaseUrl(stored) : null;
 };
 
 export const setHvscBaseUrlOverride = (value?: string | null) => {
-  if (typeof localStorage === 'undefined') return;
-  const trimmed = value?.trim() ?? '';
+  if (typeof localStorage === "undefined") return;
+  const trimmed = value?.trim() ?? "";
   if (!trimmed) {
     localStorage.removeItem(HVSC_BASE_URL_KEY);
     return;
@@ -62,18 +62,18 @@ const fetchHvscIndex = async (baseUrl: string) => {
   if (isNativePlatform()) {
     const response = await CapacitorHttp.request({
       url: baseUrl,
-      method: 'GET',
-      headers: { 'Cache-Control': 'no-store' },
+      method: "GET",
+      headers: { "Cache-Control": "no-store" },
     });
     if (response.status < 200 || response.status >= 300) {
       throw new Error(`HVSC release fetch failed: ${response.status}`);
     }
-    return typeof response.data === 'string'
+    return typeof response.data === "string"
       ? response.data
-      : JSON.stringify(response.data ?? '');
+      : JSON.stringify(response.data ?? "");
   }
 
-  const response = await fetch(baseUrl, { cache: 'no-store' });
+  const response = await fetch(baseUrl, { cache: "no-store" });
   if (!response.ok) {
     throw new Error(
       `HVSC release fetch failed: ${response.status} ${response.statusText}`,

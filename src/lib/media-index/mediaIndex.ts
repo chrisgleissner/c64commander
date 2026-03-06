@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-export type MediaType = 'sid' | 'mod' | 'prg' | 'crt' | 'disk';
+export type MediaType = "sid" | "mod" | "prg" | "crt" | "disk";
 
 export type MediaEntry = {
   path: string;

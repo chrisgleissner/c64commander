@@ -6,16 +6,16 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { describe, expect, it, beforeAll, afterAll, vi } from 'vitest';
-import { ConfigItemRow } from '@/components/ConfigItemRow';
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { describe, expect, it, beforeAll, afterAll, vi } from "vitest";
+import { ConfigItemRow } from "@/components/ConfigItemRow";
 import {
   createMockC64Server,
   type MockC64Server,
-} from '../../mocks/mockC64Server';
-import { createOpenApiGeneratedClient } from '../../helpers/openapiGeneratedClient';
-import { updateC64APIConfig } from '@/lib/c64api';
+} from "../../mocks/mockC64Server";
+import { createOpenApiGeneratedClient } from "../../helpers/openapiGeneratedClient";
+import { updateC64APIConfig } from "@/lib/c64api";
 
 function renderWithQuery(ui: React.ReactElement) {
   const client = new QueryClient({
@@ -26,27 +26,27 @@ function renderWithQuery(ui: React.ReactElement) {
   );
 }
 
-describe('ConfigItemRow control selection + REST updates', () => {
+describe("ConfigItemRow control selection + REST updates", () => {
   let server: MockC64Server;
   let openapiClient: any;
 
   beforeAll(async () => {
     server = await createMockC64Server(
       {
-        'Test Category': {
-          'Network Password': 'secret',
-          Drive: 'Enabled',
-          'Video Mode': 'PAL',
-          Power: 'On',
-          Hostname: 'c64u',
+        "Test Category": {
+          "Network Password": "secret",
+          Drive: "Enabled",
+          "Video Mode": "PAL",
+          Power: "On",
+          Hostname: "c64u",
         },
       },
       {
-        'Test Category': {
-          Drive: { options: ['Enabled', 'Disabled'] },
-          'Video Mode': { options: ['PAL', 'NTSC'] },
-          'Network Password': { options: ['Enabled', 'Disabled'] },
-          Power: { options: ['On', 'Off'] },
+        "Test Category": {
+          Drive: { options: ["Enabled", "Disabled"] },
+          "Video Mode": { options: ["PAL", "NTSC"] },
+          "Network Password": { options: ["Enabled", "Disabled"] },
+          Power: { options: ["On", "Off"] },
         },
       },
     );
@@ -64,7 +64,7 @@ describe('ConfigItemRow control selection + REST updates', () => {
     value: string | number,
   ) => {
     await openapiClient.request({
-      method: 'PUT',
+      method: "PUT",
       url: `/v1/configs/${encodeURIComponent(category)}/${encodeURIComponent(item)}`,
       params: { value: String(value) },
     });
@@ -76,85 +76,85 @@ describe('ConfigItemRow control selection + REST updates', () => {
         category="Test Category"
         name="Network Password"
         value="secret"
-        options={['Enabled', 'Disabled']}
+        options={["Enabled", "Disabled"]}
         details={{ presets: [] }}
         onValueChange={(v) =>
-          void putValue('Test Category', 'Network Password', v)
+          void putValue("Test Category", "Network Password", v)
         }
       />,
     );
 
     const input = screen.getByLabelText(
-      'Network Password password input',
+      "Network Password password input",
     ) as HTMLInputElement;
-    expect(input).toHaveAttribute('type', 'password');
-    expect(input.value).toBe('secret');
+    expect(input).toHaveAttribute("type", "password");
+    expect(input.value).toBe("secret");
 
-    fireEvent.change(input, { target: { value: 'newpass' } });
+    fireEvent.change(input, { target: { value: "newpass" } });
     fireEvent.blur(input);
 
     await waitFor(async () => {
       const resp = await openapiClient.request({
-        method: 'GET',
-        url: `/v1/configs/${encodeURIComponent('Test Category')}`,
+        method: "GET",
+        url: `/v1/configs/${encodeURIComponent("Test Category")}`,
       });
       expect(resp.status).toBe(200);
       expect(
-        resp.data['Test Category'].items['Network Password'].selected,
-      ).toBe('newpass');
+        resp.data["Test Category"].items["Network Password"].selected,
+      ).toBe("newpass");
     });
   });
 
-  it('renders a checkbox for Enabled/Disabled and updates via REST immediately', async () => {
+  it("renders a checkbox for Enabled/Disabled and updates via REST immediately", async () => {
     renderWithQuery(
       <ConfigItemRow
         category="Test Category"
         name="Drive"
         value="Enabled"
-        options={['Enabled', 'Disabled']}
+        options={["Enabled", "Disabled"]}
         details={{ presets: [] }}
-        onValueChange={(v) => void putValue('Test Category', 'Drive', v)}
+        onValueChange={(v) => void putValue("Test Category", "Drive", v)}
       />,
     );
 
-    const checkbox = screen.getByLabelText('Drive checkbox');
-    expect(checkbox).toHaveAttribute('role', 'checkbox');
+    const checkbox = screen.getByLabelText("Drive checkbox");
+    expect(checkbox).toHaveAttribute("role", "checkbox");
 
     fireEvent.pointerDown(checkbox);
     fireEvent.click(checkbox);
 
     await waitFor(async () => {
       const resp = await openapiClient.request({
-        method: 'GET',
-        url: `/v1/configs/${encodeURIComponent('Test Category')}`,
+        method: "GET",
+        url: `/v1/configs/${encodeURIComponent("Test Category")}`,
       });
-      expect(resp.data['Test Category'].items.Drive.selected).toBe('Disabled');
+      expect(resp.data["Test Category"].items.Drive.selected).toBe("Disabled");
     });
   });
 
-  it('renders a checkbox for On/Off and maps checked=On, unchecked=Off', async () => {
+  it("renders a checkbox for On/Off and maps checked=On, unchecked=Off", async () => {
     renderWithQuery(
       <ConfigItemRow
         category="Test Category"
         name="Power"
         value="On"
-        options={['On', 'Off']}
-        onValueChange={(v) => void putValue('Test Category', 'Power', v)}
+        options={["On", "Off"]}
+        onValueChange={(v) => void putValue("Test Category", "Power", v)}
       />,
     );
 
-    const checkbox = screen.getByLabelText('Power checkbox');
-    expect(checkbox).toHaveAttribute('role', 'checkbox');
+    const checkbox = screen.getByLabelText("Power checkbox");
+    expect(checkbox).toHaveAttribute("role", "checkbox");
 
     // Toggle to Off
     fireEvent.click(checkbox);
 
     await waitFor(async () => {
       const resp = await openapiClient.request({
-        method: 'GET',
-        url: `/v1/configs/${encodeURIComponent('Test Category')}`,
+        method: "GET",
+        url: `/v1/configs/${encodeURIComponent("Test Category")}`,
       });
-      expect(resp.data['Test Category'].items.Power.selected).toBe('Off');
+      expect(resp.data["Test Category"].items.Power.selected).toBe("Off");
     });
 
     // Toggle back to On (keep shared test state stable)
@@ -162,44 +162,44 @@ describe('ConfigItemRow control selection + REST updates', () => {
 
     await waitFor(async () => {
       const resp = await openapiClient.request({
-        method: 'GET',
-        url: `/v1/configs/${encodeURIComponent('Test Category')}`,
+        method: "GET",
+        url: `/v1/configs/${encodeURIComponent("Test Category")}`,
       });
-      expect(resp.data['Test Category'].items.Power.selected).toBe('On');
+      expect(resp.data["Test Category"].items.Power.selected).toBe("On");
     });
   });
 
-  it('renders a select for 2+ possible values and updates via REST immediately when selecting', async () => {
+  it("renders a select for 2+ possible values and updates via REST immediately when selecting", async () => {
     renderWithQuery(
       <ConfigItemRow
         category="Test Category"
         name="Video Mode"
         value="PAL"
-        options={['PAL', 'NTSC']}
+        options={["PAL", "NTSC"]}
         details={{ presets: [] }}
-        onValueChange={(v) => void putValue('Test Category', 'Video Mode', v)}
+        onValueChange={(v) => void putValue("Test Category", "Video Mode", v)}
       />,
     );
 
-    const trigger = screen.getByLabelText('Video Mode select');
+    const trigger = screen.getByLabelText("Video Mode select");
     fireEvent.mouseDown(trigger);
     fireEvent.click(trigger);
 
-    const option = await screen.findByRole('option', { name: 'NTSC' });
+    const option = await screen.findByRole("option", { name: "NTSC" });
     fireEvent.click(option);
 
     await waitFor(async () => {
       const resp = await openapiClient.request({
-        method: 'GET',
-        url: `/v1/configs/${encodeURIComponent('Test Category')}`,
+        method: "GET",
+        url: `/v1/configs/${encodeURIComponent("Test Category")}`,
       });
-      expect(resp.data['Test Category'].items['Video Mode'].selected).toBe(
-        'NTSC',
+      expect(resp.data["Test Category"].items["Video Mode"].selected).toBe(
+        "NTSC",
       );
     });
   });
 
-  it('renders a text input for remaining cases and updates via REST on edit', async () => {
+  it("renders a text input for remaining cases and updates via REST on edit", async () => {
     renderWithQuery(
       <ConfigItemRow
         category="Test Category"
@@ -207,41 +207,41 @@ describe('ConfigItemRow control selection + REST updates', () => {
         value="c64u"
         options={[]}
         details={{ presets: [] }}
-        onValueChange={(v) => void putValue('Test Category', 'Hostname', v)}
+        onValueChange={(v) => void putValue("Test Category", "Hostname", v)}
       />,
     );
 
     const input = screen.getByLabelText(
-      'Hostname text input',
+      "Hostname text input",
     ) as HTMLInputElement;
-    expect(input).toHaveAttribute('type', 'text');
-    expect(input.value).toBe('c64u');
+    expect(input).toHaveAttribute("type", "text");
+    expect(input.value).toBe("c64u");
 
-    fireEvent.change(input, { target: { value: 'u64' } });
+    fireEvent.change(input, { target: { value: "u64" } });
     fireEvent.blur(input);
 
     await waitFor(async () => {
       const resp = await openapiClient.request({
-        method: 'GET',
-        url: `/v1/configs/${encodeURIComponent('Test Category')}`,
+        method: "GET",
+        url: `/v1/configs/${encodeURIComponent("Test Category")}`,
       });
-      expect(resp.data['Test Category'].items.Hostname.selected).toBe('u64');
+      expect(resp.data["Test Category"].items.Hostname.selected).toBe("u64");
     });
   });
 
-  it('fetches item details (options) when missing and upgrades rendering to checkbox/select', async () => {
+  it("fetches item details (options) when missing and upgrades rendering to checkbox/select", async () => {
     // No options passed: should fetch `/v1/configs/{category}/{item}` and render checkbox.
     renderWithQuery(
       <ConfigItemRow
         category="Test Category"
         name="Drive"
         value="Enabled"
-        onValueChange={(v) => void putValue('Test Category', 'Drive', v)}
+        onValueChange={(v) => void putValue("Test Category", "Drive", v)}
       />,
     );
 
-    const checkbox = await screen.findByLabelText('Drive checkbox');
-    expect(checkbox).toHaveAttribute('role', 'checkbox');
+    const checkbox = await screen.findByLabelText("Drive checkbox");
+    expect(checkbox).toHaveAttribute("role", "checkbox");
 
     // No options passed: should fetch `/v1/configs/{category}/{item}` and render select.
     renderWithQuery(
@@ -249,93 +249,93 @@ describe('ConfigItemRow control selection + REST updates', () => {
         category="Test Category"
         name="Video Mode"
         value="PAL"
-        onValueChange={(v) => void putValue('Test Category', 'Video Mode', v)}
+        onValueChange={(v) => void putValue("Test Category", "Video Mode", v)}
       />,
     );
 
-    const trigger = await screen.findByLabelText('Video Mode select');
+    const trigger = await screen.findByLabelText("Video Mode select");
     fireEvent.mouseDown(trigger);
     fireEvent.click(trigger);
-    const option = await screen.findByRole('option', { name: 'NTSC' });
+    const option = await screen.findByRole("option", { name: "NTSC" });
     fireEvent.click(option);
 
     await waitFor(async () => {
       const resp = await openapiClient.request({
-        method: 'GET',
-        url: `/v1/configs/${encodeURIComponent('Test Category')}`,
+        method: "GET",
+        url: `/v1/configs/${encodeURIComponent("Test Category")}`,
       });
-      expect(resp.data['Test Category'].items['Video Mode'].selected).toBe(
-        'NTSC',
+      expect(resp.data["Test Category"].items["Video Mode"].selected).toBe(
+        "NTSC",
       );
     });
   });
 });
 
-describe('ConfigItemRow slider and input behaviors', () => {
-  it('renders a slider for audio mixer volumes', () => {
+describe("ConfigItemRow slider and input behaviors", () => {
+  it("renders a slider for audio mixer volumes", () => {
     const onValueChange = vi.fn();
     renderWithQuery(
       <ConfigItemRow
         category="Audio Mixer"
         name="Vol UltiSid 1"
         value="0 dB"
-        options={['-6 dB', '0 dB', '+6 dB']}
+        options={["-6 dB", "0 dB", "+6 dB"]}
         onValueChange={onValueChange}
         valueTestId="volume-value"
         sliderTestId="volume-slider"
       />,
     );
 
-    expect(screen.getByLabelText('Vol UltiSid 1 slider')).toBeTruthy();
-    expect(screen.getByTestId('volume-value')).toHaveTextContent('0 dB');
+    expect(screen.getByLabelText("Vol UltiSid 1 slider")).toBeTruthy();
+    expect(screen.getByTestId("volume-value")).toHaveTextContent("0 dB");
   });
 
-  it('orders off/low/medium/high slider options', () => {
+  it("orders off/low/medium/high slider options", () => {
     renderWithQuery(
       <ConfigItemRow
         category="Test Category"
         name="Fan Speed"
         value="Low"
-        options={['Off', 'Low', 'Medium', 'High']}
+        options={["Off", "Low", "Medium", "High"]}
         onValueChange={() => {}}
       />,
     );
 
-    expect(screen.getByLabelText('Fan Speed slider')).toBeTruthy();
-    expect(screen.getByText('Low')).toBeTruthy();
+    expect(screen.getByLabelText("Fan Speed slider")).toBeTruthy();
+    expect(screen.getByText("Low")).toBeTruthy();
   });
 
-  it('maps numeric values when option formatting differs', () => {
+  it("maps numeric values when option formatting differs", () => {
     renderWithQuery(
       <ConfigItemRow
         category="Test Category"
         name="Gain"
         value="0"
-        options={['0 dB', '+6 dB']}
+        options={["0 dB", "+6 dB"]}
         onValueChange={() => {}}
       />,
     );
 
-    expect(screen.getByLabelText('Gain slider')).toBeTruthy();
-    expect(screen.getByText('0 dB')).toBeTruthy();
+    expect(screen.getByLabelText("Gain slider")).toBeTruthy();
+    expect(screen.getByText("0 dB")).toBeTruthy();
   });
 
-  it('supports left/center/right slider ordering', () => {
+  it("supports left/center/right slider ordering", () => {
     renderWithQuery(
       <ConfigItemRow
         category="Test Category"
         name="Pan"
         value="Center"
-        options={['Left 40', 'Right 20', 'Center']}
+        options={["Left 40", "Right 20", "Center"]}
         onValueChange={() => {}}
       />,
     );
 
-    expect(screen.getByLabelText('Pan slider')).toBeTruthy();
-    expect(screen.getByText('Center')).toBeTruthy();
+    expect(screen.getByLabelText("Pan slider")).toBeTruthy();
+    expect(screen.getByText("Center")).toBeTruthy();
   });
 
-  it('commits text input on enter without waiting for debounce', () => {
+  it("commits text input on enter without waiting for debounce", () => {
     vi.useFakeTimers();
     try {
       const onValueChange = vi.fn();
@@ -351,18 +351,18 @@ describe('ConfigItemRow slider and input behaviors', () => {
       );
 
       const input = screen.getByLabelText(
-        'Hostname text input',
+        "Hostname text input",
       ) as HTMLInputElement;
-      fireEvent.change(input, { target: { value: 'u64' } });
-      fireEvent.keyDown(input, { key: 'Enter' });
+      fireEvent.change(input, { target: { value: "u64" } });
+      fireEvent.keyDown(input, { key: "Enter" });
 
-      expect(onValueChange).toHaveBeenCalledWith('u64');
+      expect(onValueChange).toHaveBeenCalledWith("u64");
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it('ignores edits for read-only rows', () => {
+  it("ignores edits for read-only rows", () => {
     const onValueChange = vi.fn();
     renderWithQuery(
       <ConfigItemRow
@@ -376,17 +376,17 @@ describe('ConfigItemRow slider and input behaviors', () => {
     );
 
     const input = screen.getByLabelText(
-      'SID Detected Socket 1 text input',
+      "SID Detected Socket 1 text input",
     ) as HTMLInputElement;
-    fireEvent.change(input, { target: { value: 'Socket B' } });
-    fireEvent.keyDown(input, { key: 'Enter' });
+    fireEvent.change(input, { target: { value: "Socket B" } });
+    fireEvent.keyDown(input, { key: "Enter" });
     fireEvent.blur(input);
 
     expect(onValueChange).not.toHaveBeenCalled();
   });
 });
 
-describe('ConfigItemRow adaptive layout', () => {
+describe("ConfigItemRow adaptive layout", () => {
   const setLayoutMetrics = (
     layoutEl: HTMLElement,
     labelEl: HTMLElement,
@@ -396,11 +396,11 @@ describe('ConfigItemRow adaptive layout', () => {
       labelHeight: number;
     },
   ) => {
-    Object.defineProperty(layoutEl, 'clientWidth', {
+    Object.defineProperty(layoutEl, "clientWidth", {
       value: metrics.containerWidth,
       configurable: true,
     });
-    Object.defineProperty(labelEl, 'scrollWidth', {
+    Object.defineProperty(labelEl, "scrollWidth", {
       value: metrics.labelWidth,
       configurable: true,
     });
@@ -418,80 +418,80 @@ describe('ConfigItemRow adaptive layout', () => {
       }) as DOMRect;
   };
 
-  it('uses horizontal layout when label and widget fit', async () => {
+  it("uses horizontal layout when label and widget fit", async () => {
     renderWithQuery(
       <ConfigItemRow
         category="Audio Mixer"
         name="VolUltiSid1+6dB"
         value="0 dB"
-        options={['-6 dB', '0 dB', '+6 dB']}
+        options={["-6 dB", "0 dB", "+6 dB"]}
         onValueChange={() => {}}
       />,
     );
 
-    const layout = screen.getByTestId('config-item-layout');
-    const label = screen.getByTestId('config-item-label');
+    const layout = screen.getByTestId("config-item-layout");
+    const label = screen.getByTestId("config-item-label");
     setLayoutMetrics(layout, label, {
       containerWidth: 640,
       labelWidth: 140,
       labelHeight: 16,
     });
-    fireEvent(window, new Event('resize'));
+    fireEvent(window, new Event("resize"));
 
     await waitFor(() => {
-      expect(layout).toHaveAttribute('data-layout', 'horizontal');
+      expect(layout).toHaveAttribute("data-layout", "horizontal");
     });
-    expect(label.className).toContain('whitespace-nowrap');
+    expect(label.className).toContain("whitespace-nowrap");
   });
 
-  it('switches to vertical layout when label would overflow horizontally', async () => {
+  it("switches to vertical layout when label would overflow horizontally", async () => {
     renderWithQuery(
       <ConfigItemRow
         category="Audio Mixer"
         name="VolUltiSid1+6dB"
         value="0 dB"
-        options={['-6 dB', '0 dB', '+6 dB']}
+        options={["-6 dB", "0 dB", "+6 dB"]}
         onValueChange={() => {}}
       />,
     );
 
-    const layout = screen.getByTestId('config-item-layout');
-    const label = screen.getByTestId('config-item-label');
+    const layout = screen.getByTestId("config-item-layout");
+    const label = screen.getByTestId("config-item-label");
     setLayoutMetrics(layout, label, {
       containerWidth: 240,
       labelWidth: 140,
       labelHeight: 16,
     });
-    fireEvent(window, new Event('resize'));
+    fireEvent(window, new Event("resize"));
 
     await waitFor(() => {
-      expect(layout).toHaveAttribute('data-layout', 'vertical');
+      expect(layout).toHaveAttribute("data-layout", "vertical");
     });
-    expect(label.className).toContain('break-words');
+    expect(label.className).toContain("break-words");
   });
 
-  it('forces vertical layout when label appears vertically stacked', async () => {
+  it("forces vertical layout when label appears vertically stacked", async () => {
     renderWithQuery(
       <ConfigItemRow
         category="Drive A Settings"
         name="DriveType123456"
         value="1541"
-        options={['1541', '1571', '1581']}
+        options={["1541", "1571", "1581"]}
         onValueChange={() => {}}
       />,
     );
 
-    const layout = screen.getByTestId('config-item-layout');
-    const label = screen.getByTestId('config-item-label');
+    const layout = screen.getByTestId("config-item-layout");
+    const label = screen.getByTestId("config-item-label");
     setLayoutMetrics(layout, label, {
       containerWidth: 640,
       labelWidth: 12,
       labelHeight: 64,
     });
-    fireEvent(window, new Event('resize'));
+    fireEvent(window, new Event("resize"));
 
     await waitFor(() => {
-      expect(layout).toHaveAttribute('data-layout', 'vertical');
+      expect(layout).toHaveAttribute("data-layout", "vertical");
     });
   });
 });

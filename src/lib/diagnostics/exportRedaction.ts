@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-const REDACTED = '***';
+const REDACTED = "***";
 
 const SENSITIVE_KEY_REGEX =
   /(password|token|authorization|auth|secret|credential|api[-_]?key)/i;
@@ -49,20 +49,20 @@ export const redactExportValue = (
   value: unknown,
   keyHint?: string,
 ): unknown => {
-  if (typeof keyHint === 'string') {
+  if (typeof keyHint === "string") {
     if (SENSITIVE_KEY_REGEX.test(keyHint)) return REDACTED;
     if (HOST_KEY_REGEX.test(keyHint)) return REDACTED;
-    if (LOCATION_KEY_REGEX.test(keyHint) && typeof value === 'string') {
+    if (LOCATION_KEY_REGEX.test(keyHint) && typeof value === "string") {
       return redactText(value);
     }
   }
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     return redactText(value);
   }
   if (Array.isArray(value)) {
     return value.map((entry) => redactExportValue(entry));
   }
-  if (value && typeof value === 'object') {
+  if (value && typeof value === "object") {
     const result: Record<string, unknown> = {};
     Object.entries(value as Record<string, unknown>).forEach(([key, entry]) => {
       result[key] = redactExportValue(entry, key);

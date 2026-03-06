@@ -11,12 +11,12 @@ import type {
   ErrorEffect,
   FtpEffect,
   RestEffect,
-} from '@/lib/diagnostics/actionSummaries';
+} from "@/lib/diagnostics/actionSummaries";
 import {
   formatActionEffectTarget,
   formatActionSummaryOrigin,
   formatTriggerDisplay,
-} from '@/lib/diagnostics/actionSummaryDisplay';
+} from "@/lib/diagnostics/actionSummaryDisplay";
 
 type Props = {
   summary: ActionSummary;
@@ -24,10 +24,10 @@ type Props = {
 
 export const ActionExpandedContent = ({ summary }: Props) => {
   const effects = summary.effects ?? [];
-  const restEffects = effects.filter((e): e is RestEffect => e.type === 'REST');
-  const ftpEffects = effects.filter((e): e is FtpEffect => e.type === 'FTP');
+  const restEffects = effects.filter((e): e is RestEffect => e.type === "REST");
+  const ftpEffects = effects.filter((e): e is FtpEffect => e.type === "FTP");
   const errorEffects = effects.filter(
-    (e): e is ErrorEffect => e.type === 'ERROR',
+    (e): e is ErrorEffect => e.type === "ERROR",
   );
   const inferredProduct =
     restEffects.find((effect) => effect.product)?.product ?? null;
@@ -36,7 +36,7 @@ export const ActionExpandedContent = ({ summary }: Props) => {
     <div className="space-y-3 text-xs">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
         <span>
-          origin:{' '}
+          origin:{" "}
           {formatActionSummaryOrigin(summary.origin, summary.originalOrigin)}
         </span>
         <span>outcome: {summary.outcome}</span>
@@ -66,16 +66,16 @@ export const ActionExpandedContent = ({ summary }: Props) => {
                 {effect.method} {effect.path}
               </p>
               <p className="text-muted-foreground">
-                target:{' '}
+                target:{" "}
                 {formatActionEffectTarget(
                   effect.target,
                   effect.product ?? inferredProduct,
-                )}{' '}
-                · status:{' '}
+                )}{" "}
+                · status:{" "}
                 {effect.status !== null && effect.status !== undefined
                   ? effect.status
-                  : 'unknown'}
-                {effect.durationMs !== null ? ` · ${effect.durationMs}ms` : ''}
+                  : "unknown"}
+                {effect.durationMs !== null ? ` · ${effect.durationMs}ms` : ""}
               </p>
               {effect.error ? (
                 <p className="text-diagnostics-error">error: {effect.error}</p>
@@ -98,9 +98,9 @@ export const ActionExpandedContent = ({ summary }: Props) => {
                 {effect.operation} {effect.path}
               </p>
               <p className="text-muted-foreground">
-                target:{' '}
+                target:{" "}
                 {formatActionEffectTarget(effect.target, inferredProduct)} ·
-                result: {effect.result ?? 'unknown'}
+                result: {effect.result ?? "unknown"}
               </p>
               {effect.error ? (
                 <p className="text-diagnostics-error">error: {effect.error}</p>

@@ -6,14 +6,14 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
-import { PlaybackSettingsPanel } from '@/pages/playFiles/components/PlaybackSettingsPanel';
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+import { PlaybackSettingsPanel } from "@/pages/playFiles/components/PlaybackSettingsPanel";
 
 const baseProps = {
   durationSliderMax: 600,
   durationSliderValue: 120,
-  durationInput: '02:00',
+  durationInput: "02:00",
   onDurationSliderChange: vi.fn(),
   onDurationInputChange: vi.fn(),
   onDurationInputBlur: vi.fn(),
@@ -33,8 +33,8 @@ const baseProps = {
   onCloseSongPicker: vi.fn(),
 };
 
-describe('PlaybackSettingsPanel', () => {
-  it('renders compact songlengths summary with path metadata and change action', () => {
+describe("PlaybackSettingsPanel", () => {
+  it("renders compact songlengths summary with path metadata and change action", () => {
     render(
       <PlaybackSettingsPanel
         {...baseProps}
@@ -45,12 +45,12 @@ describe('PlaybackSettingsPanel', () => {
       />,
     );
 
-    expect(screen.getByTestId('songlengths-path-label')).toBeInTheDocument();
-    expect(screen.getByText('1024 Entries, 240 KB')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Change' })).toBeInTheDocument();
+    expect(screen.getByTestId("songlengths-path-label")).toBeInTheDocument();
+    expect(screen.getByText("1024 Entries, 240 KB")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Change" })).toBeInTheDocument();
   });
 
-  it('invokes change handler from compact action button', () => {
+  it("invokes change handler from compact action button", () => {
     const onChooseSonglengthsFile = vi.fn();
     render(
       <PlaybackSettingsPanel
@@ -59,11 +59,11 @@ describe('PlaybackSettingsPanel', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Change' }));
+    fireEvent.click(screen.getByRole("button", { name: "Change" }));
     expect(onChooseSonglengthsFile).toHaveBeenCalledTimes(1);
   });
 
-  it('uses Subsong terminology for multi-subsong selector', () => {
+  it("uses Subsong terminology for multi-subsong selector", () => {
     render(
       <PlaybackSettingsPanel
         {...baseProps}
@@ -75,8 +75,8 @@ describe('PlaybackSettingsPanel', () => {
     );
 
     expect(
-      screen.getByRole('button', { name: 'Subsong 2/5' }),
+      screen.getByRole("button", { name: "Subsong 2/5" }),
     ).toBeInTheDocument();
-    expect(screen.getByText('Available subsongs: 1–5')).toBeInTheDocument();
+    expect(screen.getByText("Available subsongs: 1–5")).toBeInTheDocument();
   });
 });

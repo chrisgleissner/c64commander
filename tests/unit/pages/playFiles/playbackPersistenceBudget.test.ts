@@ -1,12 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from "vitest";
 import {
   LEGACY_PLAYLIST_MAX_BYTES,
   LEGACY_PLAYLIST_MAX_ITEMS,
   shouldPersistLegacyPlaylistBlob,
-} from '@/pages/playFiles/hooks/playbackPersistenceBudget';
+} from "@/pages/playFiles/hooks/playbackPersistenceBudget";
 
-describe('playbackPersistenceBudget', () => {
-  it('allows persistence when payload is within item and size budgets', () => {
+describe("playbackPersistenceBudget", () => {
+  it("allows persistence when payload is within item and size budgets", () => {
     const playlist = new Array(LEGACY_PLAYLIST_MAX_ITEMS).fill({});
     expect(
       shouldPersistLegacyPlaylistBlob(
@@ -16,12 +16,12 @@ describe('playbackPersistenceBudget', () => {
     ).toBe(true);
   });
 
-  it('blocks persistence when playlist item count exceeds budget', () => {
+  it("blocks persistence when playlist item count exceeds budget", () => {
     const playlist = new Array(LEGACY_PLAYLIST_MAX_ITEMS + 1).fill({});
     expect(shouldPersistLegacyPlaylistBlob(playlist as any, 1024)).toBe(false);
   });
 
-  it('blocks persistence when payload bytes exceed budget', () => {
+  it("blocks persistence when payload bytes exceed budget", () => {
     const playlist = new Array(10).fill({});
     expect(
       shouldPersistLegacyPlaylistBlob(

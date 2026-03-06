@@ -6,17 +6,17 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { addErrorLog } from '@/lib/logging';
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { addErrorLog } from "@/lib/logging";
 import {
   buildDiskId,
   createDiskEntry,
   getDiskName,
   normalizeDiskPath,
   type DiskEntry,
-} from '@/lib/disks/diskTypes';
-import { loadDiskLibrary, saveDiskLibrary } from '@/lib/disks/diskStore';
-import { buildDiskTreeState } from '@/lib/disks/diskTree';
+} from "@/lib/disks/diskTypes";
+import { loadDiskLibrary, saveDiskLibrary } from "@/lib/disks/diskStore";
+import { buildDiskTreeState } from "@/lib/disks/diskTree";
 
 export type DiskLibrary = {
   disks: DiskEntry[];
@@ -34,7 +34,7 @@ export type DiskLibrary = {
 export const useDiskLibrary = (uniqueId: string | null): DiskLibrary => {
   const [disks, setDisks] = useState<DiskEntry[]>([]);
   const [runtimeFiles, setRuntimeFiles] = useState<Record<string, File>>({});
-  const [filter, setFilter] = useState('');
+  const [filter, setFilter] = useState("");
   const lastUniqueIdRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -134,7 +134,7 @@ export const useDiskLibrary = (uniqueId: string | null): DiskLibrary => {
 };
 
 export const buildDiskEntryFromPath = (
-  location: 'local' | 'ultimate',
+  location: "local" | "ultimate",
   path: string,
   group?: string | null,
 ) => {
@@ -147,7 +147,7 @@ export const buildDiskEntryFromPath = (
 };
 
 export const buildDiskEntryFromDrive = (
-  location: 'local' | 'ultimate',
+  location: "local" | "ultimate",
   path?: string | null,
 ) => {
   if (!path) return null;
@@ -155,7 +155,7 @@ export const buildDiskEntryFromDrive = (
     const normalized = normalizeDiskPath(path);
     return buildDiskId(location, normalized);
   } catch (error) {
-    addErrorLog('Disk id build failed', {
+    addErrorLog("Disk id build failed", {
       path,
       error: (error as Error).message,
     });

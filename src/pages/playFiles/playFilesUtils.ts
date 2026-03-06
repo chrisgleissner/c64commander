@@ -6,10 +6,10 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { mergeAudioMixerOptions } from '@/lib/config/audioMixer';
-import { normalizeConfigItem } from '@/lib/config/normalizeConfigItem';
-import type { LocalPlayFile } from '@/lib/playback/playbackRouter';
-import type { PlayFileCategory } from '@/lib/playback/fileTypes';
+import { mergeAudioMixerOptions } from "@/lib/config/audioMixer";
+import { normalizeConfigItem } from "@/lib/config/normalizeConfigItem";
+import type { LocalPlayFile } from "@/lib/playback/playbackRouter";
+import type { PlayFileCategory } from "@/lib/playback/fileTypes";
 
 export type AudioMixerItem = {
   name: string;
@@ -18,33 +18,33 @@ export type AudioMixerItem = {
 };
 
 export const CATEGORY_OPTIONS: PlayFileCategory[] = [
-  'sid',
-  'mod',
-  'prg',
-  'crt',
-  'disk',
+  "sid",
+  "mod",
+  "prg",
+  "crt",
+  "disk",
 ];
 export const buildPlaylistStorageKey = (deviceId: string) =>
   `c64u_playlist:v1:${deviceId}`;
-export const LAST_DEVICE_ID_KEY = 'c64u_last_device_id';
-export const PLAYLIST_STORAGE_PREFIX = 'c64u_playlist:v1:';
-export const PLAYBACK_SESSION_KEY = 'c64u_playback_session:v1';
+export const LAST_DEVICE_ID_KEY = "c64u_last_device_id";
+export const PLAYLIST_STORAGE_PREFIX = "c64u_playlist:v1:";
+export const PLAYBACK_SESSION_KEY = "c64u_playback_session:v1";
 export const DEFAULT_SONG_DURATION_MS = 3 * 60 * 1000;
 export const DURATION_MIN_SECONDS = 1;
 export const DURATION_MAX_SECONDS = 3600;
 export const DURATION_SLIDER_STEPS = 1000;
 
 export const formatTime = (ms?: number) => {
-  if (ms === undefined) return '—:—';
+  if (ms === undefined) return "—:—";
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
-  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 };
 
 export const formatBytes = (value?: number | null) => {
-  if (value === null || value === undefined || value < 0) return '—';
-  const units = ['B', 'KB', 'MB', 'GB'];
+  if (value === null || value === undefined || value < 0) return "—";
+  const units = ["B", "KB", "MB", "GB"];
   let size = value;
   let unitIndex = 0;
   while (size >= 1024 && unitIndex < units.length - 1) {
@@ -55,21 +55,21 @@ export const formatBytes = (value?: number | null) => {
 };
 
 export const formatDate = (value?: string | null) => {
-  if (!value) return '—';
+  if (!value) return "—";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '—';
+  if (Number.isNaN(date.getTime())) return "—";
   return new Intl.DateTimeFormat(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: '2-digit',
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
   }).format(date);
 };
 
 export const isSongCategory = (category: PlayFileCategory) =>
-  category === 'sid' || category === 'mod';
+  category === "sid" || category === "mod";
 
 export const normalizeLocalPath = (path: string) =>
-  path.startsWith('/') ? path : `/${path}`;
+  path.startsWith("/") ? path : `/${path}`;
 
 export const getLocalFilePath = (file: LocalPlayFile) => {
   const candidate =
@@ -82,8 +82,8 @@ export const getLocalFilePath = (file: LocalPlayFile) => {
 export const parseDurationInput = (value: string) => {
   const trimmed = value.trim();
   if (!trimmed) return undefined;
-  if (trimmed.includes(':')) {
-    const [minutesRaw, secondsRaw] = trimmed.split(':');
+  if (trimmed.includes(":")) {
+    const [minutesRaw, secondsRaw] = trimmed.split(":");
     const minutes = Number(minutesRaw);
     const seconds = Number(secondsRaw);
     if (Number.isNaN(minutes) || Number.isNaN(seconds)) return undefined;
@@ -154,12 +154,12 @@ export const extractAudioMixerItems = (
 ): AudioMixerItem[] => {
   if (!payload) return [];
   const categoryData =
-    (payload as Record<string, any>)['Audio Mixer'] ?? payload;
+    (payload as Record<string, any>)["Audio Mixer"] ?? payload;
   const itemsData =
     (categoryData as Record<string, any>)?.items ?? categoryData;
-  if (!itemsData || typeof itemsData !== 'object') return [];
+  if (!itemsData || typeof itemsData !== "object") return [];
   return Object.entries(itemsData)
-    .filter(([key]) => key !== 'errors')
+    .filter(([key]) => key !== "errors")
     .map(([name, config]) => {
       const normalized = normalizeConfigItem(config);
       return {

@@ -6,14 +6,14 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { registerPlugin } from '@capacitor/core';
-import { addLog } from '@/lib/logging';
-import { getPlatform } from '@/lib/native/platform';
-import { getActiveAction } from '@/lib/tracing/actionTrace';
+import { registerPlugin } from "@capacitor/core";
+import { addLog } from "@/lib/logging";
+import { getPlatform } from "@/lib/native/platform";
+import { getActiveAction } from "@/lib/tracing/actionTrace";
 import {
   resolveNativeTraceContext,
   type NativeTraceContext,
-} from '@/lib/native/nativeTraceContext';
+} from "@/lib/native/nativeTraceContext";
 
 export type PickedFolderEntry = {
   uri: string;
@@ -22,7 +22,7 @@ export type PickedFolderEntry = {
 };
 
 export type SafFolderEntry = {
-  type: 'file' | 'dir';
+  type: "file" | "dir";
   name: string;
   path: string;
   sizeBytes?: number | null;
@@ -95,9 +95,9 @@ type FolderPickerPlugin = {
 type FolderPickerOverride = Partial<FolderPickerPlugin>;
 
 const allowAndroidOverride = () => {
-  if (typeof window === 'undefined') return false;
+  if (typeof window === "undefined") return false;
   const testProbeEnabled =
-    import.meta.env.VITE_ENABLE_TEST_PROBES === '1' ||
+    import.meta.env.VITE_ENABLE_TEST_PROBES === "1" ||
     (window as Window & { __c64uTestProbeEnabled?: boolean })
       .__c64uTestProbeEnabled === true;
   return (
@@ -108,7 +108,7 @@ const allowAndroidOverride = () => {
 };
 
 const resolveOverride = (): FolderPickerOverride | null => {
-  if (typeof window === 'undefined') return null;
+  if (typeof window === "undefined") return null;
   const candidate = (
     window as Window & { __c64uFolderPickerOverride?: FolderPickerOverride }
   ).__c64uFolderPickerOverride;
@@ -121,9 +121,9 @@ const resolveOverrideMethod = <K extends keyof FolderPickerPlugin>(
   const override = resolveOverride();
   const candidate = override?.[method];
   if (!candidate) return null;
-  if (getPlatform() !== 'android' || allowAndroidOverride()) return candidate;
-  addLog('debug', 'Android SAF override blocked', { method });
-  throw new Error('Android SAF picker is required.');
+  if (getPlatform() !== "android" || allowAndroidOverride()) return candidate;
+  addLog("debug", "Android SAF override blocked", { method });
+  throw new Error("Android SAF picker is required.");
 };
 
 const withTraceContext = <T extends Record<string, unknown> | undefined>(
@@ -133,47 +133,47 @@ const withTraceContext = <T extends Record<string, unknown> | undefined>(
   traceContext: resolveNativeTraceContext(getActiveAction()),
 });
 
-const plugin = registerPlugin<FolderPickerPlugin>('FolderPicker');
+const plugin = registerPlugin<FolderPickerPlugin>("FolderPicker");
 
 export const FolderPicker: FolderPickerPlugin = {
   pickDirectory: (options) => {
-    const override = resolveOverrideMethod('pickDirectory');
+    const override = resolveOverrideMethod("pickDirectory");
     const withTrace = withTraceContext(options);
     if (override) return override(withTrace);
     return plugin.pickDirectory(withTrace);
   },
   pickFile: (options) => {
-    const override = resolveOverrideMethod('pickFile');
+    const override = resolveOverrideMethod("pickFile");
     const withTrace = withTraceContext(options);
     if (override) return override(withTrace);
     return plugin.pickFile(withTrace);
   },
   listChildren: (options) => {
-    const override = resolveOverrideMethod('listChildren');
+    const override = resolveOverrideMethod("listChildren");
     const withTrace = withTraceContext(options);
     if (override) return override(withTrace);
     return plugin.listChildren(withTrace);
   },
   getPersistedUris: (options) => {
-    const override = resolveOverrideMethod('getPersistedUris');
+    const override = resolveOverrideMethod("getPersistedUris");
     const withTrace = withTraceContext(options);
     if (override) return override(withTrace);
     return plugin.getPersistedUris(withTrace);
   },
   readFile: (options) => {
-    const override = resolveOverrideMethod('readFile');
+    const override = resolveOverrideMethod("readFile");
     const withTrace = withTraceContext(options);
     if (override) return override(withTrace);
     return plugin.readFile(withTrace);
   },
   readFileFromTree: (options) => {
-    const override = resolveOverrideMethod('readFileFromTree');
+    const override = resolveOverrideMethod("readFileFromTree");
     const withTrace = withTraceContext(options);
     if (override) return override(withTrace);
     return plugin.readFileFromTree(withTrace);
   },
   writeFileToTree: (options) => {
-    const override = resolveOverrideMethod('writeFileToTree');
+    const override = resolveOverrideMethod("writeFileToTree");
     const withTrace = withTraceContext(options);
     if (override) return override(withTrace);
     return plugin.writeFileToTree(withTrace);

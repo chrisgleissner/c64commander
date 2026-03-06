@@ -1,13 +1,13 @@
-import { useState, useMemo } from 'react';
-import { motion } from 'framer-motion';
-import { getC64API } from '@/lib/c64api';
-import { useActionTrace } from '@/hooks/useActionTrace';
-import { SectionHeader } from '@/components/SectionHeader';
-import { useSharedConfigActions } from '../hooks/ConfigActionsContext';
-import { useSidData } from '../hooks/useSidData';
-import { SidCard } from '../SidCard';
-import { silenceSidTargets } from '@/lib/sid/sidSilence';
-import { buildSidEnablement } from '@/lib/config/sidVolumeControl';
+import { useState, useMemo } from "react";
+import { motion } from "framer-motion";
+import { getC64API } from "@/lib/c64api";
+import { useActionTrace } from "@/hooks/useActionTrace";
+import { SectionHeader } from "@/components/SectionHeader";
+import { useSharedConfigActions } from "../hooks/ConfigActionsContext";
+import { useSidData } from "../hooks/useSidData";
+import { SidCard } from "../SidCard";
+import { silenceSidTargets } from "@/lib/sid/sidSilence";
+import { buildSidEnablement } from "@/lib/config/sidVolumeControl";
 import {
   resolveOptionIndex,
   resolveVolumeCenterIndex,
@@ -20,10 +20,10 @@ import {
   resolveSidSocketToggleValue,
   resolveSidAddressDisableValue,
   resolveSidAddressEnableValue,
-} from '../utils/uiLogic';
-import { buildConfigKey, readItemOptions } from '../utils/HomeConfigUtils';
-import { formatDbValue, formatPanValue } from '@/lib/ui/sliderValueFormat';
-import { SID_SLIDER_STEP } from '../constants';
+} from "../utils/uiLogic";
+import { buildConfigKey, readItemOptions } from "../utils/HomeConfigUtils";
+import { formatDbValue, formatPanValue } from "@/lib/ui/sliderValueFormat";
+import { SID_SLIDER_STEP } from "../constants";
 
 interface AudioMixerProps {
   isConnected: boolean;
@@ -42,7 +42,7 @@ export function AudioMixer({
   runMachineTask,
 }: AudioMixerProps) {
   const api = getC64API();
-  const trace = useActionTrace('AudioMixer');
+  const trace = useActionTrace("AudioMixer");
   const {
     configOverrides,
     configWritePending,
@@ -66,28 +66,28 @@ export function AudioMixer({
   const ultiSid1ProfileValue = String(
     resolveConfigValue(
       ultiSidConfig,
-      'UltiSID Configuration',
-      'UltiSID 1 Filter Curve',
-      '—',
+      "UltiSID Configuration",
+      "UltiSID 1 Filter Curve",
+      "—",
     ),
   );
   const ultiSid2ProfileValue = String(
     resolveConfigValue(
       ultiSidConfig,
-      'UltiSID Configuration',
-      'UltiSID 2 Filter Curve',
-      '—',
+      "UltiSID Configuration",
+      "UltiSID 2 Filter Curve",
+      "—",
     ),
   );
   const ultiSid1ProfileSelectOptions = readItemOptions(
     ultiSidConfig,
-    'UltiSID Configuration',
-    'UltiSID 1 Filter Curve',
+    "UltiSID Configuration",
+    "UltiSID 1 Filter Curve",
   ).map((value) => String(value));
   const ultiSid2ProfileSelectOptions = readItemOptions(
     ultiSidConfig,
-    'UltiSID Configuration',
-    'UltiSID 2 Filter Curve',
+    "UltiSID Configuration",
+    "UltiSID 2 Filter Curve",
   ).map((value) => String(value));
 
   const ultiSid1ProfileSelectValue = ultiSid1ProfileValue;
@@ -96,17 +96,17 @@ export function AudioMixer({
   const sidDetectedSocket1 = String(
     resolveConfigValue(
       sidSocketsCategory as Record<string, unknown> | undefined,
-      'SID Sockets Configuration',
-      'SID Detected Socket 1',
-      'None',
+      "SID Sockets Configuration",
+      "SID Detected Socket 1",
+      "None",
     ),
   );
   const sidDetectedSocket2 = String(
     resolveConfigValue(
       sidSocketsCategory as Record<string, unknown> | undefined,
-      'SID Sockets Configuration',
-      'SID Detected Socket 2',
-      'None',
+      "SID Sockets Configuration",
+      "SID Detected Socket 2",
+      "None",
     ),
   );
 
@@ -122,10 +122,10 @@ export function AudioMixer({
   const sidStatusMap = useMemo(
     () =>
       new Map([
-        ['socket1', sidEnablement.socket1],
-        ['socket2', sidEnablement.socket2],
-        ['ultiSid1', sidEnablement.ultiSid1],
-        ['ultiSid2', sidEnablement.ultiSid2],
+        ["socket1", sidEnablement.socket1],
+        ["socket2", sidEnablement.socket2],
+        ["ultiSid1", sidEnablement.ultiSid1],
+        ["ultiSid2", sidEnablement.ultiSid2],
       ]),
     [sidEnablement],
   );
@@ -134,21 +134,21 @@ export function AudioMixer({
     entry: (typeof sidControlEntries)[number],
     enabled: boolean,
   ) {
-    if (entry.key === 'socket1' || entry.key === 'socket2') {
-      const socketIndex = entry.key === 'socket1' ? 1 : 2;
+    if (entry.key === "socket1" || entry.key === "socket2") {
+      const socketIndex = entry.key === "socket1" ? 1 : 2;
       const socketItem = `SID Socket ${socketIndex}`;
       const socketOptions = readItemOptions(
         sidSocketsCategory as Record<string, unknown> | undefined,
-        'SID Sockets Configuration',
+        "SID Sockets Configuration",
         socketItem,
       ).map((value) => String(value));
       const nextValue = resolveSidSocketToggleValue(socketOptions, !enabled);
       await updateConfigValue(
-        'SID Sockets Configuration',
+        "SID Sockets Configuration",
         socketItem,
         nextValue,
-        'HOME_SID_ENABLED',
-        `${entry.label} ${enabled ? 'disabled' : 'enabled'}`,
+        "HOME_SID_ENABLED",
+        `${entry.label} ${enabled ? "disabled" : "enabled"}`,
       );
       return;
     }
@@ -160,22 +160,22 @@ export function AudioMixer({
       ? resolveSidAddressDisableValue(addressOptions)
       : resolveSidAddressEnableValue(addressOptions);
     await updateConfigValue(
-      'SID Addressing',
+      "SID Addressing",
       entry.addressItem,
       nextValue,
-      'HOME_SID_ADDRESS',
-      `${entry.label} ${enabled ? 'disabled' : 'enabled'}`,
+      "HOME_SID_ADDRESS",
+      `${entry.label} ${enabled ? "disabled" : "enabled"}`,
     );
   });
 
   const handleSidReset = trace(async function handleSidReset() {
     await runMachineTask(
-      'reset-sid',
+      "reset-sid",
       async () => {
         await silenceSidTargets(api, sidSilenceTargets);
       },
-      'SID silence command sent',
-      'Volume set to zero, then restored settings.',
+      "SID silence command sent",
+      "Volume set to zero, then restored settings.",
     );
   });
 
@@ -196,10 +196,10 @@ export function AudioMixer({
       />
       <div className="space-y-3">
         {sidControlEntries.map((entry) => {
-          const volumeKey = buildConfigKey('Audio Mixer', entry.volumeItem);
-          const panKey = buildConfigKey('Audio Mixer', entry.panItem);
+          const volumeKey = buildConfigKey("Audio Mixer", entry.volumeItem);
+          const panKey = buildConfigKey("Audio Mixer", entry.panItem);
           const addressKey = buildConfigKey(
-            'SID Addressing',
+            "SID Addressing",
             entry.addressItem,
           );
 
@@ -238,7 +238,7 @@ export function AudioMixer({
           );
 
           const isUltiSid =
-            entry.key === 'ultiSid1' || entry.key === 'ultiSid2';
+            entry.key === "ultiSid1" || entry.key === "ultiSid2";
           const resolveVolumeIndexValue = (value: number) =>
             resolveSliderIndex(
               applySoftDetent(value, volumeCenterIndex),
@@ -257,12 +257,12 @@ export function AudioMixer({
           const volumeValueFormatter = (value: number) =>
             formatDbValue(
               String(
-                volumeOptions[Math.round(value)] ?? volumeOptions[0] ?? '',
+                volumeOptions[Math.round(value)] ?? volumeOptions[0] ?? "",
               ),
             );
           const panValueFormatter = (value: number) =>
             formatPanValue(
-              String(panOptions[Math.round(value)] ?? panOptions[0] ?? ''),
+              String(panOptions[Math.round(value)] ?? panOptions[0] ?? ""),
             );
 
           const handleVolumeLocalChange = (val: number) => {
@@ -285,10 +285,10 @@ export function AudioMixer({
           const handleVolumeAsyncChange = (val: number) => {
             const v = resolveVolumeOption(val);
             void updateConfigValue(
-              'Audio Mixer',
+              "Audio Mixer",
               entry.volumeItem,
               v,
-              'HOME_SID_VOLUME',
+              "HOME_SID_VOLUME",
               `${entry.label} volume updated`,
               { suppressToast: true },
             );
@@ -296,10 +296,10 @@ export function AudioMixer({
           const handleVolumeAsyncCommit = (val: number) => {
             const v = resolveVolumeOption(val);
             void updateConfigValue(
-              'Audio Mixer',
+              "Audio Mixer",
               entry.volumeItem,
               v,
-              'HOME_SID_VOLUME',
+              "HOME_SID_VOLUME",
               `${entry.label} volume updated`,
             );
           };
@@ -320,10 +320,10 @@ export function AudioMixer({
           const handlePanAsyncChange = (val: number) => {
             const v = resolvePanOption(val);
             void updateConfigValue(
-              'Audio Mixer',
+              "Audio Mixer",
               entry.panItem,
               v,
-              'HOME_SID_PAN',
+              "HOME_SID_PAN",
               `${entry.label} pan updated`,
               { suppressToast: true },
             );
@@ -331,31 +331,31 @@ export function AudioMixer({
           const handlePanAsyncCommit = (val: number) => {
             const v = resolvePanOption(val);
             void updateConfigValue(
-              'Audio Mixer',
+              "Audio Mixer",
               entry.panItem,
               v,
-              'HOME_SID_PAN',
+              "HOME_SID_PAN",
               `${entry.label} pan updated`,
             );
           };
 
           // Identity / Filter
-          const identityLabel = isUltiSid ? 'Filter' : 'SID';
+          const identityLabel = isUltiSid ? "Filter" : "SID";
           const identityValue =
-            entry.key === 'socket1'
+            entry.key === "socket1"
               ? sidDetectedSocket1
-              : entry.key === 'socket2'
+              : entry.key === "socket2"
                 ? sidDetectedSocket2
-                : entry.key === 'ultiSid1'
+                : entry.key === "ultiSid1"
                   ? ultiSid1ProfileValue
                   : ultiSid2ProfileValue;
           const identityOptions = isUltiSid
-            ? entry.key === 'ultiSid1'
+            ? entry.key === "ultiSid1"
               ? ultiSid1ProfileSelectOptions
               : ultiSid2ProfileSelectOptions
             : undefined;
           const identitySelectValue = isUltiSid
-            ? entry.key === 'ultiSid1'
+            ? entry.key === "ultiSid1"
               ? ultiSid1ProfileSelectValue
               : ultiSid2ProfileSelectValue
             : undefined;
@@ -363,10 +363,10 @@ export function AudioMixer({
             ? Boolean(
                 configWritePending[
                   buildConfigKey(
-                    'UltiSID Configuration',
-                    entry.key === 'ultiSid1'
-                      ? 'UltiSID 1 Filter Curve'
-                      : 'UltiSID 2 Filter Curve',
+                    "UltiSID Configuration",
+                    entry.key === "ultiSid1"
+                      ? "UltiSID 1 Filter Curve"
+                      : "UltiSID 2 Filter Curve",
                   )
                 ],
               )
@@ -375,7 +375,7 @@ export function AudioMixer({
           // Address
           const addressOptions = readItemOptions(
             sidAddressingCategory as Record<string, unknown> | undefined,
-            'SID Addressing',
+            "SID Addressing",
             entry.addressItem,
           ).map(String);
           const addressSelectValue = resolveSelectValue(
@@ -386,29 +386,29 @@ export function AudioMixer({
           // Shaping Controls
           const shapingControls = [];
           if (isUltiSid) {
-            const ultiIndex = entry.key === 'ultiSid1' ? 1 : 2;
+            const ultiIndex = entry.key === "ultiSid1" ? 1 : 2;
             const resonanceItem = `UltiSID ${ultiIndex} Filter Resonance`;
             const waveformItem = `UltiSID ${ultiIndex} Combined Waveforms`;
             const digisItem = `UltiSID ${ultiIndex} Digis Level`;
 
             shapingControls.push({
-              label: 'Reson',
+              label: "Reson",
               value: String(
                 resolveConfigValue(
                   ultiSidCategory as Record<string, unknown> | undefined,
-                  'UltiSID Configuration',
+                  "UltiSID Configuration",
                   resonanceItem,
-                  '—',
+                  "—",
                 ),
               ),
               options: readItemOptions(
                 ultiSidCategory as Record<string, unknown> | undefined,
-                'UltiSID Configuration',
+                "UltiSID Configuration",
                 resonanceItem,
               ).map(String),
               onChange: (val: string) =>
                 void updateConfigValue(
-                  'UltiSID Configuration',
+                  "UltiSID Configuration",
                   resonanceItem,
                   resolveSelectValue(val),
                   `HOME_ULTISID_RES_${ultiIndex}`,
@@ -416,28 +416,28 @@ export function AudioMixer({
                 ),
               pending: Boolean(
                 configWritePending[
-                  buildConfigKey('UltiSID Configuration', resonanceItem)
+                  buildConfigKey("UltiSID Configuration", resonanceItem)
                 ],
               ),
             });
             shapingControls.push({
-              label: 'Wave',
+              label: "Wave",
               value: String(
                 resolveConfigValue(
                   ultiSidCategory as Record<string, unknown> | undefined,
-                  'UltiSID Configuration',
+                  "UltiSID Configuration",
                   waveformItem,
-                  '—',
+                  "—",
                 ),
               ),
               options: readItemOptions(
                 ultiSidCategory as Record<string, unknown> | undefined,
-                'UltiSID Configuration',
+                "UltiSID Configuration",
                 waveformItem,
               ).map(String),
               onChange: (val: string) =>
                 void updateConfigValue(
-                  'UltiSID Configuration',
+                  "UltiSID Configuration",
                   waveformItem,
                   resolveSelectValue(val),
                   `HOME_ULTISID_WAVE_${ultiIndex}`,
@@ -445,28 +445,28 @@ export function AudioMixer({
                 ),
               pending: Boolean(
                 configWritePending[
-                  buildConfigKey('UltiSID Configuration', waveformItem)
+                  buildConfigKey("UltiSID Configuration", waveformItem)
                 ],
               ),
             });
             shapingControls.push({
-              label: 'Digis',
+              label: "Digis",
               value: String(
                 resolveConfigValue(
                   ultiSidCategory as Record<string, unknown> | undefined,
-                  'UltiSID Configuration',
+                  "UltiSID Configuration",
                   digisItem,
-                  '—',
+                  "—",
                 ),
               ),
               options: readItemOptions(
                 ultiSidCategory as Record<string, unknown> | undefined,
-                'UltiSID Configuration',
+                "UltiSID Configuration",
                 digisItem,
               ).map(String),
               onChange: (val: string) =>
                 void updateConfigValue(
-                  'UltiSID Configuration',
+                  "UltiSID Configuration",
                   digisItem,
                   resolveSelectValue(val),
                   `HOME_ULTISID_DIGIS_${ultiIndex}`,
@@ -474,33 +474,33 @@ export function AudioMixer({
                 ),
               pending: Boolean(
                 configWritePending[
-                  buildConfigKey('UltiSID Configuration', digisItem)
+                  buildConfigKey("UltiSID Configuration", digisItem)
                 ],
               ),
             });
           } else {
-            const socketIndex = entry.key === 'socket1' ? 1 : 2;
+            const socketIndex = entry.key === "socket1" ? 1 : 2;
             const resistorItem = `SID Socket ${socketIndex} 1K Ohm Resistor`;
             const capacitorItem = `SID Socket ${socketIndex} Capacitors`;
 
             shapingControls.push({
-              label: 'Resistor',
+              label: "Resistor",
               value: String(
                 resolveConfigValue(
                   sidSocketsCategory as Record<string, unknown> | undefined,
-                  'SID Sockets Configuration',
+                  "SID Sockets Configuration",
                   resistorItem,
-                  '—',
+                  "—",
                 ),
               ),
               options: readItemOptions(
                 sidSocketsCategory as Record<string, unknown> | undefined,
-                'SID Sockets Configuration',
+                "SID Sockets Configuration",
                 resistorItem,
               ).map(String),
               onChange: (val: string) =>
                 void updateConfigValue(
-                  'SID Sockets Configuration',
+                  "SID Sockets Configuration",
                   resistorItem,
                   resolveSelectValue(val),
                   `HOME_SID_RES_${socketIndex}`,
@@ -508,28 +508,28 @@ export function AudioMixer({
                 ),
               pending: Boolean(
                 configWritePending[
-                  buildConfigKey('SID Sockets Configuration', resistorItem)
+                  buildConfigKey("SID Sockets Configuration", resistorItem)
                 ],
               ),
             });
             shapingControls.push({
-              label: 'Cap',
+              label: "Cap",
               value: String(
                 resolveConfigValue(
                   sidSocketsCategory as Record<string, unknown> | undefined,
-                  'SID Sockets Configuration',
+                  "SID Sockets Configuration",
                   capacitorItem,
-                  '—',
+                  "—",
                 ),
               ),
               options: readItemOptions(
                 sidSocketsCategory as Record<string, unknown> | undefined,
-                'SID Sockets Configuration',
+                "SID Sockets Configuration",
                 capacitorItem,
               ).map(String),
               onChange: (val: string) =>
                 void updateConfigValue(
-                  'SID Sockets Configuration',
+                  "SID Sockets Configuration",
                   capacitorItem,
                   resolveSelectValue(val),
                   `HOME_SID_CAP_${socketIndex}`,
@@ -537,20 +537,20 @@ export function AudioMixer({
                 ),
               pending: Boolean(
                 configWritePending[
-                  buildConfigKey('SID Sockets Configuration', capacitorItem)
+                  buildConfigKey("SID Sockets Configuration", capacitorItem)
                 ],
               ),
             });
           }
 
           const socketItemName =
-            entry.key === 'socket1'
-              ? 'SID Socket 1'
-              : entry.key === 'socket2'
-                ? 'SID Socket 2'
+            entry.key === "socket1"
+              ? "SID Socket 1"
+              : entry.key === "socket2"
+                ? "SID Socket 2"
                 : null;
           const toggleKey = socketItemName
-            ? buildConfigKey('SID Sockets Configuration', socketItemName)
+            ? buildConfigKey("SID Sockets Configuration", socketItemName)
             : addressKey;
           const togglePending = Boolean(configWritePending[toggleKey]);
 
@@ -569,13 +569,13 @@ export function AudioMixer({
               onIdentityChange={(val) => {
                 if (isUltiSid) {
                   void updateConfigValue(
-                    'UltiSID Configuration',
-                    entry.key === 'ultiSid1'
-                      ? 'UltiSID 1 Filter Curve'
-                      : 'UltiSID 2 Filter Curve',
+                    "UltiSID Configuration",
+                    entry.key === "ultiSid1"
+                      ? "UltiSID 1 Filter Curve"
+                      : "UltiSID 2 Filter Curve",
                     resolveSelectValue(val),
-                    'HOME_ULTISID_PROFILE',
-                    'UltiSID filter curve updated',
+                    "HOME_ULTISID_PROFILE",
+                    "UltiSID filter curve updated",
                   );
                 }
               }}
@@ -585,10 +585,10 @@ export function AudioMixer({
               addressOptions={addressOptions}
               onAddressChange={(val) =>
                 void updateConfigValue(
-                  'SID Addressing',
+                  "SID Addressing",
                   entry.addressItem,
                   resolveSelectValue(val),
-                  'HOME_SID_ADDRESS',
+                  "HOME_SID_ADDRESS",
                   `${entry.label} address updated`,
                 )
               }

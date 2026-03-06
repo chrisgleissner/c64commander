@@ -12,29 +12,29 @@ import type {
   MediaIndexSnapshot,
   MediaIndexStorage,
   MediaType,
-} from './mediaIndex';
+} from "./mediaIndex";
 
-const STORAGE_KEY = 'c64u_media_index:v1';
+const STORAGE_KEY = "c64u_media_index:v1";
 
 const safeParse = (raw: string | null): MediaIndexSnapshot | null => {
   if (!raw) return null;
   try {
     return JSON.parse(raw) as MediaIndexSnapshot;
   } catch (error) {
-    console.warn('Failed to parse media index snapshot', { error });
+    console.warn("Failed to parse media index snapshot", { error });
     return null;
   }
 };
 
 export class LocalStorageMediaIndexStorage implements MediaIndexStorage {
   async read(): Promise<MediaIndexSnapshot | null> {
-    if (typeof localStorage === 'undefined') return null;
+    if (typeof localStorage === "undefined") return null;
     const raw = localStorage.getItem(STORAGE_KEY);
     return safeParse(raw);
   }
 
   async write(snapshot: MediaIndexSnapshot): Promise<void> {
-    if (typeof localStorage === 'undefined') return;
+    if (typeof localStorage === "undefined") return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
   }
 }

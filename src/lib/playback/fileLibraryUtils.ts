@@ -6,10 +6,10 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { FolderPicker } from '@/lib/native/folderPicker';
-import { normalizeDiskPath } from '@/lib/disks/diskTypes';
-import type { PlayRequest, PlaySource, LocalPlayFile } from './playbackRouter';
-import type { FileLibraryEntry } from './fileLibraryTypes';
+import { FolderPicker } from "@/lib/native/folderPicker";
+import { normalizeDiskPath } from "@/lib/disks/diskTypes";
+import type { PlayRequest, PlaySource, LocalPlayFile } from "./playbackRouter";
+import type { FileLibraryEntry } from "./fileLibraryTypes";
 
 export const normalizeFilePath = (path: string) => normalizeDiskPath(path);
 
@@ -20,11 +20,11 @@ export const buildFileLibraryId = (
 ) => {
   const normalized = normalizeFilePath(path);
   const sourceKey =
-    source === 'ultimate'
-      ? 'ultimate'
-      : source === 'hvsc'
-        ? sourceId || 'hvsc'
-        : sourceId || 'local';
+    source === "ultimate"
+      ? "ultimate"
+      : source === "hvsc"
+        ? sourceId || "hvsc"
+        : sourceId || "local";
   return `${sourceKey}:${normalized}`;
 };
 
@@ -71,8 +71,8 @@ export const resolvePlayRequestFromLibrary = (
   entry: FileLibraryEntry,
   runtimeFiles: Record<string, LocalPlayFile>,
 ): PlayRequest => {
-  if (entry.source === 'ultimate') {
-    return { source: 'ultimate', path: entry.path };
+  if (entry.source === "ultimate") {
+    return { source: "ultimate", path: entry.path };
   }
   const runtime = runtimeFiles[entry.id];
   const file =
@@ -80,8 +80,8 @@ export const resolvePlayRequestFromLibrary = (
     (entry.localUri
       ? buildLocalPlayFileFromUri(entry.name, entry.path, entry.localUri)
       : undefined);
-  if (entry.source === 'hvsc') {
-    return { source: 'hvsc', path: entry.path, file };
+  if (entry.source === "hvsc") {
+    return { source: "hvsc", path: entry.path, file };
   }
-  return { source: 'local', path: entry.path, file };
+  return { source: "local", path: entry.path, file };
 };

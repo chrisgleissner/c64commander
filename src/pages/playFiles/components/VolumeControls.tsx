@@ -6,9 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { Volume2, VolumeX } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Slider } from '@/components/ui/slider';
+import { Volume2, VolumeX } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Slider } from "@/components/ui/slider";
 
 export type VolumeControlsProps = {
   volumeMuted: boolean;
@@ -51,7 +51,7 @@ export const VolumeControls = ({
       ) : (
         <VolumeX className="h-4 w-4 mr-1" />
       )}
-      {volumeMuted ? 'Unmute' : 'Mute'}
+      {volumeMuted ? "Unmute" : "Mute"}
     </Button>
     <div className="flex flex-1 min-w-[160px] sm:min-w-[200px] flex-col gap-1">
       <span

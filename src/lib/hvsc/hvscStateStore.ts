@@ -6,12 +6,12 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { HvscIngestionState, HvscStatus } from './hvscTypes';
-import { addLog } from '@/lib/logging';
+import type { HvscIngestionState, HvscStatus } from "./hvscTypes";
+import { addLog } from "@/lib/logging";
 
 type HvscUpdateRecord = {
   version: number;
-  status: 'success' | 'failed' | 'unknown';
+  status: "success" | "failed" | "unknown";
   error?: string | null;
 };
 
@@ -19,26 +19,26 @@ export type HvscState = HvscStatus & {
   updates: Record<number, HvscUpdateRecord>;
 };
 
-const STORAGE_KEY = 'c64u_hvsc_state:v1';
+const STORAGE_KEY = "c64u_hvsc_state:v1";
 
 const validIngestionStates = new Set<HvscIngestionState>([
-  'idle',
-  'installing',
-  'updating',
-  'ready',
-  'error',
+  "idle",
+  "installing",
+  "updating",
+  "ready",
+  "error",
 ]);
 
 const toIngestionState = (value: unknown): HvscIngestionState =>
-  typeof value === 'string' &&
+  typeof value === "string" &&
   validIngestionStates.has(value as HvscIngestionState)
     ? (value as HvscIngestionState)
-    : 'idle';
+    : "idle";
 
 const defaultState = (): HvscState => ({
   installedBaselineVersion: null,
   installedVersion: 0,
-  ingestionState: 'idle',
+  ingestionState: "idle",
   lastUpdateCheckUtcMs: null,
   ingestionError: null,
   ingestionSummary: null,
@@ -46,7 +46,7 @@ const defaultState = (): HvscState => ({
 });
 
 export const loadHvscState = (): HvscState => {
-  if (typeof localStorage === 'undefined') return defaultState();
+  if (typeof localStorage === "undefined") return defaultState();
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) return defaultState();
   try {
@@ -62,7 +62,7 @@ export const loadHvscState = (): HvscState => {
       updates: parsed.updates ?? {},
     };
   } catch (error) {
-    addLog('warn', 'Failed to load HVSC state from storage', {
+    addLog("warn", "Failed to load HVSC state from storage", {
       storageKey: STORAGE_KEY,
       error: (error as Error).message,
     });
@@ -71,7 +71,7 @@ export const loadHvscState = (): HvscState => {
 };
 
 export const saveHvscState = (state: HvscState) => {
-  if (typeof localStorage === 'undefined') return;
+  if (typeof localStorage === "undefined") return;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 };
 
@@ -88,7 +88,7 @@ export const updateHvscState = (partial: Partial<HvscState>) => {
 
 export const markUpdateApplied = (
   version: number,
-  status: 'success' | 'failed',
+  status: "success" | "failed",
   error?: string | null,
 ) => {
   const current = loadHvscState();
@@ -105,5 +105,5 @@ export const markUpdateApplied = (
 
 export const isUpdateApplied = (version: number) => {
   const record = loadHvscState().updates[version];
-  return record?.status === 'success';
+  return record?.status === "success";
 };

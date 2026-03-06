@@ -6,14 +6,14 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import fs from 'node:fs';
-import path from 'node:path';
-import { z } from 'zod';
+import fs from "node:fs";
+import path from "node:path";
+import { z } from "zod";
 
-const ModeSchema = z.union([z.literal('SAFE'), z.literal('STRESS')]);
-const AuthSchema = z.union([z.literal('ON'), z.literal('OFF')]);
-const FtpModeSchema = z.union([z.literal('PASV'), z.literal('PORT')]);
-const PrgActionSchema = z.union([z.literal('run'), z.literal('load')]);
+const ModeSchema = z.union([z.literal("SAFE"), z.literal("STRESS")]);
+const AuthSchema = z.union([z.literal("ON"), z.literal("OFF")]);
+const FtpModeSchema = z.union([z.literal("PASV"), z.literal("PORT")]);
+const PrgActionSchema = z.union([z.literal("run"), z.literal("load")]);
 
 export const ConfigSchema = z
   .object({
@@ -57,13 +57,13 @@ export const ConfigSchema = z
     media: z
       .object({
         diskImagePath: z.string().optional(),
-        diskDrive: z.union([z.literal('a'), z.literal('b')]).optional(),
+        diskDrive: z.union([z.literal("a"), z.literal("b")]).optional(),
         diskType: z.string().optional(),
         diskMode: z
           .union([
-            z.literal('readwrite'),
-            z.literal('readonly'),
-            z.literal('unlinked'),
+            z.literal("readwrite"),
+            z.literal("readonly"),
+            z.literal("unlinked"),
           ])
           .optional(),
         sidFilePath: z.string().optional(),
@@ -82,21 +82,21 @@ export const ConfigSchema = z
       })
       .optional(),
   })
-  .refine((value) => (value.auth === 'ON' ? Boolean(value.password) : true), {
-    message: 'password is required when auth is ON',
-    path: ['password'],
+  .refine((value) => (value.auth === "ON" ? Boolean(value.password) : true), {
+    message: "password is required when auth is ON",
+    path: ["password"],
   });
 
 export type HarnessConfig = z.infer<typeof ConfigSchema>;
 
 export const DefaultConfig: HarnessConfig = {
-  baseUrl: 'http://c64u',
-  mode: 'SAFE',
-  auth: 'OFF',
-  password: '',
-  ftpMode: 'PASV',
+  baseUrl: "http://c64u",
+  mode: "SAFE",
+  auth: "OFF",
+  password: "",
+  ftpMode: "PASV",
   ftpPort: 21,
-  outputDir: 'test-results/contract',
+  outputDir: "test-results/contract",
   concurrency: {
     restMaxInFlight: 2,
     ftpMaxSessions: 1,
@@ -107,7 +107,7 @@ export const DefaultConfig: HarnessConfig = {
     ftpMinDelayMs: 100,
   },
   health: {
-    endpoint: '/v1/version',
+    endpoint: "/v1/version",
     intervalMs: 5000,
     timeoutMs: 2000,
   },
@@ -118,11 +118,11 @@ export const DefaultConfig: HarnessConfig = {
     maxDestructiveScenarioMs: 120000,
   },
   scratch: {
-    ftpDir: '/Temp/contract-test',
+    ftpDir: "/Temp/contract-test",
   },
   media: {
-    diskDrive: 'a',
-    prgAction: 'run',
+    diskDrive: "a",
+    prgAction: "run",
   },
   allowMachineReset: false,
 };
@@ -134,7 +134,7 @@ export function loadConfig(configPath?: string): HarnessConfig {
   const absolutePath = path.isAbsolute(configPath)
     ? configPath
     : path.join(process.cwd(), configPath);
-  const raw = fs.readFileSync(absolutePath, 'utf8');
+  const raw = fs.readFileSync(absolutePath, "utf8");
   const data = JSON.parse(raw);
   return ConfigSchema.parse({ ...DefaultConfig, ...data });
 }

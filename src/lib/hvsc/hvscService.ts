@@ -14,20 +14,20 @@ import type {
   HvscSong,
   HvscStatus,
   HvscUpdateStatus,
-} from './hvscTypes';
-import { Capacitor } from '@capacitor/core';
-import { normalizeSourcePath } from '@/lib/sourceNavigation/paths';
-import { createHvscMediaIndex } from './hvscMediaIndex';
-import { loadHvscRoot } from './hvscRootLocator';
+} from "./hvscTypes";
+import { Capacitor } from "@capacitor/core";
+import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
+import { createHvscMediaIndex } from "./hvscMediaIndex";
+import { loadHvscRoot } from "./hvscRootLocator";
 import type {
   SongLengthResolveQuery,
   SongLengthResolution,
-} from '@/lib/songlengths';
-import { addErrorLog, addLog } from '@/lib/logging';
+} from "@/lib/songlengths";
+import { addErrorLog, addLog } from "@/lib/logging";
 import {
   loadHvscBrowseIndexSnapshot,
   verifyHvscBrowseIndexIntegrity,
-} from './hvscBrowseIndexStore';
+} from "./hvscBrowseIndexStore";
 import {
   addHvscProgressListener as addRuntimeListener,
   cancelHvscInstall as cancelRuntimeInstall,
@@ -39,29 +39,29 @@ import {
   getHvscStatus as getRuntimeStatus,
   ingestCachedHvsc as ingestRuntimeCached,
   installOrUpdateHvsc as installRuntime,
-} from './hvscIngestionRuntime';
-import { resolveHvscSonglengthDuration } from './hvscSongLengthService';
+} from "./hvscIngestionRuntime";
+import { resolveHvscSonglengthDuration } from "./hvscSongLengthService";
 
 export type HvscProgressListener = (event: HvscProgressEvent) => void;
 
 type HvscMockBridge = Record<string, any>;
 
 const getBrowserWindow = () =>
-  typeof window === 'undefined'
+  typeof window === "undefined"
     ? undefined
     : (window as Window & { __hvscMock__?: HvscMockBridge });
 
 const hasMockBridge = () => Boolean(getBrowserWindow()?.__hvscMock__);
 const getMockBridge = () => getBrowserWindow()?.__hvscMock__;
 const hasRuntimeBridge = () => {
-  if (typeof window === 'undefined') return false;
+  if (typeof window === "undefined") return false;
   try {
     return (
-      Capacitor.isNativePlatform() || Capacitor.isPluginAvailable('Filesystem')
+      Capacitor.isNativePlatform() || Capacitor.isPluginAvailable("Filesystem")
     );
   } catch (error) {
     const err = error as Error;
-    addErrorLog('HVSC runtime bridge probe failed', {
+    addErrorLog("HVSC runtime bridge probe failed", {
       error: {
         name: err.name,
         message: err.message,
@@ -74,10 +74,10 @@ const hasRuntimeBridge = () => {
 
 const hvscIndex = createHvscMediaIndex();
 
-const LEGACY_MEDIA_INDEX_STORAGE_KEY = 'c64u_media_index:v1';
+const LEGACY_MEDIA_INDEX_STORAGE_KEY = "c64u_media_index:v1";
 
 const migrateLegacyMediaIndex = async () => {
-  if (typeof localStorage === 'undefined') return false;
+  if (typeof localStorage === "undefined") return false;
   const raw = localStorage.getItem(LEGACY_MEDIA_INDEX_STORAGE_KEY);
   if (!raw) return false;
   try {
@@ -93,18 +93,18 @@ const migrateLegacyMediaIndex = async () => {
       return false;
     hvscIndex.setEntries(
       parsed.entries
-        .filter((entry) => entry.type === 'sid')
+        .filter((entry) => entry.type === "sid")
         .map((entry) => ({
           path: entry.path,
           name: entry.name,
-          type: 'sid' as const,
+          type: "sid" as const,
           durationSeconds: entry.durationSeconds ?? null,
         })),
     );
     await hvscIndex.save();
     return true;
   } catch (error) {
-    addErrorLog('Failed to migrate legacy HVSC media index', {
+    addErrorLog("Failed to migrate legacy HVSC media index", {
       error: {
         name: (error as Error).name,
         message: (error as Error).message,
@@ -163,7 +163,7 @@ export const addHvscProgressListener = async (
   listener: HvscProgressListener,
 ) => {
   const mock = getMockBridge();
-  if (mock?.addListener) return mock.addListener('progress', listener);
+  if (mock?.addListener) return mock.addListener("progress", listener);
   return addRuntimeListener(listener);
 };
 
@@ -237,8 +237,8 @@ export const getHvscFolderListingPaged = async (options: {
   offset?: number;
   limit?: number;
 }): Promise<HvscFolderListingPage> => {
-  const path = normalizeSourcePath(options.path || '/');
-  const query = options.query ?? '';
+  const path = normalizeSourcePath(options.path || "/");
+  const query = options.query ?? "";
   const offset = Math.max(0, Math.floor(options.offset ?? 0));
   const limit = Math.max(1, Math.floor(options.limit ?? 200));
 
@@ -267,8 +267,8 @@ export const getHvscFolderListingPaged = async (options: {
   } catch (error) {
     const err = error as Error;
     addLog(
-      'info',
-      'HVSC paged folder listing failed; falling back to runtime',
+      "info",
+      "HVSC paged folder listing failed; falling back to runtime",
       {
         path,
         query,

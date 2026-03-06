@@ -6,19 +6,19 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   render,
   screen,
   fireEvent,
   within,
   waitFor,
-} from '@testing-library/react';
-import { HomeDiskManager } from '@/components/disks/HomeDiskManager';
+} from "@testing-library/react";
+import { HomeDiskManager } from "@/components/disks/HomeDiskManager";
 
 // --- MOCKS ---
 
-vi.mock('@/components/lists/SelectableActionList', () => ({
+vi.mock("@/components/lists/SelectableActionList", () => ({
   SelectableActionList: ({
     items,
     headerActions,
@@ -39,7 +39,7 @@ vi.mock('@/components/lists/SelectableActionList', () => ({
 
           <div data-testid={`menu-${item.id}`}>
             {item.menuItems?.map((menuItem: any, idx: number) => {
-              if (menuItem.type === 'action') {
+              if (menuItem.type === "action") {
                 return (
                   <button
                     key={idx}
@@ -65,16 +65,16 @@ vi.mock('@/components/lists/SelectableActionList', () => ({
   ),
 }));
 
-vi.mock('@/components/itemSelection/ItemSelectionDialog', () => ({
+vi.mock("@/components/itemSelection/ItemSelectionDialog", () => ({
   ItemSelectionDialog: () => null,
 }));
-vi.mock('@/components/itemSelection/AddItemsProgressOverlay', () => ({
+vi.mock("@/components/itemSelection/AddItemsProgressOverlay", () => ({
   AddItemsProgressOverlay: () => null,
 }));
-vi.mock('@/components/FileOriginIcon', () => ({ FileOriginIcon: () => null }));
+vi.mock("@/components/FileOriginIcon", () => ({ FileOriginIcon: () => null }));
 
 const mockInvalidateQueries = vi.fn();
-vi.mock('@tanstack/react-query', () => ({
+vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({
     invalidateQueries: mockInvalidateQueries,
     fetchQuery: vi.fn().mockResolvedValue(undefined),
@@ -90,73 +90,73 @@ const mockDiskLibrary = {
   removeDisk: vi.fn(),
 };
 
-vi.mock('@/hooks/useDiskLibrary', () => ({
+vi.mock("@/hooks/useDiskLibrary", () => ({
   useDiskLibrary: () => mockDiskLibrary,
 }));
 
-vi.mock('@/hooks/useC64Connection', () => ({
+vi.mock("@/hooks/useC64Connection", () => ({
   useC64Connection: () => ({
-    status: { isConnected: true, deviceInfo: { unique_id: 'test' } },
+    status: { isConnected: true, deviceInfo: { unique_id: "test" } },
   }),
   useC64Drives: () => ({ data: { drives: [] } }),
   useC64ConfigItems: () => ({ data: undefined }),
 }));
 
-vi.mock('@/hooks/useLocalSources', () => ({
+vi.mock("@/hooks/useLocalSources", () => ({
   useLocalSources: () => ({
     sources: [],
     addSourceFromPicker: vi.fn(),
     addSourceFromFiles: vi.fn(),
   }),
 }));
-vi.mock('@/hooks/useListPreviewLimit', () => ({
+vi.mock("@/hooks/useListPreviewLimit", () => ({
   useListPreviewLimit: () => ({ limit: 100 }),
 }));
-vi.mock('@/hooks/useActionTrace', () => ({
+vi.mock("@/hooks/useActionTrace", () => ({
   useActionTrace: () => (fn: any) => fn,
 }));
-vi.mock('@/hooks/use-toast', () => ({ toast: vi.fn() }));
-vi.mock('@/lib/uiErrors', () => ({ reportUserError: vi.fn() }));
-vi.mock('@/lib/logging', () => ({ addErrorLog: vi.fn(), addLog: vi.fn() }));
-vi.mock('@/lib/c64api', () => ({
+vi.mock("@/hooks/use-toast", () => ({ toast: vi.fn() }));
+vi.mock("@/lib/uiErrors", () => ({ reportUserError: vi.fn() }));
+vi.mock("@/lib/logging", () => ({ addErrorLog: vi.fn(), addLog: vi.fn() }));
+vi.mock("@/lib/c64api", () => ({
   getC64API: () => ({
     unmountDrive: vi.fn(),
     driveOn: vi.fn(),
     driveOff: vi.fn(),
-    getBaseUrl: () => '',
-    getDeviceHost: () => '',
+    getBaseUrl: () => "",
+    getDeviceHost: () => "",
   }),
 }));
-vi.mock('@/lib/disks/diskMount', () => ({ mountDiskToDrive: vi.fn() }));
-import { mountDiskToDrive } from '@/lib/disks/diskMount';
+vi.mock("@/lib/disks/diskMount", () => ({ mountDiskToDrive: vi.fn() }));
+import { mountDiskToDrive } from "@/lib/disks/diskMount";
 
 // --- TESTS ---
 
-describe('HomeDiskManager Dialogs', () => {
+describe("HomeDiskManager Dialogs", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockDiskLibrary.disks = [
       {
-        id: '1',
-        name: 'DiskOne.d64',
-        path: '/DiskOne.d64',
-        group: 'Games',
-        location: 'local',
+        id: "1",
+        name: "DiskOne.d64",
+        path: "/DiskOne.d64",
+        group: "Games",
+        location: "local",
       },
       {
-        id: '2',
-        name: 'DiskTwo.d64',
-        path: '/DiskTwo.d64',
+        id: "2",
+        name: "DiskTwo.d64",
+        path: "/DiskTwo.d64",
         group: null,
-        location: 'ultimate',
+        location: "ultimate",
       },
     ] as any;
   });
 
-  it('handles mounting a disk to a specific drive via dialog', async () => {
+  it("handles mounting a disk to a specific drive via dialog", async () => {
     // 1. Click "Mount..." on Drive A
     const { getAllByTestId } = render(<HomeDiskManager />);
-    fireEvent.click(screen.getByTestId('drive-mount-toggle-a'));
+    fireEvent.click(screen.getByTestId("drive-mount-toggle-a"));
 
     // Dialog opens. SelectableActionList with "Available disks" title renders.
     // We need to click "Mount" on a disk inside this dialog.
@@ -165,34 +165,34 @@ describe('HomeDiskManager Dialogs', () => {
     // Radix Dialog usually renders in a Portal, but `SelectableActionList` mock renders `mock-action-list`.
     // We will have TWO lists now.
 
-    const lists = getAllByTestId('mock-action-list');
+    const lists = getAllByTestId("mock-action-list");
     expect(lists.length).toBe(2); // Main list + Dialog list
 
     // The second list should be the dialog one (rendered last/in portal)
     const dialogList = lists[1];
-    const mountBtn = within(dialogList).getAllByText('Mount')[0]; // Pick first disk
+    const mountBtn = within(dialogList).getAllByText("Mount")[0]; // Pick first disk
 
     fireEvent.click(mountBtn);
 
     await waitFor(() => {
       expect(mountDiskToDrive).toHaveBeenCalledWith(
         expect.anything(),
-        'a',
-        expect.objectContaining({ id: '1' }),
+        "a",
+        expect.objectContaining({ id: "1" }),
         undefined, // runtimeFile
       );
     });
   });
 
-  it('handles mounting a specific disk to a drive via dialog', async () => {
+  it("handles mounting a specific disk to a drive via dialog", async () => {
     // 1. Click "Mount" on a disk in the main list
     const { getAllByTestId, getByText } = render(<HomeDiskManager />);
-    const lists = getAllByTestId('mock-action-list');
+    const lists = getAllByTestId("mock-action-list");
     const mainList = lists[0];
 
     // Find "Mount" button for Disk 1 in main list
     // My mock ActionList renders: {item.onAction && <button onClick={item.onAction}>Mount</button>}
-    const mountButtons = within(mainList).getAllByText('Mount');
+    const mountButtons = within(mainList).getAllByText("Mount");
     fireEvent.click(mountButtons[0]); // Disk 1
 
     // Dialog "Mount DiskOne.d64" opens.
@@ -215,9 +215,9 @@ describe('HomeDiskManager Dialogs', () => {
     // Button text: "{buildDriveLabel(key)} (#{info?.bus_id ?? '—'}) {mounted ? '• mounted' : ''}"
     // "Drive A (#—)"
 
-    const dialog = screen.getByRole('dialog', { name: /Mount DiskOne.d64/i });
+    const dialog = screen.getByRole("dialog", { name: /Mount DiskOne.d64/i });
     const driveBBtn = within(dialog).getByText((content) =>
-      content.includes('Drive B'),
+      content.includes("Drive B"),
     ); // Scoped
 
     fireEvent.click(driveBBtn);
@@ -225,120 +225,120 @@ describe('HomeDiskManager Dialogs', () => {
     await waitFor(() => {
       expect(mountDiskToDrive).toHaveBeenCalledWith(
         expect.anything(),
-        'b',
-        expect.objectContaining({ id: '1' }),
+        "b",
+        expect.objectContaining({ id: "1" }),
         undefined,
       );
     });
   });
 
-  it('handles renaming a disk', async () => {
+  it("handles renaming a disk", async () => {
     render(<HomeDiskManager />);
 
-    const disk1 = screen.getByTestId('disk-item-1');
-    const renameBtn = within(disk1).getByText('Rename disk…');
+    const disk1 = screen.getByTestId("disk-item-1");
+    const renameBtn = within(disk1).getByText("Rename disk…");
     fireEvent.click(renameBtn);
 
-    const input = await screen.findByDisplayValue('DiskOne.d64');
-    fireEvent.change(input, { target: { value: 'Renamed.d64' } });
+    const input = await screen.findByDisplayValue("DiskOne.d64");
+    fireEvent.change(input, { target: { value: "Renamed.d64" } });
 
-    const saveBtn = screen.getByText('Save');
+    const saveBtn = screen.getByText("Save");
     fireEvent.click(saveBtn);
 
     expect(mockDiskLibrary.updateDiskName).toHaveBeenCalledWith(
-      '1',
-      'Renamed.d64',
+      "1",
+      "Renamed.d64",
     );
   });
 
-  it('handles updating disk group (new group)', async () => {
+  it("handles updating disk group (new group)", async () => {
     render(<HomeDiskManager />);
 
-    const disk2 = screen.getByTestId('disk-item-2');
-    const setGroupBtn = within(disk2).getByText('Set group…');
+    const disk2 = screen.getByTestId("disk-item-2");
+    const setGroupBtn = within(disk2).getByText("Set group…");
     fireEvent.click(setGroupBtn);
 
-    const input = await screen.findByPlaceholderText('Enter a group name');
-    fireEvent.change(input, { target: { value: 'NewGroup' } });
+    const input = await screen.findByPlaceholderText("Enter a group name");
+    fireEvent.change(input, { target: { value: "NewGroup" } });
 
-    const createBtn = screen.getByText('Create & assign');
+    const createBtn = screen.getByText("Create & assign");
     fireEvent.click(createBtn);
 
     expect(mockDiskLibrary.updateDiskGroup).toHaveBeenCalledWith(
-      '2',
-      'NewGroup',
+      "2",
+      "NewGroup",
     );
   });
 
-  it('handles updating disk group (existing group)', async () => {
+  it("handles updating disk group (existing group)", async () => {
     render(<HomeDiskManager />);
 
-    const disk2 = screen.getByTestId('disk-item-2');
-    const setGroupBtn = within(disk2).getByText('Set group…');
+    const disk2 = screen.getByTestId("disk-item-2");
+    const setGroupBtn = within(disk2).getByText("Set group…");
     fireEvent.click(setGroupBtn);
 
-    const existingGroupBtn = await screen.findByText('Games');
+    const existingGroupBtn = await screen.findByText("Games");
     fireEvent.click(existingGroupBtn);
 
-    expect(mockDiskLibrary.updateDiskGroup).toHaveBeenCalledWith('2', 'Games');
+    expect(mockDiskLibrary.updateDiskGroup).toHaveBeenCalledWith("2", "Games");
   });
 
-  it('handles updating disk group (new group) via Enter key', async () => {
+  it("handles updating disk group (new group) via Enter key", async () => {
     render(<HomeDiskManager />);
 
-    const disk2 = screen.getByTestId('disk-item-2');
-    const setGroupBtn = within(disk2).getByText('Set group…');
+    const disk2 = screen.getByTestId("disk-item-2");
+    const setGroupBtn = within(disk2).getByText("Set group…");
     fireEvent.click(setGroupBtn);
 
-    const input = await screen.findByPlaceholderText('Enter a group name');
-    fireEvent.change(input, { target: { value: 'EnterGroup' } });
+    const input = await screen.findByPlaceholderText("Enter a group name");
+    fireEvent.change(input, { target: { value: "EnterGroup" } });
 
-    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter', charCode: 13 });
+    fireEvent.keyDown(input, { key: "Enter", code: "Enter", charCode: 13 });
 
     expect(mockDiskLibrary.updateDiskGroup).toHaveBeenCalledWith(
-      '2',
-      'EnterGroup',
+      "2",
+      "EnterGroup",
     );
   });
 
-  it('handles single disk deletion', async () => {
+  it("handles single disk deletion", async () => {
     render(<HomeDiskManager />);
 
-    const disk1 = screen.getByTestId('disk-item-1');
-    const menuRemoveBtn = within(disk1).getByText('Remove from collection');
+    const disk1 = screen.getByTestId("disk-item-1");
+    const menuRemoveBtn = within(disk1).getByText("Remove from collection");
     fireEvent.click(menuRemoveBtn);
 
-    expect(screen.getByText('Remove disk?')).toBeInTheDocument();
+    expect(screen.getByText("Remove disk?")).toBeInTheDocument();
 
     // Find the "Remove" button in the dialog (not the menu)
     // Since dialog is open, screen.getByText('Remove') might find two if we aren't careful,
     // but the menu button is "Remove from collection". The dialog button is "Remove".
-    const confirmBtn = screen.getByRole('button', { name: 'Remove' });
+    const confirmBtn = screen.getByRole("button", { name: "Remove" });
     fireEvent.click(confirmBtn);
 
-    expect(mockDiskLibrary.removeDisk).toHaveBeenCalledWith('1');
+    expect(mockDiskLibrary.removeDisk).toHaveBeenCalledWith("1");
   });
 
-  it('handles bulk deletion', async () => {
+  it("handles bulk deletion", async () => {
     render(<HomeDiskManager />);
 
-    const check1 = screen.getByTestId('checkbox-1');
-    const check2 = screen.getByTestId('checkbox-2');
+    const check1 = screen.getByTestId("checkbox-1");
+    const check2 = screen.getByTestId("checkbox-2");
 
     fireEvent.click(check1);
     fireEvent.click(check2);
 
-    const deleteSelectedBtn = screen.getByText('Delete Selected');
+    const deleteSelectedBtn = screen.getByText("Delete Selected");
     fireEvent.click(deleteSelectedBtn);
 
-    expect(screen.getByText('Remove selected disks?')).toBeInTheDocument();
+    expect(screen.getByText("Remove selected disks?")).toBeInTheDocument();
 
-    const confirmBtn = screen.getByRole('button', { name: 'Remove' });
+    const confirmBtn = screen.getByRole("button", { name: "Remove" });
     fireEvent.click(confirmBtn);
 
     await waitFor(() => {
-      expect(mockDiskLibrary.removeDisk).toHaveBeenCalledWith('1');
-      expect(mockDiskLibrary.removeDisk).toHaveBeenCalledWith('2');
+      expect(mockDiskLibrary.removeDisk).toHaveBeenCalledWith("1");
+      expect(mockDiskLibrary.removeDisk).toHaveBeenCalledWith("2");
     });
   });
 });

@@ -6,9 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { wrapUserEvent } from '@/lib/tracing/userTrace';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { wrapUserEvent } from "@/lib/tracing/userTrace";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Disc,
   ArrowLeftRight,
@@ -17,10 +17,10 @@ import {
   X,
   Folder,
   RotateCcw,
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { ResponsivePathText } from '@/components/ResponsivePathText';
-import { Input } from '@/components/ui/input';
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ResponsivePathText } from "@/components/ResponsivePathText";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -28,44 +28,44 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
+} from "@/components/ui/select";
 import {
   SelectableActionList,
   type ActionListItem,
   type ActionListMenuItem,
-} from '@/components/lists/SelectableActionList';
+} from "@/components/lists/SelectableActionList";
 import {
   AddItemsProgressOverlay,
   type AddItemsProgressState,
-} from '@/components/itemSelection/AddItemsProgressOverlay';
+} from "@/components/itemSelection/AddItemsProgressOverlay";
 import {
   ItemSelectionDialog,
   type SourceGroup,
-} from '@/components/itemSelection/ItemSelectionDialog';
-import { SOURCE_LABELS } from '@/lib/sourceNavigation/sourceTerms';
-import { FileOriginIcon } from '@/components/FileOriginIcon';
-import { toast } from '@/hooks/use-toast';
+} from "@/components/itemSelection/ItemSelectionDialog";
+import { SOURCE_LABELS } from "@/lib/sourceNavigation/sourceTerms";
+import { FileOriginIcon } from "@/components/FileOriginIcon";
+import { toast } from "@/hooks/use-toast";
 import {
   useC64ConfigItems,
   useC64Connection,
   useC64Drives,
-} from '@/hooks/useC64Connection';
-import { useListPreviewLimit } from '@/hooks/useListPreviewLimit';
-import { useLocalSources } from '@/hooks/useLocalSources';
-import { useActionTrace } from '@/hooks/useActionTrace';
-import { getC64API } from '@/lib/c64api';
-import { addErrorLog, addLog } from '@/lib/logging';
-import { reportUserError } from '@/lib/uiErrors';
-import { cn } from '@/lib/utils';
-import { mountDiskToDrive } from '@/lib/disks/diskMount';
-import { getOnOffButtonClass } from '@/lib/ui/buttonStyles';
+} from "@/hooks/useC64Connection";
+import { useListPreviewLimit } from "@/hooks/useListPreviewLimit";
+import { useLocalSources } from "@/hooks/useLocalSources";
+import { useActionTrace } from "@/hooks/useActionTrace";
+import { getC64API } from "@/lib/c64api";
+import { addErrorLog, addLog } from "@/lib/logging";
+import { reportUserError } from "@/lib/uiErrors";
+import { cn } from "@/lib/utils";
+import { mountDiskToDrive } from "@/lib/disks/diskMount";
+import { getOnOffButtonClass } from "@/lib/ui/buttonStyles";
 import {
   createDiskEntry,
   getDiskFolderPath,
@@ -73,92 +73,92 @@ import {
   isDiskImagePath,
   normalizeDiskPath,
   type DiskEntry,
-} from '@/lib/disks/diskTypes';
-import { assignDiskGroupsByPrefix } from '@/lib/disks/diskGrouping';
-import { pickDiskGroupColor } from '@/lib/disks/diskGroupColors';
-import { useDiskLibrary } from '@/hooks/useDiskLibrary';
-import { createUltimateSourceLocation } from '@/lib/sourceNavigation/ftpSourceAdapter';
+} from "@/lib/disks/diskTypes";
+import { assignDiskGroupsByPrefix } from "@/lib/disks/diskGrouping";
+import { pickDiskGroupColor } from "@/lib/disks/diskGroupColors";
+import { useDiskLibrary } from "@/hooks/useDiskLibrary";
+import { createUltimateSourceLocation } from "@/lib/sourceNavigation/ftpSourceAdapter";
 import {
   createLocalSourceLocation,
   resolveLocalRuntimeFile,
-} from '@/lib/sourceNavigation/localSourceAdapter';
-import { normalizeSourcePath } from '@/lib/sourceNavigation/paths';
+} from "@/lib/sourceNavigation/localSourceAdapter";
+import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 import {
   getLocalSourceListingMode,
   requireLocalSourceEntries,
-} from '@/lib/sourceNavigation/localSourcesStore';
-import { LocalSourceListingError } from '@/lib/sourceNavigation/localSourceErrors';
-import { prepareDirectoryInput } from '@/lib/sourceNavigation/localSourcesStore';
+} from "@/lib/sourceNavigation/localSourcesStore";
+import { LocalSourceListingError } from "@/lib/sourceNavigation/localSourceErrors";
+import { prepareDirectoryInput } from "@/lib/sourceNavigation/localSourcesStore";
 import type {
   SelectedItem,
   SourceEntry,
   SourceLocation,
-} from '@/lib/sourceNavigation/types';
-import { getPlatform, isNativePlatform } from '@/lib/native/platform';
-import { redactTreeUri } from '@/lib/native/safUtils';
-import { normalizeConfigItem } from '@/lib/config/normalizeConfigItem';
-import { formatDiskDosStatus } from '@/lib/disks/dosStatusFormatter';
-import { getDiagnosticsColorClassForDisplaySeverity } from '@/lib/diagnostics/diagnosticsSeverity';
+} from "@/lib/sourceNavigation/types";
+import { getPlatform, isNativePlatform } from "@/lib/native/platform";
+import { redactTreeUri } from "@/lib/native/safUtils";
+import { normalizeConfigItem } from "@/lib/config/normalizeConfigItem";
+import { formatDiskDosStatus } from "@/lib/disks/dosStatusFormatter";
+import { getDiagnosticsColorClassForDisplaySeverity } from "@/lib/diagnostics/diagnosticsSeverity";
 import {
   buildBusIdOptions,
   buildTypeOptions,
   normalizeDriveDevices,
   type DriveDeviceClass,
-} from '@/lib/drives/driveDevices';
+} from "@/lib/drives/driveDevices";
 
-const DRIVE_KEYS = ['a', 'b'] as const;
+const DRIVE_KEYS = ["a", "b"] as const;
 
 type DriveKey = (typeof DRIVE_KEYS)[number];
 
 const buildDriveLabel = (key: DriveKey) => `Drive ${key.toUpperCase()}`;
 const DRIVE_CONFIG_CATEGORY: Record<DriveKey, string> = {
-  a: 'Drive A Settings',
-  b: 'Drive B Settings',
+  a: "Drive A Settings",
+  b: "Drive B Settings",
 };
-const DRIVE_BUS_ID_ITEM = 'Drive Bus ID';
-const DRIVE_TYPE_ITEM = 'Drive Type';
+const DRIVE_BUS_ID_ITEM = "Drive Bus ID";
+const DRIVE_TYPE_ITEM = "Drive Type";
 const DRIVE_BUS_ID_DEFAULTS = [8, 9, 10, 11] as const;
-const DRIVE_TYPE_DEFAULTS = ['1541', '1571', '1581'] as const;
+const DRIVE_TYPE_DEFAULTS = ["1541", "1571", "1581"] as const;
 const DRIVE_DEFAULT_BUS_ID: Record<DriveKey, number> = { a: 8, b: 9 };
-const DRIVE_DEFAULT_TYPE = '1541';
-const SOFT_IEC_DEFAULT_PATH_ITEM = 'Default Path';
-const SOFT_IEC_DEFAULT_PATH_FALLBACK = '/USB0/';
+const DRIVE_DEFAULT_TYPE = "1541";
+const SOFT_IEC_DEFAULT_PATH_ITEM = "Default Path";
+const SOFT_IEC_DEFAULT_PATH_FALLBACK = "/USB0/";
 const SOFT_IEC_BUS_ID_DEFAULTS = Array.from(
   { length: 23 },
   (_, index) => index + 8,
 );
-const ROW1_CONTROL_CLASS = 'h-9 w-14 rounded-md px-0 text-xs font-semibold';
+const ROW1_CONTROL_CLASS = "h-9 w-14 rounded-md px-0 text-xs font-semibold";
 const INLINE_META_SELECT_CLASS =
-  'h-7 border-transparent bg-transparent px-1.5 text-xs shadow-none focus:ring-1 focus:ring-ring data-[state=open]:border-border data-[state=open]:bg-background';
+  "h-7 border-transparent bg-transparent px-1.5 text-xs shadow-none focus:ring-1 focus:ring-ring data-[state=open]:border-border data-[state=open]:bg-background";
 const SOFT_IEC_CONTROL = {
-  class: 'SOFT_IEC_DRIVE' as DriveDeviceClass,
-  category: 'SoftIEC Drive Settings',
-  enabledItem: 'IEC Drive',
-  busItem: 'Soft Drive Bus ID',
+  class: "SOFT_IEC_DRIVE" as DriveDeviceClass,
+  category: "SoftIEC Drive Settings",
+  enabledItem: "IEC Drive",
+  busItem: "Soft Drive Bus ID",
 };
 
 const buildDrivePath = (path?: string | null, file?: string | null) => {
   if (!file) return null;
-  const base = normalizeDiskPath(path || '/');
-  return base.endsWith('/') ? `${base}${file}` : `${base}/${file}`;
+  const base = normalizeDiskPath(path || "/");
+  return base.endsWith("/") ? `${base}${file}` : `${base}/${file}`;
 };
 
 const normalizeDirectoryPath = (value: string) => {
-  const normalized = normalizeSourcePath(value || '/');
-  return normalized.endsWith('/') ? normalized : `${normalized}/`;
+  const normalized = normalizeSourcePath(value || "/");
+  return normalized.endsWith("/") ? normalized : `${normalized}/`;
 };
 
-const LocationIcon = ({ location }: { location: DiskEntry['location'] }) => (
+const LocationIcon = ({ location }: { location: DiskEntry["location"] }) => (
   <FileOriginIcon
-    origin={location === 'local' ? 'local' : 'ultimate'}
+    origin={location === "local" ? "local" : "ultimate"}
     className="h-4 w-4 shrink-0 opacity-60"
-    label={location === 'local' ? 'Local disk' : 'C64U disk'}
+    label={location === "local" ? "Local disk" : "C64U disk"}
   />
 );
 
 const formatBytes = (value?: number | null) => {
-  if (!value || value <= 0) return '—';
-  const units = ['B', 'KB', 'MB', 'GB'];
+  if (!value || value <= 0) return "—";
+  const units = ["B", "KB", "MB", "GB"];
   let size = value;
   let unitIndex = 0;
   while (size >= 1024 && unitIndex < units.length - 1) {
@@ -169,20 +169,20 @@ const formatBytes = (value?: number | null) => {
 };
 
 const formatDate = (value?: string | null) => {
-  if (!value) return '—';
+  if (!value) return "—";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '—';
+  if (Number.isNaN(date.getTime())) return "—";
   return new Intl.DateTimeFormat(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: '2-digit',
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
   }).format(date);
 };
 
 const resolveSoftIecServiceError = (value?: string | null) => {
   const message = value?.trim();
-  if (!message) return '';
-  if (/^service error reported\.?$/i.test(message)) return '';
+  if (!message) return "";
+  if (/^service error reported\.?$/i.test(message)) return "";
   return message;
 };
 
@@ -190,24 +190,24 @@ const resolveDriveStatusRaw = (
   primary?: string | null,
   fallback?: string | null,
 ) => {
-  if (typeof primary === 'string' && primary.trim().length) return primary;
-  if (typeof fallback === 'string' && fallback.trim().length) return fallback;
-  return '';
+  if (typeof primary === "string" && primary.trim().length) return primary;
+  if (typeof fallback === "string" && fallback.trim().length) return fallback;
+  return "";
 };
 
 const resolveStatusDisplaySeverity = (status: {
-  severity: 'INFO' | 'WARN' | 'ERROR';
+  severity: "INFO" | "WARN" | "ERROR";
   message: string | null;
 }) => {
   return status.severity;
 };
 
 const getStatusMessageColorClass = (status: {
-  severity: 'INFO' | 'WARN' | 'ERROR';
+  severity: "INFO" | "WARN" | "ERROR";
   message: string | null;
 }) => {
   // OK is always green, regardless of severity
-  if (status.message === 'OK') return 'text-success';
+  if (status.message === "OK") return "text-success";
   // Otherwise use standard diagnostics colors
   return getDiagnosticsColorClassForDisplaySeverity(status.severity);
 };
@@ -216,7 +216,7 @@ export const HomeDiskManager = () => {
   const { status } = useC64Connection();
   const { data: drivesData } = useC64Drives();
   const uniqueId = status.deviceInfo?.unique_id || null;
-  const trace = useActionTrace('HomeDiskManager');
+  const trace = useActionTrace("HomeDiskManager");
 
   const diskLibrary = useDiskLibrary(uniqueId);
   const disksById = useMemo(
@@ -244,7 +244,7 @@ export const HomeDiskManager = () => {
     useState(false);
   const [addItemsProgress, setAddItemsProgress] =
     useState<AddItemsProgressState>({
-      status: 'idle',
+      status: "idle",
       count: 0,
       elapsedMs: 0,
       total: null,
@@ -257,8 +257,8 @@ export const HomeDiskManager = () => {
     controller.abort();
   }, []);
   const [showAddItemsOverlay, setShowAddItemsOverlay] = useState(false);
-  const [addItemsSurface, setAddItemsSurface] = useState<'dialog' | 'page'>(
-    'dialog',
+  const [addItemsSurface, setAddItemsSurface] = useState<"dialog" | "page">(
+    "dialog",
   );
   const [isAddingItems, setIsAddingItems] = useState(false);
   const addItemsStartedAtRef = useRef<number | null>(null);
@@ -267,11 +267,11 @@ export const HomeDiskManager = () => {
   const [groupDialogDisk, setGroupDialogDisk] = useState<DiskEntry | null>(
     null,
   );
-  const [groupName, setGroupName] = useState('');
+  const [groupName, setGroupName] = useState("");
   const [renameDialogDisk, setRenameDialogDisk] = useState<DiskEntry | null>(
     null,
   );
-  const [renameValue, setRenameValue] = useState('');
+  const [renameValue, setRenameValue] = useState("");
   const [deleteDialogDisk, setDeleteDialogDisk] = useState<DiskEntry | null>(
     null,
   );
@@ -286,7 +286,7 @@ export const HomeDiskManager = () => {
     addSourceFromFiles,
   } = useLocalSources();
   const { limit: listPreviewLimit } = useListPreviewLimit();
-  const isAndroid = getPlatform() === 'android' && isNativePlatform();
+  const isAndroid = getPlatform() === "android" && isNativePlatform();
 
   const api = getC64API();
   const queryClient = useQueryClient();
@@ -296,7 +296,7 @@ export const HomeDiskManager = () => {
   const [softIecConfigPending, setSoftIecConfigPending] = useState(false);
   const refreshDrivesFromDevice = useCallback(async () => {
     await queryClient.fetchQuery({
-      queryKey: ['c64-drives'],
+      queryKey: ["c64-drives"],
       queryFn: () => api.getDrives(),
       staleTime: 0,
     });
@@ -363,17 +363,17 @@ export const HomeDiskManager = () => {
       const next = { ...prev };
       const actualStates: Record<string, boolean | undefined> = {
         a: normalizedDriveModel.devices.find(
-          (entry) => entry.class === 'PHYSICAL_DRIVE_A',
+          (entry) => entry.class === "PHYSICAL_DRIVE_A",
         )?.enabled,
         b: normalizedDriveModel.devices.find(
-          (entry) => entry.class === 'PHYSICAL_DRIVE_B',
+          (entry) => entry.class === "PHYSICAL_DRIVE_B",
         )?.enabled,
         softiec: normalizedDriveModel.devices.find(
           (entry) => entry.class === SOFT_IEC_CONTROL.class,
         )?.enabled,
       };
       Object.entries(actualStates).forEach(([key, actual]) => {
-        if (typeof actual !== 'boolean') return;
+        if (typeof actual !== "boolean") return;
         if (next[key] !== undefined && next[key] === actual) {
           delete next[key];
           changed = true;
@@ -388,7 +388,7 @@ export const HomeDiskManager = () => {
   }, [toast]);
 
   useEffect(() => {
-    if (addItemsProgress.status !== 'scanning') return undefined;
+    if (addItemsProgress.status !== "scanning") return undefined;
     const interval = window.setInterval(() => {
       const startedAt = addItemsStartedAtRef.current ?? Date.now();
       setAddItemsProgress((prev) => ({
@@ -401,15 +401,15 @@ export const HomeDiskManager = () => {
 
   useEffect(() => {
     if (browserOpen) {
-      setAddItemsSurface('dialog');
+      setAddItemsSurface("dialog");
     }
   }, [browserOpen]);
 
   useEffect(() => {
     if (browserOpen) return;
-    if (addItemsProgress.status === 'scanning') return;
+    if (addItemsProgress.status === "scanning") return;
     setAddItemsProgress({
-      status: 'idle',
+      status: "idle",
       count: 0,
       elapsedMs: 0,
       total: null,
@@ -419,22 +419,22 @@ export const HomeDiskManager = () => {
 
   useEffect(() => {
     if (browserOpen) return;
-    if (addItemsProgress.status !== 'scanning') return;
-    if (addItemsSurface !== 'page') {
-      setAddItemsSurface('page');
+    if (addItemsProgress.status !== "scanning") return;
+    if (addItemsSurface !== "page") {
+      setAddItemsSurface("page");
     }
   }, [addItemsProgress.status, addItemsSurface, browserOpen]);
 
   useEffect(() => {
-    if (addItemsProgress.status === 'scanning') return;
-    if (addItemsSurface === 'page' && isAddingItems) return;
-    if (addItemsSurface !== 'dialog') {
-      setAddItemsSurface('dialog');
+    if (addItemsProgress.status === "scanning") return;
+    if (addItemsSurface === "page" && isAddingItems) return;
+    if (addItemsSurface !== "dialog") {
+      setAddItemsSurface("dialog");
     }
   }, [addItemsProgress.status, addItemsSurface, isAddingItems]);
 
   const handleAutoConfirmStart = useCallback(() => {
-    setAddItemsSurface('page');
+    setAddItemsSurface("page");
     setIsAddingItems(true);
     setShowAddItemsOverlay(true);
     addItemsOverlayStartedAtRef.current = Date.now();
@@ -443,9 +443,9 @@ export const HomeDiskManager = () => {
 
   const showNoDiskWarning = useCallback(() => {
     reportUserError({
-      operation: 'DISK_IMPORT',
-      title: 'No disks found',
-      description: 'Found no disk file.',
+      operation: "DISK_IMPORT",
+      title: "No disks found",
+      description: "Found no disk file.",
     });
   }, [reportUserError]);
 
@@ -497,9 +497,9 @@ export const HomeDiskManager = () => {
       const runtimeFile = diskLibrary.runtimeFiles[disk.id];
       await mountDiskToDrive(api, drive, disk, runtimeFile);
       setMountedByDrive((prev) => ({ ...prev, [drive]: disk.id }));
-      setDriveErrors((prev) => ({ ...prev, [drive]: '' }));
+      setDriveErrors((prev) => ({ ...prev, [drive]: "" }));
       toast({
-        title: 'Disk mounted',
+        title: "Disk mounted",
         description: `${disk.name} mounted in ${buildDriveLabel(drive)}`,
       });
     } catch (error) {
@@ -507,19 +507,19 @@ export const HomeDiskManager = () => {
         ...prev,
         [drive]: (error as Error).message,
       }));
-      addErrorLog('Disk mount failed (UI)', {
+      addErrorLog("Disk mount failed (UI)", {
         drive,
         path: disk.path,
         location: disk.location,
         endpoint: `/v1/drives/${drive}:mount`,
         baseUrl: api.getBaseUrl(),
         deviceHost: api.getDeviceHost(),
-        demoMode: status.state === 'DEMO_ACTIVE',
+        demoMode: status.state === "DEMO_ACTIVE",
         error: (error as Error).message,
       });
       reportUserError({
-        operation: 'DISK_MOUNT',
-        title: 'Mount failed',
+        operation: "DISK_MOUNT",
+        title: "Mount failed",
         description: (error as Error).message,
         error,
         context: {
@@ -529,7 +529,7 @@ export const HomeDiskManager = () => {
           endpoint: `/v1/drives/${drive}:mount`,
           baseUrl: api.getBaseUrl(),
           deviceHost: api.getDeviceHost(),
-          demoMode: status.state === 'DEMO_ACTIVE',
+          demoMode: status.state === "DEMO_ACTIVE",
         },
       });
     }
@@ -538,10 +538,10 @@ export const HomeDiskManager = () => {
   const handleEject = trace(async (drive: DriveKey) => {
     try {
       await api.unmountDrive(drive);
-      setMountedByDrive((prev) => ({ ...prev, [drive]: '' }));
-      setDriveErrors((prev) => ({ ...prev, [drive]: '' }));
+      setMountedByDrive((prev) => ({ ...prev, [drive]: "" }));
+      setDriveErrors((prev) => ({ ...prev, [drive]: "" }));
       toast({
-        title: 'Disk ejected',
+        title: "Disk ejected",
         description: `${buildDriveLabel(drive)} cleared`,
       });
     } catch (error) {
@@ -550,8 +550,8 @@ export const HomeDiskManager = () => {
         [drive]: (error as Error).message,
       }));
       reportUserError({
-        operation: 'DISK_EJECT',
-        title: 'Eject failed',
+        operation: "DISK_EJECT",
+        title: "Eject failed",
         description: (error as Error).message,
         error,
         context: { drive },
@@ -575,12 +575,12 @@ export const HomeDiskManager = () => {
         } else {
           await api.driveOff(driveKey);
         }
-        setDriveErrors((prev) => ({ ...prev, [errorKey]: '' }));
+        setDriveErrors((prev) => ({ ...prev, [errorKey]: "" }));
         toast({
-          title: targetEnabled ? 'Drive powered on' : 'Drive powered off',
-          description: `${driveLabel} ${targetEnabled ? 'enabled' : 'disabled'}.`,
+          title: targetEnabled ? "Drive powered on" : "Drive powered off",
+          description: `${driveLabel} ${targetEnabled ? "enabled" : "disabled"}.`,
         });
-        queryClient.invalidateQueries({ queryKey: ['c64-drives'] });
+        queryClient.invalidateQueries({ queryKey: ["c64-drives"] });
       } catch (error) {
         setDrivePowerOverride((prev) => {
           const next = { ...prev };
@@ -592,8 +592,8 @@ export const HomeDiskManager = () => {
           [errorKey]: (error as Error).message,
         }));
         reportUserError({
-          operation: 'DRIVE_POWER',
-          title: 'Drive power toggle failed',
+          operation: "DRIVE_POWER",
+          title: "Drive power toggle failed",
           description: (error as Error).message,
           error,
           context: { driveKey, driveLabel, targetEnabled },
@@ -611,7 +611,7 @@ export const HomeDiskManager = () => {
       try {
         await api.resetDrive(driveKey);
         await refreshDrivesFromDevice();
-        setDriveErrors((prev) => ({ ...prev, [errorKey]: '' }));
+        setDriveErrors((prev) => ({ ...prev, [errorKey]: "" }));
         toast({
           title: `${driveLabel} reset`,
           description: `${driveLabel} was reset.`,
@@ -622,8 +622,8 @@ export const HomeDiskManager = () => {
           [errorKey]: (error as Error).message,
         }));
         reportUserError({
-          operation: 'RESET_DRIVES',
-          title: 'Drive reset failed',
+          operation: "RESET_DRIVES",
+          title: "Drive reset failed",
           description: (error as Error).message,
           error,
           context: { driveKey, driveLabel },
@@ -639,13 +639,13 @@ export const HomeDiskManager = () => {
       drive
     ];
     const mountedOverride = mountedByDrive[drive];
-    if (mountedOverride === '') return null;
+    if (mountedOverride === "") return null;
     if (mountedOverride) return mountedOverride;
     if (!driveInfo?.image_file) return null;
     const fullPath = buildDrivePath(driveInfo.image_path, driveInfo.image_file);
     if (!fullPath) return null;
     const disk = diskLibrary.disks.find(
-      (entry) => entry.location === 'ultimate' && entry.path === fullPath,
+      (entry) => entry.location === "ultimate" && entry.path === fullPath,
     );
     return disk?.id ?? null;
   };
@@ -662,7 +662,7 @@ export const HomeDiskManager = () => {
       } catch (error) {
         lastError = error as Error;
         if (attempt >= attempts) break;
-        addErrorLog('Drive config update retry', {
+        addErrorLog("Drive config update retry", {
           operation,
           attempt,
           attempts,
@@ -674,7 +674,7 @@ export const HomeDiskManager = () => {
       }
     }
     throw new Error(
-      `${operation} failed: ${lastError?.message ?? 'unknown error'}`,
+      `${operation} failed: ${lastError?.message ?? "unknown error"}`,
     );
   };
 
@@ -706,13 +706,13 @@ export const HomeDiskManager = () => {
 
   const parseBusId = (value: unknown) => {
     const numeric =
-      typeof value === 'number' ? value : Number(String(value ?? '').trim());
+      typeof value === "number" ? value : Number(String(value ?? "").trim());
     if (!Number.isInteger(numeric)) return null;
     return numeric;
   };
 
   const parseDriveType = (value: unknown) => {
-    const normalized = String(value ?? '').trim();
+    const normalized = String(value ?? "").trim();
     return normalized.length ? normalized : null;
   };
 
@@ -753,7 +753,7 @@ export const HomeDiskManager = () => {
         payload,
         SOFT_IEC_CONTROL.category,
         SOFT_IEC_DEFAULT_PATH_ITEM,
-      ) ?? '',
+      ) ?? "",
     ).trim();
     if (fromConfig.length) return normalizeDirectoryPath(fromConfig);
     if (fallbackPath && fallbackPath.trim())
@@ -776,16 +776,16 @@ export const HomeDiskManager = () => {
         await withRetry(`${buildDriveLabel(drive)} ${itemName} update`, () =>
           api.setConfigValue(category, itemName, value),
         );
-        setDriveErrors((prev) => ({ ...prev, [drive]: '' }));
+        setDriveErrors((prev) => ({ ...prev, [drive]: "" }));
         toast({ title: successTitle, description: successDescription });
         await Promise.all([
           queryClient.invalidateQueries({
             predicate: (query) =>
               Array.isArray(query.queryKey) &&
-              query.queryKey[0] === 'c64-config-items' &&
+              query.queryKey[0] === "c64-config-items" &&
               query.queryKey[1] === category,
           }),
-          queryClient.invalidateQueries({ queryKey: ['c64-drives'] }),
+          queryClient.invalidateQueries({ queryKey: ["c64-drives"] }),
         ]);
       } catch (error) {
         setDriveErrors((prev) => ({
@@ -793,8 +793,8 @@ export const HomeDiskManager = () => {
           [drive]: (error as Error).message,
         }));
         reportUserError({
-          operation: 'DRIVE_CONFIG_UPDATE',
-          title: 'Drive setting update failed',
+          operation: "DRIVE_CONFIG_UPDATE",
+          title: "Drive setting update failed",
           description: (error as Error).message,
           error,
           context: { drive, itemName, value },
@@ -807,7 +807,7 @@ export const HomeDiskManager = () => {
 
   const handleSoftIecConfigUpdate = trace(
     async (
-      itemName: 'IEC Drive' | 'Soft Drive Bus ID' | 'Default Path',
+      itemName: "IEC Drive" | "Soft Drive Bus ID" | "Default Path",
       value: string | number,
       successTitle: string,
       successDescription: string,
@@ -818,14 +818,14 @@ export const HomeDiskManager = () => {
         await withRetry(`Soft IEC ${itemName} update`, () =>
           api.setConfigValue(SOFT_IEC_CONTROL.category, itemName, value),
         );
-        setDriveErrors((prev) => ({ ...prev, softiec: '' }));
+        setDriveErrors((prev) => ({ ...prev, softiec: "" }));
         toast({ title: successTitle, description: successDescription });
         await Promise.all([
           refreshDrivesFromDevice(),
           queryClient.invalidateQueries({
             predicate: (query) =>
               Array.isArray(query.queryKey) &&
-              query.queryKey[0] === 'c64-config-items' &&
+              query.queryKey[0] === "c64-config-items" &&
               query.queryKey[1] === SOFT_IEC_CONTROL.category,
           }),
         ]);
@@ -836,8 +836,8 @@ export const HomeDiskManager = () => {
           softiec: (error as Error).message,
         }));
         reportUserError({
-          operation: 'SOFT_IEC_CONFIG_UPDATE',
-          title: 'Soft IEC setting update failed',
+          operation: "SOFT_IEC_CONFIG_UPDATE",
+          title: "Soft IEC setting update failed",
           description: (error as Error).message,
           error,
           context: { itemName, value },
@@ -853,30 +853,30 @@ export const HomeDiskManager = () => {
     async (source: SourceLocation, selections: SelectedItem[]) => {
       if (!status.isConnected) {
         reportUserError({
-          operation: 'SOFT_IEC_CONFIG_UPDATE',
-          title: 'Offline',
-          description: 'Connect to select a default directory.',
+          operation: "SOFT_IEC_CONFIG_UPDATE",
+          title: "Offline",
+          description: "Connect to select a default directory.",
         });
         return false;
       }
-      if (source.type !== 'ultimate') {
+      if (source.type !== "ultimate") {
         reportUserError({
-          operation: 'SOFT_IEC_CONFIG_UPDATE',
-          title: 'Unsupported source',
-          description: 'Default Path must be selected from C64U storage.',
+          operation: "SOFT_IEC_CONFIG_UPDATE",
+          title: "Unsupported source",
+          description: "Default Path must be selected from C64U storage.",
         });
         return false;
       }
 
       const directorySelection = selections.find(
-        (selection) => selection.type === 'dir',
+        (selection) => selection.type === "dir",
       );
       if (!directorySelection) {
         reportUserError({
-          operation: 'SOFT_IEC_CONFIG_UPDATE',
-          title: 'Select directory',
+          operation: "SOFT_IEC_CONFIG_UPDATE",
+          title: "Select directory",
           description:
-            'Choose a folder. File selection is not supported for Default Path.',
+            "Choose a folder. File selection is not supported for Default Path.",
         });
         return false;
       }
@@ -885,7 +885,7 @@ export const HomeDiskManager = () => {
       return handleSoftIecConfigUpdate(
         SOFT_IEC_DEFAULT_PATH_ITEM,
         directoryPath,
-        'Soft IEC default path updated',
+        "Soft IEC default path updated",
         `Default Path set to ${directoryPath}`,
       );
     },
@@ -937,12 +937,12 @@ export const HomeDiskManager = () => {
           });
           if (!options.suppressToast) {
             toast({
-              title: 'Disk removed',
-              description: 'Disk ejected from mounted drives.',
+              title: "Disk removed",
+              description: "Disk ejected from mounted drives.",
             });
           }
         } catch (error) {
-          addErrorLog('Disk eject failed', { error: (error as Error).message });
+          addErrorLog("Disk eject failed", { error: (error as Error).message });
         }
       }
       diskLibrary.removeDisk(disk.id);
@@ -965,7 +965,7 @@ export const HomeDiskManager = () => {
     setSelectedDiskIds(new Set());
     setBulkDeleteOpen(false);
     toast({
-      title: 'Disks removed',
+      title: "Disks removed",
       description: `${disksToRemove.length} disk(s) removed from the library.`,
     });
   };
@@ -977,18 +977,18 @@ export const HomeDiskManager = () => {
         const startedAt = Date.now();
         addItemsStartedAtRef.current = startedAt;
         const localTreeUri =
-          source.type === 'local'
+          source.type === "local"
             ? (localSourcesById.get(source.id)?.android?.treeUri ?? null)
             : null;
         if (localTreeUri) {
-          addLog('debug', 'SAF disk scan started', {
+          addLog("debug", "SAF disk scan started", {
             sourceId: source.id,
             treeUri: redactTreeUri(localTreeUri),
             rootPath: source.rootPath,
           });
         }
         if (!browserOpen) {
-          setAddItemsSurface('page');
+          setAddItemsSurface("page");
           if (!addItemsOverlayActiveRef.current) {
             setShowAddItemsOverlay(true);
             addItemsOverlayStartedAtRef.current = Date.now();
@@ -997,11 +997,11 @@ export const HomeDiskManager = () => {
         }
         setIsAddingItems(true);
         setAddItemsProgress({
-          status: 'scanning',
+          status: "scanning",
           count: 0,
           elapsedMs: 0,
           total: null,
-          message: 'Scanning…',
+          message: "Scanning…",
         });
         const abortController = new AbortController();
         addItemsAbortRef.current = abortController;
@@ -1033,12 +1033,12 @@ export const HomeDiskManager = () => {
         const resolveSelectionEntry = async (filePath: string) => {
           const normalizedPath = normalizeSourcePath(filePath);
           const parent =
-            normalizedPath.slice(0, normalizedPath.lastIndexOf('/') + 1) || '/';
+            normalizedPath.slice(0, normalizedPath.lastIndexOf("/") + 1) || "/";
           if (!listingCache.has(parent)) {
             try {
               listingCache.set(parent, await source.listEntries(parent));
             } catch (error) {
-              console.warn('Failed to list source entries for selection', {
+              console.warn("Failed to list source entries for selection", {
                 path: parent,
                 sourceId: source.id,
                 error,
@@ -1050,22 +1050,22 @@ export const HomeDiskManager = () => {
           return (
             entries.find(
               (entry) =>
-                entry.type === 'file' &&
+                entry.type === "file" &&
                 normalizeSourcePath(entry.path) === normalizedPath,
             ) ?? null
           );
         };
         for (const selection of selections) {
           if (abortSignal.aborted) {
-            throw new DOMException('Aborted', 'AbortError');
+            throw new DOMException("Aborted", "AbortError");
           }
-          if (selection.type === 'dir') {
+          if (selection.type === "dir") {
             const nested = await source.listFilesRecursive(selection.path, {
               signal: abortSignal,
             });
             updateProgress(nested.length);
             nested.forEach((entry) => {
-              if (entry.type !== 'file') return;
+              if (entry.type !== "file") return;
               files.push({
                 path: entry.path,
                 name: entry.name,
@@ -1093,9 +1093,9 @@ export const HomeDiskManager = () => {
         );
         if (
           !diskCandidates.length &&
-          source.type === 'local' &&
+          source.type === "local" &&
           selections.length === 1 &&
-          selections[0]?.type === 'dir'
+          selections[0]?.type === "dir"
         ) {
           const selectionPath = normalizeSourcePath(selections[0].path);
           const rootPath = normalizeSourcePath(source.rootPath);
@@ -1103,12 +1103,12 @@ export const HomeDiskManager = () => {
             const localSource = localSourcesById.get(source.id);
             if (
               localSource &&
-              getLocalSourceListingMode(localSource) === 'entries'
+              getLocalSourceListingMode(localSource) === "entries"
             ) {
               try {
                 const entries = requireLocalSourceEntries(
                   localSource,
-                  'HomeDiskManager.localFallback',
+                  "HomeDiskManager.localFallback",
                 );
                 files = entries.map((entry) => ({
                   path: normalizeSourcePath(entry.relativePath),
@@ -1121,7 +1121,7 @@ export const HomeDiskManager = () => {
                   isDiskImagePath(entry.path),
                 );
               } catch (error) {
-                addErrorLog('Local source fallback failed', {
+                addErrorLog("Local source fallback failed", {
                   sourceId: localSource.id,
                   error: {
                     name: (error as Error).name,
@@ -1134,16 +1134,16 @@ export const HomeDiskManager = () => {
           }
         }
         if (!diskCandidates.length) {
-          addLog('debug', 'No disk files after scan', {
+          addLog("debug", "No disk files after scan", {
             sourceId: source.id,
             sourceType: source.type,
-            reason: 'no-disk-files',
+            reason: "no-disk-files",
             totalFiles: files.length,
           });
           setAddItemsProgress((prev) => ({
             ...prev,
-            status: 'error',
-            message: 'No disk files found.',
+            status: "error",
+            message: "No disk files found.",
           }));
           showNoDiskWarning();
           return false;
@@ -1163,16 +1163,16 @@ export const HomeDiskManager = () => {
           const fallbackGroup = getLeafFolderName(normalized);
           const groupName = autoGroup ?? fallbackGroup ?? null;
           const localSource =
-            source.type === 'local' ? localSourcesById.get(source.id) : null;
+            source.type === "local" ? localSourcesById.get(source.id) : null;
           let localEntry: { uri?: string | null } | null = null;
           if (
             localSource &&
-            getLocalSourceListingMode(localSource) === 'entries'
+            getLocalSourceListingMode(localSource) === "entries"
           ) {
             try {
               const entries = requireLocalSourceEntries(
                 localSource,
-                'HomeDiskManager.localEntry',
+                "HomeDiskManager.localEntry",
               );
               localEntry =
                 entries.find(
@@ -1180,7 +1180,7 @@ export const HomeDiskManager = () => {
                     normalizeSourcePath(item.relativePath) === normalized,
                 ) ?? null;
             } catch (error) {
-              addErrorLog('Local source entries unavailable', {
+              addErrorLog("Local source entries unavailable", {
                 sourceId: localSource.id,
                 error: {
                   name: (error as Error).name,
@@ -1192,23 +1192,23 @@ export const HomeDiskManager = () => {
           }
           const diskEntry = createDiskEntry({
             path: normalized,
-            location: source.type === 'ultimate' ? 'ultimate' : 'local',
+            location: source.type === "ultimate" ? "ultimate" : "local",
             group: groupName,
-            sourceId: source.type === 'local' ? source.id : null,
+            sourceId: source.type === "local" ? source.id : null,
             localUri: localEntry?.uri ?? null,
             localTreeUri: localSource?.android?.treeUri ?? null,
             sizeBytes: entry.sizeBytes ?? null,
             modifiedAt: entry.modifiedAt ?? null,
             importOrder: index,
           });
-          if (source.type === 'local') {
+          if (source.type === "local") {
             const runtime = resolveLocalRuntimeFile(source.id, normalized);
             if (runtime) runtimeFiles[diskEntry.id] = runtime;
           }
           return diskEntry;
         });
 
-        const minDuration = addItemsSurface === 'page' ? 800 : 300;
+        const minDuration = addItemsSurface === "page" ? 800 : 300;
         const elapsed = Date.now() - startedAt;
         if (elapsed < minDuration) {
           await new Promise((resolve) =>
@@ -1218,7 +1218,7 @@ export const HomeDiskManager = () => {
 
         diskLibrary.addDisks(disks, runtimeFiles);
         if (localTreeUri) {
-          addLog('debug', 'SAF disk scan complete', {
+          addLog("debug", "SAF disk scan complete", {
             sourceId: source.id,
             treeUri: redactTreeUri(localTreeUri),
             totalFiles: files.length,
@@ -1228,21 +1228,21 @@ export const HomeDiskManager = () => {
         }
         setAddItemsProgress((prev) => ({
           ...prev,
-          status: 'done',
-          message: 'Added to library',
+          status: "done",
+          message: "Added to library",
         }));
         toast({
-          title: 'Items added',
+          title: "Items added",
           description: `${disks.length} disk(s) added to library.`,
         });
         return true;
       } catch (error) {
         const err = error as Error;
-        if (err.name === 'AbortError') {
+        if (err.name === "AbortError") {
           setAddItemsProgress((prev) => ({
             ...prev,
-            status: 'idle',
-            message: 'Scan canceled.',
+            status: "idle",
+            message: "Scan canceled.",
           }));
           return false;
         }
@@ -1250,12 +1250,12 @@ export const HomeDiskManager = () => {
           err instanceof LocalSourceListingError ? err.details : undefined;
         setAddItemsProgress((prev) => ({
           ...prev,
-          status: 'error',
-          message: 'Add items failed',
+          status: "error",
+          message: "Add items failed",
         }));
         reportUserError({
-          operation: 'DISK_IMPORT',
-          title: 'Add items failed',
+          operation: "DISK_IMPORT",
+          title: "Add items failed",
           description: err.message,
           error: err,
           context: {
@@ -1317,17 +1317,17 @@ export const HomeDiskManager = () => {
       try {
         setIsAddingItems(true);
         setAddItemsProgress({
-          status: 'scanning',
+          status: "scanning",
           count: 0,
           elapsedMs: 0,
           total: null,
-          message: 'Scanning…',
+          message: "Scanning…",
         });
         const normalizedFiles = fileList.map((file) => {
           const relative =
             (file as File & { webkitRelativePath?: string })
               .webkitRelativePath || file.name;
-          const relativePath = relative.replace(/^\/+/, '');
+          const relativePath = relative.replace(/^\/+/, "");
           return {
             path: normalizeSourcePath(relativePath),
             name: file.name,
@@ -1343,8 +1343,8 @@ export const HomeDiskManager = () => {
         if (!diskCandidates.length) {
           setAddItemsProgress((prev) => ({
             ...prev,
-            status: 'error',
-            message: 'No disk files found.',
+            status: "error",
+            message: "No disk files found.",
           }));
           showNoDiskWarning();
         } else {
@@ -1362,7 +1362,7 @@ export const HomeDiskManager = () => {
             const groupName = autoGroup ?? fallbackGroup ?? null;
             const diskEntry = createDiskEntry({
               path: normalized,
-              location: 'local',
+              location: "local",
               group: groupName,
               sourceId: source.id,
               sizeBytes: entry.sizeBytes ?? null,
@@ -1376,11 +1376,11 @@ export const HomeDiskManager = () => {
           diskLibrary.addDisks(disks, runtimeFiles);
           setAddItemsProgress((prev) => ({
             ...prev,
-            status: 'done',
-            message: 'Added to library',
+            status: "done",
+            message: "Added to library",
           }));
           toast({
-            title: 'Items added',
+            title: "Items added",
             description: `${disks.length} disk(s) added to library.`,
           });
           success = true;
@@ -1388,12 +1388,12 @@ export const HomeDiskManager = () => {
       } catch (error) {
         setAddItemsProgress((prev) => ({
           ...prev,
-          status: 'error',
-          message: 'Add items failed',
+          status: "error",
+          message: "Add items failed",
         }));
         reportUserError({
-          operation: 'DISK_IMPORT',
-          title: 'Add items failed',
+          operation: "DISK_IMPORT",
+          title: "Add items failed",
           description: (error as Error).message,
           error: error as Error,
         });
@@ -1413,7 +1413,7 @@ export const HomeDiskManager = () => {
       if (!source) return null;
       const location = createLocalSourceLocation(source);
       const success = await handleAddDiskSelections(location, [
-        { type: 'dir', name: location.name, path: location.rootPath },
+        { type: "dir", name: location.name, path: location.rootPath },
       ]);
       if (success && browserOpen) {
         await new Promise((resolve) => setTimeout(resolve, 0));
@@ -1428,31 +1428,31 @@ export const HomeDiskManager = () => {
     (disk: DiskEntry, disableActions?: boolean): ActionListMenuItem[] => {
       const detailsDate = disk.modifiedAt || disk.importedAt;
       return [
-        { type: 'label', label: 'Details' },
-        { type: 'info', label: 'Size', value: formatBytes(disk.sizeBytes) },
-        { type: 'info', label: 'Date', value: formatDate(detailsDate) },
-        { type: 'separator' },
+        { type: "label", label: "Details" },
+        { type: "info", label: "Size", value: formatBytes(disk.sizeBytes) },
+        { type: "info", label: "Date", value: formatDate(detailsDate) },
+        { type: "separator" },
         {
-          type: 'action',
-          label: 'Set group…',
+          type: "action",
+          label: "Set group…",
           onSelect: () => {
             setGroupDialogDisk(disk);
-            setGroupName(disk.group || '');
+            setGroupName(disk.group || "");
           },
           disabled: disableActions,
         },
         {
-          type: 'action',
-          label: 'Rename disk…',
+          type: "action",
+          label: "Rename disk…",
           onSelect: () => {
             setRenameDialogDisk(disk);
-            setRenameValue(disk.name || '');
+            setRenameValue(disk.name || "");
           },
           disabled: disableActions,
         },
         {
-          type: 'action',
-          label: 'Remove from collection',
+          type: "action",
+          label: "Remove from collection",
           onSelect: () => setDeleteDialogDisk(disk),
           disabled: disableActions,
           destructive: true,
@@ -1479,10 +1479,10 @@ export const HomeDiskManager = () => {
           acc.push({
             id: `folder:${folderPath}`,
             title: folderPath,
-            variant: 'header',
+            variant: "header",
             icon: <Folder className="h-3.5 w-3.5" aria-hidden="true" />,
             selected: false,
-            actionLabel: '',
+            actionLabel: "",
             showMenu: false,
             showSelection: false,
             disableActions: true,
@@ -1493,10 +1493,10 @@ export const HomeDiskManager = () => {
         const groupMeta = disk.group ? (
           <span className="flex items-center gap-1 min-w-0">
             <span
-              className={cn('h-2 w-2 rounded-full border', groupColor?.chip)}
+              className={cn("h-2 w-2 rounded-full border", groupColor?.chip)}
               aria-hidden="true"
             />
-            <span className={cn(groupColor?.text, 'break-words min-w-0')}>
+            <span className={cn(groupColor?.text, "break-words min-w-0")}>
               Group: {disk.group}
             </span>
           </span>
@@ -1504,14 +1504,14 @@ export const HomeDiskManager = () => {
         acc.push({
           id: disk.id,
           title: disk.name,
-          filterText: `${disk.name} ${disk.path} ${disk.group ?? ''}`,
+          filterText: `${disk.name} ${disk.path} ${disk.group ?? ""}`,
           meta: groupMeta,
           icon: <LocationIcon location={disk.location} />,
           selected: selectedDiskIds.has(disk.id),
           onSelectToggle: (selected) => handleDiskSelect(disk, selected),
           menuItems: buildDiskMenuItems(disk, options?.disableActions),
           disableActions: options?.disableActions,
-          actionLabel: 'Mount',
+          actionLabel: "Mount",
           actionIcon: <HardDrive className="h-4 w-4" aria-hidden="true" />,
           onAction: () => options?.onMount?.(disk),
           onTitleClick: () => options?.onMount?.(disk),
@@ -1527,7 +1527,7 @@ export const HomeDiskManager = () => {
 
   const driveRows = DRIVE_KEYS.map((key) => {
     const info = drivesData?.drives?.find((entry) => entry[key])?.[key];
-    const driveConfigPayload = key === 'a' ? driveAConfig : driveBConfig;
+    const driveConfigPayload = key === "a" ? driveAConfig : driveBConfig;
     const busId = resolveDriveBusId(key, driveConfigPayload, info);
     const driveType = resolveDriveType(key, driveConfigPayload, info);
     const busOptions = buildBusIdOptions([...DRIVE_BUS_ID_DEFAULTS], busId);
@@ -1537,12 +1537,12 @@ export const HomeDiskManager = () => {
     );
     const powerOverride = drivePowerOverride[key];
     const powerEnabled = powerOverride ?? info?.enabled;
-    const hasPowerState = typeof powerEnabled === 'boolean';
-    const powerLabel = powerEnabled ? 'Turn Off' : 'Turn On';
+    const hasPowerState = typeof powerEnabled === "boolean";
+    const powerLabel = powerEnabled ? "Turn Off" : "Turn On";
     const powerTarget = !powerEnabled;
     const powerPending = Boolean(drivePowerPending[key]);
     const mountedDiskId = resolveMountedDiskId(key);
-    const forcedEmpty = mountedByDrive[key] === '';
+    const forcedEmpty = mountedByDrive[key] === "";
     const mounted = forcedEmpty
       ? false
       : Boolean(info?.image_file || mountedDiskId);
@@ -1555,7 +1555,7 @@ export const HomeDiskManager = () => {
     const mountedDiskName = forcedEmpty
       ? null
       : mountedDisk?.name || info?.image_file || null;
-    const mountedLabel = mountedDiskName ?? 'No disk mounted';
+    const mountedLabel = mountedDiskName ?? "No disk mounted";
 
     const rawStatusLine = resolveDriveStatusRaw(
       driveErrors[key],
@@ -1605,15 +1605,15 @@ export const HomeDiskManager = () => {
     softIecDevice?.partitions?.[0]?.path ?? null,
   );
   const softIecMounted = Boolean(softIecDevice?.imageFile);
-  const softIecMountedLabel = softIecDevice?.imageFile ?? 'No disk mounted';
+  const softIecMountedLabel = softIecDevice?.imageFile ?? "No disk mounted";
   const softIecPowerEnabled =
     drivePowerOverride.softiec ?? softIecDevice?.enabled ?? false;
-  const softIecHasPowerState = typeof softIecPowerEnabled === 'boolean';
-  const softIecPowerLabel = softIecPowerEnabled ? 'Turn Off' : 'Turn On';
+  const softIecHasPowerState = typeof softIecPowerEnabled === "boolean";
+  const softIecPowerLabel = softIecPowerEnabled ? "Turn Off" : "Turn On";
   const softIecPowerTarget = !softIecPowerEnabled;
   const softIecResetPending = Boolean(driveResetPending.softiec);
   const softIecPowerPending = Boolean(drivePowerPending.softiec);
-  const softIecEndpointKey = softIecDevice?.endpointKey ?? 'softiec';
+  const softIecEndpointKey = softIecDevice?.endpointKey ?? "softiec";
   const softIecRawStatus = resolveDriveStatusRaw(
     driveErrors.softiec,
     resolveSoftIecServiceError(softIecDevice?.lastError),
@@ -1684,10 +1684,10 @@ export const HomeDiskManager = () => {
                       }
                       data-testid={`drive-status-toggle-${key}`}
                     >
-                      {powerEnabled ? 'ON' : 'OFF'}
+                      {powerEnabled ? "ON" : "OFF"}
                     </Button>
                     <Button
-                      variant={mounted ? 'secondary' : 'outline'}
+                      variant={mounted ? "secondary" : "outline"}
                       size="sm"
                       className={ROW1_CONTROL_CLASS}
                       onClick={() => {
@@ -1699,12 +1699,12 @@ export const HomeDiskManager = () => {
                       }}
                       disabled={!status.isConnected || configPending}
                       data-testid={`drive-mount-toggle-${key}`}
-                      aria-label={`${driveLabel} ${mounted ? 'Eject disk' : 'Mount disk'}`}
+                      aria-label={`${driveLabel} ${mounted ? "Eject disk" : "Mount disk"}`}
                     >
                       <Disc
                         className={cn(
-                          'h-4 w-4',
-                          mounted ? 'text-success' : 'text-muted-foreground',
+                          "h-4 w-4",
+                          mounted ? "text-success" : "text-muted-foreground",
                         )}
                       />
                     </Button>
@@ -1720,7 +1720,7 @@ export const HomeDiskManager = () => {
                         key,
                         DRIVE_BUS_ID_ITEM,
                         Number(value),
-                        'Drive Bus ID updated',
+                        "Drive Bus ID updated",
                         `${driveLabel} now uses device #${value}.`,
                       )
                     }
@@ -1729,7 +1729,7 @@ export const HomeDiskManager = () => {
                     <SelectTrigger
                       className={cn(
                         INLINE_META_SELECT_CLASS,
-                        'w-[76px] min-w-[76px]',
+                        "w-[76px] min-w-[76px]",
                       )}
                       aria-label={`${driveLabel} Bus ID`}
                       data-testid={`drive-bus-select-${key}`}
@@ -1758,7 +1758,7 @@ export const HomeDiskManager = () => {
                         key,
                         DRIVE_TYPE_ITEM,
                         value,
-                        'Drive Type updated',
+                        "Drive Type updated",
                         `${driveLabel} switched to ${value} mode.`,
                       )
                     }
@@ -1767,7 +1767,7 @@ export const HomeDiskManager = () => {
                     <SelectTrigger
                       className={cn(
                         INLINE_META_SELECT_CLASS,
-                        'w-[80px] min-w-[80px]',
+                        "w-[80px] min-w-[80px]",
                       )}
                       aria-label={`${driveLabel} Drive Type`}
                       data-testid={`drive-type-select-${key}`}
@@ -1795,7 +1795,7 @@ export const HomeDiskManager = () => {
                     {mountedDisk?.group ? (
                       <span
                         className={cn(
-                          'h-2 w-2 shrink-0 rounded-full border',
+                          "h-2 w-2 shrink-0 rounded-full border",
                           pickDiskGroupColor(mountedDisk.group).chip,
                         )}
                         aria-hidden="true"
@@ -1805,7 +1805,7 @@ export const HomeDiskManager = () => {
                       <span
                         className={cn(
                           pickDiskGroupColor(mountedDisk.group).text,
-                          'truncate text-[11px]',
+                          "truncate text-[11px]",
                         )}
                       >
                         {mountedDisk.group}
@@ -1885,7 +1885,7 @@ export const HomeDiskManager = () => {
                     {formattedStatus.message ? (
                       <p
                         className={cn(
-                          'text-xs',
+                          "text-xs",
                           getStatusMessageColorClass(formattedStatus),
                         )}
                         data-testid={`drive-status-message-${key}`}
@@ -1937,14 +1937,14 @@ export const HomeDiskManager = () => {
                   )}
                   onClick={() =>
                     void handleSoftIecConfigUpdate(
-                      'IEC Drive',
-                      softIecPowerEnabled ? 'Disabled' : 'Enabled',
+                      "IEC Drive",
+                      softIecPowerEnabled ? "Disabled" : "Enabled",
                       softIecPowerEnabled
-                        ? 'Soft IEC disabled'
-                        : 'Soft IEC enabled',
+                        ? "Soft IEC disabled"
+                        : "Soft IEC enabled",
                       softIecPowerEnabled
-                        ? 'Soft IEC drive turned off.'
-                        : 'Soft IEC drive turned on.',
+                        ? "Soft IEC drive turned off."
+                        : "Soft IEC drive turned on.",
                     )
                   }
                   disabled={
@@ -1954,10 +1954,10 @@ export const HomeDiskManager = () => {
                   }
                   data-testid="drive-status-toggle-soft-iec"
                 >
-                  {softIecPowerEnabled ? 'ON' : 'OFF'}
+                  {softIecPowerEnabled ? "ON" : "OFF"}
                 </Button>
                 <Button
-                  variant={softIecMounted ? 'secondary' : 'outline'}
+                  variant={softIecMounted ? "secondary" : "outline"}
                   size="sm"
                   className={ROW1_CONTROL_CLASS}
                   onClick={() => setSoftIecDirectoryBrowserOpen(true)}
@@ -1967,8 +1967,8 @@ export const HomeDiskManager = () => {
                 >
                   <Disc
                     className={cn(
-                      'h-4 w-4',
-                      softIecMounted ? 'text-success' : 'text-muted-foreground',
+                      "h-4 w-4",
+                      softIecMounted ? "text-success" : "text-muted-foreground",
                     )}
                   />
                 </Button>
@@ -1981,9 +1981,9 @@ export const HomeDiskManager = () => {
                 value={String(softIecBusId)}
                 onValueChange={(value) =>
                   void handleSoftIecConfigUpdate(
-                    'Soft Drive Bus ID',
+                    "Soft Drive Bus ID",
                     Number(value),
-                    'Soft IEC bus ID updated',
+                    "Soft IEC bus ID updated",
                     `Soft IEC now uses device #${value}.`,
                   )
                 }
@@ -1992,7 +1992,7 @@ export const HomeDiskManager = () => {
                 <SelectTrigger
                   className={cn(
                     INLINE_META_SELECT_CLASS,
-                    'w-[76px] min-w-[76px]',
+                    "w-[76px] min-w-[76px]",
                   )}
                   data-testid="drive-bus-select-soft-iec"
                 >
@@ -2043,8 +2043,8 @@ export const HomeDiskManager = () => {
                   onClick={() =>
                     void handleResetDrive(
                       softIecEndpointKey,
-                      'Soft IEC Drive',
-                      'softiec',
+                      "Soft IEC Drive",
+                      "softiec",
                     )
                   }
                   disabled={
@@ -2064,9 +2064,9 @@ export const HomeDiskManager = () => {
                   onClick={() =>
                     void handleToggleDrivePower(
                       softIecEndpointKey,
-                      'Soft IEC Drive',
+                      "Soft IEC Drive",
                       softIecPowerTarget,
-                      'softiec',
+                      "softiec",
                     )
                   }
                   disabled={
@@ -2087,7 +2087,7 @@ export const HomeDiskManager = () => {
                 {softIecFormattedStatus.message ? (
                   <p
                     className={cn(
-                      'text-xs',
+                      "text-xs",
                       getStatusMessageColorClass(softIecFormattedStatus),
                     )}
                     data-testid="drive-status-message-soft-iec"
@@ -2132,9 +2132,9 @@ export const HomeDiskManager = () => {
               onMount: (entry) => {
                 if (!status.isConnected) {
                   reportUserError({
-                    operation: 'DISK_MOUNT',
-                    title: 'Offline',
-                    description: 'Connect to mount disks.',
+                    operation: "DISK_MOUNT",
+                    title: "Offline",
+                    description: "Connect to mount disks.",
                   });
                   return;
                 }
@@ -2145,7 +2145,7 @@ export const HomeDiskManager = () => {
             selectAllLabel="Select all"
             deselectAllLabel="Deselect all"
             removeSelectedLabel={
-              selectedCount ? 'Remove selected items' : undefined
+              selectedCount ? "Remove selected items" : undefined
             }
             selectedCount={selectedCount}
             allSelected={allSelected}
@@ -2162,7 +2162,7 @@ export const HomeDiskManager = () => {
                 size="sm"
                 onClick={() => setBrowserOpen(true)}
               >
-                {diskLibrary.disks.length ? 'Add more disks' : 'Add disks'}
+                {diskLibrary.disks.length ? "Add more disks" : "Add disks"}
               </Button>
             }
           />
@@ -2180,12 +2180,12 @@ export const HomeDiskManager = () => {
               ? Array.from(event.currentTarget.files)
               : [];
             void handleLocalSourceInput(selected.length ? selected : null);
-            event.currentTarget.value = '';
+            event.currentTarget.value = "";
           },
-          'upload',
-          'FileInput',
-          { type: 'file' },
-          'FileInput',
+          "upload",
+          "FileInput",
+          { type: "file" },
+          "FileInput",
         )}
       />
 
@@ -2196,7 +2196,7 @@ export const HomeDiskManager = () => {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>
-              Mount disk to {activeDrive ? buildDriveLabel(activeDrive) : ''}
+              Mount disk to {activeDrive ? buildDriveLabel(activeDrive) : ""}
             </DialogTitle>
             <DialogDescription>
               Select a disk to mount in this drive.
@@ -2252,8 +2252,8 @@ export const HomeDiskManager = () => {
                   disabled={!status.isConnected || configPending}
                 >
                   <HardDrive className="h-4 w-4 mr-2" />
-                  {buildDriveLabel(key)} (#{busId}, {driveType}){' '}
-                  {mounted ? '• mounted' : ''}
+                  {buildDriveLabel(key)} (#{busId}, {driveType}){" "}
+                  {mounted ? "• mounted" : ""}
                 </Button>
               ),
             )}
@@ -2270,12 +2270,12 @@ export const HomeDiskManager = () => {
         onAddLocalSource={handleAddLocalSourceFromPicker}
         onConfirm={handleAddDiskSelections}
         filterEntry={(entry) =>
-          entry.type === 'dir' || isDiskImagePath(entry.path)
+          entry.type === "dir" || isDiskImagePath(entry.path)
         }
         allowFolderSelection
         isConfirming={isAddingItems}
         progress={addItemsProgress}
-        showProgressFooter={addItemsSurface === 'dialog'}
+        showProgressFooter={addItemsSurface === "dialog"}
         autoConfirmCloseBefore={isAndroid}
         onAutoConfirmStart={handleAutoConfirmStart}
         autoConfirmLocalSource={false}
@@ -2301,7 +2301,7 @@ export const HomeDiskManager = () => {
           title="Adding disks"
           testId="add-disks-overlay"
           visible={
-            showAddItemsOverlay || addItemsProgress.status === 'scanning'
+            showAddItemsOverlay || addItemsProgress.status === "scanning"
           }
           onCancel={cancelAddItemsScan}
         />
@@ -2342,7 +2342,7 @@ export const HomeDiskManager = () => {
                     >
                       <span
                         className={cn(
-                          'h-2 w-2 rounded-full border',
+                          "h-2 w-2 rounded-full border",
                           option.color.chip,
                         )}
                         aria-hidden="true"
@@ -2350,7 +2350,7 @@ export const HomeDiskManager = () => {
                       <span
                         className={cn(
                           option.color.text,
-                          'max-w-[180px] break-words whitespace-normal',
+                          "max-w-[180px] break-words whitespace-normal",
                         )}
                       >
                         {option.name}
@@ -2372,7 +2372,7 @@ export const HomeDiskManager = () => {
                 onChange={(event) => setGroupName(event.target.value)}
                 placeholder="Enter a group name"
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter' && groupDialogDisk) {
+                  if (event.key === "Enter" && groupDialogDisk) {
                     const nextName = groupName.trim();
                     if (!nextName) return;
                     diskLibrary.updateDiskGroup(groupDialogDisk.id, nextName);
@@ -2395,7 +2395,7 @@ export const HomeDiskManager = () => {
                 setGroupDialogDisk(null);
               }}
             >
-              {groupName.trim() ? 'Create & assign' : 'Clear group'}
+              {groupName.trim() ? "Create & assign" : "Clear group"}
             </Button>
             <Button variant="ghost" onClick={() => setGroupDialogDisk(null)}>
               Cancel
@@ -2477,7 +2477,7 @@ export const HomeDiskManager = () => {
             <DialogDescription>
               {selectedCount
                 ? `This removes ${selectedCount} disk(s) from your collection. Files are not deleted.`
-                : 'No disks selected.'}
+                : "No disks selected."}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

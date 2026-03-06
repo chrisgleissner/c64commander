@@ -6,18 +6,18 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { addErrorLog, addLog } from '@/lib/logging';
+import { addErrorLog, addLog } from "@/lib/logging";
 
 // ── Pipeline state machine ───────────────────────────────────────
 
 export type HvscPipelineState =
-  | 'IDLE'
-  | 'DOWNLOADING'
-  | 'DOWNLOADED'
-  | 'EXTRACTING'
-  | 'EXTRACTED'
-  | 'INGESTING'
-  | 'READY';
+  | "IDLE"
+  | "DOWNLOADING"
+  | "DOWNLOADED"
+  | "EXTRACTING"
+  | "EXTRACTED"
+  | "INGESTING"
+  | "READY";
 
 export type PipelineStateMachine = {
   transition: (
@@ -29,21 +29,21 @@ export type PipelineStateMachine = {
 
 const hvscPipelineTransitions: Record<HvscPipelineState, HvscPipelineState[]> =
   {
-    IDLE: ['DOWNLOADING'],
-    DOWNLOADING: ['DOWNLOADED'],
-    DOWNLOADED: ['EXTRACTING'],
-    EXTRACTING: ['EXTRACTED'],
-    EXTRACTED: ['INGESTING'],
-    INGESTING: ['READY'],
+    IDLE: ["DOWNLOADING"],
+    DOWNLOADING: ["DOWNLOADED"],
+    DOWNLOADED: ["EXTRACTING"],
+    EXTRACTING: ["EXTRACTED"],
+    EXTRACTED: ["INGESTING"],
+    INGESTING: ["READY"],
     READY: [],
   };
 
 export const createArchivePipelineStateMachine = (params: {
   archiveName: string;
-  archiveType: 'baseline' | 'update';
+  archiveType: "baseline" | "update";
   archiveVersion: number;
 }): PipelineStateMachine => {
-  let state: HvscPipelineState = 'IDLE';
+  let state: HvscPipelineState = "IDLE";
   const transition = (
     next: HvscPipelineState,
     details: Record<string, unknown> = {},
@@ -53,7 +53,7 @@ export const createArchivePipelineStateMachine = (params: {
       const error = new Error(
         `Illegal HVSC pipeline transition ${state} -> ${next}`,
       );
-      addErrorLog('HVSC pipeline transition violation', {
+      addErrorLog("HVSC pipeline transition violation", {
         archiveName: params.archiveName,
         archiveType: params.archiveType,
         archiveVersion: params.archiveVersion,
@@ -68,7 +68,7 @@ export const createArchivePipelineStateMachine = (params: {
       });
       throw error;
     }
-    addLog('info', 'HVSC pipeline transition', {
+    addLog("info", "HVSC pipeline transition", {
       archiveName: params.archiveName,
       archiveType: params.archiveType,
       archiveVersion: params.archiveVersion,

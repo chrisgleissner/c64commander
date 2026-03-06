@@ -6,14 +6,14 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { C64API } from '@/lib/c64api';
-import { addErrorLog } from '@/lib/logging';
-import { checkC64Liveness } from '@/lib/machine/c64Liveness';
+import type { C64API } from "@/lib/c64api";
+import { addErrorLog } from "@/lib/logging";
+import { checkC64Liveness } from "@/lib/machine/c64Liveness";
 import {
   createActionContext,
   getActiveAction,
-} from '@/lib/tracing/actionTrace';
-import { recordDeviceGuard } from '@/lib/tracing/traceSession';
+} from "@/lib/tracing/actionTrace";
+import { recordDeviceGuard } from "@/lib/tracing/traceSession";
 
 export const FULL_RAM_SIZE_BYTES = 0x10000;
 const IO_REGION_START = 0xd000;
@@ -45,7 +45,7 @@ const delay = (ms: number) =>
   });
 
 const toHexAddress = (value: number) =>
-  value.toString(16).toUpperCase().padStart(4, '0');
+  value.toString(16).toUpperCase().padStart(4, "0");
 
 const asError = (error: unknown, fallbackMessage: string) => {
   if (error instanceof Error) return error;
@@ -74,7 +74,7 @@ const withRetry = async <T>(
       if (onRetry) {
         await onRetry(lastError, attempt, attempts);
       }
-      addErrorLog('RAM operation retry', {
+      addErrorLog("RAM operation retry", {
         operation,
         attempt,
         attempts,
@@ -91,18 +91,18 @@ const withRetry = async <T>(
 
 const recordRamTrace = (payload: Record<string, unknown>) => {
   const action =
-    getActiveAction() ?? createActionContext('ram.operation', 'system', null);
+    getActiveAction() ?? createActionContext("ram.operation", "system", null);
   recordDeviceGuard(action, payload);
 };
 
 const ensureLiveness = async (api: C64API, operation: string) => {
   const sample = await checkC64Liveness(api);
-  if (sample.decision === 'wedged') {
+  if (sample.decision === "wedged") {
     throw new Error(`${operation} aborted: C64 appears wedged.`);
   }
   recordRamTrace({
     operation,
-    status: 'liveness-ok',
+    status: "liveness-ok",
     decision: sample.decision,
   });
   return sample;
@@ -113,15 +113,15 @@ const recoverFromLivenessFailure = async (api: C64API, operation: string) => {
   try {
     sample = await checkC64Liveness(api);
   } catch (error) {
-    const err = asError(error, 'Liveness check failed');
-    recordRamTrace({ operation, status: 'liveness-error', error: err.message });
+    const err = asError(error, "Liveness check failed");
+    recordRamTrace({ operation, status: "liveness-error", error: err.message });
     throw err;
   }
 
-  if (sample.decision !== 'wedged') {
+  if (sample.decision !== "wedged") {
     recordRamTrace({
       operation,
-      status: 'liveness-ok',
+      status: "liveness-ok",
       decision: sample.decision,
     });
     return;
@@ -129,18 +129,18 @@ const recoverFromLivenessFailure = async (api: C64API, operation: string) => {
 
   recordRamTrace({
     operation,
-    status: 'liveness-wedged',
+    status: "liveness-wedged",
     decision: sample.decision,
   });
-  await withRetry('Reset machine after liveness failure', () =>
+  await withRetry("Reset machine after liveness failure", () =>
     api.machineReset(),
   );
   await delay(500);
   const afterReset = await checkC64Liveness(api);
-  if (afterReset.decision !== 'wedged') {
+  if (afterReset.decision !== "wedged") {
     recordRamTrace({
       operation,
-      status: 'liveness-recovered',
+      status: "liveness-recovered",
       decision: afterReset.decision,
     });
     return;
@@ -148,25 +148,25 @@ const recoverFromLivenessFailure = async (api: C64API, operation: string) => {
 
   recordRamTrace({
     operation,
-    status: 'liveness-reset-failed',
+    status: "liveness-reset-failed",
     decision: afterReset.decision,
   });
-  await withRetry('Reboot machine after liveness failure', () =>
+  await withRetry("Reboot machine after liveness failure", () =>
     api.machineReboot(),
   );
   await delay(800);
   const afterReboot = await checkC64Liveness(api);
-  if (afterReboot.decision === 'wedged') {
+  if (afterReboot.decision === "wedged") {
     recordRamTrace({
       operation,
-      status: 'liveness-reboot-failed',
+      status: "liveness-reboot-failed",
       decision: afterReboot.decision,
     });
     throw new Error(`${operation} aborted: C64 remained wedged after reboot.`);
   }
   recordRamTrace({
     operation,
-    status: 'liveness-recovered',
+    status: "liveness-recovered",
     decision: afterReboot.decision,
   });
 };
@@ -192,8 +192,8 @@ const readRanges = async (
         range.endExclusive - address,
       );
       recordRamTrace({
-        operation: 'ram-read',
-        status: 'start',
+        operation: "ram-read",
+        status: "start",
         address: toHexAddress(address),
         expectedLength: chunkSize,
       });
@@ -205,8 +205,8 @@ const readRanges = async (
       );
       if (chunk.length !== chunkSize) {
         recordRamTrace({
-          operation: 'ram-read',
-          status: 'error',
+          operation: "ram-read",
+          status: "error",
           address: toHexAddress(address),
           expectedLength: chunkSize,
           actualLength: chunk.length,
@@ -216,8 +216,8 @@ const readRanges = async (
         );
       }
       recordRamTrace({
-        operation: 'ram-read',
-        status: 'success',
+        operation: "ram-read",
+        status: "success",
         address: toHexAddress(address),
         expectedLength: chunkSize,
         actualLength: chunk.length,
@@ -238,8 +238,8 @@ const writeFullImage = async (
   ) => Promise<void>,
 ) => {
   recordRamTrace({
-    operation: 'ram-write',
-    status: 'start',
+    operation: "ram-write",
+    status: "start",
     address: toHexAddress(0),
     expectedLength: image.length,
     chunkSizeBytes: WRITE_CHUNK_SIZE_BYTES,
@@ -248,8 +248,8 @@ const writeFullImage = async (
   // satisfying the device-side chunked-transfer constraint.
   await writeRanges(api, image, FULL_RAM_RANGE, onRetry);
   recordRamTrace({
-    operation: 'ram-write',
-    status: 'success',
+    operation: "ram-write",
+    status: "success",
     address: toHexAddress(0),
     expectedLength: image.length,
     actualLength: image.length,
@@ -278,8 +278,8 @@ const writeRanges = async (
       );
       const chunk = image.subarray(address, address + chunkSize);
       recordRamTrace({
-        operation: 'ram-write',
-        status: 'start',
+        operation: "ram-write",
+        status: "start",
         address: toHexAddress(address),
         expectedLength: chunkSize,
       });
@@ -287,11 +287,11 @@ const writeRanges = async (
         `Write RAM chunk at $${toHexAddress(address)}`,
         () => api.writeMemoryBlock(toHexAddress(address), chunk),
         DEFAULT_RETRY_ATTEMPTS,
-        onRetry ?? (async () => recoverFromLivenessFailure(api, 'Load RAM')),
+        onRetry ?? (async () => recoverFromLivenessFailure(api, "Load RAM")),
       );
       recordRamTrace({
-        operation: 'ram-write',
-        status: 'success',
+        operation: "ram-write",
+        status: "success",
         address: toHexAddress(address),
         expectedLength: chunkSize,
         actualLength: chunkSize,
@@ -310,23 +310,23 @@ const runPaused = async <T>(
   let resumeFailure: Error | null = null;
   let result: T | undefined;
   try {
-    await withRetry('Pause machine', () => api.machinePause());
+    await withRetry("Pause machine", () => api.machinePause());
     paused = true;
     result = await run();
-    await withRetry('Resume machine', () => api.machineResume());
+    await withRetry("Resume machine", () => api.machineResume());
     paused = false;
   } catch (error) {
     operationError = asError(error, `${operation} failed`);
   } finally {
     if (paused) {
       try {
-        await withRetry('Resume machine after failure', () =>
+        await withRetry("Resume machine after failure", () =>
           api.machineResume(),
         );
       } catch (error) {
-        const resumeErr = asError(error, 'Resume machine failed');
+        const resumeErr = asError(error, "Resume machine failed");
         resumeFailure = resumeErr;
-        addErrorLog('Failed to resume machine after RAM operation error', {
+        addErrorLog("Failed to resume machine after RAM operation error", {
           operation,
           error: resumeErr.message,
         });
@@ -354,11 +354,11 @@ export const dumpFullRamImage = async (
   api: C64API,
   options?: { recoveryMode?: boolean },
 ): Promise<Uint8Array> => {
-  await ensureLiveness(api, 'Save RAM');
+  await ensureLiveness(api, "Save RAM");
   const onRetry = options?.recoveryMode
-    ? async () => recoverFromLivenessFailure(api, 'Save RAM')
+    ? async () => recoverFromLivenessFailure(api, "Save RAM")
     : undefined;
-  return runPaused(api, 'Save RAM', async () =>
+  return runPaused(api, "Save RAM", async () =>
     readRanges(api, FULL_RAM_RANGE, onRetry),
   );
 };
@@ -373,11 +373,11 @@ export const loadFullRamImage = async (
       `Invalid RAM image size: expected ${FULL_RAM_SIZE_BYTES} bytes, got ${image.length} bytes`,
     );
   }
-  await ensureLiveness(api, 'Load RAM');
+  await ensureLiveness(api, "Load RAM");
   const onRetry = options?.recoveryMode
-    ? async () => recoverFromLivenessFailure(api, 'Load RAM')
+    ? async () => recoverFromLivenessFailure(api, "Load RAM")
     : undefined;
-  await runPaused(api, 'Load RAM', async () => {
+  await runPaused(api, "Load RAM", async () => {
     await writeFullImage(api, image, onRetry);
   });
 };
@@ -390,26 +390,26 @@ export const clearRamAndReboot = async (api: C64API) => {
   const zeroBlock = new Uint8Array(FULL_RAM_SIZE_BYTES);
 
   try {
-    await withRetry('Pause machine', () => api.machinePause());
+    await withRetry("Pause machine", () => api.machinePause());
     paused = true;
     await writeRanges(api, zeroBlock, CLEAR_RAM_RANGES);
-    await withRetry('Reboot machine', () => api.machineReboot());
+    await withRetry("Reboot machine", () => api.machineReboot());
     await delay(800);
-    await ensureLiveness(api, 'Reboot (Clear RAM)');
+    await ensureLiveness(api, "Reboot (Clear RAM)");
     rebooted = true;
     paused = false;
   } catch (error) {
-    operationError = asError(error, 'Reboot (Clear RAM) failed');
+    operationError = asError(error, "Reboot (Clear RAM) failed");
   } finally {
     if (paused && !rebooted) {
       try {
-        await withRetry('Resume machine after clear-memory failure', () =>
+        await withRetry("Resume machine after clear-memory failure", () =>
           api.machineResume(),
         );
       } catch (error) {
-        const resumeErr = asError(error, 'Resume machine failed');
+        const resumeErr = asError(error, "Resume machine failed");
         resumeFailure = resumeErr;
-        addErrorLog('Failed to resume machine after clear-memory error', {
+        addErrorLog("Failed to resume machine after clear-memory error", {
           error: resumeErr.message,
         });
       }

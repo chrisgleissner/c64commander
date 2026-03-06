@@ -6,8 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import '@testing-library/jest-dom';
-import { vi } from 'vitest';
+import "@testing-library/jest-dom";
+import { vi } from "vitest";
 
 // ---------------------------------------------------------------------------
 // Shared setup (runs in both Node and jsdom environments)
@@ -46,8 +46,8 @@ const createMemoryStorage = (): Storage => {
 const isStorageUsable = (storage?: Storage | null) => {
   if (!storage) return false;
   try {
-    const probeKey = '__c64u_storage_probe__';
-    storage.setItem(probeKey, '1');
+    const probeKey = "__c64u_storage_probe__";
+    storage.setItem(probeKey, "1");
     storage.removeItem(probeKey);
     return true;
   } catch {
@@ -62,15 +62,15 @@ const ensureLocalStorage = () => {
   let storage: Storage | undefined = existingStorage;
   let shouldOverrideWindow = false;
 
-  if (typeof window !== 'undefined') {
-    const descriptor = Object.getOwnPropertyDescriptor(window, 'localStorage');
+  if (typeof window !== "undefined") {
+    const descriptor = Object.getOwnPropertyDescriptor(window, "localStorage");
     if (descriptor?.get) {
       try {
         storage = descriptor.get.call(window) as Storage;
       } catch (error) {
         shouldOverrideWindow = true;
         console.warn(
-          'LocalStorage access failed in tests; falling back to memory storage.',
+          "LocalStorage access failed in tests; falling back to memory storage.",
           error,
         );
       }
@@ -83,13 +83,13 @@ const ensureLocalStorage = () => {
     storage = createMemoryStorage();
   }
 
-  Object.defineProperty(globalThis, 'localStorage', {
+  Object.defineProperty(globalThis, "localStorage", {
     value: storage,
     configurable: true,
     writable: true,
   });
 
-  if (typeof window !== 'undefined') {
+  if (typeof window !== "undefined") {
     let hasUsableLocalStorage = false;
     try {
       hasUsableLocalStorage = isStorageUsable(window.localStorage);
@@ -98,7 +98,7 @@ const ensureLocalStorage = () => {
     }
 
     if (shouldOverrideWindow || !hasUsableLocalStorage) {
-      Object.defineProperty(window, 'localStorage', {
+      Object.defineProperty(window, "localStorage", {
         value: storage,
         configurable: true,
         writable: true,
@@ -117,7 +117,7 @@ ensureLocalStorage();
 // jsdom-only setup (guarded — skipped entirely in Node environment)
 // ---------------------------------------------------------------------------
 
-if (typeof window !== 'undefined') {
+if (typeof window !== "undefined") {
   // Default to non-native platform in unit tests unless explicitly overridden.
   (
     globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }
@@ -127,7 +127,7 @@ if (typeof window !== 'undefined') {
 
   ensureLocalStorage();
 
-  Object.defineProperty(window, 'matchMedia', {
+  Object.defineProperty(window, "matchMedia", {
     writable: true,
     value: (query: string) => ({
       matches: false,
@@ -152,7 +152,7 @@ if (typeof window !== 'undefined') {
     Element.prototype.releasePointerCapture = () => {};
   }
 
-  if (typeof (window as any).MouseEvent === 'undefined') {
+  if (typeof (window as any).MouseEvent === "undefined") {
     class MouseEvent extends Event {
       constructor(type: string, params?: EventInit) {
         super(type, params);
@@ -162,7 +162,7 @@ if (typeof window !== 'undefined') {
   }
 
   // Minimal PointerEvent polyfill for libraries expecting it.
-  if (typeof (window as any).PointerEvent === 'undefined') {
+  if (typeof (window as any).PointerEvent === "undefined") {
     class PointerEvent extends (window as any).MouseEvent {}
     (window as any).PointerEvent = PointerEvent;
   }
@@ -173,13 +173,13 @@ if (typeof window !== 'undefined') {
   }
 
   // Add window.scrollTo mock
-  Object.defineProperty(window, 'scrollTo', {
+  Object.defineProperty(window, "scrollTo", {
     writable: true,
     value: () => {},
   });
 
   // Radix Slider uses ResizeObserver in JSDOM.
-  if (typeof (window as any).ResizeObserver === 'undefined') {
+  if (typeof (window as any).ResizeObserver === "undefined") {
     (window as any).ResizeObserver = class {
       constructor(_callback?: ResizeObserverCallback) {}
       observe() {}

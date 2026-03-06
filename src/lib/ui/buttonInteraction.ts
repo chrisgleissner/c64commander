@@ -10,15 +10,15 @@ type InteractiveElement = HTMLElement & {
   __c64TapFlashTimeoutId?: number;
 };
 
-export const CTA_HIGHLIGHT_ATTR = 'data-c64-tap-flash';
-export const CTA_HIGHLIGHT_SET_AT_ATTR = 'data-c64-tap-flash-set-at';
+export const CTA_HIGHLIGHT_ATTR = "data-c64-tap-flash";
+export const CTA_HIGHLIGHT_SET_AT_ATTR = "data-c64-tap-flash-set-at";
 export const CTA_HIGHLIGHT_DURATION_MS = 220;
 export const CTA_HIGHLIGHT_MAX_AGE_MS = 2000;
-const CTA_PERSISTENT_ACTIVE_ATTR = 'data-c64-persistent-active';
+const CTA_PERSISTENT_ACTIVE_ATTR = "data-c64-persistent-active";
 const INTERACTIVE_SELECTOR = [
-  'button',
-  'a[href]',
-  'summary',
+  "button",
+  "a[href]",
+  "summary",
   'input[type="button"]',
   'input[type="submit"]',
   'input[type="reset"]',
@@ -31,10 +31,10 @@ const INTERACTIVE_SELECTOR = [
   '[role="checkbox"]',
   '[data-c64-interactive="true"]',
   '[tabindex]:not([tabindex="-1"])',
-].join(',');
+].join(",");
 
 const clearTapFlash = (element: InteractiveElement) => {
-  if (typeof element.__c64TapFlashTimeoutId === 'number') {
+  if (typeof element.__c64TapFlashTimeoutId === "number") {
     window.clearTimeout(element.__c64TapFlashTimeoutId);
   }
   delete element.__c64TapFlashTimeoutId;
@@ -44,7 +44,7 @@ const clearTapFlash = (element: InteractiveElement) => {
 
 const setTapFlash = (element: InteractiveElement) => {
   clearTapFlash(element);
-  element.setAttribute(CTA_HIGHLIGHT_ATTR, 'true');
+  element.setAttribute(CTA_HIGHLIGHT_ATTR, "true");
   element.setAttribute(CTA_HIGHLIGHT_SET_AT_ATTR, String(Date.now()));
   element.__c64TapFlashTimeoutId = window.setTimeout(() => {
     clearTapFlash(element);
@@ -52,13 +52,13 @@ const setTapFlash = (element: InteractiveElement) => {
 };
 
 const clearPointerFocus = (element: HTMLElement) => {
-  if (document.activeElement !== element || typeof element.blur !== 'function')
+  if (document.activeElement !== element || typeof element.blur !== "function")
     return;
   window.setTimeout(() => element.blur(), 0);
 };
 
 const shouldSkipStatelessInteraction = (element: HTMLElement) =>
-  element.getAttribute(CTA_PERSISTENT_ACTIVE_ATTR) === 'true';
+  element.getAttribute(CTA_PERSISTENT_ACTIVE_ATTR) === "true";
 
 const resolveInteractiveElement = (target: EventTarget | null) => {
   if (!(target instanceof Element)) return null;
@@ -93,7 +93,7 @@ export const sweepStaleHighlights = (nowMs = Date.now()) => {
     `[${CTA_HIGHLIGHT_ATTR}]`,
   );
   highlighted.forEach((el) => {
-    const setAt = Number(el.getAttribute(CTA_HIGHLIGHT_SET_AT_ATTR) ?? '0');
+    const setAt = Number(el.getAttribute(CTA_HIGHLIGHT_SET_AT_ATTR) ?? "0");
     if (nowMs - setAt >= CTA_HIGHLIGHT_MAX_AGE_MS) {
       clearTapFlash(el as InteractiveElement);
     }
@@ -102,7 +102,7 @@ export const sweepStaleHighlights = (nowMs = Date.now()) => {
 
 export const registerGlobalButtonInteractionModel = () => {
   const handler = (event: PointerEvent) => {
-    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    if (event.pointerType === "mouse" && event.button !== 0) return;
     const interactive = resolveInteractiveElement(event.target);
     if (!interactive) return;
     applyPointerButtonInteraction(interactive);
@@ -110,12 +110,12 @@ export const registerGlobalButtonInteractionModel = () => {
 
   const sweep = () => sweepStaleHighlights();
 
-  document.addEventListener('pointerup', handler, true);
-  document.addEventListener('visibilitychange', sweep);
-  window.addEventListener('focus', sweep);
+  document.addEventListener("pointerup", handler, true);
+  document.addEventListener("visibilitychange", sweep);
+  window.addEventListener("focus", sweep);
   return () => {
-    document.removeEventListener('pointerup', handler, true);
-    document.removeEventListener('visibilitychange', sweep);
-    window.removeEventListener('focus', sweep);
+    document.removeEventListener("pointerup", handler, true);
+    document.removeEventListener("visibilitychange", sweep);
+    window.removeEventListener("focus", sweep);
   };
 };

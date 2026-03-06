@@ -1,6 +1,6 @@
-import { addLog, type LogLevel } from '@/lib/logging';
-import { getActiveAction } from '@/lib/tracing/actionTrace';
-import { getPlaybackTraceSnapshot } from '@/pages/playFiles/playbackTraceStore';
+import { addLog, type LogLevel } from "@/lib/logging";
+import { getActiveAction } from "@/lib/tracing/actionTrace";
+import { getPlaybackTraceSnapshot } from "@/pages/playFiles/playbackTraceStore";
 
 type LoggerDetails = Record<string, unknown>;
 
@@ -34,9 +34,9 @@ const normalizeError = (error: unknown) => {
       stack: error.stack,
     };
   }
-  if (typeof error === 'string') {
+  if (typeof error === "string") {
     return {
-      name: 'Error',
+      name: "Error",
       message: error,
       stack: null,
     };
@@ -48,13 +48,13 @@ const buildContextDetails = (component?: string): LoggerDetails => {
   const activeAction = getActiveAction();
   const playback = getPlaybackTraceSnapshot();
   const lifecycleState =
-    typeof document === 'undefined'
-      ? 'unknown'
+    typeof document === "undefined"
+      ? "unknown"
       : document.hidden
-        ? 'background'
+        ? "background"
         : document.hasFocus()
-          ? 'foreground'
-          : 'unknown';
+          ? "foreground"
+          : "unknown";
   return {
     correlationId: activeAction?.correlationId ?? null,
     origin: activeAction?.origin ?? null,
@@ -75,7 +75,7 @@ const toLogDetails = (details: LoggerDetails = {}, component?: string) => {
     ...details,
   };
 
-  if ('error' in merged) {
+  if ("error" in merged) {
     const normalized = normalizeError(merged.error);
     merged.error = normalized ?? merged.error;
   }
@@ -91,15 +91,15 @@ const writeLog = (
   const details = toLogDetails(options.details, options.component);
   addLog(level, message, details);
   if (options.includeConsole === false) return;
-  if (level === 'warn') {
+  if (level === "warn") {
     console.warn(message, details);
     return;
   }
-  if (level === 'error') {
+  if (level === "error") {
     console.error(message, details);
     return;
   }
-  if (level === 'info') {
+  if (level === "info") {
     console.info(message, details);
     return;
   }
@@ -108,21 +108,21 @@ const writeLog = (
 
 export const logger = {
   debug: (message: string, options?: LoggerOptions) =>
-    writeLog('debug', message, options),
+    writeLog("debug", message, options),
   info: (message: string, options?: LoggerOptions) =>
-    writeLog('info', message, options),
+    writeLog("info", message, options),
   warn: (message: string, options?: LoggerOptions) =>
-    writeLog('warn', message, options),
+    writeLog("warn", message, options),
   error: (message: string, options?: LoggerOptions) =>
-    writeLog('error', message, options),
+    writeLog("error", message, options),
 };
 
 const normalizeConsoleMessage = (args: unknown[]) => {
-  if (!args.length) return '';
+  if (!args.length) return "";
   const first = args[0];
-  if (typeof first === 'string') return first;
+  if (typeof first === "string") return first;
   if (first instanceof Error) return first.message;
-  if (first !== null && typeof first === 'object') {
+  if (first !== null && typeof first === "object") {
     try {
       return JSON.stringify(first);
     } catch {
@@ -173,7 +173,7 @@ export const installConsoleDiagnosticsBridge = (
     try {
       logger.warn(normalizeConsoleMessage(args), {
         details: normalizeConsoleDetails(args),
-        component: 'console',
+        component: "console",
         includeConsole: false,
       });
     } finally {
@@ -188,7 +188,7 @@ export const installConsoleDiagnosticsBridge = (
     try {
       logger.error(normalizeConsoleMessage(args), {
         details: normalizeConsoleDetails(args),
-        component: 'console',
+        component: "console",
         includeConsole: false,
       });
     } finally {

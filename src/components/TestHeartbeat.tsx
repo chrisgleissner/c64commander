@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from "react";
 
 /**
  * Test-only component that increments a counter every second.
@@ -34,13 +34,13 @@ export function TestHeartbeat() {
       aria-label="test-heartbeat"
       role="status"
       style={{
-        position: 'fixed',
+        position: "fixed",
         bottom: 0,
         right: 0,
         fontSize: 8,
         lineHeight: 1,
         opacity: 0.01,
-        pointerEvents: 'none',
+        pointerEvents: "none",
         zIndex: 2147483647,
       }}
     >

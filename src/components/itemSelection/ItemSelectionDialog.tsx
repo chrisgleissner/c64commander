@@ -6,9 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { FolderPlus } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { FolderPlus } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogClose,
@@ -17,28 +17,28 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { ModalCloseButton } from '@/components/ui/modal-close-button';
-import { Input } from '@/components/ui/input';
-import { FileOriginIcon } from '@/components/FileOriginIcon';
-import { toast } from '@/hooks/use-toast';
-import { cn } from '@/lib/utils';
-import { reportUserError } from '@/lib/uiErrors';
+} from "@/components/ui/dialog";
+import { ModalCloseButton } from "@/components/ui/modal-close-button";
+import { Input } from "@/components/ui/input";
+import { FileOriginIcon } from "@/components/FileOriginIcon";
+import { toast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
+import { reportUserError } from "@/lib/uiErrors";
 import type {
   SourceEntry,
   SelectedItem,
   SourceLocation,
-} from '@/lib/sourceNavigation/types';
+} from "@/lib/sourceNavigation/types";
 import {
   SOURCE_EXPLANATIONS,
   SOURCE_LABELS,
-} from '@/lib/sourceNavigation/sourceTerms';
-import type { AddItemsProgressState } from './AddItemsProgressOverlay';
-import { useSourceNavigator } from '@/lib/sourceNavigation/useSourceNavigator';
-import { ItemSelectionView } from './ItemSelectionView';
+} from "@/lib/sourceNavigation/sourceTerms";
+import type { AddItemsProgressState } from "./AddItemsProgressOverlay";
+import { useSourceNavigator } from "@/lib/sourceNavigation/useSourceNavigator";
+import { ItemSelectionView } from "./ItemSelectionView";
 
 const isLocalAutoConfirmDisabled = () =>
-  typeof window !== 'undefined' &&
+  typeof window !== "undefined" &&
   Boolean(
     (window as Window & { __c64uDisableLocalAutoConfirm?: boolean })
       .__c64uDisableLocalAutoConfirm,
@@ -93,7 +93,7 @@ export const ItemSelectionDialog = ({
   const [selection, setSelection] = useState<Map<string, SourceEntry>>(
     new Map(),
   );
-  const [filterText, setFilterText] = useState('');
+  const [filterText, setFilterText] = useState("");
   const [pendingLocalSource, setPendingLocalSource] = useState(false);
   const [pendingLocalSourceCount, setPendingLocalSourceCount] = useState(0);
   const [pendingLocalSourceId, setPendingLocalSourceId] = useState<
@@ -105,7 +105,7 @@ export const ItemSelectionDialog = ({
     () =>
       sourceGroups
         .flatMap((group) => group.sources)
-        .filter((item) => item.type === 'local'),
+        .filter((item) => item.type === "local"),
     [sourceGroups],
   );
   const localSourceCount = localSources.length;
@@ -122,7 +122,7 @@ export const ItemSelectionDialog = ({
     () =>
       sourceGroups
         .flatMap((group) => group.sources)
-        .find((item) => item.type === 'ultimate') ?? null,
+        .find((item) => item.type === "ultimate") ?? null,
     [sourceGroups],
   );
 
@@ -130,7 +130,7 @@ export const ItemSelectionDialog = ({
     () =>
       sourceGroups
         .flatMap((group) => group.sources)
-        .find((item) => item.type === 'hvsc') ?? null,
+        .find((item) => item.type === "hvsc") ?? null,
     [sourceGroups],
   );
 
@@ -139,8 +139,8 @@ export const ItemSelectionDialog = ({
   useEffect(() => {
     if (!browser.error || !open) return;
     reportUserError({
-      operation: 'BROWSE',
-      title: 'Browse failed',
+      operation: "BROWSE",
+      title: "Browse failed",
       description: browser.error,
       context: { sourceId: selectedSourceId },
     });
@@ -150,7 +150,7 @@ export const ItemSelectionDialog = ({
     if (!open) return;
     setSelectedSourceId(null);
     setSelection(new Map());
-    setFilterText('');
+    setFilterText("");
     setPendingLocalSource(false);
     setPendingLocalSourceCount(0);
     setPendingLocalSourceId(null);
@@ -163,7 +163,7 @@ export const ItemSelectionDialog = ({
       setAutoConfirming(true);
       const selections: SelectedItem[] = [
         {
-          type: 'dir',
+          type: "dir",
           name: target.name,
           path: target.rootPath,
         },
@@ -181,8 +181,8 @@ export const ItemSelectionDialog = ({
         }
       } catch (error) {
         reportUserError({
-          operation: 'ITEM_SELECTION',
-          title: 'Add items failed',
+          operation: "ITEM_SELECTION",
+          title: "Add items failed",
           description: (error as Error).message,
           error,
         });
@@ -229,7 +229,7 @@ export const ItemSelectionDialog = ({
   const visibleEntries = useMemo(() => {
     const filesFiltered = filterEntry
       ? browser.entries.filter(
-          (entry) => entry.type === 'dir' || filterEntry(entry),
+          (entry) => entry.type === "dir" || filterEntry(entry),
         )
       : browser.entries;
     if (!filterText) return filesFiltered;
@@ -258,9 +258,9 @@ export const ItemSelectionDialog = ({
     if (isConfirming || autoConfirming) return;
     if (!selection.size) {
       reportUserError({
-        operation: 'ITEM_SELECTION',
-        title: 'Select items',
-        description: 'Choose at least one item to add.',
+        operation: "ITEM_SELECTION",
+        title: "Select items",
+        description: "Choose at least one item to add.",
       });
       return;
     }
@@ -279,8 +279,8 @@ export const ItemSelectionDialog = ({
       }
     } catch (error) {
       reportUserError({
-        operation: 'ITEM_SELECTION',
-        title: 'Add items failed',
+        operation: "ITEM_SELECTION",
+        title: "Add items failed",
         description: (error as Error).message,
         error,
       });
@@ -291,7 +291,7 @@ export const ItemSelectionDialog = ({
     const totalSeconds = Math.max(0, Math.floor(ms / 1000));
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
-    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
   };
 
   const handleAddLocalSource = async () => {
@@ -310,8 +310,8 @@ export const ItemSelectionDialog = ({
       setPendingLocalSource(false);
       setPendingLocalSourceId(null);
       reportUserError({
-        operation: 'LOCAL_FOLDER_PICK',
-        title: 'Unable to add folder',
+        operation: "LOCAL_FOLDER_PICK",
+        title: "Unable to add folder",
         description: (error as Error).message,
         error,
       });
@@ -324,13 +324,13 @@ export const ItemSelectionDialog = ({
         showClose={false}
         onOpenAutoFocus={(e) => e.preventDefault()}
         className={cn(
-          'w-[calc(100%-2rem)] p-0 overflow-hidden shadow-2xl sm:rounded-2xl',
+          "w-[calc(100%-2rem)] p-0 overflow-hidden shadow-2xl sm:rounded-2xl",
           source
-            ? 'max-w-3xl h-[min(80vh,calc(100dvh-6rem))] max-h-[calc(100dvh-6rem)]'
-            : 'max-w-md',
+            ? "max-w-3xl h-[min(80vh,calc(100dvh-6rem))] max-h-[calc(100dvh-6rem)]"
+            : "max-w-md",
         )}
       >
-        <div className={cn('flex min-h-0 flex-col', source && 'h-full')}>
+        <div className={cn("flex min-h-0 flex-col", source && "h-full")}>
           <DialogHeader className="border-b border-border px-6 pb-3 pt-6">
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -462,11 +462,11 @@ export const ItemSelectionDialog = ({
               <div
                 className="space-y-3"
                 data-testid={
-                  source.type === 'ultimate'
-                    ? 'c64u-file-picker'
-                    : source.type === 'local'
-                      ? 'local-file-picker'
-                      : 'source-file-picker'
+                  source.type === "ultimate"
+                    ? "c64u-file-picker"
+                    : source.type === "local"
+                      ? "local-file-picker"
+                      : "source-file-picker"
                 }
               >
                 <div>
@@ -506,13 +506,13 @@ export const ItemSelectionDialog = ({
           </div>
 
           <DialogFooter className="flex flex-col gap-2 border-t border-border px-6 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:flex-row sm:items-center sm:justify-between">
-            {showProgressFooter && progress && progress.status !== 'idle' && (
+            {showProgressFooter && progress && progress.status !== "idle" && (
               <div
                 className="text-xs text-muted-foreground"
                 data-testid="add-items-progress"
               >
                 <span>
-                  {progress.message || 'Scanning…'} {progress.count} items,{' '}
+                  {progress.message || "Scanning…"} {progress.count} items,{" "}
                   {formatElapsed(progress.elapsedMs)}
                 </span>
                 {progress.total ? <span> / {progress.total}</span> : null}
@@ -522,16 +522,16 @@ export const ItemSelectionDialog = ({
               <Button
                 variant="outline"
                 onClick={() => {
-                  if (progress?.status === 'scanning' && onCancelScan) {
+                  if (progress?.status === "scanning" && onCancelScan) {
                     onCancelScan();
                     return;
                   }
                   onOpenChange(false);
                 }}
               >
-                {progress?.status === 'scanning' && onCancelScan
-                  ? 'Cancel scan'
-                  : 'Cancel'}
+                {progress?.status === "scanning" && onCancelScan
+                  ? "Cancel scan"
+                  : "Cancel"}
               </Button>
               {source && (
                 <Button

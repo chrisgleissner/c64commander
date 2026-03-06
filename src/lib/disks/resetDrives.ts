@@ -6,37 +6,37 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { DrivesResponse } from '@/lib/c64api';
+import type { DrivesResponse } from "@/lib/c64api";
 import {
   normalizeDriveDevices,
   type DriveDeviceClass,
   type KnownDriveDevice,
-} from '@/lib/drives/driveDevices';
+} from "@/lib/drives/driveDevices";
 
-export type DriveKey = 'a' | 'b';
+export type DriveKey = "a" | "b";
 
 export type ResetApi = {
   resetDrive: (drive: string) => Promise<unknown>;
 };
 
 const DISK_RESET_CLASSES: DriveDeviceClass[] = [
-  'PHYSICAL_DRIVE_A',
-  'PHYSICAL_DRIVE_B',
-  'SOFT_IEC_DRIVE',
+  "PHYSICAL_DRIVE_A",
+  "PHYSICAL_DRIVE_B",
+  "SOFT_IEC_DRIVE",
 ];
 
 const buildFailureMessage = (
   failures: Array<{ label: string; error: string }>,
-) => failures.map(({ label, error }) => `${label}: ${error}`).join('; ');
+) => failures.map(({ label, error }) => `${label}: ${error}`).join("; ");
 
 const toLegacyDriveKey = (device: KnownDriveDevice): DriveKey | null => {
-  if (device.class === 'PHYSICAL_DRIVE_A') return 'a';
-  if (device.class === 'PHYSICAL_DRIVE_B') return 'b';
+  if (device.class === "PHYSICAL_DRIVE_A") return "a";
+  if (device.class === "PHYSICAL_DRIVE_B") return "b";
   return null;
 };
 
 export const listConnectedDrives = (
-  payload?: Pick<DrivesResponse, 'drives'> | null,
+  payload?: Pick<DrivesResponse, "drives"> | null,
 ): DriveKey[] => {
   const normalized = normalizeDriveDevices(payload);
   return normalized.devices
@@ -45,7 +45,7 @@ export const listConnectedDrives = (
 };
 
 const listDiskResetTargets = (
-  payload?: Pick<DrivesResponse, 'drives'> | null,
+  payload?: Pick<DrivesResponse, "drives"> | null,
 ) => {
   const normalized = normalizeDriveDevices(payload);
   return DISK_RESET_CLASSES.map(
@@ -55,10 +55,10 @@ const listDiskResetTargets = (
 };
 
 export const getPrinterResetTarget = (
-  payload?: Pick<DrivesResponse, 'drives'> | null,
+  payload?: Pick<DrivesResponse, "drives"> | null,
 ) => {
   const normalized = normalizeDriveDevices(payload);
-  return normalized.devices.find((entry) => entry.class === 'PRINTER') ?? null;
+  return normalized.devices.find((entry) => entry.class === "PRINTER") ?? null;
 };
 
 const resetTargets = async (
@@ -98,13 +98,13 @@ const resetTargets = async (
 
 export const resetDiskDevices = async (
   api: ResetApi,
-  payload?: Pick<DrivesResponse, 'drives'> | null,
+  payload?: Pick<DrivesResponse, "drives"> | null,
 ) => {
   const targets = listDiskResetTargets(payload);
   const reset = await resetTargets(
     api,
     targets,
-    'No resettable disk devices found.',
+    "No resettable disk devices found.",
   );
   return {
     devices: reset,
@@ -114,13 +114,13 @@ export const resetDiskDevices = async (
 
 export const resetPrinterDevice = async (
   api: ResetApi,
-  payload?: Pick<DrivesResponse, 'drives'> | null,
+  payload?: Pick<DrivesResponse, "drives"> | null,
 ) => {
   const printer = getPrinterResetTarget(payload);
   const reset = await resetTargets(
     api,
     printer ? [printer] : [],
-    'No printer device found.',
+    "No printer device found.",
   );
   return {
     device: reset[0],
@@ -131,7 +131,7 @@ export const resetPrinterDevice = async (
 // Backward-compatible helper retained for existing disk reset callers.
 export const resetConnectedDrives = async (
   api: ResetApi,
-  payload?: Pick<DrivesResponse, 'drives'> | null,
+  payload?: Pick<DrivesResponse, "drives"> | null,
 ) => {
   const result = await resetDiskDevices(api, payload);
   const drives = result.devices

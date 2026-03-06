@@ -6,15 +6,15 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from "vitest";
 import {
   createSliderAsyncQueue,
   resolveMidpointSnap,
   shouldTriggerMidpointHaptic,
-} from './sliderBehavior';
+} from "./sliderBehavior";
 
-describe('createSliderAsyncQueue', () => {
-  it('coalesces changes and emits the latest value', async () => {
+describe("createSliderAsyncQueue", () => {
+  it("coalesces changes and emits the latest value", async () => {
     vi.useFakeTimers();
     const changes: number[] = [];
     const queue = createSliderAsyncQueue({
@@ -36,7 +36,7 @@ describe('createSliderAsyncQueue', () => {
     vi.useRealTimers();
   });
 
-  it('commits immediately and clears pending changes', async () => {
+  it("commits immediately and clears pending changes", async () => {
     vi.useFakeTimers();
     const changes: number[] = [];
     const commits: number[] = [];
@@ -57,8 +57,8 @@ describe('createSliderAsyncQueue', () => {
   });
 });
 
-describe('resolveMidpointSnap', () => {
-  it('snaps within range and returns original outside', () => {
+describe("resolveMidpointSnap", () => {
+  it("snaps within range and returns original outside", () => {
     expect(
       resolveMidpointSnap({
         value: 50,
@@ -89,8 +89,8 @@ describe('resolveMidpointSnap', () => {
   });
 });
 
-describe('shouldTriggerMidpointHaptic', () => {
-  it('triggers when crossing the midpoint', () => {
+describe("shouldTriggerMidpointHaptic", () => {
+  it("triggers when crossing the midpoint", () => {
     const base = { midpoint: 5, nowMs: 1000, lastTriggerMs: null };
     expect(shouldTriggerMidpointHaptic({ ...base, previous: 2, next: 5 })).toBe(
       true,

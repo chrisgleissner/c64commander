@@ -1,4 +1,4 @@
-import { loadDeviceSafetyConfig } from '@/lib/config/deviceSafetySettings';
+import { loadDeviceSafetyConfig } from "@/lib/config/deviceSafetySettings";
 
 type ProbeSnapshot = {
   lastProbeSucceededAtMs: number | null;

@@ -6,16 +6,16 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, renderHook, waitFor } from '@testing-library/react';
-import React from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, renderHook, waitFor } from "@testing-library/react";
+import React from "react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const status = { isConnected: true, isConnecting: false };
 
-const getCategories = vi.fn(async () => ({ categories: ['Audio Mixer'] }));
+const getCategories = vi.fn(async () => ({ categories: ["Audio Mixer"] }));
 const getCategory = vi.fn(async () => ({
-  items: { Volume: { selected: '5' } },
+  items: { Volume: { selected: "5" } },
 }));
 const updateConfigBatch = vi.fn(async () => undefined);
 
@@ -30,15 +30,15 @@ const createAppConfigEntry = vi.fn((_baseUrl, name, data) => ({
   id: `id-${name}`,
   name,
   data,
-  savedAt: 'now',
+  savedAt: "now",
 }));
 
-vi.mock('@/hooks/useC64Connection', () => ({
-  useC64Connection: () => ({ status, baseUrl: 'http://c64u' }),
+vi.mock("@/hooks/useC64Connection", () => ({
+  useC64Connection: () => ({ status, baseUrl: "http://c64u" }),
 }));
 
-vi.mock('@/lib/c64api', () => ({
-  getDefaultBaseUrl: () => 'http://c64u',
+vi.mock("@/lib/c64api", () => ({
+  getDefaultBaseUrl: () => "http://c64u",
   getC64API: () => ({
     getCategories,
     getCategory,
@@ -46,7 +46,7 @@ vi.mock('@/lib/c64api', () => ({
   }),
 }));
 
-vi.mock('@/lib/config/appConfigStore', () => ({
+vi.mock("@/lib/config/appConfigStore", () => ({
   loadInitialSnapshot,
   loadHasChanges,
   listAppConfigs,
@@ -57,18 +57,18 @@ vi.mock('@/lib/config/appConfigStore', () => ({
   createAppConfigEntry,
 }));
 
-vi.mock('@/lib/logging', () => ({
+vi.mock("@/lib/logging", () => ({
   addLog: vi.fn(),
 }));
 
-describe('useAppConfigState', () => {
+describe("useAppConfigState", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     sessionStorage.clear();
   });
 
-  it('captures initial snapshot and supports save/load app config', async () => {
-    const { useAppConfigState } = await import('@/hooks/useAppConfigState');
+  it("captures initial snapshot and supports save/load app config", async () => {
+    const { useAppConfigState } = await import("@/hooks/useAppConfigState");
     const queryClient = new QueryClient();
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
@@ -81,17 +81,17 @@ describe('useAppConfigState', () => {
     });
 
     await act(async () => {
-      await result.current.saveCurrentConfig('Profile A');
+      await result.current.saveCurrentConfig("Profile A");
     });
 
     expect(saveAppConfigs).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       await result.current.loadAppConfig({
-        id: 'id-Profile A',
-        name: 'Profile A',
-        savedAt: 'now',
-        data: { 'Audio Mixer': { items: { Volume: { selected: '5' } } } },
+        id: "id-Profile A",
+        name: "Profile A",
+        savedAt: "now",
+        data: { "Audio Mixer": { items: { Volume: { selected: "5" } } } },
       });
     });
 

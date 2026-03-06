@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-declare module 'libarchive.js' {
+declare module "libarchive.js" {
   const libarchive: unknown;
   export default libarchive;
 }

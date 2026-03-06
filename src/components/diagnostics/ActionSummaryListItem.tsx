@@ -11,12 +11,12 @@ import type {
   ErrorEffect,
   FtpEffect,
   RestEffect,
-} from '@/lib/diagnostics/actionSummaries';
-import { formatActionDuration } from '@/lib/diagnostics/actionSummaryDisplay';
-import { resolveActionSeverity } from '@/lib/diagnostics/diagnosticsSeverity';
-import { DiagnosticsListItem } from '@/components/diagnostics/DiagnosticsListItem';
-import { ActionExpandedContent } from '@/components/diagnostics/ActionExpandedContent';
-import type { ReactNode } from 'react';
+} from "@/lib/diagnostics/actionSummaries";
+import { formatActionDuration } from "@/lib/diagnostics/actionSummaryDisplay";
+import { resolveActionSeverity } from "@/lib/diagnostics/diagnosticsSeverity";
+import { DiagnosticsListItem } from "@/components/diagnostics/DiagnosticsListItem";
+import { ActionExpandedContent } from "@/components/diagnostics/ActionExpandedContent";
+import type { ReactNode } from "react";
 
 type Props = {
   summary: ActionSummary;
@@ -25,13 +25,13 @@ type Props = {
 export const ActionSummaryListItem = ({ summary }: Props) => {
   const effects = summary.effects ?? [];
   const restCount = effects.filter(
-    (e): e is RestEffect => e.type === 'REST',
+    (e): e is RestEffect => e.type === "REST",
   ).length;
   const ftpCount = effects.filter(
-    (e): e is FtpEffect => e.type === 'FTP',
+    (e): e is FtpEffect => e.type === "FTP",
   ).length;
   const errorCount = effects.filter(
-    (e): e is ErrorEffect => e.type === 'ERROR',
+    (e): e is ErrorEffect => e.type === "ERROR",
   ).length;
   const hasEffects = Boolean(restCount || ftpCount || errorCount);
 

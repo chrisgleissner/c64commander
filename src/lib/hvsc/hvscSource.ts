@@ -10,18 +10,18 @@ import type {
   SongEntry,
   SongFolder,
   SongSource,
-} from '@/lib/sources/SongSource';
-import { base64ToUint8 } from '@/lib/sid/sidUtils';
-import { getHvscFolderListing, getHvscSong } from './hvscService';
-import { resolveHvscSonglengthDuration } from './hvscSongLengthService';
+} from "@/lib/sources/SongSource";
+import { base64ToUint8 } from "@/lib/sid/sidUtils";
+import { getHvscFolderListing, getHvscSong } from "./hvscService";
+import { resolveHvscSonglengthDuration } from "./hvscSongLengthService";
 
 const mapFolder = (folder: string): SongFolder => ({
   path: folder,
-  name: folder.split('/').pop() || folder,
+  name: folder.split("/").pop() || folder,
 });
 
 export const HvscSongSource: SongSource = {
-  id: 'hvsc',
+  id: "hvsc",
   listFolders: async (path: string) => {
     const listing = await getHvscFolderListing(path);
     return listing.folders.map(mapFolder);
@@ -64,7 +64,7 @@ export const HvscSongSource: SongSource = {
                 : undefined,
               songNr: 1,
               subsongCount: resolvedCount,
-              source: 'hvsc',
+              source: "hvsc",
               payload: song,
             },
           ];
@@ -77,7 +77,7 @@ export const HvscSongSource: SongSource = {
           durationMs: durations?.[index] ? durations[index] * 1000 : undefined,
           songNr: index + 1,
           subsongCount: resolvedCount,
-          source: 'hvsc',
+          source: "hvsc",
           payload: song,
         }));
       }),

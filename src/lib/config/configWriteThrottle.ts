@@ -6,8 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { loadConfigWriteIntervalMs } from './appSettings';
-import { addErrorLog } from '@/lib/logging';
+import { loadConfigWriteIntervalMs } from "./appSettings";
+import { addErrorLog } from "@/lib/logging";
 
 let lastWriteAt = 0;
 let queue = Promise.resolve();
@@ -40,7 +40,7 @@ export const scheduleConfigWrite = async <T>(
   };
   const next = queue.then(run);
   queue = next.catch((error) => {
-    addErrorLog('Config write queue: preceding task failed', {
+    addErrorLog("Config write queue: preceding task failed", {
       error: (error as Error).message,
     });
   });

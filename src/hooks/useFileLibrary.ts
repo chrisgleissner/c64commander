@@ -6,16 +6,16 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { addErrorLog } from '@/lib/logging';
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { addErrorLog } from "@/lib/logging";
 import {
   loadFileLibrary,
   saveFileLibrary,
-} from '@/lib/playback/fileLibraryStore';
+} from "@/lib/playback/fileLibraryStore";
 import type {
   FileLibraryEntry,
   FileLibraryRuntime,
-} from '@/lib/playback/fileLibraryTypes';
+} from "@/lib/playback/fileLibraryTypes";
 
 export type FileLibrary = {
   entries: FileLibraryEntry[];
@@ -79,7 +79,7 @@ export const useFileLibrary = (uniqueId: string | null): FileLibrary => {
   );
 
   if (!uniqueId) {
-    addErrorLog('File library missing device id', { entries: entries.length });
+    addErrorLog("File library missing device id", { entries: entries.length });
   }
 
   return memo;

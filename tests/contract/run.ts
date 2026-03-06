@@ -6,23 +6,23 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import fs from 'node:fs';
-import path from 'node:path';
-import crypto from 'node:crypto';
-import { loadConfig } from './lib/config.js';
+import fs from "node:fs";
+import path from "node:path";
+import crypto from "node:crypto";
+import { loadConfig } from "./lib/config.js";
 import {
   startContractMockServers,
   type ContractMockServers,
-} from './mockServers.js';
-import { RestClient } from './lib/restClient.js';
-import { buildRestScenarios } from './scenarios/rest/index.js';
-import { buildFtpScenarios } from './scenarios/ftp/index.js';
-import { buildMixedScenarios } from './scenarios/mixed/index.js';
-import { HealthMonitor } from './lib/health.js';
-import { LatencyTracker, deriveCooldown, delay } from './lib/timing.js';
-import { SchemaValidator, schemaPath } from './lib/schema.js';
-import type { LogEventInput } from './lib/logging.js';
-import yaml from 'js-yaml';
+} from "./mockServers.js";
+import { RestClient } from "./lib/restClient.js";
+import { buildRestScenarios } from "./scenarios/rest/index.js";
+import { buildFtpScenarios } from "./scenarios/ftp/index.js";
+import { buildMixedScenarios } from "./scenarios/mixed/index.js";
+import { HealthMonitor } from "./lib/health.js";
+import { LatencyTracker, deriveCooldown, delay } from "./lib/timing.js";
+import { SchemaValidator, schemaPath } from "./lib/schema.js";
+import type { LogEventInput } from "./lib/logging.js";
+import yaml from "js-yaml";
 
 type LogEvent = LogEventInput & { timestamp: string };
 type ConcurrencyObservation = {
@@ -35,7 +35,7 @@ type ConcurrencyObservation = {
 const args = parseArgs(process.argv.slice(2));
 let config = loadConfig(args.configPath);
 let mockServers: ContractMockServers | null = null;
-if (process.env.CONTRACT_TEST_TARGET?.toLowerCase() === 'mock') {
+if (process.env.CONTRACT_TEST_TARGET?.toLowerCase() === "mock") {
   mockServers = await startContractMockServers();
   config = {
     ...config,
@@ -45,18 +45,18 @@ if (process.env.CONTRACT_TEST_TARGET?.toLowerCase() === 'mock') {
 }
 
 const runId = `${formatTimestamp(new Date())}-${config.mode}-${config.auth}`;
-const runRoot = path.join(process.cwd(), config.outputDir, 'runs', runId);
-const latestRoot = path.join(process.cwd(), config.outputDir, 'latest');
+const runRoot = path.join(process.cwd(), config.outputDir, "runs", runId);
+const latestRoot = path.join(process.cwd(), config.outputDir, "latest");
 
 fs.mkdirSync(runRoot, { recursive: true });
 fs.mkdirSync(latestRoot, { recursive: true });
 
-const logStream = fs.createWriteStream(path.join(runRoot, 'logs.ndjson'), {
-  flags: 'a',
+const logStream = fs.createWriteStream(path.join(runRoot, "logs.ndjson"), {
+  flags: "a",
 });
 const latencyMap = new Map<
   string,
-  { kind: 'REST' | 'FTP'; tracker: LatencyTracker }
+  { kind: "REST" | "FTP"; tracker: LatencyTracker }
 >();
 const concurrencyObservations: ConcurrencyObservation[] = [];
 
@@ -65,12 +65,12 @@ const log = (event: LogEventInput) => {
   logStream.write(`${JSON.stringify(payload)}\n`);
   if (
     event.latencyMs !== undefined &&
-    (event.kind === 'rest' || event.kind === 'ftp')
+    (event.kind === "rest" || event.kind === "ftp")
   ) {
     const key = `${event.kind}:${event.op}`;
     if (!latencyMap.has(key)) {
       latencyMap.set(key, {
-        kind: event.kind === 'ftp' ? 'FTP' : 'REST',
+        kind: event.kind === "ftp" ? "FTP" : "REST",
         tracker: new LatencyTracker(),
       });
     }
@@ -93,7 +93,7 @@ const healthMonitor = new HealthMonitor(
   async () => {
     try {
       const response = await withTimeout(
-        restClient.request({ method: 'GET', url: config.health.endpoint }),
+        restClient.request({ method: "GET", url: config.health.endpoint }),
         config.health.timeoutMs,
         `Health probe timeout: ${config.health.endpoint}`,
       );
@@ -103,7 +103,7 @@ const healthMonitor = new HealthMonitor(
         latencyMs: response.latencyMs,
       };
     } catch (error) {
-      console.warn('Health probe failed', { error: String(error) });
+      console.warn("Health probe failed", { error: String(error) });
       return { ok: false, error: String(error) };
     }
   },
@@ -124,7 +124,7 @@ const mixedScenarios = filterScenarios(
 );
 
 try {
-  await runScenarioGroup('rest', restScenarios, async (scenario) => {
+  await runScenarioGroup("rest", restScenarios, async (scenario) => {
     await runScenario(scenario.id, scenario.safe, () =>
       scenario.run({
         rest: restClient,
@@ -138,50 +138,50 @@ try {
     );
   });
 
-  await runScenarioGroup('ftp', ftpScenarios, async (scenario) => {
+  await runScenarioGroup("ftp", ftpScenarios, async (scenario) => {
     await runScenario(scenario.id, scenario.safe, () =>
       scenario.run({ config, log }),
     );
   });
 
-  await runScenarioGroup('mixed', mixedScenarios, async (scenario) => {
+  await runScenarioGroup("mixed", mixedScenarios, async (scenario) => {
     await runScenario(scenario.id, scenario.safe, () =>
       scenario.run({ rest: restClient, request: restRequest, config, log }),
     );
   });
 
   const latencyStats = buildLatencyStats(latencyMap, config);
-  const restCooldowns = buildCooldowns(latencyStats, 'REST', config);
-  const ftpCooldowns = buildCooldowns(latencyStats, 'FTP', config);
+  const restCooldowns = buildCooldowns(latencyStats, "REST", config);
+  const ftpCooldowns = buildCooldowns(latencyStats, "FTP", config);
 
   const endpoints = loadOpenApiEndpoints(config);
   const ftpCommands = [
-    'USER',
-    'PASS',
-    'QUIT',
-    'PORT',
-    'CWD',
-    'CDUP',
-    'PWD',
-    'NLST',
-    'LIST',
-    'RETR',
-    'STOR',
-    'NOOP',
-    'SYST',
-    'ABOR',
-    'TYPE',
-    'MODE',
-    'RNFR',
-    'RNTO',
-    'MKD',
-    'RMD',
-    'DELE',
-    'SIZE',
-    'PASV',
-    'MLST',
-    'MLSD',
-    'FEAT',
+    "USER",
+    "PASS",
+    "QUIT",
+    "PORT",
+    "CWD",
+    "CDUP",
+    "PWD",
+    "NLST",
+    "LIST",
+    "RETR",
+    "STOR",
+    "NOOP",
+    "SYST",
+    "ABOR",
+    "TYPE",
+    "MODE",
+    "RNFR",
+    "RNTO",
+    "MKD",
+    "RMD",
+    "DELE",
+    "SIZE",
+    "PASV",
+    "MLST",
+    "MLSD",
+    "FEAT",
   ];
 
   const endpointsPayload = {
@@ -213,9 +213,9 @@ try {
     overlap: string;
     evidence: string;
   }> {
-    const logsPath = path.join(runRoot, 'logs.ndjson');
+    const logsPath = path.join(runRoot, "logs.ndjson");
     if (!fs.existsSync(logsPath)) return [];
-    const lines = fs.readFileSync(logsPath, 'utf8').split('\n').filter(Boolean);
+    const lines = fs.readFileSync(logsPath, "utf8").split("\n").filter(Boolean);
     const results: Array<{
       primary: string;
       secondary: string;
@@ -225,18 +225,18 @@ try {
     for (const line of lines) {
       try {
         const event = JSON.parse(line);
-        if (event.kind !== 'conflict') continue;
+        if (event.kind !== "conflict") continue;
         const d = event.details;
         if (!d || !d.pair) continue;
-        const parts = d.pair.split(' × ');
+        const parts = d.pair.split(" × ");
         results.push({
           primary: parts[0] || d.pair,
           secondary: parts[1] || d.pair,
-          overlap: d.conflict ? 'forbidden' : 'allowed',
+          overlap: d.conflict ? "forbidden" : "allowed",
           evidence: `aOk=${d.aOk} bOk=${d.bOk} aLatency=${d.aLatencyMs}ms bLatency=${d.bLatencyMs}ms`,
         });
       } catch (error) {
-        console.warn('Failed to parse conflict log line', {
+        console.warn("Failed to parse conflict log line", {
           error: String(error),
         });
       }
@@ -246,55 +246,55 @@ try {
 
   const meta = await buildMeta(config);
 
-  writeJson(path.join(runRoot, 'meta.json'), meta);
-  writeJson(path.join(runRoot, 'endpoints.json'), endpointsPayload);
-  writeJson(path.join(runRoot, 'latency-stats.json'), latencyStats);
-  writeJson(path.join(runRoot, 'rest-cooldowns.json'), restCooldowns);
-  writeJson(path.join(runRoot, 'ftp-cooldowns.json'), ftpCooldowns);
-  writeJson(path.join(runRoot, 'concurrency.json'), concurrencyPayload);
-  writeJson(path.join(runRoot, 'conflicts.json'), conflictsPayload);
+  writeJson(path.join(runRoot, "meta.json"), meta);
+  writeJson(path.join(runRoot, "endpoints.json"), endpointsPayload);
+  writeJson(path.join(runRoot, "latency-stats.json"), latencyStats);
+  writeJson(path.join(runRoot, "rest-cooldowns.json"), restCooldowns);
+  writeJson(path.join(runRoot, "ftp-cooldowns.json"), ftpCooldowns);
+  writeJson(path.join(runRoot, "concurrency.json"), concurrencyPayload);
+  writeJson(path.join(runRoot, "conflicts.json"), conflictsPayload);
 
   const validator = new SchemaValidator();
   validateOrThrow(
     validator,
-    schemaPath('endpoints.schema.json'),
-    path.join(runRoot, 'endpoints.json'),
+    schemaPath("endpoints.schema.json"),
+    path.join(runRoot, "endpoints.json"),
   );
   validateOrThrow(
     validator,
-    schemaPath('latency.schema.json'),
-    path.join(runRoot, 'latency-stats.json'),
+    schemaPath("latency.schema.json"),
+    path.join(runRoot, "latency-stats.json"),
   );
   validateOrThrow(
     validator,
-    schemaPath('cooldowns.schema.json'),
-    path.join(runRoot, 'rest-cooldowns.json'),
+    schemaPath("cooldowns.schema.json"),
+    path.join(runRoot, "rest-cooldowns.json"),
   );
   validateOrThrow(
     validator,
-    schemaPath('cooldowns.schema.json'),
-    path.join(runRoot, 'ftp-cooldowns.json'),
+    schemaPath("cooldowns.schema.json"),
+    path.join(runRoot, "ftp-cooldowns.json"),
   );
   validateOrThrow(
     validator,
-    schemaPath('concurrency.schema.json'),
-    path.join(runRoot, 'concurrency.json'),
+    schemaPath("concurrency.schema.json"),
+    path.join(runRoot, "concurrency.json"),
   );
   validateOrThrow(
     validator,
-    schemaPath('conflicts.schema.json'),
-    path.join(runRoot, 'conflicts.json'),
+    schemaPath("conflicts.schema.json"),
+    path.join(runRoot, "conflicts.json"),
   );
 
   copyLatest(runRoot, latestRoot, [
-    'meta.json',
-    'logs.ndjson',
-    'endpoints.json',
-    'latency-stats.json',
-    'rest-cooldowns.json',
-    'ftp-cooldowns.json',
-    'concurrency.json',
-    'conflicts.json',
+    "meta.json",
+    "logs.ndjson",
+    "endpoints.json",
+    "latency-stats.json",
+    "rest-cooldowns.json",
+    "ftp-cooldowns.json",
+    "concurrency.json",
+    "conflicts.json",
   ]);
 } finally {
   try {
@@ -327,20 +327,20 @@ async function runScenario(
   safe: boolean,
   run: () => Promise<void>,
 ): Promise<void> {
-  if (config.mode === 'SAFE' && !safe) {
+  if (config.mode === "SAFE" && !safe) {
     log({
-      kind: 'scenario',
+      kind: "scenario",
       op: id,
-      status: 'skipped',
-      details: { reason: 'unsafe in SAFE' },
+      status: "skipped",
+      details: { reason: "unsafe in SAFE" },
     });
     return;
   }
   const pre = await healthMonitor.check();
   log({
-    kind: 'health',
+    kind: "health",
     op: `${id}:pre`,
-    status: pre.status ?? 'fail',
+    status: pre.status ?? "fail",
     latencyMs: pre.latencyMs,
   });
 
@@ -355,9 +355,9 @@ async function runScenario(
       .check()
       .then((result) => {
         log({
-          kind: 'health',
+          kind: "health",
           op: `${id}:periodic`,
-          status: result.status ?? 'fail',
+          status: result.status ?? "fail",
           latencyMs: result.latencyMs,
         });
         const abort = healthMonitor.shouldAbort();
@@ -366,7 +366,7 @@ async function runScenario(
         }
       })
       .catch((error) => {
-        console.warn('Periodic health probe failed', { error: String(error) });
+        console.warn("Periodic health probe failed", { error: String(error) });
       })
       .finally(() => {
         checking = false;
@@ -385,9 +385,9 @@ async function runScenario(
   } catch (error) {
     const isAbort = abortError !== null;
     log({
-      kind: 'scenario',
+      kind: "scenario",
       op: id,
-      status: isAbort ? 'abort' : 'error',
+      status: isAbort ? "abort" : "error",
       details: { message: String(error) },
     });
     if (isAbort) {
@@ -400,15 +400,15 @@ async function runScenario(
 
   const post = await healthMonitor.check();
   log({
-    kind: 'health',
+    kind: "health",
     op: `${id}:post`,
-    status: post.status ?? 'fail',
+    status: post.status ?? "fail",
     latencyMs: post.latencyMs,
   });
 }
 
 function buildLatencyStats(
-  latency: Map<string, { kind: 'REST' | 'FTP'; tracker: LatencyTracker }>,
+  latency: Map<string, { kind: "REST" | "FTP"; tracker: LatencyTracker }>,
   cfg: typeof config,
 ): {
   generatedAt: string;
@@ -452,7 +452,7 @@ function buildCooldowns(
     mode: string;
     auth: string;
   },
-  kind: 'REST' | 'FTP',
+  kind: "REST" | "FTP",
   cfg: typeof config,
 ) {
   return {
@@ -474,7 +474,7 @@ function buildCooldowns(
           minDelayMs: cooldown.minDelayMs,
           recommendedDelayMs: cooldown.recommendedDelayMs,
           maxDelayMs: cooldown.maxDelayMs,
-          basis: 'p50/p90/p99',
+          basis: "p50/p90/p99",
         };
       })
       .filter(Boolean),
@@ -482,22 +482,22 @@ function buildCooldowns(
 }
 
 async function buildMeta(cfg: typeof config) {
-  const openapiPath = path.join(process.cwd(), 'doc/c64/c64u-openapi.yaml');
-  const openapiHash = fs.existsSync(openapiPath) ? hashFile(openapiPath) : '';
-  const firmwareHash = getGitHash(path.join(process.cwd(), '1541ultimate'));
+  const openapiPath = path.join(process.cwd(), "doc/c64/c64u-openapi.yaml");
+  const openapiHash = fs.existsSync(openapiPath) ? hashFile(openapiPath) : "";
+  const firmwareHash = getGitHash(path.join(process.cwd(), "1541ultimate"));
   const repoHash = getGitHash(process.cwd());
 
   let info: unknown = null;
   try {
     const response = await restClient.request({
-      method: 'GET',
-      url: '/v1/info',
+      method: "GET",
+      url: "/v1/info",
     });
     if (response.status === 200) {
       info = response.data;
     }
   } catch (error) {
-    console.warn('Failed to read /v1/info', { error: String(error) });
+    console.warn("Failed to read /v1/info", { error: String(error) });
     info = null;
   }
 
@@ -515,7 +515,7 @@ async function buildMeta(cfg: typeof config) {
 }
 
 function loadOpenApiEndpoints(cfg: typeof config) {
-  const filePath = path.join(process.cwd(), 'doc/c64/c64u-openapi.yaml');
+  const filePath = path.join(process.cwd(), "doc/c64/c64u-openapi.yaml");
   if (!fs.existsSync(filePath)) {
     return [] as Array<{
       id: string;
@@ -525,7 +525,7 @@ function loadOpenApiEndpoints(cfg: typeof config) {
       safe: boolean;
     }>;
   }
-  const doc = yaml.load(fs.readFileSync(filePath, 'utf8')) as Record<
+  const doc = yaml.load(fs.readFileSync(filePath, "utf8")) as Record<
     string,
     unknown
   >;
@@ -544,8 +544,8 @@ function loadOpenApiEndpoints(cfg: typeof config) {
         continue;
       }
       const id = `${method.toUpperCase()} ${pathKey}`;
-      const group = pathKey.split('/')[2] || 'root';
-      const safe = method.toUpperCase() === 'GET';
+      const group = pathKey.split("/")[2] || "root";
+      const safe = method.toUpperCase() === "GET";
       endpoints.push({
         id,
         method: method.toUpperCase(),
@@ -559,13 +559,13 @@ function loadOpenApiEndpoints(cfg: typeof config) {
 }
 
 function isHttpMethod(method: string): boolean {
-  return ['get', 'post', 'put', 'delete', 'patch'].includes(
+  return ["get", "post", "put", "delete", "patch"].includes(
     method.toLowerCase(),
   );
 }
 
 function writeJson(filePath: string, data: unknown): void {
-  fs.writeFileSync(filePath, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
+  fs.writeFileSync(filePath, `${JSON.stringify(data, null, 2)}\n`, "utf8");
 }
 
 function validateOrThrow(
@@ -573,11 +573,11 @@ function validateOrThrow(
   schemaFile: string,
   dataFile: string,
 ): void {
-  const data = JSON.parse(fs.readFileSync(dataFile, 'utf8'));
+  const data = JSON.parse(fs.readFileSync(dataFile, "utf8"));
   const result = validator.validate(schemaFile, data);
   if (!result.valid) {
     throw new Error(
-      `Schema validation failed for ${dataFile}: ${result.errors?.join('; ')}`,
+      `Schema validation failed for ${dataFile}: ${result.errors?.join("; ")}`,
     );
   }
 }
@@ -603,9 +603,9 @@ async function rebootAndRecover(
   const start = Date.now();
 
   try {
-    await client.request({ method: 'PUT', url: '/v1/machine:reboot' });
+    await client.request({ method: "PUT", url: "/v1/machine:reboot" });
   } catch (error) {
-    console.warn('Reboot request failed', {
+    console.warn("Reboot request failed", {
       error: String(error),
       baseUrl: cfg.baseUrl,
     });
@@ -613,12 +613,12 @@ async function rebootAndRecover(
 
   while (Date.now() - start < timeoutMs) {
     try {
-      const response = await client.request({ method: 'GET', url: '/v1/info' });
+      const response = await client.request({ method: "GET", url: "/v1/info" });
       if (response.status === 200) {
         return;
       }
     } catch (error) {
-      console.warn('Recovery probe failed', { error: String(error) });
+      console.warn("Recovery probe failed", { error: String(error) });
     }
     await delay(pollIntervalMs);
   }
@@ -628,30 +628,30 @@ async function rebootAndRecover(
 
 function hashFile(filePath: string): string {
   const data = fs.readFileSync(filePath);
-  return crypto.createHash('sha256').update(data).digest('hex');
+  return crypto.createHash("sha256").update(data).digest("hex");
 }
 
 function getGitHash(repoPath: string): string {
   try {
     const head = fs
-      .readFileSync(path.join(repoPath, '.git/HEAD'), 'utf8')
+      .readFileSync(path.join(repoPath, ".git/HEAD"), "utf8")
       .trim();
-    if (head.startsWith('ref:')) {
-      const ref = head.replace('ref:', '').trim();
-      const refPath = path.join(repoPath, '.git', ref);
-      return fs.readFileSync(refPath, 'utf8').trim();
+    if (head.startsWith("ref:")) {
+      const ref = head.replace("ref:", "").trim();
+      const refPath = path.join(repoPath, ".git", ref);
+      return fs.readFileSync(refPath, "utf8").trim();
     }
     return head;
   } catch (error) {
-    console.warn('Failed to read git hash', { repoPath, error: String(error) });
-    return '';
+    console.warn("Failed to read git hash", { repoPath, error: String(error) });
+    return "";
   }
 }
 
 function parseArgs(argv: string[]): { configPath?: string } {
   const result: { configPath?: string } = {};
   for (let i = 0; i < argv.length; i += 1) {
-    if (argv[i] === '--config') {
+    if (argv[i] === "--config") {
       result.configPath = argv[i + 1];
       i += 1;
     }
@@ -660,7 +660,7 @@ function parseArgs(argv: string[]): { configPath?: string } {
 }
 
 function formatTimestamp(date: Date): string {
-  const pad = (value: number) => String(value).padStart(2, '0');
+  const pad = (value: number) => String(value).padStart(2, "0");
   return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(
     date.getMinutes(),
   )}${pad(date.getSeconds())}`;
@@ -694,12 +694,12 @@ async function withTimeout<T>(
   }
 }
 
-function createRestRequest(client: RestClient, mode: 'SAFE' | 'STRESS') {
-  if (mode !== 'STRESS') {
-    return (config: Parameters<RestClient['request']>[0]) =>
+function createRestRequest(client: RestClient, mode: "SAFE" | "STRESS") {
+  if (mode !== "STRESS") {
+    return (config: Parameters<RestClient["request"]>[0]) =>
       client.request(config);
   }
-  return async (req: Parameters<RestClient['request']>[0]) => {
+  return async (req: Parameters<RestClient["request"]>[0]) => {
     const maxRetries = 2;
     const baseDelayMs = 200;
     for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
@@ -709,7 +709,7 @@ function createRestRequest(client: RestClient, mode: 'SAFE' | 'STRESS') {
           const waitMs =
             baseDelayMs * Math.pow(2, attempt) +
             Math.floor(Math.random() * 100);
-          console.warn('REST retryable response', {
+          console.warn("REST retryable response", {
             status: response.status,
             attempt,
             waitMs,
@@ -724,7 +724,7 @@ function createRestRequest(client: RestClient, mode: 'SAFE' | 'STRESS') {
         }
         const waitMs =
           baseDelayMs * Math.pow(2, attempt) + Math.floor(Math.random() * 100);
-        console.warn('REST request failed, retrying', {
+        console.warn("REST request failed, retrying", {
           error: String(error),
           attempt,
           waitMs,
@@ -732,6 +732,6 @@ function createRestRequest(client: RestClient, mode: 'SAFE' | 'STRESS') {
         await delay(waitMs);
       }
     }
-    throw new Error('REST retry loop exhausted');
+    throw new Error("REST retry loop exhausted");
   };
 }

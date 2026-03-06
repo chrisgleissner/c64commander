@@ -1,6 +1,6 @@
 {
   "issue1": {
-    "status": "FIXED",
+    "status": "DONE",
     "pre_fix_failure_evidence": [
       "applyAudioMixerUpdates swallowed errors for non-Restore contexts (reportUserError called, no throw)",
       "scheduleVolumeUpdate dispatched 'unmute' before write completed (fire-and-forget void call)",
@@ -14,7 +14,7 @@
     ]
   },
   "issue2": {
-    "status": "FIXED",
+    "status": "DONE",
     "pre_fix_failure_evidence": [
       "isSongCategory guard at usePlaybackController.ts:~310 blocked auto-advance arming for prg/crt/disk"
     ],
@@ -24,7 +24,7 @@
     ]
   },
   "issue3": {
-    "status": "FIXED",
+    "status": "DONE",
     "pre_fix_failure_evidence": [
       "No sweep mechanism existed; highlights stuck indefinitely when timer starved by main-thread stall or background suspension",
       "No timestamp on highlight elements; impossible to detect stale highlights"
@@ -37,7 +37,7 @@
     ]
   },
   "issue4": {
-    "status": "FIXED",
+    "status": "DONE",
     "pre_fix_failure_evidence": [
       "hvscArchiveExtraction.ts accumulated all extracted entries before processing (peak memory proportional to archive size)",
       "extracted[] array held all decompressed bytes in memory simultaneously"
@@ -48,14 +48,14 @@
     ]
   },
   "issue5": {
-    "status": "FIXED",
+    "status": "DONE",
     "pre_fix_failure_evidence": [
       "Same root cause as Issue 4: full in-memory extraction buffer"
     ],
     "post_fix_pass_evidence": ["Resolved by Issue 4 streaming fix"]
   },
   "issue6": {
-    "status": "FIXED",
+    "status": "DONE",
     "pre_fix_failure_evidence": [
       "WRITE_CHUNK_SIZE_BYTES = 0x10000 (64 KiB): single oversized write caused device instability",
       "writeFullImage wrote entire 64 KiB in one request; no chunking",

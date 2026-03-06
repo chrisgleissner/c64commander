@@ -1,13 +1,13 @@
-import { useMemo } from 'react';
-import { useC64ConfigItems, useC64Drives } from '@/hooks/useC64Connection';
-import { PRINTER_HOME_ITEMS } from '../constants';
-import { normalizeDriveDevices } from '@/lib/drives/driveDevices';
+import { useMemo } from "react";
+import { useC64ConfigItems, useC64Drives } from "@/hooks/useC64Connection";
+import { PRINTER_HOME_ITEMS } from "../constants";
+import { normalizeDriveDevices } from "@/lib/drives/driveDevices";
 
 export function usePrinterData(isConnected: boolean) {
   const { data: drivesData, refetch: refetchDrives } = useC64Drives();
 
   const { data: printerConfig } = useC64ConfigItems(
-    'Printer Settings',
+    "Printer Settings",
     [...PRINTER_HOME_ITEMS],
     isConnected,
   );
@@ -25,7 +25,7 @@ export function usePrinterData(isConnected: boolean) {
     [normalizedDriveModel.devices],
   );
 
-  const printerDevice = drivesByClass.get('PRINTER') ?? null;
+  const printerDevice = drivesByClass.get("PRINTER") ?? null;
 
   return {
     refetchDrives,

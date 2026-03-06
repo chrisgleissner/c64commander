@@ -6,32 +6,32 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useEffect, useRef, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { useConnectionState } from '@/hooks/useConnectionState';
+import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useConnectionState } from "@/hooks/useConnectionState";
 import {
   discoverConnection,
   getConnectionSnapshot,
   initializeConnectionManager,
-} from '@/lib/connection/connectionManager';
+} from "@/lib/connection/connectionManager";
 import {
   buildBaseUrlFromDeviceHost,
   resolveDeviceHostFromStorage,
-} from '@/lib/c64api';
-import { loadBackgroundRediscoveryIntervalMs } from '@/lib/config/appSettings';
+} from "@/lib/c64api";
+import { loadBackgroundRediscoveryIntervalMs } from "@/lib/config/appSettings";
 import {
   getPassword as loadStoredPassword,
   hasStoredPasswordFlag,
-} from '@/lib/secureStorage';
-import { invalidateForConnectionStateTransition } from '@/lib/query/c64QueryInvalidation';
+} from "@/lib/secureStorage";
+import { invalidateForConnectionStateTransition } from "@/lib/query/c64QueryInvalidation";
 import {
   getBackgroundRediscoveryDelayMs,
   getNextBackgroundFailureCount,
-} from '@/lib/query/c64PollingGovernance';
+} from "@/lib/query/c64PollingGovernance";
 
 const allowBackgroundRediscovery = () => {
-  if (import.meta.env.VITE_ENABLE_TEST_PROBES !== '1') return true;
-  if (typeof window === 'undefined') return false;
+  if (import.meta.env.VITE_ENABLE_TEST_PROBES !== "1") return true;
+  if (typeof window === "undefined") return false;
   return (
     (window as Window & { __c64uAllowBackgroundRediscovery?: boolean })
       .__c64uAllowBackgroundRediscovery === true
@@ -54,7 +54,7 @@ export function ConnectionController() {
 
   useEffect(() => {
     void initializeConnectionManager().then(() => {
-      void discoverConnection('startup');
+      void discoverConnection("startup");
     });
   }, []);
 
@@ -78,7 +78,7 @@ export function ConnectionController() {
       }
     };
 
-    if (state !== 'DEMO_ACTIVE' && state !== 'OFFLINE_NO_DEMO') {
+    if (state !== "DEMO_ACTIVE" && state !== "OFFLINE_NO_DEMO") {
       clearTimer();
       return;
     }
@@ -101,7 +101,7 @@ export function ConnectionController() {
           clearTimer();
           return;
         }
-        void discoverConnection('background').finally(() => {
+        void discoverConnection("background").finally(() => {
           const snapshot = getConnectionSnapshot();
           const nextFailureCount = getNextBackgroundFailureCount(
             backgroundFailureCountRef.current,
@@ -116,8 +116,8 @@ export function ConnectionController() {
             return;
           }
           if (
-            snapshot.state === 'DEMO_ACTIVE' ||
-            snapshot.state === 'OFFLINE_NO_DEMO'
+            snapshot.state === "DEMO_ACTIVE" ||
+            snapshot.state === "OFFLINE_NO_DEMO"
           ) {
             scheduleNextProbe(nextFailureCount);
           }
@@ -139,10 +139,10 @@ export function ConnectionController() {
         | undefined;
       if (!detail) return;
       const next = {
-        baseUrl: typeof detail.baseUrl === 'string' ? detail.baseUrl : '',
-        password: typeof detail.password === 'string' ? detail.password : '',
+        baseUrl: typeof detail.baseUrl === "string" ? detail.baseUrl : "",
+        password: typeof detail.password === "string" ? detail.password : "",
         deviceHost:
-          typeof detail.deviceHost === 'string' ? detail.deviceHost : '',
+          typeof detail.deviceHost === "string" ? detail.deviceHost : "",
       };
       const prev = lastSettingsRef.current;
       lastSettingsRef.current = next;
@@ -151,14 +151,14 @@ export function ConnectionController() {
       const passwordChanged = prev.password !== next.password;
       const hostChanged = prev.deviceHost !== next.deviceHost;
       if (!baseUrlChanged && !passwordChanged && !hostChanged) return;
-      void discoverConnection('settings');
+      void discoverConnection("settings");
     };
 
     // Prime the comparison with current persisted settings.
     const storedDeviceHost = resolveDeviceHostFromStorage();
     lastSettingsRef.current = {
       baseUrl: buildBaseUrlFromDeviceHost(storedDeviceHost),
-      password: '',
+      password: "",
       deviceHost: storedDeviceHost,
     };
     if (hasStoredPasswordFlag()) {
@@ -166,15 +166,15 @@ export function ConnectionController() {
         if (!lastSettingsRef.current) return;
         lastSettingsRef.current = {
           ...lastSettingsRef.current,
-          password: value || '',
+          password: value || "",
         };
       });
     }
 
-    window.addEventListener('c64u-connection-change', handler as EventListener);
+    window.addEventListener("c64u-connection-change", handler as EventListener);
     return () =>
       window.removeEventListener(
-        'c64u-connection-change',
+        "c64u-connection-change",
         handler as EventListener,
       );
   }, []);
@@ -184,17 +184,17 @@ export function ConnectionController() {
       const detail = (event as CustomEvent).detail as
         | { key?: string }
         | undefined;
-      if (detail?.key !== 'c64u_background_rediscovery_interval_ms') return;
+      if (detail?.key !== "c64u_background_rediscovery_interval_ms") return;
       setBackgroundScheduleVersion((previous) => previous + 1);
     };
 
     window.addEventListener(
-      'c64u-app-settings-updated',
+      "c64u-app-settings-updated",
       handler as EventListener,
     );
     return () =>
       window.removeEventListener(
-        'c64u-app-settings-updated',
+        "c64u-app-settings-updated",
         handler as EventListener,
       );
   }, []);

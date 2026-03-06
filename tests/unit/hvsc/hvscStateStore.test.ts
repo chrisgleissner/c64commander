@@ -7,17 +7,17 @@
  */
 
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { loadHvscState } from '@/lib/hvsc/hvscStateStore';
-import { addLog } from '@/lib/logging';
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { loadHvscState } from "@/lib/hvsc/hvscStateStore";
+import { addLog } from "@/lib/logging";
 
-vi.mock('@/lib/logging', () => ({
+vi.mock("@/lib/logging", () => ({
   addLog: vi.fn(),
 }));
 
-describe('hvscStateStore', () => {
+describe("hvscStateStore", () => {
   beforeEach(() => {
-    if (typeof globalThis.localStorage === 'undefined') {
+    if (typeof globalThis.localStorage === "undefined") {
       const store = new Map<string, string>();
       (
         globalThis as typeof globalThis & { localStorage?: Storage }
@@ -38,17 +38,17 @@ describe('hvscStateStore', () => {
     }
   });
 
-  it('logs and returns defaults when storage is corrupted', () => {
-    localStorage.setItem('c64u_hvsc_state:v1', '{broken');
+  it("logs and returns defaults when storage is corrupted", () => {
+    localStorage.setItem("c64u_hvsc_state:v1", "{broken");
 
     const state = loadHvscState();
 
-    expect(state.ingestionState).toBe('idle');
+    expect(state.ingestionState).toBe("idle");
     expect(addLog).toHaveBeenCalledWith(
-      'warn',
-      'Failed to load HVSC state from storage',
+      "warn",
+      "Failed to load HVSC state from storage",
       expect.objectContaining({
-        storageKey: 'c64u_hvsc_state:v1',
+        storageKey: "c64u_hvsc_state:v1",
         error: expect.any(String),
       }),
     );

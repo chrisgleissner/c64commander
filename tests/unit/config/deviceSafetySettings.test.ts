@@ -6,8 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { DeviceSafetyMode } from '@/lib/config/deviceSafetySettings';
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { DeviceSafetyMode } from "@/lib/config/deviceSafetySettings";
 import {
   loadDeviceSafetyConfig,
   loadDeviceSafetyMode,
@@ -18,7 +18,7 @@ import {
   saveRestMaxConcurrency,
   subscribeDeviceSafetyUpdates,
   DEVICE_SAFETY_SETTING_KEYS,
-} from '@/lib/config/deviceSafetySettings';
+} from "@/lib/config/deviceSafetySettings";
 
 type ExpectedDefaults = {
   restMaxConcurrency: number;
@@ -69,13 +69,13 @@ const MODE_EXPECTATIONS: Record<DeviceSafetyMode, ExpectedDefaults> = {
   },
 };
 
-describe('deviceSafetySettings defaults', () => {
+describe("deviceSafetySettings defaults", () => {
   beforeEach(() => {
     localStorage.clear();
   });
 
   it.each(Object.entries(MODE_EXPECTATIONS))(
-    'loads %s defaults',
+    "loads %s defaults",
     (mode, expected) => {
       saveDeviceSafetyMode(mode as DeviceSafetyMode);
 
@@ -95,8 +95,8 @@ describe('deviceSafetySettings defaults', () => {
     },
   );
 
-  it('keeps REST and FTP concurrency independent', () => {
-    saveDeviceSafetyMode('BALANCED');
+  it("keeps REST and FTP concurrency independent", () => {
+    saveDeviceSafetyMode("BALANCED");
 
     saveRestMaxConcurrency(4);
     let config = loadDeviceSafetyConfig();
@@ -110,67 +110,67 @@ describe('deviceSafetySettings defaults', () => {
   });
 });
 
-describe('deviceSafetySettings undefined-environment branches', () => {
+describe("deviceSafetySettings undefined-environment branches", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     localStorage.clear();
   });
 
-  it('readString/readNumber/readBoolean return null when localStorage undefined (lines 115, 121, 129)', () => {
-    vi.stubGlobal('localStorage', undefined);
+  it("readString/readNumber/readBoolean return null when localStorage undefined (lines 115, 121, 129)", () => {
+    vi.stubGlobal("localStorage", undefined);
     // loadDeviceSafetyMode calls readString; loadDeviceSafetyConfig calls readNumber + readBoolean
-    expect(loadDeviceSafetyMode()).toBe('BALANCED');
+    expect(loadDeviceSafetyMode()).toBe("BALANCED");
     const config = loadDeviceSafetyConfig();
-    expect(config.mode).toBe('BALANCED');
+    expect(config.mode).toBe("BALANCED");
     expect(config.restMaxConcurrency).toBe(2);
   });
 
-  it('readNumber returns null for non-finite stored value (line 125 FALSE)', () => {
+  it("readNumber returns null for non-finite stored value (line 125 FALSE)", () => {
     localStorage.setItem(
       DEVICE_SAFETY_SETTING_KEYS.REST_MAX_CONCURRENCY_KEY,
-      'not-a-number',
+      "not-a-number",
     );
     const config = loadDeviceSafetyConfig();
     // Falls back to default (BALANCED = 2)
     expect(config.restMaxConcurrency).toBe(2);
   });
 
-  it('broadcast is skipped when window is undefined (line 147)', () => {
-    vi.stubGlobal('window', undefined);
+  it("broadcast is skipped when window is undefined (line 147)", () => {
+    vi.stubGlobal("window", undefined);
     // Should not throw
-    saveDeviceSafetyMode('RELAXED');
+    saveDeviceSafetyMode("RELAXED");
     vi.unstubAllGlobals();
     expect(
       localStorage.getItem(DEVICE_SAFETY_SETTING_KEYS.DEVICE_SAFETY_MODE_KEY),
-    ).toBe('RELAXED');
+    ).toBe("RELAXED");
   });
 
-  it('subscribeDeviceSafetyUpdates returns no-op when window is undefined (line 152)', () => {
-    vi.stubGlobal('window', undefined);
+  it("subscribeDeviceSafetyUpdates returns no-op when window is undefined (line 152)", () => {
+    vi.stubGlobal("window", undefined);
     const unsubscribe = subscribeDeviceSafetyUpdates(() => {});
-    expect(typeof unsubscribe).toBe('function');
+    expect(typeof unsubscribe).toBe("function");
     // No error thrown
     unsubscribe();
   });
 
-  it('saveDeviceSafetyMode returns early when localStorage undefined (line 163)', () => {
-    vi.stubGlobal('localStorage', undefined);
+  it("saveDeviceSafetyMode returns early when localStorage undefined (line 163)", () => {
+    vi.stubGlobal("localStorage", undefined);
     // Should not throw
-    saveDeviceSafetyMode('CONSERVATIVE');
+    saveDeviceSafetyMode("CONSERVATIVE");
   });
 
-  it('resetDeviceSafetyOverrides returns early when localStorage undefined', () => {
-    vi.stubGlobal('localStorage', undefined);
+  it("resetDeviceSafetyOverrides returns early when localStorage undefined", () => {
+    vi.stubGlobal("localStorage", undefined);
     // Should not throw
     resetDeviceSafetyOverrides();
   });
 
-  it('saveAllowUserOverrideCircuit stores false as 0 (line 230 FALSE)', () => {
+  it("saveAllowUserOverrideCircuit stores false as 0 (line 230 FALSE)", () => {
     saveAllowUserOverrideCircuit(false);
     expect(
       localStorage.getItem(
         DEVICE_SAFETY_SETTING_KEYS.ALLOW_USER_OVERRIDE_CIRCUIT_KEY,
       ),
-    ).toBe('0');
+    ).toBe("0");
   });
 });

@@ -6,11 +6,11 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { describe, it, expect, vi } from 'vitest';
-import { createSliderDeviceAdapter } from '@/lib/ui/sliderDeviceAdapter';
+import { describe, it, expect, vi } from "vitest";
+import { createSliderDeviceAdapter } from "@/lib/ui/sliderDeviceAdapter";
 
-describe('createSliderDeviceAdapter', () => {
-  it('onChange updates local value synchronously', () => {
+describe("createSliderDeviceAdapter", () => {
+  it("onChange updates local value synchronously", () => {
     const setLocalValue = vi.fn();
     const applyToDevice = vi.fn();
     const adapter = createSliderDeviceAdapter({ setLocalValue, applyToDevice });
@@ -20,7 +20,7 @@ describe('createSliderDeviceAdapter', () => {
     expect(setLocalValue).toHaveBeenCalledWith(42);
   });
 
-  it('onChange applies transform before setting local value', () => {
+  it("onChange applies transform before setting local value", () => {
     const setLocalValue = vi.fn();
     const applyToDevice = vi.fn();
     const adapter = createSliderDeviceAdapter({
@@ -34,7 +34,7 @@ describe('createSliderDeviceAdapter', () => {
     expect(setLocalValue).toHaveBeenCalledWith(10);
   });
 
-  it('onChange schedules best-effort device apply via microtask', async () => {
+  it("onChange schedules best-effort device apply via microtask", async () => {
     const setLocalValue = vi.fn();
     const applyToDevice = vi.fn();
     const adapter = createSliderDeviceAdapter({ setLocalValue, applyToDevice });
@@ -49,7 +49,7 @@ describe('createSliderDeviceAdapter', () => {
     expect(applyToDevice).toHaveBeenCalledWith(5);
   });
 
-  it('coalesces rapid onChange calls into a single device apply', async () => {
+  it("coalesces rapid onChange calls into a single device apply", async () => {
     const setLocalValue = vi.fn();
     const applyToDevice = vi.fn();
     const adapter = createSliderDeviceAdapter({ setLocalValue, applyToDevice });
@@ -67,7 +67,7 @@ describe('createSliderDeviceAdapter', () => {
     expect(applyToDevice).toHaveBeenCalledWith(3);
   });
 
-  it('onCommit updates local value and applies immediately', () => {
+  it("onCommit updates local value and applies immediately", () => {
     const setLocalValue = vi.fn();
     const applyToDevice = vi.fn();
     const adapter = createSliderDeviceAdapter({ setLocalValue, applyToDevice });
@@ -78,7 +78,7 @@ describe('createSliderDeviceAdapter', () => {
     expect(applyToDevice).toHaveBeenCalledWith(99);
   });
 
-  it('onCommit cancels pending intermediate apply', async () => {
+  it("onCommit cancels pending intermediate apply", async () => {
     const setLocalValue = vi.fn();
     const applyToDevice = vi.fn();
     const adapter = createSliderDeviceAdapter({ setLocalValue, applyToDevice });
@@ -93,7 +93,7 @@ describe('createSliderDeviceAdapter', () => {
     expect(applyToDevice).toHaveBeenCalledWith(10);
   });
 
-  it('onCommit applies transform', () => {
+  it("onCommit applies transform", () => {
     const setLocalValue = vi.fn();
     const applyToDevice = vi.fn();
     const adapter = createSliderDeviceAdapter({
@@ -108,7 +108,7 @@ describe('createSliderDeviceAdapter', () => {
     expect(applyToDevice).toHaveBeenCalledWith(10);
   });
 
-  it('handlers are synchronous (no awaits or promises returned)', () => {
+  it("handlers are synchronous (no awaits or promises returned)", () => {
     const applyToDevice = vi.fn();
     const adapter = createSliderDeviceAdapter({
       setLocalValue: vi.fn(),

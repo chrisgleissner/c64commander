@@ -6,8 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { addErrorLog } from '@/lib/logging';
-import type { C64API } from '@/lib/c64api';
+import { addErrorLog } from "@/lib/logging";
+import type { C64API } from "@/lib/c64api";
 
 // LOAD"*",8,1\rRUN\r
 export const AUTOSTART_SEQUENCE = new Uint8Array([
@@ -23,13 +23,13 @@ export type AutostartOptions = {
 };
 
 const readKeyboardBufferLength = async (api: C64API) => {
-  const data = await api.readMemory('00C6', 1);
+  const data = await api.readMemory("00C6", 1);
   return data[0] ?? 0;
 };
 
 const writeKeyboardBuffer = async (api: C64API, payload: Uint8Array) => {
-  await api.writeMemory('0277', payload);
-  await api.writeMemory('00C6', new Uint8Array([payload.length]));
+  await api.writeMemory("0277", payload);
+  await api.writeMemory("00C6", new Uint8Array([payload.length]));
 };
 
 export const injectAutostart = async (
@@ -50,8 +50,8 @@ export const injectAutostart = async (
   }
 
   const error = new Error(
-    'Keyboard buffer remained busy while waiting to autostart.',
+    "Keyboard buffer remained busy while waiting to autostart.",
   );
-  addErrorLog('Autostart injection failed', { error: error.message });
+  addErrorLog("Autostart injection failed", { error: error.message });
   throw error;
 };

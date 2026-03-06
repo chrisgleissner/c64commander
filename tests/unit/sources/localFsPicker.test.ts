@@ -6,11 +6,11 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const platformState = { value: 'web' };
+const platformState = { value: "web" };
 
-vi.mock('@capacitor/core', () => ({
+vi.mock("@capacitor/core", () => ({
   Capacitor: {
     getPlatform: () => platformState.value,
     isNativePlatform: () => false,
@@ -23,7 +23,7 @@ const readFileMock = vi.fn();
 const listChildrenMock = vi.fn();
 const readFileFromTreeMock = vi.fn();
 
-vi.mock('@/lib/native/folderPicker', () => ({
+vi.mock("@/lib/native/folderPicker", () => ({
   FolderPicker: {
     pickDirectory: (...args: unknown[]) => pickDirectoryMock(...args),
     readFile: (...args: unknown[]) => readFileMock(...args),
@@ -35,10 +35,10 @@ vi.mock('@/lib/native/folderPicker', () => ({
 
 const ingestLocalArchivesMock = vi.fn();
 
-vi.mock('@/lib/sources/localArchiveIngestion', async () => {
+vi.mock("@/lib/sources/localArchiveIngestion", async () => {
   const actual = await vi.importActual<
-    typeof import('@/lib/sources/localArchiveIngestion')
-  >('@/lib/sources/localArchiveIngestion');
+    typeof import("@/lib/sources/localArchiveIngestion")
+  >("@/lib/sources/localArchiveIngestion");
   return {
     ...actual,
     ingestLocalArchives: (...args: unknown[]) =>
@@ -46,13 +46,13 @@ vi.mock('@/lib/sources/localArchiveIngestion', async () => {
   };
 });
 
-import { browseLocalSidFiles } from '@/lib/sources/localFsPicker';
+import { browseLocalSidFiles } from "@/lib/sources/localFsPicker";
 
 const buildAsyncEntries = (
   entries: [
     string,
     {
-      kind: 'file' | 'directory';
+      kind: "file" | "directory";
       name: string;
       getFile?: () => Promise<File>;
       entries?: () => AsyncIterableIterator<[string, any]>;
@@ -65,9 +65,9 @@ const buildAsyncEntries = (
     }
   })();
 
-describe('localFsPicker', () => {
+describe("localFsPicker", () => {
   beforeEach(() => {
-    platformState.value = 'android';
+    platformState.value = "android";
     pickDirectoryMock.mockReset();
     readFileMock.mockReset();
     listChildrenMock.mockReset();
@@ -75,15 +75,15 @@ describe('localFsPicker', () => {
     ingestLocalArchivesMock.mockReset();
   });
 
-  it('enumerates SAF results on android', async () => {
-    const treeUri = 'content://tree/primary%3AMusic';
+  it("enumerates SAF results on android", async () => {
+    const treeUri = "content://tree/primary%3AMusic";
     pickDirectoryMock.mockResolvedValue({
       treeUri,
-      rootName: 'Music',
+      rootName: "Music",
       permissionPersisted: true,
     });
     listChildrenMock.mockResolvedValue({
-      entries: [{ type: 'file', name: 'song.sid', path: '/song.sid' }],
+      entries: [{ type: "file", name: "song.sid", path: "/song.sid" }],
     });
     ingestLocalArchivesMock.mockImplementation(async (files: unknown[]) => ({
       files,
@@ -93,24 +93,24 @@ describe('localFsPicker', () => {
 
     const result = await browseLocalSidFiles(null);
     expect(result).toHaveLength(1);
-    expect(result?.[0].name).toBe('song.sid');
+    expect(result?.[0].name).toBe("song.sid");
     expect(ingestLocalArchivesMock).toHaveBeenCalledTimes(1);
   });
 
-  it('enumerates SAF results on ios using same native path as android', async () => {
-    platformState.value = 'ios';
+  it("enumerates SAF results on ios using same native path as android", async () => {
+    platformState.value = "ios";
     const treeUri =
-      'file:///private/var/mobile/Containers/Shared/AppGroup/Music';
+      "file:///private/var/mobile/Containers/Shared/AppGroup/Music";
     pickDirectoryMock.mockResolvedValue({
       treeUri,
-      rootName: 'Music',
+      rootName: "Music",
       permissionPersisted: true,
     });
     listChildrenMock.mockResolvedValue({
       entries: [
-        { type: 'file', name: 'tune.sid', path: '/tune.sid' },
-        { type: 'file', name: 'demo.sid', path: '/demo.sid' },
-        { type: 'file', name: 'readme.txt', path: '/readme.txt' },
+        { type: "file", name: "tune.sid", path: "/tune.sid" },
+        { type: "file", name: "demo.sid", path: "/demo.sid" },
+        { type: "file", name: "readme.txt", path: "/readme.txt" },
       ],
     });
     ingestLocalArchivesMock.mockImplementation(async (files: unknown[]) => ({
@@ -122,26 +122,26 @@ describe('localFsPicker', () => {
     const result = await browseLocalSidFiles(null);
     // readme.txt is not a supported file type and should be filtered out
     expect(result).toHaveLength(2);
-    expect(result?.map((f) => f.name)).toEqual(['tune.sid', 'demo.sid']);
+    expect(result?.map((f) => f.name)).toEqual(["tune.sid", "demo.sid"]);
     expect(pickDirectoryMock).toHaveBeenCalledTimes(1);
     expect(listChildrenMock).toHaveBeenCalledTimes(1);
     expect(ingestLocalArchivesMock).toHaveBeenCalledTimes(1);
   });
 
-  it('throws on unsupported picker response on ios', async () => {
-    platformState.value = 'ios';
+  it("throws on unsupported picker response on ios", async () => {
+    platformState.value = "ios";
     pickDirectoryMock.mockResolvedValue({
       treeUri: null,
       permissionPersisted: false,
     });
 
     await expect(browseLocalSidFiles(null)).rejects.toThrow(
-      'Native folder picker returned an unsupported response.',
+      "Native folder picker returned an unsupported response.",
     );
   });
 
-  it('falls back to input click when directory picker is unavailable on web', async () => {
-    platformState.value = 'web';
+  it("falls back to input click when directory picker is unavailable on web", async () => {
+    platformState.value = "web";
     const input = { click: vi.fn() } as unknown as HTMLInputElement;
 
     const result = await browseLocalSidFiles(input);
@@ -150,51 +150,51 @@ describe('localFsPicker', () => {
     expect(input.click).toHaveBeenCalledTimes(1);
   });
 
-  it('walks directory picker entries on web and filters supported files', async () => {
-    platformState.value = 'web';
+  it("walks directory picker entries on web and filters supported files", async () => {
+    platformState.value = "web";
 
-    const fileOne = new File([new Uint8Array([1, 2, 3])], 'Track.sid', {
-      type: 'application/octet-stream',
+    const fileOne = new File([new Uint8Array([1, 2, 3])], "Track.sid", {
+      type: "application/octet-stream",
     });
-    const fileTwo = new File([new Uint8Array([4, 5])], 'Readme.txt', {
-      type: 'text/plain',
+    const fileTwo = new File([new Uint8Array([4, 5])], "Readme.txt", {
+      type: "text/plain",
     });
 
     const fileHandle = {
-      kind: 'file',
-      name: 'Track.sid',
+      kind: "file",
+      name: "Track.sid",
       getFile: () => Promise.resolve(fileOne),
     };
     const ignoredHandle = {
-      kind: 'file',
-      name: 'Readme.txt',
+      kind: "file",
+      name: "Readme.txt",
       getFile: () => Promise.resolve(fileTwo),
     };
     const nestedFile = {
-      kind: 'file',
-      name: 'Nested.sid',
+      kind: "file",
+      name: "Nested.sid",
       getFile: () =>
-        Promise.resolve(new File([new Uint8Array([9])], 'Nested.sid')),
+        Promise.resolve(new File([new Uint8Array([9])], "Nested.sid")),
     };
     const nestedDir = {
-      kind: 'directory',
-      name: 'Nested',
-      entries: () => buildAsyncEntries([['Nested.sid', nestedFile]]),
+      kind: "directory",
+      name: "Nested",
+      entries: () => buildAsyncEntries([["Nested.sid", nestedFile]]),
     };
 
     const rootHandle = {
-      kind: 'directory',
-      name: 'Root',
+      kind: "directory",
+      name: "Root",
       entries: () =>
         buildAsyncEntries([
-          ['Track.sid', fileHandle],
-          ['Readme.txt', ignoredHandle],
-          ['Nested', nestedDir],
+          ["Track.sid", fileHandle],
+          ["Readme.txt", ignoredHandle],
+          ["Nested", nestedDir],
         ]),
     };
 
     const showDirectoryPicker = vi.fn().mockResolvedValue(rootHandle);
-    Object.defineProperty(window, 'showDirectoryPicker', {
+    Object.defineProperty(window, "showDirectoryPicker", {
       value: showDirectoryPicker,
       configurable: true,
     });
@@ -210,8 +210,8 @@ describe('localFsPicker', () => {
     expect(showDirectoryPicker).toHaveBeenCalledTimes(1);
     expect(result).toHaveLength(2);
     expect(result?.map((file) => file.name)).toEqual([
-      'Track.sid',
-      'Nested.sid',
+      "Track.sid",
+      "Nested.sid",
     ]);
     expect(ingestLocalArchivesMock).toHaveBeenCalledWith(expect.any(Array));
   });

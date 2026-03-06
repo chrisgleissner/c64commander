@@ -6,9 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import * as http from 'node:http';
-import { Writable } from 'node:stream';
-import { Client } from 'basic-ftp';
+import * as http from "node:http";
+import { Writable } from "node:stream";
+import { Client } from "basic-ftp";
 
 export type MockFtpBridgeServer = {
   baseUrl: string;
@@ -24,9 +24,9 @@ type FtpBridgeRequest = {
 };
 
 const withCors = (res: http.ServerResponse) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 };
 
 const readJsonBody = async (req: http.IncomingMessage) => {
@@ -35,14 +35,14 @@ const readJsonBody = async (req: http.IncomingMessage) => {
     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
   }
   if (!chunks.length) return null;
-  const raw = Buffer.concat(chunks).toString('utf8');
+  const raw = Buffer.concat(chunks).toString("utf8");
   return raw ? JSON.parse(raw) : null;
 };
 
 const buildPath = (base: string, name: string) => {
-  const normalized = base && base !== '' ? base : '/';
-  if (normalized === '/') return `/${name}`;
-  return normalized.endsWith('/')
+  const normalized = base && base !== "" ? base : "/";
+  if (normalized === "/") return `/${name}`;
+  return normalized.endsWith("/")
     ? `${normalized}${name}`
     : `${normalized}/${name}`;
 };
@@ -65,29 +65,29 @@ export async function createMockFtpBridgeServer(): Promise<MockFtpBridgeServer> 
   const server = http.createServer(async (req, res) => {
     try {
       withCors(res);
-      if (req.method === 'OPTIONS') {
+      if (req.method === "OPTIONS") {
         res.writeHead(204);
         res.end();
         return;
       }
 
-      const isList = req.method === 'POST' && req.url === '/v1/ftp/list';
-      const isRead = req.method === 'POST' && req.url === '/v1/ftp/read';
+      const isList = req.method === "POST" && req.url === "/v1/ftp/list";
+      const isRead = req.method === "POST" && req.url === "/v1/ftp/read";
       if (!isList && !isRead) {
-        res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Not found' }));
+        res.writeHead(404, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Not found" }));
         return;
       }
 
       const payload = (await readJsonBody(req)) as FtpBridgeRequest | null;
       if (!payload?.host) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'host is required' }));
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "host is required" }));
         return;
       }
-      if (isRead && (!payload.path || payload.path === '')) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'path is required' }));
+      if (isRead && (!payload.path || payload.path === "")) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "path is required" }));
         return;
       }
 
@@ -98,19 +98,19 @@ export async function createMockFtpBridgeServer(): Promise<MockFtpBridgeServer> 
         await client.access({
           host: payload.host,
           port: payload.port ?? 21,
-          user: payload.username ?? 'anonymous',
-          password: payload.password ?? '',
+          user: payload.username ?? "anonymous",
+          password: payload.password ?? "",
           secure: false,
         });
 
         if (isList) {
           const listPath =
-            payload.path && payload.path !== '' ? payload.path : '/';
+            payload.path && payload.path !== "" ? payload.path : "/";
           const items = await client.list(listPath);
           const entries = items
             .filter(
               (entry) =>
-                entry.name && entry.name !== '.' && entry.name !== '..',
+                entry.name && entry.name !== "." && entry.name !== "..",
             )
             .map((entry) => {
               const isDir =
@@ -119,7 +119,7 @@ export async function createMockFtpBridgeServer(): Promise<MockFtpBridgeServer> 
               return {
                 name: entry.name,
                 path: buildPath(listPath, entry.name),
-                type: isDir ? 'dir' : 'file',
+                type: isDir ? "dir" : "file",
                 size: entry.size || undefined,
                 modifiedAt: entry.modifiedAt
                   ? entry.modifiedAt.toISOString()
@@ -127,47 +127,47 @@ export async function createMockFtpBridgeServer(): Promise<MockFtpBridgeServer> 
               };
             });
 
-          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.writeHead(200, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ entries }));
         } else {
           const { stream, getBuffer } = createBufferSink();
-          await client.downloadTo(stream, payload.path ?? '/');
+          await client.downloadTo(stream, payload.path ?? "/");
           const buffer = getBuffer();
-          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.writeHead(200, { "Content-Type": "application/json" });
           res.end(
             JSON.stringify({
-              data: buffer.toString('base64'),
+              data: buffer.toString("base64"),
               sizeBytes: buffer.length,
             }),
           );
         }
       } catch (error) {
-        res.writeHead(502, { 'Content-Type': 'application/json' });
+        res.writeHead(502, { "Content-Type": "application/json" });
         res.end(
           JSON.stringify({
-            error: (error as Error).message || 'FTP bridge error',
+            error: (error as Error).message || "FTP bridge error",
           }),
         );
       } finally {
         client.close();
       }
     } catch (error) {
-      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.writeHead(500, { "Content-Type": "application/json" });
       res.end(
         JSON.stringify({
-          error: (error as Error).message || 'FTP bridge failure',
+          error: (error as Error).message || "FTP bridge failure",
         }),
       );
     }
   });
 
   await new Promise<void>((resolve) => {
-    server.listen(0, '127.0.0.1', () => resolve());
+    server.listen(0, "127.0.0.1", () => resolve());
   });
 
   const addr = server.address();
-  if (!addr || typeof addr === 'string') {
-    throw new Error('FTP bridge server failed to start');
+  if (!addr || typeof addr === "string") {
+    throw new Error("FTP bridge server failed to start");
   }
 
   return {

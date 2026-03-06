@@ -6,11 +6,11 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { ArrowUp, ChevronRight, Folder, RefreshCw } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { PathWrap } from '@/components/PathWrap';
-import type { SourceEntry } from '@/lib/sourceNavigation/types';
+import { ArrowUp, ChevronRight, Folder, RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { PathWrap } from "@/components/PathWrap";
+import type { SourceEntry } from "@/lib/sourceNavigation/types";
 
 export type ItemSelectionViewProps = {
   path: string;
@@ -43,7 +43,7 @@ export const ItemSelectionView = ({
   showFolderSelect,
   emptyLabel,
 }: ItemSelectionViewProps) => {
-  const atRoot = path === rootPath || path === rootPath.replace(/\/$/, '');
+  const atRoot = path === rootPath || path === rootPath.replace(/\/$/, "");
 
   return (
     <div className="space-y-3 relative">
@@ -81,7 +81,7 @@ export const ItemSelectionView = ({
           disabled={isLoading}
         >
           <RefreshCw className="h-4 w-4 mr-1" />
-          {isLoading ? 'Loading…' : 'Refresh'}
+          {isLoading ? "Loading…" : "Refresh"}
         </Button>
       </div>
 
@@ -91,7 +91,7 @@ export const ItemSelectionView = ({
           aria-hidden="true"
         />
         <div className="min-w-0">
-          <span className="mr-1">Path:</span>{' '}
+          <span className="mr-1">Path:</span>{" "}
           <PathWrap path={path} className="text-foreground" />
         </div>
       </div>
@@ -102,8 +102,8 @@ export const ItemSelectionView = ({
         )}
         {entries.map((entry) => {
           const isSelected = selection.has(entry.path);
-          const canSelect = entry.type === 'file' || showFolderSelect;
-          const isFolder = entry.type === 'dir';
+          const canSelect = entry.type === "file" || showFolderSelect;
+          const isFolder = entry.type === "dir";
           const canNavigateFolder = isFolder && !isLoading;
           return (
             <div
@@ -111,10 +111,10 @@ export const ItemSelectionView = ({
               className="flex items-center gap-2 min-w-0 border-b border-border/50 py-2"
               data-testid="source-entry-row"
               data-entry-type={entry.type}
-              role={isFolder ? 'button' : undefined}
+              role={isFolder ? "button" : undefined}
               tabIndex={isFolder ? 0 : undefined}
               aria-label={isFolder ? `Open ${entry.name}` : undefined}
-              aria-disabled={isFolder && isLoading ? 'true' : undefined}
+              aria-disabled={isFolder && isLoading ? "true" : undefined}
               onClick={() => {
                 if (!canNavigateFolder) return;
                 onOpen(entry.path);
@@ -122,7 +122,7 @@ export const ItemSelectionView = ({
               onKeyDown={(event) => {
                 if (!canNavigateFolder) return;
                 if (event.target !== event.currentTarget) return;
-                if (event.key === 'Enter' || event.key === ' ') {
+                if (event.key === "Enter" || event.key === " ") {
                   event.preventDefault();
                   onOpen(entry.path);
                 }

@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   decrementFtpInFlight,
   decrementRestInFlight,
@@ -14,16 +14,16 @@ import {
   incrementFtpInFlight,
   incrementRestInFlight,
   resetDiagnosticsActivity,
-} from '@/lib/diagnostics/diagnosticsActivity';
+} from "@/lib/diagnostics/diagnosticsActivity";
 
-describe('diagnosticsActivity', () => {
+describe("diagnosticsActivity", () => {
   beforeEach(() => {
     resetDiagnosticsActivity();
   });
 
-  it('tracks in-flight counts and emits updates', () => {
+  it("tracks in-flight counts and emits updates", () => {
     const handler = vi.fn();
-    window.addEventListener('c64u-activity-updated', handler);
+    window.addEventListener("c64u-activity-updated", handler);
 
     incrementRestInFlight();
     incrementFtpInFlight();
@@ -48,12 +48,12 @@ describe('diagnosticsActivity', () => {
     });
     expect(handler).toHaveBeenCalledTimes(5);
 
-    window.removeEventListener('c64u-activity-updated', handler);
+    window.removeEventListener("c64u-activity-updated", handler);
   });
 
-  it('clamps decrement operations at zero', () => {
+  it("clamps decrement operations at zero", () => {
     const handler = vi.fn();
-    window.addEventListener('c64u-activity-updated', handler);
+    window.addEventListener("c64u-activity-updated", handler);
 
     decrementRestInFlight();
     decrementFtpInFlight();
@@ -63,6 +63,6 @@ describe('diagnosticsActivity', () => {
     });
     expect(handler).toHaveBeenCalledTimes(2);
 
-    window.removeEventListener('c64u-activity-updated', handler);
+    window.removeEventListener("c64u-activity-updated", handler);
   });
 });

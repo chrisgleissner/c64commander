@@ -1,23 +1,23 @@
-import type { QueryClient } from '@tanstack/react-query';
-import type { ConnectionState } from '@/lib/connection/connectionManager';
+import type { QueryClient } from "@tanstack/react-query";
+import type { ConnectionState } from "@/lib/connection/connectionManager";
 
 type C64QueryPrefix =
-  | 'c64-info'
-  | 'c64-drives'
-  | 'c64-categories'
-  | 'c64-category'
-  | 'c64-config-item'
-  | 'c64-config-items'
-  | 'c64-all-config';
+  | "c64-info"
+  | "c64-drives"
+  | "c64-categories"
+  | "c64-category"
+  | "c64-config-item"
+  | "c64-config-items"
+  | "c64-all-config";
 
 const connectionSettingsPrefixes: ReadonlyArray<C64QueryPrefix> = [
-  'c64-info',
-  'c64-drives',
-  'c64-categories',
-  'c64-category',
-  'c64-config-item',
-  'c64-config-items',
-  'c64-all-config',
+  "c64-info",
+  "c64-drives",
+  "c64-categories",
+  "c64-category",
+  "c64-config-item",
+  "c64-config-items",
+  "c64-all-config",
 ];
 
 const routePrefixMap: Array<{
@@ -25,35 +25,35 @@ const routePrefixMap: Array<{
   prefixes: ReadonlyArray<C64QueryPrefix>;
 }> = [
   {
-    routePrefix: '/config',
+    routePrefix: "/config",
     prefixes: [
-      'c64-info',
-      'c64-categories',
-      'c64-category',
-      'c64-config-item',
-      'c64-config-items',
-      'c64-all-config',
+      "c64-info",
+      "c64-categories",
+      "c64-category",
+      "c64-config-item",
+      "c64-config-items",
+      "c64-all-config",
     ],
   },
   {
-    routePrefix: '/disks',
-    prefixes: ['c64-info', 'c64-drives', 'c64-config-items'],
+    routePrefix: "/disks",
+    prefixes: ["c64-info", "c64-drives", "c64-config-items"],
   },
   {
-    routePrefix: '/play',
-    prefixes: ['c64-info', 'c64-config-item', 'c64-config-items'],
+    routePrefix: "/play",
+    prefixes: ["c64-info", "c64-config-item", "c64-config-items"],
   },
   {
-    routePrefix: '/settings',
-    prefixes: ['c64-info', 'c64-categories'],
+    routePrefix: "/settings",
+    prefixes: ["c64-info", "c64-categories"],
   },
   {
-    routePrefix: '/docs',
-    prefixes: ['c64-info'],
+    routePrefix: "/docs",
+    prefixes: ["c64-info"],
   },
   {
-    routePrefix: '/',
-    prefixes: ['c64-info', 'c64-drives', 'c64-config-items'],
+    routePrefix: "/",
+    prefixes: ["c64-info", "c64-drives", "c64-config-items"],
   },
 ];
 
@@ -72,13 +72,13 @@ const invalidateByPrefix = (
 export const getRouteInvalidationPrefixes = (
   pathname: string,
 ): ReadonlyArray<C64QueryPrefix> => {
-  const normalizedPath = pathname.trim() || '/';
+  const normalizedPath = pathname.trim() || "/";
   const matchedEntry = routePrefixMap.find(({ routePrefix }) =>
-    routePrefix === '/'
-      ? normalizedPath === '/'
+    routePrefix === "/"
+      ? normalizedPath === "/"
       : normalizedPath.startsWith(routePrefix),
   );
-  return matchedEntry?.prefixes ?? ['c64-info'];
+  return matchedEntry?.prefixes ?? ["c64-info"];
 };
 
 export const invalidateForRouteChange = (
@@ -106,11 +106,11 @@ export const invalidateForConnectionStateTransition = (
   previousState: ConnectionState | null,
   nextState: ConnectionState,
 ) => {
-  if (nextState === 'REAL_CONNECTED' && previousState !== 'REAL_CONNECTED') {
-    invalidateByPrefix(queryClient, ['c64-info']);
+  if (nextState === "REAL_CONNECTED" && previousState !== "REAL_CONNECTED") {
+    invalidateByPrefix(queryClient, ["c64-info"]);
     return;
   }
-  if (previousState === 'REAL_CONNECTED' && nextState !== 'REAL_CONNECTED') {
-    invalidateByPrefix(queryClient, ['c64-info']);
+  if (previousState === "REAL_CONNECTED" && nextState !== "REAL_CONNECTED") {
+    invalidateByPrefix(queryClient, ["c64-info"]);
   }
 };

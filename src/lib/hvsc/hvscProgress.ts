@@ -11,7 +11,7 @@ export const calculateHvscProgress = (
   totalCount?: number | null,
   explicitPercent?: number | null,
 ) => {
-  if (typeof explicitPercent === 'number') {
+  if (typeof explicitPercent === "number") {
     return Math.max(0, Math.min(100, Math.floor(explicitPercent)));
   }
   if (processedCount === null || processedCount === undefined) return null;

@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { Page, TestInfo } from '@playwright/test';
+import type { Page, TestInfo } from "@playwright/test";
 
 /**
  * Runtime viewport validation - MUST be called in every test.
@@ -16,7 +16,7 @@ export const validateViewport = async (page: Page, testInfo: TestInfo) => {
   const viewport = page.viewportSize();
   const devicePixelRatio = await page.evaluate(() => window.devicePixelRatio);
   const projectName = testInfo.project.name.toLowerCase();
-  const isDesktopWebProject = projectName === 'web';
+  const isDesktopWebProject = projectName === "web";
 
   // Viewport width must be reasonable (CSS pixels)
   // Allow tablet viewport (800px) for mobile/tablet projects.
@@ -35,7 +35,7 @@ export const validateViewport = async (page: Page, testInfo: TestInfo) => {
 
   // Log viewport info for debugging
   testInfo.annotations.push({
-    type: 'viewport-info',
+    type: "viewport-info",
     description: `${viewport?.width}×${viewport?.height} @ ${devicePixelRatio}x`,
   });
 };
@@ -56,7 +56,7 @@ export const enforceVisualBoundaries = async (
 ) => {
   const viewport = page.viewportSize();
   if (!viewport) {
-    throw new Error('No viewport configured');
+    throw new Error("No viewport configured");
   }
 
   // DOM-level boundary check
@@ -75,7 +75,7 @@ export const enforceVisualBoundaries = async (
       );
 
     // Check all visible elements
-    const elements = document.querySelectorAll('body *');
+    const elements = document.querySelectorAll("body *");
     elements.forEach((element) => {
       if (isToastElement(element)) return;
       const rect = element.getBoundingClientRect();
@@ -83,17 +83,17 @@ export const enforceVisualBoundaries = async (
 
       // Skip if element is not visible
       if (rect.width === 0 || rect.height === 0) return;
-      if (style.display === 'none' || style.visibility === 'hidden') return;
+      if (style.display === "none" || style.visibility === "hidden") return;
 
       // Check if element extends beyond viewport
       const SUBPIXEL_TOLERANCE = 3; // Allow tolerance for subpixel rendering and rounding
       if (rect.width > maxWidth + SUBPIXEL_TOLERANCE) {
         const tag = element.tagName.toLowerCase();
-        const id = element.id ? `#${element.id}` : '';
+        const id = element.id ? `#${element.id}` : "";
         const classes =
-          element.className && typeof element.className === 'string'
-            ? `.${element.className.split(/\s+/).filter(Boolean).join('.')}`
-            : '';
+          element.className && typeof element.className === "string"
+            ? `.${element.className.split(/\s+/).filter(Boolean).join(".")}`
+            : "";
         const selector = `${tag}${id}${classes}`.slice(0, 150);
 
         results.push({
@@ -105,11 +105,11 @@ export const enforceVisualBoundaries = async (
       } else if (rect.right > maxWidth + SUBPIXEL_TOLERANCE) {
         // Allow tolerance for rounding and subpixel rendering
         const tag = element.tagName.toLowerCase();
-        const id = element.id ? `#${element.id}` : '';
+        const id = element.id ? `#${element.id}` : "";
         const classes =
-          element.className && typeof element.className === 'string'
-            ? `.${element.className.split(/\s+/).filter(Boolean).join('.')}`
-            : '';
+          element.className && typeof element.className === "string"
+            ? `.${element.className.split(/\s+/).filter(Boolean).join(".")}`
+            : "";
         const selector = `${tag}${id}${classes}`.slice(0, 150);
 
         results.push({
@@ -133,7 +133,7 @@ export const enforceVisualBoundaries = async (
           i: number,
         ) => `  ${i + 1}. ${v.selector}\n     ${v.reason}`,
       )
-      .join('\n');
+      .join("\n");
 
     throw new Error(
       `Visual boundary violations detected (${violations.length} total):\n\n${details}\n\n` +

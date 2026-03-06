@@ -6,24 +6,24 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { LocalPlayFile } from '@/lib/playback/playbackRouter';
+import type { LocalPlayFile } from "@/lib/playback/playbackRouter";
 import {
   listLocalFiles,
   listLocalFolders,
-} from '@/lib/playback/localFileBrowser';
-import { addLog } from '@/lib/logging';
-import { FolderPicker, type SafFolderEntry } from '@/lib/native/folderPicker';
-import { getPlatform, isNativePlatform } from '@/lib/native/platform';
-import { redactTreeUri } from '@/lib/native/safUtils';
-import { normalizeSourcePath } from './paths';
-import type { SourceEntry, SourceLocation } from './types';
+} from "@/lib/playback/localFileBrowser";
+import { addLog } from "@/lib/logging";
+import { FolderPicker, type SafFolderEntry } from "@/lib/native/folderPicker";
+import { getPlatform, isNativePlatform } from "@/lib/native/platform";
+import { redactTreeUri } from "@/lib/native/safUtils";
+import { normalizeSourcePath } from "./paths";
+import type { SourceEntry, SourceLocation } from "./types";
 import {
   getLocalSourceListingMode,
   getLocalSourceRuntimeFile,
   requireLocalSourceEntries,
   type LocalSourceRecord,
-} from './localSourcesStore';
-import { LocalSourceListingError } from './localSourceErrors';
+} from "./localSourcesStore";
+import { LocalSourceListingError } from "./localSourceErrors";
 
 const toLocalPlayFile = (entry: {
   relativePath: string;
@@ -41,7 +41,7 @@ const toLocalPlayFile = (entry: {
 });
 
 const buildFileList = (source: LocalSourceRecord) =>
-  requireLocalSourceEntries(source, 'localSourceAdapter.buildFileList').map(
+  requireLocalSourceEntries(source, "localSourceAdapter.buildFileList").map(
     (entry) => toLocalPlayFile(entry),
   );
 
@@ -50,36 +50,36 @@ const toSourceEntryPath = (relativePath: string) =>
 
 const resolveRootPath = (source: LocalSourceRecord) => {
   if (source.android?.treeUri) {
-    return '/';
+    return "/";
   }
-  const normalizedRoot = normalizeSourcePath(source.rootPath || '/');
+  const normalizedRoot = normalizeSourcePath(source.rootPath || "/");
   const entries = requireLocalSourceEntries(
     source,
-    'localSourceAdapter.resolveRootPath',
+    "localSourceAdapter.resolveRootPath",
   );
-  if (!entries.length || normalizedRoot === '/') return '/';
+  if (!entries.length || normalizedRoot === "/") return "/";
   const hasRootedEntry = entries.some((entry) =>
     normalizeSourcePath(entry.relativePath).startsWith(normalizedRoot),
   );
-  return hasRootedEntry ? normalizedRoot : '/';
+  return hasRootedEntry ? normalizedRoot : "/";
 };
 
-const normalizeSafPath = (path: string) => normalizeSourcePath(path || '/');
+const normalizeSafPath = (path: string) => normalizeSourcePath(path || "/");
 
 const coerceSafEntries = (value: unknown): SafFolderEntry[] | null => {
   if (Array.isArray(value)) return value as SafFolderEntry[];
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     try {
       const parsed = JSON.parse(value) as unknown;
       return Array.isArray(parsed) ? (parsed as SafFolderEntry[]) : null;
     } catch (error) {
-      addLog('warn', 'Failed to parse SAF entries', {
+      addLog("warn", "Failed to parse SAF entries", {
         error: (error as Error).message,
       });
       return null;
     }
   }
-  if (value && typeof value === 'object') {
+  if (value && typeof value === "object") {
     const maybeEntries = (value as { entries?: unknown }).entries;
     if (Array.isArray(maybeEntries)) return maybeEntries as SafFolderEntry[];
   }
@@ -87,9 +87,9 @@ const coerceSafEntries = (value: unknown): SafFolderEntry[] | null => {
 };
 
 const normalizeSafEntry = (entry: SafFolderEntry): SafFolderEntry | null => {
-  if (!entry || typeof entry !== 'object') return null;
-  if (entry.type !== 'file' && entry.type !== 'dir') return null;
-  if (typeof entry.name !== 'string' || typeof entry.path !== 'string')
+  if (!entry || typeof entry !== "object") return null;
+  if (entry.type !== "file" && entry.type !== "dir") return null;
+  if (typeof entry.name !== "string" || typeof entry.path !== "string")
     return null;
   return entry;
 };
@@ -100,8 +100,8 @@ const listSafEntries = async (
 ): Promise<SourceEntry[]> => {
   if (!source.android?.treeUri) {
     throw new LocalSourceListingError(
-      'Missing SAF handle for Android local source.',
-      'saf-listing-unavailable',
+      "Missing SAF handle for Android local source.",
+      "saf-listing-unavailable",
       {
         sourceId: source.id,
       },
@@ -115,8 +115,8 @@ const listSafEntries = async (
   const rawEntries = coerceSafEntries(response?.entries);
   if (!rawEntries) {
     throw new LocalSourceListingError(
-      'SAF listChildren returned invalid entries.',
-      'saf-listing-invalid',
+      "SAF listChildren returned invalid entries.",
+      "saf-listing-invalid",
       {
         sourceId: source.id,
         treeUri: redactTreeUri(source.android.treeUri),
@@ -128,8 +128,8 @@ const listSafEntries = async (
   const normalizedEntries = rawEntries.map(normalizeSafEntry);
   if (normalizedEntries.some((entry) => !entry)) {
     throw new LocalSourceListingError(
-      'SAF listChildren returned invalid entries.',
-      'saf-listing-invalid',
+      "SAF listChildren returned invalid entries.",
+      "saf-listing-invalid",
       {
         sourceId: source.id,
         treeUri: redactTreeUri(source.android.treeUri),
@@ -146,9 +146,9 @@ const listSafEntries = async (
     sizeBytes: entry.sizeBytes ?? null,
     modifiedAt: entry.modifiedAt ?? null,
   }));
-  const folders = entries.filter((entry) => entry.type === 'dir').length;
-  const files = entries.filter((entry) => entry.type === 'file').length;
-  addLog('debug', 'SAF enumerate', {
+  const folders = entries.filter((entry) => entry.type === "dir").length;
+  const files = entries.filter((entry) => entry.type === "file").length;
+  addLog("debug", "SAF enumerate", {
     sourceId: source.id,
     treeUri: redactTreeUri(source.android.treeUri),
     path: normalized,
@@ -169,13 +169,13 @@ const listSafFilesRecursive = async (
   const signal = options?.signal;
   while (queue.length) {
     if (signal?.aborted) {
-      throw new DOMException('Aborted', 'AbortError');
+      throw new DOMException("Aborted", "AbortError");
     }
     const next = queue.shift();
     if (!next) continue;
     const entries = await listSafEntries(source, next);
     entries.forEach((entry) => {
-      if (entry.type === 'dir') {
+      if (entry.type === "dir") {
         queue.push(entry.path);
       } else {
         files.push(entry);
@@ -189,30 +189,30 @@ export const createLocalSourceLocation = (
   source: LocalSourceRecord,
 ): SourceLocation => {
   const rootPath = resolveRootPath(source);
-  const isAndroid = getPlatform() === 'android' && isNativePlatform();
+  const isAndroid = getPlatform() === "android" && isNativePlatform();
   const listEntries = async (path: string): Promise<SourceEntry[]> => {
     if (source.android?.treeUri) {
       return listSafEntries(source, path);
     }
     if (isAndroid) {
       const error = new LocalSourceListingError(
-        'This folder must be re-added using the Android folder picker.',
-        'saf-listing-unavailable',
+        "This folder must be re-added using the Android folder picker.",
+        "saf-listing-unavailable",
         { sourceId: source.id },
       );
-      addLog('debug', 'Android local source missing SAF handle', {
+      addLog("debug", "Android local source missing SAF handle", {
         sourceId: source.id,
       });
       throw error;
     }
     const files = buildFileList(source);
     const folders = listLocalFolders(files, path).map((folder) => ({
-      type: 'dir' as const,
-      name: folder.replace(path, '').replace(/\/$/, '') || folder,
+      type: "dir" as const,
+      name: folder.replace(path, "").replace(/\/$/, "") || folder,
       path: folder,
     }));
     const fileEntries = listLocalFiles(files, path).map((file) => ({
-      type: 'file' as const,
+      type: "file" as const,
       name: file.name,
       path: file.path,
       sizeBytes: file.sizeBytes ?? null,
@@ -231,16 +231,16 @@ export const createLocalSourceLocation = (
       return listSafFilesRecursive(source, path, options);
     }
     if (options?.signal?.aborted) {
-      throw new DOMException('Aborted', 'AbortError');
+      throw new DOMException("Aborted", "AbortError");
     }
     const normalized = normalizeSourcePath(path);
-    const prefix = normalized.endsWith('/') ? normalized : `${normalized}/`;
+    const prefix = normalized.endsWith("/") ? normalized : `${normalized}/`;
     return requireLocalSourceEntries(
       source,
-      'localSourceAdapter.listFilesRecursive',
+      "localSourceAdapter.listFilesRecursive",
     )
       .map((entry) => ({
-        type: 'file' as const,
+        type: "file" as const,
         name: entry.name,
         path: toSourceEntryPath(entry.relativePath),
         sizeBytes: entry.sizeBytes ?? null,
@@ -253,12 +253,12 @@ export const createLocalSourceLocation = (
 
   return {
     id: source.id,
-    type: 'local',
+    type: "local",
     name: source.name,
     rootPath,
     isAvailable:
       !source.requiresReselect &&
-      (!isAndroid || getLocalSourceListingMode(source) === 'saf'),
+      (!isAndroid || getLocalSourceListingMode(source) === "saf"),
     listEntries,
     listFilesRecursive,
   };

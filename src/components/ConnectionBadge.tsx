@@ -6,9 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { motion } from 'framer-motion';
-import { Wifi, WifiOff, Loader2 } from 'lucide-react';
-import { ConnectionStatus } from '@/hooks/useC64Connection';
+import { motion } from "framer-motion";
+import { Wifi, WifiOff, Loader2 } from "lucide-react";
+import { ConnectionStatus } from "@/hooks/useC64Connection";
 
 interface ConnectionBadgeProps {
   status: ConnectionStatus;
@@ -28,7 +28,7 @@ export function ConnectionBadge({
           <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
         ) : (
           <div
-            className={`status-dot ${isConnected ? 'status-online' : 'status-offline'}`}
+            className={`status-dot ${isConnected ? "status-online" : "status-offline"}`}
           />
         )}
       </div>
@@ -41,10 +41,10 @@ export function ConnectionBadge({
       animate={{ opacity: 1, y: 0 }}
       className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium ${
         isConnected
-          ? 'bg-success/10 text-success'
+          ? "bg-success/10 text-success"
           : isConnecting
-            ? 'bg-muted text-muted-foreground'
-            : 'bg-destructive/10 text-destructive'
+            ? "bg-muted text-muted-foreground"
+            : "bg-destructive/10 text-destructive"
       }`}
     >
       {isConnecting ? (
@@ -56,7 +56,7 @@ export function ConnectionBadge({
         <>
           <Wifi className="h-4 w-4" />
           <span className="font-semibold text-xs">
-            {deviceInfo?.hostname || 'Connected'}
+            {deviceInfo?.hostname || "Connected"}
           </span>
         </>
       ) : (

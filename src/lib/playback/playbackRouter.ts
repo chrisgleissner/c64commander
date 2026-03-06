@@ -6,36 +6,36 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { addErrorLog, addLog } from '@/lib/logging';
-import type { C64API } from '@/lib/c64api';
-import { getC64APIConfigSnapshot } from '@/lib/c64api';
-import { readFtpFile } from '@/lib/ftp/ftpClient';
-import { getStoredFtpPort } from '@/lib/ftp/ftpConfig';
-import { normalizeFtpHost } from '@/lib/sourceNavigation/ftpSourceAdapter';
-import { getActiveAction } from '@/lib/tracing/actionTrace';
+import { addErrorLog, addLog } from "@/lib/logging";
+import type { C64API } from "@/lib/c64api";
+import { getC64APIConfigSnapshot } from "@/lib/c64api";
+import { readFtpFile } from "@/lib/ftp/ftpClient";
+import { getStoredFtpPort } from "@/lib/ftp/ftpConfig";
+import { normalizeFtpHost } from "@/lib/sourceNavigation/ftpSourceAdapter";
+import { getActiveAction } from "@/lib/tracing/actionTrace";
 import {
   recordDeviceGuard,
   recordTraceError,
-} from '@/lib/tracing/traceSession';
-import { classifyError } from '@/lib/tracing/failureTaxonomy';
-import { AUTOSTART_SEQUENCE, injectAutostart } from './autostart';
+} from "@/lib/tracing/traceSession";
+import { classifyError } from "@/lib/tracing/failureTaxonomy";
+import { AUTOSTART_SEQUENCE, injectAutostart } from "./autostart";
 import {
   formatPlayCategory,
   getFileExtension,
   getMountTypeForExtension,
   getPlayCategory,
   type PlayFileCategory,
-} from './fileTypes';
-import { mountDiskToDrive, resolveLocalDiskBlob } from '@/lib/disks/diskMount';
-import { createDiskEntry } from '@/lib/disks/diskTypes';
-import { base64ToUint8, createSslPayload } from '@/lib/sid/sidUtils';
+} from "./fileTypes";
+import { mountDiskToDrive, resolveLocalDiskBlob } from "@/lib/disks/diskMount";
+import { createDiskEntry } from "@/lib/disks/diskTypes";
+import { base64ToUint8, createSslPayload } from "@/lib/sid/sidUtils";
 import {
   loadDiskAutostartMode,
   type DiskAutostartMode,
-} from '@/lib/config/appSettings';
-import { loadFirstDiskPrgViaDma, type DiskImageType } from './diskFirstPrg';
+} from "@/lib/config/appSettings";
+import { loadFirstDiskPrgViaDma, type DiskImageType } from "./diskFirstPrg";
 
-export type PlaySource = 'local' | 'ultimate' | 'hvsc';
+export type PlaySource = "local" | "ultimate" | "hvsc";
 
 export type LocalPlayFile =
   | File
@@ -67,7 +67,7 @@ export type PlayPlan = {
 export const buildPlayPlan = (request: PlayRequest): PlayPlan => {
   const category = getPlayCategory(request.path);
   if (!category) {
-    throw new Error('Unsupported file format.');
+    throw new Error("Unsupported file format.");
   }
   return {
     category,
@@ -83,11 +83,11 @@ export const buildPlayPlan = (request: PlayRequest): PlayPlan => {
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const normalizeUltimatePath = (path: string) =>
-  path.startsWith('/') ? path : `/${path}`;
+  path.startsWith("/") ? path : `/${path}`;
 
 const emitDurationPropagationEvent = (payload: {
-  type: 'ssl-propagation-failure' | 'playback-no-duration';
-  level: 'error' | 'info';
+  type: "ssl-propagation-failure" | "playback-no-duration";
+  level: "error" | "info";
   reason: string;
   path: string;
   songlengthEntryMs?: number;
@@ -97,16 +97,16 @@ const emitDurationPropagationEvent = (payload: {
     type: payload.type,
     level: payload.level,
     reason: payload.reason,
-    sourceKind: 'ultimate',
+    sourceKind: "ultimate",
     trackId: payload.path,
     songlengthEntryMs: payload.songlengthEntryMs ?? null,
     error: payload.errorMessage ?? null,
   };
 
-  if (payload.level === 'error') {
-    addErrorLog('Ultimate SID SSL propagation failure', eventContext);
+  if (payload.level === "error") {
+    addErrorLog("Ultimate SID SSL propagation failure", eventContext);
   } else {
-    addLog('info', 'Ultimate SID has no duration metadata', eventContext);
+    addLog("info", "Ultimate SID has no duration metadata", eventContext);
   }
 
   const activeAction = getActiveAction();
@@ -117,7 +117,7 @@ const emitDurationPropagationEvent = (payload: {
 
 export const tryFetchUltimateSidBlob = async (path: string) => {
   const normalizedPath = normalizeUltimatePath(path);
-  const { deviceHost: rawHost, password = '' } = getC64APIConfigSnapshot();
+  const { deviceHost: rawHost, password = "" } = getC64APIConfigSnapshot();
   const host = normalizeFtpHost(rawHost);
   try {
     const response = await readFtpFile({
@@ -128,19 +128,19 @@ export const tryFetchUltimateSidBlob = async (path: string) => {
     });
     const bytes = base64ToUint8(response.data);
     if (
-      typeof response.sizeBytes === 'number' &&
+      typeof response.sizeBytes === "number" &&
       response.sizeBytes !== bytes.length
     ) {
-      addLog('warn', 'FTP SID payload size mismatch', {
+      addLog("warn", "FTP SID payload size mismatch", {
         path: normalizedPath,
         expectedBytes: response.sizeBytes,
         actualBytes: bytes.length,
       });
       return null;
     }
-    return new Blob([bytes], { type: 'application/octet-stream' });
+    return new Blob([bytes], { type: "application/octet-stream" });
   } catch (error) {
-    addLog('debug', 'FTP SID fetch failed', {
+    addLog("debug", "FTP SID fetch failed", {
       path: normalizedPath,
       error: (error as Error).message,
     });
@@ -163,21 +163,21 @@ const injectDiskAutostart = async (api: C64API, payload: Uint8Array) => {
         pollIntervalMs: 140,
         maxAttempts: 20,
       });
-      addLog('info', 'Disk autostart injected', { attempt: attempt + 1 });
+      addLog("info", "Disk autostart injected", { attempt: attempt + 1 });
       return;
     } catch (error) {
       lastError = error as Error;
-      addLog('debug', 'Disk autostart retry', {
+      addLog("debug", "Disk autostart retry", {
         attempt: attempt + 1,
         error: lastError.message,
       });
     }
   }
-  addErrorLog('Disk autostart failed', {
-    error: lastError?.message ?? 'Unknown error',
+  addErrorLog("Disk autostart failed", {
+    error: lastError?.message ?? "Unknown error",
   });
   throw new Error(
-    'Disk autostart failed. Try again after the disk finishes mounting.',
+    "Disk autostart failed. Try again after the disk finishes mounting.",
   );
 };
 
@@ -186,21 +186,21 @@ const toBlob = async (file?: LocalPlayFile) => {
   if (file instanceof Blob) return file;
   try {
     const buffer = await file.arrayBuffer();
-    return new Blob([buffer], { type: 'application/octet-stream' });
+    return new Blob([buffer], { type: "application/octet-stream" });
   } catch (error) {
-    const message = (error as Error).message || 'Local file unavailable.';
+    const message = (error as Error).message || "Local file unavailable.";
     const isNetworkFailure =
       /failed to fetch|networkerror|network request failed/i.test(message);
     if (isNetworkFailure) {
-      throw new Error('Local file unavailable. Re-add it to the playlist.');
+      throw new Error("Local file unavailable. Re-add it to the playlist.");
     }
     throw error;
   }
 };
 
 export type PlayExecutionOptions = {
-  drive?: 'a' | 'b';
-  loadMode?: 'run' | 'load';
+  drive?: "a" | "b";
+  loadMode?: "run" | "load";
   resetBeforeMount?: boolean;
   rebootBeforeMount?: boolean;
   diskAutostartMode?: DiskAutostartMode;
@@ -211,8 +211,8 @@ export const executePlayPlan = async (
   plan: PlayPlan,
   options: PlayExecutionOptions = {},
 ) => {
-  const drive = options.drive ?? 'a';
-  const loadMode = options.loadMode ?? 'run';
+  const drive = options.drive ?? "a";
+  const loadMode = options.loadMode ?? "run";
   const rebootBeforeMount = options.rebootBeforeMount ?? false;
   const resetBeforeMount = options.resetBeforeMount ?? true;
   const resetDelayMs = 500;
@@ -221,15 +221,15 @@ export const executePlayPlan = async (
 
   try {
     switch (plan.category) {
-      case 'sid': {
-        if (plan.source === 'ultimate') {
+      case "sid": {
+        if (plan.source === "ultimate") {
           const hasSonglengthData =
-            typeof plan.durationMs === 'number' && plan.durationMs > 0;
+            typeof plan.durationMs === "number" && plan.durationMs > 0;
           if (!hasSonglengthData) {
             emitDurationPropagationEvent({
-              type: 'playback-no-duration',
-              level: 'info',
-              reason: 'no-songlength-entry',
+              type: "playback-no-duration",
+              level: "info",
+              reason: "no-songlength-entry",
               path: plan.path,
             });
             await api.playSid(plan.path, plan.songNr);
@@ -240,11 +240,11 @@ export const executePlayPlan = async (
           try {
             const ftpBlob = await tryFetchUltimateSidBlob(plan.path);
             if (!ftpBlob) {
-              throw new Error('SID FTP fetch failed for SSL propagation');
+              throw new Error("SID FTP fetch failed for SSL propagation");
             }
             const sslPayload = createSslPayload(plan.durationMs);
             const sslBlob = new Blob([sslPayload], {
-              type: 'application/octet-stream',
+              type: "application/octet-stream",
             });
             await api.playSidUpload(ftpBlob, plan.songNr, sslBlob);
             return;
@@ -252,21 +252,21 @@ export const executePlayPlan = async (
             propagationFailure = error as Error;
             const message = propagationFailure.message;
             const reason = /ftp/i.test(message)
-              ? 'ftp-fetch-failed'
+              ? "ftp-fetch-failed"
               : /invalid sid duration|duration/i.test(message)
-                ? 'ssl-payload-invalid'
-                : 'upload-failed-with-songlength-available';
+                ? "ssl-payload-invalid"
+                : "upload-failed-with-songlength-available";
             emitDurationPropagationEvent({
-              type: 'ssl-propagation-failure',
-              level: 'error',
+              type: "ssl-propagation-failure",
+              level: "error",
               reason,
               path: plan.path,
               songlengthEntryMs: plan.durationMs,
               errorMessage: message,
             });
             addLog(
-              'warn',
-              'Ultimate SID falling back to direct playback without SSL upload',
+              "warn",
+              "Ultimate SID falling back to direct playback without SSL upload",
               {
                 path: plan.path,
                 reason,
@@ -283,7 +283,7 @@ export const executePlayPlan = async (
             const fallbackContext = new Error(
               `Ultimate SID fallback playback failed after SSL propagation failure: ${err.message}`,
             );
-            addErrorLog('Ultimate SID fallback playback failed', {
+            addErrorLog("Ultimate SID fallback playback failed", {
               path: plan.path,
               propagationError: propagationFailure?.message ?? null,
               fallbackError: err.message,
@@ -292,29 +292,29 @@ export const executePlayPlan = async (
           }
         }
         const blob = await toBlob(plan.file);
-        if (!blob) throw new Error('Missing local SID data.');
+        if (!blob) throw new Error("Missing local SID data.");
         const sslBlob =
           plan.durationMs && plan.durationMs > 0
             ? new Blob([createSslPayload(plan.durationMs)], {
-                type: 'application/octet-stream',
+                type: "application/octet-stream",
               })
             : undefined;
         await api.playSidUpload(blob, plan.songNr, sslBlob);
         return;
       }
-      case 'mod': {
-        if (plan.source === 'ultimate') {
+      case "mod": {
+        if (plan.source === "ultimate") {
           await api.playMod(plan.path);
           return;
         }
         const blob = await toBlob(plan.file);
-        if (!blob) throw new Error('Missing local MOD data.');
+        if (!blob) throw new Error("Missing local MOD data.");
         await api.playModUpload(blob);
         return;
       }
-      case 'prg': {
-        if (plan.source === 'ultimate') {
-          if (loadMode === 'load') {
+      case "prg": {
+        if (plan.source === "ultimate") {
+          if (loadMode === "load") {
             await api.loadPrg(plan.path);
           } else {
             await api.runPrg(plan.path);
@@ -322,25 +322,25 @@ export const executePlayPlan = async (
           return;
         }
         const blob = await toBlob(plan.file);
-        if (!blob) throw new Error('Missing local PRG data.');
-        if (loadMode === 'load') {
+        if (!blob) throw new Error("Missing local PRG data.");
+        if (loadMode === "load") {
           await api.loadPrgUpload(blob);
         } else {
           await api.runPrgUpload(blob);
         }
         return;
       }
-      case 'crt': {
-        if (plan.source === 'ultimate') {
+      case "crt": {
+        if (plan.source === "ultimate") {
           await api.runCartridge(plan.path);
           return;
         }
         const blob = await toBlob(plan.file);
-        if (!blob) throw new Error('Missing local CRT data.');
+        if (!blob) throw new Error("Missing local CRT data.");
         await api.runCartridgeUpload(blob);
         return;
       }
-      case 'disk': {
+      case "disk": {
         if (rebootBeforeMount) {
           await api.machineReboot();
           await delay(resetDelayMs);
@@ -351,55 +351,55 @@ export const executePlayPlan = async (
 
         let localBlob: Blob | null = null;
 
-        if (plan.source === 'ultimate') {
+        if (plan.source === "ultimate") {
           const diskEntry = createDiskEntry({
             path: plan.path,
-            location: 'ultimate',
+            location: "ultimate",
           });
           await mountDiskToDrive(api, drive, diskEntry);
         } else if (plan.file) {
           localBlob = await toBlob(plan.file);
-          if (!localBlob) throw new Error('Missing local disk data.');
+          if (!localBlob) throw new Error("Missing local disk data.");
           await api.mountDriveUpload(
             drive,
             localBlob,
             plan.mountType,
-            'readwrite',
+            "readwrite",
           );
         } else {
           const diskEntry = createDiskEntry({
             path: plan.path,
-            location: 'local',
+            location: "local",
           });
           await mountDiskToDrive(api, drive, diskEntry);
         }
 
         const diskType = getFileExtension(plan.path);
         const dmaEligible =
-          diskAutostartMode === 'dma' &&
-          plan.source === 'local' &&
-          (diskType === 'd64' || diskType === 'd71' || diskType === 'd81') &&
+          diskAutostartMode === "dma" &&
+          plan.source === "local" &&
+          (diskType === "d64" || diskType === "d71" || diskType === "d81") &&
           localBlob;
 
         if (dmaEligible) {
           const image = new Uint8Array(await localBlob.arrayBuffer());
           await loadFirstDiskPrgViaDma(api, image, diskType as DiskImageType);
         } else if (
-          diskAutostartMode === 'dma' &&
-          plan.source === 'local' &&
+          diskAutostartMode === "dma" &&
+          plan.source === "local" &&
           !localBlob &&
-          (diskType === 'd64' || diskType === 'd71' || diskType === 'd81')
+          (diskType === "d64" || diskType === "d71" || diskType === "d81")
         ) {
           const diskEntry = createDiskEntry({
             path: plan.path,
-            location: 'local',
+            location: "local",
           });
           try {
             const blob = await resolveLocalDiskBlob(diskEntry);
             const image = new Uint8Array(await blob.arrayBuffer());
             await loadFirstDiskPrgViaDma(api, image, diskType as DiskImageType);
           } catch (error) {
-            addLog('warn', 'DMA disk autostart fallback to injection', {
+            addLog("warn", "DMA disk autostart fallback to injection", {
               path: plan.path,
               error: (error as Error).message,
             });
@@ -418,7 +418,7 @@ export const executePlayPlan = async (
   } catch (error) {
     const err = error as Error;
     const failure = classifyError(err);
-    addErrorLog('Playback failed', {
+    addErrorLog("Playback failed", {
       source: plan.source,
       path: plan.path,
       category: plan.category,

@@ -6,8 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { FeatureFlags as FeatureFlagsPlugin } from '@/lib/native/featureFlags';
-import { addErrorLog } from '@/lib/logging';
+import { FeatureFlags as FeatureFlagsPlugin } from "@/lib/native/featureFlags";
+import { addErrorLog } from "@/lib/logging";
 
 export const FEATURE_FLAG_DEFINITIONS = {
   hvsc_enabled: {
@@ -34,7 +34,7 @@ export interface FeatureFlagRepository {
 export class PluginFeatureFlagRepository implements FeatureFlagRepository {
   async getFlag(key: FeatureFlagKey): Promise<boolean | null> {
     const result = await FeatureFlagsPlugin.getFlag({ key });
-    if (typeof result.value === 'boolean') return result.value;
+    if (typeof result.value === "boolean") return result.value;
     return null;
   }
 
@@ -120,7 +120,7 @@ export class FeatureFlagManager {
       };
       this.emit();
     } catch (error) {
-      addErrorLog('Feature flag load failed', {
+      addErrorLog("Feature flag load failed", {
         error: (error as Error).message,
       });
       this.snapshot = { flags: { ...this.defaults }, isLoaded: true };
@@ -139,7 +139,7 @@ export class FeatureFlagManager {
       };
       this.emit();
     } catch (error) {
-      addErrorLog('Feature flag update failed', {
+      addErrorLog("Feature flag update failed", {
         key,
         error: (error as Error).message,
       });

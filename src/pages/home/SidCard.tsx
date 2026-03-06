@@ -6,18 +6,18 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import React from 'react';
-import { Button } from '@/components/ui/button';
-import { Slider } from '@/components/ui/slider';
+import React from "react";
+import { Button } from "@/components/ui/button";
+import { Slider } from "@/components/ui/slider";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import { cn } from '@/lib/utils';
-import { getOnOffButtonClass } from '@/lib/ui/buttonStyles';
+} from "@/components/ui/select";
+import { cn } from "@/lib/utils";
+import { getOnOffButtonClass } from "@/lib/ui/buttonStyles";
 
 export interface SidCardProps {
   name: string;
@@ -77,7 +77,7 @@ export interface SidCardProps {
 }
 
 const inlineSelectTriggerClass =
-  'h-auto w-auto border-0 bg-transparent px-0 py-0 text-xs font-semibold text-foreground shadow-none focus:ring-0 focus:ring-offset-0 [&>svg]:hidden';
+  "h-auto w-auto border-0 bg-transparent px-0 py-0 text-xs font-semibold text-foreground shadow-none focus:ring-0 focus:ring-offset-0 [&>svg]:hidden";
 
 export function SidCard({
   name,
@@ -120,12 +120,12 @@ export function SidCard({
   testIdSuffix,
 }: SidCardProps) {
   const formatSelectOptionLabel = (value: string) =>
-    value === '' ? 'Default' : value;
+    value === "" ? "Default" : value;
 
   return (
     <div
       className={cn(
-        'bg-card border border-border rounded-xl p-3 space-y-2',
+        "bg-card border border-border rounded-xl p-3 space-y-2",
         className,
       )}
       data-testid={`home-sid-entry-${testIdSuffix}`}
@@ -141,20 +141,20 @@ export function SidCard({
             size="sm"
             onClick={onPowerToggle}
             disabled={!isConnected || powerPending}
-            className={cn('h-6 px-2 text-xs', getOnOffButtonClass(power))}
+            className={cn("h-6 px-2 text-xs", getOnOffButtonClass(power))}
             data-testid={`home-sid-toggle-${testIdSuffix}`}
           >
-            {power ? 'ON' : 'OFF'}
+            {power ? "ON" : "OFF"}
           </Button>
         ) : (
           <Button
             variant="outline"
             size="sm"
             disabled={true}
-            className={cn('h-6 px-2 text-xs', getOnOffButtonClass(power))}
+            className={cn("h-6 px-2 text-xs", getOnOffButtonClass(power))}
             data-testid={`home-sid-toggle-${testIdSuffix}`}
           >
-            {power ? 'ON' : 'OFF'}
+            {power ? "ON" : "OFF"}
           </Button>
         )}
       </div>

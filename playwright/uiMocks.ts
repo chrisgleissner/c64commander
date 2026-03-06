@@ -6,9 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-import type { Page } from '@playwright/test';
+import * as fs from "node:fs";
+import * as path from "node:path";
+import type { Page } from "@playwright/test";
 
 type HvscFixture = {
   version: number;
@@ -22,20 +22,20 @@ type HvscFixture = {
 
 const configState = JSON.parse(
   fs.readFileSync(
-    path.resolve('playwright/fixtures/c64u/configState.json'),
-    'utf8',
+    path.resolve("playwright/fixtures/c64u/configState.json"),
+    "utf8",
   ),
 ) as Record<string, Record<string, any>>;
 
 const baselineFixture = JSON.parse(
   fs.readFileSync(
-    path.resolve('playwright/fixtures/hvsc/baseline.json'),
-    'utf8',
+    path.resolve("playwright/fixtures/hvsc/baseline.json"),
+    "utf8",
   ),
 ) as HvscFixture;
 
 const primarySong = baselineFixture.songs[0];
-const fixtureBase64 = primarySong?.dataBase64 ?? '';
+const fixtureBase64 = primarySong?.dataBase64 ?? "";
 
 const buildSnapshotData = () => {
   const data: Record<string, any> = {};
@@ -79,7 +79,7 @@ export async function seedUiMocks(page: Page, baseUrl: string) {
         delete (window as Window & { showDirectoryPicker?: unknown })
           .showDirectoryPicker;
       } catch (error) {
-        console.warn('Unable to clear showDirectoryPicker', error);
+        console.warn("Unable to clear showDirectoryPicker", error);
       }
       const routingWindow = window as Window & {
         __c64uExpectedBaseUrl?: string;
@@ -98,7 +98,7 @@ export async function seedUiMocks(page: Page, baseUrl: string) {
         allowedBaseUrls.add(baseUrlArg);
       }
       try {
-        const ftpBridgeUrl = localStorage.getItem('c64u_ftp_bridge_url');
+        const ftpBridgeUrl = localStorage.getItem("c64u_ftp_bridge_url");
         if (ftpBridgeUrl) {
           allowedBaseUrls.add(ftpBridgeUrl);
         }
@@ -106,20 +106,20 @@ export async function seedUiMocks(page: Page, baseUrl: string) {
         // ignore storage access failures
       }
       routingWindow.__c64uAllowedBaseUrls = Array.from(allowedBaseUrls);
-      const host = baseUrlArg?.replace(/^https?:\/\//, '');
+      const host = baseUrlArg?.replace(/^https?:\/\//, "");
       try {
-        localStorage.removeItem('c64u_password');
-        localStorage.removeItem('c64u_has_password');
+        localStorage.removeItem("c64u_password");
+        localStorage.removeItem("c64u_has_password");
         delete (window as Window & { __c64uSecureStorageOverride?: unknown })
           .__c64uSecureStorageOverride;
-        localStorage.setItem('c64u_device_host', host || 'c64u');
+        localStorage.setItem("c64u_device_host", host || "c64u");
         localStorage.setItem(
           `c64u_initial_snapshot:${baseUrlArg}`,
           JSON.stringify(snapshot),
         );
         sessionStorage.setItem(
           `c64u_initial_snapshot_session:${baseUrlArg}`,
-          '1',
+          "1",
         );
       } catch {
         return;
@@ -128,8 +128,8 @@ export async function seedUiMocks(page: Page, baseUrl: string) {
       const listeners: Array<(event: any) => void> = [];
       const song = {
         id: 1,
-        virtualPath: '/DEMOS/0-9/10_Orbyte.sid',
-        fileName: '10_Orbyte.sid',
+        virtualPath: "/DEMOS/0-9/10_Orbyte.sid",
+        fileName: "10_Orbyte.sid",
         durationSeconds: 77,
         dataBase64: songData,
       };
@@ -142,7 +142,7 @@ export async function seedUiMocks(page: Page, baseUrl: string) {
         getHvscStatus: async () => ({
           installedBaselineVersion: 83,
           installedVersion: 84,
-          ingestionState: 'ready',
+          ingestionState: "ready",
           lastUpdateCheckUtcMs: Date.now(),
           ingestionError: null as string | null,
         }),
@@ -159,21 +159,21 @@ export async function seedUiMocks(page: Page, baseUrl: string) {
         installOrUpdateHvsc: async () => ({
           installedBaselineVersion: 83,
           installedVersion: 84,
-          ingestionState: 'ready',
+          ingestionState: "ready",
           lastUpdateCheckUtcMs: Date.now(),
           ingestionError: null as string | null,
         }),
         cancelHvscInstall: async () => {},
         getHvscFolderListing: async ({ path }: { path: string }) => {
-          const normalized = path || '/';
-          if (normalized === '/') {
+          const normalized = path || "/";
+          if (normalized === "/") {
             return {
-              path: '/',
-              folders: ['/DEMOS/0-9'],
+              path: "/",
+              folders: ["/DEMOS/0-9"],
               songs: [] as Array<any>,
             };
           }
-          if (normalized === '/DEMOS/0-9') {
+          if (normalized === "/DEMOS/0-9") {
             return {
               path: normalized,
               folders: [],
@@ -197,7 +197,7 @@ export async function seedUiMocks(page: Page, baseUrl: string) {
           virtualPath?: string;
         }) => {
           if (id !== song.id && virtualPath !== song.virtualPath)
-            throw new Error('Song not found');
+            throw new Error("Song not found");
           return {
             id: song.id,
             virtualPath: song.virtualPath,

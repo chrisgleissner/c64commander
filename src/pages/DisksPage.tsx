@@ -6,9 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { motion } from 'framer-motion';
-import { HomeDiskManager } from '@/components/disks/HomeDiskManager';
-import { AppBar } from '@/components/AppBar';
+import { motion } from "framer-motion";
+import { HomeDiskManager } from "@/components/disks/HomeDiskManager";
+import { AppBar } from "@/components/AppBar";
 
 export default function DisksPage() {
   return (

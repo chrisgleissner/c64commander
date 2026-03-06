@@ -6,21 +6,21 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-export type PlayFileCategory = 'sid' | 'mod' | 'prg' | 'crt' | 'disk';
+export type PlayFileCategory = "sid" | "mod" | "prg" | "crt" | "disk";
 
 const normalizeExtension = (value: string) =>
-  value.replace(/^\./, '').toLowerCase();
+  value.replace(/^\./, "").toLowerCase();
 
-const SID_EXTENSIONS = new Set(['sid']);
-const MOD_EXTENSIONS = new Set(['mod']);
-const PRG_EXTENSIONS = new Set(['prg']);
-const CRT_EXTENSIONS = new Set(['crt']);
+const SID_EXTENSIONS = new Set(["sid"]);
+const MOD_EXTENSIONS = new Set(["mod"]);
+const PRG_EXTENSIONS = new Set(["prg"]);
+const CRT_EXTENSIONS = new Set(["crt"]);
 export const DISK_IMAGE_EXTENSIONS = new Set([
-  'd64',
-  'g64',
-  'd71',
-  'g71',
-  'd81',
+  "d64",
+  "g64",
+  "d71",
+  "g71",
+  "d81",
 ]);
 
 export const SUPPORTED_PLAY_EXTENSIONS = new Set([
@@ -32,9 +32,9 @@ export const SUPPORTED_PLAY_EXTENSIONS = new Set([
 ]);
 
 export const getFileExtension = (value: string) => {
-  const base = value.split('/').pop() || value;
-  const idx = base.lastIndexOf('.');
-  if (idx < 0) return '';
+  const base = value.split("/").pop() || value;
+  const idx = base.lastIndexOf(".");
+  if (idx < 0) return "";
   return normalizeExtension(base.slice(idx + 1));
 };
 
@@ -43,11 +43,11 @@ export const isSupportedPlayFile = (value: string) =>
 
 export const getPlayCategory = (value: string): PlayFileCategory | null => {
   const ext = getFileExtension(value);
-  if (SID_EXTENSIONS.has(ext)) return 'sid';
-  if (MOD_EXTENSIONS.has(ext)) return 'mod';
-  if (PRG_EXTENSIONS.has(ext)) return 'prg';
-  if (CRT_EXTENSIONS.has(ext)) return 'crt';
-  if (DISK_IMAGE_EXTENSIONS.has(ext)) return 'disk';
+  if (SID_EXTENSIONS.has(ext)) return "sid";
+  if (MOD_EXTENSIONS.has(ext)) return "mod";
+  if (PRG_EXTENSIONS.has(ext)) return "prg";
+  if (CRT_EXTENSIONS.has(ext)) return "crt";
+  if (DISK_IMAGE_EXTENSIONS.has(ext)) return "disk";
   return null;
 };
 
@@ -59,17 +59,17 @@ export const getMountTypeForExtension = (value: string) => {
 
 export const formatPlayCategory = (category: PlayFileCategory) => {
   switch (category) {
-    case 'sid':
-      return 'SID music';
-    case 'mod':
-      return 'MOD music';
-    case 'prg':
-      return 'PRG program';
-    case 'crt':
-      return 'CRT cartridge';
-    case 'disk':
-      return 'Disk image';
+    case "sid":
+      return "SID music";
+    case "mod":
+      return "MOD music";
+    case "prg":
+      return "PRG program";
+    case "crt":
+      return "CRT cartridge";
+    case "disk":
+      return "Disk image";
     default:
-      return 'File';
+      return "File";
   }
 };

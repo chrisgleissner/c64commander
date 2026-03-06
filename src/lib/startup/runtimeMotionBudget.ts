@@ -6,26 +6,26 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { addLog } from '@/lib/logging';
+import { addLog } from "@/lib/logging";
 
-const MOTION_MODE_STORAGE_KEY = 'c64_motion_mode';
+const MOTION_MODE_STORAGE_KEY = "c64_motion_mode";
 const LOW_END_DEVICE_MAX_CORES = 4;
 const LOW_END_DEVICE_MAX_MEMORY_GB = 4;
 
-export type RuntimeMotionMode = 'standard' | 'reduced';
+export type RuntimeMotionMode = "standard" | "reduced";
 export type RuntimeMotionReason =
-  | 'user-override'
-  | 'system-preference'
-  | 'low-end-device'
-  | 'default';
+  | "user-override"
+  | "system-preference"
+  | "low-end-device"
+  | "default";
 
 export type MotionRuntimeEnvironment = {
-  localStorage?: Pick<Storage, 'getItem'>;
-  navigator?: Pick<Navigator, 'hardwareConcurrency' | 'userAgent'> & {
+  localStorage?: Pick<Storage, "getItem">;
+  navigator?: Pick<Navigator, "hardwareConcurrency" | "userAgent"> & {
     deviceMemory?: number;
   };
   matchMedia?: (query: string) => { matches: boolean };
-  document?: Pick<Document, 'documentElement'>;
+  document?: Pick<Document, "documentElement">;
 };
 
 export type RuntimeMotionResolution = {
@@ -36,31 +36,31 @@ export type RuntimeMotionResolution = {
 };
 
 const toFiniteNumber = (value: unknown) =>
-  typeof value === 'number' && Number.isFinite(value) ? value : null;
+  typeof value === "number" && Number.isFinite(value) ? value : null;
 
 const parseOverride = (value: string | null): RuntimeMotionMode | null => {
   if (!value) return null;
   const normalized = value.trim().toLowerCase();
   if (
-    normalized === 'reduced' ||
-    normalized === 'low' ||
-    normalized === 'minimal'
+    normalized === "reduced" ||
+    normalized === "low" ||
+    normalized === "minimal"
   )
-    return 'reduced';
+    return "reduced";
   if (
-    normalized === 'standard' ||
-    normalized === 'full' ||
-    normalized === 'high'
+    normalized === "standard" ||
+    normalized === "full" ||
+    normalized === "high"
   )
-    return 'standard';
+    return "standard";
   return null;
 };
 
 const defaultEnvironment = (): MotionRuntimeEnvironment => {
-  if (typeof window === 'undefined') return {};
+  if (typeof window === "undefined") return {};
   return {
     localStorage: window.localStorage,
-    navigator: window.navigator as MotionRuntimeEnvironment['navigator'],
+    navigator: window.navigator as MotionRuntimeEnvironment["navigator"],
     matchMedia: window.matchMedia.bind(window),
     document: window.document,
   };
@@ -74,7 +74,7 @@ const readMotionOverride = (
   try {
     return parseOverride(storage.getItem(MOTION_MODE_STORAGE_KEY));
   } catch (error) {
-    addLog('warn', 'Failed to read runtime motion mode override', {
+    addLog("warn", "Failed to read runtime motion mode override", {
       error: (error as Error).message,
     });
     return null;
@@ -86,9 +86,9 @@ const prefersReducedMotion = (
 ): boolean => {
   if (!environment.matchMedia) return false;
   try {
-    return environment.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    return environment.matchMedia("(prefers-reduced-motion: reduce)").matches;
   } catch (error) {
-    addLog('warn', 'Failed to evaluate prefers-reduced-motion media query', {
+    addLog("warn", "Failed to evaluate prefers-reduced-motion media query", {
       error: (error as Error).message,
     });
     return false;
@@ -100,7 +100,7 @@ const isLowEndDevice = (environment: MotionRuntimeEnvironment): boolean => {
     environment.navigator?.hardwareConcurrency,
   );
   const deviceMemoryGb = toFiniteNumber(environment.navigator?.deviceMemory);
-  const userAgent = environment.navigator?.userAgent?.toLowerCase() ?? '';
+  const userAgent = environment.navigator?.userAgent?.toLowerCase() ?? "";
   const cpuBound =
     hardwareConcurrency !== null &&
     hardwareConcurrency <= LOW_END_DEVICE_MAX_CORES;
@@ -121,30 +121,30 @@ export const resolveRuntimeMotionMode = (
   if (override) {
     return {
       mode: override,
-      reason: 'user-override',
+      reason: "user-override",
       hardwareConcurrency,
       deviceMemoryGb,
     };
   }
   if (prefersReducedMotion(environment)) {
     return {
-      mode: 'reduced',
-      reason: 'system-preference',
+      mode: "reduced",
+      reason: "system-preference",
       hardwareConcurrency,
       deviceMemoryGb,
     };
   }
   if (isLowEndDevice(environment)) {
     return {
-      mode: 'reduced',
-      reason: 'low-end-device',
+      mode: "reduced",
+      reason: "low-end-device",
       hardwareConcurrency,
       deviceMemoryGb,
     };
   }
   return {
-    mode: 'standard',
-    reason: 'default',
+    mode: "standard",
+    reason: "default",
     hardwareConcurrency,
     deviceMemoryGb,
   };
@@ -157,7 +157,7 @@ export const applyRuntimeMotionMode = (
   const root = environment.document?.documentElement;
   if (!root) return;
   root.dataset.c64MotionMode = resolution.mode;
-  root.classList.toggle('c64-motion-reduced', resolution.mode === 'reduced');
+  root.classList.toggle("c64-motion-reduced", resolution.mode === "reduced");
 };
 
 export const initializeRuntimeMotionMode = (
@@ -165,6 +165,6 @@ export const initializeRuntimeMotionMode = (
 ) => {
   const resolution = resolveRuntimeMotionMode(environment);
   applyRuntimeMotionMode(resolution, environment);
-  addLog('info', 'Runtime motion mode selected', resolution);
+  addLog("info", "Runtime motion mode selected", resolution);
   return resolution;
 };

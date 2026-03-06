@@ -5,8 +5,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 interface PowerOffDialogProps {
   open: boolean;
@@ -41,7 +41,7 @@ export function PowerOffDialog({
             onClick={onConfirm}
             disabled={isPending}
           >
-            {isPending ? 'Powering off…' : 'Power Off'}
+            {isPending ? "Powering off…" : "Power Off"}
           </Button>
         </DialogFooter>
       </DialogContent>

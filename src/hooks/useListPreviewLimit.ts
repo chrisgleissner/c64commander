@@ -6,12 +6,12 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from "react";
 import {
   clampListPreviewLimit,
   getListPreviewLimit,
   setListPreviewLimit,
-} from '@/lib/uiPreferences';
+} from "@/lib/uiPreferences";
 
 export const useListPreviewLimit = () => {
   const [limit, setLimitState] = useState(() => getListPreviewLimit());
@@ -27,12 +27,12 @@ export const useListPreviewLimit = () => {
       }
     };
     window.addEventListener(
-      'c64u-ui-preferences-changed',
+      "c64u-ui-preferences-changed",
       handler as EventListener,
     );
     return () =>
       window.removeEventListener(
-        'c64u-ui-preferences-changed',
+        "c64u-ui-preferences-changed",
         handler as EventListener,
       );
   }, []);

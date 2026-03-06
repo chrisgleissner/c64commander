@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { CATEGORY_OPTIONS, shuffleArray } from '../playFilesUtils';
-import type { PlayFileCategory, PlaylistItem } from '@/pages/playFiles/types';
+import { useCallback, useEffect, useRef, useState } from "react";
+import { CATEGORY_OPTIONS, shuffleArray } from "../playFilesUtils";
+import type { PlayFileCategory, PlaylistItem } from "@/pages/playFiles/types";
 
 export function usePlaylistManager() {
   const [playlist, setPlaylist] = useState<PlaylistItem[]>([]);
@@ -40,8 +40,8 @@ export function usePlaylistManager() {
           ...shuffled.slice(insertIndex),
         ];
         if (
-          next.map((item) => item.id).join('|') ===
-          items.map((item) => item.id).join('|')
+          next.map((item) => item.id).join("|") ===
+          items.map((item) => item.id).join("|")
         ) {
           if (rest.length > 1) {
             const swapped = [...shuffled];
@@ -58,8 +58,8 @@ export function usePlaylistManager() {
 
       let shuffled = shuffleArray(items);
       if (
-        shuffled.map((item) => item.id).join('|') ===
-        items.map((item) => item.id).join('|')
+        shuffled.map((item) => item.id).join("|") ===
+        items.map((item) => item.id).join("|")
       ) {
         if (shuffled.length > 1) {
           const swapped = [...shuffled];

@@ -6,9 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-describe('fuzzMode', () => {
+describe("fuzzMode", () => {
   let localStorageMock: {
     getItem: ReturnType<typeof vi.fn>;
     setItem: ReturnType<typeof vi.fn>;
@@ -35,12 +35,12 @@ describe('fuzzMode', () => {
       removeItem: vi.fn(),
       clear: vi.fn(),
     };
-    Object.defineProperty(global, 'localStorage', {
+    Object.defineProperty(global, "localStorage", {
       value: localStorageMock,
       writable: true,
       configurable: true,
     });
-    Object.defineProperty(global, 'sessionStorage', {
+    Object.defineProperty(global, "sessionStorage", {
       value: sessionStorageMock,
       writable: true,
       configurable: true,
@@ -53,158 +53,158 @@ describe('fuzzMode', () => {
     delete (window as Window & { __c64uFuzzMode?: boolean }).__c64uFuzzMode;
   });
 
-  describe('isFuzzModeEnabled', () => {
-    it('returns false when no fuzz mode indicators are set', async () => {
+  describe("isFuzzModeEnabled", () => {
+    it("returns false when no fuzz mode indicators are set", async () => {
       localStorageMock.getItem.mockReturnValue(null);
-      const { isFuzzModeEnabled } = await import('./fuzzMode');
+      const { isFuzzModeEnabled } = await import("./fuzzMode");
       expect(isFuzzModeEnabled()).toBe(false);
     });
 
-    it('returns true when localStorage has fuzz mode enabled', async () => {
-      localStorageMock.getItem.mockReturnValue('1');
-      const { isFuzzModeEnabled } = await import('./fuzzMode');
+    it("returns true when localStorage has fuzz mode enabled", async () => {
+      localStorageMock.getItem.mockReturnValue("1");
+      const { isFuzzModeEnabled } = await import("./fuzzMode");
       expect(isFuzzModeEnabled()).toBe(true);
     });
 
-    it('returns true when window.__c64uFuzzMode is set', async () => {
+    it("returns true when window.__c64uFuzzMode is set", async () => {
       (window as Window & { __c64uFuzzMode?: boolean }).__c64uFuzzMode = true;
-      const { isFuzzModeEnabled } = await import('./fuzzMode');
+      const { isFuzzModeEnabled } = await import("./fuzzMode");
       expect(isFuzzModeEnabled()).toBe(true);
     });
 
     it('returns false when localStorage value is not "1"', async () => {
-      localStorageMock.getItem.mockReturnValue('0');
-      const { isFuzzModeEnabled } = await import('./fuzzMode');
+      localStorageMock.getItem.mockReturnValue("0");
+      const { isFuzzModeEnabled } = await import("./fuzzMode");
       expect(isFuzzModeEnabled()).toBe(false);
     });
   });
 
-  describe('getFuzzMockBaseUrl', () => {
-    it('returns null when no base URL is set', async () => {
+  describe("getFuzzMockBaseUrl", () => {
+    it("returns null when no base URL is set", async () => {
       localStorageMock.getItem.mockReturnValue(null);
-      const { getFuzzMockBaseUrl } = await import('./fuzzMode');
+      const { getFuzzMockBaseUrl } = await import("./fuzzMode");
       expect(getFuzzMockBaseUrl()).toBeNull();
     });
 
-    it('returns the base URL when set', async () => {
-      localStorageMock.getItem.mockReturnValue('http://localhost:8064');
-      const { getFuzzMockBaseUrl } = await import('./fuzzMode');
-      expect(getFuzzMockBaseUrl()).toBe('http://localhost:8064');
+    it("returns the base URL when set", async () => {
+      localStorageMock.getItem.mockReturnValue("http://localhost:8064");
+      const { getFuzzMockBaseUrl } = await import("./fuzzMode");
+      expect(getFuzzMockBaseUrl()).toBe("http://localhost:8064");
     });
   });
 
-  describe('markFuzzModeEnabled', () => {
-    it('sets fuzz mode in localStorage', async () => {
-      const { markFuzzModeEnabled } = await import('./fuzzMode');
+  describe("markFuzzModeEnabled", () => {
+    it("sets fuzz mode in localStorage", async () => {
+      const { markFuzzModeEnabled } = await import("./fuzzMode");
       markFuzzModeEnabled();
       expect(localStorageMock.setItem).toHaveBeenCalledWith(
-        'c64u_fuzz_mode_enabled',
-        '1',
+        "c64u_fuzz_mode_enabled",
+        "1",
       );
     });
 
-    it('does nothing when localStorage is undefined', async () => {
-      Object.defineProperty(global, 'localStorage', {
+    it("does nothing when localStorage is undefined", async () => {
+      Object.defineProperty(global, "localStorage", {
         value: undefined,
         writable: true,
         configurable: true,
       });
-      const { markFuzzModeEnabled } = await import('./fuzzMode');
+      const { markFuzzModeEnabled } = await import("./fuzzMode");
       expect(() => markFuzzModeEnabled()).not.toThrow();
     });
   });
 
-  describe('resetFuzzStorage', () => {
-    it('does nothing when fuzz mode is not enabled', async () => {
+  describe("resetFuzzStorage", () => {
+    it("does nothing when fuzz mode is not enabled", async () => {
       localStorageMock.getItem.mockReturnValue(null);
-      const { resetFuzzStorage } = await import('./fuzzMode');
+      const { resetFuzzStorage } = await import("./fuzzMode");
       resetFuzzStorage();
       expect(localStorageMock.clear).not.toHaveBeenCalled();
     });
 
-    it('clears storage when fuzz mode is enabled', async () => {
+    it("clears storage when fuzz mode is enabled", async () => {
       localStorageMock.getItem.mockImplementation((key: string) => {
-        if (key === 'c64u_fuzz_mode_enabled') return '1';
-        if (key === 'c64u_fuzz_storage_seeded') return null;
+        if (key === "c64u_fuzz_mode_enabled") return "1";
+        if (key === "c64u_fuzz_storage_seeded") return null;
         return null;
       });
-      const { resetFuzzStorage } = await import('./fuzzMode');
+      const { resetFuzzStorage } = await import("./fuzzMode");
       resetFuzzStorage();
       expect(localStorageMock.clear).toHaveBeenCalled();
       expect(sessionStorageMock.clear).toHaveBeenCalled();
     });
 
-    it('preserves fuzz mock base URL when clearing', async () => {
+    it("preserves fuzz mock base URL when clearing", async () => {
       localStorageMock.getItem.mockImplementation((key: string) => {
-        if (key === 'c64u_fuzz_mode_enabled') return '1';
-        if (key === 'c64u_fuzz_storage_seeded') return null;
-        if (key === 'c64u_fuzz_mock_base_url') return 'http://localhost:3000';
+        if (key === "c64u_fuzz_mode_enabled") return "1";
+        if (key === "c64u_fuzz_storage_seeded") return null;
+        if (key === "c64u_fuzz_mock_base_url") return "http://localhost:3000";
         return null;
       });
-      const { resetFuzzStorage } = await import('./fuzzMode');
+      const { resetFuzzStorage } = await import("./fuzzMode");
       resetFuzzStorage();
       expect(localStorageMock.setItem).toHaveBeenCalledWith(
-        'c64u_fuzz_mock_base_url',
-        'http://localhost:3000',
+        "c64u_fuzz_mock_base_url",
+        "http://localhost:3000",
       );
     });
 
-    it('does not clear if already seeded', async () => {
+    it("does not clear if already seeded", async () => {
       localStorageMock.getItem.mockImplementation((key: string) => {
-        if (key === 'c64u_fuzz_mode_enabled') return '1';
-        if (key === 'c64u_fuzz_storage_seeded') return '1';
+        if (key === "c64u_fuzz_mode_enabled") return "1";
+        if (key === "c64u_fuzz_storage_seeded") return "1";
         return null;
       });
-      const { resetFuzzStorage } = await import('./fuzzMode');
+      const { resetFuzzStorage } = await import("./fuzzMode");
       resetFuzzStorage();
       expect(localStorageMock.clear).not.toHaveBeenCalled();
     });
   });
 
-  describe('applyFuzzModeDefaults', () => {
-    it('does nothing when fuzz mode is not enabled', async () => {
+  describe("applyFuzzModeDefaults", () => {
+    it("does nothing when fuzz mode is not enabled", async () => {
       localStorageMock.getItem.mockReturnValue(null);
-      const { applyFuzzModeDefaults } = await import('./fuzzMode');
+      const { applyFuzzModeDefaults } = await import("./fuzzMode");
       applyFuzzModeDefaults();
       expect(localStorageMock.setItem).not.toHaveBeenCalled();
     });
 
-    it('applies defaults when fuzz mode is enabled', async () => {
+    it("applies defaults when fuzz mode is enabled", async () => {
       localStorageMock.getItem.mockImplementation((key: string) => {
-        if (key === 'c64u_fuzz_mode_enabled') return '1';
-        if (key === 'c64u_fuzz_storage_seeded') return null;
+        if (key === "c64u_fuzz_mode_enabled") return "1";
+        if (key === "c64u_fuzz_storage_seeded") return null;
         return null;
       });
-      const { applyFuzzModeDefaults } = await import('./fuzzMode');
+      const { applyFuzzModeDefaults } = await import("./fuzzMode");
       applyFuzzModeDefaults();
       expect(localStorageMock.setItem).toHaveBeenCalledWith(
-        'c64u_fuzz_storage_seeded',
-        '1',
+        "c64u_fuzz_storage_seeded",
+        "1",
       );
       expect(localStorageMock.setItem).toHaveBeenCalledWith(
-        'c64u_debug_logging_enabled',
-        '1',
+        "c64u_debug_logging_enabled",
+        "1",
       );
       expect(localStorageMock.setItem).toHaveBeenCalledWith(
-        'c64u_automatic_demo_mode_enabled',
-        '1',
+        "c64u_automatic_demo_mode_enabled",
+        "1",
       );
     });
 
-    it('returns early when localStorage is undefined even if fuzz mode is enabled via window flag', async () => {
+    it("returns early when localStorage is undefined even if fuzz mode is enabled via window flag", async () => {
       // Covers the if (typeof localStorage === 'undefined') return branch in applyFuzzModeDefaults
       (window as Window & { __c64uFuzzMode?: boolean }).__c64uFuzzMode = true;
-      Object.defineProperty(global, 'localStorage', {
+      Object.defineProperty(global, "localStorage", {
         value: undefined,
         writable: true,
         configurable: true,
       });
 
-      const { applyFuzzModeDefaults } = await import('./fuzzMode');
+      const { applyFuzzModeDefaults } = await import("./fuzzMode");
       expect(() => applyFuzzModeDefaults()).not.toThrow();
 
       // Restore
-      Object.defineProperty(global, 'localStorage', {
+      Object.defineProperty(global, "localStorage", {
         value: localStorageMock,
         writable: true,
         configurable: true,
@@ -212,39 +212,39 @@ describe('fuzzMode', () => {
     });
   });
 
-  describe('platform edge cases', () => {
-    it('readStorageValue returns null when localStorage is undefined', async () => {
+  describe("platform edge cases", () => {
+    it("readStorageValue returns null when localStorage is undefined", async () => {
       // Covers: if (typeof localStorage === 'undefined') return null in readStorageValue
-      Object.defineProperty(global, 'localStorage', {
+      Object.defineProperty(global, "localStorage", {
         value: undefined,
         writable: true,
         configurable: true,
       });
 
-      const { getFuzzMockBaseUrl } = await import('./fuzzMode');
+      const { getFuzzMockBaseUrl } = await import("./fuzzMode");
       expect(getFuzzMockBaseUrl()).toBeNull();
 
       // Restore
-      Object.defineProperty(global, 'localStorage', {
+      Object.defineProperty(global, "localStorage", {
         value: localStorageMock,
         writable: true,
         configurable: true,
       });
     });
 
-    it('isFuzzModeEnabled returns false when window is undefined', async () => {
+    it("isFuzzModeEnabled returns false when window is undefined", async () => {
       // Covers: if (typeof window === 'undefined') return false in isFuzzModeEnabled
       const savedWindow = globalThis.window;
-      Object.defineProperty(globalThis, 'window', {
+      Object.defineProperty(globalThis, "window", {
         value: undefined,
         writable: true,
         configurable: true,
       });
 
-      const { isFuzzModeEnabled } = await import('./fuzzMode');
+      const { isFuzzModeEnabled } = await import("./fuzzMode");
       expect(isFuzzModeEnabled()).toBe(false);
 
-      Object.defineProperty(globalThis, 'window', {
+      Object.defineProperty(globalThis, "window", {
         value: savedWindow,
         writable: true,
         configurable: true,

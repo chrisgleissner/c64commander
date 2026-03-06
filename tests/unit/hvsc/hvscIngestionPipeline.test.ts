@@ -6,18 +6,18 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   loadHvscUpdateArchiveBuffer,
   loadHvscUpdateMockArchiveBuffer,
-} from '../../fixtures/hvsc/ensureHvscUpdateArchive';
+} from "../../fixtures/hvsc/ensureHvscUpdateArchive";
 import {
   ingestArchiveBuffer,
   type IngestArchiveBufferOptions,
-} from '@/lib/hvsc/hvscIngestionRuntime';
-import type { PipelineStateMachine } from '@/lib/hvsc/hvscIngestionPipeline';
+} from "@/lib/hvsc/hvscIngestionRuntime";
+import type { PipelineStateMachine } from "@/lib/hvsc/hvscIngestionPipeline";
 
-vi.mock('@/lib/hvsc/hvscFilesystem', () => ({
+vi.mock("@/lib/hvsc/hvscFilesystem", () => ({
   MAX_BRIDGE_READ_BYTES: 5 * 1024 * 1024,
   writeLibraryFile: vi.fn(async () => undefined),
   deleteLibraryFile: vi.fn(async () => undefined),
@@ -25,19 +25,19 @@ vi.mock('@/lib/hvsc/hvscFilesystem', () => ({
   resetSonglengthsCache: vi.fn(),
 }));
 
-vi.mock('@/lib/hvsc/hvscStateStore', () => ({
+vi.mock("@/lib/hvsc/hvscStateStore", () => ({
   markUpdateApplied: vi.fn(),
   updateHvscState: vi.fn(),
 }));
 
-vi.mock('@/lib/hvsc/hvscSongLengthService', () => ({
+vi.mock("@/lib/hvsc/hvscSongLengthService", () => ({
   reloadHvscSonglengthsOnConfigChange: vi.fn(async () => undefined),
   getHvscSonglengthsStats: vi.fn(() => ({
     backendStats: { rejectedLines: 0 },
   })),
 }));
 
-vi.mock('@/lib/logging', () => ({
+vi.mock("@/lib/logging", () => ({
   addErrorLog: vi.fn(),
   addLog: vi.fn(),
 }));
@@ -47,9 +47,9 @@ import {
   deleteLibraryFile,
   resetLibraryRoot,
   resetSonglengthsCache,
-} from '@/lib/hvsc/hvscFilesystem';
-import { markUpdateApplied, updateHvscState } from '@/lib/hvsc/hvscStateStore';
-import { reloadHvscSonglengthsOnConfigChange } from '@/lib/hvsc/hvscSongLengthService';
+} from "@/lib/hvsc/hvscFilesystem";
+import { markUpdateApplied, updateHvscState } from "@/lib/hvsc/hvscStateStore";
+import { reloadHvscSonglengthsOnConfigChange } from "@/lib/hvsc/hvscSongLengthService";
 
 const makePipeline = (): PipelineStateMachine & { transitions: string[] } => {
   const transitions: string[] = [];
@@ -58,30 +58,30 @@ const makePipeline = (): PipelineStateMachine & { transitions: string[] } => {
     transition: (next: string) => {
       transitions.push(next);
     },
-    current: () => transitions[transitions.length - 1] ?? 'DOWNLOADED',
+    current: () => transitions[transitions.length - 1] ?? "DOWNLOADED",
   } as PipelineStateMachine & { transitions: string[] };
 };
 
 const makeOptions = (
   overrides: Partial<IngestArchiveBufferOptions> = {},
 ): IngestArchiveBufferOptions => ({
-  plan: { type: 'update', version: 84 },
-  archiveName: 'HVSC_Update_84.7z',
+  plan: { type: "update", version: 84 },
+  archiveName: "HVSC_Update_84.7z",
   archiveBuffer: new Uint8Array(),
-  cancelToken: 'token-1',
-  cancelTokens: new Map([['token-1', { cancelled: false }]]),
+  cancelToken: "token-1",
+  cancelTokens: new Map([["token-1", { cancelled: false }]]),
   emitProgress: vi.fn(),
   pipeline: makePipeline(),
   baselineInstalled: 83,
   ...overrides,
 });
 
-describe('hvscIngestionPipeline', () => {
+describe("hvscIngestionPipeline", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('ingests a real update archive end-to-end', async () => {
+  it("ingests a real update archive end-to-end", async () => {
     const buffer = await loadHvscUpdateArchiveBuffer();
     const options = makeOptions({ archiveBuffer: buffer });
     const result = await ingestArchiveBuffer(options);
@@ -92,59 +92,59 @@ describe('hvscIngestionPipeline', () => {
     expect(updateHvscState).toHaveBeenCalledWith(
       expect.objectContaining({
         installedVersion: 84,
-        ingestionState: 'ready',
+        ingestionState: "ready",
       }),
     );
-    expect(markUpdateApplied).toHaveBeenCalledWith(84, 'success');
+    expect(markUpdateApplied).toHaveBeenCalledWith(84, "success");
     expect(
       (options.pipeline as ReturnType<typeof makePipeline>).transitions,
-    ).toEqual(['EXTRACTING', 'EXTRACTED', 'INGESTING', 'READY']);
+    ).toEqual(["EXTRACTING", "EXTRACTED", "INGESTING", "READY"]);
     expect(writeLibraryFile).toHaveBeenCalled();
   }, 120000);
 
-  it('classifies songlengths and deletion lists from mock archive', async () => {
+  it("classifies songlengths and deletion lists from mock archive", async () => {
     const buffer = await loadHvscUpdateMockArchiveBuffer();
     const options = makeOptions({
-      archiveName: 'HVSC_Update_mock.7z',
+      archiveName: "HVSC_Update_mock.7z",
       archiveBuffer: buffer,
     });
     await ingestArchiveBuffer(options);
 
     expect(writeLibraryFile).toHaveBeenCalledWith(
-      '/DOCUMENTS/Songlengths.txt',
+      "/DOCUMENTS/Songlengths.txt",
       expect.any(Uint8Array),
     );
     expect(deleteLibraryFile).toHaveBeenCalledWith(
-      '/MUSICIANS/B/Bjerregaard_Johannes/Old_Tune.sid',
+      "/MUSICIANS/B/Bjerregaard_Johannes/Old_Tune.sid",
     );
     expect(deleteLibraryFile).toHaveBeenCalledWith(
-      '/MUSICIANS/B/Bjerregaard_Johannes/Gone.sid',
+      "/MUSICIANS/B/Bjerregaard_Johannes/Gone.sid",
     );
   }, 60000);
 
-  it('normalizes update paths for library writes', async () => {
+  it("normalizes update paths for library writes", async () => {
     const buffer = await loadHvscUpdateMockArchiveBuffer();
     const options = makeOptions({
-      archiveName: 'HVSC_Update_mock.7z',
+      archiveName: "HVSC_Update_mock.7z",
       archiveBuffer: buffer,
     });
     await ingestArchiveBuffer(options);
 
     const calls = vi.mocked(writeLibraryFile).mock.calls.map((call) => call[0]);
     expect(calls).toContain(
-      '/fix/MUSICIANS/A/Adrock_and_Deadeye/James_Bond.sid',
+      "/fix/MUSICIANS/A/Adrock_and_Deadeye/James_Bond.sid",
     );
     expect(calls).toContain(
-      '/fix/MUSICIANS/B/Bjerregaard_Johannes/Cute_Tune.sid',
+      "/fix/MUSICIANS/B/Bjerregaard_Johannes/Cute_Tune.sid",
     );
   }, 60000);
 
-  it('resets library root for baseline plans', async () => {
+  it("resets library root for baseline plans", async () => {
     const buffer = await loadHvscUpdateMockArchiveBuffer();
     const options = makeOptions({
-      plan: { type: 'baseline', version: 84 },
+      plan: { type: "baseline", version: 84 },
       baselineInstalled: null,
-      archiveName: 'HVSC_Update_mock.7z',
+      archiveName: "HVSC_Update_mock.7z",
       archiveBuffer: buffer,
     });
     await ingestArchiveBuffer(options);
@@ -158,14 +158,14 @@ describe('hvscIngestionPipeline', () => {
     );
   }, 60000);
 
-  it('cancels mid-extraction when token flips', async () => {
+  it("cancels mid-extraction when token flips", async () => {
     const buffer = await loadHvscUpdateArchiveBuffer();
-    const cancelTokens = new Map([['token-1', { cancelled: false }]]);
+    const cancelTokens = new Map([["token-1", { cancelled: false }]]);
     let progressEvents = 0;
     const emitProgress = vi.fn(() => {
       progressEvents += 1;
       if (progressEvents > 3) {
-        cancelTokens.get('token-1')!.cancelled = true;
+        cancelTokens.get("token-1")!.cancelled = true;
       }
     });
     const options = makeOptions({
@@ -175,11 +175,11 @@ describe('hvscIngestionPipeline', () => {
     });
 
     await expect(ingestArchiveBuffer(options)).rejects.toThrow(
-      'HVSC update cancelled',
+      "HVSC update cancelled",
     );
   }, 120000);
 
-  it('fails with corrupt archive buffers', async () => {
+  it("fails with corrupt archive buffers", async () => {
     const buffer = new Uint8Array([0x01, 0x02, 0x03, 0x04]);
     const options = makeOptions({ archiveBuffer: buffer });
     // Error depends on 7z implementation, might contain 'Call to main failed' or '7zip exited with'.

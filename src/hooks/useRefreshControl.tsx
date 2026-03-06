@@ -12,7 +12,7 @@ import {
   useContext,
   useMemo,
   useState,
-} from 'react';
+} from "react";
 
 type RefreshControlContextValue = {
   configExpandedCount: number;
@@ -63,7 +63,7 @@ export function useRefreshControl() {
   const ctx = useContext(RefreshControlContext);
   if (!ctx) {
     throw new Error(
-      'useRefreshControl must be used within RefreshControlProvider',
+      "useRefreshControl must be used within RefreshControlProvider",
     );
   }
   return ctx;

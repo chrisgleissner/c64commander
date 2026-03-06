@@ -6,4 +6,4 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-export { HvscSongSource } from '@/lib/hvsc';
+export { HvscSongSource } from "@/lib/hvsc";

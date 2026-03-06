@@ -6,12 +6,12 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { FolderPicker } from '@/lib/native/folderPicker';
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { FolderPicker } from "@/lib/native/folderPicker";
 
-const platformState = { value: 'web', native: false };
+const platformState = { value: "web", native: false };
 
-vi.mock('@capacitor/core', () => ({
+vi.mock("@capacitor/core", () => ({
   Capacitor: {
     getPlatform: () => platformState.value,
     isNativePlatform: () => platformState.native,
@@ -21,7 +21,7 @@ vi.mock('@capacitor/core', () => ({
 
 const pickDirectoryMock = vi.fn();
 
-vi.mock('@/lib/native/folderPicker', () => ({
+vi.mock("@/lib/native/folderPicker", () => ({
   FolderPicker: {
     pickDirectory: (...args: unknown[]) => pickDirectoryMock(...args),
     listChildren: vi.fn(),
@@ -40,54 +40,54 @@ import {
   setLocalSourceRuntimeFiles,
   prepareDirectoryInput,
   validateSource,
-} from '@/lib/sourceNavigation/localSourcesStore';
+} from "@/lib/sourceNavigation/localSourcesStore";
 
 const createFile = (name: string, content: string, relativePath?: string) => {
   const file = new File([content], name, {
-    type: 'text/plain',
+    type: "text/plain",
     lastModified: Date.now(),
   });
   if (relativePath) {
-    Object.defineProperty(file, 'webkitRelativePath', { value: relativePath });
+    Object.defineProperty(file, "webkitRelativePath", { value: relativePath });
   }
   return file;
 };
 
-describe('localSourcesStore', () => {
+describe("localSourcesStore", () => {
   beforeEach(() => {
     localStorage.clear();
     pickDirectoryMock.mockReset();
-    platformState.value = 'web';
+    platformState.value = "web";
     platformState.native = false;
     (
       FolderPicker.listChildren as unknown as ReturnType<typeof vi.fn>
     ).mockReset();
   });
 
-  it('creates a local source from file list and tracks runtime files', () => {
+  it("creates a local source from file list and tracks runtime files", () => {
     const files = [
-      createFile('song.sid', 'SID', 'MyFolder/song.sid'),
-      createFile('note.txt', 'TXT', 'MyFolder/note.txt'),
+      createFile("song.sid", "SID", "MyFolder/song.sid"),
+      createFile("note.txt", "TXT", "MyFolder/note.txt"),
     ];
 
     const result = createLocalSourceFromFileList(files);
-    expect(result.source.rootName).toBe('MyFolder');
+    expect(result.source.rootName).toBe("MyFolder");
     expect(result.source.entries).toHaveLength(2);
-    expect(result.runtimeFiles['/MyFolder/song.sid']).toBeDefined();
+    expect(result.runtimeFiles["/MyFolder/song.sid"]).toBeDefined();
 
     setLocalSourceRuntimeFiles(result.source.id, result.runtimeFiles);
     expect(
-      getLocalSourceRuntimeFile(result.source.id, 'MyFolder/song.sid'),
+      getLocalSourceRuntimeFile(result.source.id, "MyFolder/song.sid"),
     ).toBe(files[0]);
   });
 
-  it('saves and loads local sources from storage', () => {
+  it("saves and loads local sources from storage", () => {
     const sources = [
       {
-        id: 'source-1',
-        name: 'Local',
-        rootName: 'Local',
-        rootPath: '/Local/',
+        id: "source-1",
+        name: "Local",
+        rootName: "Local",
+        rootPath: "/Local/",
         createdAt: new Date().toISOString(),
         entries: [],
       },
@@ -99,63 +99,63 @@ describe('localSourcesStore', () => {
     expect(loaded[0].entries).toHaveLength(0);
   });
 
-  it('prepares directory input attributes', () => {
-    const input = document.createElement('input');
+  it("prepares directory input attributes", () => {
+    const input = document.createElement("input");
     prepareDirectoryInput(input);
-    expect(input.getAttribute('webkitdirectory')).toBe('');
-    expect(input.getAttribute('directory')).toBe('');
+    expect(input.getAttribute("webkitdirectory")).toBe("");
+    expect(input.getAttribute("directory")).toBe("");
   });
 
-  it('uses native folder picker on android', async () => {
-    platformState.value = 'android';
+  it("uses native folder picker on android", async () => {
+    platformState.value = "android";
     platformState.native = true;
     pickDirectoryMock.mockResolvedValue({
-      treeUri: 'content://tree/primary%3AMusic',
-      rootName: 'Phone',
+      treeUri: "content://tree/primary%3AMusic",
+      rootName: "Phone",
       permissionPersisted: true,
     });
 
     const result = await createLocalSourceFromPicker(null);
-    expect(result?.source.rootName).toBe('Phone');
+    expect(result?.source.rootName).toBe("Phone");
     expect(result?.source.entries).toBeUndefined();
     expect(result?.source.android?.treeUri).toBe(
-      'content://tree/primary%3AMusic',
+      "content://tree/primary%3AMusic",
     );
   });
 
-  it('keeps rootPath as / for SAF sources regardless of rootName', async () => {
-    platformState.value = 'android';
+  it("keeps rootPath as / for SAF sources regardless of rootName", async () => {
+    platformState.value = "android";
     platformState.native = true;
     pickDirectoryMock.mockResolvedValue({
-      treeUri: 'content://tree/primary%3AMusic%2FDemos',
-      rootName: 'Demos',
+      treeUri: "content://tree/primary%3AMusic%2FDemos",
+      rootName: "Demos",
       permissionPersisted: true,
     });
 
     const result = await createLocalSourceFromPicker(null);
-    expect(result?.source.rootPath).toBe('/');
-    expect(result?.source.rootName).toBe('Demos');
+    expect(result?.source.rootPath).toBe("/");
+    expect(result?.source.rootName).toBe("Demos");
   });
 
-  it('defaults rootPath to / when rootName is empty', async () => {
-    platformState.value = 'android';
+  it("defaults rootPath to / when rootName is empty", async () => {
+    platformState.value = "android";
     platformState.native = true;
     pickDirectoryMock.mockResolvedValue({
-      treeUri: 'content://tree/primary%3AMusic',
-      rootName: '',
+      treeUri: "content://tree/primary%3AMusic",
+      rootName: "",
       permissionPersisted: true,
     });
 
     const result = await createLocalSourceFromPicker(null);
-    expect(result?.source.rootPath).toBe('/');
+    expect(result?.source.rootPath).toBe("/");
   });
 
-  it('persists and restores SAF source with treeUri across save/load', async () => {
-    platformState.value = 'android';
+  it("persists and restores SAF source with treeUri across save/load", async () => {
+    platformState.value = "android";
     platformState.native = true;
     pickDirectoryMock.mockResolvedValue({
-      treeUri: 'content://tree/primary%3AMusic',
-      rootName: 'SID Collection',
+      treeUri: "content://tree/primary%3AMusic",
+      rootName: "SID Collection",
       permissionPersisted: true,
     });
 
@@ -165,32 +165,32 @@ describe('localSourcesStore', () => {
 
     const loaded = loadLocalSources();
     expect(loaded).toHaveLength(1);
-    expect(loaded[0].android?.treeUri).toBe('content://tree/primary%3AMusic');
-    expect(loaded[0].rootPath).toBe('/');
-    expect(loaded[0].rootName).toBe('SID Collection');
+    expect(loaded[0].android?.treeUri).toBe("content://tree/primary%3AMusic");
+    expect(loaded[0].rootPath).toBe("/");
+    expect(loaded[0].rootName).toBe("SID Collection");
     expect(loaded[0].id).toBe(result!.source.id);
   });
 
-  it('rejects picker payloads with file listings on android', async () => {
-    platformState.value = 'android';
+  it("rejects picker payloads with file listings on android", async () => {
+    platformState.value = "android";
     platformState.native = true;
     pickDirectoryMock.mockResolvedValue({
-      treeUri: 'content://tree/primary%3AMusic',
-      rootName: 'Phone',
+      treeUri: "content://tree/primary%3AMusic",
+      rootName: "Phone",
       permissionPersisted: true,
       files: [
-        { name: 'song.sid', path: '/Phone/song.sid', uri: 'file://song.sid' },
+        { name: "song.sid", path: "/Phone/song.sid", uri: "file://song.sid" },
       ],
     });
 
     await expect(createLocalSourceFromPicker(null)).rejects.toThrow(
-      'Native folder picker returned an unsupported response.',
+      "Native folder picker returned an unsupported response.",
     );
   });
 
-  it('falls back to input click when directory picker is unavailable', async () => {
-    const input = document.createElement('input');
-    const clickSpy = vi.spyOn(input, 'click');
+  it("falls back to input click when directory picker is unavailable", async () => {
+    const input = document.createElement("input");
+    const clickSpy = vi.spyOn(input, "click");
     (
       window as Window & {
         showDirectoryPicker?: () => Promise<FileSystemDirectoryHandle>;
@@ -202,18 +202,18 @@ describe('localSourcesStore', () => {
     expect(clickSpy).toHaveBeenCalled();
   });
 
-  it('walks directory picker entries on web', async () => {
-    const song = createFile('song.sid', 'SID');
+  it("walks directory picker entries on web", async () => {
+    const song = createFile("song.sid", "SID");
     const fileHandle = {
-      kind: 'file',
+      kind: "file",
       getFile: async () => song,
     } as unknown as FileSystemFileHandle;
 
     const directoryHandle = {
-      kind: 'directory',
-      name: 'Music',
+      kind: "directory",
+      name: "Music",
       entries: async function* () {
-        yield ['song.sid', fileHandle] as const;
+        yield ["song.sid", fileHandle] as const;
       },
     } as unknown as FileSystemDirectoryHandle;
 
@@ -224,7 +224,7 @@ describe('localSourcesStore', () => {
     ).showDirectoryPicker = async () => directoryHandle;
 
     const result = await createLocalSourceFromPicker(null);
-    expect(result?.source.rootName).toBe('song.sid'); // webkitRelativePath takes precedence in simulation?
+    expect(result?.source.rootName).toBe("song.sid"); // webkitRelativePath takes precedence in simulation?
     // Wait, in `createLocalSourceFromFileList`, rootName comes from first file's relative path or label.
     // Here, we mocked walkDirectory, setting relativePath.
     // In `createLocalSourceFromPicker`:
@@ -242,25 +242,25 @@ describe('localSourcesStore', () => {
     expect(result?.source.entries).toHaveLength(1);
   });
 
-  it('recurses into subdirectories on web', async () => {
-    const song = createFile('tune.sid', 'SID');
+  it("recurses into subdirectories on web", async () => {
+    const song = createFile("tune.sid", "SID");
     const fileHandle = {
-      kind: 'file',
+      kind: "file",
       getFile: async () => song,
     } as unknown as FileSystemFileHandle;
 
     const nestedDirHandle = {
-      kind: 'directory',
+      kind: "directory",
       entries: async function* () {
-        yield ['tune.sid', fileHandle] as const;
+        yield ["tune.sid", fileHandle] as const;
       },
     } as unknown as FileSystemDirectoryHandle;
 
     const rootDirHandle = {
-      kind: 'directory',
-      name: 'Root',
+      kind: "directory",
+      name: "Root",
       entries: async function* () {
-        yield ['Nested', nestedDirHandle] as const;
+        yield ["Nested", nestedDirHandle] as const;
       },
     } as unknown as FileSystemDirectoryHandle;
 
@@ -272,46 +272,46 @@ describe('localSourcesStore', () => {
 
     const result = await createLocalSourceFromPicker(null);
     expect(result?.source.entries).toHaveLength(1);
-    expect(result?.source.entries?.[0].relativePath).toBe('Nested/tune.sid');
+    expect(result?.source.entries?.[0].relativePath).toBe("Nested/tune.sid");
   });
 
-  describe('Validation and Normalization', () => {
-    it('clears corrupted entries from localStorage', () => {
-      localStorage.setItem('c64u_local_sources:v1', 'invalid-json');
+  describe("Validation and Normalization", () => {
+    it("clears corrupted entries from localStorage", () => {
+      localStorage.setItem("c64u_local_sources:v1", "invalid-json");
       expect(loadLocalSources()).toEqual([]);
     });
 
-    it('returns empty array when localStorage contains valid JSON but non-array (BRDA:93)', () => {
-      localStorage.setItem('c64u_local_sources:v1', '{}');
+    it("returns empty array when localStorage contains valid JSON but non-array (BRDA:93)", () => {
+      localStorage.setItem("c64u_local_sources:v1", "{}");
       expect(loadLocalSources()).toEqual([]);
     });
 
-    it('normalizes SAF sources by removing entries and ensuring rootPath /', () => {
+    it("normalizes SAF sources by removing entries and ensuring rootPath /", () => {
       const raw = [
         {
-          id: 'saf1',
-          name: 'Saf',
-          createdAt: 'now',
-          entries: [{ name: 'ignored', relativePath: 'ignored' }],
+          id: "saf1",
+          name: "Saf",
+          createdAt: "now",
+          entries: [{ name: "ignored", relativePath: "ignored" }],
           android: {
-            treeUri: 'content://tree',
-            rootName: 'Saf',
-            permissionGrantedAt: 'now',
+            treeUri: "content://tree",
+            rootName: "Saf",
+            permissionGrantedAt: "now",
           },
         },
       ];
       saveLocalSources(raw as any);
       const loaded = loadLocalSources();
       expect(loaded[0].entries).toBeUndefined();
-      expect(loaded[0].rootPath).toBe('/');
+      expect(loaded[0].rootPath).toBe("/");
     });
 
-    it('normalizes entries array for non-SAF sources', () => {
+    it("normalizes entries array for non-SAF sources", () => {
       const raw = [
         {
-          id: 'local1',
-          name: 'Local',
-          createdAt: 'now',
+          id: "local1",
+          name: "Local",
+          createdAt: "now",
           // entries missing
         },
       ];
@@ -319,171 +319,171 @@ describe('localSourcesStore', () => {
       const loaded = loadLocalSources();
       expect(Array.isArray(loaded[0].entries)).toBe(true);
       expect(loaded[0].entries).toHaveLength(0);
-      expect(loaded[0].rootPath).toBe('/');
+      expect(loaded[0].rootPath).toBe("/");
     });
   });
 
-  describe('Android SAF Errors', () => {
+  describe("Android SAF Errors", () => {
     beforeEach(() => {
-      platformState.value = 'android';
+      platformState.value = "android";
       platformState.native = true;
     });
 
-    it('throws when SAF picker fails', async () => {
-      pickDirectoryMock.mockRejectedValue(new Error('User cancelled'));
+    it("throws when SAF picker fails", async () => {
+      pickDirectoryMock.mockRejectedValue(new Error("User cancelled"));
       await expect(createLocalSourceFromPicker(null)).rejects.toThrow(
-        'User cancelled',
+        "User cancelled",
       );
     });
 
-    it('throws when SAF permission cannot be persisted', async () => {
+    it("throws when SAF permission cannot be persisted", async () => {
       pickDirectoryMock.mockResolvedValue({
-        treeUri: 'content://tree',
-        rootName: 'Test',
+        treeUri: "content://tree",
+        rootName: "Test",
         permissionPersisted: false,
       });
       await expect(createLocalSourceFromPicker(null)).rejects.toThrow(
-        'Folder access permission could not be persisted',
+        "Folder access permission could not be persisted",
       );
     });
   });
 
-  describe('validateSource', () => {
-    it('returns false when source is missing', async () => {
-      await expect(validateSource('missing')).resolves.toBe(false);
+  describe("validateSource", () => {
+    it("returns false when source is missing", async () => {
+      await expect(validateSource("missing")).resolves.toBe(false);
     });
 
-    it('validates SAF source via native listChildren', async () => {
+    it("validates SAF source via native listChildren", async () => {
       const listChildrenMock =
         FolderPicker.listChildren as unknown as ReturnType<typeof vi.fn>;
       listChildrenMock.mockResolvedValue({ entries: [] });
 
       saveLocalSources([
         {
-          id: 'saf',
-          name: 'SAF Source',
-          rootName: 'Phone',
-          rootPath: '/',
+          id: "saf",
+          name: "SAF Source",
+          rootName: "Phone",
+          rootPath: "/",
           createdAt: new Date().toISOString(),
           android: {
-            treeUri: 'content://tree/primary%3AMusic',
-            rootName: 'Phone',
+            treeUri: "content://tree/primary%3AMusic",
+            rootName: "Phone",
             permissionGrantedAt: new Date().toISOString(),
           },
         },
       ] as any);
 
-      await expect(validateSource('saf')).resolves.toBe(true);
+      await expect(validateSource("saf")).resolves.toBe(true);
       expect(listChildrenMock).toHaveBeenCalledWith({
-        treeUri: 'content://tree/primary%3AMusic',
-        path: '',
+        treeUri: "content://tree/primary%3AMusic",
+        path: "",
       });
     });
 
-    it('normalizes entries source with missing entries array as valid', async () => {
+    it("normalizes entries source with missing entries array as valid", async () => {
       saveLocalSources([
         {
-          id: 'local-missing',
-          name: 'Local Missing',
-          rootName: 'Folder',
-          rootPath: '/Folder/',
+          id: "local-missing",
+          name: "Local Missing",
+          rootName: "Folder",
+          rootPath: "/Folder/",
           createdAt: new Date().toISOString(),
           entries: undefined,
         },
       ] as any);
 
-      await expect(validateSource('local-missing')).resolves.toBe(true);
+      await expect(validateSource("local-missing")).resolves.toBe(true);
     });
 
-    it('returns true for entries source with valid entries array', async () => {
+    it("returns true for entries source with valid entries array", async () => {
       saveLocalSources([
         {
-          id: 'local-ok',
-          name: 'Local',
-          rootName: 'Folder',
-          rootPath: '/Folder/',
+          id: "local-ok",
+          name: "Local",
+          rootName: "Folder",
+          rootPath: "/Folder/",
           createdAt: new Date().toISOString(),
           entries: [],
         },
       ] as any);
 
-      await expect(validateSource('local-ok')).resolves.toBe(true);
+      await expect(validateSource("local-ok")).resolves.toBe(true);
     });
 
-    it('returns false when SAF listChildren throws an error (BRDA:258)', async () => {
+    it("returns false when SAF listChildren throws an error (BRDA:258)", async () => {
       const listChildrenMock =
         FolderPicker.listChildren as unknown as ReturnType<typeof vi.fn>;
-      listChildrenMock.mockRejectedValueOnce(new Error('Permission denied'));
+      listChildrenMock.mockRejectedValueOnce(new Error("Permission denied"));
 
       saveLocalSources([
         {
-          id: 'saf-fail',
-          name: 'SAF Source',
-          rootName: 'Phone',
-          rootPath: '/',
+          id: "saf-fail",
+          name: "SAF Source",
+          rootName: "Phone",
+          rootPath: "/",
           createdAt: new Date().toISOString(),
           android: {
-            treeUri: 'content://tree/primary%3AMusic',
-            rootName: 'Phone',
+            treeUri: "content://tree/primary%3AMusic",
+            rootName: "Phone",
             permissionGrantedAt: new Date().toISOString(),
           },
         },
       ] as any);
 
-      await expect(validateSource('saf-fail')).resolves.toBe(false);
+      await expect(validateSource("saf-fail")).resolves.toBe(false);
     });
   });
 
-  describe('createLocalSourceFromFileList Edge Cases', () => {
-    it('handles empty file list', () => {
+  describe("createLocalSourceFromFileList Edge Cases", () => {
+    it("handles empty file list", () => {
       const result = createLocalSourceFromFileList([]);
-      expect(result.source.name).toBe('Folder');
+      expect(result.source.name).toBe("Folder");
       expect(result.source.entries).toHaveLength(0);
     });
 
-    it('uses label when first file has no relative path root', () => {
-      const file = createFile('test.sid');
+    it("uses label when first file has no relative path root", () => {
+      const file = createFile("test.sid");
       // @ts-expect-error - intentionally deleting property for test
       delete file.webkitRelativePath;
-      const result = createLocalSourceFromFileList([file], 'MyLabel');
-      expect(result.source.name).toBe('MyLabel');
-      expect(result.source.entries?.[0].relativePath).toBe('MyLabel/test.sid');
+      const result = createLocalSourceFromFileList([file], "MyLabel");
+      expect(result.source.name).toBe("MyLabel");
+      expect(result.source.entries?.[0].relativePath).toBe("MyLabel/test.sid");
     });
 
-    it('prepends label to flat files', () => {
-      const file = createFile('test.sid');
+    it("prepends label to flat files", () => {
+      const file = createFile("test.sid");
       // Standard file drop has empty webkitRelativePath
-      Object.defineProperty(file, 'webkitRelativePath', { value: '' });
-      const result = createLocalSourceFromFileList([file], 'Drop');
-      expect(result.source.name).toBe('Drop');
-      expect(result.source.entries?.[0].relativePath).toBe('Drop/test.sid');
+      Object.defineProperty(file, "webkitRelativePath", { value: "" });
+      const result = createLocalSourceFromFileList([file], "Drop");
+      expect(result.source.name).toBe("Drop");
+      expect(result.source.entries?.[0].relativePath).toBe("Drop/test.sid");
     });
 
-    it('strips leading slashes from relative paths', () => {
-      const file = createFile('test.sid');
-      Object.defineProperty(file, 'webkitRelativePath', {
-        value: '/folder/test.sid',
+    it("strips leading slashes from relative paths", () => {
+      const file = createFile("test.sid");
+      Object.defineProperty(file, "webkitRelativePath", {
+        value: "/folder/test.sid",
       });
       const result = createLocalSourceFromFileList([file]);
-      expect(result.source.entries?.[0].relativePath).toBe('folder/test.sid');
+      expect(result.source.entries?.[0].relativePath).toBe("folder/test.sid");
     });
   });
 
-  describe('prepareDirectoryInput', () => {
-    it('sets attributes on input', () => {
-      const input = document.createElement('input');
+  describe("prepareDirectoryInput", () => {
+    it("sets attributes on input", () => {
+      const input = document.createElement("input");
       prepareDirectoryInput(input);
-      expect(input.hasAttribute('webkitdirectory')).toBe(true);
-      expect(input.hasAttribute('directory')).toBe(true);
+      expect(input.hasAttribute("webkitdirectory")).toBe(true);
+      expect(input.hasAttribute("directory")).toBe(true);
     });
 
-    it('does nothing if input is null', () => {
+    it("does nothing if input is null", () => {
       expect(() => prepareDirectoryInput(null)).not.toThrow();
     });
   });
 
-  describe('Random ID Generation', () => {
-    it('falls back to timestamp when crypto is unavailable', () => {
+  describe("Random ID Generation", () => {
+    it("falls back to timestamp when crypto is unavailable", () => {
       const originalCrypto = globalThis.crypto;
       // @ts-expect-error - intentionally deleting global for test
       delete globalThis.crypto;
@@ -499,31 +499,31 @@ describe('localSourcesStore', () => {
 import {
   requireLocalSourceEntries,
   getLocalSourceListingMode,
-} from '@/lib/sourceNavigation/localSourcesStore';
+} from "@/lib/sourceNavigation/localSourcesStore";
 
-describe('requireLocalSourceEntries', () => {
-  it('throws for SAF sources', () => {
+describe("requireLocalSourceEntries", () => {
+  it("throws for SAF sources", () => {
     const source = {
-      id: 's1',
-      android: { treeUri: 'content://tree' },
+      id: "s1",
+      android: { treeUri: "content://tree" },
     } as any;
-    expect(() => requireLocalSourceEntries(source, 'test')).toThrow(
-      'SAF sources do not expose entry listings',
+    expect(() => requireLocalSourceEntries(source, "test")).toThrow(
+      "SAF sources do not expose entry listings",
     );
-    expect(getLocalSourceListingMode(source)).toBe('saf');
+    expect(getLocalSourceListingMode(source)).toBe("saf");
   });
 
-  it('throws for missing entries in non-SAF sources', () => {
-    const source = { id: 's2' } as any;
-    expect(() => requireLocalSourceEntries(source, 'test')).toThrow(
-      'Local source entries are missing or invalid',
+  it("throws for missing entries in non-SAF sources", () => {
+    const source = { id: "s2" } as any;
+    expect(() => requireLocalSourceEntries(source, "test")).toThrow(
+      "Local source entries are missing or invalid",
     );
-    expect(getLocalSourceListingMode(source)).toBe('entries');
+    expect(getLocalSourceListingMode(source)).toBe("entries");
   });
 
-  it('returns entries when valid', () => {
-    const entries = [{ name: 'f', relativePath: 'f' }];
-    const source = { id: 's3', entries } as any;
-    expect(requireLocalSourceEntries(source, 'test')).toBe(entries);
+  it("returns entries when valid", () => {
+    const entries = [{ name: "f", relativePath: "f" }];
+    const source = { id: "s3", entries } as any;
+    expect(requireLocalSourceEntries(source, "test")).toBe(entries);
   });
 });

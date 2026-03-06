@@ -6,8 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useState, useRef, useCallback, useEffect } from 'react';
-import { cn } from '@/lib/utils';
+import { useState, useRef, useCallback, useEffect } from "react";
+import { cn } from "@/lib/utils";
 
 type Props = {
   items: Array<{ title: string; id: string }>;
@@ -16,7 +16,7 @@ type Props = {
   onScrollToIndex?: (index: number) => void;
 };
 
-const LETTERS = '#ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+const LETTERS = "#ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 
 export function AlphabetScrollbar({
   items,
@@ -48,8 +48,8 @@ export function AlphabetScrollbar({
   const computeLetterIndices = useCallback(() => {
     const indices = new Map<string, number>();
     items.forEach((item, index) => {
-      const first = item.title.trim()[0]?.toUpperCase() || '#';
-      const letter = /[A-Z]/.test(first) ? first : '#';
+      const first = item.title.trim()[0]?.toUpperCase() || "#";
+      const letter = /[A-Z]/.test(first) ? first : "#";
       if (!indices.has(letter)) {
         indices.set(letter, index);
       }
@@ -70,7 +70,7 @@ export function AlphabetScrollbar({
         const targetItem = items[index];
         if (!targetItem) return;
         const safeId =
-          typeof CSS !== 'undefined' && 'escape' in CSS
+          typeof CSS !== "undefined" && "escape" in CSS
             ? CSS.escape(targetItem.id)
             : targetItem.id.replace(/"/g, '\\"');
         const targetRow = container.querySelector(
@@ -78,7 +78,7 @@ export function AlphabetScrollbar({
         ) as HTMLElement | null;
 
         if (targetRow) {
-          targetRow.scrollIntoView({ block: 'start', behavior: 'smooth' });
+          targetRow.scrollIntoView({ block: "start", behavior: "smooth" });
         }
       } else {
         return;
@@ -148,8 +148,8 @@ export function AlphabetScrollbar({
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
-    container.addEventListener('scroll', handleScroll, { passive: true });
-    return () => container.removeEventListener('scroll', handleScroll);
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    return () => container.removeEventListener("scroll", handleScroll);
   }, [scrollContainerRef, handleScroll]);
 
   useEffect(() => {
@@ -178,11 +178,11 @@ export function AlphabetScrollbar({
       }
       updateEligibility();
       resizeObserver =
-        typeof ResizeObserver !== 'undefined'
+        typeof ResizeObserver !== "undefined"
           ? new ResizeObserver(updateEligibility)
           : null;
       resizeObserver?.observe(container);
-      window.addEventListener('resize', updateEligibility);
+      window.addEventListener("resize", updateEligibility);
     };
 
     attachObservers();
@@ -190,7 +190,7 @@ export function AlphabetScrollbar({
     return () => {
       cancelled = true;
       resizeObserver?.disconnect();
-      window.removeEventListener('resize', updateEligibility);
+      window.removeEventListener("resize", updateEligibility);
     };
   }, [items, scrollContainerRef]);
 
@@ -217,8 +217,8 @@ export function AlphabetScrollbar({
           {/* Visible overlay */}
           <div
             className={cn(
-              'fixed left-2 top-1/2 -translate-y-1/2 flex flex-col items-center gap-0.5 py-2 px-1.5 rounded-lg bg-background/90 backdrop-blur-sm border border-border shadow-lg z-50 transition-opacity duration-200 pointer-events-none',
-              visible ? 'opacity-100' : 'opacity-0',
+              "fixed left-2 top-1/2 -translate-y-1/2 flex flex-col items-center gap-0.5 py-2 px-1.5 rounded-lg bg-background/90 backdrop-blur-sm border border-border shadow-lg z-50 transition-opacity duration-200 pointer-events-none",
+              visible ? "opacity-100" : "opacity-0",
             )}
             data-testid="alphabet-overlay"
           >
@@ -226,10 +226,10 @@ export function AlphabetScrollbar({
               <div
                 key={letter}
                 className={cn(
-                  'text-xs font-semibold leading-none py-0.5 px-1 rounded transition-colors',
+                  "text-xs font-semibold leading-none py-0.5 px-1 rounded transition-colors",
                   activeLetter === letter
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground',
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground",
                 )}
               >
                 {letter}

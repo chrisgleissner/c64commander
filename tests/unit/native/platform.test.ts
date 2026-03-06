@@ -6,15 +6,15 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getPlatform, isNativePlatform } from '@/lib/native/platform';
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { getPlatform, isNativePlatform } from "@/lib/native/platform";
 
 const getPlatformMock = vi.fn();
 const isNativePlatformMock = vi.fn();
 let restoreWindow: (() => void) | null = null;
 
 const ensureWindow = () => {
-  if (typeof window !== 'undefined') return () => undefined;
+  if (typeof window !== "undefined") return () => undefined;
   const globalWithWindow = globalThis as typeof globalThis & {
     window?: Window;
   };
@@ -55,14 +55,14 @@ const restoreEnvs = () => {
   }
 };
 
-vi.mock('@capacitor/core', () => ({
+vi.mock("@capacitor/core", () => ({
   Capacitor: {
     getPlatform: (...args: unknown[]) => getPlatformMock(...args),
     isNativePlatform: (...args: unknown[]) => isNativePlatformMock(...args),
   },
 }));
 
-describe('platform', () => {
+describe("platform", () => {
   beforeEach(() => {
     restoreWindow = ensureWindow();
   });
@@ -70,7 +70,7 @@ describe('platform', () => {
   afterEach(() => {
     getPlatformMock.mockReset();
     isNativePlatformMock.mockReset();
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       delete (window as { __c64uPlatformOverride?: string })
         .__c64uPlatformOverride;
     }
@@ -78,39 +78,39 @@ describe('platform', () => {
     restoreWindow?.();
   });
 
-  it('returns override when test probes are enabled', () => {
-    setEnv('VITE_ENABLE_TEST_PROBES', '1');
+  it("returns override when test probes are enabled", () => {
+    setEnv("VITE_ENABLE_TEST_PROBES", "1");
     (window as { __c64uPlatformOverride?: string }).__c64uPlatformOverride =
-      'android';
+      "android";
 
-    expect(getPlatform()).toBe('android');
+    expect(getPlatform()).toBe("android");
     expect(isNativePlatform()).toBe(true);
   });
 
-  it('falls back to Capacitor when override is disabled', () => {
-    setEnv('VITE_ENABLE_TEST_PROBES', '0');
-    getPlatformMock.mockReturnValue('ios');
+  it("falls back to Capacitor when override is disabled", () => {
+    setEnv("VITE_ENABLE_TEST_PROBES", "0");
+    getPlatformMock.mockReturnValue("ios");
     isNativePlatformMock.mockReturnValue(true);
 
-    expect(getPlatform()).toBe('ios');
+    expect(getPlatform()).toBe("ios");
     expect(isNativePlatform()).toBe(true);
   });
 
-  it('returns web when Capacitor getPlatform is unavailable', async () => {
-    setEnv('VITE_ENABLE_TEST_PROBES', '0');
+  it("returns web when Capacitor getPlatform is unavailable", async () => {
+    setEnv("VITE_ENABLE_TEST_PROBES", "0");
     isNativePlatformMock.mockReturnValue(false);
-    const { Capacitor } = await import('@capacitor/core');
+    const { Capacitor } = await import("@capacitor/core");
     const previous = (Capacitor as { getPlatform?: () => string }).getPlatform;
     (Capacitor as { getPlatform?: () => string }).getPlatform = undefined;
-    expect(getPlatform()).toBe('web');
+    expect(getPlatform()).toBe("web");
     expect(isNativePlatform()).toBe(false);
     (Capacitor as { getPlatform?: () => string }).getPlatform = previous;
   });
 
-  it('treats web override as non-native', async () => {
-    setEnv('VITE_ENABLE_TEST_PROBES', '1');
+  it("treats web override as non-native", async () => {
+    setEnv("VITE_ENABLE_TEST_PROBES", "1");
     (window as { __c64uPlatformOverride?: string }).__c64uPlatformOverride =
-      'web';
+      "web";
     expect(isNativePlatform()).toBe(false);
   });
 });

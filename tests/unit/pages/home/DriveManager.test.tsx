@@ -1,5 +1,5 @@
-import { render, screen, fireEvent } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { render, screen, fireEvent } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   toastSpy,
@@ -35,29 +35,29 @@ const {
   ),
 }));
 
-vi.mock('@tanstack/react-query', () => ({
+vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => queryClientMockRef.current,
 }));
 
-vi.mock('@/lib/c64api', () => ({
+vi.mock("@/lib/c64api", () => ({
   getC64API: () => c64ApiMockRef.current,
 }));
 
-vi.mock('@/hooks/useActionTrace', () => ({
+vi.mock("@/hooks/useActionTrace", () => ({
   useActionTrace: () =>
     Object.assign((fn: (...args: any[]) => any) => fn, { scope: vi.fn() }),
 }));
 
-vi.mock('@/hooks/use-toast', () => ({
+vi.mock("@/hooks/use-toast", () => ({
   toast: toastSpy,
   useToast: () => ({ toasts: [], dismiss: vi.fn() }),
 }));
 
-vi.mock('@/lib/uiErrors', () => ({
+vi.mock("@/lib/uiErrors", () => ({
   reportUserError: reportUserErrorSpy,
 }));
 
-vi.mock('@/hooks/useC64Connection', () => ({
+vi.mock("@/hooks/useC64Connection", () => ({
   useC64ConfigItems: () => ({ data: undefined }),
   useC64Drives: () => ({
     data: { drives: [] },
@@ -65,19 +65,19 @@ vi.mock('@/hooks/useC64Connection', () => ({
   }),
 }));
 
-vi.mock('@/hooks/useDiagnosticsActivity', () => ({
+vi.mock("@/hooks/useDiagnosticsActivity", () => ({
   useDiagnosticsActivity: () => ({ restInFlight: 0, setRestInFlight: vi.fn() }),
 }));
 
-vi.mock('@/lib/diagnostics/diagnosticsOverlayState', () => ({
+vi.mock("@/lib/diagnostics/diagnosticsOverlayState", () => ({
   isDiagnosticsOverlayActive: () => false,
   subscribeDiagnosticsOverlay: () => () => {},
   shouldSuppressDiagnosticsSideEffects: () => false,
 }));
 
 // Mock ConfigActionsContext
-vi.mock('@/pages/home/hooks/ConfigActionsContext', async () => {
-  const React = await import('react');
+vi.mock("@/pages/home/hooks/ConfigActionsContext", async () => {
+  const React = await import("react");
   return {
     useSharedConfigActions: () => ({
       configOverrides: {},
@@ -93,24 +93,24 @@ vi.mock('@/pages/home/hooks/ConfigActionsContext', async () => {
 
 // Mock useDriveData
 const refetchDrivesSpy = vi.fn().mockResolvedValue(undefined);
-vi.mock('@/pages/home/hooks/useDriveData', () => ({
+vi.mock("@/pages/home/hooks/useDriveData", () => ({
   useDriveData: () => ({
     refetchDrives: refetchDrivesSpy,
     driveASettingsCategory: undefined,
     driveBSettingsCategory: undefined,
     softIecConfig: undefined,
     driveSummaryItems: [
-      { key: 'a', label: 'Drive A', mountedLabel: 'game.d64', isMounted: true },
+      { key: "a", label: "Drive A", mountedLabel: "game.d64", isMounted: true },
       {
-        key: 'b',
-        label: 'Drive B',
-        mountedLabel: 'No disk mounted',
+        key: "b",
+        label: "Drive B",
+        mountedLabel: "No disk mounted",
         isMounted: false,
       },
       {
-        key: 'softiec',
-        label: 'Soft IEC',
-        mountedLabel: '/USB0/',
+        key: "softiec",
+        label: "Soft IEC",
+        mountedLabel: "/USB0/",
         isMounted: false,
       },
     ],
@@ -119,32 +119,32 @@ vi.mock('@/pages/home/hooks/useDriveData', () => ({
 }));
 
 // Mock DriveCard to expose callback props
-vi.mock('@/pages/home/DriveCard', () => ({
+vi.mock("@/pages/home/DriveCard", () => ({
   DriveCard: (props: any) => (
     <div data-testid={`drive-card-${props.testIdSuffix}`}>
       <span data-testid="drive-name">{props.name}</span>
       <span data-testid="drive-enabled">
-        {props.enabled ? 'Enabled' : 'Disabled'}
+        {props.enabled ? "Enabled" : "Disabled"}
       </span>
       <span data-testid="drive-bus">{props.busIdValue}</span>
       {props.typeValue && (
         <span data-testid="drive-type">{props.typeValue}</span>
       )}
-      <span data-testid="drive-mounted">{props.mountedPath ?? 'none'}</span>
+      <span data-testid="drive-mounted">{props.mountedPath ?? "none"}</span>
       <span data-testid="drive-status">{props.statusSummary}</span>
       <button data-testid="drive-toggle" onClick={props.onToggle}>
         Toggle
       </button>
       <button
         data-testid="drive-bus-change"
-        onClick={() => props.onBusIdChange?.('9')}
+        onClick={() => props.onBusIdChange?.("9")}
       >
         ChangeBus
       </button>
       {props.onTypeChange && (
         <button
           data-testid="drive-type-change"
-          onClick={() => props.onTypeChange?.('1571')}
+          onClick={() => props.onTypeChange?.("1571")}
         >
           ChangeType
         </button>
@@ -162,7 +162,7 @@ vi.mock('@/pages/home/DriveCard', () => ({
   ),
 }));
 
-vi.mock('@/components/SectionHeader', () => ({
+vi.mock("@/components/SectionHeader", () => ({
   SectionHeader: (props: any) => (
     <div data-testid={props.resetTestId}>
       <span>{props.title}</span>
@@ -178,14 +178,14 @@ vi.mock('@/components/SectionHeader', () => ({
 }));
 
 // Mock ItemSelectionDialog
-vi.mock('@/components/itemSelection/ItemSelectionDialog', () => ({
+vi.mock("@/components/itemSelection/ItemSelectionDialog", () => ({
   ItemSelectionDialog: (props: any) => (
     <div data-testid="item-selection-dialog" data-open={props.open}>
       {props.open && (
         <button
           data-testid="confirm-mount"
           onClick={() =>
-            props.onConfirm?.(null, [{ path: '/USB0/games/test.d64' }])
+            props.onConfirm?.(null, [{ path: "/USB0/games/test.d64" }])
           }
         >
           Confirm
@@ -196,7 +196,7 @@ vi.mock('@/components/itemSelection/ItemSelectionDialog', () => ({
 }));
 
 // Mock Dialog components
-vi.mock('@/components/ui/dialog', () => ({
+vi.mock("@/components/ui/dialog", () => ({
   Dialog: ({ children, open }: any) => (
     <div data-testid="dialog" data-open={open}>
       {children}
@@ -208,17 +208,17 @@ vi.mock('@/components/ui/dialog', () => ({
   DialogTitle: ({ children }: any) => <div>{children}</div>,
 }));
 
-vi.mock('@/lib/sourceNavigation/ftpSourceAdapter', () => ({
-  createUltimateSourceLocation: () => ({ type: 'ultimate', label: 'C64U' }),
+vi.mock("@/lib/sourceNavigation/ftpSourceAdapter", () => ({
+  createUltimateSourceLocation: () => ({ type: "ultimate", label: "C64U" }),
 }));
 
-vi.mock('@/lib/sourceNavigation/sourceTerms', () => ({
-  SOURCE_LABELS: { c64u: 'C64 Ultimate' },
+vi.mock("@/lib/sourceNavigation/sourceTerms", () => ({
+  SOURCE_LABELS: { c64u: "C64 Ultimate" },
 }));
 
-import { DriveManager } from '@/pages/home/components/DriveManager';
+import { DriveManager } from "@/pages/home/components/DriveManager";
 
-describe('DriveManager', () => {
+describe("DriveManager", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -239,61 +239,61 @@ describe('DriveManager', () => {
       }),
   };
 
-  it('renders Drives section header', () => {
+  it("renders Drives section header", () => {
     render(<DriveManager {...defaultProps} />);
-    expect(screen.getByText('Drives')).toBeDefined();
+    expect(screen.getByText("Drives")).toBeDefined();
   });
 
-  it('renders drive cards for all DRIVE_CONTROL_SPECS', () => {
+  it("renders drive cards for all DRIVE_CONTROL_SPECS", () => {
     render(<DriveManager {...defaultProps} />);
-    expect(screen.getByTestId('drive-card-a')).toBeDefined();
-    expect(screen.getByTestId('drive-card-b')).toBeDefined();
-    expect(screen.getByTestId('drive-card-soft-iec')).toBeDefined();
+    expect(screen.getByTestId("drive-card-a")).toBeDefined();
+    expect(screen.getByTestId("drive-card-b")).toBeDefined();
+    expect(screen.getByTestId("drive-card-soft-iec")).toBeDefined();
   });
 
-  describe('handleEnabledToggle', () => {
-    it('calls updateConfigValue to disable Drive A', async () => {
+  describe("handleEnabledToggle", () => {
+    it("calls updateConfigValue to disable Drive A", async () => {
       render(<DriveManager {...defaultProps} />);
-      const cards = screen.getAllByTestId('drive-toggle');
+      const cards = screen.getAllByTestId("drive-toggle");
       fireEvent.click(cards[0]); // Drive A toggle
       await vi.waitFor(() => {
         expect(updateConfigValueSpy).toHaveBeenCalledWith(
-          'Drive A Settings',
-          'Drive',
+          "Drive A Settings",
+          "Drive",
           expect.stringMatching(/Enabled|Disabled/),
-          'HOME_DRIVE_ENABLED',
-          expect.stringContaining('Drive A'),
+          "HOME_DRIVE_ENABLED",
+          expect.stringContaining("Drive A"),
           { refreshDrives: true },
         );
       });
     });
 
-    it('calls updateConfigValue to toggle Drive B', async () => {
+    it("calls updateConfigValue to toggle Drive B", async () => {
       render(<DriveManager {...defaultProps} />);
-      const cards = screen.getAllByTestId('drive-toggle');
+      const cards = screen.getAllByTestId("drive-toggle");
       fireEvent.click(cards[1]); // Drive B toggle
       await vi.waitFor(() => {
         expect(updateConfigValueSpy).toHaveBeenCalledWith(
-          'Drive B Settings',
-          'Drive',
+          "Drive B Settings",
+          "Drive",
           expect.stringMatching(/Enabled|Disabled/),
-          'HOME_DRIVE_ENABLED',
-          expect.stringContaining('Drive B'),
+          "HOME_DRIVE_ENABLED",
+          expect.stringContaining("Drive B"),
           { refreshDrives: true },
         );
       });
     });
 
-    it('calls updateConfigValue to toggle Soft IEC', async () => {
+    it("calls updateConfigValue to toggle Soft IEC", async () => {
       render(<DriveManager {...defaultProps} />);
-      const cards = screen.getAllByTestId('drive-toggle');
+      const cards = screen.getAllByTestId("drive-toggle");
       fireEvent.click(cards[2]); // Soft IEC toggle
       await vi.waitFor(() => {
         expect(updateConfigValueSpy).toHaveBeenCalledWith(
-          'SoftIEC Drive Settings',
-          'IEC Drive',
+          "SoftIEC Drive Settings",
+          "IEC Drive",
           expect.stringMatching(/Enabled|Disabled/),
-          'HOME_DRIVE_ENABLED',
+          "HOME_DRIVE_ENABLED",
           expect.any(String),
           { refreshDrives: true },
         );
@@ -301,147 +301,147 @@ describe('DriveManager', () => {
     });
   });
 
-  describe('bus ID change', () => {
-    it('calls updateConfigValue for bus ID change on Drive A', () => {
+  describe("bus ID change", () => {
+    it("calls updateConfigValue for bus ID change on Drive A", () => {
       render(<DriveManager {...defaultProps} />);
-      const btns = screen.getAllByTestId('drive-bus-change');
+      const btns = screen.getAllByTestId("drive-bus-change");
       fireEvent.click(btns[0]);
       expect(updateConfigValueSpy).toHaveBeenCalledWith(
-        'Drive A Settings',
-        'Drive Bus ID',
+        "Drive A Settings",
+        "Drive Bus ID",
         9,
-        'HOME_DRIVE_BUS',
-        expect.stringContaining('bus ID updated'),
+        "HOME_DRIVE_BUS",
+        expect.stringContaining("bus ID updated"),
         { refreshDrives: true },
       );
     });
   });
 
-  describe('type change', () => {
-    it('calls updateConfigValue for type change on Drive A', () => {
+  describe("type change", () => {
+    it("calls updateConfigValue for type change on Drive A", () => {
       render(<DriveManager {...defaultProps} />);
-      const btns = screen.getAllByTestId('drive-type-change');
+      const btns = screen.getAllByTestId("drive-type-change");
       fireEvent.click(btns[0]);
       expect(updateConfigValueSpy).toHaveBeenCalledWith(
-        'Drive A Settings',
-        'Drive Type',
-        '1571',
-        'HOME_DRIVE_TYPE',
-        expect.stringContaining('type updated'),
+        "Drive A Settings",
+        "Drive Type",
+        "1571",
+        "HOME_DRIVE_TYPE",
+        expect.stringContaining("type updated"),
         { refreshDrives: true },
       );
     });
   });
 
-  describe('mount selection flow', () => {
-    it('opens mount dialog and handles path mount for Soft IEC', async () => {
+  describe("mount selection flow", () => {
+    it("opens mount dialog and handles path mount for Soft IEC", async () => {
       render(<DriveManager {...defaultProps} />);
       // Click mount on Soft IEC (index 2)
-      const mountBtns = screen.getAllByTestId('drive-mount-click');
+      const mountBtns = screen.getAllByTestId("drive-mount-click");
       fireEvent.click(mountBtns[2]);
       // Dialog should now be open
       await vi.waitFor(() => {
-        const dialog = screen.getByTestId('item-selection-dialog');
-        expect(dialog.getAttribute('data-open')).toBe('true');
+        const dialog = screen.getByTestId("item-selection-dialog");
+        expect(dialog.getAttribute("data-open")).toBe("true");
       });
       // Confirm the mount
-      fireEvent.click(screen.getByTestId('confirm-mount'));
+      fireEvent.click(screen.getByTestId("confirm-mount"));
       await vi.waitFor(() => {
         expect(updateConfigValueSpy).toHaveBeenCalledWith(
-          'SoftIEC Drive Settings',
-          'Default Path',
-          '/USB0/games/test.d64',
-          'HOME_SOFT_IEC_PATH',
-          'Soft IEC path updated',
+          "SoftIEC Drive Settings",
+          "Default Path",
+          "/USB0/games/test.d64",
+          "HOME_SOFT_IEC_PATH",
+          "Soft IEC path updated",
         );
       });
     });
 
-    it('handles disk mount for physical Drive A', async () => {
+    it("handles disk mount for physical Drive A", async () => {
       render(<DriveManager {...defaultProps} />);
-      const mountBtns = screen.getAllByTestId('drive-mount-click');
+      const mountBtns = screen.getAllByTestId("drive-mount-click");
       fireEvent.click(mountBtns[0]); // Drive A
       await vi.waitFor(() => {
-        const dialog = screen.getByTestId('item-selection-dialog');
-        expect(dialog.getAttribute('data-open')).toBe('true');
+        const dialog = screen.getByTestId("item-selection-dialog");
+        expect(dialog.getAttribute("data-open")).toBe("true");
       });
-      fireEvent.click(screen.getByTestId('confirm-mount'));
+      fireEvent.click(screen.getByTestId("confirm-mount"));
       await vi.waitFor(() => {
         expect(c64ApiMockRef.current.mountDrive).toHaveBeenCalledWith(
-          'a',
-          '/USB0/games/test.d64',
+          "a",
+          "/USB0/games/test.d64",
         );
       });
     });
 
-    it('handles disk mount for physical Drive B', async () => {
+    it("handles disk mount for physical Drive B", async () => {
       render(<DriveManager {...defaultProps} />);
-      const mountBtns = screen.getAllByTestId('drive-mount-click');
+      const mountBtns = screen.getAllByTestId("drive-mount-click");
       fireEvent.click(mountBtns[1]); // Drive B
       await vi.waitFor(() => {
-        const dialog = screen.getByTestId('item-selection-dialog');
-        expect(dialog.getAttribute('data-open')).toBe('true');
+        const dialog = screen.getByTestId("item-selection-dialog");
+        expect(dialog.getAttribute("data-open")).toBe("true");
       });
-      fireEvent.click(screen.getByTestId('confirm-mount'));
+      fireEvent.click(screen.getByTestId("confirm-mount"));
       await vi.waitFor(() => {
         expect(c64ApiMockRef.current.mountDrive).toHaveBeenCalledWith(
-          'b',
-          '/USB0/games/test.d64',
+          "b",
+          "/USB0/games/test.d64",
         );
       });
     });
   });
 
-  describe('reset drives', () => {
-    it('calls onResetDrives with refetch callback', async () => {
+  describe("reset drives", () => {
+    it("calls onResetDrives with refetch callback", async () => {
       render(<DriveManager {...defaultProps} />);
-      fireEvent.click(screen.getByTestId('drives-reset-btn'));
+      fireEvent.click(screen.getByTestId("drives-reset-btn"));
       await vi.waitFor(() => {
         expect(defaultProps.onResetDrives).toHaveBeenCalled();
       });
     });
 
-    it('disables reset when disconnected', () => {
+    it("disables reset when disconnected", () => {
       render(<DriveManager {...defaultProps} isConnected={false} />);
-      expect(screen.getByTestId('drives-reset-btn')).toBeDisabled();
+      expect(screen.getByTestId("drives-reset-btn")).toBeDisabled();
     });
 
-    it('disables reset when machineTaskBusy', () => {
+    it("disables reset when machineTaskBusy", () => {
       render(<DriveManager {...defaultProps} machineTaskBusy={true} />);
-      expect(screen.getByTestId('drives-reset-btn')).toBeDisabled();
+      expect(screen.getByTestId("drives-reset-btn")).toBeDisabled();
     });
   });
 
-  describe('status dialog', () => {
-    it('opens status details dialog on status click', () => {
+  describe("status dialog", () => {
+    it("opens status details dialog on status click", () => {
       render(<DriveManager {...defaultProps} />);
-      const statusBtns = screen.getAllByTestId('drive-status-click');
+      const statusBtns = screen.getAllByTestId("drive-status-click");
       fireEvent.click(statusBtns[0]);
       // Dialog becomes open
-      const dialogs = screen.getAllByTestId('dialog');
+      const dialogs = screen.getAllByTestId("dialog");
       const statusDialog = dialogs.find(
-        (d) => d.getAttribute('data-open') === 'true',
+        (d) => d.getAttribute("data-open") === "true",
       );
       expect(statusDialog).toBeDefined();
     });
   });
 
-  describe('drive rendering', () => {
-    it('shows default status OK for drives without errors', () => {
+  describe("drive rendering", () => {
+    it("shows default status OK for drives without errors", () => {
       render(<DriveManager {...defaultProps} />);
-      const statuses = screen.getAllByTestId('drive-status');
-      expect(statuses[0].textContent).toBe('OK');
+      const statuses = screen.getAllByTestId("drive-status");
+      expect(statuses[0].textContent).toBe("OK");
     });
 
-    it('shows correct bus ID defaults', () => {
+    it("shows correct bus ID defaults", () => {
       render(<DriveManager {...defaultProps} />);
-      const buses = screen.getAllByTestId('drive-bus');
-      expect(buses[0].textContent).toBe('8'); // Drive A default
-      expect(buses[1].textContent).toBe('9'); // Drive B default
-      expect(buses[2].textContent).toBe('11'); // Soft IEC default
+      const buses = screen.getAllByTestId("drive-bus");
+      expect(buses[0].textContent).toBe("8"); // Drive A default
+      expect(buses[1].textContent).toBe("9"); // Drive B default
+      expect(buses[2].textContent).toBe("11"); // Soft IEC default
     });
 
-    it('shows Soft IEC default path from resolveConfigValue', () => {
+    it("shows Soft IEC default path from resolveConfigValue", () => {
       resolveConfigValueSpy.mockImplementation(
         (
           _payload: unknown,
@@ -449,13 +449,13 @@ describe('DriveManager', () => {
           itemName: string,
           fallback: string | number,
         ) => {
-          if (itemName === 'Default Path') return '/SD/';
+          if (itemName === "Default Path") return "/SD/";
           return fallback;
         },
       );
       render(<DriveManager {...defaultProps} />);
-      const mounted = screen.getAllByTestId('drive-mounted');
-      expect(mounted[2].textContent).toBe('/SD/');
+      const mounted = screen.getAllByTestId("drive-mounted");
+      expect(mounted[2].textContent).toBe("/SD/");
     });
   });
 });

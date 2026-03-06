@@ -6,15 +6,15 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { addErrorLog } from '@/lib/logging';
-import { MockC64U } from '@/lib/native/mockC64u';
+import { addErrorLog } from "@/lib/logging";
+import { MockC64U } from "@/lib/native/mockC64u";
 
 let activeMockBaseUrl: string | null = null;
 let activeFtpPort: number | null = null;
 let startPromise: Promise<{ baseUrl: string; ftpPort?: number }> | null = null;
 
 const loadMockConfigPayload = async () => {
-  const module = await import('@/lib/mock/mockConfig');
+  const module = await import("@/lib/mock/mockConfig");
   return module.getMockConfigPayload();
 };
 
@@ -37,7 +37,7 @@ export const startMockServer = async (): Promise<{
       activeFtpPort = response.ftpPort ?? null;
       return { baseUrl: response.baseUrl, ftpPort: response.ftpPort };
     } catch (error) {
-      addErrorLog('Mock C64U server failed to start', {
+      addErrorLog("Mock C64U server failed to start", {
         error: (error as Error).message,
       });
       throw error;
@@ -60,7 +60,7 @@ export const stopMockServer = async () => {
     }
     await MockC64U.stopServer();
   } catch (error) {
-    addErrorLog('Mock C64U server failed to stop', {
+    addErrorLog("Mock C64U server failed to stop", {
       error: (error as Error).message,
     });
     throw error;

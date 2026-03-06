@@ -6,10 +6,10 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { ensureWithinRoot, getParentPathWithinRoot } from './paths';
-import { addErrorLog } from '@/lib/logging';
-import type { SourceEntry, SourceLocation } from './types';
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ensureWithinRoot, getParentPathWithinRoot } from "./paths";
+import { addErrorLog } from "@/lib/logging";
+import type { SourceEntry, SourceLocation } from "./types";
 
 export type SourceNavigatorState = {
   path: string;
@@ -27,20 +27,20 @@ const buildNavKey = (source: SourceLocation) =>
   `c64u_source_nav:${source.type}:${source.id}`;
 
 const getStoredPath = (source: SourceLocation) => {
-  if (typeof localStorage === 'undefined') return null;
+  if (typeof localStorage === "undefined") return null;
   const raw = localStorage.getItem(buildNavKey(source));
   return raw || null;
 };
 
 const setStoredPath = (source: SourceLocation, path: string) => {
-  if (typeof localStorage === 'undefined') return;
+  if (typeof localStorage === "undefined") return;
   localStorage.setItem(buildNavKey(source), path);
 };
 
 export const useSourceNavigator = (
   source: SourceLocation | null,
 ): SourceNavigatorState => {
-  const [path, setPath] = useState('/');
+  const [path, setPath] = useState("/");
   const [entries, setEntries] = useState<SourceEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showLoadingIndicator, setShowLoadingIndicator] = useState(false);
@@ -56,7 +56,7 @@ export const useSourceNavigator = (
       setIsLoading(true);
       setError(null);
       let loadingTimer: number | null = null;
-      if (source.type === 'ultimate') {
+      if (source.type === "ultimate") {
         loadingTimer = window.setTimeout(() => {
           if (loadingTokenRef.current === token) {
             loadingShownAtRef.current = Date.now();
@@ -75,7 +75,7 @@ export const useSourceNavigator = (
       } catch (err) {
         const error = err as Error;
         setError(error.message);
-        addErrorLog('Source browse failed', {
+        addErrorLog("Source browse failed", {
           sourceId: source.id,
           sourceType: source.type,
           path: nextPath,

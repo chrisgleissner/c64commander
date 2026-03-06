@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { Page } from '@playwright/test';
+import type { Page } from "@playwright/test";
 
 export type ProgressSnapshot = {
   screenKey: string;
@@ -23,12 +23,12 @@ export type ProgressDelta = {
 };
 
 const traceProgressTypes = new Set([
-  'rest-request',
-  'rest-response',
-  'ftp-operation',
-  'device-guard',
-  'backend-decision',
-  'error',
+  "rest-request",
+  "rest-response",
+  "ftp-operation",
+  "device-guard",
+  "backend-decision",
+  "error",
 ]);
 
 export const readProgressSnapshot = async (
@@ -37,38 +37,38 @@ export const readProgressSnapshot = async (
   const progressTypes = Array.from(traceProgressTypes);
   return page.evaluate((types) => {
     const traceProgressTypes = new Set(types);
-    const route = location.pathname || '';
-    const title = document.title || '';
+    const route = location.pathname || "";
+    const title = document.title || "";
     const heading = Array.from(
       document.querySelectorAll('h1,[data-testid="page-title"]'),
     )
-      .map((el) => (el.textContent || '').trim())
+      .map((el) => (el.textContent || "").trim())
       .filter(Boolean)
       .slice(0, 3)
-      .join('|')
+      .join("|")
       .slice(0, 120);
 
     const historyState = window.history.state as {
       idx?: number;
       key?: string;
     } | null;
-    const navKey = `${window.history.length}:${historyState?.idx ?? ''}:${historyState?.key ?? ''}`;
+    const navKey = `${window.history.length}:${historyState?.idx ?? ""}:${historyState?.key ?? ""}`;
 
     const traces =
       (
         window as Window & { __c64uTracing?: { getTraces?: () => any[] } }
       ).__c64uTracing?.getTraces?.() ?? [];
-    let traceKey = '';
+    let traceKey = "";
     const start = Math.max(0, traces.length - 40);
     for (let i = traces.length - 1; i >= start; i -= 1) {
       const event = traces[i];
-      if (!event || typeof event !== 'object') continue;
+      if (!event || typeof event !== "object") continue;
       if (!traceProgressTypes.has(event.type)) continue;
       traceKey = `${event.id}:${event.type}`;
       break;
     }
 
-    let stateKey = '';
+    let stateKey = "";
     for (let i = traces.length - 1; i >= start; i -= 1) {
       const event = traces[i];
       const context = event?.data?.context as
@@ -82,13 +82,13 @@ export const readProgressSnapshot = async (
           }
         | undefined;
       if (!context) continue;
-      const deviceState = context.device?.connectionState ?? '';
-      const playing = context.playback?.isPlaying ? 'playing' : 'stopped';
-      const currentItem = context.playback?.currentItemId ?? '';
+      const deviceState = context.device?.connectionState ?? "";
+      const playing = context.playback?.isPlaying ? "playing" : "stopped";
+      const currentItem = context.playback?.currentItemId ?? "";
       const queueLength =
-        typeof context.playback?.queueLength === 'number'
+        typeof context.playback?.queueLength === "number"
           ? String(context.playback?.queueLength)
-          : '';
+          : "";
       stateKey = `${deviceState}:${playing}:${currentItem}:${queueLength}`;
       break;
     }

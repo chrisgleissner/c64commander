@@ -6,13 +6,13 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { registerPlugin } from '@capacitor/core';
-import type { NativeTraceContext } from '@/lib/native/nativeTraceContext';
+import { registerPlugin } from "@capacitor/core";
+import type { NativeTraceContext } from "@/lib/native/nativeTraceContext";
 
 export type FtpEntry = {
   name: string;
   path: string;
-  type: 'file' | 'dir';
+  type: "file" | "dir";
   size?: number;
   modifiedAt?: string | null;
 };
@@ -42,7 +42,7 @@ export type FtpClientPlugin = {
   ) => Promise<{ data: string; sizeBytes?: number }>;
 };
 
-export const FtpClient = registerPlugin<FtpClientPlugin>('FtpClient', {
+export const FtpClient = registerPlugin<FtpClientPlugin>("FtpClient", {
   web: () =>
-    import('./ftpClient.web').then((module) => new module.FtpClientWeb()),
+    import("./ftpClient.web").then((module) => new module.FtpClientWeb()),
 });

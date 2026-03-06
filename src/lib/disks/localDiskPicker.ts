@@ -6,16 +6,16 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { FolderPicker } from '@/lib/native/folderPicker';
-import { getPlatform } from '@/lib/native/platform';
-import type { DiskEntry } from './diskTypes';
+import { FolderPicker } from "@/lib/native/folderPicker";
+import { getPlatform } from "@/lib/native/platform";
+import type { DiskEntry } from "./diskTypes";
 import {
   createDiskEntry,
   getLeafFolderName,
   isDiskImagePath,
   normalizeDiskPath,
-} from './diskTypes';
-import { assignDiskGroupsByPrefix } from './diskGrouping';
+} from "./diskTypes";
+import { assignDiskGroupsByPrefix } from "./diskGrouping";
 
 export type LocalDiskSelection = {
   disks: DiskEntry[];
@@ -23,29 +23,29 @@ export type LocalDiskSelection = {
 };
 
 type FileSystemHandleLike = {
-  kind: 'file' | 'directory';
+  kind: "file" | "directory";
   name: string;
 };
 
 type FileSystemFileHandleLike = FileSystemHandleLike & {
-  kind: 'file';
+  kind: "file";
   getFile: () => Promise<File>;
 };
 
 type FileSystemDirectoryHandleLike = FileSystemHandleLike & {
-  kind: 'directory';
+  kind: "directory";
   entries: () => AsyncIterableIterator<[string, FileSystemHandleLike]>;
 };
 
 const isDirectoryHandle = (
   handle: FileSystemHandleLike,
 ): handle is FileSystemDirectoryHandleLike =>
-  handle.kind === 'directory' && 'entries' in handle;
+  handle.kind === "directory" && "entries" in handle;
 
 export const prepareDiskDirectoryInput = (input: HTMLInputElement | null) => {
   if (!input) return;
-  input.setAttribute('webkitdirectory', '');
-  input.setAttribute('directory', '');
+  input.setAttribute("webkitdirectory", "");
+  input.setAttribute("directory", "");
 };
 
 const listSafFiles = async (
@@ -58,7 +58,7 @@ const listSafFiles = async (
     modifiedAt?: string | null;
   }[]
 > => {
-  const queue = ['/'];
+  const queue = ["/"];
   const files: {
     name: string;
     path: string;
@@ -70,7 +70,7 @@ const listSafFiles = async (
     if (!path) continue;
     const response = await FolderPicker.listChildren({ treeUri, path });
     response.entries.forEach((entry) => {
-      if (entry.type === 'dir') {
+      if (entry.type === "dir") {
         queue.push(normalizeDiskPath(entry.path));
       } else {
         files.push({
@@ -87,12 +87,12 @@ const listSafFiles = async (
 
 export const importLocalDiskFolder =
   async (): Promise<LocalDiskSelection | null> => {
-    if (getPlatform() === 'android' || getPlatform() === 'ios') {
+    if (getPlatform() === "android" || getPlatform() === "ios") {
       const result = await FolderPicker.pickDirectory();
       const treeUri = result?.treeUri;
       if (!treeUri || result?.files != null || !result?.permissionPersisted) {
         throw new Error(
-          'Native folder picker returned an unsupported response.',
+          "Native folder picker returned an unsupported response.",
         );
       }
       const runtimeFiles: Record<string, File> = {};
@@ -112,7 +112,7 @@ export const importLocalDiskFolder =
         const fallbackGroup = getLeafFolderName(path);
         return createDiskEntry({
           path,
-          location: 'local',
+          location: "local",
           group: autoGroup ?? fallbackGroup ?? null,
           localTreeUri: treeUri,
           modifiedAt: entry.modifiedAt ?? null,
@@ -142,10 +142,10 @@ export const importLocalDiskFolder =
       prefix: string,
     ) => {
       for await (const [name, handle] of dirHandle.entries()) {
-        if (handle.kind === 'file') {
+        if (handle.kind === "file") {
           const file = await (handle as FileSystemFileHandleLike).getFile();
           if (!isDiskImagePath(file.name)) continue;
-          Object.defineProperty(file, 'webkitRelativePath', {
+          Object.defineProperty(file, "webkitRelativePath", {
             value: `${prefix}${name}`,
           });
           files.push(file);
@@ -155,7 +155,7 @@ export const importLocalDiskFolder =
       }
     };
 
-    await walkDirectory(directoryHandle, '');
+    await walkDirectory(directoryHandle, "");
     const runtimeFiles: Record<string, File> = {};
     const diskCandidates = files.map((file) => {
       const relativePath =
@@ -175,7 +175,7 @@ export const importLocalDiskFolder =
       const fallbackGroup = getLeafFolderName(entry.path);
       const diskEntry = createDiskEntry({
         path: entry.path,
-        location: 'local',
+        location: "local",
         group: autoGroup ?? fallbackGroup ?? null,
         sizeBytes: entry.file.size,
         modifiedAt: new Date(entry.file.lastModified).toISOString(),
@@ -212,7 +212,7 @@ export const importLocalDiskFiles = (
     const fallbackGroup = getLeafFolderName(entry.path);
     const diskEntry = createDiskEntry({
       path: entry.path,
-      location: 'local',
+      location: "local",
       group: autoGroup ?? fallbackGroup ?? null,
       sizeBytes: entry.file.size,
       modifiedAt: new Date(entry.file.lastModified).toISOString(),
@@ -230,7 +230,7 @@ export const importLocalDiskFolderFromInput = (
   if (!files || files.length === 0) return { disks: [], runtimeFiles: {} };
   const runtimeFiles: Record<string, File> = {};
   const first = files[0] as File & { webkitRelativePath?: string };
-  const rootName = first?.webkitRelativePath?.split('/')?.[0] || null;
+  const rootName = first?.webkitRelativePath?.split("/")?.[0] || null;
   const diskCandidates = Array.from(files)
     .filter((file) => isDiskImagePath(file.name))
     .map((file) => {
@@ -251,7 +251,7 @@ export const importLocalDiskFolderFromInput = (
     const fallbackGroup = getLeafFolderName(entry.path) ?? rootName;
     const diskEntry = createDiskEntry({
       path: entry.path,
-      location: 'local',
+      location: "local",
       group: autoGroup ?? fallbackGroup ?? null,
       sizeBytes: entry.file.size,
       modifiedAt: new Date(entry.file.lastModified).toISOString(),

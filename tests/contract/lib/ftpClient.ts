@@ -6,10 +6,10 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import net from 'node:net';
-import { randomUUID } from 'node:crypto';
+import net from "node:net";
+import { randomUUID } from "node:crypto";
 
-export type FtpMode = 'PASV' | 'PORT';
+export type FtpMode = "PASV" | "PORT";
 
 export type FtpClientConfig = {
   host: string;
@@ -33,7 +33,7 @@ export type FtpCommandResult = {
 
 export class FtpClient {
   private readonly control: net.Socket;
-  private buffer = '';
+  private buffer = "";
   private readonly config: FtpClientConfig;
   private connected = false;
   readonly sessionId = randomUUID();
@@ -41,19 +41,19 @@ export class FtpClient {
   constructor(config: FtpClientConfig) {
     this.config = config;
     this.control = new net.Socket();
-    this.control.setEncoding('utf8');
+    this.control.setEncoding("utf8");
   }
 
   async connect(): Promise<void> {
     await withTimeout(
       new Promise<void>((resolve, reject) => {
-        this.control.once('error', reject);
+        this.control.once("error", reject);
         this.control.connect(this.config.port, this.config.host, () =>
           resolve(),
         );
       }),
       this.config.timeoutMs,
-      'FTP control connect timeout',
+      "FTP control connect timeout",
     );
     await this.readResponse();
     await this.sendCommand(`USER ${this.config.user}`);
@@ -72,7 +72,7 @@ export class FtpClient {
       return;
     }
     try {
-      await this.sendCommand('QUIT');
+      await this.sendCommand("QUIT");
     } finally {
       this.control.end();
       this.control.destroy();
@@ -81,7 +81,7 @@ export class FtpClient {
   }
 
   async pwd(): Promise<FtpCommandResult> {
-    return this.sendCommand('PWD');
+    return this.sendCommand("PWD");
   }
 
   async cwd(path: string): Promise<FtpCommandResult> {
@@ -112,19 +112,19 @@ export class FtpClient {
     return this.sendCommand(`SIZE ${path}`);
   }
 
-  async list(path = ''): Promise<{ result: FtpCommandResult; data: string }> {
+  async list(path = ""): Promise<{ result: FtpCommandResult; data: string }> {
     return this.transferWithData(`LIST ${path}`.trim());
   }
 
-  async nlst(path = ''): Promise<{ result: FtpCommandResult; data: string }> {
+  async nlst(path = ""): Promise<{ result: FtpCommandResult; data: string }> {
     return this.transferWithData(`NLST ${path}`.trim());
   }
 
-  async mlsd(path = ''): Promise<{ result: FtpCommandResult; data: string }> {
+  async mlsd(path = ""): Promise<{ result: FtpCommandResult; data: string }> {
     return this.transferWithData(`MLSD ${path}`.trim());
   }
 
-  async mlst(path = ''): Promise<FtpCommandResult> {
+  async mlst(path = ""): Promise<FtpCommandResult> {
     return this.sendCommand(`MLST ${path}`.trim());
   }
 
@@ -178,10 +178,10 @@ export class FtpClient {
       new Promise<void>((resolve, reject) => {
         let settled = false;
         const cleanup = () => {
-          socket.off('finish', onDone);
-          socket.off('close', onDone);
-          socket.off('end', onDone);
-          socket.off('error', onError);
+          socket.off("finish", onDone);
+          socket.off("close", onDone);
+          socket.off("end", onDone);
+          socket.off("error", onError);
         };
         const onDone = () => {
           if (settled) {
@@ -199,13 +199,13 @@ export class FtpClient {
           cleanup();
           reject(err);
         };
-        socket.once('finish', onDone);
-        socket.once('close', onDone);
-        socket.once('end', onDone);
-        socket.once('error', onError);
+        socket.once("finish", onDone);
+        socket.once("close", onDone);
+        socket.once("end", onDone);
+        socket.once("error", onError);
       }),
       this.config.timeoutMs,
-      'FTP data socket finish timeout',
+      "FTP data socket finish timeout",
     );
   }
 
@@ -220,13 +220,13 @@ export class FtpClient {
   private async readResponse(): Promise<FtpResponse> {
     const line = await this.readLine();
     if (!line) {
-      throw new Error('FTP response empty');
+      throw new Error("FTP response empty");
     }
     const code = parseInt(line.slice(0, 3), 10);
     if (Number.isNaN(code)) {
       return { code: 0, message: line };
     }
-    if (line[3] === '-') {
+    if (line[3] === "-") {
       let message = line;
       while (true) {
         const next = await this.readLine();
@@ -245,9 +245,9 @@ export class FtpClient {
       new Promise((resolve, reject) => {
         const onData = (chunk: string) => {
           this.buffer += chunk;
-          const idx = this.buffer.indexOf('\n');
+          const idx = this.buffer.indexOf("\n");
           if (idx !== -1) {
-            const line = this.buffer.slice(0, idx).replace(/\r$/, '');
+            const line = this.buffer.slice(0, idx).replace(/\r$/, "");
             this.buffer = this.buffer.slice(idx + 1);
             cleanup();
             resolve(line);
@@ -259,19 +259,19 @@ export class FtpClient {
         };
         const onClose = () => {
           cleanup();
-          reject(new Error('FTP control socket closed'));
+          reject(new Error("FTP control socket closed"));
         };
         const cleanup = () => {
-          this.control.removeListener('data', onData);
-          this.control.removeListener('error', onError);
-          this.control.removeListener('close', onClose);
+          this.control.removeListener("data", onData);
+          this.control.removeListener("error", onError);
+          this.control.removeListener("close", onClose);
         };
-        this.control.on('data', onData);
-        this.control.once('error', onError);
-        this.control.once('close', onClose);
+        this.control.on("data", onData);
+        this.control.once("error", onError);
+        this.control.once("close", onClose);
       }),
       this.config.timeoutMs,
-      'FTP read response timeout',
+      "FTP read response timeout",
     );
   }
 
@@ -287,11 +287,11 @@ export class FtpClient {
       close();
       return {
         result: { response: pre, latencyMs: Date.now() - start, correlationId },
-        data: '',
+        data: "",
       };
     }
     const data = (await readAll(socket, this.config.timeoutMs)).toString(
-      'utf8',
+      "utf8",
     );
     close();
     const post = await this.readResponse();
@@ -305,8 +305,8 @@ export class FtpClient {
     socket: net.Socket;
     close: () => void;
   }> {
-    if (this.config.mode === 'PASV') {
-      const response = await this.sendCommand('PASV');
+    if (this.config.mode === "PASV") {
+      const response = await this.sendCommand("PASV");
       if (response.response.code !== 227) {
         throw new Error(`PASV failed: ${response.response.message}`);
       }
@@ -322,11 +322,11 @@ export class FtpClient {
       socket.setTimeout(this.config.timeoutMs);
       await withTimeout(
         new Promise<void>((resolve, reject) => {
-          socket.once('error', reject);
+          socket.once("error", reject);
           socket.connect(port, host, () => resolve());
         }),
         this.config.timeoutMs,
-        'FTP PASV data connect timeout',
+        "FTP PASV data connect timeout",
       );
       return { socket, close: () => socket.destroy() };
     }
@@ -344,25 +344,25 @@ export class FtpClient {
 
     try {
       const port = await new Promise<number>((resolve, reject) => {
-        server.once('error', reject);
+        server.once("error", reject);
         server.listen(0, () => {
           const address = server.address();
-          if (!address || typeof address === 'string') {
-            reject(new Error('FTP PORT listen failed'));
+          if (!address || typeof address === "string") {
+            reject(new Error("FTP PORT listen failed"));
             return;
           }
           resolve(address.port);
         });
       });
 
-      const localAddress = this.control.localAddress || '127.0.0.1';
-      if (!localAddress.includes('.')) {
+      const localAddress = this.control.localAddress || "127.0.0.1";
+      if (!localAddress.includes(".")) {
         throw new Error(
           `FTP PORT requires IPv4 local address, got '${localAddress}'`,
         );
       }
       const [a, b, c, d] = localAddress
-        .split('.')
+        .split(".")
         .map((part) => parseInt(part, 10));
       const pHi = Math.floor(port / 256);
       const pLo = port % 256;
@@ -370,17 +370,17 @@ export class FtpClient {
 
       const socket = await withTimeout(
         new Promise<net.Socket>((resolve, reject) => {
-          server.once('connection', (client) => {
+          server.once("connection", (client) => {
             closeServer();
             resolve(client);
           });
-          server.once('error', (err) => {
+          server.once("error", (err) => {
             closeServer();
             reject(err);
           });
         }),
         this.config.timeoutMs,
-        'FTP PORT accept timeout',
+        "FTP PORT accept timeout",
       );
 
       return { socket, close: () => socket.destroy() };
@@ -396,14 +396,14 @@ async function readAll(socket: net.Socket, timeoutMs: number): Promise<Buffer> {
   const chunks: Buffer[] = [];
   return withTimeout(
     new Promise<Buffer>((resolve, reject) => {
-      socket.on('data', (data) => chunks.push(Buffer.from(data)));
-      socket.once('error', reject);
-      socket.once('timeout', () => reject(new Error('FTP data timeout')));
-      socket.once('end', () => resolve(Buffer.concat(chunks)));
-      socket.once('close', () => resolve(Buffer.concat(chunks)));
+      socket.on("data", (data) => chunks.push(Buffer.from(data)));
+      socket.once("error", reject);
+      socket.once("timeout", () => reject(new Error("FTP data timeout")));
+      socket.once("end", () => resolve(Buffer.concat(chunks)));
+      socket.once("close", () => resolve(Buffer.concat(chunks)));
     }),
     timeoutMs,
-    'FTP data read timeout',
+    "FTP data read timeout",
   );
 }
 

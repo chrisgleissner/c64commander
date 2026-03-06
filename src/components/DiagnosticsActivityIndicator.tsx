@@ -6,8 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { cn } from '@/lib/utils';
-import { useDiagnosticsActivity } from '@/hooks/useDiagnosticsActivity';
+import { cn } from "@/lib/utils";
+import { useDiagnosticsActivity } from "@/hooks/useDiagnosticsActivity";
 
 type Props = {
   onClick: () => void;
@@ -32,9 +32,9 @@ const IndicatorDot = ({
   return (
     <span
       className={cn(
-        'relative inline-flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-semibold leading-none',
+        "relative inline-flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-semibold leading-none",
         colorClass,
-        animate ? 'animate-pulse-soft' : null,
+        animate ? "animate-pulse-soft" : null,
       )}
       aria-label={ariaLabel}
       data-testid={testId}
@@ -56,7 +56,7 @@ export const DiagnosticsActivityIndicator = ({ onClick, className }: Props) => {
   return (
     <button
       type="button"
-      className={cn('flex items-center gap-1.5', className)}
+      className={cn("flex items-center gap-1.5", className)}
       onClick={onClick}
       aria-label="Open diagnostics"
       data-testid="diagnostics-activity-indicator"

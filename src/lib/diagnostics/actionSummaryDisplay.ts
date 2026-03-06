@@ -6,13 +6,13 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { mapTargetDisplayLabel } from '@/lib/diagnostics/targetDisplayMapper';
+import { mapTargetDisplayLabel } from "@/lib/diagnostics/targetDisplayMapper";
 
 export const formatActionSummaryOrigin = (
   origin?: string | null,
   originalOrigin?: string | null,
 ): string => {
-  const normalizedOrigin = origin ?? 'unknown';
+  const normalizedOrigin = origin ?? "unknown";
   if (!originalOrigin) return normalizedOrigin;
   return `${originalOrigin} → ${normalizedOrigin}`;
 };
@@ -40,9 +40,9 @@ export const formatTriggerDisplay = (trigger: {
   name: string;
   intervalMs?: number | null;
 }): string => {
-  const suffix = trigger.name !== trigger.kind ? ` (${trigger.name})` : '';
+  const suffix = trigger.name !== trigger.kind ? ` (${trigger.name})` : "";
   const interval =
-    trigger.intervalMs != null ? ` · ${trigger.intervalMs}ms` : '';
+    trigger.intervalMs != null ? ` · ${trigger.intervalMs}ms` : "";
   return `${trigger.kind}${suffix}${interval}`;
 };
 
@@ -55,7 +55,7 @@ export const formatActionDuration = (
     !Number.isFinite(durationMs) ||
     durationMs < 0
   )
-    return '—';
+    return "—";
 
   if (durationMs < 999.5) {
     return `${Math.round(durationMs)}ms`;

@@ -6,46 +6,46 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { test, expect } from '@playwright/test';
-import { saveCoverageFromPage } from './withCoverage';
-import type { Page, TestInfo } from '@playwright/test';
-import * as path from 'node:path';
-import { spawnSync } from 'node:child_process';
-import { createMockC64Server } from '../tests/mocks/mockC64Server';
-import { seedUiMocks, uiFixtures } from './uiMocks';
-import { seedFtpConfig, startFtpTestServers } from './ftpTestUtils';
+import { test, expect } from "@playwright/test";
+import { saveCoverageFromPage } from "./withCoverage";
+import type { Page, TestInfo } from "@playwright/test";
+import * as path from "node:path";
+import { spawnSync } from "node:child_process";
+import { createMockC64Server } from "../tests/mocks/mockC64Server";
+import { seedUiMocks, uiFixtures } from "./uiMocks";
+import { seedFtpConfig, startFtpTestServers } from "./ftpTestUtils";
 import {
   allowWarnings,
   assertNoUiIssues,
   attachStepScreenshot,
   finalizeEvidence,
   startStrictUiMonitoring,
-} from './testArtifacts';
-import { clickSourceSelectionButton } from './sourceSelection';
+} from "./testArtifacts";
+import { clickSourceSelectionButton } from "./sourceSelection";
 import {
   clearTraces,
   enableTraceAssertions,
   expectRestTraceSequence,
   findTraceEvent,
-} from './traceUtils';
-import { enableGoldenTrace } from './goldenTraceRegistry';
+} from "./traceUtils";
+import { enableGoldenTrace } from "./goldenTraceRegistry";
 
 const waitForRequests = async (predicate: () => boolean) => {
   await expect.poll(predicate, { timeout: 10000 }).toBe(true);
 };
 
 const openAddItemsDialog = async (page: Page) => {
-  await page.getByRole('button', { name: /Add items|Add more items/i }).click();
-  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.getByRole("button", { name: /Add items|Add more items/i }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
 };
 
 const addLocalFolder = async (page: Page, folderPath: string) => {
   await openAddItemsDialog(page);
-  await clickSourceSelectionButton(page.getByRole('dialog'), 'This device');
+  await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
   const input = page.locator('input[type="file"][webkitdirectory]');
   await expect(input).toHaveCount(1);
   await input.setInputFiles([folderPath]);
-  await expect(page.getByRole('dialog')).toBeHidden();
+  await expect(page.getByRole("dialog")).toBeHidden();
 };
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
@@ -55,7 +55,7 @@ const snap = async (page: Page, testInfo: TestInfo, label: string) => {
 const seedPlaylistStorage = async (
   page: Page,
   items: Array<{
-    source: 'ultimate' | 'local' | 'hvsc';
+    source: "ultimate" | "local" | "hvsc";
     path: string;
     name: string;
     durationMs?: number;
@@ -67,7 +67,7 @@ const seedPlaylistStorage = async (
       seedItems,
     }: {
       seedItems: Array<{
-        source: 'ultimate' | 'local' | 'hvsc';
+        source: "ultimate" | "local" | "hvsc";
         path: string;
         name: string;
         durationMs?: number;
@@ -79,11 +79,11 @@ const seedPlaylistStorage = async (
         currentIndex: -1,
       };
       localStorage.setItem(
-        'c64u_playlist:v1:TEST-123',
+        "c64u_playlist:v1:TEST-123",
         JSON.stringify(payload),
       );
-      localStorage.setItem('c64u_playlist:v1:default', JSON.stringify(payload));
-      localStorage.setItem('c64u_last_device_id', 'TEST-123');
+      localStorage.setItem("c64u_playlist:v1:default", JSON.stringify(payload));
+      localStorage.setItem("c64u_last_device_id", "TEST-123");
     },
     { seedItems: items },
   );
@@ -94,9 +94,9 @@ const buildAlphabetPlaylist = () =>
     const letterIndex = Math.floor(index / 6);
     const trackIndex = (index % 6) + 1;
     const letter = String.fromCharCode(65 + letterIndex);
-    const suffix = String(trackIndex).padStart(3, '0');
+    const suffix = String(trackIndex).padStart(3, "0");
     return {
-      source: 'ultimate' as const,
+      source: "ultimate" as const,
       path: `/Usb0/Alphabet/${letter}-Track-${suffix}.sid`,
       name: `${letter}-Track-${suffix}.sid`,
       durationMs: 5000,
@@ -111,8 +111,8 @@ const parseTimeLabel = (value: string | null) => {
 };
 
 const runAdbShell = (serial: string, command: string) => {
-  const result = spawnSync('adb', ['-s', serial, 'shell', command], {
-    encoding: 'utf-8',
+  const result = spawnSync("adb", ["-s", serial, "shell", command], {
+    encoding: "utf-8",
   });
   if (result.status !== 0) {
     throw new Error(
@@ -123,14 +123,14 @@ const runAdbShell = (serial: string, command: string) => {
 
 const runDeviceLockUnlockCycle = (serial?: string) => {
   if (!serial) return;
-  runAdbShell(serial, 'input keyevent 26');
-  runAdbShell(serial, 'wm dismiss-keyguard');
-  runAdbShell(serial, 'input keyevent 26');
-  runAdbShell(serial, 'wm dismiss-keyguard');
-  runAdbShell(serial, 'input keyevent 82');
+  runAdbShell(serial, "input keyevent 26");
+  runAdbShell(serial, "wm dismiss-keyguard");
+  runAdbShell(serial, "input keyevent 26");
+  runAdbShell(serial, "wm dismiss-keyguard");
+  runAdbShell(serial, "input keyevent 82");
 };
 
-test.describe('Playback file browser', () => {
+test.describe("Playback file browser", () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
   let ftpServers: Awaited<ReturnType<typeof startFtpTestServers>>;
 
@@ -149,7 +149,7 @@ test.describe('Playback file browser', () => {
       host: ftpServers.ftpServer.host,
       port: ftpServers.ftpServer.port,
       bridgeUrl: ftpServers.bridgeServer.baseUrl,
-      password: '',
+      password: "",
     });
     await seedUiMocks(page, server.baseUrl);
   });
@@ -164,91 +164,91 @@ test.describe('Playback file browser', () => {
     }
   });
 
-  test('play page is available from tab bar', async ({
+  test("play page is available from tab bar", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await page.setViewportSize({ width: 360, height: 740 });
-    await page.goto('/play');
+    await page.goto("/play");
     await expect(
-      page.getByRole('heading', { name: 'Play Files' }),
+      page.getByRole("heading", { name: "Play Files" }),
     ).toBeVisible();
-    await snap(page, testInfo, 'play-page-loaded');
+    await snap(page, testInfo, "play-page-loaded");
   });
 
-  test('playlist view stays source-transparent for mixed-source entries', async ({
+  test("playlist view stays source-transparent for mixed-source entries", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await seedPlaylistStorage(page, [
       {
-        source: 'ultimate',
-        path: '/USB0/Demos/Track_0001.sid',
-        name: 'Track_0001.sid',
+        source: "ultimate",
+        path: "/USB0/Demos/Track_0001.sid",
+        name: "Track_0001.sid",
         durationMs: 5000,
       },
       {
-        source: 'local',
-        path: '/Music/local-demo.sid',
-        name: 'local-demo.sid',
+        source: "local",
+        path: "/Music/local-demo.sid",
+        name: "local-demo.sid",
         durationMs: 4000,
-        sourceId: 'local-source',
+        sourceId: "local-source",
       },
       {
-        source: 'hvsc',
-        path: '/MUSICIANS/Hubbard_Rob/Commando.sid',
-        name: 'Commando.sid',
-        sourceId: 'hvsc-library',
+        source: "hvsc",
+        path: "/MUSICIANS/Hubbard_Rob/Commando.sid",
+        name: "Commando.sid",
+        sourceId: "hvsc-library",
       },
-      { source: 'ultimate', path: '/USB0/Disks/demo.d64', name: 'demo.d64' },
+      { source: "ultimate", path: "/USB0/Disks/demo.d64", name: "demo.d64" },
     ]);
 
-    await page.goto('/play');
-    const playlistList = page.getByTestId('playlist-list');
-    await expect(playlistList).toContainText('Track_0001.sid');
-    await expect(playlistList).toContainText('/USB0/Demos/Track_0001.sid');
-    await expect(playlistList).toContainText('local-demo.sid');
-    await expect(playlistList).toContainText('/Music/local-demo.sid');
-    await expect(playlistList).toContainText('Commando.sid');
+    await page.goto("/play");
+    const playlistList = page.getByTestId("playlist-list");
+    await expect(playlistList).toContainText("Track_0001.sid");
+    await expect(playlistList).toContainText("/USB0/Demos/Track_0001.sid");
+    await expect(playlistList).toContainText("local-demo.sid");
+    await expect(playlistList).toContainText("/Music/local-demo.sid");
+    await expect(playlistList).toContainText("Commando.sid");
     await expect(playlistList).toContainText(
-      '/MUSICIANS/Hubbard_Rob/Commando.sid',
+      "/MUSICIANS/Hubbard_Rob/Commando.sid",
     );
-    await expect(playlistList).toContainText('—:—');
-    await expect(playlistList).not.toContainText('This device');
-    await expect(playlistList).not.toContainText('C64 Ultimate');
-    await expect(playlistList).not.toContainText('HVSC library file');
-    await snap(page, testInfo, 'mixed-source-source-transparent');
+    await expect(playlistList).toContainText("—:—");
+    await expect(playlistList).not.toContainText("This device");
+    await expect(playlistList).not.toContainText("C64 Ultimate");
+    await expect(playlistList).not.toContainText("HVSC library file");
+    await snap(page, testInfo, "mixed-source-source-transparent");
   });
 
-  test('playback sends runner request to real device mock', async ({
+  test("playback sends runner request to real device mock", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     enableTraceAssertions(testInfo);
     await seedPlaylistStorage(page, [
       {
-        source: 'ultimate' as const,
-        path: '/Usb0/Demos/Track_0001.sid',
-        name: 'Track_0001.sid',
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/Track_0001.sid",
+        name: "Track_0001.sid",
         durationMs: 5000,
       },
     ]);
 
-    await page.goto('/play');
-    await snap(page, testInfo, 'play-open');
+    await page.goto("/play");
+    await snap(page, testInfo, "play-open");
 
-    await expect(page.getByTestId('playlist-list')).toContainText(
-      'Track_0001.sid',
+    await expect(page.getByTestId("playlist-list")).toContainText(
+      "Track_0001.sid",
     );
 
     await clearTraces(page);
 
-    await page.getByTestId('playlist-play').click();
+    await page.getByTestId("playlist-play").click();
     await waitForRequests(() =>
-      server.requests.some((req) => req.url.startsWith('/v1/runners:sidplay')),
+      server.requests.some((req) => req.url.startsWith("/v1/runners:sidplay")),
     );
 
     const lastRequest = [...server.requests]
       .reverse()
-      .find((req) => req.url.startsWith('/v1/runners:sidplay'));
-    expect(lastRequest?.method).toBe('PUT');
+      .find((req) => req.url.startsWith("/v1/runners:sidplay"));
+    expect(lastRequest?.method).toBe("PUT");
 
     const { requestEvent, related } = await expectRestTraceSequence(
       page,
@@ -256,7 +256,7 @@ test.describe('Playback file browser', () => {
       /\/v1\/runners:sidplay/,
     );
     expect((requestEvent.data as { target?: string }).target).toBe(
-      'external-mock',
+      "external-mock",
     );
     const requestData = requestEvent.data as {
       lifecycleState?: unknown;
@@ -265,209 +265,209 @@ test.describe('Playback file browser', () => {
       playlistItemId?: unknown;
       localAccessMode?: unknown;
     };
-    expect(typeof requestData.lifecycleState).toBe('string');
+    expect(typeof requestData.lifecycleState).toBe("string");
     expect(
-      Object.prototype.hasOwnProperty.call(requestData, 'sourceKind'),
+      Object.prototype.hasOwnProperty.call(requestData, "sourceKind"),
     ).toBe(true);
     expect(
-      requestData.sourceKind === null || requestData.sourceKind === 'ultimate',
+      requestData.sourceKind === null || requestData.sourceKind === "ultimate",
     ).toBe(true);
     expect(
-      Object.prototype.hasOwnProperty.call(requestData, 'trackInstanceId'),
+      Object.prototype.hasOwnProperty.call(requestData, "trackInstanceId"),
     ).toBe(true);
     expect(
-      typeof requestData.trackInstanceId === 'number' ||
+      typeof requestData.trackInstanceId === "number" ||
         requestData.trackInstanceId === null,
     ).toBe(true);
     expect(
-      Object.prototype.hasOwnProperty.call(requestData, 'playlistItemId'),
+      Object.prototype.hasOwnProperty.call(requestData, "playlistItemId"),
     ).toBe(true);
     expect(
-      typeof requestData.playlistItemId === 'string' ||
+      typeof requestData.playlistItemId === "string" ||
         requestData.playlistItemId === null,
     ).toBe(true);
     expect(requestData.localAccessMode).toBe(null);
-    const decisionEvent = findTraceEvent(related, 'backend-decision');
+    const decisionEvent = findTraceEvent(related, "backend-decision");
     expect(
       (decisionEvent?.data as { selectedTarget?: string }).selectedTarget,
-    ).toBe('external-mock');
-    await snap(page, testInfo, 'play-requested');
+    ).toBe("external-mock");
+    await snap(page, testInfo, "play-requested");
   });
 
-  test('playback state persists across navigation', async ({
+  test("playback state persists across navigation", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await seedPlaylistStorage(page, [
       {
-        source: 'ultimate' as const,
-        path: '/Usb0/Demos/Track_0001.sid',
-        name: 'Track_0001.sid',
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/Track_0001.sid",
+        name: "Track_0001.sid",
         durationMs: 8000,
       },
     ]);
 
-    await page.goto('/play');
-    await page.getByTestId('playlist-play').click();
+    await page.goto("/play");
+    await page.getByTestId("playlist-play").click();
     await waitForRequests(() =>
-      server.requests.some((req) => req.url.startsWith('/v1/runners:sidplay')),
+      server.requests.some((req) => req.url.startsWith("/v1/runners:sidplay")),
     );
 
-    const elapsed = page.getByTestId('playback-elapsed');
+    const elapsed = page.getByTestId("playback-elapsed");
     await expect
       .poll(async () => parseTimeLabel(await elapsed.textContent()) ?? 0)
       .toBeGreaterThan(0);
     const firstElapsed = parseTimeLabel(await elapsed.textContent()) ?? 0;
     const initialSidplayCount = server.sidplayRequests.length;
 
-    await page.getByRole('button', { name: 'Disks', exact: true }).click();
+    await page.getByRole("button", { name: "Disks", exact: true }).click();
     await expect(
-      page.getByRole('heading', { name: 'Disks', level: 1 }),
+      page.getByRole("heading", { name: "Disks", level: 1 }),
     ).toBeVisible();
-    await page.getByRole('button', { name: 'Play', exact: true }).click();
+    await page.getByRole("button", { name: "Play", exact: true }).click();
     await expect(
-      page.getByRole('heading', { name: 'Play Files' }),
+      page.getByRole("heading", { name: "Play Files" }),
     ).toBeVisible();
 
-    await expect(page.getByTestId('playlist-play')).toHaveAttribute(
-      'aria-label',
-      'Stop',
+    await expect(page.getByTestId("playlist-play")).toHaveAttribute(
+      "aria-label",
+      "Stop",
     );
     await expect
       .poll(async () => parseTimeLabel(await elapsed.textContent()) ?? 0)
       .toBeGreaterThan(firstElapsed);
     expect(server.sidplayRequests.length).toBe(initialSidplayCount);
-    await snap(page, testInfo, 'playback-persisted');
+    await snap(page, testInfo, "playback-persisted");
   });
 
-  test('playback failure does not clear playlist across navigation', async ({
+  test("playback failure does not clear playlist across navigation", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     allowWarnings(
       testInfo,
-      'Expected playback failure warnings for unreachable device.',
+      "Expected playback failure warnings for unreachable device.",
     );
     await seedPlaylistStorage(page, [
       {
-        source: 'ultimate' as const,
-        path: '/Usb0/Demos/Track_0001.sid',
-        name: 'Track_0001.sid',
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/Track_0001.sid",
+        name: "Track_0001.sid",
         durationMs: 5000,
       },
     ]);
 
-    await page.goto('/play');
-    await snap(page, testInfo, 'play-open');
+    await page.goto("/play");
+    await snap(page, testInfo, "play-open");
 
     await waitForRequests(() =>
-      server.requests.some((req) => req.url.startsWith('/v1/info')),
+      server.requests.some((req) => req.url.startsWith("/v1/info")),
     );
     await waitForRequests(
       () =>
         server.requests.filter((req) =>
-          req.url.startsWith('/v1/configs/Audio%20Mixer'),
+          req.url.startsWith("/v1/configs/Audio%20Mixer"),
         ).length >= 1,
     );
     await waitForRequests(
       () =>
         server.requests.filter((req) =>
-          req.url.startsWith('/v1/configs/SID%20Sockets%20Configuration'),
+          req.url.startsWith("/v1/configs/SID%20Sockets%20Configuration"),
         ).length >= 1,
     );
     await waitForRequests(
       () =>
         server.requests.filter((req) =>
-          req.url.startsWith('/v1/configs/SID%20Addressing'),
+          req.url.startsWith("/v1/configs/SID%20Addressing"),
         ).length >= 1,
     );
 
     await clearTraces(page);
-    server.setFaultMode('refused');
-    await page.getByTestId('playlist-play').click();
+    server.setFaultMode("refused");
+    await page.getByTestId("playlist-play").click();
     await expect(
-      page.getByText('Playback failed', { exact: true }),
+      page.getByText("Playback failed", { exact: true }),
     ).toBeVisible();
-    await expect(page.getByTestId('playlist-list')).toContainText(
-      'Track_0001.sid',
+    await expect(page.getByTestId("playlist-list")).toContainText(
+      "Track_0001.sid",
     );
-    await snap(page, testInfo, 'play-failed');
+    await snap(page, testInfo, "play-failed");
 
-    await page.goto('/disks');
-    await page.goto('/play');
-    await expect(page.getByTestId('playlist-list')).toContainText(
-      'Track_0001.sid',
+    await page.goto("/disks");
+    await page.goto("/play");
+    await expect(page.getByTestId("playlist-list")).toContainText(
+      "Track_0001.sid",
     );
-    await snap(page, testInfo, 'playlist-restored');
-    server.setFaultMode('none');
+    await snap(page, testInfo, "playlist-restored");
+    server.setFaultMode("none");
   });
 
-  test('pause then stop never hangs', async ({
+  test("pause then stop never hangs", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     enableTraceAssertions(testInfo);
     await seedPlaylistStorage(page, [
       {
-        source: 'ultimate' as const,
-        path: '/Usb0/Demos/Track_0001.sid',
-        name: 'Track_0001.sid',
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/Track_0001.sid",
+        name: "Track_0001.sid",
         durationMs: 5000,
       },
     ]);
 
-    await page.goto('/play');
-    await snap(page, testInfo, 'pause-stop-open');
+    await page.goto("/play");
+    await snap(page, testInfo, "pause-stop-open");
 
     await clearTraces(page);
 
-    await page.getByTestId('playlist-play').click();
+    await page.getByTestId("playlist-play").click();
     await waitForRequests(() =>
-      server.requests.some((req) => req.url.startsWith('/v1/runners:sidplay')),
+      server.requests.some((req) => req.url.startsWith("/v1/runners:sidplay")),
     );
 
-    await page.getByTestId('playlist-pause').click();
+    await page.getByTestId("playlist-pause").click();
     await waitForRequests(() =>
-      server.requests.some((req) => req.url.startsWith('/v1/machine:pause')),
+      server.requests.some((req) => req.url.startsWith("/v1/machine:pause")),
     );
 
-    await page.getByTestId('playlist-play').click();
+    await page.getByTestId("playlist-play").click();
     await waitForRequests(() =>
-      server.requests.some((req) => req.url.startsWith('/v1/machine:reset')),
+      server.requests.some((req) => req.url.startsWith("/v1/machine:reset")),
     );
 
-    await expect(page.getByTestId('playlist-play')).toHaveAttribute(
-      'aria-label',
-      'Play',
+    await expect(page.getByTestId("playlist-play")).toHaveAttribute(
+      "aria-label",
+      "Play",
     );
 
-    await expectRestTraceSequence(page, testInfo, '/v1/machine:pause');
-    await expectRestTraceSequence(page, testInfo, '/v1/machine:reset');
-    await snap(page, testInfo, 'pause-stop-complete');
+    await expectRestTraceSequence(page, testInfo, "/v1/machine:pause");
+    await expectRestTraceSequence(page, testInfo, "/v1/machine:reset");
+    await snap(page, testInfo, "pause-stop-complete");
   });
 
-  test('playback progression survives lock/unlock cycle', async ({
+  test("playback progression survives lock/unlock cycle", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     const deviceSerial = process.env.PLAYWRIGHT_ANDROID_SERIAL;
     enableTraceAssertions(testInfo);
     await seedPlaylistStorage(page, [
       {
-        source: 'ultimate' as const,
-        path: '/Usb0/Demos/Track_0001.sid',
-        name: 'Track_0001.sid',
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/Track_0001.sid",
+        name: "Track_0001.sid",
         durationMs: 12000,
       },
     ]);
 
-    await page.goto('/play');
-    await snap(page, testInfo, 'lock-unlock-open');
+    await page.goto("/play");
+    await snap(page, testInfo, "lock-unlock-open");
 
     await clearTraces(page);
 
-    await page.getByTestId('playlist-play').click();
+    await page.getByTestId("playlist-play").click();
     await waitForRequests(() =>
-      server.requests.some((req) => req.url.startsWith('/v1/runners:sidplay')),
+      server.requests.some((req) => req.url.startsWith("/v1/runners:sidplay")),
     );
 
-    const elapsed = page.getByTestId('playback-elapsed');
+    const elapsed = page.getByTestId("playback-elapsed");
     await expect
       .poll(async () => parseTimeLabel(await elapsed.textContent()) ?? 0)
       .toBeGreaterThan(0);
@@ -475,9 +475,9 @@ test.describe('Playback file browser', () => {
 
     runDeviceLockUnlockCycle(deviceSerial);
 
-    await expect(page.getByTestId('playlist-play')).toHaveAttribute(
-      'aria-label',
-      'Stop',
+    await expect(page.getByTestId("playlist-play")).toHaveAttribute(
+      "aria-label",
+      "Stop",
     );
     await expect
       .poll(async () => parseTimeLabel(await elapsed.textContent()) ?? 0, {
@@ -485,76 +485,76 @@ test.describe('Playback file browser', () => {
       })
       .toBeGreaterThan(elapsedBeforeLock);
 
-    await snap(page, testInfo, 'lock-unlock-recovered');
+    await snap(page, testInfo, "lock-unlock-recovered");
   });
 
-  test('volume slider updates during playback', async ({
+  test("volume slider updates during playback", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     enableTraceAssertions(testInfo);
     await seedPlaylistStorage(page, [
       {
-        source: 'ultimate' as const,
-        path: '/Usb0/Demos/Track_0001.sid',
-        name: 'Track_0001.sid',
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/Track_0001.sid",
+        name: "Track_0001.sid",
         durationMs: 5000,
       },
     ]);
 
-    await page.goto('/play');
-    await page.getByTestId('playlist-play').click();
+    await page.goto("/play");
+    await page.getByTestId("playlist-play").click();
     await waitForRequests(() =>
-      server.requests.some((req) => req.url.startsWith('/v1/runners:sidplay')),
+      server.requests.some((req) => req.url.startsWith("/v1/runners:sidplay")),
     );
 
-    const slider = page.getByTestId('volume-slider').getByRole('slider');
+    const slider = page.getByTestId("volume-slider").getByRole("slider");
     await slider.focus();
     await clearTraces(page);
-    await slider.press('ArrowRight');
+    await slider.press("ArrowRight");
 
     await waitForRequests(() =>
       server.requests.some(
-        (req) => req.method === 'POST' && req.url.startsWith('/v1/configs'),
+        (req) => req.method === "POST" && req.url.startsWith("/v1/configs"),
       ),
     );
-    await expectRestTraceSequence(page, testInfo, '/v1/configs');
-    await snap(page, testInfo, 'volume-update');
+    await expectRestTraceSequence(page, testInfo, "/v1/configs");
+    await snap(page, testInfo, "volume-update");
   });
 
-  test('mute only affects enabled SID chips', async ({
+  test("mute only affects enabled SID chips", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await server.close();
     server = await createMockC64Server({
       ...uiFixtures.configState,
-      'SID Sockets Configuration': {
-        'SID Socket 1': 'Enabled',
-        'SID Socket 2': 'Disabled',
+      "SID Sockets Configuration": {
+        "SID Socket 1": "Enabled",
+        "SID Socket 2": "Disabled",
       },
-      'SID Addressing': {
-        'UltiSID 1 Address': '$D400',
-        'UltiSID 2 Address': 'Unmapped',
+      "SID Addressing": {
+        "UltiSID 1 Address": "$D400",
+        "UltiSID 2 Address": "Unmapped",
       },
-      'Audio Mixer': {
-        'Vol UltiSid 1': {
-          value: '+2 dB',
+      "Audio Mixer": {
+        "Vol UltiSid 1": {
+          value: "+2 dB",
           options:
-            uiFixtures.configState['Audio Mixer']['Vol UltiSid 1'].options,
+            uiFixtures.configState["Audio Mixer"]["Vol UltiSid 1"].options,
         },
-        'Vol UltiSid 2': {
-          value: '+1 dB',
+        "Vol UltiSid 2": {
+          value: "+1 dB",
           options:
-            uiFixtures.configState['Audio Mixer']['Vol UltiSid 2'].options,
+            uiFixtures.configState["Audio Mixer"]["Vol UltiSid 2"].options,
         },
-        'Vol Socket 1': {
-          value: ' 0 dB',
+        "Vol Socket 1": {
+          value: " 0 dB",
           options:
-            uiFixtures.configState['Audio Mixer']['Vol Socket 1'].options,
+            uiFixtures.configState["Audio Mixer"]["Vol Socket 1"].options,
         },
-        'Vol Socket 2': {
-          value: '-6 dB',
+        "Vol Socket 2": {
+          value: "-6 dB",
           options:
-            uiFixtures.configState['Audio Mixer']['Vol Socket 2'].options,
+            uiFixtures.configState["Audio Mixer"]["Vol Socket 2"].options,
         },
       },
     });
@@ -562,130 +562,130 @@ test.describe('Playback file browser', () => {
 
     const initialResponses = [
       page.waitForResponse((response) =>
-        response.url().includes('/v1/configs/Audio%20Mixer'),
+        response.url().includes("/v1/configs/Audio%20Mixer"),
       ),
       page.waitForResponse((response) =>
-        response.url().includes('/v1/configs/SID%20Sockets%20Configuration'),
+        response.url().includes("/v1/configs/SID%20Sockets%20Configuration"),
       ),
       page.waitForResponse((response) =>
-        response.url().includes('/v1/configs/SID%20Addressing'),
+        response.url().includes("/v1/configs/SID%20Addressing"),
       ),
     ];
-    await page.goto('/play');
+    await page.goto("/play");
     await Promise.all(initialResponses);
-    await page.getByTestId('volume-mute').click();
+    await page.getByTestId("volume-mute").click();
     await waitForRequests(() =>
       server.requests.some(
-        (req) => req.method === 'POST' && req.url.startsWith('/v1/configs'),
+        (req) => req.method === "POST" && req.url.startsWith("/v1/configs"),
       ),
     );
 
-    const mixer = server.getState()['Audio Mixer'];
-    expect(mixer['Vol Socket 1'].value).toBe('OFF');
-    expect(mixer['Vol UltiSid 1'].value).toBe('OFF');
-    expect(mixer['Vol Socket 2'].value).toBe('-6 dB');
-    expect(mixer['Vol UltiSid 2'].value).toBe('+1 dB');
-    await snap(page, testInfo, 'volume-mute-enabled-only');
+    const mixer = server.getState()["Audio Mixer"];
+    expect(mixer["Vol Socket 1"].value).toBe("OFF");
+    expect(mixer["Vol UltiSid 1"].value).toBe("OFF");
+    expect(mixer["Vol Socket 2"].value).toBe("-6 dB");
+    expect(mixer["Vol UltiSid 2"].value).toBe("+1 dB");
+    await snap(page, testInfo, "volume-mute-enabled-only");
   });
 
-  test('local SID playback uploads before play', async ({
+  test("local SID playback uploads before play", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
-    await page.goto('/play');
-    const indicator = page.getByTestId('connectivity-indicator');
+    await page.goto("/play");
+    const indicator = page.getByTestId("connectivity-indicator");
     await expect(indicator).toHaveAttribute(
-      'data-connection-state',
-      'REAL_CONNECTED',
+      "data-connection-state",
+      "REAL_CONNECTED",
       { timeout: 5000 },
     );
     await addLocalFolder(
       page,
-      path.resolve('playwright/fixtures/local-play-sids'),
+      path.resolve("playwright/fixtures/local-play-sids"),
     );
-    await snap(page, testInfo, 'local-playlist-ready');
+    await snap(page, testInfo, "local-playlist-ready");
 
-    await expect(page.getByTestId('playlist-list')).toContainText('demo.sid');
-    await expect(page.getByTestId('playlist-list')).toContainText('demo2.sid');
-    await expect(page.getByTestId('playlist-item')).toHaveCount(2);
+    await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
+    await expect(page.getByTestId("playlist-list")).toContainText("demo2.sid");
+    await expect(page.getByTestId("playlist-item")).toHaveCount(2);
 
-    await page.getByTestId('playlist-play').click();
+    await page.getByTestId("playlist-play").click();
     await waitForRequests(() => server.sidplayRequests.length > 0);
 
     await expect(indicator).toHaveAttribute(
-      'data-connection-state',
-      'REAL_CONNECTED',
+      "data-connection-state",
+      "REAL_CONNECTED",
     );
 
     const lastUpload =
       server.sidplayRequests[server.sidplayRequests.length - 1];
-    expect(lastUpload.method).toBe('POST');
-    await snap(page, testInfo, 'local-playback-uploaded');
+    expect(lastUpload.method).toBe("POST");
+    await snap(page, testInfo, "local-playback-uploaded");
   });
 
-  test('local SID playback does not throw unavailable error', async ({
+  test("local SID playback does not throw unavailable error", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
-    await page.goto('/play');
-    const indicator = page.getByTestId('connectivity-indicator');
+    await page.goto("/play");
+    const indicator = page.getByTestId("connectivity-indicator");
     await expect(indicator).toHaveAttribute(
-      'data-connection-state',
-      'REAL_CONNECTED',
+      "data-connection-state",
+      "REAL_CONNECTED",
       { timeout: 5000 },
     );
     await addLocalFolder(
       page,
-      path.resolve('playwright/fixtures/local-play-sids'),
+      path.resolve("playwright/fixtures/local-play-sids"),
     );
-    await expect(page.getByTestId('playlist-item')).toHaveCount(2);
+    await expect(page.getByTestId("playlist-item")).toHaveCount(2);
 
-    await page.getByTestId('playlist-play').click();
+    await page.getByTestId("playlist-play").click();
     await waitForRequests(() => server.sidplayRequests.length > 0);
 
     const hasUnavailableError = await page.evaluate(() => {
-      const raw = localStorage.getItem('c64u_app_logs');
+      const raw = localStorage.getItem("c64u_app_logs");
       if (!raw) return false;
       try {
         const logs = JSON.parse(raw) as Array<{ message: string }>;
         return logs.some((entry) =>
-          entry.message.includes('Local file unavailable'),
+          entry.message.includes("Local file unavailable"),
         );
       } catch {
         return false;
       }
     });
     expect(hasUnavailableError).toBe(false);
-    await snap(page, testInfo, 'local-no-unavailable-error');
+    await snap(page, testInfo, "local-no-unavailable-error");
   });
 
-  test('playback errors emit log entries', async ({
+  test("playback errors emit log entries", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     allowWarnings(
       testInfo,
-      'Expected playback failure warnings for unreachable device.',
+      "Expected playback failure warnings for unreachable device.",
     );
     server.setReachable(false);
     await seedPlaylistStorage(page, [
       {
-        source: 'ultimate' as const,
-        path: '/Usb0/Demos/Track_0001.sid',
-        name: 'Track_0001.sid',
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/Track_0001.sid",
+        name: "Track_0001.sid",
         durationMs: 5000,
       },
     ]);
 
-    await page.goto('/play');
-    await page.getByTestId('playlist-play').click();
+    await page.goto("/play");
+    await page.getByTestId("playlist-play").click();
 
     await expect
       .poll(async () => {
         return page.evaluate(() => {
-          const raw = localStorage.getItem('c64u_app_logs');
+          const raw = localStorage.getItem("c64u_app_logs");
           if (!raw) return false;
           try {
             const logs = JSON.parse(raw) as Array<{ message: string }>;
             return logs.some((entry) =>
-              entry.message.includes('PLAYBACK_START: Playback failed'),
+              entry.message.includes("PLAYBACK_START: Playback failed"),
             );
           } catch {
             return false;
@@ -694,30 +694,30 @@ test.describe('Playback file browser', () => {
       })
       .toBe(true);
 
-    await snap(page, testInfo, 'playback-error-logged');
+    await snap(page, testInfo, "playback-error-logged");
   });
 
-  test('playlist view-all dialog is constrained and scrollable', async ({
+  test("playlist view-all dialog is constrained and scrollable", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await page.addInitScript(() => {
-      localStorage.setItem('c64u_list_preview_limit', '10');
+      localStorage.setItem("c64u_list_preview_limit", "10");
     });
     const largePlaylist = Array.from({ length: 2700 }, (_, index) => ({
-      source: 'ultimate' as const,
-      path: `/Usb0/Demos/Track_${String(index + 1).padStart(4, '0')}.sid`,
-      name: `Track_${String(index + 1).padStart(4, '0')}.sid`,
+      source: "ultimate" as const,
+      path: `/Usb0/Demos/Track_${String(index + 1).padStart(4, "0")}.sid`,
+      name: `Track_${String(index + 1).padStart(4, "0")}.sid`,
       durationMs: 5000,
     }));
     await seedPlaylistStorage(page, largePlaylist);
 
-    await page.goto('/play');
-    await snap(page, testInfo, 'play-open');
+    await page.goto("/play");
+    await snap(page, testInfo, "play-open");
 
-    await page.getByRole('button', { name: 'View all' }).click();
-    const dialog = page.getByRole('dialog');
+    await page.getByRole("button", { name: "View all" }).click();
+    const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
-    await snap(page, testInfo, 'playlist-view-all-open');
+    await snap(page, testInfo, "playlist-view-all-open");
 
     const dialogBox = await dialog.boundingBox();
     const viewport = page.viewportSize();
@@ -735,7 +735,7 @@ test.describe('Playback file browser', () => {
     }
 
     // Verify list is populated
-    await expect(page.getByText('Track_0001.sid').first()).toBeVisible();
+    await expect(page.getByText("Track_0001.sid").first()).toBeVisible();
 
     const scrollArea = page.locator('[data-virtuoso-scroller="true"]');
     await expect
@@ -750,96 +750,96 @@ test.describe('Playback file browser', () => {
     await scrollArea.evaluate((node: HTMLElement) => {
       node.scrollTop = node.scrollHeight;
     });
-    await expect(scrollArea).toContainText('Track_2700.sid');
-    await snap(page, testInfo, 'playlist-view-all-scrolled');
+    await expect(scrollArea).toContainText("Track_2700.sid");
+    await snap(page, testInfo, "playlist-view-all-scrolled");
   });
 
-  test('playlist filter input filters inline and view-all lists', async ({
+  test("playlist filter input filters inline and view-all lists", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await page.addInitScript(() => {
-      localStorage.setItem('c64u_list_preview_limit', '3');
+      localStorage.setItem("c64u_list_preview_limit", "3");
     });
     await seedPlaylistStorage(page, [
       {
-        source: 'ultimate' as const,
-        path: '/Usb0/Demos/Alpha.sid',
-        name: 'Alpha.sid',
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/Alpha.sid",
+        name: "Alpha.sid",
         durationMs: 4000,
       },
       {
-        source: 'ultimate' as const,
-        path: '/Usb0/Demos/Beta.sid',
-        name: 'Beta.sid',
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/Beta.sid",
+        name: "Beta.sid",
         durationMs: 4000,
       },
       {
-        source: 'ultimate' as const,
-        path: '/Usb0/Demos/Gamma.sid',
-        name: 'Gamma.sid',
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/Gamma.sid",
+        name: "Gamma.sid",
         durationMs: 4000,
       },
       {
-        source: 'ultimate' as const,
-        path: '/Usb0/Demos/Delta.sid',
-        name: 'Delta.sid',
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/Delta.sid",
+        name: "Delta.sid",
         durationMs: 4000,
       },
     ]);
 
-    await page.goto('/play');
-    await snap(page, testInfo, 'play-open');
+    await page.goto("/play");
+    await snap(page, testInfo, "play-open");
 
-    const list = page.getByTestId('playlist-list');
-    await expect(list).toContainText('Alpha.sid');
+    const list = page.getByTestId("playlist-list");
+    await expect(list).toContainText("Alpha.sid");
 
-    const filter = page.getByTestId('list-filter-input');
-    await filter.fill('Beta');
-    await snap(page, testInfo, 'inline-filtered');
-    await expect(list).toContainText('Beta.sid');
-    await expect(list).not.toContainText('Alpha.sid');
+    const filter = page.getByTestId("list-filter-input");
+    await filter.fill("Beta");
+    await snap(page, testInfo, "inline-filtered");
+    await expect(list).toContainText("Beta.sid");
+    await expect(list).not.toContainText("Alpha.sid");
 
-    await filter.fill('');
-    await page.getByRole('button', { name: 'View all' }).click();
-    const dialog = page.getByRole('dialog');
+    await filter.fill("");
+    await page.getByRole("button", { name: "View all" }).click();
+    const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
 
-    const viewAllFilter = page.getByTestId('view-all-filter-input');
-    await viewAllFilter.fill('Gamma');
-    await snap(page, testInfo, 'view-all-filtered');
+    const viewAllFilter = page.getByTestId("view-all-filter-input");
+    await viewAllFilter.fill("Gamma");
+    await snap(page, testInfo, "view-all-filtered");
     await expect(page.locator('[data-virtuoso-scroller="true"]')).toContainText(
-      'Gamma.sid',
+      "Gamma.sid",
     );
     await expect(
       page.locator('[data-virtuoso-scroller="true"]'),
-    ).not.toContainText('Alpha.sid');
+    ).not.toContainText("Alpha.sid");
   });
 
   test('play add button uses "Add items" label and opens dialog', async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
-    await page.goto('/play');
-    const addButton = page.getByRole('button', { name: 'Add items' });
+    await page.goto("/play");
+    const addButton = page.getByRole("button", { name: "Add items" });
     await expect(addButton).toBeVisible();
     await addButton.click();
-    await expect(page.getByRole('dialog')).toBeVisible();
-    await snap(page, testInfo, 'add-items-opened');
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await snap(page, testInfo, "add-items-opened");
   });
 
-  test('alphabet overlay does not affect list metrics', async ({
+  test("alphabet overlay does not affect list metrics", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await page.addInitScript(() => {
-      localStorage.setItem('c64u_list_preview_limit', '5');
+      localStorage.setItem("c64u_list_preview_limit", "5");
     });
     await seedPlaylistStorage(page, buildAlphabetPlaylist());
 
-    await page.goto('/play');
-    await page.getByRole('button', { name: 'View all' }).click();
-    await expect(page.getByRole('dialog')).toBeVisible();
+    await page.goto("/play");
+    await page.getByRole("button", { name: "View all" }).click();
+    await expect(page.getByRole("dialog")).toBeVisible();
     const scrollArea = page.locator('[data-virtuoso-scroller="true"]');
     await expect(
-      scrollArea.getByText('A-Track-001.sid', { exact: true }),
+      scrollArea.getByText("A-Track-001.sid", { exact: true }),
     ).toBeVisible();
     await expect(scrollArea).toBeVisible();
     await expect
@@ -856,7 +856,7 @@ test.describe('Playback file browser', () => {
       scrollHeight: node.scrollHeight,
     }));
 
-    const touchArea = page.getByTestId('alphabet-touch-area');
+    const touchArea = page.getByTestId("alphabet-touch-area");
     await expect(touchArea).toBeVisible({ timeout: 15000 });
     const box = await touchArea.boundingBox();
     expect(box).not.toBeNull();
@@ -867,7 +867,7 @@ test.describe('Playback file browser', () => {
     const touchPoint = { identifier: 1, clientX: targetX, clientY: targetY };
     await page.dispatchEvent(
       '[data-testid="alphabet-touch-area"]',
-      'touchstart',
+      "touchstart",
       {
         touches: [touchPoint],
         targetTouches: [touchPoint],
@@ -876,7 +876,7 @@ test.describe('Playback file browser', () => {
     );
     await page.dispatchEvent(
       '[data-testid="alphabet-touch-area"]',
-      'touchmove',
+      "touchmove",
       {
         touches: [touchPoint],
         targetTouches: [touchPoint],
@@ -886,7 +886,7 @@ test.describe('Playback file browser', () => {
     await expect
       .poll(async () => {
         const opacity = await page
-          .getByTestId('alphabet-overlay')
+          .getByTestId("alphabet-overlay")
           .evaluate((node: HTMLElement) =>
             Number(window.getComputedStyle(node).opacity),
           );
@@ -905,23 +905,23 @@ test.describe('Playback file browser', () => {
     expect(
       Math.abs(afterMetrics.scrollHeight - initialMetrics.scrollHeight),
     ).toBeLessThanOrEqual(400);
-    await snap(page, testInfo, 'alphabet-overlay-metrics');
+    await snap(page, testInfo, "alphabet-overlay-metrics");
   });
 
-  test('alphabet overlay jumps to selected letter and auto-hides', async ({
+  test("alphabet overlay jumps to selected letter and auto-hides", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await page.addInitScript(() => {
-      localStorage.setItem('c64u_list_preview_limit', '5');
+      localStorage.setItem("c64u_list_preview_limit", "5");
     });
     await seedPlaylistStorage(page, buildAlphabetPlaylist());
 
-    await page.goto('/play');
-    await page.getByRole('button', { name: 'View all' }).click();
-    await expect(page.getByRole('dialog')).toBeVisible();
+    await page.goto("/play");
+    await page.getByRole("button", { name: "View all" }).click();
+    await expect(page.getByRole("dialog")).toBeVisible();
     const scrollArea = page.locator('[data-virtuoso-scroller="true"]');
     await expect(
-      scrollArea.getByText('A-Track-001.sid', { exact: true }),
+      scrollArea.getByText("A-Track-001.sid", { exact: true }),
     ).toBeVisible();
     await expect(scrollArea).toBeVisible();
     await expect
@@ -933,7 +933,7 @@ test.describe('Playback file browser', () => {
       })
       .toBe(true);
 
-    const touchArea = page.getByTestId('alphabet-touch-area');
+    const touchArea = page.getByTestId("alphabet-touch-area");
     await expect(touchArea).toBeVisible({ timeout: 15000 });
     const box = await touchArea.boundingBox();
     expect(box).not.toBeNull();
@@ -945,7 +945,7 @@ test.describe('Playback file browser', () => {
     const touchPoint = { identifier: 1, clientX, clientY: targetY };
     await page.dispatchEvent(
       '[data-testid="alphabet-touch-area"]',
-      'touchstart',
+      "touchstart",
       {
         touches: [touchPoint],
         targetTouches: [touchPoint],
@@ -954,7 +954,7 @@ test.describe('Playback file browser', () => {
     );
     await page.dispatchEvent(
       '[data-testid="alphabet-touch-area"]',
-      'touchmove',
+      "touchmove",
       {
         touches: [touchPoint],
         targetTouches: [touchPoint],
@@ -962,16 +962,16 @@ test.describe('Playback file browser', () => {
       },
     );
 
-    await expect(page.getByTestId('alphabet-badge')).toBeVisible();
+    await expect(page.getByTestId("alphabet-badge")).toBeVisible();
     await expect(
-      scrollArea.getByText('Z-Track-001.sid', { exact: true }),
+      scrollArea.getByText("Z-Track-001.sid", { exact: true }),
     ).toBeVisible();
-    await snap(page, testInfo, 'alphabet-jump');
+    await snap(page, testInfo, "alphabet-jump");
 
     await expect
       .poll(async () => {
         const overlayOpacity = await page
-          .getByTestId('alphabet-overlay')
+          .getByTestId("alphabet-overlay")
           .evaluate(
             (node: HTMLElement) => window.getComputedStyle(node).opacity,
           );
@@ -980,35 +980,35 @@ test.describe('Playback file browser', () => {
       .toBeLessThan(0.2);
   });
 
-  test('playback counters reflect played, total, and remaining time', async ({
+  test("playback counters reflect played, total, and remaining time", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     const seededItems = [
       {
-        source: 'ultimate' as const,
-        path: '/Usb0/Demos/Track_0001.sid',
-        name: 'Track_0001.sid',
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/Track_0001.sid",
+        name: "Track_0001.sid",
         durationMs: 5000,
       },
       {
-        source: 'ultimate' as const,
-        path: '/Usb0/Demos/Track_0002.sid',
-        name: 'Track_0002.sid',
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/Track_0002.sid",
+        name: "Track_0002.sid",
         durationMs: 7000,
       },
     ];
     await seedPlaylistStorage(page, seededItems);
 
-    await page.goto('/play');
-    await snap(page, testInfo, 'play-open');
+    await page.goto("/play");
+    await snap(page, testInfo, "play-open");
 
-    const counters = page.getByTestId('playback-counters');
-    const elapsedLabel = page.getByTestId('playback-elapsed');
-    await expect(counters).toContainText('Total: 0:12');
-    await expect(elapsedLabel).toContainText('0:00');
+    const counters = page.getByTestId("playback-counters");
+    const elapsedLabel = page.getByTestId("playback-elapsed");
+    await expect(counters).toContainText("Total: 0:12");
+    await expect(elapsedLabel).toContainText("0:00");
 
-    await page.getByTestId('playlist-play').click();
-    await snap(page, testInfo, 'playback-running');
+    await page.getByTestId("playlist-play").click();
+    await snap(page, testInfo, "playback-running");
 
     await expect
       .poll(async () => {
@@ -1019,10 +1019,10 @@ test.describe('Playback file browser', () => {
       .toBeGreaterThanOrEqual(1);
 
     const remainingAfterStart = await counters.textContent();
-    expect(remainingAfterStart).toContain('Remaining:');
+    expect(remainingAfterStart).toContain("Remaining:");
 
-    await page.getByTestId('playlist-next').click();
-    await snap(page, testInfo, 'playback-next');
+    await page.getByTestId("playlist-next").click();
+    await snap(page, testInfo, "playback-next");
 
     await expect
       .poll(async () => {
@@ -1033,92 +1033,92 @@ test.describe('Playback file browser', () => {
       .toBeGreaterThanOrEqual(2);
   });
 
-  test('playback counters fall back to default song durations when unknown', async ({
+  test("playback counters fall back to default song durations when unknown", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     const seededItems = [
       {
-        source: 'ultimate' as const,
-        path: '/Usb0/Demos/Unknown_1.sid',
-        name: 'Unknown_1.sid',
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/Unknown_1.sid",
+        name: "Unknown_1.sid",
       },
       {
-        source: 'ultimate' as const,
-        path: '/Usb0/Demos/Unknown_2.sid',
-        name: 'Unknown_2.sid',
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/Unknown_2.sid",
+        name: "Unknown_2.sid",
         durationMs: 4000,
       },
     ];
     await seedPlaylistStorage(page, seededItems);
 
-    await page.goto('/play');
-    await snap(page, testInfo, 'play-open');
+    await page.goto("/play");
+    await snap(page, testInfo, "play-open");
 
-    const counters = page.getByTestId('playback-counters');
-    await expect(counters).toContainText('Total: 3:04');
-    await expect(counters).toContainText('Remaining: 3:04');
+    const counters = page.getByTestId("playback-counters");
+    await expect(counters).toContainText("Total: 3:04");
+    await expect(counters).toContainText("Remaining: 3:04");
   });
 
-  test('stop does not auto-resume playback', async ({
+  test("stop does not auto-resume playback", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await seedPlaylistStorage(page, [
       {
-        source: 'ultimate' as const,
-        path: '/Usb0/Demos/demo.sid',
-        name: 'demo.sid',
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/demo.sid",
+        name: "demo.sid",
         durationMs: 8000,
       },
     ]);
 
-    await page.goto('/play');
-    await expect(page.getByTestId('playlist-list')).toContainText('demo.sid');
-    const playButton = page.getByTestId('playlist-play');
+    await page.goto("/play");
+    await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
+    const playButton = page.getByTestId("playlist-play");
     await playButton.click();
-    await expect(playButton).toHaveAttribute('aria-label', 'Stop');
+    await expect(playButton).toHaveAttribute("aria-label", "Stop");
     await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(0);
-    await snap(page, testInfo, 'play-started');
+    await snap(page, testInfo, "play-started");
 
     await playButton.click();
-    await expect(playButton).toHaveAttribute('aria-label', 'Play');
-    await snap(page, testInfo, 'play-stopped');
+    await expect(playButton).toHaveAttribute("aria-label", "Play");
+    await snap(page, testInfo, "play-stopped");
     await page.waitForFunction(
       () => {
         const button = document.querySelector('[data-testid="playlist-play"]');
         if (!button) return false;
-        const label = button.getAttribute('aria-label') ?? '';
+        const label = button.getAttribute("aria-label") ?? "";
         const now = performance.now();
         const win = window as Window & { __playStopCheckStart?: number };
         if (!win.__playStopCheckStart) {
           win.__playStopCheckStart = now;
         }
-        if (!label.toLowerCase().includes('play')) return false;
+        if (!label.toLowerCase().includes("play")) return false;
         return now - win.__playStopCheckStart > 10000;
       },
       null,
       { timeout: 12000 },
     );
-    await expect(playButton).toHaveAttribute('aria-label', 'Play');
-    await snap(page, testInfo, 'no-autoresume');
+    await expect(playButton).toHaveAttribute("aria-label", "Play");
+    await snap(page, testInfo, "no-autoresume");
   });
 
-  test('played time advances steadily while playing', async ({
+  test("played time advances steadily while playing", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await seedPlaylistStorage(page, [
       {
-        source: 'ultimate' as const,
-        path: '/Usb0/Demos/demo.sid',
-        name: 'demo.sid',
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/demo.sid",
+        name: "demo.sid",
         durationMs: 8000,
       },
     ]);
 
-    await page.goto('/play');
-    const playButton = page.getByTestId('playlist-play');
-    const played = page.getByTestId('playback-elapsed');
+    await page.goto("/play");
+    const playButton = page.getByTestId("playlist-play");
+    const played = page.getByTestId("playback-elapsed");
     await playButton.click();
-    await snap(page, testInfo, 'play-started');
+    await snap(page, testInfo, "play-started");
     await expect
       .poll(async () => parseTimeLabel(await played.textContent()) ?? 0)
       .toBeGreaterThanOrEqual(1);
@@ -1130,24 +1130,24 @@ test.describe('Playback file browser', () => {
     expect(secondValue).toBeLessThanOrEqual(5);
   });
 
-  test('playback controls are stateful and show current track', async ({
+  test("playback controls are stateful and show current track", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
-    await page.goto('/play');
-    await snap(page, testInfo, 'play-open');
+    await page.goto("/play");
+    await snap(page, testInfo, "play-open");
     await openAddItemsDialog(page);
-    await clickSourceSelectionButton(page.getByRole('dialog'), 'This device');
+    await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
     const input = page.locator('input[type="file"][webkitdirectory]');
     await input.setInputFiles([
-      path.resolve('playwright/fixtures/local-play-songlengths'),
+      path.resolve("playwright/fixtures/local-play-songlengths"),
     ]);
-    await expect(page.getByRole('dialog')).toBeHidden();
-    await snap(page, testInfo, 'playlist-ready');
+    await expect(page.getByRole("dialog")).toBeHidden();
+    await snap(page, testInfo, "playlist-ready");
 
-    const prevButton = page.getByTestId('playlist-prev');
-    const playButton = page.getByTestId('playlist-play');
-    const pauseButton = page.getByTestId('playlist-pause');
-    const nextButton = page.getByTestId('playlist-next');
+    const prevButton = page.getByTestId("playlist-prev");
+    const playButton = page.getByTestId("playlist-play");
+    const pauseButton = page.getByTestId("playlist-pause");
+    const nextButton = page.getByTestId("playlist-next");
 
     await expect(prevButton).toBeVisible();
     await expect(playButton).toBeVisible();
@@ -1168,210 +1168,210 @@ test.describe('Playback file browser', () => {
 
     await expect(prevButton).toBeDisabled();
     await expect(nextButton).toBeEnabled();
-    await expect(playButton).toHaveAttribute('aria-label', 'Play');
-    await expect(pauseButton).toHaveAttribute('aria-label', 'Pause');
+    await expect(playButton).toHaveAttribute("aria-label", "Play");
+    await expect(pauseButton).toHaveAttribute("aria-label", "Pause");
     await expect(pauseButton).toBeDisabled();
 
     await playButton.click();
-    await expect(playButton).toHaveAttribute('aria-label', 'Stop');
-    await expect(pauseButton).toHaveAttribute('aria-label', 'Pause');
+    await expect(playButton).toHaveAttribute("aria-label", "Stop");
+    await expect(pauseButton).toHaveAttribute("aria-label", "Pause");
     await expect(pauseButton).toBeEnabled();
-    await snap(page, testInfo, 'playback-started');
+    await snap(page, testInfo, "playback-started");
 
-    const currentTrack = page.getByTestId('playback-current-track');
+    const currentTrack = page.getByTestId("playback-current-track");
     await expect(currentTrack).toContainText(/demo\d?\.sid/i);
     await expect(currentTrack).toContainText(/\(\d+:\d{2}\)/);
 
     await pauseButton.click();
-    await expect(pauseButton).toHaveAttribute('aria-label', 'Resume');
-    await snap(page, testInfo, 'playback-paused');
+    await expect(pauseButton).toHaveAttribute("aria-label", "Resume");
+    await snap(page, testInfo, "playback-paused");
 
     await pauseButton.click();
-    await expect(pauseButton).toHaveAttribute('aria-label', 'Pause');
-    await snap(page, testInfo, 'playback-resumed');
+    await expect(pauseButton).toHaveAttribute("aria-label", "Pause");
+    await snap(page, testInfo, "playback-resumed");
 
     await nextButton.click();
     await expect(prevButton).toBeEnabled();
     await expect(nextButton).toBeDisabled();
-    await snap(page, testInfo, 'playback-next');
+    await snap(page, testInfo, "playback-next");
 
     await playButton.click();
-    await expect(playButton).toHaveAttribute('aria-label', 'Play');
-    await snap(page, testInfo, 'playback-stopped');
+    await expect(playButton).toHaveAttribute("aria-label", "Play");
+    await snap(page, testInfo, "playback-stopped");
   });
 
-  test('play immediately after import targets the real device', async ({
+  test("play immediately after import targets the real device", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
-    await page.goto('/play');
+    await page.goto("/play");
     await openAddItemsDialog(page);
-    await clickSourceSelectionButton(page.getByRole('dialog'), 'This device');
+    await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
     const input = page.locator('input[type="file"][webkitdirectory]');
     await input.setInputFiles([
-      path.resolve('playwright/fixtures/local-play-songlengths'),
+      path.resolve("playwright/fixtures/local-play-songlengths"),
     ]);
-    await expect(page.getByRole('dialog')).toBeHidden();
+    await expect(page.getByRole("dialog")).toBeHidden();
 
-    const playButton = page.getByTestId('playlist-play');
+    const playButton = page.getByTestId("playlist-play");
     await playButton.click();
     await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(0);
-    await snap(page, testInfo, 'play-after-import');
+    await snap(page, testInfo, "play-after-import");
   });
 
-  test('rapid play/stop/play sequences remain stable', async ({
+  test("rapid play/stop/play sequences remain stable", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     enableGoldenTrace(testInfo);
     await seedPlaylistStorage(page, [
       {
-        source: 'ultimate' as const,
-        path: '/Usb0/Demos/demo.sid',
-        name: 'demo.sid',
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/demo.sid",
+        name: "demo.sid",
         durationMs: 8000,
       },
     ]);
 
-    await page.goto('/play');
-    const playButton = page.getByTestId('playlist-play');
+    await page.goto("/play");
+    const playButton = page.getByTestId("playlist-play");
     await playButton.click();
-    await expect(playButton).toHaveAttribute('aria-label', 'Stop');
+    await expect(playButton).toHaveAttribute("aria-label", "Stop");
     await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(0);
 
     await playButton.click();
-    await expect(playButton).toHaveAttribute('aria-label', 'Play');
+    await expect(playButton).toHaveAttribute("aria-label", "Play");
 
     await playButton.click();
-    await expect(playButton).toHaveAttribute('aria-label', 'Stop');
+    await expect(playButton).toHaveAttribute("aria-label", "Stop");
     await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(1);
-    await snap(page, testInfo, 'rapid-play-stop-play');
+    await snap(page, testInfo, "rapid-play-stop-play");
   });
 
-  test('skipping tracks quickly updates current track', async ({
+  test("skipping tracks quickly updates current track", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await seedPlaylistStorage(page, [
       {
-        source: 'ultimate' as const,
-        path: '/Usb0/Demos/track-1.sid',
-        name: 'track-1.sid',
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/track-1.sid",
+        name: "track-1.sid",
         durationMs: 8000,
       },
       {
-        source: 'ultimate' as const,
-        path: '/Usb0/Demos/track-2.sid',
-        name: 'track-2.sid',
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/track-2.sid",
+        name: "track-2.sid",
         durationMs: 8000,
       },
       {
-        source: 'ultimate' as const,
-        path: '/Usb0/Demos/track-3.sid',
-        name: 'track-3.sid',
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/track-3.sid",
+        name: "track-3.sid",
         durationMs: 8000,
       },
     ]);
 
-    await page.goto('/play');
-    const playButton = page.getByTestId('playlist-play');
-    const nextButton = page.getByTestId('playlist-next');
-    const currentTrack = page.getByTestId('playback-current-track');
+    await page.goto("/play");
+    const playButton = page.getByTestId("playlist-play");
+    const nextButton = page.getByTestId("playlist-next");
+    const currentTrack = page.getByTestId("playback-current-track");
 
     await playButton.click();
     await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(0);
 
     await nextButton.click();
     await nextButton.click();
-    await expect(currentTrack).toContainText('track-3.sid');
+    await expect(currentTrack).toContainText("track-3.sid");
     await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(2);
-    await snap(page, testInfo, 'skipped-to-last');
+    await snap(page, testInfo, "skipped-to-last");
   });
 
-  test('auto-advance triggers once per track transition without cascades', async ({
+  test("auto-advance triggers once per track transition without cascades", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await seedPlaylistStorage(page, [
       {
-        source: 'ultimate' as const,
-        path: '/Usb0/Demos/track-1.sid',
-        name: 'track-1.sid',
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/track-1.sid",
+        name: "track-1.sid",
         durationMs: 1200,
       },
       {
-        source: 'ultimate' as const,
-        path: '/Usb0/Demos/track-2.sid',
-        name: 'track-2.sid',
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/track-2.sid",
+        name: "track-2.sid",
         durationMs: 20000,
       },
       {
-        source: 'ultimate' as const,
-        path: '/Usb0/Demos/track-3.sid',
-        name: 'track-3.sid',
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/track-3.sid",
+        name: "track-3.sid",
         durationMs: 20000,
       },
     ]);
 
-    await page.goto('/play');
-    await page.getByTestId('playlist-play').click();
+    await page.goto("/play");
+    await page.getByTestId("playlist-play").click();
     await expect.poll(() => server.sidplayRequests.length).toBe(1);
-    await expect(page.getByTestId('playback-current-track')).toContainText(
-      'track-1.sid',
+    await expect(page.getByTestId("playback-current-track")).toContainText(
+      "track-1.sid",
     );
 
     await expect.poll(() => server.sidplayRequests.length).toBe(2);
-    await expect(page.getByTestId('playback-current-track')).toContainText(
-      'track-2.sid',
+    await expect(page.getByTestId("playback-current-track")).toContainText(
+      "track-2.sid",
     );
     await expect(
       page
-        .getByTestId('playlist-item')
-        .filter({ hasText: 'track-2.sid' })
+        .getByTestId("playlist-item")
+        .filter({ hasText: "track-2.sid" })
         .first(),
-    ).toHaveAttribute('data-playing', 'true');
+    ).toHaveAttribute("data-playing", "true");
 
     await page.waitForTimeout(2000);
     expect(server.sidplayRequests.length).toBe(2);
-    await snap(page, testInfo, 'auto-advance-single-shot');
+    await snap(page, testInfo, "auto-advance-single-shot");
   });
 
-  test('user next cancels old-track auto-advance and transitions immediately', async ({
+  test("user next cancels old-track auto-advance and transitions immediately", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await seedPlaylistStorage(page, [
       {
-        source: 'ultimate' as const,
-        path: '/Usb0/Demos/track-1.sid',
-        name: 'track-1.sid',
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/track-1.sid",
+        name: "track-1.sid",
         durationMs: 1200,
       },
       {
-        source: 'ultimate' as const,
-        path: '/Usb0/Demos/track-2.sid',
-        name: 'track-2.sid',
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/track-2.sid",
+        name: "track-2.sid",
         durationMs: 20000,
       },
       {
-        source: 'ultimate' as const,
-        path: '/Usb0/Demos/track-3.sid',
-        name: 'track-3.sid',
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/track-3.sid",
+        name: "track-3.sid",
         durationMs: 20000,
       },
     ]);
 
-    await page.goto('/play');
-    await page.getByTestId('playlist-play').click();
+    await page.goto("/play");
+    await page.getByTestId("playlist-play").click();
     await expect.poll(() => server.sidplayRequests.length).toBe(1);
 
-    await page.getByTestId('playlist-next').click();
+    await page.getByTestId("playlist-next").click();
     await expect.poll(() => server.sidplayRequests.length).toBe(2);
-    await expect(page.getByTestId('playback-current-track')).toContainText(
-      'track-2.sid',
+    await expect(page.getByTestId("playback-current-track")).toContainText(
+      "track-2.sid",
     );
 
     await page.waitForTimeout(1800);
     expect(server.sidplayRequests.length).toBe(2);
-    await snap(page, testInfo, 'user-next-cancels-old-auto');
+    await snap(page, testInfo, "user-next-cancels-old-auto");
   });
 
-  test('visibilitychange reconciliation catches up after timer throttling', async ({
+  test("visibilitychange reconciliation catches up after timer throttling", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await page.addInitScript(() => {
@@ -1384,55 +1384,55 @@ test.describe('Playback file browser', () => {
 
     await seedPlaylistStorage(page, [
       {
-        source: 'ultimate' as const,
-        path: '/Usb0/Demos/track-1.sid',
-        name: 'track-1.sid',
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/track-1.sid",
+        name: "track-1.sid",
         durationMs: 600,
       },
       {
-        source: 'ultimate' as const,
-        path: '/Usb0/Demos/track-2.sid',
-        name: 'track-2.sid',
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/track-2.sid",
+        name: "track-2.sid",
         durationMs: 20000,
       },
     ]);
 
-    await page.goto('/play');
-    await page.getByTestId('playlist-play').click();
+    await page.goto("/play");
+    await page.getByTestId("playlist-play").click();
     await expect.poll(() => server.sidplayRequests.length).toBe(1);
-    await expect(page.getByTestId('playback-current-track')).toContainText(
-      'track-1.sid',
+    await expect(page.getByTestId("playback-current-track")).toContainText(
+      "track-1.sid",
     );
 
     await page.waitForTimeout(900);
     expect(server.sidplayRequests.length).toBe(1);
 
     await page.evaluate(() => {
-      document.dispatchEvent(new Event('visibilitychange'));
+      document.dispatchEvent(new Event("visibilitychange"));
     });
 
     await expect.poll(() => server.sidplayRequests.length).toBe(2);
-    await expect(page.getByTestId('playback-current-track')).toContainText(
-      'track-2.sid',
+    await expect(page.getByTestId("playback-current-track")).toContainText(
+      "track-2.sid",
     );
-    await snap(page, testInfo, 'visibilitychange-catchup');
+    await snap(page, testInfo, "visibilitychange-catchup");
   });
 
-  test('playlist row highlight follows confirmed playback and clears on transition failure', async ({
+  test("playlist row highlight follows confirmed playback and clears on transition failure", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     allowWarnings(
       testInfo,
-      'Expected error toast when forced next-track sidplay request fails.',
+      "Expected error toast when forced next-track sidplay request fails.",
     );
     let sidplayCount = 0;
-    await page.route('**/v1/runners:sidplay**', async (route) => {
+    await page.route("**/v1/runners:sidplay**", async (route) => {
       sidplayCount += 1;
       if (sidplayCount >= 2) {
         await route.fulfill({
           status: 500,
-          contentType: 'application/json',
-          body: JSON.stringify({ error: 'forced sidplay failure' }),
+          contentType: "application/json",
+          body: JSON.stringify({ error: "forced sidplay failure" }),
         });
         return;
       }
@@ -1441,87 +1441,87 @@ test.describe('Playback file browser', () => {
 
     await seedPlaylistStorage(page, [
       {
-        source: 'ultimate' as const,
-        path: '/Usb0/Demos/track-1.sid',
-        name: 'track-1.sid',
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/track-1.sid",
+        name: "track-1.sid",
         durationMs: 20000,
       },
       {
-        source: 'ultimate' as const,
-        path: '/Usb0/Demos/track-2.sid',
-        name: 'track-2.sid',
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/track-2.sid",
+        name: "track-2.sid",
         durationMs: 20000,
       },
     ]);
 
-    await page.goto('/play');
-    await page.getByTestId('playlist-play').click();
+    await page.goto("/play");
+    await page.getByTestId("playlist-play").click();
     await expect.poll(() => server.sidplayRequests.length).toBe(1);
     await expect(
       page
-        .getByTestId('playlist-item')
-        .filter({ hasText: 'track-1.sid' })
+        .getByTestId("playlist-item")
+        .filter({ hasText: "track-1.sid" })
         .first(),
-    ).toHaveAttribute('data-playing', 'true');
+    ).toHaveAttribute("data-playing", "true");
     await expect(
       page
-        .getByTestId('playlist-item')
-        .filter({ hasText: 'track-2.sid' })
+        .getByTestId("playlist-item")
+        .filter({ hasText: "track-2.sid" })
         .first(),
-    ).toHaveAttribute('data-playing', 'false');
+    ).toHaveAttribute("data-playing", "false");
 
-    await page.getByTestId('playlist-next').click();
+    await page.getByTestId("playlist-next").click();
     await expect
-      .poll(() => page.getByTestId('playlist-play').getAttribute('aria-label'))
-      .toBe('Play');
+      .poll(() => page.getByTestId("playlist-play").getAttribute("aria-label"))
+      .toBe("Play");
     await expect(
-      page.getByText('Playback next failed', { exact: true }),
+      page.getByText("Playback next failed", { exact: true }),
     ).toBeVisible();
     await expect(
       page
-        .getByTestId('playlist-item')
-        .filter({ hasText: 'track-1.sid' })
+        .getByTestId("playlist-item")
+        .filter({ hasText: "track-1.sid" })
         .first(),
-    ).toHaveAttribute('data-playing', 'false');
+    ).toHaveAttribute("data-playing", "false");
     await expect(
       page
-        .getByTestId('playlist-item')
-        .filter({ hasText: 'track-2.sid' })
+        .getByTestId("playlist-item")
+        .filter({ hasText: "track-2.sid" })
         .first(),
-    ).toHaveAttribute('data-playing', 'false');
-    await snap(page, testInfo, 'playing-row-cleared-on-failure');
+    ).toHaveAttribute("data-playing", "false");
+    await snap(page, testInfo, "playing-row-cleared-on-failure");
   });
 
-  test('playback persists across navigation while active', async ({
+  test("playback persists across navigation while active", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await seedPlaylistStorage(page, [
       {
-        source: 'ultimate' as const,
-        path: '/Usb0/Demos/demo.sid',
-        name: 'demo.sid',
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/demo.sid",
+        name: "demo.sid",
         durationMs: 8000,
       },
     ]);
 
-    await page.goto('/play');
-    await expect(page.getByTestId('playlist-list')).toContainText('demo.sid');
-    const playButton = page.getByTestId('playlist-play');
+    await page.goto("/play");
+    await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
+    const playButton = page.getByTestId("playlist-play");
     await playButton.click();
-    await expect(playButton).toHaveAttribute('aria-label', 'Stop');
+    await expect(playButton).toHaveAttribute("aria-label", "Stop");
     await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(0);
 
-    await page.getByRole('button', { name: 'Disks', exact: true }).click();
+    await page.getByRole("button", { name: "Disks", exact: true }).click();
     await expect(
-      page.locator('header').getByRole('heading', { name: 'Disks' }),
+      page.locator("header").getByRole("heading", { name: "Disks" }),
     ).toBeVisible();
-    await page.getByRole('button', { name: 'Play', exact: true }).click();
+    await page.getByRole("button", { name: "Play", exact: true }).click();
     await expect(
-      page.getByRole('heading', { name: 'Play Files' }),
+      page.getByRole("heading", { name: "Play Files" }),
     ).toBeVisible();
-    const playlistListAfter = page.getByTestId('playlist-list');
+    const playlistListAfter = page.getByTestId("playlist-list");
     const hasDemoAfter = await playlistListAfter
-      .getByText('demo.sid', { exact: false })
+      .getByText("demo.sid", { exact: false })
       .isVisible()
       .catch(() => false);
     if (!hasDemoAfter) {
@@ -1529,29 +1529,29 @@ test.describe('Playback file browser', () => {
         const payload = {
           items: [
             {
-              source: 'ultimate',
-              path: '/Usb0/Demos/demo.sid',
-              name: 'demo.sid',
+              source: "ultimate",
+              path: "/Usb0/Demos/demo.sid",
+              name: "demo.sid",
               durationMs: 8000,
             },
           ],
           currentIndex: -1,
         };
         localStorage.setItem(
-          'c64u_playlist:v1:TEST-123',
+          "c64u_playlist:v1:TEST-123",
           JSON.stringify(payload),
         );
       });
-      await page.reload({ waitUntil: 'domcontentloaded' });
-      await expect(page.getByTestId('playlist-list')).toContainText('demo.sid');
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
     }
-    const playButtonAfter = page.getByTestId('playlist-play');
+    const playButtonAfter = page.getByTestId("playlist-play");
     const playLabelAfter = await playButtonAfter.textContent();
     let playbackStarted = false;
-    if (!playLabelAfter || !playLabelAfter.toLowerCase().includes('stop')) {
+    if (!playLabelAfter || !playLabelAfter.toLowerCase().includes("stop")) {
       const demoRow = page
-        .getByTestId('playlist-item')
-        .filter({ hasText: 'demo.sid' })
+        .getByTestId("playlist-item")
+        .filter({ hasText: "demo.sid" })
         .first();
       if (await demoRow.isVisible().catch(() => false)) {
         await demoRow.click();
@@ -1565,33 +1565,33 @@ test.describe('Playback file browser', () => {
       }
     }
     if (playbackStarted) {
-      await expect(page.getByTestId('playback-current-track')).toContainText(
-        'demo.sid',
+      await expect(page.getByTestId("playback-current-track")).toContainText(
+        "demo.sid",
       );
     } else {
-      await expect(page.getByTestId('playlist-list')).toContainText('demo.sid');
+      await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
     }
-    await snap(page, testInfo, 'playback-persists-navigation');
+    await snap(page, testInfo, "playback-persists-navigation");
   });
 
-  test('settings changes while playback active do not interrupt playback', async ({
+  test("settings changes while playback active do not interrupt playback", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await seedPlaylistStorage(page, [
       {
-        source: 'ultimate' as const,
-        path: '/Usb0/Demos/demo.sid',
-        name: 'demo.sid',
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/demo.sid",
+        name: "demo.sid",
         durationMs: 8000,
       },
     ]);
 
-    await page.goto('/play');
-    await expect(page.getByTestId('playlist-list')).toContainText('demo.sid');
-    const playButton = page.getByTestId('playlist-play');
-    const played = page.getByTestId('playback-elapsed');
+    await page.goto("/play");
+    await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
+    const playButton = page.getByTestId("playlist-play");
+    const played = page.getByTestId("playback-elapsed");
     await playButton.click();
-    await expect(playButton).toHaveAttribute('aria-label', 'Stop');
+    await expect(playButton).toHaveAttribute("aria-label", "Stop");
     await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(0);
 
     await expect
@@ -1599,21 +1599,21 @@ test.describe('Playback file browser', () => {
       .toBeGreaterThan(0);
     const firstPlayed = parseTimeLabel(await played.textContent()) ?? 0;
 
-    await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
     const darkThemeButton = page
-      .getByRole('button', { name: /Dark|dark theme/i })
+      .getByRole("button", { name: /Dark|dark theme/i })
       .first();
     await expect(darkThemeButton).toBeVisible();
     await darkThemeButton.click();
 
-    await page.getByRole('button', { name: 'Play', exact: true }).click();
+    await page.getByRole("button", { name: "Play", exact: true }).click();
     await expect(
-      page.getByRole('heading', { name: 'Play Files' }),
+      page.getByRole("heading", { name: "Play Files" }),
     ).toBeVisible();
-    const playlistListAfter = page.getByTestId('playlist-list');
+    const playlistListAfter = page.getByTestId("playlist-list");
     const hasDemoAfter = await playlistListAfter
-      .getByText('demo.sid', { exact: false })
+      .getByText("demo.sid", { exact: false })
       .isVisible()
       .catch(() => false);
     if (!hasDemoAfter) {
@@ -1621,28 +1621,28 @@ test.describe('Playback file browser', () => {
         const payload = {
           items: [
             {
-              source: 'ultimate',
-              path: '/Usb0/Demos/demo.sid',
-              name: 'demo.sid',
+              source: "ultimate",
+              path: "/Usb0/Demos/demo.sid",
+              name: "demo.sid",
               durationMs: 8000,
             },
           ],
           currentIndex: -1,
         };
         localStorage.setItem(
-          'c64u_playlist:v1:TEST-123',
+          "c64u_playlist:v1:TEST-123",
           JSON.stringify(payload),
         );
       });
-      await page.reload({ waitUntil: 'domcontentloaded' });
-      await expect(page.getByTestId('playlist-list')).toContainText('demo.sid');
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
     }
-    const playButtonAfter = page.getByTestId('playlist-play');
+    const playButtonAfter = page.getByTestId("playlist-play");
     const playLabelAfter = await playButtonAfter.textContent();
-    if (!playLabelAfter || !playLabelAfter.toLowerCase().includes('stop')) {
+    if (!playLabelAfter || !playLabelAfter.toLowerCase().includes("stop")) {
       const demoRow = page
-        .getByTestId('playlist-item')
-        .filter({ hasText: 'demo.sid' })
+        .getByTestId("playlist-item")
+        .filter({ hasText: "demo.sid" })
         .first();
       if (await demoRow.isVisible().catch(() => false)) {
         await demoRow.click();
@@ -1654,65 +1654,65 @@ test.describe('Playback file browser', () => {
           .toBeGreaterThan(0);
       }
     }
-    await expect(page.getByTestId('playlist-list')).toContainText('demo.sid');
-    await snap(page, testInfo, 'playback-persists-after-settings');
+    await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
+    await snap(page, testInfo, "playback-persists-after-settings");
   });
 
-  test('mute button toggles and slider does not unmute', async ({
+  test("mute button toggles and slider does not unmute", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
-    await page.goto('/play');
-    await expect(page.getByText('Connected')).toBeVisible();
+    await page.goto("/play");
+    await expect(page.getByText("Connected")).toBeVisible();
 
-    const muteButton = page.getByTestId('volume-mute');
-    const slider = page.getByTestId('volume-slider');
+    const muteButton = page.getByTestId("volume-mute");
+    const slider = page.getByTestId("volume-slider");
     await expect(muteButton).toBeEnabled();
 
     await muteButton.click();
-    await expect(muteButton).toContainText('Unmute');
-    await snap(page, testInfo, 'muted');
+    await expect(muteButton).toContainText("Unmute");
+    await snap(page, testInfo, "muted");
 
     await muteButton.click();
-    await expect(muteButton).toContainText('Mute');
-    await snap(page, testInfo, 'unmuted');
+    await expect(muteButton).toContainText("Mute");
+    await snap(page, testInfo, "unmuted");
 
     await muteButton.click();
-    await expect(muteButton).toContainText('Unmute');
+    await expect(muteButton).toContainText("Unmute");
     await slider.click({ position: { x: 10, y: 5 } });
-    await expect(muteButton).toContainText('Unmute');
-    await snap(page, testInfo, 'slider-muted');
+    await expect(muteButton).toContainText("Unmute");
+    await snap(page, testInfo, "slider-muted");
 
     await muteButton.click();
-    await expect(muteButton).toContainText('Mute');
-    await snap(page, testInfo, 'slider-unmuted');
+    await expect(muteButton).toContainText("Mute");
+    await snap(page, testInfo, "slider-unmuted");
   });
 
-  test('playlist text filter hides non-matching files', async ({
+  test("playlist text filter hides non-matching files", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await seedPlaylistStorage(page, [
       {
-        source: 'ultimate' as const,
-        path: '/Usb0/Demos/demo.sid',
-        name: 'demo.sid',
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/demo.sid",
+        name: "demo.sid",
         durationMs: 4000,
       },
       {
-        source: 'ultimate' as const,
-        path: '/Usb0/Demos/demo.prg',
-        name: 'demo.prg',
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/demo.prg",
+        name: "demo.prg",
         durationMs: 4000,
       },
     ]);
 
-    await page.goto('/play');
-    const list = page.getByTestId('playlist-list');
-    await expect(list).toContainText('demo.sid');
-    await expect(list).toContainText('demo.prg');
+    await page.goto("/play");
+    const list = page.getByTestId("playlist-list");
+    await expect(list).toContainText("demo.sid");
+    await expect(list).toContainText("demo.prg");
 
-    await page.getByTestId('list-filter-input').fill('demo.sid');
-    await snap(page, testInfo, 'playlist-filtered');
-    await expect(list).toContainText('demo.sid');
-    await expect(list).not.toContainText('demo.prg');
+    await page.getByTestId("list-filter-input").fill("demo.sid");
+    await snap(page, testInfo, "playlist-filtered");
+    await expect(list).toContainText("demo.sid");
+    await expect(list).not.toContainText("demo.prg");
   });
 });

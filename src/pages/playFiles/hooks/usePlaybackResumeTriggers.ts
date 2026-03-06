@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect } from "react";
 
 /**
  * Triggers a callback when the app likely resumed after being backgrounded/locked.
@@ -8,7 +8,7 @@ import { useEffect } from 'react';
  */
 export const usePlaybackResumeTriggers = (onResume: () => void) => {
   useEffect(() => {
-    if (typeof document === 'undefined') return;
+    if (typeof document === "undefined") return;
 
     const onVisible = () => {
       if (document.hidden) return;
@@ -18,13 +18,13 @@ export const usePlaybackResumeTriggers = (onResume: () => void) => {
       onResume();
     };
 
-    document.addEventListener('visibilitychange', onVisible);
-    window.addEventListener('focus', onFocus);
-    window.addEventListener('pageshow', onFocus);
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("pageshow", onFocus);
     return () => {
-      document.removeEventListener('visibilitychange', onVisible);
-      window.removeEventListener('focus', onFocus);
-      window.removeEventListener('pageshow', onFocus);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("pageshow", onFocus);
     };
   }, [onResume]);
 };

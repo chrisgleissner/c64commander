@@ -6,23 +6,23 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from "react";
 
-export type PathDisplayMode = 'filename-fallback' | 'start-and-filename';
+export type PathDisplayMode = "filename-fallback" | "start-and-filename";
 export type TextMeasureFn = (value: string) => number;
 
-const ELLIPSIS = '...';
+const ELLIPSIS = "...";
 
-const normalizePath = (value: string) => value.replace(/\\/g, '/');
+const normalizePath = (value: string) => value.replace(/\\/g, "/");
 
 const parsePath = (value: string) => {
   const normalized = normalizePath(value).trim();
   if (!normalized)
-    return { root: '', directories: [] as string[], fileName: '' };
-  const hasLeadingSlash = normalized.startsWith('/');
-  const parts = normalized.split('/').filter(Boolean);
-  const fileName = parts.pop() ?? '';
-  const root = hasLeadingSlash ? '/' : '';
+    return { root: "", directories: [] as string[], fileName: "" };
+  const hasLeadingSlash = normalized.startsWith("/");
+  const parts = normalized.split("/").filter(Boolean);
+  const fileName = parts.pop() ?? "";
+  const root = hasLeadingSlash ? "/" : "";
   return { root, directories: parts, fileName };
 };
 
@@ -38,14 +38,14 @@ const trimFromStartToFit = (
 ) => {
   if (!value) return value;
   if (measure(value) <= maxWidth) return value;
-  if (measure(ELLIPSIS) > maxWidth) return '';
+  if (measure(ELLIPSIS) > maxWidth) return "";
   for (let keep = value.length; keep >= 1; keep -= 1) {
     const candidate = `${ELLIPSIS}${value.slice(value.length - keep)}`;
     if (measure(candidate) <= maxWidth) {
       return candidate;
     }
   }
-  return '';
+  return "";
 };
 
 const fitFilenameFallback = (
@@ -68,7 +68,7 @@ const buildStartAndFilenameCandidate = (
   if (directories.length === 0) {
     return `${root}${fileName}`;
   }
-  const prefix = directories.slice(0, prefixSegments).join('/');
+  const prefix = directories.slice(0, prefixSegments).join("/");
   if (prefix) {
     return `${root}${prefix}/${ELLIPSIS}/${fileName}`;
   }
@@ -108,7 +108,7 @@ export const fitPathToWidth = (
   mode: PathDisplayMode,
 ) => {
   if (!path || maxWidth <= 0) return path;
-  if (mode === 'filename-fallback') {
+  if (mode === "filename-fallback") {
     return fitFilenameFallback(path, maxWidth, measure);
   }
   return fitStartAndFilename(path, maxWidth, measure);
@@ -116,13 +116,13 @@ export const fitPathToWidth = (
 
 const buildCanvasTextMeasure = (element: HTMLElement): TextMeasureFn => {
   const isJsdom =
-    typeof navigator !== 'undefined' && /\bjsdom\b/i.test(navigator.userAgent);
+    typeof navigator !== "undefined" && /\bjsdom\b/i.test(navigator.userAgent);
   if (isJsdom) {
     return (value: string) => value.length * 8;
   }
 
-  const canvas = document.createElement('canvas');
-  const context = canvas.getContext('2d');
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
   const computedStyle = window.getComputedStyle(element);
   const fallbackFont = `${computedStyle.fontStyle} ${computedStyle.fontVariant} ${computedStyle.fontWeight} ${computedStyle.fontSize} / ${computedStyle.lineHeight} ${computedStyle.fontFamily}`;
   if (context) {
@@ -153,15 +153,15 @@ export const useResponsivePathLabel = (path: string, mode: PathDisplayMode) => {
 
     recalculate();
 
-    if (typeof ResizeObserver !== 'undefined') {
+    if (typeof ResizeObserver !== "undefined") {
       const observer = new ResizeObserver(() => recalculate());
       observer.observe(element);
       return () => observer.disconnect();
     }
 
-    window.addEventListener('resize', recalculate);
+    window.addEventListener("resize", recalculate);
     return () => {
-      window.removeEventListener('resize', recalculate);
+      window.removeEventListener("resize", recalculate);
     };
   }, [path, mode]);
 

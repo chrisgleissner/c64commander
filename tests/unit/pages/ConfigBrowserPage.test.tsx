@@ -6,15 +6,15 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { RouterProvider, createMemoryRouter } from 'react-router-dom';
-import type { ReactNode } from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import ConfigBrowserPage from '@/pages/ConfigBrowserPage';
-import { reportUserError } from '@/lib/uiErrors';
-import { getC64API } from '@/lib/c64api';
-import { resolveAudioMixerResetValue } from '@/lib/config/audioMixer';
-import { toast } from '@/hooks/use-toast';
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { RouterProvider, createMemoryRouter } from "react-router-dom";
+import type { ReactNode } from "react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import ConfigBrowserPage from "@/pages/ConfigBrowserPage";
+import { reportUserError } from "@/lib/uiErrors";
+import { getC64API } from "@/lib/c64api";
+import { resolveAudioMixerResetValue } from "@/lib/config/audioMixer";
+import { toast } from "@/hooks/use-toast";
 
 const mockUseC64Connection = vi.fn();
 const mockUseC64Categories = vi.fn();
@@ -24,14 +24,14 @@ const mockUseC64UpdateConfigBatch = vi.fn();
 const mockSetConfigExpanded = vi.fn();
 const mockUpdateHasChanges = vi.fn();
 
-vi.mock('@/components/ThemeProvider', () => ({
+vi.mock("@/components/ThemeProvider", () => ({
   useThemeContext: () => ({
-    theme: 'light',
+    theme: "light",
     setTheme: vi.fn(),
   }),
 }));
 
-vi.mock('@/components/DiagnosticsActivityIndicator', () => ({
+vi.mock("@/components/DiagnosticsActivityIndicator", () => ({
   DiagnosticsActivityIndicator: ({ onClick }: { onClick: () => void }) => (
     <button
       type="button"
@@ -41,7 +41,7 @@ vi.mock('@/components/DiagnosticsActivityIndicator', () => ({
   ),
 }));
 
-vi.mock('@/hooks/useC64Connection', () => ({
+vi.mock("@/hooks/useC64Connection", () => ({
   useC64Connection: () => mockUseC64Connection(),
   useC64Categories: () => mockUseC64Categories(),
   useC64Category: (...args: [string, boolean]) => mockUseC64Category(...args),
@@ -49,16 +49,16 @@ vi.mock('@/hooks/useC64Connection', () => ({
   useC64UpdateConfigBatch: () => mockUseC64UpdateConfigBatch(),
 }));
 
-vi.mock('@/hooks/useRefreshControl', () => ({
+vi.mock("@/hooks/useRefreshControl", () => ({
   useRefreshControl: () => ({ setConfigExpanded: mockSetConfigExpanded }),
 }));
 
-vi.mock('@/hooks/use-toast', () => ({
+vi.mock("@/hooks/use-toast", () => ({
   toast: vi.fn(),
   useToast: () => ({ toasts: [], dismiss: vi.fn() }),
 }));
 
-vi.mock('@/components/ConfigItemRow', () => ({
+vi.mock("@/components/ConfigItemRow", () => ({
   ConfigItemRow: ({
     name,
     rightAccessory,
@@ -70,7 +70,7 @@ vi.mock('@/components/ConfigItemRow', () => ({
   }) => (
     <div>
       <span>{name}</span>
-      <button type="button" onClick={() => onValueChange?.('updated')}>
+      <button type="button" onClick={() => onValueChange?.("updated")}>
         Update {name}
       </button>
       {rightAccessory}
@@ -78,13 +78,13 @@ vi.mock('@/components/ConfigItemRow', () => ({
   ),
 }));
 
-vi.mock('@/lib/uiErrors', () => ({
+vi.mock("@/lib/uiErrors", () => ({
   reportUserError: vi.fn(),
 }));
 
 const buildRouter = (ui: JSX.Element) =>
-  createMemoryRouter([{ path: '*', element: ui }], {
-    initialEntries: ['/'],
+  createMemoryRouter([{ path: "*", element: ui }], {
+    initialEntries: ["/"],
     future: {
       v7_startTransition: true,
       v7_relativeSplatPath: true,
@@ -102,17 +102,17 @@ const renderConfigBrowserPage = () =>
     />,
   );
 
-vi.mock('@/lib/c64api', () => ({
+vi.mock("@/lib/c64api", () => ({
   getC64API: vi.fn(),
 }));
 
-vi.mock('@/lib/config/audioMixer', () => ({
+vi.mock("@/lib/config/audioMixer", () => ({
   resolveAudioMixerResetValue: vi.fn(),
   isAudioMixerValueEqual: (left: string | number, right: string | number) =>
     left === right,
 }));
 
-vi.mock('@/lib/config/appConfigStore', () => ({
+vi.mock("@/lib/config/appConfigStore", () => ({
   updateHasChanges: (...args: [string, boolean]) =>
     mockUpdateHasChanges(...args),
 }));
@@ -120,7 +120,7 @@ vi.mock('@/lib/config/appConfigStore', () => ({
 const setupDefaultMocks = () => {
   mockUseC64Connection.mockReturnValue({
     status: { isConnected: true },
-    runtimeBaseUrl: 'http://c64u',
+    runtimeBaseUrl: "http://c64u",
   });
   mockUseC64Categories.mockReturnValue({
     data: { categories: [] },
@@ -147,12 +147,12 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe('ConfigBrowserPage', () => {
-  it('renders connection warning when offline', () => {
+describe("ConfigBrowserPage", () => {
+  it("renders connection warning when offline", () => {
     setupDefaultMocks();
     mockUseC64Connection.mockReturnValue({
       status: { isConnected: false },
-      runtimeBaseUrl: 'http://c64u',
+      runtimeBaseUrl: "http://c64u",
     });
 
     renderConfigBrowserPage();
@@ -160,14 +160,14 @@ describe('ConfigBrowserPage', () => {
     expect(screen.getByText(/not connected/i)).toBeInTheDocument();
   });
 
-  it('renders categories in demo mode without showing not-connected message', () => {
+  it("renders categories in demo mode without showing not-connected message", () => {
     setupDefaultMocks();
     mockUseC64Connection.mockReturnValue({
-      status: { isConnected: true, isDemo: true, deviceType: 'demo' },
-      runtimeBaseUrl: 'http://c64u',
+      status: { isConnected: true, isDemo: true, deviceType: "demo" },
+      runtimeBaseUrl: "http://c64u",
     });
     mockUseC64Categories.mockReturnValue({
-      data: { categories: ['Audio Mixer', 'Clock Settings'] },
+      data: { categories: ["Audio Mixer", "Clock Settings"] },
       isLoading: false,
     });
 
@@ -175,45 +175,45 @@ describe('ConfigBrowserPage', () => {
 
     expect(screen.queryByText(/not connected/i)).not.toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /audio mixer/i }),
+      screen.getByRole("button", { name: /audio mixer/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /clock settings/i }),
+      screen.getByRole("button", { name: /clock settings/i }),
     ).toBeInTheDocument();
   });
 
-  it('filters categories by search query', () => {
+  it("filters categories by search query", () => {
     setupDefaultMocks();
     mockUseC64Categories.mockReturnValue({
-      data: { categories: ['Audio Mixer', 'Clock Settings'] },
+      data: { categories: ["Audio Mixer", "Clock Settings"] },
       isLoading: false,
     });
 
     renderConfigBrowserPage();
 
     fireEvent.change(screen.getByPlaceholderText(/search categories/i), {
-      target: { value: 'clock' },
+      target: { value: "clock" },
     });
 
     expect(
-      screen.getByRole('button', { name: /clock settings/i }),
+      screen.getByRole("button", { name: /clock settings/i }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: /audio mixer/i }),
+      screen.queryByRole("button", { name: /audio mixer/i }),
     ).not.toBeInTheDocument();
   });
 
-  it('shows empty search results message', () => {
+  it("shows empty search results message", () => {
     setupDefaultMocks();
     mockUseC64Categories.mockReturnValue({
-      data: { categories: ['Audio Mixer'] },
+      data: { categories: ["Audio Mixer"] },
       isLoading: false,
     });
 
     renderConfigBrowserPage();
 
     fireEvent.change(screen.getByPlaceholderText(/search categories/i), {
-      target: { value: 'missing' },
+      target: { value: "missing" },
     });
 
     expect(
@@ -221,7 +221,7 @@ describe('ConfigBrowserPage', () => {
     ).toBeInTheDocument();
   });
 
-  it('shows empty state when no categories exist', () => {
+  it("shows empty state when no categories exist", () => {
     setupDefaultMocks();
     mockUseC64Categories.mockReturnValue({
       data: { categories: [] },
@@ -233,15 +233,15 @@ describe('ConfigBrowserPage', () => {
     expect(screen.getByText(/no categories available/i)).toBeInTheDocument();
   });
 
-  it('reports solo routing errors for audio mixer', async () => {
+  it("reports solo routing errors for audio mixer", async () => {
     setupDefaultMocks();
     mockUseC64Categories.mockReturnValue({
-      data: { categories: ['Audio Mixer'] },
+      data: { categories: ["Audio Mixer"] },
       isLoading: false,
     });
 
     vi.mocked(getC64API).mockReturnValue({
-      updateConfigBatch: vi.fn().mockRejectedValue(new Error('Update failed')),
+      updateConfigBatch: vi.fn().mockRejectedValue(new Error("Update failed")),
     });
 
     const refetch = vi.fn();
@@ -249,7 +249,7 @@ describe('ConfigBrowserPage', () => {
       data: {
         [categoryName]: {
           items: {
-            'Vol Ultisid 1': { selected: '0 dB', options: ['-6 dB', '0 dB'] },
+            "Vol Ultisid 1": { selected: "0 dB", options: ["-6 dB", "0 dB"] },
           },
         },
       },
@@ -259,29 +259,29 @@ describe('ConfigBrowserPage', () => {
 
     renderConfigBrowserPage();
 
-    fireEvent.click(screen.getByRole('button', { name: /audio mixer/i }));
+    fireEvent.click(screen.getByRole("button", { name: /audio mixer/i }));
 
     const soloSwitch = await screen.findByTestId(
-      'audio-mixer-solo-vol-ultisid-1',
+      "audio-mixer-solo-vol-ultisid-1",
     );
     fireEvent.click(soloSwitch);
 
     await waitFor(() => {
       expect(reportUserError).toHaveBeenCalledWith(
         expect.objectContaining({
-          operation: 'AUDIO_ROUTING',
+          operation: "AUDIO_ROUTING",
         }),
       );
     });
   });
 
-  it('reports audio mixer update failures when solo is active', async () => {
+  it("reports audio mixer update failures when solo is active", async () => {
     setupDefaultMocks();
     mockUseC64Categories.mockReturnValue({
-      data: { categories: ['Audio Mixer'] },
+      data: { categories: ["Audio Mixer"] },
       isLoading: false,
     });
-    const mutateAsync = vi.fn().mockRejectedValue(new Error('Update failed'));
+    const mutateAsync = vi.fn().mockRejectedValue(new Error("Update failed"));
     mockUseC64UpdateConfigBatch.mockReturnValue({
       mutateAsync,
       isPending: false,
@@ -292,7 +292,7 @@ describe('ConfigBrowserPage', () => {
       data: {
         [categoryName]: {
           items: {
-            'Vol Ultisid 1': { selected: '0 dB', options: ['-6 dB', '0 dB'] },
+            "Vol Ultisid 1": { selected: "0 dB", options: ["-6 dB", "0 dB"] },
           },
         },
       },
@@ -302,39 +302,39 @@ describe('ConfigBrowserPage', () => {
 
     renderConfigBrowserPage();
 
-    fireEvent.click(screen.getByRole('button', { name: /audio mixer/i }));
+    fireEvent.click(screen.getByRole("button", { name: /audio mixer/i }));
 
     const soloSwitch = await screen.findByTestId(
-      'audio-mixer-solo-vol-ultisid-1',
+      "audio-mixer-solo-vol-ultisid-1",
     );
     fireEvent.click(soloSwitch);
     fireEvent.click(
-      await screen.findByRole('button', { name: /update vol ultisid 1/i }),
+      await screen.findByRole("button", { name: /update vol ultisid 1/i }),
     );
 
     await waitFor(() => {
       expect(reportUserError).toHaveBeenCalledWith(
         expect.objectContaining({
-          operation: 'AUDIO_MIXER_UPDATE',
+          operation: "AUDIO_MIXER_UPDATE",
         }),
       );
     });
   });
 
-  it('reports config update failures', async () => {
+  it("reports config update failures", async () => {
     setupDefaultMocks();
     mockUseC64Categories.mockReturnValue({
-      data: { categories: ['General'] },
+      data: { categories: ["General"] },
       isLoading: false,
     });
-    const mutateAsync = vi.fn().mockRejectedValue(new Error('Update failed'));
+    const mutateAsync = vi.fn().mockRejectedValue(new Error("Update failed"));
     mockUseC64SetConfig.mockReturnValue({ mutateAsync, isPending: false });
     const refetch = vi.fn();
     mockUseC64Category.mockImplementation((categoryName: string) => ({
       data: {
         [categoryName]: {
           items: {
-            'Demo Option': { selected: 'Off', options: ['Off', 'On'] },
+            "Demo Option": { selected: "Off", options: ["Off", "On"] },
           },
         },
       },
@@ -344,24 +344,24 @@ describe('ConfigBrowserPage', () => {
 
     renderConfigBrowserPage();
 
-    fireEvent.click(screen.getByRole('button', { name: /general/i }));
+    fireEvent.click(screen.getByRole("button", { name: /general/i }));
     fireEvent.click(
-      await screen.findByRole('button', { name: /update demo option/i }),
+      await screen.findByRole("button", { name: /update demo option/i }),
     );
 
     await waitFor(() => {
       expect(reportUserError).toHaveBeenCalledWith(
         expect.objectContaining({
-          operation: 'CONFIG_UPDATE',
+          operation: "CONFIG_UPDATE",
         }),
       );
     });
   });
 
-  it('syncs clock settings when fields are present', async () => {
+  it("syncs clock settings when fields are present", async () => {
     setupDefaultMocks();
     mockUseC64Categories.mockReturnValue({
-      data: { categories: ['Clock Settings'] },
+      data: { categories: ["Clock Settings"] },
       isLoading: false,
     });
     const mutateAsync = vi.fn().mockResolvedValue(undefined);
@@ -385,22 +385,22 @@ describe('ConfigBrowserPage', () => {
 
     renderConfigBrowserPage();
 
-    fireEvent.click(screen.getByRole('button', { name: /clock settings/i }));
-    fireEvent.click(await screen.findByRole('button', { name: /sync clock/i }));
+    fireEvent.click(screen.getByRole("button", { name: /clock settings/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /sync clock/i }));
 
     await waitFor(() => {
       expect(mutateAsync).toHaveBeenCalled();
-      expect(mockUpdateHasChanges).toHaveBeenCalledWith('http://c64u', true);
+      expect(mockUpdateHasChanges).toHaveBeenCalledWith("http://c64u", true);
       expect(toast).toHaveBeenCalledWith(
-        expect.objectContaining({ title: 'Clock synced' }),
+        expect.objectContaining({ title: "Clock synced" }),
       );
     });
   });
 
-  it('reports clock sync when no matching fields exist', async () => {
+  it("reports clock sync when no matching fields exist", async () => {
     setupDefaultMocks();
     mockUseC64Categories.mockReturnValue({
-      data: { categories: ['Clock Settings'] },
+      data: { categories: ["Clock Settings"] },
       isLoading: false,
     });
     const refetch = vi.fn();
@@ -408,7 +408,7 @@ describe('ConfigBrowserPage', () => {
       data: {
         [categoryName]: {
           items: {
-            Timezone: { selected: 'UTC' },
+            Timezone: { selected: "UTC" },
           },
         },
       },
@@ -418,22 +418,22 @@ describe('ConfigBrowserPage', () => {
 
     renderConfigBrowserPage();
 
-    fireEvent.click(screen.getByRole('button', { name: /clock settings/i }));
-    fireEvent.click(await screen.findByRole('button', { name: /sync clock/i }));
+    fireEvent.click(screen.getByRole("button", { name: /clock settings/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /sync clock/i }));
 
     await waitFor(() => {
       expect(reportUserError).toHaveBeenCalledWith(
         expect.objectContaining({
-          operation: 'CLOCK_SYNC',
+          operation: "CLOCK_SYNC",
         }),
       );
     });
   });
 
-  it('resets audio mixer to defaults', async () => {
+  it("resets audio mixer to defaults", async () => {
     setupDefaultMocks();
     mockUseC64Categories.mockReturnValue({
-      data: { categories: ['Audio Mixer'] },
+      data: { categories: ["Audio Mixer"] },
       isLoading: false,
     });
     const mutateAsync = vi.fn().mockResolvedValue(undefined);
@@ -446,33 +446,33 @@ describe('ConfigBrowserPage', () => {
       data: {
         [categoryName]: {
           items: {
-            'Vol Ultisid 1': { selected: '-6 dB', options: ['-6 dB', '0 dB'] },
+            "Vol Ultisid 1": { selected: "-6 dB", options: ["-6 dB", "0 dB"] },
           },
         },
       },
       isLoading: false,
       refetch,
     }));
-    vi.mocked(resolveAudioMixerResetValue).mockResolvedValue('0 dB');
+    vi.mocked(resolveAudioMixerResetValue).mockResolvedValue("0 dB");
 
     renderConfigBrowserPage();
 
-    fireEvent.click(screen.getByRole('button', { name: /audio mixer/i }));
-    fireEvent.click(await screen.findByRole('button', { name: /reset/i }));
+    fireEvent.click(screen.getByRole("button", { name: /audio mixer/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /reset/i }));
 
     await waitFor(() => {
       expect(mutateAsync).toHaveBeenCalledWith(
-        expect.objectContaining({ category: 'Audio Mixer' }),
+        expect.objectContaining({ category: "Audio Mixer" }),
       );
       expect(refetch).toHaveBeenCalled();
-      expect(mockUpdateHasChanges).toHaveBeenCalledWith('http://c64u', true);
+      expect(mockUpdateHasChanges).toHaveBeenCalledWith("http://c64u", true);
     });
   });
 
-  it('shows no-op toast when audio mixer is already at defaults', async () => {
+  it("shows no-op toast when audio mixer is already at defaults", async () => {
     setupDefaultMocks();
     mockUseC64Categories.mockReturnValue({
-      data: { categories: ['Audio Mixer'] },
+      data: { categories: ["Audio Mixer"] },
       isLoading: false,
     });
     const mutateAsync = vi.fn().mockResolvedValue(undefined);
@@ -485,35 +485,35 @@ describe('ConfigBrowserPage', () => {
       data: {
         [categoryName]: {
           items: {
-            'Vol Ultisid 1': { selected: '0 dB', options: ['-6 dB', '0 dB'] },
+            "Vol Ultisid 1": { selected: "0 dB", options: ["-6 dB", "0 dB"] },
           },
         },
       },
       isLoading: false,
       refetch,
     }));
-    vi.mocked(resolveAudioMixerResetValue).mockResolvedValue('0 dB');
+    vi.mocked(resolveAudioMixerResetValue).mockResolvedValue("0 dB");
 
     renderConfigBrowserPage();
 
-    fireEvent.click(screen.getByRole('button', { name: /audio mixer/i }));
-    fireEvent.click(await screen.findByRole('button', { name: /reset/i }));
+    fireEvent.click(screen.getByRole("button", { name: /audio mixer/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /reset/i }));
 
     await waitFor(() => {
       expect(mutateAsync).not.toHaveBeenCalled();
       expect(toast).toHaveBeenCalledWith(
-        expect.objectContaining({ title: 'Audio Mixer already at defaults' }),
+        expect.objectContaining({ title: "Audio Mixer already at defaults" }),
       );
     });
   });
 
-  it('reports audio mixer reset failures', async () => {
+  it("reports audio mixer reset failures", async () => {
     setupDefaultMocks();
     mockUseC64Categories.mockReturnValue({
-      data: { categories: ['Audio Mixer'] },
+      data: { categories: ["Audio Mixer"] },
       isLoading: false,
     });
-    const mutateAsync = vi.fn().mockRejectedValue(new Error('Reset failed'));
+    const mutateAsync = vi.fn().mockRejectedValue(new Error("Reset failed"));
     mockUseC64UpdateConfigBatch.mockReturnValue({
       mutateAsync,
       isPending: false,
@@ -523,36 +523,36 @@ describe('ConfigBrowserPage', () => {
       data: {
         [categoryName]: {
           items: {
-            'Vol Ultisid 1': { selected: '-6 dB', options: ['-6 dB', '0 dB'] },
+            "Vol Ultisid 1": { selected: "-6 dB", options: ["-6 dB", "0 dB"] },
           },
         },
       },
       isLoading: false,
       refetch,
     }));
-    vi.mocked(resolveAudioMixerResetValue).mockResolvedValue('0 dB');
+    vi.mocked(resolveAudioMixerResetValue).mockResolvedValue("0 dB");
 
     renderConfigBrowserPage();
 
-    fireEvent.click(screen.getByRole('button', { name: /audio mixer/i }));
-    fireEvent.click(await screen.findByRole('button', { name: /reset/i }));
+    fireEvent.click(screen.getByRole("button", { name: /audio mixer/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /reset/i }));
 
     await waitFor(() => {
       expect(reportUserError).toHaveBeenCalledWith(
         expect.objectContaining({
-          operation: 'AUDIO_MIXER_RESET',
+          operation: "AUDIO_MIXER_RESET",
         }),
       );
     });
   });
 
-  it('reports clock sync failure when update batch rejects', async () => {
+  it("reports clock sync failure when update batch rejects", async () => {
     setupDefaultMocks();
     mockUseC64Categories.mockReturnValue({
-      data: { categories: ['Clock Settings'] },
+      data: { categories: ["Clock Settings"] },
       isLoading: false,
     });
-    const mutateAsync = vi.fn().mockRejectedValue(new Error('Clock failed'));
+    const mutateAsync = vi.fn().mockRejectedValue(new Error("Clock failed"));
     mockUseC64UpdateConfigBatch.mockReturnValue({
       mutateAsync,
       isPending: false,
@@ -573,23 +573,23 @@ describe('ConfigBrowserPage', () => {
     }));
 
     renderConfigBrowserPage();
-    fireEvent.click(screen.getByRole('button', { name: /clock settings/i }));
-    fireEvent.click(await screen.findByRole('button', { name: /sync clock/i }));
+    fireEvent.click(screen.getByRole("button", { name: /clock settings/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /sync clock/i }));
 
     await waitFor(() => {
       expect(reportUserError).toHaveBeenCalledWith(
         expect.objectContaining({
-          operation: 'CLOCK_SYNC',
-          title: 'Clock sync failed',
+          operation: "CLOCK_SYNC",
+          title: "Clock sync failed",
         }),
       );
     });
   });
 
-  it('refreshes category data', async () => {
+  it("refreshes category data", async () => {
     setupDefaultMocks();
     mockUseC64Categories.mockReturnValue({
-      data: { categories: ['Audio Mixer'] },
+      data: { categories: ["Audio Mixer"] },
       isLoading: false,
     });
     const refetch = vi.fn();
@@ -597,7 +597,7 @@ describe('ConfigBrowserPage', () => {
       data: {
         [categoryName]: {
           items: {
-            'Vol Ultisid 1': { selected: '0 dB', options: ['-6 dB', '0 dB'] },
+            "Vol Ultisid 1": { selected: "0 dB", options: ["-6 dB", "0 dB"] },
           },
         },
       },
@@ -607,18 +607,18 @@ describe('ConfigBrowserPage', () => {
 
     renderConfigBrowserPage();
 
-    fireEvent.click(screen.getByRole('button', { name: /audio mixer/i }));
-    fireEvent.click(await screen.findByRole('button', { name: /refresh/i }));
+    fireEvent.click(screen.getByRole("button", { name: /audio mixer/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /refresh/i }));
 
     await waitFor(() => {
       expect(refetch).toHaveBeenCalled();
     });
   });
 
-  it('renders loading and empty category states in the category panel', async () => {
+  it("renders loading and empty category states in the category panel", async () => {
     setupDefaultMocks();
     mockUseC64Categories.mockReturnValue({
-      data: { categories: ['General'] },
+      data: { categories: ["General"] },
       isLoading: false,
     });
 
@@ -635,8 +635,8 @@ describe('ConfigBrowserPage', () => {
 
     const firstView = renderConfigBrowserPage();
 
-    fireEvent.click(screen.getByRole('button', { name: /general/i }));
-    expect(document.querySelector('.animate-spin')).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /general/i }));
+    expect(document.querySelector(".animate-spin")).toBeTruthy();
     firstView.unmount();
 
     mockUseC64Category.mockImplementation((categoryName: string) => ({
@@ -651,7 +651,7 @@ describe('ConfigBrowserPage', () => {
 
     renderConfigBrowserPage();
 
-    fireEvent.click(screen.getByRole('button', { name: /general/i }));
+    fireEvent.click(screen.getByRole("button", { name: /general/i }));
     expect(
       await screen.findByText(/no settings available/i),
     ).toBeInTheDocument();

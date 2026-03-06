@@ -6,28 +6,28 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
-import { PlaybackClock } from '@/lib/playback/playbackClock';
+import { describe, it, expect, beforeEach } from "vitest";
+import { PlaybackClock } from "@/lib/playback/playbackClock";
 
-describe('PlaybackClock', () => {
+describe("PlaybackClock", () => {
   let clock: PlaybackClock;
 
   beforeEach(() => {
     clock = new PlaybackClock();
   });
 
-  it('starts at zero', () => {
+  it("starts at zero", () => {
     expect(clock.current(1000)).toBe(0);
   });
 
-  it('tracks time after start', () => {
+  it("tracks time after start", () => {
     const start = 1000;
     clock.start(start);
     expect(clock.current(start + 500)).toBe(500);
     expect(clock.current(start + 1500)).toBe(1500);
   });
 
-  it('resets baseMs on restart if requested', () => {
+  it("resets baseMs on restart if requested", () => {
     clock.start(1000);
     clock.pause(2000); // baseMs = 1000
 
@@ -43,7 +43,7 @@ describe('PlaybackClock', () => {
     expect(clock.current(4500)).toBe(500);
   });
 
-  it('pauses correctly', () => {
+  it("pauses correctly", () => {
     clock.start(1000); // startedAt = 1000
     clock.pause(1500); // baseMs += 500 => 500. startedAt = null
 
@@ -54,7 +54,7 @@ describe('PlaybackClock', () => {
     expect(clock.current(3000)).toBe(500);
   });
 
-  it('resumes correctly', () => {
+  it("resumes correctly", () => {
     clock.start(1000);
     clock.pause(1500); // baseMs = 500
 
@@ -68,7 +68,7 @@ describe('PlaybackClock', () => {
     expect(clock.current(3000)).toBe(600 + (3000 - 2100)); // 1500
   });
 
-  it('stops correctly', () => {
+  it("stops correctly", () => {
     clock.start(1000);
     clock.stop(1500); // calls pause(1500) -> baseMs = 500
     expect(clock.current(2000)).toBe(500);
@@ -78,13 +78,13 @@ describe('PlaybackClock', () => {
     expect(clock.current(3000)).toBe(0);
   });
 
-  it('resets manually', () => {
+  it("resets manually", () => {
     clock.start(1000);
     clock.reset();
     expect(clock.current(2000)).toBe(0);
   });
 
-  it('hydrates state', () => {
+  it("hydrates state", () => {
     clock.hydrate(5000, null);
     expect(clock.current(1000)).toBe(5000);
 
@@ -92,7 +92,7 @@ describe('PlaybackClock', () => {
     expect(clock.current(2500)).toBe(1000 + 500); // 1500
   });
 
-  it('handles negative time deltas gracefully', () => {
+  it("handles negative time deltas gracefully", () => {
     // e.g. system time skew
     clock.start(5000);
     // current queried with time before start

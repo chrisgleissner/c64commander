@@ -1,9 +1,9 @@
-import { useState, useMemo, useEffect } from 'react';
-import { getC64API } from '@/lib/c64api';
-import { useC64ConfigItems } from '@/hooks/useC64Connection';
-import { useActionTrace } from '@/hooks/useActionTrace';
-import { toast } from '@/hooks/use-toast';
-import { reportUserError } from '@/lib/uiErrors';
+import { useState, useMemo, useEffect } from "react";
+import { getC64API } from "@/lib/c64api";
+import { useC64ConfigItems } from "@/hooks/useC64Connection";
+import { useActionTrace } from "@/hooks/useActionTrace";
+import { toast } from "@/hooks/use-toast";
+import { reportUserError } from "@/lib/uiErrors";
 import {
   buildStreamConfigValue,
   buildStreamEndpointLabel,
@@ -13,8 +13,8 @@ import {
   validateStreamPort,
   type StreamKey,
   STREAM_ITEMS,
-} from '@/lib/config/homeStreams';
-import { buildConfigKey } from '@/pages/home/utils/HomeConfigUtils';
+} from "@/lib/config/homeStreams";
+import { buildConfigKey } from "@/pages/home/utils/HomeConfigUtils";
 
 export function useStreamData(
   isConnected: boolean,
@@ -29,10 +29,10 @@ export function useStreamData(
   ) => Promise<void>,
 ) {
   const api = getC64API();
-  const trace = useActionTrace('useStreamData');
+  const trace = useActionTrace("useStreamData");
 
   const { data: streamCategory } = useC64ConfigItems(
-    'Data Streams',
+    "Data Streams",
     STREAM_ITEMS,
     isConnected, // Use isConnected directly as status.isConnected || status.isConnecting
   );
@@ -61,7 +61,7 @@ export function useStreamData(
     setStreamDrafts((previous) => {
       const next = { ...previous };
       streamControlEntries.forEach((entry) => {
-        const configKey = buildConfigKey('Data Streams', entry.itemName);
+        const configKey = buildConfigKey("Data Streams", entry.itemName);
         if (configWritePending[configKey]) return;
         if (activeStreamEditorKey === entry.key) return;
 
@@ -89,12 +89,12 @@ export function useStreamData(
     const portError = validateStreamPort(draft.port);
     if (hostError || portError) {
       reportUserError({
-        operation: 'STREAM_VALIDATE',
-        title: 'Invalid stream target',
-        description: hostError ?? portError ?? 'Invalid stream target',
+        operation: "STREAM_VALIDATE",
+        title: "Invalid stream target",
+        description: hostError ?? portError ?? "Invalid stream target",
         context: { stream: key, ip: draft.ip, port: draft.port },
       });
-      setStreamEditorError(hostError ?? portError ?? 'Invalid stream target');
+      setStreamEditorError(hostError ?? portError ?? "Invalid stream target");
       return;
     }
     setStreamEditorError(null);
@@ -105,8 +105,8 @@ export function useStreamData(
       toast({ title: `${entry.label} start command sent` });
     } catch (error) {
       reportUserError({
-        operation: 'STREAM_START',
-        title: 'Stream start failed',
+        operation: "STREAM_START",
+        title: "Stream start failed",
         description: (error as Error).message,
         error,
         context: { stream: key, ip: ipPort },
@@ -128,8 +128,8 @@ export function useStreamData(
       toast({ title: `${entry.label} stop command sent` });
     } catch (error) {
       reportUserError({
-        operation: 'STREAM_STOP',
-        title: 'Stream stop failed',
+        operation: "STREAM_STOP",
+        title: "Stream stop failed",
         description: (error as Error).message,
         error,
         context: { stream: key },
@@ -143,7 +143,7 @@ export function useStreamData(
     const parsed = parseStreamEndpoint(value);
     setStreamEditorError(null);
     setStreamDrafts((previous) => {
-      const fallback = { ip: '', port: '', endpoint: '' };
+      const fallback = { ip: "", port: "", endpoint: "" };
       const current = previous[key] ?? fallback;
       return {
         ...previous,
@@ -203,8 +203,8 @@ export function useStreamData(
     const parsed = parseStreamEndpoint(current.endpoint);
     if (parsed.error) {
       reportUserError({
-        operation: 'STREAM_VALIDATE',
-        title: 'Invalid stream endpoint',
+        operation: "STREAM_VALIDATE",
+        title: "Invalid stream endpoint",
         description: parsed.error,
         context: { stream: key, endpoint: current.endpoint },
       });
@@ -225,8 +225,8 @@ export function useStreamData(
     const hostError = validateStreamHost(nextIp);
     if (hostError) {
       reportUserError({
-        operation: 'STREAM_VALIDATE',
-        title: 'Invalid stream host',
+        operation: "STREAM_VALIDATE",
+        title: "Invalid stream host",
         description: hostError,
         context: { stream: key, ip: nextIp },
       });
@@ -236,8 +236,8 @@ export function useStreamData(
     const portError = validateStreamPort(nextPort);
     if (portError) {
       reportUserError({
-        operation: 'STREAM_VALIDATE',
-        title: 'Invalid stream port',
+        operation: "STREAM_VALIDATE",
+        title: "Invalid stream port",
         description: portError,
         context: { stream: key, port: nextPort },
       });
@@ -246,10 +246,10 @@ export function useStreamData(
     }
     setStreamEditorError(null);
     await updateConfigValue(
-      'Data Streams',
+      "Data Streams",
       entry.itemName,
       buildStreamConfigValue(true, nextIp, nextPort),
-      'HOME_STREAM_UPDATE',
+      "HOME_STREAM_UPDATE",
       `${entry.label} stream target updated`,
     );
     setActiveStreamEditorKey(null);

@@ -7,23 +7,23 @@
  */
 
 const normalizeHostInput = (hostInput?: string) => {
-  const value = typeof hostInput === 'string' ? hostInput.trim() : '';
-  return value || 'c64u';
+  const value = typeof hostInput === "string" ? hostInput.trim() : "";
+  return value || "c64u";
 };
 
 const splitHostAndPort = (hostValue: string) => {
   const normalized = hostValue.trim().toLowerCase();
-  if (!normalized) return '';
+  if (!normalized) return "";
 
-  if (normalized.startsWith('[')) {
-    const closingBracketIndex = normalized.indexOf(']');
+  if (normalized.startsWith("[")) {
+    const closingBracketIndex = normalized.indexOf("]");
     if (closingBracketIndex > 0) {
       return normalized.slice(1, closingBracketIndex);
     }
   }
 
-  const firstColon = normalized.indexOf(':');
-  const lastColon = normalized.lastIndexOf(':');
+  const firstColon = normalized.indexOf(":");
+  const lastColon = normalized.lastIndexOf(":");
   if (firstColon !== -1 && firstColon === lastColon) {
     const maybePort = normalized.slice(lastColon + 1);
     if (/^\d+$/.test(maybePort)) {
@@ -50,10 +50,10 @@ const isPrivateIpv4Host = (host: string) => {
 };
 
 const isPrivateIpv6Host = (host: string) => {
-  if (!host.includes(':')) return false;
-  if (host === '::1') return true;
+  if (!host.includes(":")) return false;
+  if (host === "::1") return true;
 
-  const firstSegment = host.split(':')[0];
+  const firstSegment = host.split(":")[0];
   if (!firstSegment) return false;
   const firstHextet = Number.parseInt(firstSegment, 16);
   if (Number.isNaN(firstHextet)) return false;
@@ -64,8 +64,8 @@ const isPrivateIpv6Host = (host: string) => {
 };
 
 const isSingleLabelHostname = (host: string) => {
-  if (host.includes('.')) return false;
-  if (host.includes(':')) return false;
+  if (host.includes(".")) return false;
+  if (host.includes(":")) return false;
   return /^[a-z0-9-]+$/i.test(host);
 };
 
@@ -75,15 +75,15 @@ export const isTrustedLanDeviceHost = (hostInput: string) => {
   if (!host) return false;
 
   if (
-    host === 'c64u' ||
-    host === 'localhost' ||
-    host === '127.0.0.1' ||
-    host === '::1'
+    host === "c64u" ||
+    host === "localhost" ||
+    host === "127.0.0.1" ||
+    host === "::1"
   ) {
     return true;
   }
 
-  if (host.endsWith('.local')) {
+  if (host.endsWith(".local")) {
     return true;
   }
 

@@ -6,8 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { toast } from '@/hooks/use-toast';
-import { addErrorLog, addLog } from '@/lib/logging';
+import { toast } from "@/hooks/use-toast";
+import { addErrorLog, addLog } from "@/lib/logging";
 
 export type UiErrorReport = {
   operation: string;
@@ -26,10 +26,10 @@ const buildErrorDetails = (error?: unknown) => {
       stack: error.stack,
     };
   }
-  if (typeof error === 'string') {
+  if (typeof error === "string") {
     return { message: error };
   }
-  if (typeof error === 'object') {
+  if (typeof error === "object") {
     return { ...(error as Record<string, unknown>) };
   }
   return { message: String(error) };
@@ -49,7 +49,7 @@ const isRecoverableConnectivityError = (
   error?: unknown,
 ) => {
   const details = buildErrorDetails(error) as { message?: string } | undefined;
-  const message = `${description} ${details?.message ?? ''}`;
+  const message = `${description} ${details?.message ?? ""}`;
   return isTransientConnectivityFailure(message);
 };
 
@@ -81,6 +81,6 @@ export const reportUserError = ({
   toast({
     title,
     description,
-    variant: 'destructive',
+    variant: "destructive",
   });
 };

@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-export type SongSourceId = 'hvsc' | 'local';
+export type SongSourceId = "hvsc" | "local";
 
 export type SongFolder = {
   path: string;

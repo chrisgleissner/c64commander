@@ -6,30 +6,30 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const buildBaseUrlFromDeviceHost = vi.fn((host: string) => `http://${host}`);
-const getC64APIConfigSnapshot = vi.fn(() => ({ password: 'pw' }));
+const getC64APIConfigSnapshot = vi.fn(() => ({ password: "pw" }));
 const updateC64APIConfig = vi.fn();
 const discoverConnection = vi.fn();
 const dismissDemoInterstitial = vi.fn();
 const addLog = vi.fn();
 
-vi.mock('@/lib/c64api', () => ({
+vi.mock("@/lib/c64api", () => ({
   buildBaseUrlFromDeviceHost: (...args: unknown[]) =>
     buildBaseUrlFromDeviceHost(args[0] as string),
   getC64APIConfigSnapshot: () => getC64APIConfigSnapshot(),
-  normalizeDeviceHost: (host?: string) => host?.trim() || 'c64u',
+  normalizeDeviceHost: (host?: string) => host?.trim() || "c64u",
   updateC64APIConfig: (...args: unknown[]) => updateC64APIConfig(...args),
 }));
 
-vi.mock('@/lib/connection/connectionManager', () => ({
+vi.mock("@/lib/connection/connectionManager", () => ({
   discoverConnection: (...args: unknown[]) => discoverConnection(...args),
   dismissDemoInterstitial: (...args: unknown[]) =>
     dismissDemoInterstitial(...args),
 }));
 
-vi.mock('@/lib/logging', () => ({
+vi.mock("@/lib/logging", () => ({
   addLog: (...args: unknown[]) => addLog(...args),
 }));
 
@@ -37,9 +37,9 @@ import {
   getConfiguredHost,
   normalizeConfiguredHost,
   saveConfiguredHostAndRetry,
-} from '@/lib/connection/hostEdit';
+} from "@/lib/connection/hostEdit";
 
-describe('hostEdit', () => {
+describe("hostEdit", () => {
   beforeEach(() => {
     buildBaseUrlFromDeviceHost.mockClear();
     getC64APIConfigSnapshot.mockClear();
@@ -50,30 +50,30 @@ describe('hostEdit', () => {
     localStorage.clear();
   });
 
-  it('normalizes host input with fallback', () => {
-    expect(normalizeConfiguredHost(' 192.168.0.1 ', 'c64u')).toBe(
-      '192.168.0.1',
+  it("normalizes host input with fallback", () => {
+    expect(normalizeConfiguredHost(" 192.168.0.1 ", "c64u")).toBe(
+      "192.168.0.1",
     );
-    expect(normalizeConfiguredHost('   ', 'c64u')).toBe('c64u');
-    expect(normalizeConfiguredHost('', 'c64u')).toBe('c64u');
+    expect(normalizeConfiguredHost("   ", "c64u")).toBe("c64u");
+    expect(normalizeConfiguredHost("", "c64u")).toBe("c64u");
   });
 
-  it('reads configured host from localStorage', () => {
-    localStorage.setItem('c64u_device_host', '10.0.0.5');
-    expect(getConfiguredHost()).toBe('10.0.0.5');
+  it("reads configured host from localStorage", () => {
+    localStorage.setItem("c64u_device_host", "10.0.0.5");
+    expect(getConfiguredHost()).toBe("10.0.0.5");
   });
 
-  it('returns default host and logs when localStorage read fails', () => {
+  it("returns default host and logs when localStorage read fails", () => {
     const getItemSpy = vi
-      .spyOn(Storage.prototype, 'getItem')
+      .spyOn(Storage.prototype, "getItem")
       .mockImplementation(() => {
-        throw new Error('boom');
+        throw new Error("boom");
       });
     try {
-      expect(getConfiguredHost()).toBe('c64u');
+      expect(getConfiguredHost()).toBe("c64u");
       expect(addLog).toHaveBeenCalledWith(
-        'warn',
-        'Failed to read configured host from storage',
+        "warn",
+        "Failed to read configured host from storage",
         expect.any(Object),
       );
     } finally {
@@ -81,17 +81,17 @@ describe('hostEdit', () => {
     }
   });
 
-  it('returns default host and logs when localStorage throws a non-Error value (BRDA:25)', () => {
+  it("returns default host and logs when localStorage throws a non-Error value (BRDA:25)", () => {
     const getItemSpy = vi
-      .spyOn(Storage.prototype, 'getItem')
+      .spyOn(Storage.prototype, "getItem")
       .mockImplementation(() => {
-        throw 'storage-error-string'; // non-Error throw to cover hostEdit.ts BRDA:25 FALSE branch
+        throw "storage-error-string"; // non-Error throw to cover hostEdit.ts BRDA:25 FALSE branch
       });
     try {
-      expect(getConfiguredHost()).toBe('c64u');
+      expect(getConfiguredHost()).toBe("c64u");
       expect(addLog).toHaveBeenCalledWith(
-        'warn',
-        'Failed to read configured host from storage',
+        "warn",
+        "Failed to read configured host from storage",
         expect.any(Object),
       );
     } finally {
@@ -99,50 +99,50 @@ describe('hostEdit', () => {
     }
   });
 
-  it('saves host and retries with default trigger', () => {
-    const host = saveConfiguredHostAndRetry(' 10.0.0.7 ', 'c64u');
-    expect(host).toBe('10.0.0.7');
+  it("saves host and retries with default trigger", () => {
+    const host = saveConfiguredHostAndRetry(" 10.0.0.7 ", "c64u");
+    expect(host).toBe("10.0.0.7");
     expect(updateC64APIConfig).toHaveBeenCalledWith(
-      'http://10.0.0.7',
-      'pw',
-      '10.0.0.7',
+      "http://10.0.0.7",
+      "pw",
+      "10.0.0.7",
     );
-    expect(discoverConnection).toHaveBeenCalledWith('settings');
+    expect(discoverConnection).toHaveBeenCalledWith("settings");
     expect(dismissDemoInterstitial).not.toHaveBeenCalled();
   });
 
-  it('can dismiss interstitial and use explicit trigger', () => {
-    saveConfiguredHostAndRetry('', 'c64u', {
+  it("can dismiss interstitial and use explicit trigger", () => {
+    saveConfiguredHostAndRetry("", "c64u", {
       dismissInterstitial: true,
-      trigger: 'manual',
+      trigger: "manual",
     });
     expect(updateC64APIConfig).toHaveBeenCalledWith(
-      'http://c64u',
-      'pw',
-      'c64u',
+      "http://c64u",
+      "pw",
+      "c64u",
     );
     expect(dismissDemoInterstitial).toHaveBeenCalled();
-    expect(discoverConnection).toHaveBeenCalledWith('manual');
+    expect(discoverConnection).toHaveBeenCalledWith("manual");
   });
 
-  it('allows any normalized host and retries', () => {
-    const host = saveConfiguredHostAndRetry('8.8.8.8', 'c64u');
-    expect(host).toBe('8.8.8.8');
+  it("allows any normalized host and retries", () => {
+    const host = saveConfiguredHostAndRetry("8.8.8.8", "c64u");
+    expect(host).toBe("8.8.8.8");
     expect(updateC64APIConfig).toHaveBeenCalledWith(
-      'http://8.8.8.8',
-      'pw',
-      '8.8.8.8',
+      "http://8.8.8.8",
+      "pw",
+      "8.8.8.8",
     );
-    expect(discoverConnection).toHaveBeenCalledWith('settings');
+    expect(discoverConnection).toHaveBeenCalledWith("settings");
   });
 
-  it('accepts mDNS local hosts', () => {
-    const host = saveConfiguredHostAndRetry('my-c64.local', 'c64u');
-    expect(host).toBe('my-c64.local');
+  it("accepts mDNS local hosts", () => {
+    const host = saveConfiguredHostAndRetry("my-c64.local", "c64u");
+    expect(host).toBe("my-c64.local");
     expect(updateC64APIConfig).toHaveBeenCalledWith(
-      'http://my-c64.local',
-      'pw',
-      'my-c64.local',
+      "http://my-c64.local",
+      "pw",
+      "my-c64.local",
     );
   });
 });

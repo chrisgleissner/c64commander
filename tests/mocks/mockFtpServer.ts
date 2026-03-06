@@ -6,5 +6,5 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-export type { MockFtpServer } from '../contract/mockFtpServer.js';
-export { createMockFtpServer } from '../contract/mockFtpServer.js';
+export type { MockFtpServer } from "../contract/mockFtpServer.js";
+export { createMockFtpServer } from "../contract/mockFtpServer.js";

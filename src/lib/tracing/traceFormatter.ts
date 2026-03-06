@@ -6,20 +6,20 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { TraceEvent } from './types';
+import type { TraceEvent } from "./types";
 
 export const getTraceTitle = (event: TraceEvent): string => {
   const data = event.data as Record<string, unknown>;
 
-  if (event.type === 'action-start') {
+  if (event.type === "action-start") {
     return `Action: ${data.name}`;
   }
 
-  if (event.type === 'rest-request') {
+  if (event.type === "rest-request") {
     return `REST ${data.method} ${data.url}`;
   }
 
-  if (event.type === 'rest-response') {
+  if (event.type === "rest-response") {
     return `Response ${data.status} (${data.durationMs}ms)`;
   }
 

@@ -6,10 +6,10 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import fs from 'node:fs';
-import path from 'node:path';
-import Ajv, { type ErrorObject } from 'ajv';
-import addFormats from 'ajv-formats';
+import fs from "node:fs";
+import path from "node:path";
+import Ajv, { type ErrorObject } from "ajv";
+import addFormats from "ajv-formats";
 
 export type SchemaValidationResult = { valid: boolean; errors?: string[] };
 
@@ -31,7 +31,7 @@ export class SchemaValidator {
   }
 
   validate(schemaPath: string, data: unknown): SchemaValidationResult {
-    const schema = JSON.parse(fs.readFileSync(schemaPath, 'utf8'));
+    const schema = JSON.parse(fs.readFileSync(schemaPath, "utf8"));
     const validate = this.ajv.compile(schema);
     const valid = validate(data);
     return {
@@ -44,5 +44,5 @@ export class SchemaValidator {
 }
 
 export function schemaPath(name: string): string {
-  return path.join(process.cwd(), 'tests/contract/schemas', name);
+  return path.join(process.cwd(), "tests/contract/schemas", name);
 }

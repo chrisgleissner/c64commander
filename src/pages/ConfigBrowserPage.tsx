@@ -13,60 +13,60 @@ import {
   useReducer,
   useRef,
   useCallback,
-} from 'react';
-import { wrapUserEvent } from '@/lib/tracing/userTrace';
-import { motion, AnimatePresence } from 'framer-motion';
+} from "react";
+import { wrapUserEvent } from "@/lib/tracing/userTrace";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Search,
   ChevronDown,
   Loader2,
   RefreshCw,
   FolderOpen,
-} from 'lucide-react';
+} from "lucide-react";
 import {
   useC64Categories,
   useC64Category,
   useC64SetConfig,
   useC64Connection,
-} from '@/hooks/useC64Connection';
-import { ConfigItemRow } from '@/components/ConfigItemRow';
-import { useC64UpdateConfigBatch } from '@/hooks/useC64Connection';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { toast } from '@/hooks/use-toast';
-import { reportUserError } from '@/lib/uiErrors';
-import { addErrorLog } from '@/lib/logging';
-import { resolveAudioMixerResetValue } from '@/lib/config/audioMixer';
-import { useRefreshControl } from '@/hooks/useRefreshControl';
-import { isAudioMixerValueEqual } from '@/lib/config/audioMixer';
-import { getC64API } from '@/lib/c64api';
-import { cn } from '@/lib/utils';
+} from "@/hooks/useC64Connection";
+import { ConfigItemRow } from "@/components/ConfigItemRow";
+import { useC64UpdateConfigBatch } from "@/hooks/useC64Connection";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { toast } from "@/hooks/use-toast";
+import { reportUserError } from "@/lib/uiErrors";
+import { addErrorLog } from "@/lib/logging";
+import { resolveAudioMixerResetValue } from "@/lib/config/audioMixer";
+import { useRefreshControl } from "@/hooks/useRefreshControl";
+import { isAudioMixerValueEqual } from "@/lib/config/audioMixer";
+import { getC64API } from "@/lib/c64api";
+import { cn } from "@/lib/utils";
 import {
   buildSoloRoutingUpdates,
   isSidVolumeName,
   soloReducer,
-} from '@/lib/config/audioMixerSolo';
+} from "@/lib/config/audioMixerSolo";
 import {
   normalizeConfigItem,
   type NormalizedConfigItem,
-} from '@/lib/config/normalizeConfigItem';
-import { AppBar } from '@/components/AppBar';
-import { updateHasChanges } from '@/lib/config/appConfigStore';
+} from "@/lib/config/normalizeConfigItem";
+import { AppBar } from "@/components/AppBar";
+import { updateHasChanges } from "@/lib/config/appConfigStore";
 
 type ConfigListItem = {
   name: string;
   value: string | number;
   options?: string[];
-  details?: NormalizedConfigItem['details'];
+  details?: NormalizedConfigItem["details"];
 };
 
 const DHCP_STATIC_FIELDS = new Set([
-  'Static IP',
-  'Static Netmask',
-  'Static Gateway',
-  'Static DNS',
+  "Static IP",
+  "Static Netmask",
+  "Static Gateway",
+  "Static DNS",
 ]);
 
 function CategorySection({
@@ -87,7 +87,7 @@ function CategorySection({
   } = useC64Category(categoryName, isOpen);
   const setConfig = useC64SetConfig();
   const updateConfigBatch = useC64UpdateConfigBatch();
-  const isAudioMixer = categoryName === 'Audio Mixer';
+  const isAudioMixer = categoryName === "Audio Mixer";
   const [soloState, dispatchSolo] = useReducer(soloReducer, { soloItem: null });
   const [audioConfiguredItems, setAudioConfiguredItems] = useState<
     ConfigListItem[]
@@ -98,7 +98,7 @@ function CategorySection({
   const [isEditingVolumes, setIsEditingVolumes] = useState(false);
   const editTimeoutRef = useRef<number | null>(null);
   const skipSoloRoutingRef = useRef(false);
-  const soloSnapshotKey = 'c64u_audio_mixer_solo_snapshot';
+  const soloSnapshotKey = "c64u_audio_mixer_solo_snapshot";
 
   useEffect(() => {
     if (isOpen) {
@@ -114,12 +114,12 @@ function CategorySection({
     if (!categoryData) return [];
 
     const catData = categoryData[categoryName] as any;
-    if (!catData || typeof catData !== 'object') return [];
+    if (!catData || typeof catData !== "object") return [];
 
     const itemsData = (catData as any).items ?? catData;
 
     return Object.entries(itemsData)
-      .filter(([key]) => key !== 'errors')
+      .filter(([key]) => key !== "errors")
       .map(([name, config]) => ({
         name,
         ...normalizeConfigItem(config),
@@ -128,17 +128,17 @@ function CategorySection({
 
   const dhcpStatus = useMemo(() => {
     if (
-      categoryName !== 'Ethernet Settings' &&
-      categoryName !== 'WiFi settings'
+      categoryName !== "Ethernet Settings" &&
+      categoryName !== "WiFi settings"
     )
       return null;
-    const dhcpItem = items.find((item) => item.name === 'Use DHCP');
+    const dhcpItem = items.find((item) => item.name === "Use DHCP");
     if (!dhcpItem) return null;
     return String(dhcpItem.value).trim().toLowerCase();
   }, [categoryName, items]);
 
   const isDhcpEnabled = dhcpStatus
-    ? ['enabled', 'on', 'true', 'yes', '1'].includes(dhcpStatus)
+    ? ["enabled", "on", "true", "yes", "1"].includes(dhcpStatus)
     : false;
 
   const syncAudioConfiguredItems = useCallback((next: ConfigListItem[]) => {
@@ -200,7 +200,7 @@ function CategorySection({
         try {
           sessionStorage.setItem(soloSnapshotKey, JSON.stringify(configured));
         } catch (error) {
-          addErrorLog('Solo snapshot save failed', {
+          addErrorLog("Solo snapshot save failed", {
             error: (error as Error).message,
           });
         }
@@ -214,20 +214,20 @@ function CategorySection({
           try {
             sessionStorage.removeItem(soloSnapshotKey);
           } catch (error) {
-            addErrorLog('Solo snapshot cleanup failed', {
+            addErrorLog("Solo snapshot cleanup failed", {
               error: (error as Error).message,
             });
           }
         }
       } catch (error) {
         reportUserError({
-          operation: 'AUDIO_ROUTING',
-          title: 'Audio routing error',
+          operation: "AUDIO_ROUTING",
+          title: "Audio routing error",
           description: (error as Error).message,
           error,
           context: {
             category: categoryName,
-            soloItem: soloItem ?? 'none',
+            soloItem: soloItem ?? "none",
           },
         });
       }
@@ -259,7 +259,7 @@ function CategorySection({
     try {
       stored = sessionStorage.getItem(soloSnapshotKey);
     } catch (error) {
-      addErrorLog('Solo snapshot read failed', {
+      addErrorLog("Solo snapshot read failed", {
         error: (error as Error).message,
       });
       restoredSnapshotRef.current = true;
@@ -275,7 +275,7 @@ function CategorySection({
         void applySoloRouting(null, parsed);
       }
     } catch (error) {
-      addErrorLog('Solo snapshot parse failed', {
+      addErrorLog("Solo snapshot parse failed", {
         error: (error as Error).message,
       });
     } finally {
@@ -300,7 +300,7 @@ function CategorySection({
           if (Array.isArray(parsed) && parsed.length) snapshot = parsed;
         }
       } catch (error) {
-        addErrorLog('Solo snapshot restore failed', {
+        addErrorLog("Solo snapshot restore failed", {
           error: (error as Error).message,
         });
       }
@@ -323,8 +323,8 @@ function CategorySection({
       toast({ title: `${itemName} updated` });
     } catch (error) {
       reportUserError({
-        operation: 'CONFIG_UPDATE',
-        title: 'Error',
+        operation: "CONFIG_UPDATE",
+        title: "Error",
         description: (error as Error).message,
         error,
         context: {
@@ -356,7 +356,7 @@ function CategorySection({
     const wasSoloActive = Boolean(soloState.soloItem);
     if (wasSoloActive) {
       skipSoloRoutingRef.current = true;
-      dispatchSolo({ type: 'reset' });
+      dispatchSolo({ type: "reset" });
     }
     setIsEditingVolumes(true);
     if (editTimeoutRef.current) {
@@ -385,8 +385,8 @@ function CategorySection({
           : items;
       } catch (error) {
         reportUserError({
-          operation: 'AUDIO_MIXER_UPDATE',
-          title: 'Error',
+          operation: "AUDIO_MIXER_UPDATE",
+          title: "Error",
           description: (error as Error).message,
           error,
           context: {
@@ -405,7 +405,7 @@ function CategorySection({
   };
 
   const handleSyncClock = async () => {
-    if (categoryName !== 'Clock Settings') return;
+    if (categoryName !== "Clock Settings") return;
     const now = new Date();
     const updates: Record<string, string | number> = {};
     const normalizedItems = items.map((item) => ({
@@ -421,18 +421,18 @@ function CategorySection({
         });
     };
 
-    setIfMatch((name) => name.includes('year'), now.getFullYear());
-    setIfMatch((name) => name.includes('month'), now.getMonth() + 1);
-    setIfMatch((name) => name.includes('day'), now.getDate());
-    setIfMatch((name) => name.includes('hour'), now.getHours());
-    setIfMatch((name) => name.includes('minute'), now.getMinutes());
-    setIfMatch((name) => name.includes('second'), now.getSeconds());
+    setIfMatch((name) => name.includes("year"), now.getFullYear());
+    setIfMatch((name) => name.includes("month"), now.getMonth() + 1);
+    setIfMatch((name) => name.includes("day"), now.getDate());
+    setIfMatch((name) => name.includes("hour"), now.getHours());
+    setIfMatch((name) => name.includes("minute"), now.getMinutes());
+    setIfMatch((name) => name.includes("second"), now.getSeconds());
 
     if (Object.keys(updates).length === 0) {
       reportUserError({
-        operation: 'CLOCK_SYNC',
-        title: 'Clock sync unavailable',
-        description: 'No matching clock fields found in this section.',
+        operation: "CLOCK_SYNC",
+        title: "Clock sync unavailable",
+        description: "No matching clock fields found in this section.",
         context: { category: categoryName },
       });
       return;
@@ -442,13 +442,13 @@ function CategorySection({
       await updateConfigBatch.mutateAsync({ category: categoryName, updates });
       markChanged();
       toast({
-        title: 'Clock synced',
-        description: 'C64U clock updated from device time.',
+        title: "Clock synced",
+        description: "C64U clock updated from device time.",
       });
     } catch (error) {
       reportUserError({
-        operation: 'CLOCK_SYNC',
-        title: 'Clock sync failed',
+        operation: "CLOCK_SYNC",
+        title: "Clock sync failed",
         description: (error as Error).message,
         error,
         context: { category: categoryName },
@@ -457,9 +457,9 @@ function CategorySection({
   };
 
   const resetAudioMixer = async () => {
-    if (categoryName !== 'Audio Mixer') return;
+    if (categoryName !== "Audio Mixer") return;
     skipSoloRoutingRef.current = true;
-    dispatchSolo({ type: 'reset' });
+    dispatchSolo({ type: "reset" });
     soloSnapshotRef.current = [];
     setIsResetting(true);
     try {
@@ -477,8 +477,8 @@ function CategorySection({
 
       if (Object.keys(updates).length === 0) {
         toast({
-          title: 'Audio Mixer already at defaults',
-          description: 'No changes needed.',
+          title: "Audio Mixer already at defaults",
+          description: "No changes needed.",
         });
         return;
       }
@@ -487,13 +487,13 @@ function CategorySection({
       await refetch();
       markChanged();
       toast({
-        title: 'Audio Mixer reset',
-        description: 'Volumes set to 0 dB, pans centered.',
+        title: "Audio Mixer reset",
+        description: "Volumes set to 0 dB, pans centered.",
       });
     } catch (error) {
       reportUserError({
-        operation: 'AUDIO_MIXER_RESET',
-        title: 'Error',
+        operation: "AUDIO_MIXER_RESET",
+        title: "Error",
         description: (error as Error).message,
         error,
         context: { category: categoryName },
@@ -506,7 +506,7 @@ function CategorySection({
   const handleRefresh = async () => {
     if (isAudioMixer) {
       skipSoloRoutingRef.current = true;
-      dispatchSolo({ type: 'reset' });
+      dispatchSolo({ type: "reset" });
       soloSnapshotRef.current = [];
       syncAudioConfiguredItems([]);
     }
@@ -525,13 +525,13 @@ function CategorySection({
       <button
         onClick={wrapUserEvent(
           () => setIsOpen(!isOpen),
-          'toggle',
-          'ConfigSection',
+          "toggle",
+          "ConfigSection",
           { title: categoryName },
-          'ConfigHeader',
+          "ConfigHeader",
         )}
         className="w-full flex items-center justify-between px-4 py-3 text-left"
-        data-testid={`config-category-${categoryName.toLowerCase().replace(/\s+/g, '-')}`}
+        data-testid={`config-category-${categoryName.toLowerCase().replace(/\s+/g, "-")}`}
       >
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-muted">
@@ -551,7 +551,7 @@ function CategorySection({
         {isOpen && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
+            animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.2 }}
           >
@@ -561,7 +561,7 @@ function CategorySection({
                 data-testid="config-group-actions"
               >
                 <div className="flex items-center gap-2">
-                  {categoryName === 'Audio Mixer' && (
+                  {categoryName === "Audio Mixer" && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -572,7 +572,7 @@ function CategorySection({
                       Reset
                     </Button>
                   )}
-                  {categoryName === 'Clock Settings' && (
+                  {categoryName === "Clock Settings" && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -622,17 +622,17 @@ function CategorySection({
                       soloState.soloItem &&
                       soloState.soloItem !== item.name;
                     const isDhcpStaticField =
-                      (categoryName === 'Ethernet Settings' ||
-                        categoryName === 'WiFi settings') &&
+                      (categoryName === "Ethernet Settings" ||
+                        categoryName === "WiFi settings") &&
                       DHCP_STATIC_FIELDS.has(item.name);
                     const isReadOnly = isDhcpEnabled && isDhcpStaticField;
                     const testIdBase = item.name
                       .toLowerCase()
-                      .replace(/\s+/g, '-');
+                      .replace(/\s+/g, "-");
                     const rowClassName = cn(
-                      isSidVolume && 'rounded-md px-3',
-                      isSoloed && 'bg-primary/10',
-                      isMutedBySolo && 'bg-muted/20',
+                      isSidVolume && "rounded-md px-3",
+                      isSoloed && "bg-primary/10",
+                      isMutedBySolo && "bg-muted/20",
                     );
 
                     const rightAccessory = isSidVolume ? (
@@ -654,7 +654,7 @@ function CategorySection({
                             checked={isSoloed}
                             aria-label={`Solo ${item.name}`}
                             onCheckedChange={() =>
-                              dispatchSolo({ type: 'toggle', item: item.name })
+                              dispatchSolo({ type: "toggle", item: item.name })
                             }
                             disabled={isEditingVolumes}
                             data-testid={`audio-mixer-solo-${testIdBase}`}
@@ -706,7 +706,7 @@ function CategorySection({
 export default function ConfigBrowserPage() {
   const { status, runtimeBaseUrl } = useC64Connection();
   const { data: categoriesData, isLoading } = useC64Categories();
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const { setConfigExpanded } = useRefreshControl();
   const markChanged = useCallback(() => {
     updateHasChanges(runtimeBaseUrl, true);
@@ -757,8 +757,8 @@ export default function ConfigBrowserPage() {
         ) : filteredCategories.length === 0 ? (
           <div className="py-8 text-center text-sm text-muted-foreground">
             {searchQuery
-              ? 'No categories match your search'
-              : 'No categories available'}
+              ? "No categories match your search"
+              : "No categories available"}
           </div>
         ) : (
           filteredCategories.map((category, index) => (

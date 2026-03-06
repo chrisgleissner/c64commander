@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from "vitest";
 
 /**
  * Unit tests for Issue 1 (volume/mute desync) fixes.
@@ -43,7 +43,7 @@ async function applyAudioMixerUpdates(
   try {
     await mutateAsync();
   } catch (error) {
-    if (context.startsWith('Restore')) {
+    if (context.startsWith("Restore")) {
       onError((error as Error).message, context);
       onToast();
       return;
@@ -52,53 +52,53 @@ async function applyAudioMixerUpdates(
   }
 }
 
-describe('applyAudioMixerUpdates rethrow contract', () => {
-  it('swallows and logs errors for Restore contexts', async () => {
+describe("applyAudioMixerUpdates rethrow contract", () => {
+  it("swallows and logs errors for Restore contexts", async () => {
     const onError = vi.fn();
     const onToast = vi.fn();
-    const mutateAsync = vi.fn().mockRejectedValue(new Error('network'));
+    const mutateAsync = vi.fn().mockRejectedValue(new Error("network"));
 
     await expect(
-      applyAudioMixerUpdates(mutateAsync, 'Restore (stop)', onError, onToast),
+      applyAudioMixerUpdates(mutateAsync, "Restore (stop)", onError, onToast),
     ).resolves.toBeUndefined();
 
-    expect(onError).toHaveBeenCalledWith('network', 'Restore (stop)');
+    expect(onError).toHaveBeenCalledWith("network", "Restore (stop)");
     expect(onToast).toHaveBeenCalledTimes(1);
   });
 
-  it('rethrows for Volume context', async () => {
+  it("rethrows for Volume context", async () => {
     const onError = vi.fn();
     const onToast = vi.fn();
-    const mutateAsync = vi.fn().mockRejectedValue(new Error('timeout'));
+    const mutateAsync = vi.fn().mockRejectedValue(new Error("timeout"));
 
     await expect(
-      applyAudioMixerUpdates(mutateAsync, 'Volume', onError, onToast),
-    ).rejects.toThrow('timeout');
+      applyAudioMixerUpdates(mutateAsync, "Volume", onError, onToast),
+    ).rejects.toThrow("timeout");
 
     expect(onError).not.toHaveBeenCalled();
     expect(onToast).not.toHaveBeenCalled();
   });
 
-  it('rethrows for Mute context', async () => {
-    const mutateAsync = vi.fn().mockRejectedValue(new Error('unreachable'));
+  it("rethrows for Mute context", async () => {
+    const mutateAsync = vi.fn().mockRejectedValue(new Error("unreachable"));
     await expect(
-      applyAudioMixerUpdates(mutateAsync, 'Mute', vi.fn(), vi.fn()),
-    ).rejects.toThrow('unreachable');
+      applyAudioMixerUpdates(mutateAsync, "Mute", vi.fn(), vi.fn()),
+    ).rejects.toThrow("unreachable");
   });
 
-  it('rethrows for Unmute context', async () => {
-    const mutateAsync = vi.fn().mockRejectedValue(new Error('device lost'));
+  it("rethrows for Unmute context", async () => {
+    const mutateAsync = vi.fn().mockRejectedValue(new Error("device lost"));
     await expect(
-      applyAudioMixerUpdates(mutateAsync, 'Unmute', vi.fn(), vi.fn()),
-    ).rejects.toThrow('device lost');
+      applyAudioMixerUpdates(mutateAsync, "Unmute", vi.fn(), vi.fn()),
+    ).rejects.toThrow("device lost");
   });
 
-  it('does not call onError or onToast on success', async () => {
+  it("does not call onError or onToast on success", async () => {
     const onError = vi.fn();
     const onToast = vi.fn();
     const mutateAsync = vi.fn().mockResolvedValue(undefined);
 
-    await applyAudioMixerUpdates(mutateAsync, 'Mute', onError, onToast);
+    await applyAudioMixerUpdates(mutateAsync, "Mute", onError, onToast);
 
     expect(onError).not.toHaveBeenCalled();
     expect(onToast).not.toHaveBeenCalled();
@@ -127,11 +127,11 @@ async function runUpdate(opts: {
     return;
   }
   if (token !== tokenRef.current) return;
-  dispatch('unmute');
+  dispatch("unmute");
 }
 
-describe('scheduleVolumeUpdate: dispatch gated on write', () => {
-  it('dispatches unmute after a successful write', async () => {
+describe("scheduleVolumeUpdate: dispatch gated on write", () => {
+  it("dispatches unmute after a successful write", async () => {
     const dispatch = vi.fn();
     const tokenRef = { current: 1 };
     await runUpdate({
@@ -140,22 +140,22 @@ describe('scheduleVolumeUpdate: dispatch gated on write', () => {
       writeVolume: vi.fn().mockResolvedValue(undefined),
       dispatch,
     });
-    expect(dispatch).toHaveBeenCalledWith('unmute');
+    expect(dispatch).toHaveBeenCalledWith("unmute");
   });
 
-  it('skips dispatch when write fails', async () => {
+  it("skips dispatch when write fails", async () => {
     const dispatch = vi.fn();
     const tokenRef = { current: 1 };
     await runUpdate({
       token: 1,
       tokenRef,
-      writeVolume: vi.fn().mockRejectedValue(new Error('write error')),
+      writeVolume: vi.fn().mockRejectedValue(new Error("write error")),
       dispatch,
     });
     expect(dispatch).not.toHaveBeenCalled();
   });
 
-  it('skips dispatch when token is superseded before write', async () => {
+  it("skips dispatch when token is superseded before write", async () => {
     const dispatch = vi.fn();
     const tokenRef = { current: 2 }; // already advanced
     await runUpdate({
@@ -167,7 +167,7 @@ describe('scheduleVolumeUpdate: dispatch gated on write', () => {
     expect(dispatch).not.toHaveBeenCalled();
   });
 
-  it('skips dispatch when token is superseded after write completes', async () => {
+  it("skips dispatch when token is superseded after write completes", async () => {
     const dispatch = vi.fn();
     const tokenRef = { current: 1 };
     const writeVolume = vi.fn().mockImplementation(async () => {
@@ -178,7 +178,7 @@ describe('scheduleVolumeUpdate: dispatch gated on write', () => {
     expect(dispatch).not.toHaveBeenCalled();
   });
 
-  it('dispatches when token matches after concurrent write completes', async () => {
+  it("dispatches when token matches after concurrent write completes", async () => {
     const dispatch = vi.fn();
     const tokenRef = { current: 3 };
     await runUpdate({
@@ -187,7 +187,7 @@ describe('scheduleVolumeUpdate: dispatch gated on write', () => {
       writeVolume: vi.fn().mockResolvedValue(undefined),
       dispatch,
     });
-    expect(dispatch).toHaveBeenCalledWith('unmute');
+    expect(dispatch).toHaveBeenCalledWith("unmute");
   });
 });
 
@@ -204,31 +204,31 @@ async function handleMute(opts: {
 }): Promise<void> {
   const { writeMute, dispatch } = opts;
   await writeMute(); // throws on failure — caller sees rejection
-  dispatch('mute');
+  dispatch("mute");
 }
 
-describe('handleToggleMute mute path: dispatch gated on write', () => {
-  it('dispatches mute after write succeeds', async () => {
+describe("handleToggleMute mute path: dispatch gated on write", () => {
+  it("dispatches mute after write succeeds", async () => {
     const dispatch = vi.fn();
     await handleMute({
       writeMute: vi.fn().mockResolvedValue(undefined),
       dispatch,
     });
-    expect(dispatch).toHaveBeenCalledWith('mute');
+    expect(dispatch).toHaveBeenCalledWith("mute");
   });
 
-  it('does not dispatch mute when write fails', async () => {
+  it("does not dispatch mute when write fails", async () => {
     const dispatch = vi.fn();
     await expect(
       handleMute({
-        writeMute: vi.fn().mockRejectedValue(new Error('network')),
+        writeMute: vi.fn().mockRejectedValue(new Error("network")),
         dispatch,
       }),
-    ).rejects.toThrow('network');
+    ).rejects.toThrow("network");
     expect(dispatch).not.toHaveBeenCalled();
   });
 
-  it('dispatch is called exactly once on a single successful mute', async () => {
+  it("dispatch is called exactly once on a single successful mute", async () => {
     const dispatch = vi.fn();
     await handleMute({
       writeMute: vi.fn().mockResolvedValue(undefined),
@@ -242,8 +242,8 @@ describe('handleToggleMute mute path: dispatch gated on write', () => {
 // D. Convergence: rapid mute/unmute sequence leaves state consistent
 // ---------------------------------------------------------------------------
 
-describe('convergence: rapid mute/unmute sequence', () => {
-  it('final state reflects last successful write', async () => {
+describe("convergence: rapid mute/unmute sequence", () => {
+  it("final state reflects last successful write", async () => {
     let muteCount = 0;
     let unmuteCount = 0;
 
@@ -259,7 +259,7 @@ describe('convergence: rapid mute/unmute sequence', () => {
           writeMute: vi.fn().mockResolvedValue(undefined),
           dispatch,
         });
-        expect(dispatch).toHaveBeenCalledWith('mute');
+        expect(dispatch).toHaveBeenCalledWith("mute");
         muteCount++;
       } else {
         const tokenRef = { current: i };
@@ -269,14 +269,14 @@ describe('convergence: rapid mute/unmute sequence', () => {
           writeVolume: vi.fn().mockResolvedValue(undefined),
           dispatch,
         });
-        expect(dispatch).toHaveBeenCalledWith('unmute');
+        expect(dispatch).toHaveBeenCalledWith("unmute");
         unmuteCount++;
       }
     }
     expect(muteCount + unmuteCount).toBe(N);
   });
 
-  it('no dispatch leaks when all writes in the sequence fail', async () => {
+  it("no dispatch leaks when all writes in the sequence fail", async () => {
     const allDispatches: string[] = [];
     const N = 6;
     for (let i = 0; i < N; i++) {
@@ -285,7 +285,7 @@ describe('convergence: rapid mute/unmute sequence', () => {
       await runUpdate({
         token: i,
         tokenRef,
-        writeVolume: vi.fn().mockRejectedValue(new Error('fail')),
+        writeVolume: vi.fn().mockRejectedValue(new Error("fail")),
         dispatch,
       });
     }

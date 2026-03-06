@@ -1,30 +1,30 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, act, waitFor } from '@testing-library/react';
-import { useSonglengths } from '@/pages/playFiles/hooks/useSonglengths';
-import { type LocalPlayFile } from '@/lib/playback/playbackRouter';
-import { getPlatform, isNativePlatform } from '@/lib/native/platform';
-import { countSonglengthsEntries } from '@/lib/sid/songlengths';
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { renderHook, act, waitFor } from "@testing-library/react";
+import { useSonglengths } from "@/pages/playFiles/hooks/useSonglengths";
+import { type LocalPlayFile } from "@/lib/playback/playbackRouter";
+import { getPlatform, isNativePlatform } from "@/lib/native/platform";
+import { countSonglengthsEntries } from "@/lib/sid/songlengths";
 
 // Mocks
-vi.mock('@/hooks/use-toast', () => ({
+vi.mock("@/hooks/use-toast", () => ({
   toast: vi.fn(),
 }));
 
-vi.mock('@/lib/logging', () => ({
+vi.mock("@/lib/logging", () => ({
   addErrorLog: vi.fn(),
 }));
 
-vi.mock('@/lib/native/platform', () => ({
-  getPlatform: vi.fn(() => 'web'),
+vi.mock("@/lib/native/platform", () => ({
+  getPlatform: vi.fn(() => "web"),
   isNativePlatform: vi.fn(() => false),
 }));
 
 // Mock songlengths library
-vi.mock('@/lib/songlengths', () => ({
+vi.mock("@/lib/songlengths", () => ({
   SongLengthServiceFacade: class {
     constructor() {}
     loadOnColdStart() {
-      return Promise.resolve({ status: 'ready' });
+      return Promise.resolve({ status: "ready" });
     }
   },
   InMemoryTextBackend: class {
@@ -35,15 +35,15 @@ vi.mock('@/lib/songlengths', () => ({
   },
 }));
 
-vi.mock('@/lib/sid/songlengths', () => ({
+vi.mock("@/lib/sid/songlengths", () => ({
   countSonglengthsEntries: vi.fn(() => 42),
   parseSongLengthsFile: () => Promise.resolve([]),
 }));
 
-vi.mock('@/lib/playback/fileLibraryUtils', () => ({
+vi.mock("@/lib/playback/fileLibraryUtils", () => ({
   buildLocalPlayFileFromUri: (name: string, path: string, uri: string) => {
     // Mock file object with necessary methods
-    const blob = new Blob([''], { type: 'text/plain' });
+    const blob = new Blob([""], { type: "text/plain" });
     const file = new File([blob], name, {
       lastModified: 1000,
     }) as unknown as LocalPlayFile;
@@ -52,29 +52,29 @@ vi.mock('@/lib/playback/fileLibraryUtils', () => ({
   },
 }));
 
-describe('useSonglengths', () => {
+describe("useSonglengths", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
   });
 
-  it('initializes defaults', () => {
+  it("initializes defaults", () => {
     const { result } = renderHook(() => useSonglengths({ playlist: [] }));
     expect(result.current.songlengthsFiles).toEqual([]);
   });
 
-  it('handles songlengths input', async () => {
+  it("handles songlengths input", async () => {
     const { result } = renderHook(() => useSonglengths({ playlist: [] }));
 
-    const file = new File(['md5=123'], 'Songlengths.txt', {
-      type: 'text/plain',
+    const file = new File(["md5=123"], "Songlengths.txt", {
+      type: "text/plain",
     });
     // Mock arrayBuffer/text if missing in environment
     if (!file.text) {
       // @ts-expect-error - polyfilling text() for test environment
-      file.text = async () => 'md5=123';
+      file.text = async () => "md5=123";
       // @ts-expect-error - polyfilling arrayBuffer() for test environment
-      file.arrayBuffer = async () => new TextEncoder().encode('md5=123').buffer;
+      file.arrayBuffer = async () => new TextEncoder().encode("md5=123").buffer;
     }
 
     act(() => {
@@ -83,32 +83,32 @@ describe('useSonglengths', () => {
     });
 
     expect(result.current.songlengthsFiles).toHaveLength(1);
-    expect(result.current.songlengthsFiles[0].name).toBe('Songlengths.txt');
+    expect(result.current.songlengthsFiles[0].name).toBe("Songlengths.txt");
 
     await waitFor(() => {
       expect(result.current.songlengthsSummary.entryCount).toBe(42);
     });
   });
 
-  it('handles picked file persistence', () => {
+  it("handles picked file persistence", () => {
     const { result } = renderHook(() => useSonglengths({ playlist: [] }));
 
     act(() => {
       result.current.handleSonglengthsPicked({
-        uri: 'file://sl.txt',
-        name: 'Songlengths.txt',
-        path: '/Songlengths.txt',
+        uri: "file://sl.txt",
+        name: "Songlengths.txt",
+        path: "/Songlengths.txt",
       });
     });
 
-    expect(localStorage.getItem('c64u_songlengths_file:v1')).toContain(
-      'file://sl.txt',
+    expect(localStorage.getItem("c64u_songlengths_file:v1")).toContain(
+      "file://sl.txt",
     );
   });
 
-  it('ignores invalid file types', () => {
+  it("ignores invalid file types", () => {
     const { result } = renderHook(() => useSonglengths({ playlist: [] }));
-    const file = new File([''], 'readme.md', { type: 'text/plain' });
+    const file = new File([""], "readme.md", { type: "text/plain" });
     act(() => {
       // @ts-expect-error - passing File[] instead of FileList for test
       result.current.handleSonglengthsInput([file]);
@@ -117,9 +117,9 @@ describe('useSonglengths', () => {
     expect(result.current.songlengthsFiles).toHaveLength(0);
   });
 
-  it('formatKiB returns null for zero-size file (BRDA:119)', async () => {
+  it("formatKiB returns null for zero-size file (BRDA:119)", async () => {
     const { result } = renderHook(() => useSonglengths({ playlist: [] }));
-    const file = new File([''], 'Songlengths.txt', { type: 'text/plain' });
+    const file = new File([""], "Songlengths.txt", { type: "text/plain" });
     // @ts-expect-error - polyfilling arrayBuffer() for test environment
     file.arrayBuffer = async () => new ArrayBuffer(0);
     act(() => {
@@ -132,30 +132,30 @@ describe('useSonglengths', () => {
     expect(result.current.songlengthsSummary.sizeLabel).toBeNull();
   });
 
-  it('formatKiB returns toFixed(0) for size >= 10 KiB (BRDA:121)', async () => {
+  it("formatKiB returns toFixed(0) for size >= 10 KiB (BRDA:121)", async () => {
     const { result } = renderHook(() => useSonglengths({ playlist: [] }));
     const fakeFile = {
-      arrayBuffer: async () => new TextEncoder().encode('x').buffer,
+      arrayBuffer: async () => new TextEncoder().encode("x").buffer,
     } as unknown as LocalPlayFile;
     act(() => {
       result.current.mergeSonglengthsFiles([
         {
-          path: '/test/Songlengths.txt',
+          path: "/test/Songlengths.txt",
           file: fakeFile,
           sizeBytes: 10240,
         },
       ]);
     });
     await waitFor(() => {
-      expect(result.current.songlengthsSummary.sizeLabel).toBe('10 KiB');
+      expect(result.current.songlengthsSummary.sizeLabel).toBe("10 KiB");
     });
   });
 
-  it('sets error when entryCount is zero (BRDA:212)', async () => {
+  it("sets error when entryCount is zero (BRDA:212)", async () => {
     vi.mocked(countSonglengthsEntries).mockReturnValueOnce(0);
     const { result } = renderHook(() => useSonglengths({ playlist: [] }));
-    const content = 'md5=abc';
-    const file = new File([content], 'Songlengths.txt', { type: 'text/plain' });
+    const content = "md5=abc";
+    const file = new File([content], "Songlengths.txt", { type: "text/plain" });
     // @ts-expect-error - polyfilling arrayBuffer() for test environment
     file.arrayBuffer = async () => new TextEncoder().encode(content).buffer;
     act(() => {
@@ -164,38 +164,38 @@ describe('useSonglengths', () => {
     });
     await waitFor(() => {
       expect(result.current.songlengthsSummary.error).toBe(
-        'Songlengths file contains no entries.',
+        "Songlengths file contains no entries.",
       );
     });
     expect(result.current.songlengthsSummary.entryCount).toBe(0);
   });
 
-  it('uses path-derived name when entry has no name or file.name (BRDA:212)', async () => {
+  it("uses path-derived name when entry has no name or file.name (BRDA:212)", async () => {
     const { result } = renderHook(() => useSonglengths({ playlist: [] }));
     const fakeFile = {
-      arrayBuffer: async () => new TextEncoder().encode('md5=123').buffer,
+      arrayBuffer: async () => new TextEncoder().encode("md5=123").buffer,
     } as unknown as LocalPlayFile;
     act(() => {
       result.current.mergeSonglengthsFiles([
-        { path: '/some/dir/Songlengths.txt', file: fakeFile },
+        { path: "/some/dir/Songlengths.txt", file: fakeFile },
       ]);
     });
     await waitFor(() => {
       expect(result.current.songlengthsSummary.fileName).toBe(
-        'Songlengths.txt',
+        "Songlengths.txt",
       );
     });
   });
 
-  it('loads persisted file on Android with missing sizeBytes/modifiedAt (BRDA:136,144,145)', async () => {
-    vi.mocked(getPlatform).mockReturnValue('android' as any);
+  it("loads persisted file on Android with missing sizeBytes/modifiedAt (BRDA:136,144,145)", async () => {
+    vi.mocked(getPlatform).mockReturnValue("android" as any);
     vi.mocked(isNativePlatform).mockReturnValue(true);
     const stored = {
-      uri: 'file://sl.txt',
-      name: 'Songlengths.txt',
-      path: '/Songlengths.txt',
+      uri: "file://sl.txt",
+      name: "Songlengths.txt",
+      path: "/Songlengths.txt",
     };
-    localStorage.setItem('c64u_songlengths_file:v1', JSON.stringify(stored));
+    localStorage.setItem("c64u_songlengths_file:v1", JSON.stringify(stored));
     const { result } = renderHook(() => useSonglengths({ playlist: [] }));
     await waitFor(() => {
       expect(result.current.songlengthsFiles).toHaveLength(1);
@@ -204,11 +204,11 @@ describe('useSonglengths', () => {
     expect(result.current.songlengthsFiles[0].modifiedAt).toBeNull();
   });
 
-  it('skips Android restore when stored data has missing required field (BRDA:136)', async () => {
-    vi.mocked(getPlatform).mockReturnValue('android' as any);
+  it("skips Android restore when stored data has missing required field (BRDA:136)", async () => {
+    vi.mocked(getPlatform).mockReturnValue("android" as any);
     vi.mocked(isNativePlatform).mockReturnValue(true);
-    const stored = { uri: 'file://sl.txt', name: 'Songlengths.txt' }; // missing path
-    localStorage.setItem('c64u_songlengths_file:v1', JSON.stringify(stored));
+    const stored = { uri: "file://sl.txt", name: "Songlengths.txt" }; // missing path
+    localStorage.setItem("c64u_songlengths_file:v1", JSON.stringify(stored));
     const { result } = renderHook(() => useSonglengths({ playlist: [] }));
     await act(async () => {
       await new Promise((r) => setTimeout(r, 50));

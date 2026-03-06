@@ -10,7 +10,7 @@ import {
   ConfigResponse,
   buildBaseUrlFromDeviceHost,
   resolveDeviceHostFromStorage,
-} from '@/lib/c64api';
+} from "@/lib/c64api";
 
 export type ConfigSnapshot = {
   savedAt: string;
@@ -25,9 +25,9 @@ export type AppConfigEntry = {
   data: Record<string, ConfigResponse>;
 };
 
-const APP_CONFIGS_KEY = 'c64u_app_configs';
-const INITIAL_SNAPSHOT_PREFIX = 'c64u_initial_snapshot:';
-const HAS_CHANGES_PREFIX = 'c64u_has_changes:';
+const APP_CONFIGS_KEY = "c64u_app_configs";
+const INITIAL_SNAPSHOT_PREFIX = "c64u_initial_snapshot:";
+const HAS_CHANGES_PREFIX = "c64u_has_changes:";
 
 const buildInitialSnapshotKey = (baseUrl: string) =>
   `${INITIAL_SNAPSHOT_PREFIX}${baseUrl}`;
@@ -39,7 +39,7 @@ const safeParse = <T>(raw: string | null, fallback: T): T => {
   try {
     return JSON.parse(raw) as T;
   } catch (error) {
-    console.warn('Failed to parse app config snapshot', { error });
+    console.warn("Failed to parse app config snapshot", { error });
     return fallback;
   }
 };
@@ -65,12 +65,12 @@ export const saveInitialSnapshot = (
 };
 
 export const loadHasChanges = (baseUrl: string): boolean =>
-  localStorage.getItem(buildHasChangesKey(baseUrl)) === '1';
+  localStorage.getItem(buildHasChangesKey(baseUrl)) === "1";
 
 export const updateHasChanges = (baseUrl: string, value: boolean) => {
-  localStorage.setItem(buildHasChangesKey(baseUrl), value ? '1' : '0');
+  localStorage.setItem(buildHasChangesKey(baseUrl), value ? "1" : "0");
   window.dispatchEvent(
-    new CustomEvent('c64u-has-changes', { detail: { baseUrl, value } }),
+    new CustomEvent("c64u-has-changes", { detail: { baseUrl, value } }),
   );
 };
 
@@ -92,8 +92,8 @@ export const createAppConfigEntry = (
   data: Record<string, ConfigResponse>,
 ): AppConfigEntry => {
   const id =
-    (typeof crypto !== 'undefined' &&
-      'randomUUID' in crypto &&
+    (typeof crypto !== "undefined" &&
+      "randomUUID" in crypto &&
       crypto.randomUUID()) ||
     `${Date.now()}-${Math.round(Math.random() * 1e6)}`;
 

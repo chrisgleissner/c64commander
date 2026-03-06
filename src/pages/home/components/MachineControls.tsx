@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion';
+import { motion } from "framer-motion";
 import {
   RotateCcw,
   Power,
@@ -8,16 +8,16 @@ import {
   Upload,
   Play,
   Download,
-} from 'lucide-react';
-import { SectionHeader } from '@/components/SectionHeader';
-import { QuickActionCard } from '@/components/QuickActionCard';
-import { ResponsivePathText } from '@/components/ResponsivePathText';
+} from "lucide-react";
+import { SectionHeader } from "@/components/SectionHeader";
+import { QuickActionCard } from "@/components/QuickActionCard";
+import { ResponsivePathText } from "@/components/ResponsivePathText";
 
 export interface MachineControlsProps {
   status: { isConnected: boolean; isConnecting: boolean };
   machineTaskBusy: boolean;
-  machineExecutionState: 'running' | 'paused' | 'unknown';
-  setMachineExecutionState: (s: 'running' | 'paused' | 'unknown') => void;
+  machineExecutionState: "running" | "paused" | "unknown";
+  setMachineExecutionState: (s: "running" | "paused" | "unknown") => void;
   controls: {
     reset: { mutateAsync: () => Promise<unknown>; isPending: boolean };
     reboot: { mutateAsync: () => Promise<unknown>; isPending: boolean };
@@ -84,8 +84,8 @@ export function MachineControls({
                 mode="filename-fallback"
                 className={
                   entry.isMounted
-                    ? 'text-foreground truncate'
-                    : 'text-muted-foreground truncate'
+                    ? "text-foreground truncate"
+                    : "text-muted-foreground truncate"
                 }
                 dataTestId={`home-drive-summary-label-${entry.key}`}
               />
@@ -105,8 +105,8 @@ export function MachineControls({
             onClick={() =>
               onAction(async () => {
                 await controls.reset.mutateAsync();
-                setMachineExecutionState('running');
-              }, 'Machine reset')
+                setMachineExecutionState("running");
+              }, "Machine reset")
             }
             disabled={!status.isConnected || machineTaskBusy}
             loading={controls.reset.isPending}
@@ -120,19 +120,19 @@ export function MachineControls({
             onClick={() =>
               onAction(async () => {
                 await controls.reboot.mutateAsync();
-                setMachineExecutionState('running');
-              }, 'Machine rebooting...')
+                setMachineExecutionState("running");
+              }, "Machine rebooting...")
             }
             disabled={!status.isConnected || machineTaskBusy}
             loading={controls.reboot.isPending}
           />
           <QuickActionCard
-            icon={machineExecutionState === 'paused' ? Play : Pause}
-            label={machineExecutionState === 'paused' ? 'Resume' : 'Pause'}
+            icon={machineExecutionState === "paused" ? Play : Pause}
+            label={machineExecutionState === "paused" ? "Resume" : "Pause"}
             compact
             className={
-              machineExecutionState === 'paused'
-                ? 'border-primary/60 bg-primary/10'
+              machineExecutionState === "paused"
+                ? "border-primary/60 bg-primary/10"
                 : undefined
             }
             onClick={() => void onPauseResume()}
@@ -146,7 +146,7 @@ export function MachineControls({
             onClick={() =>
               onAction(
                 () => controls.menuButton.mutateAsync() as Promise<void>,
-                'Menu toggled',
+                "Menu toggled",
               )
             }
             disabled={!status.isConnected || machineTaskBusy}
@@ -158,7 +158,7 @@ export function MachineControls({
             compact
             onClick={() => void onSaveRam()}
             disabled={!status.isConnected || machineTaskBusy}
-            loading={machineTaskId === 'save-ram'}
+            loading={machineTaskId === "save-ram"}
           />
           <QuickActionCard
             icon={Upload}
@@ -166,7 +166,7 @@ export function MachineControls({
             compact
             onClick={() => void onLoadRam()}
             disabled={!status.isConnected || machineTaskBusy}
-            loading={machineTaskId === 'load-ram'}
+            loading={machineTaskId === "load-ram"}
           />
           <QuickActionCard
             icon={RotateCcw}
@@ -174,7 +174,7 @@ export function MachineControls({
             compact
             onClick={() => void onRebootClearMemory()}
             disabled={!status.isConnected || machineTaskBusy}
-            loading={machineTaskId === 'reboot-clear-memory'}
+            loading={machineTaskId === "reboot-clear-memory"}
           />
           <QuickActionCard
             icon={PowerOff}

@@ -6,14 +6,14 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { describe, expect, it, beforeEach, vi } from 'vitest';
+import { describe, expect, it, beforeEach, vi } from "vitest";
 import {
   clearMockConfigLoader,
   getMockConfigPayload,
   setMockConfigLoader,
-} from '@/lib/mock/mockConfig';
+} from "@/lib/mock/mockConfig";
 
-describe('mockConfig', () => {
+describe("mockConfig", () => {
   beforeEach(() => {
     setMockConfigLoader(
       () => `
@@ -39,54 +39,54 @@ config:
     );
   });
 
-  it('builds and caches payload from yaml', async () => {
+  it("builds and caches payload from yaml", async () => {
     const payload = await getMockConfigPayload();
-    expect(payload.general.baseUrl).toBe('http://mock');
-    expect(payload.general.restApiVersion).toBe('1.0');
-    expect(payload.categories.Audio.Volume.value).toBe('+6 dB');
-    expect(payload.categories.Audio.Volume.options).toEqual(['+6 dB', '0 dB']);
+    expect(payload.general.baseUrl).toBe("http://mock");
+    expect(payload.general.restApiVersion).toBe("1.0");
+    expect(payload.categories.Audio.Volume.value).toBe("+6 dB");
+    expect(payload.categories.Audio.Volume.options).toEqual(["+6 dB", "0 dB"]);
     expect(payload.categories.Audio.Volume.details).toEqual({
       min: 0,
       max: 10,
-      format: 'db',
-      presets: ['0', '6'],
+      format: "db",
+      presets: ["0", "6"],
     });
 
     const cached = await getMockConfigPayload();
     expect(cached).toBe(payload);
   });
 
-  it('resets cache when loader changes', async () => {
+  it("resets cache when loader changes", async () => {
     const first = await getMockConfigPayload();
     setMockConfigLoader(() => ({
-      config: { general: { base_url: 'http://other' } },
+      config: { general: { base_url: "http://other" } },
     }));
     const second = await getMockConfigPayload();
-    expect(second.general.baseUrl).toBe('http://other');
+    expect(second.general.baseUrl).toBe("http://other");
     expect(second).not.toBe(first);
   });
 
-  it('falls back to defaults when loader throws', async () => {
+  it("falls back to defaults when loader throws", async () => {
     setMockConfigLoader(() => {
-      throw new Error('boom');
+      throw new Error("boom");
     });
 
     const payload = await getMockConfigPayload();
-    expect(payload.general.baseUrl).toBe('http://c64u');
-    expect(payload.general.deviceType).toBe('Ultimate 64 Elite');
+    expect(payload.general.baseUrl).toBe("http://c64u");
+    expect(payload.general.deviceType).toBe("Ultimate 64 Elite");
     expect(Object.keys(payload.categories).length).toBeGreaterThan(0);
   });
 
-  it('falls back to bundled yaml when asset fetch fails', async () => {
+  it("falls back to bundled yaml when asset fetch fails", async () => {
     clearMockConfigLoader();
     const fetchSpy = vi
-      .spyOn(globalThis, 'fetch')
-      .mockRejectedValue(new Error('nope'));
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValue(new Error("nope"));
 
     const payload = await getMockConfigPayload();
 
     expect(fetchSpy).not.toHaveBeenCalled();
-    expect(payload.general.deviceType).toBe('Ultimate 64 Elite');
+    expect(payload.general.deviceType).toBe("Ultimate 64 Elite");
     expect(Object.keys(payload.categories).length).toBeGreaterThan(0);
     fetchSpy.mockRestore();
   });

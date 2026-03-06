@@ -6,13 +6,13 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import fs from 'node:fs';
-import path from 'node:path';
+import fs from "node:fs";
+import path from "node:path";
 
 const args = parseArgs(process.argv.slice(2));
 if (!args.left || !args.right) {
   throw new Error(
-    'Usage: compare --left <runDirA> --right <runDirB> [--out <dir>]',
+    "Usage: compare --left <runDirA> --right <runDirB> [--out <dir>]",
   );
 }
 
@@ -38,21 +38,21 @@ const outDir = args.out || process.cwd();
 fs.mkdirSync(outDir, { recursive: true });
 
 fs.writeFileSync(
-  path.join(outDir, 'comparison.json'),
+  path.join(outDir, "comparison.json"),
   JSON.stringify({ latencyDelta, cooldownDelta, concurrencyDelta }, null, 2),
 );
-fs.writeFileSync(path.join(outDir, 'comparison.md'), `${summary}\n`);
+fs.writeFileSync(path.join(outDir, "comparison.md"), `${summary}\n`);
 
 console.log(summary);
 
 function loadRun(dir: string) {
   return {
-    latency: readJson(path.join(dir, 'latency-stats.json')),
+    latency: readJson(path.join(dir, "latency-stats.json")),
     cooldowns: {
-      rest: readJson(path.join(dir, 'rest-cooldowns.json')),
-      ftp: readJson(path.join(dir, 'ftp-cooldowns.json')),
+      rest: readJson(path.join(dir, "rest-cooldowns.json")),
+      ftp: readJson(path.join(dir, "ftp-cooldowns.json")),
     },
-    concurrency: readJson(path.join(dir, 'concurrency.json')),
+    concurrency: readJson(path.join(dir, "concurrency.json")),
   };
 }
 
@@ -137,29 +137,29 @@ function renderSummary(
   ).length;
 
   return [
-    '# AUTH comparison',
+    "# AUTH comparison",
     `- Left: ${leftDir}`,
     `- Right: ${rightDir}`,
     `- Latency p95 deltas: ${latencyUp} increased, ${latencyDown} decreased`,
     `- Cooldown deltas: rest +${restCooldownUp}, ftp +${ftpCooldownUp}`,
     `- Concurrency deltas: rest ${concurrency.restMaxInFlight}, ftp ${concurrency.ftpMaxSessions}, mixed ${concurrency.mixedMaxInFlight}`,
-  ].join('\n');
+  ].join("\n");
 }
 
 function readJson(filePath: string) {
-  return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  return JSON.parse(fs.readFileSync(filePath, "utf8"));
 }
 
 function parseArgs(argv: string[]) {
   const result: { left?: string; right?: string; out?: string } = {};
   for (let i = 0; i < argv.length; i += 1) {
-    if (argv[i] === '--left') {
+    if (argv[i] === "--left") {
       result.left = argv[i + 1];
       i += 1;
-    } else if (argv[i] === '--right') {
+    } else if (argv[i] === "--right") {
       result.right = argv[i + 1];
       i += 1;
-    } else if (argv[i] === '--out') {
+    } else if (argv[i] === "--out") {
       result.out = argv[i + 1];
       i += 1;
     }

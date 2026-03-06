@@ -1,31 +1,31 @@
-import { useActionTrace } from '@/hooks/useActionTrace';
-import { useSharedConfigActions } from '../hooks/ConfigActionsContext';
-import { usePrinterData } from '../hooks/usePrinterData';
+import { useActionTrace } from "@/hooks/useActionTrace";
+import { useSharedConfigActions } from "../hooks/ConfigActionsContext";
+import { usePrinterData } from "../hooks/usePrinterData";
 import {
   PRINTER_CONTROL_SPEC,
   PRINTER_HOME_ITEMS,
   PRINTER_BUS_ID_DEFAULTS,
   DriveControlSpec,
-} from '../constants';
+} from "../constants";
 import {
   formatPrinterLabel,
   formatPrinterOptionLabel,
   readItemOptions,
   readItemDetails,
   buildConfigKey,
-} from '../utils/HomeConfigUtils';
-import { buildBusIdOptions } from '@/lib/drives/driveDevices';
-import { SectionHeader } from '@/components/SectionHeader';
-import { Button } from '@/components/ui/button';
+} from "../utils/HomeConfigUtils";
+import { buildBusIdOptions } from "@/lib/drives/driveDevices";
+import { SectionHeader } from "@/components/SectionHeader";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import { cn } from '@/lib/utils';
-import { getOnOffButtonClass } from '@/lib/ui/buttonStyles';
+} from "@/components/ui/select";
+import { cn } from "@/lib/utils";
+import { getOnOffButtonClass } from "@/lib/ui/buttonStyles";
 
 interface PrinterManagerProps {
   isConnected: boolean;
@@ -40,7 +40,7 @@ export function PrinterManager({
   machineTaskId,
   onResetPrinter,
 }: PrinterManagerProps) {
-  const trace = useActionTrace('PrinterManager');
+  const trace = useActionTrace("PrinterManager");
   const { updateConfigValue, resolveConfigValue, configWritePending } =
     useSharedConfigActions();
   const { refetchDrives, printerConfig, printerDevice } =
@@ -51,10 +51,10 @@ export function PrinterManager({
       undefined,
       PRINTER_CONTROL_SPEC.category,
       PRINTER_CONTROL_SPEC.enabledItem,
-      printerDevice?.enabled ? 'Enabled' : 'Disabled',
+      printerDevice?.enabled ? "Enabled" : "Disabled",
     ),
   );
-  const printerEnabled = printerEnabledValue.trim().toLowerCase() === 'enabled';
+  const printerEnabled = printerEnabledValue.trim().toLowerCase() === "enabled";
 
   const printerBusValue = Number(
     resolveConfigValue(
@@ -79,18 +79,18 @@ export function PrinterManager({
   ) => {
     const value = resolveConfigValue(
       printerConfigPayload,
-      'Printer Settings',
+      "Printer Settings",
       itemName,
       fallback,
     );
     const options = readItemOptions(
       printerConfigPayload,
-      'Printer Settings',
+      "Printer Settings",
       itemName,
     ).map((entry) => String(entry));
     const details = readItemDetails(
       printerConfigPayload,
-      'Printer Settings',
+      "Printer Settings",
       itemName,
     );
     return {
@@ -100,35 +100,35 @@ export function PrinterManager({
       options,
       details,
       pending: Boolean(
-        configWritePending[buildConfigKey('Printer Settings', itemName)],
+        configWritePending[buildConfigKey("Printer Settings", itemName)],
       ),
     };
   };
 
   const printerControlRows = [
-    buildPrinterControl('Output type', 'PNG B&W'),
-    buildPrinterControl('Ink density', 'Medium'),
-    buildPrinterControl('Emulation', 'Commodore MPS'),
-    buildPrinterControl('Commodore charset', 'USA/UK'),
-    buildPrinterControl('Epson charset', 'Basic'),
-    buildPrinterControl('IBM table 2', 'International 1'),
+    buildPrinterControl("Output type", "PNG B&W"),
+    buildPrinterControl("Ink density", "Medium"),
+    buildPrinterControl("Emulation", "Commodore MPS"),
+    buildPrinterControl("Commodore charset", "USA/UK"),
+    buildPrinterControl("Epson charset", "Basic"),
+    buildPrinterControl("IBM table 2", "International 1"),
   ];
 
   const inlineSelectTriggerClass =
-    'h-auto w-auto border-0 bg-transparent px-0 py-0 text-xs font-semibold text-foreground shadow-none focus:ring-0 focus:ring-offset-0 [&>svg]:hidden';
+    "h-auto w-auto border-0 bg-transparent px-0 py-0 text-xs font-semibold text-foreground shadow-none focus:ring-0 focus:ring-offset-0 [&>svg]:hidden";
 
   const handleEnabledToggle = trace(async function handleEnabledToggle(
     label: string,
     spec: DriveControlSpec,
     enabled: boolean,
   ) {
-    const nextValue = enabled ? 'Disabled' : 'Enabled';
+    const nextValue = enabled ? "Disabled" : "Enabled";
     await updateConfigValue(
       spec.category,
       spec.enabledItem,
       nextValue,
-      'HOME_DRIVE_ENABLED',
-      `${label} ${enabled ? 'disabled' : 'enabled'}`,
+      "HOME_DRIVE_ENABLED",
+      `${label} ${enabled ? "disabled" : "enabled"}`,
       { refreshDrives: true },
     );
   });
@@ -143,7 +143,7 @@ export function PrinterManager({
           })
         }
         resetDisabled={!isConnected || machineTaskBusy}
-        isResetting={machineTaskId === 'reset-printer'}
+        isResetting={machineTaskId === "reset-printer"}
         resetTestId="home-printer-reset"
       />
       <div className="space-y-2" data-testid="home-printer-group">
@@ -157,7 +157,7 @@ export function PrinterManager({
               size="sm"
               onClick={() =>
                 void handleEnabledToggle(
-                  'Printer',
+                  "Printer",
                   PRINTER_CONTROL_SPEC,
                   printerEnabled,
                 )
@@ -175,11 +175,11 @@ export function PrinterManager({
               }
               data-testid="home-printer-toggle"
               className={cn(
-                'h-6 px-2 text-xs',
+                "h-6 px-2 text-xs",
                 getOnOffButtonClass(printerEnabled),
               )}
             >
-              {printerEnabled ? 'ON' : 'OFF'}
+              {printerEnabled ? "ON" : "OFF"}
             </Button>
           </div>
           <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
@@ -194,8 +194,8 @@ export function PrinterManager({
                     PRINTER_CONTROL_SPEC.category,
                     PRINTER_CONTROL_SPEC.busItem,
                     Number(value),
-                    'HOME_PRINTER_BUS',
-                    'Printer bus ID updated',
+                    "HOME_PRINTER_BUS",
+                    "Printer bus ID updated",
                     { refreshDrives: true },
                   )
                 }
@@ -240,10 +240,10 @@ export function PrinterManager({
                     value={entry.value}
                     onValueChange={(value) =>
                       void updateConfigValue(
-                        'Printer Settings',
+                        "Printer Settings",
                         entry.itemName,
                         value,
-                        'HOME_PRINTER_CONFIG',
+                        "HOME_PRINTER_CONFIG",
                         `${entry.label} updated`,
                       )
                     }
@@ -251,7 +251,7 @@ export function PrinterManager({
                   >
                     <SelectTrigger
                       className={inlineSelectTriggerClass}
-                      data-testid={`home-printer-${entry.itemName.toLowerCase().replace(/\s+/g, '-')}`}
+                      data-testid={`home-printer-${entry.itemName.toLowerCase().replace(/\s+/g, "-")}`}
                     >
                       <SelectValue>
                         {formatPrinterOptionLabel(entry.value)}

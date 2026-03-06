@@ -6,9 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { Filesystem, Directory } from '@capacitor/filesystem';
-import { Capacitor } from '@capacitor/core';
-import type { HvscProgressEvent } from './hvscTypes';
+import { Filesystem, Directory } from "@capacitor/filesystem";
+import { Capacitor } from "@capacitor/core";
+import type { HvscProgressEvent } from "./hvscTypes";
 import {
   getHvscCacheDir,
   writeCachedArchive,
@@ -16,28 +16,28 @@ import {
   writeCachedArchiveMarker,
   readCachedArchiveMarker,
   MAX_BRIDGE_READ_BYTES,
-} from './hvscFilesystem';
-import { addErrorLog, addLog } from '@/lib/logging';
+} from "./hvscFilesystem";
+import { addErrorLog, addLog } from "@/lib/logging";
 
 // ── Utility helpers ──────────────────────────────────────────────
 
 export const getErrorMessage = (error: unknown) => {
-  if (typeof error === 'string') return error;
-  if (error && typeof error === 'object') {
-    if ('message' in error) {
+  if (typeof error === "string") return error;
+  if (error && typeof error === "object") {
+    if ("message" in error) {
       const message = (error as { message?: unknown }).message;
-      if (typeof message === 'string') return message;
+      if (typeof message === "string") return message;
     }
-    if ('error' in error) {
+    if ("error" in error) {
       const nested = (error as { error?: unknown }).error;
-      if (typeof nested === 'string') return nested;
-      if (nested && typeof nested === 'object' && 'message' in nested) {
+      if (typeof nested === "string") return nested;
+      if (nested && typeof nested === "object" && "message" in nested) {
         const nestedMessage = (nested as { message?: unknown }).message;
-        if (typeof nestedMessage === 'string') return nestedMessage;
+        if (typeof nestedMessage === "string") return nestedMessage;
       }
     }
   }
-  return String(error ?? '');
+  return String(error ?? "");
 };
 
 export const isExistsError = (error: unknown) =>
@@ -45,15 +45,15 @@ export const isExistsError = (error: unknown) =>
 
 export const isTestProbeEnabled = () => {
   try {
-    if (import.meta.env?.VITE_ENABLE_TEST_PROBES === '1') return true;
+    if (import.meta.env?.VITE_ENABLE_TEST_PROBES === "1") return true;
   } catch (error) {
-    addLog('warn', 'Failed to read test probe flag', {
+    addLog("warn", "Failed to read test probe flag", {
       error: (error as Error).message,
     });
   }
   return (
-    typeof process !== 'undefined' &&
-    process.env?.VITE_ENABLE_TEST_PROBES === '1'
+    typeof process !== "undefined" &&
+    process.env?.VITE_ENABLE_TEST_PROBES === "1"
   );
 };
 
@@ -62,7 +62,7 @@ export const shouldUseNativeDownload = () => {
   try {
     return Capacitor.isNativePlatform();
   } catch (error) {
-    addLog('warn', 'Failed to detect native platform for HVSC download', {
+    addLog("warn", "Failed to detect native platform for HVSC download", {
       error: (error as Error).message,
     });
     return false;
@@ -77,13 +77,13 @@ export const parseContentLength = (value: string | null) => {
 };
 
 export const fetchContentLength = async (url: string) => {
-  if (typeof fetch === 'undefined') return null;
+  if (typeof fetch === "undefined") return null;
   try {
-    const response = await fetch(url, { method: 'HEAD', cache: 'no-store' });
+    const response = await fetch(url, { method: "HEAD", cache: "no-store" });
     if (!response.ok) return null;
-    return parseContentLength(response.headers.get('content-length'));
+    return parseContentLength(response.headers.get("content-length"));
   } catch (error) {
-    addLog('warn', 'Failed to read HVSC content length', {
+    addLog("warn", "Failed to read HVSC content length", {
       url,
       error: (error as Error).message,
     });
@@ -107,15 +107,15 @@ export const concatChunks = (
 };
 
 const readHeapUsageBytes = () => {
-  if (typeof performance !== 'undefined' && 'memory' in performance) {
+  if (typeof performance !== "undefined" && "memory" in performance) {
     const perf = performance as Performance & {
       memory?: { usedJSHeapSize?: number };
     };
     return perf.memory?.usedJSHeapSize ?? null;
   }
   if (
-    typeof process !== 'undefined' &&
-    typeof process.memoryUsage === 'function'
+    typeof process !== "undefined" &&
+    typeof process.memoryUsage === "function"
   ) {
     return process.memoryUsage().heapUsed;
   }
@@ -123,11 +123,11 @@ const readHeapUsageBytes = () => {
 };
 
 const decodeBase64ToUint8Chunked = (base64: string) => {
-  const normalized = base64.replace(/\s+/g, '');
+  const normalized = base64.replace(/\s+/g, "");
   if (!normalized) {
     return new Uint8Array();
   }
-  const stripped = normalized.replace(/=+$/, '');
+  const stripped = normalized.replace(/=+$/, "");
   const outputLength = Math.floor((stripped.length * 3) / 4);
   const output = new Uint8Array(outputLength);
   const encodedChunkLength = 16384;
@@ -201,41 +201,41 @@ const streamToBuffer = async (
 // ── Path normalization helpers ───────────────────────────────────
 
 export const normalizeEntryName = (raw: string) =>
-  raw.replace(/\\/g, '/').replace(/^\/+/, '');
+  raw.replace(/\\/g, "/").replace(/^\/+/, "");
 
 export const normalizeVirtualPath = (entryName: string) => {
   const name = normalizeEntryName(entryName)
-    .replace(/^HVSC\//i, '')
-    .replace(/^C64Music\//i, '')
-    .replace(/^C64MUSIC\//i, '');
-  return name.toLowerCase().endsWith('.sid')
-    ? `/${name.replace(/^\/+/, '')}`
+    .replace(/^HVSC\//i, "")
+    .replace(/^C64Music\//i, "")
+    .replace(/^C64MUSIC\//i, "");
+  return name.toLowerCase().endsWith(".sid")
+    ? `/${name.replace(/^\/+/, "")}`
     : null;
 };
 
 export const normalizeLibraryPath = (entryName: string) => {
   const name = normalizeEntryName(entryName)
-    .replace(/^HVSC\//i, '')
-    .replace(/^C64Music\//i, '')
-    .replace(/^C64MUSIC\//i, '')
-    .replace(/^\/+/, '');
+    .replace(/^HVSC\//i, "")
+    .replace(/^C64Music\//i, "")
+    .replace(/^C64MUSIC\//i, "")
+    .replace(/^\/+/, "");
   return name ? `/${name}` : null;
 };
 
 const stripHvscRoot = (entryName: string) =>
   normalizeEntryName(entryName)
-    .replace(/^HVSC\//i, '')
-    .replace(/^C64Music\//i, '')
-    .replace(/^C64MUSIC\//i, '');
+    .replace(/^HVSC\//i, "")
+    .replace(/^C64Music\//i, "")
+    .replace(/^C64MUSIC\//i, "");
 
 export const normalizeUpdateVirtualPath = (entryName: string) => {
   const stripped = stripHvscRoot(entryName);
   const lowered = stripped.toLowerCase();
-  const base = lowered.startsWith('new/')
+  const base = lowered.startsWith("new/")
     ? stripped.substring(4)
-    : lowered.startsWith('update/')
+    : lowered.startsWith("update/")
       ? stripped.substring(7)
-      : lowered.startsWith('updated/')
+      : lowered.startsWith("updated/")
         ? stripped.substring(8)
         : stripped;
   return normalizeVirtualPath(base);
@@ -244,11 +244,11 @@ export const normalizeUpdateVirtualPath = (entryName: string) => {
 export const normalizeUpdateLibraryPath = (entryName: string) => {
   const stripped = stripHvscRoot(entryName);
   const lowered = stripped.toLowerCase();
-  const base = lowered.startsWith('new/')
+  const base = lowered.startsWith("new/")
     ? stripped.substring(4)
-    : lowered.startsWith('update/')
+    : lowered.startsWith("update/")
       ? stripped.substring(7)
-      : lowered.startsWith('updated/')
+      : lowered.startsWith("updated/")
         ? stripped.substring(8)
         : stripped;
   return normalizeLibraryPath(base);
@@ -257,8 +257,8 @@ export const normalizeUpdateLibraryPath = (entryName: string) => {
 export const isDeletionList = (path: string) => {
   const lowered = path.toLowerCase();
   return (
-    lowered.endsWith('.txt') &&
-    (lowered.includes('delete') || lowered.includes('remove'))
+    lowered.endsWith(".txt") &&
+    (lowered.includes("delete") || lowered.includes("remove"))
   );
 };
 
@@ -266,11 +266,11 @@ export const parseDeletionList = (content: string) =>
   content
     .split(/\r?\n/)
     .map((line) => line.trim())
-    .filter((line) => line && line.toLowerCase().endsWith('.sid'))
-    .map((line) => (line.startsWith('/') ? line : `/${line}`));
+    .filter((line) => line && line.toLowerCase().endsWith(".sid"))
+    .map((line) => (line.startsWith("/") ? line : `/${line}`));
 
 export const parseCachedVersion = (prefix: string, name: string) => {
-  const match = new RegExp(`^${prefix}-(\\d+)(\\..+)?$`, 'i').exec(name);
+  const match = new RegExp(`^${prefix}-(\\d+)(\\..+)?$`, "i").exec(name);
   return match ? Number(match[1]) : null;
 };
 
@@ -278,14 +278,14 @@ export const parseCachedVersion = (prefix: string, name: string) => {
 
 export const emitDownloadProgress = (
   emitProgress: (
-    event: Omit<HvscProgressEvent, 'ingestionId' | 'elapsedTimeMs'>,
+    event: Omit<HvscProgressEvent, "ingestionId" | "elapsedTimeMs">,
   ) => void,
   archiveName: string,
   downloadedBytes?: number | null,
   totalBytes?: number | null,
 ) => {
   emitProgress({
-    stage: 'download',
+    stage: "download",
     message: `Downloading ${archiveName}…`,
     archiveName,
     downloadedBytes: downloadedBytes ?? undefined,
@@ -311,13 +311,13 @@ export const resolveCachedArchive = async (prefix: string, version: number) => {
         directory: Directory.Data,
         path: `${cacheDir}/${name}`,
       });
-      if (stat.type === 'file' || stat.type === 'directory') {
+      if (stat.type === "file" || stat.type === "directory") {
         const marker = await readCachedArchiveMarker(name);
         if (marker) return name;
         await deleteCachedArchive(name);
       }
     } catch (error) {
-      addLog('warn', 'HVSC cache stat failed', {
+      addLog("warn", "HVSC cache stat failed", {
         name,
         error: (error as Error).message,
       });
@@ -336,23 +336,23 @@ export const getCacheStatusInternal = async () => {
     });
     files = result.files ?? [];
   } catch (error) {
-    addLog('warn', 'HVSC cache directory read failed', {
+    addLog("warn", "HVSC cache directory read failed", {
       cacheDir,
       error: (error as Error).message,
     });
     return { baselineVersion: null, updateVersions: [] as number[] };
   }
   const names = files
-    .map((entry) => (typeof entry === 'string' ? entry : (entry.name ?? '')))
+    .map((entry) => (typeof entry === "string" ? entry : (entry.name ?? "")))
     .filter(Boolean);
-  const markerNames = names.filter((name) => name.endsWith('.complete.json'));
+  const markerNames = names.filter((name) => name.endsWith(".complete.json"));
   const normalizeMarker = (name: string) =>
-    name.replace(/\.complete\.json$/i, '');
+    name.replace(/\.complete\.json$/i, "");
   const baselineVersions = markerNames
-    .map((name) => parseCachedVersion('hvsc-baseline', normalizeMarker(name)))
+    .map((name) => parseCachedVersion("hvsc-baseline", normalizeMarker(name)))
     .filter((v): v is number => !!v);
   const updateVersions = markerNames
-    .map((name) => parseCachedVersion('hvsc-update', normalizeMarker(name)))
+    .map((name) => parseCachedVersion("hvsc-update", normalizeMarker(name)))
     .filter((v): v is number => !!v);
   return {
     baselineVersion: baselineVersions.length
@@ -375,7 +375,7 @@ export const readArchiveBuffer = async (archivePath: string) => {
     });
     statSize = stat?.size ?? null;
   } catch (error) {
-    addLog('warn', 'Failed to stat archive before guarded read', {
+    addLog("warn", "Failed to stat archive before guarded read", {
       archivePath,
       error: (error as Error).message,
     });
@@ -391,7 +391,7 @@ export const readArchiveBuffer = async (archivePath: string) => {
   });
   const decoded = decodeBase64ToUint8Chunked(archiveData.data);
   const heapAfter = readHeapUsageBytes();
-  addLog('info', 'HVSC archive read memory profile', {
+  addLog("info", "HVSC archive read memory profile", {
     archivePath,
     bytes: decoded.byteLength,
     heapBefore,
@@ -405,14 +405,14 @@ export const readArchiveBuffer = async (archivePath: string) => {
 // ── Download engine ──────────────────────────────────────────────
 
 export type DownloadArchiveOptions = {
-  plan: { type: 'baseline' | 'update'; version: number };
+  plan: { type: "baseline" | "update"; version: number };
   archiveName: string;
   archivePath: string;
   downloadUrl: string;
   cancelToken: string;
   cancelTokens: Map<string, { cancelled: boolean }>;
   emitProgress: (
-    event: Omit<HvscProgressEvent, 'ingestionId' | 'elapsedTimeMs'>,
+    event: Omit<HvscProgressEvent, "ingestionId" | "elapsedTimeMs">,
   ) => void;
   retainInMemoryBuffer?: boolean;
 };
@@ -424,8 +424,8 @@ export const ensureNotCancelledWith = (
 ) => {
   if (!token) return;
   if (cancelTokens.get(token)?.cancelled) {
-    stateUpdater?.({ ingestionState: 'idle', ingestionError: 'Cancelled' });
-    throw new Error('HVSC update cancelled');
+    stateUpdater?.({ ingestionState: "idle", ingestionError: "Cancelled" });
+    throw new Error("HVSC update cancelled");
   }
 };
 
@@ -448,13 +448,13 @@ export const downloadArchive = async (
 
   ensureNotCancelled();
   emitProgress({
-    stage: 'download',
+    stage: "download",
     message: `Downloading ${archiveName}…`,
     archiveName,
     percent: 0,
   });
   await deleteCachedArchive(archivePath);
-  addLog('info', 'HVSC download started', { archiveName, url: downloadUrl });
+  addLog("info", "HVSC download started", { archiveName, url: downloadUrl });
   const downloadHeapBefore = readHeapUsageBytes();
   const totalBytesHint = await fetchContentLength(downloadUrl);
 
@@ -478,7 +478,7 @@ export const downloadArchive = async (
       } catch (error) {
         if (!pollErrorLogged) {
           pollErrorLogged = true;
-          addLog('warn', 'HVSC download progress stat failed', {
+          addLog("warn", "HVSC download progress stat failed", {
             archivePath,
             error: (error as Error).message,
           });
@@ -505,7 +505,7 @@ export const downloadArchive = async (
       await deleteCachedArchive(archivePath);
       if (!isExistsError(error)) throw error;
       ensureNotCancelled();
-      const response = await fetch(downloadUrl, { cache: 'no-store' });
+      const response = await fetch(downloadUrl, { cache: "no-store" });
       if (!response.ok) {
         throw new Error(
           `Download failed: ${response.status} ${response.statusText}`,
@@ -525,14 +525,14 @@ export const downloadArchive = async (
     }
   } else {
     ensureNotCancelled();
-    const response = await fetch(downloadUrl, { cache: 'no-store' });
+    const response = await fetch(downloadUrl, { cache: "no-store" });
     if (!response.ok) {
       throw new Error(
         `Download failed: ${response.status} ${response.statusText}`,
       );
     }
     const totalBytes =
-      parseContentLength(response.headers.get('content-length')) ??
+      parseContentLength(response.headers.get("content-length")) ??
       totalBytesHint;
     if (!response.body) {
       const buffer = new Uint8Array(await response.arrayBuffer());
@@ -570,8 +570,8 @@ export const downloadArchive = async (
           await reader.cancel();
         } catch (cancelError) {
           addLog(
-            'warn',
-            'Failed to cancel HVSC download reader after stream error',
+            "warn",
+            "Failed to cancel HVSC download reader after stream error",
             {
               archiveName,
               error: (cancelError as Error).message,
@@ -583,7 +583,7 @@ export const downloadArchive = async (
         try {
           reader.releaseLock();
         } catch (releaseError) {
-          addLog('warn', 'Failed to release HVSC download reader lock', {
+          addLog("warn", "Failed to release HVSC download reader lock", {
             archiveName,
             error: (releaseError as Error).message,
           });
@@ -601,7 +601,7 @@ export const downloadArchive = async (
   }
 
   const downloadHeapAfter = readHeapUsageBytes();
-  addLog('info', 'HVSC download memory profile', {
+  addLog("info", "HVSC download memory profile", {
     archiveName,
     heapBefore: downloadHeapBefore,
     heapAfter: downloadHeapAfter,
@@ -611,7 +611,7 @@ export const downloadArchive = async (
         : null,
   });
 
-  addLog('info', 'HVSC download completed', { archiveName });
+  addLog("info", "HVSC download completed", { archiveName });
 
   const cacheDir = getHvscCacheDir();
   try {
@@ -626,7 +626,7 @@ export const downloadArchive = async (
       completedAt: new Date().toISOString(),
     });
     emitProgress({
-      stage: 'download',
+      stage: "download",
       message: `Downloaded ${archiveName}`,
       archiveName,
       downloadedBytes: stat.size,
@@ -634,7 +634,7 @@ export const downloadArchive = async (
       percent: 100,
     });
   } catch (error) {
-    addLog('warn', 'Failed to write HVSC cache marker', {
+    addLog("warn", "Failed to write HVSC cache marker", {
       archivePath,
       error: (error as Error).message,
     });

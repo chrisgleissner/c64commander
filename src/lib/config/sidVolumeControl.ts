@@ -6,11 +6,11 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { normalizeConfigItem } from '@/lib/config/normalizeConfigItem';
+import { normalizeConfigItem } from "@/lib/config/normalizeConfigItem";
 import {
   isSidVolumeName,
   resolveAudioMixerMuteValue,
-} from '@/lib/config/audioMixerSolo';
+} from "@/lib/config/audioMixerSolo";
 
 export type SidVolumeItem = {
   name: string;
@@ -33,11 +33,11 @@ export type SidVolumeOption = {
 };
 
 const normalizeToken = (value: string) =>
-  value.trim().replace(/\s+/g, ' ').toLowerCase();
+  value.trim().replace(/\s+/g, " ").toLowerCase();
 const isOffOption = (value: string) => {
   const normalized = normalizeToken(value);
   return (
-    normalized === 'off' || normalized === 'mute' || normalized === 'muted'
+    normalized === "off" || normalized === "mute" || normalized === "muted"
   );
 };
 
@@ -51,7 +51,7 @@ const resolveEnabledValue = (
   disabledTokens: string[],
 ) => {
   if (value === undefined || value === null) return undefined;
-  if (typeof value === 'number') return true;
+  if (typeof value === "number") return true;
   const trimmed = value.trim();
   if (!trimmed) return undefined;
   const normalized = normalizeToken(trimmed);
@@ -69,7 +69,7 @@ const getCategoryItemValue = (
     (payload as Record<string, any>)[categoryName] ?? payload;
   const itemsData =
     (categoryData as Record<string, any>)?.items ?? categoryData;
-  if (!itemsData || typeof itemsData !== 'object') return undefined;
+  if (!itemsData || typeof itemsData !== "object") return undefined;
   const itemConfig = (itemsData as Record<string, any>)[itemName];
   if (itemConfig === undefined) return undefined;
   return normalizeConfigItem(itemConfig).value;
@@ -81,37 +81,37 @@ export const buildSidEnablement = (
 ): SidEnablement => {
   const socket1Value = getCategoryItemValue(
     sidSocketsCategory,
-    'SID Sockets Configuration',
-    'SID Socket 1',
+    "SID Sockets Configuration",
+    "SID Socket 1",
   );
   const socket2Value = getCategoryItemValue(
     sidSocketsCategory,
-    'SID Sockets Configuration',
-    'SID Socket 2',
+    "SID Sockets Configuration",
+    "SID Socket 2",
   );
   const ultiSid1Value = getCategoryItemValue(
     sidAddressingCategory,
-    'SID Addressing',
-    'UltiSID 1 Address',
+    "SID Addressing",
+    "UltiSID 1 Address",
   );
   const ultiSid2Value = getCategoryItemValue(
     sidAddressingCategory,
-    'SID Addressing',
-    'UltiSID 2 Address',
+    "SID Addressing",
+    "UltiSID 2 Address",
   );
 
   return {
-    socket1: resolveEnabledValue(socket1Value, ['disabled', 'off', 'false']),
-    socket2: resolveEnabledValue(socket2Value, ['disabled', 'off', 'false']),
+    socket1: resolveEnabledValue(socket1Value, ["disabled", "off", "false"]),
+    socket2: resolveEnabledValue(socket2Value, ["disabled", "off", "false"]),
     ultiSid1: resolveEnabledValue(ultiSid1Value, [
-      'unmapped',
-      'disabled',
-      'off',
+      "unmapped",
+      "disabled",
+      "off",
     ]),
     ultiSid2: resolveEnabledValue(ultiSid2Value, [
-      'unmapped',
-      'disabled',
-      'off',
+      "unmapped",
+      "disabled",
+      "off",
     ]),
   };
 };
@@ -157,13 +157,13 @@ export const isSidEnabledForName = (
   const type = match[1];
   const index = Number(match[2]);
   const key =
-    type === 'socket'
+    type === "socket"
       ? index === 1
-        ? 'socket1'
-        : 'socket2'
+        ? "socket1"
+        : "socket2"
       : index === 1
-        ? 'ultiSid1'
-        : 'ultiSid2';
+        ? "ultiSid1"
+        : "ultiSid2";
   const enabled = enablement[key];
   return enabled !== false;
 };

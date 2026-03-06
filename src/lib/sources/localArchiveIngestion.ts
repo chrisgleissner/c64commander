@@ -6,9 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { unzipSync } from 'fflate';
-import { addErrorLog } from '@/lib/logging';
-import type { LocalSidFile } from './LocalFsSongSource';
+import { unzipSync } from "fflate";
+import { addErrorLog } from "@/lib/logging";
+import type { LocalSidFile } from "./LocalFsSongSource";
 
 export type LocalArchiveIngestionResult = {
   files: LocalSidFile[];
@@ -16,12 +16,12 @@ export type LocalArchiveIngestionResult = {
   extractedCount: number;
 };
 
-const SID_EXTENSION = '.sid';
-const ZIP_EXTENSION = '.zip';
-const SEVEN_Z_EXTENSION = '.7z';
+const SID_EXTENSION = ".sid";
+const ZIP_EXTENSION = ".zip";
+const SEVEN_Z_EXTENSION = ".7z";
 
 const normalizePath = (value: string) =>
-  value.replace(/\\/g, '/').replace(/^\/+/, '');
+  value.replace(/\\/g, "/").replace(/^\/+/, "");
 
 const toArrayBuffer = (data: Uint8Array) => {
   const buffer = new ArrayBuffer(data.byteLength);
@@ -43,7 +43,7 @@ const buildExtractedFile = (
   data: Uint8Array,
 ): LocalSidFile => {
   const normalized = normalizePath(entryPath);
-  const name = normalized.split('/').pop() || normalized;
+  const name = normalized.split("/").pop() || normalized;
   const snapshot = new Uint8Array(data);
   return {
     name,
@@ -56,13 +56,13 @@ const buildExtractedFile = (
 const readArchiveBuffer = async (
   archive: LocalSidFile,
 ): Promise<ArrayBuffer> => {
-  if (typeof (archive as LocalSidFile).arrayBuffer === 'function') {
+  if (typeof (archive as LocalSidFile).arrayBuffer === "function") {
     return archive.arrayBuffer();
   }
   if (archive instanceof Blob) {
     return new Response(archive).arrayBuffer();
   }
-  throw new Error('Selected file does not support arrayBuffer.');
+  throw new Error("Selected file does not support arrayBuffer.");
 };
 
 const extractZipArchive = async (
@@ -91,10 +91,10 @@ let sevenZipModulePromise: ReturnType<SevenZipFactory> | null = null;
 
 const getSevenZipModule = async () => {
   if (!sevenZipModulePromise) {
-    const { default: SevenZip } = await import('7z-wasm');
-    const wasmUrl = new URL('7z-wasm/7zz.wasm', import.meta.url).toString();
+    const { default: SevenZip } = await import("7z-wasm");
+    const wasmUrl = new URL("7z-wasm/7zz.wasm", import.meta.url).toString();
     sevenZipModulePromise = (SevenZip as SevenZipFactory)({
-      locateFile: (url) => (url.endsWith('.wasm') ? wasmUrl : url),
+      locateFile: (url) => (url.endsWith(".wasm") ? wasmUrl : url),
     });
   }
   return sevenZipModulePromise;
@@ -114,7 +114,7 @@ const extractSevenZArchive = async (
   const cleanupDir = (dir: string) => {
     const entries = module.FS.readdir(dir);
     entries.forEach((entry) => {
-      if (entry === '.' || entry === '..') return;
+      if (entry === "." || entry === "..") return;
       const fullPath = `${dir}/${entry}`;
       const stat = module.FS.stat(fullPath);
       if (module.FS.isDir(stat.mode)) {
@@ -129,17 +129,17 @@ const extractSevenZArchive = async (
   try {
     module.FS.mkdir(workingDir);
     module.FS.mkdir(outputDir);
-    const stream = module.FS.open(archivePath, 'w+');
+    const stream = module.FS.open(archivePath, "w+");
     module.FS.write(stream, buffer, 0, buffer.length);
     module.FS.close(stream);
 
-    module.callMain(['x', archivePath, `-o${outputDir}`, '-y']);
+    module.callMain(["x", archivePath, `-o${outputDir}`, "-y"]);
 
     const results: LocalSidFile[] = [];
     const walkDir = (dir: string, prefix: string) => {
       const entries = module.FS.readdir(dir);
       entries.forEach((entry) => {
-        if (entry === '.' || entry === '..') return;
+        if (entry === "." || entry === "..") return;
         const fullPath = `${dir}/${entry}`;
         const stat = module.FS.stat(fullPath);
         if (module.FS.isDir(stat.mode)) {
@@ -148,14 +148,14 @@ const extractSevenZArchive = async (
         }
         if (!isSidFile(entry)) return;
         const data = module.FS.readFile(fullPath, {
-          encoding: 'binary',
+          encoding: "binary",
         }) as Uint8Array;
         results.push(
           buildExtractedFile(archive.name, `${prefix}${entry}`, data),
         );
       });
     };
-    walkDir(outputDir, '');
+    walkDir(outputDir, "");
     return results;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -164,33 +164,33 @@ const extractSevenZArchive = async (
     try {
       cleanupDir(outputDir);
     } catch (error) {
-      addErrorLog('SevenZip cleanup failed', {
+      addErrorLog("SevenZip cleanup failed", {
         error: (error as Error).message,
-        step: 'cleanupDir',
+        step: "cleanupDir",
       });
     }
     try {
       module.FS.rmdir(outputDir);
     } catch (error) {
-      addErrorLog('SevenZip cleanup failed', {
+      addErrorLog("SevenZip cleanup failed", {
         error: (error as Error).message,
-        step: 'rmdir-output',
+        step: "rmdir-output",
       });
     }
     try {
       module.FS.unlink(archivePath);
     } catch (error) {
-      addErrorLog('SevenZip cleanup failed', {
+      addErrorLog("SevenZip cleanup failed", {
         error: (error as Error).message,
-        step: 'unlink-archive',
+        step: "unlink-archive",
       });
     }
     try {
       module.FS.rmdir(workingDir);
     } catch (error) {
-      addErrorLog('SevenZip cleanup failed', {
+      addErrorLog("SevenZip cleanup failed", {
         error: (error as Error).message,
-        step: 'rmdir-workdir',
+        step: "rmdir-workdir",
       });
     }
   }

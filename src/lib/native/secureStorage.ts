@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { registerPlugin } from '@capacitor/core';
+import { registerPlugin } from "@capacitor/core";
 
 export type SecureStoragePlugin = {
   setPassword: (options: { value: string }) => Promise<void>;
@@ -15,10 +15,10 @@ export type SecureStoragePlugin = {
 };
 
 export const SecureStorage = registerPlugin<SecureStoragePlugin>(
-  'SecureStorage',
+  "SecureStorage",
   {
     web: () =>
-      import('./secureStorage.web').then(
+      import("./secureStorage.web").then(
         (module) => new module.SecureStorageWeb(),
       ),
   },

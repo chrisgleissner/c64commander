@@ -6,8 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { motion } from "framer-motion";
 import {
   Wifi,
   Moon,
@@ -22,29 +22,29 @@ import {
   Play,
   Search,
   X,
-} from 'lucide-react';
-import { useC64Connection } from '@/hooks/useC64Connection';
+} from "lucide-react";
+import { useC64Connection } from "@/hooks/useC64Connection";
 import {
   C64_DEFAULTS,
   getDeviceHostFromBaseUrl,
   resolveDeviceHostFromStorage,
-} from '@/lib/c64api';
-import { AppBar } from '@/components/AppBar';
-import { useThemeContext } from '@/components/ThemeProvider';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Slider } from '@/components/ui/slider';
+} from "@/lib/c64api";
+import { AppBar } from "@/components/AppBar";
+import { useThemeContext } from "@/components/ThemeProvider";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Slider } from "@/components/ui/slider";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import { toast } from '@/hooks/use-toast';
-import { reportUserError } from '@/lib/uiErrors';
+} from "@/components/ui/select";
+import { toast } from "@/hooks/use-toast";
+import { reportUserError } from "@/lib/uiErrors";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -55,7 +55,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
+} from "@/components/ui/alert-dialog";
 import {
   Dialog,
   DialogContent,
@@ -63,47 +63,47 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+} from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   addErrorLog,
   addLog,
   clearLogs,
   getErrorLogs,
   getLogs,
-} from '@/lib/logging';
-import { formatDiagnosticsTimestamp } from '@/lib/diagnostics/timeFormat';
-import { buildActionSummaries } from '@/lib/diagnostics/actionSummaries';
-import { clearTraceEvents, getTraceEvents } from '@/lib/tracing/traceSession';
-import { getTraceTitle } from '@/lib/tracing/traceFormatter';
-import { DiagnosticsListItem } from '@/components/diagnostics/DiagnosticsListItem';
-import { ActionSummaryListItem } from '@/components/diagnostics/ActionSummaryListItem';
-import { shareDiagnosticsZip } from '@/lib/diagnostics/diagnosticsExport';
-import { resetDiagnosticsActivity } from '@/lib/diagnostics/diagnosticsActivity';
+} from "@/lib/logging";
+import { formatDiagnosticsTimestamp } from "@/lib/diagnostics/timeFormat";
+import { buildActionSummaries } from "@/lib/diagnostics/actionSummaries";
+import { clearTraceEvents, getTraceEvents } from "@/lib/tracing/traceSession";
+import { getTraceTitle } from "@/lib/tracing/traceFormatter";
+import { DiagnosticsListItem } from "@/components/diagnostics/DiagnosticsListItem";
+import { ActionSummaryListItem } from "@/components/diagnostics/ActionSummaryListItem";
+import { shareDiagnosticsZip } from "@/lib/diagnostics/diagnosticsExport";
+import { resetDiagnosticsActivity } from "@/lib/diagnostics/diagnosticsActivity";
 import {
   consumeDiagnosticsOpenRequest,
   type DiagnosticsTabKey,
-} from '@/lib/diagnostics/diagnosticsOverlay';
+} from "@/lib/diagnostics/diagnosticsOverlay";
 import {
   setDiagnosticsOverlayActive,
   withDiagnosticsTraceOverride,
-} from '@/lib/diagnostics/diagnosticsOverlayState';
+} from "@/lib/diagnostics/diagnosticsOverlayState";
 import {
   resolveLogSeverity,
   resolveTraceSeverity,
-} from '@/lib/diagnostics/diagnosticsSeverity';
-import { useDeveloperMode } from '@/hooks/useDeveloperMode';
-import { useFeatureFlag } from '@/hooks/useFeatureFlags';
-import { useListPreviewLimit } from '@/hooks/useListPreviewLimit';
-import { wrapUserEvent } from '@/lib/tracing/userTrace';
-import { useActionTrace } from '@/hooks/useActionTrace';
-import { clampListPreviewLimit } from '@/lib/uiPreferences';
-import { getBuildInfo, getBuildInfoRows } from '@/lib/buildInfo';
+} from "@/lib/diagnostics/diagnosticsSeverity";
+import { useDeveloperMode } from "@/hooks/useDeveloperMode";
+import { useFeatureFlag } from "@/hooks/useFeatureFlags";
+import { useListPreviewLimit } from "@/hooks/useListPreviewLimit";
+import { wrapUserEvent } from "@/lib/tracing/userTrace";
+import { useActionTrace } from "@/hooks/useActionTrace";
+import { clampListPreviewLimit } from "@/lib/uiPreferences";
+import { getBuildInfo, getBuildInfoRows } from "@/lib/buildInfo";
 import {
   getHvscBaseUrl,
   getHvscBaseUrlOverride,
   setHvscBaseUrlOverride,
-} from '@/lib/hvsc/hvscReleaseService';
+} from "@/lib/hvsc/hvscReleaseService";
 import {
   clampConfigWriteIntervalMs,
   clampDiscoveryProbeTimeoutMs,
@@ -124,7 +124,7 @@ import {
   saveDebugLoggingEnabled,
   saveDiskAutostartMode,
   type DiskAutostartMode,
-} from '@/lib/config/appSettings';
+} from "@/lib/config/appSettings";
 import {
   loadDeviceSafetyConfig,
   saveDeviceSafetyMode,
@@ -144,22 +144,22 @@ import {
   saveAllowUserOverrideCircuit,
   resetDeviceSafetyOverrides,
   type DeviceSafetyMode,
-} from '@/lib/config/deviceSafetySettings';
+} from "@/lib/config/deviceSafetySettings";
 import {
   exportSettingsJson,
   importSettingsJson,
-} from '@/lib/config/settingsTransfer';
-import { FolderPicker, type SafPersistedUri } from '@/lib/native/folderPicker';
-import { getPlatform } from '@/lib/native/platform';
-import { redactTreeUri } from '@/lib/native/safUtils';
-import { discoverConnection } from '@/lib/connection/connectionManager';
-import { useConnectionState } from '@/hooks/useConnectionState';
-import { useNavigate } from 'react-router-dom';
+} from "@/lib/config/settingsTransfer";
+import { FolderPicker, type SafPersistedUri } from "@/lib/native/folderPicker";
+import { getPlatform } from "@/lib/native/platform";
+import { redactTreeUri } from "@/lib/native/safUtils";
+import { discoverConnection } from "@/lib/connection/connectionManager";
+import { useConnectionState } from "@/hooks/useConnectionState";
+import { useNavigate } from "react-router-dom";
 
 const diagnosticsTabTriggerClass =
-  'border border-transparent data-[state=active]:border-border data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm';
+  "border border-transparent data-[state=active]:border-border data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm";
 
-type Theme = 'light' | 'dark' | 'system';
+type Theme = "light" | "dark" | "system";
 
 export default function SettingsPage() {
   const navigate = useNavigate();
@@ -176,10 +176,10 @@ export default function SettingsPage() {
   const { theme, setTheme } = useThemeContext();
   const { isDeveloperModeEnabled, enableDeveloperMode } = useDeveloperMode();
   const { value: isHvscEnabled, setValue: setHvscEnabled } =
-    useFeatureFlag('hvsc_enabled');
+    useFeatureFlag("hvsc_enabled");
   const { limit: listPreviewLimit, setLimit: setListPreviewLimit } =
     useListPreviewLimit();
-  const trace = useActionTrace('SettingsPage');
+  const trace = useActionTrace("SettingsPage");
   const buildInfo = getBuildInfo();
   const buildInfoRows = getBuildInfoRows(buildInfo);
 
@@ -187,15 +187,15 @@ export default function SettingsPage() {
     void setHvscEnabled(enabled);
     try {
       localStorage.setItem(
-        'c64u_feature_flag:hvsc_enabled',
-        enabled ? '1' : '0',
+        "c64u_feature_flag:hvsc_enabled",
+        enabled ? "1" : "0",
       );
       sessionStorage.setItem(
-        'c64u_feature_flag:hvsc_enabled',
-        enabled ? '1' : '0',
+        "c64u_feature_flag:hvsc_enabled",
+        enabled ? "1" : "0",
       );
     } catch (error) {
-      addErrorLog('Feature flag storage failed', {
+      addErrorLog("Feature flag storage failed", {
         error: (error as Error).message,
       });
     }
@@ -204,20 +204,20 @@ export default function SettingsPage() {
   const [passwordInput, setPasswordInput] = useState(password);
   const [deviceHostInput, setDeviceHostInput] = useState(deviceHost);
   const runtimeDeviceHost = getDeviceHostFromBaseUrl(runtimeBaseUrl);
-  const isDemoActive = status.state === 'DEMO_ACTIVE';
+  const isDemoActive = status.state === "DEMO_ACTIVE";
   const lastProbeSucceededAtMs = connectionSnapshot.lastProbeSucceededAtMs;
   const lastProbeFailedAtMs = connectionSnapshot.lastProbeFailedAtMs;
   const [isSaving, setIsSaving] = useState(false);
   const [logsDialogOpen, setLogsDialogOpen] = useState(false);
   const [diagnosticsTab, setDiagnosticsTab] =
-    useState<DiagnosticsTabKey>('actions');
+    useState<DiagnosticsTabKey>("actions");
   const [diagnosticsFilters, setDiagnosticsFilters] = useState<
     Record<DiagnosticsTabKey, string>
   >({
-    'error-logs': '',
-    logs: '',
-    traces: '',
-    actions: '',
+    "error-logs": "",
+    logs: "",
+    traces: "",
+    actions: "",
   });
   const [logs, setLogs] = useState(getLogs());
   const [errorLogs, setErrorLogs] = useState(getErrorLogs());
@@ -226,7 +226,7 @@ export default function SettingsPage() {
     () => buildActionSummaries(traceEvents),
     [traceEvents],
   );
-  const activeDiagnosticsFilter = diagnosticsFilters[diagnosticsTab] ?? '';
+  const activeDiagnosticsFilter = diagnosticsFilters[diagnosticsTab] ?? "";
   const [listPreviewInput, setListPreviewInput] = useState(
     String(listPreviewLimit),
   );
@@ -234,7 +234,7 @@ export default function SettingsPage() {
     loadDebugLoggingEnabled(),
   );
   const [hvscBaseUrlInput, setHvscBaseUrlInput] = useState(
-    () => getHvscBaseUrlOverride() ?? '',
+    () => getHvscBaseUrlOverride() ?? "",
   );
   const [hvscBaseUrlPreview, setHvscBaseUrlPreview] = useState(() =>
     getHvscBaseUrl(),
@@ -316,13 +316,13 @@ export default function SettingsPage() {
   const [safError, setSafError] = useState<string | null>(null);
   const devTapTimestamps = useRef<number[]>([]);
   const settingsFileInputRef = useRef<HTMLInputElement | null>(null);
-  const isAndroid = getPlatform() === 'android';
+  const isAndroid = getPlatform() === "android";
 
   const commitHvscBaseUrl = useCallback(() => {
     const trimmed = hvscBaseUrlInput.trim();
     setHvscBaseUrlOverride(trimmed || null);
     const resolved = getHvscBaseUrl();
-    setHvscBaseUrlInput(trimmed ? resolved : '');
+    setHvscBaseUrlInput(trimmed ? resolved : "");
     setHvscBaseUrlPreview(resolved);
   }, [hvscBaseUrlInput]);
 
@@ -352,16 +352,16 @@ export default function SettingsPage() {
       setLogs(getLogs());
       setErrorLogs(getErrorLogs());
     };
-    window.addEventListener('c64u-logs-updated', handler);
-    return () => window.removeEventListener('c64u-logs-updated', handler);
+    window.addEventListener("c64u-logs-updated", handler);
+    return () => window.removeEventListener("c64u-logs-updated", handler);
   }, []);
 
   useEffect(() => {
     const handler = () => {
       setTraceEvents(getTraceEvents());
     };
-    window.addEventListener('c64u-traces-updated', handler);
-    return () => window.removeEventListener('c64u-traces-updated', handler);
+    window.addEventListener("c64u-traces-updated", handler);
+    return () => window.removeEventListener("c64u-traces-updated", handler);
   }, []);
 
   useEffect(() => {
@@ -370,35 +370,35 @@ export default function SettingsPage() {
         | { key?: string; value?: unknown }
         | undefined;
       if (!detail?.key) return;
-      if (detail.key === 'c64u_debug_logging_enabled') {
+      if (detail.key === "c64u_debug_logging_enabled") {
         setDebugLoggingEnabled(Boolean(detail.value));
       }
-      if (detail.key === 'c64u_config_write_min_interval_ms') {
+      if (detail.key === "c64u_config_write_min_interval_ms") {
         setConfigWriteIntervalMs(loadConfigWriteIntervalMs());
       }
-      if (detail.key === 'c64u_automatic_demo_mode_enabled') {
+      if (detail.key === "c64u_automatic_demo_mode_enabled") {
         setAutomaticDemoModeEnabled(loadAutomaticDemoModeEnabled());
       }
-      if (detail.key === 'c64u_startup_discovery_window_ms') {
+      if (detail.key === "c64u_startup_discovery_window_ms") {
         setStartupDiscoveryWindowInput(
           String(loadStartupDiscoveryWindowMs() / 1000),
         );
       }
-      if (detail.key === 'c64u_background_rediscovery_interval_ms') {
+      if (detail.key === "c64u_background_rediscovery_interval_ms") {
         setBackgroundRediscoveryIntervalInput(
           String(loadBackgroundRediscoveryIntervalMs() / 1000),
         );
       }
-      if (detail.key === 'c64u_discovery_probe_timeout_ms') {
+      if (detail.key === "c64u_discovery_probe_timeout_ms") {
         setProbeTimeoutInput(String(loadDiscoveryProbeTimeoutMs() / 1000));
       }
-      if (detail.key === 'c64u_disk_autostart_mode') {
+      if (detail.key === "c64u_disk_autostart_mode") {
         setDiskAutostartMode(loadDiskAutostartMode());
       }
     };
-    window.addEventListener('c64u-app-settings-updated', handler);
+    window.addEventListener("c64u-app-settings-updated", handler);
     return () =>
-      window.removeEventListener('c64u-app-settings-updated', handler);
+      window.removeEventListener("c64u-app-settings-updated", handler);
   }, []);
 
   const refreshDeviceSafetyState = useCallback(() => {
@@ -423,9 +423,9 @@ export default function SettingsPage() {
 
   useEffect(() => {
     const handler = () => refreshDeviceSafetyState();
-    window.addEventListener('c64u-device-safety-updated', handler);
+    window.addEventListener("c64u-device-safety-updated", handler);
     return () =>
-      window.removeEventListener('c64u-device-safety-updated', handler);
+      window.removeEventListener("c64u-device-safety-updated", handler);
   }, [refreshDeviceSafetyState]);
 
   useEffect(() => {
@@ -443,12 +443,12 @@ export default function SettingsPage() {
       setDiagnosticsDialogOpen(true);
     }
     window.addEventListener(
-      'c64u-diagnostics-open-request',
+      "c64u-diagnostics-open-request",
       handleDiagnosticsRequest,
     );
     return () =>
       window.removeEventListener(
-        'c64u-diagnostics-open-request',
+        "c64u-diagnostics-open-request",
         handleDiagnosticsRequest,
       );
   }, [setDiagnosticsDialogOpen]);
@@ -464,14 +464,14 @@ export default function SettingsPage() {
     try {
       const result = await FolderPicker.getPersistedUris();
       setSafUris(result?.uris ?? []);
-      addLog('debug', 'SAF persisted URIs (manual)', {
+      addLog("debug", "SAF persisted URIs (manual)", {
         count: result?.uris?.length ?? 0,
         uris: (result?.uris ?? []).map((entry) => redactTreeUri(entry.uri)),
       });
     } catch (error) {
       const message = (error as Error).message;
       setSafError(message);
-      addErrorLog('SAF persisted URI lookup failed', { error: message });
+      addErrorLog("SAF persisted URI lookup failed", { error: message });
     } finally {
       setSafBusy(false);
     }
@@ -482,25 +482,25 @@ export default function SettingsPage() {
     const treeUri = safUris[0]?.uri;
     if (!treeUri) {
       reportUserError({
-        operation: 'SAF_DIAGNOSTICS',
-        title: 'SAF diagnostics',
-        description: 'No persisted SAF permissions found.',
+        operation: "SAF_DIAGNOSTICS",
+        title: "SAF diagnostics",
+        description: "No persisted SAF permissions found.",
       });
       return;
     }
     setSafBusy(true);
     setSafError(null);
     try {
-      const result = await FolderPicker.listChildren({ treeUri, path: '/' });
+      const result = await FolderPicker.listChildren({ treeUri, path: "/" });
       setSafEntries(result.entries ?? []);
-      addLog('debug', 'SAF diagnostic enumeration', {
+      addLog("debug", "SAF diagnostic enumeration", {
         treeUri: redactTreeUri(treeUri),
         entries: result.entries?.length ?? 0,
       });
     } catch (error) {
       const message = (error as Error).message;
       setSafError(message);
-      addErrorLog('SAF enumeration failed', { error: message });
+      addErrorLog("SAF enumeration failed", { error: message });
     } finally {
       setSafBusy(false);
     }
@@ -515,12 +515,12 @@ export default function SettingsPage() {
   ) => {
     const normalized = normalizeDiagnosticsFilter(filterText);
     if (!normalized) return true;
-    const haystack = fields.filter(Boolean).join(' ').toLowerCase();
+    const haystack = fields.filter(Boolean).join(" ").toLowerCase();
     return haystack.includes(normalized);
   };
 
   const filteredErrorLogs = useMemo(() => {
-    const filterText = diagnosticsFilters['error-logs'] ?? '';
+    const filterText = diagnosticsFilters["error-logs"] ?? "";
     if (!normalizeDiagnosticsFilter(filterText)) return errorLogs;
     return errorLogs.filter((entry) =>
       matchesDiagnosticsFilter(filterText, [
@@ -533,7 +533,7 @@ export default function SettingsPage() {
   }, [diagnosticsFilters, errorLogs]);
 
   const filteredLogs = useMemo(() => {
-    const filterText = diagnosticsFilters.logs ?? '';
+    const filterText = diagnosticsFilters.logs ?? "";
     if (!normalizeDiagnosticsFilter(filterText)) return logs;
     return logs.filter((entry) =>
       matchesDiagnosticsFilter(filterText, [
@@ -547,7 +547,7 @@ export default function SettingsPage() {
   }, [diagnosticsFilters, logs]);
 
   const filteredTraces = useMemo(() => {
-    const filterText = diagnosticsFilters.traces ?? '';
+    const filterText = diagnosticsFilters.traces ?? "";
     if (!normalizeDiagnosticsFilter(filterText)) return traceEvents;
     return traceEvents.filter((entry) =>
       matchesDiagnosticsFilter(filterText, [
@@ -560,12 +560,12 @@ export default function SettingsPage() {
   }, [diagnosticsFilters, traceEvents]);
 
   const filteredActions = useMemo(() => {
-    const filterText = diagnosticsFilters.actions ?? '';
+    const filterText = diagnosticsFilters.actions ?? "";
     if (!normalizeDiagnosticsFilter(filterText)) return actionSummaries;
     return actionSummaries.filter((summary) => {
       const summaryTime = formatDiagnosticsTimestamp(summary.startTimestamp);
       const durationLabel =
-        summary.durationMs !== null ? `${summary.durationMs} ms` : 'Unknown';
+        summary.durationMs !== null ? `${summary.durationMs} ms` : "Unknown";
       return matchesDiagnosticsFilter(filterText, [
         summary.actionName,
         summary.correlationId,
@@ -581,19 +581,19 @@ export default function SettingsPage() {
 
   const handleShareDiagnostics = trace(async function handleShareDiagnostics() {
     const data =
-      diagnosticsTab === 'error-logs'
+      diagnosticsTab === "error-logs"
         ? errorLogs
-        : diagnosticsTab === 'logs'
+        : diagnosticsTab === "logs"
           ? logs
-          : diagnosticsTab === 'traces'
+          : diagnosticsTab === "traces"
             ? traceEvents
             : actionSummaries;
     try {
       await shareDiagnosticsZip(diagnosticsTab, data);
     } catch (error) {
       reportUserError({
-        operation: 'DIAGNOSTICS_EXPORT',
-        title: 'Unable to share',
+        operation: "DIAGNOSTICS_EXPORT",
+        title: "Unable to share",
         description: (error as Error).message,
         error,
       });
@@ -607,7 +607,7 @@ export default function SettingsPage() {
     setLogs([]);
     setErrorLogs([]);
     setTraceEvents([]);
-    toast({ title: 'Diagnostics cleared' });
+    toast({ title: "Diagnostics cleared" });
   };
 
   const handleSaveConnection = trace(async function handleSaveConnection() {
@@ -617,12 +617,12 @@ export default function SettingsPage() {
         deviceHostInput || C64_DEFAULTS.DEFAULT_DEVICE_HOST,
         passwordInput || undefined,
       );
-      await discoverConnection('settings');
-      toast({ title: 'Connection settings saved' });
+      await discoverConnection("settings");
+      toast({ title: "Connection settings saved" });
     } catch (error) {
       reportUserError({
-        operation: 'CONNECTION_SAVE',
-        title: 'Error',
+        operation: "CONNECTION_SAVE",
+        title: "Error",
         description: (error as Error).message,
         error,
       });
@@ -644,7 +644,7 @@ export default function SettingsPage() {
     if (taps.length >= 7) {
       enableDeveloperMode();
       devTapTimestamps.current = [];
-      toast({ title: 'Developer mode enabled' });
+      toast({ title: "Developer mode enabled" });
     }
   };
 
@@ -653,9 +653,9 @@ export default function SettingsPage() {
     icon: React.ElementType;
     label: string;
   }[] = [
-    { value: 'light', icon: Sun, label: 'Light' },
-    { value: 'dark', icon: Moon, label: 'Dark' },
-    { value: 'system', icon: Monitor, label: 'System' },
+    { value: "light", icon: Sun, label: "Light" },
+    { value: "dark", icon: Moon, label: "Dark" },
+    { value: "system", icon: Monitor, label: "System" },
   ];
 
   const commitListPreviewLimit = () => {
@@ -693,13 +693,13 @@ export default function SettingsPage() {
   };
 
   const commitDeviceSafetyMode = (mode: DeviceSafetyMode) => {
-    if (mode === 'RELAXED' && deviceSafetyMode !== 'RELAXED') {
+    if (mode === "RELAXED" && deviceSafetyMode !== "RELAXED") {
       setPendingSafetyMode(mode);
       setRelaxedWarningOpen(true);
       return;
     }
     saveDeviceSafetyMode(mode);
-    if (mode === 'TROUBLESHOOTING') {
+    if (mode === "TROUBLESHOOTING") {
       setDebugLoggingEnabled(true);
       saveDebugLoggingEnabled(true);
     }
@@ -717,12 +717,12 @@ export default function SettingsPage() {
   };
 
   const handleConfirmRelaxedMode = () => {
-    if (pendingSafetyMode !== 'RELAXED') {
+    if (pendingSafetyMode !== "RELAXED") {
       setRelaxedWarningOpen(false);
       setPendingSafetyMode(null);
       return;
     }
-    saveDeviceSafetyMode('RELAXED');
+    saveDeviceSafetyMode("RELAXED");
     refreshDeviceSafetyState();
     setRelaxedWarningOpen(false);
     setPendingSafetyMode(null);
@@ -736,18 +736,18 @@ export default function SettingsPage() {
   const handleExportSettings = trace(function handleExportSettings() {
     try {
       const payload = exportSettingsJson();
-      const blob = new Blob([payload], { type: 'application/json' });
+      const blob = new Blob([payload], { type: "application/json" });
       const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
+      const link = document.createElement("a");
       link.href = url;
-      link.download = 'c64commander-settings.json';
+      link.download = "c64commander-settings.json";
       link.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 5000);
-      toast({ title: 'Settings export ready' });
+      toast({ title: "Settings export ready" });
     } catch (error) {
       reportUserError({
-        operation: 'SETTINGS_EXPORT',
-        title: 'Settings export failed',
+        operation: "SETTINGS_EXPORT",
+        title: "Settings export failed",
         description: (error as Error).message,
         error,
       });
@@ -763,8 +763,8 @@ export default function SettingsPage() {
       const result = importSettingsJson(content);
       if (!result.ok) {
         reportUserError({
-          operation: 'SETTINGS_IMPORT',
-          title: 'Settings import failed',
+          operation: "SETTINGS_IMPORT",
+          title: "Settings import failed",
           description: (result as { error: string }).error,
         });
         return;
@@ -781,11 +781,11 @@ export default function SettingsPage() {
       );
       setProbeTimeoutInput(String(loadDiscoveryProbeTimeoutMs() / 1000));
       setDiskAutostartMode(loadDiskAutostartMode());
-      toast({ title: 'Settings imported' });
+      toast({ title: "Settings imported" });
     } catch (error) {
       reportUserError({
-        operation: 'SETTINGS_IMPORT',
-        title: 'Settings import failed',
+        operation: "SETTINGS_IMPORT",
+        title: "Settings import failed",
         description: (error as Error).message,
         error,
       });
@@ -821,21 +821,21 @@ export default function SettingsPage() {
                   key={option.value}
                   onClick={wrapUserEvent(
                     () => setTheme(option.value),
-                    'select',
-                    'ThemeSelector',
+                    "select",
+                    "ThemeSelector",
                     { title: option.label },
-                    'ThemeOption',
+                    "ThemeOption",
                   )}
                   className={`flex flex-col items-center gap-2 p-4 rounded-lg border transition-colors ${
                     isActive
-                      ? 'border-primary bg-primary/5'
-                      : 'border-border hover:border-muted-foreground'
+                      ? "border-primary bg-primary/5"
+                      : "border-border hover:border-muted-foreground"
                   }`}
                 >
                   <Icon
-                    className={`h-6 w-6 ${isActive ? 'text-primary' : 'text-muted-foreground'}`}
+                    className={`h-6 w-6 ${isActive ? "text-primary" : "text-muted-foreground"}`}
                   />
-                  <span className={`text-sm ${isActive ? 'font-medium' : ''}`}>
+                  <span className={`text-sm ${isActive ? "font-medium" : ""}`}>
                     {option.label}
                   </span>
                 </button>
@@ -873,17 +873,17 @@ export default function SettingsPage() {
                 Hostname or IP from the C64 menu.
               </p>
               <p className="text-xs text-muted-foreground">
-                Currently using:{' '}
+                Currently using:{" "}
                 <span className="font-sans break-all">{runtimeDeviceHost}</span>
-                {isDemoActive ? ' (Demo mock)' : ''}
+                {isDemoActive ? " (Demo mock)" : ""}
               </p>
               {isDemoActive ? (
                 <p className="text-xs text-muted-foreground">
                   {lastProbeSucceededAtMs
-                    ? 'Real device detected during probe.'
+                    ? "Real device detected during probe."
                     : lastProbeFailedAtMs
-                      ? 'No real device detected in recent probe.'
-                      : 'Waiting for initial probe.'}
+                      ? "No real device detected in recent probe."
+                      : "Waiting for initial probe."}
                 </p>
               ) : null}
             </div>
@@ -946,12 +946,12 @@ export default function SettingsPage() {
             </Button>
             <Button
               variant="outline"
-              onClick={() => void discoverConnection('manual')}
+              onClick={() => void discoverConnection("manual")}
               disabled={status.isConnecting}
               aria-label="Refresh connection"
             >
               <RefreshCw
-                className={`h-4 w-4 ${status.isConnecting ? 'animate-spin' : ''}`}
+                className={`h-4 w-4 ${status.isConnecting ? "animate-spin" : ""}`}
               />
             </Button>
           </div>
@@ -960,21 +960,21 @@ export default function SettingsPage() {
           <div
             className={`p-3 rounded-lg text-sm break-words ${
               status.isConnected
-                ? 'bg-success/10 text-success'
+                ? "bg-success/10 text-success"
                 : isDemoActive
-                  ? 'bg-primary/10 text-primary'
+                  ? "bg-primary/10 text-primary"
                   : status.isConnecting
-                    ? 'bg-muted text-muted-foreground'
-                    : 'bg-destructive/10 text-destructive'
+                    ? "bg-muted text-muted-foreground"
+                    : "bg-destructive/10 text-destructive"
             }`}
           >
             {status.isConnecting
-              ? 'Connecting...'
+              ? "Connecting..."
               : status.isConnected
                 ? `Connected to ${baseUrl}`
                 : isDemoActive
                   ? `Demo mode — ${baseUrl}`
-                  : status.error || 'Not connected'}
+                  : status.error || "Not connected"}
           </div>
         </motion.div>
 
@@ -1056,11 +1056,11 @@ export default function SettingsPage() {
                 ) : null}
                 {safUris.length ? (
                   <div className="text-xs text-muted-foreground break-words min-w-0">
-                    Persisted:{' '}
+                    Persisted:{" "}
                     {safUris
                       .map((entry) => redactTreeUri(entry.uri))
                       .filter(Boolean)
-                      .join(', ')}
+                      .join(", ")}
                   </div>
                 ) : null}
                 {safEntries.length ? (
@@ -1069,7 +1069,7 @@ export default function SettingsPage() {
                       .map(
                         (entry) => `${entry.type.toUpperCase()}: ${entry.path}`,
                       )
-                      .join('\n')}
+                      .join("\n")}
                   </div>
                 ) : null}
               </div>
@@ -1108,7 +1108,7 @@ export default function SettingsPage() {
                   const file = event.target.files?.[0];
                   void handleImportSettings(file);
                   if (event.currentTarget) {
-                    event.currentTarget.value = '';
+                    event.currentTarget.value = "";
                   }
                 }}
               />
@@ -1144,7 +1144,7 @@ export default function SettingsPage() {
                 onChange={(event) => setListPreviewInput(event.target.value)}
                 onBlur={commitListPreviewLimit}
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
+                  if (event.key === "Enter") {
                     commitListPreviewLimit();
                   }
                 }}
@@ -1241,7 +1241,7 @@ export default function SettingsPage() {
                 }
                 onBlur={commitStartupDiscoveryWindow}
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter') commitStartupDiscoveryWindow();
+                  if (event.key === "Enter") commitStartupDiscoveryWindow();
                 }}
               />
               <p className="text-xs text-muted-foreground">
@@ -1268,7 +1268,7 @@ export default function SettingsPage() {
                 }
                 onBlur={commitBackgroundRediscoveryInterval}
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter')
+                  if (event.key === "Enter")
                     commitBackgroundRediscoveryInterval();
                 }}
               />
@@ -1302,7 +1302,7 @@ export default function SettingsPage() {
                   setHvscEnabledAndPersist(!isHvscEnabled);
                 }}
                 onKeyDown={(event) => {
-                  if (event.key !== 'Enter' && event.key !== ' ') return;
+                  if (event.key !== "Enter" && event.key !== " ") return;
                   event.preventDefault();
                   setHvscEnabledAndPersist(!isHvscEnabled);
                 }}
@@ -1334,13 +1334,13 @@ export default function SettingsPage() {
                   onChange={(event) => setHvscBaseUrlInput(event.target.value)}
                   onBlur={commitHvscBaseUrl}
                   onKeyDown={(event) => {
-                    if (event.key === 'Enter') commitHvscBaseUrl();
+                    if (event.key === "Enter") commitHvscBaseUrl();
                   }}
                   placeholder={hvscBaseUrlPreview}
                   data-testid="hvsc-base-url"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Leave blank to use the default HVSC mirror. Current base URL:{' '}
+                  Leave blank to use the default HVSC mirror. Current base URL:{" "}
                   {hvscBaseUrlPreview}
                 </p>
               </div>
@@ -1422,7 +1422,7 @@ export default function SettingsPage() {
                 }
                 onBlur={commitStartupDiscoveryWindow}
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter') commitStartupDiscoveryWindow();
+                  if (event.key === "Enter") commitStartupDiscoveryWindow();
                 }}
               />
               <p className="text-xs text-muted-foreground">
@@ -1449,7 +1449,7 @@ export default function SettingsPage() {
                 }
                 onBlur={commitBackgroundRediscoveryInterval}
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter')
+                  if (event.key === "Enter")
                     commitBackgroundRediscoveryInterval();
                 }}
               />
@@ -1472,7 +1472,7 @@ export default function SettingsPage() {
                 onChange={(event) => setProbeTimeoutInput(event.target.value)}
                 onBlur={commitProbeTimeout}
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter') commitProbeTimeout();
+                  if (event.key === "Enter") commitProbeTimeout();
                 }}
               />
               <p className="text-xs text-muted-foreground">
@@ -1520,7 +1520,7 @@ export default function SettingsPage() {
                 }}
                 onBlur={() => saveConfigWriteIntervalMs(configWriteIntervalMs)}
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter')
+                  if (event.key === "Enter")
                     saveConfigWriteIntervalMs(configWriteIntervalMs);
                 }}
               />
@@ -1866,7 +1866,7 @@ export default function SettingsPage() {
           role="button"
           tabIndex={0}
           onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
+            if (event.key === "Enter" || event.key === " ") {
               handleDeveloperTap();
             }
           }}
@@ -1917,7 +1917,7 @@ export default function SettingsPage() {
           <button
             type="button"
             className="flex items-center gap-2 text-sm text-primary hover:underline"
-            onClick={() => navigate('/settings/open-source-licenses')}
+            onClick={() => navigate("/settings/open-source-licenses")}
           >
             <FileText className="h-4 w-4" />
             Open Source Licenses
@@ -2006,7 +2006,7 @@ export default function SettingsPage() {
                 onClick={() =>
                   setDiagnosticsFilters((prev) => ({
                     ...prev,
-                    [diagnosticsTab]: '',
+                    [diagnosticsTab]: "",
                   }))
                 }
                 className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"

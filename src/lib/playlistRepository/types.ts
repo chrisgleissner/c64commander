@@ -1,4 +1,4 @@
-export type SourceKind = 'local' | 'ultimate' | 'hvsc';
+export type SourceKind = "local" | "ultimate" | "hvsc";
 
 export type TrackRecord = {
   trackId: string;
@@ -24,11 +24,11 @@ export type PlaylistItemRecord = {
   songNr: number;
   sortKey: string;
   durationOverrideMs?: number | null;
-  status: 'ready' | 'unavailable';
+  status: "ready" | "unavailable";
   unavailableReason?:
-    | 'source-revoked'
-    | 'file-inaccessible'
-    | 'hvsc-unavailable'
+    | "source-revoked"
+    | "file-inaccessible"
+    | "hvsc-unavailable"
     | null;
   addedAt: string;
 };
@@ -48,7 +48,7 @@ export type PlaylistSessionRecord = {
   updatedAt: string;
 };
 
-export type PlaylistQuerySort = 'playlist-position' | 'title' | 'path';
+export type PlaylistQuerySort = "playlist-position" | "title" | "path";
 
 export type PlaylistQueryOptions = {
   playlistId: string;

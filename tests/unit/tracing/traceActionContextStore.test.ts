@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
+import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 
 import {
   getCurrentActionContext,
@@ -17,20 +17,20 @@ import {
   uninstallAsyncContextPropagation,
   isAsyncContextInstalled,
   getContextStackDepth,
-} from '@/lib/tracing/traceActionContextStore';
-import type { TraceActionContext } from '@/lib/tracing/types';
+} from "@/lib/tracing/traceActionContextStore";
+import type { TraceActionContext } from "@/lib/tracing/types";
 
 const createTestContext = (
   correlationId: string,
-  origin: 'user' | 'automatic' | 'system' = 'user',
+  origin: "user" | "automatic" | "system" = "user",
 ): TraceActionContext => ({
   correlationId,
   origin,
   name: `test-action-${correlationId}`,
-  componentName: 'TestComponent',
+  componentName: "TestComponent",
 });
 
-describe('traceActionContextStore', () => {
+describe("traceActionContextStore", () => {
   beforeEach(() => {
     resetActionContextStore();
     installAsyncContextPropagation();
@@ -41,13 +41,13 @@ describe('traceActionContextStore', () => {
     uninstallAsyncContextPropagation();
   });
 
-  describe('basic context management', () => {
-    it('returns null when no context is active', () => {
+  describe("basic context management", () => {
+    it("returns null when no context is active", () => {
       expect(getCurrentActionContext()).toBeNull();
     });
 
-    it('returns active context during synchronous execution', () => {
-      const ctx = createTestContext('COR-0001');
+    it("returns active context during synchronous execution", () => {
+      const ctx = createTestContext("COR-0001");
       let capturedCtx: TraceActionContext | null = null;
 
       runWithActionContext(ctx, () => {
@@ -57,19 +57,19 @@ describe('traceActionContextStore', () => {
       expect(capturedCtx).toBe(ctx);
     });
 
-    it('tracks context stack depth', () => {
+    it("tracks context stack depth", () => {
       expect(getContextStackDepth()).toBe(0);
 
-      const ctx = createTestContext('COR-0001');
+      const ctx = createTestContext("COR-0001");
       runWithActionContext(ctx, () => {
         expect(getContextStackDepth()).toBe(1);
       });
     });
   });
 
-  describe('async context propagation', () => {
-    it('propagates context through await', async () => {
-      const ctx = createTestContext('COR-0001');
+  describe("async context propagation", () => {
+    it("propagates context through await", async () => {
+      const ctx = createTestContext("COR-0001");
       let capturedCtx: TraceActionContext | null = null;
 
       await runWithActionContext(ctx, async () => {
@@ -80,8 +80,8 @@ describe('traceActionContextStore', () => {
       expect(capturedCtx).toBe(ctx);
     });
 
-    it('propagates context through .then() chain', async () => {
-      const ctx = createTestContext('COR-0001');
+    it("propagates context through .then() chain", async () => {
+      const ctx = createTestContext("COR-0001");
       let capturedCtx: TraceActionContext | null = null;
 
       await runWithActionContext(ctx, () => {
@@ -93,19 +93,19 @@ describe('traceActionContextStore', () => {
       expect(capturedCtx).toBe(ctx);
     });
 
-    it('propagates context through multiple .then() calls', async () => {
-      const ctx = createTestContext('COR-0001');
+    it("propagates context through multiple .then() calls", async () => {
+      const ctx = createTestContext("COR-0001");
       const capturedContexts: (TraceActionContext | null)[] = [];
 
       await runWithActionContext(ctx, () => {
         return Promise.resolve()
           .then(() => {
             capturedContexts.push(getCurrentActionContext());
-            return 'first';
+            return "first";
           })
           .then(() => {
             capturedContexts.push(getCurrentActionContext());
-            return 'second';
+            return "second";
           })
           .then(() => {
             capturedContexts.push(getCurrentActionContext());
@@ -116,12 +116,12 @@ describe('traceActionContextStore', () => {
       expect(capturedContexts.every((c) => c === ctx)).toBe(true);
     });
 
-    it('propagates context through .catch()', async () => {
-      const ctx = createTestContext('COR-0001');
+    it("propagates context through .catch()", async () => {
+      const ctx = createTestContext("COR-0001");
       let capturedCtx: TraceActionContext | null = null;
 
       await runWithActionContext(ctx, () => {
-        return Promise.reject(new Error('test')).catch(() => {
+        return Promise.reject(new Error("test")).catch(() => {
           capturedCtx = getCurrentActionContext();
         });
       });
@@ -129,8 +129,8 @@ describe('traceActionContextStore', () => {
       expect(capturedCtx).toBe(ctx);
     });
 
-    it('propagates context through .finally()', async () => {
-      const ctx = createTestContext('COR-0001');
+    it("propagates context through .finally()", async () => {
+      const ctx = createTestContext("COR-0001");
       let capturedCtx: TraceActionContext | null = null;
 
       await runWithActionContext(ctx, () => {
@@ -142,8 +142,8 @@ describe('traceActionContextStore', () => {
       expect(capturedCtx).toBe(ctx);
     });
 
-    it('propagates context through fire-and-forget (void promise)', async () => {
-      const ctx = createTestContext('COR-0001');
+    it("propagates context through fire-and-forget (void promise)", async () => {
+      const ctx = createTestContext("COR-0001");
       let capturedCtx: TraceActionContext | null = null;
       let resolved = false;
 
@@ -163,8 +163,8 @@ describe('traceActionContextStore', () => {
       expect(capturedCtx).toBe(ctx);
     });
 
-    it('propagates context through setTimeout', async () => {
-      const ctx = createTestContext('COR-0001');
+    it("propagates context through setTimeout", async () => {
+      const ctx = createTestContext("COR-0001");
       let capturedCtx: TraceActionContext | null = null;
 
       await new Promise<void>((resolve) => {
@@ -179,8 +179,8 @@ describe('traceActionContextStore', () => {
       expect(capturedCtx).toBe(ctx);
     });
 
-    it('propagates context through queueMicrotask', async () => {
-      const ctx = createTestContext('COR-0001');
+    it("propagates context through queueMicrotask", async () => {
+      const ctx = createTestContext("COR-0001");
       let capturedCtx: TraceActionContext | null = null;
 
       await new Promise<void>((resolve) => {
@@ -196,10 +196,10 @@ describe('traceActionContextStore', () => {
     });
   });
 
-  describe('overlapping actions', () => {
-    it('maintains separate contexts for non-overlapping actions', async () => {
-      const ctx1 = createTestContext('COR-0001');
-      const ctx2 = createTestContext('COR-0002');
+  describe("overlapping actions", () => {
+    it("maintains separate contexts for non-overlapping actions", async () => {
+      const ctx1 = createTestContext("COR-0001");
+      const ctx2 = createTestContext("COR-0002");
       let capturedCtx1: TraceActionContext | null = null;
       let capturedCtx2: TraceActionContext | null = null;
 
@@ -219,9 +219,9 @@ describe('traceActionContextStore', () => {
       expect(capturedCtx2).toBe(ctx2);
     });
 
-    it('maintains correct correlation when fire-and-forget effects overlap', async () => {
-      const ctx1 = createTestContext('COR-0001');
-      const ctx2 = createTestContext('COR-0002');
+    it("maintains correct correlation when fire-and-forget effects overlap", async () => {
+      const ctx1 = createTestContext("COR-0001");
+      const ctx2 = createTestContext("COR-0002");
       const capturedContexts: { id: string; ctx: TraceActionContext | null }[] =
         [];
 
@@ -231,7 +231,7 @@ describe('traceActionContextStore', () => {
           .then(() => new Promise((r) => setTimeout(r, 20)))
           .then(() => {
             capturedContexts.push({
-              id: 'effect1',
+              id: "effect1",
               ctx: getCurrentActionContext(),
             });
           });
@@ -244,7 +244,7 @@ describe('traceActionContextStore', () => {
           .then(() => new Promise((r) => setTimeout(r, 10)))
           .then(() => {
             capturedContexts.push({
-              id: 'effect2',
+              id: "effect2",
               ctx: getCurrentActionContext(),
             });
           });
@@ -255,18 +255,18 @@ describe('traceActionContextStore', () => {
       await new Promise((resolve) => setTimeout(resolve, 50));
 
       // Each effect should have captured its originating context
-      const effect1 = capturedContexts.find((c) => c.id === 'effect1');
-      const effect2 = capturedContexts.find((c) => c.id === 'effect2');
+      const effect1 = capturedContexts.find((c) => c.id === "effect1");
+      const effect2 = capturedContexts.find((c) => c.id === "effect2");
 
       expect(effect1?.ctx).toBe(ctx1);
       expect(effect2?.ctx).toBe(ctx2);
     });
   });
 
-  describe('sequential actions', () => {
-    it('allows starting a new action after exiting previous one', () => {
-      const ctx1 = createTestContext('COR-0001');
-      const ctx2 = createTestContext('COR-0002');
+  describe("sequential actions", () => {
+    it("allows starting a new action after exiting previous one", () => {
+      const ctx1 = createTestContext("COR-0001");
+      const ctx2 = createTestContext("COR-0002");
 
       runWithActionContext(ctx1, () => {
         expect(getCurrentActionContext()).toBe(ctx1);
@@ -281,9 +281,9 @@ describe('traceActionContextStore', () => {
     });
   });
 
-  describe('context cleanup', () => {
-    it('exitCurrentActionContext removes the context', () => {
-      const ctx = createTestContext('COR-0001');
+  describe("context cleanup", () => {
+    it("exitCurrentActionContext removes the context", () => {
+      const ctx = createTestContext("COR-0001");
 
       runWithActionContext(ctx, () => {
         expect(getCurrentActionContext()).toBe(ctx);
@@ -292,8 +292,8 @@ describe('traceActionContextStore', () => {
       });
     });
 
-    it('context is null after synchronous runWithActionContext', () => {
-      const ctx = createTestContext('COR-0001');
+    it("context is null after synchronous runWithActionContext", () => {
+      const ctx = createTestContext("COR-0001");
 
       runWithActionContext(ctx, () => {
         // sync work
@@ -304,8 +304,8 @@ describe('traceActionContextStore', () => {
     });
   });
 
-  describe('installation', () => {
-    it('isAsyncContextInstalled returns correct state', () => {
+  describe("installation", () => {
+    it("isAsyncContextInstalled returns correct state", () => {
       uninstallAsyncContextPropagation();
       expect(isAsyncContextInstalled()).toBe(false);
 
@@ -313,13 +313,13 @@ describe('traceActionContextStore', () => {
       expect(isAsyncContextInstalled()).toBe(true);
     });
 
-    it('multiple installs are idempotent', () => {
+    it("multiple installs are idempotent", () => {
       installAsyncContextPropagation();
       installAsyncContextPropagation();
       expect(isAsyncContextInstalled()).toBe(true);
     });
 
-    it('uninstall is a no-op when not already installed', () => {
+    it("uninstall is a no-op when not already installed", () => {
       uninstallAsyncContextPropagation();
       expect(isAsyncContextInstalled()).toBe(false);
       // Second call should not throw (covers the early-return branch)
@@ -328,34 +328,34 @@ describe('traceActionContextStore', () => {
     });
   });
 
-  describe('error handling', () => {
-    it('restores previous context when synchronous fn throws', () => {
-      const outer = createTestContext('COR-outer');
+  describe("error handling", () => {
+    it("restores previous context when synchronous fn throws", () => {
+      const outer = createTestContext("COR-outer");
       runWithActionContext(outer, () => {
-        const inner = createTestContext('COR-inner');
+        const inner = createTestContext("COR-inner");
         expect(() =>
           runWithActionContext(inner, () => {
-            throw new Error('sync boom');
+            throw new Error("sync boom");
           }),
-        ).toThrow('sync boom');
+        ).toThrow("sync boom");
         // After the sync throw the outer context must be restored
         expect(getCurrentActionContext()).toBe(outer);
       });
     });
   });
 
-  describe('null callback branches', () => {
+  describe("null callback branches", () => {
     beforeEach(() => {
       installAsyncContextPropagation();
     });
 
-    it('handles .catch(null) without throwing', async () => {
+    it("handles .catch(null) without throwing", async () => {
       // Exercises the onrejected-falsy branch (line 144)
-      const p = Promise.reject(new Error('handled'));
-      await expect(p.catch(null)).rejects.toThrow('handled');
+      const p = Promise.reject(new Error("handled"));
+      await expect(p.catch(null)).rejects.toThrow("handled");
     });
 
-    it('handles .finally(null) without throwing', async () => {
+    it("handles .finally(null) without throwing", async () => {
       // Exercises the onfinally-falsy branch (line 154)
       const result = await Promise.resolve(42).finally(
         null as unknown as () => void,

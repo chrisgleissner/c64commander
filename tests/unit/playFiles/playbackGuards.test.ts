@@ -6,35 +6,35 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from "vitest";
 import {
   releaseSingleFlight,
   resolveVolumeSyncDecision,
   tryAcquireSingleFlight,
   type BooleanRef,
-} from '@/pages/playFiles/playbackGuards';
-import { resolvePlayTargetIndex } from '@/pages/playFiles/playFilesUtils';
+} from "@/pages/playFiles/playbackGuards";
+import { resolvePlayTargetIndex } from "@/pages/playFiles/playFilesUtils";
 
-describe('playbackGuards', () => {
-  it('starts from first item when playlist has items and no prior playback', () => {
+describe("playbackGuards", () => {
+  it("starts from first item when playlist has items and no prior playback", () => {
     expect(resolvePlayTargetIndex(3, -1)).toBe(0);
   });
 
-  it('uses current index when playback already has a selected item', () => {
+  it("uses current index when playback already has a selected item", () => {
     expect(resolvePlayTargetIndex(3, 2)).toBe(2);
   });
 
-  it('returns null when playlist is empty (BRDA:105 TRUE)', () => {
+  it("returns null when playlist is empty (BRDA:105 TRUE)", () => {
     expect(resolvePlayTargetIndex(0, 0)).toBeNull();
     expect(resolvePlayTargetIndex(-1, 0)).toBeNull();
   });
 
-  it('wraps to first item when current index exceeds playlist length (BRDA:107 FALSE)', () => {
+  it("wraps to first item when current index exceeds playlist length (BRDA:107 FALSE)", () => {
     expect(resolvePlayTargetIndex(3, 5)).toBe(0);
     expect(resolvePlayTargetIndex(3, 3)).toBe(0);
   });
 
-  it('prevents duplicate single-flight start requests during rapid taps', () => {
+  it("prevents duplicate single-flight start requests during rapid taps", () => {
     const lock: BooleanRef = { current: false };
     expect(tryAcquireSingleFlight(lock)).toBe(true);
     expect(tryAcquireSingleFlight(lock)).toBe(false);
@@ -42,18 +42,18 @@ describe('playbackGuards', () => {
     expect(tryAcquireSingleFlight(lock)).toBe(true);
   });
 
-  it('defers volume sync while UI target is still in its hold window', () => {
+  it("defers volume sync while UI target is still in its hold window", () => {
     const now = 10_000;
     expect(
       resolveVolumeSyncDecision({ index: 7, setAtMs: now - 200 }, 3, now, 2500),
-    ).toBe('defer');
+    ).toBe("defer");
   });
 
-  it('clears pending volume target once backend matches or hold window expires', () => {
+  it("clears pending volume target once backend matches or hold window expires", () => {
     const now = 10_000;
     expect(
       resolveVolumeSyncDecision({ index: 5, setAtMs: now - 50 }, 5, now, 2500),
-    ).toBe('clear');
+    ).toBe("clear");
     expect(
       resolveVolumeSyncDecision(
         { index: 5, setAtMs: now - 4000 },
@@ -61,6 +61,6 @@ describe('playbackGuards', () => {
         now,
         2500,
       ),
-    ).toBe('clear');
+    ).toBe("clear");
   });
 });

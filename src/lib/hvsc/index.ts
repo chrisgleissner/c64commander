@@ -16,7 +16,7 @@ export type {
   HvscSong,
   HvscStatus,
   HvscUpdateStatus,
-} from './hvscTypes';
+} from "./hvscTypes";
 export {
   addHvscProgressListener,
   cancelHvscInstall,
@@ -32,26 +32,26 @@ export {
   installOrUpdateHvsc,
   isHvscBridgeAvailable,
   resolveHvscSonglength,
-} from './hvscService';
-export { recoverStaleIngestionState } from './hvscIngestionRuntime';
-export { createHvscMediaIndex, HvscMediaIndexAdapter } from './hvscMediaIndex';
+} from "./hvscService";
+export { recoverStaleIngestionState } from "./hvscIngestionRuntime";
+export { createHvscMediaIndex, HvscMediaIndexAdapter } from "./hvscMediaIndex";
 export {
   clearHvscRoot,
   getDefaultHvscRoot,
   loadHvscRoot,
   saveHvscRoot,
-} from './hvscRootLocator';
+} from "./hvscRootLocator";
 export {
   clearHvscStatusSummary,
   getDefaultHvscStatusSummary,
   loadHvscStatusSummary,
   saveHvscStatusSummary,
-} from './hvscStatusStore';
+} from "./hvscStatusStore";
 export type {
   HvscDownloadStatus,
   HvscExtractionStatus,
   HvscFailureCategory,
   HvscStatusSummary,
   HvscStepStatus,
-} from './hvscStatusStore';
-export { HvscSongSource } from './hvscSource';
+} from "./hvscStatusStore";
+export { HvscSongSource } from "./hvscSource";

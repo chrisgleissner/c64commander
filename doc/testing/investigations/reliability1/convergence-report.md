@@ -12,6 +12,8 @@ test evidence, and the convergence verification for each issue.
 
 ## Issue 1: Volume/mute UI–device state desynchronisation
 
+Status: `DONE`
+
 **Root cause**: `applyAudioMixerUpdates` swallowed write failures for
 `Volume`/`Mute`/`Unmute` contexts (called `reportUserError`, did not rethrow).
 Callers — `scheduleVolumeUpdate` and `handleToggleMute` — dispatched UI state
@@ -38,6 +40,8 @@ type: 'unmute' })` moved after `await applyAudioMixerUpdates`; failure exits
 
 ## Issue 2: Auto-advance does not arm for prg/crt/disk
 
+Status: `DONE`
+
 **Root cause**: `isSongCategory` guard at
 `usePlaybackController.ts:~310` blocked auto-advance guard arming for all
 non-song file categories.
@@ -53,6 +57,8 @@ covering sid/mod/prg/crt/disk arming and no-op cases.
 ---
 
 ## Issue 3: Stuck button highlight on background/timer starvation
+
+Status: `DONE`
 
 **Root cause**: The 220 ms clear timer is starved when the main thread is
 blocked (heavy JSON, extraction loops) or when the app is backgrounded. No
@@ -83,7 +89,9 @@ sweep mechanism existed to recover stale highlights on resume.
 
 ---
 
-## Issues 4 + 5: HVSC extraction memory peak (streaming fix)
+## Issue 4: HVSC extraction memory peak (streaming fix)
+
+Status: `DONE`
 
 **Root cause**: `extractZip` accumulated all extracted entries in an `extracted[]`
 array before calling `onEntry`, materialising the full archive in memory.
@@ -98,7 +106,31 @@ including new streaming incremental-callback test.
 
 ---
 
+## Issue 5: Low-resource stability under HVSC ingest load
+
+Status: `DONE`
+
+**Root cause**: Low-resource instability was dominated by the same full
+in-memory zip materialisation path fixed in Issue 4 (`extracted[]`
+accumulation before callback processing).
+
+**Fix**:
+
+- Reused the Issue 4 streaming extraction refactor so ingestion memory is
+  bounded per entry instead of full-archive sized.
+- Retained periodic event-loop yielding in extraction to reduce long blocking
+  windows under constrained CPU.
+
+**Test evidence**:
+
+- `tests/unit/hvsc/hvscArchiveExtraction.test.ts` validates incremental
+  callback behavior and extraction completion without full-buffer accumulation.
+
+---
+
 ## Issue 6: RAM restore device instability (chunked writes)
+
+Status: `DONE`
 
 **Root cause**: `WRITE_CHUNK_SIZE_BYTES = 0x10000` (64 KiB). `writeFullImage`
 issued a single 64 KiB write, which caused device firmware instability.

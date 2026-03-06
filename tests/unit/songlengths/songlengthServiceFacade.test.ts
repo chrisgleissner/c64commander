@@ -7,14 +7,14 @@
  */
 
 /* @vitest-environment node */
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from "vitest";
 import {
   InMemoryTextBackend,
   SongLengthServiceFacade,
-} from '@/lib/songlengths';
-import { addLog, addErrorLog } from '@/lib/logging';
+} from "@/lib/songlengths";
+import { addLog, addErrorLog } from "@/lib/logging";
 
-vi.mock('@/lib/logging', () => ({
+vi.mock("@/lib/logging", () => ({
   addLog: vi.fn(),
   addErrorLog: vi.fn(),
 }));
@@ -22,18 +22,18 @@ vi.mock('@/lib/logging', () => ({
 const loadWithContent = async (
   service: SongLengthServiceFacade,
   content: string,
-  configuredPath = '/Songlengths.md5',
+  configuredPath = "/Songlengths.md5",
 ) =>
   service.loadOnColdStart(
     configuredPath,
     async () => [{ path: configuredPath, content }],
-    'unit-test',
+    "unit-test",
   );
 
-describe('SongLengthServiceFacade', () => {
-  it('resolves unique file names directly by filename', async () => {
+describe("SongLengthServiceFacade", () => {
+  it("resolves unique file names directly by filename", async () => {
     const service = new SongLengthServiceFacade(new InMemoryTextBackend(), {
-      serviceId: 'test-unique',
+      serviceId: "test-unique",
     });
     await loadWithContent(
       service,
@@ -46,16 +46,16 @@ describe('SongLengthServiceFacade', () => {
     );
 
     const resolution = service.resolveDurationSeconds({
-      fileName: 'solo.sid',
+      fileName: "solo.sid",
       songNr: 1,
     });
     expect(resolution.durationSeconds).toBe(30);
-    expect(resolution.strategy).toBe('filename-unique');
+    expect(resolution.strategy).toBe("filename-unique");
   });
 
-  it('resolves duplicate filenames using partial path', async () => {
+  it("resolves duplicate filenames using partial path", async () => {
     const service = new SongLengthServiceFacade(new InMemoryTextBackend(), {
-      serviceId: 'test-duplicate-path',
+      serviceId: "test-duplicate-path",
     });
     await loadWithContent(
       service,
@@ -68,17 +68,17 @@ bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb=0:20
     );
 
     const resolution = service.resolveDurationSeconds({
-      fileName: 'common.sid',
-      partialPath: '/musicians/b',
+      fileName: "common.sid",
+      partialPath: "/musicians/b",
       songNr: 1,
     });
     expect(resolution.durationSeconds).toBe(20);
-    expect(resolution.strategy).toBe('filename-partial-path');
+    expect(resolution.strategy).toBe("filename-partial-path");
   });
 
-  it('falls back to md5 when path hints do not match', async () => {
+  it("falls back to md5 when path hints do not match", async () => {
     const service = new SongLengthServiceFacade(new InMemoryTextBackend(), {
-      serviceId: 'test-md5-fallback',
+      serviceId: "test-md5-fallback",
     });
     await loadWithContent(
       service,
@@ -91,21 +91,21 @@ bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb=0:20
     );
 
     const resolution = service.resolveDurationSeconds({
-      virtualPath: '/missing/path/common.sid',
-      fileName: 'common.sid',
-      partialPath: '/unknown',
-      md5: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      virtualPath: "/missing/path/common.sid",
+      fileName: "common.sid",
+      partialPath: "/unknown",
+      md5: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
       songNr: 1,
     });
     expect(resolution.durationSeconds).toBe(20);
-    expect(resolution.strategy).toBe('md5');
+    expect(resolution.strategy).toBe("md5");
   });
 
-  it('detects ambiguity and does not guess', async () => {
+  it("detects ambiguity and does not guess", async () => {
     const onAmbiguous = vi.fn();
     const backend = new InMemoryTextBackend({ onAmbiguous });
     const service = new SongLengthServiceFacade(backend, {
-      serviceId: 'test-ambiguous',
+      serviceId: "test-ambiguous",
     });
     await loadWithContent(
       service,
@@ -118,18 +118,18 @@ bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb=0:20
     );
 
     const resolution = service.resolveDurationSeconds({
-      fileName: 'common.sid',
-      partialPath: '/musicians',
+      fileName: "common.sid",
+      partialPath: "/musicians",
       songNr: 1,
     });
     expect(resolution.durationSeconds).toBeNull();
-    expect(resolution.strategy).toBe('ambiguous');
+    expect(resolution.strategy).toBe("ambiguous");
     expect(onAmbiguous).toHaveBeenCalledOnce();
   });
 
-  it('uses full-path resolution after duplicate partial-path ambiguity', async () => {
+  it("uses full-path resolution after duplicate partial-path ambiguity", async () => {
     const service = new SongLengthServiceFacade(new InMemoryTextBackend(), {
-      serviceId: 'test-full-path-after-ambiguity',
+      serviceId: "test-full-path-after-ambiguity",
     });
     await loadWithContent(
       service,
@@ -142,18 +142,18 @@ bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb=0:20
     );
 
     const resolution = service.resolveDurationSeconds({
-      virtualPath: '/MUSICIANS/B/common.sid',
-      fileName: 'common.sid',
-      partialPath: '/musicians',
+      virtualPath: "/MUSICIANS/B/common.sid",
+      fileName: "common.sid",
+      partialPath: "/musicians",
       songNr: 1,
     });
     expect(resolution.durationSeconds).toBe(20);
-    expect(resolution.strategy).toBe('full-path');
+    expect(resolution.strategy).toBe("full-path");
   });
 
-  it('uses md5 fallback after duplicate partial-path ambiguity and full-path miss', async () => {
+  it("uses md5 fallback after duplicate partial-path ambiguity and full-path miss", async () => {
     const service = new SongLengthServiceFacade(new InMemoryTextBackend(), {
-      serviceId: 'test-md5-after-ambiguity',
+      serviceId: "test-md5-after-ambiguity",
     });
     await loadWithContent(
       service,
@@ -166,19 +166,19 @@ bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb=0:20
     );
 
     const resolution = service.resolveDurationSeconds({
-      virtualPath: '/MISSING/common.sid',
-      fileName: 'common.sid',
-      partialPath: '/musicians',
-      md5: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      virtualPath: "/MISSING/common.sid",
+      fileName: "common.sid",
+      partialPath: "/musicians",
+      md5: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
       songNr: 1,
     });
     expect(resolution.durationSeconds).toBe(20);
-    expect(resolution.strategy).toBe('md5');
+    expect(resolution.strategy).toBe("md5");
   });
 
-  it('handles malformed input without crashing', async () => {
+  it("handles malformed input without crashing", async () => {
     const service = new SongLengthServiceFacade(new InMemoryTextBackend(), {
-      serviceId: 'test-malformed',
+      serviceId: "test-malformed",
     });
     const stats = await loadWithContent(
       service,
@@ -190,46 +190,46 @@ this is not valid
 `,
     );
 
-    expect(stats.status).toBe('ready');
+    expect(stats.status).toBe("ready");
     expect(stats.backendStats.rejectedLines).toBeGreaterThan(0);
     const resolution = service.resolveDurationSeconds({
-      fileName: 'valid.sid',
+      fileName: "valid.sid",
       songNr: 1,
     });
     expect(resolution.durationSeconds).toBe(33);
   });
 
-  it('reports unavailable state when cold-start load fails', async () => {
+  it("reports unavailable state when cold-start load fails", async () => {
     const service = new SongLengthServiceFacade(new InMemoryTextBackend(), {
-      serviceId: 'test-failure',
+      serviceId: "test-failure",
     });
     const stats = await service.loadOnColdStart(
-      '/Songlengths.md5',
+      "/Songlengths.md5",
       async () => {
-        throw new Error('failed to read');
+        throw new Error("failed to read");
       },
-      'unit-test',
+      "unit-test",
     );
-    expect(stats.status).toBe('unavailable');
-    expect(stats.unavailableReason).toBe('songlengths unavailable');
+    expect(stats.status).toBe("unavailable");
+    expect(stats.unavailableReason).toBe("songlengths unavailable");
   });
 
-  it('builds a 100k entry index within memory estimate budget and reasonable time', async () => {
+  it("builds a 100k entry index within memory estimate budget and reasonable time", async () => {
     const service = new SongLengthServiceFacade(new InMemoryTextBackend(), {
-      serviceId: 'test-100k',
+      serviceId: "test-100k",
     });
     const entries = 100_000;
     const lines: string[] = [];
     for (let i = 0; i < entries; i += 1) {
       lines.push(`/MUSICIANS/${i % 128}/song-${i}.sid 0:30`);
     }
-    const content = lines.join('\n');
+    const content = lines.join("\n");
 
     const startedAt = Date.now();
-    const stats = await loadWithContent(service, content, '/Songlengths.txt');
+    const stats = await loadWithContent(service, content, "/Songlengths.txt");
     const elapsedMs = Date.now() - startedAt;
 
-    expect(stats.status).toBe('ready');
+    expect(stats.status).toBe("ready");
     expect(stats.backendStats.entriesTotal).toBe(entries);
     expect(stats.backendStats.estimatedMemoryBytes).toBeLessThan(
       80 * 1024 * 1024,
@@ -237,48 +237,48 @@ this is not valid
     expect(elapsedMs).toBeLessThan(10_000);
   }, 15000);
 
-  it('returns unavailable when no source files provided', async () => {
+  it("returns unavailable when no source files provided", async () => {
     const service = new SongLengthServiceFacade(new InMemoryTextBackend(), {
-      serviceId: 'test-empty',
+      serviceId: "test-empty",
     });
     const stats = await service.loadOnColdStart(
       null,
       async () => [],
-      'unit-test',
+      "unit-test",
     );
-    expect(stats.status).toBe('unavailable');
-    expect(stats.unavailableReason).toContain('unavailable');
+    expect(stats.status).toBe("unavailable");
+    expect(stats.unavailableReason).toContain("unavailable");
   });
 
-  it('handles load error gracefully', async () => {
+  it("handles load error gracefully", async () => {
     const backend = new InMemoryTextBackend();
-    vi.spyOn(backend, 'load').mockRejectedValueOnce(new Error('load failure'));
+    vi.spyOn(backend, "load").mockRejectedValueOnce(new Error("load failure"));
     const service = new SongLengthServiceFacade(backend, {
-      serviceId: 'test-error',
+      serviceId: "test-error",
     });
     const stats = await service.loadOnColdStart(
-      '/Songlengths.md5',
-      async () => [{ path: '/Songlengths.md5', content: 'bad content' }],
-      'unit-test',
+      "/Songlengths.md5",
+      async () => [{ path: "/Songlengths.md5", content: "bad content" }],
+      "unit-test",
     );
-    expect(stats.status).toBe('unavailable');
+    expect(stats.status).toBe("unavailable");
   });
 
-  it('returns unavailable resolution when not loaded', () => {
+  it("returns unavailable resolution when not loaded", () => {
     const service = new SongLengthServiceFacade(new InMemoryTextBackend(), {
-      serviceId: 'test-unloaded',
+      serviceId: "test-unloaded",
     });
     const resolution = service.resolveDurationSeconds({
-      fileName: 'test.sid',
+      fileName: "test.sid",
       songNr: 1,
     });
     expect(resolution.durationSeconds).toBeNull();
-    expect(resolution.strategy).toBe('unavailable');
+    expect(resolution.strategy).toBe("unavailable");
   });
 
-  it('reset clears state', async () => {
+  it("reset clears state", async () => {
     const service = new SongLengthServiceFacade(new InMemoryTextBackend(), {
-      serviceId: 'test-reset',
+      serviceId: "test-reset",
     });
     await loadWithContent(
       service,
@@ -287,58 +287,58 @@ this is not valid
 11111111111111111111111111111111=0:30
 `,
     );
-    expect(service.stats().status).toBe('ready');
-    service.reset('test');
-    expect(service.stats().status).toBe('unavailable');
+    expect(service.stats().status).toBe("ready");
+    service.reset("test");
+    expect(service.stats().status).toBe("unavailable");
   });
 
-  it('safeAddLog swallows addLog exceptions', async () => {
+  it("safeAddLog swallows addLog exceptions", async () => {
     // Make addLog throw to cover the catch-block branch in safeAddLog (line 27)
     vi.mocked(addLog).mockImplementationOnce(() => {
-      throw new Error('log error');
+      throw new Error("log error");
     });
     const service = new SongLengthServiceFacade(new InMemoryTextBackend(), {
-      serviceId: 'test-safe-log',
+      serviceId: "test-safe-log",
     });
-    await expect(loadWithContent(service, '')).resolves.not.toThrow();
+    await expect(loadWithContent(service, "")).resolves.not.toThrow();
   });
 
-  it('safeAddErrorLog swallows addErrorLog exceptions', async () => {
+  it("safeAddErrorLog swallows addErrorLog exceptions", async () => {
     // Make addErrorLog throw to cover the catch-block branch in safeAddErrorLog (line 43)
     vi.mocked(addErrorLog).mockImplementationOnce(() => {
-      throw new Error('err log error');
+      throw new Error("err log error");
     });
     const service = new SongLengthServiceFacade(new InMemoryTextBackend(), {
-      serviceId: 'test-safe-err-log',
+      serviceId: "test-safe-err-log",
     });
     await expect(
       service.loadOnColdStart(
-        '/bad.md5',
+        "/bad.md5",
         async () => {
-          throw new Error('load fail');
+          throw new Error("load fail");
         },
-        'unit-test',
+        "unit-test",
       ),
     ).resolves.not.toThrow();
   });
 
-  it('reloadOnConfigChange works same as loadOnColdStart', async () => {
+  it("reloadOnConfigChange works same as loadOnColdStart", async () => {
     const service = new SongLengthServiceFacade(new InMemoryTextBackend(), {
-      serviceId: 'test-reload',
+      serviceId: "test-reload",
     });
     const stats = await service.reloadOnConfigChange(
-      '/Songlengths.md5',
+      "/Songlengths.md5",
       async () => [
         {
-          path: '/Songlengths.md5',
+          path: "/Songlengths.md5",
           content: `
 ; /MUSICIANS/A/solo.sid
 11111111111111111111111111111111=0:30
 `,
         },
       ],
-      'unit-test',
+      "unit-test",
     );
-    expect(stats.status).toBe('ready');
+    expect(stats.status).toBe("ready");
   });
 });

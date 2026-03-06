@@ -1,5 +1,5 @@
-import { randomBytes } from 'node:crypto';
-import type { IncomingMessage, ServerResponse } from 'node:http';
+import { randomBytes } from "node:crypto";
+import type { IncomingMessage, ServerResponse } from "node:http";
 
 type SessionRecord = {
   token: string;
@@ -17,8 +17,8 @@ const parseCookies = (
   headerValue: string | undefined,
 ): Record<string, string> => {
   if (!headerValue) return {};
-  return headerValue.split(';').reduce<Record<string, string>>((acc, pair) => {
-    const idx = pair.indexOf('=');
+  return headerValue.split(";").reduce<Record<string, string>>((acc, pair) => {
+    const idx = pair.indexOf("=");
     if (idx < 0) return acc;
     const key = pair.slice(0, idx).trim();
     const value = pair.slice(idx + 1).trim();
@@ -92,7 +92,7 @@ export const createAuthState = (options: {
   };
 
   const issueSessionCookie = (res: ServerResponse) => {
-    const token = randomBytes(24).toString('base64url');
+    const token = randomBytes(24).toString("base64url");
     const createdAtMs = Date.now();
     const session: SessionRecord = {
       token,
@@ -100,9 +100,9 @@ export const createAuthState = (options: {
       expiresAtMs: createdAtMs + sessionTtlMs,
     };
     sessions.set(token, session);
-    const securePart = isSecureCookieEnabled ? '; Secure' : '';
+    const securePart = isSecureCookieEnabled ? "; Secure" : "";
     res.setHeader(
-      'Set-Cookie',
+      "Set-Cookie",
       `${cookieName}=${encodeURIComponent(token)}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${Math.floor(sessionTtlMs / 1000)}${securePart}`,
     );
   };
@@ -112,9 +112,9 @@ export const createAuthState = (options: {
     if (token) {
       sessions.delete(token);
     }
-    const securePart = isSecureCookieEnabled ? '; Secure' : '';
+    const securePart = isSecureCookieEnabled ? "; Secure" : "";
     res.setHeader(
-      'Set-Cookie',
+      "Set-Cookie",
       `${cookieName}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0${securePart}`,
     );
   };

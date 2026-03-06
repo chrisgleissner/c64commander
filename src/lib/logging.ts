@@ -6,15 +6,15 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { loadDebugLoggingEnabled } from '@/lib/config/appSettings';
+import { loadDebugLoggingEnabled } from "@/lib/config/appSettings";
 import {
   redactExportValue,
   redactExportText,
-} from '@/lib/diagnostics/exportRedaction';
-import { formatLocalTime } from '@/lib/diagnostics/timeFormat';
-import { shouldSuppressDiagnosticsSideEffects } from '@/lib/diagnostics/diagnosticsOverlayState';
+} from "@/lib/diagnostics/exportRedaction";
+import { formatLocalTime } from "@/lib/diagnostics/timeFormat";
+import { shouldSuppressDiagnosticsSideEffects } from "@/lib/diagnostics/diagnosticsOverlayState";
 
-export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+export type LogLevel = "debug" | "info" | "warn" | "error";
 
 export type LogEntry = {
   id: string;
@@ -27,38 +27,38 @@ export type LogEntry = {
 const MAX_STACK_LINES = 30;
 const MAX_STACK_CHARS = 3000;
 
-const LOG_KEY = 'c64u_app_logs';
+const LOG_KEY = "c64u_app_logs";
 const MAX_LOGS = 500;
 let externalLogs: LogEntry[] = [];
 
 const buildId = () =>
-  (typeof crypto !== 'undefined' &&
-    'randomUUID' in crypto &&
+  (typeof crypto !== "undefined" &&
+    "randomUUID" in crypto &&
     crypto.randomUUID()) ||
   `${Date.now()}-${Math.round(Math.random() * 1e6)}`;
 
 const readLogs = (): LogEntry[] => {
-  if (typeof localStorage === 'undefined') return [];
+  if (typeof localStorage === "undefined") return [];
   const raw = localStorage.getItem(LOG_KEY);
   if (!raw) return [];
   try {
     return JSON.parse(raw) as LogEntry[];
   } catch (error) {
-    console.warn('Failed to parse stored logs', { error });
+    console.warn("Failed to parse stored logs", { error });
     return [];
   }
 };
 
 const writeLogs = (logs: LogEntry[]) => {
-  if (typeof localStorage === 'undefined') return;
+  if (typeof localStorage === "undefined") return;
   localStorage.setItem(LOG_KEY, JSON.stringify(logs.slice(0, MAX_LOGS)));
 };
 
 export const addLog = (level: LogLevel, message: string, details?: unknown) => {
-  if (typeof window === 'undefined' || typeof localStorage === 'undefined')
+  if (typeof window === "undefined" || typeof localStorage === "undefined")
     return;
-  if (shouldSuppressDiagnosticsSideEffects() && level !== 'error') return;
-  if (level === 'debug' && !loadDebugLoggingEnabled()) return;
+  if (shouldSuppressDiagnosticsSideEffects() && level !== "error") return;
+  if (level === "debug" && !loadDebugLoggingEnabled()) return;
   const entry: LogEntry = {
     id: buildId(),
     level,
@@ -68,20 +68,20 @@ export const addLog = (level: LogLevel, message: string, details?: unknown) => {
   };
   const logs = [entry, ...readLogs()];
   writeLogs(logs);
-  window.dispatchEvent(new CustomEvent('c64u-logs-updated'));
+  window.dispatchEvent(new CustomEvent("c64u-logs-updated"));
 };
 
 export const addErrorLog = (message: string, details?: unknown) => {
-  addLog('error', message, details);
+  addLog("error", message, details);
 };
 
 const trimStack = (stack?: string | null) => {
   if (!stack) return null;
-  let lines = stack.split('\n');
+  let lines = stack.split("\n");
   if (lines.length > MAX_STACK_LINES) {
-    lines = [...lines.slice(0, MAX_STACK_LINES), '... (stack truncated)'];
+    lines = [...lines.slice(0, MAX_STACK_LINES), "... (stack truncated)"];
   }
-  let result = lines.join('\n');
+  let result = lines.join("\n");
   if (result.length > MAX_STACK_CHARS) {
     result = `${result.slice(0, MAX_STACK_CHARS)}... (stack truncated)`;
   }
@@ -95,7 +95,7 @@ export const buildErrorLogDetails = (
   ...details,
   error: {
     name: error.name,
-    message: typeof details.error === 'string' ? details.error : error.message,
+    message: typeof details.error === "string" ? details.error : error.message,
     stack: trimStack(error.stack),
   },
   errorName: error.name,
@@ -103,9 +103,9 @@ export const buildErrorLogDetails = (
 });
 
 export const setExternalLogs = (logs: LogEntry[]) => {
-  if (typeof window === 'undefined') return;
+  if (typeof window === "undefined") return;
   externalLogs = logs;
-  window.dispatchEvent(new CustomEvent('c64u-logs-updated'));
+  window.dispatchEvent(new CustomEvent("c64u-logs-updated"));
 };
 
 const mergeLogs = () => {
@@ -125,16 +125,16 @@ export const getLogs = (): LogEntry[] => mergeLogs();
 
 export const getProblemLogs = (): LogEntry[] =>
   getLogs().filter(
-    (entry) => entry.level === 'warn' || entry.level === 'error',
+    (entry) => entry.level === "warn" || entry.level === "error",
   );
 
 export const getErrorLogs = (): LogEntry[] => getProblemLogs();
 
 export const clearLogs = () => {
-  if (typeof window === 'undefined' || typeof localStorage === 'undefined')
+  if (typeof window === "undefined" || typeof localStorage === "undefined")
     return;
   writeLogs([]);
-  window.dispatchEvent(new CustomEvent('c64u-logs-updated'));
+  window.dispatchEvent(new CustomEvent("c64u-logs-updated"));
 };
 
 export const formatLogsForShare = (
@@ -151,7 +151,7 @@ export const formatLogsForShare = (
         : entry.details;
       const details = detailsValue
         ? `\n${JSON.stringify(detailsValue, null, 2)}`
-        : '';
+        : "";
       return `[${formatLocalTime(entry.timestamp)}] ${entry.level.toUpperCase()} - ${message}${details}`;
     })
-    .join('\n\n');
+    .join("\n\n");

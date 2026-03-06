@@ -6,25 +6,25 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { Directory, Filesystem } from '@capacitor/filesystem';
-import { addErrorLog, addLog } from '@/lib/logging';
-import { base64ToUint8 } from '@/lib/sid/sidUtils';
+import { Directory, Filesystem } from "@capacitor/filesystem";
+import { addErrorLog, addLog } from "@/lib/logging";
+import { base64ToUint8 } from "@/lib/sid/sidUtils";
 import {
   InMemoryTextBackend,
   SongLengthServiceFacade,
   type SongLengthResolveQuery,
   type SongLengthResolution,
   type SongLengthSourceFile,
-} from '@/lib/songlengths';
+} from "@/lib/songlengths";
 
-const HVSC_WORK_DIR = 'hvsc';
+const HVSC_WORK_DIR = "hvsc";
 const HVSC_LIBRARY_DIR = `${HVSC_WORK_DIR}/library`;
 const SONG_LENGTH_FILE_PATTERN = /^songlengths\.(md5|txt)$/i;
 
 const backend = new InMemoryTextBackend({
   onRejectedLine: ({ sourceFile, line, raw, reason }) => {
-    addLog('warn', 'Songlengths rejected line', {
-      service: 'hvsc-songlengths',
+    addLog("warn", "Songlengths rejected line", {
+      service: "hvsc-songlengths",
       sourceFile,
       line,
       raw,
@@ -32,8 +32,8 @@ const backend = new InMemoryTextBackend({
     });
   },
   onAmbiguous: ({ fileName, partialPath, candidateCount, candidates }) => {
-    addLog('warn', 'Songlengths ambiguity detected', {
-      service: 'hvsc-songlengths',
+    addLog("warn", "Songlengths ambiguity detected", {
+      service: "hvsc-songlengths",
       fileName,
       partialPath,
       candidateCount,
@@ -42,7 +42,7 @@ const backend = new InMemoryTextBackend({
   },
 });
 const facade = new SongLengthServiceFacade(backend, {
-  serviceId: 'hvsc-songlengths',
+  serviceId: "hvsc-songlengths",
 });
 
 let hasAttemptedColdStartLoad = false;
@@ -53,8 +53,8 @@ const decodeBase64Text = (raw: string) => {
     const bytes = base64ToUint8(raw);
     return new TextDecoder().decode(bytes);
   } catch (error) {
-    addErrorLog('HVSC songlengths decode fallback used', {
-      service: 'hvsc-songlengths',
+    addErrorLog("HVSC songlengths decode fallback used", {
+      service: "hvsc-songlengths",
       error: {
         name: (error as Error).name,
         message: (error as Error).message,
@@ -66,28 +66,28 @@ const decodeBase64Text = (raw: string) => {
 };
 
 const getErrorMessage = (error: unknown) => {
-  if (typeof error === 'string') return error;
-  if (error && typeof error === 'object') {
+  if (typeof error === "string") return error;
+  if (error && typeof error === "object") {
     if (
-      'message' in error &&
-      typeof (error as { message?: unknown }).message === 'string'
+      "message" in error &&
+      typeof (error as { message?: unknown }).message === "string"
     ) {
       return (error as { message: string }).message;
     }
-    if ('error' in error) {
+    if ("error" in error) {
       const nested = (error as { error?: unknown }).error;
-      if (typeof nested === 'string') return nested;
+      if (typeof nested === "string") return nested;
       if (
         nested &&
-        typeof nested === 'object' &&
-        'message' in nested &&
-        typeof (nested as { message?: unknown }).message === 'string'
+        typeof nested === "object" &&
+        "message" in nested &&
+        typeof (nested as { message?: unknown }).message === "string"
       ) {
         return (nested as { message: string }).message;
       }
     }
   }
-  return String(error ?? '');
+  return String(error ?? "");
 };
 
 const isMissingPathError = (error: unknown) =>
@@ -104,15 +104,15 @@ const ensureSonglengthDirectory = async (path: string) => {
     });
   } catch (error) {
     if (isMissingPathError(error)) {
-      addLog('debug', 'HVSC songlengths directory missing during bootstrap', {
-        service: 'hvsc-songlengths',
+      addLog("debug", "HVSC songlengths directory missing during bootstrap", {
+        service: "hvsc-songlengths",
         path,
         error: getErrorMessage(error),
       });
       return;
     }
-    addLog('info', 'HVSC songlengths directory bootstrap failed', {
-      service: 'hvsc-songlengths',
+    addLog("info", "HVSC songlengths directory bootstrap failed", {
+      service: "hvsc-songlengths",
       path,
       error: {
         name: (error as Error).name,
@@ -126,11 +126,11 @@ const ensureSonglengthDirectory = async (path: string) => {
 const isReadableFile = async (path: string) => {
   try {
     const stat = await Filesystem.stat({ directory: Directory.Data, path });
-    return stat.type === 'file';
+    return stat.type === "file";
   } catch (error) {
     if (isMissingPathError(error)) return false;
-    addErrorLog('HVSC songlengths stat failed', {
-      service: 'hvsc-songlengths',
+    addErrorLog("HVSC songlengths stat failed", {
+      service: "hvsc-songlengths",
       path,
       error: {
         name: (error as Error).name,
@@ -156,13 +156,13 @@ const discoverSonglengthFiles = async (): Promise<SongLengthSourceFile[]> => {
           path: rootPath,
         });
         (listing.files ?? []).forEach((entry) => {
-          const name = typeof entry === 'string' ? entry : (entry.name ?? '');
+          const name = typeof entry === "string" ? entry : (entry.name ?? "");
           if (!name || !SONG_LENGTH_FILE_PATTERN.test(name)) return;
           discovered.push(`${rootPath}/${name}`);
         });
       } catch (error) {
-        addLog('debug', 'HVSC songlengths directory unavailable', {
-          service: 'hvsc-songlengths',
+        addLog("debug", "HVSC songlengths directory unavailable", {
+          service: "hvsc-songlengths",
           rootPath,
           error: (error as Error).message,
         });
@@ -171,8 +171,8 @@ const discoverSonglengthFiles = async (): Promise<SongLengthSourceFile[]> => {
   );
 
   const sortedPaths = Array.from(new Set(discovered)).sort((a, b) => {
-    const aMd5 = a.toLowerCase().endsWith('.md5');
-    const bMd5 = b.toLowerCase().endsWith('.md5');
+    const aMd5 = a.toLowerCase().endsWith(".md5");
+    const bMd5 = b.toLowerCase().endsWith(".md5");
     if (aMd5 && !bMd5) return -1;
     if (!aMd5 && bMd5) return 1;
     return a.localeCompare(b);
@@ -182,8 +182,8 @@ const discoverSonglengthFiles = async (): Promise<SongLengthSourceFile[]> => {
   for (const path of sortedPaths) {
     const isReadable = await isReadableFile(path);
     if (!isReadable) {
-      addLog('debug', 'HVSC songlengths file missing; skipping read', {
-        service: 'hvsc-songlengths',
+      addLog("debug", "HVSC songlengths file missing; skipping read", {
+        service: "hvsc-songlengths",
         path,
       });
       continue;
@@ -199,15 +199,15 @@ const discoverSonglengthFiles = async (): Promise<SongLengthSourceFile[]> => {
       });
     } catch (error) {
       if (isMissingPathError(error)) {
-        addLog('debug', 'HVSC songlengths file disappeared before read', {
-          service: 'hvsc-songlengths',
+        addLog("debug", "HVSC songlengths file disappeared before read", {
+          service: "hvsc-songlengths",
           path,
           error: getErrorMessage(error),
         });
         continue;
       }
-      addErrorLog('HVSC songlengths file read failed', {
-        service: 'hvsc-songlengths',
+      addErrorLog("HVSC songlengths file read failed", {
+        service: "hvsc-songlengths",
         path,
         error: {
           name: (error as Error).name,
@@ -218,35 +218,35 @@ const discoverSonglengthFiles = async (): Promise<SongLengthSourceFile[]> => {
     }
   }
 
-  const hasMd5 = files.some((file) => file.path.toLowerCase().endsWith('.md5'));
-  const hasTxt = files.some((file) => file.path.toLowerCase().endsWith('.txt'));
+  const hasMd5 = files.some((file) => file.path.toLowerCase().endsWith(".md5"));
+  const hasTxt = files.some((file) => file.path.toLowerCase().endsWith(".txt"));
   const detectedSource =
-    hasMd5 && hasTxt ? 'merged' : hasMd5 ? 'md5' : hasTxt ? 'txt' : 'none';
-  addLog('info', 'HVSC songlengths source detected', {
-    service: 'hvsc-songlengths',
+    hasMd5 && hasTxt ? "merged" : hasMd5 ? "md5" : hasTxt ? "txt" : "none";
+  addLog("info", "HVSC songlengths source detected", {
+    service: "hvsc-songlengths",
     detectedSource,
     files: files.map((file) => file.path),
   });
   return files;
 };
 
-const loadInternal = async (trigger: 'cold-start' | 'config-change') => {
-  if (trigger === 'cold-start') {
+const loadInternal = async (trigger: "cold-start" | "config-change") => {
+  if (trigger === "cold-start") {
     await facade.loadOnColdStart(
       HVSC_LIBRARY_DIR,
       discoverSonglengthFiles,
-      'hvsc-library',
+      "hvsc-library",
     );
   } else {
     await facade.reloadOnConfigChange(
       HVSC_LIBRARY_DIR,
       discoverSonglengthFiles,
-      'hvsc-library',
+      "hvsc-library",
     );
   }
 };
 
-const runLoad = async (trigger: 'cold-start' | 'config-change') => {
+const runLoad = async (trigger: "cold-start" | "config-change") => {
   if (activeLoad) {
     await activeLoad;
     return;
@@ -260,11 +260,11 @@ const runLoad = async (trigger: 'cold-start' | 'config-change') => {
 
 export const ensureHvscSonglengthsReadyOnColdStart = async () => {
   if (hasAttemptedColdStartLoad) return;
-  await runLoad('cold-start');
+  await runLoad("cold-start");
 };
 
 export const reloadHvscSonglengthsOnConfigChange = async () => {
-  await runLoad('config-change');
+  await runLoad("config-change");
 };
 
 export const resolveHvscSonglengthDuration = async (
@@ -276,7 +276,7 @@ export const resolveHvscSonglengthDuration = async (
 
 export const getHvscSonglengthsStats = () => facade.stats();
 
-export const resetHvscSonglengths = (reason = 'manual-reset') => {
+export const resetHvscSonglengths = (reason = "manual-reset") => {
   hasAttemptedColdStartLoad = false;
   facade.reset(reason);
 };

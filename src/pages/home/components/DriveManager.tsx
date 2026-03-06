@@ -1,51 +1,51 @@
-import { useState, useMemo } from 'react';
-import { getC64API } from '@/lib/c64api';
-import { useActionTrace } from '@/hooks/useActionTrace';
-import { useSharedConfigActions } from '../hooks/ConfigActionsContext';
-import { useDriveData } from '../hooks/useDriveData';
-import { DriveCard } from '../DriveCard';
-import { SectionHeader } from '@/components/SectionHeader';
+import { useState, useMemo } from "react";
+import { getC64API } from "@/lib/c64api";
+import { useActionTrace } from "@/hooks/useActionTrace";
+import { useSharedConfigActions } from "../hooks/ConfigActionsContext";
+import { useDriveData } from "../hooks/useDriveData";
+import { DriveCard } from "../DriveCard";
+import { SectionHeader } from "@/components/SectionHeader";
 import {
   ItemSelectionDialog,
   type SourceGroup,
-} from '@/components/itemSelection/ItemSelectionDialog';
-import { createUltimateSourceLocation } from '@/lib/sourceNavigation/ftpSourceAdapter';
-import { SOURCE_LABELS } from '@/lib/sourceNavigation/sourceTerms';
-import { DRIVE_CONTROL_SPECS, DriveControlSpec } from '../constants';
+} from "@/components/itemSelection/ItemSelectionDialog";
+import { createUltimateSourceLocation } from "@/lib/sourceNavigation/ftpSourceAdapter";
+import { SOURCE_LABELS } from "@/lib/sourceNavigation/sourceTerms";
+import { DRIVE_CONTROL_SPECS, DriveControlSpec } from "../constants";
 import {
   formatDiskDosStatus,
   type DiskDosStatus,
-} from '@/lib/disks/dosStatusFormatter';
+} from "@/lib/disks/dosStatusFormatter";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from "@/components/ui/dialog";
 
-import { buildBusIdOptions, buildTypeOptions } from '@/lib/drives/driveDevices';
-import { readItemOptions, buildConfigKey } from '../utils/HomeConfigUtils';
+import { buildBusIdOptions, buildTypeOptions } from "@/lib/drives/driveDevices";
+import { readItemOptions, buildConfigKey } from "../utils/HomeConfigUtils";
 import {
   DISK_BUS_ID_DEFAULTS,
   PHYSICAL_DRIVE_TYPE_DEFAULTS,
-} from '../constants';
+} from "../constants";
 
 const resolveDriveStatusRaw = (value?: string | null) => {
-  const message = value?.trim() ?? '';
-  if (!message) return '';
-  if (/^service error reported\.?$/i.test(message)) return '';
+  const message = value?.trim() ?? "";
+  if (!message) return "";
+  if (/^service error reported\.?$/i.test(message)) return "";
   return message;
 };
 
 const toStatusSummary = (status: DiskDosStatus) => {
   if (status.message) {
-    return status.message.replace(/\s+\(.+\)$/, '');
+    return status.message.replace(/\s+\(.+\)$/, "");
   }
   if (status.code !== null) {
     return `DOS STATUS ${status.code}`;
   }
-  return 'Status reported';
+  return "Status reported";
 };
 
 interface DriveManagerProps {
@@ -67,7 +67,7 @@ export function DriveManager({
   onResetDrives,
 }: DriveManagerProps) {
   const api = getC64API();
-  const trace = useActionTrace('DriveManager');
+  const trace = useActionTrace("DriveManager");
   const { updateConfigValue, resolveConfigValue, configWritePending } =
     useSharedConfigActions();
 
@@ -112,19 +112,19 @@ export function DriveManager({
     const selected = selections[0];
     const { spec } = mountTarget;
 
-    if (spec.class === 'SOFT_IEC_DRIVE') {
+    if (spec.class === "SOFT_IEC_DRIVE") {
       await updateConfigValue(
-        'SoftIEC Drive Settings',
-        'Default Path',
+        "SoftIEC Drive Settings",
+        "Default Path",
         selected.path,
-        'HOME_SOFT_IEC_PATH',
-        'Soft IEC path updated',
+        "HOME_SOFT_IEC_PATH",
+        "Soft IEC path updated",
       );
     } else if (
-      spec.class === 'PHYSICAL_DRIVE_A' ||
-      spec.class === 'PHYSICAL_DRIVE_B'
+      spec.class === "PHYSICAL_DRIVE_A" ||
+      spec.class === "PHYSICAL_DRIVE_B"
     ) {
-      const driveId = spec.class === 'PHYSICAL_DRIVE_A' ? 'a' : 'b';
+      const driveId = spec.class === "PHYSICAL_DRIVE_A" ? "a" : "b";
       await handleAction(async () => {
         await api.mountDrive(driveId, selected.path);
         await refetchDrives();
@@ -139,13 +139,13 @@ export function DriveManager({
     spec: DriveControlSpec,
     enabled: boolean,
   ) {
-    const nextValue = enabled ? 'Disabled' : 'Enabled';
+    const nextValue = enabled ? "Disabled" : "Enabled";
     await updateConfigValue(
       spec.category,
       spec.enabledItem,
       nextValue,
-      'HOME_DRIVE_ENABLED',
-      `${label} ${enabled ? 'disabled' : 'enabled'}`,
+      "HOME_DRIVE_ENABLED",
+      `${label} ${enabled ? "disabled" : "enabled"}`,
       { refreshDrives: true },
     );
   });
@@ -160,7 +160,7 @@ export function DriveManager({
           })
         }
         resetDisabled={!isConnected || machineTaskBusy}
-        isResetting={machineTaskId === 'reset-drives'}
+        isResetting={machineTaskId === "reset-drives"}
         resetTestId="home-drives-reset"
       />
       <div
@@ -171,19 +171,19 @@ export function DriveManager({
           let category: Record<string, unknown> | undefined;
           let summary: { mountedLabel: string; isMounted: boolean } | undefined;
 
-          if (spec.class === 'PHYSICAL_DRIVE_A') {
+          if (spec.class === "PHYSICAL_DRIVE_A") {
             category = driveASettingsCategory as
               | Record<string, unknown>
               | undefined;
-            summary = driveSummaryItems.find((s) => s.key === 'a');
-          } else if (spec.class === 'PHYSICAL_DRIVE_B') {
+            summary = driveSummaryItems.find((s) => s.key === "a");
+          } else if (spec.class === "PHYSICAL_DRIVE_B") {
             category = driveBSettingsCategory as
               | Record<string, unknown>
               | undefined;
-            summary = driveSummaryItems.find((s) => s.key === 'b');
-          } else if (spec.class === 'SOFT_IEC_DRIVE') {
+            summary = driveSummaryItems.find((s) => s.key === "b");
+          } else if (spec.class === "SOFT_IEC_DRIVE") {
             category = softIecConfig as Record<string, unknown> | undefined;
-            summary = driveSummaryItems.find((s) => s.key === 'softiec');
+            summary = driveSummaryItems.find((s) => s.key === "softiec");
           }
 
           const device = drivesByClass.get(spec.class) ?? null;
@@ -194,15 +194,15 @@ export function DriveManager({
               payload,
               spec.category,
               spec.enabledItem,
-              device?.enabled ? 'Enabled' : 'Disabled',
+              device?.enabled ? "Enabled" : "Disabled",
             ),
           );
-          const enabled = enabledValue.trim().toLowerCase() === 'enabled';
+          const enabled = enabledValue.trim().toLowerCase() === "enabled";
           const busFallback =
             device?.busId ??
-            (spec.class === 'PHYSICAL_DRIVE_A'
+            (spec.class === "PHYSICAL_DRIVE_A"
               ? 8
-              : spec.class === 'PHYSICAL_DRIVE_B'
+              : spec.class === "PHYSICAL_DRIVE_B"
                 ? 9
                 : 11);
           const busValue = Number(
@@ -224,10 +224,10 @@ export function DriveManager({
                   payload,
                   spec.category,
                   spec.typeItem,
-                  device?.type ?? '1541',
+                  device?.type ?? "1541",
                 ),
               )
-            : (device?.type ?? 'DOS emulation');
+            : (device?.type ?? "DOS emulation");
 
           const rawTypeOptions = spec.typeItem
             ? readItemOptions(payload, spec.category, spec.typeItem).map(
@@ -244,7 +244,7 @@ export function DriveManager({
               )
             : [typeValue];
 
-          const isSoftIec = spec.class === 'SOFT_IEC_DRIVE';
+          const isSoftIec = spec.class === "SOFT_IEC_DRIVE";
           const pendingEnabled = Boolean(
             configWritePending[buildConfigKey(spec.category, spec.enabledItem)],
           );
@@ -264,17 +264,17 @@ export function DriveManager({
             mountedPath = String(
               resolveConfigValue(
                 softIecConfig as Record<string, unknown> | undefined,
-                'SoftIEC Drive Settings',
-                'Default Path',
-                '/USB0/',
+                "SoftIEC Drive Settings",
+                "Default Path",
+                "/USB0/",
               ),
             );
           }
-          const mountedPathLabel = isSoftIec ? 'Path' : 'Disk';
+          const mountedPathLabel = isSoftIec ? "Path" : "Disk";
           const pathPending = isSoftIec
             ? Boolean(
                 configWritePending[
-                  buildConfigKey('SoftIEC Drive Settings', 'Default Path')
+                  buildConfigKey("SoftIEC Drive Settings", "Default Path")
                 ],
               )
             : false;
@@ -284,14 +284,14 @@ export function DriveManager({
             : null;
           const statusSummary = formattedStatus
             ? toStatusSummary(formattedStatus)
-            : 'OK';
-          const statusSeverity = formattedStatus?.severity ?? 'INFO';
+            : "OK";
+          const statusSeverity = formattedStatus?.severity ?? "INFO";
           const statusDetails = formattedStatus ?? {
             code: null,
-            severity: 'INFO' as const,
-            message: 'OK',
-            details: 'Drive status not yet retrieved.',
-            raw: '',
+            severity: "INFO" as const,
+            message: "OK",
+            details: "Drive status not yet retrieved.",
+            raw: "",
           };
 
           const testIdSuffix = spec.testIdSuffix;
@@ -310,7 +310,7 @@ export function DriveManager({
                   spec.category,
                   spec.busItem,
                   Number(value),
-                  'HOME_DRIVE_BUS',
+                  "HOME_DRIVE_BUS",
                   `${label} bus ID updated`,
                   { refreshDrives: true },
                 )
@@ -326,7 +326,7 @@ export function DriveManager({
                         spec.category,
                         spec.typeItem,
                         value,
-                        'HOME_DRIVE_TYPE',
+                        "HOME_DRIVE_TYPE",
                         `${label} type updated`,
                         { refreshDrives: true },
                       );
@@ -367,21 +367,21 @@ export function DriveManager({
         open={mountTarget !== null}
         onOpenChange={(open) => !open && setMountTarget(null)}
         title={
-          mountTarget?.spec.class === 'SOFT_IEC_DRIVE'
-            ? 'Mount Path'
-            : 'Mount Disk'
+          mountTarget?.spec.class === "SOFT_IEC_DRIVE"
+            ? "Mount Path"
+            : "Mount Disk"
         }
         confirmLabel="Mount"
         sourceGroups={
-          mountTarget?.spec.class === 'SOFT_IEC_DRIVE'
+          mountTarget?.spec.class === "SOFT_IEC_DRIVE"
             ? sourceGroups.filter((g) =>
-                g.sources.some((s) => s.type === 'ultimate'),
+                g.sources.some((s) => s.type === "ultimate"),
               )
             : sourceGroups
         }
         onConfirm={handleMountSelection}
         onAddLocalSource={async () => null}
-        allowFolderSelection={mountTarget?.spec.class === 'SOFT_IEC_DRIVE'}
+        allowFolderSelection={mountTarget?.spec.class === "SOFT_IEC_DRIVE"}
       />
 
       <Dialog
@@ -395,13 +395,13 @@ export function DriveManager({
           <DialogHeader>
             <DialogTitle>
               {statusDetailsDialog
-                ? `${statusDetailsDialog.driveLabel}: ${statusDetailsDialog.status.message ?? 'DOS Status'}`
-                : 'DOS Status'}
+                ? `${statusDetailsDialog.driveLabel}: ${statusDetailsDialog.status.message ?? "DOS Status"}`
+                : "DOS Status"}
             </DialogTitle>
             <DialogDescription>
               {statusDetailsDialog && statusDetailsDialog.status.code !== null
                 ? `Code ${statusDetailsDialog.status.code} • ${statusDetailsDialog.status.severity}`
-                : `Severity ${statusDetailsDialog?.status.severity ?? 'INFO'}`}
+                : `Severity ${statusDetailsDialog?.status.severity ?? "INFO"}`}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">

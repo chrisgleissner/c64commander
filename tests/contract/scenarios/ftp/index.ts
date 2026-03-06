@@ -6,10 +6,10 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { HarnessConfig } from '../../lib/config.js';
-import { FtpClient } from '../../lib/ftpClient.js';
-import { delay } from '../../lib/timing.js';
-import type { LogEventInput } from '../../lib/logging.js';
+import type { HarnessConfig } from "../../lib/config.js";
+import { FtpClient } from "../../lib/ftpClient.js";
+import { delay } from "../../lib/timing.js";
+import type { LogEventInput } from "../../lib/logging.js";
 
 export type FtpScenarioContext = {
   config: HarnessConfig;
@@ -26,8 +26,8 @@ function makeFtpClient(config: HarnessConfig): FtpClient {
   return new FtpClient({
     host: new URL(config.baseUrl).hostname,
     port: config.ftpPort ?? 21,
-    user: 'anonymous',
-    password: config.auth === 'ON' ? config.password || '' : '',
+    user: "anonymous",
+    password: config.auth === "ON" ? config.password || "" : "",
     mode: config.ftpMode,
     timeoutMs: config.timeouts.ftpTimeoutMs,
   });
@@ -38,73 +38,73 @@ export function buildFtpScenarios(): FtpScenario[] {
     // ── Full command sweep ────────────────────────────────────────────
 
     {
-      id: 'ftp.basic',
+      id: "ftp.basic",
       safe: true,
       run: async ({ config, log }) => {
         const client = makeFtpClient(config);
         try {
           await client.connect();
           log({
-            kind: 'ftp',
-            op: 'connect',
+            kind: "ftp",
+            op: "connect",
             details: { sessionId: client.sessionId },
           });
 
           // SYST
-          const syst = await client.sendCommand('SYST');
+          const syst = await client.sendCommand("SYST");
           log({
-            kind: 'ftp',
-            op: 'SYST',
+            kind: "ftp",
+            op: "SYST",
             status: syst.response.code,
             latencyMs: syst.latencyMs,
             details: { sessionId: client.sessionId },
           });
 
           // FEAT
-          const feat = await client.sendCommand('FEAT');
+          const feat = await client.sendCommand("FEAT");
           log({
-            kind: 'ftp',
-            op: 'FEAT',
+            kind: "ftp",
+            op: "FEAT",
             status: feat.response.code,
             latencyMs: feat.latencyMs,
             details: { sessionId: client.sessionId },
           });
 
           // TYPE I
-          const typeI = await client.sendCommand('TYPE I');
+          const typeI = await client.sendCommand("TYPE I");
           log({
-            kind: 'ftp',
-            op: 'TYPE',
+            kind: "ftp",
+            op: "TYPE",
             status: typeI.response.code,
             latencyMs: typeI.latencyMs,
             details: { sessionId: client.sessionId },
           });
 
           // TYPE A
-          const typeA = await client.sendCommand('TYPE A');
+          const typeA = await client.sendCommand("TYPE A");
           log({
-            kind: 'ftp',
-            op: 'TYPE A',
+            kind: "ftp",
+            op: "TYPE A",
             status: typeA.response.code,
             latencyMs: typeA.latencyMs,
             details: { sessionId: client.sessionId },
           });
 
           // MODE S
-          const modeS = await client.sendCommand('MODE S');
+          const modeS = await client.sendCommand("MODE S");
           log({
-            kind: 'ftp',
-            op: 'MODE',
+            kind: "ftp",
+            op: "MODE",
             status: modeS.response.code,
             latencyMs: modeS.latencyMs,
             details: { sessionId: client.sessionId },
           });
 
           // NOOP
-          const noop = await client.sendCommand('NOOP');
+          const noop = await client.sendCommand("NOOP");
           log({
-            kind: 'ftp',
-            op: 'NOOP',
+            kind: "ftp",
+            op: "NOOP",
             status: noop.response.code,
             latencyMs: noop.latencyMs,
             details: { sessionId: client.sessionId },
@@ -113,8 +113,8 @@ export function buildFtpScenarios(): FtpScenario[] {
           // PWD
           const pwd = await client.pwd();
           log({
-            kind: 'ftp',
-            op: 'PWD',
+            kind: "ftp",
+            op: "PWD",
             status: pwd.response.code,
             latencyMs: pwd.latencyMs,
             details: { sessionId: client.sessionId },
@@ -124,8 +124,8 @@ export function buildFtpScenarios(): FtpScenario[] {
           const scratchDir = config.scratch.ftpDir;
           const mkd = await client.mkd(scratchDir);
           log({
-            kind: 'ftp',
-            op: 'MKD',
+            kind: "ftp",
+            op: "MKD",
             status: mkd.response.code,
             latencyMs: mkd.latencyMs,
             details: { sessionId: client.sessionId },
@@ -134,8 +134,8 @@ export function buildFtpScenarios(): FtpScenario[] {
           // CWD
           const cwd = await client.cwd(scratchDir);
           log({
-            kind: 'ftp',
-            op: 'CWD',
+            kind: "ftp",
+            op: "CWD",
             status: cwd.response.code,
             latencyMs: cwd.latencyMs,
             details: { sessionId: client.sessionId, path: scratchDir },
@@ -144,21 +144,21 @@ export function buildFtpScenarios(): FtpScenario[] {
           // LIST
           const list = await client.list();
           log({
-            kind: 'ftp',
-            op: 'LIST',
+            kind: "ftp",
+            op: "LIST",
             status: list.result.response.code,
             latencyMs: list.result.latencyMs,
             details: {
               sessionId: client.sessionId,
-              lines: list.data.split('\n').length,
+              lines: list.data.split("\n").length,
             },
           });
 
           // NLST
           const nlst = await client.nlst();
           log({
-            kind: 'ftp',
-            op: 'NLST',
+            kind: "ftp",
+            op: "NLST",
             status: nlst.result.response.code,
             latencyMs: nlst.result.latencyMs,
             details: { sessionId: client.sessionId },
@@ -167,8 +167,8 @@ export function buildFtpScenarios(): FtpScenario[] {
           // MLSD
           const mlsd = await client.mlsd();
           log({
-            kind: 'ftp',
-            op: 'MLSD',
+            kind: "ftp",
+            op: "MLSD",
             status: mlsd.result.response.code,
             latencyMs: mlsd.result.latencyMs,
             details: { sessionId: client.sessionId },
@@ -177,19 +177,19 @@ export function buildFtpScenarios(): FtpScenario[] {
           // MLST
           const mlst = await client.mlst();
           log({
-            kind: 'ftp',
-            op: 'MLST',
+            kind: "ftp",
+            op: "MLST",
             status: mlst.response.code,
             latencyMs: mlst.latencyMs,
             details: { sessionId: client.sessionId },
           });
 
           // STOR
-          const payload = Buffer.from('c64u-contract-test-probe', 'utf8');
-          const stor = await client.stor('probe.txt', payload);
+          const payload = Buffer.from("c64u-contract-test-probe", "utf8");
+          const stor = await client.stor("probe.txt", payload);
           log({
-            kind: 'ftp',
-            op: 'STOR',
+            kind: "ftp",
+            op: "STOR",
             status: stor.response.code,
             latencyMs: stor.latencyMs,
             details: { sessionId: client.sessionId, size: payload.length },
@@ -198,20 +198,20 @@ export function buildFtpScenarios(): FtpScenario[] {
           await delay(100);
 
           // SIZE
-          const size = await client.size('probe.txt');
+          const size = await client.size("probe.txt");
           log({
-            kind: 'ftp',
-            op: 'SIZE',
+            kind: "ftp",
+            op: "SIZE",
             status: size.response.code,
             latencyMs: size.latencyMs,
             details: { sessionId: client.sessionId },
           });
 
           // RETR
-          const retr = await client.retr('probe.txt');
+          const retr = await client.retr("probe.txt");
           log({
-            kind: 'ftp',
-            op: 'RETR',
+            kind: "ftp",
+            op: "RETR",
             status: retr.result.response.code,
             latencyMs: retr.result.latencyMs,
             details: {
@@ -221,57 +221,57 @@ export function buildFtpScenarios(): FtpScenario[] {
           });
 
           // RNFR + RNTO
-          const rnfr = await client.rnfr('probe.txt');
+          const rnfr = await client.rnfr("probe.txt");
           log({
-            kind: 'ftp',
-            op: 'RNFR',
+            kind: "ftp",
+            op: "RNFR",
             status: rnfr.response.code,
             latencyMs: rnfr.latencyMs,
             details: { sessionId: client.sessionId },
           });
-          const rnto = await client.rnto('probe-renamed.txt');
+          const rnto = await client.rnto("probe-renamed.txt");
           log({
-            kind: 'ftp',
-            op: 'RNTO',
+            kind: "ftp",
+            op: "RNTO",
             status: rnto.response.code,
             latencyMs: rnto.latencyMs,
             details: { sessionId: client.sessionId },
           });
 
           // DELE
-          const dele = await client.dele('probe-renamed.txt');
+          const dele = await client.dele("probe-renamed.txt");
           log({
-            kind: 'ftp',
-            op: 'DELE',
+            kind: "ftp",
+            op: "DELE",
             status: dele.response.code,
             latencyMs: dele.latencyMs,
             details: { sessionId: client.sessionId },
           });
 
           // CDUP
-          const cdup = await client.sendCommand('CDUP');
+          const cdup = await client.sendCommand("CDUP");
           log({
-            kind: 'ftp',
-            op: 'CDUP',
+            kind: "ftp",
+            op: "CDUP",
             status: cdup.response.code,
             latencyMs: cdup.latencyMs,
             details: { sessionId: client.sessionId },
           });
 
           // ABOR (should be harmless)
-          const abor = await client.sendCommand('ABOR');
+          const abor = await client.sendCommand("ABOR");
           log({
-            kind: 'ftp',
-            op: 'ABOR',
+            kind: "ftp",
+            op: "ABOR",
             status: abor.response.code,
             latencyMs: abor.latencyMs,
             details: { sessionId: client.sessionId },
           });
         } catch (error) {
           log({
-            kind: 'ftp',
-            op: 'session',
-            status: 'error',
+            kind: "ftp",
+            op: "session",
+            status: "error",
             details: { message: String(error) },
           });
         } finally {
@@ -283,7 +283,7 @@ export function buildFtpScenarios(): FtpScenario[] {
     // ── Concurrent FTP sessions ──────────────────────────────────────
 
     {
-      id: 'ftp.concurrent-sessions',
+      id: "ftp.concurrent-sessions",
       safe: true,
       run: async ({ config, log }) => {
         for (const n of [2, 3]) {
@@ -298,15 +298,15 @@ export function buildFtpScenarios(): FtpScenario[] {
                 try {
                   await s.connect();
                   log({
-                    kind: 'ftp',
+                    kind: "ftp",
                     op: `concurrent-connect N=${n}`,
                     details: { sessionId: s.sessionId },
                   });
                 } catch (error) {
                   log({
-                    kind: 'ftp',
+                    kind: "ftp",
                     op: `concurrent-connect N=${n}`,
-                    status: 'error',
+                    status: "error",
                     details: { sessionId: s.sessionId, message: String(error) },
                   });
                 }
@@ -317,9 +317,9 @@ export function buildFtpScenarios(): FtpScenario[] {
             const listResults = await Promise.all(
               sessions.map(async (s) => {
                 try {
-                  const r = await s.list('/');
+                  const r = await s.list("/");
                   log({
-                    kind: 'ftp',
+                    kind: "ftp",
                     op: `LIST concurrent N=${n}`,
                     status: r.result.response.code,
                     latencyMs: r.result.latencyMs,
@@ -331,9 +331,9 @@ export function buildFtpScenarios(): FtpScenario[] {
                   };
                 } catch (error) {
                   log({
-                    kind: 'ftp',
+                    kind: "ftp",
                     op: `LIST concurrent N=${n}`,
-                    status: 'error',
+                    status: "error",
                     details: { sessionId: s.sessionId, message: String(error) },
                   });
                   return { ok: false, latencyMs: 0 };
@@ -345,7 +345,7 @@ export function buildFtpScenarios(): FtpScenario[] {
             const failures = results.filter((r) => !r.ok).length;
             const maxLatency = Math.max(...results.map((r) => r.latencyMs));
             log({
-              kind: 'ftp',
+              kind: "ftp",
               op: `concurrent-summary N=${n}`,
               details: {
                 failures,
@@ -359,7 +359,7 @@ export function buildFtpScenarios(): FtpScenario[] {
             await Promise.all(
               sessions.map((s) =>
                 s.close().catch((closeError) => {
-                  console.warn('FTP session close failed', {
+                  console.warn("FTP session close failed", {
                     error: String(closeError),
                     sessionId: s.sessionId,
                   });
@@ -374,7 +374,7 @@ export function buildFtpScenarios(): FtpScenario[] {
     // ── Large file upload/download ───────────────────────────────────
 
     {
-      id: 'ftp.large-transfer',
+      id: "ftp.large-transfer",
       safe: true,
       run: async ({ config, log }) => {
         const client = makeFtpClient(config);
@@ -384,10 +384,10 @@ export function buildFtpScenarios(): FtpScenario[] {
 
           // Upload 64KB file
           const payload = Buffer.alloc(65536, 0x42);
-          const stor = await client.stor('large-probe.bin', payload);
+          const stor = await client.stor("large-probe.bin", payload);
           log({
-            kind: 'ftp',
-            op: 'STOR large',
+            kind: "ftp",
+            op: "STOR large",
             status: stor.response.code,
             latencyMs: stor.latencyMs,
             details: { size: payload.length },
@@ -396,10 +396,10 @@ export function buildFtpScenarios(): FtpScenario[] {
           await delay(200);
 
           // Download it back
-          const retr = await client.retr('large-probe.bin');
+          const retr = await client.retr("large-probe.bin");
           log({
-            kind: 'ftp',
-            op: 'RETR large',
+            kind: "ftp",
+            op: "RETR large",
             status: retr.result.response.code,
             latencyMs: retr.result.latencyMs,
             details: { receivedBytes: retr.data.length },
@@ -408,20 +408,20 @@ export function buildFtpScenarios(): FtpScenario[] {
           // Verify size
           if (retr.data.length !== payload.length) {
             log({
-              kind: 'ftp',
-              op: 'large-transfer-verify',
-              status: 'mismatch',
+              kind: "ftp",
+              op: "large-transfer-verify",
+              status: "mismatch",
               details: { expected: payload.length, actual: retr.data.length },
             });
           }
 
           // Cleanup
-          await client.dele('large-probe.bin');
+          await client.dele("large-probe.bin");
         } catch (error) {
           log({
-            kind: 'ftp',
-            op: 'large-transfer',
-            status: 'error',
+            kind: "ftp",
+            op: "large-transfer",
+            status: "error",
             details: { message: String(error) },
           });
         } finally {
@@ -433,7 +433,7 @@ export function buildFtpScenarios(): FtpScenario[] {
     // ── FTP while REST is active ─────────────────────────────────────
 
     {
-      id: 'ftp.during-rest-load',
+      id: "ftp.during-rest-load",
       safe: true,
       run: async ({ config, log }) => {
         // This tests FTP stability when REST requests are in-flight
@@ -444,23 +444,23 @@ export function buildFtpScenarios(): FtpScenario[] {
           await client.cwd(config.scratch.ftpDir);
           const list = await client.list();
           log({
-            kind: 'ftp',
-            op: 'LIST (rest-load bg)',
+            kind: "ftp",
+            op: "LIST (rest-load bg)",
             status: list.result.response.code,
             latencyMs: list.result.latencyMs,
           });
           const mlsd = await client.mlsd();
           log({
-            kind: 'ftp',
-            op: 'MLSD (rest-load bg)',
+            kind: "ftp",
+            op: "MLSD (rest-load bg)",
             status: mlsd.result.response.code,
             latencyMs: mlsd.result.latencyMs,
           });
         } catch (error) {
           log({
-            kind: 'ftp',
-            op: 'during-rest-load',
-            status: 'error',
+            kind: "ftp",
+            op: "during-rest-load",
+            status: "error",
             details: { message: String(error) },
           });
         } finally {

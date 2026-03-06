@@ -1,10 +1,10 @@
-import { useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { useActionTrace } from '@/hooks/useActionTrace';
-import { getC64API } from '@/lib/c64api';
-import { buildConfigKey, readItemValue } from '../utils/HomeConfigUtils';
-import { reportUserError } from '@/lib/uiErrors';
-import { toast } from '@/hooks/use-toast';
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useActionTrace } from "@/hooks/useActionTrace";
+import { getC64API } from "@/lib/c64api";
+import { buildConfigKey, readItemValue } from "../utils/HomeConfigUtils";
+import { reportUserError } from "@/lib/uiErrors";
+import { toast } from "@/hooks/use-toast";
 
 export function useConfigActions() {
   const api = getC64API();
@@ -37,12 +37,12 @@ export function useConfigActions() {
       await queryClient.invalidateQueries({
         predicate: (query) =>
           Array.isArray(query.queryKey) &&
-          query.queryKey[0] === 'c64-config-items' &&
+          query.queryKey[0] === "c64-config-items" &&
           query.queryKey[1] === category,
       });
       if (options.refreshDrives) {
         await queryClient.fetchQuery({
-          queryKey: ['c64-drives'],
+          queryKey: ["c64-drives"],
           queryFn: () => api.getDrives(),
           staleTime: 0,
         });
@@ -59,7 +59,7 @@ export function useConfigActions() {
       });
       reportUserError({
         operation,
-        title: 'Update failed',
+        title: "Update failed",
         description: (error as Error).message,
         error,
         context: { category, item: itemName, value },

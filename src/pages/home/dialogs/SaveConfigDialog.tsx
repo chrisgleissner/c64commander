@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -6,10 +6,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { toast } from '@/hooks/use-toast';
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { toast } from "@/hooks/use-toast";
 
 interface SaveConfigDialogProps {
   open: boolean;
@@ -26,26 +26,26 @@ export function SaveConfigDialog({
   onSave,
   isSaving,
 }: SaveConfigDialogProps) {
-  const [name, setName] = useState('');
+  const [name, setName] = useState("");
 
   // Reset name when dialog opens
   useEffect(() => {
-    if (open) setName('');
+    if (open) setName("");
   }, [open]);
 
   const handleSave = async () => {
     const trimmed = name.trim();
     if (!trimmed) {
       toast({
-        title: 'Name required',
-        description: 'Enter a config name first.',
+        title: "Name required",
+        description: "Enter a config name first.",
       });
       return;
     }
     if (existingNames.includes(trimmed)) {
       toast({
-        title: 'Name already used',
-        description: 'Choose a unique config name.',
+        title: "Name already used",
+        description: "Choose a unique config name.",
       });
       return;
     }

@@ -3,7 +3,7 @@ import {
   setExternalLogs,
   type LogEntry,
   type LogLevel,
-} from '@/lib/logging';
+} from "@/lib/logging";
 
 type ServerLogEntry = {
   id: string;
@@ -19,15 +19,15 @@ type ServerLogsPayload = {
 
 const POLL_INTERVAL_MS = 5000;
 
-const isWebPlatformServerMode = () => import.meta.env.VITE_WEB_PLATFORM === '1';
+const isWebPlatformServerMode = () => import.meta.env.VITE_WEB_PLATFORM === "1";
 
 const normalizeLogs = (logs: ServerLogEntry[]): LogEntry[] =>
   logs
     .filter(
       (entry) =>
         entry &&
-        typeof entry.id === 'string' &&
-        typeof entry.timestamp === 'string',
+        typeof entry.id === "string" &&
+        typeof entry.timestamp === "string",
     )
     .map((entry) => ({
       id: `server-${entry.id}`,
@@ -38,7 +38,7 @@ const normalizeLogs = (logs: ServerLogEntry[]): LogEntry[] =>
     }));
 
 export const startWebServerLogBridge = () => {
-  if (typeof window === 'undefined') return () => {};
+  if (typeof window === "undefined") return () => {};
   if (!isWebPlatformServerMode()) return () => {};
 
   let disposed = false;
@@ -48,9 +48,9 @@ export const startWebServerLogBridge = () => {
   const poll = async () => {
     if (disposed) return;
     try {
-      const response = await fetch('/api/diagnostics/server-logs', {
-        method: 'GET',
-        credentials: 'same-origin',
+      const response = await fetch("/api/diagnostics/server-logs", {
+        method: "GET",
+        credentials: "same-origin",
       });
       if (response.status === 401) {
         setExternalLogs([]);
@@ -61,7 +61,7 @@ export const startWebServerLogBridge = () => {
     } catch (error) {
       const now = Date.now();
       if (now - lastPollErrorAtMs > 60_000) {
-        addLog('warn', 'Web server log bridge poll failed', {
+        addLog("warn", "Web server log bridge poll failed", {
           error: error instanceof Error ? error.message : String(error),
         });
         lastPollErrorAtMs = now;

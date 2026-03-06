@@ -1,33 +1,33 @@
-import { useCallback, type MutableRefObject } from 'react';
-import { getC64API } from '@/lib/c64api';
-import { addErrorLog, addLog } from '@/lib/logging';
-import { reportUserError } from '@/lib/uiErrors';
+import { useCallback, type MutableRefObject } from "react";
+import { getC64API } from "@/lib/c64api";
+import { addErrorLog, addLog } from "@/lib/logging";
+import { reportUserError } from "@/lib/uiErrors";
 import {
   buildPlayPlan,
   executePlayPlan,
   tryFetchUltimateSidBlob,
   type LocalPlayFile,
   type PlayRequest,
-} from '@/lib/playback/playbackRouter';
-import { getHvscDurationByMd5Seconds } from '@/lib/hvsc';
+} from "@/lib/playback/playbackRouter";
+import { getHvscDurationByMd5Seconds } from "@/lib/hvsc";
 import {
   getLocalFilePath,
   isSongCategory,
   resolvePlayTargetIndex,
   tryAcquireSingleFlight,
   releaseSingleFlight,
-} from '@/pages/playFiles/playFilesUtils';
-import { normalizeSourcePath } from '@/lib/sourceNavigation/paths';
+} from "@/pages/playFiles/playFilesUtils";
+import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 
 import {
   buildLocalPlayFileFromUri,
   buildLocalPlayFileFromTree,
-} from '@/lib/playback/fileLibraryUtils';
-import type { PlaylistItem } from '@/pages/playFiles/types';
-import { resolveAudioMixerMuteValue } from '@/lib/config/audioMixerSolo';
-import type { AudioMixerItem } from '@/pages/playFiles/playFilesUtils';
-import type { VolumeAction } from '@/pages/playFiles/volumeState';
-import type { SidEnablement } from '@/lib/config/sidVolumeControl';
+} from "@/lib/playback/fileLibraryUtils";
+import type { PlaylistItem } from "@/pages/playFiles/types";
+import { resolveAudioMixerMuteValue } from "@/lib/config/audioMixerSolo";
+import type { AudioMixerItem } from "@/pages/playFiles/playFilesUtils";
+import type { VolumeAction } from "@/pages/playFiles/volumeState";
+import type { SidEnablement } from "@/lib/config/sidVolumeControl";
 
 type SidMuteSnapshot = {
   volumes: Record<string, string | number>;
@@ -201,12 +201,12 @@ export function usePlaybackController({
   const resumeMachineWithRetry = useCallback(
     async (api: ReturnType<typeof getC64API>) => {
       try {
-        await withTimeout(api.machineResume(), 6000, 'Resume');
+        await withTimeout(api.machineResume(), 6000, "Resume");
       } catch (error) {
-        addErrorLog('Machine resume first attempt failed', {
+        addErrorLog("Machine resume first attempt failed", {
           error: (error as Error).message,
         });
-        await withTimeout(api.machineResume(), 6000, 'Resume');
+        await withTimeout(api.machineResume(), 6000, "Resume");
       }
     },
     [withTimeout],
@@ -224,7 +224,7 @@ export function usePlaybackController({
       try {
         buffer = await file.arrayBuffer();
       } catch (error) {
-        addErrorLog('Failed to read local SID file', {
+        addErrorLog("Failed to read local SID file", {
           error: (error as Error).message,
         });
         return {
@@ -233,7 +233,7 @@ export function usePlaybackController({
           readable: false,
         } as const;
       }
-      const { getSidSongCount } = await import('@/lib/sid/sidUtils');
+      const { getSidSongCount } = await import("@/lib/sid/sidUtils");
       const subsongCount = getSidSongCount(buffer);
 
       try {
@@ -251,7 +251,7 @@ export function usePlaybackController({
           } as const;
         }
 
-        const { computeSidMd5 } = await import('@/lib/sid/sidUtils');
+        const { computeSidMd5 } = await import("@/lib/sid/sidUtils");
         const md5 = await computeSidMd5(buffer);
         const seconds = await getHvscDurationByMd5Seconds(md5);
         const durationMs =
@@ -260,7 +260,7 @@ export function usePlaybackController({
             : durationFallbackMs;
         return { durationMs, subsongCount, readable: true } as const;
       } catch (error) {
-        addErrorLog('Failed to resolve SID metadata', {
+        addErrorLog("Failed to resolve SID metadata", {
           error: (error as Error).message,
           file: file.name,
         });
@@ -280,14 +280,14 @@ export function usePlaybackController({
         const blob = await tryFetchUltimateSidBlob(path);
         if (!blob) return null;
         const buffer = await blob.arrayBuffer();
-        const { computeSidMd5 } = await import('@/lib/sid/sidUtils');
+        const { computeSidMd5 } = await import("@/lib/sid/sidUtils");
         const md5 = await computeSidMd5(buffer);
         const seconds = await getHvscDurationByMd5Seconds(md5);
         if (seconds === undefined || seconds === null) return null;
         return seconds * 1000;
       } catch (error) {
-        addLog('debug', 'Ultimate SID MD5 duration lookup failed', { path });
-        addErrorLog('Ultimate SID MD5 duration lookup failed', {
+        addLog("debug", "Ultimate SID MD5 duration lookup failed", { path });
+        addErrorLog("Ultimate SID MD5 duration lookup failed", {
           path,
           error: (error as Error).message,
         });
@@ -303,7 +303,7 @@ export function usePlaybackController({
       options?: { rebootBeforePlay?: boolean; playlistIndex?: number },
     ) => {
       return enqueuePlayTransition(async () => {
-        if (item.request.source === 'local' && !item.request.file) {
+        if (item.request.source === "local" && !item.request.file) {
           const sourceId = item.sourceId;
           const treeUri = sourceId ? localSourceTreeUris.get(sourceId) : null;
           if (treeUri) {
@@ -328,13 +328,13 @@ export function usePlaybackController({
           }
           if (!item.request.file) {
             throw new Error(
-              'Local file unavailable. Re-add it to the playlist.',
+              "Local file unavailable. Re-add it to the playlist.",
             );
           }
         }
         let durationOverride: number | undefined;
         let subsongCount: number | undefined;
-        if (item.category === 'sid' && item.request.source === 'local') {
+        if (item.category === "sid" && item.request.source === "local") {
           const metadata = await resolveSidMetadata(
             item.request.file,
             item.request.songNr ?? null,
@@ -343,12 +343,12 @@ export function usePlaybackController({
           subsongCount = metadata.subsongCount;
           if (!metadata.readable) {
             throw new Error(
-              'Local file unavailable. Re-add it to the playlist.',
+              "Local file unavailable. Re-add it to the playlist.",
             );
           }
         } else if (
-          item.category === 'sid' &&
-          item.request.source === 'ultimate' &&
+          item.category === "sid" &&
+          item.request.source === "ultimate" &&
           !item.durationMs
         ) {
           try {
@@ -367,10 +367,10 @@ export function usePlaybackController({
               if (md5Ms !== null) durationOverride = md5Ms;
             }
           } catch (error) {
-            addLog('debug', 'Ultimate SID duration resolution failed', {
+            addLog("debug", "Ultimate SID duration resolution failed", {
               path: item.path,
             });
-            addErrorLog('Ultimate SID duration resolution failed', {
+            addErrorLog("Ultimate SID duration resolution failed", {
               path: item.path,
               error: (error as Error).message,
             });
@@ -380,8 +380,8 @@ export function usePlaybackController({
           await ensurePlaybackConnection();
         } catch (error) {
           reportUserError({
-            operation: 'PLAYBACK_CONNECT',
-            title: 'Connection failed',
+            operation: "PLAYBACK_CONNECT",
+            title: "Connection failed",
             description: (error as Error).message,
             error,
             context: {
@@ -401,7 +401,7 @@ export function usePlaybackController({
           : item.request;
         const plan = buildPlayPlan(request);
         const shouldReboot =
-          options?.rebootBeforePlay ?? item.category === 'disk';
+          options?.rebootBeforePlay ?? item.category === "disk";
         const executionOptions = shouldReboot
           ? { rebootBeforeMount: true }
           : undefined;
@@ -412,7 +412,7 @@ export function usePlaybackController({
         setElapsedMs(0);
         setDurationMs(resolvedDuration);
         if (
-          typeof options?.playlistIndex === 'number' &&
+          typeof options?.playlistIndex === "number" &&
           options.playlistIndex >= 0
         ) {
           setCurrentIndex(options.playlistIndex);
@@ -425,7 +425,7 @@ export function usePlaybackController({
         trackStartedAtRef.current = now;
         playedClockRef.current.start(now, true);
         setPlayedMs(playedClockRef.current.current(now));
-        if (typeof resolvedDuration === 'number') {
+        if (typeof resolvedDuration === "number") {
           autoAdvanceGuardRef.current = {
             trackInstanceId: nextTrackInstanceId,
             dueAtMs: now + resolvedDuration,
@@ -503,8 +503,8 @@ export function usePlaybackController({
         });
       } catch (error) {
         reportUserError({
-          operation: 'PLAYBACK_START',
-          title: 'Playback failed',
+          operation: "PLAYBACK_START",
+          title: "Playback failed",
           description: (error as Error).message,
           error,
           context: {
@@ -550,8 +550,8 @@ export function usePlaybackController({
         await playItem(playlist[targetIndex], { playlistIndex: targetIndex });
       } catch (error) {
         reportUserError({
-          operation: 'PLAYBACK_START',
-          title: 'Playback failed',
+          operation: "PLAYBACK_START",
+          title: "Playback failed",
           description: (error as Error).message,
           error,
           context: {
@@ -579,27 +579,27 @@ export function usePlaybackController({
     trace(async function handleStop() {
       if (!isPlaying && !isPaused) return;
       const currentItem = playlist[currentIndex];
-      const shouldReboot = currentItem?.category === 'disk';
+      const shouldReboot = currentItem?.category === "disk";
       try {
         const api = getC64API();
         if (isPaused) {
           try {
             await resumeMachineWithRetry(api);
           } catch (error) {
-            addErrorLog('Resume before stop failed', {
+            addErrorLog("Resume before stop failed", {
               error: (error as Error).message,
             });
           }
         }
         if (shouldReboot) {
-          await withTimeout(api.machineReboot(), 3000, 'Reboot');
+          await withTimeout(api.machineReboot(), 3000, "Reboot");
         } else {
-          await withTimeout(api.machineReset(), 3000, 'Reset');
+          await withTimeout(api.machineReset(), 3000, "Reset");
         }
       } catch (error) {
         reportUserError({
-          operation: 'PLAYBACK_STOP',
-          title: 'Stop failed',
+          operation: "PLAYBACK_STOP",
+          title: "Stop failed",
           description: (error as Error).message,
           error,
           context: {
@@ -608,7 +608,7 @@ export function usePlaybackController({
           },
         });
       }
-      await restoreVolumeOverrides('stop');
+      await restoreVolumeOverrides("stop");
       const now = Date.now();
       playedClockRef.current.stop(now, true);
       setPlayedMs(0);
@@ -664,11 +664,11 @@ export function usePlaybackController({
             try {
               await applyAudioMixerUpdates(
                 snapshotToUpdates(pauseMuteSnapshotRef.current, resumeItems),
-                'Resume',
+                "Resume",
               );
             } catch (error) {
               addErrorLog(
-                'Failed to reapply audio mixer settings after resume',
+                "Failed to reapply audio mixer settings after resume",
                 {
                   error: (error as Error).message,
                   itemCount: resumeItems.length,
@@ -679,14 +679,14 @@ export function usePlaybackController({
           pauseMuteSnapshotRef.current = null;
           setIsPaused(false);
           dispatchVolume({
-            type: wasMuted ? 'mute' : 'unmute',
-            reason: 'pause',
+            type: wasMuted ? "mute" : "unmute",
+            reason: "pause",
           });
           const now = Date.now();
           trackStartedAtRef.current = now - elapsedMs;
           playedClockRef.current.resume(now);
           setPlayedMs(playedClockRef.current.current(now));
-          if (autoAdvanceGuardRef.current && typeof durationMs === 'number') {
+          if (autoAdvanceGuardRef.current && typeof durationMs === "number") {
             autoAdvanceGuardRef.current.dueAtMs =
               now + Math.max(0, durationMs - elapsedMs);
             autoAdvanceGuardRef.current.autoFired = false;
@@ -701,13 +701,13 @@ export function usePlaybackController({
               sidEnablement,
             );
           }
-          await withTimeout(api.machinePause(), 3000, 'Pause');
+          await withTimeout(api.machinePause(), 3000, "Pause");
           if (pauseItems.length) {
             await applyAudioMixerUpdates(
               buildEnabledSidMuteUpdates(pauseItems, sidEnablement),
-              'Pause',
+              "Pause",
             );
-            dispatchVolume({ type: 'mute', reason: 'pause' });
+            dispatchVolume({ type: "mute", reason: "pause" });
           }
           const now = Date.now();
           playedClockRef.current.pause(now);
@@ -717,8 +717,8 @@ export function usePlaybackController({
         }
       } catch (error) {
         reportUserError({
-          operation: 'PLAYBACK_CONTROL',
-          title: 'Playback control failed',
+          operation: "PLAYBACK_CONTROL",
+          title: "Playback control failed",
           description: (error as Error).message,
           error,
           context: {
@@ -754,15 +754,15 @@ export function usePlaybackController({
 
   const handleNext = useCallback(
     async (
-      source: 'auto' | 'user' = 'user',
+      source: "auto" | "user" = "user",
       expectedTrackInstanceId?: number,
     ) => {
       if (!playlist.length) return;
-      if (source === 'auto') {
+      if (source === "auto") {
         const guard = autoAdvanceGuardRef.current;
         if (!guard || guard.autoFired || guard.userCancelled) return;
         if (
-          typeof expectedTrackInstanceId === 'number' &&
+          typeof expectedTrackInstanceId === "number" &&
           guard.trackInstanceId !== expectedTrackInstanceId
         )
           return;
@@ -790,7 +790,7 @@ export function usePlaybackController({
 
       const nextItem = playlist[nextIndex];
       const shouldReboot =
-        currentItem?.category === 'disk' || nextItem?.category === 'disk';
+        currentItem?.category === "disk" || nextItem?.category === "disk";
       try {
         await playItem(nextItem, {
           rebootBeforePlay: shouldReboot,
@@ -799,8 +799,8 @@ export function usePlaybackController({
         setIsPaused(false);
       } catch (error) {
         reportUserError({
-          operation: 'PLAYBACK_NEXT',
-          title: 'Playback next failed',
+          operation: "PLAYBACK_NEXT",
+          title: "Playback next failed",
           description: (error as Error).message,
           error,
           context: {
@@ -842,7 +842,7 @@ export function usePlaybackController({
     const prevIndex = Math.max(0, currentIndex - 1);
     const prevItem = playlist[prevIndex];
     const shouldReboot =
-      currentItem?.category === 'disk' || prevItem?.category === 'disk';
+      currentItem?.category === "disk" || prevItem?.category === "disk";
     try {
       await playItem(prevItem, {
         rebootBeforePlay: shouldReboot,
@@ -851,8 +851,8 @@ export function usePlaybackController({
       setIsPaused(false);
     } catch (error) {
       reportUserError({
-        operation: 'PLAYBACK_PREVIOUS',
-        title: 'Playback previous failed',
+        operation: "PLAYBACK_PREVIOUS",
+        title: "Playback previous failed",
         description: (error as Error).message,
         error,
         context: {

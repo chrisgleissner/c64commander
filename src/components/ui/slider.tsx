@@ -6,11 +6,11 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import * as React from 'react';
-import * as SliderPrimitive from '@radix-ui/react-slider';
+import * as React from "react";
+import * as SliderPrimitive from "@radix-ui/react-slider";
 
-import { cn } from '@/lib/utils';
-import { emitUiTraceMarker, wrapValueChange } from '@/lib/tracing/userTrace';
+import { cn } from "@/lib/utils";
+import { emitUiTraceMarker, wrapValueChange } from "@/lib/tracing/userTrace";
 import {
   clampSliderValue,
   createSliderAsyncQueue,
@@ -18,14 +18,14 @@ import {
   resolveMidpointSnap,
   shouldTriggerMidpointHaptic,
   type SliderAsyncQueue,
-} from '@/lib/ui/sliderBehavior';
+} from "@/lib/ui/sliderBehavior";
 import {
   reduceSliderPopupState,
   resolveSliderPopupCloseDelayMs,
   type SliderPopupEvent,
   type SliderPopupState,
-} from '@/lib/ui/sliderPopupStateMachine';
-import { triggerSliderHaptic } from '@/lib/ui/sliderHaptics';
+} from "@/lib/ui/sliderPopupStateMachine";
+import { triggerSliderHaptic } from "@/lib/ui/sliderHaptics";
 
 type SliderProps = React.ComponentPropsWithoutRef<
   typeof SliderPrimitive.Root
@@ -83,8 +83,8 @@ const Slider = React.forwardRef<
     const step = props.step;
     const [dragValue, setDragValue] = React.useState<number | null>(null);
     const [popupState, setPopupState] =
-      React.useState<SliderPopupState>('Hidden');
-    const popupStateRef = React.useRef<SliderPopupState>('Hidden');
+      React.useState<SliderPopupState>("Hidden");
+    const popupStateRef = React.useRef<SliderPopupState>("Hidden");
     const popupOpenAtRef = React.useRef<number | null>(null);
     const popupLastInteractionAtRef = React.useRef<number | null>(null);
     const popupCloseTimerRef = React.useRef<number | null>(null);
@@ -101,13 +101,13 @@ const Slider = React.forwardRef<
 
     const setPopupHidden = React.useCallback(() => {
       clearPopupCloseTimer();
-      if (popupStateRef.current === 'Hidden') return;
-      popupStateRef.current = 'Hidden';
-      setPopupState('Hidden');
+      if (popupStateRef.current === "Hidden") return;
+      popupStateRef.current = "Hidden";
+      setPopupState("Hidden");
       popupOpenAtRef.current = null;
       popupLastInteractionAtRef.current = null;
       if (popupSessionOpenRef.current) {
-        emitUiTraceMarker('SliderPopupClosed');
+        emitUiTraceMarker("SliderPopupClosed");
         popupSessionOpenRef.current = false;
       }
     }, [clearPopupCloseTimer]);
@@ -119,12 +119,12 @@ const Slider = React.forwardRef<
       popupStateRef.current = nextState;
       setPopupState(nextState);
       if (
-        previousState === 'Hidden' &&
-        nextState !== 'Hidden' &&
+        previousState === "Hidden" &&
+        nextState !== "Hidden" &&
         !popupSessionOpenRef.current
       ) {
         popupSessionOpenRef.current = true;
-        emitUiTraceMarker('SliderPopupOpened');
+        emitUiTraceMarker("SliderPopupOpened");
       }
     }, []);
 
@@ -142,7 +142,7 @@ const Slider = React.forwardRef<
         Date.now(),
       );
       popupCloseTimerRef.current = window.setTimeout(() => {
-        applyPopupEvent('idle-timeout');
+        applyPopupEvent("idle-timeout");
         setPopupHidden();
       }, delay);
     }, [
@@ -175,7 +175,7 @@ const Slider = React.forwardRef<
       return () => {
         clearPopupCloseTimer();
         if (popupSessionOpenRef.current) {
-          emitUiTraceMarker('SliderPopupClosed');
+          emitUiTraceMarker("SliderPopupClosed");
           popupSessionOpenRef.current = false;
         }
       };
@@ -216,7 +216,7 @@ const Slider = React.forwardRef<
 
     const handlePointerDown = React.useCallback(
       (event: React.PointerEvent<HTMLDivElement>) => {
-        registerPopupInteraction('interaction-start');
+        registerPopupInteraction("interaction-start");
         onPointerDown?.(event);
       },
       [onPointerDown, registerPopupInteraction],
@@ -224,7 +224,7 @@ const Slider = React.forwardRef<
 
     const handlePointerUp = React.useCallback(
       (event: React.PointerEvent<HTMLDivElement>) => {
-        registerPopupInteraction('interaction-end');
+        registerPopupInteraction("interaction-end");
         onPointerUp?.(event);
       },
       [onPointerUp, registerPopupInteraction],
@@ -232,7 +232,7 @@ const Slider = React.forwardRef<
 
     const handlePointerCancel = React.useCallback(
       (event: React.PointerEvent<HTMLDivElement>) => {
-        registerPopupInteraction('interaction-end');
+        registerPopupInteraction("interaction-end");
         onPointerCancel?.(event);
       },
       [onPointerCancel, registerPopupInteraction],
@@ -243,7 +243,7 @@ const Slider = React.forwardRef<
         const rawValue = values[0] ?? min;
         const nextValue = resolveValue(rawValue);
         setDragValue(nextValue);
-        registerPopupInteraction('interaction-update');
+        registerPopupInteraction("interaction-update");
         if (midpoint?.haptics !== false && midpoint) {
           const now = Date.now();
           if (
@@ -271,7 +271,7 @@ const Slider = React.forwardRef<
         const rawValue = values[0] ?? min;
         const nextValue = resolveValue(rawValue);
         setDragValue(null);
-        registerPopupInteraction('interaction-end');
+        registerPopupInteraction("interaction-end");
         lastValueRef.current = nextValue;
         onValueCommit?.([nextValue]);
         asyncQueueRef.current?.commit(nextValue);
@@ -281,12 +281,12 @@ const Slider = React.forwardRef<
 
     const tracedChange = React.useMemo(
       () =>
-        wrapValueChange(handleValueChange, 'slide', 'Slider', props, 'Slider'),
+        wrapValueChange(handleValueChange, "slide", "Slider", props, "Slider"),
       [handleValueChange, props],
     );
     const tracedCommit = React.useMemo(
       () =>
-        wrapValueChange(handleValueCommit, 'slide', 'Slider', props, 'Slider'),
+        wrapValueChange(handleValueCommit, "slide", "Slider", props, "Slider"),
       [handleValueCommit, props],
     );
 
@@ -296,7 +296,7 @@ const Slider = React.forwardRef<
     const formattedValue = valueFormatter
       ? valueFormatter(displayValue)
       : `${displayValue}`;
-    const showValue = showValueOnDrag && popupState !== 'Hidden';
+    const showValue = showValueOnDrag && popupState !== "Hidden";
     const midpointPercent = midpoint
       ? resolveMidpointPercent(midpoint.value, min, max)
       : null;
@@ -310,20 +310,20 @@ const Slider = React.forwardRef<
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
         className={cn(
-          'relative flex w-full touch-none select-none items-center',
+          "relative flex w-full touch-none select-none items-center",
           className,
         )}
         {...props}
       >
         <SliderPrimitive.Track
           className={cn(
-            'relative h-2 w-full grow overflow-hidden rounded-full bg-secondary',
+            "relative h-2 w-full grow overflow-hidden rounded-full bg-secondary",
             trackClassName,
           )}
           style={trackStyle}
         >
           <SliderPrimitive.Range
-            className={cn('absolute h-full bg-primary', rangeClassName)}
+            className={cn("absolute h-full bg-primary", rangeClassName)}
             style={rangeStyle}
           />
           {midpoint && midpoint.notch !== false && midpointPercent !== null ? (
@@ -338,12 +338,12 @@ const Slider = React.forwardRef<
           <div
             data-testid="slider-value-display"
             className={cn(
-              'pointer-events-none absolute -top-7 text-[11px] font-semibold text-foreground transition-opacity duration-150 opacity-100',
+              "pointer-events-none absolute -top-7 text-[11px] font-semibold text-foreground transition-opacity duration-150 opacity-100",
               valueLabelClassName,
             )}
             style={{
               left: `${resolveMidpointPercent(displayValue, min, max)}%`,
-              transform: 'translateX(-50%)',
+              transform: "translateX(-50%)",
             }}
           >
             {formattedValue}
@@ -351,7 +351,7 @@ const Slider = React.forwardRef<
         ) : null}
         <SliderPrimitive.Thumb
           className={cn(
-            'block h-5 w-5 rounded-full border-2 border-primary bg-background ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
+            "block h-5 w-5 rounded-full border-2 border-primary bg-background ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
             thumbClassName,
           )}
         />

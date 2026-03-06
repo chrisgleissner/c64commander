@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { ReactNode } from 'react';
+import type { ReactNode } from "react";
 import {
   Pause,
   Play,
@@ -15,10 +15,10 @@ import {
   SkipBack,
   SkipForward,
   Square,
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Progress } from '@/components/ui/progress';
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Progress } from "@/components/ui/progress";
 
 export type PlaybackControlsCardProps = {
   hasCurrentItem: boolean;
@@ -116,7 +116,7 @@ export const PlaybackControlsCard = ({
           ) : null}
         </div>
       ) : (
-        'Select a playlist item to start'
+        "Select a playlist item to start"
       )}
     </div>
     <div className="flex flex-col gap-3 w-full sm:w-auto">
@@ -134,15 +134,15 @@ export const PlaybackControlsCard = ({
           <SkipBack className="h-4 w-4" />
         </Button>
         <Button
-          variant={isPlaying ? 'destructive' : 'default'}
+          variant={isPlaying ? "destructive" : "default"}
           size="icon"
           onClick={isPlaying ? onStop : onPlay}
           disabled={!hasPlaylist || isPlaylistLoading}
-          data-c64-persistent-active={isPlaying ? 'true' : undefined}
+          data-c64-persistent-active={isPlaying ? "true" : undefined}
           id="playlist-play"
           data-testid="playlist-play"
-          aria-label={isPlaying ? 'Stop' : 'Play'}
-          title={isPlaying ? 'Stop' : 'Play'}
+          aria-label={isPlaying ? "Stop" : "Play"}
+          title={isPlaying ? "Stop" : "Play"}
         >
           {isPlaying ? (
             <Square className="h-4 w-4" />
@@ -157,8 +157,8 @@ export const PlaybackControlsCard = ({
           disabled={!canPause || isPlaylistLoading}
           id="playlist-pause"
           data-testid="playlist-pause"
-          aria-label={isPaused ? 'Resume' : 'Pause'}
-          title={isPaused ? 'Resume' : 'Pause'}
+          aria-label={isPaused ? "Resume" : "Pause"}
+          title={isPaused ? "Resume" : "Pause"}
         >
           {isPaused ? (
             <Play className="h-4 w-4" />
@@ -237,9 +237,9 @@ export const PlaybackControlsCard = ({
           disabled={reshuffleDisabled}
           id="playlist-reshuffle"
           data-testid="playlist-reshuffle"
-          data-active={reshuffleActive ? 'true' : 'false'}
+          data-active={reshuffleActive ? "true" : "false"}
           className={
-            reshuffleActive ? 'bg-accent text-accent-foreground' : undefined
+            reshuffleActive ? "bg-accent text-accent-foreground" : undefined
           }
         >
           <Shuffle className="h-4 w-4 mr-1" />

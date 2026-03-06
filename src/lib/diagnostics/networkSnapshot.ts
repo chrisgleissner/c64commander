@@ -6,8 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { getTraceEvents } from '@/lib/tracing/traceSession';
-import type { TraceEvent } from '@/lib/tracing/types';
+import { getTraceEvents } from "@/lib/tracing/traceSession";
+import type { TraceEvent } from "@/lib/tracing/types";
 
 export type NetworkRequest = {
   hostname: string | null;
@@ -38,10 +38,10 @@ const parseUrl = (url: string) => {
       hostname: parsed.hostname,
       port: parsed.port
         ? Number(parsed.port)
-        : parsed.protocol === 'https:'
+        : parsed.protocol === "https:"
           ? 443
           : 80,
-      protocol: parsed.protocol.replace(':', ''),
+      protocol: parsed.protocol.replace(":", ""),
     };
   } catch {
     return { hostname: null, port: null, protocol: null };
@@ -56,13 +56,13 @@ export const buildNetworkSnapshot = (): NetworkSnapshot => {
   >();
 
   for (const event of events) {
-    if (event.type !== 'rest-request' && event.type !== 'rest-response')
+    if (event.type !== "rest-request" && event.type !== "rest-response")
       continue;
 
     const correlationId = event.correlationId;
     const entry = requestMap.get(correlationId) ?? {};
 
-    if (event.type === 'rest-request') {
+    if (event.type === "rest-request") {
       entry.request = event;
     } else {
       entry.response = event;
@@ -79,8 +79,8 @@ export const buildNetworkSnapshot = (): NetworkSnapshot => {
     const reqData = request?.data as Record<string, unknown> | undefined;
     const resData = response?.data as Record<string, unknown> | undefined;
 
-    const url = (reqData?.url as string) ?? '';
-    const method = (reqData?.method as string) ?? 'GET';
+    const url = (reqData?.url as string) ?? "";
+    const method = (reqData?.method as string) ?? "GET";
     const { hostname, port, protocol } = parseUrl(url);
 
     const httpStatus = (resData?.status as number) ?? null;
@@ -98,8 +98,8 @@ export const buildNetworkSnapshot = (): NetworkSnapshot => {
     requests.push({
       hostname,
       resolvedIp:
-        hostname === '127.0.0.1' || hostname === 'localhost'
-          ? '127.0.0.1'
+        hostname === "127.0.0.1" || hostname === "localhost"
+          ? "127.0.0.1"
           : hostname,
       port,
       protocol,
@@ -111,7 +111,7 @@ export const buildNetworkSnapshot = (): NetworkSnapshot => {
       retryCount: 0,
       url,
       method,
-      timestamp: request?.timestamp ?? response?.timestamp ?? '',
+      timestamp: request?.timestamp ?? response?.timestamp ?? "",
     });
   }
 

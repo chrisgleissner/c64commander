@@ -6,17 +6,17 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from "vitest";
 
-vi.mock('@capacitor/core', () => ({
+vi.mock("@capacitor/core", () => ({
   Capacitor: {
     isNativePlatform: vi.fn(() => false),
     isPluginAvailable: vi.fn(() => false),
   },
 }));
 
-vi.mock('@capacitor/filesystem', () => ({
-  Directory: { Data: 'DATA' },
+vi.mock("@capacitor/filesystem", () => ({
+  Directory: { Data: "DATA" },
   Filesystem: {
     stat: vi.fn(),
     readdir: vi.fn(),
@@ -25,21 +25,21 @@ vi.mock('@capacitor/filesystem', () => ({
   },
 }));
 
-vi.mock('@/lib/hvsc/hvscFilesystem', () => ({
+vi.mock("@/lib/hvsc/hvscFilesystem", () => ({
   MAX_BRIDGE_READ_BYTES: 5 * 1024 * 1024,
-  getHvscCacheDir: vi.fn(() => 'hvsc/cache'),
+  getHvscCacheDir: vi.fn(() => "hvsc/cache"),
   writeCachedArchive: vi.fn(async () => undefined),
   deleteCachedArchive: vi.fn(async () => undefined),
   writeCachedArchiveMarker: vi.fn(async () => undefined),
   readCachedArchiveMarker: vi.fn(async () => null),
 }));
 
-vi.mock('@/lib/logging', () => ({
+vi.mock("@/lib/logging", () => ({
   addErrorLog: vi.fn(),
   addLog: vi.fn(),
 }));
 
-vi.mock('@/lib/sid/sidUtils', () => ({
+vi.mock("@/lib/sid/sidUtils", () => ({
   base64ToUint8: vi.fn((str: string) => new TextEncoder().encode(atob(str))),
 }));
 
@@ -62,244 +62,244 @@ import {
   readArchiveBuffer,
   resolveCachedArchive,
   getCacheStatusInternal,
-} from '@/lib/hvsc/hvscDownload';
-import { Filesystem } from '@capacitor/filesystem';
+} from "@/lib/hvsc/hvscDownload";
+import { Filesystem } from "@capacitor/filesystem";
 
-import { addLog } from '@/lib/logging';
+import { addLog } from "@/lib/logging";
 
-describe('hvscDownload', () => {
+describe("hvscDownload", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('logs when content length fetch fails', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('boom')));
+  it("logs when content length fetch fails", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("boom")));
 
-    const length = await fetchContentLength('http://example.com/archive.7z');
+    const length = await fetchContentLength("http://example.com/archive.7z");
 
     expect(length).toBeNull();
     expect(vi.mocked(addLog)).toHaveBeenCalledWith(
-      'warn',
-      'Failed to read HVSC content length',
+      "warn",
+      "Failed to read HVSC content length",
       expect.objectContaining({
-        url: 'http://example.com/archive.7z',
+        url: "http://example.com/archive.7z",
       }),
     );
   });
 
   // ── getErrorMessage ──
 
-  describe('getErrorMessage', () => {
-    it('extracts string errors', () => {
-      expect(getErrorMessage('boom')).toBe('boom');
+  describe("getErrorMessage", () => {
+    it("extracts string errors", () => {
+      expect(getErrorMessage("boom")).toBe("boom");
     });
 
-    it('extracts message from Error objects', () => {
-      expect(getErrorMessage(new Error('fail'))).toBe('fail');
+    it("extracts message from Error objects", () => {
+      expect(getErrorMessage(new Error("fail"))).toBe("fail");
     });
 
-    it('extracts nested error.error.message', () => {
-      expect(getErrorMessage({ error: { message: 'nested' } })).toBe('nested');
+    it("extracts nested error.error.message", () => {
+      expect(getErrorMessage({ error: { message: "nested" } })).toBe("nested");
     });
 
-    it('extracts error.error as string', () => {
-      expect(getErrorMessage({ error: 'flat-nested' })).toBe('flat-nested');
+    it("extracts error.error as string", () => {
+      expect(getErrorMessage({ error: "flat-nested" })).toBe("flat-nested");
     });
 
-    it('stringifies null/undefined', () => {
-      expect(getErrorMessage(null)).toBe('');
-      expect(getErrorMessage(undefined)).toBe('');
+    it("stringifies null/undefined", () => {
+      expect(getErrorMessage(null)).toBe("");
+      expect(getErrorMessage(undefined)).toBe("");
     });
 
-    it('stringifies number errors', () => {
-      expect(getErrorMessage(42)).toBe('42');
+    it("stringifies number errors", () => {
+      expect(getErrorMessage(42)).toBe("42");
     });
   });
 
   // ── isExistsError ──
 
-  describe('isExistsError', () => {
+  describe("isExistsError", () => {
     it('detects "already exists" errors', () => {
-      expect(isExistsError(new Error('File already exists'))).toBe(true);
+      expect(isExistsError(new Error("File already exists"))).toBe(true);
     });
 
     it('detects "exists" errors', () => {
-      expect(isExistsError('Path exists')).toBe(true);
+      expect(isExistsError("Path exists")).toBe(true);
     });
 
-    it('rejects unrelated errors', () => {
-      expect(isExistsError(new Error('permission denied'))).toBe(false);
+    it("rejects unrelated errors", () => {
+      expect(isExistsError(new Error("permission denied"))).toBe(false);
     });
   });
 
   // ── normalizeEntryName ──
 
-  describe('normalizeEntryName', () => {
-    it('replaces backslashes with forward slashes', () => {
-      expect(normalizeEntryName('HVSC\\DEMOS\\test.sid')).toBe(
-        'HVSC/DEMOS/test.sid',
+  describe("normalizeEntryName", () => {
+    it("replaces backslashes with forward slashes", () => {
+      expect(normalizeEntryName("HVSC\\DEMOS\\test.sid")).toBe(
+        "HVSC/DEMOS/test.sid",
       );
     });
 
-    it('strips leading slashes', () => {
-      expect(normalizeEntryName('///HVSC/test.sid')).toBe('HVSC/test.sid');
+    it("strips leading slashes", () => {
+      expect(normalizeEntryName("///HVSC/test.sid")).toBe("HVSC/test.sid");
     });
   });
 
   // ── normalizeVirtualPath ──
 
-  describe('normalizeVirtualPath', () => {
-    it('strips HVSC/ prefix and adds leading slash for .sid', () => {
-      expect(normalizeVirtualPath('HVSC/DEMOS/test.sid')).toBe(
-        '/DEMOS/test.sid',
+  describe("normalizeVirtualPath", () => {
+    it("strips HVSC/ prefix and adds leading slash for .sid", () => {
+      expect(normalizeVirtualPath("HVSC/DEMOS/test.sid")).toBe(
+        "/DEMOS/test.sid",
       );
     });
 
-    it('strips C64Music/ prefix', () => {
+    it("strips C64Music/ prefix", () => {
       expect(
-        normalizeVirtualPath('C64Music/MUSICIANS/Rob_Hubbard/Commando.sid'),
-      ).toBe('/MUSICIANS/Rob_Hubbard/Commando.sid');
+        normalizeVirtualPath("C64Music/MUSICIANS/Rob_Hubbard/Commando.sid"),
+      ).toBe("/MUSICIANS/Rob_Hubbard/Commando.sid");
     });
 
-    it('returns null for non-.sid entries', () => {
-      expect(normalizeVirtualPath('HVSC/DOCUMENTS/readme.txt')).toBeNull();
+    it("returns null for non-.sid entries", () => {
+      expect(normalizeVirtualPath("HVSC/DOCUMENTS/readme.txt")).toBeNull();
     });
 
-    it('handles backslashes', () => {
-      expect(normalizeVirtualPath('HVSC\\DEMOS\\test.sid')).toBe(
-        '/DEMOS/test.sid',
+    it("handles backslashes", () => {
+      expect(normalizeVirtualPath("HVSC\\DEMOS\\test.sid")).toBe(
+        "/DEMOS/test.sid",
       );
     });
   });
 
   // ── normalizeLibraryPath ──
 
-  describe('normalizeLibraryPath', () => {
-    it('normalizes HVSC library path for .sid files', () => {
-      expect(normalizeLibraryPath('HVSC/DEMOS/test.sid')).toBe(
-        '/DEMOS/test.sid',
+  describe("normalizeLibraryPath", () => {
+    it("normalizes HVSC library path for .sid files", () => {
+      expect(normalizeLibraryPath("HVSC/DEMOS/test.sid")).toBe(
+        "/DEMOS/test.sid",
       );
     });
 
-    it('normalizes non-.sid entries too', () => {
-      expect(normalizeLibraryPath('HVSC/DOCUMENTS/Songlengths.md5')).toBe(
-        '/DOCUMENTS/Songlengths.md5',
+    it("normalizes non-.sid entries too", () => {
+      expect(normalizeLibraryPath("HVSC/DOCUMENTS/Songlengths.md5")).toBe(
+        "/DOCUMENTS/Songlengths.md5",
       );
     });
 
-    it('returns null for empty path after stripping', () => {
-      expect(normalizeLibraryPath('HVSC/')).toBeNull();
+    it("returns null for empty path after stripping", () => {
+      expect(normalizeLibraryPath("HVSC/")).toBeNull();
     });
   });
 
   // ── normalizeUpdateVirtualPath ──
 
-  describe('normalizeUpdateVirtualPath', () => {
-    it('strips new/ prefix from update entries', () => {
-      expect(normalizeUpdateVirtualPath('new/DEMOS/test.sid')).toBe(
-        '/DEMOS/test.sid',
+  describe("normalizeUpdateVirtualPath", () => {
+    it("strips new/ prefix from update entries", () => {
+      expect(normalizeUpdateVirtualPath("new/DEMOS/test.sid")).toBe(
+        "/DEMOS/test.sid",
       );
     });
 
-    it('strips update/ prefix', () => {
-      expect(normalizeUpdateVirtualPath('update/MUSICIANS/test.sid')).toBe(
-        '/MUSICIANS/test.sid',
+    it("strips update/ prefix", () => {
+      expect(normalizeUpdateVirtualPath("update/MUSICIANS/test.sid")).toBe(
+        "/MUSICIANS/test.sid",
       );
     });
 
-    it('strips updated/ prefix', () => {
-      expect(normalizeUpdateVirtualPath('updated/DEMOS/test.sid')).toBe(
-        '/DEMOS/test.sid',
+    it("strips updated/ prefix", () => {
+      expect(normalizeUpdateVirtualPath("updated/DEMOS/test.sid")).toBe(
+        "/DEMOS/test.sid",
       );
     });
 
-    it('strips HVSC/ then new/ prefix', () => {
-      expect(normalizeUpdateVirtualPath('HVSC/new/DEMOS/test.sid')).toBe(
-        '/DEMOS/test.sid',
+    it("strips HVSC/ then new/ prefix", () => {
+      expect(normalizeUpdateVirtualPath("HVSC/new/DEMOS/test.sid")).toBe(
+        "/DEMOS/test.sid",
       );
     });
 
-    it('returns null for non-.sid', () => {
-      expect(normalizeUpdateVirtualPath('new/DOCUMENTS/readme.txt')).toBeNull();
+    it("returns null for non-.sid", () => {
+      expect(normalizeUpdateVirtualPath("new/DOCUMENTS/readme.txt")).toBeNull();
     });
   });
 
   // ── normalizeUpdateLibraryPath ──
 
-  describe('normalizeUpdateLibraryPath', () => {
-    it('strips new/ prefix for library paths', () => {
-      expect(normalizeUpdateLibraryPath('new/DOCUMENTS/Songlengths.md5')).toBe(
-        '/DOCUMENTS/Songlengths.md5',
+  describe("normalizeUpdateLibraryPath", () => {
+    it("strips new/ prefix for library paths", () => {
+      expect(normalizeUpdateLibraryPath("new/DOCUMENTS/Songlengths.md5")).toBe(
+        "/DOCUMENTS/Songlengths.md5",
       );
     });
 
-    it('strips update/ prefix for library paths', () => {
+    it("strips update/ prefix for library paths", () => {
       expect(
-        normalizeUpdateLibraryPath('update/DOCUMENTS/Songlengths.md5'),
-      ).toBe('/DOCUMENTS/Songlengths.md5');
+        normalizeUpdateLibraryPath("update/DOCUMENTS/Songlengths.md5"),
+      ).toBe("/DOCUMENTS/Songlengths.md5");
     });
 
-    it('strips updated/ prefix for library paths (BRDA:226)', () => {
+    it("strips updated/ prefix for library paths (BRDA:226)", () => {
       expect(
-        normalizeUpdateLibraryPath('updated/DOCUMENTS/Songlengths.md5'),
-      ).toBe('/DOCUMENTS/Songlengths.md5');
+        normalizeUpdateLibraryPath("updated/DOCUMENTS/Songlengths.md5"),
+      ).toBe("/DOCUMENTS/Songlengths.md5");
     });
   });
 
   // ── isDeletionList ──
 
-  describe('isDeletionList', () => {
-    it('detects deletion list files', () => {
-      expect(isDeletionList('delete_files.txt')).toBe(true);
-      expect(isDeletionList('REMOVE_LIST.txt')).toBe(true);
+  describe("isDeletionList", () => {
+    it("detects deletion list files", () => {
+      expect(isDeletionList("delete_files.txt")).toBe(true);
+      expect(isDeletionList("REMOVE_LIST.txt")).toBe(true);
     });
 
-    it('rejects non-deletion files', () => {
-      expect(isDeletionList('songlengths.md5')).toBe(false);
-      expect(isDeletionList('readme.txt')).toBe(false);
+    it("rejects non-deletion files", () => {
+      expect(isDeletionList("songlengths.md5")).toBe(false);
+      expect(isDeletionList("readme.txt")).toBe(false);
     });
 
-    it('rejects non-.txt extension', () => {
-      expect(isDeletionList('deleted_songs.sid')).toBe(false);
+    it("rejects non-.txt extension", () => {
+      expect(isDeletionList("deleted_songs.sid")).toBe(false);
     });
   });
 
   // ── parseDeletionList ──
 
-  describe('parseDeletionList', () => {
-    it('parses newline-separated .sid paths', () => {
-      const input = 'DEMOS/foo.sid\nMUSICIANS/bar.sid\n';
+  describe("parseDeletionList", () => {
+    it("parses newline-separated .sid paths", () => {
+      const input = "DEMOS/foo.sid\nMUSICIANS/bar.sid\n";
       expect(parseDeletionList(input)).toEqual([
-        '/DEMOS/foo.sid',
-        '/MUSICIANS/bar.sid',
+        "/DEMOS/foo.sid",
+        "/MUSICIANS/bar.sid",
       ]);
     });
 
-    it('adds leading slash if missing', () => {
-      expect(parseDeletionList('test.sid')).toEqual(['/test.sid']);
+    it("adds leading slash if missing", () => {
+      expect(parseDeletionList("test.sid")).toEqual(["/test.sid"]);
     });
 
-    it('preserves existing leading slash', () => {
-      expect(parseDeletionList('/test.sid')).toEqual(['/test.sid']);
+    it("preserves existing leading slash", () => {
+      expect(parseDeletionList("/test.sid")).toEqual(["/test.sid"]);
     });
 
-    it('filters out non-.sid lines', () => {
-      expect(parseDeletionList('readme.txt\ntest.sid')).toEqual(['/test.sid']);
+    it("filters out non-.sid lines", () => {
+      expect(parseDeletionList("readme.txt\ntest.sid")).toEqual(["/test.sid"]);
     });
 
-    it('handles CRLF', () => {
-      expect(parseDeletionList('a.sid\r\nb.sid')).toEqual(['/a.sid', '/b.sid']);
+    it("handles CRLF", () => {
+      expect(parseDeletionList("a.sid\r\nb.sid")).toEqual(["/a.sid", "/b.sid"]);
     });
 
-    it('ignores blank lines', () => {
-      expect(parseDeletionList('\n\ntest.sid\n\n')).toEqual(['/test.sid']);
+    it("ignores blank lines", () => {
+      expect(parseDeletionList("\n\ntest.sid\n\n")).toEqual(["/test.sid"]);
     });
   });
 
   // ── concatChunks ──
 
-  describe('concatChunks', () => {
-    it('concatenates chunks into single buffer', () => {
+  describe("concatChunks", () => {
+    it("concatenates chunks into single buffer", () => {
       const a = new Uint8Array([1, 2]);
       const b = new Uint8Array([3, 4, 5]);
       const result = concatChunks([a, b]);
@@ -307,7 +307,7 @@ describe('hvscDownload', () => {
       expect(result.length).toBe(5);
     });
 
-    it('uses totalLength when provided', () => {
+    it("uses totalLength when provided", () => {
       const a = new Uint8Array([1, 2]);
       const result = concatChunks([a], 5);
       expect(result.length).toBe(5);
@@ -315,69 +315,69 @@ describe('hvscDownload', () => {
       expect(result[1]).toBe(2);
     });
 
-    it('handles empty array', () => {
+    it("handles empty array", () => {
       expect(concatChunks([])).toEqual(new Uint8Array([]));
     });
   });
 
   // ── parseContentLength ──
 
-  describe('parseContentLength', () => {
-    it('parses valid content-length', () => {
-      expect(parseContentLength('12345')).toBe(12345);
+  describe("parseContentLength", () => {
+    it("parses valid content-length", () => {
+      expect(parseContentLength("12345")).toBe(12345);
     });
 
-    it('returns null for null input', () => {
+    it("returns null for null input", () => {
       expect(parseContentLength(null)).toBeNull();
     });
 
-    it('returns null for non-finite values', () => {
-      expect(parseContentLength('NaN')).toBeNull();
-      expect(parseContentLength('Infinity')).toBeNull();
+    it("returns null for non-finite values", () => {
+      expect(parseContentLength("NaN")).toBeNull();
+      expect(parseContentLength("Infinity")).toBeNull();
     });
 
-    it('returns null for zero or negative', () => {
-      expect(parseContentLength('0')).toBeNull();
-      expect(parseContentLength('-1')).toBeNull();
+    it("returns null for zero or negative", () => {
+      expect(parseContentLength("0")).toBeNull();
+      expect(parseContentLength("-1")).toBeNull();
     });
   });
 
   // ── emitDownloadProgress ──
 
-  describe('emitDownloadProgress', () => {
-    it('emits download progress with percent', () => {
+  describe("emitDownloadProgress", () => {
+    it("emits download progress with percent", () => {
       const emitProgress = vi.fn();
-      emitDownloadProgress(emitProgress, 'test.7z', 50, 100);
+      emitDownloadProgress(emitProgress, "test.7z", 50, 100);
       expect(emitProgress).toHaveBeenCalledWith({
-        stage: 'download',
-        message: 'Downloading test.7z…',
-        archiveName: 'test.7z',
+        stage: "download",
+        message: "Downloading test.7z…",
+        archiveName: "test.7z",
         downloadedBytes: 50,
         totalBytes: 100,
         percent: 50,
       });
     });
 
-    it('emits without percent when totalBytes is null', () => {
+    it("emits without percent when totalBytes is null", () => {
       const emitProgress = vi.fn();
-      emitDownloadProgress(emitProgress, 'test.7z', 50, null);
+      emitDownloadProgress(emitProgress, "test.7z", 50, null);
       expect(emitProgress).toHaveBeenCalledWith({
-        stage: 'download',
-        message: 'Downloading test.7z…',
-        archiveName: 'test.7z',
+        stage: "download",
+        message: "Downloading test.7z…",
+        archiveName: "test.7z",
         downloadedBytes: 50,
         totalBytes: undefined,
         percent: undefined,
       });
     });
 
-    it('emits with undefined downloadedBytes when null (BRDA:261,263)', () => {
+    it("emits with undefined downloadedBytes when null (BRDA:261,263)", () => {
       const emitProgress = vi.fn();
-      emitDownloadProgress(emitProgress, 'test.7z', null, 100);
+      emitDownloadProgress(emitProgress, "test.7z", null, 100);
       expect(emitProgress).toHaveBeenCalledWith({
-        stage: 'download',
-        message: 'Downloading test.7z…',
-        archiveName: 'test.7z',
+        stage: "download",
+        message: "Downloading test.7z…",
+        archiveName: "test.7z",
         downloadedBytes: undefined,
         totalBytes: 100,
         percent: 0,
@@ -387,30 +387,30 @@ describe('hvscDownload', () => {
 
   // ── ensureNotCancelledWith ──
 
-  describe('ensureNotCancelledWith', () => {
-    it('does nothing when token is not cancelled', () => {
-      const tokens = new Map([['t1', { cancelled: false }]]);
-      expect(() => ensureNotCancelledWith(tokens, 't1')).not.toThrow();
+  describe("ensureNotCancelledWith", () => {
+    it("does nothing when token is not cancelled", () => {
+      const tokens = new Map([["t1", { cancelled: false }]]);
+      expect(() => ensureNotCancelledWith(tokens, "t1")).not.toThrow();
     });
 
-    it('throws when token is cancelled', () => {
-      const tokens = new Map([['t1', { cancelled: true }]]);
-      expect(() => ensureNotCancelledWith(tokens, 't1')).toThrow(
-        'HVSC update cancelled',
+    it("throws when token is cancelled", () => {
+      const tokens = new Map([["t1", { cancelled: true }]]);
+      expect(() => ensureNotCancelledWith(tokens, "t1")).toThrow(
+        "HVSC update cancelled",
       );
     });
 
-    it('calls stateUpdater when token is cancelled', () => {
-      const tokens = new Map([['t1', { cancelled: true }]]);
+    it("calls stateUpdater when token is cancelled", () => {
+      const tokens = new Map([["t1", { cancelled: true }]]);
       const updater = vi.fn();
-      expect(() => ensureNotCancelledWith(tokens, 't1', updater)).toThrow();
+      expect(() => ensureNotCancelledWith(tokens, "t1", updater)).toThrow();
       expect(updater).toHaveBeenCalledWith({
-        ingestionState: 'idle',
-        ingestionError: 'Cancelled',
+        ingestionState: "idle",
+        ingestionError: "Cancelled",
       });
     });
 
-    it('does nothing when token is undefined', () => {
+    it("does nothing when token is undefined", () => {
       const tokens = new Map<string, { cancelled: boolean }>();
       expect(() => ensureNotCancelledWith(tokens, undefined)).not.toThrow();
     });
@@ -418,86 +418,86 @@ describe('hvscDownload', () => {
 
   // ── downloadArchive ──
 
-  describe('readArchiveBuffer', () => {
-    it('decodes archive base64 payload through guarded chunked decode', async () => {
+  describe("readArchiveBuffer", () => {
+    it("decodes archive base64 payload through guarded chunked decode", async () => {
       vi.mocked(Filesystem.stat).mockResolvedValue({ size: 4 } as any);
       vi.mocked(Filesystem.readFile).mockResolvedValue({
-        data: 'AQIDBA==',
+        data: "AQIDBA==",
       } as any);
 
-      const decoded = await readArchiveBuffer('hvsc-baseline-84.7z');
+      const decoded = await readArchiveBuffer("hvsc-baseline-84.7z");
 
       expect(decoded).toEqual(new Uint8Array([1, 2, 3, 4]));
     });
 
-    it('proceeds when stat.size is undefined (BRDA:333)', async () => {
+    it("proceeds when stat.size is undefined (BRDA:333)", async () => {
       vi.mocked(Filesystem.stat).mockResolvedValue({} as any);
       vi.mocked(Filesystem.readFile).mockResolvedValue({
-        data: 'AQIDBA==',
+        data: "AQIDBA==",
       } as any);
-      const decoded = await readArchiveBuffer('hvsc-baseline-84.7z');
+      const decoded = await readArchiveBuffer("hvsc-baseline-84.7z");
       expect(decoded).toEqual(new Uint8Array([1, 2, 3, 4]));
     });
 
-    it('throws when stat.size exceeds MAX_BRIDGE_READ_BYTES (BRDA:340)', async () => {
+    it("throws when stat.size exceeds MAX_BRIDGE_READ_BYTES (BRDA:340)", async () => {
       vi.mocked(Filesystem.stat).mockResolvedValue({
         size: 10 * 1024 * 1024,
       } as any);
-      await expect(readArchiveBuffer('hvsc-baseline-84.7z')).rejects.toThrow(
-        'HVSC bridge read blocked',
+      await expect(readArchiveBuffer("hvsc-baseline-84.7z")).rejects.toThrow(
+        "HVSC bridge read blocked",
       );
     });
 
-    it('continues when stat throws during size check (BRDA:334)', async () => {
-      vi.mocked(Filesystem.stat).mockRejectedValue(new Error('stat failed'));
+    it("continues when stat throws during size check (BRDA:334)", async () => {
+      vi.mocked(Filesystem.stat).mockRejectedValue(new Error("stat failed"));
       vi.mocked(Filesystem.readFile).mockResolvedValue({
-        data: 'AQIDBA==',
+        data: "AQIDBA==",
       } as any);
-      const decoded = await readArchiveBuffer('hvsc-baseline-84.7z');
+      const decoded = await readArchiveBuffer("hvsc-baseline-84.7z");
       expect(decoded).toEqual(new Uint8Array([1, 2, 3, 4]));
     });
 
-    it('decodes empty base64 string returning empty Uint8Array (BRDA:107)', async () => {
+    it("decodes empty base64 string returning empty Uint8Array (BRDA:107)", async () => {
       vi.mocked(Filesystem.stat).mockResolvedValue({ size: 0 } as any);
-      vi.mocked(Filesystem.readFile).mockResolvedValue({ data: '' } as any);
-      const decoded = await readArchiveBuffer('hvsc-baseline-84.7z');
+      vi.mocked(Filesystem.readFile).mockResolvedValue({ data: "" } as any);
+      const decoded = await readArchiveBuffer("hvsc-baseline-84.7z");
       expect(decoded).toEqual(new Uint8Array(0));
     });
   });
 
-  describe('resolveCachedArchive', () => {
-    it('returns null when stat finds file type but marker is null (BRDA:279,281)', async () => {
-      vi.mocked(Filesystem.stat).mockResolvedValue({ type: 'file' } as any);
-      const result = await resolveCachedArchive('hvsc-baseline', 84);
+  describe("resolveCachedArchive", () => {
+    it("returns null when stat finds file type but marker is null (BRDA:279,281)", async () => {
+      vi.mocked(Filesystem.stat).mockResolvedValue({ type: "file" } as any);
+      const result = await resolveCachedArchive("hvsc-baseline", 84);
       expect(result).toBeNull();
     });
 
-    it('returns null when all stat calls throw', async () => {
-      vi.mocked(Filesystem.stat).mockRejectedValue(new Error('not found'));
-      const result = await resolveCachedArchive('hvsc-baseline', 84);
+    it("returns null when all stat calls throw", async () => {
+      vi.mocked(Filesystem.stat).mockRejectedValue(new Error("not found"));
+      const result = await resolveCachedArchive("hvsc-baseline", 84);
       expect(result).toBeNull();
     });
 
-    it('returns name when stat finds directory type and marker is set (BRDA:279)', async () => {
+    it("returns name when stat finds directory type and marker is set (BRDA:279)", async () => {
       vi.mocked(Filesystem.stat).mockResolvedValue({
-        type: 'directory',
+        type: "directory",
       } as any);
       const { readCachedArchiveMarker } =
-        await import('@/lib/hvsc/hvscFilesystem');
+        await import("@/lib/hvsc/hvscFilesystem");
       vi.mocked(readCachedArchiveMarker).mockResolvedValue({
         version: 84,
       } as any);
-      const result = await resolveCachedArchive('hvsc-baseline', 84);
-      expect(result).toBe('hvsc-baseline-84');
+      const result = await resolveCachedArchive("hvsc-baseline", 84);
+      expect(result).toBe("hvsc-baseline-84");
     });
   });
 
-  describe('getCacheStatusInternal', () => {
-    it('parses baseline and update versions from readdir (BRDA:299,307)', async () => {
+  describe("getCacheStatusInternal", () => {
+    it("parses baseline and update versions from readdir (BRDA:299,307)", async () => {
       vi.mocked(Filesystem.readdir).mockResolvedValue({
         files: [
-          'hvsc-baseline-84.complete.json',
-          'hvsc-update-85.complete.json',
+          "hvsc-baseline-84.complete.json",
+          "hvsc-update-85.complete.json",
         ],
       } as any);
       const status = await getCacheStatusInternal();
@@ -505,17 +505,17 @@ describe('hvscDownload', () => {
       expect(status.updateVersions).toEqual([85]);
     });
 
-    it('returns empty status when readdir throws', async () => {
-      vi.mocked(Filesystem.readdir).mockRejectedValue(new Error('no dir'));
+    it("returns empty status when readdir throws", async () => {
+      vi.mocked(Filesystem.readdir).mockRejectedValue(new Error("no dir"));
       const status = await getCacheStatusInternal();
       expect(status.baselineVersion).toBeNull();
       expect(status.updateVersions).toEqual([]);
     });
 
-    it('handles object entries with undefined name (BRDA:307)', async () => {
+    it("handles object entries with undefined name (BRDA:307)", async () => {
       vi.mocked(Filesystem.readdir).mockResolvedValue({
         files: [
-          { name: 'hvsc-baseline-84.complete.json' },
+          { name: "hvsc-baseline-84.complete.json" },
           { name: undefined },
         ],
       } as any);
@@ -523,23 +523,23 @@ describe('hvscDownload', () => {
       expect(status.baselineVersion).toBe(84);
     });
 
-    it('handles files undefined in readdir result (BRDA:299)', async () => {
+    it("handles files undefined in readdir result (BRDA:299)", async () => {
       vi.mocked(Filesystem.readdir).mockResolvedValue({} as any);
       const status = await getCacheStatusInternal();
       expect(status.baselineVersion).toBeNull();
     });
   });
 
-  describe('downloadArchive', () => {
+  describe("downloadArchive", () => {
     const makeOptions = (
       overrides: Partial<Parameters<typeof downloadArchive>[0]> = {},
     ) => ({
-      plan: { type: 'baseline' as const, version: 84 },
-      archiveName: 'hvsc-baseline-84.7z',
-      archivePath: 'hvsc-baseline-84.7z',
-      downloadUrl: 'https://example.com/hvsc.7z',
-      cancelToken: 'token-1',
-      cancelTokens: new Map([['token-1', { cancelled: false }]]),
+      plan: { type: "baseline" as const, version: 84 },
+      archiveName: "hvsc-baseline-84.7z",
+      archivePath: "hvsc-baseline-84.7z",
+      downloadUrl: "https://example.com/hvsc.7z",
+      cancelToken: "token-1",
+      cancelTokens: new Map([["token-1", { cancelled: false }]]),
       emitProgress: vi.fn(),
       ...overrides,
     });
@@ -549,7 +549,7 @@ describe('hvscDownload', () => {
       globalThis.fetch = vi.fn();
     });
 
-    it('streams download progress and writes archive', async () => {
+    it("streams download progress and writes archive", async () => {
       const chunks = [
         new Uint8Array([1, 2]),
         new Uint8Array([3, 4]),
@@ -558,7 +558,7 @@ describe('hvscDownload', () => {
       let index = 0;
       (globalThis.fetch as any).mockResolvedValue({
         ok: true,
-        headers: { get: () => '6' },
+        headers: { get: () => "6" },
         body: {
           getReader: () => ({
             read: async () => {
@@ -575,22 +575,22 @@ describe('hvscDownload', () => {
       const options = makeOptions();
       const inMemory = await downloadArchive(options);
 
-      const { writeCachedArchive } = await import('@/lib/hvsc/hvscFilesystem');
+      const { writeCachedArchive } = await import("@/lib/hvsc/hvscFilesystem");
       expect(writeCachedArchive).toHaveBeenCalledWith(
-        'hvsc-baseline-84.7z',
+        "hvsc-baseline-84.7z",
         expect.any(Uint8Array),
       );
       const progressStages = (options.emitProgress as any).mock.calls.map(
         (call: any[]) => call[0]?.stage,
       );
-      expect(progressStages).toContain('download');
+      expect(progressStages).toContain("download");
       expect(inMemory).toBeNull();
     });
 
-    it('retains in-memory buffer when requested', async () => {
+    it("retains in-memory buffer when requested", async () => {
       (globalThis.fetch as any).mockResolvedValue({
         ok: true,
-        headers: { get: () => '2' },
+        headers: { get: () => "2" },
         body: null,
         arrayBuffer: async () => new Uint8Array([7, 8]).buffer,
       });
@@ -602,11 +602,11 @@ describe('hvscDownload', () => {
       expect(buffer).toEqual(new Uint8Array([7, 8]));
     });
 
-    it('throws on content-length mismatch (streaming)', async () => {
+    it("throws on content-length mismatch (streaming)", async () => {
       let readCalls = 0;
       (globalThis.fetch as any).mockResolvedValue({
         ok: true,
-        headers: { get: () => '5' },
+        headers: { get: () => "5" },
         body: {
           getReader: () => ({
             read: async () => {
@@ -620,29 +620,29 @@ describe('hvscDownload', () => {
       });
 
       await expect(downloadArchive(makeOptions())).rejects.toThrow(
-        'Download size mismatch',
+        "Download size mismatch",
       );
     });
 
-    it('throws on content-length mismatch (buffered)', async () => {
+    it("throws on content-length mismatch (buffered)", async () => {
       (globalThis.fetch as any).mockResolvedValue({
         ok: true,
-        headers: { get: () => '4' },
+        headers: { get: () => "4" },
         body: null,
         arrayBuffer: async () => new Uint8Array([1, 2]).buffer,
       });
 
       await expect(downloadArchive(makeOptions())).rejects.toThrow(
-        'Download size mismatch',
+        "Download size mismatch",
       );
     });
 
-    it('cancels mid-download when token flips', async () => {
-      const tokens = new Map([['token-1', { cancelled: false }]]);
+    it("cancels mid-download when token flips", async () => {
+      const tokens = new Map([["token-1", { cancelled: false }]]);
       let index = 0;
       (globalThis.fetch as any).mockResolvedValue({
         ok: true,
-        headers: { get: () => '4' },
+        headers: { get: () => "4" },
         body: {
           getReader: () => ({
             read: async () => {
@@ -650,7 +650,7 @@ describe('hvscDownload', () => {
                 index += 1;
                 return { done: false, value: new Uint8Array([1, 2]) };
               }
-              tokens.get('token-1')!.cancelled = true;
+              tokens.get("token-1")!.cancelled = true;
               return { done: false, value: new Uint8Array([3, 4]) };
             },
           }),
@@ -659,19 +659,19 @@ describe('hvscDownload', () => {
 
       await expect(
         downloadArchive(makeOptions({ cancelTokens: tokens })),
-      ).rejects.toThrow('HVSC update cancelled');
+      ).rejects.toThrow("HVSC update cancelled");
     });
 
-    it('propagates HTTP errors', async () => {
+    it("propagates HTTP errors", async () => {
       (globalThis.fetch as any).mockResolvedValue({
         ok: false,
         status: 500,
-        statusText: 'Server error',
+        statusText: "Server error",
         headers: { get: () => null },
       });
 
       await expect(downloadArchive(makeOptions())).rejects.toThrow(
-        'Download failed: 500 Server error',
+        "Download failed: 500 Server error",
       );
     });
   });

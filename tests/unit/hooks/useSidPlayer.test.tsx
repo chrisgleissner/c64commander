@@ -6,9 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { describe, expect, it, vi, afterEach } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
-import React from 'react';
+import { describe, expect, it, vi, afterEach } from "vitest";
+import { renderHook, act } from "@testing-library/react";
+import React from "react";
 
 const mocks = vi.hoisted(() => ({
   playSidUpload: vi.fn(async () => undefined),
@@ -16,18 +16,18 @@ const mocks = vi.hoisted(() => ({
   stopBackgroundExecution: vi.fn(async () => undefined),
 }));
 
-vi.mock('@/lib/c64api', () => ({
+vi.mock("@/lib/c64api", () => ({
   getC64API: () => ({ playSidUpload: mocks.playSidUpload }),
 }));
 
-vi.mock('@/lib/native/backgroundExecutionManager', () => ({
+vi.mock("@/lib/native/backgroundExecutionManager", () => ({
   startBackgroundExecution: mocks.startBackgroundExecution,
   stopBackgroundExecution: mocks.stopBackgroundExecution,
 }));
 
-import { SidPlayerProvider, useSidPlayer } from '@/hooks/useSidPlayer';
+import { SidPlayerProvider, useSidPlayer } from "@/hooks/useSidPlayer";
 
-describe('useSidPlayer', () => {
+describe("useSidPlayer", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
@@ -35,9 +35,9 @@ describe('useSidPlayer', () => {
     mocks.stopBackgroundExecution.mockReset();
   });
 
-  it('only starts elapsed timer interval while playback is active', async () => {
+  it("only starts elapsed timer interval while playback is active", async () => {
     vi.useFakeTimers();
-    const setIntervalSpy = vi.spyOn(window, 'setInterval');
+    const setIntervalSpy = vi.spyOn(window, "setInterval");
 
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <SidPlayerProvider>{children}</SidPlayerProvider>
@@ -49,9 +49,9 @@ describe('useSidPlayer', () => {
 
     await act(async () => {
       await result.current.playTrack({
-        id: 'track-1',
-        title: 'Track 1',
-        source: 'local',
+        id: "track-1",
+        title: "Track 1",
+        source: "local",
         data: new Uint8Array([1, 2, 3]),
       });
     });
@@ -59,7 +59,7 @@ describe('useSidPlayer', () => {
     expect(setIntervalSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('does not start background execution in deprecated provider path', async () => {
+  it("does not start background execution in deprecated provider path", async () => {
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <SidPlayerProvider>{children}</SidPlayerProvider>
     );
@@ -68,9 +68,9 @@ describe('useSidPlayer', () => {
 
     await act(async () => {
       await result.current.playTrack({
-        id: 'track-1',
-        title: 'Track 1',
-        source: 'local',
+        id: "track-1",
+        title: "Track 1",
+        source: "local",
         data: new Uint8Array([1, 2, 3]),
       });
     });
@@ -83,13 +83,13 @@ describe('useSidPlayer', () => {
     expect(mocks.stopBackgroundExecution).not.toHaveBeenCalled();
   });
 
-  it('throws when legacy hook is used outside provider', () => {
+  it("throws when legacy hook is used outside provider", () => {
     expect(() => renderHook(() => useSidPlayer())).toThrow(
-      'useSidPlayer must be used within SidPlayerProvider',
+      "useSidPlayer must be used within SidPlayerProvider",
     );
   });
 
-  it('returns early for empty queue in playQueue', async () => {
+  it("returns early for empty queue in playQueue", async () => {
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <SidPlayerProvider>{children}</SidPlayerProvider>
     );
@@ -103,7 +103,7 @@ describe('useSidPlayer', () => {
     expect(result.current.currentIndex).toBe(-1);
   });
 
-  it('throws when track is missing playable data', async () => {
+  it("throws when track is missing playable data", async () => {
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <SidPlayerProvider>{children}</SidPlayerProvider>
     );
@@ -111,22 +111,22 @@ describe('useSidPlayer', () => {
 
     await expect(
       result.current.playTrack({
-        id: 'missing-data',
-        title: 'Missing',
-        source: 'local',
+        id: "missing-data",
+        title: "Missing",
+        source: "local",
       }),
-    ).rejects.toThrow('Missing SID data.');
+    ).rejects.toThrow("Missing SID data.");
   });
 
-  it('assigns an id when playTrack is called without one', async () => {
+  it("assigns an id when playTrack is called without one", async () => {
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <SidPlayerProvider>{children}</SidPlayerProvider>
     );
     const { result } = renderHook(() => useSidPlayer(), { wrapper });
 
     const track = {
-      title: 'No ID',
-      source: 'local' as const,
+      title: "No ID",
+      source: "local" as const,
       data: new Uint8Array([1, 2, 3]),
     };
 
@@ -134,26 +134,26 @@ describe('useSidPlayer', () => {
       await result.current.playTrack(track);
     });
 
-    expect(typeof (track as { id?: string }).id).toBe('string');
+    expect(typeof (track as { id?: string }).id).toBe("string");
     expect((track as { id?: string }).id?.length).toBeGreaterThan(0);
   });
 
-  it('wraps previous and next around queue boundaries', async () => {
+  it("wraps previous and next around queue boundaries", async () => {
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <SidPlayerProvider>{children}</SidPlayerProvider>
     );
     const { result } = renderHook(() => useSidPlayer(), { wrapper });
     const tracks = [
       {
-        id: 'a',
-        title: 'A',
-        source: 'local' as const,
+        id: "a",
+        title: "A",
+        source: "local" as const,
         data: new Uint8Array([1]),
       },
       {
-        id: 'b',
-        title: 'B',
-        source: 'local' as const,
+        id: "b",
+        title: "B",
+        source: "local" as const,
         data: new Uint8Array([2]),
       },
     ];
@@ -173,33 +173,33 @@ describe('useSidPlayer', () => {
     expect(result.current.currentIndex).toBe(0);
   });
 
-  it('uses shuffle branch when enabled', async () => {
+  it("uses shuffle branch when enabled", async () => {
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <SidPlayerProvider>{children}</SidPlayerProvider>
     );
     const { result } = renderHook(() => useSidPlayer(), { wrapper });
     const tracks = [
       {
-        id: 'a',
-        title: 'A',
-        source: 'local' as const,
+        id: "a",
+        title: "A",
+        source: "local" as const,
         data: new Uint8Array([1]),
       },
       {
-        id: 'b',
-        title: 'B',
-        source: 'local' as const,
+        id: "b",
+        title: "B",
+        source: "local" as const,
         data: new Uint8Array([2]),
       },
       {
-        id: 'c',
-        title: 'C',
-        source: 'local' as const,
+        id: "c",
+        title: "C",
+        source: "local" as const,
         data: new Uint8Array([3]),
       },
     ];
 
-    const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.8);
+    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0.8);
     await act(async () => {
       await result.current.playQueue(tracks, 0);
     });
@@ -216,7 +216,7 @@ describe('useSidPlayer', () => {
     randomSpy.mockRestore();
   });
 
-  it('auto-advances when elapsed time reaches duration', async () => {
+  it("auto-advances when elapsed time reaches duration", async () => {
     vi.useFakeTimers();
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <SidPlayerProvider>{children}</SidPlayerProvider>
@@ -224,16 +224,16 @@ describe('useSidPlayer', () => {
     const { result } = renderHook(() => useSidPlayer(), { wrapper });
     const tracks = [
       {
-        id: 'a',
-        title: 'A',
-        source: 'local' as const,
+        id: "a",
+        title: "A",
+        source: "local" as const,
         data: new Uint8Array([1]),
         durationMs: 100,
       },
       {
-        id: 'b',
-        title: 'B',
-        source: 'local' as const,
+        id: "b",
+        title: "B",
+        source: "local" as const,
         data: new Uint8Array([2]),
         durationMs: 100,
       },

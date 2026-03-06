@@ -6,13 +6,13 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { zipSync, strToU8 } from 'fflate';
-import { Share } from '@capacitor/share';
-import { Filesystem, Directory } from '@capacitor/filesystem';
-import { Capacitor } from '@capacitor/core';
-import { addErrorLog } from '@/lib/logging';
+import { zipSync, strToU8 } from "fflate";
+import { Share } from "@capacitor/share";
+import { Filesystem, Directory } from "@capacitor/filesystem";
+import { Capacitor } from "@capacitor/core";
+import { addErrorLog } from "@/lib/logging";
 
-export type DiagnosticsExportTab = 'error-logs' | 'logs' | 'traces' | 'actions';
+export type DiagnosticsExportTab = "error-logs" | "logs" | "traces" | "actions";
 
 type DiagnosticsShareOverridePayload = {
   filename: string;
@@ -31,14 +31,14 @@ type DiagnosticsShareOverrideWindow = Window & {
 
 const isTestProbeEnabled = () => {
   try {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       const enabled = (window as Window & { __c64uTestProbeEnabled?: boolean })
         .__c64uTestProbeEnabled;
       if (enabled) return true;
     }
-    return import.meta.env.VITE_ENABLE_TEST_PROBES === '1';
+    return import.meta.env.VITE_ENABLE_TEST_PROBES === "1";
   } catch (error) {
-    addErrorLog('Diagnostics export test probe check failed', {
+    addErrorLog("Diagnostics export test probe check failed", {
       error: (error as Error).message,
     });
     return false;
@@ -46,7 +46,7 @@ const isTestProbeEnabled = () => {
 };
 
 const getShareOverride = (): DiagnosticsShareOverride | null => {
-  if (typeof window === 'undefined') return null;
+  if (typeof window === "undefined") return null;
   const override =
     (window as DiagnosticsShareOverrideWindow).__c64uDiagnosticsShareOverride ??
     null;
@@ -60,9 +60,9 @@ const blobToBase64 = (blob: Blob): Promise<string> => {
     const reader = new FileReader();
     reader.onloadend = () => {
       const result = reader.result as string;
-      const parts = typeof result === 'string' ? result.split(',') : [];
+      const parts = typeof result === "string" ? result.split(",") : [];
       if (parts.length < 2 || !parts[1]) {
-        reject(new Error('Unexpected data URL format for diagnostics export.'));
+        reject(new Error("Unexpected data URL format for diagnostics export."));
         return;
       }
       resolve(parts[1]);
@@ -74,13 +74,13 @@ const blobToBase64 = (blob: Blob): Promise<string> => {
 
 const buildDiagnosticsZipData = (tab: DiagnosticsExportTab, data: unknown) => {
   const fileName =
-    tab === 'error-logs'
-      ? 'error-logs.json'
-      : tab === 'logs'
-        ? 'logs.json'
-        : tab === 'traces'
-          ? 'traces.json'
-          : 'actions.json';
+    tab === "error-logs"
+      ? "error-logs.json"
+      : tab === "logs"
+        ? "logs.json"
+        : tab === "traces"
+          ? "traces.json"
+          : "actions.json";
   const json = JSON.stringify(data ?? [], null, 2);
   return zipSync({
     [fileName]: strToU8(json),
@@ -91,7 +91,7 @@ export const buildDiagnosticsZipBlob = (
   tab: DiagnosticsExportTab,
   data: unknown,
 ) =>
-  new Blob([buildDiagnosticsZipData(tab, data)], { type: 'application/zip' });
+  new Blob([buildDiagnosticsZipData(tab, data)], { type: "application/zip" });
 
 const downloadDiagnosticsZip = (
   filename: string,
@@ -100,7 +100,7 @@ const downloadDiagnosticsZip = (
 ) => {
   const blob = buildDiagnosticsZipBlob(tab, data);
   const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
+  const link = document.createElement("a");
   link.href = url;
   link.download = filename;
   link.click();
@@ -119,7 +119,7 @@ export const shareDiagnosticsZip = async (
       await override({ filename, tab, data, zipData });
       return;
     } catch (error) {
-      addErrorLog('Diagnostics share override failed', {
+      addErrorLog("Diagnostics share override failed", {
         error: (error as Error).message,
       });
       throw error;
@@ -142,11 +142,11 @@ export const shareDiagnosticsZip = async (
       });
 
       await Share.share({
-        title: 'Diagnostics Export',
+        title: "Diagnostics Export",
         files: [uriResult.uri],
       });
     } catch (error) {
-      addErrorLog('Diagnostics share failed', {
+      addErrorLog("Diagnostics share failed", {
         error: (error as Error).message,
       });
       throw error;

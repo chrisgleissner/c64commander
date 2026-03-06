@@ -1,6 +1,7 @@
 appId: uk.gleissner.c64commander
 tags:
   - edge
+  - slow
   - device
 env:
   LONG_TIMEOUT: ${LONG_TIMEOUT || "20000"}

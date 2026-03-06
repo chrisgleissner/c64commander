@@ -1,29 +1,29 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef } from "react";
 import type {
   PlayableEntry,
   PlaylistItem,
   StoredPlaybackSession,
   StoredPlaylistState,
-} from '../types';
+} from "../types";
 import {
   PLAYBACK_SESSION_KEY,
   PLAYLIST_STORAGE_PREFIX,
   buildPlaylistStorageKey,
   isSongCategory,
   parseModifiedAt,
-} from '../playFilesUtils';
-import { shouldPersistLegacyPlaylistBlob } from './playbackPersistenceBudget';
-import { normalizeSourcePath } from '@/lib/sourceNavigation/paths';
-import { resolveLocalRuntimeFile } from '@/lib/sourceNavigation/localSourceAdapter';
+} from "../playFilesUtils";
+import { shouldPersistLegacyPlaylistBlob } from "./playbackPersistenceBudget";
+import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
+import { resolveLocalRuntimeFile } from "@/lib/sourceNavigation/localSourceAdapter";
 import {
   buildLocalPlayFileFromTree,
   buildLocalPlayFileFromUri,
-} from '@/lib/playback/fileLibraryUtils';
-import type { PlaybackClock } from '@/lib/playback/playbackClock';
-import type { LocalPlayFile } from '@/lib/playback/playbackRouter';
-import { addErrorLog } from '@/lib/logging';
-import { getPlaylistDataRepository } from '@/lib/playlistRepository';
-import type { PlaylistItemRecord, TrackRecord } from '@/lib/playlistRepository';
+} from "@/lib/playback/fileLibraryUtils";
+import type { PlaybackClock } from "@/lib/playback/playbackClock";
+import type { LocalPlayFile } from "@/lib/playback/playbackRouter";
+import { addErrorLog } from "@/lib/logging";
+import { getPlaylistDataRepository } from "@/lib/playlistRepository";
+import type { PlaylistItemRecord, TrackRecord } from "@/lib/playlistRepository";
 
 interface UsePlaybackPersistenceProps {
   playlist: PlaylistItem[];
@@ -122,11 +122,11 @@ export function usePlaybackPersistence({
       .map((entry) => {
         const normalizedPath = normalizeSourcePath(entry.path);
         const localEntry =
-          entry.source === 'local' && entry.sourceId
+          entry.source === "local" && entry.sourceId
             ? localEntriesBySourceId.get(entry.sourceId)?.get(normalizedPath)
             : null;
         const localTreeUri =
-          entry.source === 'local' && entry.sourceId
+          entry.source === "local" && entry.sourceId
             ? localSourceTreeUris.get(entry.sourceId)
             : null;
         const playable: PlayableEntry = {
@@ -136,8 +136,8 @@ export function usePlaybackPersistence({
           durationMs: entry.durationMs,
           sourceId: entry.sourceId ?? null,
           file:
-            entry.source === 'local'
-              ? resolveLocalRuntimeFile(entry.sourceId ?? '', normalizedPath) ||
+            entry.source === "local"
+              ? resolveLocalRuntimeFile(entry.sourceId ?? "", normalizedPath) ||
                 (localEntry?.uri
                   ? buildLocalPlayFileFromUri(
                       entry.name,
@@ -154,7 +154,7 @@ export function usePlaybackPersistence({
                       parseModifiedAt(localEntry?.modifiedAt),
                     )
                   : undefined)
-              : entry.source === 'hvsc'
+              : entry.source === "hvsc"
                 ? buildHvscLocalPlayFile(normalizedPath, entry.name)
                 : undefined,
           sizeBytes: localEntry?.sizeBytes ?? entry.sizeBytes ?? null,
@@ -170,7 +170,7 @@ export function usePlaybackPersistence({
     source: string,
     sourceId: string | null | undefined,
     path: string,
-  ) => `${source}:${sourceId ?? ''}:${normalizeSourcePath(path)}`;
+  ) => `${source}:${sourceId ?? ""}:${normalizeSourcePath(path)}`;
 
   const serializePlaylistToRepository = (
     items: PlaylistItem[],
@@ -206,9 +206,9 @@ export function usePlaybackPersistence({
         item.path,
       ),
       songNr: item.request.songNr ?? 1,
-      sortKey: String(index).padStart(8, '0'),
+      sortKey: String(index).padStart(8, "0"),
       durationOverrideMs: item.durationMs ?? null,
-      status: item.status ?? 'ready',
+      status: item.status ?? "ready",
       unavailableReason: item.unavailableReason ?? null,
       addedAt: item.addedAt ?? nowIso,
     }));
@@ -248,8 +248,8 @@ export function usePlaybackPersistence({
             durationMs: track.defaultDurationMs ?? undefined,
             songNr: playlistItem.songNr,
             sourceId:
-              track.sourceKind === 'local'
-                ? track.sourceLocator.startsWith('/')
+              track.sourceKind === "local"
+                ? track.sourceLocator.startsWith("/")
                   ? null
                   : track.sourceLocator
                 : null,
@@ -268,15 +268,15 @@ export function usePlaybackPersistence({
 
   // Restore Session (Step 1: Read)
   useEffect(() => {
-    if (typeof sessionStorage === 'undefined') return;
+    if (typeof sessionStorage === "undefined") return;
     try {
       const raw = sessionStorage.getItem(PLAYBACK_SESSION_KEY);
       if (!raw) return;
       const parsed = JSON.parse(raw) as StoredPlaybackSession;
-      if (!parsed || typeof parsed !== 'object') return;
+      if (!parsed || typeof parsed !== "object") return;
       pendingPlaybackRestoreRef.current = parsed;
     } catch (error) {
-      addErrorLog('Failed to restore playback session', {
+      addErrorLog("Failed to restore playback session", {
         error: (error as Error).message,
       });
     }
@@ -284,7 +284,7 @@ export function usePlaybackPersistence({
 
   // Restore Playlist (Local Storage)
   useEffect(() => {
-    if (typeof localStorage === 'undefined') return;
+    if (typeof localStorage === "undefined") return;
     if (hasHydratedPlaylistRef.current) return;
     hasHydratedPlaylistRef.current = true;
     (async () => {
@@ -297,9 +297,9 @@ export function usePlaybackPersistence({
           candidateKeys.push(key);
         };
 
-        const defaultKey = buildPlaylistStorageKey('default');
+        const defaultKey = buildPlaylistStorageKey("default");
         pushKey(playlistStorageKey);
-        if (resolvedDeviceId !== 'default') {
+        if (resolvedDeviceId !== "default") {
           pushKey(defaultKey);
         }
 
@@ -328,7 +328,7 @@ export function usePlaybackPersistence({
             const parsed = JSON.parse(raw) as StoredPlaylistState;
             candidates.push({ key, parsed });
           } catch (error) {
-            addErrorLog('Failed to parse stored playlist candidate', {
+            addErrorLog("Failed to parse stored playlist candidate", {
               key,
               error: (error as Error).message,
             });
@@ -361,14 +361,14 @@ export function usePlaybackPersistence({
           await persistSerializedPlaylist(serialized);
         }
       } catch (error) {
-        addErrorLog('Failed to hydrate stored playlist', {
+        addErrorLog("Failed to hydrate stored playlist", {
           playlistStorageKey,
           resolvedDeviceId,
           error: (error as Error).message,
         });
       }
     })().catch((error) => {
-      addErrorLog('Playlist hydration task failed', {
+      addErrorLog("Playlist hydration task failed", {
         playlistStorageKey,
         error: (error as Error).message,
       });
@@ -412,7 +412,7 @@ export function usePlaybackPersistence({
     if (pending.isPlaying && !pending.isPaused) {
       trackStartedAtRef.current = now - Math.max(0, pending.elapsedMs);
       playedClockRef.current.hydrate(Math.max(0, pending.playedMs), now);
-      if (typeof pending.durationMs === 'number' && pending.durationMs > 0) {
+      if (typeof pending.durationMs === "number" && pending.durationMs > 0) {
         const restoredTrackInstanceId = trackInstanceIdRef.current + 1;
         trackInstanceIdRef.current = restoredTrackInstanceId;
         setTrackInstanceId(restoredTrackInstanceId);
@@ -439,7 +439,7 @@ export function usePlaybackPersistence({
 
   // Persist Playlist
   useEffect(() => {
-    if (typeof localStorage === 'undefined') return;
+    if (typeof localStorage === "undefined") return;
     if (!hasHydratedPlaylistRef.current) return;
     const stored: StoredPlaylistState = {
       items: playlist.map((item) => ({
@@ -452,7 +452,7 @@ export function usePlaybackPersistence({
         sizeBytes: item.sizeBytes ?? null,
         modifiedAt: item.modifiedAt ?? null,
         addedAt: item.addedAt ?? null,
-        status: item.status ?? 'ready',
+        status: item.status ?? "ready",
         unavailableReason: item.unavailableReason ?? null,
       })),
       currentIndex,
@@ -466,13 +466,13 @@ export function usePlaybackPersistence({
       );
       if (shouldPersistLegacy) {
         localStorage.setItem(playlistStorageKey, payload);
-        const defaultKey = buildPlaylistStorageKey('default');
+        const defaultKey = buildPlaylistStorageKey("default");
         if (playlistStorageKey !== defaultKey) {
           localStorage.setItem(defaultKey, payload);
         }
       } else {
         addErrorLog(
-          'Skipping legacy playlist blob persistence due to size budget',
+          "Skipping legacy playlist blob persistence due to size budget",
           {
             playlistStorageKey,
             playlistItems: playlist.length,
@@ -480,7 +480,7 @@ export function usePlaybackPersistence({
           },
         );
         localStorage.removeItem(playlistStorageKey);
-        const defaultKey = buildPlaylistStorageKey('default');
+        const defaultKey = buildPlaylistStorageKey("default");
         localStorage.removeItem(defaultKey);
       }
       const serialized = serializePlaylistToRepository(
@@ -488,13 +488,13 @@ export function usePlaybackPersistence({
         playlistStorageKey,
       );
       void persistSerializedPlaylist(serialized).catch((error) => {
-        addErrorLog('Failed to persist playlist repository state', {
+        addErrorLog("Failed to persist playlist repository state", {
           playlistStorageKey,
           error: (error as Error).message,
         });
       });
     } catch (error) {
-      addErrorLog('Failed to persist playlist', {
+      addErrorLog("Failed to persist playlist", {
         playlistStorageKey,
         error: (error as Error).message,
       });
@@ -503,7 +503,7 @@ export function usePlaybackPersistence({
 
   // Persist Session
   useEffect(() => {
-    if (typeof sessionStorage === 'undefined') return;
+    if (typeof sessionStorage === "undefined") return;
     if (!isPlaying && !isPaused) {
       sessionStorage.removeItem(PLAYBACK_SESSION_KEY);
       return;
@@ -523,7 +523,7 @@ export function usePlaybackPersistence({
     try {
       sessionStorage.setItem(PLAYBACK_SESSION_KEY, JSON.stringify(payload));
     } catch (error) {
-      addErrorLog('Failed to persist playback session', {
+      addErrorLog("Failed to persist playback session", {
         playlistStorageKey,
         error: (error as Error).message,
       });

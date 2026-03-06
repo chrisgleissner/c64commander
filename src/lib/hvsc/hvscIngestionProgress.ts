@@ -6,15 +6,15 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { HvscProgressEvent } from './hvscTypes';
-import { updateHvscStatusSummaryFromEvent } from './hvscStatusStore';
+import type { HvscProgressEvent } from "./hvscTypes";
+import { updateHvscStatusSummaryFromEvent } from "./hvscStatusStore";
 
 const listeners = new Set<(event: HvscProgressEvent) => void>();
 let summaryLastStage: string | null = null;
 
 const emit = (event: HvscProgressEvent) => {
   const lastStage = summaryLastStage;
-  if (event.stage && event.stage !== 'error') {
+  if (event.stage && event.stage !== "error") {
     summaryLastStage = event.stage;
   }
   updateHvscStatusSummaryFromEvent(event, lastStage);
@@ -27,7 +27,7 @@ export const resetHvscProgressSummaryStage = () => {
 
 export const createProgressEmitter = (ingestionId: string) => {
   const startedAt = Date.now();
-  return (event: Omit<HvscProgressEvent, 'ingestionId' | 'elapsedTimeMs'>) => {
+  return (event: Omit<HvscProgressEvent, "ingestionId" | "elapsedTimeMs">) => {
     emit({
       ...event,
       ingestionId,

@@ -1,223 +1,223 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { FtpClientWeb } from '@/lib/native/ftpClient.web';
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { FtpClientWeb } from "@/lib/native/ftpClient.web";
 
-vi.mock('@/lib/ftp/ftpConfig', () => ({
-  getFtpBridgeUrl: vi.fn(() => 'http://bridge.local'),
+vi.mock("@/lib/ftp/ftpConfig", () => ({
+  getFtpBridgeUrl: vi.fn(() => "http://bridge.local"),
 }));
 
-describe('FtpClientWeb retry policy', () => {
+describe("FtpClientWeb retry policy", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('retries timeout failures and eventually succeeds for listDirectory', async () => {
+  it("retries timeout failures and eventually succeeds for listDirectory", async () => {
     const fetchMock = vi
       .fn()
-      .mockRejectedValueOnce(new Error('FTP bridge request timed out'))
+      .mockRejectedValueOnce(new Error("FTP bridge request timed out"))
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
-            entries: [{ name: 'demo.sid', path: '/demo.sid', type: 'file' }],
+            entries: [{ name: "demo.sid", path: "/demo.sid", type: "file" }],
           }),
           {
             status: 200,
-            headers: { 'content-type': 'application/json' },
+            headers: { "content-type": "application/json" },
           },
         ),
       );
-    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
 
     const client = new FtpClientWeb();
-    const result = await client.listDirectory({ host: 'c64u' });
+    const result = await client.listDirectory({ host: "c64u" });
 
     expect(result.entries).toHaveLength(1);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it('retries HTTP 5xx responses and succeeds for readFile', async () => {
+  it("retries HTTP 5xx responses and succeeds for readFile", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ error: 'upstream unavailable' }), {
+        new Response(JSON.stringify({ error: "upstream unavailable" }), {
           status: 503,
-          headers: { 'content-type': 'application/json' },
+          headers: { "content-type": "application/json" },
         }),
       )
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ data: 'QQ==', sizeBytes: 1 }), {
+        new Response(JSON.stringify({ data: "QQ==", sizeBytes: 1 }), {
           status: 200,
-          headers: { 'content-type': 'application/json' },
+          headers: { "content-type": "application/json" },
         }),
       );
-    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
 
     const client = new FtpClientWeb();
     const result = await client.readFile({
-      host: 'c64u',
-      path: '/songlengths.md5',
+      host: "c64u",
+      path: "/songlengths.md5",
     });
 
-    expect(result.data).toBe('QQ==');
+    expect(result.data).toBe("QQ==");
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it('does not retry HTTP 4xx responses', async () => {
+  it("does not retry HTTP 4xx responses", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ error: 'bad request' }), {
+      new Response(JSON.stringify({ error: "bad request" }), {
         status: 400,
-        headers: { 'content-type': 'application/json' },
+        headers: { "content-type": "application/json" },
       }),
     );
-    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
 
     const client = new FtpClientWeb();
-    await expect(client.listDirectory({ host: 'c64u' })).rejects.toThrow(
-      'bad request',
+    await expect(client.listDirectory({ host: "c64u" })).rejects.toThrow(
+      "bad request",
     );
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('fails after max retry attempts for repeated transient failures', async () => {
+  it("fails after max retry attempts for repeated transient failures", async () => {
     const fetchMock = vi
       .fn()
-      .mockRejectedValue(new Error('network failed to fetch'));
-    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
+      .mockRejectedValue(new Error("network failed to fetch"));
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
 
     const client = new FtpClientWeb();
     await expect(
-      client.readFile({ host: 'c64u', path: '/demo.sid' }),
-    ).rejects.toThrow('network failed to fetch');
+      client.readFile({ host: "c64u", path: "/demo.sid" }),
+    ).rejects.toThrow("network failed to fetch");
 
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 });
 
-describe('FtpClientWeb missing bridge URL', () => {
+describe("FtpClientWeb missing bridge URL", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('throws when bridge URL is not configured for listDirectory', async () => {
-    const { getFtpBridgeUrl } = await import('@/lib/ftp/ftpConfig');
+  it("throws when bridge URL is not configured for listDirectory", async () => {
+    const { getFtpBridgeUrl } = await import("@/lib/ftp/ftpConfig");
     vi.mocked(getFtpBridgeUrl).mockReturnValueOnce(null);
 
     const client = new FtpClientWeb();
-    await expect(client.listDirectory({ host: 'c64u' })).rejects.toThrow(
-      'missing FTP bridge URL',
+    await expect(client.listDirectory({ host: "c64u" })).rejects.toThrow(
+      "missing FTP bridge URL",
     );
   });
 
-  it('throws when bridge URL is not configured for readFile', async () => {
-    const { getFtpBridgeUrl } = await import('@/lib/ftp/ftpConfig');
+  it("throws when bridge URL is not configured for readFile", async () => {
+    const { getFtpBridgeUrl } = await import("@/lib/ftp/ftpConfig");
     vi.mocked(getFtpBridgeUrl).mockReturnValueOnce(null);
 
     const client = new FtpClientWeb();
     await expect(
-      client.readFile({ host: 'c64u', path: '/demo.sid' }),
-    ).rejects.toThrow('missing FTP bridge URL');
+      client.readFile({ host: "c64u", path: "/demo.sid" }),
+    ).rejects.toThrow("missing FTP bridge URL");
   });
 });
 
-describe('FtpClientWeb error handling', () => {
+describe("FtpClientWeb error handling", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('handles AbortError timeout for listDirectory', async () => {
-    const abortError = new Error('aborted');
-    abortError.name = 'AbortError';
+  it("handles AbortError timeout for listDirectory", async () => {
+    const abortError = new Error("aborted");
+    abortError.name = "AbortError";
     const fetchMock = vi.fn().mockRejectedValue(abortError);
-    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
 
     const client = new FtpClientWeb();
-    await expect(client.listDirectory({ host: 'c64u' })).rejects.toThrow(
-      'FTP bridge request timed out',
+    await expect(client.listDirectory({ host: "c64u" })).rejects.toThrow(
+      "FTP bridge request timed out",
     );
   });
 
-  it('handles AbortError timeout for readFile', async () => {
-    const abortError = new Error('aborted');
-    abortError.name = 'AbortError';
+  it("handles AbortError timeout for readFile", async () => {
+    const abortError = new Error("aborted");
+    abortError.name = "AbortError";
     const fetchMock = vi.fn().mockRejectedValue(abortError);
-    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
 
     const client = new FtpClientWeb();
     await expect(
-      client.readFile({ host: 'c64u', path: '/demo.sid' }),
-    ).rejects.toThrow('FTP bridge request timed out');
+      client.readFile({ host: "c64u", path: "/demo.sid" }),
+    ).rejects.toThrow("FTP bridge request timed out");
   });
 
-  it('handles error response with no JSON body for listDirectory', async () => {
+  it("handles error response with no JSON body for listDirectory", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValue(new Response(null, { status: 500 }));
-    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
 
     const client = new FtpClientWeb();
-    await expect(client.listDirectory({ host: 'c64u' })).rejects.toThrow(
-      'FTP bridge error: HTTP 500',
+    await expect(client.listDirectory({ host: "c64u" })).rejects.toThrow(
+      "FTP bridge error: HTTP 500",
     );
   });
 
-  it('rejects listDirectory when file payload is empty entries', async () => {
+  it("rejects listDirectory when file payload is empty entries", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ entries: null }), {
         status: 200,
-        headers: { 'content-type': 'application/json' },
+        headers: { "content-type": "application/json" },
       }),
     );
-    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
 
     const client = new FtpClientWeb();
-    const result = await client.listDirectory({ host: 'c64u' });
+    const result = await client.listDirectory({ host: "c64u" });
     expect(result.entries).toEqual([]);
   });
 
-  it('rejects readFile when payload is missing data field', async () => {
+  it("rejects readFile when payload is missing data field", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ sizeBytes: 100 }), {
         status: 200,
-        headers: { 'content-type': 'application/json' },
+        headers: { "content-type": "application/json" },
       }),
     );
-    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
 
     const client = new FtpClientWeb();
     await expect(
-      client.readFile({ host: 'c64u', path: '/demo.sid' }),
-    ).rejects.toThrow('invalid file payload');
+      client.readFile({ host: "c64u", path: "/demo.sid" }),
+    ).rejects.toThrow("invalid file payload");
   });
 
-  it('retries on connection reset errors', async () => {
+  it("retries on connection reset errors", async () => {
     const fetchMock = vi
       .fn()
-      .mockRejectedValueOnce(new Error('connection reset'))
+      .mockRejectedValueOnce(new Error("connection reset"))
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ entries: [] }), {
           status: 200,
-          headers: { 'content-type': 'application/json' },
+          headers: { "content-type": "application/json" },
         }),
       );
-    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
 
     const client = new FtpClientWeb();
-    const result = await client.listDirectory({ host: 'c64u' });
+    const result = await client.listDirectory({ host: "c64u" });
     expect(result.entries).toEqual([]);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it('treats error response with only HTTP status as FTP bridge error', async () => {
+  it("treats error response with only HTTP status as FTP bridge error", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ error: 'unauthorized' }), {
+      new Response(JSON.stringify({ error: "unauthorized" }), {
         status: 401,
       }),
     );
-    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
 
     const client = new FtpClientWeb();
-    await expect(client.listDirectory({ host: 'c64u' })).rejects.toThrow(
-      'unauthorized',
+    await expect(client.listDirectory({ host: "c64u" })).rejects.toThrow(
+      "unauthorized",
     );
   });
 });

@@ -6,13 +6,13 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { computeSidMd5, getSidSongCount } from '@/lib/sid/sidUtils';
-import { addErrorLog } from '@/lib/logging';
+import { computeSidMd5, getSidSongCount } from "@/lib/sid/sidUtils";
+import { addErrorLog } from "@/lib/logging";
 import type {
   SongLengthResolveQuery,
   SongLengthResolution,
-} from '@/lib/songlengths';
-import type { SongEntry, SongFolder, SongSource } from './SongSource';
+} from "@/lib/songlengths";
+import type { SongEntry, SongFolder, SongSource } from "./SongSource";
 
 export type LocalSidFile =
   | File
@@ -38,12 +38,12 @@ export type LocalFsSongSourceOptions = {
 };
 
 const normalizeLocalPath = (path: string) =>
-  path.startsWith('/') ? path : `/${path}`;
+  path.startsWith("/") ? path : `/${path}`;
 const getLocalPath = (file: LocalSidFile) =>
   normalizeLocalPath(file.webkitRelativePath || file.name);
 const getPartialPath = (path: string) => {
   const normalized = normalizeLocalPath(path);
-  const separator = normalized.lastIndexOf('/');
+  const separator = normalized.lastIndexOf("/");
   if (separator <= 0) return null;
   return normalized.slice(0, separator);
 };
@@ -80,7 +80,7 @@ const buildSongEntries = (
             : undefined,
         songNr: 1,
         subsongCount: 1,
-        source: 'local',
+        source: "local",
         payload: file,
       },
     ];
@@ -95,7 +95,7 @@ const buildSongEntries = (
         : undefined,
     songNr: index + 1,
     subsongCount: count,
-    source: 'local',
+    source: "local",
     payload: file,
   }));
 };
@@ -116,12 +116,12 @@ const isMd5FallbackCandidate = (
   durations: number[] | null,
 ) =>
   !durations &&
-  resolution.strategy !== 'md5' &&
-  resolution.strategy !== 'unavailable';
+  resolution.strategy !== "md5" &&
+  resolution.strategy !== "unavailable";
 
 const readSidHeader = async (file: LocalSidFile) => {
   const slice = (file as File).slice;
-  if (typeof slice === 'function') {
+  if (typeof slice === "function") {
     return slice.call(file, 0, 0x20).arrayBuffer();
   }
   const fullBuffer = await file.arrayBuffer();
@@ -175,7 +175,7 @@ export const createLocalFsSongSource = (
           resolved !== null && resolved !== undefined ? [resolved] : null;
       }
     } catch (error) {
-      addErrorLog('SID duration lookup failed', {
+      addErrorLog("SID duration lookup failed", {
         error: (error as Error).message,
         path: pathValue,
       });
@@ -201,7 +201,7 @@ export const createLocalFsSongSource = (
         durationsSeconds = await resolveDurationsForFile(file, pathValue);
         subsongCount = Math.max(subsongCount, durationsSeconds?.length ?? 1);
       } catch (error) {
-        addErrorLog('Local SID metadata scan failed', {
+        addErrorLog("Local SID metadata scan failed", {
           error: (error as Error).message,
           path: pathValue,
         });
@@ -226,28 +226,28 @@ export const createLocalFsSongSource = (
 
   const listFolders = async (path: string): Promise<SongFolder[]> => {
     const folders = new Set<string>();
-    const normalized = normalizeLocalPath(path || '/');
+    const normalized = normalizeLocalPath(path || "/");
     files.forEach((file) => {
       const filePath = getLocalPath(file);
       if (!filePath.startsWith(normalized)) return;
-      const parts = filePath.split('/').filter(Boolean);
+      const parts = filePath.split("/").filter(Boolean);
       if (parts.length <= 1) return;
       parts.pop();
-      const folderPath = `/${parts.join('/')}`;
-      if (normalized === '/' || folderPath.startsWith(normalized)) {
+      const folderPath = `/${parts.join("/")}`;
+      if (normalized === "/" || folderPath.startsWith(normalized)) {
         folders.add(folderPath);
       }
     });
     return Array.from(folders)
       .map((folder) => ({
         path: folder,
-        name: folder.split('/').pop() || folder,
+        name: folder.split("/").pop() || folder,
       }))
       .sort((a, b) => a.path.localeCompare(b.path));
   };
 
   const listSongs = async (path: string): Promise<SongEntry[]> => {
-    const normalized = normalizeLocalPath(path || '/');
+    const normalized = normalizeLocalPath(path || "/");
     const candidates = files.filter((file) =>
       getLocalPath(file).toLowerCase().startsWith(normalized.toLowerCase()),
     );
@@ -267,7 +267,7 @@ export const createLocalFsSongSource = (
 
   const getSong = async (entry: SongEntry) => {
     const file = entry.payload as LocalSidFile | undefined;
-    if (!file) throw new Error('Missing local file data.');
+    if (!file) throw new Error("Missing local file data.");
     const buffer = await file.arrayBuffer();
     const data = new Uint8Array(buffer);
     let durationMs: number | undefined = entry.durationMs;
@@ -284,7 +284,7 @@ export const createLocalFsSongSource = (
   };
 
   return {
-    id: 'local',
+    id: "local",
     listFolders,
     listSongs,
     getSong,

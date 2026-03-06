@@ -6,22 +6,22 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, waitFor, act } from '@testing-library/react';
-import { useRef, useState } from 'react';
-import { usePlaybackPersistence } from '@/pages/playFiles/hooks/usePlaybackPersistence';
-import type { PlayableEntry, PlaylistItem } from '@/pages/playFiles/types';
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { renderHook, waitFor, act } from "@testing-library/react";
+import { useRef, useState } from "react";
+import { usePlaybackPersistence } from "@/pages/playFiles/hooks/usePlaybackPersistence";
+import type { PlayableEntry, PlaylistItem } from "@/pages/playFiles/types";
 import {
   buildPlaylistStorageKey,
   PLAYBACK_SESSION_KEY,
-} from '@/pages/playFiles/playFilesUtils';
-import { resetPlaylistDataRepositoryForTests } from '@/lib/playlistRepository';
+} from "@/pages/playFiles/playFilesUtils";
+import { resetPlaylistDataRepositoryForTests } from "@/lib/playlistRepository";
 
-vi.mock('@/pages/playFiles/hooks/playbackPersistenceBudget', () => ({
+vi.mock("@/pages/playFiles/hooks/playbackPersistenceBudget", () => ({
   shouldPersistLegacyPlaylistBlob: vi.fn().mockReturnValue(true),
 }));
 
-import { shouldPersistLegacyPlaylistBlob } from '@/pages/playFiles/hooks/playbackPersistenceBudget';
+import { shouldPersistLegacyPlaylistBlob } from "@/pages/playFiles/hooks/playbackPersistenceBudget";
 
 // Flexible harness allowing custom buildPlaylistItem and initial state
 const usePlaybackHarness = ({
@@ -87,14 +87,14 @@ const usePlaybackHarness = ({
     songNrOverride?: number,
     addedAtOverride?: string | null,
   ): PlaylistItem | null => ({
-    id: `${entry.source}:${entry.sourceId ?? ''}:${entry.path}`,
+    id: `${entry.source}:${entry.sourceId ?? ""}:${entry.path}`,
     request: {
       source: entry.source,
       path: entry.path,
       file: entry.file,
       songNr: songNrOverride,
     },
-    category: 'sid',
+    category: "sid",
     label: entry.name,
     path: entry.path,
     durationMs: entry.durationMs,
@@ -102,7 +102,7 @@ const usePlaybackHarness = ({
     sizeBytes: entry.sizeBytes ?? null,
     modifiedAt: entry.modifiedAt ?? null,
     addedAt: addedAtOverride ?? new Date().toISOString(),
-    status: 'ready',
+    status: "ready",
     unavailableReason: null,
   });
 
@@ -123,7 +123,7 @@ const usePlaybackHarness = ({
     setDurationMs,
     setCurrentSubsongCount: vi.fn(),
     setAutoAdvanceDueAtMs: setAutoAdvanceDueAtMsRef.current,
-    resolvedDeviceId: 'device-1',
+    resolvedDeviceId: "device-1",
     playlistStorageKey,
     localEntriesBySourceId,
     localSourceTreeUris,
@@ -149,7 +149,7 @@ const usePlaybackHarness = ({
   };
 };
 
-describe('usePlaybackPersistence – edge cases', () => {
+describe("usePlaybackPersistence – edge cases", () => {
   beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();
@@ -157,18 +157,18 @@ describe('usePlaybackPersistence – edge cases', () => {
     vi.mocked(shouldPersistLegacyPlaylistBlob).mockReturnValue(true);
   });
 
-  it('handles non-object JSON in sessionStorage (ignores malformed session)', async () => {
+  it("handles non-object JSON in sessionStorage (ignores malformed session)", async () => {
     // Put a JSON string that is valid JSON but not an object
-    const playlistStorageKey = buildPlaylistStorageKey('device-1');
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
     localStorage.setItem(
       playlistStorageKey,
       JSON.stringify({
         items: [
           {
-            source: 'hvsc',
-            path: '/MUSICIANS/Test/demo.sid',
-            name: 'demo.sid',
-            sourceId: 'hvsc',
+            source: "hvsc",
+            path: "/MUSICIANS/Test/demo.sid",
+            name: "demo.sid",
+            sourceId: "hvsc",
             addedAt: new Date().toISOString(),
           },
         ],
@@ -176,7 +176,7 @@ describe('usePlaybackPersistence – edge cases', () => {
       }),
     );
     // Store a JSON string that is not an object – this triggers line 221 branch
-    sessionStorage.setItem('c64u_playback_session:v1', '"hello"');
+    sessionStorage.setItem("c64u_playback_session:v1", '"hello"');
 
     const { result } = renderHook(() =>
       usePlaybackHarness({ playlistStorageKey }),
@@ -189,10 +189,10 @@ describe('usePlaybackPersistence – edge cases', () => {
     expect(result.current.isPlaying).toBe(false);
   });
 
-  it('handles corrupt JSON in localStorage playlist key (falls back gracefully)', async () => {
-    const playlistStorageKey = buildPlaylistStorageKey('device-1');
+  it("handles corrupt JSON in localStorage playlist key (falls back gracefully)", async () => {
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
     // Corrupt JSON as the primary key
-    localStorage.setItem(playlistStorageKey, '{NOT_VALID_JSON}');
+    localStorage.setItem(playlistStorageKey, "{NOT_VALID_JSON}");
 
     const { result } = renderHook(() =>
       usePlaybackHarness({ playlistStorageKey }),
@@ -204,8 +204,8 @@ describe('usePlaybackPersistence – edge cases', () => {
     });
   });
 
-  it('all parsed localStorage candidates have empty items → fallback to candidates[0]', async () => {
-    const playlistStorageKey = buildPlaylistStorageKey('device-1');
+  it("all parsed localStorage candidates have empty items → fallback to candidates[0]", async () => {
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
     // Put an empty items array under the storage key
     localStorage.setItem(
       playlistStorageKey,
@@ -222,17 +222,17 @@ describe('usePlaybackPersistence – edge cases', () => {
     });
   });
 
-  it('session restore: uses currentIndex directly when currentItemId is absent', async () => {
-    const playlistStorageKey = buildPlaylistStorageKey('device-1');
+  it("session restore: uses currentIndex directly when currentItemId is absent", async () => {
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
     localStorage.setItem(
       playlistStorageKey,
       JSON.stringify({
         items: [
           {
-            source: 'hvsc',
-            path: '/MUSICIANS/Test/byindex.sid',
-            name: 'byindex.sid',
-            sourceId: 'hvsc',
+            source: "hvsc",
+            path: "/MUSICIANS/Test/byindex.sid",
+            name: "byindex.sid",
+            sourceId: "hvsc",
             addedAt: new Date().toISOString(),
           },
         ],
@@ -241,7 +241,7 @@ describe('usePlaybackPersistence – edge cases', () => {
     );
     // Session WITHOUT currentItemId – uses currentIndex (line 325 FALSE branch)
     sessionStorage.setItem(
-      'c64u_playback_session:v1',
+      "c64u_playback_session:v1",
       JSON.stringify({
         playlistKey: playlistStorageKey,
         currentIndex: 0,
@@ -269,15 +269,15 @@ describe('usePlaybackPersistence – edge cases', () => {
 
   it('hydrates "ultimate" source entry without local file reference', async () => {
     // 'ultimate' source is neither 'local' nor 'hvsc' → file = undefined (line 126 branch)
-    const playlistStorageKey = buildPlaylistStorageKey('device-1');
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
     localStorage.setItem(
       playlistStorageKey,
       JSON.stringify({
         items: [
           {
-            source: 'ultimate',
-            path: '/Disks/game.d64',
-            name: 'game.d64',
+            source: "ultimate",
+            path: "/Disks/game.d64",
+            name: "game.d64",
             addedAt: new Date().toISOString(),
           },
         ],
@@ -291,28 +291,28 @@ describe('usePlaybackPersistence – edge cases', () => {
 
     await waitFor(() => {
       expect(result.current.playlist).toHaveLength(1);
-      expect(result.current.playlist[0].label).toBe('game.d64');
+      expect(result.current.playlist[0].label).toBe("game.d64");
     });
   });
 
-  it('skips playlist overwrite when current playlist exists and restored is empty', async () => {
+  it("skips playlist overwrite when current playlist exists and restored is empty", async () => {
     // Pre-populate the playlist (makes hasPlaylistRef.current → true)
     const existingItem: PlaylistItem = {
-      id: 'hvsc::existing',
+      id: "hvsc::existing",
       request: {
-        source: 'hvsc',
-        path: '/existing.sid',
+        source: "hvsc",
+        path: "/existing.sid",
         file: undefined,
         songNr: undefined,
       },
-      category: 'sid',
-      label: 'existing.sid',
-      path: '/existing.sid',
+      category: "sid",
+      label: "existing.sid",
+      path: "/existing.sid",
       addedAt: new Date().toISOString(),
-      status: 'ready',
+      status: "ready",
       unavailableReason: null,
     };
-    const playlistStorageKey = buildPlaylistStorageKey('device-1');
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
     // Storage key exists but has no items
     localStorage.setItem(
       playlistStorageKey,
@@ -333,19 +333,19 @@ describe('usePlaybackPersistence – edge cases', () => {
     });
   });
 
-  it('size budget exceeded: skips legacy localStorage write and removes old keys', async () => {
+  it("size budget exceeded: skips legacy localStorage write and removes old keys", async () => {
     vi.mocked(shouldPersistLegacyPlaylistBlob).mockReturnValue(false);
 
-    const playlistStorageKey = buildPlaylistStorageKey('device-1');
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
     localStorage.setItem(
       playlistStorageKey,
       JSON.stringify({
         items: [
           {
-            source: 'hvsc',
-            path: '/MUSICIANS/Test/big.sid',
-            name: 'big.sid',
-            sourceId: 'hvsc',
+            source: "hvsc",
+            path: "/MUSICIANS/Test/big.sid",
+            name: "big.sid",
+            sourceId: "hvsc",
             addedAt: new Date().toISOString(),
           },
         ],
@@ -369,17 +369,17 @@ describe('usePlaybackPersistence – edge cases', () => {
     });
   });
 
-  it('persist session catch: handles sessionStorage.setItem throwing', async () => {
-    const playlistStorageKey = buildPlaylistStorageKey('device-1');
+  it("persist session catch: handles sessionStorage.setItem throwing", async () => {
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
     localStorage.setItem(
       playlistStorageKey,
       JSON.stringify({
         items: [
           {
-            source: 'hvsc',
-            path: '/MUSICIANS/Test/session.sid',
-            name: 'session.sid',
-            sourceId: 'hvsc',
+            source: "hvsc",
+            path: "/MUSICIANS/Test/session.sid",
+            name: "session.sid",
+            sourceId: "hvsc",
             addedAt: new Date().toISOString(),
           },
         ],
@@ -388,7 +388,7 @@ describe('usePlaybackPersistence – edge cases', () => {
     );
     // Session with isPlaying=true to trigger persist session save
     sessionStorage.setItem(
-      'c64u_playback_session:v1',
+      "c64u_playback_session:v1",
       JSON.stringify({
         playlistKey: playlistStorageKey,
         currentIndex: 0,
@@ -405,10 +405,10 @@ describe('usePlaybackPersistence – edge cases', () => {
     // Capture the original prototype method before spying to avoid recursion
     const originalProtoSetItem = Storage.prototype.setItem;
     const setItemSpy = vi
-      .spyOn(sessionStorage, 'setItem')
+      .spyOn(sessionStorage, "setItem")
       .mockImplementation((key: string, value: string) => {
-        if (key === 'c64u_playback_session:v1') {
-          throw new Error('Storage quota exceeded');
+        if (key === "c64u_playback_session:v1") {
+          throw new Error("Storage quota exceeded");
         }
         // Use prototype directly to avoid calling the spy again
         originalProtoSetItem.call(sessionStorage, key, value);
@@ -425,17 +425,17 @@ describe('usePlaybackPersistence – edge cases', () => {
     setItemSpy.mockRestore();
   });
 
-  it('persist playlist with items having null addedAt and undefined status (uses fallbacks)', async () => {
-    const playlistStorageKey = buildPlaylistStorageKey('device-1');
+  it("persist playlist with items having null addedAt and undefined status (uses fallbacks)", async () => {
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
     localStorage.setItem(
       playlistStorageKey,
       JSON.stringify({
         items: [
           {
-            source: 'hvsc',
-            path: '/MUSICIANS/Test/noadded.sid',
-            name: 'noadded.sid',
-            sourceId: 'hvsc',
+            source: "hvsc",
+            path: "/MUSICIANS/Test/noadded.sid",
+            name: "noadded.sid",
+            sourceId: "hvsc",
             // no addedAt, no status
           },
         ],
@@ -450,14 +450,14 @@ describe('usePlaybackPersistence – edge cases', () => {
       songNrOverride?: number,
       addedAtOverride?: string | null,
     ): PlaylistItem | null => ({
-      id: `${entry.source}:${entry.sourceId ?? ''}:${entry.path}`,
+      id: `${entry.source}:${entry.sourceId ?? ""}:${entry.path}`,
       request: {
         source: entry.source,
         path: entry.path,
         file: entry.file,
         songNr: songNrOverride,
       },
-      category: 'sid',
+      category: "sid",
       label: entry.name,
       path: entry.path,
       durationMs: entry.durationMs,
@@ -488,22 +488,22 @@ describe('usePlaybackPersistence – edge cases', () => {
           items: Array<{ addedAt?: string | null; status?: string }>;
         };
         // After persist, status should be 'ready' (from the ?? fallback)
-        expect(parsed.items[0].status).toBe('ready');
+        expect(parsed.items[0].status).toBe("ready");
       }
     });
   });
 
-  it('persist session: out-of-range currentIndex produces null currentItemId', async () => {
-    const playlistStorageKey = buildPlaylistStorageKey('device-1');
+  it("persist session: out-of-range currentIndex produces null currentItemId", async () => {
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
     localStorage.setItem(
       playlistStorageKey,
       JSON.stringify({
         items: [
           {
-            source: 'hvsc',
-            path: '/MUSICIANS/Test/oor.sid',
-            name: 'oor.sid',
-            sourceId: 'hvsc',
+            source: "hvsc",
+            path: "/MUSICIANS/Test/oor.sid",
+            name: "oor.sid",
+            sourceId: "hvsc",
             addedAt: new Date().toISOString(),
           },
         ],
@@ -525,7 +525,7 @@ describe('usePlaybackPersistence – edge cases', () => {
     });
 
     await waitFor(() => {
-      const raw = sessionStorage.getItem('c64u_playback_session:v1');
+      const raw = sessionStorage.getItem("c64u_playback_session:v1");
       expect(raw).not.toBeNull();
       const parsed = JSON.parse(raw as string) as {
         currentItemId: string | null;

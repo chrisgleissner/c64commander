@@ -6,27 +6,27 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { test, expect } from '@playwright/test';
-import { saveCoverageFromPage } from './withCoverage';
-import type { Page, TestInfo } from '@playwright/test';
-import * as path from 'node:path';
-import { createMockC64Server } from '../tests/mocks/mockC64Server';
-import { seedUiMocks, uiFixtures } from './uiMocks';
-import { seedFtpConfig, startFtpTestServers } from './ftpTestUtils';
+import { test, expect } from "@playwright/test";
+import { saveCoverageFromPage } from "./withCoverage";
+import type { Page, TestInfo } from "@playwright/test";
+import * as path from "node:path";
+import { createMockC64Server } from "../tests/mocks/mockC64Server";
+import { seedUiMocks, uiFixtures } from "./uiMocks";
+import { seedFtpConfig, startFtpTestServers } from "./ftpTestUtils";
 import {
   allowWarnings,
   assertNoUiIssues,
   attachStepScreenshot,
   finalizeEvidence,
   startStrictUiMonitoring,
-} from './testArtifacts';
+} from "./testArtifacts";
 import {
   clearTraces,
   enableTraceAssertions,
   expectRestTraceSequence,
-} from './traceUtils';
-import { enableGoldenTrace } from './goldenTraceRegistry';
-import { clickSourceSelectionButton } from './sourceSelection';
+} from "./traceUtils";
+import { enableGoldenTrace } from "./goldenTraceRegistry";
+import { clickSourceSelectionButton } from "./sourceSelection";
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
@@ -48,7 +48,7 @@ const openRemoteFolder = async (page: Page, name: string) => {
   await row.click();
 };
 
-test.describe('Navigation boundaries and edge cases', () => {
+test.describe("Navigation boundaries and edge cases", () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
   let ftpServers: Awaited<ReturnType<typeof startFtpTestServers>>;
 
@@ -67,7 +67,7 @@ test.describe('Navigation boundaries and edge cases', () => {
       host: ftpServers.ftpServer.host,
       port: ftpServers.ftpServer.port,
       bridgeUrl: ftpServers.bridgeServer.baseUrl,
-      password: '',
+      password: "",
     });
     await seedUiMocks(page, server.baseUrl);
   });
@@ -82,149 +82,149 @@ test.describe('Navigation boundaries and edge cases', () => {
     }
   });
 
-  test('navigate parent from subfolder shows parent', async ({
+  test("navigate parent from subfolder shows parent", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
-    await page.goto('/play');
-    await snap(page, testInfo, 'play-open');
+    await page.goto("/play");
+    await snap(page, testInfo, "play-open");
 
     await page
-      .getByRole('button', { name: /Add items|Add more items/i })
+      .getByRole("button", { name: /Add items|Add more items/i })
       .click();
-    const dialog = page.getByRole('dialog');
-    await clickSourceSelectionButton(dialog, 'C64 Ultimate');
+    const dialog = page.getByRole("dialog");
+    await clickSourceSelectionButton(dialog, "C64 Ultimate");
     await ensureRemoteRoot(page);
-    await snap(page, testInfo, 'root-folder');
+    await snap(page, testInfo, "root-folder");
 
-    await openRemoteFolder(page, 'Usb0');
-    await snap(page, testInfo, 'usb0-folder');
+    await openRemoteFolder(page, "Usb0");
+    await snap(page, testInfo, "usb0-folder");
 
-    await openRemoteFolder(page, 'Games');
-    await snap(page, testInfo, 'games-folder');
+    await openRemoteFolder(page, "Games");
+    await snap(page, testInfo, "games-folder");
 
     await expect(page.getByText(/Path:\s*\/Usb0\/Games\/?/i)).toBeVisible();
-    await snap(page, testInfo, 'deep-path-shown');
+    await snap(page, testInfo, "deep-path-shown");
 
     const parentButton = page
-      .getByTestId('navigate-parent')
-      .or(page.getByRole('button', { name: /up|parent|back/i }).first());
+      .getByTestId("navigate-parent")
+      .or(page.getByRole("button", { name: /up|parent|back/i }).first());
 
     if (await parentButton.isVisible({ timeout: 2000 }).catch(() => false)) {
       await parentButton.click();
-      await snap(page, testInfo, 'parent-clicked');
+      await snap(page, testInfo, "parent-clicked");
 
       // Check if we navigated to parent (may not be implemented yet)
       const parentVisible = await page
-        .getByText('Usb0', { exact: true })
+        .getByText("Usb0", { exact: true })
         .isVisible({ timeout: 5000 })
         .catch(() => false);
       if (parentVisible) {
         await expect(page.getByText(/Path:\s*\/Usb0\/?$/i)).toBeVisible();
-        await snap(page, testInfo, 'parent-folder-shown');
+        await snap(page, testInfo, "parent-folder-shown");
       } else {
-        await snap(page, testInfo, 'parent-navigation-not-working');
+        await snap(page, testInfo, "parent-navigation-not-working");
       }
     } else {
-      await snap(page, testInfo, 'parent-button-not-available');
+      await snap(page, testInfo, "parent-button-not-available");
     }
   });
 
-  test('navigate parent from root disables or hides button', async ({
+  test("navigate parent from root disables or hides button", async ({
     page,
   }: { page: Path }, testInfo: TestInfo) => {
-    await page.goto('/play');
-    await snap(page, testInfo, 'play-open');
+    await page.goto("/play");
+    await snap(page, testInfo, "play-open");
 
     await page
-      .getByRole('button', { name: /Add items|Add more items/i })
+      .getByRole("button", { name: /Add items|Add more items/i })
       .click();
-    const dialog = page.getByRole('dialog');
-    await clickSourceSelectionButton(dialog, 'C64 Ultimate');
+    const dialog = page.getByRole("dialog");
+    await clickSourceSelectionButton(dialog, "C64 Ultimate");
     await ensureRemoteRoot(page);
-    await snap(page, testInfo, 'root-folder');
+    await snap(page, testInfo, "root-folder");
 
     const parentButton = page
-      .getByTestId('navigate-parent')
-      .or(page.getByRole('button', { name: /up|parent|back/i }).first());
+      .getByTestId("navigate-parent")
+      .or(page.getByRole("button", { name: /up|parent|back/i }).first());
 
     if (await parentButton.isVisible({ timeout: 2000 }).catch(() => false)) {
       await expect(parentButton).toBeDisabled();
-      await snap(page, testInfo, 'parent-disabled-at-root');
+      await snap(page, testInfo, "parent-disabled-at-root");
     } else {
-      await snap(page, testInfo, 'parent-not-shown-at-root');
+      await snap(page, testInfo, "parent-not-shown-at-root");
     }
   });
 
-  test('breadcrumb click jumps to ancestor folder', async ({
+  test("breadcrumb click jumps to ancestor folder", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
-    await page.goto('/play');
-    await snap(page, testInfo, 'play-open');
+    await page.goto("/play");
+    await snap(page, testInfo, "play-open");
 
     await page
-      .getByRole('button', { name: /Add items|Add more items/i })
+      .getByRole("button", { name: /Add items|Add more items/i })
       .click();
-    const dialog = page.getByRole('dialog');
-    await clickSourceSelectionButton(dialog, 'C64 Ultimate');
+    const dialog = page.getByRole("dialog");
+    await clickSourceSelectionButton(dialog, "C64 Ultimate");
     await ensureRemoteRoot(page);
-    await snap(page, testInfo, 'root-folder');
+    await snap(page, testInfo, "root-folder");
 
-    await openRemoteFolder(page, 'Usb0');
-    await openRemoteFolder(page, 'Games');
-    await openRemoteFolder(page, 'Turrican II');
-    await snap(page, testInfo, 'deep-folder');
+    await openRemoteFolder(page, "Usb0");
+    await openRemoteFolder(page, "Games");
+    await openRemoteFolder(page, "Turrican II");
+    await snap(page, testInfo, "deep-folder");
 
     const breadcrumbs = page
       .locator('[data-testid="breadcrumb"]')
-      .or(page.getByRole('navigation', { name: /breadcrumb/i }));
+      .or(page.getByRole("navigation", { name: /breadcrumb/i }));
 
     if (await breadcrumbs.isVisible({ timeout: 2000 }).catch(() => false)) {
       const usb0Link = breadcrumbs
-        .getByRole('button', { name: /Usb0/i })
-        .or(breadcrumbs.getByText('Usb0', { exact: true }));
+        .getByRole("button", { name: /Usb0/i })
+        .or(breadcrumbs.getByText("Usb0", { exact: true }));
 
       if (await usb0Link.isVisible({ timeout: 1000 }).catch(() => false)) {
         await usb0Link.click();
-        await snap(page, testInfo, 'breadcrumb-clicked');
+        await snap(page, testInfo, "breadcrumb-clicked");
 
         await expect(page.getByText(/Path:.*\/Usb0$/i)).toBeVisible();
-        await expect(page.getByText('Games', { exact: true })).toBeVisible();
-        await snap(page, testInfo, 'jumped-to-ancestor');
+        await expect(page.getByText("Games", { exact: true })).toBeVisible();
+        await snap(page, testInfo, "jumped-to-ancestor");
       } else {
-        await snap(page, testInfo, 'usb0-breadcrumb-not-clickable');
+        await snap(page, testInfo, "usb0-breadcrumb-not-clickable");
       }
     } else {
-      await snap(page, testInfo, 'breadcrumbs-not-available');
+      await snap(page, testInfo, "breadcrumbs-not-available");
     }
   });
 
-  test('add items with no selection shows validation', async ({
+  test("add items with no selection shows validation", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
-    allowWarnings(testInfo, 'Expected validation message for empty selection.');
-    await page.goto('/play');
-    await snap(page, testInfo, 'play-open');
+    allowWarnings(testInfo, "Expected validation message for empty selection.");
+    await page.goto("/play");
+    await snap(page, testInfo, "play-open");
 
     await page
-      .getByRole('button', { name: /Add items|Add more items/i })
+      .getByRole("button", { name: /Add items|Add more items/i })
       .click();
-    const dialog = page.getByRole('dialog');
-    await clickSourceSelectionButton(dialog, 'C64 Ultimate');
+    const dialog = page.getByRole("dialog");
+    await clickSourceSelectionButton(dialog, "C64 Ultimate");
     await ensureRemoteRoot(page);
-    await snap(page, testInfo, 'root-folder');
+    await snap(page, testInfo, "root-folder");
 
     const confirmButton = page
-      .getByTestId('add-items-confirm')
-      .or(page.getByRole('button', { name: /Add to|Confirm|Add selected/i }));
+      .getByTestId("add-items-confirm")
+      .or(page.getByRole("button", { name: /Add to|Confirm|Add selected/i }));
 
     await expect(confirmButton).toBeVisible();
     const isDisabled = await confirmButton.isDisabled();
 
     if (isDisabled) {
-      await snap(page, testInfo, 'confirm-button-disabled');
+      await snap(page, testInfo, "confirm-button-disabled");
     } else {
       await confirmButton.click();
-      await snap(page, testInfo, 'confirm-clicked');
+      await snap(page, testInfo, "confirm-clicked");
 
       const hasWarning = await page
         .getByText(/no items|select at least|nothing selected/i)
@@ -233,37 +233,37 @@ test.describe('Navigation boundaries and edge cases', () => {
         .catch(() => false);
 
       if (hasWarning) {
-        await snap(page, testInfo, 'validation-shown');
+        await snap(page, testInfo, "validation-shown");
       } else {
-        await snap(page, testInfo, 'no-validation-accepts-empty');
+        await snap(page, testInfo, "no-validation-accepts-empty");
       }
     }
   });
 
-  test('disk rotate previous mounts previous disk in group', async ({
+  test("disk rotate previous mounts previous disk in group", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     enableTraceAssertions(testInfo);
     await page.addInitScript(() => {
       localStorage.setItem(
-        'c64u_disk_library:TEST-123',
+        "c64u_disk_library:TEST-123",
         JSON.stringify({
           disks: [
             {
-              id: 'ultimate:/Usb0/Games/Turrican II/Disk 1.d64',
-              name: 'Disk 1.d64',
-              path: '/Usb0/Games/Turrican II/Disk 1.d64',
-              location: 'ultimate',
-              group: 'Turrican II',
+              id: "ultimate:/Usb0/Games/Turrican II/Disk 1.d64",
+              name: "Disk 1.d64",
+              path: "/Usb0/Games/Turrican II/Disk 1.d64",
+              location: "ultimate",
+              group: "Turrican II",
               importOrder: 1,
               importedAt: new Date().toISOString(),
             },
             {
-              id: 'ultimate:/Usb0/Games/Turrican II/Disk 2.d64',
-              name: 'Disk 2.d64',
-              path: '/Usb0/Games/Turrican II/Disk 2.d64',
-              location: 'ultimate',
-              group: 'Turrican II',
+              id: "ultimate:/Usb0/Games/Turrican II/Disk 2.d64",
+              name: "Disk 2.d64",
+              path: "/Usb0/Games/Turrican II/Disk 2.d64",
+              location: "ultimate",
+              group: "Turrican II",
               importOrder: 2,
               importedAt: new Date().toISOString(),
             },
@@ -272,109 +272,109 @@ test.describe('Navigation boundaries and edge cases', () => {
       );
     });
 
-    await page.goto('/disks');
-    await snap(page, testInfo, 'disks-open');
+    await page.goto("/disks");
+    await snap(page, testInfo, "disks-open");
 
     const disk2Row = page
-      .getByTestId('disk-row')
-      .filter({ hasText: 'Disk 2.d64' });
-    await disk2Row.getByRole('button', { name: /Mount/i }).click();
-    await snap(page, testInfo, 'mount-dialog-open');
+      .getByTestId("disk-row")
+      .filter({ hasText: "Disk 2.d64" });
+    await disk2Row.getByRole("button", { name: /Mount/i }).click();
+    await snap(page, testInfo, "mount-dialog-open");
 
     await clearTraces(page);
     await page
-      .getByRole('dialog')
-      .getByRole('button', { name: /Drive A/i })
+      .getByRole("dialog")
+      .getByRole("button", { name: /Drive A/i })
       .click();
-    await snap(page, testInfo, 'disk2-mounted');
+    await snap(page, testInfo, "disk2-mounted");
 
     await expect
       .poll(() =>
         server.requests.some(
           (req) =>
-            req.url.includes('Disk%202.d64') &&
-            req.url.includes('/v1/drives/a:mount'),
+            req.url.includes("Disk%202.d64") &&
+            req.url.includes("/v1/drives/a:mount"),
         ),
       )
       .toBe(true);
 
-    await expectRestTraceSequence(page, testInfo, '/v1/drives/a:mount');
+    await expectRestTraceSequence(page, testInfo, "/v1/drives/a:mount");
 
     const prevButton = page
-      .getByRole('button', { name: /Prev|Previous/i })
+      .getByRole("button", { name: /Prev|Previous/i })
       .first();
 
     if (await prevButton.isVisible({ timeout: 2000 }).catch(() => false)) {
       await prevButton.click();
-      await snap(page, testInfo, 'prev-clicked');
+      await snap(page, testInfo, "prev-clicked");
 
       await expect
         .poll(() =>
           server.requests.some(
             (req) =>
-              req.url.includes('Disk%201.d64') &&
-              req.url.includes('/v1/drives/a:mount'),
+              req.url.includes("Disk%201.d64") &&
+              req.url.includes("/v1/drives/a:mount"),
           ),
         )
         .toBe(true);
 
-      await snap(page, testInfo, 'disk1-mounted');
+      await snap(page, testInfo, "disk1-mounted");
     } else {
-      await snap(page, testInfo, 'prev-button-not-available');
+      await snap(page, testInfo, "prev-button-not-available");
     }
   });
 
-  test('config reset category applies defaults', async ({
+  test("config reset category applies defaults", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     enableGoldenTrace(testInfo);
-    await page.goto('/config');
-    await snap(page, testInfo, 'config-open');
+    await page.goto("/config");
+    await snap(page, testInfo, "config-open");
 
-    await page.getByRole('button', { name: 'U64 Specific Settings' }).click();
-    await snap(page, testInfo, 'category-expanded');
+    await page.getByRole("button", { name: "U64 Specific Settings" }).click();
+    await snap(page, testInfo, "category-expanded");
 
-    const selectTrigger = page.getByLabel('System Mode select');
+    const selectTrigger = page.getByLabel("System Mode select");
     await selectTrigger.click();
-    await page.getByRole('option', { name: 'NTSC', exact: true }).click();
-    await snap(page, testInfo, 'value-changed');
+    await page.getByRole("option", { name: "NTSC", exact: true }).click();
+    await snap(page, testInfo, "value-changed");
 
     await expect
       .poll(
-        () => server.getState()['U64 Specific Settings']['System Mode'].value,
+        () => server.getState()["U64 Specific Settings"]["System Mode"].value,
       )
-      .toBe('NTSC');
+      .toBe("NTSC");
 
     const resetButton = page
-      .getByRole('button', { name: /Reset|Reset category|Restore defaults/i })
+      .getByRole("button", { name: /Reset|Reset category|Restore defaults/i })
       .first();
 
     if (await resetButton.isVisible({ timeout: 2000 }).catch(() => false)) {
       await resetButton.click();
-      await snap(page, testInfo, 'reset-clicked');
+      await snap(page, testInfo, "reset-clicked");
 
       await expect
         .poll(() =>
           server.requests.some(
-            (req) => req.url.includes('/v1/configs') && req.method === 'POST',
+            (req) => req.url.includes("/v1/configs") && req.method === "POST",
           ),
         )
         .toBe(true);
 
-      await snap(page, testInfo, 'reset-requested');
+      await snap(page, testInfo, "reset-requested");
 
       await expect
         .poll(() => {
           const state = server.getState();
           return (
-            state['U64 Specific Settings']?.['System Mode']?.value !== 'NTSC'
+            state["U64 Specific Settings"]?.["System Mode"]?.value !== "NTSC"
           );
         })
         .toBe(true);
 
-      await snap(page, testInfo, 'defaults-applied');
+      await snap(page, testInfo, "defaults-applied");
     } else {
-      await snap(page, testInfo, 'reset-button-not-available');
+      await snap(page, testInfo, "reset-button-not-available");
     }
   });
 });

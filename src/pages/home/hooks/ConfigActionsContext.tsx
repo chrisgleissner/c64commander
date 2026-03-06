@@ -1,5 +1,5 @@
-import { createContext, useContext, type ReactNode } from 'react';
-import { useConfigActions } from './useConfigActions';
+import { createContext, useContext, type ReactNode } from "react";
+import { useConfigActions } from "./useConfigActions";
 
 type ConfigActionsValue = ReturnType<typeof useConfigActions>;
 
@@ -18,7 +18,7 @@ export function useSharedConfigActions(): ConfigActionsValue {
   const context = useContext(ConfigActionsContext);
   if (!context) {
     throw new Error(
-      'useSharedConfigActions must be used within a ConfigActionsProvider',
+      "useSharedConfigActions must be used within a ConfigActionsProvider",
     );
   }
   return context;

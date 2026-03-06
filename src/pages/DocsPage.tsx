@@ -6,8 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronDown,
   ExternalLink,
@@ -18,13 +18,13 @@ import {
   Disc,
   Sliders,
   Activity,
-} from 'lucide-react';
-import { AppBar } from '@/components/AppBar';
+} from "lucide-react";
+import { AppBar } from "@/components/AppBar";
 import {
   SOURCE_EXPLANATIONS,
   SOURCE_LABELS,
-} from '@/lib/sourceNavigation/sourceTerms';
-import { wrapUserEvent } from '@/lib/tracing/userTrace';
+} from "@/lib/sourceNavigation/sourceTerms";
+import { wrapUserEvent } from "@/lib/tracing/userTrace";
 
 interface DocSection {
   id: string;
@@ -35,13 +35,13 @@ interface DocSection {
 
 const docSections: DocSection[] = [
   {
-    id: 'getting-started',
-    title: 'Getting Started',
+    id: "getting-started",
+    title: "Getting Started",
     icon: Wifi,
     content: (
       <div className="space-y-3 text-sm">
         <p>
-          C64 Commander connects to your <strong>{SOURCE_LABELS.c64u}</strong>{' '}
+          C64 Commander connects to your <strong>{SOURCE_LABELS.c64u}</strong>{" "}
           over the REST API. Stay on the same network and make sure the device
           is reachable.
         </p>
@@ -65,8 +65,8 @@ const docSections: DocSection[] = [
     ),
   },
   {
-    id: 'home',
-    title: 'Home',
+    id: "home",
+    title: "Home",
     icon: Home,
     content: (
       <div className="space-y-3 text-sm">
@@ -99,8 +99,8 @@ const docSections: DocSection[] = [
     ),
   },
   {
-    id: 'play',
-    title: 'Play Files',
+    id: "play",
+    title: "Play Files",
     icon: Play,
     content: (
       <div className="space-y-3 text-sm">
@@ -114,14 +114,14 @@ const docSections: DocSection[] = [
             Open <strong>Play</strong> and tap <strong>Add items</strong>.
           </li>
           <li>
-            Pick a source: <strong>{SOURCE_LABELS.local}</strong>,{' '}
-            <strong>{SOURCE_LABELS.c64u}</strong>, or{' '}
+            Pick a source: <strong>{SOURCE_LABELS.local}</strong>,{" "}
+            <strong>{SOURCE_LABELS.c64u}</strong>, or{" "}
             <strong>{SOURCE_LABELS.hvsc}</strong> (if enabled).
           </li>
           <li>
-            Source terms in this app: <strong>{SOURCE_LABELS.local}</strong> ={' '}
-            {SOURCE_EXPLANATIONS.local}, <strong>{SOURCE_LABELS.c64u}</strong> ={' '}
-            {SOURCE_EXPLANATIONS.c64u}, <strong>{SOURCE_LABELS.hvsc}</strong> ={' '}
+            Source terms in this app: <strong>{SOURCE_LABELS.local}</strong> ={" "}
+            {SOURCE_EXPLANATIONS.local}, <strong>{SOURCE_LABELS.c64u}</strong> ={" "}
+            {SOURCE_EXPLANATIONS.c64u}, <strong>{SOURCE_LABELS.hvsc}</strong> ={" "}
             {SOURCE_EXPLANATIONS.hvsc}.
           </li>
           <li>Browse folders, select files or folders, then confirm.</li>
@@ -146,8 +146,8 @@ const docSections: DocSection[] = [
     ),
   },
   {
-    id: 'disks',
-    title: 'Disks & Drives',
+    id: "disks",
+    title: "Disks & Drives",
     icon: Disc,
     content: (
       <div className="space-y-3 text-sm">
@@ -181,8 +181,8 @@ const docSections: DocSection[] = [
     ),
   },
   {
-    id: 'disk-swapping',
-    title: 'Swapping Disks',
+    id: "disk-swapping",
+    title: "Swapping Disks",
     icon: Disc,
     content: (
       <div className="space-y-3 text-sm">
@@ -201,8 +201,8 @@ const docSections: DocSection[] = [
     ),
   },
   {
-    id: 'config',
-    title: 'Config',
+    id: "config",
+    title: "Config",
     icon: Sliders,
     content: (
       <div className="space-y-3 text-sm">
@@ -224,8 +224,8 @@ const docSections: DocSection[] = [
     ),
   },
   {
-    id: 'settings',
-    title: 'Settings',
+    id: "settings",
+    title: "Settings",
     icon: Settings,
     content: (
       <div className="space-y-3 text-sm">
@@ -254,8 +254,8 @@ const docSections: DocSection[] = [
     ),
   },
   {
-    id: 'diagnostics',
-    title: 'Diagnostics',
+    id: "diagnostics",
+    title: "Diagnostics",
     icon: Activity,
     content: (
       <div className="space-y-3 text-sm">
@@ -304,10 +304,10 @@ function DocSectionCard({ section }: { section: DocSection }) {
       <button
         onClick={wrapUserEvent(
           () => setIsOpen(!isOpen),
-          'toggle',
-          'DocsSection',
+          "toggle",
+          "DocsSection",
           { title: section.title },
-          'DocsHeader',
+          "DocsHeader",
         )}
         className="w-full flex items-center justify-between p-4 text-left"
       >
@@ -329,7 +329,7 @@ function DocSectionCard({ section }: { section: DocSection }) {
         {isOpen && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
+            animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.2 }}
           >

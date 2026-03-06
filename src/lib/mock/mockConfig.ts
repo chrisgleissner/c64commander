@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import yaml from 'js-yaml';
+import yaml from "js-yaml";
 
 type RawConfigItem = {
   selected?: string | number;
@@ -54,15 +54,15 @@ export type MockConfigPayload = {
   categories: Record<string, Record<string, MockConfigItem>>;
 };
 
-const asString = (value: unknown, fallback = '') => {
-  if (typeof value === 'string') return value;
-  if (typeof value === 'number') return String(value);
+const asString = (value: unknown, fallback = "") => {
+  if (typeof value === "string") return value;
+  if (typeof value === "number") return String(value);
   return fallback;
 };
 
 const asNumber = (value: unknown) => {
-  if (typeof value === 'number') return value;
-  if (typeof value === 'string') {
+  if (typeof value === "number") return value;
+  if (typeof value === "string") {
     const parsed = Number(value);
     return Number.isNaN(parsed) ? undefined : parsed;
   }
@@ -70,7 +70,7 @@ const asNumber = (value: unknown) => {
 };
 
 const normalizeDetails = (
-  details?: RawConfigItem['details'],
+  details?: RawConfigItem["details"],
 ): MockConfigDetails | undefined => {
   if (!details) return undefined;
   const min = asNumber(details.min);
@@ -110,8 +110,8 @@ export const clearMockConfigLoader = () => {
 };
 const resolveYamlUrl = () => {
   const base =
-    typeof import.meta !== 'undefined' ? import.meta.env.BASE_URL || '/' : '/';
-  if (typeof window === 'undefined') return `${base}doc/c64/c64u-config.yaml`;
+    typeof import.meta !== "undefined" ? import.meta.env.BASE_URL || "/" : "/";
+  if (typeof window === "undefined") return `${base}doc/c64/c64u-config.yaml`;
   return new URL(
     `doc/c64/c64u-config.yaml`,
     `${window.location.origin}${base}`,
@@ -128,17 +128,17 @@ const loadYamlFromAssets = async () => {
 
 const loadBundledConfigYaml = async () => {
   if (bundledConfigYaml !== null) return bundledConfigYaml;
-  if (typeof window === 'undefined') {
-    bundledConfigYaml = '';
+  if (typeof window === "undefined") {
+    bundledConfigYaml = "";
     return bundledConfigYaml;
   }
   try {
-    const module = await import('../../../doc/c64/c64u-config.yaml?raw');
+    const module = await import("../../../doc/c64/c64u-config.yaml?raw");
     bundledConfigYaml =
-      typeof module.default === 'string' ? module.default : '';
+      typeof module.default === "string" ? module.default : "";
   } catch (error) {
-    console.warn('Failed to load bundled mock config YAML', { error });
-    bundledConfigYaml = '';
+    console.warn("Failed to load bundled mock config YAML", { error });
+    bundledConfigYaml = "";
   }
   return bundledConfigYaml;
 };
@@ -147,12 +147,12 @@ const loadRawConfig = async (): Promise<RawConfig> => {
   try {
     if (customYamlLoader) {
       const loaded = await customYamlLoader();
-      if (typeof loaded === 'string') {
+      if (typeof loaded === "string") {
         return (yaml.load(loaded) as RawConfig) ?? {};
       }
       return (loaded as RawConfig) ?? {};
     }
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       const bundled = await loadBundledConfigYaml();
       if (bundled) {
         return (yaml.load(bundled) as RawConfig) ?? {};
@@ -161,7 +161,7 @@ const loadRawConfig = async (): Promise<RawConfig> => {
     const yamlText = await loadYamlFromAssets();
     return (yaml.load(yamlText) as RawConfig) ?? {};
   } catch (error) {
-    console.warn('Failed to load mock config YAML', { error });
+    console.warn("Failed to load mock config YAML", { error });
     const bundled = await loadBundledConfigYaml();
     if (bundled) {
       return (yaml.load(bundled) as RawConfig) ?? {};
@@ -180,11 +180,11 @@ const buildPayload = (parsed: RawConfig): MockConfigPayload => {
     const items = category.items ?? {};
     const itemPayload: Record<string, MockConfigItem> = {};
     Object.entries(items).forEach(([itemName, item]) => {
-      const value = item?.selected ?? '';
+      const value = item?.selected ?? "";
       const options = normalizeOptions(item?.options);
       const details = normalizeDetails(item?.details);
       itemPayload[itemName] = {
-        value: typeof value === 'number' ? value : asString(value),
+        value: typeof value === "number" ? value : asString(value),
         ...(options && options.length > 0 ? { options } : {}),
         ...(details ? { details } : {}),
       };
@@ -194,11 +194,11 @@ const buildPayload = (parsed: RawConfig): MockConfigPayload => {
 
   return {
     general: {
-      baseUrl: asString(general.base_url, 'http://c64u'),
-      restApiVersion: asString(general.rest_api_version, '0.1'),
-      deviceType: asString(general.device_type, 'Ultimate 64'),
-      firmwareVersion: asString(general.firmware_version, '3.12a'),
-      fetchedAt: asString(general.fetched_at || '', ''),
+      baseUrl: asString(general.base_url, "http://c64u"),
+      restApiVersion: asString(general.rest_api_version, "0.1"),
+      deviceType: asString(general.device_type, "Ultimate 64"),
+      firmwareVersion: asString(general.firmware_version, "3.12a"),
+      fetchedAt: asString(general.fetched_at || "", ""),
     },
     categories: categoryPayload,
   };

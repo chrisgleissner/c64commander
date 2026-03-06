@@ -6,8 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import fs from 'node:fs/promises';
-import path from 'node:path';
+import fs from "node:fs/promises";
+import path from "node:path";
 
 const createMemoryStorage = () => {
   const store = new Map<string, string>();
@@ -34,26 +34,26 @@ const createMemoryStorage = () => {
 };
 
 const ensureBrowserShims = () => {
-  if (typeof window === 'undefined') {
+  if (typeof window === "undefined") {
     (globalThis as typeof globalThis & { window?: unknown }).window =
       globalThis;
   }
-  if (typeof localStorage === 'undefined') {
+  if (typeof localStorage === "undefined") {
     (
       globalThis as typeof globalThis & { localStorage?: Storage }
     ).localStorage = createMemoryStorage() as Storage;
   }
-  if (typeof sessionStorage === 'undefined') {
+  if (typeof sessionStorage === "undefined") {
     (
       globalThis as typeof globalThis & { sessionStorage?: Storage }
     ).sessionStorage = createMemoryStorage() as Storage;
   }
-  if (typeof navigator === 'undefined') {
+  if (typeof navigator === "undefined") {
     (globalThis as typeof globalThis & { navigator?: Navigator }).navigator = {
-      userAgent: 'node',
+      userAgent: "node",
     } as Navigator;
   }
-  if (typeof CustomEvent === 'undefined') {
+  if (typeof CustomEvent === "undefined") {
     class CustomEventShim<T = unknown> extends Event {
       detail: T;
       constructor(type: string, init?: CustomEventInit<T>) {
@@ -65,17 +65,17 @@ const ensureBrowserShims = () => {
       globalThis as typeof globalThis & { CustomEvent?: typeof CustomEventShim }
     ).CustomEvent = CustomEventShim;
   }
-  if (typeof window.addEventListener !== 'function') {
+  if (typeof window.addEventListener !== "function") {
     (
       window as typeof window & { addEventListener?: () => void }
     ).addEventListener = () => {};
   }
-  if (typeof window.removeEventListener !== 'function') {
+  if (typeof window.removeEventListener !== "function") {
     (
       window as typeof window & { removeEventListener?: () => void }
     ).removeEventListener = () => {};
   }
-  if (typeof window.dispatchEvent !== 'function') {
+  if (typeof window.dispatchEvent !== "function") {
     (
       window as typeof window & { dispatchEvent?: () => boolean }
     ).dispatchEvent = () => true;
@@ -87,7 +87,7 @@ const parseArgs = (argv: string[]) => {
   const filePath = args.shift();
   if (!filePath) {
     throw new Error(
-      'Usage: manual-play-sid.sh /path/to/song.sid [--song 1] [--duration-ms 180000]',
+      "Usage: manual-play-sid.sh /path/to/song.sid [--song 1] [--duration-ms 180000]",
     );
   }
 
@@ -97,9 +97,9 @@ const parseArgs = (argv: string[]) => {
   while (args.length > 0) {
     const flag = args.shift();
     if (!flag) break;
-    if (flag === '--song') {
+    if (flag === "--song") {
       const value = args.shift();
-      if (!value) throw new Error('Missing value for --song');
+      if (!value) throw new Error("Missing value for --song");
       const parsed = Number(value);
       if (!Number.isFinite(parsed) || parsed < 1) {
         throw new Error(`Invalid --song value: ${value}`);
@@ -107,9 +107,9 @@ const parseArgs = (argv: string[]) => {
       songNr = Math.floor(parsed);
       continue;
     }
-    if (flag === '--duration-ms') {
+    if (flag === "--duration-ms") {
       const value = args.shift();
-      if (!value) throw new Error('Missing value for --duration-ms');
+      if (!value) throw new Error("Missing value for --duration-ms");
       const parsed = Number(value);
       if (!Number.isFinite(parsed) || parsed <= 0) {
         throw new Error(`Invalid --duration-ms value: ${value}`);
@@ -136,23 +136,23 @@ const main = async () => {
   const resolvedPath = path.resolve(filePath);
 
   const buffer = await fs.readFile(resolvedPath);
-  const sidBlob = new Blob([buffer], { type: 'audio/sid' });
+  const sidBlob = new Blob([buffer], { type: "audio/sid" });
   (sidBlob as Blob & { name?: string }).name = path.basename(resolvedPath);
 
   const envSongNr = resolveEnvNumber(process.env.C64U_SONGNR);
   const envDurationMs = resolveEnvNumber(process.env.C64U_DURATION_MS);
 
-  const host = process.env.C64U_HOST || process.env.C64U_DEVICE_HOST || 'c64u';
+  const host = process.env.C64U_HOST || process.env.C64U_DEVICE_HOST || "c64u";
   const baseUrl = process.env.C64U_BASE_URL || undefined;
   const password = process.env.C64U_PASSWORD || undefined;
 
-  const { buildBaseUrlFromDeviceHost, C64API } = await import('@/lib/c64api');
+  const { buildBaseUrlFromDeviceHost, C64API } = await import("@/lib/c64api");
   const { buildPlayPlan, executePlayPlan } =
-    await import('@/lib/playback/playbackRouter');
+    await import("@/lib/playback/playbackRouter");
   const { updateDeviceConnectionState } =
-    await import('@/lib/deviceInteraction/deviceStateStore');
+    await import("@/lib/deviceInteraction/deviceStateStore");
 
-  updateDeviceConnectionState('REAL_CONNECTED');
+  updateDeviceConnectionState("REAL_CONNECTED");
 
   const api = new C64API(
     baseUrl ?? buildBaseUrlFromDeviceHost(host),
@@ -160,7 +160,7 @@ const main = async () => {
     host,
   );
   const plan = buildPlayPlan({
-    source: 'local',
+    source: "local",
     path: resolvedPath,
     file: sidBlob,
     songNr: songNr ?? envSongNr,
@@ -168,10 +168,10 @@ const main = async () => {
   });
 
   await executePlayPlan(api, plan);
-  console.log('SID upload requested. Check the C64U for playback.');
+  console.log("SID upload requested. Check the C64U for playback.");
 };
 
 main().catch((error) => {
-  console.error('SID playback failed:', (error as Error).message || error);
+  console.error("SID playback failed:", (error as Error).message || error);
   process.exitCode = 1;
 });

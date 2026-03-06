@@ -1,4 +1,4 @@
-import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { IncomingMessage, ServerResponse } from "node:http";
 
 export const readBody = async (req: IncomingMessage): Promise<Buffer> => {
   const chunks: Buffer[] = [];
@@ -13,7 +13,7 @@ export const readJsonBody = async <T>(req: IncomingMessage): Promise<T> => {
   if (body.length === 0) {
     return {} as T;
   }
-  return JSON.parse(body.toString('utf8')) as T;
+  return JSON.parse(body.toString("utf8")) as T;
 };
 
 export const writeJson = (
@@ -23,9 +23,9 @@ export const writeJson = (
 ) => {
   const body = Buffer.from(JSON.stringify(payload));
   res.writeHead(status, {
-    'Content-Type': 'application/json; charset=utf-8',
-    'Content-Length': String(body.length),
-    'Cache-Control': 'no-store',
+    "Content-Type": "application/json; charset=utf-8",
+    "Content-Length": String(body.length),
+    "Cache-Control": "no-store",
   });
   res.end(body);
 };
@@ -34,14 +34,14 @@ export const writeText = (
   res: ServerResponse,
   status: number,
   body: string,
-  contentType = 'text/plain; charset=utf-8',
-  cacheControl = 'no-store',
+  contentType = "text/plain; charset=utf-8",
+  cacheControl = "no-store",
 ) => {
   const data = Buffer.from(body);
   res.writeHead(status, {
-    'Content-Type': contentType,
-    'Content-Length': String(data.length),
-    'Cache-Control': cacheControl,
+    "Content-Type": contentType,
+    "Content-Length": String(data.length),
+    "Cache-Control": cacheControl,
   });
   res.end(data);
 };
@@ -50,13 +50,13 @@ export const writeBuffer = (
   res: ServerResponse,
   status: number,
   data: Buffer,
-  contentType = 'application/octet-stream',
-  cacheControl = 'no-store',
+  contentType = "application/octet-stream",
+  cacheControl = "no-store",
 ) => {
   res.writeHead(status, {
-    'Content-Type': contentType,
-    'Content-Length': String(data.length),
-    'Cache-Control': cacheControl,
+    "Content-Type": contentType,
+    "Content-Length": String(data.length),
+    "Cache-Control": cacheControl,
   });
   res.end(data);
 };

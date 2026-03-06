@@ -11,28 +11,28 @@ import {
   getC64APIConfigSnapshot,
   normalizeDeviceHost,
   updateC64APIConfig,
-} from '@/lib/c64api';
-import type { DiscoveryTrigger } from '@/lib/connection/connectionManager';
+} from "@/lib/c64api";
+import type { DiscoveryTrigger } from "@/lib/connection/connectionManager";
 import {
   discoverConnection,
   dismissDemoInterstitial,
-} from '@/lib/connection/connectionManager';
-import { addLog } from '@/lib/logging';
+} from "@/lib/connection/connectionManager";
+import { addLog } from "@/lib/logging";
 
 export const normalizeConfiguredHost = (input: string, fallbackHost: string) =>
   normalizeDeviceHost(input.trim() || fallbackHost);
 export const getConfiguredHost = () => {
-  if (typeof window === 'undefined') return 'c64u';
+  if (typeof window === "undefined") return "c64u";
   try {
-    return localStorage.getItem('c64u_device_host') || 'c64u';
+    return localStorage.getItem("c64u_device_host") || "c64u";
   } catch (error) {
     const resolvedError =
       error instanceof Error ? error : new Error(String(error));
-    addLog('warn', 'Failed to read configured host from storage', {
+    addLog("warn", "Failed to read configured host from storage", {
       error: resolvedError.message,
       stack: resolvedError.stack,
     });
-    return 'c64u';
+    return "c64u";
   }
 };
 
@@ -47,6 +47,6 @@ export const saveConfiguredHostAndRetry = (
   if (options.dismissInterstitial) {
     dismissDemoInterstitial();
   }
-  void discoverConnection(options.trigger ?? 'settings');
+  void discoverConnection(options.trigger ?? "settings");
   return host;
 };

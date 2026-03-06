@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-export type SourceEntryType = 'file' | 'dir';
+export type SourceEntryType = "file" | "dir";
 
 export type SourceEntry = {
   type: SourceEntryType;
@@ -16,7 +16,7 @@ export type SourceEntry = {
   modifiedAt?: string | null;
 };
 
-export type SourceLocationType = 'ultimate' | 'local' | 'hvsc';
+export type SourceLocationType = "ultimate" | "local" | "hvsc";
 
 export type SelectedItem = {
   type: SourceEntryType;

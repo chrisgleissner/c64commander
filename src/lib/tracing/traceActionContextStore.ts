@@ -28,7 +28,7 @@
  * 2. Promise/timer patching to restore captured contexts in async callbacks
  */
 
-import type { TraceActionContext } from '@/lib/tracing/types';
+import type { TraceActionContext } from "@/lib/tracing/types";
 
 // The active action context during synchronous execution
 // This is what getActiveAction() returns for synchronous callers
@@ -120,7 +120,7 @@ const wrapCallback = <T extends (...args: any[]) => any>(
  */
 export const installAsyncContextPropagation = (): void => {
   if (isInstalled) return;
-  if (typeof Promise === 'undefined') return;
+  if (typeof Promise === "undefined") return;
 
   isInstalled = true;
 
@@ -181,8 +181,8 @@ export const installAsyncContextPropagation = (): void => {
 
   // Patch setTimeout
   if (
-    typeof globalThis !== 'undefined' &&
-    typeof globalThis.setTimeout === 'function'
+    typeof globalThis !== "undefined" &&
+    typeof globalThis.setTimeout === "function"
   ) {
     originalSetTimeout = globalThis.setTimeout;
     (globalThis as any).setTimeout = ((
@@ -201,8 +201,8 @@ export const installAsyncContextPropagation = (): void => {
 
   // Patch setInterval
   if (
-    typeof globalThis !== 'undefined' &&
-    typeof globalThis.setInterval === 'function'
+    typeof globalThis !== "undefined" &&
+    typeof globalThis.setInterval === "function"
   ) {
     originalSetInterval = globalThis.setInterval;
     (globalThis as any).setInterval = ((
@@ -221,8 +221,8 @@ export const installAsyncContextPropagation = (): void => {
 
   // Patch queueMicrotask
   if (
-    typeof globalThis !== 'undefined' &&
-    typeof globalThis.queueMicrotask === 'function'
+    typeof globalThis !== "undefined" &&
+    typeof globalThis.queueMicrotask === "function"
   ) {
     originalQueueMicrotask = globalThis.queueMicrotask;
     globalThis.queueMicrotask = (callback: VoidFunction): void => {
@@ -250,15 +250,15 @@ export const uninstallAsyncContextPropagation = (): void => {
     Promise.prototype.finally = originalPromiseFinally;
     originalPromiseFinally = null;
   }
-  if (originalSetTimeout && typeof globalThis !== 'undefined') {
+  if (originalSetTimeout && typeof globalThis !== "undefined") {
     globalThis.setTimeout = originalSetTimeout;
     originalSetTimeout = null;
   }
-  if (originalSetInterval && typeof globalThis !== 'undefined') {
+  if (originalSetInterval && typeof globalThis !== "undefined") {
     globalThis.setInterval = originalSetInterval;
     originalSetInterval = null;
   }
-  if (originalQueueMicrotask && typeof globalThis !== 'undefined') {
+  if (originalQueueMicrotask && typeof globalThis !== "undefined") {
     globalThis.queueMicrotask = originalQueueMicrotask;
     originalQueueMicrotask = null;
   }

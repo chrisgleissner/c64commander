@@ -6,17 +6,17 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { ReactNode } from 'react';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ConnectivityIndicator } from '@/components/ConnectivityIndicator';
-import { DiagnosticsActivityIndicator } from '@/components/DiagnosticsActivityIndicator';
-import { requestDiagnosticsOpen } from '@/lib/diagnostics/diagnosticsOverlay';
+import type { ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { ConnectivityIndicator } from "@/components/ConnectivityIndicator";
+import { DiagnosticsActivityIndicator } from "@/components/DiagnosticsActivityIndicator";
+import { requestDiagnosticsOpen } from "@/lib/diagnostics/diagnosticsOverlay";
 import {
   isDiagnosticsOverlayActive,
   subscribeDiagnosticsOverlay,
-} from '@/lib/diagnostics/diagnosticsOverlayState';
-import { useDiagnosticsActivity } from '@/hooks/useDiagnosticsActivity';
-import { toast, useToast } from '@/hooks/use-toast';
+} from "@/lib/diagnostics/diagnosticsOverlayState";
+import { useDiagnosticsActivity } from "@/hooks/useDiagnosticsActivity";
+import { toast, useToast } from "@/hooks/use-toast";
 
 type Props = {
   title: ReactNode;
@@ -35,7 +35,7 @@ export function AppBar({ title, subtitle, leading, children }: Props) {
   );
 
   useLayoutEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === "undefined") return;
     const element = headerRef.current;
     if (!element) return;
 
@@ -43,7 +43,7 @@ export function AppBar({ title, subtitle, leading, children }: Props) {
       const nextHeight = element.offsetHeight;
       if (!Number.isFinite(nextHeight) || nextHeight <= 0) return;
       document.documentElement.style.setProperty(
-        '--app-bar-height',
+        "--app-bar-height",
         `${nextHeight}px`,
       );
     };
@@ -51,16 +51,16 @@ export function AppBar({ title, subtitle, leading, children }: Props) {
     updateHeight();
 
     let observer: ResizeObserver | null = null;
-    if ('ResizeObserver' in window) {
+    if ("ResizeObserver" in window) {
       observer = new ResizeObserver(() => updateHeight());
       observer.observe(element);
     } else {
-      window.addEventListener('resize', updateHeight);
+      window.addEventListener("resize", updateHeight);
     }
 
     return () => {
       observer?.disconnect();
-      window.removeEventListener('resize', updateHeight);
+      window.removeEventListener("resize", updateHeight);
     };
   }, []);
 
@@ -84,25 +84,25 @@ export function AppBar({ title, subtitle, leading, children }: Props) {
 
     const description =
       restInFlight === 1
-        ? '1 request in flight.'
+        ? "1 request in flight."
         : `${restInFlight} requests in flight.`;
 
     if (!restToastRef.current) {
       restToastRef.current = toast({
-        title: 'REST activity',
+        title: "REST activity",
         description,
       });
       return;
     }
 
     restToastRef.current.update({
-      title: 'REST activity',
+      title: "REST activity",
       description,
     });
   }, [diagnosticsOverlayActive, restInFlight, toasts]);
 
   const handleDiagnosticsOpen = () => {
-    requestDiagnosticsOpen('actions');
+    requestDiagnosticsOpen("actions");
   };
 
   return (

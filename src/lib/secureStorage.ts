@@ -6,20 +6,20 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { SecureStorage } from '@/lib/native/secureStorage';
+import { SecureStorage } from "@/lib/native/secureStorage";
 
-const HAS_PASSWORD_KEY = 'c64u_has_password';
+const HAS_PASSWORD_KEY = "c64u_has_password";
 
 let cachedPassword: string | null = null;
 let passwordLoaded = false;
 let passwordLoadPromise: Promise<string | null> | null = null;
 
 export const hasStoredPasswordFlag = () =>
-  localStorage.getItem(HAS_PASSWORD_KEY) === '1';
+  localStorage.getItem(HAS_PASSWORD_KEY) === "1";
 
 const setHasPasswordFlag = (value: boolean) => {
   if (value) {
-    localStorage.setItem(HAS_PASSWORD_KEY, '1');
+    localStorage.setItem(HAS_PASSWORD_KEY, "1");
   } else {
     localStorage.removeItem(HAS_PASSWORD_KEY);
   }

@@ -6,6 +6,6 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-declare module 'js-yaml' {
+declare module "js-yaml" {
   export function load(content: string): unknown;
 }

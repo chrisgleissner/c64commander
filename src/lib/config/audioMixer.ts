@@ -6,11 +6,11 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { ConfigResponse, getC64API } from '@/lib/c64api';
-import { addLog } from '@/lib/logging';
+import { ConfigResponse, getC64API } from "@/lib/c64api";
+import { addLog } from "@/lib/logging";
 
 const normalizeOption = (value: string) =>
-  value.trim().replace(/\s+/g, ' ').toLowerCase();
+  value.trim().replace(/\s+/g, " ").toLowerCase();
 
 const parseNumeric = (option: string) => {
   const match = option.trim().match(/[+-]?\d+(?:\.\d+)?/);
@@ -21,10 +21,10 @@ export const normalizeAudioMixerValue = (
   value: string | number | undefined,
 ) => {
   if (value === undefined || value === null) return undefined;
-  if (typeof value === 'number') return value;
+  if (typeof value === "number") return value;
   const trimmed = value.trim();
   const normalized = normalizeOption(trimmed);
-  if (normalized === 'center') return 'center';
+  if (normalized === "center") return "center";
   const numeric = parseNumeric(trimmed);
   return numeric ?? normalized;
 };
@@ -53,7 +53,7 @@ export const mergeAudioMixerOptions = (
 };
 
 const asRecord = (value: unknown): Record<string, unknown> | null =>
-  value && typeof value === 'object' && !Array.isArray(value)
+  value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;
 
@@ -68,8 +68,8 @@ const extractOptions = (
   const itemBlock =
     (asRecord(categoryRecord?.items ?? categoryBlock) ?? {})[item] ??
     payload[item] ??
-    payload['item'] ??
-    payload['value'] ??
+    payload["item"] ??
+    payload["value"] ??
     payload;
 
   const itemRecord = asRecord(itemBlock);
@@ -99,7 +99,7 @@ export const resolveAudioMixerResetValue = async (
       const response = await api.getConfigItem(category, itemName);
       options = extractOptions(response, category, itemName);
     } catch (error) {
-      addLog('warn', 'Failed to fetch audio mixer options', {
+      addLog("warn", "Failed to fetch audio mixer options", {
         category,
         itemName,
         error,
@@ -107,23 +107,23 @@ export const resolveAudioMixerResetValue = async (
     }
   }
 
-  if (itemName.startsWith('Vol ')) {
+  if (itemName.startsWith("Vol ")) {
     const zeroOption = options.find((option) => {
       const normalized = normalizeOption(option);
       return (
-        normalized === '0 db' ||
-        normalized === '0db' ||
+        normalized === "0 db" ||
+        normalized === "0db" ||
         parseNumeric(option) === 0
       );
     });
     return zeroOption ?? 0;
   }
 
-  if (itemName.startsWith('Pan ')) {
+  if (itemName.startsWith("Pan ")) {
     const centerOption = options.find(
-      (option) => normalizeOption(option) === 'center',
+      (option) => normalizeOption(option) === "center",
     );
-    return centerOption ?? 'Center';
+    return centerOption ?? "Center";
   }
 
   return undefined;

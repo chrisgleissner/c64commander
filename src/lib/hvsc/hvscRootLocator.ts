@@ -11,15 +11,15 @@ export type HvscRootLocation = {
   label: string;
 };
 
-const STORAGE_KEY = 'c64u_hvsc_root:v1';
+const STORAGE_KEY = "c64u_hvsc_root:v1";
 
 export const getDefaultHvscRoot = (): HvscRootLocation => ({
-  path: '/',
-  label: 'HVSC',
+  path: "/",
+  label: "HVSC",
 });
 
 export const loadHvscRoot = (): HvscRootLocation => {
-  if (typeof localStorage === 'undefined') return getDefaultHvscRoot();
+  if (typeof localStorage === "undefined") return getDefaultHvscRoot();
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) return getDefaultHvscRoot();
   try {
@@ -27,17 +27,17 @@ export const loadHvscRoot = (): HvscRootLocation => {
     if (!parsed?.path || !parsed?.label) return getDefaultHvscRoot();
     return parsed;
   } catch (error) {
-    console.warn('Failed to load HVSC root from storage', { error });
+    console.warn("Failed to load HVSC root from storage", { error });
     return getDefaultHvscRoot();
   }
 };
 
 export const saveHvscRoot = (root: HvscRootLocation) => {
-  if (typeof localStorage === 'undefined') return;
+  if (typeof localStorage === "undefined") return;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(root));
 };
 
 export const clearHvscRoot = () => {
-  if (typeof localStorage === 'undefined') return;
+  if (typeof localStorage === "undefined") return;
   localStorage.removeItem(STORAGE_KEY);
 };

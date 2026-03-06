@@ -6,14 +6,14 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Slider } from '@/components/ui/slider';
-import { ResponsivePathText } from '@/components/ResponsivePathText';
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Slider } from "@/components/ui/slider";
+import { ResponsivePathText } from "@/components/ResponsivePathText";
 import {
   formatDurationSeconds,
   sliderToDurationSeconds,
-} from '../playFilesUtils';
+} from "../playFilesUtils";
 
 export type PlaybackSettingsPanelProps = {
   durationSliderMax: number;
@@ -65,7 +65,7 @@ export const PlaybackSettingsPanel = ({
     songlengthsSizeLabel,
   ]
     .filter(Boolean)
-    .join(', ');
+    .join(", ");
   const songlengthsPath = activeSonglengthsPath ?? songlengthsName;
 
   return (
@@ -137,7 +137,7 @@ export const PlaybackSettingsPanel = ({
                   variant="outline"
                   size="sm"
                   data-testid="song-selector-trigger"
-                  data-open={songPickerOpen ? 'true' : 'false'}
+                  data-open={songPickerOpen ? "true" : "false"}
                   onPointerDown={onSongPickerPointerDown}
                   onClick={onSongPickerClick}
                 >
@@ -163,7 +163,7 @@ export const PlaybackSettingsPanel = ({
                       <Button
                         key={value}
                         variant={
-                          value === clampedSongNr ? 'default' : 'outline'
+                          value === clampedSongNr ? "default" : "outline"
                         }
                         className="w-full justify-start"
                         onClick={() => onSelectSong(value)}

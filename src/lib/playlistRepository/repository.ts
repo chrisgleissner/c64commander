@@ -5,7 +5,7 @@ import type {
   PlaylistSessionRecord,
   RandomPlaySession,
   TrackRecord,
-} from './types';
+} from "./types";
 
 export interface TrackRepository {
   upsertTracks(tracks: TrackRecord[]): Promise<void>;

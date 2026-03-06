@@ -6,11 +6,11 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-export type SidClock = 'unknown' | 'pal' | 'ntsc' | 'pal_ntsc';
-export type SidModel = 'unknown' | 'mos6581' | 'mos8580' | 'both';
+export type SidClock = "unknown" | "pal" | "ntsc" | "pal_ntsc";
+export type SidModel = "unknown" | "mos6581" | "mos8580" | "both";
 
 export type SidHeaderMetadata = {
-  magicId: 'PSID' | 'RSID';
+  magicId: "PSID" | "RSID";
   version: number;
   dataOffset: number;
   loadAddress: number;
@@ -83,21 +83,21 @@ const decodeWindows1252 = (bytes: Uint8Array) => {
     }
     chars.push(String.fromCodePoint(byte));
   }
-  return chars.join('').trim();
+  return chars.join("").trim();
 };
 
 const decodeSidModel = (value: number): SidModel => {
-  if (value === 0b01) return 'mos6581';
-  if (value === 0b10) return 'mos8580';
-  if (value === 0b11) return 'both';
-  return 'unknown';
+  if (value === 0b01) return "mos6581";
+  if (value === 0b10) return "mos8580";
+  if (value === 0b11) return "both";
+  return "unknown";
 };
 
 const decodeClock = (value: number): SidClock => {
-  if (value === 0b01) return 'pal';
-  if (value === 0b10) return 'ntsc';
-  if (value === 0b11) return 'pal_ntsc';
-  return 'unknown';
+  if (value === 0b01) return "pal";
+  if (value === 0b10) return "ntsc";
+  if (value === 0b11) return "pal_ntsc";
+  return "unknown";
 };
 
 const decodeSidAddressByte = (byte: number): number | null => {
@@ -126,7 +126,7 @@ export const parseSidHeaderMetadata = (
     view.getUint8(2),
     view.getUint8(3),
   );
-  if (magic !== 'PSID' && magic !== 'RSID') {
+  if (magic !== "PSID" && magic !== "RSID") {
     throw new Error(`Unsupported SID magic: ${magic}`);
   }
 
@@ -168,11 +168,11 @@ export const parseSidHeaderMetadata = (
 
   const parserWarnings: string[] = [];
   let rsidValid: boolean | null = null;
-  if (magic === 'RSID') {
+  if (magic === "RSID") {
     const warnings: string[] = [];
-    if (loadAddress !== 0) warnings.push('RSID requires loadAddress=0');
-    if (playAddress !== 0) warnings.push('RSID requires playAddress=0');
-    if (speedBits !== 0) warnings.push('RSID requires speedBits=0');
+    if (loadAddress !== 0) warnings.push("RSID requires loadAddress=0");
+    if (playAddress !== 0) warnings.push("RSID requires playAddress=0");
+    if (speedBits !== 0) warnings.push("RSID requires speedBits=0");
     rsidValid = warnings.length === 0;
     parserWarnings.push(...warnings);
   }
@@ -225,23 +225,23 @@ export const buildSidTrackSubsongs = (
 };
 
 export const computeSidMd5 = async (data: ArrayBuffer) => {
-  const { computeSidMd5: computeSidMd5Internal } = await import('./sidHash');
+  const { computeSidMd5: computeSidMd5Internal } = await import("./sidHash");
   return computeSidMd5Internal(data);
 };
 
 export const createSslPayload = (durationMs: number) => {
   if (!Number.isFinite(durationMs)) {
-    throw new Error('Invalid SID duration: value must be finite milliseconds');
+    throw new Error("Invalid SID duration: value must be finite milliseconds");
   }
   if (durationMs < 0) {
     throw new Error(
-      'Invalid SID duration: value must be non-negative milliseconds',
+      "Invalid SID duration: value must be non-negative milliseconds",
     );
   }
   const totalSeconds = Math.floor(durationMs / 1000);
   const maxSeconds = 99 * 60 + 59;
   if (totalSeconds > maxSeconds) {
-    throw new Error('Invalid SID duration: maximum supported value is 99:59');
+    throw new Error("Invalid SID duration: maximum supported value is 99:59");
   }
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
@@ -269,7 +269,7 @@ export const getSidSongCount = (buffer: ArrayBuffer) => {
       view.getUint8(2),
       view.getUint8(3),
     );
-    if (magic !== 'PSID' && magic !== 'RSID') return 1;
+    if (magic !== "PSID" && magic !== "RSID") return 1;
     const songs = view.getUint16(14, false);
     return songs > 0 ? songs : 1;
   } catch (error) {
@@ -278,7 +278,7 @@ export const getSidSongCount = (buffer: ArrayBuffer) => {
     const headerBytes = isBuffer
       ? Array.from(new Uint8Array(buffer, 0, Math.min(4, buffer.byteLength)))
       : [];
-    console.warn('Failed to read SID song count', {
+    console.warn("Failed to read SID song count", {
       byteLength,
       headerBytes,
       error,

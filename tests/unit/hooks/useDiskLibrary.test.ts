@@ -6,29 +6,29 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act } from "@testing-library/react";
 import {
   useDiskLibrary,
   buildDiskEntryFromDrive,
   toDisplayName,
-} from '@/hooks/useDiskLibrary';
-import { loadDiskLibrary, saveDiskLibrary } from '@/lib/disks/diskStore';
-import { buildDiskTreeState } from '@/lib/disks/diskTree';
-import { createDiskEntry } from '@/lib/disks/diskTypes';
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+} from "@/hooks/useDiskLibrary";
+import { loadDiskLibrary, saveDiskLibrary } from "@/lib/disks/diskStore";
+import { buildDiskTreeState } from "@/lib/disks/diskTree";
+import { createDiskEntry } from "@/lib/disks/diskTypes";
+import { vi, describe, it, expect, beforeEach } from "vitest";
 
-vi.mock('@/lib/disks/diskStore');
-vi.mock('@/lib/disks/diskTree');
-vi.mock('@/lib/logging', () => ({
+vi.mock("@/lib/disks/diskStore");
+vi.mock("@/lib/disks/diskTree");
+vi.mock("@/lib/logging", () => ({
   addErrorLog: vi.fn(),
 }));
 
-describe('useDiskLibrary', () => {
-  const mockUniqueId = 'test-id';
+describe("useDiskLibrary", () => {
+  const mockUniqueId = "test-id";
   const mockDisk = createDiskEntry({
-    path: '/some/path.d64',
-    location: 'local',
-    name: 'Test Disk',
+    path: "/some/path.d64",
+    location: "local",
+    name: "Test Disk",
   });
 
   beforeEach(() => {
@@ -42,14 +42,14 @@ describe('useDiskLibrary', () => {
     });
   });
 
-  it('initializes with empty state and loads from store', () => {
+  it("initializes with empty state and loads from store", () => {
     const { result } = renderHook(() => useDiskLibrary(mockUniqueId));
 
     expect(loadDiskLibrary).toHaveBeenCalledWith(mockUniqueId);
     expect(result.current.disks).toEqual([]);
   });
 
-  it('loads disks from store on mount', () => {
+  it("loads disks from store on mount", () => {
     vi.mocked(loadDiskLibrary).mockReturnValue({
       disks: [mockDisk],
     });
@@ -60,12 +60,12 @@ describe('useDiskLibrary', () => {
     expect(result.current.disks[0].id).toBe(mockDisk.id);
   });
 
-  it('does not load if uniqueId is null', () => {
+  it("does not load if uniqueId is null", () => {
     renderHook(() => useDiskLibrary(null));
     expect(loadDiskLibrary).not.toHaveBeenCalled();
   });
 
-  it('saves to store when disks change', () => {
+  it("saves to store when disks change", () => {
     const { result } = renderHook(() => useDiskLibrary(mockUniqueId));
 
     act(() => {
@@ -83,9 +83,9 @@ describe('useDiskLibrary', () => {
     );
   });
 
-  it('adds disks correctly', () => {
+  it("adds disks correctly", () => {
     const { result } = renderHook(() => useDiskLibrary(mockUniqueId));
-    const newDisk = createDiskEntry({ path: '/other.d64', location: 'local' });
+    const newDisk = createDiskEntry({ path: "/other.d64", location: "local" });
 
     act(() => {
       result.current.addDisks([newDisk]);
@@ -95,9 +95,9 @@ describe('useDiskLibrary', () => {
     expect(result.current.disks[0].id).toBe(newDisk.id);
   });
 
-  it('does not add duplicate disks', () => {
+  it("does not add duplicate disks", () => {
     const { result } = renderHook(() => useDiskLibrary(mockUniqueId));
-    const disk1 = createDiskEntry({ path: '/disk1.d64', location: 'local' });
+    const disk1 = createDiskEntry({ path: "/disk1.d64", location: "local" });
 
     act(() => {
       result.current.addDisks([disk1]);
@@ -110,7 +110,7 @@ describe('useDiskLibrary', () => {
     expect(result.current.disks).toHaveLength(1);
   });
 
-  it('removes disks', () => {
+  it("removes disks", () => {
     const { result } = renderHook(() => useDiskLibrary(mockUniqueId));
 
     act(() => {
@@ -126,7 +126,7 @@ describe('useDiskLibrary', () => {
     expect(result.current.disks).toHaveLength(0);
   });
 
-  it('updates disk group', () => {
+  it("updates disk group", () => {
     const { result } = renderHook(() => useDiskLibrary(mockUniqueId));
 
     act(() => {
@@ -134,10 +134,10 @@ describe('useDiskLibrary', () => {
     });
 
     act(() => {
-      result.current.updateDiskGroup(mockDisk.id, 'New Group');
+      result.current.updateDiskGroup(mockDisk.id, "New Group");
     });
 
-    expect(result.current.disks[0].group).toBe('New Group');
+    expect(result.current.disks[0].group).toBe("New Group");
 
     act(() => {
       result.current.updateDiskGroup(mockDisk.id, null);
@@ -146,7 +146,7 @@ describe('useDiskLibrary', () => {
     expect(result.current.disks[0].group).toBeNull();
   });
 
-  it('updates disk name', () => {
+  it("updates disk name", () => {
     const { result } = renderHook(() => useDiskLibrary(mockUniqueId));
 
     act(() => {
@@ -154,13 +154,13 @@ describe('useDiskLibrary', () => {
     });
 
     act(() => {
-      result.current.updateDiskName(mockDisk.id, 'New Name');
+      result.current.updateDiskName(mockDisk.id, "New Name");
     });
 
-    expect(result.current.disks[0].name).toBe('New Name');
+    expect(result.current.disks[0].name).toBe("New Name");
   });
 
-  it('gets disk by id', () => {
+  it("gets disk by id", () => {
     const { result } = renderHook(() => useDiskLibrary(mockUniqueId));
 
     act(() => {
@@ -172,24 +172,24 @@ describe('useDiskLibrary', () => {
     expect(found?.id).toBe(mockDisk.id);
   });
 
-  it('manages filter state', () => {
+  it("manages filter state", () => {
     const { result } = renderHook(() => useDiskLibrary(mockUniqueId));
 
     act(() => {
-      result.current.setFilter('filtered');
+      result.current.setFilter("filtered");
     });
 
-    expect(result.current.filter).toBe('filtered');
+    expect(result.current.filter).toBe("filtered");
     expect(buildDiskTreeState).toHaveBeenCalledWith(
       expect.anything(),
-      'filtered',
+      "filtered",
     );
   });
 
-  it('adds disks with runtime files and removes them', () => {
+  it("adds disks with runtime files and removes them", () => {
     const { result } = renderHook(() => useDiskLibrary(mockUniqueId));
-    const runtimeFile = new File(['data'], 'disk.d64');
-    const disk = createDiskEntry({ path: '/runtime.d64', location: 'local' });
+    const runtimeFile = new File(["data"], "disk.d64");
+    const disk = createDiskEntry({ path: "/runtime.d64", location: "local" });
 
     act(() => {
       result.current.addDisks([disk], { [disk.id]: runtimeFile });
@@ -205,9 +205,9 @@ describe('useDiskLibrary', () => {
     expect(result.current.disks).toHaveLength(0);
   });
 
-  it('removeDisk is a no-op on runtimeFiles when disk has no runtime file', () => {
+  it("removeDisk is a no-op on runtimeFiles when disk has no runtime file", () => {
     const { result } = renderHook(() => useDiskLibrary(mockUniqueId));
-    const disk = createDiskEntry({ path: '/nodisk.d64', location: 'local' });
+    const disk = createDiskEntry({ path: "/nodisk.d64", location: "local" });
 
     act(() => {
       result.current.addDisks([disk]);
@@ -219,55 +219,55 @@ describe('useDiskLibrary', () => {
     expect(result.current.disks).toHaveLength(0);
   });
 
-  it('updateDiskName falls back to existing name when empty string passed', () => {
+  it("updateDiskName falls back to existing name when empty string passed", () => {
     const { result } = renderHook(() => useDiskLibrary(mockUniqueId));
     const disk = createDiskEntry({
-      path: '/path.d64',
-      location: 'local',
-      name: 'Original',
+      path: "/path.d64",
+      location: "local",
+      name: "Original",
     });
 
     act(() => {
       result.current.addDisks([disk]);
     });
     act(() => {
-      result.current.updateDiskName(disk.id, '');
+      result.current.updateDiskName(disk.id, "");
     });
 
-    expect(result.current.disks[0].name).toBe('Original');
+    expect(result.current.disks[0].name).toBe("Original");
   });
 });
 
-describe('buildDiskEntryFromDrive', () => {
-  it('returns null when path is null', () => {
-    expect(buildDiskEntryFromDrive('local', null)).toBeNull();
+describe("buildDiskEntryFromDrive", () => {
+  it("returns null when path is null", () => {
+    expect(buildDiskEntryFromDrive("local", null)).toBeNull();
   });
 
-  it('returns null when path is undefined', () => {
-    expect(buildDiskEntryFromDrive('local', undefined)).toBeNull();
+  it("returns null when path is undefined", () => {
+    expect(buildDiskEntryFromDrive("local", undefined)).toBeNull();
   });
 
-  it('returns disk id string for valid path', () => {
-    const result = buildDiskEntryFromDrive('local', '/disks/game.d64');
-    expect(typeof result).toBe('string');
-    expect(result).toContain('local:');
+  it("returns disk id string for valid path", () => {
+    const result = buildDiskEntryFromDrive("local", "/disks/game.d64");
+    expect(typeof result).toBe("string");
+    expect(result).toContain("local:");
   });
 });
 
-describe('toDisplayName', () => {
-  it('uses disk.name when present', () => {
+describe("toDisplayName", () => {
+  it("uses disk.name when present", () => {
     const disk = createDiskEntry({
-      path: '/path/game.d64',
-      location: 'local',
-      name: 'My Game',
+      path: "/path/game.d64",
+      location: "local",
+      name: "My Game",
     });
-    expect(toDisplayName(disk)).toBe('My Game');
+    expect(toDisplayName(disk)).toBe("My Game");
   });
 
-  it('derives name from path when disk.name is absent', () => {
-    const disk = createDiskEntry({ path: '/path/game.d64', location: 'local' });
+  it("derives name from path when disk.name is absent", () => {
+    const disk = createDiskEntry({ path: "/path/game.d64", location: "local" });
     // createDiskEntry may or may not set name; override to ensure it is empty
-    const diskWithoutName = { ...disk, name: '' };
-    expect(toDisplayName(diskWithoutName)).toBe('game.d64');
+    const diskWithoutName = { ...disk, name: "" };
+    expect(toDisplayName(diskWithoutName)).toBe("game.d64");
   });
 });

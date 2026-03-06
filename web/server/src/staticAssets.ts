@@ -1,7 +1,7 @@
-import path from 'node:path';
-import { promises as fs } from 'node:fs';
-import type { ServerResponse } from 'node:http';
-import { writeBuffer, writeJson, writeText } from './httpIO.js';
+import path from "node:path";
+import { promises as fs } from "node:fs";
+import type { ServerResponse } from "node:http";
+import { writeBuffer, writeJson, writeText } from "./httpIO.js";
 
 export type LogErrorDetails = (error: unknown) => Record<string, unknown>;
 export type LogError = (
@@ -10,15 +10,15 @@ export type LogError = (
 ) => void;
 
 const getStaticCacheControl = (safePath: string) => {
-  const normalized = safePath.replace(/\\/g, '/');
-  if (normalized === 'index.html') return 'no-store';
-  if (normalized === 'sw.js' || normalized === 'manifest.webmanifest')
-    return 'no-cache';
+  const normalized = safePath.replace(/\\/g, "/");
+  if (normalized === "index.html") return "no-store";
+  if (normalized === "sw.js" || normalized === "manifest.webmanifest")
+    return "no-cache";
   const isHashedAsset = /^assets\/.+[-_.][a-f0-9]{8,}\.[a-z0-9]+$/i.test(
     normalized,
   );
-  if (isHashedAsset) return 'public, max-age=31536000, immutable';
-  return 'public, max-age=3600';
+  if (isHashedAsset) return "public, max-age=31536000, immutable";
+  return "public, max-age=3600";
 };
 
 const loginHtml = () => `<!doctype html>
@@ -67,17 +67,17 @@ const loginHtml = () => `<!doctype html>
 </html>`;
 
 const getContentType = (filePath: string) => {
-  if (filePath.endsWith('.html')) return 'text/html; charset=utf-8';
-  if (filePath.endsWith('.js')) return 'application/javascript; charset=utf-8';
-  if (filePath.endsWith('.css')) return 'text/css; charset=utf-8';
-  if (filePath.endsWith('.json')) return 'application/json; charset=utf-8';
-  if (filePath.endsWith('.svg')) return 'image/svg+xml';
-  if (filePath.endsWith('.png')) return 'image/png';
-  if (filePath.endsWith('.jpg') || filePath.endsWith('.jpeg'))
-    return 'image/jpeg';
-  if (filePath.endsWith('.webm')) return 'video/webm';
-  if (filePath.endsWith('.woff2')) return 'font/woff2';
-  return 'application/octet-stream';
+  if (filePath.endsWith(".html")) return "text/html; charset=utf-8";
+  if (filePath.endsWith(".js")) return "application/javascript; charset=utf-8";
+  if (filePath.endsWith(".css")) return "text/css; charset=utf-8";
+  if (filePath.endsWith(".json")) return "application/json; charset=utf-8";
+  if (filePath.endsWith(".svg")) return "image/svg+xml";
+  if (filePath.endsWith(".png")) return "image/png";
+  if (filePath.endsWith(".jpg") || filePath.endsWith(".jpeg"))
+    return "image/jpeg";
+  if (filePath.endsWith(".webm")) return "video/webm";
+  if (filePath.endsWith(".woff2")) return "font/woff2";
+  return "application/octet-stream";
 };
 
 export const createStaticAssetServer = (options: {
@@ -92,29 +92,29 @@ export const createStaticAssetServer = (options: {
     try {
       decodedPath = decodeURIComponent(requestPath);
     } catch {
-      writeJson(res, 400, { error: 'Invalid path encoding' });
+      writeJson(res, 400, { error: "Invalid path encoding" });
       return;
     }
 
     const normalized =
-      decodedPath === '/' ? 'index.html' : decodedPath.replace(/^\/+/, '');
+      decodedPath === "/" ? "index.html" : decodedPath.replace(/^\/+/, "");
     const safePath = path.normalize(normalized);
-    if (safePath.startsWith('..') || path.isAbsolute(safePath)) {
-      writeJson(res, 403, { error: 'Invalid path' });
+    if (safePath.startsWith("..") || path.isAbsolute(safePath)) {
+      writeJson(res, 403, { error: "Invalid path" });
       return;
     }
     const fullPath = path.resolve(distDir, safePath);
     if (fullPath !== distDir && !fullPath.startsWith(`${distDir}${path.sep}`)) {
-      writeJson(res, 403, { error: 'Invalid path' });
+      writeJson(res, 403, { error: "Invalid path" });
       return;
     }
 
     try {
       const stat = await fs.stat(fullPath);
       if (stat.isDirectory()) {
-        const indexPath = path.join(fullPath, 'index.html');
+        const indexPath = path.join(fullPath, "index.html");
         const data = await fs.readFile(indexPath);
-        writeText(res, 200, data.toString('utf8'), 'text/html; charset=utf-8');
+        writeText(res, 200, data.toString("utf8"), "text/html; charset=utf-8");
         return;
       }
       const data = await fs.readFile(fullPath);
@@ -128,27 +128,27 @@ export const createStaticAssetServer = (options: {
       return;
     } catch (error) {
       const err = error as NodeJS.ErrnoException;
-      if (err.code !== 'ENOENT') {
-        logError('Static file serve failed', {
+      if (err.code !== "ENOENT") {
+        logError("Static file serve failed", {
           requestPath,
           errorCode: err.code,
           ...errorDetails(error),
         });
-        writeJson(res, 500, { error: 'Failed to serve static asset' });
+        writeJson(res, 500, { error: "Failed to serve static asset" });
         return;
       }
     }
 
     try {
       const indexHtml = await fs.readFile(
-        path.join(distDir, 'index.html'),
-        'utf8',
+        path.join(distDir, "index.html"),
+        "utf8",
       );
-      writeText(res, 200, indexHtml, 'text/html; charset=utf-8');
+      writeText(res, 200, indexHtml, "text/html; charset=utf-8");
     } catch (error) {
-      logError('Missing index.html in dist output', errorDetails(error));
+      logError("Missing index.html in dist output", errorDetails(error));
       writeJson(res, 500, {
-        error: 'Web bundle missing. Build dist before starting server.',
+        error: "Web bundle missing. Build dist before starting server.",
       });
     }
   };

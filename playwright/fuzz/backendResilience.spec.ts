@@ -6,34 +6,34 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { test, expect } from '@playwright/test';
-import { createMockC64Server } from '../../tests/mocks/mockC64Server';
-import { seedUiMocks } from '../uiMocks';
+import { test, expect } from "@playwright/test";
+import { createMockC64Server } from "../../tests/mocks/mockC64Server";
+import { seedUiMocks } from "../uiMocks";
 import {
   createBackendFailureTracker,
   shouldIgnoreBackendFailure,
   type AppLogEntry,
-} from './fuzzBackend';
+} from "./fuzzBackend";
 
 const waitForLogEntry = async (
-  page: import('@playwright/test').Page,
+  page: import("@playwright/test").Page,
   predicate: (entry: AppLogEntry) => boolean,
   timeoutMs = 6000,
 ) => {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     const logs = await page.evaluate(() => {
-      const raw = localStorage.getItem('c64u_app_logs');
+      const raw = localStorage.getItem("c64u_app_logs");
       return raw ? JSON.parse(raw) : [];
     });
     const entry = (logs as AppLogEntry[]).find(predicate);
     if (entry) return entry;
     await page.waitForTimeout(200);
   }
-  throw new Error('Timed out waiting for app log entry');
+  throw new Error("Timed out waiting for app log entry");
 };
 
-test.describe('Fuzz backend resilience', () => {
+test.describe("Fuzz backend resilience", () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
   test.beforeEach(async ({ page }) => {
@@ -42,9 +42,9 @@ test.describe('Fuzz backend resilience', () => {
     await seedUiMocks(page, server.baseUrl);
     await page.addInitScript(
       ({ baseUrl }: { baseUrl: string }) => {
-        localStorage.setItem('c64u_fuzz_mode_enabled', '1');
-        localStorage.setItem('c64u_fuzz_mock_base_url', baseUrl);
-        localStorage.setItem('c64u_fuzz_storage_seeded', '1');
+        localStorage.setItem("c64u_fuzz_mode_enabled", "1");
+        localStorage.setItem("c64u_fuzz_mock_base_url", baseUrl);
+        localStorage.setItem("c64u_fuzz_storage_seeded", "1");
       },
       { baseUrl: server.baseUrl },
     );
@@ -54,13 +54,13 @@ test.describe('Fuzz backend resilience', () => {
     await server.close();
   });
 
-  test('backend 503 logs are treated as recoverable', async ({ page }) => {
-    await page.goto('/');
+  test("backend 503 logs are treated as recoverable", async ({ page }) => {
+    await page.goto("/");
 
     const entry = await waitForLogEntry(
       page,
       (log) =>
-        log.message === 'C64 API request failed' ||
+        log.message === "C64 API request failed" ||
         /Service Unavailable|HTTP 503/i.test(log.message),
     );
 
@@ -68,7 +68,7 @@ test.describe('Fuzz backend resilience', () => {
       now: Date.now(),
       serverReachable: true,
       networkOffline: false,
-      faultMode: 'none',
+      faultMode: "none",
       lastOutageAt: 0,
     });
 

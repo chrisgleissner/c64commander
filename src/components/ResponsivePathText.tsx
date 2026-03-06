@@ -9,8 +9,8 @@
 import {
   useResponsivePathLabel,
   type PathDisplayMode,
-} from '@/lib/ui/pathDisplay';
-import { cn } from '@/lib/utils';
+} from "@/lib/ui/pathDisplay";
+import { cn } from "@/lib/utils";
 
 type ResponsivePathTextProps = {
   path: string;
@@ -24,7 +24,7 @@ export const ResponsivePathText = ({
   path,
   mode,
   className,
-  fallback = '—',
+  fallback = "—",
   dataTestId,
 }: ResponsivePathTextProps) => {
   const source = path.trim() || fallback;
@@ -35,7 +35,7 @@ export const ResponsivePathText = ({
       ref={(node) => {
         elementRef.current = node;
       }}
-      className={cn('block min-w-0', className)}
+      className={cn("block min-w-0", className)}
       title={source}
       data-testid={dataTestId}
     >

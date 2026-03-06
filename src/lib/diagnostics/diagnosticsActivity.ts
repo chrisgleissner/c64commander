@@ -15,8 +15,8 @@ let restInFlight = 0;
 let ftpInFlight = 0;
 
 const emitUpdate = () => {
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('c64u-activity-updated'));
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("c64u-activity-updated"));
   }
 };
 

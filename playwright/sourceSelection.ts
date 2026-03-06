@@ -6,26 +6,26 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { Locator, Page } from '@playwright/test';
+import type { Locator, Page } from "@playwright/test";
 
 export type SourceSelectionLabel =
-  | 'C64U'
-  | 'Local'
-  | 'HVSC'
-  | 'C64 Ultimate'
-  | 'This device';
+  | "C64U"
+  | "Local"
+  | "HVSC"
+  | "C64 Ultimate"
+  | "This device";
 
 const getInterstitialTestId = (label: SourceSelectionLabel) => {
-  if (label === 'C64U' || label === 'C64 Ultimate') return 'import-option-c64u';
-  if (label === 'HVSC') return 'import-option-hvsc';
-  return 'import-option-local';
+  if (label === "C64U" || label === "C64 Ultimate") return "import-option-c64u";
+  if (label === "HVSC") return "import-option-hvsc";
+  return "import-option-local";
 };
 
 const normalizeLabel = (
   label: SourceSelectionLabel,
-): 'C64U' | 'Local' | 'HVSC' => {
-  if (label === 'C64 Ultimate') return 'C64U';
-  if (label === 'This device') return 'Local';
+): "C64U" | "Local" | "HVSC" => {
+  if (label === "C64 Ultimate") return "C64U";
+  if (label === "This device") return "Local";
   return label;
 };
 
@@ -38,8 +38,8 @@ export const getSourceSelectionButton = (
     .or(
       container
         .getByText(normalizeLabel(label), { exact: true })
-        .locator('..')
-        .getByRole('button', { name: 'Add file / folder' }),
+        .locator("..")
+        .getByRole("button", { name: "Add file / folder" }),
     );
 
 export const clickSourceSelectionButton = async (

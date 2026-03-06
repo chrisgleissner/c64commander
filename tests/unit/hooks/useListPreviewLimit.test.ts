@@ -6,34 +6,34 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { renderHook, act } from '@testing-library/react';
-import { useListPreviewLimit } from '@/hooks/useListPreviewLimit';
+import { renderHook, act } from "@testing-library/react";
+import { useListPreviewLimit } from "@/hooks/useListPreviewLimit";
 import {
   getListPreviewLimit,
   setListPreviewLimit,
   clampListPreviewLimit,
-} from '@/lib/uiPreferences';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+} from "@/lib/uiPreferences";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock('@/lib/uiPreferences', () => ({
+vi.mock("@/lib/uiPreferences", () => ({
   getListPreviewLimit: vi.fn(),
   setListPreviewLimit: vi.fn(),
   clampListPreviewLimit: vi.fn((val) => val),
 }));
 
-describe('useListPreviewLimit', () => {
+describe("useListPreviewLimit", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(getListPreviewLimit).mockReturnValue(100);
   });
 
-  it('initializes with stored limit', () => {
+  it("initializes with stored limit", () => {
     const { result } = renderHook(() => useListPreviewLimit());
     expect(result.current.limit).toBe(100);
     expect(getListPreviewLimit).toHaveBeenCalled();
   });
 
-  it('updates limit via setLimit', () => {
+  it("updates limit via setLimit", () => {
     const { result } = renderHook(() => useListPreviewLimit());
 
     act(() => {
@@ -44,12 +44,12 @@ describe('useListPreviewLimit', () => {
     expect(setListPreviewLimit).toHaveBeenCalledWith(200);
   });
 
-  it('updates limit on window event', () => {
+  it("updates limit on window event", () => {
     const { result } = renderHook(() => useListPreviewLimit());
 
     act(() => {
       window.dispatchEvent(
-        new CustomEvent('c64u-ui-preferences-changed', {
+        new CustomEvent("c64u-ui-preferences-changed", {
           detail: { listPreviewLimit: 150 },
         }),
       );
@@ -58,7 +58,7 @@ describe('useListPreviewLimit', () => {
     expect(result.current.limit).toBe(150);
   });
 
-  it('updates limit on window event without detail', () => {
+  it("updates limit on window event without detail", () => {
     // cover the else branch
     const { result } = renderHook(() => useListPreviewLimit());
 
@@ -66,7 +66,7 @@ describe('useListPreviewLimit', () => {
 
     act(() => {
       window.dispatchEvent(
-        new CustomEvent('c64u-ui-preferences-changed', {
+        new CustomEvent("c64u-ui-preferences-changed", {
           detail: {},
         }),
       );

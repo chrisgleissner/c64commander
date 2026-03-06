@@ -6,8 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useState, useCallback, useEffect, useRef } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState, useCallback, useEffect, useRef } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getC64API,
   updateC64APIConfig,
@@ -19,35 +19,35 @@ import {
   buildBaseUrlFromDeviceHost,
   normalizeDeviceHost,
   resolveDeviceHostFromStorage,
-} from '@/lib/c64api';
+} from "@/lib/c64api";
 import {
   getPassword as loadStoredPassword,
   hasStoredPasswordFlag,
-} from '@/lib/secureStorage';
+} from "@/lib/secureStorage";
 import {
   getActiveBaseUrl,
   updateHasChanges,
   loadInitialSnapshot,
-} from '@/lib/config/appConfigStore';
-import { useConnectionState } from '@/hooks/useConnectionState';
-import { invalidateForConnectionSettingsChange } from '@/lib/query/c64QueryInvalidation';
+} from "@/lib/config/appConfigStore";
+import { useConnectionState } from "@/hooks/useConnectionState";
+import { invalidateForConnectionSettingsChange } from "@/lib/query/c64QueryInvalidation";
 import {
   getInfoRefreshMinIntervalMs,
   shouldRunRateLimited,
-} from '@/lib/query/c64PollingGovernance';
-import { addLog } from '@/lib/logging';
+} from "@/lib/query/c64PollingGovernance";
+import { addLog } from "@/lib/logging";
 
 export interface ConnectionStatus {
   state:
-    | 'UNKNOWN'
-    | 'DISCOVERING'
-    | 'REAL_CONNECTED'
-    | 'DEMO_ACTIVE'
-    | 'OFFLINE_NO_DEMO';
-  connectionState: 'connected' | 'disconnected';
+    | "UNKNOWN"
+    | "DISCOVERING"
+    | "REAL_CONNECTED"
+    | "DEMO_ACTIVE"
+    | "OFFLINE_NO_DEMO";
+  connectionState: "connected" | "disconnected";
   isConnected: boolean;
   isDemo: boolean;
-  deviceType: 'real' | 'demo' | null;
+  deviceType: "real" | "demo" | null;
   isConnecting: boolean;
   error: string | null;
   deviceInfo: DeviceInfo | null;
@@ -59,7 +59,7 @@ export function useC64Connection() {
     const resolvedDeviceHost = resolveDeviceHostFromStorage();
     return buildBaseUrlFromDeviceHost(resolvedDeviceHost);
   });
-  const [password, setPassword] = useState('');
+  const [password, setPassword] = useState("");
   const [deviceHost, setDeviceHost] = useState(() => {
     return resolveDeviceHostFromStorage();
   });
@@ -85,18 +85,18 @@ export function useC64Connection() {
     isLoading,
     refetch,
   } = useQuery({
-    queryKey: ['c64-info', baseUrl],
+    queryKey: ["c64-info", baseUrl],
     queryFn: async ({ signal }) => {
       const api = getC64API();
       return api.getInfo({
         timeoutMs: 3000,
         signal,
-        __c64uIntent: 'background',
+        __c64uIntent: "background",
       });
     },
     enabled:
-      connection.state === 'REAL_CONNECTED' ||
-      connection.state === 'DEMO_ACTIVE',
+      connection.state === "REAL_CONNECTED" ||
+      connection.state === "DEMO_ACTIVE",
     retry: 1,
     retryDelay: 1000,
     staleTime: 30000,
@@ -122,7 +122,7 @@ export function useC64Connection() {
     if (hasStoredPasswordFlag()) {
       void loadStoredPassword().then((value) => {
         if (!isMounted) return;
-        setPassword(value || '');
+        setPassword(value || "");
       });
     }
 
@@ -138,13 +138,13 @@ export function useC64Connection() {
       const current = settingsRef.current;
       const next = {
         baseUrl:
-          typeof detail.baseUrl === 'string' ? detail.baseUrl : current.baseUrl,
+          typeof detail.baseUrl === "string" ? detail.baseUrl : current.baseUrl,
         password:
-          typeof detail.password === 'string'
+          typeof detail.password === "string"
             ? detail.password
             : current.password,
         deviceHost:
-          typeof detail.deviceHost === 'string'
+          typeof detail.deviceHost === "string"
             ? detail.deviceHost
             : current.deviceHost,
       };
@@ -161,11 +161,11 @@ export function useC64Connection() {
       rateLimitedInfoRefetch();
     };
 
-    window.addEventListener('c64u-connection-change', handler as EventListener);
+    window.addEventListener("c64u-connection-change", handler as EventListener);
     return () => {
       isMounted = false;
       window.removeEventListener(
-        'c64u-connection-change',
+        "c64u-connection-change",
         handler as EventListener,
       );
     };
@@ -175,7 +175,7 @@ export function useC64Connection() {
     (newDeviceHost: string, newPassword?: string) => {
       const resolvedDeviceHost = normalizeDeviceHost(newDeviceHost);
       const resolvedBaseUrl = buildBaseUrlFromDeviceHost(resolvedDeviceHost);
-      const resolvedPassword = newPassword || '';
+      const resolvedPassword = newPassword || "";
       const current = settingsRef.current;
       const baseUrlChanged = current.baseUrl !== resolvedBaseUrl;
       const passwordChanged = current.password !== resolvedPassword;
@@ -202,21 +202,21 @@ export function useC64Connection() {
   const status: ConnectionStatus = {
     state: connection.state,
     connectionState:
-      connection.state === 'REAL_CONNECTED' ||
-      connection.state === 'DEMO_ACTIVE'
-        ? 'connected'
-        : 'disconnected',
+      connection.state === "REAL_CONNECTED" ||
+      connection.state === "DEMO_ACTIVE"
+        ? "connected"
+        : "disconnected",
     isConnected:
-      connection.state === 'REAL_CONNECTED' ||
-      connection.state === 'DEMO_ACTIVE',
-    isDemo: connection.state === 'DEMO_ACTIVE',
+      connection.state === "REAL_CONNECTED" ||
+      connection.state === "DEMO_ACTIVE",
+    isDemo: connection.state === "DEMO_ACTIVE",
     deviceType:
-      connection.state === 'REAL_CONNECTED'
-        ? 'real'
-        : connection.state === 'DEMO_ACTIVE'
-          ? 'demo'
+      connection.state === "REAL_CONNECTED"
+        ? "real"
+        : connection.state === "DEMO_ACTIVE"
+          ? "demo"
           : null,
-    isConnecting: connection.state === 'DISCOVERING',
+    isConnecting: connection.state === "DISCOVERING",
     error: error ? (error as Error).message : null,
     deviceInfo: deviceInfo || null,
   };
@@ -236,7 +236,7 @@ export function useC64Connection() {
 
 export function useC64Categories() {
   return useQuery({
-    queryKey: ['c64-categories'],
+    queryKey: ["c64-categories"],
     queryFn: async () => {
       const api = getC64API();
       return api.getCategories();
@@ -247,7 +247,7 @@ export function useC64Categories() {
 
 export function useC64Category(category: string, enabled = true) {
   return useQuery({
-    queryKey: ['c64-category', category],
+    queryKey: ["c64-category", category],
     queryFn: async () => {
       const api = getC64API();
       return api.getCategory(category);
@@ -262,7 +262,7 @@ export function useC64ConfigItems(
   items: string[],
   enabled = true,
 ) {
-  const itemKey = items.join('|');
+  const itemKey = items.join("|");
   const snapshot = loadInitialSnapshot(getC64APIConfigSnapshot().baseUrl);
   const placeholderData = (() => {
     if (!snapshot?.data?.[category]) return undefined;
@@ -272,7 +272,7 @@ export function useC64ConfigItems(
     const itemsBlock =
       (categoryBlock as { items?: Record<string, unknown> }).items ??
       categoryBlock;
-    if (!itemsBlock || typeof itemsBlock !== 'object') return undefined;
+    if (!itemsBlock || typeof itemsBlock !== "object") return undefined;
     const selected: Record<string, unknown> = {};
     items.forEach((item) => {
       if (Object.prototype.hasOwnProperty.call(itemsBlock, item)) {
@@ -288,7 +288,7 @@ export function useC64ConfigItems(
     } as ConfigResponse;
   })();
   return useQuery({
-    queryKey: ['c64-config-items', category, itemKey],
+    queryKey: ["c64-config-items", category, itemKey],
     queryFn: async () => {
       const api = getC64API();
       return api.getConfigItems(category, items);
@@ -303,7 +303,7 @@ export function useC64AllConfig() {
   const { data: categories } = useC64Categories();
 
   return useQuery({
-    queryKey: ['c64-all-config'],
+    queryKey: ["c64-all-config"],
     queryFn: async () => {
       const api = getC64API();
       const cats = await api.getCategories();
@@ -315,8 +315,8 @@ export function useC64AllConfig() {
         } catch (catError) {
           // Per-category failures are tolerated; callers can render partial config safely.
           addLog(
-            'debug',
-            'Config category fetch failed; partial config in use',
+            "debug",
+            "Config category fetch failed; partial config in use",
             { category: cat, error: (catError as Error).message },
           );
         }
@@ -324,7 +324,7 @@ export function useC64AllConfig() {
 
       if (cats.categories.length > 0 && Object.keys(configs).length === 0) {
         throw new Error(
-          'Failed to fetch configuration data for all categories',
+          "Failed to fetch configuration data for all categories",
         );
       }
 
@@ -353,9 +353,9 @@ export function useC64SetConfig() {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
-        queryKey: ['c64-category', variables.category],
+        queryKey: ["c64-category", variables.category],
       });
-      queryClient.invalidateQueries({ queryKey: ['c64-all-config'] });
+      queryClient.invalidateQueries({ queryKey: ["c64-all-config"] });
       updateHasChanges(getActiveBaseUrl(), true);
     },
   });
@@ -379,9 +379,9 @@ export function useC64UpdateConfigBatch() {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
-        queryKey: ['c64-category', variables.category],
+        queryKey: ["c64-category", variables.category],
       });
-      queryClient.invalidateQueries({ queryKey: ['c64-all-config'] });
+      queryClient.invalidateQueries({ queryKey: ["c64-all-config"] });
       updateHasChanges(getActiveBaseUrl(), true);
     },
   });
@@ -393,7 +393,7 @@ export function useC64ConfigItem(
   enabled = true,
 ) {
   return useQuery({
-    queryKey: ['c64-config-item', category, item],
+    queryKey: ["c64-config-item", category, item],
     queryFn: async () => {
       const api = getC64API();
       if (!category || !item) {
@@ -408,7 +408,7 @@ export function useC64ConfigItem(
 
 export function useC64Drives() {
   return useQuery({
-    queryKey: ['c64-drives'],
+    queryKey: ["c64-drives"],
     queryFn: async () => {
       const api = getC64API();
       return api.getDrives();
@@ -429,7 +429,7 @@ export function useC64MachineControl() {
       mutationFn: () => api.machineReboot(),
       onSuccess: () => {
         setTimeout(() => {
-          queryClient.invalidateQueries({ queryKey: ['c64'] });
+          queryClient.invalidateQueries({ queryKey: ["c64"] });
         }, 3000);
       },
     }),
@@ -451,16 +451,16 @@ export function useC64MachineControl() {
     loadConfig: useMutation({
       mutationFn: () => api.loadConfig(),
       onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ['c64-category'] });
-        queryClient.invalidateQueries({ queryKey: ['c64-all-config'] });
+        queryClient.invalidateQueries({ queryKey: ["c64-category"] });
+        queryClient.invalidateQueries({ queryKey: ["c64-all-config"] });
         updateHasChanges(getActiveBaseUrl(), true);
       },
     }),
     resetConfig: useMutation({
       mutationFn: () => api.resetConfig(),
       onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ['c64-category'] });
-        queryClient.invalidateQueries({ queryKey: ['c64-all-config'] });
+        queryClient.invalidateQueries({ queryKey: ["c64-category"] });
+        queryClient.invalidateQueries({ queryKey: ["c64-all-config"] });
         updateHasChanges(getActiveBaseUrl(), true);
       },
     }),

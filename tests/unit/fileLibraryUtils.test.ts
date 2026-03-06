@@ -6,16 +6,16 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from "vitest";
 import {
   buildFileLibraryId,
   buildLocalPlayFileFromTree,
   buildLocalPlayFileFromUri,
   resolvePlayRequestFromLibrary,
-} from '@/lib/playback/fileLibraryUtils';
-import type { FileLibraryEntry } from '@/lib/playback/fileLibraryTypes';
+} from "@/lib/playback/fileLibraryUtils";
+import type { FileLibraryEntry } from "@/lib/playback/fileLibraryTypes";
 
-vi.mock('@/lib/native/folderPicker', () => ({
+vi.mock("@/lib/native/folderPicker", () => ({
   FolderPicker: {
     readFile: vi.fn(),
     readFileFromTree: vi.fn(),
@@ -23,101 +23,101 @@ vi.mock('@/lib/native/folderPicker', () => ({
 }));
 
 const mockFolderPicker = async (data: string) => {
-  const { FolderPicker } = await import('@/lib/native/folderPicker');
+  const { FolderPicker } = await import("@/lib/native/folderPicker");
   (FolderPicker.readFile as ReturnType<typeof vi.fn>).mockResolvedValue({
     data,
   });
 };
 
 const mockFolderPickerTree = async (data: string) => {
-  const { FolderPicker } = await import('@/lib/native/folderPicker');
+  const { FolderPicker } = await import("@/lib/native/folderPicker");
   (FolderPicker.readFileFromTree as ReturnType<typeof vi.fn>).mockResolvedValue(
     { data },
   );
 };
 
-describe('fileLibraryUtils', () => {
-  it('builds normalized ids for ultimate and local sources', () => {
-    const ultimateId = buildFileLibraryId('ultimate', 'Usb0/Games/Disk 1.d64');
-    const localId = buildFileLibraryId('local', '/Local/Demo.sid', 'source-1');
+describe("fileLibraryUtils", () => {
+  it("builds normalized ids for ultimate and local sources", () => {
+    const ultimateId = buildFileLibraryId("ultimate", "Usb0/Games/Disk 1.d64");
+    const localId = buildFileLibraryId("local", "/Local/Demo.sid", "source-1");
 
-    expect(ultimateId).toBe('ultimate:/Usb0/Games/Disk 1.d64');
-    expect(localId).toBe('source-1:/Local/Demo.sid');
+    expect(ultimateId).toBe("ultimate:/Usb0/Games/Disk 1.d64");
+    expect(localId).toBe("source-1:/Local/Demo.sid");
   });
 
-  it('falls back to hvsc when hvsc source has no sourceId', () => {
-    expect(buildFileLibraryId('hvsc', '/MUSICIANS/test.sid')).toBe(
-      'hvsc:/MUSICIANS/test.sid',
+  it("falls back to hvsc when hvsc source has no sourceId", () => {
+    expect(buildFileLibraryId("hvsc", "/MUSICIANS/test.sid")).toBe(
+      "hvsc:/MUSICIANS/test.sid",
     );
-    expect(buildFileLibraryId('hvsc', '/MUSICIANS/test.sid', null)).toBe(
-      'hvsc:/MUSICIANS/test.sid',
-    );
-  });
-
-  it('falls back to local when local source has no sourceId', () => {
-    expect(buildFileLibraryId('local', '/test.sid')).toBe('local:/test.sid');
-    expect(buildFileLibraryId('local', '/test.sid', null)).toBe(
-      'local:/test.sid',
+    expect(buildFileLibraryId("hvsc", "/MUSICIANS/test.sid", null)).toBe(
+      "hvsc:/MUSICIANS/test.sid",
     );
   });
 
-  it('builds local play files that read from FolderPicker', async () => {
-    await mockFolderPicker(btoa('hello'));
+  it("falls back to local when local source has no sourceId", () => {
+    expect(buildFileLibraryId("local", "/test.sid")).toBe("local:/test.sid");
+    expect(buildFileLibraryId("local", "/test.sid", null)).toBe(
+      "local:/test.sid",
+    );
+  });
+
+  it("builds local play files that read from FolderPicker", async () => {
+    await mockFolderPicker(btoa("hello"));
     const file = buildLocalPlayFileFromUri(
-      'demo.sid',
-      '/demo.sid',
-      'content://demo/sid',
+      "demo.sid",
+      "/demo.sid",
+      "content://demo/sid",
     );
     const buffer = await file.arrayBuffer();
     const text = new TextDecoder().decode(new Uint8Array(buffer));
 
-    expect(file.name).toBe('demo.sid');
-    expect(file.webkitRelativePath).toBe('/demo.sid');
-    expect(text).toBe('hello');
+    expect(file.name).toBe("demo.sid");
+    expect(file.webkitRelativePath).toBe("/demo.sid");
+    expect(text).toBe("hello");
   });
 
-  it('builds local play files that read from SAF tree URIs', async () => {
-    await mockFolderPickerTree(btoa('tree-data'));
+  it("builds local play files that read from SAF tree URIs", async () => {
+    await mockFolderPickerTree(btoa("tree-data"));
     const file = buildLocalPlayFileFromTree(
-      'demo.sid',
-      '/demo.sid',
-      'content://tree',
+      "demo.sid",
+      "/demo.sid",
+      "content://tree",
     );
     const buffer = await file.arrayBuffer();
     const text = new TextDecoder().decode(new Uint8Array(buffer));
 
-    expect(file.name).toBe('demo.sid');
-    expect(file.webkitRelativePath).toBe('/demo.sid');
-    expect(text).toBe('tree-data');
+    expect(file.name).toBe("demo.sid");
+    expect(file.webkitRelativePath).toBe("/demo.sid");
+    expect(text).toBe("tree-data");
   });
 
-  it('resolves play requests for ultimate entries', () => {
+  it("resolves play requests for ultimate entries", () => {
     const entry: FileLibraryEntry = {
-      id: 'ultimate:/Usb0/Games/Disk 1.d64',
-      source: 'ultimate',
-      name: 'Disk 1.d64',
-      path: '/Usb0/Games/Disk 1.d64',
-      category: 'disk',
+      id: "ultimate:/Usb0/Games/Disk 1.d64",
+      source: "ultimate",
+      name: "Disk 1.d64",
+      path: "/Usb0/Games/Disk 1.d64",
+      category: "disk",
       addedAt: new Date().toISOString(),
     };
 
     const request = resolvePlayRequestFromLibrary(entry, {});
-    expect(request).toEqual({ source: 'ultimate', path: entry.path });
+    expect(request).toEqual({ source: "ultimate", path: entry.path });
   });
 
-  it('uses runtime files when available for local entries', async () => {
+  it("uses runtime files when available for local entries", async () => {
     const entry: FileLibraryEntry = {
-      id: 'local:/Local/demo.sid',
-      source: 'local',
-      name: 'demo.sid',
-      path: '/Local/demo.sid',
-      category: 'sid',
-      localUri: 'content://demo/sid',
+      id: "local:/Local/demo.sid",
+      source: "local",
+      name: "demo.sid",
+      path: "/Local/demo.sid",
+      category: "sid",
+      localUri: "content://demo/sid",
       addedAt: new Date().toISOString(),
     };
     const runtimeFile = {
-      name: 'demo.sid',
-      webkitRelativePath: '/Local/demo.sid',
+      name: "demo.sid",
+      webkitRelativePath: "/Local/demo.sid",
       lastModified: Date.now(),
       arrayBuffer: async () => new ArrayBuffer(0),
     };
@@ -125,52 +125,52 @@ describe('fileLibraryUtils', () => {
     const request = resolvePlayRequestFromLibrary(entry, {
       [entry.id]: runtimeFile,
     });
-    expect(request.source).toBe('local');
+    expect(request.source).toBe("local");
     expect(request.path).toBe(entry.path);
     expect(request.file).toBe(runtimeFile);
   });
 
-  it('falls back to localUri-based file when no runtime file (BRDA:73)', () => {
+  it("falls back to localUri-based file when no runtime file (BRDA:73)", () => {
     const entry: FileLibraryEntry = {
-      id: 'local:/path/demo.sid',
-      source: 'local',
-      name: 'demo.sid',
-      path: '/path/demo.sid',
-      category: 'sid',
-      localUri: 'content://uri/demo.sid',
+      id: "local:/path/demo.sid",
+      source: "local",
+      name: "demo.sid",
+      path: "/path/demo.sid",
+      category: "sid",
+      localUri: "content://uri/demo.sid",
       addedAt: new Date().toISOString(),
     };
     // runtimeFiles has no entry for this id → runtime=undefined → || right side
     const request = resolvePlayRequestFromLibrary(entry, {});
-    expect(request.source).toBe('local');
+    expect(request.source).toBe("local");
     expect(request.file).toBeDefined();
   });
 
-  it('uses undefined file when no runtime and no localUri (BRDA:74)', () => {
+  it("uses undefined file when no runtime and no localUri (BRDA:74)", () => {
     const entry: FileLibraryEntry = {
-      id: 'local:/path/demo.sid',
-      source: 'local',
-      name: 'demo.sid',
-      path: '/path/demo.sid',
-      category: 'sid',
+      id: "local:/path/demo.sid",
+      source: "local",
+      name: "demo.sid",
+      path: "/path/demo.sid",
+      category: "sid",
       addedAt: new Date().toISOString(),
     };
     const request = resolvePlayRequestFromLibrary(entry, {});
-    expect(request.source).toBe('local');
+    expect(request.source).toBe("local");
     expect(request.file).toBeUndefined();
   });
 
-  it('resolves hvsc play request with runtime file when available (BRDA:75 hvsc)', () => {
+  it("resolves hvsc play request with runtime file when available (BRDA:75 hvsc)", () => {
     const entry: FileLibraryEntry = {
-      id: 'hvsc:/DEMOS/Song.sid',
-      source: 'hvsc',
-      name: 'Song.sid',
-      path: '/DEMOS/Song.sid',
-      category: 'sid',
+      id: "hvsc:/DEMOS/Song.sid",
+      source: "hvsc",
+      name: "Song.sid",
+      path: "/DEMOS/Song.sid",
+      category: "sid",
       addedAt: new Date().toISOString(),
     };
     const request = resolvePlayRequestFromLibrary(entry, {});
-    expect(request.source).toBe('hvsc');
+    expect(request.source).toBe("hvsc");
     expect(request.path).toBe(entry.path);
   });
 });

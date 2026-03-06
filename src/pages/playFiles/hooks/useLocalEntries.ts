@@ -1,11 +1,11 @@
-import { useMemo } from 'react';
+import { useMemo } from "react";
 import {
   getLocalSourceListingMode,
   requireLocalSourceEntries,
   type LocalSourceRecord,
-} from '@/lib/sourceNavigation/localSourcesStore';
-import { normalizeSourcePath } from '@/lib/sourceNavigation/paths';
-import { addErrorLog } from '@/lib/logging';
+} from "@/lib/sourceNavigation/localSourcesStore";
+import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
+import { addErrorLog } from "@/lib/logging";
 
 export function useLocalEntries(localSources: LocalSourceRecord[]) {
   const localEntriesBySourceId = useMemo(() => {
@@ -22,12 +22,12 @@ export function useLocalEntries(localSources: LocalSourceRecord[]) {
       >
     >();
     localSources.forEach((source) => {
-      if (getLocalSourceListingMode(source) !== 'entries') {
+      if (getLocalSourceListingMode(source) !== "entries") {
         map.set(source.id, new Map());
         return;
       }
       try {
-        const entries = requireLocalSourceEntries(source, 'useLocalEntries');
+        const entries = requireLocalSourceEntries(source, "useLocalEntries");
         const entriesMap = new Map<
           string,
           {
@@ -47,7 +47,7 @@ export function useLocalEntries(localSources: LocalSourceRecord[]) {
         });
         map.set(source.id, entriesMap);
       } catch (error) {
-        addErrorLog('Local source entries unavailable', {
+        addErrorLog("Local source entries unavailable", {
           sourceId: source.id,
           error: {
             name: (error as Error).name,

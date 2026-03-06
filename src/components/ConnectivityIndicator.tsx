@@ -6,30 +6,30 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useMemo, useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { useMemo, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { useConnectionDiagnosticsSummary } from '@/hooks/useConnectionDiagnosticsSummary';
-import { useConnectionState } from '@/hooks/useConnectionState';
-import { discoverConnection } from '@/lib/connection/connectionManager';
+} from "@/components/ui/dialog";
+import { useConnectionDiagnosticsSummary } from "@/hooks/useConnectionDiagnosticsSummary";
+import { useConnectionState } from "@/hooks/useConnectionState";
+import { discoverConnection } from "@/lib/connection/connectionManager";
 import {
   requestDiagnosticsOpen,
   type DiagnosticsTabKey,
-} from '@/lib/diagnostics/diagnosticsOverlay';
-import type { DiagnosticsSeverity } from '@/lib/diagnostics/connectionStatusDiagnostics';
+} from "@/lib/diagnostics/diagnosticsOverlay";
+import type { DiagnosticsSeverity } from "@/lib/diagnostics/connectionStatusDiagnostics";
 import {
   getConfiguredHost,
   saveConfiguredHostAndRetry,
-} from '@/lib/connection/hostEdit';
-import { cn } from '@/lib/utils';
-import { wrapUserEvent } from '@/lib/tracing/userTrace';
+} from "@/lib/connection/hostEdit";
+import { cn } from "@/lib/utils";
+import { wrapUserEvent } from "@/lib/tracing/userTrace";
 
 type Props = {
   className?: string;
@@ -40,7 +40,7 @@ export function ConnectivityIndicator({ className }: Props) {
   const diagnosticsSummary = useConnectionDiagnosticsSummary();
   const [open, setOpen] = useState(false);
   const [editingHost, setEditingHost] = useState(false);
-  const [hostInput, setHostInput] = useState('');
+  const [hostInput, setHostInput] = useState("");
   const [hostError, setHostError] = useState<string | null>(null);
   const configuredHost = getConfiguredHost();
 
@@ -53,7 +53,7 @@ export function ConnectivityIndicator({ className }: Props) {
 
   const lastAttemptAt = snapshot.lastProbeAtMs;
   const lastSuccessAt = snapshot.lastProbeSucceededAtMs;
-  const attemptInFlight = snapshot.state === 'DISCOVERING';
+  const attemptInFlight = snapshot.state === "DISCOVERING";
   const lastAttemptSucceeded = useMemo(
     () =>
       deriveLastAttemptSucceeded(
@@ -65,21 +65,21 @@ export function ConnectivityIndicator({ className }: Props) {
   );
   const isDemoMode = lastAttemptSucceeded === false;
   const status = attemptInFlight
-    ? 'Checking…'
+    ? "Checking…"
     : lastAttemptSucceeded === true
-      ? 'Online'
+      ? "Online"
       : lastAttemptSucceeded === false && lastSuccessAt !== null
-        ? 'Offline'
-        : 'Not yet connected';
+        ? "Offline"
+        : "Not yet connected";
   const lastRequest =
-    lastAttemptAt !== null ? formatRelative(lastAttemptAt) : 'none yet';
+    lastAttemptAt !== null ? formatRelative(lastAttemptAt) : "none yet";
 
-  const label = isDemoMode ? 'C64U Demo' : 'C64U';
-  const showRetryNow = status === 'Offline' || status === 'Not yet connected';
+  const label = isDemoMode ? "C64U Demo" : "C64U";
+  const showRetryNow = status === "Offline" || status === "Not yet connected";
   const saveHostAndRetry = () => {
     try {
       saveConfiguredHostAndRetry(hostInput, configuredHost, {
-        trigger: 'settings',
+        trigger: "settings",
       });
       setHostError(null);
       setOpen(false);
@@ -98,14 +98,14 @@ export function ConnectivityIndicator({ className }: Props) {
         type="button"
         onClick={wrapUserEvent(
           handleClick,
-          'click',
-          'ConnectivityIndicator',
+          "click",
+          "ConnectivityIndicator",
           { title: label },
-          'ConnectivityIndicator',
+          "ConnectivityIndicator",
         )}
         className={cn(
-          'rounded-lg border border-border px-3 py-2 touch-none text-right',
-          'hover:border-primary/60 transition-colors',
+          "rounded-lg border border-border px-3 py-2 touch-none text-right",
+          "hover:border-primary/60 transition-colors",
           className,
         )}
         aria-label={label}
@@ -114,10 +114,10 @@ export function ConnectivityIndicator({ className }: Props) {
       >
         <span
           className={cn(
-            'block text-xs font-semibold uppercase tracking-wide',
+            "block text-xs font-semibold uppercase tracking-wide",
             isDemoMode
-              ? 'text-amber-500 indicator-demo'
-              : 'text-success indicator-real',
+              ? "text-amber-500 indicator-demo"
+              : "text-success indicator-real",
           )}
           data-testid="connection-status-label"
         >
@@ -147,11 +147,11 @@ export function ConnectivityIndicator({ className }: Props) {
             <DialogDescription
               className={cn(
                 isDemoMode
-                  ? 'text-amber-500 indicator-demo'
-                  : 'text-success indicator-real',
+                  ? "text-amber-500 indicator-demo"
+                  : "text-success indicator-real",
               )}
             >
-              {isDemoMode ? 'C64U Demo (simulated device)' : 'C64U'}
+              {isDemoMode ? "C64U Demo (simulated device)" : "C64U"}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-1 text-sm">
@@ -167,7 +167,7 @@ export function ConnectivityIndicator({ className }: Props) {
                     setHostError(null);
                   }}
                   onKeyDown={(event) => {
-                    if (event.key !== 'Enter') return;
+                    if (event.key !== "Enter") return;
                     event.preventDefault();
                     saveHostAndRetry();
                   }}
@@ -222,17 +222,17 @@ export function ConnectivityIndicator({ className }: Props) {
               issueCount={diagnosticsSummary.rest.failed}
               totalLabel={pluralize(
                 diagnosticsSummary.rest.total,
-                'request',
-                'requests',
+                "request",
+                "requests",
               )}
               issueLabel={pluralize(
                 diagnosticsSummary.rest.failed,
-                'failed',
-                'failed',
+                "failed",
+                "failed",
               )}
               relationLabel="of"
               severity={diagnosticsSummary.rest.severity}
-              onClick={() => openDiagnosticsTab('actions')}
+              onClick={() => openDiagnosticsTab("actions")}
             />
             <DiagnosticsRow
               testId="connection-diagnostics-row-ftp"
@@ -241,17 +241,17 @@ export function ConnectivityIndicator({ className }: Props) {
               issueCount={diagnosticsSummary.ftp.failed}
               totalLabel={pluralize(
                 diagnosticsSummary.ftp.total,
-                'operation',
-                'operations',
+                "operation",
+                "operations",
               )}
               issueLabel={pluralize(
                 diagnosticsSummary.ftp.failed,
-                'failed',
-                'failed',
+                "failed",
+                "failed",
               )}
               relationLabel="of"
               severity={diagnosticsSummary.ftp.severity}
-              onClick={() => openDiagnosticsTab('actions')}
+              onClick={() => openDiagnosticsTab("actions")}
             />
             <DiagnosticsRow
               testId="connection-diagnostics-row-log-issues"
@@ -260,17 +260,17 @@ export function ConnectivityIndicator({ className }: Props) {
               issueCount={diagnosticsSummary.logIssues.issues}
               totalLabel={pluralize(
                 diagnosticsSummary.logIssues.total,
-                'log',
-                'logs',
+                "log",
+                "logs",
               )}
               issueLabel={pluralize(
                 diagnosticsSummary.logIssues.issues,
-                'issue',
-                'issues',
+                "issue",
+                "issues",
               )}
               relationLabel="in"
               severity={diagnosticsSummary.logIssues.severity}
-              onClick={() => openDiagnosticsTab('error-logs')}
+              onClick={() => openDiagnosticsTab("error-logs")}
             />
           </div>
           {showRetryNow ? (
@@ -279,7 +279,7 @@ export function ConnectivityIndicator({ className }: Props) {
               variant="outline"
               onClick={() => {
                 setOpen(false);
-                void discoverConnection('manual');
+                void discoverConnection("manual");
               }}
             >
               Retry Now
@@ -328,7 +328,7 @@ type DiagnosticsRowProps = {
   issueCount: number;
   totalLabel: string;
   issueLabel: string;
-  relationLabel: 'of' | 'in';
+  relationLabel: "of" | "in";
   severity: DiagnosticsSeverity;
   onClick: () => void;
 };
@@ -355,7 +355,7 @@ const DiagnosticsRow = ({
       data-severity={severity}
     >
       <span className="text-foreground">
-        {label}: <span className={issueCountClass}>{issueCount}</span>{' '}
+        {label}: <span className={issueCountClass}>{issueCount}</span>{" "}
         {formatDiagnosticsDetail(relationLabel, total, totalLabel, issueLabel)}
       </span>
     </button>
@@ -363,12 +363,12 @@ const DiagnosticsRow = ({
 };
 
 const formatDiagnosticsDetail = (
-  relationLabel: 'of' | 'in',
+  relationLabel: "of" | "in",
   total: number,
   totalLabel: string,
   issueLabel: string,
 ) => {
-  if (relationLabel === 'in') return `${issueLabel} in ${total} ${totalLabel}`;
+  if (relationLabel === "in") return `${issueLabel} in ${total} ${totalLabel}`;
   return `of ${total} ${totalLabel} ${issueLabel}`;
 };
 
@@ -376,8 +376,8 @@ const pluralize = (count: number, singular: string, plural: string) =>
   count === 1 ? singular : plural;
 
 const resolveSeverityCountClass = (severity: DiagnosticsSeverity) => {
-  if (severity === 'high') return 'text-diagnostics-error font-semibold';
-  if (severity === 'medium') return 'text-amber-500 font-semibold';
-  if (severity === 'low') return 'text-success font-semibold';
-  return 'text-foreground';
+  if (severity === "high") return "text-diagnostics-error font-semibold";
+  if (severity === "medium") return "text-amber-500 font-semibold";
+  if (severity === "low") return "text-success font-semibold";
+  return "text-foreground";
 };

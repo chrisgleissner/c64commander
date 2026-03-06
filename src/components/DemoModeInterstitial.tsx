@@ -6,8 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useEffect, useState } from 'react';
-import { Button } from '@/components/ui/button';
+import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -15,20 +15,20 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { useConnectionState } from '@/hooks/useConnectionState';
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useConnectionState } from "@/hooks/useConnectionState";
 import {
   dismissDemoInterstitial,
   discoverConnection,
-} from '@/lib/connection/connectionManager';
-import { resolveDeviceHostFromStorage } from '@/lib/c64api';
-import { saveConfiguredHostAndRetry } from '@/lib/connection/hostEdit';
+} from "@/lib/connection/connectionManager";
+import { resolveDeviceHostFromStorage } from "@/lib/c64api";
+import { saveConfiguredHostAndRetry } from "@/lib/connection/hostEdit";
 
 export function DemoModeInterstitial() {
   const { demoInterstitialVisible } = useConnectionState();
-  const [deviceHostInput, setDeviceHostInput] = useState('');
+  const [deviceHostInput, setDeviceHostInput] = useState("");
   const [hostError, setHostError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -46,7 +46,7 @@ export function DemoModeInterstitial() {
     try {
       saveConfiguredHostAndRetry(deviceHostInput, attemptedHost, {
         dismissInterstitial: true,
-        trigger: 'settings',
+        trigger: "settings",
       });
       setHostError(null);
     } catch (error) {
@@ -65,7 +65,7 @@ export function DemoModeInterstitial() {
         <DialogHeader>
           <DialogTitle>Demo Mode</DialogTitle>
           <DialogDescription>
-            No C64U was found at{' '}
+            No C64U was found at{" "}
             <strong data-testid="demo-interstitial-hostname">
               {attemptedHost}
             </strong>
@@ -100,7 +100,7 @@ export function DemoModeInterstitial() {
               variant="outline"
               onClick={() => {
                 dismissDemoInterstitial();
-                void discoverConnection('manual');
+                void discoverConnection("manual");
               }}
             >
               Retry connection

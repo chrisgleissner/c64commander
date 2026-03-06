@@ -6,14 +6,14 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
-import http from 'node:http';
-import https from 'node:https';
-import { randomUUID } from 'node:crypto';
+import axios, { AxiosInstance, AxiosRequestConfig } from "axios";
+import http from "node:http";
+import https from "node:https";
+import { randomUUID } from "node:crypto";
 
 export type RestClientConfig = {
   baseUrl: string;
-  auth: 'ON' | 'OFF';
+  auth: "ON" | "OFF";
   password?: string;
   timeoutMs: number;
   keepAlive: boolean;
@@ -30,7 +30,7 @@ export type RestResponse = {
 
 export class RestClient {
   private readonly client: AxiosInstance;
-  private readonly auth: 'ON' | 'OFF';
+  private readonly auth: "ON" | "OFF";
   private readonly password?: string;
 
   constructor(config: RestClientConfig) {
@@ -58,10 +58,10 @@ export class RestClient {
     const correlationId = randomUUID();
     const headers: Record<string, string> = {
       ...(config.headers as Record<string, string> | undefined),
-      'X-Correlation-Id': correlationId,
+      "X-Correlation-Id": correlationId,
     };
-    if (this.auth === 'ON' && this.password) {
-      headers['X-Password'] = this.password;
+    if (this.auth === "ON" && this.password) {
+      headers["X-Password"] = this.password;
     }
     const start = Date.now();
     const response = await this.client.request({
@@ -84,7 +84,7 @@ function normalizeHeaders(
 ): Record<string, string | string[] | undefined> {
   const normalized: Record<string, string | string[] | undefined> = {};
   for (const [key, value] of Object.entries(headers)) {
-    if (typeof value === 'string' || Array.isArray(value)) {
+    if (typeof value === "string" || Array.isArray(value)) {
       normalized[key] = value as string | string[];
     } else if (value === undefined || value === null) {
       normalized[key] = undefined;

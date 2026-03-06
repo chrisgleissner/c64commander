@@ -6,31 +6,31 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { addErrorLog, buildErrorLogDetails } from '@/lib/logging';
+import { addErrorLog, buildErrorLogDetails } from "@/lib/logging";
 import {
   decrementFtpInFlight,
   incrementFtpInFlight,
-} from '@/lib/diagnostics/diagnosticsActivity';
+} from "@/lib/diagnostics/diagnosticsActivity";
 import {
   FtpClient,
   type FtpEntry,
   type FtpListOptions,
   type FtpReadOptions,
-} from '@/lib/native/ftpClient';
-import { resolveNativeTraceContext } from '@/lib/native/nativeTraceContext';
+} from "@/lib/native/ftpClient";
+import { resolveNativeTraceContext } from "@/lib/native/nativeTraceContext";
 import {
   getActiveAction,
   runWithImplicitAction,
-} from '@/lib/tracing/actionTrace';
+} from "@/lib/tracing/actionTrace";
 import {
   recordFtpOperation,
   recordTraceError,
-} from '@/lib/tracing/traceSession';
+} from "@/lib/tracing/traceSession";
 import {
   withFtpInteraction,
   type InteractionIntent,
-} from '@/lib/deviceInteraction/deviceInteractionManager';
-import type { TraceActionContext } from '@/lib/tracing/types';
+} from "@/lib/deviceInteraction/deviceInteractionManager";
+import type { TraceActionContext } from "@/lib/tracing/types";
 
 export type FtpListResult = {
   path: string;
@@ -47,7 +47,7 @@ const executeFtpList = async (
   return withFtpInteraction(
     {
       action,
-      operation: 'list',
+      operation: "list",
       path: normalizedPath,
       intent,
     },
@@ -58,25 +58,25 @@ const executeFtpList = async (
           path: normalizedPath,
         });
         recordFtpOperation(action, {
-          operation: 'list',
+          operation: "list",
           path: normalizedPath,
-          result: 'success',
+          result: "success",
           error: null,
         });
         return { path: normalizedPath, entries: response.entries };
       } catch (error) {
         const err = error as Error;
         addErrorLog(
-          'FTP listing failed',
+          "FTP listing failed",
           buildErrorLogDetails(err, {
             host: ftpOptions.host,
             path: normalizedPath,
           }),
         );
         recordFtpOperation(action, {
-          operation: 'list',
+          operation: "list",
           path: normalizedPath,
-          result: 'failure',
+          result: "failure",
           error: err,
         });
         recordTraceError(action, err);
@@ -93,8 +93,8 @@ export const listFtpDirectory = async (
 ): Promise<FtpListResult> => {
   const { __c64uIntent, ...ftpOptions } = options;
   const normalizedPath =
-    options.path && options.path !== '' ? options.path : '/';
-  const intent = __c64uIntent ?? 'user';
+    options.path && options.path !== "" ? options.path : "/";
+  const intent = __c64uIntent ?? "user";
 
   // If there's an active user action, record FTP within that context
   const activeAction = getActiveAction();
@@ -111,7 +111,7 @@ export const listFtpDirectory = async (
     );
   }
   // Otherwise create an implicit system action for the FTP call
-  return runWithImplicitAction('ftp.list', async (action) => {
+  return runWithImplicitAction("ftp.list", async (action) => {
     const optionsWithTrace = {
       ...ftpOptions,
       traceContext: resolveNativeTraceContext(action),
@@ -130,7 +130,7 @@ const executeFtpRead = async (
   return withFtpInteraction(
     {
       action,
-      operation: 'read',
+      operation: "read",
       path,
       intent,
     },
@@ -138,25 +138,25 @@ const executeFtpRead = async (
       try {
         const response = await FtpClient.readFile({ ...ftpOptions, path });
         recordFtpOperation(action, {
-          operation: 'read',
+          operation: "read",
           path,
-          result: 'success',
+          result: "success",
           error: null,
         });
         return response;
       } catch (error) {
         const err = error as Error;
         addErrorLog(
-          'FTP file read failed',
+          "FTP file read failed",
           buildErrorLogDetails(err, {
             host: ftpOptions.host,
             path,
           }),
         );
         recordFtpOperation(action, {
-          operation: 'read',
+          operation: "read",
           path,
-          result: 'failure',
+          result: "failure",
           error: err,
         });
         recordTraceError(action, err);
@@ -172,7 +172,7 @@ export const readFtpFile = async (
   options: FtpReadOptions & { __c64uIntent?: InteractionIntent },
 ): Promise<{ data: string; sizeBytes?: number }> => {
   const { __c64uIntent, ...ftpOptions } = options;
-  const intent = __c64uIntent ?? 'user';
+  const intent = __c64uIntent ?? "user";
 
   // If there's an active user action, record FTP within that context
   const activeAction = getActiveAction();
@@ -184,7 +184,7 @@ export const readFtpFile = async (
     return executeFtpRead(activeAction, optionsWithTrace, options.path, intent);
   }
   // Otherwise create an implicit system action for the FTP call
-  return runWithImplicitAction('ftp.read', async (action) => {
+  return runWithImplicitAction("ftp.read", async (action) => {
     const optionsWithTrace = {
       ...ftpOptions,
       traceContext: resolveNativeTraceContext(action),

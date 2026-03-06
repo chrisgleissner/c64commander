@@ -6,19 +6,19 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import * as React from 'react';
-import * as ToggleGroupPrimitive from '@radix-ui/react-toggle-group';
-import { type VariantProps } from 'class-variance-authority';
+import * as React from "react";
+import * as ToggleGroupPrimitive from "@radix-ui/react-toggle-group";
+import { type VariantProps } from "class-variance-authority";
 
-import { cn } from '@/lib/utils';
-import { toggleVariants } from '@/components/ui/toggle';
-import { wrapValueChange } from '@/lib/tracing/userTrace';
+import { cn } from "@/lib/utils";
+import { toggleVariants } from "@/components/ui/toggle";
+import { wrapValueChange } from "@/lib/tracing/userTrace";
 
 const ToggleGroupContext = React.createContext<
   VariantProps<typeof toggleVariants>
 >({
-  size: 'default',
-  variant: 'default',
+  size: "default",
+  variant: "default",
 });
 
 const ToggleGroup = React.forwardRef<
@@ -30,12 +30,12 @@ const ToggleGroup = React.forwardRef<
     ref={ref}
     onValueChange={wrapValueChange(
       onValueChange,
-      'toggle',
-      'ToggleGroup',
+      "toggle",
+      "ToggleGroup",
       props,
-      'ToggleGroup',
+      "ToggleGroup",
     )}
-    className={cn('flex items-center justify-center gap-1', className)}
+    className={cn("flex items-center justify-center gap-1", className)}
     {...props}
   >
     <ToggleGroupContext.Provider value={{ variant, size }}>

@@ -6,8 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useSyncExternalStore } from 'react';
-import type { TracePlaybackContext } from '@/lib/tracing/types';
+import { useSyncExternalStore } from "react";
+import type { TracePlaybackContext } from "@/lib/tracing/types";
 
 let snapshot: TracePlaybackContext | null = null;
 const listeners = new Set<(next: TracePlaybackContext | null) => void>();

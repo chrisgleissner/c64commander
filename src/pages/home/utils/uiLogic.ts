@@ -1,16 +1,16 @@
-import { resolveAudioMixerMuteValue } from '@/lib/config/audioMixerSolo';
-import { parseSidBaseAddress } from '@/lib/config/sidDetails';
+import { resolveAudioMixerMuteValue } from "@/lib/config/audioMixerSolo";
+import { parseSidBaseAddress } from "@/lib/config/sidDetails";
 import {
   EMPTY_SELECT_LABEL,
   EMPTY_SELECT_VALUE,
   SID_SLIDER_DETENT_RANGE,
-} from '../constants';
+} from "../constants";
 
 export const normalizeSelectValue = (value: string) =>
   value.trim().length === 0 ? EMPTY_SELECT_VALUE : value;
 
 export const resolveSelectValue = (value: string) =>
-  value === EMPTY_SELECT_VALUE ? '' : value;
+  value === EMPTY_SELECT_VALUE ? "" : value;
 
 export const formatSelectOptionLabel = (value: string) =>
   value === EMPTY_SELECT_VALUE ? EMPTY_SELECT_LABEL : value;
@@ -33,7 +33,7 @@ export const normalizeSelectOptions = (
 };
 
 export const normalizeOptionToken = (value: string) =>
-  value.trim().replace(/\s+/g, ' ').toLowerCase();
+  value.trim().replace(/\s+/g, " ").toLowerCase();
 
 type ToggleOptionHints = {
   enabled?: string[];
@@ -41,23 +41,23 @@ type ToggleOptionHints = {
 };
 
 const DEFAULT_ENABLED_TOKENS = [
-  'enabled',
-  'on',
-  'true',
-  'yes',
-  '1',
-  'swap',
-  'swapped',
+  "enabled",
+  "on",
+  "true",
+  "yes",
+  "1",
+  "swap",
+  "swapped",
 ];
 const DEFAULT_DISABLED_TOKENS = [
-  'disabled',
-  'off',
-  'false',
-  'no',
-  '0',
-  'normal',
-  'default',
-  'unswapped',
+  "disabled",
+  "off",
+  "false",
+  "no",
+  "0",
+  "normal",
+  "default",
+  "unswapped",
 ];
 
 const hasNormalizedMatch = (option: string, candidates: string[]) => {
@@ -79,7 +79,7 @@ export const resolveToggleOption = (
   );
   if (match) return match;
   if (options.length) return enabled ? options[0] : options[options.length - 1];
-  return enabled ? 'Enabled' : 'Disabled';
+  return enabled ? "Enabled" : "Disabled";
 };
 
 export const parseNumericOption = (value: string) => {
@@ -108,14 +108,14 @@ export const resolveVolumeCenterIndex = (options: string[]) => {
   );
   if (numericIndex >= 0) return numericIndex;
   const normalizedIndex = options.findIndex(
-    (option) => normalizeOptionToken(option) === '0 db',
+    (option) => normalizeOptionToken(option) === "0 db",
   );
   return normalizedIndex >= 0 ? normalizedIndex : null;
 };
 
 export const resolvePanCenterIndex = (options: string[]) => {
   const centerIndex = options.findIndex(
-    (option) => normalizeOptionToken(option) === 'center',
+    (option) => normalizeOptionToken(option) === "center",
   );
   return centerIndex >= 0 ? centerIndex : null;
 };
@@ -137,16 +137,16 @@ export const applySoftDetent = (value: number, centerIndex: number | null) => {
 
 export const formatSidBaseAddress = (value: unknown) => {
   const parsed = parseSidBaseAddress(value);
-  if (parsed === null) return '$----';
-  return `$${parsed.toString(16).toUpperCase().padStart(4, '0')}`;
+  if (parsed === null) return "$----";
+  return `$${parsed.toString(16).toUpperCase().padStart(4, "0")}`;
 };
 
 export const resolveSidSocketToggleValue = (
   options: string[],
   enable: boolean,
 ) => {
-  const enabledTokens = ['enabled', 'on', 'true'];
-  const disabledTokens = ['disabled', 'off', 'false'];
+  const enabledTokens = ["enabled", "on", "true"];
+  const disabledTokens = ["disabled", "off", "false"];
   const match = options.find((option) => {
     const normalized = normalizeOptionToken(option);
     return enable
@@ -155,26 +155,26 @@ export const resolveSidSocketToggleValue = (
   });
   if (match) return match;
   if (options.length) return enable ? options[0] : options[options.length - 1];
-  return enable ? 'Enabled' : 'Disabled';
+  return enable ? "Enabled" : "Disabled";
 };
 
 export const resolveSidAddressEnableValue = (options: string[]) => {
   const enableOption = options.find(
     (option) => parseSidBaseAddress(option) !== null,
   );
-  return enableOption ?? options[0] ?? 'Unmapped';
+  return enableOption ?? options[0] ?? "Unmapped";
 };
 
 export const resolveSidAddressDisableValue = (options: string[]) => {
   const disableOption = options.find((option) => {
     const normalized = normalizeOptionToken(option);
     return (
-      normalized === 'unmapped' ||
-      normalized === 'disabled' ||
-      normalized === 'off'
+      normalized === "unmapped" ||
+      normalized === "disabled" ||
+      normalized === "off"
     );
   });
-  return disableOption ?? 'Unmapped';
+  return disableOption ?? "Unmapped";
 };
 
 export const isSilentSidValue = (value: string, options: string[]) => {

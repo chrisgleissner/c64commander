@@ -10,25 +10,25 @@ import type {
   TraceActionContext,
   TraceOrigin,
   ActionTrigger,
-} from '@/lib/tracing/types';
+} from "@/lib/tracing/types";
 import {
   recordActionEnd,
   recordActionScopeEnd,
   recordActionScopeStart,
   recordActionStart,
   recordTraceError,
-} from '@/lib/tracing/traceSession';
-import { nextCorrelationId } from '@/lib/tracing/traceIds';
+} from "@/lib/tracing/traceSession";
+import { nextCorrelationId } from "@/lib/tracing/traceIds";
 import {
   getCurrentActionContext,
   runWithActionContext,
   exitCurrentActionContext,
   resetActionContextStore,
-} from '@/lib/tracing/traceActionContextStore';
+} from "@/lib/tracing/traceActionContextStore";
 import {
   shouldSuppressDiagnosticsSideEffects,
   withDiagnosticsTraceOverride,
-} from '@/lib/diagnostics/diagnosticsOverlayState';
+} from "@/lib/diagnostics/diagnosticsOverlayState";
 
 /**
  * Get the currently active action context from the async context store.
@@ -148,7 +148,7 @@ export const runWithImplicitAction = async <T>(
 ): Promise<T> => {
   const context: TraceActionContext = {
     correlationId: nextCorrelationId(),
-    origin: 'system',
+    origin: "system",
     name,
     componentName: null,
     trigger: trigger ?? null,

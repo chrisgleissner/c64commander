@@ -6,8 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { Unzip, UnzipInflate, unzipSync } from 'fflate';
-import { addErrorLog, addLog } from '@/lib/logging';
+import { Unzip, UnzipInflate, unzipSync } from "fflate";
+import { addErrorLog, addLog } from "@/lib/logging";
 
 type SevenZipFactory = (options: {
   locateFile: (url: string) => string;
@@ -26,22 +26,22 @@ type ExtractArchiveOptions = {
   onEnumerate?: (total: number) => void;
 };
 
-const SEVEN_Z_EXTENSION = '.7z';
-const ZIP_EXTENSION = '.zip';
+const SEVEN_Z_EXTENSION = ".7z";
+const ZIP_EXTENSION = ".zip";
 
 const normalizePath = (value: string) =>
-  value.replace(/\\/g, '/').replace(/^\/+/, '');
+  value.replace(/\\/g, "/").replace(/^\/+/, "");
 
 const readHeapUsageBytes = () => {
-  if (typeof performance !== 'undefined' && 'memory' in performance) {
+  if (typeof performance !== "undefined" && "memory" in performance) {
     const perf = performance as Performance & {
       memory?: { usedJSHeapSize?: number };
     };
     return perf.memory?.usedJSHeapSize ?? null;
   }
   if (
-    typeof process !== 'undefined' &&
-    typeof process.memoryUsage === 'function'
+    typeof process !== "undefined" &&
+    typeof process.memoryUsage === "function"
   ) {
     return process.memoryUsage().heapUsed;
   }
@@ -53,19 +53,19 @@ let sevenZipModulePromise: ReturnType<SevenZipFactory> | null = null;
 const getSevenZipModule = async () => {
   if (!sevenZipModulePromise) {
     const initPromise = (async () => {
-      const { default: SevenZip } = await import('7z-wasm');
-      let wasmUrl = new URL('7z-wasm/7zz.wasm', import.meta.url).toString();
-      if (typeof process !== 'undefined' && process.versions?.node) {
+      const { default: SevenZip } = await import("7z-wasm");
+      let wasmUrl = new URL("7z-wasm/7zz.wasm", import.meta.url).toString();
+      if (typeof process !== "undefined" && process.versions?.node) {
         const [{ createRequire }, { pathToFileURL }] = await Promise.all([
-          import('module'),
-          import('url'),
+          import("module"),
+          import("url"),
         ]);
         const require = createRequire(import.meta.url);
-        const wasmPath = require.resolve('7z-wasm/7zz.wasm');
+        const wasmPath = require.resolve("7z-wasm/7zz.wasm");
         wasmUrl = pathToFileURL(wasmPath).toString();
       }
       return (SevenZip as SevenZipFactory)({
-        locateFile: (url) => (url.endsWith('.wasm') ? wasmUrl : url),
+        locateFile: (url) => (url.endsWith(".wasm") ? wasmUrl : url),
       });
     })();
     sevenZipModulePromise = initPromise.catch((error) => {
@@ -149,11 +149,11 @@ const extractZip = async ({
   });
 
   if (processed === 0) {
-    throw new Error('Zip archive contained no extractable entries');
+    throw new Error("Zip archive contained no extractable entries");
   }
   onEnumerate?.(processed);
   const heapAfter = readHeapUsageBytes();
-  addLog('info', 'HVSC zip extraction memory profile', {
+  addLog("info", "HVSC zip extraction memory profile", {
     totalEntries: processed,
     heapBefore,
     heapAfter,
@@ -173,7 +173,7 @@ export const archiveNameHash = (name: string) => {
   for (let i = 0; i < name.length; i++) {
     hash = (hash * 131n + BigInt(name.charCodeAt(i))) & MOD64;
   }
-  return hash.toString(16).padStart(16, '0');
+  return hash.toString(16).padStart(16, "0");
 };
 
 const extractSevenZ = async ({
@@ -192,7 +192,7 @@ const extractSevenZ = async ({
   const cleanupDir = (dir: string) => {
     const entries = module.FS.readdir(dir);
     entries.forEach((entry: string) => {
-      if (entry === '.' || entry === '..') return;
+      if (entry === "." || entry === "..") return;
       const fullPath = `${dir}/${entry}`;
       const stat = module.FS.stat(fullPath);
       if (module.FS.isDir(stat.mode)) {
@@ -207,15 +207,15 @@ const extractSevenZ = async ({
   try {
     module.FS.mkdir(workingDir);
     module.FS.mkdir(outputDir);
-    const stream = module.FS.open(archivePath, 'w+');
+    const stream = module.FS.open(archivePath, "w+");
     module.FS.write(stream, buffer, 0, buffer.length);
     module.FS.close(stream);
 
     const exitCode = module.callMain([
-      'x',
+      "x",
       archivePath,
       `-o${outputDir}`,
-      '-y',
+      "-y",
     ]);
     if (exitCode && exitCode !== 0) {
       throw new Error(`7zip exited with code ${exitCode}`);
@@ -225,7 +225,7 @@ const extractSevenZ = async ({
     const walkDir = (dir: string, prefix: string) => {
       const entries = module.FS.readdir(dir);
       entries.forEach((entry: string) => {
-        if (entry === '.' || entry === '..') return;
+        if (entry === "." || entry === "..") return;
         const fullPath = `${dir}/${entry}`;
         const stat = module.FS.stat(fullPath);
         if (module.FS.isDir(stat.mode)) {
@@ -235,7 +235,7 @@ const extractSevenZ = async ({
         }
       });
     };
-    walkDir(outputDir, '');
+    walkDir(outputDir, "");
 
     let processed = 0;
     const total = files.length;
@@ -246,14 +246,14 @@ const extractSevenZ = async ({
       for (const file of batch) {
         processed += 1;
         const data = module.FS.readFile(file.fullPath, {
-          encoding: 'binary',
+          encoding: "binary",
         }) as Uint8Array;
         await onEntry(normalizePath(file.path), data);
         try {
           module.FS.unlink(file.fullPath);
         } catch (unlinkError) {
-          addErrorLog('SevenZip post-entry cleanup failed', {
-            step: 'unlink-extracted-file',
+          addErrorLog("SevenZip post-entry cleanup failed", {
+            step: "unlink-extracted-file",
             path: file.fullPath,
             error: (unlinkError as Error).message,
           });
@@ -264,7 +264,7 @@ const extractSevenZ = async ({
     }
 
     const heapAfter = readHeapUsageBytes();
-    addLog('info', 'HVSC 7z extraction memory profile', {
+    addLog("info", "HVSC 7z extraction memory profile", {
       archiveName,
       totalEntries: total,
       heapBefore,
@@ -281,33 +281,33 @@ const extractSevenZ = async ({
     try {
       cleanupDir(outputDir);
     } catch (error) {
-      addErrorLog('SevenZip cleanup failed', {
+      addErrorLog("SevenZip cleanup failed", {
         error: (error as Error).message,
-        step: 'cleanupDir',
+        step: "cleanupDir",
       });
     }
     try {
       module.FS.rmdir(outputDir);
     } catch (error) {
-      addErrorLog('SevenZip cleanup failed', {
+      addErrorLog("SevenZip cleanup failed", {
         error: (error as Error).message,
-        step: 'rmdir-output',
+        step: "rmdir-output",
       });
     }
     try {
       module.FS.unlink(archivePath);
     } catch (error) {
-      addErrorLog('SevenZip cleanup failed', {
+      addErrorLog("SevenZip cleanup failed", {
         error: (error as Error).message,
-        step: 'unlink-archive',
+        step: "unlink-archive",
       });
     }
     try {
       module.FS.rmdir(workingDir);
     } catch (error) {
-      addErrorLog('SevenZip cleanup failed', {
+      addErrorLog("SevenZip cleanup failed", {
         error: (error as Error).message,
-        step: 'rmdir-workdir',
+        step: "rmdir-workdir",
       });
     }
   }
@@ -325,7 +325,7 @@ export const extractArchiveEntries = async (options: ExtractArchiveOptions) => {
       try {
         return await extractZip(options);
       } catch (fallbackError) {
-        addErrorLog('7z fallback zip extraction failed', {
+        addErrorLog("7z fallback zip extraction failed", {
           archiveName: options.archiveName,
           error: (fallbackError as Error).message,
         });

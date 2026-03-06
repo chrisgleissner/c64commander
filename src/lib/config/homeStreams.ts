@@ -6,9 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { normalizeConfigItem } from '@/lib/config/normalizeConfigItem';
+import { normalizeConfigItem } from "@/lib/config/normalizeConfigItem";
 
-export type StreamKey = 'vic' | 'audio' | 'debug';
+export type StreamKey = "vic" | "audio" | "debug";
 
 export type StreamControlEntry = {
   key: StreamKey;
@@ -29,38 +29,38 @@ export const STREAM_LAYOUT: Array<{
   restName: string;
 }> = [
   {
-    key: 'vic',
-    label: 'VIC',
-    itemName: 'Stream VIC to',
-    defaultPort: '11000',
-    restName: 'video',
+    key: "vic",
+    label: "VIC",
+    itemName: "Stream VIC to",
+    defaultPort: "11000",
+    restName: "video",
   },
   {
-    key: 'audio',
-    label: 'Audio',
-    itemName: 'Stream Audio to',
-    defaultPort: '11001',
-    restName: 'audio',
+    key: "audio",
+    label: "Audio",
+    itemName: "Stream Audio to",
+    defaultPort: "11001",
+    restName: "audio",
   },
   {
-    key: 'debug',
-    label: 'Debug',
-    itemName: 'Stream Debug to',
-    defaultPort: '11002',
-    restName: 'debug',
+    key: "debug",
+    label: "Debug",
+    itemName: "Stream Debug to",
+    defaultPort: "11002",
+    restName: "debug",
   },
 ];
 
 export const STREAM_ITEMS = STREAM_LAYOUT.map((item) => item.itemName);
 
 const OFF_TOKENS = new Set([
-  '',
-  'off',
-  'disabled',
-  'none',
-  '0.0.0.0',
-  '0.0.0.0:0',
-  'false',
+  "",
+  "off",
+  "disabled",
+  "none",
+  "0.0.0.0",
+  "0.0.0.0:0",
+  "false",
 ]);
 
 const IPV4_PATTERN =
@@ -68,7 +68,7 @@ const IPV4_PATTERN =
 
 const getItemValue = (payload: unknown, itemName: string) => {
   const record = payload as Record<string, unknown> | undefined;
-  const categoryBlock = (record?.['Data Streams'] ?? record) as
+  const categoryBlock = (record?.["Data Streams"] ?? record) as
     | Record<string, unknown>
     | undefined;
   const items = (categoryBlock?.items ?? categoryBlock) as
@@ -80,18 +80,18 @@ const getItemValue = (payload: unknown, itemName: string) => {
 };
 
 const parseStreamTarget = (value: unknown, defaultPort: string) => {
-  const raw = String(value ?? '').trim();
+  const raw = String(value ?? "").trim();
   const lower = raw.toLowerCase();
   if (OFF_TOKENS.has(lower)) {
     return {
       enabled: false,
-      ip: '',
+      ip: "",
       port: defaultPort,
       rawValue: raw,
     };
   }
 
-  const colonIndex = raw.lastIndexOf(':');
+  const colonIndex = raw.lastIndexOf(":");
   if (colonIndex > 0 && colonIndex < raw.length - 1) {
     const host = raw.slice(0, colonIndex).trim();
     const port = raw.slice(colonIndex + 1).trim();
@@ -131,20 +131,20 @@ export const buildStreamControlEntries = (
 
 export const validateStreamHost = (value: string) => {
   const trimmed = value.trim();
-  if (!trimmed) return 'IPv4 address is required.';
+  if (!trimmed) return "IPv4 address is required.";
   if (!IPV4_PATTERN.test(trimmed)) {
-    return 'Enter a valid IPv4 address.';
+    return "Enter a valid IPv4 address.";
   }
   return null;
 };
 
 export const validateStreamPort = (value: string) => {
   const trimmed = value.trim();
-  if (!trimmed) return 'Port is required.';
-  if (!/^\d+$/.test(trimmed)) return 'Port must be numeric.';
+  if (!trimmed) return "Port is required.";
+  if (!/^\d+$/.test(trimmed)) return "Port must be numeric.";
   const numeric = Number(trimmed);
   if (!Number.isInteger(numeric) || numeric < 1 || numeric > 65535) {
-    return 'Port must be between 1 and 65535.';
+    return "Port must be between 1 and 65535.";
   }
   return null;
 };
@@ -154,24 +154,24 @@ export const buildStreamConfigValue = (
   ip: string,
   port: string,
 ) => {
-  if (!enabled) return 'off';
+  if (!enabled) return "off";
   return `${ip.trim()}:${port.trim()}`;
 };
 
 export const buildStreamEndpointLabel = (ip: string, port: string) => {
   const host = ip.trim();
   const endpointPort = port.trim();
-  if (!host && !endpointPort) return '—';
-  if (!host) return `—:${endpointPort || '—'}`;
+  if (!host && !endpointPort) return "—";
+  if (!host) return `—:${endpointPort || "—"}`;
   if (!endpointPort) return `${host}:—`;
   return `${host}:${endpointPort}`;
 };
 
 export const parseStreamEndpoint = (value: string) => {
   const trimmed = value.trim();
-  const separatorIndex = trimmed.lastIndexOf(':');
+  const separatorIndex = trimmed.lastIndexOf(":");
   if (separatorIndex <= 0 || separatorIndex === trimmed.length - 1) {
-    return { ip: '', port: '', error: 'Enter endpoint as IPv4:port.' };
+    return { ip: "", port: "", error: "Enter endpoint as IPv4:port." };
   }
   const ip = trimmed.slice(0, separatorIndex).trim();
   const port = trimmed.slice(separatorIndex + 1).trim();

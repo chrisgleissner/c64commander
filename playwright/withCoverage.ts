@@ -6,17 +6,17 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { Page } from '@playwright/test';
-import path from 'node:path';
-import fs from 'node:fs';
-import { randomBytes } from 'node:crypto';
+import type { Page } from "@playwright/test";
+import path from "node:path";
+import fs from "node:fs";
+import { randomBytes } from "node:crypto";
 
-const istanbulCLIOutput = path.join(process.cwd(), '.nyc_output');
+const istanbulCLIOutput = path.join(process.cwd(), ".nyc_output");
 const coverageEnabled =
-  process.env.VITE_COVERAGE === '1' || process.env.VITE_COVERAGE === 'true';
+  process.env.VITE_COVERAGE === "1" || process.env.VITE_COVERAGE === "true";
 
 function generateUUID(): string {
-  return randomBytes(16).toString('hex');
+  return randomBytes(16).toString("hex");
 }
 
 /**

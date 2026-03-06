@@ -17,22 +17,22 @@
  * - Layout stability
  */
 
-import { test, expect } from '@playwright/test';
-import { saveCoverageFromPage } from './withCoverage';
-import type { Page, TestInfo } from '@playwright/test';
+import { test, expect } from "@playwright/test";
+import { saveCoverageFromPage } from "./withCoverage";
+import type { Page, TestInfo } from "@playwright/test";
 import {
   assertNoUiIssues,
   attachStepScreenshot,
   finalizeEvidence,
   startStrictUiMonitoring,
-} from './testArtifacts';
-import { enableTraceAssertions } from './traceUtils';
-import { enableGoldenTrace } from './goldenTraceRegistry';
-import { createMockC64Server } from '../tests/mocks/mockC64Server';
-import { seedUiMocks } from './uiMocks';
-import { getSourceSelectionButton } from './sourceSelection';
+} from "./testArtifacts";
+import { enableTraceAssertions } from "./traceUtils";
+import { enableGoldenTrace } from "./goldenTraceRegistry";
+import { createMockC64Server } from "../tests/mocks/mockC64Server";
+import { seedUiMocks } from "./uiMocks";
+import { getSourceSelectionButton } from "./sourceSelection";
 
-test.describe('UX Interaction Patterns', () => {
+test.describe("UX Interaction Patterns", () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
   test.beforeEach(async ({ page }, testInfo: TestInfo) => {
@@ -40,7 +40,7 @@ test.describe('UX Interaction Patterns', () => {
     enableTraceAssertions(testInfo);
     await startStrictUiMonitoring(page, testInfo);
     await seedUiMocks(page, server.baseUrl);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState("networkidle");
   });
 
   test.afterEach(async ({ page }, testInfo: TestInfo) => {
@@ -54,40 +54,40 @@ test.describe('UX Interaction Patterns', () => {
   });
 
   const getSourceButtons = (page: Page) => {
-    const dialog = page.getByRole('dialog');
+    const dialog = page.getByRole("dialog");
     return {
       dialog,
-      localButton: getSourceSelectionButton(dialog, 'This device'),
-      c64uButton: getSourceSelectionButton(dialog, 'C64 Ultimate'),
+      localButton: getSourceSelectionButton(dialog, "This device"),
+      c64uButton: getSourceSelectionButton(dialog, "C64 Ultimate"),
     };
   };
 
   const waitForUiStable = async (page: Page) => {
-    await page.waitForLoadState('domcontentloaded');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState("domcontentloaded");
+    await page.waitForLoadState("networkidle");
   };
 
-  test('source selection precedes navigation - local source @allow-warnings', async ({
+  test("source selection precedes navigation - local source @allow-warnings", async ({
     page,
   }, testInfo: TestInfo) => {
-    testInfo.annotations.push({ type: 'allow-warnings' });
+    testInfo.annotations.push({ type: "allow-warnings" });
 
     // Navigate directly to Play page
-    await page.goto('/play');
-    await page.waitForLoadState('domcontentloaded');
-    await attachStepScreenshot(page, testInfo, 'play-page');
+    await page.goto("/play");
+    await page.waitForLoadState("domcontentloaded");
+    await attachStepScreenshot(page, testInfo, "play-page");
 
     // Look for "Add items" button (intent-based language)
-    const addButton = page.getByRole('button', {
+    const addButton = page.getByRole("button", {
       name: /Add items|Add|Choose|Browse/i,
     });
     if (!(await addButton.isVisible({ timeout: 2000 }).catch(() => false))) {
-      await attachStepScreenshot(page, testInfo, 'add-button-not-found');
+      await attachStepScreenshot(page, testInfo, "add-button-not-found");
       return;
     }
     await addButton.click();
     await waitForUiStable(page);
-    await attachStepScreenshot(page, testInfo, 'source-selector-opened');
+    await attachStepScreenshot(page, testInfo, "source-selector-opened");
 
     // Should show source selection: C64 Ultimate and This device
     const { localButton, c64uButton } = getSourceButtons(page);
@@ -100,27 +100,27 @@ test.describe('UX Interaction Patterns', () => {
       .catch(() => false);
 
     if (!localVisible && !c64uVisible) {
-      await attachStepScreenshot(page, testInfo, 'source-buttons-not-found');
+      await attachStepScreenshot(page, testInfo, "source-buttons-not-found");
       return;
     }
 
-    await attachStepScreenshot(page, testInfo, 'source-buttons-visible');
+    await attachStepScreenshot(page, testInfo, "source-buttons-visible");
   });
 
-  test('source selection precedes navigation - C64U source @allow-warnings', async ({
+  test("source selection precedes navigation - C64U source @allow-warnings", async ({
     page,
   }, testInfo: TestInfo) => {
-    testInfo.annotations.push({ type: 'allow-warnings' });
+    testInfo.annotations.push({ type: "allow-warnings" });
 
-    await page.goto('/play');
-    await page.waitForLoadState('domcontentloaded');
+    await page.goto("/play");
+    await page.waitForLoadState("domcontentloaded");
     await waitForUiStable(page);
 
-    const addButton = page.getByRole('button', {
+    const addButton = page.getByRole("button", {
       name: /Add items|Add|Choose|Browse/i,
     });
     if (!(await addButton.isVisible({ timeout: 2000 }).catch(() => false))) {
-      await attachStepScreenshot(page, testInfo, 'add-button-not-found');
+      await attachStepScreenshot(page, testInfo, "add-button-not-found");
       return;
     }
     await addButton.click();
@@ -128,42 +128,42 @@ test.describe('UX Interaction Patterns', () => {
 
     const { c64uButton } = getSourceButtons(page);
     if (!(await c64uButton.isVisible({ timeout: 2000 }).catch(() => false))) {
-      await attachStepScreenshot(page, testInfo, 'c64u-source-not-available');
+      await attachStepScreenshot(page, testInfo, "c64u-source-not-available");
       return;
     }
 
     await c64uButton.click();
     await waitForUiStable(page);
-    await attachStepScreenshot(page, testInfo, 'c64u-source-selected');
+    await attachStepScreenshot(page, testInfo, "c64u-source-selected");
 
     // Should now show C64U file navigation
-    const backButton = page.getByRole('button', {
+    const backButton = page.getByRole("button", {
       name: /Back|Up|Parent|Root/i,
     });
     const hasNavigation = await backButton
       .isVisible({ timeout: 2000 })
       .catch(() => false);
     if (hasNavigation) {
-      await attachStepScreenshot(page, testInfo, 'c64u-navigation-available');
+      await attachStepScreenshot(page, testInfo, "c64u-navigation-available");
     } else {
-      await attachStepScreenshot(page, testInfo, 'c64u-navigation-not-found');
+      await attachStepScreenshot(page, testInfo, "c64u-navigation-not-found");
     }
   });
 
-  test('selection view navigation stays within source scope @allow-warnings', async ({
+  test("selection view navigation stays within source scope @allow-warnings", async ({
     page,
   }, testInfo: TestInfo) => {
-    testInfo.annotations.push({ type: 'allow-warnings' });
+    testInfo.annotations.push({ type: "allow-warnings" });
 
-    await page.goto('/play');
-    await page.waitForLoadState('domcontentloaded');
+    await page.goto("/play");
+    await page.waitForLoadState("domcontentloaded");
     await waitForUiStable(page);
 
-    const addButton = page.getByRole('button', {
+    const addButton = page.getByRole("button", {
       name: /Add items|Add|Choose|Browse/i,
     });
     if (!(await addButton.isVisible({ timeout: 2000 }).catch(() => false))) {
-      await attachStepScreenshot(page, testInfo, 'add-button-not-found');
+      await attachStepScreenshot(page, testInfo, "add-button-not-found");
       return;
     }
     await addButton.click();
@@ -171,16 +171,16 @@ test.describe('UX Interaction Patterns', () => {
 
     const { c64uButton } = getSourceButtons(page);
     if (!(await c64uButton.isVisible({ timeout: 2000 }).catch(() => false))) {
-      await attachStepScreenshot(page, testInfo, 'c64u-source-not-available');
+      await attachStepScreenshot(page, testInfo, "c64u-source-not-available");
       return;
     }
     await c64uButton.click();
     await waitForUiStable(page);
-    await attachStepScreenshot(page, testInfo, 'at-source-root');
+    await attachStepScreenshot(page, testInfo, "at-source-root");
 
     // At source root, "Up" button should be disabled or hidden
     const upButton = page
-      .getByRole('button', { name: /Back|Up|Parent/i })
+      .getByRole("button", { name: /Back|Up|Parent/i })
       .first();
     const upVisible = await upButton
       .isVisible({ timeout: 2000 })
@@ -192,21 +192,21 @@ test.describe('UX Interaction Patterns', () => {
         await attachStepScreenshot(
           page,
           testInfo,
-          'up-button-disabled-at-root',
+          "up-button-disabled-at-root",
         );
       } else {
-        await attachStepScreenshot(page, testInfo, 'up-button-enabled-at-root');
+        await attachStepScreenshot(page, testInfo, "up-button-enabled-at-root");
       }
     } else {
-      await attachStepScreenshot(page, testInfo, 'up-button-hidden-at-root');
+      await attachStepScreenshot(page, testInfo, "up-button-hidden-at-root");
     }
 
     // Navigate into a folder
-    const folder = page.getByRole('button', { name: /folder|dir/i }).first();
+    const folder = page.getByRole("button", { name: /folder|dir/i }).first();
     if (await folder.isVisible({ timeout: 2000 }).catch(() => false)) {
       await folder.click();
       await waitForUiStable(page);
-      await attachStepScreenshot(page, testInfo, 'navigated-into-folder');
+      await attachStepScreenshot(page, testInfo, "navigated-into-folder");
 
       // Now "Up" should be enabled
       const upNowEnabled = await upButton
@@ -218,29 +218,29 @@ test.describe('UX Interaction Patterns', () => {
           await attachStepScreenshot(
             page,
             testInfo,
-            'up-button-enabled-in-subfolder',
+            "up-button-enabled-in-subfolder",
           );
         }
       }
     } else {
-      await attachStepScreenshot(page, testInfo, 'no-folders-to-navigate');
+      await attachStepScreenshot(page, testInfo, "no-folders-to-navigate");
     }
   });
 
-  test('bulk actions: select all and deselect all @allow-warnings', async ({
+  test("bulk actions: select all and deselect all @allow-warnings", async ({
     page,
   }, testInfo: TestInfo) => {
-    testInfo.annotations.push({ type: 'allow-warnings' });
+    testInfo.annotations.push({ type: "allow-warnings" });
 
-    await page.goto('/play');
-    await page.waitForLoadState('domcontentloaded');
+    await page.goto("/play");
+    await page.waitForLoadState("domcontentloaded");
     await waitForUiStable(page);
 
-    const addButton = page.getByRole('button', {
+    const addButton = page.getByRole("button", {
       name: /Add items|Add|Choose|Browse/i,
     });
     if (!(await addButton.isVisible({ timeout: 2000 }).catch(() => false))) {
-      await attachStepScreenshot(page, testInfo, 'add-button-not-found');
+      await attachStepScreenshot(page, testInfo, "add-button-not-found");
       return;
     }
     await addButton.click();
@@ -248,23 +248,23 @@ test.describe('UX Interaction Patterns', () => {
 
     const { c64uButton } = getSourceButtons(page);
     if (!(await c64uButton.isVisible({ timeout: 2000 }).catch(() => false))) {
-      await attachStepScreenshot(page, testInfo, 'c64u-source-not-available');
+      await attachStepScreenshot(page, testInfo, "c64u-source-not-available");
       return;
     }
     await c64uButton.click();
     await waitForUiStable(page);
 
     // Look for "Select All" button
-    const selectAllButton = page.getByRole('button', {
+    const selectAllButton = page.getByRole("button", {
       name: /Select All|Select all/i,
     });
     if (await selectAllButton.isVisible({ timeout: 2000 }).catch(() => false)) {
       await selectAllButton.click();
       await waitForUiStable(page);
-      await attachStepScreenshot(page, testInfo, 'all-items-selected');
+      await attachStepScreenshot(page, testInfo, "all-items-selected");
 
       // Now look for "Deselect All" or "Clear Selection"
-      const deselectButton = page.getByRole('button', {
+      const deselectButton = page.getByRole("button", {
         name: /Deselect All|Clear Selection|Deselect all/i,
       });
       if (
@@ -272,24 +272,24 @@ test.describe('UX Interaction Patterns', () => {
       ) {
         await deselectButton.click();
         await waitForUiStable(page);
-        await attachStepScreenshot(page, testInfo, 'all-items-deselected');
+        await attachStepScreenshot(page, testInfo, "all-items-deselected");
       } else {
-        await attachStepScreenshot(page, testInfo, 'deselect-button-not-found');
+        await attachStepScreenshot(page, testInfo, "deselect-button-not-found");
       }
     } else {
-      await attachStepScreenshot(page, testInfo, 'select-all-not-found');
+      await attachStepScreenshot(page, testInfo, "select-all-not-found");
     }
   });
 
-  test('bulk remove from playlist shows confirmation @allow-warnings', async ({
+  test("bulk remove from playlist shows confirmation @allow-warnings", async ({
     page,
   }, testInfo: TestInfo) => {
-    testInfo.annotations.push({ type: 'allow-warnings' });
+    testInfo.annotations.push({ type: "allow-warnings" });
 
-    await page.goto('/play');
-    await page.waitForLoadState('domcontentloaded');
+    await page.goto("/play");
+    await page.waitForLoadState("domcontentloaded");
     await waitForUiStable(page);
-    await attachStepScreenshot(page, testInfo, 'playlist-view');
+    await attachStepScreenshot(page, testInfo, "playlist-view");
 
     // Check if there are items in the playlist
     const playlistItems = page.locator(
@@ -298,67 +298,67 @@ test.describe('UX Interaction Patterns', () => {
     const itemCount = await playlistItems.count();
 
     if (itemCount === 0) {
-      await attachStepScreenshot(page, testInfo, 'empty-playlist');
+      await attachStepScreenshot(page, testInfo, "empty-playlist");
       return;
     }
 
     // Look for "Select All" in playlist
-    const selectAllButton = page.getByRole('button', {
+    const selectAllButton = page.getByRole("button", {
       name: /Select All|Select all/i,
     });
     if (
       !(await selectAllButton.isVisible({ timeout: 2000 }).catch(() => false))
     ) {
-      await attachStepScreenshot(page, testInfo, 'select-all-not-available');
+      await attachStepScreenshot(page, testInfo, "select-all-not-available");
       return;
     }
 
     await selectAllButton.click();
     await waitForUiStable(page);
-    await attachStepScreenshot(page, testInfo, 'all-playlist-items-selected');
+    await attachStepScreenshot(page, testInfo, "all-playlist-items-selected");
 
     // Look for "Remove" button
-    const removeButton = page.getByRole('button', {
+    const removeButton = page.getByRole("button", {
       name: /Remove|Delete|Clear/i,
     });
     if (!(await removeButton.isVisible({ timeout: 2000 }).catch(() => false))) {
-      await attachStepScreenshot(page, testInfo, 'remove-button-not-found');
+      await attachStepScreenshot(page, testInfo, "remove-button-not-found");
       return;
     }
 
     await removeButton.click();
     await waitForUiStable(page);
-    await attachStepScreenshot(page, testInfo, 'after-remove-clicked');
+    await attachStepScreenshot(page, testInfo, "after-remove-clicked");
 
     // Should show confirmation dialog
     const confirmDialog = page
-      .getByRole('dialog')
-      .or(page.getByRole('alertdialog'));
+      .getByRole("dialog")
+      .or(page.getByRole("alertdialog"));
     const dialogVisible = await confirmDialog
       .isVisible({ timeout: 2000 })
       .catch(() => false);
 
     if (dialogVisible) {
-      await attachStepScreenshot(page, testInfo, 'confirmation-dialog-shown');
+      await attachStepScreenshot(page, testInfo, "confirmation-dialog-shown");
       const confirmText = await confirmDialog.textContent();
-      expect(confirmText?.toLowerCase()).toContain('remove');
+      expect(confirmText?.toLowerCase()).toContain("remove");
     } else {
-      await attachStepScreenshot(page, testInfo, 'no-confirmation-dialog');
+      await attachStepScreenshot(page, testInfo, "no-confirmation-dialog");
     }
   });
 
-  test('playback controls only in playlist, not in selection view @allow-warnings', async ({
+  test("playback controls only in playlist, not in selection view @allow-warnings", async ({
     page,
   }, testInfo: TestInfo) => {
-    testInfo.annotations.push({ type: 'allow-warnings' });
+    testInfo.annotations.push({ type: "allow-warnings" });
 
-    await page.goto('/play');
-    await page.waitForLoadState('domcontentloaded');
+    await page.goto("/play");
+    await page.waitForLoadState("domcontentloaded");
     await waitForUiStable(page);
-    await attachStepScreenshot(page, testInfo, 'playlist-view');
+    await attachStepScreenshot(page, testInfo, "playlist-view");
 
     // In playlist view, should have playback controls
-    const playButton = page.getByRole('button', { name: /Play|Pause|Resume/i });
+    const playButton = page.getByRole("button", { name: /Play|Pause|Resume/i });
     const playControlsExist = await playButton
       .isVisible({ timeout: 2000 })
       .catch(() => false);
@@ -367,16 +367,16 @@ test.describe('UX Interaction Patterns', () => {
       await attachStepScreenshot(
         page,
         testInfo,
-        'playback-controls-in-playlist',
+        "playback-controls-in-playlist",
       );
     }
 
     // Now open selection view
-    const addButton = page.getByRole('button', {
+    const addButton = page.getByRole("button", {
       name: /Add items|Add|Choose|Browse/i,
     });
     if (!(await addButton.isVisible({ timeout: 2000 }).catch(() => false))) {
-      await attachStepScreenshot(page, testInfo, 'add-button-not-found');
+      await attachStepScreenshot(page, testInfo, "add-button-not-found");
       return;
     }
     await addButton.click();
@@ -386,10 +386,10 @@ test.describe('UX Interaction Patterns', () => {
     if (await c64uButton.isVisible({ timeout: 2000 }).catch(() => false)) {
       await c64uButton.click();
       await waitForUiStable(page);
-      await attachStepScreenshot(page, testInfo, 'in-selection-view');
+      await attachStepScreenshot(page, testInfo, "in-selection-view");
 
       // Should NOT have playback controls here
-      const playButtonInSelection = page.getByRole('button', {
+      const playButtonInSelection = page.getByRole("button", {
         name: /Play|Pause|Resume/i,
       });
       const hasPlaybackControls = await playButtonInSelection
@@ -400,32 +400,32 @@ test.describe('UX Interaction Patterns', () => {
         await attachStepScreenshot(
           page,
           testInfo,
-          'no-playback-controls-in-selection',
+          "no-playback-controls-in-selection",
         );
       } else {
         await attachStepScreenshot(
           page,
           testInfo,
-          'unexpected-playback-controls-in-selection',
+          "unexpected-playback-controls-in-selection",
         );
       }
     } else {
-      await attachStepScreenshot(page, testInfo, 'c64u-source-not-available');
+      await attachStepScreenshot(page, testInfo, "c64u-source-not-available");
     }
   });
 
-  test('mounting controls only on disks page, not on play page @allow-warnings', async ({
+  test("mounting controls only on disks page, not on play page @allow-warnings", async ({
     page,
   }, testInfo: TestInfo) => {
-    testInfo.annotations.push({ type: 'allow-warnings' });
+    testInfo.annotations.push({ type: "allow-warnings" });
 
-    await page.goto('/play');
-    await page.waitForLoadState('domcontentloaded');
+    await page.goto("/play");
+    await page.waitForLoadState("domcontentloaded");
     await waitForUiStable(page);
-    await attachStepScreenshot(page, testInfo, 'play-page');
+    await attachStepScreenshot(page, testInfo, "play-page");
 
     // Should NOT have mounting controls (Mount, Unmount)
-    const mountButton = page.getByRole('button', {
+    const mountButton = page.getByRole("button", {
       name: /Mount|Unmount|Eject/i,
     });
     const hasMountControls = await mountButton
@@ -436,25 +436,25 @@ test.describe('UX Interaction Patterns', () => {
       await attachStepScreenshot(
         page,
         testInfo,
-        'no-mount-controls-on-play-page',
+        "no-mount-controls-on-play-page",
       );
     } else {
       await attachStepScreenshot(
         page,
         testInfo,
-        'unexpected-mount-controls-on-play-page',
+        "unexpected-mount-controls-on-play-page",
       );
     }
 
     // Navigate to Disks page
-    await page.goto('/disks');
+    await page.goto("/disks");
 
-    await page.waitForLoadState('domcontentloaded');
+    await page.waitForLoadState("domcontentloaded");
     await waitForUiStable(page);
-    await attachStepScreenshot(page, testInfo, 'disks-page');
+    await attachStepScreenshot(page, testInfo, "disks-page");
 
     // Should have mounting controls here
-    const mountButtonOnDisks = page.getByRole('button', {
+    const mountButtonOnDisks = page.getByRole("button", {
       name: /Mount|Unmount|Eject/i,
     });
     const hasMountControlsOnDisks = await mountButtonOnDisks
@@ -465,13 +465,13 @@ test.describe('UX Interaction Patterns', () => {
       await attachStepScreenshot(
         page,
         testInfo,
-        'mount-controls-on-disks-page',
+        "mount-controls-on-disks-page",
       );
     } else {
       await attachStepScreenshot(
         page,
         testInfo,
-        'mount-controls-not-found-on-disks-page',
+        "mount-controls-not-found-on-disks-page",
       );
     }
   });
@@ -479,89 +479,89 @@ test.describe('UX Interaction Patterns', () => {
   test('intent-based language: "Add items" not "Browse filesystem" @allow-warnings', async ({
     page,
   }, testInfo: TestInfo) => {
-    testInfo.annotations.push({ type: 'allow-warnings' });
+    testInfo.annotations.push({ type: "allow-warnings" });
 
-    await page.goto('/play');
-    await page.waitForLoadState('domcontentloaded');
+    await page.goto("/play");
+    await page.waitForLoadState("domcontentloaded");
     await waitForUiStable(page);
-    await attachStepScreenshot(page, testInfo, 'play-page');
+    await attachStepScreenshot(page, testInfo, "play-page");
 
     // Look for intent-based button text
-    const addButton = page.getByRole('button', {
+    const addButton = page.getByRole("button", {
       name: /Add items|Add|Choose/i,
     });
     if (await addButton.isVisible({ timeout: 2000 }).catch(() => false)) {
       const buttonText = await addButton.textContent();
-      await attachStepScreenshot(page, testInfo, 'intent-based-add-button');
+      await attachStepScreenshot(page, testInfo, "intent-based-add-button");
 
       // Should not contain technical terms like "Browse", "Filesystem", "Directory"
       const hasTechnicalTerms = /browse|filesystem|directory/i.test(
-        buttonText || '',
+        buttonText || "",
       );
       if (hasTechnicalTerms) {
-        await attachStepScreenshot(page, testInfo, 'technical-terms-in-button');
+        await attachStepScreenshot(page, testInfo, "technical-terms-in-button");
       }
     } else {
-      await attachStepScreenshot(page, testInfo, 'add-button-not-found');
+      await attachStepScreenshot(page, testInfo, "add-button-not-found");
     }
   });
 
   test('intent-based language: "Choose source" in source selection @allow-warnings', async ({
     page,
   }, testInfo: TestInfo) => {
-    testInfo.annotations.push({ type: 'allow-warnings' });
+    testInfo.annotations.push({ type: "allow-warnings" });
 
-    await page.goto('/play');
-    await page.waitForLoadState('domcontentloaded');
+    await page.goto("/play");
+    await page.waitForLoadState("domcontentloaded");
     await waitForUiStable(page);
 
-    const addButton = page.getByRole('button', {
+    const addButton = page.getByRole("button", {
       name: /Add items|Add|Choose|Browse/i,
     });
     if (!(await addButton.isVisible({ timeout: 2000 }).catch(() => false))) {
-      await attachStepScreenshot(page, testInfo, 'add-button-not-found');
+      await attachStepScreenshot(page, testInfo, "add-button-not-found");
       return;
     }
     await addButton.click();
     await waitForUiStable(page);
-    await attachStepScreenshot(page, testInfo, 'source-selector');
+    await attachStepScreenshot(page, testInfo, "source-selector");
 
     // Look for intent-based headings or instructions
-    const heading = page.getByRole('heading', { name: /Choose|Select|Pick/i });
+    const heading = page.getByRole("heading", { name: /Choose|Select|Pick/i });
     const headingVisible = await heading
       .isVisible({ timeout: 2000 })
       .catch(() => false);
 
     if (headingVisible) {
       const headingText = await heading.textContent();
-      await attachStepScreenshot(page, testInfo, 'intent-based-heading');
+      await attachStepScreenshot(page, testInfo, "intent-based-heading");
 
       // Should contain "source" or similar intent
       const hasSourceLanguage = /source|location|where/i.test(
-        headingText || '',
+        headingText || "",
       );
       if (hasSourceLanguage) {
-        await attachStepScreenshot(page, testInfo, 'source-language-present');
+        await attachStepScreenshot(page, testInfo, "source-language-present");
       }
     } else {
-      await attachStepScreenshot(page, testInfo, 'heading-not-found');
+      await attachStepScreenshot(page, testInfo, "heading-not-found");
     }
   });
 
-  test('layout stability: controls do not shift when selection changes @allow-warnings', async ({
+  test("layout stability: controls do not shift when selection changes @allow-warnings", async ({
     page,
   }, testInfo: TestInfo) => {
-    testInfo.annotations.push({ type: 'allow-warnings' });
+    testInfo.annotations.push({ type: "allow-warnings" });
 
-    await page.goto('/play');
-    await page.waitForLoadState('domcontentloaded');
+    await page.goto("/play");
+    await page.waitForLoadState("domcontentloaded");
     await waitForUiStable(page);
 
-    const addButton = page.getByRole('button', {
+    const addButton = page.getByRole("button", {
       name: /Add items|Add|Choose|Browse/i,
     });
     if (!(await addButton.isVisible({ timeout: 2000 }).catch(() => false))) {
-      await attachStepScreenshot(page, testInfo, 'add-button-not-found');
+      await attachStepScreenshot(page, testInfo, "add-button-not-found");
       return;
     }
     await addButton.click();
@@ -569,7 +569,7 @@ test.describe('UX Interaction Patterns', () => {
 
     const { c64uButton } = getSourceButtons(page);
     if (!(await c64uButton.isVisible({ timeout: 2000 }).catch(() => false))) {
-      await attachStepScreenshot(page, testInfo, 'c64u-source-not-available');
+      await attachStepScreenshot(page, testInfo, "c64u-source-not-available");
       return;
     }
     await c64uButton.click();
@@ -577,51 +577,51 @@ test.describe('UX Interaction Patterns', () => {
 
     // Get initial position of a control element (e.g., "Add" button)
     const controlButton = page
-      .getByRole('button', { name: /Add|Select/i })
+      .getByRole("button", { name: /Add|Select/i })
       .first();
     const initialBox = await controlButton.boundingBox().catch(() => null);
 
     if (!initialBox) {
-      await attachStepScreenshot(page, testInfo, 'control-button-not-found');
+      await attachStepScreenshot(page, testInfo, "control-button-not-found");
       return;
     }
-    await attachStepScreenshot(page, testInfo, 'initial-layout');
+    await attachStepScreenshot(page, testInfo, "initial-layout");
 
     // Select an item
-    const firstItem = page.getByRole('button', { name: /.+/ }).first();
+    const firstItem = page.getByRole("button", { name: /.+/ }).first();
     if (await firstItem.isVisible({ timeout: 2000 }).catch(() => false)) {
       await firstItem.click();
       await waitForUiStable(page);
-      await attachStepScreenshot(page, testInfo, 'item-selected');
+      await attachStepScreenshot(page, testInfo, "item-selected");
 
       // Check if control button moved
       const newBox = await controlButton.boundingBox().catch(() => null);
       if (newBox && initialBox) {
         const moved = Math.abs(newBox.y - initialBox.y) > 5; // Allow 5px tolerance
         if (!moved) {
-          await attachStepScreenshot(page, testInfo, 'layout-stable');
+          await attachStepScreenshot(page, testInfo, "layout-stable");
         } else {
-          await attachStepScreenshot(page, testInfo, 'layout-shifted');
+          await attachStepScreenshot(page, testInfo, "layout-shifted");
         }
       }
     } else {
-      await attachStepScreenshot(page, testInfo, 'no-items-to-select');
+      await attachStepScreenshot(page, testInfo, "no-items-to-select");
     }
   });
 
   test('disk collection shows full list with "View all" when limit exceeded @allow-warnings', async ({
     page,
   }, testInfo: TestInfo) => {
-    testInfo.annotations.push({ type: 'allow-warnings' });
+    testInfo.annotations.push({ type: "allow-warnings" });
 
-    await page.goto('/disks');
+    await page.goto("/disks");
 
-    await page.waitForLoadState('domcontentloaded');
+    await page.waitForLoadState("domcontentloaded");
     await waitForUiStable(page);
-    await attachStepScreenshot(page, testInfo, 'disks-page');
+    await attachStepScreenshot(page, testInfo, "disks-page");
 
     // Look for "View all" button (indicates truncation)
-    const viewAllButton = page.getByRole('button', {
+    const viewAllButton = page.getByRole("button", {
       name: /View all|Show all|See all/i,
     });
     const hasViewAll = await viewAllButton
@@ -629,47 +629,47 @@ test.describe('UX Interaction Patterns', () => {
       .catch(() => false);
 
     if (hasViewAll) {
-      await attachStepScreenshot(page, testInfo, 'view-all-present');
+      await attachStepScreenshot(page, testInfo, "view-all-present");
       await viewAllButton.click();
       await waitForUiStable(page);
-      await attachStepScreenshot(page, testInfo, 'full-list-opened');
+      await attachStepScreenshot(page, testInfo, "full-list-opened");
 
       // Should show a scrollable panel with all items
       const fullListPanel = page
-        .getByRole('dialog')
-        .or(page.locator('[data-full-list], [data-view-all-panel]'));
+        .getByRole("dialog")
+        .or(page.locator("[data-full-list], [data-view-all-panel]"));
       const panelVisible = await fullListPanel
         .isVisible({ timeout: 2000 })
         .catch(() => false);
 
       if (panelVisible) {
-        await attachStepScreenshot(page, testInfo, 'scrollable-panel-shown');
+        await attachStepScreenshot(page, testInfo, "scrollable-panel-shown");
       } else {
         await attachStepScreenshot(
           page,
           testInfo,
-          'full-list-display-variation',
+          "full-list-display-variation",
         );
       }
     } else {
-      await attachStepScreenshot(page, testInfo, 'no-truncation-or-view-all');
+      await attachStepScreenshot(page, testInfo, "no-truncation-or-view-all");
     }
   });
 
-  test('long paths wrap and do not force horizontal scrolling @allow-warnings', async ({
+  test("long paths wrap and do not force horizontal scrolling @allow-warnings", async ({
     page,
   }, testInfo: TestInfo) => {
-    testInfo.annotations.push({ type: 'allow-warnings' });
+    testInfo.annotations.push({ type: "allow-warnings" });
 
-    await page.goto('/play');
-    await page.waitForLoadState('domcontentloaded');
+    await page.goto("/play");
+    await page.waitForLoadState("domcontentloaded");
     await waitForUiStable(page);
 
-    const addButton = page.getByRole('button', {
+    const addButton = page.getByRole("button", {
       name: /Add items|Add|Choose|Browse/i,
     });
     if (!(await addButton.isVisible({ timeout: 2000 }).catch(() => false))) {
-      await attachStepScreenshot(page, testInfo, 'add-button-not-found');
+      await attachStepScreenshot(page, testInfo, "add-button-not-found");
       return;
     }
     await addButton.click();
@@ -679,10 +679,10 @@ test.describe('UX Interaction Patterns', () => {
     if (await c64uButton.isVisible({ timeout: 2000 }).catch(() => false)) {
       await c64uButton.click();
       await waitForUiStable(page);
-      await attachStepScreenshot(page, testInfo, 'c64u-navigation');
+      await attachStepScreenshot(page, testInfo, "c64u-navigation");
 
       // Navigate deep to get a long path
-      const folder = page.getByRole('button', { name: /folder|dir/i }).first();
+      const folder = page.getByRole("button", { name: /folder|dir/i }).first();
       let depth = 0;
       while (
         (await folder.isVisible({ timeout: 1000 }).catch(() => false)) &&
@@ -694,7 +694,7 @@ test.describe('UX Interaction Patterns', () => {
       }
 
       if (depth > 0) {
-        await attachStepScreenshot(page, testInfo, 'deep-path-displayed');
+        await attachStepScreenshot(page, testInfo, "deep-path-displayed");
 
         // Check for horizontal scroll
         const hasHorizontalScroll = await page.evaluate(
@@ -703,28 +703,28 @@ test.describe('UX Interaction Patterns', () => {
             document.documentElement.clientWidth,
         );
         expect(hasHorizontalScroll).toBe(false);
-        await attachStepScreenshot(page, testInfo, 'no-horizontal-scroll');
+        await attachStepScreenshot(page, testInfo, "no-horizontal-scroll");
       } else {
-        await attachStepScreenshot(page, testInfo, 'path-display-not-found');
+        await attachStepScreenshot(page, testInfo, "path-display-not-found");
       }
     } else {
-      await attachStepScreenshot(page, testInfo, 'c64u-not-available');
+      await attachStepScreenshot(page, testInfo, "c64u-not-available");
     }
   });
 
-  test('selection count is displayed when items are selected @allow-warnings', async ({
+  test("selection count is displayed when items are selected @allow-warnings", async ({
     page,
   }, testInfo: TestInfo) => {
-    testInfo.annotations.push({ type: 'allow-warnings' });
+    testInfo.annotations.push({ type: "allow-warnings" });
 
-    await page.goto('/play');
-    await page.waitForLoadState('domcontentloaded');
+    await page.goto("/play");
+    await page.waitForLoadState("domcontentloaded");
 
-    const addButton = page.getByRole('button', {
+    const addButton = page.getByRole("button", {
       name: /Add items|Add|Choose|Browse/i,
     });
     if (!(await addButton.isVisible({ timeout: 2000 }).catch(() => false))) {
-      await attachStepScreenshot(page, testInfo, 'add-button-not-found');
+      await attachStepScreenshot(page, testInfo, "add-button-not-found");
       return;
     }
     await addButton.click();
@@ -732,7 +732,7 @@ test.describe('UX Interaction Patterns', () => {
 
     const { c64uButton } = getSourceButtons(page);
     if (!(await c64uButton.isVisible({ timeout: 2000 }).catch(() => false))) {
-      await attachStepScreenshot(page, testInfo, 'c64u-source-not-available');
+      await attachStepScreenshot(page, testInfo, "c64u-source-not-available");
       return;
     }
     await c64uButton.click();
@@ -747,7 +747,7 @@ test.describe('UX Interaction Patterns', () => {
     ) {
       await firstEntryCheckbox.click();
       await waitForUiStable(page);
-      await attachStepScreenshot(page, testInfo, 'item-selected');
+      await attachStepScreenshot(page, testInfo, "item-selected");
 
       // Look for selection count display
       const selectionCount = page.getByText(/1 selected|Selected: 1|1 item/i);
@@ -756,28 +756,28 @@ test.describe('UX Interaction Patterns', () => {
         .catch(() => false);
 
       if (hasSelectionCount) {
-        await attachStepScreenshot(page, testInfo, 'selection-count-displayed');
+        await attachStepScreenshot(page, testInfo, "selection-count-displayed");
       } else {
-        await attachStepScreenshot(page, testInfo, 'selection-count-not-found');
+        await attachStepScreenshot(page, testInfo, "selection-count-not-found");
       }
     } else {
-      await attachStepScreenshot(page, testInfo, 'no-items-to-select');
+      await attachStepScreenshot(page, testInfo, "no-items-to-select");
     }
   });
 
   test('quick "Root" action available in selection view @allow-warnings', async ({
     page,
   }, testInfo: TestInfo) => {
-    testInfo.annotations.push({ type: 'allow-warnings' });
+    testInfo.annotations.push({ type: "allow-warnings" });
 
-    await page.goto('/play');
-    await page.waitForLoadState('domcontentloaded');
+    await page.goto("/play");
+    await page.waitForLoadState("domcontentloaded");
 
-    const addButton = page.getByRole('button', {
+    const addButton = page.getByRole("button", {
       name: /Add items|Add|Choose|Browse/i,
     });
     if (!(await addButton.isVisible({ timeout: 2000 }).catch(() => false))) {
-      await attachStepScreenshot(page, testInfo, 'add-button-not-found');
+      await attachStepScreenshot(page, testInfo, "add-button-not-found");
       return;
     }
     await addButton.click();
@@ -785,67 +785,67 @@ test.describe('UX Interaction Patterns', () => {
 
     const { c64uButton } = getSourceButtons(page);
     if (!(await c64uButton.isVisible({ timeout: 2000 }).catch(() => false))) {
-      await attachStepScreenshot(page, testInfo, 'c64u-source-not-available');
+      await attachStepScreenshot(page, testInfo, "c64u-source-not-available");
       return;
     }
     await c64uButton.click();
     await waitForUiStable(page);
-    await attachStepScreenshot(page, testInfo, 'in-selection-view');
+    await attachStepScreenshot(page, testInfo, "in-selection-view");
 
     // Look for "Root" quick action button
-    const rootButton = page.getByRole('button', { name: /Root|Go to root/i });
+    const rootButton = page.getByRole("button", { name: /Root|Go to root/i });
     const hasRootButton = await rootButton
       .isVisible({ timeout: 2000 })
       .catch(() => false);
 
     if (hasRootButton) {
-      await attachStepScreenshot(page, testInfo, 'root-button-available');
+      await attachStepScreenshot(page, testInfo, "root-button-available");
     } else {
-      await attachStepScreenshot(page, testInfo, 'root-button-not-found');
+      await attachStepScreenshot(page, testInfo, "root-button-not-found");
     }
   });
 
-  test('modal dialogs for mount actions @allow-warnings', async ({
+  test("modal dialogs for mount actions @allow-warnings", async ({
     page,
   }, testInfo: TestInfo) => {
-    testInfo.annotations.push({ type: 'allow-warnings' });
+    testInfo.annotations.push({ type: "allow-warnings" });
 
-    await page.goto('/disks');
-    await page.waitForLoadState('domcontentloaded');
-    await attachStepScreenshot(page, testInfo, 'disks-page');
+    await page.goto("/disks");
+    await page.waitForLoadState("domcontentloaded");
+    await attachStepScreenshot(page, testInfo, "disks-page");
 
     // Look for mount button
-    const mountButton = page.getByRole('button', { name: /Mount/i });
+    const mountButton = page.getByRole("button", { name: /Mount/i });
     if (!(await mountButton.isVisible({ timeout: 2000 }).catch(() => false))) {
-      await attachStepScreenshot(page, testInfo, 'mount-button-not-found');
+      await attachStepScreenshot(page, testInfo, "mount-button-not-found");
       return;
     }
 
     await mountButton.click();
     await waitForUiStable(page);
-    await attachStepScreenshot(page, testInfo, 'mount-clicked');
+    await attachStepScreenshot(page, testInfo, "mount-clicked");
 
     // Should show a modal dialog
-    const dialog = page.getByRole('dialog').or(page.getByRole('alertdialog'));
+    const dialog = page.getByRole("dialog").or(page.getByRole("alertdialog"));
     const dialogVisible = await dialog
       .isVisible({ timeout: 2000 })
       .catch(() => false);
 
     if (dialogVisible) {
-      await attachStepScreenshot(page, testInfo, 'modal-dialog-shown');
+      await attachStepScreenshot(page, testInfo, "modal-dialog-shown");
     } else {
-      await attachStepScreenshot(page, testInfo, 'no-modal-dialog');
+      await attachStepScreenshot(page, testInfo, "no-modal-dialog");
     }
   });
 
-  test('clear confirmation on destructive playlist action @allow-warnings', async ({
+  test("clear confirmation on destructive playlist action @allow-warnings", async ({
     page,
   }, testInfo: TestInfo) => {
-    testInfo.annotations.push({ type: 'allow-warnings' });
+    testInfo.annotations.push({ type: "allow-warnings" });
 
-    await page.goto('/play');
-    await page.waitForLoadState('domcontentloaded');
-    await attachStepScreenshot(page, testInfo, 'playlist-view');
+    await page.goto("/play");
+    await page.waitForLoadState("domcontentloaded");
+    await attachStepScreenshot(page, testInfo, "playlist-view");
 
     // Check if there are items
     const playlistItems = page.locator(
@@ -857,28 +857,28 @@ test.describe('UX Interaction Patterns', () => {
       await attachStepScreenshot(
         page,
         testInfo,
-        'empty-playlist-no-items-to-clear',
+        "empty-playlist-no-items-to-clear",
       );
       return;
     }
 
     // Look for "Clear" button
-    const clearButton = page.getByRole('button', {
+    const clearButton = page.getByRole("button", {
       name: /Clear all|Clear playlist|Clear/i,
     });
     if (!(await clearButton.isVisible({ timeout: 2000 }).catch(() => false))) {
-      await attachStepScreenshot(page, testInfo, 'clear-button-not-found');
+      await attachStepScreenshot(page, testInfo, "clear-button-not-found");
       return;
     }
 
     await clearButton.click();
     await waitForUiStable(page);
-    await attachStepScreenshot(page, testInfo, 'clear-clicked');
+    await attachStepScreenshot(page, testInfo, "clear-clicked");
 
     // Should show confirmation dialog
     const confirmDialog = page
-      .getByRole('dialog')
-      .or(page.getByRole('alertdialog'));
+      .getByRole("dialog")
+      .or(page.getByRole("alertdialog"));
     const dialogVisible = await confirmDialog
       .isVisible({ timeout: 2000 })
       .catch(() => false);
@@ -886,26 +886,26 @@ test.describe('UX Interaction Patterns', () => {
     if (dialogVisible) {
       const dialogText = await confirmDialog.textContent();
       if (
-        dialogText?.toLowerCase().includes('clear') ||
-        dialogText?.toLowerCase().includes('remove')
+        dialogText?.toLowerCase().includes("clear") ||
+        dialogText?.toLowerCase().includes("remove")
       ) {
-        await attachStepScreenshot(page, testInfo, 'clear-confirmation-shown');
+        await attachStepScreenshot(page, testInfo, "clear-confirmation-shown");
       } else {
-        await attachStepScreenshot(page, testInfo, 'dialog-shown-but-unclear');
+        await attachStepScreenshot(page, testInfo, "dialog-shown-but-unclear");
       }
     } else {
-      await attachStepScreenshot(page, testInfo, 'no-clear-confirmation');
+      await attachStepScreenshot(page, testInfo, "no-clear-confirmation");
     }
   });
 
-  test('HVSC metadata used for song display @allow-warnings', async ({
+  test("HVSC metadata used for song display @allow-warnings", async ({
     page,
   }, testInfo: TestInfo) => {
-    testInfo.annotations.push({ type: 'allow-warnings' });
+    testInfo.annotations.push({ type: "allow-warnings" });
 
-    await page.goto('/play');
-    await page.waitForLoadState('domcontentloaded');
-    await attachStepScreenshot(page, testInfo, 'play-page');
+    await page.goto("/play");
+    await page.waitForLoadState("domcontentloaded");
+    await attachStepScreenshot(page, testInfo, "play-page");
 
     // Look for HVSC-related UI elements (e.g., author, copyright, song length)
     const hvscAuthor = page.getByText(/.* - .*/); // Pattern: "Author - Title"
@@ -919,25 +919,25 @@ test.describe('UX Interaction Patterns', () => {
       .catch(() => false);
 
     if (hasAuthorInfo || hasDurationInfo) {
-      await attachStepScreenshot(page, testInfo, 'hvsc-metadata-displayed');
+      await attachStepScreenshot(page, testInfo, "hvsc-metadata-displayed");
     } else {
-      await attachStepScreenshot(page, testInfo, 'hvsc-metadata-not-found');
+      await attachStepScreenshot(page, testInfo, "hvsc-metadata-not-found");
     }
   });
 
-  test('consistent selection UI across local and C64U sources @allow-warnings', async ({
+  test("consistent selection UI across local and C64U sources @allow-warnings", async ({
     page,
   }, testInfo: TestInfo) => {
-    testInfo.annotations.push({ type: 'allow-warnings' });
+    testInfo.annotations.push({ type: "allow-warnings" });
 
-    await page.goto('/play');
-    await page.waitForLoadState('domcontentloaded');
+    await page.goto("/play");
+    await page.waitForLoadState("domcontentloaded");
 
-    const addButton = page.getByRole('button', {
+    const addButton = page.getByRole("button", {
       name: /Add items|Add|Choose|Browse/i,
     });
     if (!(await addButton.isVisible({ timeout: 2000 }).catch(() => false))) {
-      await attachStepScreenshot(page, testInfo, 'add-button-not-found');
+      await attachStepScreenshot(page, testInfo, "add-button-not-found");
       return;
     }
     await addButton.click();
@@ -952,33 +952,33 @@ test.describe('UX Interaction Patterns', () => {
       .catch(() => false);
 
     if (localVisible && c64uVisible) {
-      await expect(localButton).toContainText('Local');
-      await expect(localButton).toContainText('Local Device');
-      await expect(c64uButton).toContainText('C64U');
-      await expect(c64uButton).toContainText('Commodore 64 Ultimate');
-      await attachStepScreenshot(page, testInfo, 'source-buttons-consistent');
+      await expect(localButton).toContainText("Local");
+      await expect(localButton).toContainText("Local Device");
+      await expect(c64uButton).toContainText("C64U");
+      await expect(c64uButton).toContainText("Commodore 64 Ultimate");
+      await attachStepScreenshot(page, testInfo, "source-buttons-consistent");
     } else {
-      await attachStepScreenshot(page, testInfo, 'source-buttons-missing');
+      await attachStepScreenshot(page, testInfo, "source-buttons-missing");
     }
   });
 
-  test('no unrestricted filesystem access language @allow-warnings', async ({
+  test("no unrestricted filesystem access language @allow-warnings", async ({
     page,
   }, testInfo: TestInfo) => {
     enableGoldenTrace(testInfo);
-    testInfo.annotations.push({ type: 'allow-warnings' });
+    testInfo.annotations.push({ type: "allow-warnings" });
 
-    await page.goto('/play');
-    await page.waitForLoadState('domcontentloaded');
+    await page.goto("/play");
+    await page.waitForLoadState("domcontentloaded");
 
     // Check entire page for forbidden terms
-    const pageContent = await page.textContent('body');
+    const pageContent = await page.textContent("body");
     const forbiddenTerms = [
-      'browse filesystem',
-      'root directory',
-      'drill up',
-      'filesystem',
-      'browse files',
+      "browse filesystem",
+      "root directory",
+      "drill up",
+      "filesystem",
+      "browse files",
     ];
 
     const foundForbidden = forbiddenTerms.filter((term) =>
@@ -989,26 +989,26 @@ test.describe('UX Interaction Patterns', () => {
       await attachStepScreenshot(
         page,
         testInfo,
-        `forbidden-terms-found-${foundForbidden.join('-')}`,
+        `forbidden-terms-found-${foundForbidden.join("-")}`,
       );
     } else {
-      await attachStepScreenshot(page, testInfo, 'no-forbidden-terms');
+      await attachStepScreenshot(page, testInfo, "no-forbidden-terms");
     }
   });
 
-  test('playlist actions easily discoverable @allow-warnings', async ({
+  test("playlist actions easily discoverable @allow-warnings", async ({
     page,
   }, testInfo: TestInfo) => {
-    testInfo.annotations.push({ type: 'allow-warnings' });
+    testInfo.annotations.push({ type: "allow-warnings" });
 
-    await page.goto('/play');
-    await page.waitForLoadState('domcontentloaded');
-    await attachStepScreenshot(page, testInfo, 'playlist-view');
+    await page.goto("/play");
+    await page.waitForLoadState("domcontentloaded");
+    await attachStepScreenshot(page, testInfo, "playlist-view");
 
     // Check for standard playlist actions
-    const playButton = page.getByRole('button', { name: /Play|Pause/i });
-    const addButton = page.getByRole('button', { name: /Add items|Add/i });
-    const removeButton = page.getByRole('button', { name: /Remove|Delete/i });
+    const playButton = page.getByRole("button", { name: /Play|Pause/i });
+    const addButton = page.getByRole("button", { name: /Add items|Add/i });
+    const removeButton = page.getByRole("button", { name: /Remove|Delete/i });
 
     const hasPlay = await playButton
       .isVisible({ timeout: 2000 })
@@ -1026,10 +1026,10 @@ test.describe('UX Interaction Patterns', () => {
       await attachStepScreenshot(
         page,
         testInfo,
-        'playlist-actions-discoverable',
+        "playlist-actions-discoverable",
       );
     } else {
-      await attachStepScreenshot(page, testInfo, 'playlist-actions-limited');
+      await attachStepScreenshot(page, testInfo, "playlist-actions-limited");
     }
   });
 });

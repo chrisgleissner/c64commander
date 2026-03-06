@@ -13,22 +13,22 @@ import {
   useMemo,
   useRef,
   useState,
-} from 'react';
-import { Loader2 } from 'lucide-react';
-import { Input } from '@/components/ui/input';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Slider } from '@/components/ui/slider';
+} from "react";
+import { Loader2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Slider } from "@/components/ui/slider";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import { emitUiTraceMarker } from '@/lib/tracing/userTrace';
-import { useC64ConfigItem } from '@/hooks/useC64Connection';
-import { getCheckboxMapping, inferControlKind } from '@/lib/config/controlType';
-import { cn } from '@/lib/utils';
+} from "@/components/ui/select";
+import { emitUiTraceMarker } from "@/lib/tracing/userTrace";
+import { useC64ConfigItem } from "@/hooks/useC64Connection";
+import { getCheckboxMapping, inferControlKind } from "@/lib/config/controlType";
+import { cn } from "@/lib/utils";
 
 interface ConfigItemRowProps {
   name: string;
@@ -52,7 +52,7 @@ interface ConfigItemRowProps {
   formatOptionLabel?: (value: string) => string;
 }
 
-type ConfigItemLayoutMode = 'horizontal' | 'vertical';
+type ConfigItemLayoutMode = "horizontal" | "vertical";
 
 const HORIZONTAL_GAP_PX = 12;
 const HORIZONTAL_LABEL_PADDING_PX = 16;
@@ -60,7 +60,7 @@ const HORIZONTAL_LABEL_PADDING_PX = 16;
 const useAdaptiveLabelLayout = (label: string, widgetMinWidth: number) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const labelRef = useRef<HTMLSpanElement | null>(null);
-  const [layout, setLayout] = useState<ConfigItemLayoutMode>('horizontal');
+  const [layout, setLayout] = useState<ConfigItemLayoutMode>("horizontal");
 
   const measureLayout = useCallback(() => {
     const container = containerRef.current;
@@ -79,8 +79,8 @@ const useAdaptiveLabelLayout = (label: string, widgetMinWidth: number) => {
       HORIZONTAL_LABEL_PADDING_PX;
     const nextLayout: ConfigItemLayoutMode =
       labelIsVertical || containerWidth < requiredWidth
-        ? 'vertical'
-        : 'horizontal';
+        ? "vertical"
+        : "horizontal";
     setLayout((prev) => (prev === nextLayout ? prev : nextLayout));
   }, [widgetMinWidth]);
 
@@ -90,7 +90,7 @@ const useAdaptiveLabelLayout = (label: string, widgetMinWidth: number) => {
 
   useEffect(() => {
     const observer =
-      typeof ResizeObserver !== 'undefined'
+      typeof ResizeObserver !== "undefined"
         ? new ResizeObserver(() => {
             measureLayout();
           })
@@ -99,10 +99,10 @@ const useAdaptiveLabelLayout = (label: string, widgetMinWidth: number) => {
       if (containerRef.current) observer.observe(containerRef.current);
       if (labelRef.current) observer.observe(labelRef.current);
     }
-    window.addEventListener('resize', measureLayout);
+    window.addEventListener("resize", measureLayout);
     return () => {
       observer?.disconnect();
-      window.removeEventListener('resize', measureLayout);
+      window.removeEventListener("resize", measureLayout);
     };
   }, [measureLayout]);
 
@@ -130,7 +130,7 @@ export function ConfigItemRow({
   const lastCommittedRef = useRef<string>(String(value));
 
   const extractConfigFromResponse = (data: unknown) => {
-    if (!data || typeof data !== 'object') return undefined;
+    if (!data || typeof data !== "object") return undefined;
     const payload = data as Record<string, any>;
     const categoryBlock = category ? payload[category] : undefined;
     const itemBlock =
@@ -139,15 +139,15 @@ export function ConfigItemRow({
       payload.item ??
       payload.value ??
       payload;
-    if (!itemBlock || typeof itemBlock !== 'object') return undefined;
+    if (!itemBlock || typeof itemBlock !== "object") return undefined;
     return itemBlock as Record<string, any>;
   };
 
   const isConfigSurfaceActive =
-    typeof window !== 'undefined' &&
-    /\/(config|settings)(\/|$)/.test(window.location.pathname || '');
+    typeof window !== "undefined" &&
+    /\/(config|settings)(\/|$)/.test(window.location.pathname || "");
   const needsDetailFetch =
-    (import.meta.env.MODE === 'test' || isConfigSurfaceActive) &&
+    (import.meta.env.MODE === "test" || isConfigSurfaceActive) &&
     (!options || options.length === 0) &&
     !details?.presets;
   const { data: itemData, isLoading: isItemLoading } = useC64ConfigItem(
@@ -216,7 +216,7 @@ export function ConfigItemRow({
       ...fetchedOptions,
     ]
       .map((opt) => String(opt))
-      .filter((opt) => opt.length > 0 || opt === '');
+      .filter((opt) => opt.length > 0 || opt === "");
     const seen = new Set<string>();
     return combined.filter((opt) => {
       if (seen.has(opt)) return false;
@@ -241,13 +241,13 @@ export function ConfigItemRow({
   );
 
   const widgetMinWidth = useMemo(() => {
-    if (controlKind === 'slider') {
+    if (controlKind === "slider") {
       return rightAccessory ? 320 : 220;
     }
-    if (controlKind === 'select') {
+    if (controlKind === "select") {
       return 160;
     }
-    if (controlKind === 'checkbox') {
+    if (controlKind === "checkbox") {
       return 44;
     }
     return 160;
@@ -263,27 +263,27 @@ export function ConfigItemRow({
   );
 
   const rowClassName = cn(
-    'settings-row w-full',
-    layout === 'horizontal'
-      ? 'flex items-center justify-between gap-3'
-      : 'flex flex-col items-stretch gap-2',
+    "settings-row w-full",
+    layout === "horizontal"
+      ? "flex items-center justify-between gap-3"
+      : "flex flex-col items-stretch gap-2",
     className,
   );
 
   const labelBlockClassName = cn(
-    'flex flex-col',
-    layout === 'horizontal' ? 'shrink-0 pr-4' : 'w-full',
+    "flex flex-col",
+    layout === "horizontal" ? "shrink-0 pr-4" : "w-full",
   );
 
   const labelClassName = cn(
-    'text-sm font-medium block',
-    layout === 'horizontal' ? 'whitespace-nowrap' : 'break-words w-full',
+    "text-sm font-medium block",
+    layout === "horizontal" ? "whitespace-nowrap" : "break-words w-full",
   );
 
   const displayValue = inputValue;
-  const isReadOnly = readOnly || name.startsWith('SID Detected Socket');
+  const isReadOnly = readOnly || name.startsWith("SID Detected Socket");
   const normalizeOption = (option: string) =>
-    option.trim().replace(/\s+/g, ' ').toLowerCase();
+    option.trim().replace(/\s+/g, " ").toLowerCase();
   const parseNumeric = (option: string) => {
     const match = option.trim().match(/[+-]?\d+(?:\.\d+)?/);
     return match ? Number(match[0]) : undefined;
@@ -291,22 +291,22 @@ export function ConfigItemRow({
   const isLeftRightCenter = (options: string[]) => {
     const normalized = options.map(normalizeOption);
     const hasCenter = normalized.some(
-      (value) => value === 'center' || value === 'centre',
+      (value) => value === "center" || value === "centre",
     );
-    const hasLeft = normalized.some((value) => value.startsWith('left'));
-    const hasRight = normalized.some((value) => value.startsWith('right'));
+    const hasLeft = normalized.some((value) => value.startsWith("left"));
+    const hasRight = normalized.some((value) => value.startsWith("right"));
     return hasCenter && hasLeft && hasRight;
   };
   const parseLeftRight = (option: string) => {
     const normalized = normalizeOption(option);
-    if (normalized.startsWith('left')) {
-      return { side: 'left' as const, value: parseNumeric(option) ?? 0 };
+    if (normalized.startsWith("left")) {
+      return { side: "left" as const, value: parseNumeric(option) ?? 0 };
     }
-    if (normalized.startsWith('right')) {
-      return { side: 'right' as const, value: parseNumeric(option) ?? 0 };
+    if (normalized.startsWith("right")) {
+      return { side: "right" as const, value: parseNumeric(option) ?? 0 };
     }
-    if (normalized === 'center' || normalized === 'centre') {
-      return { side: 'center' as const, value: 0 };
+    if (normalized === "center" || normalized === "centre") {
+      return { side: "center" as const, value: 0 };
     }
     return null;
   };
@@ -314,15 +314,15 @@ export function ConfigItemRow({
     const normalized = new Set(options.map(normalizeOption));
     return (
       normalized.size === 4 &&
-      normalized.has('off') &&
-      normalized.has('low') &&
-      normalized.has('medium') &&
-      normalized.has('high')
+      normalized.has("off") &&
+      normalized.has("low") &&
+      normalized.has("medium") &&
+      normalized.has("high")
     );
   };
   const getSliderOptions = (options: string[]) => {
     if (isOffLowMediumHigh(options)) {
-      const order = ['off', 'low', 'medium', 'high'];
+      const order = ["off", "low", "medium", "high"];
       return order
         .map((key) => options.find((option) => normalizeOption(option) === key))
         .filter((option): option is string => Boolean(option));
@@ -344,14 +344,14 @@ export function ConfigItemRow({
     );
     const hasOnlyOff =
       nonNumeric.length > 0 &&
-      nonNumericNormalized.every((value) => value === 'off');
+      nonNumericNormalized.every((value) => value === "off");
 
     if (numericEntries.length >= 2 && (nonNumeric.length === 0 || hasOnlyOff)) {
       const sortedNumeric = [...numericEntries].sort(
         (a, b) => a.numeric - b.numeric,
       );
       const offEntry = nonNumeric.find(
-        (entry) => normalizeOption(entry.option) === 'off',
+        (entry) => normalizeOption(entry.option) === "off",
       );
       return [
         ...(offEntry ? [offEntry.option] : []),
@@ -362,17 +362,17 @@ export function ConfigItemRow({
     if (isLeftRightCenter(options)) {
       const left = options
         .map((option) => ({ option, parsed: parseLeftRight(option) }))
-        .filter((entry) => entry.parsed?.side === 'left')
+        .filter((entry) => entry.parsed?.side === "left")
         .sort((a, b) => (b.parsed?.value ?? 0) - (a.parsed?.value ?? 0))
         .map((entry) => entry.option);
       const right = options
         .map((option) => ({ option, parsed: parseLeftRight(option) }))
-        .filter((entry) => entry.parsed?.side === 'right')
+        .filter((entry) => entry.parsed?.side === "right")
         .sort((a, b) => (a.parsed?.value ?? 0) - (b.parsed?.value ?? 0))
         .map((entry) => entry.option);
       const center = options.find((option) => {
         const parsed = parseLeftRight(option);
-        return parsed?.side === 'center';
+        return parsed?.side === "center";
       });
       return [...left, ...(center ? [center] : []), ...right];
     }
@@ -381,11 +381,11 @@ export function ConfigItemRow({
   };
   const sliderOptions = useMemo(
     () =>
-      controlKind === 'slider' ? getSliderOptions(optionList) : optionList,
+      controlKind === "slider" ? getSliderOptions(optionList) : optionList,
     [controlKind, optionList],
   );
 
-  if (controlKind === 'checkbox' && checkboxMapping) {
+  if (controlKind === "checkbox" && checkboxMapping) {
     const checked =
       String(displayValue).trim().toLowerCase() ===
       checkboxMapping.checkedValue.trim().toLowerCase();
@@ -411,7 +411,7 @@ export function ConfigItemRow({
               : checkboxMapping.uncheckedValue}
           </span>
         </div>
-        <div className={layout === 'horizontal' ? undefined : 'self-start'}>
+        <div className={layout === "horizontal" ? undefined : "self-start"}>
           <Checkbox
             checked={checked}
             disabled={isLoading || isItemLoading || isReadOnly}
@@ -432,20 +432,20 @@ export function ConfigItemRow({
     );
   }
 
-  if (controlKind === 'select') {
-    const emptySentinel = '__empty__';
+  if (controlKind === "select") {
+    const emptySentinel = "__empty__";
     const normalizedOptions =
-      optionList.includes(displayValue) || displayValue === ''
+      optionList.includes(displayValue) || displayValue === ""
         ? optionList
         : [...optionList, displayValue];
     const selectOptions = normalizedOptions.map((option) => ({
       raw: option,
-      value: option === '' ? emptySentinel : option,
-      label: option === '' ? '(empty)' : formatOption(option),
+      value: option === "" ? emptySentinel : option,
+      label: option === "" ? "(empty)" : formatOption(option),
     }));
-    const selectedValue = displayValue === '' ? emptySentinel : displayValue;
+    const selectedValue = displayValue === "" ? emptySentinel : displayValue;
     const displayValueLabel =
-      displayValue === '' ? '(empty)' : formatOption(String(displayValue));
+      displayValue === "" ? "(empty)" : formatOption(String(displayValue));
 
     return (
       <div
@@ -465,14 +465,14 @@ export function ConfigItemRow({
         </div>
         <div
           className={
-            layout === 'horizontal' ? 'min-w-[160px] max-w-[220px]' : 'w-full'
+            layout === "horizontal" ? "min-w-[160px] max-w-[220px]" : "w-full"
           }
         >
           <Select
             value={selectedValue}
             onValueChange={(newValue) => {
               if (isReadOnly) return;
-              const nextValue = newValue === emptySentinel ? '' : newValue;
+              const nextValue = newValue === emptySentinel ? "" : newValue;
               setInputValue(String(nextValue));
               lastCommittedRef.current = String(nextValue);
               onValueChange(nextValue);
@@ -482,7 +482,7 @@ export function ConfigItemRow({
             <SelectTrigger aria-label={`${displayLabel} select`}>
               <SelectValue
                 placeholder={
-                  isItemLoading ? 'Loading…' : displayValueLabel || 'Select'
+                  isItemLoading ? "Loading…" : displayValueLabel || "Select"
                 }
               />
             </SelectTrigger>
@@ -499,7 +499,7 @@ export function ConfigItemRow({
     );
   }
 
-  if (controlKind === 'slider' && sliderOptions.length >= 2) {
+  if (controlKind === "slider" && sliderOptions.length >= 2) {
     const normalizedOptions = sliderOptions.map(normalizeOption);
     const displayNormalized = normalizeOption(displayValue);
     let selectedIndex = normalizedOptions.indexOf(displayNormalized);
@@ -519,7 +519,7 @@ export function ConfigItemRow({
     const currentLabelRaw = sliderOptions[selectedIndex] ?? displayValue;
     const currentLabel = formatOption(String(currentLabelRaw));
     const resolveSliderOption = (index: number) =>
-      sliderOptions[Math.round(index)] ?? sliderOptions[0] ?? '';
+      sliderOptions[Math.round(index)] ?? sliderOptions[0] ?? "";
     const formatSliderLabel = (index: number) =>
       formatOption(String(resolveSliderOption(index)));
 
@@ -547,16 +547,16 @@ export function ConfigItemRow({
         </div>
         <div
           className={
-            layout === 'horizontal'
-              ? 'flex items-center gap-3 min-w-[220px] max-w-[320px] w-full'
-              : 'flex flex-wrap items-center gap-3 w-full'
+            layout === "horizontal"
+              ? "flex items-center gap-3 min-w-[220px] max-w-[320px] w-full"
+              : "flex flex-wrap items-center gap-3 w-full"
           }
         >
           <div
             className={
-              layout === 'horizontal'
-                ? 'min-w-[180px] max-w-[260px] w-full'
-                : 'w-full'
+              layout === "horizontal"
+                ? "min-w-[180px] max-w-[260px] w-full"
+                : "w-full"
             }
           >
             <Slider
@@ -598,14 +598,14 @@ export function ConfigItemRow({
     );
   }
 
-  const inputType = controlKind === 'password' ? 'password' : 'text';
+  const inputType = controlKind === "password" ? "password" : "text";
   const commitTextValue = () => {
     if (isReadOnly) return;
     const nextValue = inputValue;
     if (nextValue === lastCommittedRef.current) return;
     lastCommittedRef.current = nextValue;
     onValueChange(nextValue);
-    emitUiTraceMarker('ConfigFieldEditCommitted', {
+    emitUiTraceMarker("ConfigFieldEditCommitted", {
       category: category ?? null,
       item: name,
     });
@@ -629,22 +629,22 @@ export function ConfigItemRow({
       </div>
       <div
         className={
-          layout === 'horizontal'
-            ? 'min-w-[160px] max-w-[220px] flex items-center gap-2'
-            : 'w-full flex items-center gap-2'
+          layout === "horizontal"
+            ? "min-w-[160px] max-w-[220px] flex items-center gap-2"
+            : "w-full flex items-center gap-2"
         }
       >
         <Input
           type={inputType}
           value={inputValue}
-          aria-label={`${displayLabel} ${controlKind === 'password' ? 'password' : 'text'} input`}
+          aria-label={`${displayLabel} ${controlKind === "password" ? "password" : "text"} input`}
           disabled={
             ((isLoading || isItemLoading) && !isTextEditing) || isReadOnly
           }
           onFocus={() => {
             if (isReadOnly || isTextEditing) return;
             setIsTextEditing(true);
-            emitUiTraceMarker('ConfigFieldEditStarted', {
+            emitUiTraceMarker("ConfigFieldEditStarted", {
               category: category ?? null,
               item: name,
             });
@@ -655,7 +655,7 @@ export function ConfigItemRow({
             setInputValue(nextValue);
           }}
           onKeyDown={(e) => {
-            if (e.key !== 'Enter') return;
+            if (e.key !== "Enter") return;
             if (isReadOnly) return;
             commitTextValue();
             (e.currentTarget as HTMLInputElement).blur();

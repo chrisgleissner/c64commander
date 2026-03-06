@@ -6,23 +6,23 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { ReactNode } from 'react';
-import { ChevronRight } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { DiagnosticsTimestamp } from '@/components/diagnostics/DiagnosticsTimestamp';
+import type { ReactNode } from "react";
+import { ChevronRight } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { DiagnosticsTimestamp } from "@/components/diagnostics/DiagnosticsTimestamp";
 import {
   getDiagnosticsSeverityMeta,
   type DiagnosticsSeverity,
-} from '@/lib/diagnostics/diagnosticsSeverity';
+} from "@/lib/diagnostics/diagnosticsSeverity";
 
-export type DiagnosticsListItemMode = 'trace' | 'action' | 'log';
+export type DiagnosticsListItemMode = "trace" | "action" | "log";
 
 type Props = {
   mode: DiagnosticsListItemMode;
   severity: DiagnosticsSeverity;
   title: string;
   timestamp: string | number | Date | null;
-  origin?: 'user' | 'system' | 'unknown' | null;
+  origin?: "user" | "system" | "unknown" | null;
   secondaryLeft?: ReactNode;
   secondaryRight?: ReactNode;
   children?: ReactNode;
@@ -40,16 +40,16 @@ export const DiagnosticsListItem = ({
   children,
   testId,
 }: Props) => {
-  const showOrigin = mode === 'action';
+  const showOrigin = mode === "action";
   const originClass =
-    origin === 'user'
-      ? 'bg-diagnostics-user'
-      : origin === 'system'
-        ? 'bg-diagnostics-system'
-        : 'bg-muted-foreground';
+    origin === "user"
+      ? "bg-diagnostics-user"
+      : origin === "system"
+        ? "bg-diagnostics-system"
+        : "bg-muted-foreground";
   const severityMeta = getDiagnosticsSeverityMeta(severity);
   const hasSecondary = Boolean(secondaryLeft || secondaryRight);
-  const isActionMode = mode === 'action';
+  const isActionMode = mode === "action";
 
   return (
     <details
@@ -69,7 +69,7 @@ export const DiagnosticsListItem = ({
             <span
               data-testid="diagnostics-severity-glyph"
               className={cn(
-                'inline-flex w-4 items-center justify-center text-[11px] font-semibold leading-none whitespace-nowrap',
+                "inline-flex w-4 items-center justify-center text-[11px] font-semibold leading-none whitespace-nowrap",
                 severityMeta.colorClass,
               )}
             >
@@ -79,9 +79,9 @@ export const DiagnosticsListItem = ({
           <div className="flex items-center gap-2 min-w-0 text-sm font-medium">
             {showOrigin ? (
               <span
-                className={cn('h-2.5 w-2.5 rounded-full shrink-0', originClass)}
+                className={cn("h-2.5 w-2.5 rounded-full shrink-0", originClass)}
                 role="img"
-                aria-label={`origin: ${origin ?? 'unknown'}`}
+                aria-label={`origin: ${origin ?? "unknown"}`}
               />
             ) : null}
             <span
@@ -121,7 +121,7 @@ export const DiagnosticsListItem = ({
             <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide">
               <span
                 className={cn(
-                  'inline-flex w-4 items-center justify-center',
+                  "inline-flex w-4 items-center justify-center",
                   severityMeta.colorClass,
                 )}
                 aria-hidden="true"
@@ -147,7 +147,7 @@ export const DiagnosticsListItem = ({
             ) : null}
           </>
         )}
-        {children ? <div className={cn('text-xs mt-2')}>{children}</div> : null}
+        {children ? <div className={cn("text-xs mt-2")}>{children}</div> : null}
       </div>
     </details>
   );

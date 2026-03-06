@@ -6,25 +6,25 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock Capacitor Filesystem
 const mockReadFile = vi.fn();
 const mockWriteFile = vi.fn();
 const mockMkdir = vi.fn();
 
-vi.mock('@capacitor/filesystem', () => ({
+vi.mock("@capacitor/filesystem", () => ({
   Filesystem: {
     readFile: () => mockReadFile(),
     writeFile: (_args: unknown) => mockWriteFile(_args),
     mkdir: (_args: unknown) => mockMkdir(_args),
   },
   Directory: {
-    Data: 'Data',
+    Data: "Data",
   },
 }));
 
-describe('filesystemMediaIndex', () => {
+describe("filesystemMediaIndex", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -33,24 +33,24 @@ describe('filesystemMediaIndex', () => {
     vi.resetModules();
   });
 
-  describe('FilesystemMediaIndexStorage', () => {
-    it('returns null when file does not exist', async () => {
-      mockReadFile.mockRejectedValue(new Error('File not found'));
+  describe("FilesystemMediaIndexStorage", () => {
+    it("returns null when file does not exist", async () => {
+      mockReadFile.mockRejectedValue(new Error("File not found"));
 
       const { FilesystemMediaIndexStorage } =
-        await import('./filesystemMediaIndex');
+        await import("./filesystemMediaIndex");
       const storage = new FilesystemMediaIndexStorage();
       const result = await storage.read();
 
       expect(result).toBeNull();
     });
 
-    it('reads and parses valid snapshot', async () => {
+    it("reads and parses valid snapshot", async () => {
       const snapshot = {
         version: 1 as const,
-        updatedAt: '2024-01-01T00:00:00.000Z',
+        updatedAt: "2024-01-01T00:00:00.000Z",
         entries: [
-          { path: '/music/song.sid', name: 'song.sid', type: 'sid' as const },
+          { path: "/music/song.sid", name: "song.sid", type: "sid" as const },
         ],
       };
       // Base64 encode the JSON
@@ -59,33 +59,33 @@ describe('filesystemMediaIndex', () => {
       mockReadFile.mockResolvedValue({ data: base64 });
 
       const { FilesystemMediaIndexStorage } =
-        await import('./filesystemMediaIndex');
+        await import("./filesystemMediaIndex");
       const storage = new FilesystemMediaIndexStorage();
       const result = await storage.read();
 
       expect(result).toEqual(snapshot);
     });
 
-    it('returns null for invalid JSON', async () => {
-      mockReadFile.mockResolvedValue({ data: btoa('invalid json') });
+    it("returns null for invalid JSON", async () => {
+      mockReadFile.mockResolvedValue({ data: btoa("invalid json") });
 
       const { FilesystemMediaIndexStorage } =
-        await import('./filesystemMediaIndex');
+        await import("./filesystemMediaIndex");
       const storage = new FilesystemMediaIndexStorage();
       const result = await storage.read();
 
       expect(result).toBeNull();
     });
 
-    it('writes snapshot to filesystem', async () => {
+    it("writes snapshot to filesystem", async () => {
       const snapshot = {
         version: 1 as const,
-        updatedAt: '2024-01-01T00:00:00.000Z',
+        updatedAt: "2024-01-01T00:00:00.000Z",
         entries: [],
       };
 
       const { FilesystemMediaIndexStorage } =
-        await import('./filesystemMediaIndex');
+        await import("./filesystemMediaIndex");
       const storage = new FilesystemMediaIndexStorage();
       await storage.write(snapshot);
 
@@ -93,53 +93,53 @@ describe('filesystemMediaIndex', () => {
       expect(mockWriteFile).toHaveBeenCalled();
     });
 
-    it('returns null when decoded data is empty (safeParse !raw branch)', async () => {
+    it("returns null when decoded data is empty (safeParse !raw branch)", async () => {
       // Empty string data decodes to empty string → safeParse(!raw) → null
-      mockReadFile.mockResolvedValue({ data: '' });
+      mockReadFile.mockResolvedValue({ data: "" });
 
       const { FilesystemMediaIndexStorage } =
-        await import('./filesystemMediaIndex');
+        await import("./filesystemMediaIndex");
       const storage = new FilesystemMediaIndexStorage();
       const result = await storage.read();
 
       expect(result).toBeNull();
     });
 
-    it('encodes using Buffer when btoa is unavailable', async () => {
-      vi.stubGlobal('btoa', undefined);
+    it("encodes using Buffer when btoa is unavailable", async () => {
+      vi.stubGlobal("btoa", undefined);
 
       const snapshot = {
         version: 1 as const,
-        updatedAt: '2024-01-01T00:00:00.000Z',
+        updatedAt: "2024-01-01T00:00:00.000Z",
         entries: [],
       };
       const { FilesystemMediaIndexStorage } =
-        await import('./filesystemMediaIndex');
+        await import("./filesystemMediaIndex");
       const storage = new FilesystemMediaIndexStorage();
       await storage.write(snapshot);
 
       expect(mockWriteFile).toHaveBeenCalled();
       const writeArg = mockWriteFile.mock.calls[0][0];
-      expect(typeof writeArg.data).toBe('string');
+      expect(typeof writeArg.data).toBe("string");
 
       vi.unstubAllGlobals();
     });
 
-    it('decodes using Buffer when atob is unavailable', async () => {
-      vi.stubGlobal('atob', undefined);
+    it("decodes using Buffer when atob is unavailable", async () => {
+      vi.stubGlobal("atob", undefined);
 
       const snapshot = {
         version: 1 as const,
-        updatedAt: '2024-01-01T00:00:00.000Z',
-        entries: [{ path: '/a.sid', name: 'a.sid', type: 'sid' as const }],
+        updatedAt: "2024-01-01T00:00:00.000Z",
+        entries: [{ path: "/a.sid", name: "a.sid", type: "sid" as const }],
       };
-      const base64 = Buffer.from(JSON.stringify(snapshot), 'utf-8').toString(
-        'base64',
+      const base64 = Buffer.from(JSON.stringify(snapshot), "utf-8").toString(
+        "base64",
       );
       mockReadFile.mockResolvedValue({ data: base64 });
 
       const { FilesystemMediaIndexStorage } =
-        await import('./filesystemMediaIndex');
+        await import("./filesystemMediaIndex");
       const storage = new FilesystemMediaIndexStorage();
       const result = await storage.read();
 
@@ -149,15 +149,15 @@ describe('filesystemMediaIndex', () => {
       vi.unstubAllGlobals();
     });
 
-    it('returns original value when atob throws (decodeUtf8Base64 catch branch)', async () => {
-      vi.stubGlobal('atob', () => {
-        throw new Error('atob failed');
+    it("returns original value when atob throws (decodeUtf8Base64 catch branch)", async () => {
+      vi.stubGlobal("atob", () => {
+        throw new Error("atob failed");
       });
 
-      mockReadFile.mockResolvedValue({ data: 'notvalidbase64' });
+      mockReadFile.mockResolvedValue({ data: "notvalidbase64" });
 
       const { FilesystemMediaIndexStorage } =
-        await import('./filesystemMediaIndex');
+        await import("./filesystemMediaIndex");
       const storage = new FilesystemMediaIndexStorage();
       // catch returns raw value → safeParse fails → null
       const result = await storage.read();

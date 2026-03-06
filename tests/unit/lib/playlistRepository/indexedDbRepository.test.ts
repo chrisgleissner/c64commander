@@ -1,7 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { getIndexedDbPlaylistDataRepository } from '@/lib/playlistRepository';
-import { resetIndexedDbPlaylistRepositoryForTests } from '@/lib/playlistRepository/indexedDbRepository';
-import type { PlaylistItemRecord, TrackRecord } from '@/lib/playlistRepository';
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { getIndexedDbPlaylistDataRepository } from "@/lib/playlistRepository";
+import { resetIndexedDbPlaylistRepositoryForTests } from "@/lib/playlistRepository/indexedDbRepository";
+import type { PlaylistItemRecord, TrackRecord } from "@/lib/playlistRepository";
 
 type FakeIndexedDbOptions = {
   failOpen?: boolean;
@@ -16,7 +16,7 @@ type FakeIndexedDbOptions = {
 const createFakeIndexedDb = (options: FakeIndexedDbOptions = {}) => {
   const stores = new Map<string, Map<string, unknown>>();
   if (options.preExistingStore) {
-    stores.set('state', new Map());
+    stores.set("state", new Map());
   }
   let upgraded = false;
 
@@ -43,7 +43,7 @@ const createFakeIndexedDb = (options: FakeIndexedDbOptions = {}) => {
             if (options.failGet) {
               request.error = options.failGetWithoutError
                 ? null
-                : new Error('fake get failure');
+                : new Error("fake get failure");
               (request.onerror as (() => void) | undefined)?.();
               return;
             }
@@ -58,7 +58,7 @@ const createFakeIndexedDb = (options: FakeIndexedDbOptions = {}) => {
             if (options.failPut) {
               request.error = options.failPutWithoutError
                 ? null
-                : new Error('fake put failure');
+                : new Error("fake put failure");
               (request.onerror as (() => void) | undefined)?.();
               return;
             }
@@ -78,7 +78,7 @@ const createFakeIndexedDb = (options: FakeIndexedDbOptions = {}) => {
       const request: Record<string, unknown> = {};
       queueMicrotask(() => {
         if (options.failOpen) {
-          request.error = new Error('fake open failure');
+          request.error = new Error("fake open failure");
           (request.onerror as (() => void) | undefined)?.();
           return;
         }
@@ -87,8 +87,8 @@ const createFakeIndexedDb = (options: FakeIndexedDbOptions = {}) => {
           upgraded = true;
           (request.onupgradeneeded as (() => void) | undefined)?.();
           if (options.initialPersistedState !== undefined) {
-            ensureStore('state').set(
-              'playlist-repository-state',
+            ensureStore("state").set(
+              "playlist-repository-state",
               options.initialPersistedState,
             );
           }
@@ -101,20 +101,20 @@ const createFakeIndexedDb = (options: FakeIndexedDbOptions = {}) => {
 };
 
 const buildTrack = (overrides: Partial<TrackRecord> = {}): TrackRecord => ({
-  trackId: overrides.trackId ?? 'track-1',
-  sourceKind: overrides.sourceKind ?? 'local',
-  sourceLocator: overrides.sourceLocator ?? '/music/a.sid',
-  category: overrides.category ?? 'song',
-  title: overrides.title ?? 'A',
+  trackId: overrides.trackId ?? "track-1",
+  sourceKind: overrides.sourceKind ?? "local",
+  sourceLocator: overrides.sourceLocator ?? "/music/a.sid",
+  category: overrides.category ?? "song",
+  title: overrides.title ?? "A",
   author: overrides.author ?? null,
   released: overrides.released ?? null,
-  path: overrides.path ?? '/music/a.sid',
+  path: overrides.path ?? "/music/a.sid",
   sizeBytes: overrides.sizeBytes ?? null,
   modifiedAt: overrides.modifiedAt ?? null,
   defaultDurationMs: overrides.defaultDurationMs ?? 1000,
   subsongCount: overrides.subsongCount ?? 1,
-  createdAt: overrides.createdAt ?? '2026-02-12T00:00:00.000Z',
-  updatedAt: overrides.updatedAt ?? '2026-02-12T00:00:00.000Z',
+  createdAt: overrides.createdAt ?? "2026-02-12T00:00:00.000Z",
+  updatedAt: overrides.updatedAt ?? "2026-02-12T00:00:00.000Z",
 });
 
 const buildItem = (
@@ -123,26 +123,26 @@ const buildItem = (
   sortKey: string,
 ): PlaylistItemRecord => ({
   playlistItemId,
-  playlistId: 'playlist-default',
+  playlistId: "playlist-default",
   trackId,
   songNr: 1,
   sortKey,
   durationOverrideMs: null,
-  status: 'ready',
+  status: "ready",
   unavailableReason: null,
-  addedAt: '2026-02-12T00:00:00.000Z',
+  addedAt: "2026-02-12T00:00:00.000Z",
 });
 
-describe('indexedDB playlist repository', () => {
+describe("indexedDB playlist repository", () => {
   beforeEach(() => {
     resetIndexedDbPlaylistRepositoryForTests();
     vi.restoreAllMocks();
-    Object.defineProperty(globalThis, 'indexedDB', {
+    Object.defineProperty(globalThis, "indexedDB", {
       value: createFakeIndexedDb(),
       configurable: true,
       writable: true,
     });
-    Object.defineProperty(globalThis, 'navigator', {
+    Object.defineProperty(globalThis, "navigator", {
       value: {
         storage: {
           persist: vi.fn().mockResolvedValue(true),
@@ -153,144 +153,144 @@ describe('indexedDB playlist repository', () => {
     });
   });
 
-  it('persists tracks and supports query sorting and category filtering', async () => {
+  it("persists tracks and supports query sorting and category filtering", async () => {
     const repository = getIndexedDbPlaylistDataRepository({
       preferDurableStorage: true,
     });
 
     await repository.upsertTracks([
       buildTrack({
-        trackId: 'track-a',
-        title: 'Alpha',
-        path: '/a.sid',
-        sourceLocator: '/a.sid',
-        category: 'song',
+        trackId: "track-a",
+        title: "Alpha",
+        path: "/a.sid",
+        sourceLocator: "/a.sid",
+        category: "song",
       }),
       buildTrack({
-        trackId: 'track-b',
-        title: 'Beta',
-        path: '/b.prg',
-        sourceLocator: '/b.prg',
-        category: 'program',
+        trackId: "track-b",
+        title: "Beta",
+        path: "/b.prg",
+        sourceLocator: "/b.prg",
+        category: "program",
       }),
       buildTrack({
-        trackId: 'track-c',
-        title: 'Gamma',
-        path: '/c.sid',
-        sourceLocator: '/c.sid',
-        category: 'song',
+        trackId: "track-c",
+        title: "Gamma",
+        path: "/c.sid",
+        sourceLocator: "/c.sid",
+        category: "song",
       }),
     ]);
 
-    await repository.replacePlaylistItems('playlist-default', [
-      buildItem('item-2', 'track-b', '0002'),
-      buildItem('item-1', 'track-a', '0001'),
-      buildItem('item-3', 'track-c', '0003'),
+    await repository.replacePlaylistItems("playlist-default", [
+      buildItem("item-2", "track-b", "0002"),
+      buildItem("item-1", "track-a", "0001"),
+      buildItem("item-3", "track-c", "0003"),
     ]);
 
     const titleSorted = await repository.queryPlaylist({
-      playlistId: 'playlist-default',
-      query: 'a',
+      playlistId: "playlist-default",
+      query: "a",
       limit: 10,
       offset: 0,
-      sort: 'title',
+      sort: "title",
     });
     expect(titleSorted.totalMatchCount).toBe(3);
 
     const pathSortedSongs = await repository.queryPlaylist({
-      playlistId: 'playlist-default',
-      categoryFilter: ['song'],
+      playlistId: "playlist-default",
+      categoryFilter: ["song"],
       limit: 10,
       offset: 0,
-      sort: 'path',
+      sort: "path",
     });
     expect(
       pathSortedSongs.rows.map((row) => row.playlistItem.playlistItemId),
-    ).toEqual(['item-1', 'item-3']);
+    ).toEqual(["item-1", "item-3"]);
 
     const tracks = await repository.getTracksByIds([
-      'track-a',
-      'track-b',
-      'missing',
+      "track-a",
+      "track-b",
+      "missing",
     ]);
-    expect(tracks.has('track-a')).toBe(true);
-    expect(tracks.has('missing')).toBe(false);
+    expect(tracks.has("track-a")).toBe(true);
+    expect(tracks.has("missing")).toBe(false);
   });
 
-  it('creates random sessions, advances cursor, and wraps around', async () => {
-    vi.spyOn(Date, 'now').mockReturnValue(1730000000000);
+  it("creates random sessions, advances cursor, and wraps around", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(1730000000000);
     const repository = getIndexedDbPlaylistDataRepository({
       preferDurableStorage: false,
     });
 
-    const created = await repository.createSession('playlist-default', [
-      'item-1',
-      'item-2',
-      'item-3',
+    const created = await repository.createSession("playlist-default", [
+      "item-1",
+      "item-2",
+      "item-3",
     ]);
     expect(created.order).toHaveLength(3);
 
-    const first = await repository.next('playlist-default');
-    const second = await repository.next('playlist-default');
-    const third = await repository.next('playlist-default');
-    const fourth = await repository.next('playlist-default');
+    const first = await repository.next("playlist-default");
+    const second = await repository.next("playlist-default");
+    const third = await repository.next("playlist-default");
+    const fourth = await repository.next("playlist-default");
 
     expect(first).not.toBeNull();
     expect(second).not.toBeNull();
     expect(third).not.toBeNull();
     expect(fourth).toBe(first);
 
-    const saved = await repository.getRandomSession('playlist-default');
+    const saved = await repository.getRandomSession("playlist-default");
     expect(saved?.order).toEqual(created.order);
 
     await repository.saveRandomSession({
-      playlistId: 'playlist-default',
+      playlistId: "playlist-default",
       seed: 1,
       cursor: 0,
-      order: ['item-9'],
+      order: ["item-9"],
     });
     expect(
-      (await repository.getRandomSession('playlist-default'))?.order,
-    ).toEqual(['item-9']);
+      (await repository.getRandomSession("playlist-default"))?.order,
+    ).toEqual(["item-9"]);
 
     await repository.saveRandomSession({
-      playlistId: 'playlist-empty',
+      playlistId: "playlist-empty",
       seed: 2,
       cursor: 0,
       order: [],
     });
-    expect(await repository.next('playlist-empty')).toBeNull();
+    expect(await repository.next("playlist-empty")).toBeNull();
 
     await repository.saveRandomSession({
-      playlistId: 'playlist-out-of-range',
+      playlistId: "playlist-out-of-range",
       seed: 3,
       cursor: 9,
-      order: ['item-x'],
+      order: ["item-x"],
     });
-    expect(await repository.next('playlist-out-of-range')).toBeNull();
-    expect(await repository.next('playlist-missing')).toBeNull();
+    expect(await repository.next("playlist-out-of-range")).toBeNull();
+    expect(await repository.next("playlist-missing")).toBeNull();
 
     const seeded = await repository.createSession(
-      'playlist-seeded',
-      ['a', 'b', 'c'],
+      "playlist-seeded",
+      ["a", "b", "c"],
       777,
     );
     expect(seeded.seed).toBe(777);
   });
 
-  it('falls back to default state when IndexedDB read fails', async () => {
-    Object.defineProperty(globalThis, 'indexedDB', {
+  it("falls back to default state when IndexedDB read fails", async () => {
+    Object.defineProperty(globalThis, "indexedDB", {
       value: createFakeIndexedDb({ failGet: true }),
       configurable: true,
       writable: true,
     });
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     const repository = getIndexedDbPlaylistDataRepository({
       preferDurableStorage: false,
     });
     const result = await repository.queryPlaylist({
-      playlistId: 'playlist-default',
+      playlistId: "playlist-default",
       limit: 10,
       offset: 0,
     });
@@ -298,13 +298,13 @@ describe('indexedDB playlist repository', () => {
     expect(result.rows).toEqual([]);
     expect(result.totalMatchCount).toBe(0);
     expect(warn).toHaveBeenCalledWith(
-      'Failed to load playlist repository state from IndexedDB',
+      "Failed to load playlist repository state from IndexedDB",
       expect.objectContaining({ error: expect.any(Error) }),
     );
   });
 
-  it('propagates IndexedDB open failures', async () => {
-    Object.defineProperty(globalThis, 'indexedDB', {
+  it("propagates IndexedDB open failures", async () => {
+    Object.defineProperty(globalThis, "indexedDB", {
       value: createFakeIndexedDb({ failOpen: true }),
       configurable: true,
       writable: true,
@@ -315,15 +315,15 @@ describe('indexedDB playlist repository', () => {
     });
     await expect(
       repository.queryPlaylist({
-        playlistId: 'playlist-default',
+        playlistId: "playlist-default",
         limit: 10,
         offset: 0,
       }),
-    ).rejects.toThrow('fake open failure');
+    ).rejects.toThrow("fake open failure");
   });
 
-  it('falls back to default state for incompatible persisted schema version', async () => {
-    Object.defineProperty(globalThis, 'indexedDB', {
+  it("falls back to default state for incompatible persisted schema version", async () => {
+    Object.defineProperty(globalThis, "indexedDB", {
       value: createFakeIndexedDb({
         initialPersistedState: {
           version: 999,
@@ -334,27 +334,27 @@ describe('indexedDB playlist repository', () => {
       writable: true,
     });
 
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const repository = getIndexedDbPlaylistDataRepository({
       preferDurableStorage: false,
     });
     const rows = await repository.queryPlaylist({
-      playlistId: 'playlist-default',
+      playlistId: "playlist-default",
       limit: 10,
       offset: 0,
     });
 
     expect(rows.totalMatchCount).toBe(0);
-    expect(await repository.getSession('playlist-default')).toBeNull();
-    expect(await repository.getPlaylistItems('playlist-default')).toEqual([]);
+    expect(await repository.getSession("playlist-default")).toBeNull();
+    expect(await repository.getPlaylistItems("playlist-default")).toEqual([]);
     expect(warn).toHaveBeenCalledWith(
-      'Incompatible playlist repository schema in IndexedDB. Resetting repository state.',
+      "Incompatible playlist repository schema in IndexedDB. Resetting repository state.",
       expect.objectContaining({ expectedVersion: 1, foundVersion: 999 }),
     );
   });
 
-  it('propagates write failures from IndexedDB', async () => {
-    Object.defineProperty(globalThis, 'indexedDB', {
+  it("propagates write failures from IndexedDB", async () => {
+    Object.defineProperty(globalThis, "indexedDB", {
       value: createFakeIndexedDb({ failPut: true }),
       configurable: true,
       writable: true,
@@ -365,12 +365,12 @@ describe('indexedDB playlist repository', () => {
     });
 
     await expect(repository.upsertTracks([buildTrack()])).rejects.toThrow(
-      'fake put failure',
+      "fake put failure",
     );
   });
 
-  it('normalizes partial persisted state fields to defaults', async () => {
-    Object.defineProperty(globalThis, 'indexedDB', {
+  it("normalizes partial persisted state fields to defaults", async () => {
+    Object.defineProperty(globalThis, "indexedDB", {
       value: createFakeIndexedDb({
         initialPersistedState: {
           version: 1,
@@ -388,35 +388,35 @@ describe('indexedDB playlist repository', () => {
       preferDurableStorage: false,
     });
 
-    expect(await repository.getPlaylistItems('playlist-default')).toEqual([]);
-    expect(await repository.getSession('playlist-default')).toBeNull();
-    expect(await repository.getRandomSession('playlist-default')).toBeNull();
-    const tracks = await repository.getTracksByIds(['missing']);
+    expect(await repository.getPlaylistItems("playlist-default")).toEqual([]);
+    expect(await repository.getSession("playlist-default")).toBeNull();
+    expect(await repository.getRandomSession("playlist-default")).toBeNull();
+    const tracks = await repository.getTracksByIds(["missing"]);
     expect(tracks.size).toBe(0);
   });
 
-  it('excludes tracks without matching category when category filter is provided', async () => {
+  it("excludes tracks without matching category when category filter is provided", async () => {
     const repository = getIndexedDbPlaylistDataRepository({
       preferDurableStorage: false,
     });
 
     const uncategorizedTrack: TrackRecord = {
       ...buildTrack({
-        trackId: 'track-uncategorized',
-        title: 'No Category',
-        path: '/uncat.sid',
-        sourceLocator: '/uncat.sid',
+        trackId: "track-uncategorized",
+        title: "No Category",
+        path: "/uncat.sid",
+        sourceLocator: "/uncat.sid",
       }),
       category: null,
     };
     await repository.upsertTracks([uncategorizedTrack]);
-    await repository.replacePlaylistItems('playlist-default', [
-      buildItem('item-uncategorized', 'track-uncategorized', '0001'),
+    await repository.replacePlaylistItems("playlist-default", [
+      buildItem("item-uncategorized", "track-uncategorized", "0001"),
     ]);
 
     const result = await repository.queryPlaylist({
-      playlistId: 'playlist-default',
-      categoryFilter: ['song'],
+      playlistId: "playlist-default",
+      categoryFilter: ["song"],
       limit: 10,
       offset: 0,
     });
@@ -425,40 +425,40 @@ describe('indexedDB playlist repository', () => {
     expect(result.rows).toEqual([]);
   });
 
-  it('persists and retrieves playlist sessions and default-sorted playlist items', async () => {
+  it("persists and retrieves playlist sessions and default-sorted playlist items", async () => {
     const repository = getIndexedDbPlaylistDataRepository({
       preferDurableStorage: false,
     });
 
     await repository.upsertTracks([
       buildTrack({
-        trackId: 'track-2',
-        title: 'Two',
-        path: '/b.sid',
-        sourceLocator: '/b.sid',
+        trackId: "track-2",
+        title: "Two",
+        path: "/b.sid",
+        sourceLocator: "/b.sid",
       }),
       buildTrack({
-        trackId: 'track-1',
-        title: 'One',
-        path: '/a.sid',
-        sourceLocator: '/a.sid',
+        trackId: "track-1",
+        title: "One",
+        path: "/a.sid",
+        sourceLocator: "/a.sid",
       }),
     ]);
 
-    await repository.replacePlaylistItems('playlist-default', [
-      buildItem('item-2', 'track-2', '0002'),
-      buildItem('item-1', 'track-1', '0001'),
+    await repository.replacePlaylistItems("playlist-default", [
+      buildItem("item-2", "track-2", "0002"),
+      buildItem("item-1", "track-1", "0001"),
     ]);
 
-    const items = await repository.getPlaylistItems('playlist-default');
+    const items = await repository.getPlaylistItems("playlist-default");
     expect(items.map((item) => item.playlistItemId)).toEqual([
-      'item-1',
-      'item-2',
+      "item-1",
+      "item-2",
     ]);
 
     await repository.saveSession({
-      playlistId: 'playlist-default',
-      currentPlaylistItemId: 'item-1',
+      playlistId: "playlist-default",
+      currentPlaylistItemId: "item-1",
       isPlaying: true,
       isPaused: false,
       elapsedMs: 10,
@@ -467,24 +467,24 @@ describe('indexedDB playlist repository', () => {
       repeatEnabled: false,
       randomSeed: null,
       randomCursor: null,
-      activeQuery: '',
-      updatedAt: '2026-02-12T00:00:00.000Z',
+      activeQuery: "",
+      updatedAt: "2026-02-12T00:00:00.000Z",
     });
 
-    const session = await repository.getSession('playlist-default');
-    expect(session?.currentPlaylistItemId).toBe('item-1');
+    const session = await repository.getSession("playlist-default");
+    expect(session?.currentPlaylistItemId).toBe("item-1");
 
     const paged = await repository.queryPlaylist({
-      playlistId: 'playlist-default',
+      playlistId: "playlist-default",
       offset: -3,
       limit: 0,
     });
     expect(paged.rows).toHaveLength(1);
-    expect(paged.rows[0]?.playlistItem.playlistItemId).toBe('item-1');
+    expect(paged.rows[0]?.playlistItem.playlistItemId).toBe("item-1");
   });
 
-  it('skips durability request when storage persist API is unavailable', async () => {
-    Object.defineProperty(globalThis, 'navigator', {
+  it("skips durability request when storage persist API is unavailable", async () => {
+    Object.defineProperty(globalThis, "navigator", {
       value: {},
       configurable: true,
       writable: true,
@@ -494,15 +494,15 @@ describe('indexedDB playlist repository', () => {
       preferDurableStorage: true,
     });
     const result = await repository.queryPlaylist({
-      playlistId: 'playlist-default',
+      playlistId: "playlist-default",
       limit: 10,
       offset: 0,
     });
     expect(result.totalMatchCount).toBe(0);
   });
 
-  it('supports repository bootstrap when IndexedDB store already exists', async () => {
-    Object.defineProperty(globalThis, 'indexedDB', {
+  it("supports repository bootstrap when IndexedDB store already exists", async () => {
+    Object.defineProperty(globalThis, "indexedDB", {
       value: createFakeIndexedDb({ preExistingStore: true }),
       configurable: true,
       writable: true,
@@ -512,14 +512,14 @@ describe('indexedDB playlist repository', () => {
       preferDurableStorage: false,
     });
     const result = await repository.queryPlaylist({
-      playlistId: 'playlist-default',
+      playlistId: "playlist-default",
       limit: 10,
       offset: 0,
     });
     expect(result.totalMatchCount).toBe(0);
   });
 
-  it('handles 100k playlist query windows deterministically', async () => {
+  it("handles 100k playlist query windows deterministically", async () => {
     const repository = getIndexedDbPlaylistDataRepository({
       preferDurableStorage: false,
     });
@@ -528,29 +528,29 @@ describe('indexedDB playlist repository', () => {
     const items: PlaylistItemRecord[] = [];
 
     for (let index = 0; index < trackCount; index += 1) {
-      const id = String(index).padStart(6, '0');
+      const id = String(index).padStart(6, "0");
       tracks.push(
         buildTrack({
           trackId: `track-${id}`,
           title: `Large Track ${id}`,
           path: `/library/large-track-${id}.sid`,
           sourceLocator: `/library/large-track-${id}.sid`,
-          category: index % 3 === 0 ? 'song' : 'program',
+          category: index % 3 === 0 ? "song" : "program",
         }),
       );
       items.push(buildItem(`item-${id}`, `track-${id}`, id));
     }
 
     await repository.upsertTracks(tracks);
-    await repository.replacePlaylistItems('playlist-default', items);
+    await repository.replacePlaylistItems("playlist-default", items);
 
     const page = await repository.queryPlaylist({
-      playlistId: 'playlist-default',
-      query: 'large track 00',
-      categoryFilter: ['song'],
+      playlistId: "playlist-default",
+      query: "large track 00",
+      categoryFilter: ["song"],
       offset: 120,
       limit: 40,
-      sort: 'playlist-position',
+      sort: "playlist-position",
     });
 
     expect(page.totalMatchCount).toBeGreaterThan(1_000);
@@ -559,22 +559,22 @@ describe('indexedDB playlist repository', () => {
     expect(
       page.rows[0]?.playlistItem.sortKey <= page.rows[39]?.playlistItem.sortKey,
     ).toBe(true);
-    expect(page.rows.every((row) => row.track.category === 'song')).toBe(true);
+    expect(page.rows.every((row) => row.track.category === "song")).toBe(true);
   });
 
-  it('uses fallback IndexedDB error messages when request.error is missing', async () => {
-    Object.defineProperty(globalThis, 'indexedDB', {
+  it("uses fallback IndexedDB error messages when request.error is missing", async () => {
+    Object.defineProperty(globalThis, "indexedDB", {
       value: createFakeIndexedDb({ failGet: true, failGetWithoutError: true }),
       configurable: true,
       writable: true,
     });
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const repository = getIndexedDbPlaylistDataRepository({
       preferDurableStorage: false,
     });
 
     const result = await repository.queryPlaylist({
-      playlistId: 'playlist-default',
+      playlistId: "playlist-default",
       limit: 10,
       offset: 0,
     });
@@ -582,7 +582,7 @@ describe('indexedDB playlist repository', () => {
     expect(warn).toHaveBeenCalled();
 
     resetIndexedDbPlaylistRepositoryForTests();
-    Object.defineProperty(globalThis, 'indexedDB', {
+    Object.defineProperty(globalThis, "indexedDB", {
       value: createFakeIndexedDb({ failPut: true, failPutWithoutError: true }),
       configurable: true,
       writable: true,
@@ -592,6 +592,6 @@ describe('indexedDB playlist repository', () => {
     });
     await expect(
       failingWriteRepository.upsertTracks([buildTrack()]),
-    ).rejects.toThrow('IndexedDB write failed');
+    ).rejects.toThrow("IndexedDB write failed");
   });
 });

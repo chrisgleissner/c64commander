@@ -6,12 +6,12 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { registerPlugin } from '@capacitor/core';
-import { getActiveAction } from '@/lib/tracing/actionTrace';
+import { registerPlugin } from "@capacitor/core";
+import { getActiveAction } from "@/lib/tracing/actionTrace";
 import {
   resolveNativeTraceContext,
   type NativeTraceContext,
-} from '@/lib/native/nativeTraceContext';
+} from "@/lib/native/nativeTraceContext";
 
 export type BackgroundAutoSkipDueEvent = {
   dueAtMs: number;
@@ -26,16 +26,16 @@ export type BackgroundExecutionPlugin = {
     traceContext?: NativeTraceContext;
   }) => Promise<void>;
   addListener: (
-    eventName: 'backgroundAutoSkipDue',
+    eventName: "backgroundAutoSkipDue",
     listenerFunc: (event: BackgroundAutoSkipDueEvent) => void,
   ) => Promise<{ remove: () => Promise<void> }>;
 };
 
 const plugin = registerPlugin<BackgroundExecutionPlugin>(
-  'BackgroundExecution',
+  "BackgroundExecution",
   {
     web: () =>
-      import('./backgroundExecution.web').then(
+      import("./backgroundExecution.web").then(
         (m) => new m.BackgroundExecutionWeb(),
       ),
   },
@@ -65,7 +65,7 @@ export const onBackgroundAutoSkipDue = async (
   listener: (event: BackgroundAutoSkipDueEvent) => void,
 ) => {
   return await BackgroundExecution.addListener(
-    'backgroundAutoSkipDue',
+    "backgroundAutoSkipDue",
     listener,
   );
 };

@@ -6,44 +6,44 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { describe, expect, it } from 'vitest';
-import { getTraceTitle } from '@/lib/tracing/traceFormatter';
-import type { TraceEvent } from '@/lib/tracing/types';
+import { describe, expect, it } from "vitest";
+import { getTraceTitle } from "@/lib/tracing/traceFormatter";
+import type { TraceEvent } from "@/lib/tracing/types";
 
-describe('traceFormatter', () => {
-  it('formats action-start', () => {
+describe("traceFormatter", () => {
+  it("formats action-start", () => {
     const event = {
-      type: 'action-start',
-      data: { name: 'MyAction' },
-      origin: 'user',
+      type: "action-start",
+      data: { name: "MyAction" },
+      origin: "user",
     } as unknown as TraceEvent;
-    expect(getTraceTitle(event)).toBe('Action: MyAction');
+    expect(getTraceTitle(event)).toBe("Action: MyAction");
   });
 
-  it('formats rest-request', () => {
+  it("formats rest-request", () => {
     const event = {
-      type: 'rest-request',
-      data: { method: 'GET', url: '/api' },
-      origin: 'user',
+      type: "rest-request",
+      data: { method: "GET", url: "/api" },
+      origin: "user",
     } as unknown as TraceEvent;
-    expect(getTraceTitle(event)).toBe('REST GET /api');
+    expect(getTraceTitle(event)).toBe("REST GET /api");
   });
 
-  it('formats rest-response', () => {
+  it("formats rest-response", () => {
     const event = {
-      type: 'rest-response',
+      type: "rest-response",
       data: { status: 200, durationMs: 15 },
-      origin: 'user',
+      origin: "user",
     } as unknown as TraceEvent;
-    expect(getTraceTitle(event)).toBe('Response 200 (15ms)');
+    expect(getTraceTitle(event)).toBe("Response 200 (15ms)");
   });
 
-  it('formats default', () => {
+  it("formats default", () => {
     const event = {
-      type: 'unknown',
+      type: "unknown",
       data: {},
-      origin: 'user',
+      origin: "user",
     } as unknown as TraceEvent;
-    expect(getTraceTitle(event)).toBe('unknown · user');
+    expect(getTraceTitle(event)).toBe("unknown · user");
   });
 });

@@ -1,21 +1,21 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import {
   useC64ConfigItems,
   useC64Connection,
   useC64UpdateConfigBatch,
-} from '@/hooks/useC64Connection';
-import { toast } from '@/hooks/use-toast';
-import { addErrorLog } from '@/lib/logging';
-import { getC64API } from '@/lib/c64api';
+} from "@/hooks/useC64Connection";
+import { toast } from "@/hooks/use-toast";
+import { addErrorLog } from "@/lib/logging";
+import { getC64API } from "@/lib/c64api";
 import {
   isSidVolumeName,
   resolveAudioMixerMuteValue,
-} from '@/lib/config/audioMixerSolo';
+} from "@/lib/config/audioMixerSolo";
 import {
   AUDIO_MIXER_VOLUME_ITEMS,
   SID_ADDRESSING_ITEMS,
   SID_SOCKETS_ITEMS,
-} from '@/lib/config/configItems';
+} from "@/lib/config/configItems";
 import {
   buildEnabledSidUnmuteUpdates,
   buildEnabledSidRestoreUpdates,
@@ -26,10 +26,10 @@ import {
   buildEnabledSidMuteUpdates,
   buildEnabledSidVolumeUpdates,
   type SidEnablement,
-} from '@/lib/config/sidVolumeControl';
-import { reduceVolumeState } from '../volumeState';
-import { extractAudioMixerItems, parseVolumeOption } from '../playFilesUtils';
-import { resolveVolumeSyncDecision } from '../playbackGuards';
+} from "@/lib/config/sidVolumeControl";
+import { reduceVolumeState } from "../volumeState";
+import { extractAudioMixerItems, parseVolumeOption } from "../playFilesUtils";
+import { resolveVolumeSyncDecision } from "../playbackGuards";
 
 type SidMuteSnapshot = {
   volumes: Record<string, string | number>;
@@ -49,17 +49,17 @@ export function useVolumeOverride({
   const updateConfigBatch = useC64UpdateConfigBatch();
 
   const { data: audioMixerCategory } = useC64ConfigItems(
-    'Audio Mixer',
+    "Audio Mixer",
     AUDIO_MIXER_VOLUME_ITEMS,
     status.isConnected || status.isConnecting,
   );
   const { data: sidSocketsCategory } = useC64ConfigItems(
-    'SID Sockets Configuration',
+    "SID Sockets Configuration",
     SID_SOCKETS_ITEMS,
     status.isConnected || status.isConnecting,
   );
   const { data: sidAddressingCategory } = useC64ConfigItems(
-    'SID Addressing',
+    "SID Addressing",
     SID_ADDRESSING_ITEMS,
     status.isConnected || status.isConnecting,
   );
@@ -127,13 +127,13 @@ export function useVolumeOverride({
     (value: string | number) => {
       if (!volumeSteps.length) return defaultVolumeIndex;
       const stringValue =
-        typeof value === 'string' ? value.trim() : value.toString();
+        typeof value === "string" ? value.trim() : value.toString();
       const directIndex = volumeSteps.findIndex(
         (option) => option.option.trim() === stringValue,
       );
       if (directIndex >= 0) return directIndex;
       const numeric =
-        typeof value === 'number' ? value : parseVolumeOption(value);
+        typeof value === "number" ? value : parseVolumeOption(value);
       if (numeric !== undefined) {
         const numericIndex = volumeSteps.findIndex(
           (option) => option.numeric === numeric,
@@ -203,7 +203,7 @@ export function useVolumeOverride({
       try {
         await withTimeout(
           updateConfigBatch.mutateAsync({
-            category: 'Audio Mixer',
+            category: "Audio Mixer",
             updates,
             immediate: true,
           }),
@@ -211,16 +211,16 @@ export function useVolumeOverride({
           `${context} audio mixer update`,
         );
       } catch (error) {
-        if (context.startsWith('Restore')) {
-          addErrorLog('Audio mixer restore failed', {
+        if (context.startsWith("Restore")) {
+          addErrorLog("Audio mixer restore failed", {
             error: (error as Error).message,
             context,
           });
           toast({
-            variant: 'destructive',
-            title: 'Could not restore volume settings',
+            variant: "destructive",
+            title: "Could not restore volume settings",
             description:
-              'Your current volume may be different than before playback.',
+              "Your current volume may be different than before playback.",
           });
           return;
         }
@@ -236,14 +236,14 @@ export function useVolumeOverride({
       if (sidVolumeItems.length && !forceRefresh) return sidVolumeItems;
       try {
         const data = await getC64API().getConfigItems(
-          'Audio Mixer',
+          "Audio Mixer",
           AUDIO_MIXER_VOLUME_ITEMS,
         );
         return extractAudioMixerItems(data as Record<string, unknown>).filter(
           (item) => isSidVolumeName(item.name),
         );
       } catch (error) {
-        addErrorLog('Audio mixer lookup failed', {
+        addErrorLog("Audio mixer lookup failed", {
           error: (error as Error).message,
         });
         return [];
@@ -263,15 +263,15 @@ export function useVolumeOverride({
       try {
         const api = getC64API();
         const [sockets, addressing] = await Promise.all([
-          api.getConfigItems('SID Sockets Configuration', SID_SOCKETS_ITEMS),
-          api.getConfigItems('SID Addressing', SID_ADDRESSING_ITEMS),
+          api.getConfigItems("SID Sockets Configuration", SID_SOCKETS_ITEMS),
+          api.getConfigItems("SID Addressing", SID_ADDRESSING_ITEMS),
         ]);
         return buildSidEnablement(
           sockets as Record<string, unknown>,
           addressing as Record<string, unknown>,
         );
       } catch (error) {
-        addErrorLog('SID enablement lookup failed', {
+        addErrorLog("SID enablement lookup failed", {
           error: (error as Error).message,
         });
         return sidEnablement;
@@ -318,14 +318,14 @@ export function useVolumeOverride({
       const snapshot = volumeSessionSnapshotRef.current;
       if (!snapshot) return;
       if (
-        status.state === 'DEMO_ACTIVE' ||
+        status.state === "DEMO_ACTIVE" ||
         (!status.isConnected && !status.isConnecting)
       ) {
         volumeSessionSnapshotRef.current = null;
         volumeSessionActiveRef.current = false;
         manualMuteSnapshotRef.current = null;
         pauseMuteSnapshotRef.current = null;
-        dispatchVolume({ type: 'reset', index: defaultVolumeIndex });
+        dispatchVolume({ type: "reset", index: defaultVolumeIndex });
         volumeUiTargetRef.current = null;
         return;
       }
@@ -342,7 +342,7 @@ export function useVolumeOverride({
       volumeSessionActiveRef.current = false;
       manualMuteSnapshotRef.current = null;
       pauseMuteSnapshotRef.current = null;
-      dispatchVolume({ type: 'reset', index: defaultVolumeIndex });
+      dispatchVolume({ type: "reset", index: defaultVolumeIndex });
       volumeUiTargetRef.current = null;
     },
     [
@@ -378,7 +378,7 @@ export function useVolumeOverride({
         if (token !== volumeUpdateSeqRef.current) return;
         void ensureVolumeSessionSnapshot();
         try {
-          await applyAudioMixerUpdates(updates, 'Volume');
+          await applyAudioMixerUpdates(updates, "Volume");
         } catch {
           // Write failed; skip UI state update to avoid desync.
           return;
@@ -391,7 +391,7 @@ export function useVolumeOverride({
           }
         }
         if (token !== volumeUpdateSeqRef.current) return;
-        dispatchVolume({ type: 'unmute', reason: 'manual' });
+        dispatchVolume({ type: "unmute", reason: "manual" });
       };
 
       if (volumeUpdateTimerRef.current) {
@@ -423,7 +423,7 @@ export function useVolumeOverride({
   const handleVolumeLocalChange = useCallback(
     (value: number[]) => {
       const nextIndex = value[0] ?? 0;
-      dispatchVolume({ type: 'set-index', index: nextIndex });
+      dispatchVolume({ type: "set-index", index: nextIndex });
       reserveVolumeUiTarget(nextIndex);
       if (!volumeMuted) return;
       previousVolumeIndexRef.current = nextIndex;
@@ -451,7 +451,7 @@ export function useVolumeOverride({
 
   const handleVolumeCommit = useCallback(
     async (nextIndex: number) => {
-      dispatchVolume({ type: 'set-index', index: nextIndex });
+      dispatchVolume({ type: "set-index", index: nextIndex });
       reserveVolumeUiTarget(nextIndex);
       if (volumeMuted) {
         previousVolumeIndexRef.current = nextIndex;
@@ -485,9 +485,9 @@ export function useVolumeOverride({
       volumeUiTargetRef.current = null;
       await applyAudioMixerUpdates(
         buildEnabledSidMuteUpdates(items, sidEnablement),
-        'Mute',
+        "Mute",
       );
-      dispatchVolume({ type: 'mute', reason: 'manual' });
+      dispatchVolume({ type: "mute", reason: "manual" });
       return;
     }
     const snapshot = manualMuteSnapshotRef.current;
@@ -500,9 +500,9 @@ export function useVolumeOverride({
       }
     }
     if (Object.keys(updates).length) {
-      await applyAudioMixerUpdates(updates, 'Unmute');
+      await applyAudioMixerUpdates(updates, "Unmute");
     }
-    dispatchVolume({ type: 'unmute', reason: 'manual' });
+    dispatchVolume({ type: "unmute", reason: "manual" });
     manualMuteSnapshotRef.current = null;
     volumeUiTargetRef.current = null;
   }, [
@@ -520,7 +520,7 @@ export function useVolumeOverride({
   useEffect(() => {
     if (updateConfigBatch.isPending) return;
     if (!enabledSidVolumeItems.length || !volumeSteps.length) {
-      dispatchVolume({ type: 'reset', index: defaultVolumeIndex });
+      dispatchVolume({ type: "reset", index: defaultVolumeIndex });
       volumeUiTargetRef.current = null;
       return;
     }
@@ -560,7 +560,7 @@ export function useVolumeOverride({
           Array.from(counts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ??
           defaultVolumeIndex;
       }
-      dispatchVolume({ type: 'sync', index: nextIndex, muted: true });
+      dispatchVolume({ type: "sync", index: nextIndex, muted: true });
       return;
     }
     const counts = new Map<number, number>();
@@ -575,13 +575,13 @@ export function useVolumeOverride({
       nextIndex,
       Date.now(),
     );
-    if (syncDecision === 'defer') {
+    if (syncDecision === "defer") {
       return;
     }
-    if (syncDecision === 'clear') {
+    if (syncDecision === "clear") {
       volumeUiTargetRef.current = null;
     }
-    dispatchVolume({ type: 'sync', index: nextIndex, muted: false });
+    dispatchVolume({ type: "sync", index: nextIndex, muted: false });
   }, [
     defaultVolumeIndex,
     enabledSidVolumeItems,

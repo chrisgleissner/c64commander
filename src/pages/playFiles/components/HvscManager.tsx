@@ -1,6 +1,6 @@
-import { useHvscLibrary } from '../hooks/useHvscLibrary';
-import { HvscControls } from './HvscControls';
-import { formatBytes } from '../playFilesUtils';
+import { useHvscLibrary } from "../hooks/useHvscLibrary";
+import { HvscControls } from "./HvscControls";
+import { formatBytes } from "../playFilesUtils";
 
 interface HvscManagerProps {
   hvscControlsEnabled: boolean;

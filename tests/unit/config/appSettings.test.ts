@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from "vitest";
 import {
   DEFAULT_AUTO_DEMO_MODE_ENABLED,
   DEFAULT_BACKGROUND_REDISCOVERY_INTERVAL_MS,
@@ -29,7 +29,7 @@ import {
   saveDebugLoggingEnabled,
   saveDiskAutostartMode,
   saveStartupDiscoveryWindowMs,
-} from '@/lib/config/appSettings';
+} from "@/lib/config/appSettings";
 
 const collectSettingEvents = () => {
   const events: Array<{ key: string; value: unknown }> = [];
@@ -40,20 +40,20 @@ const collectSettingEvents = () => {
     };
     events.push(detail);
   };
-  window.addEventListener('c64u-app-settings-updated', listener);
+  window.addEventListener("c64u-app-settings-updated", listener);
   return {
     events,
     dispose: () =>
-      window.removeEventListener('c64u-app-settings-updated', listener),
+      window.removeEventListener("c64u-app-settings-updated", listener),
   };
 };
 
-describe('appSettings', () => {
+describe("appSettings", () => {
   beforeEach(() => {
     localStorage.clear();
   });
 
-  it('loads defaults when local storage is empty', () => {
+  it("loads defaults when local storage is empty", () => {
     expect(loadDebugLoggingEnabled()).toBe(false);
     expect(loadConfigWriteIntervalMs()).toBe(DEFAULT_CONFIG_WRITE_INTERVAL_MS);
     expect(loadAutomaticDemoModeEnabled()).toBe(DEFAULT_AUTO_DEMO_MODE_ENABLED);
@@ -69,7 +69,7 @@ describe('appSettings', () => {
     expect(loadDiskAutostartMode()).toBe(DEFAULT_DISK_AUTOSTART_MODE);
   });
 
-  it('saves values and emits setting events', () => {
+  it("saves values and emits setting events", () => {
     const { events, dispose } = collectSettingEvents();
 
     saveDebugLoggingEnabled(true);
@@ -78,31 +78,31 @@ describe('appSettings', () => {
     saveStartupDiscoveryWindowMs(3499);
     saveBackgroundRediscoveryIntervalMs(800);
     saveDiscoveryProbeTimeoutMs(2780);
-    saveDiskAutostartMode('dma');
+    saveDiskAutostartMode("dma");
 
     dispose();
 
-    expect(localStorage.getItem(APP_SETTINGS_KEYS.DEBUG_LOGGING_KEY)).toBe('1');
+    expect(localStorage.getItem(APP_SETTINGS_KEYS.DEBUG_LOGGING_KEY)).toBe("1");
     expect(
       localStorage.getItem(APP_SETTINGS_KEYS.CONFIG_WRITE_INTERVAL_KEY),
-    ).toBe('400');
+    ).toBe("400");
     expect(localStorage.getItem(APP_SETTINGS_KEYS.AUTO_DEMO_MODE_KEY)).toBe(
-      '0',
+      "0",
     );
     expect(
       localStorage.getItem(APP_SETTINGS_KEYS.STARTUP_DISCOVERY_WINDOW_MS_KEY),
-    ).toBe('3500');
+    ).toBe("3500");
     expect(
       localStorage.getItem(
         APP_SETTINGS_KEYS.BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY,
       ),
-    ).toBe('1000');
+    ).toBe("1000");
     expect(
       localStorage.getItem(APP_SETTINGS_KEYS.DISCOVERY_PROBE_TIMEOUT_MS_KEY),
-    ).toBe('2800');
+    ).toBe("2800");
     expect(
       localStorage.getItem(APP_SETTINGS_KEYS.DISK_AUTOSTART_MODE_KEY),
-    ).toBe('dma');
+    ).toBe("dma");
 
     expect(events).toEqual(
       expect.arrayContaining([
@@ -115,23 +115,23 @@ describe('appSettings', () => {
           value: 1000,
         },
         { key: APP_SETTINGS_KEYS.DISCOVERY_PROBE_TIMEOUT_MS_KEY, value: 2800 },
-        { key: APP_SETTINGS_KEYS.DISK_AUTOSTART_MODE_KEY, value: 'dma' },
+        { key: APP_SETTINGS_KEYS.DISK_AUTOSTART_MODE_KEY, value: "dma" },
       ]),
     );
   });
 
-  it('normalizes disk autostart mode input', () => {
-    localStorage.setItem(APP_SETTINGS_KEYS.DISK_AUTOSTART_MODE_KEY, 'invalid');
-    expect(loadDiskAutostartMode()).toBe('kernal');
+  it("normalizes disk autostart mode input", () => {
+    localStorage.setItem(APP_SETTINGS_KEYS.DISK_AUTOSTART_MODE_KEY, "invalid");
+    expect(loadDiskAutostartMode()).toBe("kernal");
 
-    saveDiskAutostartMode('kernal');
-    expect(loadDiskAutostartMode()).toBe('kernal');
+    saveDiskAutostartMode("kernal");
+    expect(loadDiskAutostartMode()).toBe("kernal");
   });
 
-  it('returns fallback when localStorage has a non-numeric value for a number setting (BRDA:60)', () => {
+  it("returns fallback when localStorage has a non-numeric value for a number setting (BRDA:60)", () => {
     localStorage.setItem(
       APP_SETTINGS_KEYS.CONFIG_WRITE_INTERVAL_KEY,
-      'not-a-number',
+      "not-a-number",
     );
     expect(loadConfigWriteIntervalMs()).toBe(DEFAULT_CONFIG_WRITE_INTERVAL_MS);
   });

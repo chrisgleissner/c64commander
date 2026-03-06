@@ -6,13 +6,13 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   SelectableActionList,
   type ActionListItem,
-} from '@/components/lists/SelectableActionList';
-import type { PlayFileCategory } from '@/lib/playback/fileTypes';
+} from "@/components/lists/SelectableActionList";
+import type { PlayFileCategory } from "@/lib/playback/fileTypes";
 
 export type PlaylistPanelProps = {
   items: ActionListItem[];
@@ -53,7 +53,7 @@ export const PlaylistPanel = ({
       emptyLabel="No tracks in playlist yet."
       selectAllLabel="Select all"
       deselectAllLabel="Deselect all"
-      removeSelectedLabel={selectedCount ? 'Remove selected items' : undefined}
+      removeSelectedLabel={selectedCount ? "Remove selected items" : undefined}
       selectedCount={selectedCount}
       allSelected={allSelected}
       onToggleSelectAll={onToggleSelectAll}
@@ -90,7 +90,7 @@ export const PlaylistPanel = ({
             id="add-items-to-playlist"
             data-testid="add-items-to-playlist"
           >
-            {hasPlaylist ? 'Add more items' : 'Add items'}
+            {hasPlaylist ? "Add more items" : "Add items"}
           </Button>
           {hasPlaylist ? (
             <Button

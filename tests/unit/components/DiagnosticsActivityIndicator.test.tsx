@@ -6,9 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
-import { DiagnosticsActivityIndicator } from '@/components/DiagnosticsActivityIndicator';
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+import { DiagnosticsActivityIndicator } from "@/components/DiagnosticsActivityIndicator";
 
 const mockActivity = vi.hoisted(() => ({
   snapshot: {
@@ -20,12 +20,12 @@ const mockActivity = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('@/hooks/useDiagnosticsActivity', () => ({
+vi.mock("@/hooks/useDiagnosticsActivity", () => ({
   useDiagnosticsActivity: () => mockActivity.snapshot,
 }));
 
-describe('DiagnosticsActivityIndicator', () => {
-  it('hides all indicators when all counts are zero', () => {
+describe("DiagnosticsActivityIndicator", () => {
+  it("hides all indicators when all counts are zero", () => {
     mockActivity.snapshot = {
       restCount: 0,
       ftpCount: 0,
@@ -37,17 +37,17 @@ describe('DiagnosticsActivityIndicator', () => {
     render(<DiagnosticsActivityIndicator onClick={() => undefined} />);
 
     expect(
-      screen.queryByTestId('diagnostics-activity-rest'),
+      screen.queryByTestId("diagnostics-activity-rest"),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByTestId('diagnostics-activity-ftp'),
+      screen.queryByTestId("diagnostics-activity-ftp"),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByTestId('diagnostics-activity-error'),
+      screen.queryByTestId("diagnostics-activity-error"),
     ).not.toBeInTheDocument();
   });
 
-  it('shows counts and animation for in-flight activity', () => {
+  it("shows counts and animation for in-flight activity", () => {
     mockActivity.snapshot = {
       restCount: 2,
       ftpCount: 1,
@@ -58,21 +58,21 @@ describe('DiagnosticsActivityIndicator', () => {
 
     render(<DiagnosticsActivityIndicator onClick={() => undefined} />);
 
-    const rest = screen.getByTestId('diagnostics-activity-rest');
-    const ftp = screen.getByTestId('diagnostics-activity-ftp');
-    const error = screen.getByTestId('diagnostics-activity-error');
+    const rest = screen.getByTestId("diagnostics-activity-rest");
+    const ftp = screen.getByTestId("diagnostics-activity-ftp");
+    const error = screen.getByTestId("diagnostics-activity-error");
 
-    expect(rest).toHaveClass('bg-diagnostics-rest');
-    expect(ftp).toHaveClass('bg-diagnostics-ftp');
-    expect(error).toHaveClass('bg-diagnostics-error');
-    expect(rest).toHaveClass('animate-pulse-soft');
-    expect(ftp).toHaveClass('animate-pulse-soft');
-    expect(rest).toHaveTextContent('2');
-    expect(ftp).toHaveTextContent('1');
-    expect(error).toHaveTextContent('3');
+    expect(rest).toHaveClass("bg-diagnostics-rest");
+    expect(ftp).toHaveClass("bg-diagnostics-ftp");
+    expect(error).toHaveClass("bg-diagnostics-error");
+    expect(rest).toHaveClass("animate-pulse-soft");
+    expect(ftp).toHaveClass("animate-pulse-soft");
+    expect(rest).toHaveTextContent("2");
+    expect(ftp).toHaveTextContent("1");
+    expect(error).toHaveTextContent("3");
   });
 
-  it('shows only REST indicator when only REST count is non-zero', () => {
+  it("shows only REST indicator when only REST count is non-zero", () => {
     mockActivity.snapshot = {
       restCount: 5,
       ftpCount: 0,
@@ -83,16 +83,16 @@ describe('DiagnosticsActivityIndicator', () => {
 
     render(<DiagnosticsActivityIndicator onClick={() => undefined} />);
 
-    expect(screen.getByTestId('diagnostics-activity-rest')).toBeInTheDocument();
+    expect(screen.getByTestId("diagnostics-activity-rest")).toBeInTheDocument();
     expect(
-      screen.queryByTestId('diagnostics-activity-ftp'),
+      screen.queryByTestId("diagnostics-activity-ftp"),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByTestId('diagnostics-activity-error'),
+      screen.queryByTestId("diagnostics-activity-error"),
     ).not.toBeInTheDocument();
   });
 
-  it('shows only FTP indicator when only FTP count is non-zero', () => {
+  it("shows only FTP indicator when only FTP count is non-zero", () => {
     mockActivity.snapshot = {
       restCount: 0,
       ftpCount: 3,
@@ -104,15 +104,15 @@ describe('DiagnosticsActivityIndicator', () => {
     render(<DiagnosticsActivityIndicator onClick={() => undefined} />);
 
     expect(
-      screen.queryByTestId('diagnostics-activity-rest'),
+      screen.queryByTestId("diagnostics-activity-rest"),
     ).not.toBeInTheDocument();
-    expect(screen.getByTestId('diagnostics-activity-ftp')).toBeInTheDocument();
+    expect(screen.getByTestId("diagnostics-activity-ftp")).toBeInTheDocument();
     expect(
-      screen.queryByTestId('diagnostics-activity-error'),
+      screen.queryByTestId("diagnostics-activity-error"),
     ).not.toBeInTheDocument();
   });
 
-  it('renders indicator dots at increased size (h-5 w-5)', () => {
+  it("renders indicator dots at increased size (h-5 w-5)", () => {
     mockActivity.snapshot = {
       restCount: 1,
       ftpCount: 1,
@@ -123,16 +123,16 @@ describe('DiagnosticsActivityIndicator', () => {
 
     render(<DiagnosticsActivityIndicator onClick={() => undefined} />);
 
-    const rest = screen.getByTestId('diagnostics-activity-rest');
-    expect(rest).toHaveClass('h-5');
-    expect(rest).toHaveClass('w-5');
+    const rest = screen.getByTestId("diagnostics-activity-rest");
+    expect(rest).toHaveClass("h-5");
+    expect(rest).toHaveClass("w-5");
   });
 
-  it('invokes click handler', () => {
+  it("invokes click handler", () => {
     const onClick = vi.fn();
     render(<DiagnosticsActivityIndicator onClick={onClick} />);
 
-    fireEvent.click(screen.getByTestId('diagnostics-activity-indicator'));
+    fireEvent.click(screen.getByTestId("diagnostics-activity-indicator"));
     expect(onClick).toHaveBeenCalled();
   });
 });

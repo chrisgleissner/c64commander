@@ -6,17 +6,17 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { describe, expect, it, vi } from 'vitest';
-import React from 'react';
-import { act, fireEvent, render, screen } from '@testing-library/react';
-import { Slider } from './slider';
+import { describe, expect, it, vi } from "vitest";
+import React from "react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { Slider } from "./slider";
 import {
   SLIDER_POPUP_IDLE_CLOSE_MS,
   SLIDER_POPUP_MIN_VISIBLE_MS,
-} from '@/lib/ui/sliderPopupStateMachine';
+} from "@/lib/ui/sliderPopupStateMachine";
 
-describe('Slider value display', () => {
-  it('shows value on pointer down and keeps it visible for minimum duration', () => {
+describe("Slider value display", () => {
+  it("shows value on pointer down and keeps it visible for minimum duration", () => {
     vi.useFakeTimers();
     render(
       <Slider
@@ -28,25 +28,25 @@ describe('Slider value display', () => {
       />,
     );
 
-    const root = screen.getByTestId('test-slider');
-    expect(screen.queryByTestId('slider-value-display')).toBeNull();
+    const root = screen.getByTestId("test-slider");
+    expect(screen.queryByTestId("slider-value-display")).toBeNull();
     fireEvent.pointerDown(root);
-    expect(screen.getByTestId('slider-value-display')).toBeTruthy();
+    expect(screen.getByTestId("slider-value-display")).toBeTruthy();
 
     fireEvent.pointerUp(root);
     act(() => {
       vi.advanceTimersByTime(SLIDER_POPUP_MIN_VISIBLE_MS - 50);
     });
-    expect(screen.getByTestId('slider-value-display')).toBeTruthy();
+    expect(screen.getByTestId("slider-value-display")).toBeTruthy();
 
     act(() => {
       vi.advanceTimersByTime(SLIDER_POPUP_IDLE_CLOSE_MS + 100);
     });
-    expect(screen.queryByTestId('slider-value-display')).toBeNull();
+    expect(screen.queryByTestId("slider-value-display")).toBeNull();
     vi.useRealTimers();
   });
 
-  it('hides value after idle timeout on pointer cancel', () => {
+  it("hides value after idle timeout on pointer cancel", () => {
     vi.useFakeTimers();
     render(
       <Slider
@@ -58,19 +58,19 @@ describe('Slider value display', () => {
       />,
     );
 
-    const root = screen.getByTestId('test-slider');
+    const root = screen.getByTestId("test-slider");
     fireEvent.pointerDown(root);
-    expect(screen.getByTestId('slider-value-display')).toBeTruthy();
+    expect(screen.getByTestId("slider-value-display")).toBeTruthy();
 
     fireEvent.pointerCancel(root);
     act(() => {
       vi.advanceTimersByTime(SLIDER_POPUP_IDLE_CLOSE_MS + 50);
     });
-    expect(screen.queryByTestId('slider-value-display')).toBeNull();
+    expect(screen.queryByTestId("slider-value-display")).toBeNull();
     vi.useRealTimers();
   });
 
-  it('does not show value when showValueOnDrag is false', () => {
+  it("does not show value when showValueOnDrag is false", () => {
     render(
       <Slider
         value={[50]}
@@ -82,12 +82,12 @@ describe('Slider value display', () => {
       />,
     );
 
-    const root = screen.getByTestId('test-slider');
+    const root = screen.getByTestId("test-slider");
     fireEvent.pointerDown(root);
-    expect(screen.queryByTestId('slider-value-display')).toBeNull();
+    expect(screen.queryByTestId("slider-value-display")).toBeNull();
   });
 
-  it('resets idle close timer on repeated interactions', () => {
+  it("resets idle close timer on repeated interactions", () => {
     vi.useFakeTimers();
     render(
       <Slider
@@ -99,7 +99,7 @@ describe('Slider value display', () => {
       />,
     );
 
-    const root = screen.getByTestId('test-slider');
+    const root = screen.getByTestId("test-slider");
     fireEvent.pointerDown(root);
     fireEvent.pointerUp(root);
     act(() => {
@@ -110,16 +110,16 @@ describe('Slider value display', () => {
     act(() => {
       vi.advanceTimersByTime(SLIDER_POPUP_IDLE_CLOSE_MS - 100);
     });
-    expect(screen.getByTestId('slider-value-display')).toBeTruthy();
+    expect(screen.getByTestId("slider-value-display")).toBeTruthy();
 
     act(() => {
       vi.advanceTimersByTime(200);
     });
-    expect(screen.queryByTestId('slider-value-display')).toBeNull();
+    expect(screen.queryByTestId("slider-value-display")).toBeNull();
     vi.useRealTimers();
   });
 
-  it('does not close popup early when controlled value updates immediately', () => {
+  it("does not close popup early when controlled value updates immediately", () => {
     vi.useFakeTimers();
 
     const Controlled = () => {
@@ -137,25 +137,25 @@ describe('Slider value display', () => {
     };
 
     render(<Controlled />);
-    const root = screen.getByTestId('test-slider');
+    const root = screen.getByTestId("test-slider");
     fireEvent.pointerDown(root);
     fireEvent.pointerUp(root);
 
     act(() => {
       vi.advanceTimersByTime(SLIDER_POPUP_MIN_VISIBLE_MS - 50);
     });
-    expect(screen.getByTestId('slider-value-display')).toBeTruthy();
+    expect(screen.getByTestId("slider-value-display")).toBeTruthy();
 
     act(() => {
       vi.advanceTimersByTime(SLIDER_POPUP_IDLE_CLOSE_MS + 100);
     });
-    expect(screen.queryByTestId('slider-value-display')).toBeNull();
+    expect(screen.queryByTestId("slider-value-display")).toBeNull();
     vi.useRealTimers();
   });
 });
 
-describe('Slider callbacks', () => {
-  it('calls onPointerDown callback', () => {
+describe("Slider callbacks", () => {
+  it("calls onPointerDown callback", () => {
     const onPointerDown = vi.fn();
     render(
       <Slider
@@ -168,12 +168,12 @@ describe('Slider callbacks', () => {
       />,
     );
 
-    const root = screen.getByTestId('test-slider');
+    const root = screen.getByTestId("test-slider");
     fireEvent.pointerDown(root);
     expect(onPointerDown).toHaveBeenCalled();
   });
 
-  it('calls onPointerUp callback', () => {
+  it("calls onPointerUp callback", () => {
     const onPointerUp = vi.fn();
     render(
       <Slider
@@ -186,13 +186,13 @@ describe('Slider callbacks', () => {
       />,
     );
 
-    const root = screen.getByTestId('test-slider');
+    const root = screen.getByTestId("test-slider");
     fireEvent.pointerDown(root);
     fireEvent.pointerUp(root);
     expect(onPointerUp).toHaveBeenCalled();
   });
 
-  it('calls onPointerCancel callback', () => {
+  it("calls onPointerCancel callback", () => {
     const onPointerCancel = vi.fn();
     render(
       <Slider
@@ -205,14 +205,14 @@ describe('Slider callbacks', () => {
       />,
     );
 
-    const root = screen.getByTestId('test-slider');
+    const root = screen.getByTestId("test-slider");
     fireEvent.pointerCancel(root);
     expect(onPointerCancel).toHaveBeenCalled();
   });
 });
 
-describe('Slider midpoint', () => {
-  it('renders midpoint notch when configured', () => {
+describe("Slider midpoint", () => {
+  it("renders midpoint notch when configured", () => {
     render(
       <Slider
         value={[50]}
@@ -224,12 +224,12 @@ describe('Slider midpoint', () => {
       />,
     );
 
-    const root = screen.getByTestId('test-slider');
+    const root = screen.getByTestId("test-slider");
     const notch = root.querySelector('span[aria-hidden="true"]');
     expect(notch).toBeTruthy();
   });
 
-  it('does not render midpoint notch when notch is false', () => {
+  it("does not render midpoint notch when notch is false", () => {
     render(
       <Slider
         value={[50]}
@@ -241,12 +241,12 @@ describe('Slider midpoint', () => {
       />,
     );
 
-    const root = screen.getByTestId('test-slider');
+    const root = screen.getByTestId("test-slider");
     const notch = root.querySelector('span[aria-hidden="true"]');
     expect(notch).toBeNull();
   });
 
-  it('renders midpoint notch by default when midpoint is provided', () => {
+  it("renders midpoint notch by default when midpoint is provided", () => {
     render(
       <Slider
         value={[50]}
@@ -258,24 +258,24 @@ describe('Slider midpoint', () => {
       />,
     );
 
-    const root = screen.getByTestId('test-slider');
+    const root = screen.getByTestId("test-slider");
     const notch = root.querySelector('span[aria-hidden="true"]');
     expect(notch).toBeTruthy();
   });
 });
 
-describe('Slider default value', () => {
-  it('uses min value when no value or default is provided', () => {
+describe("Slider default value", () => {
+  it("uses min value when no value or default is provided", () => {
     render(<Slider min={10} max={100} step={1} data-testid="test-slider" />);
 
-    const root = screen.getByTestId('test-slider');
+    const root = screen.getByTestId("test-slider");
     fireEvent.pointerDown(root);
-    expect(screen.getByTestId('slider-value-display')).toBeTruthy();
+    expect(screen.getByTestId("slider-value-display")).toBeTruthy();
   });
 });
 
-describe('Slider custom classes', () => {
-  it('applies custom thumb class name', () => {
+describe("Slider custom classes", () => {
+  it("applies custom thumb class name", () => {
     render(
       <Slider
         value={[50]}
@@ -287,12 +287,12 @@ describe('Slider custom classes', () => {
       />,
     );
 
-    const root = screen.getByTestId('test-slider');
+    const root = screen.getByTestId("test-slider");
     const thumb = root.querySelector('[role="slider"]');
-    expect(thumb?.className).toContain('custom-thumb');
+    expect(thumb?.className).toContain("custom-thumb");
   });
 
-  it('applies custom track class name', () => {
+  it("applies custom track class name", () => {
     render(
       <Slider
         value={[50]}
@@ -304,15 +304,15 @@ describe('Slider custom classes', () => {
       />,
     );
 
-    const root = screen.getByTestId('test-slider');
+    const root = screen.getByTestId("test-slider");
     // Track element exists
     expect(
-      root.querySelector('[data-radix-slider-track]') ||
+      root.querySelector("[data-radix-slider-track]") ||
         root.querySelector('[class*="track"]'),
     ).toBeTruthy();
   });
 
-  it('applies custom range class name', () => {
+  it("applies custom range class name", () => {
     render(
       <Slider
         value={[50]}
@@ -324,10 +324,10 @@ describe('Slider custom classes', () => {
       />,
     );
 
-    const root = screen.getByTestId('test-slider');
+    const root = screen.getByTestId("test-slider");
     // Range element exists
     expect(
-      root.querySelector('[data-radix-slider-range]') ||
+      root.querySelector("[data-radix-slider-range]") ||
         root.querySelector('[class*="range"]'),
     ).toBeTruthy();
   });

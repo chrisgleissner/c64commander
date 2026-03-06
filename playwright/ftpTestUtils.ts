@@ -6,18 +6,18 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { promises as fs } from 'node:fs';
-import os from 'node:os';
-import * as path from 'node:path';
-import type { Page } from '@playwright/test';
+import { promises as fs } from "node:fs";
+import os from "node:os";
+import * as path from "node:path";
+import type { Page } from "@playwright/test";
 import {
   createMockFtpServer,
   type MockFtpServer,
-} from '../tests/mocks/mockFtpServer';
+} from "../tests/mocks/mockFtpServer";
 import {
   createMockFtpBridgeServer,
   type MockFtpBridgeServer,
-} from '../tests/mocks/mockFtpBridgeServer';
+} from "../tests/mocks/mockFtpBridgeServer";
 
 export type FtpTestServers = {
   ftpServer: MockFtpServer;
@@ -26,7 +26,7 @@ export type FtpTestServers = {
 };
 
 const ensureLargeFtpFixture = async (rootDir: string) => {
-  const marker = path.join(rootDir, '.fixture-seeded');
+  const marker = path.join(rootDir, ".fixture-seeded");
   try {
     await fs.access(marker);
     return;
@@ -34,17 +34,17 @@ const ensureLargeFtpFixture = async (rootDir: string) => {
     // continue
   }
 
-  const megaRoot = path.join(rootDir, 'Usb0', 'Games', 'Mega Collection');
-  const subFolders = ['Arcade Classics', 'Action Heroes', 'Strategy Vault'];
+  const megaRoot = path.join(rootDir, "Usb0", "Games", "Mega Collection");
+  const subFolders = ["Arcade Classics", "Action Heroes", "Strategy Vault"];
   await fs.mkdir(megaRoot, { recursive: true });
 
   const topLevelFiles = Array.from(
     { length: 40 },
-    (_, idx) => `Mega Disk ${String(idx + 1).padStart(2, '0')}.d64`,
+    (_, idx) => `Mega Disk ${String(idx + 1).padStart(2, "0")}.d64`,
   );
   await Promise.all(
     topLevelFiles.map((name) =>
-      fs.writeFile(path.join(megaRoot, name), 'x', 'utf8'),
+      fs.writeFile(path.join(megaRoot, name), "x", "utf8"),
     ),
   );
 
@@ -53,16 +53,16 @@ const ensureLargeFtpFixture = async (rootDir: string) => {
     await fs.mkdir(folderPath, { recursive: true });
     const files = Array.from(
       { length: 30 },
-      (_, idx) => `${folder.replace(/\s+/g, ' ')} ${idx + 1}.d64`,
+      (_, idx) => `${folder.replace(/\s+/g, " ")} ${idx + 1}.d64`,
     );
     await Promise.all(
       files.map((name) =>
-        fs.writeFile(path.join(folderPath, name), 'x', 'utf8'),
+        fs.writeFile(path.join(folderPath, name), "x", "utf8"),
       ),
     );
   }
 
-  const demosRoot = path.join(rootDir, 'Usb0', 'Demos', 'Scroller Showcase');
+  const demosRoot = path.join(rootDir, "Usb0", "Demos", "Scroller Showcase");
   await fs.mkdir(demosRoot, { recursive: true });
   const demoFiles = Array.from(
     { length: 24 },
@@ -70,27 +70,27 @@ const ensureLargeFtpFixture = async (rootDir: string) => {
   );
   await Promise.all(
     demoFiles.map((name) =>
-      fs.writeFile(path.join(demosRoot, name), 'x', 'utf8'),
+      fs.writeFile(path.join(demosRoot, name), "x", "utf8"),
     ),
   );
 
-  await fs.writeFile(marker, new Date().toISOString(), 'utf8');
+  await fs.writeFile(marker, new Date().toISOString(), "utf8");
 };
 
 const cloneFtpFixture = async (sourceDir: string) => {
-  const tempBase = path.join(os.tmpdir(), 'c64u-ftp-root-');
+  const tempBase = path.join(os.tmpdir(), "c64u-ftp-root-");
   const targetDir = await fs.mkdtemp(tempBase);
   await fs.cp(sourceDir, targetDir, { recursive: true });
   return targetDir;
 };
 
 export const startFtpTestServers = async (options?: { password?: string }) => {
-  const baseRoot = path.resolve('playwright/fixtures/ftp-root');
+  const baseRoot = path.resolve("playwright/fixtures/ftp-root");
   const rootDir = await cloneFtpFixture(baseRoot);
   await ensureLargeFtpFixture(rootDir);
   const ftpServer = await createMockFtpServer({
     rootDir,
-    password: options?.password || '',
+    password: options?.password || "",
   });
   const bridgeServer = await createMockFtpBridgeServer();
 
@@ -109,11 +109,11 @@ export const seedFtpConfig = async (
   options: { host: string; port: number; bridgeUrl: string; password?: string },
 ) => {
   await page.addInitScript(({ host, port, bridgeUrl, password }) => {
-    localStorage.setItem('c64u_ftp_port', String(port));
-    localStorage.setItem('c64u_ftp_bridge_url', bridgeUrl);
-    localStorage.removeItem('c64u_password');
+    localStorage.setItem("c64u_ftp_port", String(port));
+    localStorage.setItem("c64u_ftp_bridge_url", bridgeUrl);
+    localStorage.removeItem("c64u_password");
     if (password) {
-      localStorage.setItem('c64u_has_password', '1');
+      localStorage.setItem("c64u_has_password", "1");
       (
         window as Window & {
           __c64uSecureStorageOverride?: { password?: string | null };
@@ -122,7 +122,7 @@ export const seedFtpConfig = async (
         password,
       };
     } else {
-      localStorage.removeItem('c64u_has_password');
+      localStorage.removeItem("c64u_has_password");
       delete (window as Window & { __c64uSecureStorageOverride?: unknown })
         .__c64uSecureStorageOverride;
     }

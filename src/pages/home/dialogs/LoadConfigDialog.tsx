@@ -5,8 +5,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 interface ConfigItem {
   id: string;
@@ -61,7 +61,7 @@ export function LoadConfigDialog({
                   </span>
                 </div>
                 <span className="text-xs text-muted-foreground ml-2">
-                  {applyingConfigId === config.id ? 'Applying…' : 'Load'}
+                  {applyingConfigId === config.id ? "Applying…" : "Load"}
                 </span>
               </Button>
             ))

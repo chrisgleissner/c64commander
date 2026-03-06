@@ -16,16 +16,16 @@ export type SoloState = {
   soloItem: string | null;
 };
 
-export type SoloAction = { type: 'toggle'; item: string } | { type: 'reset' };
+export type SoloAction = { type: "toggle"; item: string } | { type: "reset" };
 
 const normalizeName = (name: string) =>
-  name.trim().replace(/\s+/g, ' ').toLowerCase();
+  name.trim().replace(/\s+/g, " ").toLowerCase();
 
 export const isSidVolumeName = (name: string) =>
   /^vol\s+(ultisid|socket)\s+[12]$/i.test(normalizeName(name));
 
 const normalizeOption = (value: string) =>
-  value.trim().replace(/\s+/g, ' ').toLowerCase();
+  value.trim().replace(/\s+/g, " ").toLowerCase();
 
 const parseNumeric = (option: string) => {
   const match = option.trim().match(/[+-]?\d+(?:\.\d+)?/);
@@ -33,11 +33,11 @@ const parseNumeric = (option: string) => {
 };
 
 export const resolveAudioMixerMuteValue = (options?: string[]) => {
-  if (!options || options.length === 0) return 'OFF';
+  if (!options || options.length === 0) return "OFF";
   const offOption = options.find((option) => {
     const normalized = normalizeOption(option);
     return (
-      normalized === 'off' || normalized === 'mute' || normalized === 'muted'
+      normalized === "off" || normalized === "mute" || normalized === "muted"
     );
   });
   if (offOption) return offOption;
@@ -56,14 +56,14 @@ export const resolveAudioMixerMuteValue = (options?: string[]) => {
     return lowest.option;
   }
 
-  return options[0] ?? 'OFF';
+  return options[0] ?? "OFF";
 };
 
 export const soloReducer = (
   state: SoloState,
   action: SoloAction,
 ): SoloState => {
-  if (action.type === 'reset') {
+  if (action.type === "reset") {
     return { soloItem: null };
   }
   const nextSolo = state.soloItem === action.item ? null : action.item;

@@ -1,13 +1,13 @@
-import { describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen } from '@testing-library/react';
-import { ConfigItemRow } from '@/components/ConfigItemRow';
+import { describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { ConfigItemRow } from "@/components/ConfigItemRow";
 
-vi.mock('@/hooks/useC64Connection', () => ({
+vi.mock("@/hooks/useC64Connection", () => ({
   useC64ConfigItem: () => ({ data: undefined, isLoading: false }),
 }));
 
-describe('ConfigItemRow text input buffering', () => {
-  it('keeps focus while typing and commits once on blur', () => {
+describe("ConfigItemRow text input buffering", () => {
+  it("keeps focus while typing and commits once on blur", () => {
     const onValueChange = vi.fn();
 
     render(
@@ -19,28 +19,28 @@ describe('ConfigItemRow text input buffering', () => {
       />,
     );
 
-    const input = screen.getByLabelText('Clock Year text input');
+    const input = screen.getByLabelText("Clock Year text input");
     act(() => {
       input.focus();
     });
 
-    fireEvent.change(input, { target: { value: '2' } });
+    fireEvent.change(input, { target: { value: "2" } });
     expect(document.activeElement).toBe(input);
-    fireEvent.change(input, { target: { value: '20' } });
+    fireEvent.change(input, { target: { value: "20" } });
     expect(document.activeElement).toBe(input);
-    fireEvent.change(input, { target: { value: '202' } });
+    fireEvent.change(input, { target: { value: "202" } });
     expect(document.activeElement).toBe(input);
-    fireEvent.change(input, { target: { value: '2026' } });
+    fireEvent.change(input, { target: { value: "2026" } });
     expect(document.activeElement).toBe(input);
 
     expect(onValueChange).toHaveBeenCalledTimes(0);
 
     fireEvent.blur(input);
     expect(onValueChange).toHaveBeenCalledTimes(1);
-    expect(onValueChange).toHaveBeenCalledWith('2026');
+    expect(onValueChange).toHaveBeenCalledWith("2026");
   });
 
-  it('does not overwrite active local buffer from external value updates', () => {
+  it("does not overwrite active local buffer from external value updates", () => {
     const onValueChange = vi.fn();
 
     const { rerender } = render(
@@ -53,12 +53,12 @@ describe('ConfigItemRow text input buffering', () => {
     );
 
     const input = screen.getByLabelText(
-      'Clock Year text input',
+      "Clock Year text input",
     ) as HTMLInputElement;
     act(() => {
       input.focus();
     });
-    fireEvent.change(input, { target: { value: '202' } });
+    fireEvent.change(input, { target: { value: "202" } });
 
     rerender(
       <ConfigItemRow
@@ -70,14 +70,14 @@ describe('ConfigItemRow text input buffering', () => {
     );
 
     expect(
-      (screen.getByLabelText('Clock Year text input') as HTMLInputElement)
+      (screen.getByLabelText("Clock Year text input") as HTMLInputElement)
         .value,
-    ).toBe('202');
-    fireEvent.blur(screen.getByLabelText('Clock Year text input'));
-    expect(onValueChange).toHaveBeenCalledWith('202');
+    ).toBe("202");
+    fireEvent.blur(screen.getByLabelText("Clock Year text input"));
+    expect(onValueChange).toHaveBeenCalledWith("202");
   });
 
-  it('commits on Enter without per-character dispatch', () => {
+  it("commits on Enter without per-character dispatch", () => {
     const onValueChange = vi.fn();
 
     render(
@@ -89,15 +89,15 @@ describe('ConfigItemRow text input buffering', () => {
       />,
     );
 
-    const input = screen.getByLabelText('Clock Year text input');
+    const input = screen.getByLabelText("Clock Year text input");
     act(() => {
       input.focus();
     });
-    fireEvent.change(input, { target: { value: '2026' } });
+    fireEvent.change(input, { target: { value: "2026" } });
     expect(onValueChange).toHaveBeenCalledTimes(0);
 
-    fireEvent.keyDown(input, { key: 'Enter' });
+    fireEvent.keyDown(input, { key: "Enter" });
     expect(onValueChange).toHaveBeenCalledTimes(1);
-    expect(onValueChange).toHaveBeenCalledWith('2026');
+    expect(onValueChange).toHaveBeenCalledWith("2026");
   });
 });

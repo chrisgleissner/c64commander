@@ -6,22 +6,22 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { addErrorLog, addLog } from '@/lib/logging';
-import { recordDeviceGuard } from '@/lib/tracing/traceSession';
-import type { TraceActionContext } from '@/lib/tracing/types';
+import { addErrorLog, addLog } from "@/lib/logging";
+import { recordDeviceGuard } from "@/lib/tracing/traceSession";
+import type { TraceActionContext } from "@/lib/tracing/types";
 import {
   loadDeviceSafetyConfig,
   subscribeDeviceSafetyUpdates,
   type DeviceSafetyConfig,
-} from '@/lib/config/deviceSafetySettings';
+} from "@/lib/config/deviceSafetySettings";
 import {
   getDeviceStateSnapshot,
   markDeviceRequestEnd,
   markDeviceRequestStart,
   setCircuitOpenUntil,
-} from '@/lib/deviceInteraction/deviceStateStore';
+} from "@/lib/deviceInteraction/deviceStateStore";
 
-export type InteractionIntent = 'user' | 'system' | 'background';
+export type InteractionIntent = "user" | "system" | "background";
 
 type RestRequestMeta = {
   action: TraceActionContext;
@@ -58,21 +58,21 @@ type QueueTask<T> = {
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const isTestEnv = () => {
-  if (typeof import.meta !== 'undefined') {
+  if (typeof import.meta !== "undefined") {
     const env = (import.meta as ImportMeta).env as
       | { VITE_ENABLE_TEST_PROBES?: string }
       | undefined;
-    if (env?.VITE_ENABLE_TEST_PROBES === '1') return true;
+    if (env?.VITE_ENABLE_TEST_PROBES === "1") return true;
   }
-  if (typeof window !== 'undefined') {
+  if (typeof window !== "undefined") {
     const win = window as Window & { __c64uTestProbeEnabled?: boolean };
     if (win.__c64uTestProbeEnabled) return true;
   }
-  if (typeof process !== 'undefined') {
+  if (typeof process !== "undefined") {
     if (
-      process.env.VITEST === 'true' ||
-      process.env.NODE_ENV === 'test' ||
-      process.env.PLAYWRIGHT === '1'
+      process.env.VITEST === "true" ||
+      process.env.NODE_ENV === "test" ||
+      process.env.PLAYWRIGHT === "1"
     ) {
       return true;
     }
@@ -147,7 +147,7 @@ const updateConfig = () => {
   ftpBackoffUntilMs = 0;
   ftpCircuitUntilMs = 0;
   setCircuitOpenUntil(null);
-  addLog('info', 'Device safety config updated', { mode: config.mode, config });
+  addLog("info", "Device safety config updated", { mode: config.mode, config });
 };
 
 export const resetInteractionState = (reason: string) => {
@@ -163,7 +163,7 @@ export const resetInteractionState = (reason: string) => {
   ftpBackoffUntilMs = 0;
   ftpCircuitUntilMs = 0;
   setCircuitOpenUntil(null);
-  addLog('info', 'Device interaction state reset', { reason });
+  addLog("info", "Device interaction state reset", { reason });
 };
 
 subscribeDeviceSafetyUpdates(updateConfig);
@@ -188,11 +188,11 @@ let ftpCircuitUntilMs = 0;
 
 const isCriticalRestError = (error: Error) => {
   const message = error.message.toLowerCase();
-  if (message.includes('smoke mode blocked')) return false;
-  if (message.includes('fuzz mode blocked')) return false;
-  if (message.includes('host unreachable')) return true;
-  if (message.includes('network')) return true;
-  if (message.includes('timed out')) return true;
+  if (message.includes("smoke mode blocked")) return false;
+  if (message.includes("fuzz mode blocked")) return false;
+  if (message.includes("host unreachable")) return true;
+  if (message.includes("network")) return true;
+  if (message.includes("timed out")) return true;
   const httpMatch = message.match(/http\s+(\d+)/i);
   if (httpMatch) {
     const status = Number(httpMatch[1]);
@@ -264,22 +264,22 @@ const resetFtpFailure = () => {
 };
 
 const resolveRestPolicy = (method: string, path: string, baseUrl: string) => {
-  const normalizedPath = path.split('?')[0];
-  if (method === 'GET' && normalizedPath === '/v1/info') {
+  const normalizedPath = path.split("?")[0];
+  if (method === "GET" && normalizedPath === "/v1/info") {
     return {
       key: `${baseUrl}:rest-info`,
       cacheMs: config.infoCacheMs,
       cooldownMs: 0,
     };
   }
-  if (method === 'GET' && normalizedPath === '/v1/configs') {
+  if (method === "GET" && normalizedPath === "/v1/configs") {
     return {
       key: `${baseUrl}:rest-configs`,
       cacheMs: config.configsCacheMs,
       cooldownMs: config.configsCooldownMs,
     };
   }
-  if (method === 'GET' && normalizedPath === '/v1/drives') {
+  if (method === "GET" && normalizedPath === "/v1/drives") {
     return {
       key: `${baseUrl}:rest-drives`,
       cacheMs: 0,
@@ -295,12 +295,12 @@ const shouldBlockForState = (
 ) => {
   if (isTestEnv()) return false;
   const state = getDeviceStateSnapshot().state;
-  if (state === 'UNKNOWN' || state === 'DISCOVERING') {
-    return !(allowDuringDiscovery && intent === 'system');
+  if (state === "UNKNOWN" || state === "DISCOVERING") {
+    return !(allowDuringDiscovery && intent === "system");
   }
-  if (state === 'ERROR') {
-    if (intent === 'background') return true;
-    if (intent === 'user' && config.allowUserOverrideCircuit) return false;
+  if (state === "ERROR") {
+    if (intent === "background") return true;
+    if (intent === "user" && config.allowUserOverrideCircuit) return false;
     return true;
   }
   return false;
@@ -318,8 +318,8 @@ const applyCooldown = async (
   if (now >= untilMs) return;
   const waitMs = untilMs - now;
   recordDeviceGuard(action, {
-    decision: 'defer',
-    reason: 'cooldown',
+    decision: "defer",
+    reason: "cooldown",
     waitMs,
   });
   await sleep(waitMs);
@@ -342,10 +342,10 @@ export const withRestInteraction = async <T>(
     }
   }
   if (shouldBlockForState(meta.intent, meta.allowDuringDiscovery)) {
-    const error = new Error('Device not ready for requests');
+    const error = new Error("Device not ready for requests");
     recordDeviceGuard(meta.action, {
-      decision: 'block',
-      reason: 'state',
+      decision: "block",
+      reason: "state",
       state: getDeviceStateSnapshot().state,
     });
     throw error;
@@ -354,23 +354,23 @@ export const withRestInteraction = async <T>(
   const now = Date.now();
   if (
     restCircuitUntilMs > now &&
-    !(meta.intent === 'user' && config.allowUserOverrideCircuit)
+    !(meta.intent === "user" && config.allowUserOverrideCircuit)
   ) {
     recordDeviceGuard(meta.action, {
-      decision: 'block',
-      reason: 'circuit-open',
+      decision: "block",
+      reason: "circuit-open",
       untilMs: restCircuitUntilMs,
     });
-    throw new Error('Device circuit open');
+    throw new Error("Device circuit open");
   }
   if (
     restCircuitUntilMs > now &&
-    meta.intent === 'user' &&
+    meta.intent === "user" &&
     config.allowUserOverrideCircuit
   ) {
     recordDeviceGuard(meta.action, {
-      decision: 'override',
-      reason: 'circuit-open',
+      decision: "override",
+      reason: "circuit-open",
       untilMs: restCircuitUntilMs,
     });
   }
@@ -380,8 +380,8 @@ export const withRestInteraction = async <T>(
     const cached = restCache.get(policy.key);
     if (cached && cached.expiresAt > now) {
       recordDeviceGuard(meta.action, {
-        decision: 'cache',
-        reason: 'fresh',
+        decision: "cache",
+        reason: "fresh",
         key: policy.key,
       });
       return cached.value as T;
@@ -389,8 +389,8 @@ export const withRestInteraction = async <T>(
     const inflight = restInflight.get(policy.key);
     if (inflight) {
       recordDeviceGuard(meta.action, {
-        decision: 'coalesce',
-        reason: 'inflight',
+        decision: "coalesce",
+        reason: "inflight",
         key: policy.key,
       });
       return inflight as Promise<T>;
@@ -401,8 +401,8 @@ export const withRestInteraction = async <T>(
     if (!meta.bypassBackoff && restBackoffUntilMs > Date.now()) {
       const waitMs = restBackoffUntilMs - Date.now();
       recordDeviceGuard(meta.action, {
-        decision: 'defer',
-        reason: 'backoff',
+        decision: "defer",
+        reason: "backoff",
         waitMs,
       });
       await sleep(waitMs);
@@ -474,10 +474,10 @@ export const withFtpInteraction = async <T>(
     }
   }
   if (shouldBlockForState(meta.intent, false)) {
-    const error = new Error('Device not ready for FTP');
+    const error = new Error("Device not ready for FTP");
     recordDeviceGuard(meta.action, {
-      decision: 'block',
-      reason: 'state',
+      decision: "block",
+      reason: "state",
       state: getDeviceStateSnapshot().state,
     });
     throw error;
@@ -486,23 +486,23 @@ export const withFtpInteraction = async <T>(
   const now = Date.now();
   if (
     ftpCircuitUntilMs > now &&
-    !(meta.intent === 'user' && config.allowUserOverrideCircuit)
+    !(meta.intent === "user" && config.allowUserOverrideCircuit)
   ) {
     recordDeviceGuard(meta.action, {
-      decision: 'block',
-      reason: 'circuit-open',
+      decision: "block",
+      reason: "circuit-open",
       untilMs: ftpCircuitUntilMs,
     });
-    throw new Error('FTP circuit open');
+    throw new Error("FTP circuit open");
   }
   if (
     ftpCircuitUntilMs > now &&
-    meta.intent === 'user' &&
+    meta.intent === "user" &&
     config.allowUserOverrideCircuit
   ) {
     recordDeviceGuard(meta.action, {
-      decision: 'override',
-      reason: 'circuit-open',
+      decision: "override",
+      reason: "circuit-open",
       untilMs: ftpCircuitUntilMs,
     });
   }
@@ -511,8 +511,8 @@ export const withFtpInteraction = async <T>(
   const inflight = ftpInflight.get(key);
   if (inflight) {
     recordDeviceGuard(meta.action, {
-      decision: 'coalesce',
-      reason: 'inflight',
+      decision: "coalesce",
+      reason: "inflight",
       key,
     });
     return inflight as Promise<T>;
@@ -523,8 +523,8 @@ export const withFtpInteraction = async <T>(
     if (ftpBackoffUntilMs > Date.now()) {
       const waitMs = ftpBackoffUntilMs - Date.now();
       recordDeviceGuard(meta.action, {
-        decision: 'defer',
-        reason: 'backoff',
+        decision: "defer",
+        reason: "backoff",
         waitMs,
       });
       await sleep(waitMs);
@@ -533,8 +533,8 @@ export const withFtpInteraction = async <T>(
     if (config.ftpListCooldownMs > 0 && Date.now() < cooldownUntil) {
       const waitMs = cooldownUntil - Date.now();
       recordDeviceGuard(meta.action, {
-        decision: 'defer',
-        reason: 'cooldown',
+        decision: "defer",
+        reason: "cooldown",
         waitMs,
       });
       await sleep(waitMs);
@@ -554,7 +554,7 @@ export const withFtpInteraction = async <T>(
       const err = error as Error;
       updateFtpFailure(err);
       markDeviceRequestEnd({ success: false, errorMessage: err.message });
-      addErrorLog('FTP request failed', {
+      addErrorLog("FTP request failed", {
         error: err.message,
         operation: meta.operation,
         path: meta.path,

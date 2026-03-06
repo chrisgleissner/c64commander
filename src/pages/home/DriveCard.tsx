@@ -6,21 +6,21 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import React from 'react';
-import { Button } from '@/components/ui/button';
+import React from "react";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import { cn } from '@/lib/utils';
-import { getOnOffButtonClass } from '@/lib/ui/buttonStyles';
+} from "@/components/ui/select";
+import { cn } from "@/lib/utils";
+import { getOnOffButtonClass } from "@/lib/ui/buttonStyles";
 import {
   getDiagnosticsColorClassForDisplaySeverity,
   type DiagnosticsDisplaySeverity,
-} from '@/lib/diagnostics/diagnosticsSeverity';
+} from "@/lib/diagnostics/diagnosticsSeverity";
 
 export interface DriveCardProps {
   name: string;
@@ -59,7 +59,7 @@ export interface DriveCardProps {
 }
 
 const inlineSelectTriggerClass =
-  'h-auto w-auto border-0 bg-transparent px-0 py-0 text-xs font-semibold text-foreground shadow-none focus:ring-0 focus:ring-offset-0 [&>svg]:hidden';
+  "h-auto w-auto border-0 bg-transparent px-0 py-0 text-xs font-semibold text-foreground shadow-none focus:ring-0 focus:ring-offset-0 [&>svg]:hidden";
 
 export function DriveCard({
   name,
@@ -81,7 +81,7 @@ export function DriveCard({
   mountedPathLabel,
   onMountedPathClick,
   statusSummary,
-  statusSeverity = 'INFO',
+  statusSeverity = "INFO",
   onStatusClick,
   statusRaw,
   isConnected,
@@ -89,12 +89,12 @@ export function DriveCard({
   testIdSuffix,
 }: DriveCardProps) {
   const formatSelectOptionLabel = (value: string) =>
-    value === '' ? 'Default' : value;
+    value === "" ? "Default" : value;
 
   return (
     <div
       className={cn(
-        'bg-card border border-border rounded-xl p-3 space-y-2',
+        "bg-card border border-border rounded-xl p-3 space-y-2",
         className,
       )}
       data-testid={`home-drive-row-${testIdSuffix}`}
@@ -109,10 +109,10 @@ export function DriveCard({
           size="sm"
           onClick={onToggle}
           disabled={!isConnected || togglePending}
-          className={cn('h-6 px-2 text-xs', getOnOffButtonClass(enabled))}
+          className={cn("h-6 px-2 text-xs", getOnOffButtonClass(enabled))}
           data-testid={`home-drive-toggle-${testIdSuffix}`}
         >
-          {enabled ? 'ON' : 'OFF'}
+          {enabled ? "ON" : "OFF"}
         </Button>
       </div>
 
@@ -120,7 +120,7 @@ export function DriveCard({
       {(mountedPath !== undefined || pathValue !== undefined) && (
         <div className="flex items-center gap-2 text-xs">
           <span className="text-muted-foreground whitespace-nowrap">
-            {mountedPathLabel || 'Disk'}
+            {mountedPathLabel || "Disk"}
           </span>
           <button
             type="button"
@@ -129,7 +129,7 @@ export function DriveCard({
             className="font-medium text-foreground truncate hover:underline text-left flex-1"
             data-testid={`home-drive-mounted-${testIdSuffix}`}
           >
-            {(mountedPath ?? pathValue) || 'Select...'}
+            {(mountedPath ?? pathValue) || "Select..."}
           </button>
         </div>
       )}
@@ -198,10 +198,10 @@ export function DriveCard({
           onClick={onStatusClick}
           disabled={!onStatusClick}
           className={cn(
-            'truncate text-left font-medium',
+            "truncate text-left font-medium",
             onStatusClick
-              ? 'underline-offset-2 hover:underline'
-              : 'cursor-default',
+              ? "underline-offset-2 hover:underline"
+              : "cursor-default",
             getDiagnosticsColorClassForDisplaySeverity(statusSeverity),
           )}
           data-testid={`home-drive-status-${testIdSuffix}`}

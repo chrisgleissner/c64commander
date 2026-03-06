@@ -6,30 +6,30 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { expect, test, type Page } from '@playwright/test';
-import { chromium, devices } from 'playwright';
-import { promises as fs } from 'node:fs';
-import { spawnSync } from 'node:child_process';
-import * as path from 'node:path';
-import { createHash } from 'node:crypto';
-import { createMockC64Server } from '../../tests/mocks/mockC64Server';
-import { seedUiMocks } from '../uiMocks';
+import { expect, test, type Page } from "@playwright/test";
+import { chromium, devices } from "playwright";
+import { promises as fs } from "node:fs";
+import { spawnSync } from "node:child_process";
+import * as path from "node:path";
+import { createHash } from "node:crypto";
+import { createMockC64Server } from "../../tests/mocks/mockC64Server";
+import { seedUiMocks } from "../uiMocks";
 import {
   createBackendFailureTracker,
   isAlwaysExpectedFuzzBehavior,
   shouldIgnoreBackendFailure,
   type AppLogEntry,
-} from './fuzzBackend';
+} from "./fuzzBackend";
 import {
   diffProgress,
   hasMeaningfulProgress,
   readProgressSnapshot,
-} from './fuzzProgress';
-import { attemptStructuredRecovery } from './fuzzRecovery';
+} from "./fuzzProgress";
+import { attemptStructuredRecovery } from "./fuzzRecovery";
 
 // FUZZ_ENABLED is checked at runtime inside the test function to ensure
 // the environment variable is properly set by the parent process.
-test.use({ screenshot: 'off', video: 'off', trace: 'off' });
+test.use({ screenshot: "off", video: "off", trace: "off" });
 
 const ACTION_TIMEOUT_MS = 10_000; // Hard timeout for any single action
 const SESSION_TIMEOUT_MS = 5 * 60 * 1000; // Maximum session duration (5 minutes)
@@ -42,14 +42,14 @@ const MAX_VISUAL_STAGNATION_MS = (() => {
 })();
 const VISUAL_DELTA_THRESHOLD = 0.003;
 const PLACEHOLDER_SCREENSHOT_PNG = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO3Zc1cAAAAASUVORK5CYII=',
-  'base64',
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO3Zc1cAAAAASUVORK5CYII=",
+  "base64",
 );
 
-type Severity = 'crash' | 'freeze' | 'errorLog' | 'warnLog';
+type Severity = "crash" | "freeze" | "errorLog" | "warnLog";
 
 const isTerminalSeverity = (severity: Severity): boolean =>
-  severity === 'crash' || severity === 'freeze';
+  severity === "crash" || severity === "freeze";
 
 type IssueSignature = {
   exception: string;
@@ -97,25 +97,25 @@ type IssueRecord = {
 };
 
 type SessionTerminationReason =
-  | 'issue'
-  | 'session-timeout'
-  | 'recovery-exhausted'
-  | 'no-progress'
-  | 'min-steps'
-  | 'time-budget'
-  | 'max-steps'
-  | 'no-action'
-  | 'visual-stagnation';
+  | "issue"
+  | "session-timeout"
+  | "recovery-exhausted"
+  | "no-progress"
+  | "min-steps"
+  | "time-budget"
+  | "max-steps"
+  | "no-action"
+  | "visual-stagnation";
 
 type RecoveryStepName =
-  | 'structured-recovery'
-  | 'close-modal'
-  | 'navigate-back'
-  | 'root-tab'
-  | 'cycle-tab'
-  | 'force-home'
-  | 'reload'
-  | 'terminate-session';
+  | "structured-recovery"
+  | "close-modal"
+  | "navigate-back"
+  | "root-tab"
+  | "cycle-tab"
+  | "force-home"
+  | "reload"
+  | "terminate-session";
 
 type VisualSample = {
   timestamp: number;
@@ -182,16 +182,16 @@ const toNumber = (value: string | undefined) => {
 
 const normalizeMessage = (value: string) =>
   value
-    .replace(/[\s\t]+/g, ' ')
-    .replace(/0x[0-9a-f]+/gi, '0x#')
-    .replace(/\b\d{3,}\b/g, '#')
+    .replace(/[\s\t]+/g, " ")
+    .replace(/0x[0-9a-f]+/gi, "0x#")
+    .replace(/\b\d{3,}\b/g, "#")
     .trim();
 
 const extractFrames = (stack?: string) => {
   if (!stack) return [] as string[];
   return stack
-    .split('\n')
-    .map((line) => line.trim().replace(/^at\s+/, ''))
+    .split("\n")
+    .map((line) => line.trim().replace(/^at\s+/, ""))
     .filter(Boolean)
     .slice(0, 5);
 };
@@ -208,15 +208,15 @@ const hashString = (value: string) => {
   for (let i = 0; i < value.length; i += 1) {
     hash = (hash * 33) ^ value.charCodeAt(i);
   }
-  return (hash >>> 0).toString(16).padStart(8, '0');
+  return (hash >>> 0).toString(16).padStart(8, "0");
 };
 
 const buildGroupId = (signature: IssueSignature) => {
-  const frame = signature.topFrames[0] || 'unknown';
+  const frame = signature.topFrames[0] || "unknown";
   const base = `${signature.exception}@${frame}`;
-  const signatureKey = `${signature.exception}|${signature.message}|${signature.topFrames.join('|')}`;
+  const signatureKey = `${signature.exception}|${signature.message}|${signature.topFrames.join("|")}`;
   const hash = hashString(signatureKey).slice(0, 8);
-  return `${base}-${hash}`.replace(/[^a-z0-9@._-]+/gi, '-').slice(0, 128);
+  return `${base}-${hash}`.replace(/[^a-z0-9@._-]+/gi, "-").slice(0, 128);
 };
 
 const parseActionTimeout = (error: unknown) => {
@@ -262,36 +262,36 @@ const withTimeout = async <T>(
 };
 
 const getDeviceProfile = (platform: string) => {
-  if (platform === 'android-tablet') {
+  if (platform === "android-tablet") {
     return {
       viewport: { width: 800, height: 1280 },
       deviceScaleFactor: 2,
       isMobile: true,
     };
   }
-  if (platform === 'web-desktop') {
-    return devices['Desktop Chrome'];
+  if (platform === "web-desktop") {
+    return devices["Desktop Chrome"];
   }
-  return devices['Pixel 5'];
+  return devices["Pixel 5"];
 };
 
-type ElementHandle = import('playwright').ElementHandle<HTMLElement>;
+type ElementHandle = import("playwright").ElementHandle<HTMLElement>;
 
 const describeElement = async (element: ElementHandle) =>
   element.evaluate((node) => {
     const tag = node.tagName.toLowerCase();
-    const role = node.getAttribute('role');
-    const id = node.id ? `#${node.id}` : '';
+    const role = node.getAttribute("role");
+    const id = node.id ? `#${node.id}` : "";
     const name =
-      node.getAttribute('aria-label') || node.getAttribute('name') || '';
-    const text = (node.textContent || '').trim().slice(0, 40);
-    const label = name ? `[${name}]` : text ? `"${text}"` : '';
-    const rolePart = role ? `{${role}}` : '';
+      node.getAttribute("aria-label") || node.getAttribute("name") || "";
+    const text = (node.textContent || "").trim().slice(0, 40);
+    const label = name ? `[${name}]` : text ? `"${text}"` : "";
+    const rolePart = role ? `{${role}}` : "";
     return `${tag}${id}${rolePart}${label}`.trim();
   });
 
 const isElementDetachedError = (e: unknown): boolean =>
-  e instanceof Error && e.message.includes('not attached to the DOM');
+  e instanceof Error && e.message.includes("not attached to the DOM");
 
 const pickVisibleElement = async (
   page: Page,
@@ -340,7 +340,7 @@ const pickVisibleElementByText = async (
   const visible: ElementHandle[] = [];
   for (const element of elements) {
     if (!(await element.isVisible())) continue;
-    const text = ((await element.textContent()) || '').trim();
+    const text = ((await element.textContent()) || "").trim();
     if (!matcher.test(text)) continue;
     visible.push(element as ElementHandle);
     if (visible.length >= 20) break;
@@ -359,7 +359,7 @@ const hasVisibleElementByText = async (
   const elements = await page.$$(selector);
   for (const element of elements) {
     if (!(await element.isVisible())) continue;
-    const text = ((await element.textContent()) || '').trim();
+    const text = ((await element.textContent()) || "").trim();
     if (matcher.test(text)) return true;
   }
   return false;
@@ -373,14 +373,14 @@ const getActiveDialog = async (page: Page) =>
 const isExternalOrBlankTarget = async (element: ElementHandle) =>
   element.evaluate((node) => {
     if (!(node instanceof HTMLAnchorElement)) return false;
-    const target = node.getAttribute('target');
-    const href = node.getAttribute('href') || '';
-    if (target === '_blank') return true;
+    const target = node.getAttribute("target");
+    const href = node.getAttribute("href") || "";
+    if (target === "_blank") return true;
     if (/^https?:\/\//i.test(href)) return true;
     if (
       /^[a-z]+:/i.test(href) &&
-      !href.startsWith('/') &&
-      !href.startsWith('#')
+      !href.startsWith("/") &&
+      !href.startsWith("#")
     )
       return true;
     return false;
@@ -408,7 +408,7 @@ const showInteractionPulse = async (page: Page, target?: ElementHandle) => {
   }
 };
 
-const closeBlockingOverlay = async (page: import('@playwright/test').Page) => {
+const closeBlockingOverlay = async (page: import("@playwright/test").Page) => {
   try {
     const toastViewport = await page.$(
       '[data-radix-toast-viewport], [role="region"][aria-label*="Notifications"]',
@@ -416,8 +416,8 @@ const closeBlockingOverlay = async (page: import('@playwright/test').Page) => {
     if (toastViewport) {
       await toastViewport.evaluate((node) => {
         const el = node as HTMLElement;
-        el.style.pointerEvents = 'none';
-        el.style.opacity = '0';
+        el.style.pointerEvents = "none";
+        el.style.opacity = "0";
       });
       return false;
     }
@@ -425,7 +425,7 @@ const closeBlockingOverlay = async (page: import('@playwright/test').Page) => {
       '[data-state="open"][data-aria-hidden="true"], [data-state="open"][aria-hidden="true"]',
     );
     if (!overlay) return false;
-    await page.keyboard.press('Escape').catch(() => {});
+    await page.keyboard.press("Escape").catch(() => {});
     await page.waitForTimeout(50);
     return true;
   } catch (error) {
@@ -448,12 +448,12 @@ const jitterClick = async (
   try {
     box = await target.boundingBox();
   } catch (error) {
-    const message = (error as Error)?.message || '';
+    const message = (error as Error)?.message || "";
     if (
-      message.includes('not attached') ||
-      message.includes('Element is not attached')
+      message.includes("not attached") ||
+      message.includes("Element is not attached")
     ) {
-      throw new Error('Element is not attached');
+      throw new Error("Element is not attached");
     }
     throw error;
   }
@@ -462,12 +462,12 @@ const jitterClick = async (
     try {
       await target.click({ clickCount, delay });
     } catch (error) {
-      const message = (error as Error)?.message || '';
+      const message = (error as Error)?.message || "";
       if (
-        message.includes('not attached') ||
-        message.includes('Element is not attached')
+        message.includes("not attached") ||
+        message.includes("Element is not attached")
       ) {
-        throw new Error('Element is not attached');
+        throw new Error("Element is not attached");
       }
       throw error;
     }
@@ -516,8 +516,8 @@ const safeClick = async (
     );
     return { ok: true, log: `click ${pick.description}` };
   } catch (error) {
-    const message = (error as Error)?.message || '';
-    if (message.includes('intercepts pointer events')) {
+    const message = (error as Error)?.message || "";
+    if (message.includes("intercepts pointer events")) {
       await closeBlockingOverlay(page);
       await jitterClick(
         page,
@@ -529,8 +529,8 @@ const safeClick = async (
       return { ok: true, log: `click ${pick.description}` };
     }
     if (
-      message.includes('not attached') ||
-      message.includes('Element is not attached')
+      message.includes("not attached") ||
+      message.includes("Element is not attached")
     ) {
       const refreshed = await pickVisibleElement(
         page,
@@ -554,7 +554,7 @@ const safeClick = async (
 };
 
 const safeClickByText = async (
-  page: import('@playwright/test').Page,
+  page: import("@playwright/test").Page,
   selector: string,
   matcher: RegExp,
   rng: SeededRng,
@@ -572,10 +572,10 @@ const safeClickByText = async (
     );
     return { ok: true, log: `click ${pick.description}` };
   } catch (error) {
-    const message = (error as Error)?.message || '';
+    const message = (error as Error)?.message || "";
     if (
-      message.includes('not attached') ||
-      message.includes('Element is not attached')
+      message.includes("not attached") ||
+      message.includes("Element is not attached")
     ) {
       const refreshed = await pickVisibleElementByText(
         page,
@@ -605,7 +605,7 @@ const randomText = (rng: SeededRng) => {
     const code = rng.int(97, 122);
     chars.push(String.fromCharCode(code));
   }
-  return chars.join('');
+  return chars.join("");
 };
 
 const randomLargeText = (rng: SeededRng) => {
@@ -618,31 +618,31 @@ const randomLargeText = (rng: SeededRng) => {
       const code = rng.int(97, 122);
       chars.push(String.fromCharCode(code));
     }
-    parts.push(chars.join(''));
+    parts.push(chars.join(""));
     if (rng.next() > 0.92) {
-      parts.push('\n');
+      parts.push("\n");
     }
   }
-  return parts.join(' ').replace(/\s+\n\s+/g, '\n');
+  return parts.join(" ").replace(/\s+\n\s+/g, "\n");
 };
 
 const randomKey = (rng: SeededRng) => {
   const keys = [
-    'Enter',
-    'Escape',
-    'Tab',
-    'Backspace',
-    'Delete',
-    'ArrowUp',
-    'ArrowDown',
-    'ArrowLeft',
-    'ArrowRight',
+    "Enter",
+    "Escape",
+    "Tab",
+    "Backspace",
+    "Delete",
+    "ArrowUp",
+    "ArrowDown",
+    "ArrowLeft",
+    "ArrowRight",
   ] as const;
   return rng.pick([...keys]);
 };
 
 const randomViewportPoint = async (
-  page: import('@playwright/test').Page,
+  page: import("@playwright/test").Page,
   rng: SeededRng,
 ) => {
   const viewport = page.viewportSize();
@@ -663,7 +663,7 @@ const randomViewportPoint = async (
 };
 
 const hashBuffer = (buffer: Buffer) =>
-  createHash('sha1').update(buffer).digest('hex');
+  createHash("sha1").update(buffer).digest("hex");
 
 const computeVisualDelta = (
   previous: Buffer | null,
@@ -698,7 +698,7 @@ const computeVisualDelta = (
 };
 
 const writeJson = async (filePath: string, payload: unknown) => {
-  await fs.writeFile(filePath, JSON.stringify(payload, null, 2), 'utf8');
+  await fs.writeFile(filePath, JSON.stringify(payload, null, 2), "utf8");
 };
 
 const extractScreenshotFromVideo = (
@@ -706,84 +706,84 @@ const extractScreenshotFromVideo = (
   screenshotPath: string,
 ) => {
   const result = spawnSync(
-    'ffmpeg',
+    "ffmpeg",
     [
-      '-v',
-      'error',
-      '-y',
-      '-sseof',
-      '-0.1',
-      '-i',
+      "-v",
+      "error",
+      "-y",
+      "-sseof",
+      "-0.1",
+      "-i",
       videoPath,
-      '-frames:v',
-      '1',
+      "-frames:v",
+      "1",
       screenshotPath,
     ],
-    { stdio: ['ignore', 'pipe', 'pipe'] },
+    { stdio: ["ignore", "pipe", "pipe"] },
   );
   if (result.error) {
     throw new Error(`ffmpeg execution failed: ${result.error.message}`);
   }
   if (result.status !== 0) {
     throw new Error(
-      (result.stderr || Buffer.from('ffmpeg failed')).toString('utf8').trim() ||
-        'ffmpeg failed',
+      (result.stderr || Buffer.from("ffmpeg failed")).toString("utf8").trim() ||
+        "ffmpeg failed",
     );
   }
 };
 
 const probeVideoReadable = (videoPath: string) => {
   const result = spawnSync(
-    'ffprobe',
+    "ffprobe",
     [
-      '-v',
-      'error',
-      '-show_entries',
-      'format=duration',
-      '-of',
-      'default=noprint_wrappers=1:nokey=1',
+      "-v",
+      "error",
+      "-show_entries",
+      "format=duration",
+      "-of",
+      "default=noprint_wrappers=1:nokey=1",
       videoPath,
     ],
-    { stdio: ['ignore', 'pipe', 'pipe'] },
+    { stdio: ["ignore", "pipe", "pipe"] },
   );
   if (result.error || result.status !== 0) {
     return false;
   }
-  const value = Number((result.stdout || '').toString('utf8').trim());
+  const value = Number((result.stdout || "").toString("utf8").trim());
   return Number.isFinite(value) && value > 0;
 };
 
 const createFallbackSessionVideo = (videoPath: string, durationMs: number) => {
   const seconds = Math.max(1, Math.ceil(durationMs / 1000));
   const result = spawnSync(
-    'ffmpeg',
+    "ffmpeg",
     [
-      '-v',
-      'error',
-      '-y',
-      '-f',
-      'lavfi',
-      '-i',
-      'color=c=black:s=360x740:r=1',
-      '-t',
+      "-v",
+      "error",
+      "-y",
+      "-f",
+      "lavfi",
+      "-i",
+      "color=c=black:s=360x740:r=1",
+      "-t",
       String(seconds),
-      '-c:v',
-      'libvpx-vp9',
-      '-pix_fmt',
-      'yuv420p',
+      "-c:v",
+      "libvpx-vp9",
+      "-pix_fmt",
+      "yuv420p",
       videoPath,
     ],
-    { stdio: ['ignore', 'pipe', 'pipe'] },
+    { stdio: ["ignore", "pipe", "pipe"] },
   );
   if (result.error || result.status !== 0) {
     throw new Error(
-      `Fallback session video creation failed: ${(result.stderr || result.error?.message || 'ffmpeg failed').toString()}`,
+      `Fallback session video creation failed: ${(result.stderr || result.error?.message || "ffmpeg failed").toString()}`,
     );
   }
 };
 
 const PLACEHOLDER_PNG_BASE64 =
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMBAAZf6z8AAAAASUVORK5CYII=';
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMBAAZf6z8AAAAASUVORK5CYII=";
 
 const ensureScreenshotArtifact = async (screenshotPath: string) => {
   const exists = await fs
@@ -794,7 +794,7 @@ const ensureScreenshotArtifact = async (screenshotPath: string) => {
   await fs.mkdir(path.dirname(screenshotPath), { recursive: true });
   await fs.writeFile(
     screenshotPath,
-    Buffer.from(PLACEHOLDER_PNG_BASE64, 'base64'),
+    Buffer.from(PLACEHOLDER_PNG_BASE64, "base64"),
   );
 };
 
@@ -804,12 +804,12 @@ const sleep = (ms: number) =>
   });
 
 const summarizeFixHint = (signature: IssueSignature, severity: Severity) => {
-  if (severity === 'freeze')
-    return `Investigate timeout/freeze around ${signature.topFrames[0] || 'recent action'}.`;
-  if (signature.exception.toLowerCase().includes('typeerror')) {
-    return `Guard null/undefined access near ${signature.topFrames[0] || 'the failing frame'}.`;
+  if (severity === "freeze")
+    return `Investigate timeout/freeze around ${signature.topFrames[0] || "recent action"}.`;
+  if (signature.exception.toLowerCase().includes("typeerror")) {
+    return `Guard null/undefined access near ${signature.topFrames[0] || "the failing frame"}.`;
   }
-  return `Inspect ${signature.exception} at ${signature.topFrames[0] || 'top frame'} and add safe handling.`;
+  return `Inspect ${signature.exception} at ${signature.topFrames[0] || "top frame"} and add safe handling.`;
 };
 
 /** Format a millisecond session offset as VLC-friendly mm:ss.mmm for README timestamps. */
@@ -818,14 +818,14 @@ const formatFuzzTimestamp = (ms: number): string => {
   const minutes = Math.floor(totalMs / 60000);
   const seconds = Math.floor((totalMs % 60000) / 1000);
   const millis = totalMs % 1000;
-  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(millis).padStart(3, '0')}`;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}.${String(millis).padStart(3, "0")}`;
 };
 
-test.describe('Fuzz Test', () => {
-  test('run', async ({ page }, testInfo) => {
+test.describe("Fuzz Test", () => {
+  test("run", async ({ page }, testInfo) => {
     void page;
     // Check FUZZ_ENABLED at runtime to ensure environment variable is properly set
-    const FUZZ_ENABLED = process.env.FUZZ_RUN === '1';
+    const FUZZ_ENABLED = process.env.FUZZ_RUN === "1";
     const SHORT_FUZZ_DEFAULTS = !FUZZ_ENABLED;
     const infraMode = !FUZZ_ENABLED;
     const seed = infraMode
@@ -848,9 +848,9 @@ test.describe('Fuzz Test', () => {
       5000,
       toNumber(process.env.FUZZ_ACTION_TIMEOUT_MS) ?? ACTION_TIMEOUT_MS,
     );
-    const platform = process.env.FUZZ_PLATFORM || 'android-phone';
-    const runMode = infraMode ? 'infra' : process.env.FUZZ_RUN_MODE || 'local';
-    const isCiRun = runMode === 'ci';
+    const platform = process.env.FUZZ_PLATFORM || "android-phone";
+    const runMode = infraMode ? "infra" : process.env.FUZZ_RUN_MODE || "local";
+    const isCiRun = runMode === "ci";
     const visualSampleTimeoutMs = Math.max(
       1000,
       Math.min(
@@ -897,23 +897,23 @@ test.describe('Fuzz Test', () => {
       : Math.max(1000, Math.min(3000, actionTimeoutMs));
     const baseUrl =
       process.env.FUZZ_BASE_URL ||
-      String(testInfo.project.use.baseURL || 'http://127.0.0.1:4173');
+      String(testInfo.project.use.baseURL || "http://127.0.0.1:4173");
     const baseOrigin = new URL(baseUrl).origin;
 
     const outputRootBase = process.env.FUZZ_OUTPUT_ROOT
       ? path.resolve(process.cwd(), process.env.FUZZ_OUTPUT_ROOT)
       : path.resolve(
           process.cwd(),
-          'test-results',
-          'fuzz',
+          "test-results",
+          "fuzz",
           `run-${runMode}-${platform}-${seed}-${runId}`,
         );
     const outputRoot =
       shardTotal > 1
         ? path.join(outputRootBase, `shard-${shardIndex}`)
         : outputRootBase;
-    const videosDir = path.join(outputRoot, 'videos');
-    const sessionsDir = path.join(outputRoot, 'sessions');
+    const videosDir = path.join(outputRoot, "videos");
+    const sessionsDir = path.join(outputRoot, "sessions");
     await fs.rm(outputRoot, { recursive: true, force: true });
     await fs.mkdir(videosDir, { recursive: true });
     await fs.mkdir(sessionsDir, { recursive: true });
@@ -950,14 +950,14 @@ test.describe('Fuzz Test', () => {
     const sessionManifests: SessionManifest[] = [];
     const terminationCounts: Record<SessionTerminationReason, number> = {
       issue: 0,
-      'session-timeout': 0,
-      'recovery-exhausted': 0,
-      'no-progress': 0,
-      'min-steps': 0,
-      'time-budget': 0,
-      'max-steps': 0,
-      'no-action': 0,
-      'visual-stagnation': 0,
+      "session-timeout": 0,
+      "recovery-exhausted": 0,
+      "no-progress": 0,
+      "min-steps": 0,
+      "time-budget": 0,
+      "max-steps": 0,
+      "no-action": 0,
+      "visual-stagnation": 0,
     };
 
     const recordIssue = (issue: IssueRecord, example: IssueExample) => {
@@ -978,10 +978,10 @@ test.describe('Fuzz Test', () => {
         issue_group_id: groupId,
         signature,
         severityCounts: {
-          crash: issue.severity === 'crash' ? 1 : 0,
-          freeze: issue.severity === 'freeze' ? 1 : 0,
-          errorLog: issue.severity === 'errorLog' ? 1 : 0,
-          warnLog: issue.severity === 'warnLog' ? 1 : 0,
+          crash: issue.severity === "crash" ? 1 : 0,
+          freeze: issue.severity === "freeze" ? 1 : 0,
+          errorLog: issue.severity === "errorLog" ? 1 : 0,
+          warnLog: issue.severity === "warnLog" ? 1 : 0,
         },
         platforms: [example.platform],
         examples: [example],
@@ -990,7 +990,7 @@ test.describe('Fuzz Test', () => {
 
     const runSession = async () => {
       sessionIndex += 1;
-      const sessionId = `session-${String(sessionIndex).padStart(4, '0')}`;
+      const sessionId = `session-${String(sessionIndex).padStart(4, "0")}`;
       const sessionLogPath = path.join(sessionsDir, `${sessionId}.log`);
       const sessionJsonPath = path.join(sessionsDir, `${sessionId}.json`);
       const sessionScreenshotPath = path.join(sessionsDir, `${sessionId}.png`);
@@ -1012,12 +1012,12 @@ test.describe('Fuzz Test', () => {
         await withTimeout(
           () => browser.close(),
           Math.max(10_000, actionTimeoutMs * 2),
-          'restart browser after failed session cleanup',
+          "restart browser after failed session cleanup",
         ).catch(() => {});
         browser = await withTimeout(
           () => chromium.launch({ headless: true }),
           Math.max(10_000, actionTimeoutMs * 2),
-          'launch browser for next session',
+          "launch browser for next session",
         );
         browserNeedsRestart = false;
       }
@@ -1033,12 +1033,12 @@ test.describe('Fuzz Test', () => {
             },
           }),
         Math.max(10_000, actionTimeoutMs * 2),
-        'create browser context',
+        "create browser context",
       );
       const page = await withTimeout(
         () => context.newPage(),
         Math.max(5000, actionTimeoutMs),
-        'create session page',
+        "create session page",
       );
       page.setDefaultTimeout(8000);
       page.setDefaultNavigationTimeout(12000);
@@ -1049,11 +1049,11 @@ test.describe('Fuzz Test', () => {
           try {
             localStorage.clear();
             sessionStorage.clear();
-            localStorage.setItem('c64u_fuzz_mode_enabled', '1');
-            localStorage.setItem('c64u_fuzz_mock_base_url', baseUrlArg);
-            localStorage.setItem('c64u_fuzz_storage_seeded', '1');
-            localStorage.setItem('c64u_debug_logging_enabled', '1');
-            localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
+            localStorage.setItem("c64u_fuzz_mode_enabled", "1");
+            localStorage.setItem("c64u_fuzz_mock_base_url", baseUrlArg);
+            localStorage.setItem("c64u_fuzz_storage_seeded", "1");
+            localStorage.setItem("c64u_debug_logging_enabled", "1");
+            localStorage.setItem("c64u_automatic_demo_mode_enabled", "1");
             (window as Window & { __c64uFuzzMode?: boolean }).__c64uFuzzMode =
               true;
           } catch {
@@ -1061,7 +1061,7 @@ test.describe('Fuzz Test', () => {
               true;
           }
           try {
-            const style = document.createElement('style');
+            const style = document.createElement("style");
             style.textContent = `
             .c64u-fuzz-pulse {
               position: absolute;
@@ -1082,17 +1082,17 @@ test.describe('Fuzz Test', () => {
             document.head?.appendChild(style);
 
             const ensureRoot = () => {
-              let root = document.getElementById('c64u-fuzz-overlay');
+              let root = document.getElementById("c64u-fuzz-overlay");
               if (!root) {
-                root = document.createElement('div');
-                root.id = 'c64u-fuzz-overlay';
-                root.style.position = 'fixed';
-                root.style.left = '0';
-                root.style.top = '0';
-                root.style.width = '100%';
-                root.style.height = '100%';
-                root.style.pointerEvents = 'none';
-                root.style.zIndex = '2147483647';
+                root = document.createElement("div");
+                root.id = "c64u-fuzz-overlay";
+                root.style.position = "fixed";
+                root.style.left = "0";
+                root.style.top = "0";
+                root.style.width = "100%";
+                root.style.height = "100%";
+                root.style.pointerEvents = "none";
+                root.style.zIndex = "2147483647";
                 (document.body || document.documentElement).appendChild(root);
               }
               return root;
@@ -1100,14 +1100,14 @@ test.describe('Fuzz Test', () => {
 
             const pulse = (x: number, y: number) => {
               const root = ensureRoot();
-              const dot = document.createElement('div');
-              dot.className = 'c64u-fuzz-pulse';
+              const dot = document.createElement("div");
+              dot.className = "c64u-fuzz-pulse";
               dot.style.left = `${x}px`;
               dot.style.top = `${y}px`;
               root.appendChild(dot);
               requestAnimationFrame(() => {
-                dot.style.transform = 'scale(1)';
-                dot.style.opacity = '0';
+                dot.style.transform = "scale(1)";
+                dot.style.opacity = "0";
               });
               setTimeout(() => dot.remove(), 450);
             };
@@ -1119,7 +1119,7 @@ test.describe('Fuzz Test', () => {
             ).__c64uFuzzPulse = pulse;
 
             document.addEventListener(
-              'pointerdown',
+              "pointerdown",
               (event) => {
                 pulse(event.clientX, event.clientY);
               },
@@ -1127,12 +1127,12 @@ test.describe('Fuzz Test', () => {
             );
 
             document.addEventListener(
-              'keydown',
+              "keydown",
               () => {
                 const active = document.activeElement as HTMLElement | null;
                 if (
                   !active ||
-                  typeof active.getBoundingClientRect !== 'function'
+                  typeof active.getBoundingClientRect !== "function"
                 )
                   return;
                 const rect = active.getBoundingClientRect();
@@ -1153,8 +1153,8 @@ test.describe('Fuzz Test', () => {
       let issue: IssueRecord | null = null;
       const sessionIssues: IssueRecord[] = [];
       let lastLogId: string | null = null;
-      let currentFaultMode: 'none' | 'slow' | 'timeout' | 'refused' | 'auth' =
-        'none';
+      let currentFaultMode: "none" | "slow" | "timeout" | "refused" | "auth" =
+        "none";
       let serverReachable = true;
       let lastOutageAt = 0;
       const backendTracker = createBackendFailureTracker({
@@ -1186,18 +1186,18 @@ test.describe('Fuzz Test', () => {
       };
       const recordStuckSessionIssue = (reason: string, detail: string) => {
         recordIssueOnce({
-          severity: 'freeze',
+          severity: "freeze",
           message: `Session stalled (${reason}): ${detail}`,
-          source: 'session.stalled',
+          source: "session.stalled",
           interactionIndex: totalSteps,
           lastInteractions: interactions.slice(-lastInteractionCount),
         });
       };
 
-      page.on('pageerror', (error) => {
+      page.on("pageerror", (error) => {
         recordIssueOnce({
-          severity: 'crash',
-          message: error.message || 'Page error',
+          severity: "crash",
+          message: error.message || "Page error",
           stack: error.stack,
           source: error.name,
           interactionIndex: totalSteps,
@@ -1205,33 +1205,33 @@ test.describe('Fuzz Test', () => {
         });
       });
 
-      page.on('crash', () => {
+      page.on("crash", () => {
         recordIssueOnce({
-          severity: 'crash',
-          message: 'Page crashed',
-          source: 'PageCrash',
+          severity: "crash",
+          message: "Page crashed",
+          source: "PageCrash",
           interactionIndex: totalSteps,
           lastInteractions: interactions.slice(-lastInteractionCount),
         });
       });
 
-      page.on('console', (msg) => {
+      page.on("console", (msg) => {
         if (issue) return; // terminal issue already recorded
-        if (msg.type() !== 'error' && msg.type() !== 'warning') return;
+        if (msg.type() !== "error" && msg.type() !== "warning") return;
         const text = msg.text();
         // Fuzz runner initialization no longer emits localStorage warnings.
         // Suppress expected offline / startup messages that are not app bugs.
         if (
           isAlwaysExpectedFuzzBehavior({
-            id: 'console',
+            id: "console",
             level: msg.type(),
             message: text,
           } as AppLogEntry)
         )
           return;
-        if (msg.type() === 'error') {
+        if (msg.type() === "error") {
           const shouldIgnore = shouldIgnoreBackendFailure(
-            { id: 'console', level: msg.type(), message: text } as AppLogEntry,
+            { id: "console", level: msg.type(), message: text } as AppLogEntry,
             {
               now: Date.now(),
               serverReachable,
@@ -1247,14 +1247,14 @@ test.describe('Fuzz Test', () => {
           }
         }
         if (
-          msg.type() === 'error' &&
-          text.includes('Failed to load resource') &&
-          text.includes('net::ERR_')
+          msg.type() === "error" &&
+          text.includes("Failed to load resource") &&
+          text.includes("net::ERR_")
         ) {
           return;
         }
         recordIssueOnce({
-          severity: msg.type() === 'error' ? 'errorLog' : 'warnLog',
+          severity: msg.type() === "error" ? "errorLog" : "warnLog",
           message: text,
           source: `console.${msg.type()}`,
           interactionIndex: totalSteps,
@@ -1269,13 +1269,13 @@ test.describe('Fuzz Test', () => {
             () =>
               page.evaluate(() => {
                 try {
-                  return localStorage.getItem('c64u_app_logs');
+                  return localStorage.getItem("c64u_app_logs");
                 } catch {
                   return null;
                 }
               }),
             stateProbeTimeoutMs,
-            'read app logs',
+            "read app logs",
           );
           if (!raw) return [] as AppLogEntry[];
           const parsed = JSON.parse(raw) as AppLogEntry[];
@@ -1299,11 +1299,11 @@ test.describe('Fuzz Test', () => {
         }
         if (logs[0]?.id) lastLogId = logs[0].id;
         for (const entry of fresh) {
-          if (entry.level !== 'error' && entry.level !== 'warn') continue;
+          if (entry.level !== "error" && entry.level !== "warn") continue;
           // Always-expected behaviors (e.g. DiagnosticsBridge, host cycling) must never become issues.
           if (isAlwaysExpectedFuzzBehavior(entry)) continue;
-          if (entry.level === 'error') {
-            if (entry.message.toLowerCase().includes('fuzz mode blocked'))
+          if (entry.level === "error") {
+            if (entry.message.toLowerCase().includes("fuzz mode blocked"))
               continue;
             const shouldIgnore = shouldIgnoreBackendFailure(entry, {
               now: Date.now(),
@@ -1319,9 +1319,9 @@ test.describe('Fuzz Test', () => {
             }
           }
           recordIssueOnce({
-            severity: entry.level === 'error' ? 'errorLog' : 'warnLog',
+            severity: entry.level === "error" ? "errorLog" : "warnLog",
             message: entry.message,
-            source: entry.level === 'error' ? 'app.log.error' : 'app.log.warn',
+            source: entry.level === "error" ? "app.log.error" : "app.log.warn",
             interactionIndex: totalSteps,
             lastInteractions: interactions.slice(-lastInteractionCount),
             appLog: entry,
@@ -1340,16 +1340,16 @@ test.describe('Fuzz Test', () => {
           screenshotBuffer = await withTimeout(
             () =>
               page.screenshot({
-                type: 'png',
-                animations: 'disabled',
+                type: "png",
+                animations: "disabled",
                 timeout: visualSampleTimeoutMs,
               }),
             visualSampleTimeoutMs,
-            'visual sample screenshot',
+            "visual sample screenshot",
           );
         } catch (error) {
           logInteraction(
-            `s=${totalSteps}\ta=visual\terror=${(error as Error)?.message || 'screenshot-failed'}`,
+            `s=${totalSteps}\ta=visual\terror=${(error as Error)?.message || "screenshot-failed"}`,
           );
           return;
         }
@@ -1381,44 +1381,44 @@ test.describe('Fuzz Test', () => {
       ): Promise<{ log: string; terminal: boolean }> => {
         const step =
           stepNumber === 1
-            ? 'close-modal'
+            ? "close-modal"
             : stepNumber === 2
-              ? 'navigate-back'
+              ? "navigate-back"
               : stepNumber === 3
-                ? 'root-tab'
+                ? "root-tab"
                 : stepNumber === 4
-                  ? 'cycle-tab'
+                  ? "cycle-tab"
                   : stepNumber === 5
-                    ? 'force-home'
+                    ? "force-home"
                     : stepNumber === 6
-                      ? 'reload'
-                      : 'terminate-session';
+                      ? "reload"
+                      : "terminate-session";
         recoverySteps.push(step as RecoveryStepName);
-        if (step === 'close-modal') {
+        if (step === "close-modal") {
           if (await closeBlockingOverlay(page)) {
             return {
-              log: 'ladder close-modal:overlay-closed',
+              log: "ladder close-modal:overlay-closed",
               terminal: false,
             };
           }
-          await page.keyboard.press('Escape').catch(() => {});
-          return { log: 'ladder close-modal:escape', terminal: false };
+          await page.keyboard.press("Escape").catch(() => {});
+          return { log: "ladder close-modal:escape", terminal: false };
         }
-        if (step === 'navigate-back') {
+        if (step === "navigate-back") {
           await page.goBack({ timeout: actionTimeoutMs }).catch(() => {});
-          return { log: 'ladder navigate-back', terminal: false };
+          return { log: "ladder navigate-back", terminal: false };
         }
-        if (step === 'root-tab') {
-          const rootTab = await page.$('.tab-bar button:first-of-type');
+        if (step === "root-tab") {
+          const rootTab = await page.$(".tab-bar button:first-of-type");
           if (rootTab && (await rootTab.isVisible())) {
             await showInteractionPulse(page, rootTab as ElementHandle);
             await rootTab.click().catch(() => {});
-            return { log: 'ladder root-tab:clicked', terminal: false };
+            return { log: "ladder root-tab:clicked", terminal: false };
           }
-          return { log: 'ladder root-tab:missing', terminal: false };
+          return { log: "ladder root-tab:missing", terminal: false };
         }
-        if (step === 'cycle-tab') {
-          const tabButtons = await page.$$('.tab-bar button');
+        if (step === "cycle-tab") {
+          const tabButtons = await page.$$(".tab-bar button");
           const visibleTabs: ElementHandle[] = [];
           for (const tab of tabButtons) {
             if (await tab.isVisible()) visibleTabs.push(tab as ElementHandle);
@@ -1433,34 +1433,34 @@ test.describe('Fuzz Test', () => {
               terminal: false,
             };
           }
-          return { log: 'ladder cycle-tab:insufficient-tabs', terminal: false };
+          return { log: "ladder cycle-tab:insufficient-tabs", terminal: false };
         }
-        if (step === 'force-home') {
+        if (step === "force-home") {
           await page
             .goto(baseUrl, {
-              waitUntil: 'domcontentloaded',
+              waitUntil: "domcontentloaded",
               timeout: actionTimeoutMs,
             })
             .catch(() => {});
-          return { log: 'ladder force-home', terminal: false };
+          return { log: "ladder force-home", terminal: false };
         }
-        if (step === 'reload') {
+        if (step === "reload") {
           await page
-            .reload({ waitUntil: 'domcontentloaded', timeout: actionTimeoutMs })
+            .reload({ waitUntil: "domcontentloaded", timeout: actionTimeoutMs })
             .catch(() => {});
-          return { log: 'ladder reload', terminal: false };
+          return { log: "ladder reload", terminal: false };
         }
-        return { log: 'ladder terminate-session', terminal: true };
+        return { log: "ladder terminate-session", terminal: true };
       };
 
       await withTimeout(
         () =>
           page.goto(baseUrl, {
-            waitUntil: 'domcontentloaded',
+            waitUntil: "domcontentloaded",
             timeout: actionTimeoutMs,
           }),
         Math.max(5000, actionTimeoutMs),
-        'session initial navigation',
+        "session initial navigation",
       );
 
       let sessionSteps = 0;
@@ -1469,17 +1469,17 @@ test.describe('Fuzz Test', () => {
       let progressSnapshot = await withTimeout(
         () => readProgressSnapshot(page),
         stateProbeTimeoutMs,
-        'initial progress snapshot',
+        "initial progress snapshot",
       ).catch(() => ({
-        screenKey: '',
-        navKey: '',
-        traceKey: '',
-        stateKey: '',
+        screenKey: "",
+        navKey: "",
+        traceKey: "",
+        stateKey: "",
       }));
       let lastProgressAt = Date.now();
       const sessionStartTime = Date.now();
       let lastHeartbeatAt = sessionStartTime;
-      let mode: 'chaos' | 'recovery' = 'chaos';
+      let mode: "chaos" | "recovery" = "chaos";
       let recoveryAttempts = 0;
       let structuredRecoveryAttempts = 0;
       let recoveryLadderAttempts = 0;
@@ -1507,15 +1507,15 @@ test.describe('Fuzz Test', () => {
 
       const ensureAppOrigin = async () => {
         const url = page.url();
-        if (!url || url.startsWith('about:') || !url.startsWith(baseOrigin)) {
+        if (!url || url.startsWith("about:") || !url.startsWith(baseOrigin)) {
           await withTimeout(
             () =>
               page.goto(baseUrl, {
-                waitUntil: 'domcontentloaded',
+                waitUntil: "domcontentloaded",
                 timeout: actionTimeoutMs,
               }),
             actionTimeoutMs,
-            'navigate to app origin',
+            "navigate to app origin",
           ).catch(() => {});
           return true;
         }
@@ -1526,20 +1526,20 @@ test.describe('Fuzz Test', () => {
         const meta = await page.evaluate(({ x, y }) => {
           const el = document.elementFromPoint(x, y) as HTMLElement | null;
           if (!el) return { isExternal: false };
-          const anchor = el.closest('a') as HTMLAnchorElement | null;
+          const anchor = el.closest("a") as HTMLAnchorElement | null;
           if (!anchor) return { isExternal: false };
-          const href = anchor.getAttribute('href') || '';
-          const target = anchor.getAttribute('target');
+          const href = anchor.getAttribute("href") || "";
+          const target = anchor.getAttribute("target");
           const external =
-            target === '_blank' ||
+            target === "_blank" ||
             /^https?:\/\//i.test(href) ||
             (/^[a-z]+:/i.test(href) &&
-              !href.startsWith('/') &&
-              !href.startsWith('#'));
+              !href.startsWith("/") &&
+              !href.startsWith("#"));
           return { isExternal: external };
         }, point);
         if (meta.isExternal && externalClickUsed) {
-          return { ok: false, log: 'chaos-tap external blocked' };
+          return { ok: false, log: "chaos-tap external blocked" };
         }
         if (meta.isExternal) {
           externalClickUsed = true;
@@ -1563,7 +1563,7 @@ test.describe('Fuzz Test', () => {
 
       const actions = [
         {
-          name: 'click',
+          name: "click",
           weight: 16,
           canRun: async () => {
             return hasVisibleElement(
@@ -1585,7 +1585,7 @@ test.describe('Fuzz Test', () => {
                 return element.isEnabled();
               },
             );
-            if (!pick) return { log: 'click skip' };
+            if (!pick) return { log: "click skip" };
             const isExternal = await isExternalOrBlankTarget(pick.target);
             const clickCount = rng.int(1, 4);
             const delay = rng.int(0, 10);
@@ -1603,7 +1603,7 @@ test.describe('Fuzz Test', () => {
           },
         },
         {
-          name: 'rage-click',
+          name: "rage-click",
           weight: 20,
           canRun: async () => {
             return hasVisibleElement(
@@ -1625,7 +1625,7 @@ test.describe('Fuzz Test', () => {
                 return true;
               },
             );
-            if (!pick) return { log: 'rage-click skip' };
+            if (!pick) return { log: "rage-click skip" };
             const isExternal = await isExternalOrBlankTarget(pick.target);
             const clickCount = rng.int(5, 10);
             await safeClick(page, pick, rng, selector, {
@@ -1639,7 +1639,7 @@ test.describe('Fuzz Test', () => {
           },
         },
         {
-          name: 'chaos-tap',
+          name: "chaos-tap",
           weight: 20,
           canRun: async () => true,
           run: async () => {
@@ -1649,21 +1649,21 @@ test.describe('Fuzz Test', () => {
           },
         },
         {
-          name: 'add-items-open',
+          name: "add-items-open",
           weight: 10,
           canRun: async () => {
             if (clickActionsDisabled) return false;
             if (await getActiveDialog(page)) return false;
             return hasVisibleElementByText(
               page,
-              'button',
+              "button",
               /Add (items|more items|disks|more disks)/i,
             );
           },
           run: async () => {
             const result = await safeClickByText(
               page,
-              'button',
+              "button",
               /Add (items|more items|disks|more disks)/i,
               rng,
               {
@@ -1671,11 +1671,11 @@ test.describe('Fuzz Test', () => {
                 delay: rng.int(0, 15),
               },
             );
-            return { log: result?.log ?? 'add-items open skip' };
+            return { log: result?.log ?? "add-items open skip" };
           },
         },
         {
-          name: 'add-items-source-ultimate',
+          name: "add-items-source-ultimate",
           weight: 10,
           canRun: async () => {
             if (clickActionsDisabled) return false;
@@ -1697,11 +1697,11 @@ test.describe('Fuzz Test', () => {
                 delay: rng.int(0, 10),
               },
             );
-            return { log: result?.log ?? 'add-items source skip' };
+            return { log: result?.log ?? "add-items source skip" };
           },
         },
         {
-          name: 'add-items-open-folder',
+          name: "add-items-open-folder",
           weight: 12,
           canRun: async () => {
             if (clickActionsDisabled) return false;
@@ -1723,11 +1723,11 @@ test.describe('Fuzz Test', () => {
                 delay: rng.int(0, 10),
               },
             );
-            return { log: result?.log ?? 'open folder skip' };
+            return { log: result?.log ?? "open folder skip" };
           },
         },
         {
-          name: 'add-items-select',
+          name: "add-items-select",
           weight: 16,
           canRun: async () => {
             if (clickActionsDisabled) return false;
@@ -1755,7 +1755,7 @@ test.describe('Fuzz Test', () => {
           },
         },
         {
-          name: 'add-items-filter',
+          name: "add-items-filter",
           weight: 8,
           canRun: async () => {
             if (!(await getActiveDialog(page))) return false;
@@ -1767,19 +1767,19 @@ test.describe('Fuzz Test', () => {
               '[data-testid="add-items-filter"]',
               rng,
             );
-            if (!pick) return { log: 'add-items filter skip' };
+            if (!pick) return { log: "add-items filter skip" };
             const text =
               rng.next() > 0.5 ? randomLargeText(rng) : randomText(rng);
             await showInteractionPulse(page, pick.target);
             await pick.target.click().catch(() => {});
-            await page.keyboard.press('Control+A').catch(() => {});
-            await page.keyboard.press('Backspace').catch(() => {});
+            await page.keyboard.press("Control+A").catch(() => {});
+            await page.keyboard.press("Backspace").catch(() => {});
             await page.keyboard.insertText(text);
             return { log: `add-items filter ${text.length} chars` };
           },
         },
         {
-          name: 'add-items-confirm',
+          name: "add-items-confirm",
           weight: 10,
           canRun: async () => {
             if (clickActionsDisabled) return false;
@@ -1788,7 +1788,7 @@ test.describe('Fuzz Test', () => {
             if (!button || !(await button.isVisible())) return false;
             const disabled = await button.evaluate((node) => {
               const el = node as HTMLButtonElement;
-              return el.disabled || el.getAttribute('aria-disabled') === 'true';
+              return el.disabled || el.getAttribute("aria-disabled") === "true";
             });
             return !disabled;
           },
@@ -1798,7 +1798,7 @@ test.describe('Fuzz Test', () => {
               '[data-testid="add-items-confirm"]',
               rng,
             );
-            if (!pick) return { log: 'add-items confirm skip' };
+            if (!pick) return { log: "add-items confirm skip" };
             await safeClick(
               page,
               pick,
@@ -1810,7 +1810,7 @@ test.describe('Fuzz Test', () => {
           },
         },
         {
-          name: 'config-toggle',
+          name: "config-toggle",
           weight: 18,
           canRun: async () =>
             hasVisibleElement(
@@ -1821,7 +1821,7 @@ test.describe('Fuzz Test', () => {
             const selector =
               '[data-testid="config-item-layout"] [role="checkbox"], [data-testid="config-item-layout"] [role="switch"], [data-testid^="audio-mixer-solo-"]';
             const pick = await pickVisibleElement(page, selector, rng);
-            if (!pick) return { log: 'config-toggle skip' };
+            if (!pick) return { log: "config-toggle skip" };
             const toggles = rng.int(3, 8);
             for (let i = 0; i < toggles; i += 1) {
               await safeClick(page, pick, rng, selector, {
@@ -1833,7 +1833,7 @@ test.describe('Fuzz Test', () => {
           },
         },
         {
-          name: 'config-toggle-burst',
+          name: "config-toggle-burst",
           weight: 14,
           canRun: async () =>
             hasVisibleElement(
@@ -1857,11 +1857,11 @@ test.describe('Fuzz Test', () => {
               }
               logs.push(`${pick.description} x${toggles}`);
             }
-            return { log: `config-burst ${logs.join(' | ') || 'skip'}` };
+            return { log: `config-burst ${logs.join(" | ") || "skip"}` };
           },
         },
         {
-          name: 'config-slider-scrub',
+          name: "config-slider-scrub",
           weight: 12,
           canRun: async () =>
             hasVisibleElement(
@@ -1872,9 +1872,9 @@ test.describe('Fuzz Test', () => {
             const selector =
               '[data-testid="config-item-layout"] [role="slider"]';
             const pick = await pickVisibleElement(page, selector, rng);
-            if (!pick) return { log: 'config-slider skip' };
+            if (!pick) return { log: "config-slider skip" };
             const box = await pick.target.boundingBox();
-            if (!box) return { log: 'config-slider no-box' };
+            if (!box) return { log: "config-slider no-box" };
             const steps = rng.int(4, 10);
             for (let i = 0; i < steps; i += 1) {
               const x =
@@ -1896,7 +1896,7 @@ test.describe('Fuzz Test', () => {
           },
         },
         {
-          name: 'config-select-burst',
+          name: "config-select-burst",
           weight: 12,
           canRun: async () =>
             hasVisibleElement(
@@ -1907,7 +1907,7 @@ test.describe('Fuzz Test', () => {
             const triggerSelector =
               '[data-testid="config-item-layout"] [aria-label$=" select"], [data-testid="config-item-layout"] [role="combobox"]';
             const pick = await pickVisibleElement(page, triggerSelector, rng);
-            if (!pick) return { log: 'config-select skip' };
+            if (!pick) return { log: "config-select skip" };
             const selections = rng.int(2, 5);
             for (let i = 0; i < selections; i += 1) {
               await safeClick(page, pick, rng, triggerSelector, {
@@ -1915,7 +1915,7 @@ test.describe('Fuzz Test', () => {
                 delay: rng.int(0, 10),
               });
               await page.waitForTimeout(rng.int(10, 40));
-              const options = await page.$$('role=option');
+              const options = await page.$$("role=option");
               if (!options.length) continue;
               const option = rng.pick(options);
               await showInteractionPulse(page, option as ElementHandle);
@@ -1925,7 +1925,7 @@ test.describe('Fuzz Test', () => {
           },
         },
         {
-          name: 'drag',
+          name: "drag",
           weight: 8,
           canRun: async () => true,
           run: async () => {
@@ -1948,7 +1948,7 @@ test.describe('Fuzz Test', () => {
           },
         },
         {
-          name: 'panic',
+          name: "panic",
           weight: 14,
           canRun: async () => true,
           run: async () => {
@@ -1972,12 +1972,12 @@ test.describe('Fuzz Test', () => {
               await page.waitForTimeout(rng.int(0, 15));
             }
             return {
-              log: `panic ${logs.slice(0, 6).join('|')}${logs.length > 6 ? '…' : ''}`,
+              log: `panic ${logs.slice(0, 6).join("|")}${logs.length > 6 ? "…" : ""}`,
             };
           },
         },
         {
-          name: 'connection-flap',
+          name: "connection-flap",
           weight: 6,
           canRun: async () => true,
           run: async () => {
@@ -1986,20 +1986,20 @@ test.describe('Fuzz Test', () => {
             serverReachable = nextReachable;
             if (!nextReachable) lastOutageAt = Date.now();
             return {
-              log: `connection ${nextReachable ? 'online' : 'offline'}`,
+              log: `connection ${nextReachable ? "online" : "offline"}`,
             };
           },
         },
         {
-          name: 'latency-spike',
+          name: "latency-spike",
           weight: 6,
           canRun: async () => true,
           run: async () => {
             const previousMode = server.getFaultMode();
             const spikeMs = rng.int(1500, 7000);
-            server.setFaultMode('slow');
+            server.setFaultMode("slow");
             server.setLatencyMs(spikeMs);
-            currentFaultMode = 'slow';
+            currentFaultMode = "slow";
             const recoveryDelay = rng.int(2000, 6000);
             setTimeout(() => {
               server.setFaultMode(previousMode);
@@ -2010,7 +2010,7 @@ test.describe('Fuzz Test', () => {
           },
         },
         {
-          name: 'network-offline',
+          name: "network-offline",
           weight: 4,
           canRun: async () => !networkOffline,
           run: async () => {
@@ -2025,7 +2025,7 @@ test.describe('Fuzz Test', () => {
           },
         },
         {
-          name: 'random-key',
+          name: "random-key",
           weight: 12,
           canRun: async () => true,
           run: async () => {
@@ -2036,20 +2036,20 @@ test.describe('Fuzz Test', () => {
               keys.push(key);
               await page.keyboard.press(key).catch(() => {});
             }
-            return { log: `key ${keys.join(',')}` };
+            return { log: `key ${keys.join(",")}` };
           },
         },
         {
-          name: 'tab',
+          name: "tab",
           weight: 6,
           canRun: async () => {
             if (clickActionsDisabled) return false;
-            return hasVisibleElement(page, '.tab-bar button');
+            return hasVisibleElement(page, ".tab-bar button");
           },
           run: async () => {
-            const pick = await pickVisibleElement(page, '.tab-bar button', rng);
-            if (!pick) return { log: 'tab skip' };
-            await safeClick(page, pick, rng, '.tab-bar button', {
+            const pick = await pickVisibleElement(page, ".tab-bar button", rng);
+            if (!pick) return { log: "tab skip" };
+            await safeClick(page, pick, rng, ".tab-bar button", {
               clickCount: 1,
               delay: rng.int(0, 20),
             });
@@ -2057,7 +2057,7 @@ test.describe('Fuzz Test', () => {
           },
         },
         {
-          name: 'scroll',
+          name: "scroll",
           weight: 16,
           canRun: async () => true,
           run: async () => {
@@ -2069,11 +2069,11 @@ test.describe('Fuzz Test', () => {
               await page.mouse.wheel(0, delta);
               await page.waitForTimeout(rng.int(0, 30));
             }
-            return { log: `scroll ${deltas.join(',')}` };
+            return { log: `scroll ${deltas.join(",")}` };
           },
         },
         {
-          name: 'select',
+          name: "select",
           weight: 6,
           canRun: async () => {
             if (clickActionsDisabled) return false;
@@ -2088,7 +2088,7 @@ test.describe('Fuzz Test', () => {
               '[role="option"], [role="menuitem"], li[role="option"]',
               rng,
             );
-            if (!pick) return { log: 'select skip' };
+            if (!pick) return { log: "select skip" };
             await safeClick(
               page,
               pick,
@@ -2100,7 +2100,7 @@ test.describe('Fuzz Test', () => {
           },
         },
         {
-          name: 'type',
+          name: "type",
           weight: 12,
           canRun: async () =>
             hasVisibleElement(
@@ -2113,7 +2113,7 @@ test.describe('Fuzz Test', () => {
               'input:not([type]), input[type="text"], input[type="search"], textarea, [contenteditable="true"]',
               rng,
             );
-            if (!pick) return { log: 'type skip' };
+            if (!pick) return { log: "type skip" };
             const supportsFill = await pick.target.evaluate(
               (node) =>
                 node instanceof HTMLInputElement ||
@@ -2125,8 +2125,8 @@ test.describe('Fuzz Test', () => {
             await showInteractionPulse(page, pick.target);
             if (modeRoll < 0.35) {
               await pick.target.click().catch(() => {});
-              await page.keyboard.press('Control+A').catch(() => {});
-              await page.keyboard.press('Backspace').catch(() => {});
+              await page.keyboard.press("Control+A").catch(() => {});
+              await page.keyboard.press("Backspace").catch(() => {});
               await page.keyboard.insertText(text);
               return {
                 log: `paste ${pick.description} (${text.length} chars)`,
@@ -2142,7 +2142,7 @@ test.describe('Fuzz Test', () => {
           },
         },
         {
-          name: 'toggle',
+          name: "toggle",
           weight: 6,
           canRun: async () => {
             if (clickActionsDisabled) return false;
@@ -2157,7 +2157,7 @@ test.describe('Fuzz Test', () => {
               'input[type="checkbox"], [role="switch"]',
               rng,
             );
-            if (!pick) return { log: 'toggle skip' };
+            if (!pick) return { log: "toggle skip" };
             await safeClick(
               page,
               pick,
@@ -2169,7 +2169,7 @@ test.describe('Fuzz Test', () => {
           },
         },
         {
-          name: 'modal',
+          name: "modal",
           weight: 4,
           canRun: async () => !clickActionsDisabled,
           run: async () => {
@@ -2182,17 +2182,17 @@ test.describe('Fuzz Test', () => {
                 const target = rng.pick(buttons);
                 await showInteractionPulse(page, target as ElementHandle);
                 await target.click().catch(() => {});
-                return { log: 'modal button' };
+                return { log: "modal button" };
               }
-              await page.keyboard.press('Escape').catch(() => {});
-              return { log: 'modal escape' };
+              await page.keyboard.press("Escape").catch(() => {});
+              return { log: "modal escape" };
             }
             const pick = await pickVisibleElement(
               page,
               'button[aria-haspopup="dialog"], [data-state="closed"][data-radix-collection-item]',
               rng,
             );
-            if (!pick) return { log: 'modal open skip' };
+            if (!pick) return { log: "modal open skip" };
             await safeClick(
               page,
               pick,
@@ -2204,51 +2204,51 @@ test.describe('Fuzz Test', () => {
           },
         },
         {
-          name: 'navigate',
+          name: "navigate",
           weight: 4,
           canRun: async () => true,
           run: async () => {
             const url = page.url();
-            if (!url.startsWith(baseOrigin) || url.startsWith('about:')) {
+            if (!url.startsWith(baseOrigin) || url.startsWith("about:")) {
               await page
-                .goto(baseUrl, { waitUntil: 'domcontentloaded' })
+                .goto(baseUrl, { waitUntil: "domcontentloaded" })
                 .catch(() => {});
-              return { log: 'nav recover' };
+              return { log: "nav recover" };
             }
             if (rng.next() > 0.5) {
               await page.goBack({ timeout: 5000 }).catch(() => {});
-              return { log: 'nav back' };
+              return { log: "nav back" };
             }
             await page.goForward({ timeout: 5000 }).catch(() => {});
-            return { log: 'nav forward' };
+            return { log: "nav forward" };
           },
         },
         {
-          name: 'background',
+          name: "background",
           weight: 4,
           canRun: async () => true,
           run: async () => {
             await page.evaluate(() => {
-              window.dispatchEvent(new Event('blur'));
-              document.dispatchEvent(new Event('visibilitychange'));
+              window.dispatchEvent(new Event("blur"));
+              document.dispatchEvent(new Event("visibilitychange"));
             });
             await page.waitForTimeout(50);
             await page.evaluate(() => {
-              window.dispatchEvent(new Event('focus'));
-              document.dispatchEvent(new Event('visibilitychange'));
+              window.dispatchEvent(new Event("focus"));
+              document.dispatchEvent(new Event("visibilitychange"));
             });
-            return { log: 'background-resume' };
+            return { log: "background-resume" };
           },
         },
         {
-          name: 'fault',
+          name: "fault",
           weight: 3,
           canRun: async () => true,
           run: async () => {
-            const modes = ['none', 'slow', 'timeout', 'refused'] as const;
+            const modes = ["none", "slow", "timeout", "refused"] as const;
             const mode = rng.pick([...modes]);
             server.setFaultMode(mode);
-            if (mode === 'slow') {
+            if (mode === "slow") {
               server.setLatencyMs(rng.int(100, 600));
             } else {
               server.setLatencyMs(null);
@@ -2285,7 +2285,7 @@ test.describe('Fuzz Test', () => {
               throw error;
             }
             logInteraction(
-              `s=${totalSteps}\ta=canRun:${action.name}\terror=${(error as Error)?.message || 'failed'}`,
+              `s=${totalSteps}\ta=canRun:${action.name}\terror=${(error as Error)?.message || "failed"}`,
             );
             consecutiveTimeouts += 1;
             // Short-circuit: if 3+ canRun checks timeout in a row, page is likely unresponsive
@@ -2326,13 +2326,13 @@ test.describe('Fuzz Test', () => {
         if (page.isClosed()) {
           logInteraction(`s=${totalSteps}\ta=session\tpage-closed`);
           recordIssueOnce({
-            severity: 'crash',
-            message: 'Session page closed unexpectedly while fuzzing.',
-            source: 'session.page.closed',
+            severity: "crash",
+            message: "Session page closed unexpectedly while fuzzing.",
+            source: "session.page.closed",
             interactionIndex: totalSteps,
             lastInteractions: interactions.slice(-lastInteractionCount),
           });
-          terminationReason = 'issue';
+          terminationReason = "issue";
           break;
         }
 
@@ -2343,7 +2343,7 @@ test.describe('Fuzz Test', () => {
             `s=${totalSteps}\ta=session\ttimeout ${Math.round((Date.now() - sessionStartTime) / 1000)}s`,
           );
           // Session-timeout is a designed budget cap, not an app bug; do not record as a freeze issue.
-          terminationReason = 'session-timeout';
+          terminationReason = "session-timeout";
           break;
         }
 
@@ -2359,26 +2359,26 @@ test.describe('Fuzz Test', () => {
         }
 
         const visualStagnantMs = Math.max(0, now - lastVisualChangeAt);
-        if (mode === 'chaos' && visualStagnantMs > MAX_VISUAL_STAGNATION_MS) {
-          mode = 'recovery';
+        if (mode === "chaos" && visualStagnantMs > MAX_VISUAL_STAGNATION_MS) {
+          mode = "recovery";
           recoveryAttempts = 0;
           structuredRecoveryAttempts = 0;
           recoveryLadderAttempts = 0;
-          server.setFaultMode('none');
+          server.setFaultMode("none");
           server.setLatencyMs(null);
-          currentFaultMode = 'none';
+          currentFaultMode = "none";
           logInteraction(
             `s=${totalSteps}\ta=visual\tstagnation ${visualStagnantMs}ms, faults-cleared`,
           );
         }
-        if (mode === 'chaos' && now - lastProgressAt >= progressTimeoutMs) {
-          mode = 'recovery';
+        if (mode === "chaos" && now - lastProgressAt >= progressTimeoutMs) {
+          mode = "recovery";
           recoveryAttempts = 0;
           structuredRecoveryAttempts = 0;
           recoveryLadderAttempts = 0;
-          server.setFaultMode('none');
+          server.setFaultMode("none");
           server.setLatencyMs(null);
-          currentFaultMode = 'none';
+          currentFaultMode = "none";
           logInteraction(
             `s=${totalSteps}\ta=progress\twatchdog ${now - lastProgressAt}ms, faults-cleared`,
           );
@@ -2402,7 +2402,7 @@ test.describe('Fuzz Test', () => {
         } else if (await closeBlockingOverlay(page)) {
           logInteraction(`s=${totalSteps}\ta=modal\tauto-close`);
           actionLogged = true;
-        } else if (mode === 'recovery') {
+        } else if (mode === "recovery") {
           recoveryAttempts += 1;
           recoveryAttempted = true;
           let usedStructuredRecovery = false;
@@ -2415,7 +2415,7 @@ test.describe('Fuzz Test', () => {
                 attempt: structuredRecoveryAttempts,
               });
               if (structured.recovered) {
-                recoverySteps.push('structured-recovery');
+                recoverySteps.push("structured-recovery");
                 logInteraction(
                   `s=${totalSteps}\ta=recovery\tstructured ${structured.log}`,
                 );
@@ -2427,16 +2427,16 @@ test.describe('Fuzz Test', () => {
                   `s=${totalSteps}\ta=recovery\tstructured page-closed`,
                 );
                 recordIssueOnce({
-                  severity: 'crash',
+                  severity: "crash",
                   message:
                     (error as Error)?.message ||
-                    'Page/context closed during structured recovery.',
-                  source: 'session.page.closed',
+                    "Page/context closed during structured recovery.",
+                  source: "session.page.closed",
                   stack: (error as Error)?.stack,
                   interactionIndex: totalSteps,
                   lastInteractions: interactions.slice(-lastInteractionCount),
                 });
-                terminationReason = 'issue';
+                terminationReason = "issue";
                 break;
               }
               throw error;
@@ -2457,10 +2457,10 @@ test.describe('Fuzz Test', () => {
                   `s=${totalSteps}\ta=session\trecovery-terminate`,
                 );
                 recordStuckSessionIssue(
-                  'recovery-exhausted',
-                  'Structured recovery and deterministic recovery ladder exhausted all steps.',
+                  "recovery-exhausted",
+                  "Structured recovery and deterministic recovery ladder exhausted all steps.",
                 );
-                terminationReason = 'recovery-exhausted';
+                terminationReason = "recovery-exhausted";
                 break;
               }
             } catch (error) {
@@ -2469,16 +2469,16 @@ test.describe('Fuzz Test', () => {
                   `s=${totalSteps}\ta=recovery\tladder page-closed`,
                 );
                 recordIssueOnce({
-                  severity: 'crash',
+                  severity: "crash",
                   message:
                     (error as Error)?.message ||
-                    'Page/context closed during recovery ladder.',
-                  source: 'session.page.closed',
+                    "Page/context closed during recovery ladder.",
+                  source: "session.page.closed",
                   stack: (error as Error)?.stack,
                   interactionIndex: totalSteps,
                   lastInteractions: interactions.slice(-lastInteractionCount),
                 });
-                terminationReason = 'issue';
+                terminationReason = "issue";
                 break;
               }
               throw error;
@@ -2498,35 +2498,35 @@ test.describe('Fuzz Test', () => {
                 `s=${totalSteps}\ta=session\tpage-closed-during-action-pick`,
               );
               recordIssueOnce({
-                severity: 'crash',
+                severity: "crash",
                 message:
                   (error as Error)?.message ||
-                  'Page/context closed while selecting action.',
-                source: 'session.page.closed',
+                  "Page/context closed while selecting action.",
+                source: "session.page.closed",
                 stack: (error as Error)?.stack,
                 interactionIndex: totalSteps,
                 lastInteractions: interactions.slice(-lastInteractionCount),
               });
-              terminationReason = 'issue';
+              terminationReason = "issue";
               break;
             }
             throw error;
           }
           if (!action && pageUnresponsive) {
             // Page is unresponsive — jump directly to aggressive recovery (force-home)
-            server.setFaultMode('none');
+            server.setFaultMode("none");
             server.setLatencyMs(null);
-            currentFaultMode = 'none';
+            currentFaultMode = "none";
             logInteraction(
               `s=${totalSteps}\ta=session\tpage-unresponsive, force-home recovery, faults-cleared`,
             );
-            mode = 'recovery';
+            mode = "recovery";
             recoveryAttempts = 0;
             structuredRecoveryAttempts = 2; // skip structured recovery; it can't help a frozen page
             recoveryLadderAttempts = 4; // skip close-modal/navigate-back/root-tab/cycle-tab; jump to force-home
             await page
               .goto(baseUrl, {
-                waitUntil: 'domcontentloaded',
+                waitUntil: "domcontentloaded",
                 timeout: actionTimeoutMs,
               })
               .catch(() => {});
@@ -2537,19 +2537,19 @@ test.describe('Fuzz Test', () => {
           } else if (!action) {
             // No eligible action found but page is responsive: app may be mid-transition.
             // Navigate home to recover rather than recording a stall issue.
-            server.setFaultMode('none');
+            server.setFaultMode("none");
             server.setLatencyMs(null);
-            currentFaultMode = 'none';
+            currentFaultMode = "none";
             logInteraction(
               `s=${totalSteps}\ta=session\tno-action, force-home recovery, faults-cleared`,
             );
-            mode = 'recovery';
+            mode = "recovery";
             recoveryAttempts = 0;
             structuredRecoveryAttempts = 2; // skip structured recovery; jump to force-home
             recoveryLadderAttempts = 4; // skip close-modal/navigate-back/root-tab/cycle-tab
             await page
               .goto(baseUrl, {
-                waitUntil: 'domcontentloaded',
+                waitUntil: "domcontentloaded",
                 timeout: actionTimeoutMs,
               })
               .catch(() => {});
@@ -2571,15 +2571,15 @@ test.describe('Fuzz Test', () => {
               consecutiveActionTimeouts = 0;
             } catch (error) {
               logInteraction(
-                `s=${totalSteps}\ta=${action.name}\terror=${(error as Error)?.message || 'unknown'}`,
+                `s=${totalSteps}\ta=${action.name}\terror=${(error as Error)?.message || "unknown"}`,
               );
               if (parseActionTimeout(error)) {
                 consecutiveActionTimeouts += 1;
                 if (consecutiveActionTimeouts >= 3) {
                   recordIssueOnce({
-                    severity: 'freeze',
-                    message: (error as Error).message || 'Action timeout',
-                    source: 'action.timeout',
+                    severity: "freeze",
+                    message: (error as Error).message || "Action timeout",
+                    source: "action.timeout",
                     interactionIndex: totalSteps,
                     lastInteractions: interactions.slice(-lastInteractionCount),
                   });
@@ -2587,9 +2587,9 @@ test.describe('Fuzz Test', () => {
               } else {
                 consecutiveActionTimeouts = 0;
                 recordIssueOnce({
-                  severity: 'errorLog',
-                  message: (error as Error)?.message || 'Action failed',
-                  source: (error as Error)?.name || 'action.error',
+                  severity: "errorLog",
+                  message: (error as Error)?.message || "Action failed",
+                  source: (error as Error)?.name || "action.error",
                   stack: (error as Error)?.stack,
                   interactionIndex: totalSteps,
                   lastInteractions: interactions.slice(-lastInteractionCount),
@@ -2603,7 +2603,7 @@ test.describe('Fuzz Test', () => {
         if (actionLogged) {
           // Skip expensive probes during recovery — localStorage reads and screenshots
           // will just timeout against an unresponsive page, wasting ~7s per iteration.
-          if (mode !== 'recovery') {
+          if (mode !== "recovery") {
             await checkAppLogsForIssues();
             if (issue) break; // terminal issue (crash/freeze) only
           }
@@ -2611,7 +2611,7 @@ test.describe('Fuzz Test', () => {
           const nextSnapshot = await withTimeout(
             () => readProgressSnapshot(page),
             stateProbeTimeoutMs,
-            'next progress snapshot',
+            "next progress snapshot",
           ).catch(() => progressSnapshot);
           const delta = diffProgress(progressSnapshot, nextSnapshot);
           const anyProgress = hasMeaningfulProgress(delta);
@@ -2626,22 +2626,22 @@ test.describe('Fuzz Test', () => {
           if (progressed) {
             lastProgressAt = Date.now();
             noProgressCount = 0;
-            if (mode === 'recovery') {
+            if (mode === "recovery") {
               logInteraction(
                 `s=${totalSteps}\ta=recovery\tprogress screen=${Number(delta.screenChanged)} nav=${Number(delta.navigationChanged)} trace=${Number(delta.traceChanged)} state=${Number(delta.stateChanged)}`,
               );
-              mode = 'chaos';
+              mode = "chaos";
               recoveryAttempts = 0;
               structuredRecoveryAttempts = 0;
               recoveryLadderAttempts = 0;
             }
-          } else if (mode === 'chaos') {
+          } else if (mode === "chaos") {
             noProgressCount += 1;
           }
         }
 
         if (
-          mode === 'recovery' &&
+          mode === "recovery" &&
           recoveryAttempted &&
           recoveryLadderAttempts >= recoveryStepLimit &&
           !progressed
@@ -2652,16 +2652,16 @@ test.describe('Fuzz Test', () => {
               `s=${totalSteps}\ta=session\trecovery-exhausted cycles=${recoveryCycleCount}`,
             );
             recordStuckSessionIssue(
-              'recovery-exhausted',
+              "recovery-exhausted",
               `No structured recovery progress after ${recoveryCycleCount} full cycles (${recoveryAttempts} total attempts).`,
             );
-            terminationReason = 'recovery-exhausted';
+            terminationReason = "recovery-exhausted";
             break;
           }
           // Reset recovery ladder and navigate home for a fresh start
-          server.setFaultMode('none');
+          server.setFaultMode("none");
           server.setLatencyMs(null);
-          currentFaultMode = 'none';
+          currentFaultMode = "none";
           logInteraction(
             `s=${totalSteps}\ta=recovery\tcycle-reset cycle=${recoveryCycleCount} navigating-home, faults-cleared`,
           );
@@ -2669,24 +2669,24 @@ test.describe('Fuzz Test', () => {
           structuredRecoveryAttempts = 0;
           await page
             .goto(baseUrl, {
-              waitUntil: 'domcontentloaded',
+              waitUntil: "domcontentloaded",
               timeout: actionTimeoutMs,
             })
             .catch(() => {});
           lastVisualChangeAt = Date.now();
           lastProgressAt = Date.now();
           noProgressCount = 0;
-          mode = 'chaos';
+          mode = "chaos";
         }
         if (noProgressCount >= noProgressLimit) {
-          if (mode !== 'recovery') {
-            mode = 'recovery';
+          if (mode !== "recovery") {
+            mode = "recovery";
             recoveryAttempts = 0;
             structuredRecoveryAttempts = 0;
             recoveryLadderAttempts = 0;
-            server.setFaultMode('none');
+            server.setFaultMode("none");
             server.setLatencyMs(null);
-            currentFaultMode = 'none';
+            currentFaultMode = "none";
             logInteraction(
               `s=${totalSteps}\ta=session\tno-progress->recovery (${noProgressCount}), faults-cleared`,
             );
@@ -2694,17 +2694,17 @@ test.describe('Fuzz Test', () => {
           } else {
             logInteraction(`s=${totalSteps}\ta=session\tno-progress`);
             recordStuckSessionIssue(
-              'no-progress',
+              "no-progress",
               `No interaction progress after ${noProgressCount} steps while recovery mode was active.`,
             );
-            terminationReason = 'no-progress';
+            terminationReason = "no-progress";
             break;
           }
         }
         if (
           Math.max(0, Date.now() - lastVisualChangeAt) >
             MAX_VISUAL_STAGNATION_MS &&
-          mode === 'recovery' &&
+          mode === "recovery" &&
           recoveryLadderAttempts >= recoveryStepLimit
         ) {
           recoveryCycleCount += 1;
@@ -2713,16 +2713,16 @@ test.describe('Fuzz Test', () => {
               `s=${totalSteps}\ta=session\tvisual-stagnation cycles=${recoveryCycleCount}`,
             );
             recordStuckSessionIssue(
-              'visual-stagnation',
+              "visual-stagnation",
               `Visual delta remained below threshold for more than ${MAX_VISUAL_STAGNATION_MS}ms after ${recoveryCycleCount} recovery cycles.`,
             );
-            terminationReason = 'visual-stagnation';
+            terminationReason = "visual-stagnation";
             break;
           }
           // Reset recovery ladder and navigate home
-          server.setFaultMode('none');
+          server.setFaultMode("none");
           server.setLatencyMs(null);
-          currentFaultMode = 'none';
+          currentFaultMode = "none";
           logInteraction(
             `s=${totalSteps}\ta=recovery\tvisual-cycle-reset cycle=${recoveryCycleCount} navigating-home, faults-cleared`,
           );
@@ -2730,18 +2730,18 @@ test.describe('Fuzz Test', () => {
           structuredRecoveryAttempts = 0;
           await page
             .goto(baseUrl, {
-              waitUntil: 'domcontentloaded',
+              waitUntil: "domcontentloaded",
               timeout: actionTimeoutMs,
             })
             .catch(() => {});
           lastVisualChangeAt = Date.now();
           lastProgressAt = Date.now();
           noProgressCount = 0;
-          mode = 'chaos';
+          mode = "chaos";
         }
         if (minSessionSteps !== undefined && sessionSteps >= minSessionSteps) {
           logInteraction(`s=${totalSteps}\ta=session\tmin-steps`);
-          terminationReason = 'min-steps';
+          terminationReason = "min-steps";
           break;
         }
         try {
@@ -2752,16 +2752,16 @@ test.describe('Fuzz Test', () => {
               `s=${totalSteps}\ta=session\tpage-closed-during-wait`,
             );
             recordIssueOnce({
-              severity: 'crash',
+              severity: "crash",
               message:
                 (error as Error)?.message ||
-                'Page/context closed during inter-action wait.',
-              source: 'session.page.closed',
+                "Page/context closed during inter-action wait.",
+              source: "session.page.closed",
               stack: (error as Error)?.stack,
               interactionIndex: totalSteps,
               lastInteractions: interactions.slice(-lastInteractionCount),
             });
-            terminationReason = 'issue';
+            terminationReason = "issue";
             break;
           }
           throw error;
@@ -2788,10 +2788,10 @@ test.describe('Fuzz Test', () => {
             timeout: actionTimeoutMs,
           }),
         actionTimeoutMs,
-        'final session screenshot',
+        "final session screenshot",
       ).catch((error) => {
         logInteraction(
-          `s=${totalSteps}\ta=screenshot\terror=${(error as Error)?.message || 'failed'}`,
+          `s=${totalSteps}\ta=screenshot\terror=${(error as Error)?.message || "failed"}`,
         );
       });
 
@@ -2800,18 +2800,18 @@ test.describe('Fuzz Test', () => {
           `s=${totalSteps}\ta=session\tempty-log-backfill id=${sessionId}`,
         );
       }
-      await fs.writeFile(sessionLogPath, interactions.join('\n'), 'utf8');
+      await fs.writeFile(sessionLogPath, interactions.join("\n"), "utf8");
 
       const video = page.video();
       const contextClosed = await withTimeout(
         () => context.close(),
         Math.max(5000, actionTimeoutMs),
-        'close browser context',
+        "close browser context",
       )
         .then(() => true)
         .catch((error) => {
           logInteraction(
-            `s=${totalSteps}\ta=context\terror=${(error as Error)?.message || 'close-failed'}`,
+            `s=${totalSteps}\ta=context\terror=${(error as Error)?.message || "close-failed"}`,
           );
           return false;
         });
@@ -2824,30 +2824,30 @@ test.describe('Fuzz Test', () => {
           const recorded = await withTimeout(
             () => video.path(),
             Math.max(5000, actionTimeoutMs),
-            'finalize session video path',
+            "finalize session video path",
           );
           const target = path.join(videosDir, `${sessionId}.webm`);
           await fs.rename(recorded, target).catch(async () => {
             await fs.copyFile(recorded, target);
             await fs.unlink(recorded).catch((error) => {
               logInteraction(
-                `s=${totalSteps}\ta=video\tcleanup-error=${(error as Error)?.message || 'unlink-failed'}`,
+                `s=${totalSteps}\ta=video\tcleanup-error=${(error as Error)?.message || "unlink-failed"}`,
               );
             });
           });
           savedVideo = path.relative(outputRoot, target);
         } catch (error) {
           logInteraction(
-            `s=${totalSteps}\ta=video\terror=${(error as Error)?.message || 'video-finalize-failed'}`,
+            `s=${totalSteps}\ta=video\terror=${(error as Error)?.message || "video-finalize-failed"}`,
           );
         }
       }
 
       if (!savedVideo) {
         recordIssueOnce({
-          severity: 'freeze',
-          message: 'Session video missing or failed to finalize.',
-          source: 'session.video',
+          severity: "freeze",
+          message: "Session video missing or failed to finalize.",
+          source: "session.video",
           interactionIndex: totalSteps,
           lastInteractions: interactions.slice(-lastInteractionCount),
         });
@@ -2864,7 +2864,7 @@ test.describe('Fuzz Test', () => {
             );
           } catch (error) {
             logInteraction(
-              `s=${totalSteps}\ta=video\tfallback-error=${(error as Error)?.message || 'fallback-failed'}`,
+              `s=${totalSteps}\ta=video\tfallback-error=${(error as Error)?.message || "fallback-failed"}`,
             );
             savedVideo = undefined;
           }
@@ -2885,7 +2885,7 @@ test.describe('Fuzz Test', () => {
           logInteraction(`s=${totalSteps}\ta=video\tfallback=generated`);
         } catch (error) {
           logInteraction(
-            `s=${totalSteps}\ta=video\tfallback-generate-error=${(error as Error)?.message || 'fallback-generate-failed'}`,
+            `s=${totalSteps}\ta=video\tfallback-generate-error=${(error as Error)?.message || "fallback-generate-failed"}`,
           );
         }
       }
@@ -2903,7 +2903,7 @@ test.describe('Fuzz Test', () => {
           logInteraction(`s=${totalSteps}\ta=screenshot\tfallback=video-frame`);
         } catch (error) {
           logInteraction(
-            `s=${totalSteps}\ta=screenshot\tfallback-error=${(error as Error)?.message || 'ffmpeg-failed'}`,
+            `s=${totalSteps}\ta=screenshot\tfallback-error=${(error as Error)?.message || "ffmpeg-failed"}`,
           );
           await fs
             .writeFile(screenshotPath, PLACEHOLDER_SCREENSHOT_PNG)
@@ -2918,13 +2918,13 @@ test.describe('Fuzz Test', () => {
 
       if (!terminationReason) {
         if (issue) {
-          terminationReason = 'issue';
+          terminationReason = "issue";
         } else if (Date.now() >= runDeadline) {
-          terminationReason = 'time-budget';
+          terminationReason = "time-budget";
         } else if (maxSteps && totalSteps >= maxSteps) {
-          terminationReason = 'max-steps';
+          terminationReason = "max-steps";
         } else {
-          terminationReason = 'min-steps';
+          terminationReason = "min-steps";
         }
       }
 
@@ -2981,7 +2981,7 @@ test.describe('Fuzz Test', () => {
       await writeJson(sessionJsonPath, sessionManifest);
 
       server.resetState();
-      server.setFaultMode('none');
+      server.setFaultMode("none");
       server.setLatencyMs(null);
     };
 
@@ -3012,7 +3012,7 @@ test.describe('Fuzz Test', () => {
       } catch (error) {
         browserNeedsRestart = true;
         console.error(
-          'Fuzz session failed unexpectedly; restarting browser for next session:',
+          "Fuzz session failed unexpectedly; restarting browser for next session:",
           error,
         );
       }
@@ -3027,12 +3027,12 @@ test.describe('Fuzz Test', () => {
     await withTimeout(
       () => browser.close(),
       Math.max(10_000, actionTimeoutMs * 2),
-      'close browser',
+      "close browser",
     );
     await withTimeout(
       () => server.close(),
       Math.max(10_000, actionTimeoutMs),
-      'close mock server',
+      "close mock server",
     );
 
     const sessionsStarted = sessionManifests.length;
@@ -3099,10 +3099,10 @@ test.describe('Fuzz Test', () => {
     };
 
     await writeJson(
-      path.join(outputRoot, 'visual-stagnation-report.json'),
+      path.join(outputRoot, "visual-stagnation-report.json"),
       visualStagnationReport,
     );
-    await writeJson(path.join(outputRoot, 'fuzz-run-metrics.json'), runMetrics);
+    await writeJson(path.join(outputRoot, "fuzz-run-metrics.json"), runMetrics);
 
     const report = {
       meta: {
@@ -3120,11 +3120,11 @@ test.describe('Fuzz Test', () => {
       issueGroups: Array.from(issueGroups.values()),
     };
 
-    await writeJson(path.join(outputRoot, 'fuzz-issue-report.json'), report);
+    await writeJson(path.join(outputRoot, "fuzz-issue-report.json"), report);
 
-    const summaryLines: string[] = ['# Fuzz Test Summary', ''];
+    const summaryLines: string[] = ["# Fuzz Test Summary", ""];
     if (!issueGroups.size) {
-      summaryLines.push('No issues detected.');
+      summaryLines.push("No issues detected.");
     } else {
       // Sort deterministically: total count descending, issue_group_id ascending for ties.
       const groupsArray = [...issueGroups.values()].sort((a, b) => {
@@ -3145,39 +3145,39 @@ test.describe('Fuzz Test', () => {
           0,
         );
         summaryLines.push(`## ${group.issue_group_id}`);
-        summaryLines.push('');
+        summaryLines.push("");
         summaryLines.push(`- Exception: ${group.signature.exception}`);
-        summaryLines.push(`- Message: ${group.signature.message || 'n/a'}`);
+        summaryLines.push(`- Message: ${group.signature.message || "n/a"}`);
         summaryLines.push(
-          `- Top frames: ${group.signature.topFrames.join(' | ') || 'n/a'}`,
+          `- Top frames: ${group.signature.topFrames.join(" | ") || "n/a"}`,
         );
         summaryLines.push(`- Total: ${totalCount}`);
         summaryLines.push(
           `- Severity: crash=${group.severityCounts.crash} freeze=${group.severityCounts.freeze} error=${group.severityCounts.errorLog} warn=${group.severityCounts.warnLog}`,
         );
-        summaryLines.push(`- Platforms: ${group.platforms.join(', ')}`);
+        summaryLines.push(`- Platforms: ${group.platforms.join(", ")}`);
         const examplesWithVideo = group.examples.filter((e) => e.video);
         if (examplesWithVideo.length) {
           const videoLinks = examplesWithVideo.slice(0, 3).map((e) => {
             const link = `[${e.video}](${e.video})`;
-            return typeof e.sessionOffsetMs === 'number' &&
+            return typeof e.sessionOffsetMs === "number" &&
               Number.isFinite(e.sessionOffsetMs)
               ? `${link} @ ${formatFuzzTimestamp(e.sessionOffsetMs)}`
               : link;
           });
-          summaryLines.push(`- Videos: ${videoLinks.join(', ')}`);
+          summaryLines.push(`- Videos: ${videoLinks.join(", ")}`);
         }
         summaryLines.push(
           `- Likely fix: ${summarizeFixHint(group.signature, group.examples[0].severity)}`,
         );
-        summaryLines.push('');
+        summaryLines.push("");
       }
     }
 
     await fs.writeFile(
-      path.join(outputRoot, 'README.md'),
-      summaryLines.join('\n'),
-      'utf8',
+      path.join(outputRoot, "README.md"),
+      summaryLines.join("\n"),
+      "utf8",
     );
 
     for (const item of sessionManifests) {
@@ -3207,18 +3207,18 @@ test.describe('Fuzz Test', () => {
         try {
           await fs.stat(path.join(outputRoot, item.interactionLog));
         } catch {
-          missing.push('interactionLog');
+          missing.push("interactionLog");
         }
         try {
           await fs.stat(path.join(outputRoot, item.finalScreenshot));
         } catch {
-          missing.push('finalScreenshot');
+          missing.push("finalScreenshot");
         }
         if (item.video) {
           try {
             await fs.stat(path.join(outputRoot, item.video));
           } catch {
-            missing.push('video');
+            missing.push("video");
           }
         }
         return { sessionId: item.sessionId, missing };

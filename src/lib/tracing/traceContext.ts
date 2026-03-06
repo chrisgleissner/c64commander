@@ -10,11 +10,11 @@ import type {
   TraceContextSnapshot,
   TraceDeviceContext,
   TracePlaybackContext,
-} from '@/lib/tracing/types';
-import { getPlatform } from '@/lib/native/platform';
+} from "@/lib/tracing/types";
+import { getPlatform } from "@/lib/native/platform";
 
 const defaultSnapshot: TraceContextSnapshot = {
-  ui: { route: '/', query: '' },
+  ui: { route: "/", query: "" },
   platform: getPlatform(),
   featureFlags: {},
   playback: null,

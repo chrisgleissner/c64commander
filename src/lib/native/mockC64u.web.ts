@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { MockC64UPlugin } from './mockC64u';
+import type { MockC64UPlugin } from "./mockC64u";
 
 export class MockC64UWeb implements MockC64UPlugin {
   async startServer(): Promise<{
@@ -27,7 +27,7 @@ export class MockC64UWeb implements MockC64UPlugin {
         .__c64uMockServerFtpPort;
       return { baseUrl: override, port, ftpPort };
     }
-    throw new Error('Mock C64U server is only available on native platforms.');
+    throw new Error("Mock C64U server is only available on native platforms.");
   }
 
   async stopServer(): Promise<void> {

@@ -9,21 +9,21 @@
 import {
   getActiveAction,
   runWithImplicitAction,
-} from '@/lib/tracing/actionTrace';
+} from "@/lib/tracing/actionTrace";
 import {
   decrementRestInFlight,
   incrementRestInFlight,
-} from '@/lib/diagnostics/diagnosticsActivity';
+} from "@/lib/diagnostics/diagnosticsActivity";
 import {
   recordRestRequest,
   recordRestResponse,
   recordTraceError,
-} from '@/lib/tracing/traceSession';
-import type { TraceActionContext } from '@/lib/tracing/types';
+} from "@/lib/tracing/traceSession";
+import type { TraceActionContext } from "@/lib/tracing/types";
 
 const parseUrl = (url: string) => {
   const fallbackBase =
-    typeof window !== 'undefined' ? window.location.origin : 'http://localhost';
+    typeof window !== "undefined" ? window.location.origin : "http://localhost";
   return new URL(url, fallbackBase);
 };
 
@@ -32,7 +32,7 @@ const normalizeUrlPath = (url: string) => {
     const parsed = parseUrl(url);
     return `${parsed.pathname}${parsed.search}`;
   } catch (error) {
-    console.warn('Failed to normalize fetch trace URL', { url, error });
+    console.warn("Failed to normalize fetch trace URL", { url, error });
     return url;
   }
 };
@@ -57,11 +57,11 @@ const extractHeaders = (headers?: HeadersInit) => {
 
 const extractBody = (body: BodyInit | null | undefined) => {
   if (!body) return null;
-  if (typeof body === 'string') {
+  if (typeof body === "string") {
     try {
       return JSON.parse(body);
     } catch (error) {
-      console.warn('Failed to parse fetch trace body', { error });
+      console.warn("Failed to parse fetch trace body", { error });
       return body;
     }
   }
@@ -69,62 +69,62 @@ const extractBody = (body: BodyInit | null | undefined) => {
     // Provide structured summary of FormData for diagnostics
     const fields: Array<{
       name: string;
-      type: 'file' | 'text';
+      type: "file" | "text";
       fileName?: string;
       sizeBytes?: number;
       mimeType?: string;
     }> = [];
     body.forEach((value, name) => {
-      if (typeof File !== 'undefined' && value instanceof File) {
+      if (typeof File !== "undefined" && value instanceof File) {
         fields.push({
           name,
-          type: 'file',
+          type: "file",
           fileName: value.name,
           sizeBytes: value.size,
           mimeType: value.type || undefined,
         });
-      } else if (typeof Blob !== 'undefined' && value instanceof Blob) {
+      } else if (typeof Blob !== "undefined" && value instanceof Blob) {
         fields.push({
           name,
-          type: 'file',
+          type: "file",
           sizeBytes: value.size,
           mimeType: value.type || undefined,
         });
       } else {
         fields.push({
           name,
-          type: 'text',
+          type: "text",
         });
       }
     });
-    return { type: 'form-data', fields };
+    return { type: "form-data", fields };
   }
-  if (typeof Blob !== 'undefined' && body instanceof Blob) {
+  if (typeof Blob !== "undefined" && body instanceof Blob) {
     return {
-      type: 'blob',
+      type: "blob",
       sizeBytes: body.size,
       mimeType: body.type || null,
-      source: 'blob',
+      source: "blob",
     };
   }
-  return '[body]';
+  return "[body]";
 };
 
 const shouldTraceUrl = (url: string) => {
   try {
     const parsed = parseUrl(url);
-    return parsed.pathname.includes('/v1/');
+    return parsed.pathname.includes("/v1/");
   } catch (error) {
-    console.warn('Failed to parse fetch trace URL for filtering', {
+    console.warn("Failed to parse fetch trace URL for filtering", {
       url,
       error,
     });
-    return url.includes('/v1/');
+    return url.includes("/v1/");
   }
 };
 
 export const registerFetchTrace = () => {
-  if (typeof window === 'undefined') return;
+  if (typeof window === "undefined") return;
   const existing = (window as Window & { __c64uFetchTraceInstalled?: boolean })
     .__c64uFetchTraceInstalled;
   if (existing) return;
@@ -155,13 +155,13 @@ export const registerFetchTrace = () => {
       ),
     });
     const startedAt =
-      typeof performance !== 'undefined' ? performance.now() : Date.now();
+      typeof performance !== "undefined" ? performance.now() : Date.now();
     try {
       const response = await originalFetch(input, init);
       const durationMs = Math.max(
         0,
         Math.round(
-          (typeof performance !== 'undefined'
+          (typeof performance !== "undefined"
             ? performance.now()
             : Date.now()) - startedAt,
         ),
@@ -171,7 +171,7 @@ export const registerFetchTrace = () => {
         const clone = response.clone();
         responseBody = await clone.json().catch(() => null);
       } catch (error) {
-        console.warn('Failed to parse traced fetch response body', { error });
+        console.warn("Failed to parse traced fetch response body", { error });
         responseBody = null;
       }
       if (!response.ok) {
@@ -197,7 +197,7 @@ export const registerFetchTrace = () => {
       const durationMs = Math.max(
         0,
         Math.round(
-          (typeof performance !== 'undefined'
+          (typeof performance !== "undefined"
             ? performance.now()
             : Date.now()) - startedAt,
         ),
@@ -215,7 +215,7 @@ export const registerFetchTrace = () => {
           const clone = error.clone();
           responseBody = await clone.json().catch(() => null);
         } catch (errorBody) {
-          console.warn('Failed to parse traced error response body', {
+          console.warn("Failed to parse traced error response body", {
             error: errorBody,
           });
           responseBody = null;
@@ -224,7 +224,7 @@ export const registerFetchTrace = () => {
         errorMessage = error.message;
         traceError = error;
       } else {
-        errorMessage = 'Request failed';
+        errorMessage = "Request failed";
         traceError = new Error(errorMessage);
       }
 
@@ -235,7 +235,7 @@ export const registerFetchTrace = () => {
         error: traceError,
         errorMessage,
       });
-      recordTraceError(action, traceError ?? new Error('Request failed'));
+      recordTraceError(action, traceError ?? new Error("Request failed"));
       throw error;
     } finally {
       decrementRestInFlight();
@@ -247,7 +247,7 @@ export const registerFetchTrace = () => {
     init?: RequestInit & { __c64uTraceSuppressed?: boolean },
   ) => {
     const url =
-      typeof input === 'string'
+      typeof input === "string"
         ? input
         : input instanceof Request
           ? input.url
@@ -255,12 +255,12 @@ export const registerFetchTrace = () => {
             ? input.toString()
             : String(input);
     const method = (
-      init?.method || (input instanceof Request ? input.method : 'GET')
+      init?.method || (input instanceof Request ? input.method : "GET")
     )
       .toString()
       .toUpperCase();
     const suppress = Boolean(
-      init && '__c64uTraceSuppressed' in init && init.__c64uTraceSuppressed,
+      init && "__c64uTraceSuppressed" in init && init.__c64uTraceSuppressed,
     );
 
     if (!suppress && shouldTraceUrl(url)) {

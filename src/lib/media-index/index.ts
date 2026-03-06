@@ -12,9 +12,9 @@ export type {
   MediaIndexSnapshot,
   MediaIndexStorage,
   MediaType,
-} from './mediaIndex';
+} from "./mediaIndex";
 export {
   JsonMediaIndex,
   LocalStorageMediaIndexStorage,
-} from './localStorageMediaIndex';
-export { FilesystemMediaIndexStorage } from './filesystemMediaIndex';
+} from "./localStorageMediaIndex";
+export { FilesystemMediaIndexStorage } from "./filesystemMediaIndex";

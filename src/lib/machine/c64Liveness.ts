@@ -6,12 +6,12 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { C64API } from '@/lib/c64api';
+import type { C64API } from "@/lib/c64api";
 import {
   createActionContext,
   getActiveAction,
-} from '@/lib/tracing/actionTrace';
-import { recordDeviceGuard } from '@/lib/tracing/traceSession';
+} from "@/lib/tracing/actionTrace";
+import { recordDeviceGuard } from "@/lib/tracing/traceSession";
 
 const DEFAULT_JIFFY_WAIT_MS = 50;
 const DEFAULT_RASTER_ATTEMPTS = 3;
@@ -38,24 +38,24 @@ const assertByteLength = (
 };
 
 const readJiffyClock = async (api: C64API) => {
-  const bytes = await api.readMemory('00A2', 3);
-  assertByteLength(bytes, 3, 'Jiffy clock');
+  const bytes = await api.readMemory("00A2", 3);
+  assertByteLength(bytes, 3, "Jiffy clock");
   return toUint24(bytes);
 };
 
 const readRaster = async (api: C64API) => {
-  const bytes = await api.readMemory('D012', 1);
-  assertByteLength(bytes, 1, 'Raster');
+  const bytes = await api.readMemory("D012", 1);
+  assertByteLength(bytes, 1, "Raster");
   return bytes[0];
 };
 
 const recordLivenessTrace = (payload: Record<string, unknown>) => {
   const action =
-    getActiveAction() ?? createActionContext('device.liveness', 'system', null);
+    getActiveAction() ?? createActionContext("device.liveness", "system", null);
   recordDeviceGuard(action, payload);
 };
 
-export type C64LivenessDecision = 'healthy' | 'irq-stalled' | 'wedged';
+export type C64LivenessDecision = "healthy" | "irq-stalled" | "wedged";
 
 export type C64LivenessSample = {
   jiffyStart: number;
@@ -107,10 +107,10 @@ export const checkC64Liveness = async (
 
     const jiffyAdvanced = jiffyEnd !== jiffyStart;
     const decision: C64LivenessDecision = jiffyAdvanced
-      ? 'healthy'
+      ? "healthy"
       : rasterChanged
-        ? 'irq-stalled'
-        : 'wedged';
+        ? "irq-stalled"
+        : "wedged";
 
     recordLivenessTrace({
       decision,
@@ -136,9 +136,9 @@ export const checkC64Liveness = async (
     };
   } catch (error) {
     const err =
-      error instanceof Error ? error : new Error('Liveness check failed');
+      error instanceof Error ? error : new Error("Liveness check failed");
     recordLivenessTrace({
-      decision: 'wedged',
+      decision: "wedged",
       error: err.message,
       jiffyWaitMs,
       rasterAttempts,

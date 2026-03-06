@@ -6,16 +6,16 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { getHvscFolderListing } from '@/lib/hvsc';
-import { normalizeSourcePath } from './paths';
-import { SOURCE_LABELS } from './sourceTerms';
-import type { SourceEntry, SourceLocation } from './types';
+import { getHvscFolderListing } from "@/lib/hvsc";
+import { normalizeSourcePath } from "./paths";
+import { SOURCE_LABELS } from "./sourceTerms";
+import type { SourceEntry, SourceLocation } from "./types";
 
-const normalizeHvscPath = (path: string) => normalizeSourcePath(path || '/');
+const normalizeHvscPath = (path: string) => normalizeSourcePath(path || "/");
 
 const folderToEntry = (path: string): SourceEntry => ({
-  type: 'dir',
-  name: path.split('/').pop() || path,
+  type: "dir",
+  name: path.split("/").pop() || path,
   path: normalizeHvscPath(path),
 });
 
@@ -24,7 +24,7 @@ const songToEntry = (song: {
   fileName: string;
   durationSeconds?: number | null;
 }): SourceEntry => ({
-  type: 'file',
+  type: "file",
   name: song.fileName,
   path: normalizeHvscPath(song.virtualPath),
 });
@@ -48,7 +48,7 @@ export const createHvscSourceLocation = (rootPath: string): SourceLocation => {
     const files: SourceEntry[] = [];
     while (queue.length) {
       if (options?.signal?.aborted) {
-        throw new DOMException('Aborted', 'AbortError');
+        throw new DOMException("Aborted", "AbortError");
       }
       const next = queue.shift();
       if (!next || visited.has(next)) continue;
@@ -63,8 +63,8 @@ export const createHvscSourceLocation = (rootPath: string): SourceLocation => {
   };
 
   return {
-    id: 'hvsc-library',
-    type: 'hvsc',
+    id: "hvsc-library",
+    type: "hvsc",
     name: SOURCE_LABELS.hvsc,
     rootPath: normalizedRoot,
     isAvailable: true,

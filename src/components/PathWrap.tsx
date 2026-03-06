@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { cn } from '@/lib/utils';
+import { cn } from "@/lib/utils";
 
 type PathWrapProps = {
   path: string;
@@ -17,9 +17,9 @@ export const PathWrap = ({ path, className }: PathWrapProps) => {
   if (!path) return null;
   const parts = String(path).split(/([\\/])/g);
   return (
-    <span className={cn('break-words whitespace-normal', className)}>
+    <span className={cn("break-words whitespace-normal", className)}>
       {parts.map((part, index) =>
-        part === '/' || part === '\\' ? (
+        part === "/" || part === "\\" ? (
           <span key={`${part}-${index}`}>
             {part}
             <wbr />

@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { Page, ElementHandle } from 'playwright';
+import type { Page, ElementHandle } from "playwright";
 
 export type RecoveryContext = {
   seed: number;
@@ -32,12 +32,12 @@ const dialogSelector =
   '[role="dialog"], [data-radix-dialog-content], [data-state="open"][role="dialog"]';
 
 const resolveDialogText = async (element: ElementHandle<HTMLElement>) =>
-  element.evaluate((node) => (node.textContent || '').toLowerCase());
+  element.evaluate((node) => (node.textContent || "").toLowerCase());
 
 const resolveButtonText = async (element: ElementHandle<HTMLElement>) =>
   element.evaluate((node) => {
-    const aria = node.getAttribute('aria-label') || '';
-    const text = node.textContent || '';
+    const aria = node.getAttribute("aria-label") || "";
+    const text = node.textContent || "";
     return `${aria} ${text}`.trim().toLowerCase();
   });
 
@@ -45,7 +45,7 @@ const isElementDisabled = async (element: ElementHandle<HTMLElement>) =>
   element.evaluate((node) => {
     const html = node as HTMLButtonElement | HTMLInputElement;
     return Boolean(
-      html.disabled || html.getAttribute('aria-disabled') === 'true',
+      html.disabled || html.getAttribute("aria-disabled") === "true",
     );
   });
 
@@ -59,8 +59,8 @@ const fillInput = async (
       node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement,
   );
   await input.click().catch(() => {});
-  await page.keyboard.press('Control+A').catch(() => {});
-  await page.keyboard.press('Backspace').catch(() => {});
+  await page.keyboard.press("Control+A").catch(() => {});
+  await page.keyboard.press("Backspace").catch(() => {});
   if (supportsFill) {
     await (input as ElementHandle<HTMLInputElement | HTMLTextAreaElement>)
       .fill(value)
@@ -78,21 +78,21 @@ const resolveInputHint = async (input: ElementHandle<HTMLElement>) =>
       node instanceof HTMLInputElement ||
       node instanceof HTMLTextAreaElement
     ) {
-      return `${node.placeholder || ''} ${node.name || ''} ${node.getAttribute('aria-label') || ''}`
+      return `${node.placeholder || ""} ${node.name || ""} ${node.getAttribute("aria-label") || ""}`
         .trim()
         .toLowerCase();
     }
-    return `${node.getAttribute('aria-label') || ''}`.trim().toLowerCase();
+    return `${node.getAttribute("aria-label") || ""}`.trim().toLowerCase();
   });
 
 const resolveRequiredToken = (dialogText: string, hint: string) => {
   const source = `${dialogText} ${hint}`;
   const explicit = source.match(/(?:type|enter)\s+["']?([a-z]+)["']?/i);
   const token = explicit?.[1]?.toLowerCase();
-  if (token === 'delete' || token === 'confirm' || token === 'yes')
+  if (token === "delete" || token === "confirm" || token === "yes")
     return token;
-  if (source.includes('delete')) return 'delete';
-  if (source.includes('confirm')) return 'confirm';
+  if (source.includes("delete")) return "delete";
+  if (source.includes("confirm")) return "confirm";
   return null;
 };
 
@@ -101,16 +101,16 @@ const buildRecoveryValue = (
   hint: string,
   index: number,
 ) => {
-  if (hint.includes('email')) {
+  if (hint.includes("email")) {
     return `fuzz-${context.seed}-${context.attempt}@example.com`;
   }
-  if (hint.includes('number')) {
+  if (hint.includes("number")) {
     return String(1000 + context.attempt + index);
   }
   if (
-    hint.includes('name') ||
-    hint.includes('title') ||
-    hint.includes('config')
+    hint.includes("name") ||
+    hint.includes("title") ||
+    hint.includes("config")
   ) {
     return `fuzz-config-${context.seed}-${context.attempt}-${index + 1}`;
   }
@@ -162,13 +162,13 @@ export const attemptStructuredRecovery = async (
     )) as ElementHandle<HTMLElement> | null;
     scope =
       dialog ??
-      ((await page.$('main')) as ElementHandle<HTMLElement> | null) ??
+      ((await page.$("main")) as ElementHandle<HTMLElement> | null) ??
       null;
   } catch (error) {
     if (isClosedTargetError(error)) {
       return {
         recovered: false,
-        log: 'recovery skip (page/context closed)',
+        log: "recovery skip (page/context closed)",
         filledValues: [],
         clicked: false,
       };
@@ -178,7 +178,7 @@ export const attemptStructuredRecovery = async (
   if (!scope) {
     return {
       recovered: false,
-      log: 'recovery skip (no scope)',
+      log: "recovery skip (no scope)",
       filledValues: [],
       clicked: false,
     };
@@ -186,13 +186,13 @@ export const attemptStructuredRecovery = async (
 
   const dialogText = dialog
     ? await resolveDialogText(dialog as ElementHandle<HTMLElement>)
-    : '';
+    : "";
   const inputSelector =
     'input:not([type]), input[type="text"], input[type="search"], textarea, [contenteditable="true"]';
   let inputs = await scope.$$(inputSelector);
   if (!inputs.length) {
     const fallback = await (
-      dialog ? page.locator(dialogSelector) : page.locator('main')
+      dialog ? page.locator(dialogSelector) : page.locator("main")
     )
       .locator(inputSelector)
       .elementHandles();
@@ -209,7 +209,7 @@ export const attemptStructuredRecovery = async (
       if (isClosedTargetError(error)) {
         return {
           recovered: false,
-          log: 'recovery skip (page/context closed)',
+          log: "recovery skip (page/context closed)",
           filledValues,
           clicked: false,
         };
@@ -222,9 +222,9 @@ export const attemptStructuredRecovery = async (
         node instanceof HTMLInputElement ||
         node instanceof HTMLTextAreaElement
       ) {
-        return node.value || '';
+        return node.value || "";
       }
-      return (node.textContent || '').trim();
+      return (node.textContent || "").trim();
     });
     const hint = await resolveInputHint(input as ElementHandle<HTMLElement>);
     const requiredToken = resolveRequiredToken(dialogText, hint);
@@ -236,8 +236,8 @@ export const attemptStructuredRecovery = async (
 
   const locatorScope = dialog
     ? page.locator(dialogSelector)
-    : page.locator('main');
-  const primaryLocator = locatorScope.getByRole('button', {
+    : page.locator("main");
+  const primaryLocator = locatorScope.getByRole("button", {
     name: /(save|confirm|ok|continue|yes|submit|apply|done|delete|proceed|add|create)/i,
   });
   if (await primaryLocator.count()) {
@@ -247,7 +247,7 @@ export const attemptStructuredRecovery = async (
       .catch(() => {});
     return {
       recovered: true,
-      log: 'recovery click primary locator',
+      log: "recovery click primary locator",
       filledValues,
       clicked: true,
     };
@@ -261,17 +261,17 @@ export const attemptStructuredRecovery = async (
     await primary.button.click().catch(() => {});
     return {
       recovered: true,
-      log: `recovery click "${primary.label || 'button'}"`,
+      log: `recovery click "${primary.label || "button"}"`,
       filledValues,
       clicked: true,
     };
   }
 
   if (dialog) {
-    await page.keyboard.press('Escape').catch(() => {});
+    await page.keyboard.press("Escape").catch(() => {});
     return {
       recovered: true,
-      log: 'recovery escape',
+      log: "recovery escape",
       filledValues,
       clicked: false,
     };
@@ -279,7 +279,7 @@ export const attemptStructuredRecovery = async (
 
   return {
     recovered: false,
-    log: 'recovery no-action',
+    log: "recovery no-action",
     filledValues,
     clicked: false,
   };
