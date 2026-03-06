@@ -6,10 +6,10 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 describe('PlayFilesPage', () => {
-	it('loads test harness', () => {
-		expect(true).toBe(true);
-	});
+  it('loads test harness', () => {
+    expect(true).toBe(true);
+  });
 });

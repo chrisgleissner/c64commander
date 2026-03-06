@@ -80,11 +80,7 @@ export default defineConfig({
         "coverage/**",
         "dist/**",
         "web/server/**",
-        // deviceInteraction wires together many subsystems and has limited unit
-        // test isolation; E2E is the primary coverage vehicle for it.
-        "src/lib/deviceInteraction/**",
         "src/lib/ui/buttonInteraction.ts",
-        "src/lib/playback/diskFirstPrg.ts",
         "src/**/*.test.{ts,tsx}",
         "src/**/*.spec.{ts,tsx}",
         "src/vite-env.d.ts",
