@@ -27,68 +27,68 @@ const saveAppConfigs = vi.fn();
 const createAppConfigEntry = vi.fn((_baseUrl, name, data) => ({ id: `id-${name}`, name, data, savedAt: 'now' }));
 
 vi.mock('@/hooks/useC64Connection', () => ({
-  useC64Connection: () => ({ status, baseUrl: 'http://c64u' }),
+    useC64Connection: () => ({ status, baseUrl: 'http://c64u' }),
 }));
 
 vi.mock('@/lib/c64api', () => ({
-  getDefaultBaseUrl: () => 'http://c64u',
-  getC64API: () => ({
-    getCategories,
-    getCategory,
-    updateConfigBatch,
-  }),
+    getDefaultBaseUrl: () => 'http://c64u',
+    getC64API: () => ({
+        getCategories,
+        getCategory,
+        updateConfigBatch,
+    }),
 }));
 
 vi.mock('@/lib/config/appConfigStore', () => ({
-  loadInitialSnapshot,
-  loadHasChanges,
-  listAppConfigs,
-  saveInitialSnapshot,
-  updateHasChanges,
-  loadAppConfigs,
-  saveAppConfigs,
-  createAppConfigEntry,
+    loadInitialSnapshot,
+    loadHasChanges,
+    listAppConfigs,
+    saveInitialSnapshot,
+    updateHasChanges,
+    loadAppConfigs,
+    saveAppConfigs,
+    createAppConfigEntry,
 }));
 
 vi.mock('@/lib/logging', () => ({
-  addLog: vi.fn(),
+    addLog: vi.fn(),
 }));
 
 describe('useAppConfigState', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    sessionStorage.clear();
-  });
-
-  it('captures initial snapshot and supports save/load app config', async () => {
-    const { useAppConfigState } = await import('@/hooks/useAppConfigState');
-    const queryClient = new QueryClient();
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-    );
-
-    const { result } = renderHook(() => useAppConfigState(), { wrapper });
-
-    await waitFor(() => {
-      expect(getCategories).toHaveBeenCalledTimes(1);
+    beforeEach(() => {
+        vi.clearAllMocks();
+        sessionStorage.clear();
     });
 
-    await act(async () => {
-      await result.current.saveCurrentConfig('Profile A');
+    it('captures initial snapshot and supports save/load app config', async () => {
+        const { useAppConfigState } = await import('@/hooks/useAppConfigState');
+        const queryClient = new QueryClient();
+        const wrapper = ({ children }: { children: React.ReactNode }) => (
+            <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+        );
+
+        const { result } = renderHook(() => useAppConfigState(), { wrapper });
+
+        await waitFor(() => {
+            expect(getCategories).toHaveBeenCalledTimes(1);
+        });
+
+        await act(async () => {
+            await result.current.saveCurrentConfig('Profile A');
+        });
+
+        expect(saveAppConfigs).toHaveBeenCalledTimes(1);
+
+        await act(async () => {
+            await result.current.loadAppConfig({
+                id: 'id-Profile A',
+                name: 'Profile A',
+                savedAt: 'now',
+                data: { 'Audio Mixer': { items: { Volume: { selected: '5' } } } },
+            });
+        });
+
+        expect(updateConfigBatch).toHaveBeenCalledTimes(1);
+        expect(updateHasChanges).toHaveBeenCalled();
     });
-
-    expect(saveAppConfigs).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      await result.current.loadAppConfig({
-        id: 'id-Profile A',
-        name: 'Profile A',
-        savedAt: 'now',
-        data: { 'Audio Mixer': { items: { Volume: { selected: '5' } } } },
-      });
-    });
-
-    expect(updateConfigBatch).toHaveBeenCalledTimes(1);
-    expect(updateHasChanges).toHaveBeenCalled();
-  });
 });
