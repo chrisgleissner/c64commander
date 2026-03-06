@@ -801,6 +801,78 @@ describe('HomePage SID status', () => {
     fireEvent.keyDown(document.activeElement ?? ledModeSelect, { key: 'Escape' });
   });
 
+  it('updates quick-config and LED controls across select, checkbox, and slider interactions', async () => {
+    u64SettingsPayloadRef.current = {
+      'U64 Specific Settings': {
+        items: {
+          'CPU Speed': { selected: '1', options: ['1', '2', '4'] },
+          'System Mode': { selected: 'PAL', options: ['PAL', 'NTSC'] },
+          'Analog Video Mode': { selected: 'PAL', options: ['PAL', 'NTSC'] },
+          'Digital Video Mode': { selected: '1080p', options: ['1080p', '720p'] },
+          'HDMI Scan lines': { selected: 'Disabled', options: ['Disabled', 'Enabled'] },
+          'Joystick Swapper': { selected: 'Normal', options: ['Normal', 'Swapped'] },
+        },
+      },
+    };
+
+    ledStripPayloadRef.current = {
+      'LED Strip Settings': {
+        items: {
+          'LedStrip Mode': { selected: 'Fixed Color', options: ['Off', 'Fixed Color', 'Rainbow'] },
+          'Fixed Color': { selected: 'Red', options: ['Red', 'Green', 'Blue'] },
+          'Strip Intensity': { selected: '10', min: 0, max: 31 },
+          'LedStrip SID Select': { selected: 'SID 1', options: ['SID 1', 'SID 2'] },
+          'Color tint': { selected: 'Pure', options: ['Pure', 'Warm'] },
+        },
+      },
+    };
+
+    renderHomePage();
+
+    fireEvent.click(screen.getByTestId('home-video-mode'));
+    fireEvent.click(await screen.findByRole('option', { name: /NTSC/i }));
+
+    fireEvent.click(screen.getByTestId('home-video-analog'));
+    fireEvent.click(await screen.findByRole('option', { name: /NTSC/i }));
+
+    fireEvent.click(screen.getByTestId('home-video-digital'));
+    fireEvent.click(await screen.findByRole('option', { name: /720p/i }));
+
+    fireEvent.click(screen.getByTestId('home-video-scanlines'));
+    fireEvent.click(screen.getByTestId('home-joystick-swap'));
+
+    fireEvent.click(screen.getByTestId('home-led-mode'));
+    fireEvent.click(await screen.findByRole('option', { name: /Rainbow/i }));
+
+    fireEvent.click(screen.getByTestId('home-led-color'));
+    fireEvent.click(await screen.findByRole('option', { name: /Green/i }));
+
+    fireEvent.click(screen.getByTestId('home-led-sid-select'));
+    fireEvent.click(await screen.findByRole('option', { name: /SID 2/i }));
+
+    fireEvent.click(screen.getByTestId('home-led-tint'));
+    fireEvent.click(await screen.findByRole('option', { name: /Warm/i }));
+
+    const colorSliderThumb = screen.getByTestId('home-led-color-slider').querySelector('[role="slider"]');
+    const intensitySliderThumb = screen.getByTestId('home-led-intensity-slider').querySelector('[role="slider"]');
+    expect(colorSliderThumb).toBeTruthy();
+    expect(intensitySliderThumb).toBeTruthy();
+    fireEvent.keyDown(colorSliderThumb!, { key: 'ArrowRight' });
+    fireEvent.keyDown(intensitySliderThumb!, { key: 'ArrowRight' });
+
+    await waitFor(() => {
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith('U64 Specific Settings', 'System Mode', 'NTSC');
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith('U64 Specific Settings', 'Analog Video Mode', 'NTSC');
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith('U64 Specific Settings', 'Digital Video Mode', '720p');
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith('U64 Specific Settings', 'HDMI Scan lines', 'Enabled');
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith('U64 Specific Settings', 'Joystick Swapper', 'Swapped');
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith('LED Strip Settings', 'LedStrip Mode', 'Rainbow');
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith('LED Strip Settings', 'Fixed Color', 'Green');
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith('LED Strip Settings', 'LedStrip SID Select', 'SID 2');
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith('LED Strip Settings', 'Color tint', 'Warm');
+    });
+  }, 30000);
+
   it('handles save-to-app error path', async () => {
     const savedAt = new Date('2024-01-01T00:00:00.000Z').toISOString();
     appConfigStatePayloadRef.current = {

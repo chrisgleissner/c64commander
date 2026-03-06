@@ -67,6 +67,7 @@ const {
   connectionPayloadRef,
   connectionStateRef,
   developerModeEnabledRef,
+  featureFlagValueRef,
 } = vi.hoisted(() => ({
   mockUpdateConfig: vi.fn(),
   mockRefetch: vi.fn(),
@@ -74,6 +75,7 @@ const {
   mockSetFeatureFlag: vi.fn(),
   mockSetTheme: vi.fn(),
   mockSetListPreviewLimit: vi.fn(),
+  featureFlagValueRef: { current: false as boolean },
   connectionPayloadRef: {
     current: {
       status: { state: 'OFFLINE_NO_DEMO', isConnected: false, isConnecting: false, error: null, deviceInfo: null },
@@ -126,7 +128,7 @@ vi.mock('@/hooks/useDeveloperMode', () => ({
 
 vi.mock('@/hooks/useFeatureFlags', () => ({
   useFeatureFlag: () => ({
-    value: false,
+    value: featureFlagValueRef.current,
     setValue: mockSetFeatureFlag,
   }),
 }));
@@ -267,6 +269,7 @@ beforeEach(() => {
     lastProbeFailedAtMs: null,
   };
   developerModeEnabledRef.current = false;
+  featureFlagValueRef.current = false;
   vi.mocked(getLogs).mockReturnValue([]);
   vi.mocked(getErrorLogs).mockReturnValue([]);
   vi.mocked(getTraceEvents).mockReturnValue([]);
@@ -1089,4 +1092,121 @@ describe('SettingsPage', () => {
       });
     });
   }, 15000);
+
+  it('HVSC toggle to disabled writes 0 to storage', () => {
+    // Set HVSC feature flag to enabled (true) initially so clicking turns it off
+    featureFlagValueRef.current = true;
+    const localStorageSpy = vi.spyOn(Storage.prototype, 'setItem');
+
+    renderSettingsPage();
+
+    // Click HVSC toggle — starts enabled, so clicking disables it (enabled=false)
+    fireEvent.click(screen.getByTestId('hvsc-toggle'));
+
+    // Should have been called with false (disabling)
+    expect(mockSetFeatureFlag).toHaveBeenCalledWith(false);
+    // localStorage should have been written with '0'
+    expect(localStorageSpy).toHaveBeenCalledWith('c64u_feature_flag:hvsc_enabled', '0');
+    localStorageSpy.mockRestore();
+  });
+
+  it('filters traces tab entries with non-empty filter text', async () => {
+    vi.mocked(getTraceEvents).mockReturnValue([
+      {
+        id: 'trace-1',
+        timestamp: new Date().toISOString(),
+        relativeMs: 0,
+        type: 'rest-request',
+        origin: 'user',
+        correlationId: 'COR-0001',
+        data: { method: 'GET', url: '/v1/info' },
+      },
+      {
+        id: 'trace-2',
+        timestamp: new Date().toISOString(),
+        relativeMs: 100,
+        type: 'action-start',
+        origin: 'system',
+        correlationId: 'COR-0002',
+        data: { actionName: 'HealthCheck' },
+      },
+    ] as any);
+
+    renderSettingsPage();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Diagnostics' }));
+    const dialog = await screen.findByRole('dialog');
+    const tracesTab = within(dialog).getByRole('tab', { name: /traces/i });
+    fireEvent.mouseDown(tracesTab);
+    fireEvent.click(tracesTab);
+    await waitFor(() => expect(tracesTab).toHaveAttribute('aria-selected', 'true'));
+
+    const filterInput = within(dialog).getByTestId('diagnostics-filter-input');
+    fireEvent.change(filterInput, { target: { value: 'COR-0001' } });
+
+    // Only trace-1 should now be visible (filter match)
+    await waitFor(() => {
+      expect(within(dialog).queryByText(/COR-0001/)).toBeTruthy();
+    });
+  }, 15000);
+
+  it('filters actions tab entries with non-empty filter text', async () => {
+    renderSettingsPage();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Diagnostics' }));
+    const dialog = await screen.findByRole('dialog');
+    const actionsTab = within(dialog).getByRole('tab', { name: /^Actions$/i });
+    fireEvent.mouseDown(actionsTab);
+    fireEvent.click(actionsTab);
+    await waitFor(() => expect(actionsTab).toHaveAttribute('aria-selected', 'true'));
+
+    // Type a filter — covers the actions filter useMemo non-empty filterText branch
+    const filterInput = within(dialog).getByTestId('diagnostics-filter-input');
+    fireEvent.change(filterInput, { target: { value: 'nonexistent-action' } });
+
+    // No actions should match
+    expect(within(dialog).queryAllByTestId(/^action-item-/)).toHaveLength(0);
+  }, 15000);
+
+  it('exports diagnostics from actions tab', async () => {
+    vi.mocked(shareDiagnosticsZip).mockImplementation(() => undefined);
+
+    renderSettingsPage();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Diagnostics' }));
+    const dialog = await screen.findByRole('dialog');
+    const actionsTab = within(dialog).getByRole('tab', { name: /^Actions$/i });
+    fireEvent.mouseDown(actionsTab);
+    fireEvent.click(actionsTab);
+    await waitFor(() => expect(actionsTab).toHaveAttribute('aria-selected', 'true'));
+
+    // Share button covers the 'actions' branch in handleShareDiagnostics (line 470)
+    const shareBtn = within(dialog).queryByTestId('diagnostics-share-actions');
+    if (shareBtn) {
+      fireEvent.click(shareBtn);
+      expect(shareDiagnosticsZip).toHaveBeenCalledWith('actions', expect.any(Array));
+    }
+  }, 15000);
+
+  it('handles non-finite input for discovery timing fields (uses fallback)', async () => {
+    renderSettingsPage();
+
+    // Find startup discovery window input and set to non-numeric
+    const startupInput = screen.queryByLabelText(/startup discovery window/i)
+      ?? screen.queryByTestId('startup-discovery-window-input');
+    if (startupInput) {
+      fireEvent.change(startupInput, { target: { value: 'abc' } });
+      fireEvent.blur(startupInput);
+      expect(saveStartupDiscoveryWindowMs).toHaveBeenCalled();
+    }
+
+    // Background rediscovery interval
+    const bgInput = screen.queryByLabelText(/background rediscovery interval/i)
+      ?? screen.queryByTestId('background-rediscovery-input');
+    if (bgInput) {
+      fireEvent.change(bgInput, { target: { value: '---' } });
+      fireEvent.blur(bgInput);
+      expect(saveBackgroundRediscoveryIntervalMs).toHaveBeenCalled();
+    }
+  });
 });

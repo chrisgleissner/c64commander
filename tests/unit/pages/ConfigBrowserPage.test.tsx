@@ -389,6 +389,108 @@ describe('ConfigBrowserPage', () => {
     });
   });
 
+  it('shows no-op toast when audio mixer is already at defaults', async () => {
+    setupDefaultMocks();
+    mockUseC64Categories.mockReturnValue({
+      data: { categories: ['Audio Mixer'] },
+      isLoading: false,
+    });
+    const mutateAsync = vi.fn().mockResolvedValue(undefined);
+    mockUseC64UpdateConfigBatch.mockReturnValue({ mutateAsync, isPending: false });
+    const refetch = vi.fn();
+    mockUseC64Category.mockImplementation((categoryName: string) => ({
+      data: {
+        [categoryName]: {
+          items: {
+            'Vol Ultisid 1': { selected: '0 dB', options: ['-6 dB', '0 dB'] },
+          },
+        },
+      },
+      isLoading: false,
+      refetch,
+    }));
+    vi.mocked(resolveAudioMixerResetValue).mockResolvedValue('0 dB');
+
+    renderConfigBrowserPage();
+
+    fireEvent.click(screen.getByRole('button', { name: /audio mixer/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /reset/i }));
+
+    await waitFor(() => {
+      expect(mutateAsync).not.toHaveBeenCalled();
+      expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Audio Mixer already at defaults' }));
+    });
+  });
+
+  it('reports audio mixer reset failures', async () => {
+    setupDefaultMocks();
+    mockUseC64Categories.mockReturnValue({
+      data: { categories: ['Audio Mixer'] },
+      isLoading: false,
+    });
+    const mutateAsync = vi.fn().mockRejectedValue(new Error('Reset failed'));
+    mockUseC64UpdateConfigBatch.mockReturnValue({ mutateAsync, isPending: false });
+    const refetch = vi.fn();
+    mockUseC64Category.mockImplementation((categoryName: string) => ({
+      data: {
+        [categoryName]: {
+          items: {
+            'Vol Ultisid 1': { selected: '-6 dB', options: ['-6 dB', '0 dB'] },
+          },
+        },
+      },
+      isLoading: false,
+      refetch,
+    }));
+    vi.mocked(resolveAudioMixerResetValue).mockResolvedValue('0 dB');
+
+    renderConfigBrowserPage();
+
+    fireEvent.click(screen.getByRole('button', { name: /audio mixer/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /reset/i }));
+
+    await waitFor(() => {
+      expect(reportUserError).toHaveBeenCalledWith(expect.objectContaining({
+        operation: 'AUDIO_MIXER_RESET',
+      }));
+    });
+  });
+
+  it('reports clock sync failure when update batch rejects', async () => {
+    setupDefaultMocks();
+    mockUseC64Categories.mockReturnValue({
+      data: { categories: ['Clock Settings'] },
+      isLoading: false,
+    });
+    const mutateAsync = vi.fn().mockRejectedValue(new Error('Clock failed'));
+    mockUseC64UpdateConfigBatch.mockReturnValue({ mutateAsync, isPending: false });
+    const refetch = vi.fn();
+    mockUseC64Category.mockImplementation((categoryName: string) => ({
+      data: {
+        [categoryName]: {
+          items: {
+            Year: { selected: 2024 },
+            Month: { selected: 1 },
+            Day: { selected: 1 },
+          },
+        },
+      },
+      isLoading: false,
+      refetch,
+    }));
+
+    renderConfigBrowserPage();
+    fireEvent.click(screen.getByRole('button', { name: /clock settings/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /sync clock/i }));
+
+    await waitFor(() => {
+      expect(reportUserError).toHaveBeenCalledWith(expect.objectContaining({
+        operation: 'CLOCK_SYNC',
+        title: 'Clock sync failed',
+      }));
+    });
+  });
+
   it('refreshes category data', async () => {
     setupDefaultMocks();
     mockUseC64Categories.mockReturnValue({
@@ -417,4 +519,45 @@ describe('ConfigBrowserPage', () => {
       expect(refetch).toHaveBeenCalled();
     });
   });
+
+  it('renders loading and empty category states in the category panel', async () => {
+    setupDefaultMocks();
+    mockUseC64Categories.mockReturnValue({
+      data: { categories: ['General'] },
+      isLoading: false,
+    });
+
+    const loadingRefetch = vi.fn();
+    mockUseC64Category.mockImplementation((categoryName: string) => ({
+      data: {
+        [categoryName]: {
+          items: {},
+        },
+      },
+      isLoading: true,
+      refetch: loadingRefetch,
+    }));
+
+    const firstView = renderConfigBrowserPage();
+
+    fireEvent.click(screen.getByRole('button', { name: /general/i }));
+    expect(document.querySelector('.animate-spin')).toBeTruthy();
+    firstView.unmount();
+
+    mockUseC64Category.mockImplementation((categoryName: string) => ({
+      data: {
+        [categoryName]: {
+          items: {},
+        },
+      },
+      isLoading: false,
+      refetch: loadingRefetch,
+    }));
+
+    renderConfigBrowserPage();
+
+    fireEvent.click(screen.getByRole('button', { name: /general/i }));
+    expect(await screen.findByText(/no settings available/i)).toBeInTheDocument();
+  });
+
 });

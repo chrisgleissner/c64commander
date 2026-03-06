@@ -6,11 +6,14 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { act, render, renderHook, screen } from '@testing-library/react';
+import React from 'react';
 import {
     fitPathToWidth,
     getFileNameFromPath,
     type TextMeasureFn,
+    useResponsivePathLabel,
 } from '@/lib/ui/pathDisplay';
 
 const charMeasure: TextMeasureFn = (value: string) => value.length;
@@ -121,6 +124,137 @@ describe('pathDisplay', () => {
             //  → trimFromStartToFit('abc', 2): non-empty, 3>2 (FALSE), measure('...')=3>2 (TRUE) → ''
             const result = fitPathToWidth('/abc', 2, charMeasure, 'filename-fallback');
             expect(result).toBe('');
+        });
+    });
+
+    describe('useResponsivePathLabel', () => {
+        it('keeps original label when no element is attached to the ref', () => {
+            const { result } = renderHook(() => useResponsivePathLabel('/music/demo/song.sid', 'filename-fallback'));
+            expect(result.current.label).toBe('/music/demo/song.sid');
+        });
+
+        it('recalculates on window resize when ResizeObserver is unavailable', async () => {
+            const originalResizeObserver = (globalThis as any).ResizeObserver;
+            (globalThis as any).ResizeObserver = undefined;
+
+            const Probe = ({ path }: { path: string }) => {
+                const { elementRef, label } = useResponsivePathLabel(path, 'filename-fallback');
+                return React.createElement('div', { ref: elementRef, 'data-testid': 'path-probe' }, label);
+            };
+
+            render(React.createElement(Probe, { path: '/very/long/path/to/song.sid' }));
+            const element = screen.getByTestId('path-probe');
+            Object.defineProperty(element, 'clientWidth', { value: 40, configurable: true });
+
+            act(() => {
+                window.dispatchEvent(new Event('resize'));
+            });
+
+            expect(element.textContent).not.toBe('/very/long/path/to/song.sid');
+            expect(element.textContent).toContain('...');
+            (globalThis as any).ResizeObserver = originalResizeObserver;
+        });
+
+        it('uses ResizeObserver when available and updates label on observer callback', () => {
+            const originalResizeObserver = (globalThis as any).ResizeObserver;
+            let callback: (() => void) | null = null;
+            const disconnect = vi.fn();
+
+            (globalThis as any).ResizeObserver = class {
+                constructor(cb: () => void) {
+                    callback = cb;
+                }
+
+                observe() {
+                    return undefined;
+                }
+
+                disconnect() {
+                    disconnect();
+                }
+            };
+
+            const Probe = ({ path }: { path: string }) => {
+                const { elementRef, label } = useResponsivePathLabel(path, 'start-and-filename');
+                return React.createElement('div', { ref: elementRef, 'data-testid': 'path-probe-ro' }, label);
+            };
+
+            const { unmount } = render(React.createElement(Probe, { path: '/very/long/path/to/song.sid' }));
+            const element = screen.getByTestId('path-probe-ro');
+            Object.defineProperty(element, 'clientWidth', { value: 64, configurable: true });
+
+            act(() => {
+                callback?.();
+            });
+
+            expect(element.textContent).toContain('song.sid');
+            unmount();
+            expect(disconnect).toHaveBeenCalled();
+            (globalThis as any).ResizeObserver = originalResizeObserver;
+        });
+
+        it('uses canvas text metrics in non-jsdom user-agent mode', () => {
+            const originalResizeObserver = (globalThis as any).ResizeObserver;
+            const userAgentSpy = vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue('Mozilla/5.0');
+            const getComputedStyleSpy = vi
+                .spyOn(window, 'getComputedStyle')
+                .mockReturnValue({
+                    font: '',
+                    fontStyle: 'normal',
+                    fontVariant: 'normal',
+                    fontWeight: '400',
+                    fontSize: '16px',
+                    lineHeight: '20px',
+                    fontFamily: 'sans-serif',
+                } as unknown as CSSStyleDeclaration);
+
+            let callback: (() => void) | null = null;
+            (globalThis as any).ResizeObserver = class {
+                constructor(cb: () => void) {
+                    callback = cb;
+                }
+
+                observe() {
+                    return undefined;
+                }
+
+                disconnect() {
+                    return undefined;
+                }
+            };
+
+            const originalCreateElement = document.createElement.bind(document);
+            const createElementSpy = vi.spyOn(document, 'createElement').mockImplementation((tagName: string) => {
+                if (tagName === 'canvas') {
+                    return {
+                        getContext: () => ({
+                            font: '',
+                            measureText: (value: string) => ({ width: value.length * 10 }),
+                        }),
+                    } as unknown as HTMLCanvasElement;
+                }
+                return originalCreateElement(tagName);
+            });
+
+            const Probe = ({ path }: { path: string }) => {
+                const { elementRef, label } = useResponsivePathLabel(path, 'filename-fallback');
+                return React.createElement('div', { ref: elementRef, 'data-testid': 'path-probe-canvas' }, label);
+            };
+
+            render(React.createElement(Probe, { path: '/very/long/path/to/song.sid' }));
+            const element = screen.getByTestId('path-probe-canvas');
+            Object.defineProperty(element, 'clientWidth', { value: 40, configurable: true });
+
+            act(() => {
+                callback?.();
+            });
+
+            expect(element.textContent).not.toBe('/very/long/path/to/song.sid');
+
+            createElementSpy.mockRestore();
+            getComputedStyleSpy.mockRestore();
+            userAgentSpy.mockRestore();
+            (globalThis as any).ResizeObserver = originalResizeObserver;
         });
     });
 });

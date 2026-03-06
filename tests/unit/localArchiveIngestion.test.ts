@@ -54,6 +54,8 @@ vi.mock('7z-wasm', () => {
       },
     };
 
+    (globalThis as any).__sevenZipFs = FS;
+
     return { FS, callMain: vi.fn() };
   };
 
@@ -87,6 +89,29 @@ describe('localArchiveIngestion', () => {
     expect(entry.webkitRelativePath).toContain('collection.zip');
     const buffer = await entry.arrayBuffer();
     expect(new TextDecoder().decode(buffer)).toBe('SIDDATA');
+  });
+
+  it('handles Blob archives when arrayBuffer is not directly callable', async () => {
+    const blobArchive = Object.assign(new Blob([new Uint8Array([1, 2, 3, 4])]), {
+      arrayBuffer: undefined,
+      name: 'blob.zip',
+      lastModified: Date.now(),
+    }) as unknown as LocalSidFile;
+
+    await expect(ingestLocalArchives([blobArchive])).rejects.toThrow(
+      'Failed to extract blob.zip: invalid zip data',
+    );
+  });
+
+  it('surfaces unsupported archive objects that are not Blob and lack arrayBuffer', async () => {
+    const invalidArchive = {
+      name: 'invalid.zip',
+      lastModified: Date.now(),
+    } as unknown as LocalSidFile;
+
+    await expect(ingestLocalArchives([invalidArchive])).rejects.toThrow(
+      'Failed to extract invalid.zip: Selected file does not support arrayBuffer.',
+    );
   });
 
   it('keeps direct SID files and ignores unsupported files', async () => {
@@ -151,5 +176,56 @@ describe('localArchiveIngestion', () => {
     const result = await ingestLocalArchives([archiveFile]);
     expect(result.archiveCount).toBe(1);
     expect(result.extractedCount).toBe(1);
+  });
+
+  it('continues extraction when 7z cleanup operations fail', async () => {
+    const fs = (globalThis as any).__sevenZipFs;
+    const originalRmdir = fs.rmdir;
+    const originalUnlink = fs.unlink;
+
+    let rmdirCount = 0;
+    fs.rmdir = vi.fn((path: string) => {
+      rmdirCount += 1;
+      if (rmdirCount <= 2) {
+        throw new Error(`rmdir-failed:${path}`);
+      }
+      return originalRmdir(path);
+    });
+    fs.unlink = vi.fn((path: string) => {
+      if (String(path).includes('/work-')) {
+        throw new Error(`unlink-failed:${path}`);
+      }
+      return originalUnlink(path);
+    });
+
+    const archiveFile: LocalSidFile = {
+      name: 'cleanup.7z',
+      lastModified: Date.now(),
+      arrayBuffer: async () => new Uint8Array(Buffer.from('SEVENZ')).buffer,
+    };
+
+    const result = await ingestLocalArchives([archiveFile]);
+    expect(result.extractedCount).toBe(1);
+
+    fs.rmdir = originalRmdir;
+    fs.unlink = originalUnlink;
+  });
+
+  it('wraps Error thrown during 7z extraction with archive context', async () => {
+    const fs = (globalThis as any).__sevenZipFs;
+    const originalOpen = fs.open;
+    fs.open = vi.fn(() => {
+      throw new Error('open failed');
+    });
+
+    const archiveFile: LocalSidFile = {
+      name: 'error.7z',
+      lastModified: Date.now(),
+      arrayBuffer: async () => new Uint8Array(Buffer.from('SEVENZ')).buffer,
+    };
+
+    await expect(ingestLocalArchives([archiveFile])).rejects.toThrow('Failed to extract error.7z: open failed');
+
+    fs.open = originalOpen;
   });
 });

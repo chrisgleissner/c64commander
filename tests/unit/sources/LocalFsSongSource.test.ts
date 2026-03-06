@@ -361,4 +361,51 @@ describe('createLocalFsSongSource', () => {
     expect(list[0].path).toBe('/a.sid');
     expect(list[1].path).toBe('/b.sid');
   });
+
+  it('lists unique, sorted folders and supports folder-path filtering', async () => {
+    const fileA = createLocalFile('/music/demo/a.sid', 'a.sid', createPsidPayload(1));
+    const fileB = createLocalFile('/music/demo/b.sid', 'b.sid', createPsidPayload(1));
+    const fileC = createLocalFile('/music/other/c.sid', 'c.sid', createPsidPayload(1));
+    const fileRoot = createLocalFile('/root.sid', 'root.sid', createPsidPayload(1));
+    const source = createLocalFsSongSource([fileA, fileB, fileC, fileRoot], {});
+
+    const allFolders = await source.listFolders('/');
+    expect(allFolders.map((entry) => entry.path)).toEqual(['/music/demo', '/music/other']);
+
+    const filtered = await source.listFolders('/music/demo');
+    expect(filtered.map((entry) => entry.path)).toEqual(['/music/demo']);
+  });
+
+  it('throws when getSong entry has no local payload', async () => {
+    const file = createLocalFile('/a.sid', 'a.sid', createPsidPayload(1));
+    const source = createLocalFsSongSource([file], {});
+
+    await expect(source.getSong({
+      id: 'x',
+      path: '/a.sid',
+      title: 'a.sid',
+      source: 'local',
+    })).rejects.toThrow('Missing local file data.');
+  });
+
+  it('resolves getSong duration by songNr from md5 lookup when entry has no duration', async () => {
+    const payload = createPsidPayload(3);
+    const file = createLocalFile('/set.sid', 'set.sid', payload);
+    const source = createLocalFsSongSource([file], {
+      lookupDurationsByMd5Seconds: vi.fn().mockResolvedValue([10, 20, 30]),
+    });
+
+    const song = await source.getSong({
+      id: 'set:2',
+      path: '/set.sid',
+      title: 'set.sid (Song 2/3)',
+      source: 'local',
+      songNr: 2,
+      payload: file,
+    });
+
+    expect(song.durationMs).toBe(20_000);
+    expect(song.path).toBe('/set.sid');
+    expect(song.title).toContain('Song 2/3');
+  });
 });

@@ -47,4 +47,27 @@ describe('sliderPopupStateMachine', () => {
     it('VisibleIdle returns unchanged state for unrecognized event (BRDA:36)', () => {
         expect(reduceSliderPopupState('VisibleIdle', 'unknown-event' as any)).toBe('VisibleIdle');
     });
+
+    it('covers all Closing state transitions', () => {
+        expect(reduceSliderPopupState('Closing', 'interaction-start')).toBe('VisibleActive');
+        expect(reduceSliderPopupState('Closing', 'interaction-update')).toBe('VisibleActive');
+        expect(reduceSliderPopupState('Closing', 'interaction-end')).toBe('VisibleIdle');
+        expect(reduceSliderPopupState('Closing', 'idle-timeout')).toBe('Closing');
+        expect(reduceSliderPopupState('Closing', 'unknown-event' as any)).toBe('Closing');
+    });
+
+    it('keeps Hidden state for non-interaction events', () => {
+        expect(reduceSliderPopupState('Hidden', 'interaction-end')).toBe('Hidden');
+        expect(reduceSliderPopupState('Hidden', 'idle-timeout')).toBe('Hidden');
+    });
+
+    it('returns zero close delay when target is already in the past', () => {
+        const delay = resolveSliderPopupCloseDelayMs(1_000, 1_100, 10_000);
+        expect(delay).toBe(0);
+    });
+
+    it('honors custom close delay thresholds', () => {
+        const delay = resolveSliderPopupCloseDelayMs(100, 120, 200, 300, 500);
+        expect(delay).toBe(420);
+    });
 });
