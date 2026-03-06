@@ -23,8 +23,7 @@ const makeEvent = (
   type,
   correlationId,
   relativeMs,
-  timestamp:
-    timestamp ?? `2026-03-02T10:00:${String(relativeMs).padStart(2, "0")}.000Z`,
+  timestamp: timestamp ?? `2026-03-02T10:00:${String(relativeMs).padStart(2, "0")}.000Z`,
   origin,
   data: {
     ...baseContext,
@@ -122,29 +121,13 @@ describe("actionSummaries", () => {
 
   it("adds pending REST request effect and action-end fallback error", () => {
     const events: TraceEvent[] = [
-      makeEvent(
-        "1",
-        "action-start",
-        "pending",
-        1,
-        { name: "Write config" },
-        undefined,
-        "automatic",
-      ),
+      makeEvent("1", "action-start", "pending", 1, { name: "Write config" }, undefined, "automatic"),
       makeEvent("2", "rest-request", "pending", 2, {
         method: "PUT",
         url: "/v1/config",
         target: "internal-mock",
       }),
-      makeEvent(
-        "3",
-        "action-end",
-        "pending",
-        4,
-        { status: "error", error: "write failed" },
-        undefined,
-        "automatic",
-      ),
+      makeEvent("3", "action-end", "pending", 4, { status: "error", error: "write failed" }, undefined, "automatic"),
     ];
 
     const [summary] = buildActionSummaries(events);

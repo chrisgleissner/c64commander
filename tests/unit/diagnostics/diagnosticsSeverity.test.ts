@@ -37,12 +37,7 @@ describe("diagnosticsSeverity", () => {
       label: "DEBUG",
       colorClass: "text-c64-blue",
     });
-    expect(Object.keys(DIAGNOSTICS_SEVERITY_META)).toEqual([
-      "error",
-      "warn",
-      "info",
-      "debug",
-    ]);
+    expect(Object.keys(DIAGNOSTICS_SEVERITY_META)).toEqual(["error", "warn", "info", "debug"]);
   });
 
   it("maps log levels to severity", () => {
@@ -58,11 +53,7 @@ describe("diagnosticsSeverity", () => {
     expect(resolveActionSeverity("blocked")).toBe("warn");
     expect(resolveActionSeverity("timeout")).toBe("warn");
     expect(resolveActionSeverity("incomplete")).toBe("warn");
-    expect(
-      resolveActionSeverity(
-        "unknown" as Parameters<typeof resolveActionSeverity>[0],
-      ),
-    ).toBe("info");
+    expect(resolveActionSeverity("unknown" as Parameters<typeof resolveActionSeverity>[0])).toBe("info");
   });
 
   it("maps trace errors to error severity and others to info", () => {

@@ -62,9 +62,7 @@ describe("normalizeConfigItem", () => {
   });
 
   it("extracts range and format details", () => {
-    expect(
-      normalizeConfigItem({ details: { min: 1, max: 10, format: "x" } }),
-    ).toEqual({
+    expect(normalizeConfigItem({ details: { min: 1, max: 10, format: "x" } })).toEqual({
       value: "",
       details: { min: 1, max: 10, format: "x" },
     });

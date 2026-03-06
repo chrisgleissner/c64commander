@@ -7,11 +7,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import {
-  buildPlayPlan,
-  executePlayPlan,
-  tryFetchUltimateSidBlob,
-} from "@/lib/playback/playbackRouter";
+import { buildPlayPlan, executePlayPlan, tryFetchUltimateSidBlob } from "@/lib/playback/playbackRouter";
 import { readFtpFile } from "@/lib/ftp/ftpClient";
 import { getC64APIConfigSnapshot } from "@/lib/c64api";
 import { addErrorLog } from "@/lib/logging";
@@ -49,9 +45,9 @@ vi.mock("@/lib/ftp/ftpConfig", () => ({
 }));
 
 vi.mock("@/lib/sourceNavigation/ftpSourceAdapter", async () => {
-  const actual = await vi.importActual<
-    typeof import("@/lib/sourceNavigation/ftpSourceAdapter")
-  >("@/lib/sourceNavigation/ftpSourceAdapter");
+  const actual = await vi.importActual<typeof import("@/lib/sourceNavigation/ftpSourceAdapter")>(
+    "@/lib/sourceNavigation/ftpSourceAdapter",
+  );
   return {
     ...actual,
     normalizeFtpHost: vi.fn((host: string) => host),
@@ -59,8 +55,7 @@ vi.mock("@/lib/sourceNavigation/ftpSourceAdapter", async () => {
 });
 
 vi.mock("@/lib/c64api", async () => {
-  const actual =
-    await vi.importActual<typeof import("@/lib/c64api")>("@/lib/c64api");
+  const actual = await vi.importActual<typeof import("@/lib/c64api")>("@/lib/c64api");
   return {
     ...actual,
     getC64APIConfigSnapshot: vi.fn(() => ({
@@ -71,9 +66,7 @@ vi.mock("@/lib/c64api", async () => {
 });
 
 vi.mock("@/lib/playback/autostart", async () => {
-  const actual = await vi.importActual<
-    typeof import("@/lib/playback/autostart")
-  >("@/lib/playback/autostart");
+  const actual = await vi.importActual<typeof import("@/lib/playback/autostart")>("@/lib/playback/autostart");
   return {
     ...actual,
     injectAutostart: vi.fn(),
@@ -239,12 +232,8 @@ describe("playbackRouter", () => {
       data: encoded,
       sizeBytes: sidBytes.length,
     });
-    api.playSidUpload.mockRejectedValueOnce(
-      new Error("HTTP 500: Server Error"),
-    );
-    api.playSid.mockRejectedValueOnce(
-      new Error("HTTP 503: Service Unavailable"),
-    );
+    api.playSidUpload.mockRejectedValueOnce(new Error("HTTP 500: Server Error"));
+    api.playSid.mockRejectedValueOnce(new Error("HTTP 503: Service Unavailable"));
 
     const plan = buildPlayPlan({
       source: "ultimate",
@@ -445,16 +434,12 @@ describe("playbackRouter", () => {
   it("logs and throws when local SID data is missing", async () => {
     const api = createApiMock();
     const plan = buildPlayPlan({ source: "local", path: "/demo.sid" });
-    await expect(executePlayPlan(api as any, plan)).rejects.toThrow(
-      "Missing local SID data",
-    );
+    await expect(executePlayPlan(api as any, plan)).rejects.toThrow("Missing local SID data");
     expect(vi.mocked(addErrorLog)).toHaveBeenCalled();
   });
 
   it("throws on unsupported formats", () => {
-    expect(() => buildPlayPlan({ source: "local", path: "demo.txt" })).toThrow(
-      "Unsupported",
-    );
+    expect(() => buildPlayPlan({ source: "local", path: "demo.txt" })).toThrow("Unsupported");
   });
 
   it("routes MOD upload from local file", async () => {
@@ -468,9 +453,7 @@ describe("playbackRouter", () => {
   it("throws when local MOD data is missing", async () => {
     const api = createApiMock();
     const plan = buildPlayPlan({ source: "local", path: "/demo.mod" });
-    await expect(executePlayPlan(api as any, plan)).rejects.toThrow(
-      "Missing local MOD data",
-    );
+    await expect(executePlayPlan(api as any, plan)).rejects.toThrow("Missing local MOD data");
   });
 
   it("routes CRT playback for Ultimate", async () => {
@@ -483,9 +466,7 @@ describe("playbackRouter", () => {
   it("throws when local CRT data is missing", async () => {
     const api = createApiMock();
     const plan = buildPlayPlan({ source: "local", path: "/demo.crt" });
-    await expect(executePlayPlan(api as any, plan)).rejects.toThrow(
-      "Missing local CRT data",
-    );
+    await expect(executePlayPlan(api as any, plan)).rejects.toThrow("Missing local CRT data");
   });
 
   it("routes PRG from Ultimate in load mode", async () => {
@@ -506,9 +487,7 @@ describe("playbackRouter", () => {
   it("throws when local PRG data is missing", async () => {
     const api = createApiMock();
     const plan = buildPlayPlan({ source: "local", path: "/demo.prg" });
-    await expect(executePlayPlan(api as any, plan)).rejects.toThrow(
-      "Missing local PRG data",
-    );
+    await expect(executePlayPlan(api as any, plan)).rejects.toThrow("Missing local PRG data");
   });
 
   it("mounts local D64 without reset when resetBeforeMount is false", async () => {
@@ -629,9 +608,7 @@ describe("playbackRouter", () => {
     } as any);
     const result = await tryFetchUltimateSidBlob("MUSIC/DEMO.SID");
     expect(result).toBeInstanceOf(Blob);
-    expect(vi.mocked(readFtpFile)).toHaveBeenCalledWith(
-      expect.objectContaining({ path: "/MUSIC/DEMO.SID" }),
-    );
+    expect(vi.mocked(readFtpFile)).toHaveBeenCalledWith(expect.objectContaining({ path: "/MUSIC/DEMO.SID" }));
   });
 
   it("tryFetchUltimateSidBlob returns null on FTP failure", async () => {
@@ -695,9 +672,7 @@ describe("playbackRouter", () => {
       path: "/demo.d64",
       file: file as any,
     });
-    await expect(executePlayPlan(api as any, plan)).rejects.toThrow(
-      "some custom error",
-    );
+    await expect(executePlayPlan(api as any, plan)).rejects.toThrow("some custom error");
   });
 
   it("toBlob uses generic message for empty arrayBuffer error (BRDA:169)", async () => {
@@ -712,9 +687,7 @@ describe("playbackRouter", () => {
       file: file as any,
     });
     // Error message is empty, falls back to 'Local file unavailable.' which is not a network error → rethrows original
-    await expect(executePlayPlan(api as any, plan)).rejects.toBeInstanceOf(
-      Error,
-    );
+    await expect(executePlayPlan(api as any, plan)).rejects.toBeInstanceOf(Error);
   });
 
   it("covers null propagationFailure in SID fallback (BRDA:257)", async () => {
@@ -734,9 +707,7 @@ describe("playbackRouter", () => {
       path: "/MUSIC/DEMO.SID",
       durationMs: 120000,
     });
-    await expect(executePlayPlan(api as any, plan)).rejects.toThrow(
-      "fallback playback failed",
-    );
+    await expect(executePlayPlan(api as any, plan)).rejects.toThrow("fallback playback failed");
     expect(vi.mocked(addErrorLog)).toHaveBeenCalled();
   });
 
@@ -747,8 +718,6 @@ describe("playbackRouter", () => {
       ...buildPlayPlan({ source: "local", path: "/demo.sid", file }),
       category: "unknown-category" as any,
     };
-    await expect(executePlayPlan(api as any, plan)).rejects.toThrow(
-      "Unsupported playback type",
-    );
+    await expect(executePlayPlan(api as any, plan)).rejects.toThrow("Unsupported playback type");
   });
 });

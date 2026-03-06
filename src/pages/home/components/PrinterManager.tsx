@@ -1,12 +1,7 @@
 import { useActionTrace } from "@/hooks/useActionTrace";
 import { useSharedConfigActions } from "../hooks/ConfigActionsContext";
 import { usePrinterData } from "../hooks/usePrinterData";
-import {
-  PRINTER_CONTROL_SPEC,
-  PRINTER_HOME_ITEMS,
-  PRINTER_BUS_ID_DEFAULTS,
-  DriveControlSpec,
-} from "../constants";
+import { PRINTER_CONTROL_SPEC, PRINTER_HOME_ITEMS, PRINTER_BUS_ID_DEFAULTS, DriveControlSpec } from "../constants";
 import {
   formatPrinterLabel,
   formatPrinterOptionLabel,
@@ -17,13 +12,7 @@ import {
 import { buildBusIdOptions } from "@/lib/drives/driveDevices";
 import { SectionHeader } from "@/components/SectionHeader";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { getOnOffButtonClass } from "@/lib/ui/buttonStyles";
 
@@ -34,17 +23,10 @@ interface PrinterManagerProps {
   onResetPrinter: (callback: () => Promise<void>) => Promise<void>;
 }
 
-export function PrinterManager({
-  isConnected,
-  machineTaskBusy,
-  machineTaskId,
-  onResetPrinter,
-}: PrinterManagerProps) {
+export function PrinterManager({ isConnected, machineTaskBusy, machineTaskId, onResetPrinter }: PrinterManagerProps) {
   const trace = useActionTrace("PrinterManager");
-  const { updateConfigValue, resolveConfigValue, configWritePending } =
-    useSharedConfigActions();
-  const { refetchDrives, printerConfig, printerDevice } =
-    usePrinterData(isConnected);
+  const { updateConfigValue, resolveConfigValue, configWritePending } = useSharedConfigActions();
+  const { refetchDrives, printerConfig, printerDevice } = usePrinterData(isConnected);
 
   const printerEnabledValue = String(
     resolveConfigValue(
@@ -69,39 +51,19 @@ export function PrinterManager({
     PRINTER_BUS_ID_DEFAULTS,
     Number.isFinite(printerBusValue) ? printerBusValue : null,
   );
-  const printerConfigPayload = printerConfig as
-    | Record<string, unknown>
-    | undefined;
+  const printerConfigPayload = printerConfig as Record<string, unknown> | undefined;
 
-  const buildPrinterControl = (
-    itemName: (typeof PRINTER_HOME_ITEMS)[number],
-    fallback: string | number,
-  ) => {
-    const value = resolveConfigValue(
-      printerConfigPayload,
-      "Printer Settings",
-      itemName,
-      fallback,
-    );
-    const options = readItemOptions(
-      printerConfigPayload,
-      "Printer Settings",
-      itemName,
-    ).map((entry) => String(entry));
-    const details = readItemDetails(
-      printerConfigPayload,
-      "Printer Settings",
-      itemName,
-    );
+  const buildPrinterControl = (itemName: (typeof PRINTER_HOME_ITEMS)[number], fallback: string | number) => {
+    const value = resolveConfigValue(printerConfigPayload, "Printer Settings", itemName, fallback);
+    const options = readItemOptions(printerConfigPayload, "Printer Settings", itemName).map((entry) => String(entry));
+    const details = readItemDetails(printerConfigPayload, "Printer Settings", itemName);
     return {
       itemName,
       label: formatPrinterLabel(itemName),
       value: String(value),
       options,
       details,
-      pending: Boolean(
-        configWritePending[buildConfigKey("Printer Settings", itemName)],
-      ),
+      pending: Boolean(configWritePending[buildConfigKey("Printer Settings", itemName)]),
     };
   };
 
@@ -149,44 +111,26 @@ export function PrinterManager({
       <div className="space-y-2" data-testid="home-printer-group">
         <div className="bg-card border border-border rounded-xl p-3 space-y-2">
           <div className="flex items-center justify-between gap-2">
-            <p className="text-xs font-semibold text-primary uppercase tracking-wide">
-              Printer
-            </p>
+            <p className="text-xs font-semibold text-primary uppercase tracking-wide">Printer</p>
             <Button
               variant="outline"
               size="sm"
-              onClick={() =>
-                void handleEnabledToggle(
-                  "Printer",
-                  PRINTER_CONTROL_SPEC,
-                  printerEnabled,
-                )
-              }
+              onClick={() => void handleEnabledToggle("Printer", PRINTER_CONTROL_SPEC, printerEnabled)}
               disabled={
                 !isConnected ||
                 Boolean(
-                  configWritePending[
-                    buildConfigKey(
-                      PRINTER_CONTROL_SPEC.category,
-                      PRINTER_CONTROL_SPEC.enabledItem,
-                    )
-                  ],
+                  configWritePending[buildConfigKey(PRINTER_CONTROL_SPEC.category, PRINTER_CONTROL_SPEC.enabledItem)],
                 )
               }
               data-testid="home-printer-toggle"
-              className={cn(
-                "h-6 px-2 text-xs",
-                getOnOffButtonClass(printerEnabled),
-              )}
+              className={cn("h-6 px-2 text-xs", getOnOffButtonClass(printerEnabled))}
             >
               {printerEnabled ? "ON" : "OFF"}
             </Button>
           </div>
           <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-muted-foreground whitespace-nowrap">
-                Bus ID
-              </span>
+              <span className="text-muted-foreground whitespace-nowrap">Bus ID</span>
               <Select
                 value={String(printerBusValue)}
                 onValueChange={(value) =>
@@ -202,19 +146,11 @@ export function PrinterManager({
                 disabled={
                   !isConnected ||
                   Boolean(
-                    configWritePending[
-                      buildConfigKey(
-                        PRINTER_CONTROL_SPEC.category,
-                        PRINTER_CONTROL_SPEC.busItem,
-                      )
-                    ],
+                    configWritePending[buildConfigKey(PRINTER_CONTROL_SPEC.category, PRINTER_CONTROL_SPEC.busItem)],
                   )
                 }
               >
-                <SelectTrigger
-                  className={inlineSelectTriggerClass}
-                  data-testid="home-printer-bus"
-                >
+                <SelectTrigger className={inlineSelectTriggerClass} data-testid="home-printer-bus">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -229,13 +165,8 @@ export function PrinterManager({
             {printerControlRows
               .filter((entry) => entry.options.length > 0)
               .map((entry) => (
-                <div
-                  key={entry.itemName}
-                  className="flex items-center justify-between gap-2"
-                >
-                  <span className="text-muted-foreground whitespace-nowrap">
-                    {entry.label}
-                  </span>
+                <div key={entry.itemName} className="flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground whitespace-nowrap">{entry.label}</span>
                   <Select
                     value={entry.value}
                     onValueChange={(value) =>
@@ -253,9 +184,7 @@ export function PrinterManager({
                       className={inlineSelectTriggerClass}
                       data-testid={`home-printer-${entry.itemName.toLowerCase().replace(/\s+/g, "-")}`}
                     >
-                      <SelectValue>
-                        {formatPrinterOptionLabel(entry.value)}
-                      </SelectValue>
+                      <SelectValue>{formatPrinterOptionLabel(entry.value)}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {entry.options.map((option) => (

@@ -90,24 +90,16 @@ describe("hvscFilesystem error handling", () => {
 
       // 1. First write fails (exists)
       // 2. Retry write fails (exists)
-      vi.mocked(Filesystem.writeFile).mockRejectedValue(
-        new Error("File already exists"),
-      );
+      vi.mocked(Filesystem.writeFile).mockRejectedValue(new Error("File already exists"));
 
-      await expect(
-        hvscFS.writeLibraryFile("/foo.sid", new Uint8Array([])),
-      ).rejects.toThrow("File already exists");
+      await expect(hvscFS.writeLibraryFile("/foo.sid", new Uint8Array([]))).rejects.toThrow("File already exists");
 
       expect(Filesystem.writeFile).toHaveBeenCalledTimes(2);
     });
 
     it("throws non-exists errors immediately", async () => {
-      vi.mocked(Filesystem.writeFile).mockRejectedValueOnce(
-        new Error("Disk full"),
-      );
-      await expect(
-        hvscFS.writeLibraryFile("/f.sid", new Uint8Array([])),
-      ).rejects.toThrow("Disk full");
+      vi.mocked(Filesystem.writeFile).mockRejectedValueOnce(new Error("Disk full"));
+      await expect(hvscFS.writeLibraryFile("/f.sid", new Uint8Array([]))).rejects.toThrow("Disk full");
     });
   });
 
@@ -219,9 +211,7 @@ describe("hvscFilesystem error handling", () => {
     });
 
     it("getHvscSongByVirtualPath handles missing file", async () => {
-      vi.mocked(Filesystem.readFile).mockRejectedValue(
-        new Error("File not found"),
-      );
+      vi.mocked(Filesystem.readFile).mockRejectedValue(new Error("File not found"));
       const result = await hvscFS.getHvscSongByVirtualPath("/missing.sid");
       expect(result).toBeNull();
     });
@@ -282,9 +272,7 @@ describe("hvscFilesystem error handling", () => {
 
   describe("Listing and Resolution", () => {
     it("listHvscFolder returns empty lists if filesystem access fails", async () => {
-      vi.mocked(Filesystem.readdir).mockRejectedValue(
-        new Error("Access denied"),
-      );
+      vi.mocked(Filesystem.readdir).mockRejectedValue(new Error("Access denied"));
       const result = await hvscFS.listHvscFolder("/test");
       expect(result.folders).toEqual([]);
       expect(result.songs).toEqual([]);
@@ -306,10 +294,7 @@ describe("hvscFilesystem error handling", () => {
 
     it("resolveEntry handles mixed entry types correctly", async () => {
       vi.mocked(Filesystem.readdir).mockResolvedValue({
-        files: [
-          { name: "known-dir", type: "directory" },
-          { name: "unknown-thing" } as any,
-        ],
+        files: [{ name: "known-dir", type: "directory" }, { name: "unknown-thing" } as any],
       });
 
       vi.mocked(Filesystem.stat).mockImplementation(async (opts) => {
@@ -353,9 +338,7 @@ describe("hvscFilesystem error handling", () => {
         message: "File already exists",
       });
       vi.mocked(Filesystem.stat).mockResolvedValue(null as any);
-      vi.mocked(Filesystem.deleteFile).mockRejectedValue(
-        new Error("Delete error"),
-      );
+      vi.mocked(Filesystem.deleteFile).mockRejectedValue(new Error("Delete error"));
       vi.mocked(Filesystem.writeFile).mockResolvedValueOnce({ uri: "ok" });
 
       await hvscFS.writeLibraryFile("/foo", new Uint8Array([1]));

@@ -8,22 +8,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { addErrorLog } from "@/lib/logging";
-import {
-  loadFileLibrary,
-  saveFileLibrary,
-} from "@/lib/playback/fileLibraryStore";
-import type {
-  FileLibraryEntry,
-  FileLibraryRuntime,
-} from "@/lib/playback/fileLibraryTypes";
+import { loadFileLibrary, saveFileLibrary } from "@/lib/playback/fileLibraryStore";
+import type { FileLibraryEntry, FileLibraryRuntime } from "@/lib/playback/fileLibraryTypes";
 
 export type FileLibrary = {
   entries: FileLibraryEntry[];
   runtimeFiles: FileLibraryRuntime;
-  addEntries: (
-    entries: FileLibraryEntry[],
-    runtime?: FileLibraryRuntime,
-  ) => void;
+  addEntries: (entries: FileLibraryEntry[], runtime?: FileLibraryRuntime) => void;
   removeEntry: (id: string) => void;
   clearLibrary: () => void;
 };
@@ -43,21 +34,18 @@ export const useFileLibrary = (uniqueId: string | null): FileLibrary => {
     saveFileLibrary(uniqueId, { entries });
   }, [entries, uniqueId]);
 
-  const addEntries = useCallback(
-    (next: FileLibraryEntry[], runtime: FileLibraryRuntime = {}) => {
-      setRuntimeFiles((prev) => ({ ...prev, ...runtime }));
-      setEntries((prev) => {
-        const existing = new Set(prev.map((entry) => entry.id));
-        const merged = [...prev];
-        next.forEach((entry) => {
-          if (existing.has(entry.id)) return;
-          merged.push(entry);
-        });
-        return merged;
+  const addEntries = useCallback((next: FileLibraryEntry[], runtime: FileLibraryRuntime = {}) => {
+    setRuntimeFiles((prev) => ({ ...prev, ...runtime }));
+    setEntries((prev) => {
+      const existing = new Set(prev.map((entry) => entry.id));
+      const merged = [...prev];
+      next.forEach((entry) => {
+        if (existing.has(entry.id)) return;
+        merged.push(entry);
       });
-    },
-    [],
-  );
+      return merged;
+    });
+  }, []);
 
   const removeEntry = useCallback((id: string) => {
     setRuntimeFiles((prev) => {

@@ -22,13 +22,7 @@ type IndicatorDotProps = {
   ariaLabel: string;
 };
 
-const IndicatorDot = ({
-  colorClass,
-  count,
-  animate,
-  testId,
-  ariaLabel,
-}: IndicatorDotProps) => {
+const IndicatorDot = ({ colorClass, count, animate, testId, ariaLabel }: IndicatorDotProps) => {
   return (
     <span
       className={cn(
@@ -47,8 +41,7 @@ const IndicatorDot = ({
 };
 
 export const DiagnosticsActivityIndicator = ({ onClick, className }: Props) => {
-  const { restCount, ftpCount, errorCount, restInFlight, ftpInFlight } =
-    useDiagnosticsActivity();
+  const { restCount, ftpCount, errorCount, restInFlight, ftpInFlight } = useDiagnosticsActivity();
   const restActive = restInFlight > 0;
   const ftpActive = ftpInFlight > 0;
   const restDisplayCount = restCount > 0 ? restCount : restInFlight;

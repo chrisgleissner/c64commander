@@ -145,9 +145,7 @@ describe("hvscService", () => {
 
   describe("getHvscFolderListing", () => {
     it("uses index if entries found", async () => {
-      mocks.mockIndex.getAll.mockReturnValue([
-        { path: "/HVSC/foo.sid", name: "foo.sid" },
-      ]);
+      mocks.mockIndex.getAll.mockReturnValue([{ path: "/HVSC/foo.sid", name: "foo.sid" }]);
       mocks.mockIndex.queryFolderPage.mockReturnValue({
         path: "/HVSC",
         folders: [],
@@ -182,9 +180,7 @@ describe("hvscService", () => {
       });
       stubWindow({
         __hvscMock__: {
-          getHvscFolderListing: vi
-            .fn()
-            .mockReturnValue({ path: "/path", folders: [], songs: [] }),
+          getHvscFolderListing: vi.fn().mockReturnValue({ path: "/path", folders: [], songs: [] }),
         },
       });
 

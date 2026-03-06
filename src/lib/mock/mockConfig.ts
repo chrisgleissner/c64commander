@@ -69,9 +69,7 @@ const asNumber = (value: unknown) => {
   return undefined;
 };
 
-const normalizeDetails = (
-  details?: RawConfigItem["details"],
-): MockConfigDetails | undefined => {
+const normalizeDetails = (details?: RawConfigItem["details"]): MockConfigDetails | undefined => {
   if (!details) return undefined;
   const min = asNumber(details.min);
   const max = asNumber(details.max);
@@ -95,9 +93,7 @@ let bundledConfigYaml: string | null = null;
 /**
  * Set a custom YAML loader (for tests with full config)
  */
-export const setMockConfigLoader = (
-  loader: () => unknown | Promise<unknown>,
-) => {
+export const setMockConfigLoader = (loader: () => unknown | Promise<unknown>) => {
   customYamlLoader = loader;
   cachedPayload = null; // Clear cache
   cachedPromise = null;
@@ -109,13 +105,9 @@ export const clearMockConfigLoader = () => {
   cachedPromise = null;
 };
 const resolveYamlUrl = () => {
-  const base =
-    typeof import.meta !== "undefined" ? import.meta.env.BASE_URL || "/" : "/";
+  const base = typeof import.meta !== "undefined" ? import.meta.env.BASE_URL || "/" : "/";
   if (typeof window === "undefined") return `${base}doc/c64/c64u-config.yaml`;
-  return new URL(
-    `doc/c64/c64u-config.yaml`,
-    `${window.location.origin}${base}`,
-  ).toString();
+  return new URL(`doc/c64/c64u-config.yaml`, `${window.location.origin}${base}`).toString();
 };
 
 const loadYamlFromAssets = async () => {
@@ -134,8 +126,7 @@ const loadBundledConfigYaml = async () => {
   }
   try {
     const module = await import("../../../doc/c64/c64u-config.yaml?raw");
-    bundledConfigYaml =
-      typeof module.default === "string" ? module.default : "";
+    bundledConfigYaml = typeof module.default === "string" ? module.default : "";
   } catch (error) {
     console.warn("Failed to load bundled mock config YAML", { error });
     bundledConfigYaml = "";

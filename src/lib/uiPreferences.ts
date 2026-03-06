@@ -14,10 +14,7 @@ export const MAX_LIST_PREVIEW_LIMIT = 200;
 
 const clampLimit = (value: number) => {
   if (!Number.isFinite(value)) return DEFAULT_LIST_PREVIEW_LIMIT;
-  return Math.min(
-    MAX_LIST_PREVIEW_LIMIT,
-    Math.max(MIN_LIST_PREVIEW_LIMIT, Math.round(value)),
-  );
+  return Math.min(MAX_LIST_PREVIEW_LIMIT, Math.max(MIN_LIST_PREVIEW_LIMIT, Math.round(value)));
 };
 
 export const getListPreviewLimit = () => {

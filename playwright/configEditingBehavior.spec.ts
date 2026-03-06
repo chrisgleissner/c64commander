@@ -2,11 +2,7 @@ import { expect, test } from "@playwright/test";
 import type { Page, TestInfo } from "@playwright/test";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
 import { uiFixtures } from "./uiMocks";
-import {
-  assertNoUiIssues,
-  finalizeEvidence,
-  startStrictUiMonitoring,
-} from "./testArtifacts";
+import { assertNoUiIssues, finalizeEvidence, startStrictUiMonitoring } from "./testArtifacts";
 import { saveCoverageFromPage } from "./withCoverage";
 
 const buildSnapshot = (
@@ -40,11 +36,7 @@ const buildSnapshot = (
   };
 };
 
-const seedConnection = async (
-  page: Page,
-  baseUrl: string,
-  snapshot: unknown,
-) => {
+const seedConnection = async (page: Page, baseUrl: string, snapshot: unknown) => {
   await page.addInitScript(
     ({ baseUrl: runtimeBaseUrl, snapshot: initialSnapshot }) => {
       const routingWindow = window as Window & {
@@ -61,14 +53,8 @@ const seedConnection = async (
       localStorage.removeItem("c64u_password");
       localStorage.removeItem("c64u_has_password");
       delete routingWindow.__c64uSecureStorageOverride;
-      localStorage.setItem(
-        `c64u_initial_snapshot:${runtimeBaseUrl}`,
-        JSON.stringify(initialSnapshot),
-      );
-      sessionStorage.setItem(
-        `c64u_initial_snapshot_session:${runtimeBaseUrl}`,
-        "1",
-      );
+      localStorage.setItem(`c64u_initial_snapshot:${runtimeBaseUrl}`, JSON.stringify(initialSnapshot));
+      sessionStorage.setItem(`c64u_initial_snapshot_session:${runtimeBaseUrl}`, "1");
     },
     { baseUrl, snapshot },
   );
@@ -81,11 +67,7 @@ test.describe("Config editing regressions", () => {
     await startStrictUiMonitoring(page, testInfo);
     const server = await createMockC64Server(uiFixtures.configState);
     try {
-      await seedConnection(
-        page,
-        server.baseUrl,
-        buildSnapshot(server.getState()),
-      );
+      await seedConnection(page, server.baseUrl, buildSnapshot(server.getState()));
       await page.goto("/config", { waitUntil: "domcontentloaded" });
 
       await page.getByRole("button", { name: "Audio Mixer" }).click();
@@ -112,9 +94,7 @@ test.describe("Config editing regressions", () => {
               };
             }
           ).__c64uTracing?.getTraces?.() ?? [];
-        return traces
-          .filter((event) => event.type === "action-start")
-          .map((event) => String(event.data?.name ?? ""));
+        return traces.filter((event) => event.type === "action-start").map((event) => String(event.data?.name ?? ""));
       });
       expect(markerNames).toContain("SliderPopupOpened");
       expect(markerNames).toContain("SliderPopupClosed");
@@ -126,9 +106,7 @@ test.describe("Config editing regressions", () => {
     }
   });
 
-  test("text edits commit once on blur and emit edit markers", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("text edits commit once on blur and emit edit markers", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
     const server = await createMockC64Server({
       "Clock Settings": {
@@ -137,11 +115,7 @@ test.describe("Config editing regressions", () => {
     });
 
     try {
-      await seedConnection(
-        page,
-        server.baseUrl,
-        buildSnapshot(server.getState()),
-      );
+      await seedConnection(page, server.baseUrl, buildSnapshot(server.getState()));
       await page.goto("/config", { waitUntil: "domcontentloaded" });
 
       await page.getByRole("button", { name: "Clock Settings" }).click();
@@ -153,8 +127,7 @@ test.describe("Config editing regressions", () => {
 
       const updateUrl = "/v1/configs/Clock%20Settings/Clock%20Year";
       const requestsBeforeBlur = server.requests.filter(
-        (request) =>
-          request.method === "PUT" && request.url.includes(updateUrl),
+        (request) => request.method === "PUT" && request.url.includes(updateUrl),
       );
       expect(requestsBeforeBlur.length).toBe(0);
 
@@ -163,16 +136,13 @@ test.describe("Config editing regressions", () => {
       await expect
         .poll(() => {
           const updates = server.requests.filter(
-            (request) =>
-              request.method === "PUT" && request.url.includes(updateUrl),
+            (request) => request.method === "PUT" && request.url.includes(updateUrl),
           );
           return updates.length;
         })
         .toBe(1);
 
-      await expect
-        .poll(() => server.getState()["Clock Settings"]["Clock Year"].value)
-        .toBe("2026");
+      await expect.poll(() => server.getState()["Clock Settings"]["Clock Year"].value).toBe("2026");
 
       const traceSummary = await page.evaluate(() => {
         const traces =
@@ -199,9 +169,7 @@ test.describe("Config editing regressions", () => {
           (event) =>
             event.type === "rest-request" &&
             String(event.data?.method ?? "").toUpperCase() === "PUT" &&
-            String(event.data?.normalizedUrl ?? "").includes(
-              "/v1/configs/Clock%20Settings/Clock%20Year",
-            ),
+            String(event.data?.normalizedUrl ?? "").includes("/v1/configs/Clock%20Settings/Clock%20Year"),
         );
 
         return {

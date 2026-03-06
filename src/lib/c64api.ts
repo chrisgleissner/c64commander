@@ -17,23 +17,13 @@ import {
 } from "@/lib/secureStorage";
 import { addErrorLog, addLog, buildErrorLogDetails } from "@/lib/logging";
 import { isTransientConnectivityFailure } from "@/lib/uiErrors";
-import {
-  isSmokeModeEnabled,
-  isSmokeReadOnlyEnabled,
-} from "@/lib/smoke/smokeMode";
+import { isSmokeModeEnabled, isSmokeReadOnlyEnabled } from "@/lib/smoke/smokeMode";
 import { isFuzzModeEnabled, isFuzzSafeBaseUrl } from "@/lib/fuzz/fuzzMode";
 import { scheduleConfigWrite } from "@/lib/config/configWriteThrottle";
 import { runWithImplicitAction } from "@/lib/tracing/actionTrace";
-import {
-  recordRestRequest,
-  recordRestResponse,
-  recordTraceError,
-} from "@/lib/tracing/traceSession";
+import { recordRestRequest, recordRestResponse, recordTraceError } from "@/lib/tracing/traceSession";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
-import {
-  withRestInteraction,
-  type InteractionIntent,
-} from "@/lib/deviceInteraction/deviceInteractionManager";
+import { withRestInteraction, type InteractionIntent } from "@/lib/deviceInteraction/deviceInteractionManager";
 import { getDeviceStateSnapshot } from "@/lib/deviceInteraction/deviceStateStore";
 
 const DEFAULT_BASE_URL = "http://c64u";
@@ -54,12 +44,9 @@ const READ_REQUEST_BUDGET_WINDOW_MS = 500;
 const READ_REQUEST_BUDGET_MAX_ENTRIES = 256;
 const READ_REQUEST_BUDGET_MAX_VALUE_BYTES = 64 * 1024;
 
-const isDnsFailure = (message: string) =>
-  /unknown host|enotfound|ename_not_found|dns/i.test(message);
+const isDnsFailure = (message: string) => /unknown host|enotfound|ename_not_found|dns/i.test(message);
 const isNetworkFailureMessage = (message: string) =>
-  /failed to fetch|networkerror|network request failed|unknown host|enotfound|ename_not_found|dns/i.test(
-    message,
-  );
+  /failed to fetch|networkerror|network request failed|unknown host|enotfound|ename_not_found|dns/i.test(message);
 const resolveHostErrorMessage = (message: string) =>
   isDnsFailure(message) ? "Host unreachable (DNS)" : "Host unreachable";
 
@@ -72,10 +59,7 @@ const parseHttpStatusFromErrorMessage = (message: string) => {
 
 const isSidUploadTransientFailure = (error: unknown) => {
   const message = error instanceof Error ? error.message : String(error ?? "");
-  if (
-    isNetworkFailureMessage(message) ||
-    /timed out|timeout|host unreachable/i.test(message)
-  ) {
+  if (isNetworkFailureMessage(message) || /timed out|timeout|host unreachable/i.test(message)) {
     return true;
   }
   const status = parseHttpStatusFromErrorMessage(message);
@@ -138,10 +122,7 @@ const waitWithAbortSignal = async (ms: number, signal?: AbortSignal) => {
   });
 };
 
-const awaitPromiseWithAbortSignal = <T>(
-  promise: Promise<T>,
-  signal?: AbortSignal,
-): Promise<T> => {
+const awaitPromiseWithAbortSignal = <T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> => {
   if (!signal) return promise;
   if (signal.aborted) {
     return Promise.reject(createAbortError());
@@ -195,8 +176,7 @@ const cloneBudgetValue = <T>(value: T): T => {
 const estimateBudgetValueBytes = (value: unknown): number | null => {
   if (value === null || value === undefined) return 0;
   if (typeof value === "string") return value.length;
-  if (typeof value === "number" || typeof value === "boolean")
-    return String(value).length;
+  if (typeof value === "number" || typeof value === "boolean") return String(value).length;
   if (value instanceof ArrayBuffer) return value.byteLength;
   if (ArrayBuffer.isView(value)) return value.byteLength;
   try {
@@ -212,10 +192,7 @@ const estimateBudgetValueBytes = (value: unknown): number | null => {
 const getIdleContext = () => {
   const snapshot = getDeviceStateSnapshot();
   const now = Date.now();
-  const idleMs =
-    snapshot.lastSuccessAtMs !== null
-      ? Math.max(0, now - snapshot.lastSuccessAtMs)
-      : null;
+  const idleMs = snapshot.lastSuccessAtMs !== null ? Math.max(0, now - snapshot.lastSuccessAtMs) : null;
   return {
     deviceState: snapshot.state,
     idleMs,
@@ -336,14 +313,10 @@ export const getDeviceHostFromBaseUrl = (baseUrl?: string) => {
   }
 };
 
-export const buildBaseUrlFromDeviceHost = (deviceHost?: string) =>
-  `http://${normalizeDeviceHost(deviceHost)}`;
+export const buildBaseUrlFromDeviceHost = (deviceHost?: string) => `http://${normalizeDeviceHost(deviceHost)}`;
 
 const resolvePlatformApiBaseUrl = (deviceHost: string, baseUrl?: string) => {
-  if (
-    import.meta.env.VITE_WEB_PLATFORM === "1" &&
-    typeof window !== "undefined"
-  ) {
+  if (import.meta.env.VITE_WEB_PLATFORM === "1" && typeof window !== "undefined") {
     return `${window.location.origin.replace(/\/$/, "")}${WEB_PROXY_PATH}`;
   }
   if (baseUrl) {
@@ -362,9 +335,7 @@ export const resolveDeviceHostFromStorage = () => {
   }
   const legacyBaseUrl = localStorage.getItem("c64u_base_url");
   if (legacyBaseUrl) {
-    const migratedHost = normalizeDeviceHost(
-      getDeviceHostFromBaseUrl(legacyBaseUrl),
-    );
+    const migratedHost = normalizeDeviceHost(getDeviceHostFromBaseUrl(legacyBaseUrl));
     localStorage.setItem("c64u_device_host", migratedHost);
     localStorage.removeItem("c64u_base_url");
     return migratedHost;
@@ -405,21 +376,13 @@ const isLocalDeviceHost = (host: string) => {
 
 const resolvePreferredDeviceHost = (baseUrl: string, deviceHost?: string) => {
   const explicitHost = deviceHost ? normalizeDeviceHost(deviceHost) : null;
-  const derivedHost = normalizeDeviceHost(
-    explicitHost ?? getDeviceHostFromBaseUrl(baseUrl),
-  );
+  const derivedHost = normalizeDeviceHost(explicitHost ?? getDeviceHostFromBaseUrl(baseUrl));
   const isLikelyFallbackOrigin = (() => {
     if (typeof window === "undefined") return false;
     const origin = window.location?.origin;
-    return Boolean(
-      origin && (baseUrl === origin || baseUrl.startsWith(`${origin}/`)),
-    );
+    return Boolean(origin && (baseUrl === origin || baseUrl.startsWith(`${origin}/`)));
   })();
-  if (
-    !explicitHost &&
-    isLocalDeviceHost(derivedHost) &&
-    isLikelyFallbackOrigin
-  ) {
+  if (!explicitHost && isLocalDeviceHost(derivedHost) && isLikelyFallbackOrigin) {
     const storedHost = resolveDeviceHostFromStorage();
     if (!isLocalDeviceHost(storedHost)) {
       addLog("warn", "Ignoring localhost base URL in favor of stored host", {
@@ -435,10 +398,7 @@ const resolvePreferredDeviceHost = (baseUrl: string, deviceHost?: string) => {
 
 let lastDeviceHost: string | null = null;
 
-const logDeviceHostChange = (
-  nextHost: string,
-  context: { baseUrl: string; mode: "persisted" | "runtime" },
-) => {
+const logDeviceHostChange = (nextHost: string, context: { baseUrl: string; mode: "persisted" | "runtime" }) => {
   if (lastDeviceHost && lastDeviceHost !== nextHost) {
     addLog("info", "API device host changed", {
       previous: lastDeviceHost,
@@ -446,12 +406,9 @@ const logDeviceHostChange = (
       baseUrl: context.baseUrl,
       mode: context.mode,
     });
-    void runWithImplicitAction(
-      `api.host-change:${lastDeviceHost}->${nextHost}`,
-      async () => {
-        return;
-      },
-    );
+    void runWithImplicitAction(`api.host-change:${lastDeviceHost}->${nextHost}`, async () => {
+      return;
+    });
   }
   lastDeviceHost = nextHost;
 };
@@ -466,17 +423,14 @@ const isNativePlatform = () => {
         }
       ).__C64U_NATIVE_OVERRIDE__ ??
       (typeof window !== "undefined"
-        ? (window as { __C64U_NATIVE_OVERRIDE__?: boolean })
-            .__C64U_NATIVE_OVERRIDE__
+        ? (window as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__
         : undefined) ??
-      (globalThis as { __c64uAllowNativePlatform?: boolean })
-        .__c64uAllowNativePlatform;
+      (globalThis as { __c64uAllowNativePlatform?: boolean }).__c64uAllowNativePlatform;
     if (typeof override === "boolean") {
       return override;
     }
     if (typeof process !== "undefined") {
-      const env =
-        (process as { env?: Record<string, string | undefined> }).env ?? {};
+      const env = (process as { env?: Record<string, string | undefined> }).env ?? {};
       if (env.VITEST === "true" || env.NODE_ENV === "test") {
         return false;
       }
@@ -490,8 +444,7 @@ const isNativePlatform = () => {
   }
 };
 
-const isReadOnlyMethod = (method: string) =>
-  ["GET", "HEAD", "OPTIONS"].includes(method);
+const isReadOnlyMethod = (method: string) => ["GET", "HEAD", "OPTIONS"].includes(method);
 
 const shouldBlockSmokeMutation = (method: string) =>
   isSmokeModeEnabled() && isSmokeReadOnlyEnabled() && !isReadOnlyMethod(method);
@@ -563,27 +516,13 @@ export class C64API {
   private deviceHost: string;
   private apiBaseUrl: string;
   private readonly inFlightReadRequests = new Map<string, Promise<unknown>>();
-  private readonly readRequestBudget = new Map<
-    string,
-    { recordedAtMs: number; value: unknown }
-  >();
+  private readonly readRequestBudget = new Map<string, { recordedAtMs: number; value: unknown }>();
 
-  constructor(
-    baseUrl: string = DEFAULT_BASE_URL,
-    password?: string,
-    deviceHost: string = DEFAULT_DEVICE_HOST,
-  ) {
-    this.deviceHost = normalizeDeviceHost(
-      deviceHost || getDeviceHostFromBaseUrl(baseUrl),
-    );
+  constructor(baseUrl: string = DEFAULT_BASE_URL, password?: string, deviceHost: string = DEFAULT_DEVICE_HOST) {
+    this.deviceHost = normalizeDeviceHost(deviceHost || getDeviceHostFromBaseUrl(baseUrl));
     const initialBaseUrl =
-      import.meta.env.VITE_WEB_PLATFORM === "1"
-        ? baseUrl
-        : buildBaseUrlFromDeviceHost(this.deviceHost);
-    this.apiBaseUrl = resolvePlatformApiBaseUrl(
-      this.deviceHost,
-      initialBaseUrl,
-    );
+      import.meta.env.VITE_WEB_PLATFORM === "1" ? baseUrl : buildBaseUrlFromDeviceHost(this.deviceHost);
+    this.apiBaseUrl = resolvePlatformApiBaseUrl(this.deviceHost, initialBaseUrl);
     this.password = password;
   }
 
@@ -602,10 +541,7 @@ export class C64API {
 
   setDeviceHost(deviceHost?: string) {
     this.deviceHost = normalizeDeviceHost(deviceHost);
-    this.apiBaseUrl = resolvePlatformApiBaseUrl(
-      this.deviceHost,
-      buildBaseUrlFromDeviceHost(this.deviceHost),
-    );
+    this.apiBaseUrl = resolvePlatformApiBaseUrl(this.deviceHost, buildBaseUrlFromDeviceHost(this.deviceHost));
     this.resetRequestReadState();
   }
 
@@ -639,13 +575,8 @@ export class C64API {
     reason: "non-json-content-type" | "invalid-json",
     details?: { contentType?: string; parseError?: string },
   ) {
-    const contentType =
-      details?.contentType ??
-      response.headers.get("content-type")?.toLowerCase() ??
-      "";
-    const error = new Error(
-      `Malformed JSON response for ${path}: HTTP ${response.status} (${reason})`,
-    ) as Error & {
+    const contentType = details?.contentType ?? response.headers.get("content-type")?.toLowerCase() ?? "";
+    const error = new Error(`Malformed JSON response for ${path}: HTTP ${response.status} (${reason})`) as Error & {
       code?: "C64API_MALFORMED_JSON_RESPONSE";
       c64api?: {
         path: string;
@@ -679,8 +610,7 @@ export class C64API {
     path: string,
     options?: { allowNonJsonSuccess?: boolean },
   ): Promise<T> {
-    const contentType =
-      response.headers.get("content-type")?.toLowerCase() ?? "";
+    const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
     if (!contentType.includes("application/json")) {
       if (options?.allowNonJsonSuccess) {
         addLog("warn", "C64 API non-JSON success payload accepted", {
@@ -690,12 +620,7 @@ export class C64API {
         });
         return { errors: [] } as T;
       }
-      throw this.buildMalformedResponseError(
-        path,
-        response,
-        "non-json-content-type",
-        { contentType },
-      );
+      throw this.buildMalformedResponseError(path, response, "non-json-content-type", { contentType });
     }
     try {
       return (await response.clone().json()) as T;
@@ -707,14 +632,8 @@ export class C64API {
     }
   }
 
-  private logRestCall(
-    method: string,
-    path: string,
-    status: number | "error",
-    startedAt: number,
-  ) {
-    const endedAt =
-      typeof performance !== "undefined" ? performance.now() : Date.now();
+  private logRestCall(method: string, path: string, status: number | "error", startedAt: number) {
+    const endedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
     const latencyMs = Math.max(0, Math.round(endedAt - startedAt));
     addLog("debug", "C64 API request", {
       method,
@@ -747,10 +666,7 @@ export class C64API {
     this.pruneReadRequestBudget(nowMs);
     const budgetValue = cloneBudgetValue(value);
     const estimatedBytes = estimateBudgetValueBytes(budgetValue);
-    if (
-      estimatedBytes !== null &&
-      estimatedBytes > READ_REQUEST_BUDGET_MAX_VALUE_BYTES
-    ) {
+    if (estimatedBytes !== null && estimatedBytes > READ_REQUEST_BUDGET_MAX_VALUE_BYTES) {
       addLog("debug", "Skipping oversized C64 API request budget value", {
         key,
         estimatedBytes,
@@ -814,42 +730,26 @@ export class C64API {
       __c64uBypassBackoff?: boolean;
     };
     requestOptions.__c64uTraceSuppressed = true;
-    delete (requestOptions as { __c64uIntent?: InteractionIntent })
-      .__c64uIntent;
-    delete (requestOptions as { __c64uAllowDuringDiscovery?: boolean })
-      .__c64uAllowDuringDiscovery;
-    delete (requestOptions as { __c64uBypassCache?: boolean })
-      .__c64uBypassCache;
-    delete (requestOptions as { __c64uBypassCooldown?: boolean })
-      .__c64uBypassCooldown;
-    delete (requestOptions as { __c64uBypassBackoff?: boolean })
-      .__c64uBypassBackoff;
+    delete (requestOptions as { __c64uIntent?: InteractionIntent }).__c64uIntent;
+    delete (requestOptions as { __c64uAllowDuringDiscovery?: boolean }).__c64uAllowDuringDiscovery;
+    delete (requestOptions as { __c64uBypassCache?: boolean }).__c64uBypassCache;
+    delete (requestOptions as { __c64uBypassCooldown?: boolean }).__c64uBypassCooldown;
+    delete (requestOptions as { __c64uBypassBackoff?: boolean }).__c64uBypassBackoff;
     delete (requestOptions as { timeoutMs?: number }).timeoutMs;
 
-    const readRequestKey = buildReadRequestDedupeKey(
-      method,
-      url,
-      headers,
-      requestOptions.body,
-    );
+    const readRequestKey = buildReadRequestDedupeKey(method, url, headers, requestOptions.body);
     const allowInFlightDedupe = Boolean(readRequestKey) && !bypassCache;
     const allowBudgetReplay = allowInFlightDedupe && !bypassCooldown;
 
     if (allowBudgetReplay && readRequestKey) {
-      const cachedValue = this.getReadRequestBudgetValue<T>(
-        readRequestKey,
-        Date.now(),
-      );
+      const cachedValue = this.getReadRequestBudgetValue<T>(readRequestKey, Date.now());
       if (cachedValue !== null) {
         addLog("debug", "C64 API request budget replay hit", {
           method,
           path,
           readRequestKey,
         });
-        return awaitPromiseWithAbortSignal(
-          Promise.resolve(cachedValue),
-          requestOptions.signal,
-        );
+        return awaitPromiseWithAbortSignal(Promise.resolve(cachedValue), requestOptions.signal);
       }
     }
 
@@ -861,10 +761,7 @@ export class C64API {
           path,
           readRequestKey,
         });
-        return awaitPromiseWithAbortSignal(
-          inFlight as Promise<T>,
-          requestOptions.signal,
-        );
+        return awaitPromiseWithAbortSignal(inFlight as Promise<T>, requestOptions.signal);
       }
     }
 
@@ -886,19 +783,14 @@ export class C64API {
           async () => {
             const requestId = buildRequestId();
             const idleContext = getIdleContext();
-            const canRetryAfterIdle =
-              RETRYABLE_IDLE_RECOVERY_METHODS.has(method);
-            const maxAttempts =
-              canRetryAfterIdle && idleContext.wasIdle ? 2 : 1;
+            const canRetryAfterIdle = RETRYABLE_IDLE_RECOVERY_METHODS.has(method);
+            const maxAttempts = canRetryAfterIdle && idleContext.wasIdle ? 2 : 1;
             const bodyPayload = extractRequestBody(requestOptions.body);
             const requestSignal = requestOptions.signal;
             let lastError: unknown = null;
 
             for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-              const startedAt =
-                typeof performance !== "undefined"
-                  ? performance.now()
-                  : Date.now();
+              const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
               let status: number | "error" = "error";
               let responseRecorded = false;
               recordRestRequest(action, {
@@ -913,48 +805,34 @@ export class C64API {
                 if (shouldBlockSmokeMutation(method)) {
                   addErrorLog(
                     "Smoke mode blocked mutating request",
-                    buildErrorLogDetails(
-                      new Error("Smoke mode blocked mutating request"),
-                      {
-                        path,
-                        url,
-                        method,
-                        baseUrl,
-                        deviceHost: this.deviceHost,
-                      },
-                    ),
+                    buildErrorLogDetails(new Error("Smoke mode blocked mutating request"), {
+                      path,
+                      url,
+                      method,
+                      baseUrl,
+                      deviceHost: this.deviceHost,
+                    }),
                   );
-                  console.info(
-                    "C64U_SMOKE_MUTATION_BLOCKED",
-                    JSON.stringify({ method, path, url, requestId }),
-                  );
+                  console.info("C64U_SMOKE_MUTATION_BLOCKED", JSON.stringify({ method, path, url, requestId }));
                   throw new Error("Smoke mode blocked mutating request");
                 }
                 if (isFuzzModeEnabled() && !isFuzzSafeBaseUrl(baseUrl)) {
                   addErrorLog(
                     "Fuzz mode blocked real device request",
-                    buildErrorLogDetails(
-                      new Error("Fuzz mode blocked request"),
-                      {
-                        path,
-                        url,
-                        baseUrl,
-                        deviceHost: this.deviceHost,
-                      },
-                    ),
+                    buildErrorLogDetails(new Error("Fuzz mode blocked request"), {
+                      path,
+                      url,
+                      baseUrl,
+                      deviceHost: this.deviceHost,
+                    }),
                   );
-                  const blocked = new Error(
-                    "Fuzz mode blocked request",
-                  ) as Error & { __fuzzBlocked?: boolean };
+                  const blocked = new Error("Fuzz mode blocked request") as Error & { __fuzzBlocked?: boolean };
                   blocked.__fuzzBlocked = true;
                   throw blocked;
                 }
 
                 if (isSmokeModeEnabled()) {
-                  console.info(
-                    "C64U_HTTP",
-                    JSON.stringify({ method, path, url, requestId, attempt }),
-                  );
+                  console.info("C64U_HTTP", JSON.stringify({ method, path, url, requestId, attempt }));
                 }
 
                 // Keep C64U REST calls stateless and avoid cookie bridge churn on native startup.
@@ -970,9 +848,7 @@ export class C64API {
                     });
                   }
                 }
-                const timeoutId = timeoutMs
-                  ? setTimeout(() => controller?.abort(), timeoutMs)
-                  : null;
+                const timeoutId = timeoutMs ? setTimeout(() => controller?.abort(), timeoutMs) : null;
                 const signal = controller ? controller.signal : outerSignal;
                 const responsePromise = fetch(url, {
                   ...requestOptions,
@@ -980,14 +856,10 @@ export class C64API {
                   credentials: requestOptions.credentials ?? "omit",
                   ...(signal ? { signal } : {}),
                 });
-                let timeoutPromiseId: ReturnType<typeof setTimeout> | null =
-                  null;
+                let timeoutPromiseId: ReturnType<typeof setTimeout> | null = null;
                 const timeoutPromise = timeoutMs
                   ? new Promise<never>((_, reject) => {
-                      timeoutPromiseId = setTimeout(
-                        () => reject(new Error("Request timed out")),
-                        timeoutMs,
-                      );
+                      timeoutPromiseId = setTimeout(() => reject(new Error("Request timed out")), timeoutMs);
                     })
                   : null;
                 let response: Response;
@@ -1006,17 +878,11 @@ export class C64API {
                 status = response.status;
                 const durationMs = Math.max(
                   0,
-                  Math.round(
-                    (typeof performance !== "undefined"
-                      ? performance.now()
-                      : Date.now()) - startedAt,
-                  ),
+                  Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
                 );
                 if (!response.ok) {
                   const responseBody = await readResponseBody(response);
-                  const err = new Error(
-                    `HTTP ${response.status}: ${response.statusText}`,
-                  );
+                  const err = new Error(`HTTP ${response.status}: ${response.statusText}`);
                   const failure = classifyError(err, "integration");
                   recordRestResponse(action, {
                     status: response.status,
@@ -1029,10 +895,7 @@ export class C64API {
                   throw err;
                 }
 
-                const parsedBody = await this.parseResponseJson<T>(
-                  response,
-                  path,
-                );
+                const parsedBody = await this.parseResponseJson<T>(response, path);
                 recordRestResponse(action, {
                   status: response.status,
                   body: parsedBody,
@@ -1048,24 +911,14 @@ export class C64API {
                 return parsedBody;
               } catch (error) {
                 lastError = error;
-                const fuzzBlocked = (error as { __fuzzBlocked?: boolean })
-                  .__fuzzBlocked;
+                const fuzzBlocked = (error as { __fuzzBlocked?: boolean }).__fuzzBlocked;
                 const rawMessage = (error as Error).message || "Request failed";
-                const isAbort =
-                  (error as { name?: string }).name === "AbortError" ||
-                  /timed out/i.test(rawMessage);
+                const isAbort = (error as { name?: string }).name === "AbortError" || /timed out/i.test(rawMessage);
                 const isNetworkFailure = isNetworkFailureMessage(rawMessage);
-                const normalizedError =
-                  isAbort || isNetworkFailure
-                    ? resolveHostErrorMessage(rawMessage)
-                    : rawMessage;
+                const normalizedError = isAbort || isNetworkFailure ? resolveHostErrorMessage(rawMessage) : rawMessage;
                 const durationMs = Math.max(
                   0,
-                  Math.round(
-                    (typeof performance !== "undefined"
-                      ? performance.now()
-                      : Date.now()) - startedAt,
-                  ),
+                  Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
                 );
                 if (!responseRecorded) {
                   const failure = classifyError(error);
@@ -1097,18 +950,14 @@ export class C64API {
                     durationMs,
                     error: normalizedError,
                     rawError: rawMessage,
-                    errorDetail: isDnsFailure(rawMessage)
-                      ? "DNS lookup failed"
-                      : undefined,
+                    errorDetail: isDnsFailure(rawMessage) ? "DNS lookup failed" : undefined,
                   });
                   // Always log as error so the entry is captured when the diagnostics
                   // overlay is open (warn is suppressed by the overlay). The transient
                   // flag distinguishes recoverable network blips from genuine defects.
                   addErrorLog(
                     "C64 API request failed",
-                    isTransientFailure
-                      ? { ...failureDetails, transient: true }
-                      : failureDetails,
+                    isTransientFailure ? { ...failureDetails, transient: true } : failureDetails,
                   );
                   console.info(
                     "C64U_HTTP_FAILURE",
@@ -1127,10 +976,7 @@ export class C64API {
                 }
 
                 const callerAborted = requestSignal?.aborted === true;
-                const shouldRetry =
-                  !callerAborted &&
-                  attempt < maxAttempts &&
-                  (isAbort || isNetworkFailure);
+                const shouldRetry = !callerAborted && attempt < maxAttempts && (isAbort || isNetworkFailure);
                 if (shouldRetry) {
                   const retryDelayMs = NETWORK_RETRY_DELAY_MS * attempt;
                   addLog("warn", "C64 API retry scheduled after idle failure", {
@@ -1190,10 +1036,7 @@ export class C64API {
       .finally(() => {
         this.inFlightReadRequests.delete(readRequestKey);
       });
-    this.inFlightReadRequests.set(
-      readRequestKey,
-      sharedPromise as Promise<unknown>,
-    );
+    this.inFlightReadRequests.set(readRequestKey, sharedPromise as Promise<unknown>);
     return awaitPromiseWithAbortSignal(sharedPromise, requestOptions.signal);
   }
 
@@ -1207,162 +1050,131 @@ export class C64API {
 
     const method = (options.method || "GET").toString().toUpperCase();
 
-    return runWithImplicitAction(
-      `rest.${method.toLowerCase()}`,
-      async (action) =>
-        withRestInteraction(
-          {
-            action,
-            method,
-            path: normalizeUrlPath(url),
-            normalizedUrl: normalizeUrlPath(url),
-            intent: "user",
-            baseUrl: (() => {
-              try {
-                return new URL(url).origin;
-              } catch (error) {
-                addLog("warn", "Failed to parse base URL origin for upload", {
-                  url,
-                  error: (error as Error).message,
-                });
-                return "";
-              }
-            })(),
-          },
-          async () => {
-            const startedAt =
-              typeof performance !== "undefined"
-                ? performance.now()
-                : Date.now();
-            const requestId = buildRequestId();
-            const idleContext = getIdleContext();
-            const headers = (options.headers as Record<string, string>) || {};
-            recordRestRequest(action, {
-              method,
-              url,
-              normalizedUrl: normalizeUrlPath(url),
-              headers,
-              body: extractRequestBody(body),
-            });
-
-            if (isSmokeModeEnabled()) {
-              console.info("C64U_HTTP", JSON.stringify({ method, url }));
-            }
-
-            // Keep upload/control calls stateless to avoid cookie bridge lookups.
-            const controller = timeoutMs ? new AbortController() : null;
-            const timeoutId = timeoutMs
-              ? setTimeout(() => controller?.abort(), timeoutMs)
-              : null;
-            let timeoutPromiseId: ReturnType<typeof setTimeout> | null = null;
+    return runWithImplicitAction(`rest.${method.toLowerCase()}`, async (action) =>
+      withRestInteraction(
+        {
+          action,
+          method,
+          path: normalizeUrlPath(url),
+          normalizedUrl: normalizeUrlPath(url),
+          intent: "user",
+          baseUrl: (() => {
             try {
-              const responsePromise = fetch(url, {
-                ...options,
-                credentials: options.credentials ?? "omit",
-                ...(controller ? { signal: controller.signal } : {}),
-              });
-              const timeoutPromise = timeoutMs
-                ? new Promise<never>((_, reject) => {
-                    timeoutPromiseId = setTimeout(
-                      () => reject(new Error("Request timed out")),
-                      timeoutMs,
-                    );
-                  })
-                : null;
-              const response = timeoutPromise
-                ? await Promise.race([responsePromise, timeoutPromise])
-                : await responsePromise;
-              const durationMs = Math.max(
-                0,
-                Math.round(
-                  (typeof performance !== "undefined"
-                    ? performance.now()
-                    : Date.now()) - startedAt,
-                ),
-              );
-              const responseBody = await readResponseBody(response);
-              recordRestResponse(action, {
-                status: response.status,
-                body: responseBody,
-                durationMs,
-                error: null,
-              });
-              return response;
+              return new URL(url).origin;
             } catch (error) {
-              const rawMessage = (error as Error).message || "Request failed";
-              const isAbort =
-                (error as { name?: string }).name === "AbortError" ||
-                /timed out/i.test(rawMessage);
-              const isNetworkFailure = isNetworkFailureMessage(rawMessage);
-              const normalizedError =
-                isAbort || isNetworkFailure
-                  ? resolveHostErrorMessage(rawMessage)
-                  : rawMessage;
-              const durationMs = Math.max(
-                0,
-                Math.round(
-                  (typeof performance !== "undefined"
-                    ? performance.now()
-                    : Date.now()) - startedAt,
-                ),
-              );
-              const failure = classifyError(error);
-              recordRestResponse(action, {
-                status: null,
-                body: null,
-                durationMs,
-                error: error as Error,
+              addLog("warn", "Failed to parse base URL origin for upload", {
+                url,
+                error: (error as Error).message,
               });
-              recordTraceError(action, error as Error, failure);
-              const transientUploadFailure =
-                isAbort ||
-                isNetworkFailure ||
-                isTransientConnectivityFailure(rawMessage);
-              const uploadFailureDetails = buildErrorLogDetails(
-                error as Error,
-                {
-                  url,
-                  requestId,
-                  method,
-                  path: normalizeUrlPath(url),
-                  deviceState: idleContext.deviceState,
-                  idleMs: idleContext.idleMs,
-                  wasIdle: idleContext.wasIdle,
-                  durationMs,
-                  error: normalizedError,
-                  rawError: rawMessage,
-                },
-              );
-              // Always log as error so the entry is captured when the diagnostics
-              // overlay is open. The transient flag marks recoverable upload failures.
-              addErrorLog(
-                "C64 API upload failed",
-                transientUploadFailure
-                  ? { ...uploadFailureDetails, transient: true }
-                  : uploadFailureDetails,
-              );
-              console.info(
-                "C64U_HTTP_FAILURE",
-                JSON.stringify({
-                  requestId,
-                  method,
-                  path: normalizeUrlPath(url),
-                  idleMs: idleContext.idleMs,
-                  wasIdle: idleContext.wasIdle,
-                  durationMs,
-                  error: normalizedError,
-                }),
-              );
-              if (isAbort || isNetworkFailure) {
-                throw new Error(resolveHostErrorMessage(rawMessage));
-              }
-              throw error;
-            } finally {
-              if (timeoutPromiseId) clearTimeout(timeoutPromiseId);
-              if (timeoutId) clearTimeout(timeoutId);
+              return "";
             }
-          },
-        ),
+          })(),
+        },
+        async () => {
+          const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
+          const requestId = buildRequestId();
+          const idleContext = getIdleContext();
+          const headers = (options.headers as Record<string, string>) || {};
+          recordRestRequest(action, {
+            method,
+            url,
+            normalizedUrl: normalizeUrlPath(url),
+            headers,
+            body: extractRequestBody(body),
+          });
+
+          if (isSmokeModeEnabled()) {
+            console.info("C64U_HTTP", JSON.stringify({ method, url }));
+          }
+
+          // Keep upload/control calls stateless to avoid cookie bridge lookups.
+          const controller = timeoutMs ? new AbortController() : null;
+          const timeoutId = timeoutMs ? setTimeout(() => controller?.abort(), timeoutMs) : null;
+          let timeoutPromiseId: ReturnType<typeof setTimeout> | null = null;
+          try {
+            const responsePromise = fetch(url, {
+              ...options,
+              credentials: options.credentials ?? "omit",
+              ...(controller ? { signal: controller.signal } : {}),
+            });
+            const timeoutPromise = timeoutMs
+              ? new Promise<never>((_, reject) => {
+                  timeoutPromiseId = setTimeout(() => reject(new Error("Request timed out")), timeoutMs);
+                })
+              : null;
+            const response = timeoutPromise
+              ? await Promise.race([responsePromise, timeoutPromise])
+              : await responsePromise;
+            const durationMs = Math.max(
+              0,
+              Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
+            );
+            const responseBody = await readResponseBody(response);
+            recordRestResponse(action, {
+              status: response.status,
+              body: responseBody,
+              durationMs,
+              error: null,
+            });
+            return response;
+          } catch (error) {
+            const rawMessage = (error as Error).message || "Request failed";
+            const isAbort = (error as { name?: string }).name === "AbortError" || /timed out/i.test(rawMessage);
+            const isNetworkFailure = isNetworkFailureMessage(rawMessage);
+            const normalizedError = isAbort || isNetworkFailure ? resolveHostErrorMessage(rawMessage) : rawMessage;
+            const durationMs = Math.max(
+              0,
+              Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
+            );
+            const failure = classifyError(error);
+            recordRestResponse(action, {
+              status: null,
+              body: null,
+              durationMs,
+              error: error as Error,
+            });
+            recordTraceError(action, error as Error, failure);
+            const transientUploadFailure = isAbort || isNetworkFailure || isTransientConnectivityFailure(rawMessage);
+            const uploadFailureDetails = buildErrorLogDetails(error as Error, {
+              url,
+              requestId,
+              method,
+              path: normalizeUrlPath(url),
+              deviceState: idleContext.deviceState,
+              idleMs: idleContext.idleMs,
+              wasIdle: idleContext.wasIdle,
+              durationMs,
+              error: normalizedError,
+              rawError: rawMessage,
+            });
+            // Always log as error so the entry is captured when the diagnostics
+            // overlay is open. The transient flag marks recoverable upload failures.
+            addErrorLog(
+              "C64 API upload failed",
+              transientUploadFailure ? { ...uploadFailureDetails, transient: true } : uploadFailureDetails,
+            );
+            console.info(
+              "C64U_HTTP_FAILURE",
+              JSON.stringify({
+                requestId,
+                method,
+                path: normalizeUrlPath(url),
+                idleMs: idleContext.idleMs,
+                wasIdle: idleContext.wasIdle,
+                durationMs,
+                error: normalizedError,
+              }),
+            );
+            if (isAbort || isNetworkFailure) {
+              throw new Error(resolveHostErrorMessage(rawMessage));
+            }
+            throw error;
+          } finally {
+            if (timeoutPromiseId) clearTimeout(timeoutPromiseId);
+            if (timeoutId) clearTimeout(timeoutId);
+          }
+        },
+      ),
     );
   }
 
@@ -1400,10 +1212,7 @@ export class C64API {
     return this.request(`/v1/configs/${catEncoded}/${itemEncoded}`);
   }
 
-  async getConfigItems(
-    category: string,
-    items: string[],
-  ): Promise<ConfigResponse> {
+  async getConfigItems(category: string, items: string[]): Promise<ConfigResponse> {
     const uniqueItems = Array.from(new Set(items));
     if (!uniqueItems.length) {
       return {
@@ -1428,35 +1237,25 @@ export class C64API {
         });
       }
     } catch (error) {
-      addLog(
-        "warn",
-        "Category config fetch failed; falling back to item fetches",
-        {
-          category,
-          error: (error as Error).message,
-        },
-      );
+      addLog("warn", "Category config fetch failed; falling back to item fetches", {
+        category,
+        error: (error as Error).message,
+      });
     }
 
-    const missingItems = uniqueItems.filter(
-      (item) => !Object.prototype.hasOwnProperty.call(mergedItems, item),
-    );
+    const missingItems = uniqueItems.filter((item) => !Object.prototype.hasOwnProperty.call(mergedItems, item));
     if (missingItems.length > 0) {
-      const responses = await Promise.allSettled(
-        missingItems.map((item) => this.getConfigItem(category, item)),
-      );
+      const responses = await Promise.allSettled(missingItems.map((item) => this.getConfigItem(category, item)));
       responses.forEach((result) => {
         if (result.status !== "fulfilled") return;
         const payload = result.value as Record<string, any>;
         const categoryBlock = payload?.[category] ?? payload;
         const itemsBlock = categoryBlock?.items ?? categoryBlock;
         if (!itemsBlock || typeof itemsBlock !== "object") return;
-        Object.entries(itemsBlock as Record<string, unknown>).forEach(
-          ([name, config]) => {
-            if (name === "errors") return;
-            mergedItems[name] = config;
-          },
-        );
+        Object.entries(itemsBlock as Record<string, unknown>).forEach(([name, config]) => {
+          if (name === "errors") return;
+          mergedItems[name] = config;
+        });
       });
     }
 
@@ -1468,40 +1267,27 @@ export class C64API {
     } as ConfigResponse;
   }
 
-  async setConfigValue(
-    category: string,
-    item: string,
-    value: string | number,
-  ): Promise<ConfigResponse> {
+  async setConfigValue(category: string, item: string, value: string | number): Promise<ConfigResponse> {
     const catEncoded = encodeURIComponent(category);
     const itemEncoded = encodeURIComponent(item);
     const valEncoded = encodeURIComponent(String(value));
     return scheduleConfigWrite(() =>
-      this.request(
-        `/v1/configs/${catEncoded}/${itemEncoded}?value=${valEncoded}`,
-        {
-          method: "PUT",
-        },
-      ),
+      this.request(`/v1/configs/${catEncoded}/${itemEncoded}?value=${valEncoded}`, {
+        method: "PUT",
+      }),
     );
   }
 
   async saveConfig(): Promise<{ errors: string[] }> {
-    return scheduleConfigWrite(() =>
-      this.request("/v1/configs:save_to_flash", { method: "PUT" }),
-    );
+    return scheduleConfigWrite(() => this.request("/v1/configs:save_to_flash", { method: "PUT" }));
   }
 
   async loadConfig(): Promise<{ errors: string[] }> {
-    return scheduleConfigWrite(() =>
-      this.request("/v1/configs:load_from_flash", { method: "PUT" }),
-    );
+    return scheduleConfigWrite(() => this.request("/v1/configs:load_from_flash", { method: "PUT" }));
   }
 
   async resetConfig(): Promise<{ errors: string[] }> {
-    return scheduleConfigWrite(() =>
-      this.request("/v1/configs:reset_to_default", { method: "PUT" }),
-    );
+    return scheduleConfigWrite(() => this.request("/v1/configs:reset_to_default", { method: "PUT" }));
   }
 
   async updateConfigBatch(
@@ -1563,13 +1349,10 @@ export class C64API {
   }
 
   async startStream(stream: string, ip: string): Promise<{ errors: string[] }> {
-    return this.request(
-      `/v1/streams/${encodeURIComponent(stream)}:start?ip=${encodeURIComponent(ip)}`,
-      {
-        method: "PUT",
-        timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
-      },
-    );
+    return this.request(`/v1/streams/${encodeURIComponent(stream)}:start?ip=${encodeURIComponent(ip)}`, {
+      method: "PUT",
+      timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
+    });
   }
 
   async stopStream(stream: string): Promise<{ errors: string[] }> {
@@ -1586,20 +1369,12 @@ export class C64API {
     const headers: Record<string, string> = {
       ...this.buildAuthHeaders(),
     };
-    const response = await this.fetchWithTimeout(
-      url,
-      { headers },
-      CONTROL_REQUEST_TIMEOUT_MS,
-    );
+    const response = await this.fetchWithTimeout(url, { headers }, CONTROL_REQUEST_TIMEOUT_MS);
     if (!response.ok) {
       throw new Error(`readMemory failed: HTTP ${response.status}`);
     }
-    const contentType =
-      response.headers.get("content-type")?.toLowerCase() ?? "";
-    if (
-      contentType.includes("application/octet-stream") ||
-      contentType.includes("application/binary")
-    ) {
+    const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+    if (contentType.includes("application/octet-stream") || contentType.includes("application/binary")) {
       const buffer = await response.arrayBuffer();
       return new Uint8Array(buffer);
     }
@@ -1618,10 +1393,7 @@ export class C64API {
     return new Uint8Array(data);
   }
 
-  async writeMemory(
-    address: string,
-    data: Uint8Array,
-  ): Promise<{ errors: string[] }> {
+  async writeMemory(address: string, data: Uint8Array): Promise<{ errors: string[] }> {
     const hex = Array.from(data)
       .map((value) => value.toString(16).padStart(2, "0"))
       .join("");
@@ -1630,13 +1402,9 @@ export class C64API {
     });
   }
 
-  async writeMemoryBlock(
-    address: string,
-    data: Uint8Array,
-  ): Promise<{ errors: string[] }> {
+  async writeMemoryBlock(address: string, data: Uint8Array): Promise<{ errors: string[] }> {
     const path = `/v1/machine:writemem?address=${address}`;
-    const startedAt =
-      typeof performance !== "undefined" ? performance.now() : Date.now();
+    const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
     let status: number | "error" = "error";
     const method = "POST";
     let response: Response;
@@ -1661,9 +1429,7 @@ export class C64API {
     }
 
     if (!response.ok) {
-      const error = new Error(
-        `HTTP ${response.status}: ${response.statusText}`,
-      );
+      const error = new Error(`HTTP ${response.status}: ${response.statusText}`);
       addErrorLog(
         "Memory DMA write failed",
         buildErrorLogDetails(error, {
@@ -1710,8 +1476,7 @@ export class C64API {
       path = `${path}?${params.toString()}`;
     }
 
-    const startedAt =
-      typeof performance !== "undefined" ? performance.now() : Date.now();
+    const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
     let status: number | "error" = "error";
     const method = "POST";
     let response: Response;
@@ -1743,9 +1508,7 @@ export class C64API {
     }
 
     if (!response.ok) {
-      const error = new Error(
-        `HTTP ${response.status}: ${response.statusText}`,
-      );
+      const error = new Error(`HTTP ${response.status}: ${response.statusText}`);
       addErrorLog(
         "Drive mount upload failed",
         buildErrorLogDetails(error, {
@@ -1777,10 +1540,7 @@ export class C64API {
     return this.request(`/v1/drives/${drive}:off`, { method: "PUT" });
   }
 
-  async setDriveMode(
-    drive: string,
-    mode: "1541" | "1571" | "1581",
-  ): Promise<{ errors: string[] }> {
+  async setDriveMode(drive: string, mode: "1541" | "1571" | "1581"): Promise<{ errors: string[] }> {
     return this.request(`/v1/drives/${drive}:set_mode?mode=${mode}`, {
       method: "PUT",
     });
@@ -1806,11 +1566,7 @@ export class C64API {
     });
   }
 
-  async playSidUpload(
-    sidFile: Blob,
-    songNr?: number,
-    sslFile?: Blob,
-  ): Promise<{ errors: string[] }> {
+  async playSidUpload(sidFile: Blob, songNr?: number, sslFile?: Blob): Promise<{ errors: string[] }> {
     const url = new URL(`${this.getBaseUrl()}/v1/runners:sidplay`);
     if (songNr !== undefined) {
       url.searchParams.set("songnr", String(songNr));
@@ -1828,8 +1584,7 @@ export class C64API {
     let lastError: Error | null = null;
 
     for (let attempt = 1; attempt <= SID_UPLOAD_MAX_ATTEMPTS; attempt += 1) {
-      const startedAt =
-        typeof performance !== "undefined" ? performance.now() : Date.now();
+      const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
       let status: number | "error" = "error";
       try {
         const response = await this.fetchWithTimeout(
@@ -1844,9 +1599,7 @@ export class C64API {
         status = response.status;
 
         if (!response.ok) {
-          const error = new Error(
-            `HTTP ${response.status}: ${response.statusText}`,
-          );
+          const error = new Error(`HTTP ${response.status}: ${response.statusText}`);
           addErrorLog(
             "SID upload failed",
             buildErrorLogDetails(error, {
@@ -1867,8 +1620,7 @@ export class C64API {
         lastError = err;
         const transient = isSidUploadTransientFailure(err);
         if (attempt < SID_UPLOAD_MAX_ATTEMPTS && transient) {
-          const retryDelayMs =
-            NETWORK_RETRY_DELAY_MS * Math.pow(2, attempt - 1);
+          const retryDelayMs = NETWORK_RETRY_DELAY_MS * Math.pow(2, attempt - 1);
           const failure = classifyError(err);
           addLog("warn", "SID upload retry scheduled", {
             path,
@@ -1892,19 +1644,15 @@ export class C64API {
   }
 
   async playMod(file: string): Promise<{ errors: string[] }> {
-    return this.request(
-      `/v1/runners:modplay?file=${encodeURIComponent(file)}`,
-      {
-        method: "PUT",
-        timeoutMs: PLAYBACK_REQUEST_TIMEOUT_MS,
-      },
-    );
+    return this.request(`/v1/runners:modplay?file=${encodeURIComponent(file)}`, {
+      method: "PUT",
+      timeoutMs: PLAYBACK_REQUEST_TIMEOUT_MS,
+    });
   }
 
   async playModUpload(modFile: Blob): Promise<{ errors: string[] }> {
     const path = "/v1/runners:modplay";
-    const startedAt =
-      typeof performance !== "undefined" ? performance.now() : Date.now();
+    const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
     let status: number | "error" = "error";
     const method = "POST";
     let response: Response;
@@ -1928,9 +1676,7 @@ export class C64API {
     }
 
     if (!response.ok) {
-      const error = new Error(
-        `HTTP ${response.status}: ${response.statusText}`,
-      );
+      const error = new Error(`HTTP ${response.status}: ${response.statusText}`);
       addErrorLog(
         "MOD upload failed",
         buildErrorLogDetails(error, {
@@ -1947,19 +1693,15 @@ export class C64API {
   }
 
   async runPrg(file: string): Promise<{ errors: string[] }> {
-    return this.request(
-      `/v1/runners:run_prg?file=${encodeURIComponent(file)}`,
-      {
-        method: "PUT",
-        timeoutMs: PLAYBACK_REQUEST_TIMEOUT_MS,
-      },
-    );
+    return this.request(`/v1/runners:run_prg?file=${encodeURIComponent(file)}`, {
+      method: "PUT",
+      timeoutMs: PLAYBACK_REQUEST_TIMEOUT_MS,
+    });
   }
 
   async runPrgUpload(prgFile: Blob): Promise<{ errors: string[] }> {
     const path = "/v1/runners:run_prg";
-    const startedAt =
-      typeof performance !== "undefined" ? performance.now() : Date.now();
+    const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
     let status: number | "error" = "error";
     const method = "POST";
     let response: Response;
@@ -1983,9 +1725,7 @@ export class C64API {
     }
 
     if (!response.ok) {
-      const error = new Error(
-        `HTTP ${response.status}: ${response.statusText}`,
-      );
+      const error = new Error(`HTTP ${response.status}: ${response.statusText}`);
       addErrorLog(
         "PRG upload failed",
         buildErrorLogDetails(error, {
@@ -2002,19 +1742,15 @@ export class C64API {
   }
 
   async loadPrg(file: string): Promise<{ errors: string[] }> {
-    return this.request(
-      `/v1/runners:load_prg?file=${encodeURIComponent(file)}`,
-      {
-        method: "PUT",
-        timeoutMs: PLAYBACK_REQUEST_TIMEOUT_MS,
-      },
-    );
+    return this.request(`/v1/runners:load_prg?file=${encodeURIComponent(file)}`, {
+      method: "PUT",
+      timeoutMs: PLAYBACK_REQUEST_TIMEOUT_MS,
+    });
   }
 
   async loadPrgUpload(prgFile: Blob): Promise<{ errors: string[] }> {
     const path = "/v1/runners:load_prg";
-    const startedAt =
-      typeof performance !== "undefined" ? performance.now() : Date.now();
+    const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
     let status: number | "error" = "error";
     const method = "POST";
     let response: Response;
@@ -2038,9 +1774,7 @@ export class C64API {
     }
 
     if (!response.ok) {
-      const error = new Error(
-        `HTTP ${response.status}: ${response.statusText}`,
-      );
+      const error = new Error(`HTTP ${response.status}: ${response.statusText}`);
       addErrorLog(
         "PRG upload failed",
         buildErrorLogDetails(error, {
@@ -2057,19 +1791,15 @@ export class C64API {
   }
 
   async runCartridge(file: string): Promise<{ errors: string[] }> {
-    return this.request(
-      `/v1/runners:run_crt?file=${encodeURIComponent(file)}`,
-      {
-        method: "PUT",
-        timeoutMs: PLAYBACK_REQUEST_TIMEOUT_MS,
-      },
-    );
+    return this.request(`/v1/runners:run_crt?file=${encodeURIComponent(file)}`, {
+      method: "PUT",
+      timeoutMs: PLAYBACK_REQUEST_TIMEOUT_MS,
+    });
   }
 
   async runCartridgeUpload(crtFile: Blob): Promise<{ errors: string[] }> {
     const path = "/v1/runners:run_crt";
-    const startedAt =
-      typeof performance !== "undefined" ? performance.now() : Date.now();
+    const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
     let status: number | "error" = "error";
     const method = "POST";
     let response: Response;
@@ -2093,9 +1823,7 @@ export class C64API {
     }
 
     if (!response.ok) {
-      const error = new Error(
-        `HTTP ${response.status}: ${response.statusText}`,
-      );
+      const error = new Error(`HTTP ${response.status}: ${response.statusText}`);
       addErrorLog(
         "CRT upload failed",
         buildErrorLogDetails(error, {
@@ -2135,11 +1863,7 @@ export function getC64API(): C64API {
       buildBaseUrlFromDeviceHost(resolvedDeviceHost),
     );
     const cachedPassword = getCachedPassword();
-    apiInstance = new C64API(
-      resolvedBaseUrl,
-      cachedPassword ?? undefined,
-      resolvedDeviceHost,
-    );
+    apiInstance = new C64API(resolvedBaseUrl, cachedPassword ?? undefined, resolvedDeviceHost);
     if (!lastDeviceHost) {
       lastDeviceHost = apiInstance.getDeviceHost();
     }
@@ -2155,17 +1879,10 @@ export function getC64API(): C64API {
   return apiProxy;
 }
 
-export function updateC64APIConfig(
-  baseUrl: string,
-  password?: string,
-  deviceHost?: string,
-) {
+export function updateC64APIConfig(baseUrl: string, password?: string, deviceHost?: string) {
   const api = getC64API();
   const resolvedDeviceHost = resolvePreferredDeviceHost(baseUrl, deviceHost);
-  const resolvedBaseUrl = resolvePlatformApiBaseUrl(
-    resolvedDeviceHost,
-    buildBaseUrlFromDeviceHost(resolvedDeviceHost),
-  );
+  const resolvedBaseUrl = resolvePlatformApiBaseUrl(resolvedDeviceHost, buildBaseUrlFromDeviceHost(resolvedDeviceHost));
 
   api.setBaseUrl(resolvedBaseUrl);
   api.setPassword(password);
@@ -2228,17 +1945,10 @@ export function getC64APIConfigSnapshot(): C64ApiConfigSnapshot {
  * Update the active in-memory API configuration without persisting it.
  * This is used for session-limited modes (e.g. Demo Mode).
  */
-export function applyC64APIRuntimeConfig(
-  baseUrl: string,
-  password?: string,
-  deviceHost?: string,
-) {
+export function applyC64APIRuntimeConfig(baseUrl: string, password?: string, deviceHost?: string) {
   const api = getC64API();
   const resolvedDeviceHost = resolvePreferredDeviceHost(baseUrl, deviceHost);
-  const resolvedBaseUrl = resolvePlatformApiBaseUrl(
-    resolvedDeviceHost,
-    baseUrl,
-  );
+  const resolvedBaseUrl = resolvePlatformApiBaseUrl(resolvedDeviceHost, baseUrl);
   api.setBaseUrl(resolvedBaseUrl);
   api.setPassword(password);
   api.setDeviceHost(resolvedDeviceHost);
@@ -2275,15 +1985,8 @@ export function applyC64APIRuntimeConfig(
 export async function applyC64APIConfigFromStorage() {
   const savedPassword = await loadStoredPassword();
   const resolvedDeviceHost = resolveDeviceHostFromStorage();
-  const resolvedBaseUrl = resolvePlatformApiBaseUrl(
-    resolvedDeviceHost,
-    buildBaseUrlFromDeviceHost(resolvedDeviceHost),
-  );
-  applyC64APIRuntimeConfig(
-    resolvedBaseUrl,
-    savedPassword ?? undefined,
-    resolvedDeviceHost,
-  );
+  const resolvedBaseUrl = resolvePlatformApiBaseUrl(resolvedDeviceHost, buildBaseUrlFromDeviceHost(resolvedDeviceHost));
+  applyC64APIRuntimeConfig(resolvedBaseUrl, savedPassword ?? undefined, resolvedDeviceHost);
 }
 
 export const C64_DEFAULTS = {

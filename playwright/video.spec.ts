@@ -12,11 +12,7 @@ import { createMockC64Server } from "../tests/mocks/mockC64Server";
 import "../tests/mocks/setupMockConfigForTests";
 import { seedUiMocks } from "./uiMocks";
 import { seedFtpConfig, startFtpTestServers } from "./ftpTestUtils";
-import {
-  assertNoUiIssues,
-  finalizeEvidence,
-  startStrictUiMonitoring,
-} from "./testArtifacts";
+import { assertNoUiIssues, finalizeEvidence, startStrictUiMonitoring } from "./testArtifacts";
 import { disableTraceAssertions } from "./traceUtils";
 import {
   installFixedClock,
@@ -32,11 +28,9 @@ const SHORT_PAUSE_MS = 800;
 const SCROLL_DURATION_MS = 9000;
 
 const waitForConnected = async (page: Page) => {
-  await expect(page.getByTestId("connectivity-indicator")).toHaveAttribute(
-    "data-connection-state",
-    "REAL_CONNECTED",
-    { timeout: 10000 },
-  );
+  await expect(page.getByTestId("connectivity-indicator")).toHaveAttribute("data-connection-state", "REAL_CONNECTED", {
+    timeout: 10000,
+  });
 };
 
 const pauseAtTop = async (page: Page, delayMs = TOP_PAUSE_MS) => {
@@ -44,19 +38,14 @@ const pauseAtTop = async (page: Page, delayMs = TOP_PAUSE_MS) => {
   await page.waitForTimeout(delayMs);
 };
 
-const smoothScrollTo = async (
-  page: Page,
-  targetY: number,
-  durationMs: number,
-) => {
+const smoothScrollTo = async (page: Page, targetY: number, durationMs: number) => {
   await page.evaluate(
     async ({ targetY, durationMs }) => {
       const startY = window.scrollY;
       const delta = targetY - startY;
       const clamp = (value: number) => Math.max(0, value);
       const start = performance.now();
-      const easeInOut = (t: number) =>
-        t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+      const easeInOut = (t: number) => (t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t);
       await new Promise<void>((resolve) => {
         const step = (now: number) => {
           const progress = Math.min(1, (now - start) / durationMs);
@@ -75,11 +64,7 @@ const smoothScrollTo = async (
   );
 };
 
-const smoothScrollToLocator = async (
-  page: Page,
-  locator: ReturnType<Page["locator"]>,
-  durationMs: number,
-) => {
+const smoothScrollToLocator = async (page: Page, locator: ReturnType<Page["locator"]>, durationMs: number) => {
   const targetY = await locator.evaluate((node) => {
     const rect = node.getBoundingClientRect();
     return rect.top + window.scrollY - 12;
@@ -88,16 +73,11 @@ const smoothScrollToLocator = async (
 };
 
 const smoothScrollToBottom = async (page: Page, durationMs: number) => {
-  const targetY = await page.evaluate(
-    () => document.body.scrollHeight - window.innerHeight,
-  );
+  const targetY = await page.evaluate(() => document.body.scrollHeight - window.innerHeight);
   await smoothScrollTo(page, targetY, durationMs);
 };
 
-const openAndCloseSelect = async (
-  page: Page,
-  trigger: ReturnType<Page["locator"]>,
-) => {
+const openAndCloseSelect = async (page: Page, trigger: ReturnType<Page["locator"]>) => {
   if ((await trigger.count()) === 0) {
     return;
   }
@@ -108,11 +88,7 @@ const openAndCloseSelect = async (
   await page.waitForTimeout(SHORT_PAUSE_MS);
 };
 
-const openAndCloseDialog = async (
-  page: Page,
-  trigger: ReturnType<Page["locator"]>,
-  dialogName?: string,
-) => {
+const openAndCloseDialog = async (page: Page, trigger: ReturnType<Page["locator"]>, dialogName?: string) => {
   await trigger.scrollIntoViewIfNeeded();
   await trigger.click();
   if (dialogName) {
@@ -128,9 +104,7 @@ const openAndCloseDialog = async (
 const tourHome = async (page: Page) => {
   await page.goto("/");
   await waitForConnected(page);
-  await expect(
-    page.getByRole("button", { name: "Disks", exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Disks", exact: true })).toBeVisible();
 
   await pauseAtTop(page);
 
@@ -138,41 +112,23 @@ const tourHome = async (page: Page) => {
   await systemInfo.click();
   await page.waitForTimeout(SHORT_PAUSE_MS);
 
-  await smoothScrollToLocator(
-    page,
-    page.getByTestId("home-machine-controls"),
-    1800,
-  );
+  await smoothScrollToLocator(page, page.getByTestId("home-machine-controls"), 1800);
   await page.waitForTimeout(SHORT_PAUSE_MS);
 
-  await smoothScrollToLocator(
-    page,
-    page.getByTestId("home-quick-config"),
-    1800,
-  );
+  await smoothScrollToLocator(page, page.getByTestId("home-quick-config"), 1800);
   await openAndCloseSelect(page, page.getByTestId("home-video-mode"));
 
   await smoothScrollToLocator(page, page.getByTestId("home-led-summary"), 1800);
   await openAndCloseSelect(page, page.getByTestId("home-led-tint"));
 
-  await smoothScrollToLocator(
-    page,
-    page.getByTestId("home-drives-group"),
-    2000,
-  );
+  await smoothScrollToLocator(page, page.getByTestId("home-drives-group"), 2000);
   await openAndCloseSelect(page, page.getByTestId("home-drive-type-a"));
 
-  await smoothScrollToLocator(
-    page,
-    page.getByTestId("home-printer-group"),
-    2000,
-  );
+  await smoothScrollToLocator(page, page.getByTestId("home-printer-group"), 2000);
   await openAndCloseSelect(page, page.getByTestId("home-printer-bus"));
 
   await smoothScrollToLocator(page, page.getByTestId("home-sid-status"), 2200);
-  const panSlider = page
-    .getByTestId("home-sid-pan-socket1")
-    .getByRole("slider");
+  const panSlider = page.getByTestId("home-sid-pan-socket1").getByRole("slider");
   const panBox = await panSlider.boundingBox();
   if (panBox) {
     await panSlider.click({
@@ -181,11 +137,7 @@ const tourHome = async (page: Page) => {
     await page.waitForTimeout(SHORT_PAUSE_MS);
   }
 
-  await smoothScrollToLocator(
-    page,
-    page.getByTestId("home-stream-status"),
-    2200,
-  );
+  await smoothScrollToLocator(page, page.getByTestId("home-stream-status"), 2200);
   const streamEdit = page.getByTestId("home-stream-edit-toggle-audio");
   if (await streamEdit.count()) {
     await streamEdit.click();
@@ -204,9 +156,7 @@ const tourHome = async (page: Page) => {
 
 const tourDisks = async (page: Page) => {
   await page.goto("/disks");
-  await expect(
-    page.getByRole("heading", { name: "Disks", level: 1 }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Disks", level: 1 })).toBeVisible();
   await pauseAtTop(page);
 
   const viewAll = page.getByRole("button", { name: "View all" });
@@ -226,18 +176,10 @@ const tourPlay = async (page: Page) => {
   await expect(page.getByRole("heading", { name: "Play Files" })).toBeVisible();
   await pauseAtTop(page);
 
-  await smoothScrollToLocator(
-    page,
-    page.getByTestId("play-section-playback"),
-    2200,
-  );
+  await smoothScrollToLocator(page, page.getByTestId("play-section-playback"), 2200);
   await page.waitForTimeout(SHORT_PAUSE_MS);
 
-  await smoothScrollToLocator(
-    page,
-    page.getByTestId("play-section-playlist"),
-    2200,
-  );
+  await smoothScrollToLocator(page, page.getByTestId("play-section-playlist"), 2200);
   const addItemsButton = page.getByRole("button", {
     name: /Add items|Add more items/i,
   });
@@ -279,18 +221,11 @@ const tourSettings = async (page: Page) => {
   await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
   await pauseAtTop(page);
 
-  await smoothScrollToLocator(
-    page,
-    page.getByRole("heading", { name: "Connection" }),
-    2000,
-  );
+  await smoothScrollToLocator(page, page.getByRole("heading", { name: "Connection" }), 2000);
   await page.waitForTimeout(SHORT_PAUSE_MS);
 
   await page.waitForFunction(() =>
-    Boolean(
-      (window as Window & { __c64uTracing?: { seedTraces?: unknown } })
-        .__c64uTracing?.seedTraces,
-    ),
+    Boolean((window as Window & { __c64uTracing?: { seedTraces?: unknown } }).__c64uTracing?.seedTraces),
   );
   await seedDiagnosticsTraces(page);
 
@@ -357,10 +292,7 @@ test.describe("App video tour", () => {
   });
 
   test.beforeEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
-    disableTraceAssertions(
-      testInfo,
-      "Video tour only; trace assertions disabled.",
-    );
+    disableTraceAssertions(testInfo, "Video tour only; trace assertions disabled.");
     await startStrictUiMonitoring(page, testInfo);
     await installFixedClock(page);
     await seedFtpConfig(page, {
@@ -384,16 +316,12 @@ test.describe("App video tour", () => {
     }
   });
 
-  test(
-    "records full app walkthrough",
-    { tag: "@video" },
-    async ({ page }: { page: Page }) => {
-      await tourHome(page);
-      await tourDisks(page);
-      await tourPlay(page);
-      await tourConfig(page);
-      await tourSettings(page);
-      await tourDocs(page);
-    },
-  );
+  test("records full app walkthrough", { tag: "@video" }, async ({ page }: { page: Page }) => {
+    await tourHome(page);
+    await tourDisks(page);
+    await tourPlay(page);
+    await tourConfig(page);
+    await tourSettings(page);
+    await tourDocs(page);
+  });
 });

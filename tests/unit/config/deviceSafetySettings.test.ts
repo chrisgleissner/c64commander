@@ -74,26 +74,19 @@ describe("deviceSafetySettings defaults", () => {
     localStorage.clear();
   });
 
-  it.each(Object.entries(MODE_EXPECTATIONS))(
-    "loads %s defaults",
-    (mode, expected) => {
-      saveDeviceSafetyMode(mode as DeviceSafetyMode);
+  it.each(Object.entries(MODE_EXPECTATIONS))("loads %s defaults", (mode, expected) => {
+    saveDeviceSafetyMode(mode as DeviceSafetyMode);
 
-      const config = loadDeviceSafetyConfig();
+    const config = loadDeviceSafetyConfig();
 
-      expect(config.restMaxConcurrency).toBe(expected.restMaxConcurrency);
-      expect(config.ftpMaxConcurrency).toBe(expected.ftpMaxConcurrency);
-      expect(config.backoffBaseMs).toBe(expected.backoffBaseMs);
-      expect(config.backoffMaxMs).toBe(expected.backoffMaxMs);
-      expect(config.backoffFactor).toBeCloseTo(expected.backoffFactor, 6);
-      expect(config.circuitBreakerThreshold).toBe(
-        expected.circuitBreakerThreshold,
-      );
-      expect(config.circuitBreakerCooldownMs).toBe(
-        expected.circuitBreakerCooldownMs,
-      );
-    },
-  );
+    expect(config.restMaxConcurrency).toBe(expected.restMaxConcurrency);
+    expect(config.ftpMaxConcurrency).toBe(expected.ftpMaxConcurrency);
+    expect(config.backoffBaseMs).toBe(expected.backoffBaseMs);
+    expect(config.backoffMaxMs).toBe(expected.backoffMaxMs);
+    expect(config.backoffFactor).toBeCloseTo(expected.backoffFactor, 6);
+    expect(config.circuitBreakerThreshold).toBe(expected.circuitBreakerThreshold);
+    expect(config.circuitBreakerCooldownMs).toBe(expected.circuitBreakerCooldownMs);
+  });
 
   it("keeps REST and FTP concurrency independent", () => {
     saveDeviceSafetyMode("BALANCED");
@@ -126,10 +119,7 @@ describe("deviceSafetySettings undefined-environment branches", () => {
   });
 
   it("readNumber returns null for non-finite stored value (line 125 FALSE)", () => {
-    localStorage.setItem(
-      DEVICE_SAFETY_SETTING_KEYS.REST_MAX_CONCURRENCY_KEY,
-      "not-a-number",
-    );
+    localStorage.setItem(DEVICE_SAFETY_SETTING_KEYS.REST_MAX_CONCURRENCY_KEY, "not-a-number");
     const config = loadDeviceSafetyConfig();
     // Falls back to default (BALANCED = 2)
     expect(config.restMaxConcurrency).toBe(2);
@@ -140,9 +130,7 @@ describe("deviceSafetySettings undefined-environment branches", () => {
     // Should not throw
     saveDeviceSafetyMode("RELAXED");
     vi.unstubAllGlobals();
-    expect(
-      localStorage.getItem(DEVICE_SAFETY_SETTING_KEYS.DEVICE_SAFETY_MODE_KEY),
-    ).toBe("RELAXED");
+    expect(localStorage.getItem(DEVICE_SAFETY_SETTING_KEYS.DEVICE_SAFETY_MODE_KEY)).toBe("RELAXED");
   });
 
   it("subscribeDeviceSafetyUpdates returns no-op when window is undefined (line 152)", () => {
@@ -167,10 +155,6 @@ describe("deviceSafetySettings undefined-environment branches", () => {
 
   it("saveAllowUserOverrideCircuit stores false as 0 (line 230 FALSE)", () => {
     saveAllowUserOverrideCircuit(false);
-    expect(
-      localStorage.getItem(
-        DEVICE_SAFETY_SETTING_KEYS.ALLOW_USER_OVERRIDE_CIRCUIT_KEY,
-      ),
-    ).toBe("0");
+    expect(localStorage.getItem(DEVICE_SAFETY_SETTING_KEYS.ALLOW_USER_OVERRIDE_CIRCUIT_KEY)).toBe("0");
   });
 });

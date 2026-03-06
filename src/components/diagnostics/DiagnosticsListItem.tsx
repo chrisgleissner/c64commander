@@ -10,10 +10,7 @@ import type { ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DiagnosticsTimestamp } from "@/components/diagnostics/DiagnosticsTimestamp";
-import {
-  getDiagnosticsSeverityMeta,
-  type DiagnosticsSeverity,
-} from "@/lib/diagnostics/diagnosticsSeverity";
+import { getDiagnosticsSeverityMeta, type DiagnosticsSeverity } from "@/lib/diagnostics/diagnosticsSeverity";
 
 export type DiagnosticsListItemMode = "trace" | "action" | "log";
 
@@ -42,20 +39,13 @@ export const DiagnosticsListItem = ({
 }: Props) => {
   const showOrigin = mode === "action";
   const originClass =
-    origin === "user"
-      ? "bg-diagnostics-user"
-      : origin === "system"
-        ? "bg-diagnostics-system"
-        : "bg-muted-foreground";
+    origin === "user" ? "bg-diagnostics-user" : origin === "system" ? "bg-diagnostics-system" : "bg-muted-foreground";
   const severityMeta = getDiagnosticsSeverityMeta(severity);
   const hasSecondary = Boolean(secondaryLeft || secondaryRight);
   const isActionMode = mode === "action";
 
   return (
-    <details
-      className="group rounded-lg border border-border"
-      data-testid={testId}
-    >
+    <details className="group rounded-lg border border-border" data-testid={testId}>
       <summary className="list-none cursor-pointer select-none px-2 py-0.5 [&::-webkit-details-marker]:hidden">
         <div
           className="grid grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-2"
@@ -84,17 +74,11 @@ export const DiagnosticsListItem = ({
                 aria-label={`origin: ${origin ?? "unknown"}`}
               />
             ) : null}
-            <span
-              className="min-w-0 truncate"
-              data-testid="diagnostics-entry-title"
-            >
+            <span className="min-w-0 truncate" data-testid="diagnostics-entry-title">
               {title}
             </span>
           </div>
-          <DiagnosticsTimestamp
-            className="text-muted-foreground text-right shrink-0"
-            value={timestamp}
-          />
+          <DiagnosticsTimestamp className="text-muted-foreground text-right shrink-0" value={timestamp} />
         </div>
       </summary>
       <div className="px-2 pb-3 pt-2 text-xs">
@@ -104,10 +88,7 @@ export const DiagnosticsListItem = ({
             className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 text-xs font-semibold uppercase tracking-wide"
           >
             <div className="min-w-0 flex flex-wrap items-center gap-2">
-              <span
-                data-testid="diagnostics-severity-label"
-                className={cn(severityMeta.colorClass)}
-              >
+              <span data-testid="diagnostics-severity-label" className={cn(severityMeta.colorClass)}>
                 {severityMeta.label}
               </span>
               {secondaryLeft}
@@ -120,26 +101,18 @@ export const DiagnosticsListItem = ({
           <>
             <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide">
               <span
-                className={cn(
-                  "inline-flex w-4 items-center justify-center",
-                  severityMeta.colorClass,
-                )}
+                className={cn("inline-flex w-4 items-center justify-center", severityMeta.colorClass)}
                 aria-hidden="true"
               >
                 {severityMeta.glyph}
               </span>
-              <span
-                data-testid="diagnostics-severity-label"
-                className={cn(severityMeta.colorClass)}
-              >
+              <span data-testid="diagnostics-severity-label" className={cn(severityMeta.colorClass)}>
                 {severityMeta.label}
               </span>
             </div>
             {hasSecondary ? (
               <div className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] gap-2 text-xs">
-                <div className="min-w-0 flex flex-wrap items-center gap-2">
-                  {secondaryLeft}
-                </div>
+                <div className="min-w-0 flex flex-wrap items-center gap-2">{secondaryLeft}</div>
                 <div className="text-muted-foreground font-semibold tabular-nums text-right shrink-0">
                   {secondaryRight}
                 </div>

@@ -4,19 +4,13 @@ import type { ServerResponse } from "node:http";
 import { writeBuffer, writeJson, writeText } from "./httpIO.js";
 
 export type LogErrorDetails = (error: unknown) => Record<string, unknown>;
-export type LogError = (
-  message: string,
-  details?: Record<string, unknown>,
-) => void;
+export type LogError = (message: string, details?: Record<string, unknown>) => void;
 
 const getStaticCacheControl = (safePath: string) => {
   const normalized = safePath.replace(/\\/g, "/");
   if (normalized === "index.html") return "no-store";
-  if (normalized === "sw.js" || normalized === "manifest.webmanifest")
-    return "no-cache";
-  const isHashedAsset = /^assets\/.+[-_.][a-f0-9]{8,}\.[a-z0-9]+$/i.test(
-    normalized,
-  );
+  if (normalized === "sw.js" || normalized === "manifest.webmanifest") return "no-cache";
+  const isHashedAsset = /^assets\/.+[-_.][a-f0-9]{8,}\.[a-z0-9]+$/i.test(normalized);
   if (isHashedAsset) return "public, max-age=31536000, immutable";
   return "public, max-age=3600";
 };
@@ -73,8 +67,7 @@ const getContentType = (filePath: string) => {
   if (filePath.endsWith(".json")) return "application/json; charset=utf-8";
   if (filePath.endsWith(".svg")) return "image/svg+xml";
   if (filePath.endsWith(".png")) return "image/png";
-  if (filePath.endsWith(".jpg") || filePath.endsWith(".jpeg"))
-    return "image/jpeg";
+  if (filePath.endsWith(".jpg") || filePath.endsWith(".jpeg")) return "image/jpeg";
   if (filePath.endsWith(".webm")) return "video/webm";
   if (filePath.endsWith(".woff2")) return "font/woff2";
   return "application/octet-stream";
@@ -96,8 +89,7 @@ export const createStaticAssetServer = (options: {
       return;
     }
 
-    const normalized =
-      decodedPath === "/" ? "index.html" : decodedPath.replace(/^\/+/, "");
+    const normalized = decodedPath === "/" ? "index.html" : decodedPath.replace(/^\/+/, "");
     const safePath = path.normalize(normalized);
     if (safePath.startsWith("..") || path.isAbsolute(safePath)) {
       writeJson(res, 403, { error: "Invalid path" });
@@ -118,13 +110,7 @@ export const createStaticAssetServer = (options: {
         return;
       }
       const data = await fs.readFile(fullPath);
-      writeBuffer(
-        res,
-        200,
-        data,
-        getContentType(fullPath),
-        getStaticCacheControl(safePath),
-      );
+      writeBuffer(res, 200, data, getContentType(fullPath), getStaticCacheControl(safePath));
       return;
     } catch (error) {
       const err = error as NodeJS.ErrnoException;
@@ -140,10 +126,7 @@ export const createStaticAssetServer = (options: {
     }
 
     try {
-      const indexHtml = await fs.readFile(
-        path.join(distDir, "index.html"),
-        "utf8",
-      );
+      const indexHtml = await fs.readFile(path.join(distDir, "index.html"), "utf8");
       writeText(res, 200, indexHtml, "text/html; charset=utf-8");
     } catch (error) {
       logError("Missing index.html in dist output", errorDetails(error));

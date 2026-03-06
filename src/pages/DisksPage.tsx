@@ -16,10 +16,7 @@ export default function DisksPage() {
       <AppBar title="Disks" subtitle="Drive control & disk library" />
 
       <main className="container py-6 space-y-6">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
           <HomeDiskManager />
         </motion.div>
       </main>

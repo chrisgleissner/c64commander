@@ -7,11 +7,7 @@
  */
 
 import { renderHook, act } from "@testing-library/react";
-import {
-  useDiskLibrary,
-  buildDiskEntryFromDrive,
-  toDisplayName,
-} from "@/hooks/useDiskLibrary";
+import { useDiskLibrary, buildDiskEntryFromDrive, toDisplayName } from "@/hooks/useDiskLibrary";
 import { loadDiskLibrary, saveDiskLibrary } from "@/lib/disks/diskStore";
 import { buildDiskTreeState } from "@/lib/disks/diskTree";
 import { createDiskEntry } from "@/lib/disks/diskTypes";
@@ -76,9 +72,7 @@ describe("useDiskLibrary", () => {
     expect(saveDiskLibrary).toHaveBeenLastCalledWith(
       mockUniqueId,
       expect.objectContaining({
-        disks: expect.arrayContaining([
-          expect.objectContaining({ id: mockDisk.id }),
-        ]),
+        disks: expect.arrayContaining([expect.objectContaining({ id: mockDisk.id })]),
       }),
     );
   });
@@ -180,10 +174,7 @@ describe("useDiskLibrary", () => {
     });
 
     expect(result.current.filter).toBe("filtered");
-    expect(buildDiskTreeState).toHaveBeenCalledWith(
-      expect.anything(),
-      "filtered",
-    );
+    expect(buildDiskTreeState).toHaveBeenCalledWith(expect.anything(), "filtered");
   });
 
   it("adds disks with runtime files and removes them", () => {

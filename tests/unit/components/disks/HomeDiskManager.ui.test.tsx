@@ -6,20 +6,10 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import {
-  render,
-  screen,
-  waitFor,
-  within,
-  fireEvent,
-} from "@testing-library/react";
+import { render, screen, waitFor, within, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { HomeDiskManager } from "@/components/disks/HomeDiskManager";
-import {
-  useC64ConfigItems,
-  useC64Connection,
-  useC64Drives,
-} from "@/hooks/useC64Connection";
+import { useC64ConfigItems, useC64Connection, useC64Drives } from "@/hooks/useC64Connection";
 import { useDiskLibrary } from "@/hooks/useDiskLibrary";
 import { getC64API } from "@/lib/c64api";
 import { toast } from "@/hooks/use-toast";
@@ -68,27 +58,18 @@ vi.mock("@/hooks/useActionTrace", () => ({
 // Mock child components that are complex
 vi.mock("@/components/itemSelection/ItemSelectionDialog", () => ({
   ItemSelectionDialog: ({ open }: any) =>
-    open ? (
-      <div data-testid="item-selection-dialog">Item Selection Dialog</div>
-    ) : null,
+    open ? <div data-testid="item-selection-dialog">Item Selection Dialog</div> : null,
 }));
 vi.mock("@/components/itemSelection/AddItemsProgressOverlay", () => ({
   AddItemsProgressOverlay: ({ visible }: any) =>
     visible ? <div data-testid="progress-overlay">Progress Overlay</div> : null,
 }));
 vi.mock("@/components/lists/SelectableActionList", () => ({
-  SelectableActionList: ({
-    items,
-    headerActions,
-    onRemoveSelected,
-    onToggleSelectAll,
-  }: any) => (
+  SelectableActionList: ({ items, headerActions, onRemoveSelected, onToggleSelectAll }: any) => (
     <div data-testid="mock-action-list">
       <div data-testid="header-actions">{headerActions}</div>
       <button onClick={onToggleSelectAll}>Select all</button>
-      {onRemoveSelected && (
-        <button onClick={onRemoveSelected}>Remove selected items</button>
-      )}
+      {onRemoveSelected && <button onClick={onRemoveSelected}>Remove selected items</button>}
       <ul>
         {items.map((item: any, i: number) => (
           <li key={item.id || i}>
@@ -249,9 +230,7 @@ describe("HomeDiskManager UI & Interactions", () => {
 
     // Should be in dialog now
     const dialog = screen.getByRole("dialog");
-    expect(
-      within(dialog).getByText(/This removes 2 disk\(s\)/),
-    ).toBeInTheDocument();
+    expect(within(dialog).getByText(/This removes 2 disk\(s\)/)).toBeInTheDocument();
 
     // Confirm
     const confirmBtn = within(dialog).getByRole("button", { name: "Remove" });

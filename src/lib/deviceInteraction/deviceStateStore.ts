@@ -9,13 +9,7 @@
 import { setTraceDeviceContext } from "@/lib/tracing/traceContext";
 import type { ConnectionState } from "@/lib/connection/connectionManager";
 
-export type DeviceState =
-  | "UNKNOWN"
-  | "DISCOVERING"
-  | "CONNECTING"
-  | "READY"
-  | "BUSY"
-  | "ERROR";
+export type DeviceState = "UNKNOWN" | "DISCOVERING" | "CONNECTING" | "READY" | "BUSY" | "ERROR";
 
 export type DeviceStateSnapshot = Readonly<{
   state: DeviceState;
@@ -54,10 +48,7 @@ const resolveBaseState = (): DeviceState => {
   if (connectionState === "UNKNOWN") return "UNKNOWN";
   if (connectionState === "DISCOVERING") return "DISCOVERING";
   if (connectionState === "OFFLINE_NO_DEMO") return "ERROR";
-  if (
-    connectionState === "REAL_CONNECTED" ||
-    connectionState === "DEMO_ACTIVE"
-  ) {
+  if (connectionState === "REAL_CONNECTED" || connectionState === "DEMO_ACTIVE") {
     return hasSuccessfulRequest ? "READY" : "CONNECTING";
   }
   return "UNKNOWN";
@@ -67,8 +58,7 @@ const computeState = (): DeviceState => {
   const now = Date.now();
   if (circuitOpenUntilMs && now < circuitOpenUntilMs) return "ERROR";
   const base = resolveBaseState();
-  if ((base === "READY" || base === "CONNECTING") && busyCount > 0)
-    return "BUSY";
+  if ((base === "READY" || base === "CONNECTING") && busyCount > 0) return "BUSY";
   return base;
 };
 
@@ -100,17 +90,10 @@ export const subscribeDeviceState = (listener: () => void) => {
 export const updateDeviceConnectionState = (next: ConnectionState) => {
   const previous = connectionState;
   connectionState = next;
-  if (
-    next !== previous &&
-    (next === "REAL_CONNECTED" || next === "DEMO_ACTIVE")
-  ) {
+  if (next !== previous && (next === "REAL_CONNECTED" || next === "DEMO_ACTIVE")) {
     hasSuccessfulRequest = false;
   }
-  if (
-    next === "UNKNOWN" ||
-    next === "DISCOVERING" ||
-    next === "OFFLINE_NO_DEMO"
-  ) {
+  if (next === "UNKNOWN" || next === "DISCOVERING" || next === "OFFLINE_NO_DEMO") {
     hasSuccessfulRequest = false;
   }
   updateSnapshot("connection-transition");
@@ -121,10 +104,7 @@ export const markDeviceRequestStart = () => {
   updateSnapshot("request-start");
 };
 
-export const markDeviceRequestEnd = (result: {
-  success: boolean;
-  errorMessage?: string | null;
-}) => {
+export const markDeviceRequestEnd = (result: { success: boolean; errorMessage?: string | null }) => {
   busyCount = Math.max(0, busyCount - 1);
   if (result.success) {
     hasSuccessfulRequest = true;
@@ -136,10 +116,7 @@ export const markDeviceRequestEnd = (result: {
   updateSnapshot(result.success ? "request-success" : "request-failure");
 };
 
-export const setCircuitOpenUntil = (
-  untilMs: number | null,
-  reason?: string,
-) => {
+export const setCircuitOpenUntil = (untilMs: number | null, reason?: string) => {
   circuitOpenUntilMs = untilMs;
   if (untilMs) {
     lastErrorMessage = reason ?? lastErrorMessage;

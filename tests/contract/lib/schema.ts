@@ -36,9 +36,7 @@ export class SchemaValidator {
     const valid = validate(data);
     return {
       valid: Boolean(valid),
-      errors: validate.errors?.map(
-        (err: ErrorObject) => `${err.instancePath} ${err.message}`,
-      ),
+      errors: validate.errors?.map((err: ErrorObject) => `${err.instancePath} ${err.message}`),
     };
   }
 }

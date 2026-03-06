@@ -25,11 +25,7 @@ export type PlaylistItemRecord = {
   sortKey: string;
   durationOverrideMs?: number | null;
   status: "ready" | "unavailable";
-  unavailableReason?:
-    | "source-revoked"
-    | "file-inaccessible"
-    | "hvsc-unavailable"
-    | null;
+  unavailableReason?: "source-revoked" | "file-inaccessible" | "hvsc-unavailable" | null;
   addedAt: string;
 };
 

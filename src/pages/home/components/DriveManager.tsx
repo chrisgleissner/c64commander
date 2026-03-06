@@ -5,31 +5,16 @@ import { useSharedConfigActions } from "../hooks/ConfigActionsContext";
 import { useDriveData } from "../hooks/useDriveData";
 import { DriveCard } from "../DriveCard";
 import { SectionHeader } from "@/components/SectionHeader";
-import {
-  ItemSelectionDialog,
-  type SourceGroup,
-} from "@/components/itemSelection/ItemSelectionDialog";
+import { ItemSelectionDialog, type SourceGroup } from "@/components/itemSelection/ItemSelectionDialog";
 import { createUltimateSourceLocation } from "@/lib/sourceNavigation/ftpSourceAdapter";
 import { SOURCE_LABELS } from "@/lib/sourceNavigation/sourceTerms";
 import { DRIVE_CONTROL_SPECS, DriveControlSpec } from "../constants";
-import {
-  formatDiskDosStatus,
-  type DiskDosStatus,
-} from "@/lib/disks/dosStatusFormatter";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { formatDiskDosStatus, type DiskDosStatus } from "@/lib/disks/dosStatusFormatter";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 import { buildBusIdOptions, buildTypeOptions } from "@/lib/drives/driveDevices";
 import { readItemOptions, buildConfigKey } from "../utils/HomeConfigUtils";
-import {
-  DISK_BUS_ID_DEFAULTS,
-  PHYSICAL_DRIVE_TYPE_DEFAULTS,
-} from "../constants";
+import { DISK_BUS_ID_DEFAULTS, PHYSICAL_DRIVE_TYPE_DEFAULTS } from "../constants";
 
 const resolveDriveStatusRaw = (value?: string | null) => {
   const message = value?.trim() ?? "";
@@ -50,10 +35,7 @@ const toStatusSummary = (status: DiskDosStatus) => {
 
 interface DriveManagerProps {
   isConnected: boolean;
-  handleAction: (
-    action: () => Promise<void>,
-    description: string,
-  ) => Promise<void>;
+  handleAction: (action: () => Promise<void>, description: string) => Promise<void>;
   machineTaskBusy: boolean;
   machineTaskId: string | null;
   onResetDrives: (callback: () => Promise<void>) => Promise<void>;
@@ -68,8 +50,7 @@ export function DriveManager({
 }: DriveManagerProps) {
   const api = getC64API();
   const trace = useActionTrace("DriveManager");
-  const { updateConfigValue, resolveConfigValue, configWritePending } =
-    useSharedConfigActions();
+  const { updateConfigValue, resolveConfigValue, configWritePending } = useSharedConfigActions();
 
   const {
     refetchDrives,
@@ -104,10 +85,7 @@ export function DriveManager({
     setMountTarget({ spec, currentPath });
   };
 
-  const handleMountSelection = async (
-    source: unknown,
-    selections: { path: string }[],
-  ) => {
+  const handleMountSelection = async (source: unknown, selections: { path: string }[]) => {
     if (!mountTarget || selections.length === 0) return false;
     const selected = selections[0];
     const { spec } = mountTarget;
@@ -120,10 +98,7 @@ export function DriveManager({
         "HOME_SOFT_IEC_PATH",
         "Soft IEC path updated",
       );
-    } else if (
-      spec.class === "PHYSICAL_DRIVE_A" ||
-      spec.class === "PHYSICAL_DRIVE_B"
-    ) {
+    } else if (spec.class === "PHYSICAL_DRIVE_A" || spec.class === "PHYSICAL_DRIVE_B") {
       const driveId = spec.class === "PHYSICAL_DRIVE_A" ? "a" : "b";
       await handleAction(async () => {
         await api.mountDrive(driveId, selected.path);
@@ -163,23 +138,16 @@ export function DriveManager({
         isResetting={machineTaskId === "reset-drives"}
         resetTestId="home-drives-reset"
       />
-      <div
-        className="grid grid-cols-2 md:grid-cols-3 gap-2"
-        data-testid="home-drives-group"
-      >
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-2" data-testid="home-drives-group">
         {DRIVE_CONTROL_SPECS.map((spec) => {
           let category: Record<string, unknown> | undefined;
           let summary: { mountedLabel: string; isMounted: boolean } | undefined;
 
           if (spec.class === "PHYSICAL_DRIVE_A") {
-            category = driveASettingsCategory as
-              | Record<string, unknown>
-              | undefined;
+            category = driveASettingsCategory as Record<string, unknown> | undefined;
             summary = driveSummaryItems.find((s) => s.key === "a");
           } else if (spec.class === "PHYSICAL_DRIVE_B") {
-            category = driveBSettingsCategory as
-              | Record<string, unknown>
-              | undefined;
+            category = driveBSettingsCategory as Record<string, unknown> | undefined;
             summary = driveSummaryItems.find((s) => s.key === "b");
           } else if (spec.class === "SOFT_IEC_DRIVE") {
             category = softIecConfig as Record<string, unknown> | undefined;
@@ -190,73 +158,31 @@ export function DriveManager({
           const label = device?.label ?? spec.label;
           const payload = category;
           const enabledValue = String(
-            resolveConfigValue(
-              payload,
-              spec.category,
-              spec.enabledItem,
-              device?.enabled ? "Enabled" : "Disabled",
-            ),
+            resolveConfigValue(payload, spec.category, spec.enabledItem, device?.enabled ? "Enabled" : "Disabled"),
           );
           const enabled = enabledValue.trim().toLowerCase() === "enabled";
           const busFallback =
-            device?.busId ??
-            (spec.class === "PHYSICAL_DRIVE_A"
-              ? 8
-              : spec.class === "PHYSICAL_DRIVE_B"
-                ? 9
-                : 11);
-          const busValue = Number(
-            resolveConfigValue(
-              payload,
-              spec.category,
-              spec.busItem,
-              busFallback,
-            ),
-          );
-          const busOptions = buildBusIdOptions(
-            DISK_BUS_ID_DEFAULTS,
-            Number.isFinite(busValue) ? busValue : null,
-          );
+            device?.busId ?? (spec.class === "PHYSICAL_DRIVE_A" ? 8 : spec.class === "PHYSICAL_DRIVE_B" ? 9 : 11);
+          const busValue = Number(resolveConfigValue(payload, spec.category, spec.busItem, busFallback));
+          const busOptions = buildBusIdOptions(DISK_BUS_ID_DEFAULTS, Number.isFinite(busValue) ? busValue : null);
 
           const typeValue = spec.typeItem
-            ? String(
-                resolveConfigValue(
-                  payload,
-                  spec.category,
-                  spec.typeItem,
-                  device?.type ?? "1541",
-                ),
-              )
+            ? String(resolveConfigValue(payload, spec.category, spec.typeItem, device?.type ?? "1541"))
             : (device?.type ?? "DOS emulation");
 
           const rawTypeOptions = spec.typeItem
-            ? readItemOptions(payload, spec.category, spec.typeItem).map(
-                (value) => String(value),
-              )
+            ? readItemOptions(payload, spec.category, spec.typeItem).map((value) => String(value))
             : [];
 
           const typeOptions = spec.typeItem
-            ? buildTypeOptions(
-                rawTypeOptions.length
-                  ? rawTypeOptions
-                  : PHYSICAL_DRIVE_TYPE_DEFAULTS,
-                typeValue,
-              )
+            ? buildTypeOptions(rawTypeOptions.length ? rawTypeOptions : PHYSICAL_DRIVE_TYPE_DEFAULTS, typeValue)
             : [typeValue];
 
           const isSoftIec = spec.class === "SOFT_IEC_DRIVE";
-          const pendingEnabled = Boolean(
-            configWritePending[buildConfigKey(spec.category, spec.enabledItem)],
-          );
-          const pendingBus = Boolean(
-            configWritePending[buildConfigKey(spec.category, spec.busItem)],
-          );
+          const pendingEnabled = Boolean(configWritePending[buildConfigKey(spec.category, spec.enabledItem)]);
+          const pendingBus = Boolean(configWritePending[buildConfigKey(spec.category, spec.busItem)]);
           const pendingType = spec.typeItem
-            ? Boolean(
-                configWritePending[
-                  buildConfigKey(spec.category, spec.typeItem)
-                ],
-              )
+            ? Boolean(configWritePending[buildConfigKey(spec.category, spec.typeItem)])
             : false;
 
           let mountedPath = summary?.mountedLabel;
@@ -272,19 +198,11 @@ export function DriveManager({
           }
           const mountedPathLabel = isSoftIec ? "Path" : "Disk";
           const pathPending = isSoftIec
-            ? Boolean(
-                configWritePending[
-                  buildConfigKey("SoftIEC Drive Settings", "Default Path")
-                ],
-              )
+            ? Boolean(configWritePending[buildConfigKey("SoftIEC Drive Settings", "Default Path")])
             : false;
           const statusRaw = resolveDriveStatusRaw(device?.lastError);
-          const formattedStatus = statusRaw
-            ? formatDiskDosStatus(statusRaw)
-            : null;
-          const statusSummary = formattedStatus
-            ? toStatusSummary(formattedStatus)
-            : "OK";
+          const formattedStatus = statusRaw ? formatDiskDosStatus(statusRaw) : null;
+          const statusSummary = formattedStatus ? toStatusSummary(formattedStatus) : "OK";
           const statusSeverity = formattedStatus?.severity ?? "INFO";
           const statusDetails = formattedStatus ?? {
             code: null,
@@ -336,9 +254,7 @@ export function DriveManager({
               typePending={!isSoftIec ? pendingType : undefined}
               mountedPath={mountedPath}
               mountedPathLabel={mountedPathLabel}
-              onMountedPathClick={() =>
-                handleMountClick(spec, summary?.mountedLabel)
-              }
+              onMountedPathClick={() => handleMountClick(spec, summary?.mountedLabel)}
               statusSummary={statusSummary}
               statusSeverity={statusSeverity}
               onStatusClick={
@@ -366,17 +282,11 @@ export function DriveManager({
       <ItemSelectionDialog
         open={mountTarget !== null}
         onOpenChange={(open) => !open && setMountTarget(null)}
-        title={
-          mountTarget?.spec.class === "SOFT_IEC_DRIVE"
-            ? "Mount Path"
-            : "Mount Disk"
-        }
+        title={mountTarget?.spec.class === "SOFT_IEC_DRIVE" ? "Mount Path" : "Mount Disk"}
         confirmLabel="Mount"
         sourceGroups={
           mountTarget?.spec.class === "SOFT_IEC_DRIVE"
-            ? sourceGroups.filter((g) =>
-                g.sources.some((s) => s.type === "ultimate"),
-              )
+            ? sourceGroups.filter((g) => g.sources.some((s) => s.type === "ultimate"))
             : sourceGroups
         }
         onConfirm={handleMountSelection}
@@ -384,14 +294,8 @@ export function DriveManager({
         allowFolderSelection={mountTarget?.spec.class === "SOFT_IEC_DRIVE"}
       />
 
-      <Dialog
-        open={Boolean(statusDetailsDialog)}
-        onOpenChange={(open) => !open && setStatusDetailsDialog(null)}
-      >
-        <DialogContent
-          className="max-w-lg"
-          data-testid="home-drive-status-details-dialog"
-        >
+      <Dialog open={Boolean(statusDetailsDialog)} onOpenChange={(open) => !open && setStatusDetailsDialog(null)}>
+        <DialogContent className="max-w-lg" data-testid="home-drive-status-details-dialog">
           <DialogHeader>
             <DialogTitle>
               {statusDetailsDialog
@@ -406,17 +310,12 @@ export function DriveManager({
           </DialogHeader>
           <div className="space-y-3">
             {statusDetailsDialog?.status.details ? (
-              <p
-                className="text-sm leading-relaxed"
-                data-testid="home-drive-status-details-text"
-              >
+              <p className="text-sm leading-relaxed" data-testid="home-drive-status-details-text">
                 {statusDetailsDialog.status.details}
               </p>
             ) : null}
             <div className="space-y-1">
-              <p className="text-xs font-medium text-muted-foreground">
-                Raw status line
-              </p>
+              <p className="text-xs font-medium text-muted-foreground">Raw status line</p>
               <p
                 className="text-xs text-muted-foreground whitespace-pre-wrap break-all"
                 data-testid="home-drive-status-details-raw"

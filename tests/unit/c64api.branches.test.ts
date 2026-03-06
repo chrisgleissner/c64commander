@@ -7,15 +7,7 @@
  */
 
 // @vitest-environment node
-import {
-  afterAll,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   C64API,
   getC64API,
@@ -37,10 +29,7 @@ import { addErrorLog, addLog, buildErrorLogDetails } from "@/lib/logging";
 import { resetConfigWriteThrottle } from "@/lib/config/configWriteThrottle";
 import { saveConfigWriteIntervalMs } from "@/lib/config/appSettings";
 import { isFuzzModeEnabled, isFuzzSafeBaseUrl } from "@/lib/fuzz/fuzzMode";
-import {
-  isSmokeModeEnabled,
-  isSmokeReadOnlyEnabled,
-} from "@/lib/smoke/smokeMode";
+import { isSmokeModeEnabled, isSmokeReadOnlyEnabled } from "@/lib/smoke/smokeMode";
 import { getDeviceStateSnapshot } from "@/lib/deviceInteraction/deviceStateStore";
 
 const ensureWindow = () => {
@@ -66,10 +55,7 @@ const ensureWindow = () => {
     value: windowMock,
     configurable: true,
   });
-  if (
-    typeof (globalThis as { CustomEvent?: typeof CustomEvent }).CustomEvent ===
-    "undefined"
-  ) {
+  if (typeof (globalThis as { CustomEvent?: typeof CustomEvent }).CustomEvent === "undefined") {
     class CustomEventShim<T = any> extends Event {
       detail?: T;
       constructor(type: string, params?: CustomEventInit<T>) {
@@ -133,12 +119,10 @@ const getFetchMock = () => fetchMock as unknown as ReturnType<typeof vi.fn>;
 vi.mock("@/lib/logging", () => ({
   addErrorLog: vi.fn(),
   addLog: vi.fn(),
-  buildErrorLogDetails: vi.fn(
-    (error: Error, details?: Record<string, unknown>) => ({
-      ...details,
-      error: error.message,
-    }),
-  ),
+  buildErrorLogDetails: vi.fn((error: Error, details?: Record<string, unknown>) => ({
+    ...details,
+    error: error.message,
+  })),
 }));
 
 vi.mock("@capacitor/core", () => ({
@@ -163,9 +147,7 @@ vi.mock("@/lib/smoke/smokeMode", () => ({
 }));
 
 vi.mock("@/lib/tracing/actionTrace", () => ({
-  runWithImplicitAction: vi.fn((_name: string, fn: (ctx: unknown) => unknown) =>
-    fn({}),
-  ),
+  runWithImplicitAction: vi.fn((_name: string, fn: (ctx: unknown) => unknown) => fn({})),
 }));
 
 vi.mock("@/lib/tracing/traceSession", () => ({
@@ -182,16 +164,11 @@ vi.mock("@/lib/tracing/failureTaxonomy", () => ({
 }));
 
 vi.mock("@/lib/deviceInteraction/deviceInteractionManager", () => ({
-  withRestInteraction: vi.fn((_meta: unknown, handler: () => unknown) =>
-    handler(),
-  ),
+  withRestInteraction: vi.fn((_meta: unknown, handler: () => unknown) => handler()),
 }));
 
 vi.mock("@/lib/deviceInteraction/deviceStateStore", async (importOriginal) => {
-  const actual =
-    await importOriginal<
-      typeof import("@/lib/deviceInteraction/deviceStateStore")
-    >();
+  const actual = await importOriginal<typeof import("@/lib/deviceInteraction/deviceStateStore")>();
   return {
     ...actual,
     getDeviceStateSnapshot: vi.fn(() => ({
@@ -220,31 +197,16 @@ vi.mock("@/lib/secureStorage", () => ({
 
 const addErrorLogMock = addErrorLog as unknown as ReturnType<typeof vi.fn>;
 const addLogMock = addLog as unknown as ReturnType<typeof vi.fn>;
-const fuzzEnabledMock = isFuzzModeEnabled as unknown as ReturnType<
-  typeof vi.fn
->;
+const fuzzEnabledMock = isFuzzModeEnabled as unknown as ReturnType<typeof vi.fn>;
 const fuzzSafeMock = isFuzzSafeBaseUrl as unknown as ReturnType<typeof vi.fn>;
-const smokeEnabledMock = isSmokeModeEnabled as unknown as ReturnType<
-  typeof vi.fn
->;
-const smokeReadOnlyMock = isSmokeReadOnlyEnabled as unknown as ReturnType<
-  typeof vi.fn
->;
-const deviceStateSnapshotMock = getDeviceStateSnapshot as unknown as ReturnType<
-  typeof vi.fn
->;
+const smokeEnabledMock = isSmokeModeEnabled as unknown as ReturnType<typeof vi.fn>;
+const smokeReadOnlyMock = isSmokeReadOnlyEnabled as unknown as ReturnType<typeof vi.fn>;
+const deviceStateSnapshotMock = getDeviceStateSnapshot as unknown as ReturnType<typeof vi.fn>;
 const storePasswordMock = storePassword as unknown as ReturnType<typeof vi.fn>;
-const clearPasswordMock = clearStoredPassword as unknown as ReturnType<
-  typeof vi.fn
->;
-const hasStoredPasswordFlagMock =
-  hasStoredPasswordFlag as unknown as ReturnType<typeof vi.fn>;
-const getCachedPasswordMock = getCachedPassword as unknown as ReturnType<
-  typeof vi.fn
->;
-const loadStoredPasswordMock = loadStoredPassword as unknown as ReturnType<
-  typeof vi.fn
->;
+const clearPasswordMock = clearStoredPassword as unknown as ReturnType<typeof vi.fn>;
+const hasStoredPasswordFlagMock = hasStoredPasswordFlag as unknown as ReturnType<typeof vi.fn>;
+const getCachedPasswordMock = getCachedPassword as unknown as ReturnType<typeof vi.fn>;
+const loadStoredPasswordMock = loadStoredPassword as unknown as ReturnType<typeof vi.fn>;
 
 describe("c64api branches", () => {
   beforeAll(() => {
@@ -275,17 +237,11 @@ describe("c64api branches", () => {
       lastSuccessAtMs: null,
       circuitOpenUntilMs: null,
     });
-    (
-      globalThis as { __c64uAllowNativePlatform?: boolean }
-    ).__c64uAllowNativePlatform = false;
-    (
-      window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }
-    ).Capacitor = undefined;
+    (globalThis as { __c64uAllowNativePlatform?: boolean }).__c64uAllowNativePlatform = false;
+    (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor = undefined;
     resetConfigWriteThrottle();
     saveConfigWriteIntervalMs(0);
-    (
-      globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }
-    ).__C64U_NATIVE_OVERRIDE__ = false;
+    (globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = false;
     storePasswordMock.mockReset();
     clearPasswordMock.mockReset();
     hasStoredPasswordFlagMock.mockReset();
@@ -307,15 +263,10 @@ describe("c64api branches", () => {
       if (typeof process.off === "function") {
         process.off("unhandledRejection", abortUnhandledRejectionHandler);
       } else {
-        process.removeListener?.(
-          "unhandledRejection",
-          abortUnhandledRejectionHandler,
-        );
+        process.removeListener?.("unhandledRejection", abortUnhandledRejectionHandler);
       }
     }
-    const handles =
-      (process as { _getActiveHandles?: () => any[] })._getActiveHandles?.() ??
-      [];
+    const handles = (process as { _getActiveHandles?: () => any[] })._getActiveHandles?.() ?? [];
     handles.forEach((handle) => {
       if (handle?.constructor?.name === "Timeout") {
         try {
@@ -373,9 +324,7 @@ describe("c64api branches", () => {
     fetchMock.mockRejectedValue(abortErr);
 
     const api = new C64API("http://c64u");
-    await expect(
-      api.getInfo({ signal: controller.signal }),
-    ).rejects.toMatchObject({ name: "AbortError" });
+    await expect(api.getInfo({ signal: controller.signal })).rejects.toMatchObject({ name: "AbortError" });
   });
 
   // #3: waitWithAbortSignal timeout and abort listener
@@ -383,9 +332,7 @@ describe("c64api branches", () => {
     vi.useFakeTimers();
     try {
       const fetchMock = getFetchMock();
-      fetchMock
-        .mockRejectedValueOnce(new TypeError("Failed to fetch"))
-        .mockResolvedValueOnce(okJsonResponse());
+      fetchMock.mockRejectedValueOnce(new TypeError("Failed to fetch")).mockResolvedValueOnce(okJsonResponse());
 
       deviceStateSnapshotMock.mockReturnValue({
         state: "READY",
@@ -400,9 +347,7 @@ describe("c64api branches", () => {
       const api = new C64API("http://c64u");
       const pending = api.getInfo();
       await vi.advanceTimersByTimeAsync(200);
-      await expect(pending).resolves.toEqual(
-        expect.objectContaining({ errors: [] }),
-      );
+      await expect(pending).resolves.toEqual(expect.objectContaining({ errors: [] }));
       expect(fetchMock).toHaveBeenCalledTimes(2);
     } finally {
       vi.useRealTimers();
@@ -423,9 +368,7 @@ describe("c64api branches", () => {
       const controller = new AbortController();
       controller.abort();
       // Second call hits budget replay, but signal is already aborted
-      await expect(
-        api.getInfo({ signal: controller.signal }),
-      ).rejects.toMatchObject({ name: "AbortError" });
+      await expect(api.getInfo({ signal: controller.signal })).rejects.toMatchObject({ name: "AbortError" });
     } finally {
       vi.useRealTimers();
     }
@@ -519,9 +462,7 @@ describe("c64api branches", () => {
 
     const api = new C64API("http://c64u");
     // POST with a non-JSON string body triggers the extractRequestBody string path
-    await api.updateConfigBatch(
-      {} as Record<string, Record<string, string | number>>,
-    );
+    await api.updateConfigBatch({} as Record<string, Record<string, string | number>>);
     // The body is JSON.stringify({}), which is valid JSON, so won't fail.
     // We need to test with an invalid JSON string body. Use the request method
     // indirectly via a PUT with a string body.
@@ -683,9 +624,7 @@ describe("c64api branches", () => {
 
   // #17: isNativePlatform with override, env check, Capacitor probe, and error fallback
   it("returns true when __C64U_NATIVE_OVERRIDE__ is true", async () => {
-    (
-      globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }
-    ).__C64U_NATIVE_OVERRIDE__ = true;
+    (globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = true;
 
     const fetchMock = getFetchMock();
     fetchMock.mockResolvedValue(okJsonResponse());
@@ -699,9 +638,7 @@ describe("c64api branches", () => {
     // isNativePlatform in c64api.ts is a private module function that is currently
     // unreferenced (dead code). We can exercise the override paths that are used
     // elsewhere: __C64U_NATIVE_OVERRIDE__ and __c64uAllowNativePlatform.
-    (
-      globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }
-    ).__C64U_NATIVE_OVERRIDE__ = true;
+    (globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = true;
 
     const fetchMock = getFetchMock();
     fetchMock.mockResolvedValue(okJsonResponse());
@@ -783,10 +720,7 @@ describe("c64api branches", () => {
     const api = new C64API("http://c64u");
     await api.getInfo();
 
-    expect(consoleSpy).toHaveBeenCalledWith(
-      "C64U_HTTP",
-      expect.stringContaining("/v1/info"),
-    );
+    expect(consoleSpy).toHaveBeenCalledWith("C64U_HTTP", expect.stringContaining("/v1/info"));
     consoleSpy.mockRestore();
   });
 
@@ -806,9 +740,9 @@ describe("c64api branches", () => {
     });
 
     const api = new C64API("http://c64u");
-    await expect(
-      api.getInfo({ signal: controller.signal, timeoutMs: 5000 } as any),
-    ).rejects.toMatchObject({ name: "AbortError" });
+    await expect(api.getInfo({ signal: controller.signal, timeoutMs: 5000 } as any)).rejects.toMatchObject({
+      name: "AbortError",
+    });
   });
 
   // #23: abort listener cleanup in finally
@@ -888,10 +822,7 @@ describe("c64api branches", () => {
     const api = new C64API("http://c64u");
     await api.writeMemoryBlock("1000", new Uint8Array([1]));
 
-    expect(consoleSpy).toHaveBeenCalledWith(
-      "C64U_HTTP",
-      expect.stringContaining("writemem"),
-    );
+    expect(consoleSpy).toHaveBeenCalledWith("C64U_HTTP", expect.stringContaining("writemem"));
     consoleSpy.mockRestore();
   });
 
@@ -912,9 +843,7 @@ describe("c64api branches", () => {
     fetchMock.mockRejectedValue(new Error("Some other error"));
 
     const api = new C64API("http://c64u");
-    await expect(
-      api.writeMemoryBlock("1000", new Uint8Array([1])),
-    ).rejects.toThrow("Some other error");
+    await expect(api.writeMemoryBlock("1000", new Uint8Array([1]))).rejects.toThrow("Some other error");
   });
 
   // #29: getConfigItems with empty items array
@@ -973,10 +902,7 @@ describe("c64api branches", () => {
     fetchMock.mockResolvedValue(okJsonResponse());
 
     const api = new C64API("http://c64u");
-    const result = await api.updateConfigBatch(
-      { Audio: { Volume: "0 dB" } },
-      { immediate: true },
-    );
+    const result = await api.updateConfigBatch({ Audio: { Volume: "0 dB" } }, { immediate: true });
     expect(result.errors).toEqual([]);
     expect(fetchMock).toHaveBeenCalled();
     const [url, opts] = fetchMock.mock.calls[0];
@@ -1001,18 +927,11 @@ describe("c64api branches", () => {
   // #33: writeMemoryDMA failure branch
   it("throws and logs error on writeMemoryBlock failure", async () => {
     const fetchMock = getFetchMock();
-    fetchMock.mockResolvedValue(
-      new Response("fail", { status: 500, statusText: "Server Error" }),
-    );
+    fetchMock.mockResolvedValue(new Response("fail", { status: 500, statusText: "Server Error" }));
 
     const api = new C64API("http://c64u");
-    await expect(
-      api.writeMemoryBlock("1000", new Uint8Array([1])),
-    ).rejects.toThrow("HTTP 500");
-    expect(addErrorLogMock).toHaveBeenCalledWith(
-      "Memory DMA write failed",
-      expect.objectContaining({ status: 500 }),
-    );
+    await expect(api.writeMemoryBlock("1000", new Uint8Array([1]))).rejects.toThrow("HTTP 500");
+    expect(addErrorLogMock).toHaveBeenCalledWith("Memory DMA write failed", expect.objectContaining({ status: 500 }));
   });
 
   // #34: SID upload exhausted retries
@@ -1023,9 +942,7 @@ describe("c64api branches", () => {
 
     const api = new C64API("http://c64u");
     const sidFile = new Blob(["PSID"], { type: "application/octet-stream" });
-    await expect(api.playSidUpload(sidFile)).rejects.toThrow(
-      "Host unreachable",
-    );
+    await expect(api.playSidUpload(sidFile)).rejects.toThrow("Host unreachable");
     // Should have been called 3 times (initial + 2 retries)
     expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(3);
   });
@@ -1065,24 +982,17 @@ describe("c64api branches", () => {
 
     updateC64APIConfig("http://device", undefined, "device");
 
-    expect(consoleSpy).toHaveBeenCalledWith(
-      "C64U_ROUTING_UPDATED",
-      expect.stringContaining("device"),
-    );
+    expect(consoleSpy).toHaveBeenCalledWith("C64U_ROUTING_UPDATED", expect.stringContaining("device"));
     consoleSpy.mockRestore();
   });
 
   // #38: readMemory response not OK
   it("throws when readMemory response is not ok", async () => {
     const fetchMock = getFetchMock();
-    fetchMock.mockResolvedValue(
-      new Response("fail", { status: 404, statusText: "Not Found" }),
-    );
+    fetchMock.mockResolvedValue(new Response("fail", { status: 404, statusText: "Not Found" }));
 
     const api = new C64API("http://c64u");
-    await expect(api.readMemory("0400", 4)).rejects.toThrow(
-      "readMemory failed: HTTP 404",
-    );
+    await expect(api.readMemory("0400", 4)).rejects.toThrow("readMemory failed: HTTP 404");
   });
 
   // #39: readMemory null content-type falls through to JSON path with no data
@@ -1180,16 +1090,12 @@ describe("c64api branches", () => {
   });
 
   it("normalizeDeviceHost returns default for undefined", () => {
-    expect(normalizeDeviceHost(undefined)).toBe(
-      C64_DEFAULTS.DEFAULT_DEVICE_HOST,
-    );
+    expect(normalizeDeviceHost(undefined)).toBe(C64_DEFAULTS.DEFAULT_DEVICE_HOST);
   });
 
   // #45: getDeviceHostFromBaseUrl with falsy baseUrl returns default
   it("getDeviceHostFromBaseUrl returns default for undefined", () => {
-    expect(getDeviceHostFromBaseUrl(undefined)).toBe(
-      C64_DEFAULTS.DEFAULT_DEVICE_HOST,
-    );
+    expect(getDeviceHostFromBaseUrl(undefined)).toBe(C64_DEFAULTS.DEFAULT_DEVICE_HOST);
   });
 
   it("getDeviceHostFromBaseUrl returns default for empty string", () => {
@@ -1266,9 +1172,7 @@ describe("c64api branches", () => {
         return Promise.reject(new Error("category fetch error"));
       }
       // itemsBlock is a string, not an object → skipped
-      return Promise.resolve(
-        okJsonResponse({ network: { items: "not-an-object" } }),
-      );
+      return Promise.resolve(okJsonResponse({ network: { items: "not-an-object" } }));
     });
 
     const api = new C64API("http://c64u");
@@ -1287,9 +1191,7 @@ describe("c64api branches", () => {
 
       const api = new C64API("http://c64u");
       const sidBlob = new Blob(["PSID"], { type: "application/octet-stream" });
-      await expect(api.playSidUpload(sidBlob)).rejects.toBe(
-        "plain-string-failure",
-      );
+      await expect(api.playSidUpload(sidBlob)).rejects.toBe("plain-string-failure");
     } finally {
       vi.useRealTimers();
     }
@@ -1474,10 +1376,6 @@ describe("c64api branches", () => {
     // mountDriveUpload uses allowNonJsonSuccess: true
     const result = await api.mountDriveUpload("a", new Blob(["data"]));
     expect(result).toEqual({ errors: [] });
-    expect(addLogMock).toHaveBeenCalledWith(
-      "warn",
-      expect.stringMatching(/non-JSON/i),
-      expect.anything(),
-    );
+    expect(addLogMock).toHaveBeenCalledWith("warn", expect.stringMatching(/non-JSON/i), expect.anything());
   });
 });

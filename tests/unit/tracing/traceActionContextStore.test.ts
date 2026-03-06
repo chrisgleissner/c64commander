@@ -222,8 +222,7 @@ describe("traceActionContextStore", () => {
     it("maintains correct correlation when fire-and-forget effects overlap", async () => {
       const ctx1 = createTestContext("COR-0001");
       const ctx2 = createTestContext("COR-0002");
-      const capturedContexts: { id: string; ctx: TraceActionContext | null }[] =
-        [];
+      const capturedContexts: { id: string; ctx: TraceActionContext | null }[] = [];
 
       // Start action 1 with fire-and-forget effect
       await runWithActionContext(ctx1, async () => {
@@ -357,9 +356,7 @@ describe("traceActionContextStore", () => {
 
     it("handles .finally(null) without throwing", async () => {
       // Exercises the onfinally-falsy branch (line 154)
-      const result = await Promise.resolve(42).finally(
-        null as unknown as () => void,
-      );
+      const result = await Promise.resolve(42).finally(null as unknown as () => void);
       expect(result).toBe(42);
     });
   });

@@ -13,18 +13,9 @@ import type { FileLibraryEntry } from "./fileLibraryTypes";
 
 export const normalizeFilePath = (path: string) => normalizeDiskPath(path);
 
-export const buildFileLibraryId = (
-  source: PlaySource,
-  path: string,
-  sourceId?: string | null,
-) => {
+export const buildFileLibraryId = (source: PlaySource, path: string, sourceId?: string | null) => {
   const normalized = normalizeFilePath(path);
-  const sourceKey =
-    source === "ultimate"
-      ? "ultimate"
-      : source === "hvsc"
-        ? sourceId || "hvsc"
-        : sourceId || "local";
+  const sourceKey = source === "ultimate" ? "ultimate" : source === "hvsc" ? sourceId || "hvsc" : sourceId || "local";
   return `${sourceKey}:${normalized}`;
 };
 
@@ -76,10 +67,7 @@ export const resolvePlayRequestFromLibrary = (
   }
   const runtime = runtimeFiles[entry.id];
   const file =
-    runtime ||
-    (entry.localUri
-      ? buildLocalPlayFileFromUri(entry.name, entry.path, entry.localUri)
-      : undefined);
+    runtime || (entry.localUri ? buildLocalPlayFileFromUri(entry.name, entry.path, entry.localUri) : undefined);
   if (entry.source === "hvsc") {
     return { source: "hvsc", path: entry.path, file };
   }

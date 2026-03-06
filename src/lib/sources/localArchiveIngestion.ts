@@ -20,8 +20,7 @@ const SID_EXTENSION = ".sid";
 const ZIP_EXTENSION = ".zip";
 const SEVEN_Z_EXTENSION = ".7z";
 
-const normalizePath = (value: string) =>
-  value.replace(/\\/g, "/").replace(/^\/+/, "");
+const normalizePath = (value: string) => value.replace(/\\/g, "/").replace(/^\/+/, "");
 
 const toArrayBuffer = (data: Uint8Array) => {
   const buffer = new ArrayBuffer(data.byteLength);
@@ -31,17 +30,11 @@ const toArrayBuffer = (data: Uint8Array) => {
 
 const isSidFile = (name: string) => name.toLowerCase().endsWith(SID_EXTENSION);
 const isZipFile = (name: string) => name.toLowerCase().endsWith(ZIP_EXTENSION);
-const isSevenZFile = (name: string) =>
-  name.toLowerCase().endsWith(SEVEN_Z_EXTENSION);
+const isSevenZFile = (name: string) => name.toLowerCase().endsWith(SEVEN_Z_EXTENSION);
 
-export const isSupportedLocalArchive = (name: string) =>
-  isZipFile(name) || isSevenZFile(name);
+export const isSupportedLocalArchive = (name: string) => isZipFile(name) || isSevenZFile(name);
 
-const buildExtractedFile = (
-  archiveName: string,
-  entryPath: string,
-  data: Uint8Array,
-): LocalSidFile => {
+const buildExtractedFile = (archiveName: string, entryPath: string, data: Uint8Array): LocalSidFile => {
   const normalized = normalizePath(entryPath);
   const name = normalized.split("/").pop() || normalized;
   const snapshot = new Uint8Array(data);
@@ -53,9 +46,7 @@ const buildExtractedFile = (
   };
 };
 
-const readArchiveBuffer = async (
-  archive: LocalSidFile,
-): Promise<ArrayBuffer> => {
+const readArchiveBuffer = async (archive: LocalSidFile): Promise<ArrayBuffer> => {
   if (typeof (archive as LocalSidFile).arrayBuffer === "function") {
     return archive.arrayBuffer();
   }
@@ -65,9 +56,7 @@ const readArchiveBuffer = async (
   throw new Error("Selected file does not support arrayBuffer.");
 };
 
-const extractZipArchive = async (
-  archive: LocalSidFile,
-): Promise<LocalSidFile[]> => {
+const extractZipArchive = async (archive: LocalSidFile): Promise<LocalSidFile[]> => {
   try {
     const buffer = await readArchiveBuffer(archive);
     const entries = unzipSync(new Uint8Array(buffer));
@@ -83,9 +72,7 @@ const extractZipArchive = async (
   }
 };
 
-type SevenZipFactory = (options: {
-  locateFile: (url: string) => string;
-}) => Promise<any> | any;
+type SevenZipFactory = (options: { locateFile: (url: string) => string }) => Promise<any> | any;
 
 let sevenZipModulePromise: ReturnType<SevenZipFactory> | null = null;
 
@@ -100,14 +87,11 @@ const getSevenZipModule = async () => {
   return sevenZipModulePromise;
 };
 
-const extractSevenZArchive = async (
-  archive: LocalSidFile,
-): Promise<LocalSidFile[]> => {
+const extractSevenZArchive = async (archive: LocalSidFile): Promise<LocalSidFile[]> => {
   const module = await getSevenZipModule();
   const buffer = new Uint8Array(await readArchiveBuffer(archive));
   const workingDir = `/work-${Date.now()}-${Math.round(Math.random() * 1e6)}`;
-  const archiveName =
-    normalizePath(archive.name) || `archive${SEVEN_Z_EXTENSION}`;
+  const archiveName = normalizePath(archive.name) || `archive${SEVEN_Z_EXTENSION}`;
   const archivePath = `${workingDir}/${archiveName}`;
   const outputDir = `${workingDir}/out`;
 
@@ -150,9 +134,7 @@ const extractSevenZArchive = async (
         const data = module.FS.readFile(fullPath, {
           encoding: "binary",
         }) as Uint8Array;
-        results.push(
-          buildExtractedFile(archive.name, `${prefix}${entry}`, data),
-        );
+        results.push(buildExtractedFile(archive.name, `${prefix}${entry}`, data));
       });
     };
     walkDir(outputDir, "");
@@ -196,9 +178,7 @@ const extractSevenZArchive = async (
   }
 };
 
-export const ingestLocalArchives = async (
-  files: LocalSidFile[],
-): Promise<LocalArchiveIngestionResult> => {
+export const ingestLocalArchives = async (files: LocalSidFile[]): Promise<LocalArchiveIngestionResult> => {
   const direct: LocalSidFile[] = [];
   const archives: LocalSidFile[] = [];
   files.forEach((file) => {

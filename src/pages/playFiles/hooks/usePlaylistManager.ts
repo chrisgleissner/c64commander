@@ -7,11 +7,8 @@ export function usePlaylistManager() {
   const [currentIndex, setCurrentIndex] = useState(-1);
   const [shuffleEnabled, setShuffleEnabled] = useState(false);
   const [repeatEnabled, setRepeatEnabled] = useState(false);
-  const [playlistTypeFilters, setPlaylistTypeFilters] =
-    useState<PlayFileCategory[]>(CATEGORY_OPTIONS);
-  const [selectedPlaylistIds, setSelectedPlaylistIds] = useState<Set<string>>(
-    new Set(),
-  );
+  const [playlistTypeFilters, setPlaylistTypeFilters] = useState<PlayFileCategory[]>(CATEGORY_OPTIONS);
+  const [selectedPlaylistIds, setSelectedPlaylistIds] = useState<Set<string>>(new Set());
   const [isPlaylistLoading, setIsPlaylistLoading] = useState(false);
   const [reshuffleActive, setReshuffleActive] = useState(false);
 
@@ -26,51 +23,34 @@ export function usePlaylistManager() {
     });
   }, [playlist]);
 
-  const reshufflePlaylist = useCallback(
-    (items: PlaylistItem[], lockedIndex: number) => {
-      if (items.length < 2) return items;
-      if (lockedIndex >= 0 && lockedIndex < items.length) {
-        const currentItem = items[lockedIndex];
-        const rest = items.filter((_, index) => index !== lockedIndex);
-        const shuffled = shuffleArray(rest);
-        const insertIndex = Math.min(lockedIndex, shuffled.length);
-        let next = [
-          ...shuffled.slice(0, insertIndex),
-          currentItem,
-          ...shuffled.slice(insertIndex),
-        ];
-        if (
-          next.map((item) => item.id).join("|") ===
-          items.map((item) => item.id).join("|")
-        ) {
-          if (rest.length > 1) {
-            const swapped = [...shuffled];
-            [swapped[0], swapped[1]] = [swapped[1], swapped[0]];
-            next = [
-              ...swapped.slice(0, insertIndex),
-              currentItem,
-              ...swapped.slice(insertIndex),
-            ];
-          }
-        }
-        return next;
-      }
-
-      let shuffled = shuffleArray(items);
-      if (
-        shuffled.map((item) => item.id).join("|") ===
-        items.map((item) => item.id).join("|")
-      ) {
-        if (shuffled.length > 1) {
+  const reshufflePlaylist = useCallback((items: PlaylistItem[], lockedIndex: number) => {
+    if (items.length < 2) return items;
+    if (lockedIndex >= 0 && lockedIndex < items.length) {
+      const currentItem = items[lockedIndex];
+      const rest = items.filter((_, index) => index !== lockedIndex);
+      const shuffled = shuffleArray(rest);
+      const insertIndex = Math.min(lockedIndex, shuffled.length);
+      let next = [...shuffled.slice(0, insertIndex), currentItem, ...shuffled.slice(insertIndex)];
+      if (next.map((item) => item.id).join("|") === items.map((item) => item.id).join("|")) {
+        if (rest.length > 1) {
           const swapped = [...shuffled];
           [swapped[0], swapped[1]] = [swapped[1], swapped[0]];
-          shuffled = swapped;
+          next = [...swapped.slice(0, insertIndex), currentItem, ...swapped.slice(insertIndex)];
         }
       }
-      return shuffled;
-    },
-    [],
-  );
+      return next;
+    }
+
+    let shuffled = shuffleArray(items);
+    if (shuffled.map((item) => item.id).join("|") === items.map((item) => item.id).join("|")) {
+      if (shuffled.length > 1) {
+        const swapped = [...shuffled];
+        [swapped[0], swapped[1]] = [swapped[1], swapped[0]];
+        shuffled = swapped;
+      }
+    }
+    return shuffled;
+  }, []);
 
   const handleReshuffle = useCallback(() => {
     if (!shuffleEnabled || !playlist.length) return;

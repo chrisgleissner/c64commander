@@ -54,9 +54,7 @@ describe("assignDiskGroupsByPrefix", () => {
   });
 
   it("does not group a single file even when it has a numeric suffix", () => {
-    const result = assignDiskGroupsByPrefix([
-      { path: "/Games/foo1.d64", name: "foo1.d64" },
-    ]);
+    const result = assignDiskGroupsByPrefix([{ path: "/Games/foo1.d64", name: "foo1.d64" }]);
     expect(result.get("/Games/foo1.d64")).toBeUndefined();
   });
 
@@ -110,9 +108,7 @@ describe("assignDiskGroupsByPrefix", () => {
 
   it("skips names where stripped base is whitespace-only (BRDA:19 !base TRUE)", () => {
     // '   .d64' → stripExtension='   ' → .trim()='' → !base=true → null
-    const result = assignDiskGroupsByPrefix([
-      { path: "/Games/   .d64", name: "   .d64" },
-    ]);
+    const result = assignDiskGroupsByPrefix([{ path: "/Games/   .d64", name: "   .d64" }]);
     expect(result.size).toBe(0);
   });
 });

@@ -40,11 +40,7 @@ const TRACE_NON_STRICT_ANNOTATION = "trace-non-strict";
 // Note: action-end may appear before request/response completes for fire-and-forget patterns
 // The key assertion is that all events share the same correlation ID (user action context)
 const DEFAULT_SEQUENCE = ["action-start", "backend-decision", "rest-request"];
-const DEFAULT_FTP_SEQUENCE = [
-  "action-start",
-  "backend-decision",
-  "ftp-operation",
-];
+const DEFAULT_FTP_SEQUENCE = ["action-start", "backend-decision", "ftp-operation"];
 
 const sanitizeSegment = (value: string) => {
   const cleaned = value
@@ -57,25 +53,16 @@ const sanitizeSegment = (value: string) => {
 };
 
 const isAnnotationPresent = (testInfo: TestInfo, type: string) =>
-  testInfo.annotations.some(
-    (annotation: TestInfo["annotations"][number]) => annotation.type === type,
-  );
+  testInfo.annotations.some((annotation: TestInfo["annotations"][number]) => annotation.type === type);
 
-export const getTraceAssertionConfig = (
-  testInfo: TestInfo,
-): TraceAssertionConfig => {
+export const getTraceAssertionConfig = (testInfo: TestInfo): TraceAssertionConfig => {
   const defaultEnabled = process.env.TRACE_ASSERTIONS_DEFAULT === "1";
   const optedIn = isAnnotationPresent(testInfo, TRACE_ASSERT_ANNOTATION);
   const optedOut = isAnnotationPresent(testInfo, TRACE_ASSERT_OFF_ANNOTATION);
   if (optedIn && optedOut) {
-    throw new Error(
-      `Trace assertions cannot be both enabled and disabled for "${testInfo.title}".`,
-    );
+    throw new Error(`Trace assertions cannot be both enabled and disabled for "${testInfo.title}".`);
   }
-  const strictOverride = isAnnotationPresent(
-    testInfo,
-    TRACE_NON_STRICT_ANNOTATION,
-  )
+  const strictOverride = isAnnotationPresent(testInfo, TRACE_NON_STRICT_ANNOTATION)
     ? false
     : isAnnotationPresent(testInfo, TRACE_STRICT_ANNOTATION)
       ? true
@@ -88,10 +75,7 @@ export const getTraceAssertionConfig = (
   };
 };
 
-const assertTraceOptIn = (
-  testInfo: TestInfo,
-  context: string,
-): TraceAssertionConfig => {
+const assertTraceOptIn = (testInfo: TestInfo, context: string): TraceAssertionConfig => {
   const config = getTraceAssertionConfig(testInfo);
   if (!config.enabled) {
     throw new Error(
@@ -109,10 +93,7 @@ const getNormalizedUrl = (event: TraceEvent): string => {
   return "";
 };
 
-export const enableTraceAssertions = (
-  testInfo: TestInfo,
-  options: TraceAssertionOptions = {},
-) => {
+export const enableTraceAssertions = (testInfo: TestInfo, options: TraceAssertionOptions = {}) => {
   const description = options.reason ?? "Trace assertions enabled";
   testInfo.annotations.push({ type: TRACE_ASSERT_ANNOTATION, description });
   if (options.strict === true) {
@@ -139,14 +120,7 @@ export const disableTraceAssertions = (testInfo: TestInfo, reason: string) => {
 const getEvidenceDir = (testInfo: TestInfo) => {
   const testId = generateTestId(testInfo);
   const deviceId = testInfo.project.name;
-  return path.resolve(
-    process.cwd(),
-    "test-results",
-    "evidence",
-    "playwright",
-    testId,
-    deviceId,
-  );
+  return path.resolve(process.cwd(), "test-results", "evidence", "playwright", testId, deviceId);
 };
 
 export const clearTraces = async (page: Page) => {
@@ -155,14 +129,8 @@ export const clearTraces = async (page: Page) => {
       window as Window & {
         __c64uTracing?: {
           clearTraces?: () => void;
-          resetTraceIds?: (
-            eventStart?: number,
-            correlationStart?: number,
-          ) => void;
-          resetTraceSession?: (
-            eventStart?: number,
-            correlationStart?: number,
-          ) => void;
+          resetTraceIds?: (eventStart?: number, correlationStart?: number) => void;
+          resetTraceSession?: (eventStart?: number, correlationStart?: number) => void;
         };
         __pwTraceReset?: () => void;
       }
@@ -180,49 +148,27 @@ export const clearTraces = async (page: Page) => {
 
 export const getTraces = async (page: Page): Promise<TraceEvent[]> => {
   return await page.evaluate(() => {
-    const tracing = (
-      window as Window & { __c64uTracing?: { getTraces?: () => TraceEvent[] } }
-    ).__c64uTracing;
+    const tracing = (window as Window & { __c64uTracing?: { getTraces?: () => TraceEvent[] } }).__c64uTracing;
     return tracing?.getTraces?.() ?? [];
   });
 };
 
-export const saveTracesFromPage = async (
-  page: Page,
-  testInfo: TestInfo,
-  tracesOverride?: TraceEvent[],
-) => {
+export const saveTracesFromPage = async (page: Page, testInfo: TestInfo, tracesOverride?: TraceEvent[]) => {
   const evidenceDir = getEvidenceDir(testInfo);
   await fs.mkdir(evidenceDir, { recursive: true });
   const traces = tracesOverride ?? (await getTraces(page));
-  await fs.writeFile(
-    path.join(evidenceDir, "trace.json"),
-    JSON.stringify(traces, null, 2),
-    "utf8",
-  );
+  await fs.writeFile(path.join(evidenceDir, "trace.json"), JSON.stringify(traces, null, 2), "utf8");
 
   if (shouldRecordGoldenTrace(testInfo)) {
     const outputDir =
-      process.env.TRACE_OUTPUT_DIR ||
-      path.resolve(process.cwd(), "playwright", "fixtures", "traces", "golden");
-    const suite = process.env.TRACE_SUITE
-      ? sanitizeSegment(process.env.TRACE_SUITE)
-      : null;
+      process.env.TRACE_OUTPUT_DIR || path.resolve(process.cwd(), "playwright", "fixtures", "traces", "golden");
+    const suite = process.env.TRACE_SUITE ? sanitizeSegment(process.env.TRACE_SUITE) : null;
     const suiteDir = suite ? path.join(outputDir, suite) : outputDir;
-    const evidenceRoot = path.resolve(
-      process.cwd(),
-      "test-results",
-      "evidence",
-      "playwright",
-    );
+    const evidenceRoot = path.resolve(process.cwd(), "test-results", "evidence", "playwright");
     const relative = path.relative(evidenceRoot, evidenceDir);
     const goldenDir = path.join(suiteDir, relative);
     await fs.mkdir(goldenDir, { recursive: true });
-    await fs.writeFile(
-      path.join(goldenDir, "trace.json"),
-      JSON.stringify(traces, null, 2),
-      "utf8",
-    );
+    await fs.writeFile(path.join(goldenDir, "trace.json"), JSON.stringify(traces, null, 2), "utf8");
   }
 };
 
@@ -246,38 +192,23 @@ export const assertTraceOrder = (
     const expectedSequence = expectedTypes.join(">");
     const actualSequence = actual.join(">");
     if (actualSequence !== expectedSequence) {
-      throw new Error(
-        `Strict trace ordering mismatch. Expected: ${expectedSequence} Actual: ${actualSequence}`,
-      );
+      throw new Error(`Strict trace ordering mismatch. Expected: ${expectedSequence} Actual: ${actualSequence}`);
     }
   }
 };
 
-export const findTraceEvent = (
-  events: TraceEvent[],
-  type: string,
-  predicate?: (event: TraceEvent) => boolean,
-) => {
-  return events.find(
-    (event) => event.type === type && (!predicate || predicate(event)),
-  );
+export const findTraceEvent = (events: TraceEvent[], type: string, predicate?: (event: TraceEvent) => boolean) => {
+  return events.find((event) => event.type === type && (!predicate || predicate(event)));
 };
 
-export const findRestRequest = (
-  events: TraceEvent[],
-  matcher: string | RegExp,
-) =>
+export const findRestRequest = (events: TraceEvent[], matcher: string | RegExp) =>
   findTraceEvent(events, "rest-request", (event) => {
     const url = getNormalizedUrl(event);
-    return typeof matcher === "string"
-      ? url.includes(matcher)
-      : matcher.test(url);
+    return typeof matcher === "string" ? url.includes(matcher) : matcher.test(url);
   });
 
-export const findFtpOperation = (
-  events: TraceEvent[],
-  predicate?: (event: TraceEvent) => boolean,
-) => findTraceEvent(events, "ftp-operation", predicate);
+export const findFtpOperation = (events: TraceEvent[], predicate?: (event: TraceEvent) => boolean) =>
+  findTraceEvent(events, "ftp-operation", predicate);
 
 export const assertRestTraceSequence = (
   testInfo: TestInfo,
@@ -288,13 +219,9 @@ export const assertRestTraceSequence = (
   assertTraceOptIn(testInfo, "assertRestTraceSequence");
   const requestEvent = findRestRequest(events, matcher);
   if (!requestEvent) {
-    throw new Error(
-      `Expected rest-request trace not found for matcher: ${String(matcher)}`,
-    );
+    throw new Error(`Expected rest-request trace not found for matcher: ${String(matcher)}`);
   }
-  const related = events.filter(
-    (event) => event.correlationId === requestEvent.correlationId,
-  );
+  const related = events.filter((event) => event.correlationId === requestEvent.correlationId);
   assertTraceOrder(testInfo, related, expectedTypes);
   return { requestEvent, related };
 };
@@ -310,9 +237,7 @@ export const assertFtpTraceSequence = (
   if (!ftpEvent) {
     throw new Error("Expected ftp-operation trace not found.");
   }
-  const related = events.filter(
-    (event) => event.correlationId === ftpEvent.correlationId,
-  );
+  const related = events.filter((event) => event.correlationId === ftpEvent.correlationId);
   assertTraceOrder(testInfo, related, expectedTypes);
   return { ftpEvent, related };
 };
@@ -336,16 +261,9 @@ export const expectRestTraceSequence = async (
     .toBe(true);
 
   const traces = await getTraces(page);
-  const result = assertRestTraceSequence(
-    testInfo,
-    traces,
-    matcher,
-    expectedTypes,
-  );
+  const result = assertRestTraceSequence(testInfo, traces, matcher, expectedTypes);
   if (!result) {
-    throw new Error(
-      `Expected rest trace sequence not found for matcher: ${String(matcher)}`,
-    );
+    throw new Error(`Expected rest trace sequence not found for matcher: ${String(matcher)}`);
   }
   return result;
 };
@@ -356,10 +274,7 @@ export const expectFtpTraceSequence = async (
   predicate?: (event: TraceEvent) => boolean,
   expectedTypes: string[] = DEFAULT_FTP_SEQUENCE,
 ) => {
-  if (
-    process.env.VITE_COVERAGE === "1" ||
-    process.env.VITE_COVERAGE === "true"
-  ) {
+  if (process.env.VITE_COVERAGE === "1" || process.env.VITE_COVERAGE === "true") {
     return;
   }
   await expect

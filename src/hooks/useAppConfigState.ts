@@ -45,13 +45,10 @@ const extractValue = (config: unknown) => {
 };
 
 const extractItems = (categoryName: string, response: ConfigResponse) => {
-  const categoryBlock =
-    (response as Record<string, any>)[categoryName] ?? response;
-  const itemsBlock =
-    (categoryBlock as Record<string, any>)?.items ?? categoryBlock;
+  const categoryBlock = (response as Record<string, any>)[categoryName] ?? response;
+  const itemsBlock = (categoryBlock as Record<string, any>)?.items ?? categoryBlock;
 
-  if (!itemsBlock || typeof itemsBlock !== "object")
-    return [] as Array<{ name: string; value: string | number }>;
+  if (!itemsBlock || typeof itemsBlock !== "object") return [] as Array<{ name: string; value: string | number }>;
 
   return Object.entries(itemsBlock)
     .filter(([key]) => key !== "errors")
@@ -88,9 +85,7 @@ const fetchAllConfig = async () => {
       { failedCategories },
     );
   } else if (hasFailures && !hasSuccesses) {
-    throw new Error(
-      `Failed to fetch configuration categories: ${failedCategories.join(", ")}`,
-    );
+    throw new Error(`Failed to fetch configuration categories: ${failedCategories.join(", ")}`);
   }
 
   return configs;
@@ -101,15 +96,11 @@ export function useAppConfigState() {
   const queryClient = useQueryClient();
   const resolvedBaseUrl = baseUrl || getDefaultBaseUrl();
 
-  const [initialSnapshot, setInitialSnapshot] = useState<ConfigSnapshot | null>(
-    () => loadInitialSnapshot(resolvedBaseUrl),
+  const [initialSnapshot, setInitialSnapshot] = useState<ConfigSnapshot | null>(() =>
+    loadInitialSnapshot(resolvedBaseUrl),
   );
-  const [hasChanges, setHasChanges] = useState(() =>
-    loadHasChanges(resolvedBaseUrl),
-  );
-  const [appConfigs, setAppConfigs] = useState<AppConfigEntry[]>(() =>
-    listAppConfigs(resolvedBaseUrl),
-  );
+  const [hasChanges, setHasChanges] = useState(() => loadHasChanges(resolvedBaseUrl));
+  const [appConfigs, setAppConfigs] = useState<AppConfigEntry[]>(() => listAppConfigs(resolvedBaseUrl));
   const [isSnapshotLoading, setSnapshotLoading] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -124,9 +115,7 @@ export function useAppConfigState() {
 
   useEffect(() => {
     const handler = (event: Event) => {
-      const detail = (event as CustomEvent).detail as
-        | { baseUrl?: string; value?: boolean }
-        | undefined;
+      const detail = (event as CustomEvent).detail as { baseUrl?: string; value?: boolean } | undefined;
       if (!detail || detail.baseUrl !== resolvedBaseUrl) return;
       if (typeof detail.value === "boolean") {
         setHasChanges(detail.value);
@@ -134,8 +123,7 @@ export function useAppConfigState() {
     };
 
     window.addEventListener("c64u-has-changes", handler as EventListener);
-    return () =>
-      window.removeEventListener("c64u-has-changes", handler as EventListener);
+    return () => window.removeEventListener("c64u-has-changes", handler as EventListener);
   }, [resolvedBaseUrl]);
 
   useEffect(() => {
@@ -173,12 +161,7 @@ export function useAppConfigState() {
     return () => {
       isMounted = false;
     };
-  }, [
-    status.isConnected,
-    isSnapshotLoading,
-    resolvedBaseUrl,
-    sessionSnapshotKey,
-  ]);
+  }, [status.isConnected, isSnapshotLoading, resolvedBaseUrl, sessionSnapshotKey]);
 
   const applyConfigData = useCallback(
     async (data: Record<string, ConfigResponse>) => {
@@ -225,10 +208,7 @@ export function useAppConfigState() {
       try {
         const data = await fetchAllConfig();
         const entry = createAppConfigEntry(resolvedBaseUrl, name, data);
-        const next = [
-          entry,
-          ...loadAppConfigs().filter((cfg) => cfg.id !== entry.id),
-        ];
+        const next = [entry, ...loadAppConfigs().filter((cfg) => cfg.id !== entry.id)];
         saveAppConfigs(next);
         setAppConfigs(listAppConfigs(resolvedBaseUrl));
         return entry;
@@ -255,9 +235,7 @@ export function useAppConfigState() {
   const renameAppConfig = useCallback(
     (entryId: string, name: string) => {
       const allConfigs = loadAppConfigs();
-      const next = allConfigs.map((entry) =>
-        entry.id === entryId ? { ...entry, name } : entry,
-      );
+      const next = allConfigs.map((entry) => (entry.id === entryId ? { ...entry, name } : entry));
       saveAppConfigs(next);
       setAppConfigs(listAppConfigs(resolvedBaseUrl));
     },
@@ -274,14 +252,8 @@ export function useAppConfigState() {
     [resolvedBaseUrl],
   );
 
-  const markChanged = useCallback(
-    () => updateHasChanges(resolvedBaseUrl, true),
-    [resolvedBaseUrl],
-  );
-  const clearChanges = useCallback(
-    () => updateHasChanges(resolvedBaseUrl, false),
-    [resolvedBaseUrl],
-  );
+  const markChanged = useCallback(() => updateHasChanges(resolvedBaseUrl, true), [resolvedBaseUrl]);
+  const clearChanges = useCallback(() => updateHasChanges(resolvedBaseUrl, false), [resolvedBaseUrl]);
 
   return {
     initialSnapshot,

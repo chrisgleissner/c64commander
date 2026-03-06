@@ -39,13 +39,7 @@ export function SectionHeader({
         {children}
       </h3>
       {resetAction && (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={resetAction}
-          disabled={resetDisabled}
-          data-testid={resetTestId}
-        >
+        <Button variant="outline" size="sm" onClick={resetAction} disabled={resetDisabled} data-testid={resetTestId}>
           {isResetting ? "Resetting…" : resetLabel}
         </Button>
       )}

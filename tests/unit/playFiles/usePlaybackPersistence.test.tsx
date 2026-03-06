@@ -77,11 +77,7 @@ const usePlaybackPersistenceHarness = ({
       lastModified: Date.now(),
       arrayBuffer: async () => new ArrayBuffer(4),
     }),
-    buildPlaylistItem: (
-      entry: PlayableEntry,
-      songNrOverride?: number,
-      addedAtOverride?: string | null,
-    ) => ({
+    buildPlaylistItem: (entry: PlayableEntry, songNrOverride?: number, addedAtOverride?: string | null) => ({
       id: `${entry.source}:${entry.sourceId ?? ""}:${entry.path}`,
       request: {
         source: entry.source,
@@ -139,9 +135,7 @@ describe("usePlaybackPersistence", () => {
       }),
     );
 
-    const localEntriesBySourceId = new Map([
-      ["local-source", new Map([["/Music/demo.sid", { name: "demo.sid" }]])],
-    ]);
+    const localEntriesBySourceId = new Map([["local-source", new Map([["/Music/demo.sid", { name: "demo.sid" }]])]]);
     const localSourceTreeUris = new Map<string, string | null>();
 
     const { result } = renderHook(() =>
@@ -305,9 +299,7 @@ describe("usePlaybackPersistence", () => {
     // The guard should have been set and setAutoAdvanceDueAtMs called with a numeric value
     await waitFor(() => {
       const calls = result.current.setAutoAdvanceDueAtMs.mock.calls;
-      const numericCalls = calls.filter(
-        ([v]: [unknown]) => typeof v === "number",
-      );
+      const numericCalls = calls.filter(([v]: [unknown]) => typeof v === "number");
       expect(numericCalls.length).toBeGreaterThanOrEqual(1);
       // The dueAtMs should be approximately trackStartedAt + durationMs
       const dueAt = numericCalls[numericCalls.length - 1][0] as number;
@@ -422,9 +414,7 @@ describe("usePlaybackPersistence", () => {
     // Session restore should be skipped due to key mismatch, so no setAutoAdvanceDueAtMs with numeric value
     await waitFor(() => {
       const calls = result.current.setAutoAdvanceDueAtMs.mock.calls;
-      const numericCalls = calls.filter(
-        ([v]: [unknown]) => typeof v === "number",
-      );
+      const numericCalls = calls.filter(([v]: [unknown]) => typeof v === "number");
       expect(numericCalls.length).toBe(0);
     });
   });
@@ -479,9 +469,7 @@ describe("usePlaybackPersistence", () => {
     // Session restore should be skipped due to out-of-range index
     await waitFor(() => {
       const calls = result.current.setAutoAdvanceDueAtMs.mock.calls;
-      const numericCalls = calls.filter(
-        ([v]: [unknown]) => typeof v === "number",
-      );
+      const numericCalls = calls.filter(([v]: [unknown]) => typeof v === "number");
       expect(numericCalls.length).toBe(0);
     });
   });
@@ -597,9 +585,7 @@ describe("usePlaybackPersistence", () => {
     );
 
     // No entry in localEntriesBySourceId, but provide a tree URI
-    const localSourceTreeUris = new Map<string, string | null>([
-      ["tree-source", "content://tree-uri"],
-    ]);
+    const localSourceTreeUris = new Map<string, string | null>([["tree-source", "content://tree-uri"]]);
 
     const { result } = renderHook(() =>
       usePlaybackPersistenceHarness({

@@ -6,11 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-export type DeviceSafetyMode =
-  | "RELAXED"
-  | "BALANCED"
-  | "CONSERVATIVE"
-  | "TROUBLESHOOTING";
+export type DeviceSafetyMode = "RELAXED" | "BALANCED" | "CONSERVATIVE" | "TROUBLESHOOTING";
 
 export type DeviceSafetyConfig = {
   mode: DeviceSafetyMode;
@@ -41,21 +37,14 @@ const FTP_LIST_COOLDOWN_MS_KEY = "c64u_device_safety_ftp_list_cooldown_ms";
 const BACKOFF_BASE_MS_KEY = "c64u_device_safety_backoff_base_ms";
 const BACKOFF_MAX_MS_KEY = "c64u_device_safety_backoff_max_ms";
 const BACKOFF_FACTOR_KEY = "c64u_device_safety_backoff_factor";
-const CIRCUIT_BREAKER_THRESHOLD_KEY =
-  "c64u_device_safety_circuit_breaker_threshold";
-const CIRCUIT_BREAKER_COOLDOWN_MS_KEY =
-  "c64u_device_safety_circuit_breaker_cooldown_ms";
-const DISCOVERY_PROBE_INTERVAL_MS_KEY =
-  "c64u_device_safety_discovery_probe_interval_ms";
-const ALLOW_USER_OVERRIDE_CIRCUIT_KEY =
-  "c64u_device_safety_allow_user_override_circuit";
+const CIRCUIT_BREAKER_THRESHOLD_KEY = "c64u_device_safety_circuit_breaker_threshold";
+const CIRCUIT_BREAKER_COOLDOWN_MS_KEY = "c64u_device_safety_circuit_breaker_cooldown_ms";
+const DISCOVERY_PROBE_INTERVAL_MS_KEY = "c64u_device_safety_discovery_probe_interval_ms";
+const ALLOW_USER_OVERRIDE_CIRCUIT_KEY = "c64u_device_safety_allow_user_override_circuit";
 
 export const DEFAULT_DEVICE_SAFETY_MODE: DeviceSafetyMode = "BALANCED";
 
-const MODE_DEFAULTS: Record<
-  DeviceSafetyMode,
-  Omit<DeviceSafetyConfig, "mode">
-> = {
+const MODE_DEFAULTS: Record<DeviceSafetyMode, Omit<DeviceSafetyConfig, "mode">> = {
   RELAXED: {
     restMaxConcurrency: 2,
     ftpMaxConcurrency: 2,
@@ -150,44 +139,25 @@ const clampNumber = (value: number, min: number, max: number, step = 1) => {
 };
 
 const normalizeMode = (mode?: string | null): DeviceSafetyMode => {
-  if (
-    mode === "RELAXED" ||
-    mode === "CONSERVATIVE" ||
-    mode === "TROUBLESHOOTING"
-  )
-    return mode;
+  if (mode === "RELAXED" || mode === "CONSERVATIVE" || mode === "TROUBLESHOOTING") return mode;
   return "BALANCED";
 };
 
 const broadcast = (key: string, value: unknown) => {
   if (typeof window === "undefined") return;
-  window.dispatchEvent(
-    new CustomEvent("c64u-device-safety-updated", { detail: { key, value } }),
-  );
+  window.dispatchEvent(new CustomEvent("c64u-device-safety-updated", { detail: { key, value } }));
 };
 
-export const subscribeDeviceSafetyUpdates = (
-  listener: (detail: { key?: string; value?: unknown }) => void,
-) => {
+export const subscribeDeviceSafetyUpdates = (listener: (detail: { key?: string; value?: unknown }) => void) => {
   if (typeof window === "undefined") return () => {};
   const handler = (event: Event) => {
-    listener(
-      (event as CustomEvent<{ key?: string; value?: unknown }>).detail ?? {},
-    );
+    listener((event as CustomEvent<{ key?: string; value?: unknown }>).detail ?? {});
   };
-  window.addEventListener(
-    "c64u-device-safety-updated",
-    handler as EventListener,
-  );
-  return () =>
-    window.removeEventListener(
-      "c64u-device-safety-updated",
-      handler as EventListener,
-    );
+  window.addEventListener("c64u-device-safety-updated", handler as EventListener);
+  return () => window.removeEventListener("c64u-device-safety-updated", handler as EventListener);
 };
 
-export const loadDeviceSafetyMode = (): DeviceSafetyMode =>
-  normalizeMode(readString(DEVICE_SAFETY_MODE_KEY));
+export const loadDeviceSafetyMode = (): DeviceSafetyMode => normalizeMode(readString(DEVICE_SAFETY_MODE_KEY));
 
 export const saveDeviceSafetyMode = (mode: DeviceSafetyMode) => {
   if (typeof localStorage === "undefined") return;
@@ -232,89 +202,30 @@ export const loadDeviceSafetyConfig = (): DeviceSafetyConfig => {
   const defaults = MODE_DEFAULTS[mode];
   return {
     mode,
-    restMaxConcurrency: clampNumber(
-      resolveOverride(REST_MAX_CONCURRENCY_KEY, defaults.restMaxConcurrency),
-      1,
-      4,
-      1,
-    ),
-    ftpMaxConcurrency: clampNumber(
-      resolveOverride(FTP_MAX_CONCURRENCY_KEY, defaults.ftpMaxConcurrency),
-      1,
-      4,
-      1,
-    ),
-    infoCacheMs: clampNumber(
-      resolveOverride(INFO_CACHE_MS_KEY, defaults.infoCacheMs),
-      0,
-      5000,
-      50,
-    ),
-    configsCacheMs: clampNumber(
-      resolveOverride(CONFIGS_CACHE_MS_KEY, defaults.configsCacheMs),
-      0,
-      10000,
-      50,
-    ),
-    configsCooldownMs: clampNumber(
-      resolveOverride(CONFIGS_COOLDOWN_MS_KEY, defaults.configsCooldownMs),
-      0,
-      10000,
-      50,
-    ),
-    drivesCooldownMs: clampNumber(
-      resolveOverride(DRIVES_COOLDOWN_MS_KEY, defaults.drivesCooldownMs),
-      0,
-      10000,
-      50,
-    ),
-    ftpListCooldownMs: clampNumber(
-      resolveOverride(FTP_LIST_COOLDOWN_MS_KEY, defaults.ftpListCooldownMs),
-      0,
-      10000,
-      50,
-    ),
-    backoffBaseMs: clampNumber(
-      resolveOverride(BACKOFF_BASE_MS_KEY, defaults.backoffBaseMs),
-      0,
-      10000,
-      50,
-    ),
-    backoffMaxMs: clampNumber(
-      resolveOverride(BACKOFF_MAX_MS_KEY, defaults.backoffMaxMs),
-      0,
-      20000,
-      50,
-    ),
-    backoffFactor: clampNumber(
-      resolveOverride(BACKOFF_FACTOR_KEY, defaults.backoffFactor),
-      1,
-      3,
-      0.1,
-    ),
+    restMaxConcurrency: clampNumber(resolveOverride(REST_MAX_CONCURRENCY_KEY, defaults.restMaxConcurrency), 1, 4, 1),
+    ftpMaxConcurrency: clampNumber(resolveOverride(FTP_MAX_CONCURRENCY_KEY, defaults.ftpMaxConcurrency), 1, 4, 1),
+    infoCacheMs: clampNumber(resolveOverride(INFO_CACHE_MS_KEY, defaults.infoCacheMs), 0, 5000, 50),
+    configsCacheMs: clampNumber(resolveOverride(CONFIGS_CACHE_MS_KEY, defaults.configsCacheMs), 0, 10000, 50),
+    configsCooldownMs: clampNumber(resolveOverride(CONFIGS_COOLDOWN_MS_KEY, defaults.configsCooldownMs), 0, 10000, 50),
+    drivesCooldownMs: clampNumber(resolveOverride(DRIVES_COOLDOWN_MS_KEY, defaults.drivesCooldownMs), 0, 10000, 50),
+    ftpListCooldownMs: clampNumber(resolveOverride(FTP_LIST_COOLDOWN_MS_KEY, defaults.ftpListCooldownMs), 0, 10000, 50),
+    backoffBaseMs: clampNumber(resolveOverride(BACKOFF_BASE_MS_KEY, defaults.backoffBaseMs), 0, 10000, 50),
+    backoffMaxMs: clampNumber(resolveOverride(BACKOFF_MAX_MS_KEY, defaults.backoffMaxMs), 0, 20000, 50),
+    backoffFactor: clampNumber(resolveOverride(BACKOFF_FACTOR_KEY, defaults.backoffFactor), 1, 3, 0.1),
     circuitBreakerThreshold: clampNumber(
-      resolveOverride(
-        CIRCUIT_BREAKER_THRESHOLD_KEY,
-        defaults.circuitBreakerThreshold,
-      ),
+      resolveOverride(CIRCUIT_BREAKER_THRESHOLD_KEY, defaults.circuitBreakerThreshold),
       0,
       10,
       1,
     ),
     circuitBreakerCooldownMs: clampNumber(
-      resolveOverride(
-        CIRCUIT_BREAKER_COOLDOWN_MS_KEY,
-        defaults.circuitBreakerCooldownMs,
-      ),
+      resolveOverride(CIRCUIT_BREAKER_COOLDOWN_MS_KEY, defaults.circuitBreakerCooldownMs),
       0,
       20000,
       100,
     ),
     discoveryProbeIntervalMs: clampNumber(
-      resolveOverride(
-        DISCOVERY_PROBE_INTERVAL_MS_KEY,
-        defaults.discoveryProbeIntervalMs,
-      ),
+      resolveOverride(DISCOVERY_PROBE_INTERVAL_MS_KEY, defaults.discoveryProbeIntervalMs),
       200,
       2000,
       50,
@@ -357,10 +268,7 @@ export const saveDrivesCooldownMs = (value: number) =>
   saveNumberOverride(DRIVES_COOLDOWN_MS_KEY, clampNumber(value, 0, 10000, 50));
 
 export const saveFtpListCooldownMs = (value: number) =>
-  saveNumberOverride(
-    FTP_LIST_COOLDOWN_MS_KEY,
-    clampNumber(value, 0, 10000, 50),
-  );
+  saveNumberOverride(FTP_LIST_COOLDOWN_MS_KEY, clampNumber(value, 0, 10000, 50));
 
 export const saveBackoffBaseMs = (value: number) =>
   saveNumberOverride(BACKOFF_BASE_MS_KEY, clampNumber(value, 0, 10000, 50));
@@ -372,22 +280,13 @@ export const saveBackoffFactor = (value: number) =>
   saveNumberOverride(BACKOFF_FACTOR_KEY, clampNumber(value, 1, 3, 0.1));
 
 export const saveCircuitBreakerThreshold = (value: number) =>
-  saveNumberOverride(
-    CIRCUIT_BREAKER_THRESHOLD_KEY,
-    clampNumber(value, 0, 10, 1),
-  );
+  saveNumberOverride(CIRCUIT_BREAKER_THRESHOLD_KEY, clampNumber(value, 0, 10, 1));
 
 export const saveCircuitBreakerCooldownMs = (value: number) =>
-  saveNumberOverride(
-    CIRCUIT_BREAKER_COOLDOWN_MS_KEY,
-    clampNumber(value, 0, 20000, 100),
-  );
+  saveNumberOverride(CIRCUIT_BREAKER_COOLDOWN_MS_KEY, clampNumber(value, 0, 20000, 100));
 
 export const saveDiscoveryProbeIntervalMs = (value: number) =>
-  saveNumberOverride(
-    DISCOVERY_PROBE_INTERVAL_MS_KEY,
-    clampNumber(value, 200, 2000, 50),
-  );
+  saveNumberOverride(DISCOVERY_PROBE_INTERVAL_MS_KEY, clampNumber(value, 200, 2000, 50));
 
 export const saveAllowUserOverrideCircuit = (value: boolean) =>
   saveBooleanOverride(ALLOW_USER_OVERRIDE_CIRCUIT_KEY, value);

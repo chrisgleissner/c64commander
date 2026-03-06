@@ -6,10 +6,5 @@
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true
   },
-  "include": [
-    "./**/*.ts",
-    "./**/*.d.ts",
-    "../src/types/**/*.d.ts",
-    "../tests/**/*.ts"
-  ]
+  "include": ["./**/*.ts", "./**/*.d.ts", "../src/types/**/*.d.ts", "../tests/**/*.ts"]
 }

@@ -52,8 +52,7 @@ describe("native diagnostics bridge", () => {
       return { remove: removeMock };
     });
 
-    const { startNativeDiagnosticsBridge } =
-      await import("@/lib/native/diagnosticsBridge");
+    const { startNativeDiagnosticsBridge } = await import("@/lib/native/diagnosticsBridge");
     await startNativeDiagnosticsBridge();
 
     expect(addListenerMock).toHaveBeenCalledTimes(1);
@@ -121,8 +120,7 @@ describe("native diagnostics bridge", () => {
       return { remove: removeMock };
     });
 
-    const { startNativeDiagnosticsBridge } =
-      await import("@/lib/native/diagnosticsBridge");
+    const { startNativeDiagnosticsBridge } = await import("@/lib/native/diagnosticsBridge");
     await startNativeDiagnosticsBridge();
 
     listener?.({
@@ -158,8 +156,7 @@ describe("native diagnostics bridge", () => {
 
   it("logs info when native DiagnosticsBridge is unavailable", async () => {
     addListenerMock.mockRejectedValue(new Error("plugin unavailable"));
-    const { startNativeDiagnosticsBridge } =
-      await import("@/lib/native/diagnosticsBridge");
+    const { startNativeDiagnosticsBridge } = await import("@/lib/native/diagnosticsBridge");
 
     await startNativeDiagnosticsBridge();
 

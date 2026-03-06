@@ -27,9 +27,7 @@ describe("hvscStatusStore", () => {
   beforeEach(() => {
     if (typeof globalThis.localStorage === "undefined") {
       const store = new Map<string, string>();
-      (
-        globalThis as typeof globalThis & { localStorage?: Storage }
-      ).localStorage = {
+      (globalThis as typeof globalThis & { localStorage?: Storage }).localStorage = {
         getItem: (key: string) => store.get(key) ?? null,
         setItem: (key: string, value: string) => {
           store.set(key, value);
@@ -89,9 +87,7 @@ describe("hvscStatusStore", () => {
         totalBytes: 20,
       });
 
-      const stored = JSON.parse(
-        localStorage.getItem("c64u_hvsc_status:v1") ?? "{}",
-      );
+      const stored = JSON.parse(localStorage.getItem("c64u_hvsc_status:v1") ?? "{}");
       expect(stored.download?.downloadedBytes).toBe(10);
       expect(result.download.downloadedBytes).toBe(10);
     });
@@ -148,18 +144,10 @@ describe("hvscStatusStore", () => {
         totalCount: 2,
       } as any;
 
-      const afterDownload = applyHvscProgressEventToSummary(
-        base,
-        downloadEvent,
-        null,
-      );
+      const afterDownload = applyHvscProgressEventToSummary(base, downloadEvent, null);
       expect(afterDownload.download.status).toBe("in-progress");
 
-      const afterExtraction = applyHvscProgressEventToSummary(
-        afterDownload,
-        extractionEvent,
-        "download",
-      );
+      const afterExtraction = applyHvscProgressEventToSummary(afterDownload, extractionEvent, "download");
       expect(afterExtraction.download.status).toBe("success");
       expect(afterExtraction.extraction.status).toBe("in-progress");
     });

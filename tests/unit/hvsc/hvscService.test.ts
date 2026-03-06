@@ -140,10 +140,7 @@ import {
   getHvscFolderListing as getRuntimeFolderListing,
 } from "@/lib/hvsc/hvscIngestionRuntime";
 import { resolveHvscSonglengthDuration } from "@/lib/hvsc/hvscSongLengthService";
-import {
-  loadHvscBrowseIndexSnapshot,
-  verifyHvscBrowseIndexIntegrity,
-} from "@/lib/hvsc/hvscBrowseIndexStore";
+import { loadHvscBrowseIndexSnapshot, verifyHvscBrowseIndexIntegrity } from "@/lib/hvsc/hvscBrowseIndexStore";
 
 describe("hvscService", () => {
   beforeEach(() => {
@@ -220,9 +217,7 @@ describe("hvscService", () => {
 
   describe("mock bridge dispatch", () => {
     it("getHvscStatus dispatches to mock bridge when present", async () => {
-      const mockGetStatus = vi
-        .fn()
-        .mockResolvedValue({ ingestionState: "ready", installedVersion: 99 });
+      const mockGetStatus = vi.fn().mockResolvedValue({ ingestionState: "ready", installedVersion: 99 });
       (window as any).__hvscMock__ = { getHvscStatus: mockGetStatus };
 
       const status = await getHvscStatus();
@@ -330,9 +325,7 @@ describe("hvscService", () => {
     });
 
     it("uses mock bridge when present", async () => {
-      const mockDurations = vi
-        .fn()
-        .mockResolvedValue({ durationsSeconds: [10, 20, 30] });
+      const mockDurations = vi.fn().mockResolvedValue({ durationsSeconds: [10, 20, 30] });
       (window as any).__hvscMock__ = { getHvscDurationsByMd5: mockDurations };
 
       const result = await getHvscDurationsByMd5Seconds("abc123");
@@ -507,9 +500,7 @@ describe("hvscService", () => {
     });
 
     it("delegates to mock bridge getHvscFolderListing when present (line 220)", async () => {
-      const mockListing = vi
-        .fn()
-        .mockResolvedValue({ path: "/", folders: [], songs: [] });
+      const mockListing = vi.fn().mockResolvedValue({ path: "/", folders: [], songs: [] });
       (window as any).__hvscMock__ = { getHvscFolderListing: mockListing };
       const page = await getHvscFolderListingPaged({ path: "/" });
       expect(mockListing).toHaveBeenCalled();
@@ -519,9 +510,7 @@ describe("hvscService", () => {
 
   describe("getHvscDurationsByMd5Seconds null durationsSeconds", () => {
     it("returns null when mock bridge durationsSeconds is undefined (line 281)", async () => {
-      const mockDurations = vi
-        .fn()
-        .mockResolvedValue({ durationsSeconds: undefined });
+      const mockDurations = vi.fn().mockResolvedValue({ durationsSeconds: undefined });
       (window as any).__hvscMock__ = { getHvscDurationsByMd5: mockDurations };
       const result = await getHvscDurationsByMd5Seconds("abc");
       expect(result).toBeNull();

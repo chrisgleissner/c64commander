@@ -7,9 +7,7 @@ vi.mock("@/lib/logging", () => ({
 }));
 
 vi.mock("@/lib/tracing/actionTrace", () => ({
-  runWithImplicitAction: vi.fn(async (_name: string, fn: () => Promise<void>) =>
-    fn(),
-  ),
+  runWithImplicitAction: vi.fn(async (_name: string, fn: () => Promise<void>) => fn()),
 }));
 
 describe("startupMilestones", () => {
@@ -17,14 +15,11 @@ describe("startupMilestones", () => {
     vi.resetModules();
     vi.mocked(addLog).mockReset();
     vi.mocked(runWithImplicitAction).mockReset();
-    vi.mocked(runWithImplicitAction).mockImplementation(
-      async (_name: string, fn: () => Promise<void>) => fn(),
-    );
+    vi.mocked(runWithImplicitAction).mockImplementation(async (_name: string, fn: () => Promise<void>) => fn());
   });
 
   it("marks startup bootstrap once", async () => {
-    const { markStartupBootstrapComplete } =
-      await import("@/lib/startup/startupMilestones");
+    const { markStartupBootstrapComplete } = await import("@/lib/startup/startupMilestones");
     markStartupBootstrapComplete();
     markStartupBootstrapComplete();
 
@@ -35,15 +30,11 @@ describe("startupMilestones", () => {
       expect.objectContaining({ elapsedMs: expect.any(Number) }),
     );
     expect(runWithImplicitAction).toHaveBeenCalledTimes(1);
-    expect(runWithImplicitAction).toHaveBeenCalledWith(
-      "startup.bootstrap_complete",
-      expect.any(Function),
-    );
+    expect(runWithImplicitAction).toHaveBeenCalledWith("startup.bootstrap_complete", expect.any(Function));
   });
 
   it("marks first meaningful interaction once and emits startup milestone event", async () => {
-    const { markFirstMeaningfulInteraction } =
-      await import("@/lib/startup/startupMilestones");
+    const { markFirstMeaningfulInteraction } = await import("@/lib/startup/startupMilestones");
     const captured: CustomEvent[] = [];
     const listener = (event: Event) => {
       captured.push(event as CustomEvent);
@@ -66,10 +57,7 @@ describe("startupMilestones", () => {
       }),
     );
     expect(runWithImplicitAction).toHaveBeenCalledTimes(1);
-    expect(runWithImplicitAction).toHaveBeenCalledWith(
-      "startup.first_meaningful_interaction",
-      expect.any(Function),
-    );
+    expect(runWithImplicitAction).toHaveBeenCalledWith("startup.first_meaningful_interaction", expect.any(Function));
 
     expect(captured).toHaveLength(1);
     expect(captured[0].detail).toEqual(
@@ -83,8 +71,7 @@ describe("startupMilestones", () => {
   });
 
   it("does not skip first meaningful interaction for empty label", async () => {
-    const { markFirstMeaningfulInteraction } =
-      await import("@/lib/startup/startupMilestones");
+    const { markFirstMeaningfulInteraction } = await import("@/lib/startup/startupMilestones");
     markFirstMeaningfulInteraction("click", "");
 
     expect(addLog).toHaveBeenCalledWith(
@@ -95,16 +82,11 @@ describe("startupMilestones", () => {
   });
 
   it("ignores diagnostics open actions as first meaningful interaction", async () => {
-    const { markFirstMeaningfulInteraction } =
-      await import("@/lib/startup/startupMilestones");
+    const { markFirstMeaningfulInteraction } = await import("@/lib/startup/startupMilestones");
 
     markFirstMeaningfulInteraction("click", "Diagnostics");
 
-    expect(addLog).not.toHaveBeenCalledWith(
-      "info",
-      "First meaningful interaction",
-      expect.anything(),
-    );
+    expect(addLog).not.toHaveBeenCalledWith("info", "First meaningful interaction", expect.anything());
     expect(runWithImplicitAction).not.toHaveBeenCalledWith(
       "startup.first_meaningful_interaction",
       expect.any(Function),
@@ -119,29 +101,19 @@ describe("startupMilestones", () => {
   });
 
   it('also skips "open diagnostics" exact label', async () => {
-    const { markFirstMeaningfulInteraction } =
-      await import("@/lib/startup/startupMilestones");
+    const { markFirstMeaningfulInteraction } = await import("@/lib/startup/startupMilestones");
 
     markFirstMeaningfulInteraction("click", "Open Diagnostics");
 
-    expect(addLog).not.toHaveBeenCalledWith(
-      "info",
-      "First meaningful interaction",
-      expect.anything(),
-    );
+    expect(addLog).not.toHaveBeenCalledWith("info", "First meaningful interaction", expect.anything());
   });
 
   it("skips labels that include the word diagnostics", async () => {
-    const { markFirstMeaningfulInteraction } =
-      await import("@/lib/startup/startupMilestones");
+    const { markFirstMeaningfulInteraction } = await import("@/lib/startup/startupMilestones");
 
     markFirstMeaningfulInteraction("click", "Show Diagnostics Panel");
 
-    expect(addLog).not.toHaveBeenCalledWith(
-      "info",
-      "First meaningful interaction",
-      expect.anything(),
-    );
+    expect(addLog).not.toHaveBeenCalledWith("info", "First meaningful interaction", expect.anything());
   });
 
   it("falls back to Date.now when performance is unavailable at module load and in elapsed calculation", async () => {
@@ -154,12 +126,9 @@ describe("startupMilestones", () => {
 
     vi.mocked(addLog).mockReset();
     vi.mocked(runWithImplicitAction).mockReset();
-    vi.mocked(runWithImplicitAction).mockImplementation(
-      async (_n: string, fn: () => Promise<void>) => fn(),
-    );
+    vi.mocked(runWithImplicitAction).mockImplementation(async (_n: string, fn: () => Promise<void>) => fn());
 
-    const { markStartupBootstrapComplete } =
-      await import("@/lib/startup/startupMilestones");
+    const { markStartupBootstrapComplete } = await import("@/lib/startup/startupMilestones");
     markStartupBootstrapComplete();
 
     expect(addLog).toHaveBeenCalledWith(
@@ -185,12 +154,9 @@ describe("startupMilestones", () => {
 
     vi.mocked(addLog).mockReset();
     vi.mocked(runWithImplicitAction).mockReset();
-    vi.mocked(runWithImplicitAction).mockImplementation(
-      async (_n: string, fn: () => Promise<void>) => fn(),
-    );
+    vi.mocked(runWithImplicitAction).mockImplementation(async (_n: string, fn: () => Promise<void>) => fn());
 
-    const { markStartupBootstrapComplete } =
-      await import("@/lib/startup/startupMilestones");
+    const { markStartupBootstrapComplete } = await import("@/lib/startup/startupMilestones");
     expect(() => markStartupBootstrapComplete()).not.toThrow();
 
     Object.defineProperty(globalThis, "window", {

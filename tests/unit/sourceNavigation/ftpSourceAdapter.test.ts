@@ -25,10 +25,7 @@ vi.mock("@/lib/secureStorage", () => ({
 }));
 
 import { listFtpDirectory } from "@/lib/ftp/ftpClient";
-import {
-  createUltimateSourceLocation,
-  normalizeFtpHost,
-} from "@/lib/sourceNavigation/ftpSourceAdapter";
+import { createUltimateSourceLocation, normalizeFtpHost } from "@/lib/sourceNavigation/ftpSourceAdapter";
 
 const listFtpDirectoryMock = vi.mocked(listFtpDirectory);
 
@@ -117,10 +114,7 @@ describe("ftpSourceAdapter", () => {
     const source = createUltimateSourceLocation();
     const results = await source.listFilesRecursive("/");
 
-    expect(results.map((entry) => entry.path).sort()).toEqual([
-      "/music/song.sid",
-      "/root.sid",
-    ]);
+    expect(results.map((entry) => entry.path).sort()).toEqual(["/music/song.sid", "/root.sid"]);
   });
 
   it("cancels recursive listing and stops further FTP calls", async () => {
@@ -155,26 +149,19 @@ describe("ftpSourceAdapter", () => {
     });
 
     const source = createUltimateSourceLocation();
-    await expect(
-      source.listFilesRecursive("/", { signal: controller.signal }),
-    ).rejects.toThrow(/Aborted/);
+    await expect(source.listFilesRecursive("/", { signal: controller.signal })).rejects.toThrow(/Aborted/);
     expect(listFtpDirectoryMock).toHaveBeenCalledTimes(1);
   });
 
   it("logs when cached FTP listing is corrupted", async () => {
-    const warnSpy = vi
-      .spyOn(console, "warn")
-      .mockImplementation(() => undefined);
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     localStorage.setItem("c64u_ftp_cache:v1", "{bad-json");
     listFtpDirectoryMock.mockResolvedValue({ entries: [] });
 
     const source = createUltimateSourceLocation();
     await source.listEntries("/");
 
-    expect(warnSpy).toHaveBeenCalledWith(
-      "Failed to load FTP cache",
-      expect.any(Object),
-    );
+    expect(warnSpy).toHaveBeenCalledWith("Failed to load FTP cache", expect.any(Object));
     warnSpy.mockRestore();
   });
 
@@ -234,10 +221,7 @@ describe("ftpSourceAdapter", () => {
       cache[key] = { entries: [], updatedAt: Date.now() };
       order.push(key);
     }
-    localStorage.setItem(
-      "c64u_ftp_cache:v1",
-      JSON.stringify({ entries: cache, order }),
-    );
+    localStorage.setItem("c64u_ftp_cache:v1", JSON.stringify({ entries: cache, order }));
 
     listFtpDirectoryMock.mockResolvedValue({
       entries: [
@@ -259,18 +243,12 @@ describe("ftpSourceAdapter", () => {
   });
 
   it("handles localStorage.setItem quota exceeded gracefully", async () => {
-    const warnSpy = vi
-      .spyOn(console, "warn")
-      .mockImplementation(() => undefined);
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     // Pre-populate cache so the loadCache read succeeds, then make setItem throw
-    localStorage.setItem(
-      "c64u_ftp_cache:v1",
-      JSON.stringify({ entries: {}, order: [] }),
-    );
+    localStorage.setItem("c64u_ftp_cache:v1", JSON.stringify({ entries: {}, order: [] }));
     const originalSetItem = Storage.prototype.setItem;
     Storage.prototype.setItem = function (key: string, value: string) {
-      if (key === "c64u_ftp_cache:v1")
-        throw new DOMException("QuotaExceededError");
+      if (key === "c64u_ftp_cache:v1") throw new DOMException("QuotaExceededError");
       originalSetItem.call(this, key, value);
     };
 
@@ -289,10 +267,7 @@ describe("ftpSourceAdapter", () => {
     await source.listEntries("/");
 
     Storage.prototype.setItem = originalSetItem;
-    expect(warnSpy).toHaveBeenCalledWith(
-      "Failed to persist FTP cache",
-      expect.any(Object),
-    );
+    expect(warnSpy).toHaveBeenCalledWith("Failed to persist FTP cache", expect.any(Object));
     warnSpy.mockRestore();
   });
 
@@ -306,10 +281,7 @@ describe("ftpSourceAdapter", () => {
   });
 
   it("handles parsed.order not being an array", async () => {
-    localStorage.setItem(
-      "c64u_ftp_cache:v1",
-      JSON.stringify({ entries: {}, order: "not-array" }),
-    );
+    localStorage.setItem("c64u_ftp_cache:v1", JSON.stringify({ entries: {}, order: "not-array" }));
     listFtpDirectoryMock.mockResolvedValue({ entries: [] });
 
     const source = createUltimateSourceLocation();
@@ -382,9 +354,7 @@ describe("ftpSourceAdapter", () => {
     const result = await source.listEntries("");
     expect(result).toHaveLength(1);
     // Verify the FTP call was made with '/'
-    expect(listFtpDirectoryMock).toHaveBeenCalledWith(
-      expect.objectContaining({ path: "/" }),
-    );
+    expect(listFtpDirectoryMock).toHaveBeenCalledWith(expect.objectContaining({ path: "/" }));
   });
 
   it("uses root path when listFilesRecursive called with empty string", async () => {
@@ -393,9 +363,7 @@ describe("ftpSourceAdapter", () => {
     const source = createUltimateSourceLocation();
     const results = await source.listFilesRecursive("");
     expect(results).toEqual([]);
-    expect(listFtpDirectoryMock).toHaveBeenCalledWith(
-      expect.objectContaining({ path: "/" }),
-    );
+    expect(listFtpDirectoryMock).toHaveBeenCalledWith(expect.objectContaining({ path: "/" }));
   });
 
   it("treats expired cache entry as miss and re-fetches", async () => {

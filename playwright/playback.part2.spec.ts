@@ -22,11 +22,7 @@ import {
   finalizeEvidence,
   startStrictUiMonitoring,
 } from "./testArtifacts";
-import {
-  clearTraces,
-  enableTraceAssertions,
-  expectFtpTraceSequence,
-} from "./traceUtils";
+import { clearTraces, enableTraceAssertions, expectFtpTraceSequence } from "./traceUtils";
 import { enableGoldenTrace } from "./goldenTraceRegistry";
 import { clickSourceSelectionButton } from "./sourceSelection";
 
@@ -44,19 +40,14 @@ const openAddItemsDialog = async (page: Page) => {
 };
 
 const selectEntryCheckbox = async (container: Page | Locator, name: string) => {
-  const row = container
-    .getByText(name, { exact: true })
-    .locator("..")
-    .locator("..");
+  const row = container.getByText(name, { exact: true }).locator("..").locator("..");
   const checkbox = row.getByRole("checkbox");
   await checkbox.scrollIntoViewIfNeeded();
   await checkbox.click({ force: true });
 };
 
 const openRemoteFolder = async (container: Page | Locator, name: string) => {
-  const row = container
-    .locator('[data-testid="source-entry-row"]', { hasText: name })
-    .first();
+  const row = container.locator('[data-testid="source-entry-row"]', { hasText: name }).first();
   await row.click();
 };
 
@@ -64,12 +55,8 @@ const ensureRemoteRoot = async (container: Page | Locator) => {
   const rootButton = container.getByTestId("navigate-root");
   const visible = await rootButton.isVisible().catch(() => false);
   if (!visible) return;
-  const disabledAttr = await rootButton
-    .getAttribute("disabled")
-    .catch((): null => null);
-  const ariaDisabled = await rootButton
-    .getAttribute("aria-disabled")
-    .catch((): null => null);
+  const disabledAttr = await rootButton.getAttribute("disabled").catch((): null => null);
+  const ariaDisabled = await rootButton.getAttribute("aria-disabled").catch((): null => null);
   if (disabledAttr !== null || ariaDisabled === "true") return;
   try {
     await rootButton.click({ timeout: 2000 });
@@ -98,9 +85,10 @@ const d64Offset = (track: number, sector: number) => {
 };
 
 const buildTestD64 = () => {
-  const totalSectors = Array.from({ length: 35 }, (_, idx) =>
-    sectorsPerTrack1541(idx + 1),
-  ).reduce((sum, value) => sum + value, 0);
+  const totalSectors = Array.from({ length: 35 }, (_, idx) => sectorsPerTrack1541(idx + 1)).reduce(
+    (sum, value) => sum + value,
+    0,
+  );
   const buffer = Buffer.alloc(totalSectors * 256, 0);
 
   const dirOffset = d64Offset(18, 1);
@@ -152,10 +140,7 @@ const seedPlaylistStorage = async (
         items: seedItems,
         currentIndex: -1,
       };
-      localStorage.setItem(
-        "c64u_playlist:v1:TEST-123",
-        JSON.stringify(payload),
-      );
+      localStorage.setItem("c64u_playlist:v1:TEST-123", JSON.stringify(payload));
       localStorage.setItem("c64u_playlist:v1:default", JSON.stringify(payload));
       localStorage.setItem("c64u_last_device_id", "TEST-123");
     },
@@ -204,24 +189,17 @@ test.describe("Playback file browser (part 2)", () => {
     }
   });
 
-  test("songlengths discovery shows path and durations", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("songlengths discovery shows path and durations", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/play");
     await openAddItemsDialog(page);
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
     const input = page.locator('input[type="file"][webkitdirectory]');
-    await input.setInputFiles([
-      path.resolve("playwright/fixtures/local-play-songlengths"),
-    ]);
+    await input.setInputFiles([path.resolve("playwright/fixtures/local-play-songlengths")]);
     await expect(page.getByRole("dialog")).toBeHidden();
 
     const songlengthsPath = page.getByTestId("songlengths-path-label");
     await expect(songlengthsPath).toBeVisible();
-    await expect(songlengthsPath).toHaveAttribute(
-      "title",
-      "/local-play-songlengths/songlengths.md5",
-    );
+    await expect(songlengthsPath).toHaveAttribute("title", "/local-play-songlengths/songlengths.md5");
     await expect(songlengthsPath).toContainText("songlengths.md5");
 
     const list = page.getByTestId("playlist-list");
@@ -230,24 +208,17 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "songlengths-loaded");
   });
 
-  test("songlengths.txt discovery shows path and durations", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("songlengths.txt discovery shows path and durations", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/play");
     await openAddItemsDialog(page);
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
     const input = page.locator('input[type="file"][webkitdirectory]');
-    await input.setInputFiles([
-      path.resolve("playwright/fixtures/local-play-songlengths-txt"),
-    ]);
+    await input.setInputFiles([path.resolve("playwright/fixtures/local-play-songlengths-txt")]);
     await expect(page.getByRole("dialog")).toBeHidden();
 
     const songlengthsPath = page.getByTestId("songlengths-path-label");
     await expect(songlengthsPath).toBeVisible();
-    await expect(songlengthsPath).toHaveAttribute(
-      "title",
-      "/local-play-songlengths-txt/songlengths.txt",
-    );
+    await expect(songlengthsPath).toHaveAttribute("title", "/local-play-songlengths-txt/songlengths.txt");
     await expect(songlengthsPath).toContainText("songlengths.txt");
 
     const list = page.getByTestId("playlist-list");
@@ -263,24 +234,17 @@ test.describe("Playback file browser (part 2)", () => {
     await openAddItemsDialog(page);
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
     const input = page.locator('input[type="file"][webkitdirectory]');
-    await input.setInputFiles([
-      path.resolve("playwright/fixtures/local-play-songlengths-documents"),
-    ]);
+    await input.setInputFiles([path.resolve("playwright/fixtures/local-play-songlengths-documents")]);
     await expect(page.getByRole("dialog")).toBeHidden();
 
     const songlengthsPath = page.getByTestId("songlengths-path-label");
     await expect(songlengthsPath).toBeVisible();
-    await expect(songlengthsPath).toHaveAttribute(
-      "title",
-      /\/DOCUMENTS\/songlengths\.md5$/,
-    );
+    await expect(songlengthsPath).toHaveAttribute("title", /\/DOCUMENTS\/songlengths\.md5$/);
     await expect(songlengthsPath).toContainText("songlengths.md5");
     await snap(page, testInfo, "documents-songlengths");
   });
 
-  test("playlist menu shows size and date", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("playlist menu shows size and date", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/play");
     await openAddItemsDialog(page);
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
@@ -288,10 +252,7 @@ test.describe("Playback file browser (part 2)", () => {
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play")]);
     await expect(page.getByRole("dialog")).toBeHidden();
 
-    const row = page
-      .getByTestId("playlist-item")
-      .filter({ hasText: "demo.sid" })
-      .first();
+    const row = page.getByTestId("playlist-item").filter({ hasText: "demo.sid" }).first();
     await row.getByRole("button", { name: "Item actions" }).click();
     const sizeItem = page.getByRole("menuitem", { name: /Size:/i });
     const dateItem = page.getByRole("menuitem", { name: /Date:/i });
@@ -323,10 +284,7 @@ test.describe("Playback file browser (part 2)", () => {
       return data.operation === "list" && (data.path ?? "").includes("/Usb0");
     });
 
-    const row = page
-      .getByTestId("playlist-item")
-      .filter({ hasText: "Part 1.d64" })
-      .first();
+    const row = page.getByTestId("playlist-item").filter({ hasText: "Part 1.d64" }).first();
     await row.getByRole("button", { name: "Item actions" }).click();
     const sizeItem = page.getByRole("menuitem", { name: /Size:/i });
     const dateItem = page.getByRole("menuitem", { name: /Date:/i });
@@ -349,9 +307,7 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "headers-removed");
   });
 
-  test("volume slider updates non-muted SID outputs", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("volume slider updates non-muted SID outputs", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     const initialState = server.getState()["Audio Mixer"];
 
     await page.goto("/play");
@@ -382,9 +338,7 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "volume-updated");
   });
 
-  test("pause mutes SID outputs and resume restores them", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("pause mutes SID outputs and resume restores them", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     const initialState = server.getState()["Audio Mixer"];
     await seedPlaylistStorage(page, [
       {
@@ -427,11 +381,7 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "resumed");
 
     await expect
-      .poll(
-        () =>
-          server.requests.some((req) => req.url.includes("/v1/machine:resume")),
-        { timeout: 2000 },
-      )
+      .poll(() => server.requests.some((req) => req.url.includes("/v1/machine:resume")), { timeout: 2000 })
       .toBe(true);
 
     await expect
@@ -447,58 +397,38 @@ test.describe("Playback file browser (part 2)", () => {
       .poll(() => server.getState()["Audio Mixer"]["Vol Socket 2"].value)
       .toBe(initialState["Vol Socket 2"].value);
 
-    const pauseIndex = server.requests.findIndex((req) =>
-      req.url.includes("/v1/machine:pause"),
-    );
-    const resumeIndex = server.requests.findIndex((req) =>
-      req.url.includes("/v1/machine:resume"),
-    );
+    const pauseIndex = server.requests.findIndex((req) => req.url.includes("/v1/machine:pause"));
+    const resumeIndex = server.requests.findIndex((req) => req.url.includes("/v1/machine:resume"));
     const configIndices = server.requests
       .map((req, index) => (req.url.includes("/v1/configs") ? index : -1))
       .filter((index) => index >= 0);
-    const configBetweenPauseAndResume = configIndices.filter(
-      (index) => index > pauseIndex && index < resumeIndex,
-    );
+    const configBetweenPauseAndResume = configIndices.filter((index) => index > pauseIndex && index < resumeIndex);
     expect(pauseIndex).toBeGreaterThan(-1);
     expect(resumeIndex).toBeGreaterThan(-1);
     expect(configBetweenPauseAndResume.length).toBeGreaterThan(0);
     await snap(page, testInfo, "sid-restored");
   });
 
-  test("native folder picker adds local files to playlist", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("native folder picker adds local files to playlist", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.addInitScript(() => {
-      (
-        window as Window & { __c64uTestProbeEnabled?: boolean }
-      ).__c64uTestProbeEnabled = true;
-      (
-        window as Window & { __c64uPlatformOverride?: string }
-      ).__c64uPlatformOverride = "android";
-      (
-        window as Window & { __c64uAllowAndroidFolderPickerOverride?: boolean }
-      ).__c64uAllowAndroidFolderPickerOverride = true;
+      (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled = true;
+      (window as Window & { __c64uPlatformOverride?: string }).__c64uPlatformOverride = "android";
+      (window as Window & { __c64uAllowAndroidFolderPickerOverride?: boolean }).__c64uAllowAndroidFolderPickerOverride =
+        true;
 
       const treeUri = "content://tree/primary%3AMusic";
-      const entriesByPath: Record<
-        string,
-        Array<{ type: "file" | "dir"; name: string; path: string }>
-      > = {
+      const entriesByPath: Record<string, Array<{ type: "file" | "dir"; name: string; path: string }>> = {
         "/": [
           { type: "file", name: "demo.sid", path: "/demo.sid" },
           { type: "dir", name: "Apps", path: "/Apps" },
           { type: "dir", name: "Disks", path: "/Disks" },
         ],
-        "/Apps": [
-          { type: "file", name: "launch.prg", path: "/Apps/launch.prg" },
-        ],
+        "/Apps": [{ type: "file", name: "launch.prg", path: "/Apps/launch.prg" }],
         "/Disks": [
           { type: "file", name: "disk.d64", path: "/Disks/disk.d64" },
           { type: "dir", name: "Deep", path: "/Disks/Deep" },
         ],
-        "/Disks/Deep": [
-          { type: "file", name: "deep.sid", path: "/Disks/Deep/deep.sid" },
-        ],
+        "/Disks/Deep": [{ type: "file", name: "deep.sid", path: "/Disks/Deep/deep.sid" }],
       };
 
       const pickDirectory = async () => ({
@@ -507,30 +437,19 @@ test.describe("Playback file browser (part 2)", () => {
         permissionPersisted: true,
       });
       const calls: Array<{ path: string }> = [];
-      (
-        window as Window & { __c64uSafCalls?: Array<{ path: string }> }
-      ).__c64uSafCalls = calls;
-      const listChildren = async ({
-        treeUri: requestUri,
-        path = "/",
-      }: {
-        treeUri: string;
-        path?: string;
-      }) => {
+      (window as Window & { __c64uSafCalls?: Array<{ path: string }> }).__c64uSafCalls = calls;
+      const listChildren = async ({ treeUri: requestUri, path = "/" }: { treeUri: string; path?: string }) => {
         if (requestUri !== treeUri) {
           throw new Error("Unexpected treeUri");
         }
-        const normalized =
-          path && path !== "/" ? path.replace(/\/+$/, "") : "/";
+        const normalized = path && path !== "/" ? path.replace(/\/+$/, "") : "/";
         const key = normalized === "" ? "/" : normalized;
         calls.push({ path: key });
         await new Promise((resolve) => setTimeout(resolve, 600));
         return { entries: entriesByPath[key] ?? [] };
       };
       const readFileFromTree = async () => ({ data: "" });
-      (
-        window as Window & { __c64uFolderPickerOverride?: any }
-      ).__c64uFolderPickerOverride = {
+      (window as Window & { __c64uFolderPickerOverride?: any }).__c64uFolderPickerOverride = {
         pickDirectory,
         listChildren,
         readFileFromTree,
@@ -542,9 +461,7 @@ test.describe("Playback file browser (part 2)", () => {
     await page.goto("/play");
     await snap(page, testInfo, "playlist-empty");
 
-    await page
-      .getByRole("button", { name: /Add items|Add more items/i })
-      .click();
+    await page.getByRole("button", { name: /Add items|Add more items/i }).click();
     await expect(page.getByRole("dialog")).toBeVisible();
     await snap(page, testInfo, "choose-source");
 
@@ -553,20 +470,10 @@ test.describe("Playback file browser (part 2)", () => {
     const overlay = page.getByTestId("add-items-overlay");
     await expect(overlay).toBeVisible();
     await expect(overlay).toContainText("Scanning");
-    await expect
-      .poll(async () =>
-        page.evaluate(() => (window as any).__c64uSafCalls?.length ?? 0),
-      )
-      .toBeGreaterThan(0);
-    await expect
-      .poll(async () =>
-        page.evaluate(() => (window as any).__c64uSafCalls?.length ?? 0),
-      )
-      .toBeGreaterThan(2);
+    await expect.poll(async () => page.evaluate(() => (window as any).__c64uSafCalls?.length ?? 0)).toBeGreaterThan(0);
+    await expect.poll(async () => page.evaluate(() => (window as any).__c64uSafCalls?.length ?? 0)).toBeGreaterThan(2);
     await snap(page, testInfo, "playlist-scan-overlay");
-    await expect(page.locator('[data-testid="add-items-overlay"]')).toHaveCount(
-      0,
-    );
+    await expect(page.locator('[data-testid="add-items-overlay"]')).toHaveCount(0);
     const playlistList = page.getByTestId("playlist-list");
     await expect(playlistList).toContainText("demo.sid");
     await expect(playlistList).toContainText("launch.prg");
@@ -583,21 +490,13 @@ test.describe("Playback file browser (part 2)", () => {
       description: "Expected destructive toast for empty SAF scan.",
     });
     await page.addInitScript(() => {
-      (
-        window as Window & { __c64uTestProbeEnabled?: boolean }
-      ).__c64uTestProbeEnabled = true;
-      (
-        window as Window & { __c64uPlatformOverride?: string }
-      ).__c64uPlatformOverride = "android";
-      (
-        window as Window & { __c64uAllowAndroidFolderPickerOverride?: boolean }
-      ).__c64uAllowAndroidFolderPickerOverride = true;
+      (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled = true;
+      (window as Window & { __c64uPlatformOverride?: string }).__c64uPlatformOverride = "android";
+      (window as Window & { __c64uAllowAndroidFolderPickerOverride?: boolean }).__c64uAllowAndroidFolderPickerOverride =
+        true;
 
       const treeUri = "content://tree/primary%3AEmpty";
-      const entriesByPath: Record<
-        string,
-        Array<{ type: "file" | "dir"; name: string; path: string }>
-      > = {
+      const entriesByPath: Record<string, Array<{ type: "file" | "dir"; name: string; path: string }>> = {
         "/": [{ type: "file", name: "notes.txt", path: "/notes.txt" }],
       };
 
@@ -606,20 +505,12 @@ test.describe("Playback file browser (part 2)", () => {
         rootName: "Empty",
         permissionPersisted: true,
       });
-      const listChildren = async ({
-        treeUri: requestUri,
-        path = "/",
-      }: {
-        treeUri: string;
-        path?: string;
-      }) => {
+      const listChildren = async ({ treeUri: requestUri, path = "/" }: { treeUri: string; path?: string }) => {
         if (requestUri !== treeUri) throw new Error("Unexpected treeUri");
         await new Promise((resolve) => setTimeout(resolve, 75));
         return { entries: entriesByPath[path || "/"] ?? [] };
       };
-      (
-        window as Window & { __c64uFolderPickerOverride?: any }
-      ).__c64uFolderPickerOverride = {
+      (window as Window & { __c64uFolderPickerOverride?: any }).__c64uFolderPickerOverride = {
         pickDirectory,
         listChildren,
         readFileFromTree: async () => ({ data: "" }),
@@ -637,12 +528,8 @@ test.describe("Playback file browser (part 2)", () => {
     await expect(page.getByText("No supported files")).toHaveCount(0);
     await snap(page, testInfo, "saf-scan-overlay");
 
-    await expect(page.locator('[data-testid="add-items-overlay"]')).toHaveCount(
-      0,
-    );
-    await expect(
-      page.getByRole("status").getByText("No supported files", { exact: true }),
-    ).toBeVisible();
+    await expect(page.locator('[data-testid="add-items-overlay"]')).toHaveCount(0);
+    await expect(page.getByRole("status").getByText("No supported files", { exact: true })).toBeVisible();
     await snap(page, testInfo, "saf-no-supported-files");
   });
 
@@ -654,15 +541,10 @@ test.describe("Playback file browser (part 2)", () => {
       description: "Expected destructive toast for SAF scan failure.",
     });
     await page.addInitScript(() => {
-      (
-        window as Window & { __c64uTestProbeEnabled?: boolean }
-      ).__c64uTestProbeEnabled = true;
-      (
-        window as Window & { __c64uPlatformOverride?: string }
-      ).__c64uPlatformOverride = "android";
-      (
-        window as Window & { __c64uAllowAndroidFolderPickerOverride?: boolean }
-      ).__c64uAllowAndroidFolderPickerOverride = true;
+      (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled = true;
+      (window as Window & { __c64uPlatformOverride?: string }).__c64uPlatformOverride = "android";
+      (window as Window & { __c64uAllowAndroidFolderPickerOverride?: boolean }).__c64uAllowAndroidFolderPickerOverride =
+        true;
 
       const treeUri = "content://tree/primary%3ABroken";
       const pickDirectory = async () => ({
@@ -670,18 +552,12 @@ test.describe("Playback file browser (part 2)", () => {
         rootName: "Broken",
         permissionPersisted: true,
       });
-      const listChildren = async ({
-        treeUri: requestUri,
-      }: {
-        treeUri: string;
-      }) => {
+      const listChildren = async ({ treeUri: requestUri }: { treeUri: string }) => {
         if (requestUri !== treeUri) throw new Error("Unexpected treeUri");
         await new Promise((resolve) => setTimeout(resolve, 50));
         return { entries: { bad: true } } as any;
       };
-      (
-        window as Window & { __c64uFolderPickerOverride?: any }
-      ).__c64uFolderPickerOverride = {
+      (window as Window & { __c64uFolderPickerOverride?: any }).__c64uFolderPickerOverride = {
         pickDirectory,
         listChildren,
         readFileFromTree: async () => ({ data: "" }),
@@ -698,29 +574,20 @@ test.describe("Playback file browser (part 2)", () => {
     await expect(overlay).toBeVisible();
     await snap(page, testInfo, "saf-error-overlay");
 
-    await expect(page.locator('[data-testid="add-items-overlay"]')).toHaveCount(
-      0,
-    );
-    await expect(
-      page.getByRole("status").getByText("Add items failed", { exact: true }),
-    ).toBeVisible();
+    await expect(page.locator('[data-testid="add-items-overlay"]')).toHaveCount(0);
+    await expect(page.getByRole("status").getByText("Add items failed", { exact: true })).toBeVisible();
 
     await expect
       .poll(async () => {
-        const logs = await page.evaluate(() =>
-          JSON.parse(localStorage.getItem("c64u_app_logs") ?? "[]"),
-        );
+        const logs = await page.evaluate(() => JSON.parse(localStorage.getItem("c64u_app_logs") ?? "[]"));
         return logs.some(
           (entry: { level: string; message: string }) =>
-            entry.level === "error" &&
-            entry.message === "PLAYLIST_ADD: Add items failed",
+            entry.level === "error" && entry.message === "PLAYLIST_ADD: Add items failed",
         );
       })
       .toBe(true);
 
-    await page
-      .getByRole("button", { name: /Add items|Add more items/i })
-      .click();
+    await page.getByRole("button", { name: /Add items|Add more items/i }).click();
     await expect(page.getByRole("dialog")).toBeVisible();
     await snap(page, testInfo, "saf-error-recovered");
   });
@@ -741,16 +608,10 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "playlist-populated");
     await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
     const playlistList = page.getByTestId("playlist-list");
-    await expect(
-      playlistList
-        .getByTestId("playlist-item-header")
-        .filter({ hasText: "/local-play/" }),
-    ).toBeVisible();
+    await expect(playlistList.getByTestId("playlist-item-header").filter({ hasText: "/local-play/" })).toBeVisible();
     await expect(playlistList.getByText("/local-play/demo.sid")).toHaveCount(1);
 
-    const resetBefore = server.requests.filter((req) =>
-      req.url.startsWith("/v1/machine:reset"),
-    ).length;
+    const resetBefore = server.requests.filter((req) => req.url.startsWith("/v1/machine:reset")).length;
     await page
       .getByTestId("playlist-item")
       .filter({ hasText: "demo.sid" })
@@ -765,55 +626,39 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "sid-playing");
     await stopButton.click();
     await waitForRequests(
-      () =>
-        server.requests.filter((req) => req.url.startsWith("/v1/machine:reset"))
-          .length > resetBefore,
+      () => server.requests.filter((req) => req.url.startsWith("/v1/machine:reset")).length > resetBefore,
     );
     await snap(page, testInfo, "sid-stop-reset");
   });
 
-  test("songlengths metadata is applied for local SIDs", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("songlengths metadata is applied for local SIDs", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/play");
     await snap(page, testInfo, "play-open");
     await openAddItemsDialog(page);
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
     const input = page.locator('input[type="file"][webkitdirectory]');
     await expect(input).toHaveCount(1);
-    await input.setInputFiles([
-      path.resolve("playwright/fixtures/local-play-songlengths-documents"),
-    ]);
+    await input.setInputFiles([path.resolve("playwright/fixtures/local-play-songlengths-documents")]);
     await expect(page.getByRole("dialog")).toBeHidden();
     await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
     await expect(page.getByTestId("playlist-list")).toContainText("demo2.sid");
     await snap(page, testInfo, "songlengths-playlist");
 
-    const demoRow = page
-      .getByTestId("playlist-item")
-      .filter({ hasText: "demo.sid" });
+    const demoRow = page.getByTestId("playlist-item").filter({ hasText: "demo.sid" });
     await demoRow.getByRole("button", { name: "Item actions" }).click();
-    await expect(
-      page.getByRole("menuitem", { name: /Duration: 0:20/ }),
-    ).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: /Duration: 0:20/ })).toBeVisible();
     await snap(page, testInfo, "songlengths-duration");
   });
 
-  test("remaining time label uses song length", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("remaining time label uses song length", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/play");
     await openAddItemsDialog(page);
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
     const input = page.locator('input[type="file"][webkitdirectory]');
-    await input.setInputFiles([
-      path.resolve("playwright/fixtures/local-play-songlengths-documents"),
-    ]);
+    await input.setInputFiles([path.resolve("playwright/fixtures/local-play-songlengths-documents")]);
     await expect(page.getByRole("dialog")).toBeHidden();
 
-    const demoRow = page
-      .getByTestId("playlist-item")
-      .filter({ hasText: "demo.sid" });
+    const demoRow = page.getByTestId("playlist-item").filter({ hasText: "demo.sid" });
     await demoRow.getByRole("button", { name: "Play" }).click();
     await waitForRequests(() => server.sidplayRequests.length > 0);
 
@@ -829,9 +674,7 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "remaining-time-label");
   });
 
-  test("hvsc md5 duration lookup updates playlist durations", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("hvsc md5 duration lookup updates playlist durations", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/play");
     await openAddItemsDialog(page);
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
@@ -839,23 +682,16 @@ test.describe("Playback file browser (part 2)", () => {
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play")]);
     await expect(page.getByRole("dialog")).toBeHidden();
 
-    const demoRow = page
-      .getByTestId("playlist-item")
-      .filter({ hasText: "demo.sid" })
-      .first();
+    const demoRow = page.getByTestId("playlist-item").filter({ hasText: "demo.sid" }).first();
     await demoRow.getByRole("button", { name: "Play" }).click();
     await waitForRequests(() => server.sidplayRequests.length > 0);
 
     await demoRow.getByRole("button", { name: "Item actions" }).click();
-    await expect(
-      page.getByRole("menuitem", { name: /Duration: 0:42/ }),
-    ).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: /Duration: 0:42/ })).toBeVisible();
     await snap(page, testInfo, "hvsc-md5-duration");
   });
 
-  test("local source browser filters supported files", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("local source browser filters supported files", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/play");
     await snap(page, testInfo, "play-open");
     await openAddItemsDialog(page);
@@ -870,9 +706,7 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "local-source-filtered");
   });
 
-  test("folder play populates playlist dialog", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("folder play populates playlist dialog", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.addInitScript(() => {
       localStorage.setItem("c64u_list_preview_limit", "1");
     });
@@ -892,9 +726,7 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "playlist-view-all");
   });
 
-  test("local folder input accepts directory", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("local folder input accepts directory", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/play");
     await snap(page, testInfo, "play-open");
     await openAddItemsDialog(page);
@@ -935,23 +767,11 @@ test.describe("Playback file browser (part 2)", () => {
       currentIndex: 0,
     };
 
-    await page.addInitScript(
-      (payload: {
-        items: Array<Record<string, unknown>>;
-        currentIndex: number;
-      }) => {
-        localStorage.setItem(
-          "c64u_playlist:v1:TEST-123",
-          JSON.stringify(payload),
-        );
-        localStorage.setItem(
-          "c64u_playlist:v1:default",
-          JSON.stringify(payload),
-        );
-        localStorage.setItem("c64u_last_device_id", "TEST-123");
-      },
-      playlist,
-    );
+    await page.addInitScript((payload: { items: Array<Record<string, unknown>>; currentIndex: number }) => {
+      localStorage.setItem("c64u_playlist:v1:TEST-123", JSON.stringify(payload));
+      localStorage.setItem("c64u_playlist:v1:default", JSON.stringify(payload));
+      localStorage.setItem("c64u_last_device_id", "TEST-123");
+    }, playlist);
 
     await page.goto("/play");
     await snap(page, testInfo, "play-open");
@@ -960,9 +780,7 @@ test.describe("Playback file browser (part 2)", () => {
     await shuffleCheckbox.click();
 
     await page.getByTestId("playlist-play").click();
-    await expect(page.getByTestId("playback-current-track")).toContainText(
-      "shuffle-0.sid",
-    );
+    await expect(page.getByTestId("playback-current-track")).toContainText("shuffle-0.sid");
 
     const getTitles = async () => {
       const rows = page.getByTestId("playlist-item");
@@ -983,9 +801,7 @@ test.describe("Playback file browser (part 2)", () => {
     await page.getByRole("button", { name: "Reshuffle" }).click();
     await snap(page, testInfo, "reshuffle-clicked");
 
-    await expect
-      .poll(async () => (await getTitles()).join("|"))
-      .not.toBe(beforeTitles.join("|"));
+    await expect.poll(async () => (await getTitles()).join("|")).not.toBe(beforeTitles.join("|"));
     const afterTitles = await getTitles();
     const afterIndex = afterTitles.indexOf(currentTrack);
 
@@ -993,25 +809,16 @@ test.describe("Playback file browser (part 2)", () => {
     expect(afterIndex).toBe(beforeIndex);
   });
 
-  test("local folder without supported files shows warning", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
-    allowWarnings(
-      testInfo,
-      "Expected warning when no supported files are found.",
-    );
+  test("local folder without supported files shows warning", async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    allowWarnings(testInfo, "Expected warning when no supported files are found.");
     await page.goto("/play");
     await openAddItemsDialog(page);
     await snap(page, testInfo, "add-items-open");
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
     const input = page.locator('input[type="file"][webkitdirectory]');
-    await input.setInputFiles([
-      path.resolve("playwright/fixtures/local-play-unsupported"),
-    ]);
+    await input.setInputFiles([path.resolve("playwright/fixtures/local-play-unsupported")]);
     await expect(page.getByRole("dialog")).toBeVisible();
-    await expect(page.getByTestId("add-items-progress")).toContainText(
-      "No supported files",
-    );
+    await expect(page.getByTestId("add-items-progress")).toContainText("No supported files");
     await snap(page, testInfo, "no-supported-files");
   });
 
@@ -1038,15 +845,11 @@ test.describe("Playback file browser (part 2)", () => {
       .filter({ hasText: "Disk 1.d64" })
       .getByRole("button", { name: "Play" })
       .click();
-    await waitForRequests(() =>
-      server.requests.some((req) => req.url.startsWith("/v1/drives/a:mount")),
-    );
+    await waitForRequests(() => server.requests.some((req) => req.url.startsWith("/v1/drives/a:mount")));
     await snap(page, testInfo, "mount-requested");
   });
 
-  test("C64U browser remembers last path and supports root", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("C64U browser remembers last path and supports root", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.setViewportSize({ width: 360, height: 740 });
     await page.goto("/play");
     await snap(page, testInfo, "play-open");
@@ -1070,9 +873,7 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "c64u-root");
   });
 
-  test("disk image triggers mount and autostart sequence", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("disk image triggers mount and autostart sequence", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     enableGoldenTrace(testInfo);
     await page.goto("/play");
     await snap(page, testInfo, "play-open");
@@ -1082,43 +883,27 @@ test.describe("Playback file browser (part 2)", () => {
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play")]);
     await expect(page.getByRole("dialog")).toBeHidden();
     await snap(page, testInfo, "playlist-ready");
-    const rebootBefore = server.requests.filter((req) =>
-      req.url.startsWith("/v1/machine:reboot"),
-    ).length;
+    const rebootBefore = server.requests.filter((req) => req.url.startsWith("/v1/machine:reboot")).length;
     await page
       .getByTestId("playlist-item")
       .filter({ hasText: "demo.d64" })
       .getByRole("button", { name: "Play" })
       .click();
     await waitForRequests(
-      () =>
-        server.requests.filter((req) =>
-          req.url.startsWith("/v1/machine:reboot"),
-        ).length > rebootBefore,
+      () => server.requests.filter((req) => req.url.startsWith("/v1/machine:reboot")).length > rebootBefore,
     );
-    await waitForRequests(() =>
-      server.requests.some((req) => req.url.startsWith("/v1/drives/a:mount")),
-    );
-    await waitForRequests(() =>
-      server.requests.some((req) => req.url.startsWith("/v1/machine:readmem")),
-    );
-    await waitForRequests(() =>
-      server.requests.some((req) => req.url.startsWith("/v1/machine:writemem")),
-    );
+    await waitForRequests(() => server.requests.some((req) => req.url.startsWith("/v1/drives/a:mount")));
+    await waitForRequests(() => server.requests.some((req) => req.url.startsWith("/v1/machine:readmem")));
+    await waitForRequests(() => server.requests.some((req) => req.url.startsWith("/v1/machine:writemem")));
     await snap(page, testInfo, "autostart-complete");
 
-    const rebootAfterPlay = server.requests.filter((req) =>
-      req.url.startsWith("/v1/machine:reboot"),
-    ).length;
+    const rebootAfterPlay = server.requests.filter((req) => req.url.startsWith("/v1/machine:reboot")).length;
     const stopButton = page.getByTestId("playlist-play");
     await expect(stopButton).toHaveAttribute("aria-label", "Stop");
     await snap(page, testInfo, "disk-playing");
     await stopButton.click();
     await waitForRequests(
-      () =>
-        server.requests.filter((req) =>
-          req.url.startsWith("/v1/machine:reboot"),
-        ).length > rebootAfterPlay,
+      () => server.requests.filter((req) => req.url.startsWith("/v1/machine:reboot")).length > rebootAfterPlay,
     );
     await snap(page, testInfo, "disk-stop-reboot");
   });
@@ -1129,16 +914,13 @@ test.describe("Playback file browser (part 2)", () => {
     allowWarnings(testInfo, "Expected probe failures during demo mode.");
     await page.addInitScript(
       ({ demoBaseUrl }) => {
-        (
-          window as Window & { __c64uMockServerBaseUrl?: string }
-        ).__c64uMockServerBaseUrl = demoBaseUrl;
+        (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = demoBaseUrl;
         localStorage.setItem("c64u_startup_discovery_window_ms", "300");
         localStorage.setItem("c64u_automatic_demo_mode_enabled", "1");
         localStorage.setItem("c64u_device_host", "demo.invalid");
         localStorage.removeItem("c64u_password");
         localStorage.removeItem("c64u_has_password");
-        delete (window as Window & { __c64uSecureStorageOverride?: unknown })
-          .__c64uSecureStorageOverride;
+        delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
         sessionStorage.setItem("c64u_demo_interstitial_shown", "1");
       },
       { demoBaseUrl: server.baseUrl },
@@ -1150,17 +932,13 @@ test.describe("Playback file browser (part 2)", () => {
     });
     if (await demoButton.isVisible().catch(() => false)) {
       await demoButton.click();
-      await expect(
-        page.getByRole("dialog", { name: "Demo Mode" }),
-      ).toBeHidden();
+      await expect(page.getByRole("dialog", { name: "Demo Mode" })).toBeHidden();
     }
 
     const dismissDemoDialog = async () => {
       const demoDialog = page.getByRole("dialog", { name: "Demo Mode" });
       if (await demoDialog.isVisible().catch(() => false)) {
-        await demoDialog
-          .getByRole("button", { name: "Continue in Demo Mode" })
-          .click();
+        await demoDialog.getByRole("button", { name: "Continue in Demo Mode" }).click();
         await expect(demoDialog).toBeHidden();
       }
     };
@@ -1178,9 +956,7 @@ test.describe("Playback file browser (part 2)", () => {
 
     await dismissBlockingDialogs();
     await openAddItemsDialog(page);
-    const addDialog = page
-      .getByRole("dialog")
-      .filter({ has: page.getByText("Add items") });
+    const addDialog = page.getByRole("dialog").filter({ has: page.getByText("Add items") });
     await dismissBlockingDialogs();
     await expect(page.getByRole("dialog", { name: "Demo Mode" })).toBeHidden();
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device", {
@@ -1206,28 +982,19 @@ test.describe("Playback file browser (part 2)", () => {
           await expect(lingeringDialog).toBeHidden();
         }
       }
-      await expect(
-        page.locator('[data-testid="add-items-overlay"]'),
-      ).toHaveCount(0);
-      const playlistItem = page
-        .getByTestId("playlist-item")
-        .filter({ hasText: "demo.d64" })
-        .first();
+      await expect(page.locator('[data-testid="add-items-overlay"]')).toHaveCount(0);
+      const playlistItem = page.getByTestId("playlist-item").filter({ hasText: "demo.d64" }).first();
       await expect(playlistItem).toBeVisible();
       await page.getByTestId("playlist-play").click({ force: true });
 
-      await expect(
-        page.getByText(/Keyboard buffer remained busy/i),
-      ).toHaveCount(0, { timeout: 5000 });
+      await expect(page.getByText(/Keyboard buffer remained busy/i)).toHaveCount(0, { timeout: 5000 });
       await snap(page, testInfo, "demo-autostart");
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true });
     }
   });
 
-  test("disk image uses DMA autostart when enabled", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("disk image uses DMA autostart when enabled", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     enableGoldenTrace(testInfo);
     await page.addInitScript(() => {
       localStorage.setItem("c64u_disk_autostart_mode", "dma");
@@ -1249,14 +1016,9 @@ test.describe("Playback file browser (part 2)", () => {
         .getByRole("button", { name: "Play" })
         .click();
 
+      await waitForRequests(() => server.requests.some((req) => req.url.startsWith("/v1/drives/a:mount")));
       await waitForRequests(() =>
-        server.requests.some((req) => req.url.startsWith("/v1/drives/a:mount")),
-      );
-      await waitForRequests(() =>
-        server.requests.some(
-          (req) =>
-            req.method === "POST" && req.url.startsWith("/v1/machine:writemem"),
-        ),
+        server.requests.some((req) => req.method === "POST" && req.url.startsWith("/v1/machine:writemem")),
       );
       await snap(page, testInfo, "dma-autostart-complete");
     } finally {
@@ -1308,9 +1070,8 @@ test.describe("Playback file browser (part 2)", () => {
 
     await waitForRequests(
       () =>
-        server.requests.filter(
-          (req) => req.method === "POST" && req.url.startsWith("/v1/configs"),
-        ).length > initialUpdateCount,
+        server.requests.filter((req) => req.method === "POST" && req.url.startsWith("/v1/configs")).length >
+        initialUpdateCount,
     );
 
     const updatedState = server.getState()["Audio Mixer"];
@@ -1328,17 +1089,12 @@ test.describe("Playback file browser (part 2)", () => {
     await muteButton.click();
     await waitForRequests(
       () =>
-        server.requests.filter(
-          (req) => req.method === "POST" && req.url.startsWith("/v1/configs"),
-        ).length > muteUpdateCount,
+        server.requests.filter((req) => req.method === "POST" && req.url.startsWith("/v1/configs")).length >
+        muteUpdateCount,
     );
     await expect(slider).not.toHaveAttribute("data-disabled");
-    await expect
-      .poll(() => server.getState()["Audio Mixer"]["Vol Socket 1"]?.value)
-      .toBe("OFF");
-    await expect
-      .poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 2"]?.value)
-      .toBe("OFF");
+    await expect.poll(() => server.getState()["Audio Mixer"]["Vol Socket 1"]?.value).toBe("OFF");
+    await expect.poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 2"]?.value).toBe("OFF");
     const mutedState = server.getState()["Audio Mixer"];
     expect(mutedState["Vol Socket 2"]?.value).toBe(initialSocket2);
     expect(mutedState["Vol UltiSid 1"]?.value).toBe(initialUlti1);
@@ -1348,10 +1104,7 @@ test.describe("Playback file browser (part 2)", () => {
     if (boxMuted) {
       await page.mouse.move(boxMuted.x + 4, boxMuted.y + boxMuted.height / 2);
       await page.mouse.down();
-      await page.mouse.move(
-        boxMuted.x + boxMuted.width - 4,
-        boxMuted.y + boxMuted.height / 2,
-      );
+      await page.mouse.move(boxMuted.x + boxMuted.width - 4, boxMuted.y + boxMuted.height / 2);
       await page.mouse.up();
     }
     const mutedStateAfterSlider = server.getState()["Audio Mixer"];
@@ -1364,16 +1117,11 @@ test.describe("Playback file browser (part 2)", () => {
     await muteButton.click();
     await waitForRequests(
       () =>
-        server.requests.filter(
-          (req) => req.method === "POST" && req.url.startsWith("/v1/configs"),
-        ).length > unmuteUpdateCount,
+        server.requests.filter((req) => req.method === "POST" && req.url.startsWith("/v1/configs")).length >
+        unmuteUpdateCount,
     );
-    await expect
-      .poll(() => server.getState()["Audio Mixer"]["Vol Socket 1"]?.value)
-      .not.toBe("OFF");
-    await expect
-      .poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 2"]?.value)
-      .not.toBe("OFF");
+    await expect.poll(() => server.getState()["Audio Mixer"]["Vol Socket 1"]?.value).not.toBe("OFF");
+    await expect.poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 2"]?.value).not.toBe("OFF");
     const unmutedState = server.getState()["Audio Mixer"];
     const updatedTarget = unmutedState["Vol Socket 1"]?.value;
     expect(updatedTarget).toBeDefined();
@@ -1384,9 +1132,7 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "volume-updated");
   });
 
-  test("unmute skips SID volumes disabled while muted", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("unmute skips SID volumes disabled while muted", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.request.post(`${server.baseUrl}/v1/configs`, {
       data: {
         "SID Sockets Configuration": {
@@ -1414,16 +1160,11 @@ test.describe("Playback file browser (part 2)", () => {
     await muteButton.click();
     await waitForRequests(
       () =>
-        server.requests.filter(
-          (req) => req.method === "POST" && req.url.startsWith("/v1/configs"),
-        ).length > muteUpdateCount,
+        server.requests.filter((req) => req.method === "POST" && req.url.startsWith("/v1/configs")).length >
+        muteUpdateCount,
     );
-    await expect
-      .poll(() => server.getState()["Audio Mixer"]["Vol Socket 1"]?.value)
-      .toBe("OFF");
-    await expect
-      .poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 2"]?.value)
-      .toBe("OFF");
+    await expect.poll(() => server.getState()["Audio Mixer"]["Vol Socket 1"]?.value).toBe("OFF");
+    await expect.poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 2"]?.value).toBe("OFF");
 
     await page.request.post(`${server.baseUrl}/v1/configs`, {
       data: {
@@ -1440,23 +1181,16 @@ test.describe("Playback file browser (part 2)", () => {
     await muteButton.click();
     await waitForRequests(
       () =>
-        server.requests.filter(
-          (req) => req.method === "POST" && req.url.startsWith("/v1/configs"),
-        ).length > unmuteUpdateCount,
+        server.requests.filter((req) => req.method === "POST" && req.url.startsWith("/v1/configs")).length >
+        unmuteUpdateCount,
     );
 
-    await expect
-      .poll(() => server.getState()["Audio Mixer"]["Vol Socket 1"]?.value)
-      .toBe("OFF");
-    await expect
-      .poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 2"]?.value)
-      .toBe("+6 dB");
+    await expect.poll(() => server.getState()["Audio Mixer"]["Vol Socket 1"]?.value).toBe("OFF");
+    await expect.poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 2"]?.value).toBe("+6 dB");
     await snap(page, testInfo, "unmute-skips-disabled-sid");
   });
 
-  test("volume slider reports min/max bounds", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("volume slider reports min/max bounds", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.request.post(`${server.baseUrl}/v1/configs`, {
       data: {
         "SID Sockets Configuration": {
@@ -1502,9 +1236,7 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "volume-bounds");
   });
 
-  test("reshuffle button does not stick", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("reshuffle button does not stick", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/play");
     await openAddItemsDialog(page);
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
@@ -1517,15 +1249,11 @@ test.describe("Playback file browser (part 2)", () => {
     await expect(reshuffle).toBeEnabled();
     await reshuffle.click();
     await expect(reshuffle).toHaveAttribute("data-active", "true");
-    await expect
-      .poll(async () => reshuffle.getAttribute("data-active"))
-      .toBe("false");
+    await expect.poll(async () => reshuffle.getAttribute("data-active")).toBe("false");
     await snap(page, testInfo, "reshuffle-momentary");
   });
 
-  test("FTP failure shows error toast", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("FTP failure shows error toast", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     allowWarnings(testInfo, "Expected error toast for FTP failure.");
     await seedFtpConfig(page, {
       host: ftpServers.ftpServer.host,
@@ -1538,15 +1266,11 @@ test.describe("Playback file browser (part 2)", () => {
     await page.goto("/play");
     await openAddItemsDialog(page);
     await clickSourceSelectionButton(page.getByRole("dialog"), "C64 Ultimate");
-    await expect(
-      page.getByText("Browse failed", { exact: true }).first(),
-    ).toBeVisible();
+    await expect(page.getByText("Browse failed", { exact: true }).first()).toBeVisible();
     await snap(page, testInfo, "browse-failed");
   });
 
-  test("end-to-end add, browse, and play (local + remote)", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("end-to-end add, browse, and play (local + remote)", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/play");
     await snap(page, testInfo, "play-page");
     await snap(page, testInfo, "play-open");
@@ -1594,16 +1318,12 @@ test.describe("Playback file browser (part 2)", () => {
       .filter({ hasText: "Disk 1.d64" })
       .getByRole("button", { name: "Play" })
       .click();
-    await waitForRequests(() =>
-      server.requests.some((req) => req.url.startsWith("/v1/drives/a:mount")),
-    );
+    await waitForRequests(() => server.requests.some((req) => req.url.startsWith("/v1/drives/a:mount")));
     await snap(page, testInfo, "remote-playback");
     await snap(page, testInfo, "remote-playback-started");
   });
 
-  test("add to playlist queues items without auto-play", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("add to playlist queues items without auto-play", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/play");
     await snap(page, testInfo, "play-open");
     await openAddItemsDialog(page);
@@ -1618,9 +1338,7 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "no-autoplay");
   });
 
-  test("prev/next navigates within playlist", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("prev/next navigates within playlist", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     enableGoldenTrace(testInfo);
     await page.goto("/play");
     await snap(page, testInfo, "play-open");
@@ -1631,51 +1349,32 @@ test.describe("Playback file browser (part 2)", () => {
     await expect(page.getByRole("dialog")).toBeHidden();
     await snap(page, testInfo, "playlist-ready");
 
-    const rebootStart = server.requests.filter((req) =>
-      req.url.startsWith("/v1/machine:reboot"),
-    ).length;
+    const rebootStart = server.requests.filter((req) => req.url.startsWith("/v1/machine:reboot")).length;
     await page
       .getByTestId("playlist-item")
       .filter({ hasText: "demo.d64" })
       .getByRole("button", { name: "Play" })
       .click();
-    await waitForRequests(() =>
-      server.requests.some((req) => req.url.startsWith("/v1/drives/a:mount")),
-    );
+    await waitForRequests(() => server.requests.some((req) => req.url.startsWith("/v1/drives/a:mount")));
     await snap(page, testInfo, "first-track-playing");
 
     await page.getByTestId("playlist-next").click();
     await waitForRequests(
-      () =>
-        server.requests.filter((req) =>
-          req.url.startsWith("/v1/machine:reboot"),
-        ).length > rebootStart,
+      () => server.requests.filter((req) => req.url.startsWith("/v1/machine:reboot")).length > rebootStart,
     );
     await waitForRequests(() => server.sidplayRequests.length > 0);
     await snap(page, testInfo, "next-track-playing");
 
-    const rebootAfterNext = server.requests.filter((req) =>
-      req.url.startsWith("/v1/machine:reboot"),
-    ).length;
+    const rebootAfterNext = server.requests.filter((req) => req.url.startsWith("/v1/machine:reboot")).length;
     await page.getByTestId("playlist-prev").click();
+    await waitForRequests(() => server.requests.filter((req) => req.url.startsWith("/v1/drives/a:mount")).length > 1);
     await waitForRequests(
-      () =>
-        server.requests.filter((req) =>
-          req.url.startsWith("/v1/drives/a:mount"),
-        ).length > 1,
-    );
-    await waitForRequests(
-      () =>
-        server.requests.filter((req) =>
-          req.url.startsWith("/v1/machine:reboot"),
-        ).length > rebootAfterNext,
+      () => server.requests.filter((req) => req.url.startsWith("/v1/machine:reboot")).length > rebootAfterNext,
     );
     await snap(page, testInfo, "prev-track-playing");
   });
 
-  test("transport controls toggle play, pause, and stop", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("transport controls toggle play, pause, and stop", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/play");
     await snap(page, testInfo, "play-open");
     const playButton = page.getByTestId("playlist-play");
@@ -1701,8 +1400,7 @@ test.describe("Playback file browser (part 2)", () => {
     await playButton.click();
     await waitForRequests(
       () =>
-        server.sidplayRequests.length > 0 ||
-        server.requests.some((req) => req.url.startsWith("/v1/drives/a:mount")),
+        server.sidplayRequests.length > 0 || server.requests.some((req) => req.url.startsWith("/v1/drives/a:mount")),
     );
     await snap(page, testInfo, "play-started");
     await expect(playButton).toHaveAttribute("aria-label", "Stop");
@@ -1738,16 +1436,12 @@ test.describe("Playback file browser (part 2)", () => {
 
     await page.getByRole("button", { name: "Select all" }).click();
     await page.getByRole("button", { name: "Remove selected items" }).click();
-    await expect(page.getByTestId("playlist-list")).toContainText(
-      "No tracks in playlist yet.",
-    );
+    await expect(page.getByTestId("playlist-list")).toContainText("No tracks in playlist yet.");
     await snap(page, testInfo, "playlist-cleared");
     await snap(page, testInfo, "playlist-removed");
   });
 
-  test("playlist persists after reload", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("playlist persists after reload", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/play");
     await snap(page, testInfo, "play-open");
     await openAddItemsDialog(page);
@@ -1763,9 +1457,7 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "playlist-restored");
   });
 
-  test("playlist persists across navigation", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("playlist persists across navigation", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/play");
     await openAddItemsDialog(page);
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
@@ -1782,9 +1474,7 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "playlist-after-navigation");
   });
 
-  test("upload handler tolerates empty/binary response", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("upload handler tolerates empty/binary response", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     let sidplayCalls = 0;
     await page.route("**/v1/runners:sidplay**", async (route: any) => {
       sidplayCalls += 1;

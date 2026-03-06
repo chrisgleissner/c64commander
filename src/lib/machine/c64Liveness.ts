@@ -7,10 +7,7 @@
  */
 
 import type { C64API } from "@/lib/c64api";
-import {
-  createActionContext,
-  getActiveAction,
-} from "@/lib/tracing/actionTrace";
+import { createActionContext, getActiveAction } from "@/lib/tracing/actionTrace";
 import { recordDeviceGuard } from "@/lib/tracing/traceSession";
 
 const DEFAULT_JIFFY_WAIT_MS = 50;
@@ -22,18 +19,11 @@ const delay = (ms: number) =>
     setTimeout(resolve, ms);
   });
 
-const toUint24 = (bytes: Uint8Array) =>
-  bytes[0] | (bytes[1] << 8) | (bytes[2] << 16);
+const toUint24 = (bytes: Uint8Array) => bytes[0] | (bytes[1] << 8) | (bytes[2] << 16);
 
-const assertByteLength = (
-  bytes: Uint8Array,
-  expected: number,
-  label: string,
-) => {
+const assertByteLength = (bytes: Uint8Array, expected: number, label: string) => {
   if (bytes.length !== expected) {
-    throw new Error(
-      `${label} read returned ${bytes.length} byte(s); expected ${expected}.`,
-    );
+    throw new Error(`${label} read returned ${bytes.length} byte(s); expected ${expected}.`);
   }
 };
 
@@ -50,8 +40,7 @@ const readRaster = async (api: C64API) => {
 };
 
 const recordLivenessTrace = (payload: Record<string, unknown>) => {
-  const action =
-    getActiveAction() ?? createActionContext("device.liveness", "system", null);
+  const action = getActiveAction() ?? createActionContext("device.liveness", "system", null);
   recordDeviceGuard(action, payload);
 };
 
@@ -76,14 +65,8 @@ export const checkC64Liveness = async (
   } = {},
 ): Promise<C64LivenessSample> => {
   const jiffyWaitMs = options.jiffyWaitMs ?? DEFAULT_JIFFY_WAIT_MS;
-  const rasterAttempts = Math.max(
-    1,
-    options.rasterAttempts ?? DEFAULT_RASTER_ATTEMPTS,
-  );
-  const rasterDelayMs = Math.max(
-    0,
-    options.rasterDelayMs ?? DEFAULT_RASTER_DELAY_MS,
-  );
+  const rasterAttempts = Math.max(1, options.rasterAttempts ?? DEFAULT_RASTER_ATTEMPTS);
+  const rasterDelayMs = Math.max(0, options.rasterDelayMs ?? DEFAULT_RASTER_DELAY_MS);
 
   try {
     const jiffyStart = await readJiffyClock(api);
@@ -106,11 +89,7 @@ export const checkC64Liveness = async (
     }
 
     const jiffyAdvanced = jiffyEnd !== jiffyStart;
-    const decision: C64LivenessDecision = jiffyAdvanced
-      ? "healthy"
-      : rasterChanged
-        ? "irq-stalled"
-        : "wedged";
+    const decision: C64LivenessDecision = jiffyAdvanced ? "healthy" : rasterChanged ? "irq-stalled" : "wedged";
 
     recordLivenessTrace({
       decision,
@@ -135,8 +114,7 @@ export const checkC64Liveness = async (
       decision,
     };
   } catch (error) {
-    const err =
-      error instanceof Error ? error : new Error("Liveness check failed");
+    const err = error instanceof Error ? error : new Error("Liveness check failed");
     recordLivenessTrace({
       decision: "wedged",
       error: err.message,

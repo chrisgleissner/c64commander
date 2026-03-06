@@ -37,15 +37,7 @@ const STREAM_ORDER: Array<{
   },
 ];
 
-const OFF_TOKENS = new Set([
-  "",
-  "off",
-  "disabled",
-  "none",
-  "0.0.0.0",
-  "0.0.0.0:0",
-  "false",
-]);
+const OFF_TOKENS = new Set(["", "off", "disabled", "none", "0.0.0.0", "0.0.0.0:0", "false"]);
 
 const parseStreamTarget = (value: unknown, defaultPort: string) => {
   const raw = String(value ?? "").trim();
@@ -83,25 +75,15 @@ const parseStreamTarget = (value: unknown, defaultPort: string) => {
   };
 };
 
-const getStreamItemValue = (
-  payload: Record<string, unknown> | undefined,
-  itemName: string,
-) => {
+const getStreamItemValue = (payload: Record<string, unknown> | undefined, itemName: string) => {
   if (!payload) return undefined;
-  const category = (payload["Data Streams"] ?? payload) as
-    | Record<string, unknown>
-    | undefined;
-  const items = (category?.items ?? category) as
-    | Record<string, unknown>
-    | undefined;
-  if (!items || !Object.prototype.hasOwnProperty.call(items, itemName))
-    return undefined;
+  const category = (payload["Data Streams"] ?? payload) as Record<string, unknown> | undefined;
+  const items = (category?.items ?? category) as Record<string, unknown> | undefined;
+  if (!items || !Object.prototype.hasOwnProperty.call(items, itemName)) return undefined;
   return normalizeConfigItem(items[itemName]).value;
 };
 
-export const buildStreamStatusEntries = (
-  dataStreamsCategory?: Record<string, unknown>,
-): StreamStatusEntry[] =>
+export const buildStreamStatusEntries = (dataStreamsCategory?: Record<string, unknown>): StreamStatusEntry[] =>
   STREAM_ORDER.map((entry) => {
     const selected = getStreamItemValue(dataStreamsCategory, entry.itemName);
     const parsed = parseStreamTarget(selected, entry.defaultPort);

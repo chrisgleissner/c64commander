@@ -19,9 +19,7 @@ export type ContractMockServers = {
 };
 
 export async function startContractMockServers(): Promise<ContractMockServers> {
-  const rootDir = await fs.promises.mkdtemp(
-    path.join(os.tmpdir(), "c64u-contract-mock-"),
-  );
+  const rootDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "c64u-contract-mock-"));
   const scratchDir = path.join(rootDir, "Temp", "contract-test");
   await fs.promises.mkdir(scratchDir, { recursive: true });
 

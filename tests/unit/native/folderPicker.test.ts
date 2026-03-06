@@ -49,12 +49,9 @@ describe("FolderPicker overrides", () => {
       ...(import.meta as ImportMeta & { env?: Record<string, string> }).env,
       VITE_ENABLE_TEST_PROBES: "1",
     };
-    (
-      window as Window & { __c64uFolderPickerOverride?: unknown }
-    ).__c64uFolderPickerOverride = undefined;
-    (
-      window as Window & { __c64uAllowAndroidFolderPickerOverride?: boolean }
-    ).__c64uAllowAndroidFolderPickerOverride = undefined;
+    (window as Window & { __c64uFolderPickerOverride?: unknown }).__c64uFolderPickerOverride = undefined;
+    (window as Window & { __c64uAllowAndroidFolderPickerOverride?: boolean }).__c64uAllowAndroidFolderPickerOverride =
+      undefined;
     vi.mocked(getPlatform).mockReturnValue("web");
   });
 
@@ -64,9 +61,7 @@ describe("FolderPicker overrides", () => {
         files: [{ uri: "demo", name: "demo", path: "/demo" }],
       })),
     };
-    (
-      window as Window & { __c64uFolderPickerOverride?: unknown }
-    ).__c64uFolderPickerOverride = override;
+    (window as Window & { __c64uFolderPickerOverride?: unknown }).__c64uFolderPickerOverride = override;
 
     const result = await FolderPicker.pickDirectory({ extensions: ["sid"] });
 
@@ -124,13 +119,9 @@ describe("FolderPicker overrides", () => {
   it("blocks overrides on android unless explicitly allowed", async () => {
     vi.mocked(getPlatform).mockReturnValue("android");
     const override = { listChildren: vi.fn(async () => ({ entries: [] })) };
-    (
-      window as Window & { __c64uFolderPickerOverride?: unknown }
-    ).__c64uFolderPickerOverride = override;
+    (window as Window & { __c64uFolderPickerOverride?: unknown }).__c64uFolderPickerOverride = override;
 
-    expect(() =>
-      FolderPicker.listChildren({ treeUri: "content://demo" }),
-    ).toThrow("Android SAF picker is required.");
+    expect(() => FolderPicker.listChildren({ treeUri: "content://demo" })).toThrow("Android SAF picker is required.");
     expect(override.listChildren).not.toHaveBeenCalled();
   });
 
@@ -142,9 +133,7 @@ describe("FolderPicker overrides", () => {
         sizeBytes: 0,
       })),
     };
-    (
-      window as Window & { __c64uFolderPickerOverride?: unknown }
-    ).__c64uFolderPickerOverride = override;
+    (window as Window & { __c64uFolderPickerOverride?: unknown }).__c64uFolderPickerOverride = override;
 
     const result = await FolderPicker.pickFile({ extensions: ["sid"] });
     expect(override.pickFile).toHaveBeenCalled();
@@ -156,9 +145,7 @@ describe("FolderPicker overrides", () => {
     const override = {
       getPersistedUris: vi.fn(async () => ({ uris: ["content://uri1"] })),
     };
-    (
-      window as Window & { __c64uFolderPickerOverride?: unknown }
-    ).__c64uFolderPickerOverride = override;
+    (window as Window & { __c64uFolderPickerOverride?: unknown }).__c64uFolderPickerOverride = override;
 
     const result = await FolderPicker.getPersistedUris({});
     expect(override.getPersistedUris).toHaveBeenCalled();
@@ -169,9 +156,7 @@ describe("FolderPicker overrides", () => {
     const override = {
       readFile: vi.fn(async () => ({ data: "SGVsbG8=" })),
     };
-    (
-      window as Window & { __c64uFolderPickerOverride?: unknown }
-    ).__c64uFolderPickerOverride = override;
+    (window as Window & { __c64uFolderPickerOverride?: unknown }).__c64uFolderPickerOverride = override;
 
     const result = await FolderPicker.readFile({ uri: "content://demo.sid" });
     expect(override.readFile).toHaveBeenCalled();
@@ -183,9 +168,7 @@ describe("FolderPicker overrides", () => {
     const override = {
       readFileFromTree: vi.fn(async () => ({ data: "dHJlZQ==" })),
     };
-    (
-      window as Window & { __c64uFolderPickerOverride?: unknown }
-    ).__c64uFolderPickerOverride = override;
+    (window as Window & { __c64uFolderPickerOverride?: unknown }).__c64uFolderPickerOverride = override;
 
     const result = await FolderPicker.readFileFromTree({
       treeUri: "content://tree",
@@ -202,9 +185,7 @@ describe("FolderPicker overrides", () => {
         entries: [{ type: "file", name: "a.sid", path: "/a.sid" }],
       })),
     };
-    (
-      window as Window & { __c64uFolderPickerOverride?: unknown }
-    ).__c64uFolderPickerOverride = override;
+    (window as Window & { __c64uFolderPickerOverride?: unknown }).__c64uFolderPickerOverride = override;
 
     const result = await FolderPicker.listChildren({
       treeUri: "content://tree",
@@ -221,9 +202,7 @@ describe("FolderPicker overrides", () => {
         sizeBytes: 4,
       })),
     };
-    (
-      window as Window & { __c64uFolderPickerOverride?: unknown }
-    ).__c64uFolderPickerOverride = override;
+    (window as Window & { __c64uFolderPickerOverride?: unknown }).__c64uFolderPickerOverride = override;
 
     const result = await FolderPicker.writeFileToTree({
       treeUri: "content://tree",

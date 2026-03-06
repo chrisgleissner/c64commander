@@ -1,38 +1,27 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const {
-  toastSpy,
-  reportUserErrorSpy,
-  c64ApiMockRef,
-  queryClientMockRef,
-  updateConfigValueSpy,
-  resolveConfigValueSpy,
-} = vi.hoisted(() => ({
-  toastSpy: vi.fn(),
-  reportUserErrorSpy: vi.fn(),
-  c64ApiMockRef: {
-    current: {
-      setConfigValue: vi.fn().mockResolvedValue({}),
-      writeMemory: vi.fn().mockResolvedValue({}),
+const { toastSpy, reportUserErrorSpy, c64ApiMockRef, queryClientMockRef, updateConfigValueSpy, resolveConfigValueSpy } =
+  vi.hoisted(() => ({
+    toastSpy: vi.fn(),
+    reportUserErrorSpy: vi.fn(),
+    c64ApiMockRef: {
+      current: {
+        setConfigValue: vi.fn().mockResolvedValue({}),
+        writeMemory: vi.fn().mockResolvedValue({}),
+      },
     },
-  },
-  queryClientMockRef: {
-    current: {
-      invalidateQueries: vi.fn().mockResolvedValue(undefined),
-      fetchQuery: vi.fn().mockResolvedValue(undefined),
+    queryClientMockRef: {
+      current: {
+        invalidateQueries: vi.fn().mockResolvedValue(undefined),
+        fetchQuery: vi.fn().mockResolvedValue(undefined),
+      },
     },
-  },
-  updateConfigValueSpy: vi.fn().mockResolvedValue(undefined),
-  resolveConfigValueSpy: vi.fn(
-    (
-      _payload: unknown,
-      _category: string,
-      _itemName: string,
-      fallback: string | number,
-    ) => fallback,
-  ),
-}));
+    updateConfigValueSpy: vi.fn().mockResolvedValue(undefined),
+    resolveConfigValueSpy: vi.fn(
+      (_payload: unknown, _category: string, _itemName: string, fallback: string | number) => fallback,
+    ),
+  }));
 
 vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => queryClientMockRef.current,
@@ -43,8 +32,7 @@ vi.mock("@/lib/c64api", () => ({
 }));
 
 vi.mock("@/hooks/useActionTrace", () => ({
-  useActionTrace: () =>
-    Object.assign((fn: (...args: any[]) => any) => fn, { scope: vi.fn() }),
+  useActionTrace: () => Object.assign((fn: (...args: any[]) => any) => fn, { scope: vi.fn() }),
 }));
 
 vi.mock("@/hooks/use-toast", () => ({
@@ -59,8 +47,7 @@ vi.mock("@/lib/uiErrors", () => ({
 vi.mock("framer-motion", () => ({
   motion: {
     div: ({ children, ...props }: any) => {
-      const { initial, animate, exit, transition, variants, ...validProps } =
-        props;
+      const { initial, animate, exit, transition, variants, ...validProps } = props;
       return <div {...validProps}>{children}</div>;
     },
   },
@@ -92,9 +79,7 @@ vi.mock("@/pages/home/hooks/ConfigActionsContext", async () => {
       updateConfigValue: updateConfigValueSpy,
       resolveConfigValue: resolveConfigValueSpy,
     }),
-    ConfigActionsProvider: ({ children }: { children: React.ReactNode }) => (
-      <>{children}</>
-    ),
+    ConfigActionsProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   };
 });
 
@@ -129,28 +114,16 @@ vi.mock("@/pages/home/SidCard", () => ({
       <button data-testid="power-toggle" onClick={props.onPowerToggle}>
         Toggle
       </button>
-      <button
-        data-testid="volume-change"
-        onClick={() => props.onVolumeChange?.(5)}
-      >
+      <button data-testid="volume-change" onClick={() => props.onVolumeChange?.(5)}>
         VolChange
       </button>
-      <button
-        data-testid="volume-commit"
-        onClick={() => props.onVolumeCommit?.(5)}
-      >
+      <button data-testid="volume-commit" onClick={() => props.onVolumeCommit?.(5)}>
         VolCommit
       </button>
-      <button
-        data-testid="volume-async-change"
-        onClick={() => props.onVolumeChangeAsync?.(5)}
-      >
+      <button data-testid="volume-async-change" onClick={() => props.onVolumeChangeAsync?.(5)}>
         VolAsyncChange
       </button>
-      <button
-        data-testid="volume-async-commit"
-        onClick={() => props.onVolumeCommitAsync?.(5)}
-      >
+      <button data-testid="volume-async-commit" onClick={() => props.onVolumeCommitAsync?.(5)}>
         VolAsyncCommit
       </button>
       <button data-testid="pan-change" onClick={() => props.onPanChange?.(3)}>
@@ -159,28 +132,16 @@ vi.mock("@/pages/home/SidCard", () => ({
       <button data-testid="pan-commit" onClick={() => props.onPanCommit?.(3)}>
         PanCommit
       </button>
-      <button
-        data-testid="pan-async-change"
-        onClick={() => props.onPanChangeAsync?.(3)}
-      >
+      <button data-testid="pan-async-change" onClick={() => props.onPanChangeAsync?.(3)}>
         PanAsyncChange
       </button>
-      <button
-        data-testid="pan-async-commit"
-        onClick={() => props.onPanCommitAsync?.(3)}
-      >
+      <button data-testid="pan-async-commit" onClick={() => props.onPanCommitAsync?.(3)}>
         PanAsyncCommit
       </button>
-      <button
-        data-testid="identity-change"
-        onClick={() => props.onIdentityChange?.("NewProfile")}
-      >
+      <button data-testid="identity-change" onClick={() => props.onIdentityChange?.("NewProfile")}>
         IdentityChange
       </button>
-      <button
-        data-testid="address-change"
-        onClick={() => props.onAddressChange?.("$DE00")}
-      >
+      <button data-testid="address-change" onClick={() => props.onAddressChange?.("$DE00")}>
         AddressChange
       </button>
     </div>
@@ -191,11 +152,7 @@ vi.mock("@/components/SectionHeader", () => ({
   SectionHeader: (props: any) => (
     <div data-testid={props.resetTestId}>
       <span>{props.title}</span>
-      <button
-        onClick={props.resetAction}
-        disabled={props.resetDisabled}
-        data-testid="reset-btn"
-      >
+      <button onClick={props.resetAction} disabled={props.resetDisabled} data-testid="reset-btn">
         Reset
       </button>
     </div>
@@ -234,11 +191,9 @@ describe("AudioMixer", () => {
   const defaultProps = {
     isConnected: true,
     machineTaskBusy: false,
-    runMachineTask: vi
-      .fn()
-      .mockImplementation(async (_id: string, action: () => Promise<void>) => {
-        await action();
-      }),
+    runMachineTask: vi.fn().mockImplementation(async (_id: string, action: () => Promise<void>) => {
+      await action();
+    }),
   };
 
   it("renders SID section header", () => {
@@ -254,10 +209,7 @@ describe("AudioMixer", () => {
 
   it("renders multiple SID cards when multiple entries exist", () => {
     mockSidControlEntries.mockReturnValue({
-      sidControlEntries: [
-        baseSidEntry("socket1", "SID Socket 1"),
-        baseSidEntry("socket2", "SID Socket 2"),
-      ],
+      sidControlEntries: [baseSidEntry("socket1", "SID Socket 1"), baseSidEntry("socket2", "SID Socket 2")],
       sidSilenceTargets: [],
       sidAddressingCategory: undefined,
       ultiSidCategory: undefined,

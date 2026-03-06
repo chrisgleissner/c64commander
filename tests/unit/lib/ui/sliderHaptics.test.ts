@@ -46,10 +46,7 @@ describe("sliderHaptics", () => {
       throw new Error("Fail");
     });
     await triggerSliderHaptic();
-    expect(addErrorLog).toHaveBeenCalledWith(
-      "Haptics availability probe failed",
-      expect.any(Object),
-    );
+    expect(addErrorLog).toHaveBeenCalledWith("Haptics availability probe failed", expect.any(Object));
   });
 
   it("uses Capacitor Haptics plugin if available", async () => {
@@ -107,9 +104,6 @@ describe("sliderHaptics", () => {
 
     await triggerSliderHaptic();
 
-    expect(addErrorLog).toHaveBeenCalledWith(
-      "Haptics impact failed",
-      expect.any(Object),
-    );
+    expect(addErrorLog).toHaveBeenCalledWith("Haptics impact failed", expect.any(Object));
   });
 });

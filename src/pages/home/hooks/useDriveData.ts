@@ -6,17 +6,9 @@ import { DRIVE_A_HOME_ITEMS, DRIVE_B_HOME_ITEMS } from "../constants";
 export function useDriveData(isConnected: boolean) {
   const { data: drivesData, refetch: refetchDrives } = useC64Drives();
 
-  const { data: driveASettingsCategory } = useC64ConfigItems(
-    "Drive A Settings",
-    [...DRIVE_A_HOME_ITEMS],
-    isConnected,
-  );
+  const { data: driveASettingsCategory } = useC64ConfigItems("Drive A Settings", [...DRIVE_A_HOME_ITEMS], isConnected);
 
-  const { data: driveBSettingsCategory } = useC64ConfigItems(
-    "Drive B Settings",
-    [...DRIVE_B_HOME_ITEMS],
-    isConnected,
-  );
+  const { data: driveBSettingsCategory } = useC64ConfigItems("Drive B Settings", [...DRIVE_B_HOME_ITEMS], isConnected);
 
   const { data: softIecConfig } = useC64ConfigItems(
     "SoftIEC Drive Settings",
@@ -24,16 +16,10 @@ export function useDriveData(isConnected: boolean) {
     isConnected,
   );
 
-  const normalizedDriveModel = useMemo(
-    () => normalizeDriveDevices(drivesData ?? null),
-    [drivesData],
-  );
+  const normalizedDriveModel = useMemo(() => normalizeDriveDevices(drivesData ?? null), [drivesData]);
 
   const drivesByClass = useMemo(
-    () =>
-      new Map(
-        normalizedDriveModel.devices.map((entry) => [entry.class, entry]),
-      ),
+    () => new Map(normalizedDriveModel.devices.map((entry) => [entry.class, entry])),
     [normalizedDriveModel.devices],
   );
 

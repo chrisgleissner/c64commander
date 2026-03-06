@@ -7,11 +7,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import {
-  buildBusIdOptions,
-  buildTypeOptions,
-  normalizeDriveDevices,
-} from "@/lib/drives/driveDevices";
+import { buildBusIdOptions, buildTypeOptions, normalizeDriveDevices } from "@/lib/drives/driveDevices";
 
 describe("drive device normalization", () => {
   it("classifies and orders known device classes", () => {
@@ -30,20 +26,12 @@ describe("drive device normalization", () => {
       "SOFT_IEC_DRIVE",
       "PRINTER",
     ]);
-    expect(result.devices.map((entry) => entry.label)).toEqual([
-      "Drive A",
-      "Drive B",
-      "Soft IEC Drive",
-      "Printer",
-    ]);
+    expect(result.devices.map((entry) => entry.label)).toEqual(["Drive A", "Drive B", "Soft IEC Drive", "Printer"]);
   });
 
   it("tolerates unknown devices and missing optional fields", () => {
     const result = normalizeDriveDevices({
-      drives: [
-        { a: { enabled: true, bus_id: 8 } },
-        { UnknownDevice: { enabled: false, bus_id: 15, type: "mystery" } },
-      ],
+      drives: [{ a: { enabled: true, bus_id: 8 } }, { UnknownDevice: { enabled: false, bus_id: 15, type: "mystery" } }],
     });
 
     expect(result.devices).toHaveLength(1);
@@ -82,9 +70,7 @@ describe("drive device normalization", () => {
 
   it("keeps current values in dropdown option builders", () => {
     expect(buildBusIdOptions([8, 9, 10, 11], 15)).toContain("15");
-    expect(buildTypeOptions(["1541", "1571", "1581"], "custom")).toContain(
-      "custom",
-    );
+    expect(buildTypeOptions(["1541", "1571", "1581"], "custom")).toContain("custom");
   });
 
   it("handles null payload gracefully (BRDA:119)", () => {
@@ -95,32 +81,21 @@ describe("drive device normalization", () => {
 
   it("skips non-object entries in drives array (BRDA:121)", () => {
     const result = normalizeDriveDevices({
-      drives: [
-        null as any,
-        "not an object" as any,
-        { a: { enabled: true, bus_id: 8 } },
-      ],
+      drives: [null as any, "not an object" as any, { a: { enabled: true, bus_id: 8 } }],
     });
     expect(result.devices).toHaveLength(1);
   });
 
   it("skips non-object rawValue in drive entry (BRDA:123)", () => {
     const result = normalizeDriveDevices({
-      drives: [
-        { a: null as any },
-        { b: "not-object" as any },
-        { "IEC Drive": { enabled: true } },
-      ],
+      drives: [{ a: null as any }, { b: "not-object" as any }, { "IEC Drive": { enabled: true } }],
     });
     expect(result.devices).toHaveLength(1);
   });
 
   it("ignores duplicate device class entries (BRDA:132)", () => {
     const result = normalizeDriveDevices({
-      drives: [
-        { a: { enabled: true, bus_id: 8, type: "1541" } },
-        { a: { enabled: false, bus_id: 9, type: "1571" } },
-      ],
+      drives: [{ a: { enabled: true, bus_id: 8, type: "1541" } }, { a: { enabled: false, bus_id: 9, type: "1571" } }],
     });
     expect(result.devices).toHaveLength(1);
     expect(result.devices[0]?.busId).toBe(8);

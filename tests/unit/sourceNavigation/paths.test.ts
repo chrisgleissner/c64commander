@@ -24,9 +24,7 @@ describe("normalizeSourcePath", () => {
   });
 
   it("collapses multiple slashes", () => {
-    expect(normalizeSourcePath("/games//level1//file")).toBe(
-      "/games/level1/file",
-    );
+    expect(normalizeSourcePath("/games//level1//file")).toBe("/games/level1/file");
   });
 
   it("trims whitespace", () => {
@@ -71,9 +69,7 @@ describe("getParentPathWithinRoot", () => {
   });
 
   it("returns parent directory for nested path", () => {
-    expect(getParentPathWithinRoot("/games/level1/file.sid", "/games/")).toBe(
-      "/games/level1/",
-    );
+    expect(getParentPathWithinRoot("/games/level1/file.sid", "/games/")).toBe("/games/level1/");
   });
 });
 

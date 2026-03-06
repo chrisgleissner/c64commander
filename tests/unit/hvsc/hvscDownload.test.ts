@@ -136,9 +136,7 @@ describe("hvscDownload", () => {
 
   describe("normalizeEntryName", () => {
     it("replaces backslashes with forward slashes", () => {
-      expect(normalizeEntryName("HVSC\\DEMOS\\test.sid")).toBe(
-        "HVSC/DEMOS/test.sid",
-      );
+      expect(normalizeEntryName("HVSC\\DEMOS\\test.sid")).toBe("HVSC/DEMOS/test.sid");
     });
 
     it("strips leading slashes", () => {
@@ -150,15 +148,13 @@ describe("hvscDownload", () => {
 
   describe("normalizeVirtualPath", () => {
     it("strips HVSC/ prefix and adds leading slash for .sid", () => {
-      expect(normalizeVirtualPath("HVSC/DEMOS/test.sid")).toBe(
-        "/DEMOS/test.sid",
-      );
+      expect(normalizeVirtualPath("HVSC/DEMOS/test.sid")).toBe("/DEMOS/test.sid");
     });
 
     it("strips C64Music/ prefix", () => {
-      expect(
-        normalizeVirtualPath("C64Music/MUSICIANS/Rob_Hubbard/Commando.sid"),
-      ).toBe("/MUSICIANS/Rob_Hubbard/Commando.sid");
+      expect(normalizeVirtualPath("C64Music/MUSICIANS/Rob_Hubbard/Commando.sid")).toBe(
+        "/MUSICIANS/Rob_Hubbard/Commando.sid",
+      );
     });
 
     it("returns null for non-.sid entries", () => {
@@ -166,9 +162,7 @@ describe("hvscDownload", () => {
     });
 
     it("handles backslashes", () => {
-      expect(normalizeVirtualPath("HVSC\\DEMOS\\test.sid")).toBe(
-        "/DEMOS/test.sid",
-      );
+      expect(normalizeVirtualPath("HVSC\\DEMOS\\test.sid")).toBe("/DEMOS/test.sid");
     });
   });
 
@@ -176,15 +170,11 @@ describe("hvscDownload", () => {
 
   describe("normalizeLibraryPath", () => {
     it("normalizes HVSC library path for .sid files", () => {
-      expect(normalizeLibraryPath("HVSC/DEMOS/test.sid")).toBe(
-        "/DEMOS/test.sid",
-      );
+      expect(normalizeLibraryPath("HVSC/DEMOS/test.sid")).toBe("/DEMOS/test.sid");
     });
 
     it("normalizes non-.sid entries too", () => {
-      expect(normalizeLibraryPath("HVSC/DOCUMENTS/Songlengths.md5")).toBe(
-        "/DOCUMENTS/Songlengths.md5",
-      );
+      expect(normalizeLibraryPath("HVSC/DOCUMENTS/Songlengths.md5")).toBe("/DOCUMENTS/Songlengths.md5");
     });
 
     it("returns null for empty path after stripping", () => {
@@ -196,27 +186,19 @@ describe("hvscDownload", () => {
 
   describe("normalizeUpdateVirtualPath", () => {
     it("strips new/ prefix from update entries", () => {
-      expect(normalizeUpdateVirtualPath("new/DEMOS/test.sid")).toBe(
-        "/DEMOS/test.sid",
-      );
+      expect(normalizeUpdateVirtualPath("new/DEMOS/test.sid")).toBe("/DEMOS/test.sid");
     });
 
     it("strips update/ prefix", () => {
-      expect(normalizeUpdateVirtualPath("update/MUSICIANS/test.sid")).toBe(
-        "/MUSICIANS/test.sid",
-      );
+      expect(normalizeUpdateVirtualPath("update/MUSICIANS/test.sid")).toBe("/MUSICIANS/test.sid");
     });
 
     it("strips updated/ prefix", () => {
-      expect(normalizeUpdateVirtualPath("updated/DEMOS/test.sid")).toBe(
-        "/DEMOS/test.sid",
-      );
+      expect(normalizeUpdateVirtualPath("updated/DEMOS/test.sid")).toBe("/DEMOS/test.sid");
     });
 
     it("strips HVSC/ then new/ prefix", () => {
-      expect(normalizeUpdateVirtualPath("HVSC/new/DEMOS/test.sid")).toBe(
-        "/DEMOS/test.sid",
-      );
+      expect(normalizeUpdateVirtualPath("HVSC/new/DEMOS/test.sid")).toBe("/DEMOS/test.sid");
     });
 
     it("returns null for non-.sid", () => {
@@ -228,21 +210,15 @@ describe("hvscDownload", () => {
 
   describe("normalizeUpdateLibraryPath", () => {
     it("strips new/ prefix for library paths", () => {
-      expect(normalizeUpdateLibraryPath("new/DOCUMENTS/Songlengths.md5")).toBe(
-        "/DOCUMENTS/Songlengths.md5",
-      );
+      expect(normalizeUpdateLibraryPath("new/DOCUMENTS/Songlengths.md5")).toBe("/DOCUMENTS/Songlengths.md5");
     });
 
     it("strips update/ prefix for library paths", () => {
-      expect(
-        normalizeUpdateLibraryPath("update/DOCUMENTS/Songlengths.md5"),
-      ).toBe("/DOCUMENTS/Songlengths.md5");
+      expect(normalizeUpdateLibraryPath("update/DOCUMENTS/Songlengths.md5")).toBe("/DOCUMENTS/Songlengths.md5");
     });
 
     it("strips updated/ prefix for library paths (BRDA:226)", () => {
-      expect(
-        normalizeUpdateLibraryPath("updated/DOCUMENTS/Songlengths.md5"),
-      ).toBe("/DOCUMENTS/Songlengths.md5");
+      expect(normalizeUpdateLibraryPath("updated/DOCUMENTS/Songlengths.md5")).toBe("/DOCUMENTS/Songlengths.md5");
     });
   });
 
@@ -269,10 +245,7 @@ describe("hvscDownload", () => {
   describe("parseDeletionList", () => {
     it("parses newline-separated .sid paths", () => {
       const input = "DEMOS/foo.sid\nMUSICIANS/bar.sid\n";
-      expect(parseDeletionList(input)).toEqual([
-        "/DEMOS/foo.sid",
-        "/MUSICIANS/bar.sid",
-      ]);
+      expect(parseDeletionList(input)).toEqual(["/DEMOS/foo.sid", "/MUSICIANS/bar.sid"]);
     });
 
     it("adds leading slash if missing", () => {
@@ -395,9 +368,7 @@ describe("hvscDownload", () => {
 
     it("throws when token is cancelled", () => {
       const tokens = new Map([["t1", { cancelled: true }]]);
-      expect(() => ensureNotCancelledWith(tokens, "t1")).toThrow(
-        "HVSC update cancelled",
-      );
+      expect(() => ensureNotCancelledWith(tokens, "t1")).toThrow("HVSC update cancelled");
     });
 
     it("calls stateUpdater when token is cancelled", () => {
@@ -443,9 +414,7 @@ describe("hvscDownload", () => {
       vi.mocked(Filesystem.stat).mockResolvedValue({
         size: 10 * 1024 * 1024,
       } as any);
-      await expect(readArchiveBuffer("hvsc-baseline-84.7z")).rejects.toThrow(
-        "HVSC bridge read blocked",
-      );
+      await expect(readArchiveBuffer("hvsc-baseline-84.7z")).rejects.toThrow("HVSC bridge read blocked");
     });
 
     it("continues when stat throws during size check (BRDA:334)", async () => {
@@ -482,8 +451,7 @@ describe("hvscDownload", () => {
       vi.mocked(Filesystem.stat).mockResolvedValue({
         type: "directory",
       } as any);
-      const { readCachedArchiveMarker } =
-        await import("@/lib/hvsc/hvscFilesystem");
+      const { readCachedArchiveMarker } = await import("@/lib/hvsc/hvscFilesystem");
       vi.mocked(readCachedArchiveMarker).mockResolvedValue({
         version: 84,
       } as any);
@@ -495,10 +463,7 @@ describe("hvscDownload", () => {
   describe("getCacheStatusInternal", () => {
     it("parses baseline and update versions from readdir (BRDA:299,307)", async () => {
       vi.mocked(Filesystem.readdir).mockResolvedValue({
-        files: [
-          "hvsc-baseline-84.complete.json",
-          "hvsc-update-85.complete.json",
-        ],
+        files: ["hvsc-baseline-84.complete.json", "hvsc-update-85.complete.json"],
       } as any);
       const status = await getCacheStatusInternal();
       expect(status.baselineVersion).toBe(84);
@@ -514,10 +479,7 @@ describe("hvscDownload", () => {
 
     it("handles object entries with undefined name (BRDA:307)", async () => {
       vi.mocked(Filesystem.readdir).mockResolvedValue({
-        files: [
-          { name: "hvsc-baseline-84.complete.json" },
-          { name: undefined },
-        ],
+        files: [{ name: "hvsc-baseline-84.complete.json" }, { name: undefined }],
       } as any);
       const status = await getCacheStatusInternal();
       expect(status.baselineVersion).toBe(84);
@@ -531,9 +493,7 @@ describe("hvscDownload", () => {
   });
 
   describe("downloadArchive", () => {
-    const makeOptions = (
-      overrides: Partial<Parameters<typeof downloadArchive>[0]> = {},
-    ) => ({
+    const makeOptions = (overrides: Partial<Parameters<typeof downloadArchive>[0]> = {}) => ({
       plan: { type: "baseline" as const, version: 84 },
       archiveName: "hvsc-baseline-84.7z",
       archivePath: "hvsc-baseline-84.7z",
@@ -550,11 +510,7 @@ describe("hvscDownload", () => {
     });
 
     it("streams download progress and writes archive", async () => {
-      const chunks = [
-        new Uint8Array([1, 2]),
-        new Uint8Array([3, 4]),
-        new Uint8Array([5, 6]),
-      ];
+      const chunks = [new Uint8Array([1, 2]), new Uint8Array([3, 4]), new Uint8Array([5, 6])];
       let index = 0;
       (globalThis.fetch as any).mockResolvedValue({
         ok: true,
@@ -562,8 +518,7 @@ describe("hvscDownload", () => {
         body: {
           getReader: () => ({
             read: async () => {
-              if (index >= chunks.length)
-                return { done: true, value: undefined };
+              if (index >= chunks.length) return { done: true, value: undefined };
               const value = chunks[index];
               index += 1;
               return { done: false, value };
@@ -576,13 +531,8 @@ describe("hvscDownload", () => {
       const inMemory = await downloadArchive(options);
 
       const { writeCachedArchive } = await import("@/lib/hvsc/hvscFilesystem");
-      expect(writeCachedArchive).toHaveBeenCalledWith(
-        "hvsc-baseline-84.7z",
-        expect.any(Uint8Array),
-      );
-      const progressStages = (options.emitProgress as any).mock.calls.map(
-        (call: any[]) => call[0]?.stage,
-      );
+      expect(writeCachedArchive).toHaveBeenCalledWith("hvsc-baseline-84.7z", expect.any(Uint8Array));
+      const progressStages = (options.emitProgress as any).mock.calls.map((call: any[]) => call[0]?.stage);
       expect(progressStages).toContain("download");
       expect(inMemory).toBeNull();
     });
@@ -595,9 +545,7 @@ describe("hvscDownload", () => {
         arrayBuffer: async () => new Uint8Array([7, 8]).buffer,
       });
 
-      const buffer = await downloadArchive(
-        makeOptions({ retainInMemoryBuffer: true }),
-      );
+      const buffer = await downloadArchive(makeOptions({ retainInMemoryBuffer: true }));
 
       expect(buffer).toEqual(new Uint8Array([7, 8]));
     });
@@ -611,17 +559,14 @@ describe("hvscDownload", () => {
           getReader: () => ({
             read: async () => {
               readCalls += 1;
-              if (readCalls === 1)
-                return { done: false, value: new Uint8Array([1, 2]) };
+              if (readCalls === 1) return { done: false, value: new Uint8Array([1, 2]) };
               return { done: true, value: undefined };
             },
           }),
         },
       });
 
-      await expect(downloadArchive(makeOptions())).rejects.toThrow(
-        "Download size mismatch",
-      );
+      await expect(downloadArchive(makeOptions())).rejects.toThrow("Download size mismatch");
     });
 
     it("throws on content-length mismatch (buffered)", async () => {
@@ -632,9 +577,7 @@ describe("hvscDownload", () => {
         arrayBuffer: async () => new Uint8Array([1, 2]).buffer,
       });
 
-      await expect(downloadArchive(makeOptions())).rejects.toThrow(
-        "Download size mismatch",
-      );
+      await expect(downloadArchive(makeOptions())).rejects.toThrow("Download size mismatch");
     });
 
     it("cancels mid-download when token flips", async () => {
@@ -657,9 +600,7 @@ describe("hvscDownload", () => {
         },
       });
 
-      await expect(
-        downloadArchive(makeOptions({ cancelTokens: tokens })),
-      ).rejects.toThrow("HVSC update cancelled");
+      await expect(downloadArchive(makeOptions({ cancelTokens: tokens }))).rejects.toThrow("HVSC update cancelled");
     });
 
     it("propagates HTTP errors", async () => {
@@ -670,9 +611,7 @@ describe("hvscDownload", () => {
         headers: { get: () => null },
       });
 
-      await expect(downloadArchive(makeOptions())).rejects.toThrow(
-        "Download failed: 500 Server error",
-      );
+      await expect(downloadArchive(makeOptions())).rejects.toThrow("Download failed: 500 Server error");
     });
   });
 });

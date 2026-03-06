@@ -26,11 +26,7 @@ vi.mock("fflate", () => ({
     constructor(
       onFile: (entry: {
         name: string;
-        ondata?: (
-          error: Error | null,
-          chunk: Uint8Array,
-          final: boolean,
-        ) => void;
+        ondata?: (error: Error | null, chunk: Uint8Array, final: boolean) => void;
         start: () => void;
       }) => void,
     ) {
@@ -41,16 +37,12 @@ vi.mock("fflate", () => ({
 
     push(chunk: Uint8Array, final: boolean) {
       if (!final) return;
-      const files =
-        vi.mocked(unzipSync).mock.results.at(-1)?.value ??
-        vi.mocked(unzipSync)(chunk as any);
+      const files = vi.mocked(unzipSync).mock.results.at(-1)?.value ?? vi.mocked(unzipSync)(chunk as any);
       Object.entries(files || {}).forEach(([name, data]) => {
         if (!(data instanceof Uint8Array)) return;
         const entry = {
           name,
-          ondata: undefined as
-            | ((error: Error | null, chunk: Uint8Array, final: boolean) => void)
-            | undefined,
+          ondata: undefined as ((error: Error | null, chunk: Uint8Array, final: boolean) => void) | undefined,
           start: () => {
             entry.ondata?.(null, data, true);
           },
@@ -131,10 +123,7 @@ describe("hvscArchiveExtraction", () => {
       // Check callbacks
       expect(onEnumerate).toHaveBeenCalledWith(2); // 2 valid files
       expect(onEntry).toHaveBeenCalledTimes(2);
-      expect(onEntry).toHaveBeenCalledWith(
-        "folder/file1.txt",
-        new Uint8Array([1, 2, 3]),
-      );
+      expect(onEntry).toHaveBeenCalledWith("folder/file1.txt", new Uint8Array([1, 2, 3]));
       expect(onEntry).toHaveBeenCalledWith("file2.bin", new Uint8Array([4, 5]));
 
       expect(onProgress).toHaveBeenCalledTimes(2);
@@ -155,14 +144,8 @@ describe("hvscArchiveExtraction", () => {
         onEntry,
       });
 
-      expect(onEntry).toHaveBeenCalledWith(
-        "windows/path/file.txt",
-        expect.anything(),
-      );
-      expect(onEntry).toHaveBeenCalledWith(
-        "leading/slash/file.txt",
-        expect.anything(),
-      );
+      expect(onEntry).toHaveBeenCalledWith("windows/path/file.txt", expect.anything());
+      expect(onEntry).toHaveBeenCalledWith("leading/slash/file.txt", expect.anything());
     });
   });
 
@@ -206,10 +189,7 @@ describe("hvscArchiveExtraction", () => {
 
       // 2. Check Input Write
       expect(mockFS.mkdir).toHaveBeenCalled(); // work dir and out dir
-      expect(mockFS.open).toHaveBeenCalledWith(
-        expect.stringMatching(/test.7z$/),
-        "w+",
-      );
+      expect(mockFS.open).toHaveBeenCalledWith(expect.stringMatching(/test.7z$/), "w+");
       expect(mockFS.write).toHaveBeenCalled();
 
       // 3. Check Extraction Command
@@ -228,10 +208,7 @@ describe("hvscArchiveExtraction", () => {
       // walkDir('out', '') -> 'file1.txt'
       // walkDir('folder', 'folder/') -> 'folder/file2.txt'
       expect(onEntry).toHaveBeenCalledWith("file1.txt", expect.any(Uint8Array));
-      expect(onEntry).toHaveBeenCalledWith(
-        "folder/file2.txt",
-        expect.any(Uint8Array),
-      );
+      expect(onEntry).toHaveBeenCalledWith("folder/file2.txt", expect.any(Uint8Array));
 
       // 5. Check Cleanup
       // Cleanup should remove dir structure

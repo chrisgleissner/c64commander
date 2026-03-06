@@ -83,11 +83,7 @@ const toLogDetails = (details: LoggerDetails = {}, component?: string) => {
   return merged;
 };
 
-const writeLog = (
-  level: LogLevel,
-  message: string,
-  options: LoggerOptions = {},
-) => {
+const writeLog = (level: LogLevel, message: string, options: LoggerOptions = {}) => {
   const details = toLogDetails(options.details, options.component);
   addLog(level, message, details);
   if (options.includeConsole === false) return;
@@ -107,14 +103,10 @@ const writeLog = (
 };
 
 export const logger = {
-  debug: (message: string, options?: LoggerOptions) =>
-    writeLog("debug", message, options),
-  info: (message: string, options?: LoggerOptions) =>
-    writeLog("info", message, options),
-  warn: (message: string, options?: LoggerOptions) =>
-    writeLog("warn", message, options),
-  error: (message: string, options?: LoggerOptions) =>
-    writeLog("error", message, options),
+  debug: (message: string, options?: LoggerOptions) => writeLog("debug", message, options),
+  info: (message: string, options?: LoggerOptions) => writeLog("info", message, options),
+  warn: (message: string, options?: LoggerOptions) => writeLog("warn", message, options),
+  error: (message: string, options?: LoggerOptions) => writeLog("error", message, options),
 };
 
 const normalizeConsoleMessage = (args: unknown[]) => {
@@ -146,9 +138,7 @@ const normalizeConsoleDetails = (args: unknown[]) => {
   };
 };
 
-export const installConsoleDiagnosticsBridge = (
-  options: ConsoleBridgeOptions = {},
-) => {
+export const installConsoleDiagnosticsBridge = (options: ConsoleBridgeOptions = {}) => {
   if (bridgeState.installed) {
     return () => {
       // no-op if already installed globally

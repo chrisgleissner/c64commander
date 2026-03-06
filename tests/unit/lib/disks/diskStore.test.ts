@@ -40,10 +40,7 @@ describe("diskStore", () => {
   });
 
   it("handles valid JSON with invalid structure gracefully", () => {
-    localStorage.setItem(
-      `c64u_disk_library:${mockId}`,
-      JSON.stringify({ disks: "not an array" }),
-    );
+    localStorage.setItem(`c64u_disk_library:${mockId}`, JSON.stringify({ disks: "not an array" }));
     const loaded = loadDiskLibrary(mockId);
     expect(loaded.disks).toEqual([]);
   });

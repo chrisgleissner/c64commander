@@ -9,11 +9,7 @@
 import { test, expect } from "@playwright/test";
 import { createMockC64Server } from "../../tests/mocks/mockC64Server";
 import { seedUiMocks } from "../uiMocks";
-import {
-  createBackendFailureTracker,
-  shouldIgnoreBackendFailure,
-  type AppLogEntry,
-} from "./fuzzBackend";
+import { createBackendFailureTracker, shouldIgnoreBackendFailure, type AppLogEntry } from "./fuzzBackend";
 
 const waitForLogEntry = async (
   page: import("@playwright/test").Page,
@@ -59,9 +55,7 @@ test.describe("Fuzz backend resilience", () => {
 
     const entry = await waitForLogEntry(
       page,
-      (log) =>
-        log.message === "C64 API request failed" ||
-        /Service Unavailable|HTTP 503/i.test(log.message),
+      (log) => log.message === "C64 API request failed" || /Service Unavailable|HTTP 503/i.test(log.message),
     );
 
     const shouldIgnore = shouldIgnoreBackendFailure(entry, {

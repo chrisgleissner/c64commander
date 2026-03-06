@@ -33,11 +33,7 @@ vi.mock("@/components/ThemeProvider", () => ({
 
 vi.mock("@/components/DiagnosticsActivityIndicator", () => ({
   DiagnosticsActivityIndicator: ({ onClick }: { onClick: () => void }) => (
-    <button
-      type="button"
-      onClick={onClick}
-      data-testid="diagnostics-activity-indicator"
-    />
+    <button type="button" onClick={onClick} data-testid="diagnostics-activity-indicator" />
   ),
 }));
 
@@ -108,13 +104,11 @@ vi.mock("@/lib/c64api", () => ({
 
 vi.mock("@/lib/config/audioMixer", () => ({
   resolveAudioMixerResetValue: vi.fn(),
-  isAudioMixerValueEqual: (left: string | number, right: string | number) =>
-    left === right,
+  isAudioMixerValueEqual: (left: string | number, right: string | number) => left === right,
 }));
 
 vi.mock("@/lib/config/appConfigStore", () => ({
-  updateHasChanges: (...args: [string, boolean]) =>
-    mockUpdateHasChanges(...args),
+  updateHasChanges: (...args: [string, boolean]) => mockUpdateHasChanges(...args),
 }));
 
 const setupDefaultMocks = () => {
@@ -174,12 +168,8 @@ describe("ConfigBrowserPage", () => {
     renderConfigBrowserPage();
 
     expect(screen.queryByText(/not connected/i)).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /audio mixer/i }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /clock settings/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /audio mixer/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /clock settings/i })).toBeInTheDocument();
   });
 
   it("filters categories by search query", () => {
@@ -195,12 +185,8 @@ describe("ConfigBrowserPage", () => {
       target: { value: "clock" },
     });
 
-    expect(
-      screen.getByRole("button", { name: /clock settings/i }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: /audio mixer/i }),
-    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /clock settings/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /audio mixer/i })).not.toBeInTheDocument();
   });
 
   it("shows empty search results message", () => {
@@ -216,9 +202,7 @@ describe("ConfigBrowserPage", () => {
       target: { value: "missing" },
     });
 
-    expect(
-      screen.getByText(/no categories match your search/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/no categories match your search/i)).toBeInTheDocument();
   });
 
   it("shows empty state when no categories exist", () => {
@@ -261,9 +245,7 @@ describe("ConfigBrowserPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /audio mixer/i }));
 
-    const soloSwitch = await screen.findByTestId(
-      "audio-mixer-solo-vol-ultisid-1",
-    );
+    const soloSwitch = await screen.findByTestId("audio-mixer-solo-vol-ultisid-1");
     fireEvent.click(soloSwitch);
 
     await waitFor(() => {
@@ -304,13 +286,9 @@ describe("ConfigBrowserPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /audio mixer/i }));
 
-    const soloSwitch = await screen.findByTestId(
-      "audio-mixer-solo-vol-ultisid-1",
-    );
+    const soloSwitch = await screen.findByTestId("audio-mixer-solo-vol-ultisid-1");
     fireEvent.click(soloSwitch);
-    fireEvent.click(
-      await screen.findByRole("button", { name: /update vol ultisid 1/i }),
-    );
+    fireEvent.click(await screen.findByRole("button", { name: /update vol ultisid 1/i }));
 
     await waitFor(() => {
       expect(reportUserError).toHaveBeenCalledWith(
@@ -345,9 +323,7 @@ describe("ConfigBrowserPage", () => {
     renderConfigBrowserPage();
 
     fireEvent.click(screen.getByRole("button", { name: /general/i }));
-    fireEvent.click(
-      await screen.findByRole("button", { name: /update demo option/i }),
-    );
+    fireEvent.click(await screen.findByRole("button", { name: /update demo option/i }));
 
     await waitFor(() => {
       expect(reportUserError).toHaveBeenCalledWith(
@@ -391,9 +367,7 @@ describe("ConfigBrowserPage", () => {
     await waitFor(() => {
       expect(mutateAsync).toHaveBeenCalled();
       expect(mockUpdateHasChanges).toHaveBeenCalledWith("http://c64u", true);
-      expect(toast).toHaveBeenCalledWith(
-        expect.objectContaining({ title: "Clock synced" }),
-      );
+      expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Clock synced" }));
     });
   });
 
@@ -461,9 +435,7 @@ describe("ConfigBrowserPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: /reset/i }));
 
     await waitFor(() => {
-      expect(mutateAsync).toHaveBeenCalledWith(
-        expect.objectContaining({ category: "Audio Mixer" }),
-      );
+      expect(mutateAsync).toHaveBeenCalledWith(expect.objectContaining({ category: "Audio Mixer" }));
       expect(refetch).toHaveBeenCalled();
       expect(mockUpdateHasChanges).toHaveBeenCalledWith("http://c64u", true);
     });
@@ -501,9 +473,7 @@ describe("ConfigBrowserPage", () => {
 
     await waitFor(() => {
       expect(mutateAsync).not.toHaveBeenCalled();
-      expect(toast).toHaveBeenCalledWith(
-        expect.objectContaining({ title: "Audio Mixer already at defaults" }),
-      );
+      expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Audio Mixer already at defaults" }));
     });
   });
 
@@ -652,8 +622,6 @@ describe("ConfigBrowserPage", () => {
     renderConfigBrowserPage();
 
     fireEvent.click(screen.getByRole("button", { name: /general/i }));
-    expect(
-      await screen.findByText(/no settings available/i),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/no settings available/i)).toBeInTheDocument();
   });
 });

@@ -111,9 +111,7 @@ describe("featureFlags", () => {
       listener.mockClear();
       await manager.load();
       expect(listener).toHaveBeenCalledTimes(1);
-      expect(listener).toHaveBeenCalledWith(
-        expect.objectContaining({ isLoaded: true }),
-      );
+      expect(listener).toHaveBeenCalledWith(expect.objectContaining({ isLoaded: true }));
     });
 
     it("sets flag and emits", async () => {
@@ -149,9 +147,7 @@ describe("featureFlags", () => {
         }),
       };
       const errorManager = new FeatureFlagManager(failingRepo, defaults);
-      await expect(errorManager.setFlag("hvsc_enabled", false)).rejects.toThrow(
-        "write failed",
-      );
+      await expect(errorManager.setFlag("hvsc_enabled", false)).rejects.toThrow("write failed");
     });
   });
 

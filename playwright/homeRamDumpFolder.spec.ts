@@ -11,12 +11,7 @@ import type { Page, TestInfo } from "@playwright/test";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
 import { seedUiMocks, uiFixtures } from "./uiMocks";
 import { saveCoverageFromPage } from "./withCoverage";
-import {
-  attachStepScreenshot,
-  assertNoUiIssues,
-  finalizeEvidence,
-  startStrictUiMonitoring,
-} from "./testArtifacts";
+import { attachStepScreenshot, assertNoUiIssues, finalizeEvidence, startStrictUiMonitoring } from "./testArtifacts";
 import { enforceDeviceTestMapping } from "./layoutTest";
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
@@ -33,8 +28,7 @@ test.describe("Home RAM dump folder display", () => {
     await seedUiMocks(page, server.baseUrl);
     await page.addInitScript(() => {
       const folder = {
-        treeUri:
-          "content://com.android.externalstorage.documents/tree/primary%3ADownload%2Fc64",
+        treeUri: "content://com.android.externalstorage.documents/tree/primary%3ADownload%2Fc64",
         rootName: "c64",
         selectedAt: new Date().toISOString(),
       };
@@ -52,9 +46,7 @@ test.describe("Home RAM dump folder display", () => {
     }
   });
 
-  test("shows derived SAF display path @layout", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("shows derived SAF display path @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/");
     await snap(page, testInfo, "home-open");
 
@@ -62,15 +54,12 @@ test.describe("Home RAM dump folder display", () => {
 
     await page.evaluate(() => {
       const folder = {
-        treeUri:
-          "content://com.android.externalstorage.documents/tree/primary%3ADownload%2Fc64",
+        treeUri: "content://com.android.externalstorage.documents/tree/primary%3ADownload%2Fc64",
         rootName: "c64",
         selectedAt: new Date().toISOString(),
       };
       localStorage.setItem("c64u_ram_dump_folder:v1", JSON.stringify(folder));
-      window.dispatchEvent(
-        new CustomEvent("c64u-ram-dump-folder-updated", { detail: folder }),
-      );
+      window.dispatchEvent(new CustomEvent("c64u-ram-dump-folder-updated", { detail: folder }));
     });
 
     const label = page.getByTestId("ram-dump-folder-value");

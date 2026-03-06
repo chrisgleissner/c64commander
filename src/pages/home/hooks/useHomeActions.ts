@@ -1,10 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { getC64API } from "@/lib/c64api";
-import {
-  useC64Connection,
-  useC64MachineControl,
-  useC64Drives,
-} from "@/hooks/useC64Connection";
+import { useC64Connection, useC64MachineControl, useC64Drives } from "@/hooks/useC64Connection";
 import { toast } from "@/hooks/use-toast";
 import { reportUserError } from "@/lib/uiErrors";
 import { addErrorLog } from "@/lib/logging";
@@ -37,34 +33,23 @@ export function useHomeActions() {
   const machineTaskInFlightRef = useRef<string | null>(null);
   const [machineTaskId, setMachineTaskId] = useState<string | null>(null);
   const [powerOffDialogOpen, setPowerOffDialogOpen] = useState(false);
-  const [machineExecutionState, setMachineExecutionState] = useState<
-    "running" | "paused" | "unknown"
-  >("running");
+  const [machineExecutionState, setMachineExecutionState] = useState<"running" | "paused" | "unknown">("running");
   const [pauseResumePending, setPauseResumePending] = useState(false);
 
-  const [ramDumpFolder, setRamDumpFolder] =
-    useState<RamDumpFolderConfig | null>(() => loadRamDumpFolderConfig());
+  const [ramDumpFolder, setRamDumpFolder] = useState<RamDumpFolderConfig | null>(() => loadRamDumpFolderConfig());
   const [folderTaskPending, setFolderTaskPending] = useState(false);
 
   useEffect(() => {
     const handler = (event: Event) => {
-      const detail = (event as CustomEvent)
-        .detail as RamDumpFolderConfig | null;
+      const detail = (event as CustomEvent).detail as RamDumpFolderConfig | null;
       if (!detail) {
         setRamDumpFolder(null);
         return;
       }
       setRamDumpFolder(detail);
     };
-    window.addEventListener(
-      "c64u-ram-dump-folder-updated",
-      handler as EventListener,
-    );
-    return () =>
-      window.removeEventListener(
-        "c64u-ram-dump-folder-updated",
-        handler as EventListener,
-      );
+    window.addEventListener("c64u-ram-dump-folder-updated", handler as EventListener);
+    return () => window.removeEventListener("c64u-ram-dump-folder-updated", handler as EventListener);
   }, []);
 
   const runMachineTask = trace(async function runMachineTask(
@@ -101,10 +86,7 @@ export function useHomeActions() {
     }
   });
 
-  const handleAction = trace(async function handleAction(
-    action: () => Promise<unknown>,
-    successMessage: string,
-  ) {
+  const handleAction = trace(async function handleAction(action: () => Promise<unknown>, successMessage: string) {
     try {
       await action();
       toast({ title: successMessage });
@@ -119,48 +101,42 @@ export function useHomeActions() {
     }
   });
 
-  const handleSelectRamDumpFolder = trace(
-    async function handleSelectRamDumpFolder() {
-      setFolderTaskPending(true);
-      try {
-        const folder = await selectRamDumpFolder();
-        setRamDumpFolder(folder);
-        toast({
-          title: "RAM dump folder set",
-          description: folder.rootName ?? "Folder access granted",
-        });
-      } catch (error) {
-        reportUserError({
-          operation: "RAM_DUMP_FOLDER_SELECT",
-          title: "Folder selection failed",
-          description: (error as Error).message,
-          error,
-        });
-      } finally {
-        setFolderTaskPending(false);
-      }
-    },
-  );
+  const handleSelectRamDumpFolder = trace(async function handleSelectRamDumpFolder() {
+    setFolderTaskPending(true);
+    try {
+      const folder = await selectRamDumpFolder();
+      setRamDumpFolder(folder);
+      toast({
+        title: "RAM dump folder set",
+        description: folder.rootName ?? "Folder access granted",
+      });
+    } catch (error) {
+      reportUserError({
+        operation: "RAM_DUMP_FOLDER_SELECT",
+        title: "Folder selection failed",
+        description: (error as Error).message,
+        error,
+      });
+    } finally {
+      setFolderTaskPending(false);
+    }
+  });
 
-  const handleRebootClearMemory = trace(
-    async function handleRebootClearMemory() {
-      await runMachineTask(
-        "reboot-clear-memory",
-        async () => {
-          await clearRamAndReboot(api);
-        },
-        "Machine rebooting",
-        "RAM cleared (excluding I/O region).",
-      );
-      setMachineExecutionState("running");
-    },
-  );
+  const handleRebootClearMemory = trace(async function handleRebootClearMemory() {
+    await runMachineTask(
+      "reboot-clear-memory",
+      async () => {
+        await clearRamAndReboot(api);
+      },
+      "Machine rebooting",
+      "RAM cleared (excluding I/O region).",
+    );
+    setMachineExecutionState("running");
+  });
 
   const handlePauseResume = trace(async function handlePauseResume() {
-    if (!status.isConnected || machineTaskId !== null || pauseResumePending)
-      return;
-    const targetState =
-      machineExecutionState === "running" ? "paused" : "running";
+    if (!status.isConnected || machineTaskId !== null || pauseResumePending) return;
+    const targetState = machineExecutionState === "running" ? "paused" : "running";
     setPauseResumePending(true);
     try {
       if (targetState === "paused") {
@@ -237,15 +213,10 @@ export function useHomeActions() {
 
   const confirmPowerOff = trace(async function confirmPowerOff() {
     setPowerOffDialogOpen(false);
-    await handleAction(
-      () => controls.powerOff.mutateAsync(),
-      "Powering off...",
-    );
+    await handleAction(() => controls.powerOff.mutateAsync(), "Powering off...");
   });
 
-  const handleResetDrives = trace(async function handleResetDrives(
-    refreshDrivesFromDevice: () => Promise<void>,
-  ) {
+  const handleResetDrives = trace(async function handleResetDrives(refreshDrivesFromDevice: () => Promise<void>) {
     await runMachineTask(
       "reset-drives",
       async () => {
@@ -257,9 +228,7 @@ export function useHomeActions() {
     );
   });
 
-  const handleResetPrinter = trace(async function handleResetPrinter(
-    refreshDrivesFromDevice: () => Promise<void>,
-  ) {
+  const handleResetPrinter = trace(async function handleResetPrinter(refreshDrivesFromDevice: () => Promise<void>) {
     await runMachineTask(
       "reset-printer",
       async () => {

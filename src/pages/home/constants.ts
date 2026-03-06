@@ -1,19 +1,8 @@
-import {
-  SID_SOCKETS_ITEMS,
-  SID_ADDRESSING_ITEMS,
-} from "@/lib/config/configItems";
+import { SID_SOCKETS_ITEMS, SID_ADDRESSING_ITEMS } from "@/lib/config/configItems";
 import { DriveDeviceClass } from "@/lib/drives/driveDevices";
 
-export const DRIVE_A_HOME_ITEMS = [
-  "Drive",
-  "Drive Bus ID",
-  "Drive Type",
-] as const;
-export const DRIVE_B_HOME_ITEMS = [
-  "Drive",
-  "Drive Bus ID",
-  "Drive Type",
-] as const;
+export const DRIVE_A_HOME_ITEMS = ["Drive", "Drive Bus ID", "Drive Type"] as const;
+export const DRIVE_B_HOME_ITEMS = ["Drive", "Drive Bus ID", "Drive Type"] as const;
 export const U64_HOME_ITEMS = [
   "System Mode",
   "Turbo Control",
@@ -39,14 +28,8 @@ export const SID_AUDIO_ITEMS = [
   "Pan UltiSID 1",
   "Pan UltiSID 2",
 ] as const;
-export const SID_DETECTED_ITEMS = [
-  "SID Detected Socket 1",
-  "SID Detected Socket 2",
-] as const;
-export const ULTISID_PROFILE_ITEMS = [
-  "UltiSID 1 Filter Curve",
-  "UltiSID 2 Filter Curve",
-] as const;
+export const SID_DETECTED_ITEMS = ["SID Detected Socket 1", "SID Detected Socket 2"] as const;
+export const ULTISID_PROFILE_ITEMS = ["UltiSID 1 Filter Curve", "UltiSID 2 Filter Curve"] as const;
 export const SID_SOCKET_SHAPING_ITEMS = [
   "SID Socket 1 1K Ohm Resistor",
   "SID Socket 2 1K Ohm Resistor",
@@ -66,10 +49,7 @@ export const HOME_SID_SOCKET_ITEMS = [
   ...SID_DETECTED_ITEMS,
   ...SID_SOCKET_SHAPING_ITEMS,
 ] as const;
-export const HOME_ULTISID_ITEMS = [
-  ...ULTISID_PROFILE_ITEMS,
-  ...ULTISID_SHAPING_ITEMS,
-] as const;
+export const HOME_ULTISID_ITEMS = [...ULTISID_PROFILE_ITEMS, ...ULTISID_SHAPING_ITEMS] as const;
 export const HOME_SID_ADDRESSING_ITEMS = [
   ...SID_ADDRESSING_ITEMS,
   "SID Socket 1 Address",

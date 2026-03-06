@@ -9,13 +9,7 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { getOnOffButtonClass } from "@/lib/ui/buttonStyles";
 
@@ -119,22 +113,16 @@ export function SidCard({
   className,
   testIdSuffix,
 }: SidCardProps) {
-  const formatSelectOptionLabel = (value: string) =>
-    value === "" ? "Default" : value;
+  const formatSelectOptionLabel = (value: string) => (value === "" ? "Default" : value);
 
   return (
     <div
-      className={cn(
-        "bg-card border border-border rounded-xl p-3 space-y-2",
-        className,
-      )}
+      className={cn("bg-card border border-border rounded-xl p-3 space-y-2", className)}
       data-testid={`home-sid-entry-${testIdSuffix}`}
     >
       {/* Row 1: Name and Power */}
       <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-semibold text-primary uppercase tracking-wide">
-          {name}
-        </p>
+        <p className="text-xs font-semibold text-primary uppercase tracking-wide">{name}</p>
         {onPowerToggle ? (
           <Button
             variant="outline"
@@ -162,26 +150,14 @@ export function SidCard({
       {/* Row 2: Identity and Address */}
       <div className="grid grid-cols-2 gap-2 text-xs">
         <div className="flex items-center gap-2">
-          <span className="text-muted-foreground whitespace-nowrap">
-            {identityLabel}
-          </span>
+          <span className="text-muted-foreground whitespace-nowrap">{identityLabel}</span>
           {isIdentityReadOnly ? (
-            <span
-              className="font-medium text-muted-foreground"
-              data-testid={`home-sid-type-${testIdSuffix}`}
-            >
+            <span className="font-medium text-muted-foreground" data-testid={`home-sid-type-${testIdSuffix}`}>
               {identityValue}
             </span>
           ) : (
-            <Select
-              value={identityValue}
-              onValueChange={onIdentityChange}
-              disabled={!isConnected || identityPending}
-            >
-              <SelectTrigger
-                className={inlineSelectTriggerClass}
-                data-testid={`home-sid-type-${testIdSuffix}`}
-              >
+            <Select value={identityValue} onValueChange={onIdentityChange} disabled={!isConnected || identityPending}>
+              <SelectTrigger className={inlineSelectTriggerClass} data-testid={`home-sid-type-${testIdSuffix}`}>
                 <SelectValue placeholder={identityValue} />
               </SelectTrigger>
               <SelectContent>
@@ -195,18 +171,9 @@ export function SidCard({
           )}
         </div>
         <div className="flex items-center gap-2 justify-end">
-          <span className="text-muted-foreground whitespace-nowrap">
-            Address
-          </span>
-          <Select
-            value={addressValue}
-            onValueChange={onAddressChange}
-            disabled={!isConnected || addressPending}
-          >
-            <SelectTrigger
-              className={inlineSelectTriggerClass}
-              data-testid={`home-sid-address-${testIdSuffix}`}
-            >
+          <span className="text-muted-foreground whitespace-nowrap">Address</span>
+          <Select value={addressValue} onValueChange={onAddressChange} disabled={!isConnected || addressPending}>
+            <SelectTrigger className={inlineSelectTriggerClass} data-testid={`home-sid-address-${testIdSuffix}`}>
               <SelectValue placeholder={addressValue} />
             </SelectTrigger>
             <SelectContent>
@@ -224,15 +191,9 @@ export function SidCard({
       <div className="grid grid-cols-3 gap-2 text-xs">
         {shapingControls.map((control, index) => (
           <div key={index} className="flex items-center gap-2">
-            <span className="text-muted-foreground whitespace-nowrap">
-              {control.label}
-            </span>
+            <span className="text-muted-foreground whitespace-nowrap">{control.label}</span>
             {control.options && control.onChange ? (
-              <Select
-                value={control.value}
-                onValueChange={control.onChange}
-                disabled={!isConnected || control.pending}
-              >
+              <Select value={control.value} onValueChange={control.onChange} disabled={!isConnected || control.pending}>
                 <SelectTrigger
                   className={inlineSelectTriggerClass}
                   data-testid={`home-sid-shaping-${testIdSuffix}-${index}`}
@@ -248,10 +209,7 @@ export function SidCard({
                 </SelectContent>
               </Select>
             ) : (
-              <span
-                className="font-medium"
-                data-testid={`home-sid-shaping-${testIdSuffix}-${index}-readonly`}
-              >
+              <span className="font-medium" data-testid={`home-sid-shaping-${testIdSuffix}-${index}-readonly`}>
                 {control.value}
               </span>
             )}
@@ -262,9 +220,7 @@ export function SidCard({
       {/* Row 4: Volume and Pan */}
       <div className="grid grid-cols-2 gap-4 pt-1">
         <div className="flex items-center gap-2">
-          <span className="text-[10px] font-medium text-muted-foreground w-6">
-            Vol
-          </span>
+          <span className="text-[10px] font-medium text-muted-foreground w-6">Vol</span>
           <Slider
             value={[volume]}
             min={0}
@@ -286,9 +242,7 @@ export function SidCard({
           />
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-[10px] font-medium text-muted-foreground w-6">
-            Pan
-          </span>
+          <span className="text-[10px] font-medium text-muted-foreground w-6">Pan</span>
           <Slider
             value={[pan]}
             min={0}

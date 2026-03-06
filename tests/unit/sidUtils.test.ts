@@ -7,12 +7,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import {
-  base64ToUint8,
-  computeSidMd5,
-  createSslPayload,
-  getSidSongCount,
-} from "@/lib/sid/sidUtils";
+import { base64ToUint8, computeSidMd5, createSslPayload, getSidSongCount } from "@/lib/sid/sidUtils";
 
 const toHex = (value: Uint8Array) =>
   Array.from(value)

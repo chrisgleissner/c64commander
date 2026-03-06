@@ -52,8 +52,7 @@ const setTapFlash = (element: InteractiveElement) => {
 };
 
 const clearPointerFocus = (element: HTMLElement) => {
-  if (document.activeElement !== element || typeof element.blur !== "function")
-    return;
+  if (document.activeElement !== element || typeof element.blur !== "function") return;
   window.setTimeout(() => element.blur(), 0);
 };
 
@@ -73,10 +72,7 @@ export const applyPointerButtonInteraction = (element: HTMLElement) => {
   setTapFlash(element as InteractiveElement);
 };
 
-export const handlePointerButtonClick = (event: {
-  detail: number;
-  currentTarget: EventTarget | null;
-}) => {
+export const handlePointerButtonClick = (event: { detail: number; currentTarget: EventTarget | null }) => {
   if (event.detail === 0) return;
   const target =
     resolveInteractiveElement(event.currentTarget) ??
@@ -89,9 +85,7 @@ export const handlePointerButtonClick = (event: {
 };
 
 export const sweepStaleHighlights = (nowMs = Date.now()) => {
-  const highlighted = document.querySelectorAll<HTMLElement>(
-    `[${CTA_HIGHLIGHT_ATTR}]`,
-  );
+  const highlighted = document.querySelectorAll<HTMLElement>(`[${CTA_HIGHLIGHT_ATTR}]`);
   highlighted.forEach((el) => {
     const setAt = Number(el.getAttribute(CTA_HIGHLIGHT_SET_AT_ATTR) ?? "0");
     if (nowMs - setAt >= CTA_HIGHLIGHT_MAX_AGE_MS) {

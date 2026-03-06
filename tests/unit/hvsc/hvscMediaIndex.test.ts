@@ -42,10 +42,7 @@ describe("HvscMediaIndexAdapter", () => {
 
     const listFolder = async (path: string) => listings[path];
     const storage = createMemoryStorage();
-    const adapter = new HvscMediaIndexAdapter(
-      new JsonMediaIndex(storage),
-      listFolder,
-    );
+    const adapter = new HvscMediaIndexAdapter(new JsonMediaIndex(storage), listFolder);
 
     await adapter.scan(["/"]);
 
@@ -78,10 +75,7 @@ describe("HvscMediaIndexAdapter", () => {
 
     const listFolder = async (path: string) => listings[path];
     const storage = createMemoryStorage();
-    const adapter = new HvscMediaIndexAdapter(
-      new JsonMediaIndex(storage),
-      listFolder,
-    );
+    const adapter = new HvscMediaIndexAdapter(new JsonMediaIndex(storage), listFolder);
 
     await adapter.scan(["DEMOS"]);
     await adapter.save();
@@ -167,28 +161,23 @@ describe("HvscMediaIndexAdapter", () => {
 
     const listFolder = async (path: string) => listings[path];
     const storage = createMemoryStorage();
-    const adapter1 = new HvscMediaIndexAdapter(
-      new JsonMediaIndex(storage),
-      listFolder,
-    );
+    const adapter1 = new HvscMediaIndexAdapter(new JsonMediaIndex(storage), listFolder);
     await adapter1.scan(["/"]);
     await adapter1.save();
 
     // Create a new adapter with the same storage
-    const adapter2 = new HvscMediaIndexAdapter(
-      new JsonMediaIndex(storage),
-      listFolder,
-    );
+    const adapter2 = new HvscMediaIndexAdapter(new JsonMediaIndex(storage), listFolder);
     await adapter2.load();
     const all = adapter2.getAll();
     expect(all.length).toBeGreaterThanOrEqual(1);
   });
 
   it("setEntries updates internal state and browse index", async () => {
-    const adapter = new HvscMediaIndexAdapter(
-      new JsonMediaIndex(createMemoryStorage()),
-      async () => ({ path: "/", folders: [], songs: [] }),
-    );
+    const adapter = new HvscMediaIndexAdapter(new JsonMediaIndex(createMemoryStorage()), async () => ({
+      path: "/",
+      folders: [],
+      songs: [],
+    }));
 
     adapter.setEntries([
       { path: "/DEMOS/a.sid", name: "a.sid", type: "sid", durationSeconds: 10 },
@@ -201,14 +190,13 @@ describe("HvscMediaIndexAdapter", () => {
   });
 
   it("queryFolderPage uses fallback when no browse snapshot", async () => {
-    const adapter = new HvscMediaIndexAdapter(
-      new JsonMediaIndex(createMemoryStorage()),
-      async () => ({ path: "/", folders: [], songs: [] }),
-    );
+    const adapter = new HvscMediaIndexAdapter(new JsonMediaIndex(createMemoryStorage()), async () => ({
+      path: "/",
+      folders: [],
+      songs: [],
+    }));
 
-    adapter.setEntries([
-      { path: "/DEMOS/a.sid", name: "a.sid", type: "sid", durationSeconds: 10 },
-    ]);
+    adapter.setEntries([{ path: "/DEMOS/a.sid", name: "a.sid", type: "sid", durationSeconds: 10 }]);
 
     // Clear internal browse snapshot to trigger fallback path
     (adapter as any).browseSnapshot = null;
@@ -279,13 +267,10 @@ describe("HvscMediaIndexAdapter", () => {
       },
     };
 
-    const adapter = new HvscMediaIndexAdapter(
-      new JsonMediaIndex(createMemoryStorage()),
-      async (path) => {
-        callCount++;
-        return listings[path];
-      },
-    );
+    const adapter = new HvscMediaIndexAdapter(new JsonMediaIndex(createMemoryStorage()), async (path) => {
+      callCount++;
+      return listings[path];
+    });
 
     await adapter.scan(["/"]);
     expect(adapter.getAll()).toHaveLength(2);
@@ -294,10 +279,11 @@ describe("HvscMediaIndexAdapter", () => {
   });
 
   it("queryFolderPage fallback at root with sub-directory entries", async () => {
-    const adapter = new HvscMediaIndexAdapter(
-      new JsonMediaIndex(createMemoryStorage()),
-      async () => ({ path: "/", folders: [], songs: [] }),
-    );
+    const adapter = new HvscMediaIndexAdapter(new JsonMediaIndex(createMemoryStorage()), async () => ({
+      path: "/",
+      folders: [],
+      songs: [],
+    }));
 
     adapter.setEntries([
       { path: "/DEMOS/a.sid", name: "a.sid", type: "sid", durationSeconds: 10 },
@@ -324,10 +310,11 @@ describe("HvscMediaIndexAdapter", () => {
   });
 
   it("queryFolderPage fallback filters with query string", async () => {
-    const adapter = new HvscMediaIndexAdapter(
-      new JsonMediaIndex(createMemoryStorage()),
-      async () => ({ path: "/", folders: [], songs: [] }),
-    );
+    const adapter = new HvscMediaIndexAdapter(new JsonMediaIndex(createMemoryStorage()), async () => ({
+      path: "/",
+      folders: [],
+      songs: [],
+    }));
 
     adapter.setEntries([
       {
@@ -354,10 +341,11 @@ describe("HvscMediaIndexAdapter", () => {
   });
 
   it("queryFolderPage fallback skips entries in sub-subdirectories", async () => {
-    const adapter = new HvscMediaIndexAdapter(
-      new JsonMediaIndex(createMemoryStorage()),
-      async () => ({ path: "/", folders: [], songs: [] }),
-    );
+    const adapter = new HvscMediaIndexAdapter(new JsonMediaIndex(createMemoryStorage()), async () => ({
+      path: "/",
+      folders: [],
+      songs: [],
+    }));
 
     adapter.setEntries([
       { path: "/DEMOS/a.sid", name: "a.sid", type: "sid", durationSeconds: 5 },
@@ -377,14 +365,13 @@ describe("HvscMediaIndexAdapter", () => {
   });
 
   it("queryFolderPage fallback handles trailing slashes in path", async () => {
-    const adapter = new HvscMediaIndexAdapter(
-      new JsonMediaIndex(createMemoryStorage()),
-      async () => ({ path: "/", folders: [], songs: [] }),
-    );
+    const adapter = new HvscMediaIndexAdapter(new JsonMediaIndex(createMemoryStorage()), async () => ({
+      path: "/",
+      folders: [],
+      songs: [],
+    }));
 
-    adapter.setEntries([
-      { path: "/DEMOS/a.sid", name: "a.sid", type: "sid", durationSeconds: 30 },
-    ]);
+    adapter.setEntries([{ path: "/DEMOS/a.sid", name: "a.sid", type: "sid", durationSeconds: 30 }]);
     (adapter as any).browseSnapshot = null;
 
     // path with trailing slash should be normalized
@@ -394,14 +381,13 @@ describe("HvscMediaIndexAdapter", () => {
   });
 
   it("queryFolderPage with no offset or limit uses defaults", async () => {
-    const adapter = new HvscMediaIndexAdapter(
-      new JsonMediaIndex(createMemoryStorage()),
-      async () => ({ path: "/", folders: [], songs: [] }),
-    );
+    const adapter = new HvscMediaIndexAdapter(new JsonMediaIndex(createMemoryStorage()), async () => ({
+      path: "/",
+      folders: [],
+      songs: [],
+    }));
 
-    adapter.setEntries([
-      { path: "/DEMOS/a.sid", name: "a.sid", type: "sid", durationSeconds: 10 },
-    ]);
+    adapter.setEntries([{ path: "/DEMOS/a.sid", name: "a.sid", type: "sid", durationSeconds: 10 }]);
     (adapter as any).browseSnapshot = null;
 
     // No offset/limit → uses defaults (offset=0, limit=200)
@@ -411,13 +397,12 @@ describe("HvscMediaIndexAdapter", () => {
   });
 
   it("queryByPath returns null when path not found", async () => {
-    const adapter = new HvscMediaIndexAdapter(
-      new JsonMediaIndex(createMemoryStorage()),
-      async () => ({ path: "/", folders: [], songs: [] }),
-    );
-    adapter.setEntries([
-      { path: "/DEMOS/a.sid", name: "a.sid", type: "sid", durationSeconds: 10 },
-    ]);
+    const adapter = new HvscMediaIndexAdapter(new JsonMediaIndex(createMemoryStorage()), async () => ({
+      path: "/",
+      folders: [],
+      songs: [],
+    }));
+    adapter.setEntries([{ path: "/DEMOS/a.sid", name: "a.sid", type: "sid", durationSeconds: 10 }]);
 
     expect(adapter.queryByPath("/notfound.sid")).toBeNull();
   });
@@ -458,24 +443,21 @@ describe("HvscMediaIndexAdapter", () => {
 
   it("scan without explicit paths starts from root", async () => {
     const scannedPaths: string[] = [];
-    const adapter = new HvscMediaIndexAdapter(
-      new JsonMediaIndex(createMemoryStorage()),
-      async (path) => {
-        scannedPaths.push(path);
-        return {
-          path,
-          folders: [],
-          songs: [
-            {
-              id: 1,
-              virtualPath: `${path}/a.sid`,
-              fileName: "a.sid",
-              durationSeconds: 5,
-            },
-          ],
-        };
-      },
-    );
+    const adapter = new HvscMediaIndexAdapter(new JsonMediaIndex(createMemoryStorage()), async (path) => {
+      scannedPaths.push(path);
+      return {
+        path,
+        folders: [],
+        songs: [
+          {
+            id: 1,
+            virtualPath: `${path}/a.sid`,
+            fileName: "a.sid",
+            durationSeconds: 5,
+          },
+        ],
+      };
+    });
 
     await adapter.scan([]);
     expect(scannedPaths).toContain("/");
@@ -483,10 +465,11 @@ describe("HvscMediaIndexAdapter", () => {
   });
 
   it("save skips browse snapshot when browseSnapshot is null", async () => {
-    const adapter = new HvscMediaIndexAdapter(
-      new JsonMediaIndex(createMemoryStorage()),
-      async () => ({ path: "/", folders: [], songs: [] }),
-    );
+    const adapter = new HvscMediaIndexAdapter(new JsonMediaIndex(createMemoryStorage()), async () => ({
+      path: "/",
+      folders: [],
+      songs: [],
+    }));
     (adapter as any).browseSnapshot = null;
     // Should not throw, just skip saveHvscBrowseIndexSnapshot
     await expect(adapter.save()).resolves.toBeUndefined();

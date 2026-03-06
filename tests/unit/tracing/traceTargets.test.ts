@@ -50,8 +50,7 @@ describe("traceTargets", () => {
   it("uses external mock when test probes match base URL", () => {
     stickyLockMock.mockReturnValue(false);
     vi.stubEnv("VITE_ENABLE_TEST_PROBES", "1");
-    (window as { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl =
-      "http://mock";
+    (window as { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl = "http://mock";
     connectionSnapshotMock.mockReturnValue({ state: "REAL_CONNECTED" });
     apiConfigSnapshotMock.mockReturnValue({ baseUrl: "http://mock/api" });
     activeMockBaseUrlMock.mockReturnValue(null);
@@ -124,32 +123,27 @@ describe("traceTargets", () => {
     stickyLockMock.mockReturnValue(false);
     vi.stubEnv("VITE_ENABLE_TEST_PROBES", "1");
     delete (window as { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl;
-    (window as { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl =
-      "http://mock/";
+    (window as { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = "http://mock/";
     connectionSnapshotMock.mockReturnValue({ state: "REAL_CONNECTED" });
     apiConfigSnapshotMock.mockReturnValue({ baseUrl: "http://mock/api" });
     activeMockBaseUrlMock.mockReturnValue(null);
 
     const result = resolveBackendTarget();
     expect(result.target).toBe("external-mock");
-    delete (window as { __c64uMockServerBaseUrl?: string })
-      .__c64uMockServerBaseUrl;
+    delete (window as { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl;
   });
 
   it("enables test probes via __c64uTestProbeEnabled flag (BRDA:19)", () => {
     stickyLockMock.mockReturnValue(false);
-    (window as { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled =
-      true;
-    (window as { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl =
-      "http://probe/";
+    (window as { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled = true;
+    (window as { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl = "http://probe/";
     connectionSnapshotMock.mockReturnValue({ state: "REAL_CONNECTED" });
     apiConfigSnapshotMock.mockReturnValue({ baseUrl: "http://probe/api" });
     activeMockBaseUrlMock.mockReturnValue(null);
 
     const result = resolveBackendTarget();
     expect(result.target).toBe("external-mock");
-    delete (window as { __c64uTestProbeEnabled?: boolean })
-      .__c64uTestProbeEnabled;
+    delete (window as { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled;
   });
 
   it("resolves real-device when test probes enabled but no test URL globals set (BRDA:38,17)", () => {
@@ -157,8 +151,7 @@ describe("traceTargets", () => {
     vi.stubEnv("VITE_ENABLE_TEST_PROBES", "1");
     // Neither __c64uExpectedBaseUrl nor __c64uMockServerBaseUrl is set → ?? null evaluated
     delete (window as { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl;
-    delete (window as { __c64uMockServerBaseUrl?: string })
-      .__c64uMockServerBaseUrl;
+    delete (window as { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl;
     connectionSnapshotMock.mockReturnValue({ state: "REAL_CONNECTED" });
     apiConfigSnapshotMock.mockReturnValue({ baseUrl: "http://device" });
     activeMockBaseUrlMock.mockReturnValue(null);

@@ -8,13 +8,7 @@
 
 import React from "react";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { getOnOffButtonClass } from "@/lib/ui/buttonStyles";
 import {
@@ -88,22 +82,16 @@ export function DriveCard({
   className,
   testIdSuffix,
 }: DriveCardProps) {
-  const formatSelectOptionLabel = (value: string) =>
-    value === "" ? "Default" : value;
+  const formatSelectOptionLabel = (value: string) => (value === "" ? "Default" : value);
 
   return (
     <div
-      className={cn(
-        "bg-card border border-border rounded-xl p-3 space-y-2",
-        className,
-      )}
+      className={cn("bg-card border border-border rounded-xl p-3 space-y-2", className)}
       data-testid={`home-drive-row-${testIdSuffix}`}
     >
       {/* Row 1: Name and Power */}
       <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-semibold text-primary uppercase tracking-wide">
-          {name}
-        </p>
+        <p className="text-xs font-semibold text-primary uppercase tracking-wide">{name}</p>
         <Button
           variant="outline"
           size="sm"
@@ -119,9 +107,7 @@ export function DriveCard({
       {/* Row 1.5: Mounted Path */}
       {(mountedPath !== undefined || pathValue !== undefined) && (
         <div className="flex items-center gap-2 text-xs">
-          <span className="text-muted-foreground whitespace-nowrap">
-            {mountedPathLabel || "Disk"}
-          </span>
+          <span className="text-muted-foreground whitespace-nowrap">{mountedPathLabel || "Disk"}</span>
           <button
             type="button"
             onClick={onMountedPathClick || onPathClick}
@@ -137,18 +123,9 @@ export function DriveCard({
       {/* Row 2: Bus ID and Type */}
       <div className="grid grid-cols-2 gap-2 text-xs">
         <div className="flex items-center gap-2">
-          <span className="text-muted-foreground whitespace-nowrap">
-            Bus ID
-          </span>
-          <Select
-            value={busIdValue}
-            onValueChange={onBusIdChange}
-            disabled={!isConnected || busIdPending}
-          >
-            <SelectTrigger
-              className={inlineSelectTriggerClass}
-              data-testid={`home-drive-bus-${testIdSuffix}`}
-            >
+          <span className="text-muted-foreground whitespace-nowrap">Bus ID</span>
+          <Select value={busIdValue} onValueChange={onBusIdChange} disabled={!isConnected || busIdPending}>
+            <SelectTrigger className={inlineSelectTriggerClass} data-testid={`home-drive-bus-${testIdSuffix}`}>
               <SelectValue placeholder={busIdValue} />
             </SelectTrigger>
             <SelectContent>
@@ -163,18 +140,9 @@ export function DriveCard({
         <div className="flex items-center gap-2 justify-end min-w-0">
           {typeValue !== undefined && (
             <>
-              <span className="text-muted-foreground whitespace-nowrap">
-                Type
-              </span>
-              <Select
-                value={typeValue}
-                onValueChange={onTypeChange}
-                disabled={!isConnected || typePending}
-              >
-                <SelectTrigger
-                  className={inlineSelectTriggerClass}
-                  data-testid={`home-drive-type-${testIdSuffix}`}
-                >
+              <span className="text-muted-foreground whitespace-nowrap">Type</span>
+              <Select value={typeValue} onValueChange={onTypeChange} disabled={!isConnected || typePending}>
+                <SelectTrigger className={inlineSelectTriggerClass} data-testid={`home-drive-type-${testIdSuffix}`}>
                   <SelectValue placeholder={typeValue} />
                 </SelectTrigger>
                 <SelectContent>
@@ -199,9 +167,7 @@ export function DriveCard({
           disabled={!onStatusClick}
           className={cn(
             "truncate text-left font-medium",
-            onStatusClick
-              ? "underline-offset-2 hover:underline"
-              : "cursor-default",
+            onStatusClick ? "underline-offset-2 hover:underline" : "cursor-default",
             getDiagnosticsColorClassForDisplaySeverity(statusSeverity),
           )}
           data-testid={`home-drive-status-${testIdSuffix}`}

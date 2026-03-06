@@ -8,8 +8,7 @@ const runWithImplicitActionMock = vi.fn();
 
 vi.mock("@/lib/tracing/actionTrace", () => ({
   getActiveAction: () => getActiveActionMock(),
-  runWithImplicitAction: (...args: unknown[]) =>
-    runWithImplicitActionMock(...args),
+  runWithImplicitAction: (...args: unknown[]) => runWithImplicitActionMock(...args),
 }));
 
 vi.mock("@/lib/diagnostics/diagnosticsActivity", () => ({
@@ -28,18 +27,12 @@ import { registerFetchTrace } from "../../../src/lib/tracing/fetchTrace";
 describe("fetchTrace", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    (
-      window as Window & { __c64uFetchTraceInstalled?: boolean }
-    ).__c64uFetchTraceInstalled = false;
+    (window as Window & { __c64uFetchTraceInstalled?: boolean }).__c64uFetchTraceInstalled = false;
     getActiveActionMock.mockReturnValue(null);
     runWithImplicitActionMock.mockImplementation(
       async (
         _name: string,
-        callback: (action: {
-          correlationId: string;
-          origin: "system";
-          name: string;
-        }) => Promise<Response>,
+        callback: (action: { correlationId: string; origin: "system"; name: string }) => Promise<Response>,
       ) => {
         return callback({
           correlationId: "COR-TEST",
@@ -57,9 +50,7 @@ describe("fetchTrace", () => {
   });
 
   it("does not warn for relative non-traced URLs", async () => {
-    const warnSpy = vi
-      .spyOn(console, "warn")
-      .mockImplementation(() => undefined);
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     registerFetchTrace();
 
     await window.fetch("/api/diagnostics/server-logs");
@@ -113,16 +104,10 @@ describe("fetchTrace", () => {
   });
 
   it("records thrown fetch failures as trace errors", async () => {
-    window.fetch = vi
-      .fn()
-      .mockRejectedValue(
-        new Error("network down"),
-      ) as unknown as typeof window.fetch;
+    window.fetch = vi.fn().mockRejectedValue(new Error("network down")) as unknown as typeof window.fetch;
     registerFetchTrace();
 
-    await expect(window.fetch("/api/rest/v1/info")).rejects.toThrow(
-      "network down",
-    );
+    await expect(window.fetch("/api/rest/v1/info")).rejects.toThrow("network down");
     expect(recordTraceErrorMock).toHaveBeenCalled();
   });
 
@@ -135,22 +120,16 @@ describe("fetchTrace", () => {
     ) as unknown as typeof window.fetch;
     registerFetchTrace();
 
-    await expect(window.fetch("/api/rest/v1/info")).rejects.toBeInstanceOf(
-      Response,
-    );
+    await expect(window.fetch("/api/rest/v1/info")).rejects.toBeInstanceOf(Response);
     expect(recordRestResponseMock).toHaveBeenCalled();
     expect(recordTraceErrorMock).toHaveBeenCalled();
   });
 
   it("records non-error thrown values", async () => {
-    window.fetch = vi
-      .fn()
-      .mockRejectedValue("plain-failure") as unknown as typeof window.fetch;
+    window.fetch = vi.fn().mockRejectedValue("plain-failure") as unknown as typeof window.fetch;
     registerFetchTrace();
 
-    await expect(window.fetch("/api/rest/v1/info")).rejects.toBe(
-      "plain-failure",
-    );
+    await expect(window.fetch("/api/rest/v1/info")).rejects.toBe("plain-failure");
     expect(recordTraceErrorMock).toHaveBeenCalled();
   });
 
@@ -227,9 +206,7 @@ describe("fetchTrace", () => {
   });
 
   it("warns and continues when traced JSON response body is invalid", async () => {
-    const warnSpy = vi
-      .spyOn(console, "warn")
-      .mockImplementation(() => undefined);
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const responseWithCloneFailure = {
       ok: true,
       status: 200,
@@ -237,19 +214,12 @@ describe("fetchTrace", () => {
         throw new Error("clone failed");
       },
     } as unknown as Response;
-    window.fetch = vi
-      .fn()
-      .mockResolvedValue(
-        responseWithCloneFailure,
-      ) as unknown as typeof window.fetch;
+    window.fetch = vi.fn().mockResolvedValue(responseWithCloneFailure) as unknown as typeof window.fetch;
     registerFetchTrace();
 
     await window.fetch("/api/rest/v1/info");
 
-    expect(warnSpy).toHaveBeenCalledWith(
-      "Failed to parse traced fetch response body",
-      expect.any(Object),
-    );
+    expect(warnSpy).toHaveBeenCalledWith("Failed to parse traced fetch response body", expect.any(Object));
     expect(recordRestResponseMock).toHaveBeenCalled();
   });
 

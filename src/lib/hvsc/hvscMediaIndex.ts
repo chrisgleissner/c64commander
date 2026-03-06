@@ -7,11 +7,7 @@
  */
 
 import type { MediaEntry, MediaIndex } from "@/lib/media-index";
-import {
-  FilesystemMediaIndexStorage,
-  JsonMediaIndex,
-  LocalStorageMediaIndexStorage,
-} from "@/lib/media-index";
+import { FilesystemMediaIndexStorage, JsonMediaIndex, LocalStorageMediaIndexStorage } from "@/lib/media-index";
 import type { HvscFolderListing, HvscFolderListingPage } from "./hvscTypes";
 import { listHvscFolder } from "./hvscFilesystem";
 import {
@@ -22,12 +18,9 @@ import {
   type HvscBrowseIndexSnapshot,
 } from "./hvscBrowseIndexStore";
 
-const normalizePath = (path: string) =>
-  path.startsWith("/") ? path : `/${path}`;
+const normalizePath = (path: string) => (path.startsWith("/") ? path : `/${path}`);
 
-const mapSongToEntry = (
-  song: HvscFolderListing["songs"][number],
-): MediaEntry => ({
+const mapSongToEntry = (song: HvscFolderListing["songs"][number]): MediaEntry => ({
   path: song.virtualPath,
   name: song.fileName,
   type: "sid",
@@ -36,8 +29,7 @@ const mapSongToEntry = (
 
 const normalizeFolder = (path: string) => {
   const normalized = normalizePath(path || "/");
-  if (normalized.length > 1 && normalized.endsWith("/"))
-    return normalized.slice(0, -1);
+  if (normalized.length > 1 && normalized.endsWith("/")) return normalized.slice(0, -1);
   return normalized;
 };
 
@@ -73,11 +65,7 @@ const createFallbackFolderPage = (
   });
 
   const folderList = Array.from(allFolders)
-    .filter(
-      (folder) =>
-        normalizedQuery.length === 0 ||
-        folder.toLowerCase().includes(normalizedQuery),
-    )
+    .filter((folder) => normalizedQuery.length === 0 || folder.toLowerCase().includes(normalizedQuery))
     .sort((a, b) => a.localeCompare(b));
   const songList = directSongs
     .filter(
@@ -92,12 +80,7 @@ const createFallbackFolderPage = (
     path: normalizedPath,
     folders: folderList,
     songs: songList.slice(offset, offset + limit).map((song) => ({
-      id: Math.abs(
-        Array.from(song.path).reduce(
-          (hash, char) => (hash * 31 + char.charCodeAt(0)) | 0,
-          0,
-        ),
-      ),
+      id: Math.abs(Array.from(song.path).reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) | 0, 0)),
       virtualPath: song.path,
       fileName: song.name,
       durationSeconds: song.durationSeconds ?? null,
@@ -169,9 +152,7 @@ export class HvscMediaIndexAdapter implements MediaIndex {
   }
 
   getAll(): MediaEntry[] {
-    return this.entriesSnapshot.length
-      ? [...this.entriesSnapshot]
-      : this.index.getAll();
+    return this.entriesSnapshot.length ? [...this.entriesSnapshot] : this.index.getAll();
   }
 
   setEntries(entries: MediaEntry[]): void {
@@ -180,47 +161,24 @@ export class HvscMediaIndexAdapter implements MediaIndex {
     this.browseSnapshot = buildHvscBrowseIndexFromEntries(entries);
   }
 
-  queryFolderPage(options: {
-    path: string;
-    query?: string;
-    offset?: number;
-    limit?: number;
-  }): HvscFolderListingPage {
+  queryFolderPage(options: { path: string; query?: string; offset?: number; limit?: number }): HvscFolderListingPage {
     const offset = Math.max(0, Math.floor(options.offset ?? 0));
     const limit = Math.max(1, Math.floor(options.limit ?? 200));
     const query = options.query ?? "";
     if (this.browseSnapshot) {
-      return listFolderFromBrowseIndex(
-        this.browseSnapshot,
-        options.path,
-        query,
-        offset,
-        limit,
-      );
+      return listFolderFromBrowseIndex(this.browseSnapshot, options.path, query, offset, limit);
     }
-    const entries = this.entriesSnapshot.length
-      ? this.entriesSnapshot
-      : this.index.getAll();
-    const page = createFallbackFolderPage(
-      entries,
-      options.path,
-      query,
-      offset,
-      limit,
-    );
+    const entries = this.entriesSnapshot.length ? this.entriesSnapshot : this.index.getAll();
+    const page = createFallbackFolderPage(entries, options.path, query, offset, limit);
     this.browseSnapshot = buildHvscBrowseIndexFromEntries(entries);
     return page;
   }
 }
 
-export const createHvscMediaIndex = (
-  listFolder: (path: string) => Promise<HvscFolderListing> = listHvscFolder,
-) =>
+export const createHvscMediaIndex = (listFolder: (path: string) => Promise<HvscFolderListing> = listHvscFolder) =>
   new HvscMediaIndexAdapter(
     new JsonMediaIndex(
-      typeof window === "undefined"
-        ? new LocalStorageMediaIndexStorage()
-        : new FilesystemMediaIndexStorage(),
+      typeof window === "undefined" ? new LocalStorageMediaIndexStorage() : new FilesystemMediaIndexStorage(),
     ),
     (path: string) => listFolder(path),
   );

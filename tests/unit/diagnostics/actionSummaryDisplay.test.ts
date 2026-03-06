@@ -26,9 +26,7 @@ describe("formatActionSummaryOrigin", () => {
   });
 
   it("formats origin with arrow when originalOrigin differs", () => {
-    expect(formatActionSummaryOrigin("system", "automatic")).toBe(
-      "automatic → system",
-    );
+    expect(formatActionSummaryOrigin("system", "automatic")).toBe("automatic → system");
   });
 });
 
@@ -48,22 +46,14 @@ describe("formatActionEffectTarget", () => {
     expect(formatActionEffectTarget("real-device", "u64")).toBe("u64");
     expect(formatActionEffectTarget("real-device", "U64")).toBe("u64");
     expect(formatActionEffectTarget("real-device", "Ultimate 64")).toBe("u64");
-    expect(formatActionEffectTarget("real-device", "Ultimate 64 Elite")).toBe(
-      "u64e",
-    );
-    expect(formatActionEffectTarget("real-device", "Ultimate 64-II")).toBe(
-      "u64e2",
-    );
+    expect(formatActionEffectTarget("real-device", "Ultimate 64 Elite")).toBe("u64e");
+    expect(formatActionEffectTarget("real-device", "Ultimate 64-II")).toBe("u64e2");
     expect(formatActionEffectTarget("real-device", "u64e")).toBe("u64e");
     expect(formatActionEffectTarget("real-device", "U64E")).toBe("u64e");
     expect(formatActionEffectTarget("real-device", "u64e2")).toBe("u64e2");
     expect(formatActionEffectTarget("real-device", "U64E2")).toBe("u64e2");
-    expect(formatActionEffectTarget("real-device", "C64 Ultimate")).toBe(
-      "c64u",
-    );
-    expect(formatActionEffectTarget("real-device", "unknown-model")).toBe(
-      "device",
-    );
+    expect(formatActionEffectTarget("real-device", "C64 Ultimate")).toBe("c64u");
+    expect(formatActionEffectTarget("real-device", "unknown-model")).toBe("device");
   });
 
   it("maps internal and external mocks to demo/sandbox labels", () => {
@@ -76,9 +66,7 @@ describe("formatActionEffectTarget", () => {
     expect(formatActionEffectTarget("internal-mock")).not.toContain("mock");
     expect(formatActionEffectTarget("external-mock")).not.toContain("mock");
     expect(formatActionEffectTarget("mock")).not.toContain("mock");
-    expect(formatActionEffectTarget("real-device", "unknown-model")).toBe(
-      "device",
-    );
+    expect(formatActionEffectTarget("real-device", "unknown-model")).toBe("device");
   });
 
   it('returns "unknown" for null/undefined', () => {
@@ -89,15 +77,11 @@ describe("formatActionEffectTarget", () => {
 
 describe("formatTriggerDisplay", () => {
   it("formats trigger with kind only when name matches", () => {
-    expect(formatTriggerDisplay({ kind: "timer", name: "timer" })).toBe(
-      "timer",
-    );
+    expect(formatTriggerDisplay({ kind: "timer", name: "timer" })).toBe("timer");
   });
 
   it("includes name suffix when name differs from kind", () => {
-    expect(
-      formatTriggerDisplay({ kind: "timer", name: "connectivity.probe" }),
-    ).toBe("timer (connectivity.probe)");
+    expect(formatTriggerDisplay({ kind: "timer", name: "connectivity.probe" })).toBe("timer (connectivity.probe)");
   });
 
   it("includes interval when present", () => {
@@ -166,8 +150,7 @@ describe("formatActionDuration", () => {
 
   it("never exceeds 6 characters", () => {
     const testCases = [
-      0, 1, 500, 999, 1000, 9999, 59900, 99949, 100_000, 3_599_000, 3_600_000,
-      356_400_000, 360_000_000,
+      0, 1, 500, 999, 1000, 9999, 59900, 99949, 100_000, 3_599_000, 3_600_000, 356_400_000, 360_000_000,
     ];
     for (const ms of testCases) {
       const result = formatActionDuration(ms);

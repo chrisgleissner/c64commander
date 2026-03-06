@@ -8,10 +8,7 @@
 
 import { registerPlugin } from "@capacitor/core";
 import { getActiveAction } from "@/lib/tracing/actionTrace";
-import {
-  resolveNativeTraceContext,
-  type NativeTraceContext,
-} from "@/lib/native/nativeTraceContext";
+import { resolveNativeTraceContext, type NativeTraceContext } from "@/lib/native/nativeTraceContext";
 
 export type HvscNativeIngestResult = {
   totalEntries: number;
@@ -48,12 +45,8 @@ type HvscIngestionPlugin = {
     debugHeapLogging?: boolean;
     traceContext?: NativeTraceContext;
   }) => Promise<HvscNativeIngestResult>;
-  cancelIngestion: (options?: {
-    traceContext?: NativeTraceContext;
-  }) => Promise<void>;
-  getIngestionStats: (options?: {
-    traceContext?: NativeTraceContext;
-  }) => Promise<{ metadataRows: number }>;
+  cancelIngestion: (options?: { traceContext?: NativeTraceContext }) => Promise<void>;
+  getIngestionStats: (options?: { traceContext?: NativeTraceContext }) => Promise<{ metadataRows: number }>;
   addListener: (
     eventName: "hvscProgress",
     listenerFunc: (event: HvscNativeProgressEvent) => void,

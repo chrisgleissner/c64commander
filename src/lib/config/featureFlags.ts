@@ -52,11 +52,9 @@ export class InMemoryFeatureFlagRepository implements FeatureFlagRepository {
   private store = new Map<FeatureFlagKey, boolean>();
 
   constructor(initial: Partial<FeatureFlags> = {}) {
-    (Object.entries(initial) as Array<[FeatureFlagKey, boolean]>).forEach(
-      ([key, value]) => {
-        this.store.set(key, value);
-      },
-    );
+    (Object.entries(initial) as Array<[FeatureFlagKey, boolean]>).forEach(([key, value]) => {
+      this.store.set(key, value);
+    });
   }
 
   async getFlag(key: FeatureFlagKey): Promise<boolean | null> {
@@ -152,10 +150,6 @@ export class FeatureFlagManager {
   }
 }
 
-export const featureFlagManager = new FeatureFlagManager(
-  new PluginFeatureFlagRepository(),
-  buildDefaultFlags(),
-);
+export const featureFlagManager = new FeatureFlagManager(new PluginFeatureFlagRepository(), buildDefaultFlags());
 
-export const isHvscEnabled = (flags: FeatureFlags) =>
-  Boolean(flags.hvsc_enabled);
+export const isHvscEnabled = (flags: FeatureFlags) => Boolean(flags.hvsc_enabled);

@@ -7,29 +7,16 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import {
-  render,
-  screen,
-  fireEvent,
-  within,
-  waitFor,
-} from "@testing-library/react";
+import { render, screen, fireEvent, within, waitFor } from "@testing-library/react";
 import { HomeDiskManager } from "@/components/disks/HomeDiskManager";
 
 // --- MOCKS ---
 
 vi.mock("@/components/lists/SelectableActionList", () => ({
-  SelectableActionList: ({
-    items,
-    headerActions,
-    onRemoveSelected,
-    selectedCount,
-  }: any) => (
+  SelectableActionList: ({ items, headerActions, onRemoveSelected, selectedCount }: any) => (
     <div data-testid="mock-action-list">
       <div data-testid="header-actions">{headerActions}</div>
-      {selectedCount > 0 && (
-        <button onClick={onRemoveSelected}>Delete Selected</button>
-      )}
+      {selectedCount > 0 && <button onClick={onRemoveSelected}>Delete Selected</button>}
 
       {items.map((item: any) => (
         <div key={item.id} data-testid={`disk-item-${item.id}`}>
@@ -41,11 +28,7 @@ vi.mock("@/components/lists/SelectableActionList", () => ({
             {item.menuItems?.map((menuItem: any, idx: number) => {
               if (menuItem.type === "action") {
                 return (
-                  <button
-                    key={idx}
-                    onClick={menuItem.onSelect}
-                    aria-label={menuItem.label}
-                  >
+                  <button key={idx} onClick={menuItem.onSelect} aria-label={menuItem.label}>
                     {menuItem.label}
                   </button>
                 );
@@ -216,9 +199,7 @@ describe("HomeDiskManager Dialogs", () => {
     // "Drive A (#—)"
 
     const dialog = screen.getByRole("dialog", { name: /Mount DiskOne.d64/i });
-    const driveBBtn = within(dialog).getByText((content) =>
-      content.includes("Drive B"),
-    ); // Scoped
+    const driveBBtn = within(dialog).getByText((content) => content.includes("Drive B")); // Scoped
 
     fireEvent.click(driveBBtn);
 
@@ -245,10 +226,7 @@ describe("HomeDiskManager Dialogs", () => {
     const saveBtn = screen.getByText("Save");
     fireEvent.click(saveBtn);
 
-    expect(mockDiskLibrary.updateDiskName).toHaveBeenCalledWith(
-      "1",
-      "Renamed.d64",
-    );
+    expect(mockDiskLibrary.updateDiskName).toHaveBeenCalledWith("1", "Renamed.d64");
   });
 
   it("handles updating disk group (new group)", async () => {
@@ -264,10 +242,7 @@ describe("HomeDiskManager Dialogs", () => {
     const createBtn = screen.getByText("Create & assign");
     fireEvent.click(createBtn);
 
-    expect(mockDiskLibrary.updateDiskGroup).toHaveBeenCalledWith(
-      "2",
-      "NewGroup",
-    );
+    expect(mockDiskLibrary.updateDiskGroup).toHaveBeenCalledWith("2", "NewGroup");
   });
 
   it("handles updating disk group (existing group)", async () => {
@@ -295,10 +270,7 @@ describe("HomeDiskManager Dialogs", () => {
 
     fireEvent.keyDown(input, { key: "Enter", code: "Enter", charCode: 13 });
 
-    expect(mockDiskLibrary.updateDiskGroup).toHaveBeenCalledWith(
-      "2",
-      "EnterGroup",
-    );
+    expect(mockDiskLibrary.updateDiskGroup).toHaveBeenCalledWith("2", "EnterGroup");
   });
 
   it("handles single disk deletion", async () => {

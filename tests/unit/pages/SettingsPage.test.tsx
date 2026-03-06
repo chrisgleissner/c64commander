@@ -6,14 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import {
-  act,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-  within,
-} from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { RouterProvider, createMemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import SettingsPage from "@/pages/SettingsPage";
@@ -31,10 +24,7 @@ import {
   saveStartupDiscoveryWindowMs,
 } from "@/lib/config/appSettings";
 import * as deviceSafetySettings from "@/lib/config/deviceSafetySettings";
-import {
-  exportSettingsJson,
-  importSettingsJson,
-} from "@/lib/config/settingsTransfer";
+import { exportSettingsJson, importSettingsJson } from "@/lib/config/settingsTransfer";
 import { setHvscBaseUrlOverride } from "@/lib/hvsc/hvscReleaseService";
 import {
   loadConfigWriteIntervalMs,
@@ -49,9 +39,7 @@ vi.mock("framer-motion", () => ({
   motion: {
     div: ({ children, ...props }: any) => <div {...props}>{children}</div>,
     span: ({ children, ...props }: any) => <span {...props}>{children}</span>,
-    section: ({ children, ...props }: any) => (
-      <section {...props}>{children}</section>
-    ),
+    section: ({ children, ...props }: any) => <section {...props}>{children}</section>,
     li: ({ children, ...props }: any) => <li {...props}>{children}</li>,
   },
   AnimatePresence: ({ children }: any) => <>{children}</>,
@@ -59,17 +47,12 @@ vi.mock("framer-motion", () => ({
 
 vi.mock("@/components/ui/select", () => ({
   Select: ({ value, onValueChange, children }: any) => (
-    <select
-      value={value}
-      onChange={(event) => onValueChange?.(event.target.value)}
-    >
+    <select value={value} onChange={(event) => onValueChange?.(event.target.value)}>
       {children}
     </select>
   ),
   SelectContent: ({ children }: any) => <>{children}</>,
-  SelectItem: ({ value, children }: any) => (
-    <option value={value}>{children}</option>
-  ),
+  SelectItem: ({ value, children }: any) => <option value={value}>{children}</option>,
   SelectTrigger: () => null,
   SelectValue: () => null,
 }));
@@ -138,11 +121,7 @@ vi.mock("@/components/ThemeProvider", () => ({
 
 vi.mock("@/components/DiagnosticsActivityIndicator", () => ({
   DiagnosticsActivityIndicator: ({ onClick }: { onClick: () => void }) => (
-    <button
-      type="button"
-      onClick={onClick}
-      data-testid="diagnostics-activity-indicator"
-    />
+    <button type="button" onClick={onClick} data-testid="diagnostics-activity-indicator" />
   ),
 }));
 
@@ -336,18 +315,14 @@ describe("SettingsPage", () => {
     await waitFor(() => {
       expect(mockUpdateConfig).toHaveBeenCalledWith("c64u", undefined);
       expect(discoverConnection).toHaveBeenCalledWith("settings");
-      expect(toast).toHaveBeenCalledWith(
-        expect.objectContaining({ title: "Connection settings saved" }),
-      );
+      expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Connection settings saved" }));
     });
   }, 15000);
 
   it("orders core sections and places network timing under Device Safety", () => {
     renderSettingsPage();
 
-    const headings = screen
-      .getAllByRole("heading", { level: 2 })
-      .map((node) => node.textContent ?? "");
+    const headings = screen.getAllByRole("heading", { level: 2 }).map((node) => node.textContent ?? "");
     const appearanceIndex = headings.indexOf("Appearance");
     const connectionIndex = headings.indexOf("Connection");
     const diagnosticsIndex = headings.indexOf("Diagnostics");
@@ -361,50 +336,22 @@ describe("SettingsPage", () => {
     expect(aboutIndex).toBeGreaterThan(deviceSafetyIndex);
     expect(aboutIndex).toBe(headings.length - 1);
 
-    const connectionSection = screen
-      .getByRole("heading", { name: "Connection" })
-      .closest(".bg-card");
-    const deviceSafetySection = screen
-      .getByRole("heading", { name: "Device Safety" })
-      .closest(".bg-card");
+    const connectionSection = screen.getByRole("heading", { name: "Connection" }).closest(".bg-card");
+    const deviceSafetySection = screen.getByRole("heading", { name: "Device Safety" }).closest(".bg-card");
 
     expect(connectionSection).toBeTruthy();
     expect(deviceSafetySection).toBeTruthy();
 
     if (connectionSection) {
-      expect(
-        within(connectionSection).queryByText(
-          "Startup Discovery Window (seconds)",
-        ),
-      ).toBeNull();
-      expect(
-        within(connectionSection).queryByText(
-          "Background Rediscovery Interval (seconds)",
-        ),
-      ).toBeNull();
-      expect(
-        within(connectionSection).queryByText(
-          "Discovery Probe Timeout (seconds)",
-        ),
-      ).toBeNull();
+      expect(within(connectionSection).queryByText("Startup Discovery Window (seconds)")).toBeNull();
+      expect(within(connectionSection).queryByText("Background Rediscovery Interval (seconds)")).toBeNull();
+      expect(within(connectionSection).queryByText("Discovery Probe Timeout (seconds)")).toBeNull();
     }
 
     if (deviceSafetySection) {
-      expect(
-        within(deviceSafetySection).getByText(
-          "Startup Discovery Window (seconds)",
-        ),
-      ).toBeInTheDocument();
-      expect(
-        within(deviceSafetySection).getByText(
-          "Background Rediscovery Interval (seconds)",
-        ),
-      ).toBeInTheDocument();
-      expect(
-        within(deviceSafetySection).getByText(
-          "Discovery Probe Timeout (seconds)",
-        ),
-      ).toBeInTheDocument();
+      expect(within(deviceSafetySection).getByText("Startup Discovery Window (seconds)")).toBeInTheDocument();
+      expect(within(deviceSafetySection).getByText("Background Rediscovery Interval (seconds)")).toBeInTheDocument();
+      expect(within(deviceSafetySection).getByText("Discovery Probe Timeout (seconds)")).toBeInTheDocument();
     }
   });
 
@@ -432,21 +379,14 @@ describe("SettingsPage", () => {
     fireEvent.click(screen.getByTestId("hvsc-toggle"));
 
     expect(mockSetFeatureFlag).toHaveBeenCalledWith(true);
-    expect(localStorageSpy).toHaveBeenCalledWith(
-      "c64u_feature_flag:hvsc_enabled",
-      "1",
-    );
+    expect(localStorageSpy).toHaveBeenCalledWith("c64u_feature_flag:hvsc_enabled", "1");
   });
 
   it("persists demo mode and debug logging toggles", () => {
     renderSettingsPage();
 
-    fireEvent.click(
-      screen.getByRole("checkbox", { name: /automatic demo mode/i }),
-    );
-    fireEvent.click(
-      screen.getByRole("checkbox", { name: /enable debug logging/i }),
-    );
+    fireEvent.click(screen.getByRole("checkbox", { name: /automatic demo mode/i }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /enable debug logging/i }));
 
     expect(saveAutomaticDemoModeEnabled).toHaveBeenCalledWith(false);
     expect(saveDebugLoggingEnabled).toHaveBeenCalledWith(false);
@@ -456,9 +396,7 @@ describe("SettingsPage", () => {
     renderSettingsPage();
 
     const startupInput = screen.getByLabelText(/startup discovery window/i);
-    const backgroundInput = screen.getByLabelText(
-      /background rediscovery interval/i,
-    );
+    const backgroundInput = screen.getByLabelText(/background rediscovery interval/i);
 
     fireEvent.change(startupInput, { target: { value: "4" } });
     fireEvent.blur(startupInput);
@@ -497,25 +435,19 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /list persisted uris/i }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: /list persisted uris/i }));
 
     await waitFor(() => {
       expect(FolderPicker.getPersistedUris).toHaveBeenCalled();
     });
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /enumerate first root/i }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: /enumerate first root/i }));
 
     await waitFor(() => {
       expect(FolderPicker.listChildren).toHaveBeenCalled();
     });
 
-    expect(screen.getByText(/persisted:/i)).toHaveTextContent(
-      "content://example",
-    );
+    expect(screen.getByText(/persisted:/i)).toHaveTextContent("content://example");
     expect(screen.getByText(/dir: \//i)).toBeInTheDocument();
   }, 15000);
 
@@ -537,17 +469,13 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /list persisted uris/i }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: /list persisted uris/i }));
 
     await waitFor(() => {
       expect(FolderPicker.getPersistedUris).toHaveBeenCalled();
     });
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /enumerate first root/i }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: /enumerate first root/i }));
 
     await waitFor(() => {
       expect(reportUserError).toHaveBeenCalledWith(
@@ -576,9 +504,7 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    expect(
-      screen.getByText(/real device detected during probe/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/real device detected during probe/i)).toBeInTheDocument();
   });
 
   it("shows diagnostics tabs in required order", async () => {
@@ -606,9 +532,7 @@ describe("SettingsPage", () => {
 
     const dialog = await screen.findByRole("dialog");
     const actionsTab = within(dialog).getByRole("tab", { name: /actions/i });
-    await waitFor(() =>
-      expect(actionsTab).toHaveAttribute("aria-selected", "true"),
-    );
+    await waitFor(() => expect(actionsTab).toHaveAttribute("aria-selected", "true"));
   });
 
   it("renders a single diagnostics action bar", async () => {
@@ -617,24 +541,12 @@ describe("SettingsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
     const dialog = await screen.findByRole("dialog");
 
-    expect(
-      within(dialog).getByRole("button", { name: /clear all/i }),
-    ).toBeInTheDocument();
-    expect(
-      within(dialog).queryByRole("button", { name: /share\s*\/\s*export/i }),
-    ).not.toBeInTheDocument();
-    expect(
-      within(dialog).queryByRole("button", { name: /clear logs/i }),
-    ).not.toBeInTheDocument();
-    expect(
-      within(dialog).queryByRole("button", { name: /clear traces/i }),
-    ).not.toBeInTheDocument();
-    expect(
-      within(dialog).queryByRole("button", { name: /share redacted/i }),
-    ).not.toBeInTheDocument();
-    expect(
-      within(dialog).queryByRole("button", { name: /email/i }),
-    ).not.toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: /clear all/i })).toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: /share\s*\/\s*export/i })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: /clear logs/i })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: /clear traces/i })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: /share redacted/i })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: /email/i })).not.toBeInTheDocument();
   });
 
   it("filters diagnostics entries per tab and restores on clear", async () => {
@@ -671,36 +583,22 @@ describe("SettingsPage", () => {
     const errorsTab = within(dialog).getByRole("tab", { name: /^Errors$/i });
     fireEvent.mouseDown(errorsTab);
     fireEvent.click(errorsTab);
-    await waitFor(() =>
-      expect(errorsTab).toHaveAttribute("aria-selected", "true"),
-    );
+    await waitFor(() => expect(errorsTab).toHaveAttribute("aria-selected", "true"));
 
     const filterInput = within(dialog).getByTestId("diagnostics-filter-input");
     fireEvent.change(filterInput, { target: { value: "network" } });
-    expect(
-      (await within(dialog).findAllByText("Network failure")).length,
-    ).toBeGreaterThan(0);
+    expect((await within(dialog).findAllByText("Network failure")).length).toBeGreaterThan(0);
     expect(within(dialog).queryByText("Disk error")).not.toBeInTheDocument();
 
-    fireEvent.click(
-      within(dialog).getByRole("button", { name: /clear filter/i }),
-    );
-    expect(
-      (await within(dialog).findAllByText("Disk error")).length,
-    ).toBeGreaterThan(0);
+    fireEvent.click(within(dialog).getByRole("button", { name: /clear filter/i }));
+    expect((await within(dialog).findAllByText("Disk error")).length).toBeGreaterThan(0);
 
     const logsTab = within(dialog).getByRole("tab", { name: /^Logs$/i });
     fireEvent.mouseDown(logsTab);
     fireEvent.click(logsTab);
-    await waitFor(() =>
-      expect(logsTab).toHaveAttribute("aria-selected", "true"),
-    );
-    expect(within(dialog).getByTestId("diagnostics-filter-input")).toHaveValue(
-      "",
-    );
-    expect(
-      (await within(dialog).findAllByText("Connection ready")).length,
-    ).toBeGreaterThan(0);
+    await waitFor(() => expect(logsTab).toHaveAttribute("aria-selected", "true"));
+    expect(within(dialog).getByTestId("diagnostics-filter-input")).toHaveValue("");
+    expect((await within(dialog).findAllByText("Connection ready")).length).toBeGreaterThan(0);
   });
 
   it("filters diagnostics entries case-insensitively across timestamps and details", async () => {
@@ -721,20 +619,14 @@ describe("SettingsPage", () => {
     const logsTab = within(dialog).getByRole("tab", { name: /^Logs$/i });
     fireEvent.mouseDown(logsTab);
     fireEvent.click(logsTab);
-    await waitFor(() =>
-      expect(logsTab).toHaveAttribute("aria-selected", "true"),
-    );
+    await waitFor(() => expect(logsTab).toHaveAttribute("aria-selected", "true"));
 
     const filterInput = within(dialog).getByTestId("diagnostics-filter-input");
     fireEvent.change(filterInput, { target: { value: "mixedcase" } });
-    expect(
-      (await within(dialog).findAllByText("System boot")).length,
-    ).toBeGreaterThan(0);
+    expect((await within(dialog).findAllByText("System boot")).length).toBeGreaterThan(0);
 
     fireEvent.change(filterInput, { target: { value: "01:02:03.004" } });
-    expect(
-      (await within(dialog).findAllByText("System boot")).length,
-    ).toBeGreaterThan(0);
+    expect((await within(dialog).findAllByText("System boot")).length).toBeGreaterThan(0);
 
     fireEvent.change(filterInput, { target: { value: "missing" } });
     expect(within(dialog).queryByText("System boot")).not.toBeInTheDocument();
@@ -758,19 +650,13 @@ describe("SettingsPage", () => {
     const errorsTab = within(dialog).getByRole("tab", { name: /^Errors$/i });
     fireEvent.mouseDown(errorsTab);
     fireEvent.click(errorsTab);
-    await waitFor(() =>
-      expect(errorsTab).toHaveAttribute("aria-selected", "true"),
-    );
-    expect(
-      (await within(dialog).findAllByText("Error entry")).length,
-    ).toBeGreaterThan(0);
+    await waitFor(() => expect(errorsTab).toHaveAttribute("aria-selected", "true"));
+    expect((await within(dialog).findAllByText("Error entry")).length).toBeGreaterThan(0);
 
     const logsTab = within(dialog).getByRole("tab", { name: /^Logs$/i });
     fireEvent.mouseDown(logsTab);
     fireEvent.click(logsTab);
-    await waitFor(() =>
-      expect(logsTab).toHaveAttribute("aria-selected", "true"),
-    );
+    await waitFor(() => expect(logsTab).toHaveAttribute("aria-selected", "true"));
     vi.mocked(getLogs).mockReturnValue([
       {
         id: "log-1",
@@ -783,16 +669,12 @@ describe("SettingsPage", () => {
     await act(async () => {
       window.dispatchEvent(new Event("c64u-logs-updated"));
     });
-    expect(
-      (await within(dialog).findAllByText("Log entry")).length,
-    ).toBeGreaterThan(0);
+    expect((await within(dialog).findAllByText("Log entry")).length).toBeGreaterThan(0);
 
     const tracesTab = within(dialog).getByRole("tab", { name: /traces/i });
     fireEvent.mouseDown(tracesTab);
     fireEvent.click(tracesTab);
-    await waitFor(() =>
-      expect(tracesTab).toHaveAttribute("aria-selected", "true"),
-    );
+    await waitFor(() => expect(tracesTab).toHaveAttribute("aria-selected", "true"));
     vi.mocked(getTraceEvents).mockReturnValue([
       {
         id: "trace-1",
@@ -922,32 +804,18 @@ describe("SettingsPage", () => {
     const actionsTab = within(dialog).getByRole("tab", { name: /actions/i });
     fireEvent.mouseDown(actionsTab);
     fireEvent.click(actionsTab);
-    await waitFor(() =>
-      expect(actionsTab).toHaveAttribute("aria-selected", "true"),
-    );
+    await waitFor(() => expect(actionsTab).toHaveAttribute("aria-selected", "true"));
 
     await act(async () => {
       window.dispatchEvent(new Event("c64u-traces-updated"));
     });
 
-    const summary = await within(dialog).findByTestId(
-      "action-summary-COR-0001",
-    );
-    expect(within(summary).getByLabelText("origin: user")).toHaveClass(
-      "bg-diagnostics-user",
-    );
-    expect(
-      within(summary).getByTestId("action-rest-count-COR-0001"),
-    ).toHaveClass("text-diagnostics-rest");
-    expect(
-      within(summary).getByTestId("action-ftp-count-COR-0001"),
-    ).toHaveClass("text-diagnostics-ftp");
-    expect(
-      within(summary).getByTestId("action-error-count-COR-0001"),
-    ).toHaveClass("text-diagnostics-error");
-    expect(
-      within(summary).getByText(/\d+ms/, { selector: "div" }),
-    ).toBeInTheDocument();
+    const summary = await within(dialog).findByTestId("action-summary-COR-0001");
+    expect(within(summary).getByLabelText("origin: user")).toHaveClass("bg-diagnostics-user");
+    expect(within(summary).getByTestId("action-rest-count-COR-0001")).toHaveClass("text-diagnostics-rest");
+    expect(within(summary).getByTestId("action-ftp-count-COR-0001")).toHaveClass("text-diagnostics-ftp");
+    expect(within(summary).getByTestId("action-error-count-COR-0001")).toHaveClass("text-diagnostics-error");
+    expect(within(summary).getByText(/\d+ms/, { selector: "div" })).toBeInTheDocument();
     expect(within(summary).getAllByText(/target:\s*c64u/i)).toHaveLength(2);
   });
 
@@ -1005,31 +873,21 @@ describe("SettingsPage", () => {
     const tracesTab = within(dialog).getByRole("tab", { name: /traces/i });
     fireEvent.mouseDown(tracesTab);
     fireEvent.click(tracesTab);
-    await waitFor(() =>
-      expect(tracesTab).toHaveAttribute("aria-selected", "true"),
-    );
+    await waitFor(() => expect(tracesTab).toHaveAttribute("aria-selected", "true"));
 
     const traceItem = await within(dialog).findByTestId("trace-item-trace-1");
-    expect(
-      traceItem.querySelector('[data-testid="diagnostics-summary-grid"]'),
-    ).toBeTruthy();
+    expect(traceItem.querySelector('[data-testid="diagnostics-summary-grid"]')).toBeTruthy();
 
     const actionsTab = within(dialog).getByRole("tab", { name: /actions/i });
     fireEvent.mouseDown(actionsTab);
     fireEvent.click(actionsTab);
-    await waitFor(() =>
-      expect(actionsTab).toHaveAttribute("aria-selected", "true"),
-    );
+    await waitFor(() => expect(actionsTab).toHaveAttribute("aria-selected", "true"));
 
-    const actionItem = await within(dialog).findByTestId(
-      "action-summary-COR-0100",
+    const actionItem = await within(dialog).findByTestId("action-summary-COR-0100");
+    expect(actionItem.querySelector('[data-testid="diagnostics-summary-grid"]')).toBeTruthy();
+    expect(within(actionItem).getByTestId("action-trigger-COR-0100")).toHaveTextContent(
+      "trigger: timer (connectivity.probe) · 5000ms",
     );
-    expect(
-      actionItem.querySelector('[data-testid="diagnostics-summary-grid"]'),
-    ).toBeTruthy();
-    expect(
-      within(actionItem).getByTestId("action-trigger-COR-0100"),
-    ).toHaveTextContent("trigger: timer (connectivity.probe) · 5000ms");
   });
 
   it("exports active diagnostics tab and reports failures", async () => {
@@ -1042,9 +900,7 @@ describe("SettingsPage", () => {
     const tracesTab = within(dialog).getByRole("tab", { name: /traces/i });
     fireEvent.mouseDown(tracesTab);
     fireEvent.click(tracesTab);
-    await waitFor(() =>
-      expect(tracesTab).toHaveAttribute("aria-selected", "true"),
-    );
+    await waitFor(() => expect(tracesTab).toHaveAttribute("aria-selected", "true"));
     vi.mocked(getTraceEvents).mockReturnValue([
       {
         id: "trace-1",
@@ -1059,22 +915,15 @@ describe("SettingsPage", () => {
     await act(async () => {
       window.dispatchEvent(new Event("c64u-traces-updated"));
     });
-    fireEvent.click(
-      await within(dialog).findByTestId("diagnostics-share-traces"),
-    );
+    fireEvent.click(await within(dialog).findByTestId("diagnostics-share-traces"));
 
-    expect(shareDiagnosticsZip).toHaveBeenCalledWith(
-      "traces",
-      expect.any(Array),
-    );
+    expect(shareDiagnosticsZip).toHaveBeenCalledWith("traces", expect.any(Array));
 
     vi.mocked(shareDiagnosticsZip).mockImplementation(() => {
       throw new Error("export failed");
     });
 
-    fireEvent.click(
-      await within(dialog).findByTestId("diagnostics-share-traces"),
-    );
+    fireEvent.click(await within(dialog).findByTestId("diagnostics-share-traces"));
 
     await waitFor(() => {
       expect(reportUserError).toHaveBeenCalledWith(
@@ -1099,9 +948,7 @@ describe("SettingsPage", () => {
     expect(warningDialog).toBeInTheDocument();
     expect(saveSpy).not.toHaveBeenCalled();
 
-    fireEvent.click(
-      within(warningDialog).getByRole("button", { name: /enable relaxed/i }),
-    );
+    fireEvent.click(within(warningDialog).getByRole("button", { name: /enable relaxed/i }));
     expect(saveSpy).toHaveBeenCalledWith("RELAXED");
   });
 
@@ -1109,15 +956,13 @@ describe("SettingsPage", () => {
     const createObjectURL = vi.fn(() => "blob:settings");
     const revokeObjectURL = vi.fn();
     const originalCreateElement = document.createElement.bind(document);
-    const createElementSpy = vi
-      .spyOn(document, "createElement")
-      .mockImplementation((tagName: string) => {
-        const element = originalCreateElement(tagName);
-        if (tagName.toLowerCase() === "a") {
-          (element as HTMLAnchorElement).click = vi.fn();
-        }
-        return element;
-      });
+    const createElementSpy = vi.spyOn(document, "createElement").mockImplementation((tagName: string) => {
+      const element = originalCreateElement(tagName);
+      if (tagName.toLowerCase() === "a") {
+        (element as HTMLAnchorElement).click = vi.fn();
+      }
+      return element;
+    });
     Object.defineProperty(URL, "createObjectURL", {
       value: createObjectURL,
       configurable: true,
@@ -1148,9 +993,7 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    const fileInput = document.querySelector(
-      'input[type="file"]',
-    ) as HTMLInputElement;
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
     fireEvent.change(fileInput, { target: { files: buildFileList(file) } });
 
     await waitFor(() => {
@@ -1173,9 +1016,7 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    const fileInput = document.querySelector(
-      'input[type="file"]',
-    ) as HTMLInputElement;
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
     fireEvent.change(fileInput, { target: { files: buildFileList(file) } });
 
     await waitFor(() => {
@@ -1231,9 +1072,7 @@ describe("SettingsPage", () => {
     expect(vi.mocked(loadConfigWriteIntervalMs)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(loadAutomaticDemoModeEnabled)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(loadStartupDiscoveryWindowMs)).toHaveBeenCalledTimes(1);
-    expect(
-      vi.mocked(loadBackgroundRediscoveryIntervalMs),
-    ).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(loadBackgroundRediscoveryIntervalMs)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(loadDiscoveryProbeTimeoutMs)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(loadDiskAutostartMode)).toHaveBeenCalledTimes(1);
   });
@@ -1244,14 +1083,10 @@ describe("SettingsPage", () => {
     const callsBefore = vi.mocked(loadConfigWriteIntervalMs).mock.calls.length;
 
     await act(async () => {
-      window.dispatchEvent(
-        new CustomEvent("c64u-app-settings-updated", { detail: {} }),
-      );
+      window.dispatchEvent(new CustomEvent("c64u-app-settings-updated", { detail: {} }));
     });
 
-    expect(vi.mocked(loadConfigWriteIntervalMs).mock.calls.length).toBe(
-      callsBefore,
-    );
+    expect(vi.mocked(loadConfigWriteIntervalMs).mock.calls.length).toBe(callsBefore);
   });
 
   it("handles HVSC base URL commit on blur", () => {
@@ -1265,9 +1100,7 @@ describe("SettingsPage", () => {
     });
     fireEvent.blur(input);
 
-    expect(setHvscBaseUrlOverride).toHaveBeenCalledWith(
-      "https://custom.hvsc.example.com",
-    );
+    expect(setHvscBaseUrlOverride).toHaveBeenCalledWith("https://custom.hvsc.example.com");
   });
 
   it("handles HVSC base URL commit with empty value", () => {
@@ -1309,29 +1142,23 @@ describe("SettingsPage", () => {
 
     const dialog = await screen.findByRole("dialog");
     const tracesTab = within(dialog).getByRole("tab", { name: /traces/i });
-    await waitFor(() =>
-      expect(tracesTab).toHaveAttribute("aria-selected", "true"),
-    );
+    await waitFor(() => expect(tracesTab).toHaveAttribute("aria-selected", "true"));
   });
 
   it("ignores diagnostics open request event without tab", async () => {
     renderSettingsPage();
 
     await act(async () => {
-      window.dispatchEvent(
-        new CustomEvent("c64u-diagnostics-open-request", { detail: {} }),
-      );
+      window.dispatchEvent(new CustomEvent("c64u-diagnostics-open-request", { detail: {} }));
     });
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("handles HVSC feature flag toggle storage error", () => {
-    const setItemSpy = vi
-      .spyOn(Storage.prototype, "setItem")
-      .mockImplementation(() => {
-        throw new DOMException("Storage quota exceeded", "QuotaExceededError");
-      });
+    const setItemSpy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("Storage quota exceeded", "QuotaExceededError");
+    });
 
     renderSettingsPage();
 
@@ -1346,23 +1173,16 @@ describe("SettingsPage", () => {
   });
 
   it("handles SAF getPersistedUris error path", async () => {
-    vi.mocked(FolderPicker.getPersistedUris).mockRejectedValue(
-      new Error("Permission denied"),
-    );
+    vi.mocked(FolderPicker.getPersistedUris).mockRejectedValue(new Error("Permission denied"));
 
     renderSettingsPage();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /list persisted uris/i }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: /list persisted uris/i }));
 
     await waitFor(() => {
-      expect(addErrorLog).toHaveBeenCalledWith(
-        "SAF persisted URI lookup failed",
-        {
-          error: "Permission denied",
-        },
-      );
+      expect(addErrorLog).toHaveBeenCalledWith("SAF persisted URI lookup failed", {
+        error: "Permission denied",
+      });
     });
   }, 15000);
 
@@ -1370,23 +1190,17 @@ describe("SettingsPage", () => {
     vi.mocked(FolderPicker.getPersistedUris).mockResolvedValue({
       uris: [{ uri: "content://example" }],
     });
-    vi.mocked(FolderPicker.listChildren).mockRejectedValue(
-      new Error("IO error"),
-    );
+    vi.mocked(FolderPicker.listChildren).mockRejectedValue(new Error("IO error"));
 
     renderSettingsPage();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /list persisted uris/i }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: /list persisted uris/i }));
 
     await waitFor(() => {
       expect(FolderPicker.getPersistedUris).toHaveBeenCalled();
     });
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /enumerate first root/i }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: /enumerate first root/i }));
 
     await waitFor(() => {
       expect(addErrorLog).toHaveBeenCalledWith("SAF enumeration failed", {
@@ -1408,10 +1222,7 @@ describe("SettingsPage", () => {
     // Should have been called with false (disabling)
     expect(mockSetFeatureFlag).toHaveBeenCalledWith(false);
     // localStorage should have been written with '0'
-    expect(localStorageSpy).toHaveBeenCalledWith(
-      "c64u_feature_flag:hvsc_enabled",
-      "0",
-    );
+    expect(localStorageSpy).toHaveBeenCalledWith("c64u_feature_flag:hvsc_enabled", "0");
     localStorageSpy.mockRestore();
   });
 
@@ -1444,9 +1255,7 @@ describe("SettingsPage", () => {
     const tracesTab = within(dialog).getByRole("tab", { name: /traces/i });
     fireEvent.mouseDown(tracesTab);
     fireEvent.click(tracesTab);
-    await waitFor(() =>
-      expect(tracesTab).toHaveAttribute("aria-selected", "true"),
-    );
+    await waitFor(() => expect(tracesTab).toHaveAttribute("aria-selected", "true"));
 
     const filterInput = within(dialog).getByTestId("diagnostics-filter-input");
     fireEvent.change(filterInput, { target: { value: "COR-0001" } });
@@ -1465,9 +1274,7 @@ describe("SettingsPage", () => {
     const actionsTab = within(dialog).getByRole("tab", { name: /^Actions$/i });
     fireEvent.mouseDown(actionsTab);
     fireEvent.click(actionsTab);
-    await waitFor(() =>
-      expect(actionsTab).toHaveAttribute("aria-selected", "true"),
-    );
+    await waitFor(() => expect(actionsTab).toHaveAttribute("aria-selected", "true"));
 
     // Type a filter — covers the actions filter useMemo non-empty filterText branch
     const filterInput = within(dialog).getByTestId("diagnostics-filter-input");
@@ -1487,18 +1294,13 @@ describe("SettingsPage", () => {
     const actionsTab = within(dialog).getByRole("tab", { name: /^Actions$/i });
     fireEvent.mouseDown(actionsTab);
     fireEvent.click(actionsTab);
-    await waitFor(() =>
-      expect(actionsTab).toHaveAttribute("aria-selected", "true"),
-    );
+    await waitFor(() => expect(actionsTab).toHaveAttribute("aria-selected", "true"));
 
     // Share button covers the 'actions' branch in handleShareDiagnostics (line 470)
     const shareBtn = within(dialog).queryByTestId("diagnostics-share-actions");
     if (shareBtn) {
       fireEvent.click(shareBtn);
-      expect(shareDiagnosticsZip).toHaveBeenCalledWith(
-        "actions",
-        expect.any(Array),
-      );
+      expect(shareDiagnosticsZip).toHaveBeenCalledWith("actions", expect.any(Array));
     }
   }, 15000);
 
@@ -1507,8 +1309,7 @@ describe("SettingsPage", () => {
 
     // Find startup discovery window input and set to non-numeric
     const startupInput =
-      screen.queryByLabelText(/startup discovery window/i) ??
-      screen.queryByTestId("startup-discovery-window-input");
+      screen.queryByLabelText(/startup discovery window/i) ?? screen.queryByTestId("startup-discovery-window-input");
     if (startupInput) {
       fireEvent.change(startupInput, { target: { value: "abc" } });
       fireEvent.blur(startupInput);

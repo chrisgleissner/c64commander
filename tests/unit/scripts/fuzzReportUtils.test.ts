@@ -43,15 +43,11 @@ describe("formatFuzzTimestamp", () => {
 
 describe("videoMarkdownLink", () => {
   it("returns bare markdown link when sessionOffsetMs is undefined", () => {
-    expect(videoMarkdownLink("video.mp4", undefined)).toBe(
-      "[video.mp4](video.mp4)",
-    );
+    expect(videoMarkdownLink("video.mp4", undefined)).toBe("[video.mp4](video.mp4)");
   });
 
   it("appends timestamp when sessionOffsetMs is a finite number", () => {
-    expect(videoMarkdownLink("clip.mp4", 90123)).toBe(
-      "[clip.mp4](clip.mp4) @ 01:30.123",
-    );
+    expect(videoMarkdownLink("clip.mp4", 90123)).toBe("[clip.mp4](clip.mp4) @ 01:30.123");
   });
 
   it("returns bare link when sessionOffsetMs is NaN", () => {
@@ -59,9 +55,7 @@ describe("videoMarkdownLink", () => {
   });
 
   it("returns bare link when sessionOffsetMs is Infinity", () => {
-    expect(videoMarkdownLink("clip.mp4", Infinity)).toBe(
-      "[clip.mp4](clip.mp4)",
-    );
+    expect(videoMarkdownLink("clip.mp4", Infinity)).toBe("[clip.mp4](clip.mp4)");
   });
 
   it("returns bare link when sessionOffsetMs is null", () => {
@@ -69,9 +63,7 @@ describe("videoMarkdownLink", () => {
   });
 
   it("appends 00:00.000 for zero offset", () => {
-    expect(videoMarkdownLink("clip.mp4", 0)).toBe(
-      "[clip.mp4](clip.mp4) @ 00:00.000",
-    );
+    expect(videoMarkdownLink("clip.mp4", 0)).toBe("[clip.mp4](clip.mp4) @ 00:00.000");
   });
 });
 
@@ -82,20 +74,14 @@ describe("sortIssueGroups", () => {
   });
 
   it("sorts by total count descending", () => {
-    const groups = [
-      makeGroup("b", { error: 1 }),
-      makeGroup("a", { error: 5, warn: 3 }),
-    ];
+    const groups = [makeGroup("b", { error: 1 }), makeGroup("a", { error: 5, warn: 3 })];
     const sorted = sortIssueGroups(groups);
     expect(sorted[0].issue_group_id).toBe("a");
     expect(sorted[1].issue_group_id).toBe("b");
   });
 
   it("breaks ties by issue_group_id ascending", () => {
-    const groups = [
-      makeGroup("z-group", { error: 2 }),
-      makeGroup("a-group", { error: 2 }),
-    ];
+    const groups = [makeGroup("z-group", { error: 2 }), makeGroup("a-group", { error: 2 })];
     const sorted = sortIssueGroups(groups);
     expect(sorted[0].issue_group_id).toBe("a-group");
     expect(sorted[1].issue_group_id).toBe("z-group");
@@ -110,17 +96,9 @@ describe("sortIssueGroups", () => {
   });
 
   it("is stable: same input produces same output on repeated calls", () => {
-    const groups = [
-      makeGroup("c", { error: 4 }),
-      makeGroup("a", { warn: 4 }),
-      makeGroup("b", { error: 2, warn: 2 }),
-    ];
-    const first = sortIssueGroups(groups).map(
-      (g: { issue_group_id: string }) => g.issue_group_id,
-    );
-    const second = sortIssueGroups(groups).map(
-      (g: { issue_group_id: string }) => g.issue_group_id,
-    );
+    const groups = [makeGroup("c", { error: 4 }), makeGroup("a", { warn: 4 }), makeGroup("b", { error: 2, warn: 2 })];
+    const first = sortIssueGroups(groups).map((g: { issue_group_id: string }) => g.issue_group_id);
+    const second = sortIssueGroups(groups).map((g: { issue_group_id: string }) => g.issue_group_id);
     expect(first).toEqual(second);
   });
 
@@ -132,10 +110,7 @@ describe("sortIssueGroups", () => {
   });
 
   it("handles groups without severityCounts gracefully", () => {
-    const groups = [
-      { issue_group_id: "no-counts" },
-      makeGroup("with-counts", { error: 1 }),
-    ];
+    const groups = [{ issue_group_id: "no-counts" }, makeGroup("with-counts", { error: 1 })];
     const sorted = sortIssueGroups(groups);
     expect(sorted[0].issue_group_id).toBe("with-counts");
     expect(sorted[1].issue_group_id).toBe("no-counts");
@@ -148,10 +123,7 @@ describe("fuzz-issue-summary.md is generated as compact summary", () => {
     const { fileURLToPath } = await import("node:url");
     const { resolve, dirname } = await import("node:path");
     const dir = dirname(fileURLToPath(import.meta.url));
-    const src = readFileSync(
-      resolve(dir, "../../../scripts/run-fuzz.mjs"),
-      "utf8",
-    );
+    const src = readFileSync(resolve(dir, "../../../scripts/run-fuzz.mjs"), "utf8");
     // The file must write 'fuzz-issue-summary.md'
     expect(src).toContain("fuzz-issue-summary.md");
   });
@@ -198,16 +170,12 @@ describe("renderIssueEntry", () => {
 
   it("Confidence appears when provided", () => {
     const lines = renderIssueEntry(baseGroup, baseCls);
-    expect(lines.some((l: string) => l.startsWith("- Confidence: HIGH"))).toBe(
-      true,
-    );
+    expect(lines.some((l: string) => l.startsWith("- Confidence: HIGH"))).toBe(true);
   });
 
   it("Explanation appears when provided", () => {
     const lines = renderIssueEntry(baseGroup, baseCls);
-    expect(lines.some((l: string) => l.startsWith("- Explanation:"))).toBe(
-      true,
-    );
+    expect(lines.some((l: string) => l.startsWith("- Explanation:"))).toBe(true);
   });
 
   it("Explanation is omitted when null", () => {
@@ -216,9 +184,7 @@ describe("renderIssueEntry", () => {
       confidence: "LOW",
       explanation: null,
     });
-    expect(lines.some((l: string) => l.startsWith("- Explanation:"))).toBe(
-      false,
-    );
+    expect(lines.some((l: string) => l.startsWith("- Explanation:"))).toBe(false);
   });
 
   it("Videos line is omitted when no examples have videos", () => {
@@ -239,9 +205,7 @@ describe("renderIssueEntry", () => {
     };
     const lines = renderIssueEntry(group, baseCls);
     expect(lines.some((l: string) => l.startsWith("- Videos:"))).toBe(true);
-    expect(
-      lines.some((l: string) => l.includes("01:23") || l.includes("00:05")),
-    ).toBe(true);
+    expect(lines.some((l: string) => l.includes("01:23") || l.includes("00:05"))).toBe(true);
   });
 
   it("Screenshots line is included when example has screenshot", () => {
@@ -250,9 +214,7 @@ describe("renderIssueEntry", () => {
       examples: [{ screenshot: "screenshots/s1.png" }],
     };
     const lines = renderIssueEntry(group, baseCls);
-    expect(lines.some((l: string) => l.startsWith("- Screenshots:"))).toBe(
-      true,
-    );
+    expect(lines.some((l: string) => l.startsWith("- Screenshots:"))).toBe(true);
   });
 
   it("Shards line is included when example has shardIndex", () => {
@@ -295,16 +257,12 @@ describe("sanitizeMarkdownText", () => {
   });
 
   it("passes through plain ASCII unchanged", () => {
-    expect(sanitizeMarkdownText("C64 API request failed")).toBe(
-      "C64 API request failed",
-    );
+    expect(sanitizeMarkdownText("C64 API request failed")).toBe("C64 API request failed");
   });
 
   it("passes through markdown brackets and parentheses unchanged", () => {
     // Only newlines and ANSI codes are sanitised; brackets are valid inside list items
-    expect(sanitizeMarkdownText("[link](url) and backtick `code`")).toBe(
-      "[link](url) and backtick `code`",
-    );
+    expect(sanitizeMarkdownText("[link](url) and backtick `code`")).toBe("[link](url) and backtick `code`");
   });
 
   it("strips ANSI CSI colour reset code", () => {
@@ -312,9 +270,7 @@ describe("sanitizeMarkdownText", () => {
   });
 
   it("strips ANSI CSI bold + colour codes", () => {
-    expect(sanitizeMarkdownText("\x1b[1;31mERROR\x1b[0m: bad thing")).toBe(
-      "ERROR: bad thing",
-    );
+    expect(sanitizeMarkdownText("\x1b[1;31mERROR\x1b[0m: bad thing")).toBe("ERROR: bad thing");
   });
 
   it("strips ANSI CSI erase-line code", () => {
@@ -344,9 +300,7 @@ describe("sanitizeMarkdownText", () => {
   });
 
   it("handles combined ANSI codes and newlines", () => {
-    expect(sanitizeMarkdownText("\x1b[31mError\x1b[0m:\ndetails here")).toBe(
-      "Error: details here",
-    );
+    expect(sanitizeMarkdownText("\x1b[31mError\x1b[0m:\ndetails here")).toBe("Error: details here");
   });
 
   it("handles very long message without truncation", () => {
@@ -361,13 +315,7 @@ describe("sanitizeMarkdownText", () => {
   });
 
   it("output never contains bare ESC character", () => {
-    const inputs = [
-      "\x1b[0m",
-      "\x1b[1;32mGreen\x1b[0m",
-      "\x1bM",
-      "clean text",
-      "line\nbreak",
-    ];
+    const inputs = ["\x1b[0m", "\x1b[1;32mGreen\x1b[0m", "\x1bM", "clean text", "line\nbreak"];
     for (const input of inputs) {
       expect(sanitizeMarkdownText(input)).not.toContain("\x1b");
     }
@@ -480,10 +428,8 @@ describe("renderIssueEntry: pathological message inputs", () => {
 
 describe("renderReadme count parity", () => {
   it("classification counts in README header match actual group counts", async () => {
-    const { renderReadme } =
-      await import("../../../scripts/fuzzReportUtils.mjs");
-    const { classifyAllIssues } =
-      await import("../../../scripts/fuzzClassifier.mjs");
+    const { renderReadme } = await import("../../../scripts/fuzzReportUtils.mjs");
+    const { classifyAllIssues } = await import("../../../scripts/fuzzClassifier.mjs");
 
     const groups = [
       // Should become REAL (crash)
@@ -571,27 +517,17 @@ describe("renderReadme count parity", () => {
     expect(realInReadme).toBe(actualReal);
     expect(uncertainInReadme).toBe(actualUncertain);
     expect(expectedInReadme).toBe(actualExpected);
-    expect(realInReadme + uncertainInReadme + expectedInReadme).toBe(
-      totalInReadme,
-    );
+    expect(realInReadme + uncertainInReadme + expectedInReadme).toBe(totalInReadme);
   });
 
   it("zero-issue run produces correct zero counts in README", async () => {
-    const { renderReadme } =
-      await import("../../../scripts/fuzzReportUtils.mjs");
-    const { classifyAllIssues } =
-      await import("../../../scripts/fuzzClassifier.mjs");
+    const { renderReadme } = await import("../../../scripts/fuzzReportUtils.mjs");
+    const { classifyAllIssues } = await import("../../../scripts/fuzzClassifier.mjs");
 
     const groups: unknown[] = [];
-    const classificationMap = classifyAllIssues(
-      groups as Parameters<typeof classifyAllIssues>[0],
-    );
+    const classificationMap = classifyAllIssues(groups as Parameters<typeof classifyAllIssues>[0]);
     const meta = { platform: "android-phone", shardTotal: 1, sessions: 5 };
-    const readme = renderReadme(
-      meta,
-      groups as Parameters<typeof renderReadme>[1],
-      classificationMap,
-    );
+    const readme = renderReadme(meta, groups as Parameters<typeof renderReadme>[1], classificationMap);
 
     expect(readme).toContain("Total issues: 0");
     expect(readme).toContain("REAL issues: 0");

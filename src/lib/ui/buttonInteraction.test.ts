@@ -56,9 +56,7 @@ describe("buttonInteraction", () => {
     link.href = "#";
     document.body.appendChild(link);
 
-    link.dispatchEvent(
-      new MouseEvent("pointerup", { bubbles: true, button: 0 }),
-    );
+    link.dispatchEvent(new MouseEvent("pointerup", { bubbles: true, button: 0 }));
     expect(link.getAttribute("data-c64-tap-flash")).toBe("true");
 
     cleanup();

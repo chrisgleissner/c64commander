@@ -36,15 +36,9 @@ describe("DiagnosticsActivityIndicator", () => {
 
     render(<DiagnosticsActivityIndicator onClick={() => undefined} />);
 
-    expect(
-      screen.queryByTestId("diagnostics-activity-rest"),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByTestId("diagnostics-activity-ftp"),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByTestId("diagnostics-activity-error"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId("diagnostics-activity-rest")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("diagnostics-activity-ftp")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("diagnostics-activity-error")).not.toBeInTheDocument();
   });
 
   it("shows counts and animation for in-flight activity", () => {
@@ -84,12 +78,8 @@ describe("DiagnosticsActivityIndicator", () => {
     render(<DiagnosticsActivityIndicator onClick={() => undefined} />);
 
     expect(screen.getByTestId("diagnostics-activity-rest")).toBeInTheDocument();
-    expect(
-      screen.queryByTestId("diagnostics-activity-ftp"),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByTestId("diagnostics-activity-error"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId("diagnostics-activity-ftp")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("diagnostics-activity-error")).not.toBeInTheDocument();
   });
 
   it("shows only FTP indicator when only FTP count is non-zero", () => {
@@ -103,13 +93,9 @@ describe("DiagnosticsActivityIndicator", () => {
 
     render(<DiagnosticsActivityIndicator onClick={() => undefined} />);
 
-    expect(
-      screen.queryByTestId("diagnostics-activity-rest"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId("diagnostics-activity-rest")).not.toBeInTheDocument();
     expect(screen.getByTestId("diagnostics-activity-ftp")).toBeInTheDocument();
-    expect(
-      screen.queryByTestId("diagnostics-activity-error"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId("diagnostics-activity-error")).not.toBeInTheDocument();
   });
 
   it("renders indicator dots at increased size (h-5 w-5)", () => {

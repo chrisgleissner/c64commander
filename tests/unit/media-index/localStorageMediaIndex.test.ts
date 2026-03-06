@@ -7,10 +7,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  JsonMediaIndex,
-  LocalStorageMediaIndexStorage,
-} from "@/lib/media-index/localStorageMediaIndex";
+import { JsonMediaIndex, LocalStorageMediaIndexStorage } from "@/lib/media-index/localStorageMediaIndex";
 import type { MediaIndexSnapshot } from "@/lib/media-index/mediaIndex";
 
 const STORAGE_KEY = "c64u_media_index:v1";
@@ -35,10 +32,7 @@ describe("localStorageMediaIndex", () => {
   });
 
   it("returns null when localStorage is unavailable", async () => {
-    const original = Object.getOwnPropertyDescriptor(
-      globalThis,
-      "localStorage",
-    );
+    const original = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
     Object.defineProperty(globalThis, "localStorage", {
       value: undefined,
       configurable: true,

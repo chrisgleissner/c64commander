@@ -18,11 +18,7 @@ import {
   startStrictUiMonitoring,
   allowWarnings,
 } from "./testArtifacts";
-import {
-  clearTraces,
-  enableTraceAssertions,
-  expectRestTraceSequence,
-} from "./traceUtils";
+import { clearTraces, enableTraceAssertions, expectRestTraceSequence } from "./traceUtils";
 import { layoutTest, enforceDeviceTestMapping } from "./layoutTest";
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
@@ -89,9 +85,7 @@ test.describe("Home page app config management", () => {
       await openSaveDialog(page);
       await snap(page, testInfo, "save-dialog-open");
 
-      const nameInput = page
-        .getByRole("dialog")
-        .getByRole("textbox", { name: /name|config name/i });
+      const nameInput = page.getByRole("dialog").getByRole("textbox", { name: /name|config name/i });
       await nameInput.fill("My Test Config");
       await snap(page, testInfo, "name-entered");
 
@@ -102,9 +96,7 @@ test.describe("Home page app config management", () => {
       await expect(page.getByRole("dialog", { name: /Save/i })).toBeHidden();
       await snap(page, testInfo, "dialog-closed");
 
-      await expect(
-        page.getByText(/Saved to app|Config saved/i).first(),
-      ).toBeVisible();
+      await expect(page.getByText(/Saved to app|Config saved/i).first()).toBeVisible();
       await snap(page, testInfo, "toast-shown");
 
       const stored = await page.evaluate(() => {
@@ -120,9 +112,7 @@ test.describe("Home page app config management", () => {
     },
   );
 
-  test("save config with empty name shows error @layout", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("save config with empty name shows error @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     allowWarnings(testInfo, "Expected error toast for empty config name.");
     await page.goto("/");
     await snap(page, testInfo, "home-open");
@@ -136,9 +126,7 @@ test.describe("Home page app config management", () => {
       .click();
     await snap(page, testInfo, "save-attempted");
 
-    await expect(
-      page.getByText(/Name required|Enter a config name/i).first(),
-    ).toBeVisible();
+    await expect(page.getByText(/Name required|Enter a config name/i).first()).toBeVisible();
     await snap(page, testInfo, "error-shown");
 
     const stored = await page.evaluate(() => {
@@ -150,9 +138,7 @@ test.describe("Home page app config management", () => {
     await snap(page, testInfo, "not-saved");
   });
 
-  test("save config with duplicate name shows error @layout", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("save config with duplicate name shows error @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     allowWarnings(testInfo, "Expected error toast for duplicate config name.");
 
     await page.addInitScript(
@@ -179,9 +165,7 @@ test.describe("Home page app config management", () => {
     await openSaveDialog(page);
     await snap(page, testInfo, "save-dialog-open");
 
-    const nameInput = page
-      .getByRole("dialog")
-      .getByRole("textbox", { name: /name|config name/i });
+    const nameInput = page.getByRole("dialog").getByRole("textbox", { name: /name|config name/i });
     await nameInput.fill("Existing Config");
     await snap(page, testInfo, "duplicate-name-entered");
 
@@ -191,11 +175,7 @@ test.describe("Home page app config management", () => {
       .click();
     await snap(page, testInfo, "save-attempted");
 
-    await expect(
-      page
-        .getByText(/Name already used|Choose a unique|already exists/i)
-        .first(),
-    ).toBeVisible();
+    await expect(page.getByText(/Name already used|Choose a unique|already exists/i).first()).toBeVisible();
     await snap(page, testInfo, "error-shown");
 
     const stored = await page.evaluate(() => {
@@ -207,9 +187,7 @@ test.describe("Home page app config management", () => {
     await snap(page, testInfo, "not-duplicated");
   });
 
-  test("load config applies values to server @layout", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("load config applies values to server @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     enableTraceAssertions(testInfo);
     await page.addInitScript(
       ({ baseUrl }: { baseUrl: string }) => {
@@ -250,28 +228,16 @@ test.describe("Home page app config management", () => {
     await snap(page, testInfo, "toast-shown");
 
     await expect
-      .poll(() =>
-        server.requests.some(
-          (req) => req.url.includes("/v1/configs") && req.method === "POST",
-        ),
-      )
+      .poll(() => server.requests.some((req) => req.url.includes("/v1/configs") && req.method === "POST"))
       .toBe(true);
 
-    const { requestEvent } = await expectRestTraceSequence(
-      page,
-      testInfo,
-      "/v1/configs",
-    );
-    expect((requestEvent.data as { target?: string }).target).toBe(
-      "external-mock",
-    );
+    const { requestEvent } = await expectRestTraceSequence(page, testInfo, "/v1/configs");
+    expect((requestEvent.data as { target?: string }).target).toBe("external-mock");
 
     await snap(page, testInfo, "config-applied");
   });
 
-  test("rename config updates localStorage @layout", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("rename config updates localStorage @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.addInitScript(
       ({ baseUrl }: { baseUrl: string }) => {
         localStorage.setItem(
@@ -322,9 +288,7 @@ test.describe("Home page app config management", () => {
     await snap(page, testInfo, "config-renamed");
   });
 
-  test("delete config removes from localStorage @layout", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("delete config removes from localStorage @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.addInitScript(
       ({ baseUrl }: { baseUrl: string }) => {
         localStorage.setItem(
@@ -357,9 +321,7 @@ test.describe("Home page app config management", () => {
     await snap(page, testInfo, "delete-clicked");
 
     // Wait for the dialog to still be open but config list to be empty
-    await expect(
-      page.getByRole("dialog").getByText(/No saved configurations/i),
-    ).toBeVisible();
+    await expect(page.getByRole("dialog").getByText(/No saved configurations/i)).toBeVisible();
     await snap(page, testInfo, "config-deleted-ui");
 
     const stored = await page.evaluate(() => {
@@ -371,9 +333,7 @@ test.describe("Home page app config management", () => {
     await snap(page, testInfo, "config-deleted");
   });
 
-  test("home page renders SID status group @layout", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("home page renders SID status group @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.request.post(`${server.baseUrl}/v1/configs`, {
       data: {
         "SID Sockets Configuration": {
@@ -393,9 +353,7 @@ test.describe("Home page app config management", () => {
     });
     const sidGroup = page.getByTestId("home-sid-status");
     await expect(sidGroup).toBeVisible({ timeout: 20000 });
-    await expect(
-      sidGroup.locator("h3").filter({ hasText: "SID" }),
-    ).toBeVisible();
+    await expect(sidGroup.locator("h3").filter({ hasText: "SID" })).toBeVisible();
     await expect(page.getByTestId("home-sid-reset")).toBeVisible();
     await expect(sidGroup).toContainText("SID Socket 1");
     await expect(sidGroup).toContainText("ON");

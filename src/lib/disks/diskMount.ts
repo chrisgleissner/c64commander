@@ -34,21 +34,11 @@ export const buildDiskMountType = (path: string) => {
   return ext || undefined;
 };
 
-export const resolveLocalDiskBlob = async (
-  disk: DiskEntry,
-  runtimeFile?: File,
-): Promise<Blob> => {
-  const withTimeout = async <T>(
-    promise: Promise<T>,
-    timeoutMs: number,
-    context: string,
-  ) => {
+export const resolveLocalDiskBlob = async (disk: DiskEntry, runtimeFile?: File): Promise<Blob> => {
+  const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, context: string) => {
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
     const timeoutPromise = new Promise<never>((_, reject) => {
-      timeoutId = setTimeout(
-        () => reject(new Error(`${context} timed out`)),
-        timeoutMs,
-      );
+      timeoutId = setTimeout(() => reject(new Error(`${context} timed out`)), timeoutMs);
     });
     try {
       return await Promise.race([promise, timeoutPromise]);
@@ -59,11 +49,7 @@ export const resolveLocalDiskBlob = async (
 
   if (runtimeFile) return runtimeFile;
   if (disk.localUri) {
-    const data = await withTimeout(
-      FolderPicker.readFile({ uri: disk.localUri }),
-      2000,
-      "Local disk file read",
-    );
+    const data = await withTimeout(FolderPicker.readFile({ uri: disk.localUri }), 2000, "Local disk file read");
     return new Blob([base64ToUint8(data.data)], {
       type: "application/octet-stream",
     });
@@ -84,9 +70,7 @@ export const resolveLocalDiskBlob = async (
   const normalizedPath = normalizeSourcePath(disk.path);
   const sources = loadLocalSources();
 
-  const resolveFromSource = async (
-    source: LocalSourceRecord,
-  ): Promise<Blob | null> => {
+  const resolveFromSource = async (source: LocalSourceRecord): Promise<Blob | null> => {
     const runtime = getLocalSourceRuntimeFile(source.id, normalizedPath);
     if (runtime) return runtime;
     if (source.android?.treeUri) {
@@ -113,19 +97,10 @@ export const resolveLocalDiskBlob = async (
     }
     if (getLocalSourceListingMode(source) === "entries") {
       try {
-        const entries = requireLocalSourceEntries(
-          source,
-          "diskMount.resolveLocalDiskBlob",
-        );
-        const match = entries.find(
-          (entry) => normalizeSourcePath(entry.relativePath) === normalizedPath,
-        );
+        const entries = requireLocalSourceEntries(source, "diskMount.resolveLocalDiskBlob");
+        const match = entries.find((entry) => normalizeSourcePath(entry.relativePath) === normalizedPath);
         if (match?.uri) {
-          const data = await withTimeout(
-            FolderPicker.readFile({ uri: match.uri }),
-            2000,
-            "Local disk file read",
-          );
+          const data = await withTimeout(FolderPicker.readFile({ uri: match.uri }), 2000, "Local disk file read");
           return new Blob([base64ToUint8(data.data)], {
             type: "application/octet-stream",
           });
@@ -159,17 +134,10 @@ export const resolveLocalDiskBlob = async (
     if (blob) return blob;
   }
 
-  throw new Error(
-    "Local disk access is missing. Re-add the folder or file to refresh permissions.",
-  );
+  throw new Error("Local disk access is missing. Re-add the folder or file to refresh permissions.");
 };
 
-export const mountDiskToDrive = async (
-  api: C64API,
-  drive: "a" | "b",
-  disk: DiskEntry,
-  runtimeFile?: File,
-) => {
+export const mountDiskToDrive = async (api: C64API, drive: "a" | "b", disk: DiskEntry, runtimeFile?: File) => {
   try {
     const mountType = buildDiskMountType(disk.path);
     if (!mountType) {

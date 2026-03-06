@@ -8,8 +8,7 @@
 
 const REDACTED = "***";
 
-const SENSITIVE_KEY_REGEX =
-  /(password|token|authorization|auth|secret|credential|api[-_]?key)/i;
+const SENSITIVE_KEY_REGEX = /(password|token|authorization|auth|secret|credential|api[-_]?key)/i;
 const HOST_KEY_REGEX = /(host|hostname|ip|address)/i;
 const LOCATION_KEY_REGEX = /(url|path|uri)/i;
 
@@ -19,23 +18,13 @@ const FILE_URI_REGEX = /\b(?:content|file|filesystem|saf):\/\/[^\s"']+/gi;
 const FILE_PATH_REGEX = /(?:[A-Za-z]:\\|\/)(?:[^\s"'<>]+)+/g;
 const HOSTNAME_REGEX = /\b(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}\b/g;
 const AUTH_SCHEME_REGEX = /\b(Bearer|Token)\s+[A-Za-z0-9._-]+\b/gi;
-const KEY_VALUE_REGEX =
-  /(password|token|authorization|auth|secret|credential|api[-_]?key)\s*[:=]\s*([^\s",]+)/gi;
+const KEY_VALUE_REGEX = /(password|token|authorization|auth|secret|credential|api[-_]?key)\s*[:=]\s*([^\s",]+)/gi;
 
 const redactText = (input: string) => {
   let output = input;
-  output = output.replace(
-    KEY_VALUE_REGEX,
-    (_match, key) => `${key}=` + REDACTED,
-  );
-  output = output.replace(
-    AUTH_SCHEME_REGEX,
-    (_match, scheme) => `${scheme} ${REDACTED}`,
-  );
-  output = output.replace(
-    URL_REGEX,
-    (_match, scheme, _host, rest) => `${scheme}${REDACTED}${rest}`,
-  );
+  output = output.replace(KEY_VALUE_REGEX, (_match, key) => `${key}=` + REDACTED);
+  output = output.replace(AUTH_SCHEME_REGEX, (_match, scheme) => `${scheme} ${REDACTED}`);
+  output = output.replace(URL_REGEX, (_match, scheme, _host, rest) => `${scheme}${REDACTED}${rest}`);
   output = output.replace(FILE_URI_REGEX, REDACTED);
   output = output.replace(FILE_PATH_REGEX, REDACTED);
   output = output.replace(IP_REGEX, REDACTED);
@@ -45,10 +34,7 @@ const redactText = (input: string) => {
 
 export const redactExportText = (input: string) => redactText(input);
 
-export const redactExportValue = (
-  value: unknown,
-  keyHint?: string,
-): unknown => {
+export const redactExportValue = (value: unknown, keyHint?: string): unknown => {
   if (typeof keyHint === "string") {
     if (SENSITIVE_KEY_REGEX.test(keyHint)) return REDACTED;
     if (HOST_KEY_REGEX.test(keyHint)) return REDACTED;

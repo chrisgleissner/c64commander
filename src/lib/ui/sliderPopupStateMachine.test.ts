@@ -21,66 +21,41 @@ describe("sliderPopupStateMachine", () => {
   });
 
   it("re-activates VisibleActive when interaction-start or interaction-update received in VisibleActive", () => {
-    expect(reduceSliderPopupState("VisibleActive", "interaction-update")).toBe(
-      "VisibleActive",
-    );
+    expect(reduceSliderPopupState("VisibleActive", "interaction-update")).toBe("VisibleActive");
   });
 
   it("computes close delay bounded by both idle and minimum visible windows", () => {
     const openedAt = 1_000;
     const lastInteractionAt = 1_200;
     const now = 1_250;
-    const delay = resolveSliderPopupCloseDelayMs(
-      openedAt,
-      lastInteractionAt,
-      now,
-    );
+    const delay = resolveSliderPopupCloseDelayMs(openedAt, lastInteractionAt, now);
     expect(delay).toBe(
-      Math.max(
-        openedAt + SLIDER_POPUP_MIN_VISIBLE_MS - now,
-        lastInteractionAt + SLIDER_POPUP_IDLE_CLOSE_MS - now,
-      ),
+      Math.max(openedAt + SLIDER_POPUP_MIN_VISIBLE_MS - now, lastInteractionAt + SLIDER_POPUP_IDLE_CLOSE_MS - now),
     );
   });
 
   it("VisibleActive transitions to Closing on idle-timeout (BRDA:26)", () => {
-    expect(reduceSliderPopupState("VisibleActive", "idle-timeout")).toBe(
-      "Closing",
-    );
+    expect(reduceSliderPopupState("VisibleActive", "idle-timeout")).toBe("Closing");
   });
 
   it("VisibleIdle re-activates on interaction-start short-circuit (BRDA:33)", () => {
-    expect(reduceSliderPopupState("VisibleIdle", "interaction-start")).toBe(
-      "VisibleActive",
-    );
+    expect(reduceSliderPopupState("VisibleIdle", "interaction-start")).toBe("VisibleActive");
   });
 
   it("VisibleIdle stays in VisibleIdle on interaction-end (BRDA:34)", () => {
-    expect(reduceSliderPopupState("VisibleIdle", "interaction-end")).toBe(
-      "VisibleIdle",
-    );
+    expect(reduceSliderPopupState("VisibleIdle", "interaction-end")).toBe("VisibleIdle");
   });
 
   it("VisibleIdle returns unchanged state for unrecognized event (BRDA:36)", () => {
-    expect(reduceSliderPopupState("VisibleIdle", "unknown-event" as any)).toBe(
-      "VisibleIdle",
-    );
+    expect(reduceSliderPopupState("VisibleIdle", "unknown-event" as any)).toBe("VisibleIdle");
   });
 
   it("covers all Closing state transitions", () => {
-    expect(reduceSliderPopupState("Closing", "interaction-start")).toBe(
-      "VisibleActive",
-    );
-    expect(reduceSliderPopupState("Closing", "interaction-update")).toBe(
-      "VisibleActive",
-    );
-    expect(reduceSliderPopupState("Closing", "interaction-end")).toBe(
-      "VisibleIdle",
-    );
+    expect(reduceSliderPopupState("Closing", "interaction-start")).toBe("VisibleActive");
+    expect(reduceSliderPopupState("Closing", "interaction-update")).toBe("VisibleActive");
+    expect(reduceSliderPopupState("Closing", "interaction-end")).toBe("VisibleIdle");
     expect(reduceSliderPopupState("Closing", "idle-timeout")).toBe("Closing");
-    expect(reduceSliderPopupState("Closing", "unknown-event" as any)).toBe(
-      "Closing",
-    );
+    expect(reduceSliderPopupState("Closing", "unknown-event" as any)).toBe("Closing");
   });
 
   it("keeps Hidden state for non-interaction events", () => {

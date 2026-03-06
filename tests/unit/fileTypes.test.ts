@@ -51,8 +51,6 @@ describe("fileTypes", () => {
   });
 
   it("returns File for unknown play category", () => {
-    expect(
-      formatPlayCategory("unknown" as Parameters<typeof formatPlayCategory>[0]),
-    ).toBe("File");
+    expect(formatPlayCategory("unknown" as Parameters<typeof formatPlayCategory>[0])).toBe("File");
   });
 });

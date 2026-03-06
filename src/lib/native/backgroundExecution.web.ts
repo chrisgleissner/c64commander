@@ -19,18 +19,14 @@ export class BackgroundExecutionWeb implements BackgroundExecutionPlugin {
 
   private dueTimer: number | null = null;
 
-  private listeners = new Set<
-    (event: { dueAtMs: number; firedAtMs: number }) => void
-  >();
+  private listeners = new Set<(event: { dueAtMs: number; firedAtMs: number }) => void>();
 
   async start(): Promise<void> {
     if (this.wakeLock) return;
     const wakeLockApi = (
       navigator as Navigator & {
         wakeLock?: {
-          request: (
-            type: "screen",
-          ) => Promise<{ release: () => Promise<void> }>;
+          request: (type: "screen") => Promise<{ release: () => Promise<void> }>;
         };
       }
     ).wakeLock;

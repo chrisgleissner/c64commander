@@ -62,9 +62,7 @@ describe("getCheckboxMapping", () => {
 
 describe("inferControlKind", () => {
   it('returns password for name containing "password"', () => {
-    expect(inferControlKind({ name: "usb password", currentValue: "" })).toBe(
-      "password",
-    );
+    expect(inferControlKind({ name: "usb password", currentValue: "" })).toBe("password");
   });
 
   it("returns checkbox for Enabled/Disabled values", () => {
@@ -139,9 +137,7 @@ describe("inferControlKind", () => {
   });
 
   it("returns text when no possibleValues provided", () => {
-    expect(
-      inferControlKind({ name: "CustomValue", currentValue: "hello" }),
-    ).toBe("text");
+    expect(inferControlKind({ name: "CustomValue", currentValue: "hello" })).toBe("text");
   });
 
   it("returns text when possibleValues is empty", () => {

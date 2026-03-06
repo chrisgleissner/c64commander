@@ -8,10 +8,7 @@
 
 /* @vitest-environment node */
 import { describe, expect, it, vi } from "vitest";
-import {
-  InMemoryTextBackend,
-  SongLengthServiceFacade,
-} from "@/lib/songlengths";
+import { InMemoryTextBackend, SongLengthServiceFacade } from "@/lib/songlengths";
 import { addLog, addErrorLog } from "@/lib/logging";
 
 vi.mock("@/lib/logging", () => ({
@@ -23,12 +20,7 @@ const loadWithContent = async (
   service: SongLengthServiceFacade,
   content: string,
   configuredPath = "/Songlengths.md5",
-) =>
-  service.loadOnColdStart(
-    configuredPath,
-    async () => [{ path: configuredPath, content }],
-    "unit-test",
-  );
+) => service.loadOnColdStart(configuredPath, async () => [{ path: configuredPath, content }], "unit-test");
 
 describe("SongLengthServiceFacade", () => {
   it("resolves unique file names directly by filename", async () => {
@@ -231,9 +223,7 @@ this is not valid
 
     expect(stats.status).toBe("ready");
     expect(stats.backendStats.entriesTotal).toBe(entries);
-    expect(stats.backendStats.estimatedMemoryBytes).toBeLessThan(
-      80 * 1024 * 1024,
-    );
+    expect(stats.backendStats.estimatedMemoryBytes).toBeLessThan(80 * 1024 * 1024);
     expect(elapsedMs).toBeLessThan(10_000);
   }, 15000);
 
@@ -241,11 +231,7 @@ this is not valid
     const service = new SongLengthServiceFacade(new InMemoryTextBackend(), {
       serviceId: "test-empty",
     });
-    const stats = await service.loadOnColdStart(
-      null,
-      async () => [],
-      "unit-test",
-    );
+    const stats = await service.loadOnColdStart(null, async () => [], "unit-test");
     expect(stats.status).toBe("unavailable");
     expect(stats.unavailableReason).toContain("unavailable");
   });

@@ -43,17 +43,12 @@ export type LedColorName = (typeof LED_FIXED_COLORS)[number]["name"];
 /**
  * Convert RGB values to CSS rgb() string
  */
-export const rgbToCss = (rgb: { r: number; g: number; b: number }): string =>
-  `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`;
+export const rgbToCss = (rgb: { r: number; g: number; b: number }): string => `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`;
 
 /**
  * Get RGB values for a given color name
  */
-export const getLedColorRgb = (
-  name: string,
-): { r: number; g: number; b: number } | null => {
-  const found = LED_FIXED_COLORS.find(
-    (c) => c.name.toLowerCase() === name.toLowerCase(),
-  );
+export const getLedColorRgb = (name: string): { r: number; g: number; b: number } | null => {
+  const found = LED_FIXED_COLORS.find((c) => c.name.toLowerCase() === name.toLowerCase());
   return found?.rgb ?? null;
 };

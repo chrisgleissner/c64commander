@@ -10,11 +10,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
-import {
-  QueryClient,
-  QueryClientProvider,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import React, { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { ThemeProvider } from "@/components/ThemeProvider";
@@ -31,15 +27,8 @@ import { FeatureFlagsProvider } from "@/hooks/useFeatureFlags";
 import { TraceContextBridge } from "@/components/TraceContextBridge";
 import { GlobalDiagnosticsOverlay } from "@/components/diagnostics/GlobalDiagnosticsOverlay";
 import { TestHeartbeat } from "@/components/TestHeartbeat";
-import {
-  createActionContext,
-  getActiveAction,
-} from "@/lib/tracing/actionTrace";
-import {
-  recordActionEnd,
-  recordActionStart,
-  recordTraceError,
-} from "@/lib/tracing/traceSession";
+import { createActionContext, getActiveAction } from "@/lib/tracing/actionTrace";
+import { recordActionEnd, recordActionStart, recordTraceError } from "@/lib/tracing/traceSession";
 import { registerGlobalButtonInteractionModel } from "@/lib/ui/buttonInteraction";
 import { installConsoleDiagnosticsBridge } from "@/lib/diagnostics/logger";
 import { invalidateForVisibilityResume } from "@/lib/query/c64QueryInvalidation";
@@ -48,9 +37,7 @@ import { t } from "@/lib/i18n";
 const HomePage = lazy(() => import("./pages/HomePage"));
 const ConfigBrowserPage = lazy(() => import("./pages/ConfigBrowserPage"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
-const OpenSourceLicensesPage = lazy(
-  () => import("./pages/OpenSourceLicensesPage"),
-);
+const OpenSourceLicensesPage = lazy(() => import("./pages/OpenSourceLicensesPage"));
 const DocsPage = lazy(() => import("./pages/DocsPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const PlayFilesPage = lazy(() => import("./pages/PlayFilesPage"));
@@ -78,8 +65,7 @@ const RouteRefresher = () => {
       }
     };
     document.addEventListener("visibilitychange", handleVisibility);
-    return () =>
-      document.removeEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, [client, location.pathname]);
 
   return null;
@@ -88,10 +74,7 @@ const RouteRefresher = () => {
 const shouldEnableCoverageProbe = () => {
   if (import.meta.env.VITE_ENABLE_TEST_PROBES === "1") return true;
   if (typeof window !== "undefined") {
-    return Boolean(
-      (window as Window & { __c64uTestProbeEnabled?: boolean })
-        .__c64uTestProbeEnabled,
-    );
+    return Boolean((window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled);
   }
   return false;
 };
@@ -118,18 +101,13 @@ const AppRoutes = () => {
       {coverageProbeEnabled && <TestHeartbeat />}
       <Suspense fallback={<RouteLoadingFallback />}>
         <Routes>
-          {coverageProbeEnabled ? (
-            <Route path="/__coverage__" element={<CoverageProbePage />} />
-          ) : null}
+          {coverageProbeEnabled ? <Route path="/__coverage__" element={<CoverageProbePage />} /> : null}
           <Route path="/" element={<HomePage />} />
           <Route path="/config" element={<ConfigBrowserPage />} />
           <Route path="/play" element={<PlayFilesPage />} />
           <Route path="/disks" element={<DisksPage />} />
           <Route path="/settings" element={<SettingsPage />} />
-          <Route
-            path="/settings/open-source-licenses"
-            element={<OpenSourceLicensesPage />}
-          />
+          <Route path="/settings/open-source-licenses" element={<OpenSourceLicensesPage />} />
           <Route path="/docs" element={<DocsPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
@@ -169,18 +147,11 @@ const GlobalErrorListener = () => {
   useEffect(() => {
     const handleError = (event: ErrorEvent) => {
       const activeAction = getActiveAction();
-      const error =
-        event.error instanceof Error
-          ? event.error
-          : new Error(event.message || "Window error");
+      const error = event.error instanceof Error ? event.error : new Error(event.message || "Window error");
       if (activeAction) {
         recordTraceError(activeAction, error);
       } else {
-        const context = createActionContext(
-          "Window error",
-          "system",
-          "GlobalErrorListener",
-        );
+        const context = createActionContext("Window error", "system", "GlobalErrorListener");
         recordActionStart(context);
         recordTraceError(context, error);
         recordActionEnd(context, error);
@@ -196,17 +167,11 @@ const GlobalErrorListener = () => {
     const handleRejection = (event: PromiseRejectionEvent) => {
       const activeAction = getActiveAction();
       const error =
-        event.reason instanceof Error
-          ? event.reason
-          : new Error(String(event.reason ?? "Unhandled rejection"));
+        event.reason instanceof Error ? event.reason : new Error(String(event.reason ?? "Unhandled rejection"));
       if (activeAction) {
         recordTraceError(activeAction, error);
       } else {
-        const context = createActionContext(
-          "Unhandled promise rejection",
-          "system",
-          "GlobalErrorListener",
-        );
+        const context = createActionContext("Unhandled promise rejection", "system", "GlobalErrorListener");
         recordActionStart(context);
         recordTraceError(context, error);
         recordActionEnd(context, error);
@@ -245,20 +210,14 @@ const DiagnosticsRuntimeBridge = () => {
     const startDeferredBridges = async () => {
       if (started || disposed) return;
       started = true;
-      const [
-        diagnosticsBridgeModule,
-        nativeDebugSnapshotsModule,
-        webServerLogsModule,
-      ] = await Promise.all([
+      const [diagnosticsBridgeModule, nativeDebugSnapshotsModule, webServerLogsModule] = await Promise.all([
         import("@/lib/native/diagnosticsBridge"),
         import("@/lib/diagnostics/nativeDebugSnapshots"),
         import("@/lib/diagnostics/webServerLogs"),
       ]);
       if (disposed) return;
-      stopNativeDiagnosticsBridge =
-        diagnosticsBridgeModule.stopNativeDiagnosticsBridge;
-      stopDebugSnapshotPublisher =
-        nativeDebugSnapshotsModule.startNativeDebugSnapshotPublisher();
+      stopNativeDiagnosticsBridge = diagnosticsBridgeModule.stopNativeDiagnosticsBridge;
+      stopDebugSnapshotPublisher = nativeDebugSnapshotsModule.startNativeDebugSnapshotPublisher();
       stopWebServerLogBridge = webServerLogsModule.startWebServerLogBridge();
       await diagnosticsBridgeModule.startNativeDiagnosticsBridge();
     };
@@ -272,10 +231,7 @@ const DiagnosticsRuntimeBridge = () => {
     window.addEventListener("c64u-startup-milestone", handleStartupMilestone);
     return () => {
       disposed = true;
-      window.removeEventListener(
-        "c64u-startup-milestone",
-        handleStartupMilestone,
-      );
+      window.removeEventListener("c64u-startup-milestone", handleStartupMilestone);
       uninstallConsoleBridge();
       stopDebugSnapshotPublisher?.();
       stopWebServerLogBridge?.();
@@ -287,10 +243,7 @@ const DiagnosticsRuntimeBridge = () => {
   return null;
 };
 
-class AppErrorBoundary extends React.Component<
-  { children: React.ReactNode },
-  { hasError: boolean }
-> {
+class AppErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
   state = { hasError: false };
 
   static getDerivedStateFromError() {
@@ -310,14 +263,9 @@ class AppErrorBoundary extends React.Component<
       return (
         <div className="flex min-h-screen items-center justify-center bg-background px-6">
           <div className="max-w-md rounded-xl border border-border bg-card p-6 text-center shadow-lg">
-            <p className="text-lg font-semibold text-foreground">
-              {t("app.error.title", "Something went wrong")}
-            </p>
+            <p className="text-lg font-semibold text-foreground">{t("app.error.title", "Something went wrong")}</p>
             <p className="mt-2 text-sm text-muted-foreground">
-              {t(
-                "app.error.description",
-                "The app hit an unexpected error. Please reopen the page or try again.",
-              )}
+              {t("app.error.description", "The app hit an unexpected error. Please reopen the page or try again.")}
             </p>
             <Button className="mt-4" onClick={() => window.location.reload()}>
               {t("app.error.reload", "Reload")}

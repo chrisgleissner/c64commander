@@ -172,9 +172,7 @@ export function buildMixedScenarios(): MixedScenario[] {
               bOk: listB.result.response.code < 400,
               aLatencyMs: listA.result.latencyMs,
               bLatencyMs: listB.result.latencyMs,
-              conflict:
-                listA.result.response.code >= 400 ||
-                listB.result.response.code >= 400,
+              conflict: listA.result.response.code >= 400 || listB.result.response.code >= 400,
             },
           });
 
@@ -202,9 +200,7 @@ export function buildMixedScenarios(): MixedScenario[] {
               bOk: mlsdA.result.response.code < 400,
               aLatencyMs: listC.result.latencyMs,
               bLatencyMs: mlsdA.result.latencyMs,
-              conflict:
-                listC.result.response.code >= 400 ||
-                mlsdA.result.response.code >= 400,
+              conflict: listC.result.response.code >= 400 || mlsdA.result.response.code >= 400,
             },
           });
 
@@ -305,9 +301,7 @@ export function buildMixedScenarios(): MixedScenario[] {
               bOk: ftpList.result.response.code < 400,
               aLatencyMs: restVersion.latencyMs,
               bLatencyMs: ftpList.result.latencyMs,
-              conflict:
-                restVersion.status >= 400 ||
-                ftpList.result.response.code >= 400,
+              conflict: restVersion.status >= 400 || ftpList.result.response.code >= 400,
             },
           });
 
@@ -335,9 +329,7 @@ export function buildMixedScenarios(): MixedScenario[] {
               bOk: ftpList2.result.response.code < 400,
               aLatencyMs: restConfigs.latencyMs,
               bLatencyMs: ftpList2.result.latencyMs,
-              conflict:
-                restConfigs.status >= 400 ||
-                ftpList2.result.response.code >= 400,
+              conflict: restConfigs.status >= 400 || ftpList2.result.response.code >= 400,
             },
           });
 
@@ -365,8 +357,7 @@ export function buildMixedScenarios(): MixedScenario[] {
               bOk: ftpMlsd.result.response.code < 400,
               aLatencyMs: restDrives.latencyMs,
               bLatencyMs: ftpMlsd.result.latencyMs,
-              conflict:
-                restDrives.status >= 400 || ftpMlsd.result.response.code >= 400,
+              conflict: restDrives.status >= 400 || ftpMlsd.result.response.code >= 400,
             },
           });
 

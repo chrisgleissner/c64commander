@@ -11,10 +11,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ConnectivityIndicator } from "@/components/ConnectivityIndicator";
 import { DiagnosticsActivityIndicator } from "@/components/DiagnosticsActivityIndicator";
 import { requestDiagnosticsOpen } from "@/lib/diagnostics/diagnosticsOverlay";
-import {
-  isDiagnosticsOverlayActive,
-  subscribeDiagnosticsOverlay,
-} from "@/lib/diagnostics/diagnosticsOverlayState";
+import { isDiagnosticsOverlayActive, subscribeDiagnosticsOverlay } from "@/lib/diagnostics/diagnosticsOverlayState";
 import { useDiagnosticsActivity } from "@/hooks/useDiagnosticsActivity";
 import { toast, useToast } from "@/hooks/use-toast";
 
@@ -30,9 +27,7 @@ export function AppBar({ title, subtitle, leading, children }: Props) {
   const restToastRef = useRef<ReturnType<typeof toast> | null>(null);
   const { restInFlight } = useDiagnosticsActivity();
   const { toasts } = useToast();
-  const [diagnosticsOverlayActive, setDiagnosticsOverlayActive] = useState(
-    isDiagnosticsOverlayActive(),
-  );
+  const [diagnosticsOverlayActive, setDiagnosticsOverlayActive] = useState(isDiagnosticsOverlayActive());
 
   useLayoutEffect(() => {
     if (typeof window === "undefined") return;
@@ -42,10 +37,7 @@ export function AppBar({ title, subtitle, leading, children }: Props) {
     const updateHeight = () => {
       const nextHeight = element.offsetHeight;
       if (!Number.isFinite(nextHeight) || nextHeight <= 0) return;
-      document.documentElement.style.setProperty(
-        "--app-bar-height",
-        `${nextHeight}px`,
-      );
+      document.documentElement.style.setProperty("--app-bar-height", `${nextHeight}px`);
     };
 
     updateHeight();
@@ -82,10 +74,7 @@ export function AppBar({ title, subtitle, leading, children }: Props) {
       return;
     }
 
-    const description =
-      restInFlight === 1
-        ? "1 request in flight."
-        : `${restInFlight} requests in flight.`;
+    const description = restInFlight === 1 ? "1 request in flight." : `${restInFlight} requests in flight.`;
 
     if (!restToastRef.current) {
       restToastRef.current = toast({
@@ -118,11 +107,7 @@ export function AppBar({ title, subtitle, leading, children }: Props) {
             ) : (
               <>
                 <h1 className="c64-header text-xl truncate">{title}</h1>
-                {subtitle ? (
-                  <p className="text-xs text-muted-foreground mt-1 truncate">
-                    {subtitle}
-                  </p>
-                ) : null}
+                {subtitle ? <p className="text-xs text-muted-foreground mt-1 truncate">{subtitle}</p> : null}
               </>
             )}
           </div>

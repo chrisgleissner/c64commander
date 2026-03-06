@@ -8,10 +8,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 import { zipSync } from "fflate";
-import {
-  ingestLocalArchives,
-  isSupportedLocalArchive,
-} from "@/lib/sources/localArchiveIngestion";
+import { ingestLocalArchives, isSupportedLocalArchive } from "@/lib/sources/localArchiveIngestion";
 import type { LocalSidFile } from "@/lib/sources/LocalFsSongSource";
 
 // We use globalThis to share state between the vi.mock factory (hoisted before imports)
@@ -44,13 +41,11 @@ vi.mock("7z-wasm", () => {
       unlink: vi.fn(),
       readdir: (dir: string) => {
         if (dir.endsWith("/out")) return [".", "..", "music"];
-        if (dir.endsWith("/out/music"))
-          return [".", "..", "track.sid", "ignore.txt"];
+        if (dir.endsWith("/out/music")) return [".", "..", "track.sid", "ignore.txt"];
         return [".", ".."];
       },
       stat: (path: string) => ({
-        mode:
-          path.endsWith("/out") || path.endsWith("/out/music") ? "dir" : "file",
+        mode: path.endsWith("/out") || path.endsWith("/out/music") ? "dir" : "file",
       }),
       isDir: (mode: string) => mode === "dir",
       readFile: (path: string) => {
@@ -85,10 +80,7 @@ describe("localArchiveIngestion", () => {
       name: "collection.zip",
       lastModified: Date.now(),
       arrayBuffer: async () =>
-        archiveData.buffer.slice(
-          archiveData.byteOffset,
-          archiveData.byteOffset + archiveData.byteLength,
-        ),
+        archiveData.buffer.slice(archiveData.byteOffset, archiveData.byteOffset + archiveData.byteLength),
     };
     const result = await ingestLocalArchives([archiveFile]);
     expect(result.archiveCount).toBe(1);
@@ -102,18 +94,13 @@ describe("localArchiveIngestion", () => {
   });
 
   it("handles Blob archives when arrayBuffer is not directly callable", async () => {
-    const blobArchive = Object.assign(
-      new Blob([new Uint8Array([1, 2, 3, 4])]),
-      {
-        arrayBuffer: undefined,
-        name: "blob.zip",
-        lastModified: Date.now(),
-      },
-    ) as unknown as LocalSidFile;
+    const blobArchive = Object.assign(new Blob([new Uint8Array([1, 2, 3, 4])]), {
+      arrayBuffer: undefined,
+      name: "blob.zip",
+      lastModified: Date.now(),
+    }) as unknown as LocalSidFile;
 
-    await expect(ingestLocalArchives([blobArchive])).rejects.toThrow(
-      "Failed to extract blob.zip: invalid zip data",
-    );
+    await expect(ingestLocalArchives([blobArchive])).rejects.toThrow("Failed to extract blob.zip: invalid zip data");
   });
 
   it("surfaces unsupported archive objects that are not Blob and lack arrayBuffer", async () => {
@@ -241,9 +228,7 @@ describe("localArchiveIngestion", () => {
         arrayBuffer: async () => new Uint8Array(Buffer.from("SEVENZ")).buffer,
       };
 
-      await expect(ingestLocalArchives([archiveFile])).rejects.toThrow(
-        "Failed to extract error.7z: open failed",
-      );
+      await expect(ingestLocalArchives([archiveFile])).rejects.toThrow("Failed to extract error.7z: open failed");
     } finally {
       fs.open = originalOpen;
     }

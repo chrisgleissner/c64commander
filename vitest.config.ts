@@ -55,10 +55,7 @@ export default defineConfig({
         test: {
           name: "unit-jsdom",
           environment: "jsdom",
-          include: [
-            "tests/unit/**/*.{test,spec}.{ts,tsx}",
-            "src/**/*.{test,spec}.{ts,tsx}",
-          ],
+          include: ["tests/unit/**/*.{test,spec}.{ts,tsx}", "src/**/*.{test,spec}.{ts,tsx}"],
           exclude: nodeTestGlobs,
         },
       },

@@ -31,13 +31,7 @@
           },
           "overlap": {
             "type": "string",
-            "enum": [
-              "allowed",
-              "wait-for-response",
-              "wait-for-completion",
-              "forbidden",
-              "unknown"
-            ]
+            "enum": ["allowed", "wait-for-response", "wait-for-completion", "forbidden", "unknown"]
           },
           "evidence": {
             "type": "string"

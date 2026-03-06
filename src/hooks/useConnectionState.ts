@@ -14,9 +14,5 @@ import {
 } from "@/lib/connection/connectionManager";
 
 export function useConnectionState(): ConnectionSnapshot {
-  return useSyncExternalStore(
-    subscribeConnection,
-    getConnectionSnapshot,
-    getConnectionSnapshot,
-  );
+  return useSyncExternalStore(subscribeConnection, getConnectionSnapshot, getConnectionSnapshot);
 }

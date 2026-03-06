@@ -27,14 +27,11 @@ export class FeatureFlagsWeb implements FeatureFlagsPlugin {
     sessionStorage.setItem(key, value);
   }
 
-  async getAllFlags(options: {
-    keys: string[];
-  }): Promise<{ flags?: Record<string, boolean> }> {
+  async getAllFlags(options: { keys: string[] }): Promise<{ flags?: Record<string, boolean> }> {
     const flags: Record<string, boolean> = {};
     options.keys.forEach((key) => {
       const storageKey = buildKey(key);
-      const stored =
-        localStorage.getItem(storageKey) ?? sessionStorage.getItem(storageKey);
+      const stored = localStorage.getItem(storageKey) ?? sessionStorage.getItem(storageKey);
       if (stored !== null) {
         flags[key] = stored === "1";
       }

@@ -7,13 +7,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  isUpdateApplied,
-  loadHvscState,
-  markUpdateApplied,
-  saveHvscState,
-  updateHvscState,
-} from "./hvscStateStore";
+import { isUpdateApplied, loadHvscState, markUpdateApplied, saveHvscState, updateHvscState } from "./hvscStateStore";
 import { addLog } from "@/lib/logging";
 
 vi.mock("@/lib/logging", () => ({
@@ -174,9 +168,7 @@ describe("hvscStateStore", () => {
       const validStates = ["idle", "installing", "updating", "ready", "error"];
 
       for (const ingestionState of validStates) {
-        localStorageMock.getItem.mockReturnValue(
-          JSON.stringify({ ingestionState }),
-        );
+        localStorageMock.getItem.mockReturnValue(JSON.stringify({ ingestionState }));
 
         const state = loadHvscState();
 
@@ -209,10 +201,7 @@ describe("hvscStateStore", () => {
 
       saveHvscState(state);
 
-      expect(localStorageMock.setItem).toHaveBeenCalledWith(
-        STORAGE_KEY,
-        JSON.stringify(state),
-      );
+      expect(localStorageMock.setItem).toHaveBeenCalledWith(STORAGE_KEY, JSON.stringify(state));
     });
   });
 

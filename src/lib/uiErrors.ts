@@ -44,22 +44,13 @@ export const isTransientConnectivityFailure = (message: string): boolean => {
   );
 };
 
-const isRecoverableConnectivityError = (
-  description: string,
-  error?: unknown,
-) => {
+const isRecoverableConnectivityError = (description: string, error?: unknown) => {
   const details = buildErrorDetails(error) as { message?: string } | undefined;
   const message = `${description} ${details?.message ?? ""}`;
   return isTransientConnectivityFailure(message);
 };
 
-export const reportUserError = ({
-  operation,
-  title,
-  description,
-  error,
-  context,
-}: UiErrorReport) => {
+export const reportUserError = ({ operation, title, description, error, context }: UiErrorReport) => {
   const logPayload = {
     operation,
     description,
@@ -73,9 +64,7 @@ export const reportUserError = ({
   // from persistent defects so callers can filter or present them differently.
   addErrorLog(`${operation}: ${title}`, {
     ...logPayload,
-    ...(isRecoverableConnectivityError(description, error)
-      ? { recoverableConnectivityIssue: true }
-      : {}),
+    ...(isRecoverableConnectivityError(description, error) ? { recoverableConnectivityIssue: true } : {}),
   });
 
   toast({

@@ -21,18 +21,7 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "id",
-          "kind",
-          "samples",
-          "p50",
-          "p90",
-          "p95",
-          "p99",
-          "min",
-          "max",
-          "mean"
-        ],
+        "required": ["id", "kind", "samples", "p50", "p90", "p95", "p99", "min", "max", "mean"],
         "properties": {
           "id": {
             "type": "string"

@@ -34,26 +34,8 @@ export type ConcurrencyObservation = {
   notes?: string;
 };
 
-const SAFE_CATEGORY_BLOCKLIST = [
-  "network",
-  "wifi",
-  "modem",
-  "http",
-  "ftp",
-  "telnet",
-  "hostname",
-  "password",
-];
-const SAFE_ITEM_BLOCKLIST = [
-  "password",
-  "hostname",
-  "ip",
-  "mac",
-  "dns",
-  "gateway",
-  "ssid",
-  "token",
-];
+const SAFE_CATEGORY_BLOCKLIST = ["network", "wifi", "modem", "http", "ftp", "telnet", "hostname", "password"];
+const SAFE_ITEM_BLOCKLIST = ["password", "hostname", "ip", "mac", "dns", "gateway", "ssid", "token"];
 const DISK_EXTENSIONS = [".d64", ".d71", ".d81", ".dnp", ".g64"];
 const SID_EXTENSIONS = [".sid"];
 const PRG_EXTENSIONS = [".prg"];
@@ -274,9 +256,7 @@ export function buildRestScenarios(): RestScenario[] {
         url: `/v1/configs/${encodeURIComponent(targetCategory)}`,
       });
       if (detailResp.status !== 200) return;
-      const categoryObj = (detailResp.data as Record<string, unknown>)[
-        targetCategory
-      ];
+      const categoryObj = (detailResp.data as Record<string, unknown>)[targetCategory];
       if (!categoryObj || typeof categoryObj !== "object") return;
       const itemName = pickSafeItem(categoryObj as Record<string, unknown>);
       if (!itemName) {
@@ -294,12 +274,10 @@ export function buildRestScenarios(): RestScenario[] {
         url: `/v1/configs/${encodeURIComponent(targetCategory)}/${encodeURIComponent(itemName)}`,
       });
       if (itemDetailResp.status !== 200) return;
-      const itemDetail = (itemDetailResp.data as Record<string, unknown>)[
-        targetCategory
-      ] as Record<string, unknown> | undefined;
-      const itemEntry = itemDetail
-        ? (itemDetail[itemName] as Record<string, unknown> | undefined)
-        : undefined;
+      const itemDetail = (itemDetailResp.data as Record<string, unknown>)[targetCategory] as
+        | Record<string, unknown>
+        | undefined;
+      const itemEntry = itemDetail ? (itemDetail[itemName] as Record<string, unknown> | undefined) : undefined;
       if (!itemEntry || typeof itemEntry !== "object") return;
       const current = itemEntry.current ?? itemEntry;
       const nextValue = pickNextValue(itemEntry, current);
@@ -326,10 +304,7 @@ export function buildRestScenarios(): RestScenario[] {
         details: { correlationId: setR.correlationId },
       });
 
-      const restoreValue =
-        typeof current === "string" || typeof current === "number"
-          ? current
-          : undefined;
+      const restoreValue = typeof current === "string" || typeof current === "number" ? current : undefined;
       if (restoreValue !== undefined) {
         await delay(200);
         const restR = await request({
@@ -451,9 +426,7 @@ export function buildRestScenarios(): RestScenario[] {
         return;
       }
       const drives =
-        ((drivesResp.data as Record<string, unknown>).drives as Array<
-          Record<string, { enabled?: boolean }>
-        >) || [];
+        ((drivesResp.data as Record<string, unknown>).drives as Array<Record<string, { enabled?: boolean }>>) || [];
       const driveB = drives.find((d) => "b" in d);
       if (!driveB) {
         log({
@@ -512,9 +485,7 @@ export function buildRestScenarios(): RestScenario[] {
         return;
       }
       const drives =
-        ((drivesResp.data as Record<string, unknown>).drives as Array<
-          Record<string, { type?: string }>
-        >) || [];
+        ((drivesResp.data as Record<string, unknown>).drives as Array<Record<string, { type?: string }>>) || [];
       const driveA = drives.find((d) => "a" in d);
       const currentMode = driveA?.a?.type ?? "1541";
       const nextMode = currentMode === "1541" ? "1571" : "1541";
@@ -584,81 +555,69 @@ export function buildRestScenarios(): RestScenario[] {
     //  Concurrency: scaling N=2,4,8
     // ═══════════════════════════════════════════════════════════════════
 
-    scenario(
-      "rest.configs.concurrent",
-      true,
-      async ({ request, log, config, recordConcurrencyObservation }) => {
-        const levels = config.mode === "STRESS" ? [2, 4, 8] : [2, 4];
-        for (const n of levels) {
-          const maxN = Math.min(n, config.concurrency.restMaxInFlight);
-          const obs = mkObs(`REST /v1/configs concurrent N=${maxN}`, maxN);
-          const results = await runConcurrentRequests({
-            request,
-            log,
-            maxInFlight: maxN,
-            totalRequests: maxN * 3,
-            targets: [{ op: "GET /v1/configs", url: "/v1/configs" }],
-          });
-          finishObs(obs, results);
-          recordConcurrencyObservation(obs);
-          if (results.some((r) => !r.ok)) break;
-        }
-      },
-    ),
+    scenario("rest.configs.concurrent", true, async ({ request, log, config, recordConcurrencyObservation }) => {
+      const levels = config.mode === "STRESS" ? [2, 4, 8] : [2, 4];
+      for (const n of levels) {
+        const maxN = Math.min(n, config.concurrency.restMaxInFlight);
+        const obs = mkObs(`REST /v1/configs concurrent N=${maxN}`, maxN);
+        const results = await runConcurrentRequests({
+          request,
+          log,
+          maxInFlight: maxN,
+          totalRequests: maxN * 3,
+          targets: [{ op: "GET /v1/configs", url: "/v1/configs" }],
+        });
+        finishObs(obs, results);
+        recordConcurrencyObservation(obs);
+        if (results.some((r) => !r.ok)) break;
+      }
+    }),
 
-    scenario(
-      "rest.concurrent.mix",
-      true,
-      async ({ request, log, config, recordConcurrencyObservation }) => {
-        const targets = [
-          { op: "GET /v1/version", url: "/v1/version" },
-          { op: "GET /v1/info", url: "/v1/info" },
-          { op: "GET /v1/drives", url: "/v1/drives" },
-          { op: "GET /v1/configs", url: "/v1/configs" },
-        ];
-        const levels = config.mode === "STRESS" ? [2, 4, 8] : [2, 4];
-        for (const n of levels) {
-          const maxN = Math.min(n, config.concurrency.restMaxInFlight);
-          const obs = mkObs(`REST mixed concurrent N=${maxN}`, maxN);
-          const results = await runConcurrentRequests({
-            request,
-            log,
-            maxInFlight: maxN,
-            totalRequests: maxN * 4,
-            targets,
-          });
-          finishObs(obs, results);
-          recordConcurrencyObservation(obs);
-          if (results.some((r) => !r.ok)) break;
-        }
-      },
-    ),
+    scenario("rest.concurrent.mix", true, async ({ request, log, config, recordConcurrencyObservation }) => {
+      const targets = [
+        { op: "GET /v1/version", url: "/v1/version" },
+        { op: "GET /v1/info", url: "/v1/info" },
+        { op: "GET /v1/drives", url: "/v1/drives" },
+        { op: "GET /v1/configs", url: "/v1/configs" },
+      ];
+      const levels = config.mode === "STRESS" ? [2, 4, 8] : [2, 4];
+      for (const n of levels) {
+        const maxN = Math.min(n, config.concurrency.restMaxInFlight);
+        const obs = mkObs(`REST mixed concurrent N=${maxN}`, maxN);
+        const results = await runConcurrentRequests({
+          request,
+          log,
+          maxInFlight: maxN,
+          totalRequests: maxN * 4,
+          targets,
+        });
+        finishObs(obs, results);
+        recordConcurrencyObservation(obs);
+        if (results.some((r) => !r.ok)) break;
+      }
+    }),
 
-    scenario(
-      "rest.concurrent.readmem",
-      true,
-      async ({ request, log, config, recordConcurrencyObservation }) => {
-        for (const n of [2]) {
-          const maxN = Math.min(n, config.concurrency.restMaxInFlight);
-          const obs = mkObs(`REST readmem concurrent N=${maxN}`, maxN);
-          const results = await runConcurrentRequests({
-            request,
-            log,
-            maxInFlight: maxN,
-            totalRequests: maxN * 3,
-            targets: [
-              {
-                op: "GET /v1/machine:readmem",
-                url: "/v1/machine:readmem?address=D020&length=2",
-              },
-            ],
-          });
-          finishObs(obs, results);
-          recordConcurrencyObservation(obs);
-          if (results.some((r) => !r.ok)) break;
-        }
-      },
-    ),
+    scenario("rest.concurrent.readmem", true, async ({ request, log, config, recordConcurrencyObservation }) => {
+      for (const n of [2]) {
+        const maxN = Math.min(n, config.concurrency.restMaxInFlight);
+        const obs = mkObs(`REST readmem concurrent N=${maxN}`, maxN);
+        const results = await runConcurrentRequests({
+          request,
+          log,
+          maxInFlight: maxN,
+          totalRequests: maxN * 3,
+          targets: [
+            {
+              op: "GET /v1/machine:readmem",
+              url: "/v1/machine:readmem?address=D020&length=2",
+            },
+          ],
+        });
+        finishObs(obs, results);
+        recordConcurrencyObservation(obs);
+        if (results.some((r) => !r.ok)) break;
+      }
+    }),
 
     // ═══════════════════════════════════════════════════════════════════
     //  STRESS scenarios
@@ -746,85 +705,69 @@ export function buildRestScenarios(): RestScenario[] {
       });
     }),
 
-    scenario(
-      "rest.files.create-d64",
-      false,
-      async ({ request, log, config }) => {
-        const p = scratchPath(config, "harness-test.d64");
-        const r = await request({
-          method: "PUT",
-          url: `/v1/files/${encodeFilePath(p)}:create_d64`,
-          params: { tracks: 35, diskname: "HRNSS64" },
-        });
-        log({
-          kind: "rest",
-          op: "PUT /v1/files/{path}:create_d64",
-          status: r.status,
-          latencyMs: r.latencyMs,
-          details: { path: p, correlationId: r.correlationId },
-        });
-      },
-    ),
+    scenario("rest.files.create-d64", false, async ({ request, log, config }) => {
+      const p = scratchPath(config, "harness-test.d64");
+      const r = await request({
+        method: "PUT",
+        url: `/v1/files/${encodeFilePath(p)}:create_d64`,
+        params: { tracks: 35, diskname: "HRNSS64" },
+      });
+      log({
+        kind: "rest",
+        op: "PUT /v1/files/{path}:create_d64",
+        status: r.status,
+        latencyMs: r.latencyMs,
+        details: { path: p, correlationId: r.correlationId },
+      });
+    }),
 
-    scenario(
-      "rest.files.create-d71",
-      false,
-      async ({ request, log, config }) => {
-        const p = scratchPath(config, "harness-test.d71");
-        const r = await request({
-          method: "PUT",
-          url: `/v1/files/${encodeFilePath(p)}:create_d71`,
-          params: { diskname: "HRNSS71" },
-        });
-        log({
-          kind: "rest",
-          op: "PUT /v1/files/{path}:create_d71",
-          status: r.status,
-          latencyMs: r.latencyMs,
-          details: { path: p, correlationId: r.correlationId },
-        });
-      },
-    ),
+    scenario("rest.files.create-d71", false, async ({ request, log, config }) => {
+      const p = scratchPath(config, "harness-test.d71");
+      const r = await request({
+        method: "PUT",
+        url: `/v1/files/${encodeFilePath(p)}:create_d71`,
+        params: { diskname: "HRNSS71" },
+      });
+      log({
+        kind: "rest",
+        op: "PUT /v1/files/{path}:create_d71",
+        status: r.status,
+        latencyMs: r.latencyMs,
+        details: { path: p, correlationId: r.correlationId },
+      });
+    }),
 
-    scenario(
-      "rest.files.create-d81",
-      false,
-      async ({ request, log, config }) => {
-        const p = scratchPath(config, "harness-test.d81");
-        const r = await request({
-          method: "PUT",
-          url: `/v1/files/${encodeFilePath(p)}:create_d81`,
-          params: { diskname: "HRNSS81" },
-        });
-        log({
-          kind: "rest",
-          op: "PUT /v1/files/{path}:create_d81",
-          status: r.status,
-          latencyMs: r.latencyMs,
-          details: { path: p, correlationId: r.correlationId },
-        });
-      },
-    ),
+    scenario("rest.files.create-d81", false, async ({ request, log, config }) => {
+      const p = scratchPath(config, "harness-test.d81");
+      const r = await request({
+        method: "PUT",
+        url: `/v1/files/${encodeFilePath(p)}:create_d81`,
+        params: { diskname: "HRNSS81" },
+      });
+      log({
+        kind: "rest",
+        op: "PUT /v1/files/{path}:create_d81",
+        status: r.status,
+        latencyMs: r.latencyMs,
+        details: { path: p, correlationId: r.correlationId },
+      });
+    }),
 
-    scenario(
-      "rest.files.create-dnp",
-      false,
-      async ({ request, log, config }) => {
-        const p = scratchPath(config, "harness-test.dnp");
-        const r = await request({
-          method: "PUT",
-          url: `/v1/files/${encodeFilePath(p)}:create_dnp`,
-          params: { tracks: 10, diskname: "HRNSSDNP" },
-        });
-        log({
-          kind: "rest",
-          op: "PUT /v1/files/{path}:create_dnp",
-          status: r.status,
-          latencyMs: r.latencyMs,
-          details: { path: p, correlationId: r.correlationId },
-        });
-      },
-    ),
+    scenario("rest.files.create-dnp", false, async ({ request, log, config }) => {
+      const p = scratchPath(config, "harness-test.dnp");
+      const r = await request({
+        method: "PUT",
+        url: `/v1/files/${encodeFilePath(p)}:create_dnp`,
+        params: { tracks: 10, diskname: "HRNSSDNP" },
+      });
+      log({
+        kind: "rest",
+        op: "PUT /v1/files/{path}:create_dnp",
+        status: r.status,
+        latencyMs: r.latencyMs,
+        details: { path: p, correlationId: r.correlationId },
+      });
+    }),
 
     scenario("rest.drives.mount", false, async ({ request, log, config }) => {
       const imagePath = await resolveOrScratch(
@@ -870,39 +813,35 @@ export function buildRestScenarios(): RestScenario[] {
       });
     }),
 
-    scenario(
-      "rest.drives.mount-upload",
-      false,
-      async ({ request, log, config }) => {
-        const drive = config.media?.diskDrive ?? "a";
-        const d64 = Buffer.alloc(174848, 0);
-        const mount = await request({
-          method: "POST",
-          url: `/v1/drives/${drive}:mount`,
-          params: { type: "d64", mode: "readonly" },
-          data: d64,
-          headers: { "Content-Type": "application/octet-stream" },
-        });
-        log({
-          kind: "rest",
-          op: "POST /v1/drives/{drive}:mount",
-          status: mount.status,
-          latencyMs: mount.latencyMs,
-          details: { drive, correlationId: mount.correlationId },
-        });
-        await delay(500);
-        const rm = await request({
-          method: "PUT",
-          url: `/v1/drives/${drive}:remove`,
-        });
-        log({
-          kind: "rest",
-          op: "PUT /v1/drives/{drive}:remove (post-upload)",
-          status: rm.status,
-          latencyMs: rm.latencyMs,
-        });
-      },
-    ),
+    scenario("rest.drives.mount-upload", false, async ({ request, log, config }) => {
+      const drive = config.media?.diskDrive ?? "a";
+      const d64 = Buffer.alloc(174848, 0);
+      const mount = await request({
+        method: "POST",
+        url: `/v1/drives/${drive}:mount`,
+        params: { type: "d64", mode: "readonly" },
+        data: d64,
+        headers: { "Content-Type": "application/octet-stream" },
+      });
+      log({
+        kind: "rest",
+        op: "POST /v1/drives/{drive}:mount",
+        status: mount.status,
+        latencyMs: mount.latencyMs,
+        details: { drive, correlationId: mount.correlationId },
+      });
+      await delay(500);
+      const rm = await request({
+        method: "PUT",
+        url: `/v1/drives/${drive}:remove`,
+      });
+      log({
+        kind: "rest",
+        op: "PUT /v1/drives/{drive}:remove (post-upload)",
+        status: rm.status,
+        latencyMs: rm.latencyMs,
+      });
+    }),
 
     scenario("rest.drives.load-rom-upload", false, async ({ request, log }) => {
       // Upload ROM data via POST. Use existing 1541.rom loaded via PUT for baseline.
@@ -927,352 +866,308 @@ export function buildRestScenarios(): RestScenario[] {
       });
     }),
 
-    scenario(
-      "rest.runners.sidplay",
-      false,
-      async ({ request, log, config }) => {
-        const resolved = config.media?.sidFilePath
-          ? await resolveMediaFilePath({
-              basePath: config.media.sidFilePath,
-              extensions: SID_EXTENSIONS,
-              config,
-              log,
-              label: "sid file",
-            })
-          : null;
-        if (!resolved) {
-          log({
-            kind: "rest",
-            op: "runners.sidplay",
-            status: "skipped",
-            reason: "no sid file found",
-          });
-          return;
-        }
-        const r = await request({
-          method: "PUT",
-          url: "/v1/runners:sidplay",
-          params: { file: resolved, songnr: config.media?.sidSongNr ?? 0 },
-        });
+    scenario("rest.runners.sidplay", false, async ({ request, log, config }) => {
+      const resolved = config.media?.sidFilePath
+        ? await resolveMediaFilePath({
+            basePath: config.media.sidFilePath,
+            extensions: SID_EXTENSIONS,
+            config,
+            log,
+            label: "sid file",
+          })
+        : null;
+      if (!resolved) {
         log({
           kind: "rest",
-          op: "PUT /v1/runners:sidplay",
-          status: r.status,
-          latencyMs: r.latencyMs,
-          details: { file: resolved, correlationId: r.correlationId },
+          op: "runners.sidplay",
+          status: "skipped",
+          reason: "no sid file found",
         });
+        return;
+      }
+      const r = await request({
+        method: "PUT",
+        url: "/v1/runners:sidplay",
+        params: { file: resolved, songnr: config.media?.sidSongNr ?? 0 },
+      });
+      log({
+        kind: "rest",
+        op: "PUT /v1/runners:sidplay",
+        status: r.status,
+        latencyMs: r.latencyMs,
+        details: { file: resolved, correlationId: r.correlationId },
+      });
+      await delay(2000);
+      if (config.allowMachineReset) {
+        await request({ method: "PUT", url: "/v1/machine:reset" });
         await delay(2000);
-        if (config.allowMachineReset) {
-          await request({ method: "PUT", url: "/v1/machine:reset" });
-          await delay(2000);
-        }
-      },
-    ),
+      }
+    }),
 
-    scenario(
-      "rest.runners.sidplay-upload",
-      false,
-      async ({ request, log, config }) => {
-        const sidData = createMinimalSid();
-        const FormData = (await import("form-data")).default;
-        const form = new FormData();
-        form.append("file", sidData, {
-          filename: "harness-probe.sid",
-          contentType: "application/octet-stream",
-        });
-        const r = await request({
-          method: "POST",
-          url: "/v1/runners:sidplay",
-          params: { songnr: 0 },
-          data: form,
-          headers: form.getHeaders(),
-        });
-        log({
-          kind: "rest",
-          op: "POST /v1/runners:sidplay",
-          status: r.status,
-          latencyMs: r.latencyMs,
-          details: { correlationId: r.correlationId, size: sidData.length },
-        });
-        await delay(1000);
-        if (config.allowMachineReset) {
-          await request({ method: "PUT", url: "/v1/machine:reset" });
-          await delay(2000);
-        }
-      },
-    ),
-
-    scenario(
-      "rest.runners.modplay",
-      false,
-      async ({ request, log, config }) => {
-        const resolved = config.media?.modFilePath
-          ? await resolveMediaFilePath({
-              basePath: config.media.modFilePath,
-              extensions: MOD_EXTENSIONS,
-              config,
-              log,
-              label: "mod file",
-            })
-          : null;
-        if (!resolved) {
-          log({
-            kind: "rest",
-            op: "runners.modplay",
-            status: "skipped",
-            reason: "no mod file found",
-          });
-          return;
-        }
-        const r = await request({
-          method: "PUT",
-          url: "/v1/runners:modplay",
-          params: { file: resolved },
-        });
-        log({
-          kind: "rest",
-          op: "PUT /v1/runners:modplay",
-          status: r.status,
-          latencyMs: r.latencyMs,
-          details: { file: resolved, correlationId: r.correlationId },
-        });
+    scenario("rest.runners.sidplay-upload", false, async ({ request, log, config }) => {
+      const sidData = createMinimalSid();
+      const FormData = (await import("form-data")).default;
+      const form = new FormData();
+      form.append("file", sidData, {
+        filename: "harness-probe.sid",
+        contentType: "application/octet-stream",
+      });
+      const r = await request({
+        method: "POST",
+        url: "/v1/runners:sidplay",
+        params: { songnr: 0 },
+        data: form,
+        headers: form.getHeaders(),
+      });
+      log({
+        kind: "rest",
+        op: "POST /v1/runners:sidplay",
+        status: r.status,
+        latencyMs: r.latencyMs,
+        details: { correlationId: r.correlationId, size: sidData.length },
+      });
+      await delay(1000);
+      if (config.allowMachineReset) {
+        await request({ method: "PUT", url: "/v1/machine:reset" });
         await delay(2000);
-        if (config.allowMachineReset) {
-          await request({ method: "PUT", url: "/v1/machine:reset" });
-          await delay(2000);
-        }
-      },
-    ),
+      }
+    }),
 
-    scenario(
-      "rest.runners.modplay-upload",
-      false,
-      async ({ request, log, config }) => {
-        const modData = createMinimalMod();
-        const r = await request({
-          method: "POST",
-          url: "/v1/runners:modplay",
-          data: modData,
-          headers: { "Content-Type": "application/octet-stream" },
-        });
+    scenario("rest.runners.modplay", false, async ({ request, log, config }) => {
+      const resolved = config.media?.modFilePath
+        ? await resolveMediaFilePath({
+            basePath: config.media.modFilePath,
+            extensions: MOD_EXTENSIONS,
+            config,
+            log,
+            label: "mod file",
+          })
+        : null;
+      if (!resolved) {
         log({
           kind: "rest",
-          op: "POST /v1/runners:modplay",
-          status: r.status,
-          latencyMs: r.latencyMs,
-          details: { correlationId: r.correlationId, size: modData.length },
+          op: "runners.modplay",
+          status: "skipped",
+          reason: "no mod file found",
         });
-        await delay(1000);
-        if (config.allowMachineReset) {
-          await request({ method: "PUT", url: "/v1/machine:reset" });
-          await delay(2000);
-        }
-      },
-    ),
-
-    scenario(
-      "rest.runners.run-prg",
-      false,
-      async ({ request, log, config }) => {
-        const resolved = config.media?.prgFilePath
-          ? await resolveMediaFilePath({
-              basePath: config.media.prgFilePath,
-              extensions: PRG_EXTENSIONS,
-              config,
-              log,
-              label: "prg file",
-            })
-          : null;
-        if (!resolved) {
-          log({
-            kind: "rest",
-            op: "runners.run-prg",
-            status: "skipped",
-            reason: "no prg file found",
-          });
-          return;
-        }
-        const r = await request({
-          method: "PUT",
-          url: "/v1/runners:run_prg",
-          params: { file: resolved },
-        });
-        log({
-          kind: "rest",
-          op: "PUT /v1/runners:run_prg",
-          status: r.status,
-          latencyMs: r.latencyMs,
-          details: { file: resolved, correlationId: r.correlationId },
-        });
+        return;
+      }
+      const r = await request({
+        method: "PUT",
+        url: "/v1/runners:modplay",
+        params: { file: resolved },
+      });
+      log({
+        kind: "rest",
+        op: "PUT /v1/runners:modplay",
+        status: r.status,
+        latencyMs: r.latencyMs,
+        details: { file: resolved, correlationId: r.correlationId },
+      });
+      await delay(2000);
+      if (config.allowMachineReset) {
+        await request({ method: "PUT", url: "/v1/machine:reset" });
         await delay(2000);
-        if (config.allowMachineReset) {
-          await request({ method: "PUT", url: "/v1/machine:reset" });
-          await delay(2000);
-        }
-      },
-    ),
+      }
+    }),
 
-    scenario(
-      "rest.runners.load-prg",
-      false,
-      async ({ request, log, config }) => {
-        const resolved = config.media?.prgFilePath
-          ? await resolveMediaFilePath({
-              basePath: config.media.prgFilePath,
-              extensions: PRG_EXTENSIONS,
-              config,
-              log,
-              label: "prg file",
-            })
-          : null;
-        if (!resolved) {
-          log({
-            kind: "rest",
-            op: "runners.load-prg",
-            status: "skipped",
-            reason: "no prg file found",
-          });
-          return;
-        }
-        const r = await request({
-          method: "PUT",
-          url: "/v1/runners:load_prg",
-          params: { file: resolved },
-        });
-        log({
-          kind: "rest",
-          op: "PUT /v1/runners:load_prg",
-          status: r.status,
-          latencyMs: r.latencyMs,
-          details: { file: resolved, correlationId: r.correlationId },
-        });
-      },
-    ),
-
-    scenario(
-      "rest.runners.run-prg-upload",
-      false,
-      async ({ request, log, config }) => {
-        const prgData = createMinimalPrg();
-        const r = await request({
-          method: "POST",
-          url: "/v1/runners:run_prg",
-          data: prgData,
-          headers: { "Content-Type": "application/octet-stream" },
-        });
-        log({
-          kind: "rest",
-          op: "POST /v1/runners:run_prg",
-          status: r.status,
-          latencyMs: r.latencyMs,
-          details: { correlationId: r.correlationId, size: prgData.length },
-        });
-        await delay(1000);
-        if (config.allowMachineReset) {
-          await request({ method: "PUT", url: "/v1/machine:reset" });
-          await delay(2000);
-        }
-      },
-    ),
-
-    scenario(
-      "rest.runners.load-prg-upload",
-      false,
-      async ({ request, log }) => {
-        const prgData = createMinimalPrg();
-        const r = await request({
-          method: "POST",
-          url: "/v1/runners:load_prg",
-          data: prgData,
-          headers: { "Content-Type": "application/octet-stream" },
-        });
-        log({
-          kind: "rest",
-          op: "POST /v1/runners:load_prg",
-          status: r.status,
-          latencyMs: r.latencyMs,
-          details: { correlationId: r.correlationId, size: prgData.length },
-        });
-      },
-    ),
-
-    scenario(
-      "rest.runners.run-crt",
-      false,
-      async ({ request, log, config }) => {
-        const resolved = config.media?.crtFilePath
-          ? await resolveMediaFilePath({
-              basePath: config.media.crtFilePath,
-              extensions: CRT_EXTENSIONS,
-              config,
-              log,
-              label: "crt file",
-            })
-          : null;
-        if (!resolved) {
-          log({
-            kind: "rest",
-            op: "runners.run-crt",
-            status: "skipped",
-            reason: "no crt file found",
-          });
-          return;
-        }
-        const r = await request({
-          method: "PUT",
-          url: "/v1/runners:run_crt",
-          params: { file: resolved },
-        });
-        log({
-          kind: "rest",
-          op: "PUT /v1/runners:run_crt",
-          status: r.status,
-          latencyMs: r.latencyMs,
-          details: { file: resolved, correlationId: r.correlationId },
-        });
+    scenario("rest.runners.modplay-upload", false, async ({ request, log, config }) => {
+      const modData = createMinimalMod();
+      const r = await request({
+        method: "POST",
+        url: "/v1/runners:modplay",
+        data: modData,
+        headers: { "Content-Type": "application/octet-stream" },
+      });
+      log({
+        kind: "rest",
+        op: "POST /v1/runners:modplay",
+        status: r.status,
+        latencyMs: r.latencyMs,
+        details: { correlationId: r.correlationId, size: modData.length },
+      });
+      await delay(1000);
+      if (config.allowMachineReset) {
+        await request({ method: "PUT", url: "/v1/machine:reset" });
         await delay(2000);
-        if (config.allowMachineReset) {
-          await request({ method: "PUT", url: "/v1/machine:reset" });
-          await delay(2000);
-        }
-      },
-    ),
+      }
+    }),
 
-    scenario(
-      "rest.runners.run-crt-upload",
-      false,
-      async ({ request, log, config }) => {
-        const crtData = createMinimalCrt();
-        const r = await request({
-          method: "POST",
-          url: "/v1/runners:run_crt",
-          data: crtData,
-          headers: { "Content-Type": "application/octet-stream" },
-        });
+    scenario("rest.runners.run-prg", false, async ({ request, log, config }) => {
+      const resolved = config.media?.prgFilePath
+        ? await resolveMediaFilePath({
+            basePath: config.media.prgFilePath,
+            extensions: PRG_EXTENSIONS,
+            config,
+            log,
+            label: "prg file",
+          })
+        : null;
+      if (!resolved) {
         log({
           kind: "rest",
-          op: "POST /v1/runners:run_crt",
-          status: r.status,
-          latencyMs: r.latencyMs,
-          details: { correlationId: r.correlationId, size: crtData.length },
+          op: "runners.run-prg",
+          status: "skipped",
+          reason: "no prg file found",
         });
-        await delay(1000);
-        if (config.allowMachineReset) {
-          await request({ method: "PUT", url: "/v1/machine:reset" });
-          await delay(2000);
-        }
-      },
-    ),
+        return;
+      }
+      const r = await request({
+        method: "PUT",
+        url: "/v1/runners:run_prg",
+        params: { file: resolved },
+      });
+      log({
+        kind: "rest",
+        op: "PUT /v1/runners:run_prg",
+        status: r.status,
+        latencyMs: r.latencyMs,
+        details: { file: resolved, correlationId: r.correlationId },
+      });
+      await delay(2000);
+      if (config.allowMachineReset) {
+        await request({ method: "PUT", url: "/v1/machine:reset" });
+        await delay(2000);
+      }
+    }),
+
+    scenario("rest.runners.load-prg", false, async ({ request, log, config }) => {
+      const resolved = config.media?.prgFilePath
+        ? await resolveMediaFilePath({
+            basePath: config.media.prgFilePath,
+            extensions: PRG_EXTENSIONS,
+            config,
+            log,
+            label: "prg file",
+          })
+        : null;
+      if (!resolved) {
+        log({
+          kind: "rest",
+          op: "runners.load-prg",
+          status: "skipped",
+          reason: "no prg file found",
+        });
+        return;
+      }
+      const r = await request({
+        method: "PUT",
+        url: "/v1/runners:load_prg",
+        params: { file: resolved },
+      });
+      log({
+        kind: "rest",
+        op: "PUT /v1/runners:load_prg",
+        status: r.status,
+        latencyMs: r.latencyMs,
+        details: { file: resolved, correlationId: r.correlationId },
+      });
+    }),
+
+    scenario("rest.runners.run-prg-upload", false, async ({ request, log, config }) => {
+      const prgData = createMinimalPrg();
+      const r = await request({
+        method: "POST",
+        url: "/v1/runners:run_prg",
+        data: prgData,
+        headers: { "Content-Type": "application/octet-stream" },
+      });
+      log({
+        kind: "rest",
+        op: "POST /v1/runners:run_prg",
+        status: r.status,
+        latencyMs: r.latencyMs,
+        details: { correlationId: r.correlationId, size: prgData.length },
+      });
+      await delay(1000);
+      if (config.allowMachineReset) {
+        await request({ method: "PUT", url: "/v1/machine:reset" });
+        await delay(2000);
+      }
+    }),
+
+    scenario("rest.runners.load-prg-upload", false, async ({ request, log }) => {
+      const prgData = createMinimalPrg();
+      const r = await request({
+        method: "POST",
+        url: "/v1/runners:load_prg",
+        data: prgData,
+        headers: { "Content-Type": "application/octet-stream" },
+      });
+      log({
+        kind: "rest",
+        op: "POST /v1/runners:load_prg",
+        status: r.status,
+        latencyMs: r.latencyMs,
+        details: { correlationId: r.correlationId, size: prgData.length },
+      });
+    }),
+
+    scenario("rest.runners.run-crt", false, async ({ request, log, config }) => {
+      const resolved = config.media?.crtFilePath
+        ? await resolveMediaFilePath({
+            basePath: config.media.crtFilePath,
+            extensions: CRT_EXTENSIONS,
+            config,
+            log,
+            label: "crt file",
+          })
+        : null;
+      if (!resolved) {
+        log({
+          kind: "rest",
+          op: "runners.run-crt",
+          status: "skipped",
+          reason: "no crt file found",
+        });
+        return;
+      }
+      const r = await request({
+        method: "PUT",
+        url: "/v1/runners:run_crt",
+        params: { file: resolved },
+      });
+      log({
+        kind: "rest",
+        op: "PUT /v1/runners:run_crt",
+        status: r.status,
+        latencyMs: r.latencyMs,
+        details: { file: resolved, correlationId: r.correlationId },
+      });
+      await delay(2000);
+      if (config.allowMachineReset) {
+        await request({ method: "PUT", url: "/v1/machine:reset" });
+        await delay(2000);
+      }
+    }),
+
+    scenario("rest.runners.run-crt-upload", false, async ({ request, log, config }) => {
+      const crtData = createMinimalCrt();
+      const r = await request({
+        method: "POST",
+        url: "/v1/runners:run_crt",
+        data: crtData,
+        headers: { "Content-Type": "application/octet-stream" },
+      });
+      log({
+        kind: "rest",
+        op: "POST /v1/runners:run_crt",
+        status: r.status,
+        latencyMs: r.latencyMs,
+        details: { correlationId: r.correlationId, size: crtData.length },
+      });
+      await delay(1000);
+      if (config.allowMachineReset) {
+        await request({ method: "PUT", url: "/v1/machine:reset" });
+        await delay(2000);
+      }
+    }),
   ];
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
-function scenario(
-  id: string,
-  safe: boolean,
-  run: RestScenario["run"],
-): RestScenario {
+function scenario(id: string, safe: boolean, run: RestScenario["run"]): RestScenario {
   return { id, safe, run };
 }
 
@@ -1280,19 +1175,14 @@ function mkObs(scope: string, maxInFlight: number): ConcurrencyObservation {
   return { scope, maxInFlight, failureMode: "none" };
 }
 
-function finishObs(
-  obs: ConcurrencyObservation,
-  results: Array<{ ok: boolean; latencyMs: number | null }>,
-): void {
+function finishObs(obs: ConcurrencyObservation, results: Array<{ ok: boolean; latencyMs: number | null }>): void {
   const failures = results.filter((r) => !r.ok).length;
   if (failures > 0) {
     obs.failureMode = "errors";
     obs.notes = `${failures}/${results.length} failed`;
   }
   const maxLatency = Math.max(...results.map((r) => r.latencyMs ?? 0));
-  obs.notes = obs.notes
-    ? `${obs.notes}; max ${maxLatency}ms`
-    : `max ${maxLatency}ms`;
+  obs.notes = obs.notes ? `${obs.notes}; max ${maxLatency}ms` : `max ${maxLatency}ms`;
 }
 
 function scratchPath(config: HarnessConfig, filename: string): string {
@@ -1320,12 +1210,9 @@ async function resolveOrScratch(
   return `/${scratchPath(config, fallbackFile)}`;
 }
 
-async function listCategories(
-  request: RestClient["request"],
-): Promise<string[]> {
+async function listCategories(request: RestClient["request"]): Promise<string[]> {
   const r = await request({ method: "GET", url: "/v1/configs" });
-  if (r.status !== 200 || typeof r.data !== "object" || r.data === null)
-    return [];
+  if (r.status !== 200 || typeof r.data !== "object" || r.data === null) return [];
   return ((r.data as Record<string, unknown>).categories as string[]) || [];
 }
 
@@ -1349,8 +1236,7 @@ async function resolveMediaFilePath({
   if (!basePath.trim()) return null;
   if (hasMatchingExtension(basePath, extensions)) return basePath;
   const cacheKey = `${label}:${basePath.toLowerCase()}`;
-  if (mediaDiscoveryCache.has(cacheKey))
-    return mediaDiscoveryCache.get(cacheKey) ?? null;
+  if (mediaDiscoveryCache.has(cacheKey)) return mediaDiscoveryCache.get(cacheKey) ?? null;
   const client = new FtpClient({
     host: new URL(config.baseUrl).hostname,
     port: config.ftpPort ?? 21,
@@ -1398,14 +1284,10 @@ async function findFirstMatchingFile(
     if (!current || visited.has(current)) continue;
     visited.add(current);
     const { result, data } = await client.mlsd(current);
-    if (result.response.code >= 400)
-      throw new Error(`MLSD failed for ${current}: ${result.response.code}`);
-    for (const entry of parseMlsdEntries(data).sort((a, b) =>
-      a.name.localeCompare(b.name),
-    )) {
+    if (result.response.code >= 400) throw new Error(`MLSD failed for ${current}: ${result.response.code}`);
+    for (const entry of parseMlsdEntries(data).sort((a, b) => a.name.localeCompare(b.name))) {
       const p = joinFtpPath(current, entry.name);
-      if (entry.type === "file" && hasMatchingExtension(entry.name, extensions))
-        return p;
+      if (entry.type === "file" && hasMatchingExtension(entry.name, extensions)) return p;
       if (entry.type === "dir") queue.push(p);
     }
   }
@@ -1418,9 +1300,7 @@ function parseMlsdEntries(data: string): MlsdEntry[] {
     .map((l) => l.trim())
     .filter(Boolean)
     .map(parseMlsdLine)
-    .filter(
-      (e): e is MlsdEntry => e !== null && e.name !== "." && e.name !== "..",
-    );
+    .filter((e): e is MlsdEntry => e !== null && e.name !== "." && e.name !== "..");
 }
 
 function parseMlsdLine(line: string): MlsdEntry | null {
@@ -1438,18 +1318,13 @@ function parseMlsdLine(line: string): MlsdEntry | null {
       break;
     }
   }
-  if (type === "dir" || type === "cdir" || type === "pdir")
-    return { name, type: "dir" };
+  if (type === "dir" || type === "cdir" || type === "pdir") return { name, type: "dir" };
   if (type === "file") return { name, type: "file" };
   return null;
 }
 
 function joinFtpPath(base: string, name: string): string {
-  return base === "/"
-    ? `/${name}`
-    : base.endsWith("/")
-      ? `${base}${name}`
-      : `${base}/${name}`;
+  return base === "/" ? `/${name}` : base.endsWith("/") ? `${base}${name}` : `${base}/${name}`;
 }
 
 function normalizeFtpPath(value: string): string {
@@ -1489,8 +1364,7 @@ async function pickConfigTarget(
     method: "GET",
     url: `/v1/configs/${encodeURIComponent(targetCategory)}`,
   });
-  if (r.status !== 200 || typeof r.data !== "object" || r.data === null)
-    return null;
+  if (r.status !== 200 || typeof r.data !== "object" || r.data === null) return null;
   const catObj = (r.data as Record<string, unknown>)[targetCategory];
   if (!catObj || typeof catObj !== "object") return null;
   const itemName = pickSafeItem(catObj as Record<string, unknown>);
@@ -1509,19 +1383,12 @@ async function readConfigValue(
     method: "GET",
     url: `/v1/configs/${encodeURIComponent(category)}/${encodeURIComponent(item)}`,
   });
-  if (r.status !== 200 || typeof r.data !== "object" || r.data === null)
-    return null;
-  const detail = (r.data as Record<string, unknown>)[category] as
-    | Record<string, unknown>
-    | undefined;
-  const entry = detail
-    ? (detail[item] as Record<string, unknown> | undefined)
-    : undefined;
+  if (r.status !== 200 || typeof r.data !== "object" || r.data === null) return null;
+  const detail = (r.data as Record<string, unknown>)[category] as Record<string, unknown> | undefined;
+  const entry = detail ? (detail[item] as Record<string, unknown> | undefined) : undefined;
   if (!entry || typeof entry !== "object") return null;
   const current = entry.current ?? entry;
-  return typeof current === "string" || typeof current === "number"
-    ? current
-    : null;
+  return typeof current === "string" || typeof current === "number" ? current : null;
 }
 
 async function runConcurrentRequests({
@@ -1577,10 +1444,7 @@ function pickSafeItem(items: Record<string, unknown>): string | null {
   return null;
 }
 
-function pickNextValue(
-  entry: Record<string, unknown>,
-  current: unknown,
-): string | number | undefined {
+function pickNextValue(entry: Record<string, unknown>, current: unknown): string | number | undefined {
   if (typeof current === "number") {
     const min = entry.min as number | undefined;
     const max = entry.max as number | undefined;

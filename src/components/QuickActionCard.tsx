@@ -68,28 +68,11 @@ export function QuickActionCard({
               : "bg-primary/10 text-primary",
         )}
       >
-        <Icon
-          className={cn(
-            compact ? "h-5 w-5" : "h-6 w-6",
-            loading ? "animate-pulse" : null,
-          )}
-        />
+        <Icon className={cn(compact ? "h-5 w-5" : "h-6 w-6", loading ? "animate-pulse" : null)} />
       </div>
-      <span
-        className={cn(
-          "font-medium",
-          compact ? "text-xs leading-tight" : "text-sm",
-        )}
-      >
-        {label}
-      </span>
+      <span className={cn("font-medium", compact ? "text-xs leading-tight" : "text-sm")}>{label}</span>
       {description && (
-        <span
-          className={cn(
-            "text-muted-foreground",
-            compact ? "text-[11px] leading-tight" : "text-xs",
-          )}
-        >
+        <span className={cn("text-muted-foreground", compact ? "text-[11px] leading-tight" : "text-xs")}>
           {description}
         </span>
       )}

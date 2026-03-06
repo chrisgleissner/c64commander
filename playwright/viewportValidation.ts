@@ -50,10 +50,7 @@ export const validateViewport = async (page: Page, testInfo: TestInfo) => {
  *
  * This runs BEFORE screenshot capture to fail fast.
  */
-export const enforceVisualBoundaries = async (
-  page: Page,
-  testInfo: TestInfo,
-) => {
+export const enforceVisualBoundaries = async (page: Page, testInfo: TestInfo) => {
   const viewport = page.viewportSize();
   if (!viewport) {
     throw new Error("No viewport configured");
@@ -128,10 +125,8 @@ export const enforceVisualBoundaries = async (
     const details = violations
       .slice(0, 5) // Show first 5 violations
       .map(
-        (
-          v: { selector: string; width: number; right: number; reason: string },
-          i: number,
-        ) => `  ${i + 1}. ${v.selector}\n     ${v.reason}`,
+        (v: { selector: string; width: number; right: number; reason: string }, i: number) =>
+          `  ${i + 1}. ${v.selector}\n     ${v.reason}`,
       )
       .join("\n");
 
@@ -144,19 +139,14 @@ export const enforceVisualBoundaries = async (
 
   // Check for horizontal scroll
   const hasHorizontalScroll = await page.evaluate(() => {
-    return (
-      document.documentElement.scrollWidth >
-      document.documentElement.clientWidth
-    );
+    return document.documentElement.scrollWidth > document.documentElement.clientWidth;
   });
 
   if (hasHorizontalScroll) {
     const scrollInfo = await page.evaluate(() => ({
       scrollWidth: document.documentElement.scrollWidth,
       clientWidth: document.documentElement.clientWidth,
-      overflow:
-        document.documentElement.scrollWidth -
-        document.documentElement.clientWidth,
+      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
     }));
 
     throw new Error(
@@ -175,10 +165,7 @@ export const enforceVisualBoundaries = async (
  * Combined viewport validation and boundary enforcement.
  * Call this after page load and after major UI changes.
  */
-export const validateVisualConstraints = async (
-  page: Page,
-  testInfo: TestInfo,
-) => {
+export const validateVisualConstraints = async (page: Page, testInfo: TestInfo) => {
   await validateViewport(page, testInfo);
   await enforceVisualBoundaries(page, testInfo);
 };

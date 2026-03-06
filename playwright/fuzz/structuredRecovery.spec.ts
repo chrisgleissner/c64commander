@@ -71,8 +71,6 @@ test.describe("Fuzz structured recovery", () => {
     });
 
     expect(stored).toHaveLength(2);
-    expect(
-      stored.some((entry: { name: string }) => entry.name !== "confirm"),
-    ).toBe(true);
+    expect(stored.some((entry: { name: string }) => entry.name !== "confirm")).toBe(true);
   });
 });

@@ -10,10 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { ResponsivePathText } from "@/components/ResponsivePathText";
-import {
-  formatDurationSeconds,
-  sliderToDurationSeconds,
-} from "../playFilesUtils";
+import { formatDurationSeconds, sliderToDurationSeconds } from "../playFilesUtils";
 
 export type PlaybackSettingsPanelProps = {
   durationSliderMax: number;
@@ -80,9 +77,7 @@ export const PlaybackSettingsPanel = ({
               step={1}
               value={[durationSliderValue]}
               onValueChange={onDurationSliderChange}
-              valueFormatter={(value) =>
-                formatDurationSeconds(sliderToDurationSeconds(value))
-              }
+              valueFormatter={(value) => formatDurationSeconds(sliderToDurationSeconds(value))}
               data-testid="duration-slider"
             />
           </div>
@@ -112,20 +107,15 @@ export const PlaybackSettingsPanel = ({
             ) : (
               <p className="text-xs text-muted-foreground">Not selected.</p>
             )}
-            {songlengthsPath &&
-            (songlengthsSizeLabel || songlengthsEntryCount !== null) ? (
-              <p className="text-[11px] text-muted-foreground">
-                {songlengthsMetadata}
-              </p>
+            {songlengthsPath && (songlengthsSizeLabel || songlengthsEntryCount !== null) ? (
+              <p className="text-[11px] text-muted-foreground">{songlengthsMetadata}</p>
             ) : null}
           </div>
           <Button variant="outline" size="sm" onClick={onChooseSonglengthsFile}>
             Change
           </Button>
         </div>
-        {songlengthsError ? (
-          <p className="text-xs text-destructive">{songlengthsError}</p>
-        ) : null}
+        {songlengthsError ? <p className="text-xs text-destructive">{songlengthsError}</p> : null}
       </div>
 
       <div className="space-y-3">
@@ -153,18 +143,14 @@ export const PlaybackSettingsPanel = ({
                 className="w-full max-w-full rounded-lg border border-border bg-background p-3 shadow-sm space-y-2"
               >
                 <p className="text-sm font-semibold">SID song number</p>
-                <p className="text-xs text-muted-foreground">
-                  Select a subsong index to start playback.
-                </p>
+                <p className="text-xs text-muted-foreground">Select a subsong index to start playback.</p>
                 <div className="space-y-2" data-testid="song-selector-options">
                   {Array.from({ length: subsongCount }, (_, index) => {
                     const value = index + 1;
                     return (
                       <Button
                         key={value}
-                        variant={
-                          value === clampedSongNr ? "default" : "outline"
-                        }
+                        variant={value === clampedSongNr ? "default" : "outline"}
                         className="w-full justify-start"
                         onClick={() => onSelectSong(value)}
                       >
@@ -173,15 +159,8 @@ export const PlaybackSettingsPanel = ({
                     );
                   })}
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Available subsongs: 1–{subsongCount}
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full"
-                  onClick={onCloseSongPicker}
-                >
+                <p className="text-xs text-muted-foreground">Available subsongs: 1–{subsongCount}</p>
+                <Button variant="outline" size="sm" className="w-full" onClick={onCloseSongPicker}>
                   Close
                 </Button>
               </div>

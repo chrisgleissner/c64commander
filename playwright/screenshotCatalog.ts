@@ -39,10 +39,7 @@ export const sanitizeSegment = (value: string) => {
   return cleaned || "untitled";
 };
 
-export const registerScreenshotSections = async (
-  pageId: string,
-  slugs: string[],
-) => {
+export const registerScreenshotSections = async (pageId: string, slugs: string[]) => {
   const catalog = await loadCatalog();
   const existing = catalog[pageId] ?? [];
   let changed = false;

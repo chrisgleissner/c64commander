@@ -19,15 +19,9 @@ import { Capacitor } from "@capacitor/core";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 import { createHvscMediaIndex } from "./hvscMediaIndex";
 import { loadHvscRoot } from "./hvscRootLocator";
-import type {
-  SongLengthResolveQuery,
-  SongLengthResolution,
-} from "@/lib/songlengths";
+import type { SongLengthResolveQuery, SongLengthResolution } from "@/lib/songlengths";
 import { addErrorLog, addLog } from "@/lib/logging";
-import {
-  loadHvscBrowseIndexSnapshot,
-  verifyHvscBrowseIndexIntegrity,
-} from "./hvscBrowseIndexStore";
+import { loadHvscBrowseIndexSnapshot, verifyHvscBrowseIndexIntegrity } from "./hvscBrowseIndexStore";
 import {
   addHvscProgressListener as addRuntimeListener,
   cancelHvscInstall as cancelRuntimeInstall,
@@ -47,18 +41,14 @@ export type HvscProgressListener = (event: HvscProgressEvent) => void;
 type HvscMockBridge = Record<string, any>;
 
 const getBrowserWindow = () =>
-  typeof window === "undefined"
-    ? undefined
-    : (window as Window & { __hvscMock__?: HvscMockBridge });
+  typeof window === "undefined" ? undefined : (window as Window & { __hvscMock__?: HvscMockBridge });
 
 const hasMockBridge = () => Boolean(getBrowserWindow()?.__hvscMock__);
 const getMockBridge = () => getBrowserWindow()?.__hvscMock__;
 const hasRuntimeBridge = () => {
   if (typeof window === "undefined") return false;
   try {
-    return (
-      Capacitor.isNativePlatform() || Capacitor.isPluginAvailable("Filesystem")
-    );
+    return Capacitor.isNativePlatform() || Capacitor.isPluginAvailable("Filesystem");
   } catch (error) {
     const err = error as Error;
     addErrorLog("HVSC runtime bridge probe failed", {
@@ -89,8 +79,7 @@ const migrateLegacyMediaIndex = async () => {
         durationSeconds?: number | null;
       }>;
     };
-    if (!Array.isArray(parsed.entries) || parsed.entries.length === 0)
-      return false;
+    if (!Array.isArray(parsed.entries) || parsed.entries.length === 0) return false;
     hvscIndex.setEntries(
       parsed.entries
         .filter((entry) => entry.type === "sid")
@@ -115,8 +104,7 @@ const migrateLegacyMediaIndex = async () => {
   }
 };
 
-export const isHvscBridgeAvailable = () =>
-  hasMockBridge() || hasRuntimeBridge();
+export const isHvscBridgeAvailable = () => hasMockBridge() || hasRuntimeBridge();
 
 export const getHvscStatus = async (): Promise<HvscStatus> => {
   const mock = getMockBridge();
@@ -136,18 +124,13 @@ export const checkForHvscUpdates = async (): Promise<HvscUpdateStatus> => {
   return checkRuntimeUpdates();
 };
 
-export const installOrUpdateHvsc = async (
-  cancelToken: string,
-): Promise<HvscStatus> => {
+export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStatus> => {
   const mock = getMockBridge();
-  if (mock?.installOrUpdateHvsc)
-    return mock.installOrUpdateHvsc({ cancelToken });
+  if (mock?.installOrUpdateHvsc) return mock.installOrUpdateHvsc({ cancelToken });
   return installRuntime(cancelToken);
 };
 
-export const ingestCachedHvsc = async (
-  cancelToken: string,
-): Promise<HvscStatus> => {
+export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus> => {
   const mock = getMockBridge();
   if (mock?.ingestCachedHvsc) return mock.ingestCachedHvsc({ cancelToken });
   return ingestRuntimeCached(cancelToken);
@@ -159,9 +142,7 @@ export const cancelHvscInstall = async (cancelToken: string): Promise<void> => {
   return cancelRuntimeInstall(cancelToken);
 };
 
-export const addHvscProgressListener = async (
-  listener: HvscProgressListener,
-) => {
+export const addHvscProgressListener = async (listener: HvscProgressListener) => {
   const mock = getMockBridge();
   if (mock?.addListener) return mock.addListener("progress", listener);
   return addRuntimeListener(listener);
@@ -205,11 +186,7 @@ const pageRuntimeListing = (
 ): HvscFolderListingPage => {
   const normalizedQuery = query.trim().toLowerCase();
   const folders = listing.folders
-    .filter(
-      (folder) =>
-        normalizedQuery.length === 0 ||
-        folder.toLowerCase().includes(normalizedQuery),
-    )
+    .filter((folder) => normalizedQuery.length === 0 || folder.toLowerCase().includes(normalizedQuery))
     .sort((a, b) => a.localeCompare(b));
   const songs = listing.songs
     .filter(
@@ -250,11 +227,7 @@ export const getHvscFolderListingPaged = async (options: {
       offset,
       limit,
     });
-    if (
-      page.totalFolders > 0 ||
-      page.totalSongs > 0 ||
-      !isHvscBridgeAvailable()
-    ) {
+    if (page.totalFolders > 0 || page.totalSongs > 0 || !isHvscBridgeAvailable()) {
       return page;
     }
     const mock = getMockBridge();
@@ -266,21 +239,17 @@ export const getHvscFolderListingPaged = async (options: {
     return pageRuntimeListing(runtimeListing, query, offset, limit);
   } catch (error) {
     const err = error as Error;
-    addLog(
-      "info",
-      "HVSC paged folder listing failed; falling back to runtime",
-      {
-        path,
-        query,
-        offset,
-        limit,
-        error: {
-          name: err.name,
-          message: err.message,
-          stack: err.stack,
-        },
+    addLog("info", "HVSC paged folder listing failed; falling back to runtime", {
+      path,
+      query,
+      offset,
+      limit,
+      error: {
+        name: err.name,
+        message: err.message,
+        stack: err.stack,
       },
-    );
+    });
     const mock = getMockBridge();
     if (mock?.getHvscFolderListing) {
       const runtimeListing = await mock.getHvscFolderListing({ path });
@@ -291,9 +260,7 @@ export const getHvscFolderListingPaged = async (options: {
   }
 };
 
-export const getHvscFolderListing = async (
-  path: string,
-): Promise<HvscFolderListing> => {
+export const getHvscFolderListing = async (path: string): Promise<HvscFolderListing> => {
   const page = await getHvscFolderListingPaged({
     path,
     offset: 0,
@@ -306,10 +273,7 @@ export const getHvscFolderListing = async (
   };
 };
 
-export const getHvscSong = async (options: {
-  id?: number;
-  virtualPath?: string;
-}): Promise<HvscSong> => {
+export const getHvscSong = async (options: { id?: number; virtualPath?: string }): Promise<HvscSong> => {
   const mock = getMockBridge();
   if (mock?.getHvscSong) return mock.getHvscSong(options);
   return getRuntimeSong(options);
@@ -332,14 +296,10 @@ export const getHvscDurationsByMd5Seconds = async (md5: string) => {
   }
   const resolution = await resolveHvscSonglengthDuration({ md5 });
   if (resolution.durations?.length) return resolution.durations;
-  return resolution.durationSeconds !== null
-    ? [resolution.durationSeconds]
-    : null;
+  return resolution.durationSeconds !== null ? [resolution.durationSeconds] : null;
 };
 
-export const resolveHvscSonglength = async (
-  query: SongLengthResolveQuery,
-): Promise<SongLengthResolution> => {
+export const resolveHvscSonglength = async (query: SongLengthResolveQuery): Promise<SongLengthResolution> => {
   const mock = getMockBridge();
   if (mock?.resolveHvscSonglengthDuration) {
     return mock.resolveHvscSonglengthDuration(query);

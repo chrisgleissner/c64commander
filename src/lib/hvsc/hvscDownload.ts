@@ -40,8 +40,7 @@ export const getErrorMessage = (error: unknown) => {
   return String(error ?? "");
 };
 
-export const isExistsError = (error: unknown) =>
-  /exists|already exists/i.test(getErrorMessage(error));
+export const isExistsError = (error: unknown) => /exists|already exists/i.test(getErrorMessage(error));
 
 export const isTestProbeEnabled = () => {
   try {
@@ -51,10 +50,7 @@ export const isTestProbeEnabled = () => {
       error: (error as Error).message,
     });
   }
-  return (
-    typeof process !== "undefined" &&
-    process.env?.VITE_ENABLE_TEST_PROBES === "1"
-  );
+  return typeof process !== "undefined" && process.env?.VITE_ENABLE_TEST_PROBES === "1";
 };
 
 export const shouldUseNativeDownload = () => {
@@ -91,12 +87,8 @@ export const fetchContentLength = async (url: string) => {
   }
 };
 
-export const concatChunks = (
-  chunks: Uint8Array[],
-  totalLength?: number | null,
-) => {
-  const length =
-    totalLength ?? chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+export const concatChunks = (chunks: Uint8Array[], totalLength?: number | null) => {
+  const length = totalLength ?? chunks.reduce((sum, chunk) => sum + chunk.length, 0);
   const buffer = new Uint8Array(length);
   let offset = 0;
   chunks.forEach((chunk) => {
@@ -113,10 +105,7 @@ const readHeapUsageBytes = () => {
     };
     return perf.memory?.usedJSHeapSize ?? null;
   }
-  if (
-    typeof process !== "undefined" &&
-    typeof process.memoryUsage === "function"
-  ) {
+  if (typeof process !== "undefined" && typeof process.memoryUsage === "function") {
     return process.memoryUsage().heapUsed;
   }
   return null;
@@ -167,9 +156,7 @@ const streamToBuffer = async (
       ensureNotCancelled();
     }
     if (loaded !== totalBytes) {
-      throw new Error(
-        `Download size mismatch: expected ${totalBytes}, got ${loaded}`,
-      );
+      throw new Error(`Download size mismatch: expected ${totalBytes}, got ${loaded}`);
     }
     return boundedBuffer;
   }
@@ -200,17 +187,14 @@ const streamToBuffer = async (
 
 // ── Path normalization helpers ───────────────────────────────────
 
-export const normalizeEntryName = (raw: string) =>
-  raw.replace(/\\/g, "/").replace(/^\/+/, "");
+export const normalizeEntryName = (raw: string) => raw.replace(/\\/g, "/").replace(/^\/+/, "");
 
 export const normalizeVirtualPath = (entryName: string) => {
   const name = normalizeEntryName(entryName)
     .replace(/^HVSC\//i, "")
     .replace(/^C64Music\//i, "")
     .replace(/^C64MUSIC\//i, "");
-  return name.toLowerCase().endsWith(".sid")
-    ? `/${name.replace(/^\/+/, "")}`
-    : null;
+  return name.toLowerCase().endsWith(".sid") ? `/${name.replace(/^\/+/, "")}` : null;
 };
 
 export const normalizeLibraryPath = (entryName: string) => {
@@ -256,10 +240,7 @@ export const normalizeUpdateLibraryPath = (entryName: string) => {
 
 export const isDeletionList = (path: string) => {
   const lowered = path.toLowerCase();
-  return (
-    lowered.endsWith(".txt") &&
-    (lowered.includes("delete") || lowered.includes("remove"))
-  );
+  return lowered.endsWith(".txt") && (lowered.includes("delete") || lowered.includes("remove"));
 };
 
 export const parseDeletionList = (content: string) =>
@@ -277,9 +258,7 @@ export const parseCachedVersion = (prefix: string, name: string) => {
 // ── Download progress emission ───────────────────────────────────
 
 export const emitDownloadProgress = (
-  emitProgress: (
-    event: Omit<HvscProgressEvent, "ingestionId" | "elapsedTimeMs">,
-  ) => void,
+  emitProgress: (event: Omit<HvscProgressEvent, "ingestionId" | "elapsedTimeMs">) => void,
   archiveName: string,
   downloadedBytes?: number | null,
   totalBytes?: number | null,
@@ -290,9 +269,7 @@ export const emitDownloadProgress = (
     archiveName,
     downloadedBytes: downloadedBytes ?? undefined,
     totalBytes: totalBytes ?? undefined,
-    percent: totalBytes
-      ? Math.round(((downloadedBytes ?? 0) / totalBytes) * 100)
-      : undefined,
+    percent: totalBytes ? Math.round(((downloadedBytes ?? 0) / totalBytes) * 100) : undefined,
   });
 };
 
@@ -300,11 +277,7 @@ export const emitDownloadProgress = (
 
 export const resolveCachedArchive = async (prefix: string, version: number) => {
   const cacheDir = getHvscCacheDir();
-  const candidates = [
-    `${prefix}-${version}`,
-    `${prefix}-${version}.7z`,
-    `${prefix}-${version}.zip`,
-  ];
+  const candidates = [`${prefix}-${version}`, `${prefix}-${version}.7z`, `${prefix}-${version}.zip`];
   for (const name of candidates) {
     try {
       const stat = await Filesystem.stat({
@@ -342,12 +315,9 @@ export const getCacheStatusInternal = async () => {
     });
     return { baselineVersion: null, updateVersions: [] as number[] };
   }
-  const names = files
-    .map((entry) => (typeof entry === "string" ? entry : (entry.name ?? "")))
-    .filter(Boolean);
+  const names = files.map((entry) => (typeof entry === "string" ? entry : (entry.name ?? ""))).filter(Boolean);
   const markerNames = names.filter((name) => name.endsWith(".complete.json"));
-  const normalizeMarker = (name: string) =>
-    name.replace(/\.complete\.json$/i, "");
+  const normalizeMarker = (name: string) => name.replace(/\.complete\.json$/i, "");
   const baselineVersions = markerNames
     .map((name) => parseCachedVersion("hvsc-baseline", normalizeMarker(name)))
     .filter((v): v is number => !!v);
@@ -355,9 +325,7 @@ export const getCacheStatusInternal = async () => {
     .map((name) => parseCachedVersion("hvsc-update", normalizeMarker(name)))
     .filter((v): v is number => !!v);
   return {
-    baselineVersion: baselineVersions.length
-      ? Math.max(...baselineVersions)
-      : null,
+    baselineVersion: baselineVersions.length ? Math.max(...baselineVersions) : null,
     updateVersions: Array.from(new Set(updateVersions)).sort((a, b) => a - b),
   };
 };
@@ -381,9 +349,7 @@ export const readArchiveBuffer = async (archivePath: string) => {
     });
   }
   if (statSize !== null && statSize > MAX_BRIDGE_READ_BYTES) {
-    throw new Error(
-      `HVSC bridge read blocked for large archive (${statSize} bytes): ${archivePath}`,
-    );
+    throw new Error(`HVSC bridge read blocked for large archive (${statSize} bytes): ${archivePath}`);
   }
   const archiveData = await Filesystem.readFile({
     directory: Directory.Data,
@@ -396,8 +362,7 @@ export const readArchiveBuffer = async (archivePath: string) => {
     bytes: decoded.byteLength,
     heapBefore,
     heapAfter,
-    heapDelta:
-      heapBefore !== null && heapAfter !== null ? heapAfter - heapBefore : null,
+    heapDelta: heapBefore !== null && heapAfter !== null ? heapAfter - heapBefore : null,
   });
   return decoded;
 };
@@ -411,9 +376,7 @@ export type DownloadArchiveOptions = {
   downloadUrl: string;
   cancelToken: string;
   cancelTokens: Map<string, { cancelled: boolean }>;
-  emitProgress: (
-    event: Omit<HvscProgressEvent, "ingestionId" | "elapsedTimeMs">,
-  ) => void;
+  emitProgress: (event: Omit<HvscProgressEvent, "ingestionId" | "elapsedTimeMs">) => void;
   retainInMemoryBuffer?: boolean;
 };
 
@@ -429,21 +392,10 @@ export const ensureNotCancelledWith = (
   }
 };
 
-export const downloadArchive = async (
-  options: DownloadArchiveOptions,
-): Promise<Uint8Array | null> => {
-  const {
-    plan,
-    archiveName,
-    archivePath,
-    downloadUrl,
-    cancelToken,
-    cancelTokens,
-    emitProgress,
-  } = options;
+export const downloadArchive = async (options: DownloadArchiveOptions): Promise<Uint8Array | null> => {
+  const { plan, archiveName, archivePath, downloadUrl, cancelToken, cancelTokens, emitProgress } = options;
   const retainInMemoryBuffer = options.retainInMemoryBuffer ?? false;
-  const ensureNotCancelled = () =>
-    ensureNotCancelledWith(cancelTokens, cancelToken);
+  const ensureNotCancelled = () => ensureNotCancelledWith(cancelTokens, cancelToken);
   let inMemoryBuffer: Uint8Array | null = null;
 
   ensureNotCancelled();
@@ -507,18 +459,11 @@ export const downloadArchive = async (
       ensureNotCancelled();
       const response = await fetch(downloadUrl, { cache: "no-store" });
       if (!response.ok) {
-        throw new Error(
-          `Download failed: ${response.status} ${response.statusText}`,
-        );
+        throw new Error(`Download failed: ${response.status} ${response.statusText}`);
       }
       const buffer = new Uint8Array(await response.arrayBuffer());
       await writeCachedArchive(archivePath, buffer);
-      emitDownloadProgress(
-        emitProgress,
-        archiveName,
-        buffer.byteLength,
-        buffer.byteLength,
-      );
+      emitDownloadProgress(emitProgress, archiveName, buffer.byteLength, buffer.byteLength);
       inMemoryBuffer = retainInMemoryBuffer ? buffer : null;
     } finally {
       if (pollingTimer) clearInterval(pollingTimer);
@@ -527,56 +472,32 @@ export const downloadArchive = async (
     ensureNotCancelled();
     const response = await fetch(downloadUrl, { cache: "no-store" });
     if (!response.ok) {
-      throw new Error(
-        `Download failed: ${response.status} ${response.statusText}`,
-      );
+      throw new Error(`Download failed: ${response.status} ${response.statusText}`);
     }
-    const totalBytes =
-      parseContentLength(response.headers.get("content-length")) ??
-      totalBytesHint;
+    const totalBytes = parseContentLength(response.headers.get("content-length")) ?? totalBytesHint;
     if (!response.body) {
       const buffer = new Uint8Array(await response.arrayBuffer());
       if (totalBytes && buffer.byteLength !== totalBytes) {
-        throw new Error(
-          `Download size mismatch: expected ${totalBytes}, got ${buffer.byteLength}`,
-        );
+        throw new Error(`Download size mismatch: expected ${totalBytes}, got ${buffer.byteLength}`);
       }
       await writeCachedArchive(archivePath, buffer);
-      emitDownloadProgress(
-        emitProgress,
-        archiveName,
-        buffer.byteLength,
-        buffer.byteLength,
-      );
+      emitDownloadProgress(emitProgress, archiveName, buffer.byteLength, buffer.byteLength);
       inMemoryBuffer = retainInMemoryBuffer ? buffer : null;
     } else {
       const reader = response.body.getReader();
       let buffer: Uint8Array;
       try {
-        buffer = await streamToBuffer(
-          reader,
-          totalBytes,
-          ensureNotCancelled,
-          (loadedBytes) =>
-            emitDownloadProgress(
-              emitProgress,
-              archiveName,
-              loadedBytes,
-              totalBytes ?? null,
-            ),
+        buffer = await streamToBuffer(reader, totalBytes, ensureNotCancelled, (loadedBytes) =>
+          emitDownloadProgress(emitProgress, archiveName, loadedBytes, totalBytes ?? null),
         );
       } catch (error) {
         try {
           await reader.cancel();
         } catch (cancelError) {
-          addLog(
-            "warn",
-            "Failed to cancel HVSC download reader after stream error",
-            {
-              archiveName,
-              error: (cancelError as Error).message,
-            },
-          );
+          addLog("warn", "Failed to cancel HVSC download reader after stream error", {
+            archiveName,
+            error: (cancelError as Error).message,
+          });
         }
         throw error;
       } finally {
@@ -590,12 +511,7 @@ export const downloadArchive = async (
         }
       }
       await writeCachedArchive(archivePath, buffer);
-      emitDownloadProgress(
-        emitProgress,
-        archiveName,
-        buffer.byteLength,
-        totalBytes ?? buffer.byteLength,
-      );
+      emitDownloadProgress(emitProgress, archiveName, buffer.byteLength, totalBytes ?? buffer.byteLength);
       inMemoryBuffer = retainInMemoryBuffer ? buffer : null;
     }
   }
@@ -606,9 +522,7 @@ export const downloadArchive = async (
     heapBefore: downloadHeapBefore,
     heapAfter: downloadHeapAfter,
     heapDelta:
-      downloadHeapBefore !== null && downloadHeapAfter !== null
-        ? downloadHeapAfter - downloadHeapBefore
-        : null,
+      downloadHeapBefore !== null && downloadHeapAfter !== null ? downloadHeapAfter - downloadHeapBefore : null,
   });
 
   addLog("info", "HVSC download completed", { archiveName });

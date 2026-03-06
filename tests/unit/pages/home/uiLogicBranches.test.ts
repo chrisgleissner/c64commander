@@ -264,15 +264,11 @@ describe("resolveSidAddressEnableValue", () => {
 
 describe("resolveSidAddressDisableValue", () => {
   it("finds unmapped option", () => {
-    expect(resolveSidAddressDisableValue(["$D420", "Unmapped"])).toBe(
-      "Unmapped",
-    );
+    expect(resolveSidAddressDisableValue(["$D420", "Unmapped"])).toBe("Unmapped");
   });
 
   it("finds disabled option", () => {
-    expect(resolveSidAddressDisableValue(["$D420", "Disabled"])).toBe(
-      "Disabled",
-    );
+    expect(resolveSidAddressDisableValue(["$D420", "Disabled"])).toBe("Disabled");
   });
 
   it("finds off option", () => {

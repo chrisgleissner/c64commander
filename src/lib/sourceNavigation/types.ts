@@ -31,9 +31,6 @@ export type SourceLocation = {
   rootPath: string;
   isAvailable: boolean;
   listEntries: (path: string) => Promise<SourceEntry[]>;
-  listFilesRecursive: (
-    path: string,
-    options?: { signal?: AbortSignal },
-  ) => Promise<SourceEntry[]>;
+  listFilesRecursive: (path: string, options?: { signal?: AbortSignal }) => Promise<SourceEntry[]>;
   clearCacheForPath?: (path: string) => void;
 };

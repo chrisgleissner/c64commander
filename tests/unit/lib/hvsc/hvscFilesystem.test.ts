@@ -9,10 +9,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import * as hvscFS from "@/lib/hvsc/hvscFilesystem";
 import { Filesystem, Directory } from "@capacitor/filesystem";
-import {
-  ensureHvscSonglengthsReadyOnColdStart,
-  resolveHvscSonglengthDuration,
-} from "@/lib/hvsc/hvscSongLengthService";
+import { ensureHvscSonglengthsReadyOnColdStart, resolveHvscSonglengthDuration } from "@/lib/hvsc/hvscSongLengthService";
 
 // Mock dependencies
 vi.mock("@capacitor/filesystem", () => ({
@@ -142,9 +139,7 @@ describe("hvscFilesystem", () => {
     it("retries on exists error (directory conflict)", async () => {
       const failError = new Error("File exists");
       // @ts-expect-error - mock typing
-      vi.mocked(Filesystem.writeFile)
-        .mockRejectedValueOnce(failError)
-        .mockResolvedValueOnce({ uri: "ok" });
+      vi.mocked(Filesystem.writeFile).mockRejectedValueOnce(failError).mockResolvedValueOnce({ uri: "ok" });
 
       // Stat called for parent dir check AND for retry logic
       // @ts-expect-error - mock typing
@@ -319,9 +314,7 @@ describe("hvscFilesystem", () => {
     it("ignores all errors when deleting cached archive", async () => {
       // Mock ALL failures
       // @ts-expect-error - mock typing
-      vi.mocked(Filesystem.deleteFile).mockRejectedValue(
-        new Error("fail delete"),
-      );
+      vi.mocked(Filesystem.deleteFile).mockRejectedValue(new Error("fail delete"));
       // @ts-expect-error - mock typing
       vi.mocked(Filesystem.rmdir).mockRejectedValue(new Error("fail rmdir"));
 

@@ -11,9 +11,7 @@ import { addErrorLog } from "@/lib/logging";
 
 const isHapticsAvailable = () => {
   try {
-    return (
-      Capacitor.isNativePlatform() && Capacitor.isPluginAvailable("Haptics")
-    );
+    return Capacitor.isNativePlatform() && Capacitor.isPluginAvailable("Haptics");
   } catch (error) {
     const err = error as Error;
     addErrorLog("Haptics availability probe failed", {
@@ -26,12 +24,10 @@ const isHapticsAvailable = () => {
 export const triggerSliderHaptic = async () => {
   if (!isHapticsAvailable()) return;
   try {
-    const plugins = (Capacitor as unknown as { Plugins?: Record<string, any> })
-      .Plugins;
+    const plugins = (Capacitor as unknown as { Plugins?: Record<string, any> }).Plugins;
     const haptics =
       plugins?.Haptics ??
-      (window as unknown as { Capacitor?: { Plugins?: Record<string, any> } })
-        .Capacitor?.Plugins?.Haptics;
+      (window as unknown as { Capacitor?: { Plugins?: Record<string, any> } }).Capacitor?.Plugins?.Haptics;
     if (haptics?.impact) {
       const style = haptics.ImpactStyle?.Light ?? "LIGHT";
       await haptics.impact({ style });

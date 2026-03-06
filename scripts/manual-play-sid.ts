@@ -35,18 +35,13 @@ const createMemoryStorage = () => {
 
 const ensureBrowserShims = () => {
   if (typeof window === "undefined") {
-    (globalThis as typeof globalThis & { window?: unknown }).window =
-      globalThis;
+    (globalThis as typeof globalThis & { window?: unknown }).window = globalThis;
   }
   if (typeof localStorage === "undefined") {
-    (
-      globalThis as typeof globalThis & { localStorage?: Storage }
-    ).localStorage = createMemoryStorage() as Storage;
+    (globalThis as typeof globalThis & { localStorage?: Storage }).localStorage = createMemoryStorage() as Storage;
   }
   if (typeof sessionStorage === "undefined") {
-    (
-      globalThis as typeof globalThis & { sessionStorage?: Storage }
-    ).sessionStorage = createMemoryStorage() as Storage;
+    (globalThis as typeof globalThis & { sessionStorage?: Storage }).sessionStorage = createMemoryStorage() as Storage;
   }
   if (typeof navigator === "undefined") {
     (globalThis as typeof globalThis & { navigator?: Navigator }).navigator = {
@@ -61,24 +56,16 @@ const ensureBrowserShims = () => {
         this.detail = (init?.detail ?? null) as T;
       }
     }
-    (
-      globalThis as typeof globalThis & { CustomEvent?: typeof CustomEventShim }
-    ).CustomEvent = CustomEventShim;
+    (globalThis as typeof globalThis & { CustomEvent?: typeof CustomEventShim }).CustomEvent = CustomEventShim;
   }
   if (typeof window.addEventListener !== "function") {
-    (
-      window as typeof window & { addEventListener?: () => void }
-    ).addEventListener = () => {};
+    (window as typeof window & { addEventListener?: () => void }).addEventListener = () => {};
   }
   if (typeof window.removeEventListener !== "function") {
-    (
-      window as typeof window & { removeEventListener?: () => void }
-    ).removeEventListener = () => {};
+    (window as typeof window & { removeEventListener?: () => void }).removeEventListener = () => {};
   }
   if (typeof window.dispatchEvent !== "function") {
-    (
-      window as typeof window & { dispatchEvent?: () => boolean }
-    ).dispatchEvent = () => true;
+    (window as typeof window & { dispatchEvent?: () => boolean }).dispatchEvent = () => true;
   }
 };
 
@@ -86,9 +73,7 @@ const parseArgs = (argv: string[]) => {
   const args = [...argv];
   const filePath = args.shift();
   if (!filePath) {
-    throw new Error(
-      "Usage: manual-play-sid.sh /path/to/song.sid [--song 1] [--duration-ms 180000]",
-    );
+    throw new Error("Usage: manual-play-sid.sh /path/to/song.sid [--song 1] [--duration-ms 180000]");
   }
 
   let songNr: number | undefined;
@@ -147,18 +132,12 @@ const main = async () => {
   const password = process.env.C64U_PASSWORD || undefined;
 
   const { buildBaseUrlFromDeviceHost, C64API } = await import("@/lib/c64api");
-  const { buildPlayPlan, executePlayPlan } =
-    await import("@/lib/playback/playbackRouter");
-  const { updateDeviceConnectionState } =
-    await import("@/lib/deviceInteraction/deviceStateStore");
+  const { buildPlayPlan, executePlayPlan } = await import("@/lib/playback/playbackRouter");
+  const { updateDeviceConnectionState } = await import("@/lib/deviceInteraction/deviceStateStore");
 
   updateDeviceConnectionState("REAL_CONNECTED");
 
-  const api = new C64API(
-    baseUrl ?? buildBaseUrlFromDeviceHost(host),
-    password,
-    host,
-  );
+  const api = new C64API(baseUrl ?? buildBaseUrlFromDeviceHost(host), password, host);
   const plan = buildPlayPlan({
     source: "local",
     path: resolvedPath,

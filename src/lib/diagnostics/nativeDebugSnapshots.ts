@@ -22,21 +22,16 @@ const sortObjectKeys = (value: unknown): unknown => {
     Object.keys(value as Record<string, unknown>)
       .sort((left, right) => left.localeCompare(right))
       .forEach((key) => {
-        normalized[key] = sortObjectKeys(
-          (value as Record<string, unknown>)[key],
-        );
+        normalized[key] = sortObjectKeys((value as Record<string, unknown>)[key]);
       });
     return normalized;
   }
   return value;
 };
 
-const stableStringify = (value: unknown) =>
-  JSON.stringify(sortObjectKeys(value), null, 2);
+const stableStringify = (value: unknown) => JSON.stringify(sortObjectKeys(value), null, 2);
 
-const sortLogEntries = <T extends { id?: string; timestamp?: string }>(
-  entries: T[],
-) =>
+const sortLogEntries = <T extends { id?: string; timestamp?: string }>(entries: T[]) =>
   [...entries].sort((left, right) => {
     const leftTimestamp = left.timestamp ?? "";
     const rightTimestamp = right.timestamp ?? "";

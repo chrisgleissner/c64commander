@@ -55,12 +55,9 @@ describe("isAlwaysExpectedFuzzBehavior", () => {
     expect(isAlwaysExpectedFuzzBehavior(makeEntry(msg))).toBe(true);
   });
 
-  it.each(["Some unrelated log message", "User tapped the pause button"])(
-    'returns false for "%s"',
-    (msg) => {
-      expect(isAlwaysExpectedFuzzBehavior(makeEntry(msg))).toBe(false);
-    },
-  );
+  it.each(["Some unrelated log message", "User tapped the pause button"])('returns false for "%s"', (msg) => {
+    expect(isAlwaysExpectedFuzzBehavior(makeEntry(msg))).toBe(false);
+  });
 });
 
 describe("isDeviceOperationFailure", () => {
@@ -102,12 +99,7 @@ describe("isDeviceOperationFailure", () => {
 
 describe("shouldIgnoreBackendFailure", () => {
   it("ignores explicit fuzz safety block logs regardless of nominal context", () => {
-    expect(
-      shouldIgnoreBackendFailure(
-        makeEntry("Fuzz mode blocked request"),
-        nominalContext(),
-      ),
-    ).toBe(true);
+    expect(shouldIgnoreBackendFailure(makeEntry("Fuzz mode blocked request"), nominalContext())).toBe(true);
   });
 
   it("ignores device operation failure regardless of fault mode", () => {
@@ -130,48 +122,32 @@ describe("shouldIgnoreBackendFailure", () => {
 
   it("ignores device operation failure regardless of network state", () => {
     expect(
-      shouldIgnoreBackendFailure(
-        makeEntry("RESET_DRIVES: Drive reset failed"),
-        {
-          ...nominalContext(),
-          networkOffline: true,
-        },
-      ),
+      shouldIgnoreBackendFailure(makeEntry("RESET_DRIVES: Drive reset failed"), {
+        ...nominalContext(),
+        networkOffline: true,
+      }),
     ).toBe(true);
   });
 
   it("ignores device operation failure regardless of post-outage window", () => {
     const now = Date.now();
     expect(
-      shouldIgnoreBackendFailure(
-        makeEntry("DRIVE_POWER: Drive power toggle failed"),
-        {
-          now,
-          serverReachable: true,
-          networkOffline: false,
-          faultMode: "none",
-          lastOutageAt: now - 5000,
-        },
-      ),
+      shouldIgnoreBackendFailure(makeEntry("DRIVE_POWER: Drive power toggle failed"), {
+        now,
+        serverReachable: true,
+        networkOffline: false,
+        faultMode: "none",
+        lastOutageAt: now - 5000,
+      }),
     ).toBe(true);
   });
 
   it("ignores device operation failure with fully nominal context", () => {
-    expect(
-      shouldIgnoreBackendFailure(
-        makeEntry("HOME_CPU_SPEED: Update failed"),
-        nominalContext(),
-      ),
-    ).toBe(true);
+    expect(shouldIgnoreBackendFailure(makeEntry("HOME_CPU_SPEED: Update failed"), nominalContext())).toBe(true);
   });
 
   it("does not ignore unknown log with nominal context", () => {
-    expect(
-      shouldIgnoreBackendFailure(
-        makeEntry("Some unexpected log message"),
-        nominalContext(),
-      ),
-    ).toBe(false);
+    expect(shouldIgnoreBackendFailure(makeEntry("Some unexpected log message"), nominalContext())).toBe(false);
   });
 
   it("ignores c64 api request failed with HTTP 503 text", () => {

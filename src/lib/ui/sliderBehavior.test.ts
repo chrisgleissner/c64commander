@@ -7,11 +7,7 @@
  */
 
 import { describe, expect, it, vi } from "vitest";
-import {
-  createSliderAsyncQueue,
-  resolveMidpointSnap,
-  shouldTriggerMidpointHaptic,
-} from "./sliderBehavior";
+import { createSliderAsyncQueue, resolveMidpointSnap, shouldTriggerMidpointHaptic } from "./sliderBehavior";
 
 describe("createSliderAsyncQueue", () => {
   it("coalesces changes and emits the latest value", async () => {
@@ -92,14 +88,8 @@ describe("resolveMidpointSnap", () => {
 describe("shouldTriggerMidpointHaptic", () => {
   it("triggers when crossing the midpoint", () => {
     const base = { midpoint: 5, nowMs: 1000, lastTriggerMs: null };
-    expect(shouldTriggerMidpointHaptic({ ...base, previous: 2, next: 5 })).toBe(
-      true,
-    );
-    expect(shouldTriggerMidpointHaptic({ ...base, previous: 6, next: 5 })).toBe(
-      true,
-    );
-    expect(shouldTriggerMidpointHaptic({ ...base, previous: 1, next: 2 })).toBe(
-      false,
-    );
+    expect(shouldTriggerMidpointHaptic({ ...base, previous: 2, next: 5 })).toBe(true);
+    expect(shouldTriggerMidpointHaptic({ ...base, previous: 6, next: 5 })).toBe(true);
+    expect(shouldTriggerMidpointHaptic({ ...base, previous: 1, next: 2 })).toBe(false);
   });
 });

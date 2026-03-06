@@ -59,11 +59,7 @@ describe("logger", () => {
   it("writes debug log and calls console.debug", () => {
     const spy = vi.spyOn(console, "debug").mockImplementation(() => {});
     logger.logger.debug("test debug");
-    expect(addLog).toHaveBeenCalledWith(
-      "debug",
-      "test debug",
-      expect.any(Object),
-    );
+    expect(addLog).toHaveBeenCalledWith("debug", "test debug", expect.any(Object));
     expect(spy).toHaveBeenCalled();
     spy.mockRestore();
   });
@@ -71,11 +67,7 @@ describe("logger", () => {
   it("writes info log and calls console.info", () => {
     const spy = vi.spyOn(console, "info").mockImplementation(() => {});
     logger.logger.info("test info");
-    expect(addLog).toHaveBeenCalledWith(
-      "info",
-      "test info",
-      expect.any(Object),
-    );
+    expect(addLog).toHaveBeenCalledWith("info", "test info", expect.any(Object));
     expect(spy).toHaveBeenCalled();
     spy.mockRestore();
   });
@@ -83,11 +75,7 @@ describe("logger", () => {
   it("writes warn log and calls console.warn", () => {
     const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
     logger.logger.warn("test warn");
-    expect(addLog).toHaveBeenCalledWith(
-      "warn",
-      "test warn",
-      expect.any(Object),
-    );
+    expect(addLog).toHaveBeenCalledWith("warn", "test warn", expect.any(Object));
     expect(spy).toHaveBeenCalled();
     spy.mockRestore();
   });
@@ -95,11 +83,7 @@ describe("logger", () => {
   it("writes error log and calls console.error", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     logger.logger.error("test error");
-    expect(addLog).toHaveBeenCalledWith(
-      "error",
-      "test error",
-      expect.any(Object),
-    );
+    expect(addLog).toHaveBeenCalledWith("error", "test error", expect.any(Object));
     expect(spy).toHaveBeenCalled();
     spy.mockRestore();
   });
@@ -216,11 +200,7 @@ describe("logger", () => {
       const uninstall = logger.installConsoleDiagnosticsBridge();
       try {
         console.warn("bridged warning");
-        expect(addLog).toHaveBeenCalledWith(
-          "warn",
-          "bridged warning",
-          expect.any(Object),
-        );
+        expect(addLog).toHaveBeenCalledWith("warn", "bridged warning", expect.any(Object));
       } finally {
         uninstall();
       }
@@ -230,11 +210,7 @@ describe("logger", () => {
       const uninstall = logger.installConsoleDiagnosticsBridge();
       try {
         console.error("bridged error");
-        expect(addLog).toHaveBeenCalledWith(
-          "error",
-          "bridged error",
-          expect.any(Object),
-        );
+        expect(addLog).toHaveBeenCalledWith("error", "bridged error", expect.any(Object));
       } finally {
         uninstall();
       }
@@ -244,9 +220,7 @@ describe("logger", () => {
       const uninstall = logger.installConsoleDiagnosticsBridge();
       try {
         console.warn(new Error("warn-err"));
-        const calls = addLog.mock.calls.filter(
-          (c) => c[0] === "warn" && c[1] === "warn-err",
-        );
+        const calls = addLog.mock.calls.filter((c) => c[0] === "warn" && c[1] === "warn-err");
         expect(calls.length).toBeGreaterThan(0);
       } finally {
         uninstall();
@@ -293,9 +267,7 @@ describe("logger", () => {
       const uninstall = logger.installConsoleDiagnosticsBridge();
       try {
         console.error("msg", "extra1", new Error("detail-err"));
-        const calls = addLog.mock.calls.filter(
-          (c) => c[0] === "error" && c[1] === "msg",
-        );
+        const calls = addLog.mock.calls.filter((c) => c[0] === "error" && c[1] === "msg");
         expect(calls.length).toBeGreaterThan(0);
       } finally {
         uninstall();
@@ -337,11 +309,7 @@ describe("logger", () => {
       const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
       console.warn("should-not-route-through-bridge");
       // If bridge were installed, addLog would be called with 'warn'; it should NOT be
-      expect(addLog).not.toHaveBeenCalledWith(
-        "warn",
-        "should-not-route-through-bridge",
-        expect.anything(),
-      );
+      expect(addLog).not.toHaveBeenCalledWith("warn", "should-not-route-through-bridge", expect.anything());
       spy.mockRestore();
     });
   });

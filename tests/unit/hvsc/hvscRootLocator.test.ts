@@ -7,12 +7,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi, afterAll } from "vitest";
-import {
-  clearHvscRoot,
-  getDefaultHvscRoot,
-  loadHvscRoot,
-  saveHvscRoot,
-} from "@/lib/hvsc/hvscRootLocator";
+import { clearHvscRoot, getDefaultHvscRoot, loadHvscRoot, saveHvscRoot } from "@/lib/hvsc/hvscRootLocator";
 
 describe("hvscRootLocator", () => {
   beforeEach(() => {
@@ -43,15 +38,10 @@ describe("hvscRootLocator", () => {
   });
 
   it("returns default if stored content is malformed", () => {
-    const warnSpy = vi
-      .spyOn(console, "warn")
-      .mockImplementation(() => undefined);
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     localStorage.setItem("c64u_hvsc_root:v1", "{ invalid json ");
     expect(loadHvscRoot()).toEqual(getDefaultHvscRoot());
-    expect(warnSpy).toHaveBeenCalledWith(
-      "Failed to load HVSC root from storage",
-      expect.any(Object),
-    );
+    expect(warnSpy).toHaveBeenCalledWith("Failed to load HVSC root from storage", expect.any(Object));
     warnSpy.mockRestore();
   });
 

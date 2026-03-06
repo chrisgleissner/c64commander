@@ -1,14 +1,5 @@
 import { motion } from "framer-motion";
-import {
-  RotateCcw,
-  Power,
-  PowerOff,
-  Pause,
-  Menu,
-  Upload,
-  Play,
-  Download,
-} from "lucide-react";
+import { RotateCcw, Power, PowerOff, Pause, Menu, Upload, Play, Download } from "lucide-react";
 import { SectionHeader } from "@/components/SectionHeader";
 import { QuickActionCard } from "@/components/QuickActionCard";
 import { ResponsivePathText } from "@/components/ResponsivePathText";
@@ -65,9 +56,7 @@ export function MachineControls({
       data-section-label="Machine"
     >
       <SectionHeader title="Machine">
-        {machineTaskBusy && (
-          <span className="ml-2 text-xs text-muted-foreground">Working…</span>
-        )}
+        {machineTaskBusy && <span className="ml-2 text-xs text-muted-foreground">Working…</span>}
       </SectionHeader>
       <div className="space-y-2">
         <div
@@ -76,26 +65,17 @@ export function MachineControls({
         >
           {driveSummaryItems.map((entry) => (
             <span key={entry.key} className="flex min-w-0 items-center gap-1">
-              <span className="font-semibold text-foreground whitespace-nowrap">
-                {entry.label}:
-              </span>
+              <span className="font-semibold text-foreground whitespace-nowrap">{entry.label}:</span>
               <ResponsivePathText
                 path={entry.mountedLabel}
                 mode="filename-fallback"
-                className={
-                  entry.isMounted
-                    ? "text-foreground truncate"
-                    : "text-muted-foreground truncate"
-                }
+                className={entry.isMounted ? "text-foreground truncate" : "text-muted-foreground truncate"}
                 dataTestId={`home-drive-summary-label-${entry.key}`}
               />
             </span>
           ))}
         </div>
-        <div
-          className="grid grid-cols-4 gap-2"
-          data-testid="home-machine-controls"
-        >
+        <div className="grid grid-cols-4 gap-2" data-testid="home-machine-controls">
           <QuickActionCard
             icon={RotateCcw}
             label="Reset"
@@ -130,11 +110,7 @@ export function MachineControls({
             icon={machineExecutionState === "paused" ? Play : Pause}
             label={machineExecutionState === "paused" ? "Resume" : "Pause"}
             compact
-            className={
-              machineExecutionState === "paused"
-                ? "border-primary/60 bg-primary/10"
-                : undefined
-            }
+            className={machineExecutionState === "paused" ? "border-primary/60 bg-primary/10" : undefined}
             onClick={() => void onPauseResume()}
             disabled={!status.isConnected || machineTaskBusy}
             loading={pauseResumePending}
@@ -143,12 +119,7 @@ export function MachineControls({
             icon={Menu}
             label="Menu"
             compact
-            onClick={() =>
-              onAction(
-                () => controls.menuButton.mutateAsync() as Promise<void>,
-                "Menu toggled",
-              )
-            }
+            onClick={() => onAction(() => controls.menuButton.mutateAsync() as Promise<void>, "Menu toggled")}
             disabled={!status.isConnected || machineTaskBusy}
             loading={controls.menuButton.isPending}
           />

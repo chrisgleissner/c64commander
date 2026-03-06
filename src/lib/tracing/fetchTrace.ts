@@ -6,24 +6,13 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import {
-  getActiveAction,
-  runWithImplicitAction,
-} from "@/lib/tracing/actionTrace";
-import {
-  decrementRestInFlight,
-  incrementRestInFlight,
-} from "@/lib/diagnostics/diagnosticsActivity";
-import {
-  recordRestRequest,
-  recordRestResponse,
-  recordTraceError,
-} from "@/lib/tracing/traceSession";
+import { getActiveAction, runWithImplicitAction } from "@/lib/tracing/actionTrace";
+import { decrementRestInFlight, incrementRestInFlight } from "@/lib/diagnostics/diagnosticsActivity";
+import { recordRestRequest, recordRestResponse, recordTraceError } from "@/lib/tracing/traceSession";
 import type { TraceActionContext } from "@/lib/tracing/types";
 
 const parseUrl = (url: string) => {
-  const fallbackBase =
-    typeof window !== "undefined" ? window.location.origin : "http://localhost";
+  const fallbackBase = typeof window !== "undefined" ? window.location.origin : "http://localhost";
   return new URL(url, fallbackBase);
 };
 
@@ -125,12 +114,9 @@ const shouldTraceUrl = (url: string) => {
 
 export const registerFetchTrace = () => {
   if (typeof window === "undefined") return;
-  const existing = (window as Window & { __c64uFetchTraceInstalled?: boolean })
-    .__c64uFetchTraceInstalled;
+  const existing = (window as Window & { __c64uFetchTraceInstalled?: boolean }).__c64uFetchTraceInstalled;
   if (existing) return;
-  (
-    window as Window & { __c64uFetchTraceInstalled?: boolean }
-  ).__c64uFetchTraceInstalled = true;
+  (window as Window & { __c64uFetchTraceInstalled?: boolean }).__c64uFetchTraceInstalled = true;
 
   const originalFetch = window.fetch.bind(window);
 
@@ -142,29 +128,20 @@ export const registerFetchTrace = () => {
     method: string,
   ): Promise<Response> => {
     incrementRestInFlight();
-    const headers = extractHeaders(
-      init?.headers ?? (input instanceof Request ? input.headers : undefined),
-    );
+    const headers = extractHeaders(init?.headers ?? (input instanceof Request ? input.headers : undefined));
     recordRestRequest(action, {
       method,
       url,
       normalizedUrl: normalizeUrlPath(url),
       headers,
-      body: extractBody(
-        init?.body ?? (input instanceof Request ? input.body : null),
-      ),
+      body: extractBody(init?.body ?? (input instanceof Request ? input.body : null)),
     });
-    const startedAt =
-      typeof performance !== "undefined" ? performance.now() : Date.now();
+    const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
     try {
       const response = await originalFetch(input, init);
       const durationMs = Math.max(
         0,
-        Math.round(
-          (typeof performance !== "undefined"
-            ? performance.now()
-            : Date.now()) - startedAt,
-        ),
+        Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
       );
       let responseBody: unknown = null;
       try {
@@ -196,11 +173,7 @@ export const registerFetchTrace = () => {
     } catch (error) {
       const durationMs = Math.max(
         0,
-        Math.round(
-          (typeof performance !== "undefined"
-            ? performance.now()
-            : Date.now()) - startedAt,
-        ),
+        Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
       );
       let responseStatus: number | null = null;
       let responseBody: unknown = null;
@@ -242,10 +215,7 @@ export const registerFetchTrace = () => {
     }
   };
 
-  window.fetch = async (
-    input: RequestInfo | URL,
-    init?: RequestInit & { __c64uTraceSuppressed?: boolean },
-  ) => {
+  window.fetch = async (input: RequestInfo | URL, init?: RequestInit & { __c64uTraceSuppressed?: boolean }) => {
     const url =
       typeof input === "string"
         ? input
@@ -254,14 +224,8 @@ export const registerFetchTrace = () => {
           : input instanceof URL
             ? input.toString()
             : String(input);
-    const method = (
-      init?.method || (input instanceof Request ? input.method : "GET")
-    )
-      .toString()
-      .toUpperCase();
-    const suppress = Boolean(
-      init && "__c64uTraceSuppressed" in init && init.__c64uTraceSuppressed,
-    );
+    const method = (init?.method || (input instanceof Request ? input.method : "GET")).toString().toUpperCase();
+    const suppress = Boolean(init && "__c64uTraceSuppressed" in init && init.__c64uTraceSuppressed);
 
     if (!suppress && shouldTraceUrl(url)) {
       // If there's an active user action, record REST within that context
@@ -270,12 +234,9 @@ export const registerFetchTrace = () => {
         return executeTracedFetch(activeAction, input, init, url, method);
       }
       // Otherwise create an implicit system action for the REST call
-      return runWithImplicitAction(
-        `rest.${method.toLowerCase()}`,
-        async (action) => {
-          return executeTracedFetch(action, input, init, url, method);
-        },
-      );
+      return runWithImplicitAction(`rest.${method.toLowerCase()}`, async (action) => {
+        return executeTracedFetch(action, input, init, url, method);
+      });
     }
 
     return originalFetch(input, init);

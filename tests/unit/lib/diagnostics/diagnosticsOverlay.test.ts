@@ -7,10 +7,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import {
-  requestDiagnosticsOpen,
-  consumeDiagnosticsOpenRequest,
-} from "@/lib/diagnostics/diagnosticsOverlay";
+import { requestDiagnosticsOpen, consumeDiagnosticsOpenRequest } from "@/lib/diagnostics/diagnosticsOverlay";
 
 describe("diagnosticsOverlay", () => {
   beforeEach(() => {
@@ -37,10 +34,7 @@ describe("diagnosticsOverlay", () => {
   describe("requestDiagnosticsOpen", () => {
     it("persists tab to sessionStorage and dispatches event", () => {
       requestDiagnosticsOpen("logs");
-      expect(sessionStorage.setItem).toHaveBeenCalledWith(
-        "c64u_diagnostics_open_tab",
-        "logs",
-      );
+      expect(sessionStorage.setItem).toHaveBeenCalledWith("c64u_diagnostics_open_tab", "logs");
 
       expect(window.dispatchEvent).toHaveBeenCalledTimes(1);
       const event = vi.mocked(window.dispatchEvent).mock.calls[0][0] as any;
@@ -56,10 +50,7 @@ describe("diagnosticsOverlay", () => {
 
       requestDiagnosticsOpen("logs");
 
-      expect(warnSpy).toHaveBeenCalledWith(
-        "Unable to persist diagnostics open request:",
-        expect.any(Error),
-      );
+      expect(warnSpy).toHaveBeenCalledWith("Unable to persist diagnostics open request:", expect.any(Error));
       expect(window.dispatchEvent).toHaveBeenCalled(); // Should still dispatch
     });
 
@@ -78,9 +69,7 @@ describe("diagnosticsOverlay", () => {
       const result = consumeDiagnosticsOpenRequest();
 
       expect(result).toBe("logs");
-      expect(sessionStorage.removeItem).toHaveBeenCalledWith(
-        "c64u_diagnostics_open_tab",
-      );
+      expect(sessionStorage.removeItem).toHaveBeenCalledWith("c64u_diagnostics_open_tab");
     });
 
     it("returns null if no tab in storage", () => {
@@ -95,10 +84,7 @@ describe("diagnosticsOverlay", () => {
       });
 
       expect(consumeDiagnosticsOpenRequest()).toBeNull();
-      expect(warnSpy).toHaveBeenCalledWith(
-        "Unable to consume diagnostics open request:",
-        expect.any(Error),
-      );
+      expect(warnSpy).toHaveBeenCalledWith("Unable to consume diagnostics open request:", expect.any(Error));
     });
 
     it("returns null if window is undefined", () => {

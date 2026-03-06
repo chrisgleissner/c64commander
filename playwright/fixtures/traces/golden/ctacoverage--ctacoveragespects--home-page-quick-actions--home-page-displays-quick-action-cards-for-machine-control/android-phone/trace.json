@@ -8810,14 +8810,7 @@
           "items": {
             "System Mode": {
               "selected": "PAL",
-              "options": [
-                "PAL",
-                "NTSC",
-                "PAL-60",
-                "NTSC-50",
-                "PAL-60/L",
-                "NTSC-50/L"
-              ]
+              "options": ["PAL", "NTSC", "PAL-60", "NTSC-50", "PAL-60/L", "NTSC-50/L"]
             }
           }
         },
@@ -8861,12 +8854,7 @@
           "items": {
             "Turbo Control": {
               "selected": "Manual",
-              "options": [
-                "Off",
-                "Manual",
-                "U64 Turbo Registers",
-                "TurboEnable Bit"
-              ]
+              "options": ["Off", "Manual", "U64 Turbo Registers", "TurboEnable Bit"]
             }
           }
         },
@@ -9758,12 +9746,7 @@
           "items": {
             "Emulation": {
               "selected": "Commodore MPS",
-              "options": [
-                "Commodore MPS",
-                "Epson FX-80/JX-80",
-                "IBM Graphics Printer",
-                "IBM Proprinter"
-              ]
+              "options": ["Commodore MPS", "Epson FX-80/JX-80", "IBM Graphics Printer", "IBM Proprinter"]
             }
           }
         },
@@ -9807,15 +9790,7 @@
           "items": {
             "Commodore charset": {
               "selected": "USA/UK",
-              "options": [
-                "USA/UK",
-                "Denmark",
-                "France/Italy",
-                "Germany",
-                "Spain",
-                "Sweden",
-                "Switzerland"
-              ]
+              "options": ["USA/UK", "Denmark", "France/Italy", "Germany", "Spain", "Sweden", "Switzerland"]
             }
           }
         },
@@ -9916,14 +9891,7 @@
           "items": {
             "IBM table 2": {
               "selected": "International 1",
-              "options": [
-                "International 1",
-                "International 2",
-                "Israel",
-                "Greece",
-                "Portugal",
-                "Spain"
-              ]
+              "options": ["International 1", "International 2", "Israel", "Greece", "Portugal", "Spain"]
             }
           }
         },
@@ -10411,15 +10379,7 @@
           "items": {
             "UltiSID 1 Filter Curve": {
               "selected": "8580 Lo",
-              "options": [
-                "8580 Lo",
-                "8580 Hi",
-                "6581",
-                "6581 Alt",
-                "U2 Low",
-                "U2 Mid",
-                "U2 High"
-              ]
+              "options": ["8580 Lo", "8580 Hi", "6581", "6581 Alt", "U2 Low", "U2 Mid", "U2 High"]
             }
           }
         },
@@ -10463,15 +10423,7 @@
           "items": {
             "UltiSID 2 Filter Curve": {
               "selected": "8580 Lo",
-              "options": [
-                "8580 Lo",
-                "8580 Hi",
-                "6581",
-                "6581 Alt",
-                "U2 Low",
-                "U2 Mid",
-                "U2 High"
-              ]
+              "options": ["8580 Lo", "8580 Hi", "6581", "6581 Alt", "U2 Low", "U2 Mid", "U2 High"]
             }
           }
         },

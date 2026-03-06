@@ -11,17 +11,8 @@ import { saveCoverageFromPage } from "./withCoverage";
 import type { Locator, Page, TestInfo } from "@playwright/test";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
 import { seedUiMocks } from "./uiMocks";
-import {
-  assertNoUiIssues,
-  attachStepScreenshot,
-  finalizeEvidence,
-  startStrictUiMonitoring,
-} from "./testArtifacts";
-import {
-  clearTraces,
-  enableTraceAssertions,
-  expectRestTraceSequence,
-} from "./traceUtils";
+import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from "./testArtifacts";
+import { clearTraces, enableTraceAssertions, expectRestTraceSequence } from "./traceUtils";
 import { enableGoldenTrace } from "./goldenTraceRegistry";
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
@@ -70,9 +61,7 @@ test.describe("Settings diagnostics workflows", () => {
     }
   });
 
-  test("open diagnostics dialog shows logs", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("open diagnostics dialog shows logs", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/settings");
     await snap(page, testInfo, "settings-open");
 
@@ -105,9 +94,7 @@ test.describe("Settings diagnostics workflows", () => {
     }
   });
 
-  test("debug logging toggle records REST calls", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("debug logging toggle records REST calls", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     enableGoldenTrace(testInfo);
     enableTraceAssertions(testInfo);
     await page.goto("/settings");
@@ -126,32 +113,20 @@ test.describe("Settings diagnostics workflows", () => {
     await refreshButton.click();
     await snap(page, testInfo, "refresh-clicked");
 
-    await page
-      .getByRole("button", { name: "Diagnostics", exact: true })
-      .click();
+    await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: /Diagnostics|Logs/i });
     await expect(dialog).toBeVisible();
     await snap(page, testInfo, "diagnostics-open");
 
     await dialog.getByRole("tab", { name: "Logs", exact: true }).click();
-    const apiRequestEntry = dialog
-      .getByText("C64 API request", { exact: true })
-      .first();
+    const apiRequestEntry = dialog.getByText("C64 API request", { exact: true }).first();
     await expect(apiRequestEntry).toBeVisible();
     const apiRequestRow = apiRequestEntry.locator("xpath=ancestor::details");
-    await expect(
-      apiRequestRow.getByTestId("diagnostics-severity-glyph"),
-    ).toHaveText("D");
+    await expect(apiRequestRow.getByTestId("diagnostics-severity-glyph")).toHaveText("D");
     await snap(page, testInfo, "debug-log-entry");
 
-    const { requestEvent } = await expectRestTraceSequence(
-      page,
-      testInfo,
-      "/v1/info",
-    );
-    expect((requestEvent.data as { target?: string }).target).toBe(
-      "external-mock",
-    );
+    const { requestEvent } = await expectRestTraceSequence(page, testInfo, "/v1/info");
+    expect((requestEvent.data as { target?: string }).target).toBe("external-mock");
   });
 
   test("diagnostics rows stay dense and consistent across tabs", async ({
@@ -197,10 +172,7 @@ test.describe("Settings diagnostics workflows", () => {
     ];
 
     await page.waitForFunction(() =>
-      Boolean(
-        (window as Window & { __c64uTracing?: { seedTraces?: unknown } })
-          .__c64uTracing?.seedTraces,
-      ),
+      Boolean((window as Window & { __c64uTracing?: { seedTraces?: unknown } }).__c64uTracing?.seedTraces),
     );
     await page.evaluate((seedEvents) => {
       return new Promise<void>((resolve) => {
@@ -220,9 +192,7 @@ test.describe("Settings diagnostics workflows", () => {
       });
     }, traceSeed);
 
-    await page
-      .getByRole("button", { name: "Diagnostics", exact: true })
-      .click();
+    await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: /Diagnostics|Logs/i });
     await expect(dialog).toBeVisible();
 
@@ -239,12 +209,8 @@ test.describe("Settings diagnostics workflows", () => {
 
     const getTimestampSizes = async (entry: Locator) =>
       entry.evaluate((node) => {
-        const base = node.querySelector(
-          '[data-testid="diagnostics-timestamp-base"]',
-        ) as HTMLElement | null;
-        const ms = node.querySelector(
-          '[data-testid="diagnostics-timestamp-ms"]',
-        ) as HTMLElement | null;
+        const base = node.querySelector('[data-testid="diagnostics-timestamp-base"]') as HTMLElement | null;
+        const ms = node.querySelector('[data-testid="diagnostics-timestamp-ms"]') as HTMLElement | null;
         return {
           baseSize: base ? getComputedStyle(base).fontSize : "",
           msSize: ms ? getComputedStyle(ms).fontSize : "",
@@ -270,12 +236,8 @@ test.describe("Settings diagnostics workflows", () => {
 
       await summary.click();
       await expect(entryLocator).toHaveJSProperty("open", true);
-      await expect(
-        entryLocator.getByTestId("diagnostics-severity-label"),
-      ).toBeVisible();
-      await expect(
-        entryLocator.getByTestId("diagnostics-severity-label"),
-      ).toHaveText(/ERROR|WARN|INFO|DEBUG/);
+      await expect(entryLocator.getByTestId("diagnostics-severity-label")).toBeVisible();
+      await expect(entryLocator.getByTestId("diagnostics-severity-label")).toHaveText(/ERROR|WARN|INFO|DEBUG/);
 
       return {
         padding: await getPadding(summary),
@@ -283,22 +245,10 @@ test.describe("Settings diagnostics workflows", () => {
       };
     };
 
-    const errorsMetrics = await checkTab(
-      "Errors",
-      dialog.getByTestId("error-log-log-1"),
-    );
-    const logsMetrics = await checkTab(
-      "Logs",
-      dialog.getByTestId("log-entry-log-1"),
-    );
-    const tracesMetrics = await checkTab(
-      "Traces",
-      dialog.getByTestId("trace-item-TRACE-0100"),
-    );
-    const actionsMetrics = await checkTab(
-      "Actions",
-      dialog.getByTestId("action-summary-COR-0100"),
-    );
+    const errorsMetrics = await checkTab("Errors", dialog.getByTestId("error-log-log-1"));
+    const logsMetrics = await checkTab("Logs", dialog.getByTestId("log-entry-log-1"));
+    const tracesMetrics = await checkTab("Traces", dialog.getByTestId("trace-item-TRACE-0100"));
+    const actionsMetrics = await checkTab("Actions", dialog.getByTestId("action-summary-COR-0100"));
 
     expect(logsMetrics.padding).toEqual(errorsMetrics.padding);
     expect(tracesMetrics.padding).toEqual(errorsMetrics.padding);
@@ -313,40 +263,28 @@ test.describe("Settings diagnostics workflows", () => {
     );
   });
 
-  test("diagnostics action bar is available", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("diagnostics action bar is available", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/settings");
     await snap(page, testInfo, "settings-open");
 
-    await page
-      .getByRole("button", { name: "Diagnostics", exact: true })
-      .click();
+    await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
     await snap(page, testInfo, "dialog-open");
 
-    await expect(
-      page.getByRole("button", { name: /Clear All/i }),
-    ).toBeVisible();
+    await expect(page.getByRole("button", { name: /Clear All/i })).toBeVisible();
     await expect(page.getByTestId("diagnostics-share-actions")).toBeVisible();
   });
 
-  test("clear all diagnostics empties log storage", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("clear all diagnostics empties log storage", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/settings");
     await snap(page, testInfo, "settings-open");
 
-    await page
-      .getByRole("button", { name: "Diagnostics", exact: true })
-      .click();
+    await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
     await snap(page, testInfo, "dialog-open");
 
     const clearButton = page.getByRole("button", { name: /Clear All/i });
 
     if (await clearButton.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const beforeLogs = await page.evaluate(() =>
-        localStorage.getItem("c64u_app_logs"),
-      );
+      const beforeLogs = await page.evaluate(() => localStorage.getItem("c64u_app_logs"));
       await clearButton.click();
       const confirm = page.getByRole("alertdialog", {
         name: /Clear diagnostics/i,
@@ -355,13 +293,9 @@ test.describe("Settings diagnostics workflows", () => {
       await snap(page, testInfo, "clear-clicked");
 
       await expect
-        .poll(
-          async () =>
-            page.evaluate(() => localStorage.getItem("c64u_app_logs")),
-          {
-            timeout: 5000,
-          },
-        )
+        .poll(async () => page.evaluate(() => localStorage.getItem("c64u_app_logs")), {
+          timeout: 5000,
+        })
         .not.toBe(beforeLogs);
 
       // Logs should be empty or at least the clear button was clicked

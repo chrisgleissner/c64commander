@@ -17,8 +17,7 @@ const recordTraceError = vi.fn();
 vi.mock("@/lib/tracing/traceSession", () => ({
   recordActionStart: (...args: unknown[]) => recordActionStart(...args),
   recordActionEnd: (...args: unknown[]) => recordActionEnd(...args),
-  recordActionScopeStart: (...args: unknown[]) =>
-    recordActionScopeStart(...args),
+  recordActionScopeStart: (...args: unknown[]) => recordActionScopeStart(...args),
   recordActionScopeEnd: (...args: unknown[]) => recordActionScopeEnd(...args),
   recordTraceError: (...args: unknown[]) => recordTraceError(...args),
 }));
@@ -94,11 +93,9 @@ describe("actionTrace", () => {
       details: null,
     };
     let capturedContext: Parameters<typeof recordActionStart>[0] | null = null;
-    recordActionStart.mockImplementation(
-      (ctx: Parameters<typeof recordActionStart>[0]) => {
-        capturedContext = ctx;
-      },
-    );
+    recordActionStart.mockImplementation((ctx: Parameters<typeof recordActionStart>[0]) => {
+      capturedContext = ctx;
+    });
 
     await runWithImplicitAction("probe", async () => "ok", trigger);
 
@@ -108,11 +105,9 @@ describe("actionTrace", () => {
 
   it("implicit action has null trigger when none provided", async () => {
     let capturedContext: Parameters<typeof recordActionStart>[0] | null = null;
-    recordActionStart.mockImplementation(
-      (ctx: Parameters<typeof recordActionStart>[0]) => {
-        capturedContext = ctx;
-      },
-    );
+    recordActionStart.mockImplementation((ctx: Parameters<typeof recordActionStart>[0]) => {
+      capturedContext = ctx;
+    });
 
     await runWithImplicitAction("no-trigger", async () => "ok");
 

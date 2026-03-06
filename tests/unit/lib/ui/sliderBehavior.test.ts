@@ -19,15 +19,9 @@ describe("sliderBehavior", () => {
   describe("resolveMidpointSnap", () => {
     it("snaps to midpoint within default range", () => {
       // default ratio 0.02. range 100 -> snap radius 2.
-      expect(
-        resolveMidpointSnap({ value: 51, min: 0, max: 100, midpoint: 50 }),
-      ).toBe(50);
-      expect(
-        resolveMidpointSnap({ value: 48.5, min: 0, max: 100, midpoint: 50 }),
-      ).toBe(50);
-      expect(
-        resolveMidpointSnap({ value: 53, min: 0, max: 100, midpoint: 50 }),
-      ).toBe(53);
+      expect(resolveMidpointSnap({ value: 51, min: 0, max: 100, midpoint: 50 })).toBe(50);
+      expect(resolveMidpointSnap({ value: 48.5, min: 0, max: 100, midpoint: 50 })).toBe(50);
+      expect(resolveMidpointSnap({ value: 53, min: 0, max: 100, midpoint: 50 })).toBe(53);
     });
 
     it("respects step derived snap range", () => {
@@ -65,9 +59,7 @@ describe("sliderBehavior", () => {
     });
 
     it("handles zero range", () => {
-      expect(
-        resolveMidpointSnap({ value: 5, min: 10, max: 10, midpoint: 10 }),
-      ).toBe(5);
+      expect(resolveMidpointSnap({ value: 5, min: 10, max: 10, midpoint: 10 })).toBe(5);
     });
 
     it("returns value when explicit snapRange is 0 (line 37 TRUE)", () => {
@@ -108,18 +100,12 @@ describe("sliderBehavior", () => {
     };
 
     it("triggers on crossing", () => {
-      expect(
-        shouldTriggerMidpointHaptic({ ...base, previous: 49, next: 51 }),
-      ).toBe(true);
-      expect(
-        shouldTriggerMidpointHaptic({ ...base, previous: 51, next: 49 }),
-      ).toBe(true);
+      expect(shouldTriggerMidpointHaptic({ ...base, previous: 49, next: 51 })).toBe(true);
+      expect(shouldTriggerMidpointHaptic({ ...base, previous: 51, next: 49 })).toBe(true);
     });
 
     it("triggers on snapping", () => {
-      expect(
-        shouldTriggerMidpointHaptic({ ...base, previous: 49, next: 50 }),
-      ).toBe(true);
+      expect(shouldTriggerMidpointHaptic({ ...base, previous: 49, next: 50 })).toBe(true);
     });
 
     it("ignores if stale", () => {
@@ -134,9 +120,7 @@ describe("sliderBehavior", () => {
     });
 
     it("returns false when previous is null and next is not midpoint (line 60 FALSE)", () => {
-      expect(
-        shouldTriggerMidpointHaptic({ ...base, previous: null, next: 55 }),
-      ).toBe(false);
+      expect(shouldTriggerMidpointHaptic({ ...base, previous: null, next: 55 })).toBe(false);
     });
   });
 

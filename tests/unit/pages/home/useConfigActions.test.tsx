@@ -4,14 +4,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const setConfigValueMock = vi.fn();
 const getDrivesMock = vi.fn();
 const invalidateQueriesMock = vi.fn(async () => undefined);
-const fetchQueryMock = vi.fn(
-  async ({ queryFn }: { queryFn?: () => Promise<unknown> }) => queryFn?.(),
-);
+const fetchQueryMock = vi.fn(async ({ queryFn }: { queryFn?: () => Promise<unknown> }) => queryFn?.());
 const toastMock = vi.fn();
 const reportUserErrorMock = vi.fn();
-const buildConfigKeyMock = vi.fn(
-  (category: string, itemName: string) => `${category}:${itemName}`,
-);
+const buildConfigKeyMock = vi.fn((category: string, itemName: string) => `${category}:${itemName}`);
 const readItemValueMock = vi.fn();
 
 vi.mock("@tanstack/react-query", () => ({
@@ -38,8 +34,7 @@ vi.mock("@/lib/c64api", () => ({
 
 vi.mock("@/pages/home/utils/HomeConfigUtils", () => ({
   buildConfigKey: (...args: [string, string]) => buildConfigKeyMock(...args),
-  readItemValue: (...args: [unknown, string, string]) =>
-    readItemValueMock(...args),
+  readItemValue: (...args: [unknown, string, string]) => readItemValueMock(...args),
 }));
 
 vi.mock("@/hooks/use-toast", () => ({
@@ -64,21 +59,15 @@ describe("useConfigActions", () => {
     const { result } = renderHook(() => useConfigActions());
 
     await act(async () => {
-      await result.current.updateConfigValue(
-        "Audio",
-        "Volume",
-        7,
-        "HOME_CONFIG_UPDATE",
-        "Updated",
-        { refreshDrives: true },
-      );
+      await result.current.updateConfigValue("Audio", "Volume", 7, "HOME_CONFIG_UPDATE", "Updated", {
+        refreshDrives: true,
+      });
     });
 
     expect(setConfigValueMock).toHaveBeenCalledWith("Audio", "Volume", 7);
     expect(toastMock).toHaveBeenCalledWith({ title: "Updated" });
     expect(invalidateQueriesMock).toHaveBeenCalledTimes(1);
-    const predicate = invalidateQueriesMock.mock.calls[0][0]
-      .predicate as (query: { queryKey: unknown }) => boolean;
+    const predicate = invalidateQueriesMock.mock.calls[0][0].predicate as (query: { queryKey: unknown }) => boolean;
     expect(predicate({ queryKey: ["c64-config-items", "Audio"] })).toBe(true);
     expect(predicate({ queryKey: ["c64-config-items", "Video"] })).toBe(false);
     expect(fetchQueryMock).toHaveBeenCalledTimes(1);
@@ -90,14 +79,9 @@ describe("useConfigActions", () => {
     const { result } = renderHook(() => useConfigActions());
 
     await act(async () => {
-      await result.current.updateConfigValue(
-        "Audio",
-        "Volume",
-        "0 dB",
-        "HOME_CONFIG_UPDATE",
-        "Updated",
-        { suppressToast: true },
-      );
+      await result.current.updateConfigValue("Audio", "Volume", "0 dB", "HOME_CONFIG_UPDATE", "Updated", {
+        suppressToast: true,
+      });
     });
 
     expect(toastMock).not.toHaveBeenCalled();
@@ -107,25 +91,13 @@ describe("useConfigActions", () => {
     const { result } = renderHook(() => useConfigActions());
 
     await act(async () => {
-      await result.current.updateConfigValue(
-        "Audio",
-        "Volume",
-        3,
-        "HOME_CONFIG_UPDATE",
-        "Updated",
-      );
+      await result.current.updateConfigValue("Audio", "Volume", 3, "HOME_CONFIG_UPDATE", "Updated");
     });
 
     setConfigValueMock.mockRejectedValueOnce(new Error("write failed"));
 
     await act(async () => {
-      await result.current.updateConfigValue(
-        "Audio",
-        "Volume",
-        9,
-        "HOME_CONFIG_UPDATE",
-        "Updated",
-      );
+      await result.current.updateConfigValue("Audio", "Volume", 9, "HOME_CONFIG_UPDATE", "Updated");
     });
 
     expect(reportUserErrorMock).toHaveBeenCalledWith(
@@ -145,18 +117,10 @@ describe("useConfigActions", () => {
     const { result } = renderHook(() => useConfigActions());
 
     await act(async () => {
-      await result.current.updateConfigValue(
-        "Video",
-        "Mode",
-        "NTSC",
-        "HOME_CONFIG_UPDATE",
-        "Updated",
-      );
+      await result.current.updateConfigValue("Video", "Mode", "NTSC", "HOME_CONFIG_UPDATE", "Updated");
     });
 
     expect(result.current.configOverrides).toEqual({});
-    expect(
-      result.current.resolveConfigValue({}, "Video", "Mode", "fallback"),
-    ).toBe("from-payload");
+    expect(result.current.resolveConfigValue({}, "Video", "Mode", "fallback")).toBe("from-payload");
   });
 });

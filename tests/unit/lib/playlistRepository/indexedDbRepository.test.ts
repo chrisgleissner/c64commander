@@ -41,9 +41,7 @@ const createFakeIndexedDb = (options: FakeIndexedDbOptions = {}) => {
           const request: Record<string, unknown> = {};
           queueMicrotask(() => {
             if (options.failGet) {
-              request.error = options.failGetWithoutError
-                ? null
-                : new Error("fake get failure");
+              request.error = options.failGetWithoutError ? null : new Error("fake get failure");
               (request.onerror as (() => void) | undefined)?.();
               return;
             }
@@ -56,9 +54,7 @@ const createFakeIndexedDb = (options: FakeIndexedDbOptions = {}) => {
           const request: Record<string, unknown> = {};
           queueMicrotask(() => {
             if (options.failPut) {
-              request.error = options.failPutWithoutError
-                ? null
-                : new Error("fake put failure");
+              request.error = options.failPutWithoutError ? null : new Error("fake put failure");
               (request.onerror as (() => void) | undefined)?.();
               return;
             }
@@ -87,10 +83,7 @@ const createFakeIndexedDb = (options: FakeIndexedDbOptions = {}) => {
           upgraded = true;
           (request.onupgradeneeded as (() => void) | undefined)?.();
           if (options.initialPersistedState !== undefined) {
-            ensureStore("state").set(
-              "playlist-repository-state",
-              options.initialPersistedState,
-            );
+            ensureStore("state").set("playlist-repository-state", options.initialPersistedState);
           }
         }
         (request.onsuccess as (() => void) | undefined)?.();
@@ -117,11 +110,7 @@ const buildTrack = (overrides: Partial<TrackRecord> = {}): TrackRecord => ({
   updatedAt: overrides.updatedAt ?? "2026-02-12T00:00:00.000Z",
 });
 
-const buildItem = (
-  playlistItemId: string,
-  trackId: string,
-  sortKey: string,
-): PlaylistItemRecord => ({
+const buildItem = (playlistItemId: string, trackId: string, sortKey: string): PlaylistItemRecord => ({
   playlistItemId,
   playlistId: "playlist-default",
   trackId,
@@ -204,15 +193,9 @@ describe("indexedDB playlist repository", () => {
       offset: 0,
       sort: "path",
     });
-    expect(
-      pathSortedSongs.rows.map((row) => row.playlistItem.playlistItemId),
-    ).toEqual(["item-1", "item-3"]);
+    expect(pathSortedSongs.rows.map((row) => row.playlistItem.playlistItemId)).toEqual(["item-1", "item-3"]);
 
-    const tracks = await repository.getTracksByIds([
-      "track-a",
-      "track-b",
-      "missing",
-    ]);
+    const tracks = await repository.getTracksByIds(["track-a", "track-b", "missing"]);
     expect(tracks.has("track-a")).toBe(true);
     expect(tracks.has("missing")).toBe(false);
   });
@@ -223,11 +206,7 @@ describe("indexedDB playlist repository", () => {
       preferDurableStorage: false,
     });
 
-    const created = await repository.createSession("playlist-default", [
-      "item-1",
-      "item-2",
-      "item-3",
-    ]);
+    const created = await repository.createSession("playlist-default", ["item-1", "item-2", "item-3"]);
     expect(created.order).toHaveLength(3);
 
     const first = await repository.next("playlist-default");
@@ -249,9 +228,7 @@ describe("indexedDB playlist repository", () => {
       cursor: 0,
       order: ["item-9"],
     });
-    expect(
-      (await repository.getRandomSession("playlist-default"))?.order,
-    ).toEqual(["item-9"]);
+    expect((await repository.getRandomSession("playlist-default"))?.order).toEqual(["item-9"]);
 
     await repository.saveRandomSession({
       playlistId: "playlist-empty",
@@ -270,11 +247,7 @@ describe("indexedDB playlist repository", () => {
     expect(await repository.next("playlist-out-of-range")).toBeNull();
     expect(await repository.next("playlist-missing")).toBeNull();
 
-    const seeded = await repository.createSession(
-      "playlist-seeded",
-      ["a", "b", "c"],
-      777,
-    );
+    const seeded = await repository.createSession("playlist-seeded", ["a", "b", "c"], 777);
     expect(seeded.seed).toBe(777);
   });
 
@@ -364,9 +337,7 @@ describe("indexedDB playlist repository", () => {
       preferDurableStorage: false,
     });
 
-    await expect(repository.upsertTracks([buildTrack()])).rejects.toThrow(
-      "fake put failure",
-    );
+    await expect(repository.upsertTracks([buildTrack()])).rejects.toThrow("fake put failure");
   });
 
   it("normalizes partial persisted state fields to defaults", async () => {
@@ -451,10 +422,7 @@ describe("indexedDB playlist repository", () => {
     ]);
 
     const items = await repository.getPlaylistItems("playlist-default");
-    expect(items.map((item) => item.playlistItemId)).toEqual([
-      "item-1",
-      "item-2",
-    ]);
+    expect(items.map((item) => item.playlistItemId)).toEqual(["item-1", "item-2"]);
 
     await repository.saveSession({
       playlistId: "playlist-default",
@@ -556,9 +524,7 @@ describe("indexedDB playlist repository", () => {
     expect(page.totalMatchCount).toBeGreaterThan(1_000);
     expect(page.rows).toHaveLength(40);
     expect(page.rows[0]?.playlistItem.playlistItemId).toMatch(/^item-\d+$/);
-    expect(
-      page.rows[0]?.playlistItem.sortKey <= page.rows[39]?.playlistItem.sortKey,
-    ).toBe(true);
+    expect(page.rows[0]?.playlistItem.sortKey <= page.rows[39]?.playlistItem.sortKey).toBe(true);
     expect(page.rows.every((row) => row.track.category === "song")).toBe(true);
   });
 
@@ -590,8 +556,6 @@ describe("indexedDB playlist repository", () => {
     const failingWriteRepository = getIndexedDbPlaylistDataRepository({
       preferDurableStorage: false,
     });
-    await expect(
-      failingWriteRepository.upsertTracks([buildTrack()]),
-    ).rejects.toThrow("IndexedDB write failed");
+    await expect(failingWriteRepository.upsertTracks([buildTrack()])).rejects.toThrow("IndexedDB write failed");
   });
 });

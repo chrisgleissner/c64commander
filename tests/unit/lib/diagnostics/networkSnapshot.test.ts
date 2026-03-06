@@ -125,9 +125,7 @@ describe("networkSnapshot", () => {
       timestamp: "2026-03-02T10:00:00.000Z",
     });
 
-    const resOnly = snapshot.requests.find(
-      (entry) => entry.method === "GET" && entry.httpStatus === 204,
-    );
+    const resOnly = snapshot.requests.find((entry) => entry.method === "GET" && entry.httpStatus === 204);
     expect(resOnly?.timestamp).toBe("2026-03-02T10:00:00.900Z");
   });
 

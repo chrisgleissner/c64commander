@@ -17,9 +17,7 @@ type FtpSrvInstance = {
   server: { address: () => AddressInfo | string | null };
 };
 
-type FtpSrvConstructor = new (
-  options: Record<string, unknown>,
-) => FtpSrvInstance;
+type FtpSrvConstructor = new (options: Record<string, unknown>) => FtpSrvInstance;
 
 export type MockFtpServer = {
   host: string;
@@ -37,9 +35,7 @@ type MockFtpServerOptions = {
   pasvMax?: number;
 };
 
-export async function createMockFtpServer(
-  options: MockFtpServerOptions,
-): Promise<MockFtpServer> {
+export async function createMockFtpServer(options: MockFtpServerOptions): Promise<MockFtpServer> {
   const host = options.host ?? "127.0.0.1";
   const rootDir = path.resolve(options.rootDir);
   const port = options.port ?? 0;

@@ -19,13 +19,7 @@ interface SaveConfigDialogProps {
   isSaving: boolean;
 }
 
-export function SaveConfigDialog({
-  open,
-  onOpenChange,
-  existingNames,
-  onSave,
-  isSaving,
-}: SaveConfigDialogProps) {
+export function SaveConfigDialog({ open, onOpenChange, existingNames, onSave, isSaving }: SaveConfigDialogProps) {
   const [name, setName] = useState("");
 
   // Reset name when dialog opens
@@ -57,15 +51,9 @@ export function SaveConfigDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Save to App</DialogTitle>
-          <DialogDescription>
-            Store the current C64U configuration in this app.
-          </DialogDescription>
+          <DialogDescription>Store the current C64U configuration in this app.</DialogDescription>
         </DialogHeader>
-        <Input
-          placeholder="Config name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
+        <Input placeholder="Config name" value={name} onChange={(e) => setName(e.target.value)} />
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel

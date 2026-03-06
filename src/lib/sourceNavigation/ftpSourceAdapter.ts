@@ -32,8 +32,7 @@ const loadCache = (): FtpCacheState => {
     const raw = localStorage.getItem(CACHE_KEY);
     if (!raw) return { entries: {}, order: [] };
     const parsed = JSON.parse(raw) as FtpCacheState;
-    if (!parsed || typeof parsed !== "object")
-      return { entries: {}, order: [] };
+    if (!parsed || typeof parsed !== "object") return { entries: {}, order: [] };
     return {
       entries: parsed.entries ?? {},
       order: Array.isArray(parsed.order) ? parsed.order : [],
@@ -56,8 +55,7 @@ const saveCache = (state: FtpCacheState) => {
   }
 };
 
-const buildCacheKey = (host: string, port: number | undefined, path: string) =>
-  `${host}:${port ?? ""}:${path || "/"}`;
+const buildCacheKey = (host: string, port: number | undefined, path: string) => `${host}:${port ?? ""}:${path || "/"}`;
 
 export const normalizeFtpHost = (host: string) => {
   if (!host) return host;
@@ -121,10 +119,7 @@ const listEntries = async (path: string): Promise<SourceEntry[]> => {
   return entries;
 };
 
-const listFilesRecursive = async (
-  path: string,
-  options?: { signal?: AbortSignal },
-): Promise<SourceEntry[]> => {
+const listFilesRecursive = async (path: string, options?: { signal?: AbortSignal }): Promise<SourceEntry[]> => {
   const queue = [path || "/"];
   const visited = new Set<string>();
   const results: SourceEntry[] = [];

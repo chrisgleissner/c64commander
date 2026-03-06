@@ -6,10 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import {
-  DISK_IMAGE_EXTENSIONS,
-  getFileExtension,
-} from "@/lib/playback/fileTypes";
+import { DISK_IMAGE_EXTENSIONS, getFileExtension } from "@/lib/playback/fileTypes";
 
 export type DiskLocation = "local" | "ultimate";
 
@@ -37,8 +34,7 @@ export const normalizeDiskPath = (value: string) => {
   return withSlash.replace(/\/+/g, "/");
 };
 
-export const buildDiskId = (location: DiskLocation, path: string) =>
-  `${location}:${normalizeDiskPath(path)}`;
+export const buildDiskId = (location: DiskLocation, path: string) => `${location}:${normalizeDiskPath(path)}`;
 
 export const getDiskName = (path: string) => {
   const normalized = normalizeDiskPath(path);
@@ -53,8 +49,7 @@ export const getDiskFolderPath = (path: string) => {
   return `/${parts.slice(0, -1).join("/")}/`;
 };
 
-export const isDiskImagePath = (path: string) =>
-  DISK_IMAGE_EXTENSIONS.has(getFileExtension(path));
+export const isDiskImagePath = (path: string) => DISK_IMAGE_EXTENSIONS.has(getFileExtension(path));
 
 export const getLeafFolderName = (path: string) => {
   const normalized = normalizeDiskPath(path);

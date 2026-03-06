@@ -149,10 +149,6 @@ describe("uiErrors", () => {
       "HOME_CPU_SPEED: Update failed",
       expect.objectContaining({ recoverableConnectivityIssue: true }),
     );
-    expect(addLog).not.toHaveBeenCalledWith(
-      "warn",
-      expect.anything(),
-      expect.anything(),
-    );
+    expect(addLog).not.toHaveBeenCalledWith("warn", expect.anything(), expect.anything());
   });
 });

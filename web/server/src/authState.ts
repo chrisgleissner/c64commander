@@ -13,9 +13,7 @@ type LoginAttemptRecord = {
   blockedUntilMs: number;
 };
 
-const parseCookies = (
-  headerValue: string | undefined,
-): Record<string, string> => {
+const parseCookies = (headerValue: string | undefined): Record<string, string> => {
   if (!headerValue) return {};
   return headerValue.split(";").reduce<Record<string, string>>((acc, pair) => {
     const idx = pair.indexOf("=");
@@ -113,10 +111,7 @@ export const createAuthState = (options: {
       sessions.delete(token);
     }
     const securePart = isSecureCookieEnabled ? "; Secure" : "";
-    res.setHeader(
-      "Set-Cookie",
-      `${cookieName}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0${securePart}`,
-    );
+    res.setHeader("Set-Cookie", `${cookieName}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0${securePart}`);
   };
 
   const cleanupExpiredSessions = () => {

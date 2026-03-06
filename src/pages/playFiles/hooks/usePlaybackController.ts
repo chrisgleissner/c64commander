@@ -19,10 +19,7 @@ import {
 } from "@/pages/playFiles/playFilesUtils";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 
-import {
-  buildLocalPlayFileFromUri,
-  buildLocalPlayFileFromTree,
-} from "@/lib/playback/fileLibraryUtils";
+import { buildLocalPlayFileFromUri, buildLocalPlayFileFromTree } from "@/lib/playback/fileLibraryUtils";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { resolveAudioMixerMuteValue } from "@/lib/config/audioMixerSolo";
 import type { AudioMixerItem } from "@/pages/playFiles/playFilesUtils";
@@ -88,25 +85,14 @@ interface UsePlaybackControllerProps {
 
   // Volume Control
   restoreVolumeOverrides: (reason: string) => Promise<void>;
-  applyAudioMixerUpdates: (
-    updates: Record<string, string | number>,
-    reason: string,
-  ) => Promise<void>;
-  buildEnabledSidMuteUpdates: (
-    items: AudioMixerItem[],
-    enablement: SidEnablement,
-  ) => Record<string, string | number>;
-  captureSidMuteSnapshot: (
-    items: AudioMixerItem[],
-    enablement: SidEnablement,
-  ) => SidMuteSnapshot;
+  applyAudioMixerUpdates: (updates: Record<string, string | number>, reason: string) => Promise<void>;
+  buildEnabledSidMuteUpdates: (items: AudioMixerItem[], enablement: SidEnablement) => Record<string, string | number>;
+  captureSidMuteSnapshot: (items: AudioMixerItem[], enablement: SidEnablement) => SidMuteSnapshot;
   snapshotToUpdates: (
     snapshot: SidMuteSnapshot | null | undefined,
     currentItems?: AudioMixerItem[],
   ) => Record<string, string | number>;
-  resolveEnabledSidVolumeItems: (
-    includeDisabled?: boolean,
-  ) => Promise<AudioMixerItem[]>;
+  resolveEnabledSidVolumeItems: (includeDisabled?: boolean) => Promise<AudioMixerItem[]>;
   dispatchVolume: React.Dispatch<VolumeAction>;
   sidEnablement: SidEnablement;
   pauseMuteSnapshotRef: MutableRefObject<SidMuteSnapshot | null>;
@@ -180,23 +166,17 @@ export function usePlaybackController({
 }: UsePlaybackControllerProps) {
   const durationFallbackMs = durationSeconds * 1000;
 
-  const withTimeout = useCallback(
-    async <T>(promise: Promise<T>, timeoutMs: number, operation: string) => {
-      let timeoutId: number | null = null;
-      const timeoutPromise = new Promise<T>((_, reject) => {
-        timeoutId = window.setTimeout(
-          () => reject(new Error(`${operation} timed out`)),
-          timeoutMs,
-        );
-      });
-      try {
-        return await Promise.race([promise, timeoutPromise]);
-      } finally {
-        if (timeoutId !== null) window.clearTimeout(timeoutId);
-      }
-    },
-    [],
-  );
+  const withTimeout = useCallback(async <T>(promise: Promise<T>, timeoutMs: number, operation: string) => {
+    let timeoutId: number | null = null;
+    const timeoutPromise = new Promise<T>((_, reject) => {
+      timeoutId = window.setTimeout(() => reject(new Error(`${operation} timed out`)), timeoutMs);
+    });
+    try {
+      return await Promise.race([promise, timeoutPromise]);
+    } finally {
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
+    }
+  }, []);
 
   const resumeMachineWithRetry = useCallback(
     async (api: ReturnType<typeof getC64API>) => {
@@ -238,11 +218,7 @@ export function usePlaybackController({
 
       try {
         const filePath = getLocalFilePath(file);
-        const localDurationMs = await resolveSonglengthDurationMsForPath(
-          filePath,
-          file,
-          songNr ?? null,
-        );
+        const localDurationMs = await resolveSonglengthDurationMsForPath(filePath, file, songNr ?? null);
         if (localDurationMs !== null) {
           return {
             durationMs: localDurationMs,
@@ -254,10 +230,7 @@ export function usePlaybackController({
         const { computeSidMd5 } = await import("@/lib/sid/sidUtils");
         const md5 = await computeSidMd5(buffer);
         const seconds = await getHvscDurationByMd5Seconds(md5);
-        const durationMs =
-          seconds !== undefined && seconds !== null
-            ? seconds * 1000
-            : durationFallbackMs;
+        const durationMs = seconds !== undefined && seconds !== null ? seconds * 1000 : durationFallbackMs;
         return { durationMs, subsongCount, readable: true } as const;
       } catch (error) {
         addErrorLog("Failed to resolve SID metadata", {
@@ -298,72 +271,41 @@ export function usePlaybackController({
   );
 
   const playItem = useCallback(
-    async (
-      item: PlaylistItem,
-      options?: { rebootBeforePlay?: boolean; playlistIndex?: number },
-    ) => {
+    async (item: PlaylistItem, options?: { rebootBeforePlay?: boolean; playlistIndex?: number }) => {
       return enqueuePlayTransition(async () => {
         if (item.request.source === "local" && !item.request.file) {
           const sourceId = item.sourceId;
           const treeUri = sourceId ? localSourceTreeUris.get(sourceId) : null;
           if (treeUri) {
             const normalizedPath = normalizeSourcePath(item.path);
-            item.request.file = buildLocalPlayFileFromTree(
-              item.label,
-              normalizedPath,
-              treeUri,
-            );
+            item.request.file = buildLocalPlayFileFromTree(item.label, normalizedPath, treeUri);
           }
           const localEntry = sourceId
-            ? localEntriesBySourceId
-                .get(sourceId)
-                ?.get(normalizeSourcePath(item.path))
+            ? localEntriesBySourceId.get(sourceId)?.get(normalizeSourcePath(item.path))
             : null;
           if (!item.request.file && localEntry?.uri) {
-            item.request.file = buildLocalPlayFileFromUri(
-              item.label,
-              normalizeSourcePath(item.path),
-              localEntry.uri,
-            );
+            item.request.file = buildLocalPlayFileFromUri(item.label, normalizeSourcePath(item.path), localEntry.uri);
           }
           if (!item.request.file) {
-            throw new Error(
-              "Local file unavailable. Re-add it to the playlist.",
-            );
+            throw new Error("Local file unavailable. Re-add it to the playlist.");
           }
         }
         let durationOverride: number | undefined;
         let subsongCount: number | undefined;
         if (item.category === "sid" && item.request.source === "local") {
-          const metadata = await resolveSidMetadata(
-            item.request.file,
-            item.request.songNr ?? null,
-          );
+          const metadata = await resolveSidMetadata(item.request.file, item.request.songNr ?? null);
           durationOverride = metadata.durationMs;
           subsongCount = metadata.subsongCount;
           if (!metadata.readable) {
-            throw new Error(
-              "Local file unavailable. Re-add it to the playlist.",
-            );
+            throw new Error("Local file unavailable. Re-add it to the playlist.");
           }
-        } else if (
-          item.category === "sid" &&
-          item.request.source === "ultimate" &&
-          !item.durationMs
-        ) {
+        } else if (item.category === "sid" && item.request.source === "ultimate" && !item.durationMs) {
           try {
-            const pathMs = await resolveSonglengthDurationMsForPath(
-              item.path,
-              null,
-              item.request.songNr ?? null,
-            );
+            const pathMs = await resolveSonglengthDurationMsForPath(item.path, null, item.request.songNr ?? null);
             if (pathMs !== null) {
               durationOverride = pathMs;
             } else {
-              const md5Ms = await resolveUltimateSidDurationByMd5(
-                item.path,
-                item.request.songNr ?? null,
-              );
+              const md5Ms = await resolveUltimateSidDurationByMd5(item.path, item.request.songNr ?? null);
               if (md5Ms !== null) durationOverride = md5Ms;
             }
           } catch (error) {
@@ -400,21 +342,15 @@ export function usePlaybackController({
           ? { ...item.request, durationMs: durationOverride }
           : item.request;
         const plan = buildPlayPlan(request);
-        const shouldReboot =
-          options?.rebootBeforePlay ?? item.category === "disk";
-        const executionOptions = shouldReboot
-          ? { rebootBeforeMount: true }
-          : undefined;
+        const shouldReboot = options?.rebootBeforePlay ?? item.category === "disk";
+        const executionOptions = shouldReboot ? { rebootBeforeMount: true } : undefined;
         const resolvedDurationBase = durationOverride ?? item.durationMs;
         const resolvedDuration = isSongCategory(item.category)
           ? (resolvedDurationBase ?? durationFallbackMs)
           : resolvedDurationBase;
         setElapsedMs(0);
         setDurationMs(resolvedDuration);
-        if (
-          typeof options?.playlistIndex === "number" &&
-          options.playlistIndex >= 0
-        ) {
+        if (typeof options?.playlistIndex === "number" && options.playlistIndex >= 0) {
           setCurrentIndex(options.playlistIndex);
         }
         await executePlayPlan(api, plan, executionOptions);
@@ -437,10 +373,7 @@ export function usePlaybackController({
           autoAdvanceGuardRef.current = null;
           setAutoAdvanceDueAtMs(null);
         }
-        if (
-          resolvedDuration !== item.durationMs ||
-          subsongCount !== item.subsongCount
-        ) {
+        if (resolvedDuration !== item.durationMs || subsongCount !== item.subsongCount) {
           setPlaylist((prev) =>
             prev.map((entry) =>
               entry.id === item.id
@@ -654,26 +587,18 @@ export function usePlaybackController({
           const wasMuted =
             resumeSnapshot && resumeItems.length
               ? resumeItems.every(
-                  (item) =>
-                    resumeSnapshot.volumes[item.name] ===
-                    resolveAudioMixerMuteValue(item.options),
+                  (item) => resumeSnapshot.volumes[item.name] === resolveAudioMixerMuteValue(item.options),
                 )
               : false;
           await resumeMachineWithRetry(api);
           if (pauseMuteSnapshotRef.current && resumeItems.length) {
             try {
-              await applyAudioMixerUpdates(
-                snapshotToUpdates(pauseMuteSnapshotRef.current, resumeItems),
-                "Resume",
-              );
+              await applyAudioMixerUpdates(snapshotToUpdates(pauseMuteSnapshotRef.current, resumeItems), "Resume");
             } catch (error) {
-              addErrorLog(
-                "Failed to reapply audio mixer settings after resume",
-                {
-                  error: (error as Error).message,
-                  itemCount: resumeItems.length,
-                },
-              );
+              addErrorLog("Failed to reapply audio mixer settings after resume", {
+                error: (error as Error).message,
+                itemCount: resumeItems.length,
+              });
             }
           }
           pauseMuteSnapshotRef.current = null;
@@ -687,8 +612,7 @@ export function usePlaybackController({
           playedClockRef.current.resume(now);
           setPlayedMs(playedClockRef.current.current(now));
           if (autoAdvanceGuardRef.current && typeof durationMs === "number") {
-            autoAdvanceGuardRef.current.dueAtMs =
-              now + Math.max(0, durationMs - elapsedMs);
+            autoAdvanceGuardRef.current.dueAtMs = now + Math.max(0, durationMs - elapsedMs);
             autoAdvanceGuardRef.current.autoFired = false;
             autoAdvanceGuardRef.current.userCancelled = false;
             setAutoAdvanceDueAtMs(autoAdvanceGuardRef.current.dueAtMs);
@@ -696,17 +620,11 @@ export function usePlaybackController({
         } else {
           const pauseItems = await resolveEnabledSidVolumeItems();
           if (pauseItems.length) {
-            pauseMuteSnapshotRef.current = captureSidMuteSnapshot(
-              pauseItems,
-              sidEnablement,
-            );
+            pauseMuteSnapshotRef.current = captureSidMuteSnapshot(pauseItems, sidEnablement);
           }
           await withTimeout(api.machinePause(), 3000, "Pause");
           if (pauseItems.length) {
-            await applyAudioMixerUpdates(
-              buildEnabledSidMuteUpdates(pauseItems, sidEnablement),
-              "Pause",
-            );
+            await applyAudioMixerUpdates(buildEnabledSidMuteUpdates(pauseItems, sidEnablement), "Pause");
             dispatchVolume({ type: "mute", reason: "pause" });
           }
           const now = Date.now();
@@ -753,19 +671,12 @@ export function usePlaybackController({
   );
 
   const handleNext = useCallback(
-    async (
-      source: "auto" | "user" = "user",
-      expectedTrackInstanceId?: number,
-    ) => {
+    async (source: "auto" | "user" = "user", expectedTrackInstanceId?: number) => {
       if (!playlist.length) return;
       if (source === "auto") {
         const guard = autoAdvanceGuardRef.current;
         if (!guard || guard.autoFired || guard.userCancelled) return;
-        if (
-          typeof expectedTrackInstanceId === "number" &&
-          guard.trackInstanceId !== expectedTrackInstanceId
-        )
-          return;
+        if (typeof expectedTrackInstanceId === "number" && guard.trackInstanceId !== expectedTrackInstanceId) return;
         guard.autoFired = true;
       } else {
         cancelAutoAdvance();
@@ -789,8 +700,7 @@ export function usePlaybackController({
       }
 
       const nextItem = playlist[nextIndex];
-      const shouldReboot =
-        currentItem?.category === "disk" || nextItem?.category === "disk";
+      const shouldReboot = currentItem?.category === "disk" || nextItem?.category === "disk";
       try {
         await playItem(nextItem, {
           rebootBeforePlay: shouldReboot,
@@ -841,8 +751,7 @@ export function usePlaybackController({
     const currentItem = playlist[currentIndex];
     const prevIndex = Math.max(0, currentIndex - 1);
     const prevItem = playlist[prevIndex];
-    const shouldReboot =
-      currentItem?.category === "disk" || prevItem?.category === "disk";
+    const shouldReboot = currentItem?.category === "disk" || prevItem?.category === "disk";
     try {
       await playItem(prevItem, {
         rebootBeforePlay: shouldReboot,
@@ -882,10 +791,7 @@ export function usePlaybackController({
 
   const playlistItemDuration = useCallback(
     (item: PlaylistItem, index: number) => {
-      const base =
-        index === currentIndex
-          ? (durationMs ?? item.durationMs)
-          : item.durationMs;
+      const base = index === currentIndex ? (durationMs ?? item.durationMs) : item.durationMs;
       if (isSongCategory(item.category)) {
         return base ?? durationFallbackMs;
       }

@@ -19,13 +19,7 @@ const RadioGroup = React.forwardRef<
 >(({ className, onValueChange, ...props }, ref) => {
   return (
     <RadioGroupPrimitive.Root
-      onValueChange={wrapValueChange(
-        onValueChange,
-        "select",
-        "RadioGroup",
-        props,
-        "RadioGroup",
-      )}
+      onValueChange={wrapValueChange(onValueChange, "select", "RadioGroup", props, "RadioGroup")}
       className={cn("grid gap-2", className)}
       {...props}
       ref={ref}

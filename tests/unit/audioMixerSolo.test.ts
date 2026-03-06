@@ -96,10 +96,7 @@ describe("audio mixer solo routing", () => {
   });
 
   it("buildSoloRoutingUpdates skips non-SID-volume items (line 69)", () => {
-    const updates = buildSoloRoutingUpdates(
-      [{ name: "master", value: "0 dB", options: ["0 dB", "-6 dB"] }],
-      null,
-    );
+    const updates = buildSoloRoutingUpdates([{ name: "master", value: "0 dB", options: ["0 dB", "-6 dB"] }], null);
     expect(Object.keys(updates)).toHaveLength(0);
   });
 });

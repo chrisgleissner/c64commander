@@ -6,29 +6,11 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import {
-  useState,
-  useMemo,
-  useEffect,
-  useReducer,
-  useRef,
-  useCallback,
-} from "react";
+import { useState, useMemo, useEffect, useReducer, useRef, useCallback } from "react";
 import { wrapUserEvent } from "@/lib/tracing/userTrace";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  Search,
-  ChevronDown,
-  Loader2,
-  RefreshCw,
-  FolderOpen,
-} from "lucide-react";
-import {
-  useC64Categories,
-  useC64Category,
-  useC64SetConfig,
-  useC64Connection,
-} from "@/hooks/useC64Connection";
+import { Search, ChevronDown, Loader2, RefreshCw, FolderOpen } from "lucide-react";
+import { useC64Categories, useC64Category, useC64SetConfig, useC64Connection } from "@/hooks/useC64Connection";
 import { ConfigItemRow } from "@/components/ConfigItemRow";
 import { useC64UpdateConfigBatch } from "@/hooks/useC64Connection";
 import { Input } from "@/components/ui/input";
@@ -43,15 +25,8 @@ import { useRefreshControl } from "@/hooks/useRefreshControl";
 import { isAudioMixerValueEqual } from "@/lib/config/audioMixer";
 import { getC64API } from "@/lib/c64api";
 import { cn } from "@/lib/utils";
-import {
-  buildSoloRoutingUpdates,
-  isSidVolumeName,
-  soloReducer,
-} from "@/lib/config/audioMixerSolo";
-import {
-  normalizeConfigItem,
-  type NormalizedConfigItem,
-} from "@/lib/config/normalizeConfigItem";
+import { buildSoloRoutingUpdates, isSidVolumeName, soloReducer } from "@/lib/config/audioMixerSolo";
+import { normalizeConfigItem, type NormalizedConfigItem } from "@/lib/config/normalizeConfigItem";
 import { AppBar } from "@/components/AppBar";
 import { updateHasChanges } from "@/lib/config/appConfigStore";
 
@@ -62,12 +37,7 @@ type ConfigListItem = {
   details?: NormalizedConfigItem["details"];
 };
 
-const DHCP_STATIC_FIELDS = new Set([
-  "Static IP",
-  "Static Netmask",
-  "Static Gateway",
-  "Static DNS",
-]);
+const DHCP_STATIC_FIELDS = new Set(["Static IP", "Static Netmask", "Static Gateway", "Static DNS"]);
 
 function CategorySection({
   categoryName,
@@ -80,18 +50,12 @@ function CategorySection({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
-  const {
-    data: categoryData,
-    isLoading,
-    refetch,
-  } = useC64Category(categoryName, isOpen);
+  const { data: categoryData, isLoading, refetch } = useC64Category(categoryName, isOpen);
   const setConfig = useC64SetConfig();
   const updateConfigBatch = useC64UpdateConfigBatch();
   const isAudioMixer = categoryName === "Audio Mixer";
   const [soloState, dispatchSolo] = useReducer(soloReducer, { soloItem: null });
-  const [audioConfiguredItems, setAudioConfiguredItems] = useState<
-    ConfigListItem[]
-  >([]);
+  const [audioConfiguredItems, setAudioConfiguredItems] = useState<ConfigListItem[]>([]);
   const audioConfiguredRef = useRef<ConfigListItem[]>([]);
   const soloSnapshotRef = useRef<ConfigListItem[]>([]);
   const wasSoloActiveRef = useRef(false);
@@ -127,19 +91,13 @@ function CategorySection({
   }, [categoryData, categoryName]);
 
   const dhcpStatus = useMemo(() => {
-    if (
-      categoryName !== "Ethernet Settings" &&
-      categoryName !== "WiFi settings"
-    )
-      return null;
+    if (categoryName !== "Ethernet Settings" && categoryName !== "WiFi settings") return null;
     const dhcpItem = items.find((item) => item.name === "Use DHCP");
     if (!dhcpItem) return null;
     return String(dhcpItem.value).trim().toLowerCase();
   }, [categoryName, items]);
 
-  const isDhcpEnabled = dhcpStatus
-    ? ["enabled", "on", "true", "yes", "1"].includes(dhcpStatus)
-    : false;
+  const isDhcpEnabled = dhcpStatus ? ["enabled", "on", "true", "yes", "1"].includes(dhcpStatus) : false;
 
   const syncAudioConfiguredItems = useCallback((next: ConfigListItem[]) => {
     setAudioConfiguredItems(next);
@@ -160,18 +118,10 @@ function CategorySection({
       }
       return;
     }
-    const snapshot = soloSnapshotRef.current.length
-      ? soloSnapshotRef.current
-      : items;
+    const snapshot = soloSnapshotRef.current.length ? soloSnapshotRef.current : items;
     syncAudioConfiguredItems(snapshot);
     soloSnapshotRef.current = snapshot;
-  }, [
-    audioConfiguredItems.length,
-    isAudioMixer,
-    items,
-    soloState.soloItem,
-    syncAudioConfiguredItems,
-  ]);
+  }, [audioConfiguredItems.length, isAudioMixer, items, soloState.soloItem, syncAudioConfiguredItems]);
 
   useEffect(() => {
     if (!isAudioMixer) return;
@@ -191,9 +141,7 @@ function CategorySection({
     async (soloItem: string | null, configuredOverride?: ConfigListItem[]) => {
       if (!isAudioMixer) return;
       const configured =
-        configuredOverride && configuredOverride.length > 0
-          ? configuredOverride
-          : audioConfiguredRef.current;
+        configuredOverride && configuredOverride.length > 0 ? configuredOverride : audioConfiguredRef.current;
       if (!configured.length) return;
       if (soloItem) {
         soloSnapshotRef.current = configured;
@@ -287,12 +235,8 @@ function CategorySection({
     if (!isAudioMixer) return undefined;
     return () => {
       if (!wasSoloActiveRef.current && !soloState.soloItem) return;
-      const configured = audioConfiguredRef.current.length
-        ? audioConfiguredRef.current
-        : items;
-      let snapshot = soloSnapshotRef.current.length
-        ? soloSnapshotRef.current
-        : configured;
+      const configured = audioConfiguredRef.current.length ? audioConfiguredRef.current : items;
+      let snapshot = soloSnapshotRef.current.length ? soloSnapshotRef.current : configured;
       try {
         const stored = sessionStorage.getItem(soloSnapshotKey);
         if (stored) {
@@ -310,10 +254,7 @@ function CategorySection({
     };
   }, [isAudioMixer, applySoloRouting, items, soloState.soloItem]);
 
-  const handleValueChange = async (
-    itemName: string,
-    value: string | number,
-  ) => {
+  const handleValueChange = async (itemName: string, value: string | number) => {
     try {
       await setConfig.mutateAsync({
         category: categoryName,
@@ -339,9 +280,7 @@ function CategorySection({
     (itemName: string, value: string | number) => {
       setAudioConfiguredItems((prev) => {
         const source = prev.length ? prev : items;
-        const next = source.map((item) =>
-          item.name === itemName ? { ...item, value } : item,
-        );
+        const next = source.map((item) => (item.name === itemName ? { ...item, value } : item));
         audioConfiguredRef.current = next;
         return next;
       });
@@ -349,10 +288,7 @@ function CategorySection({
     [items],
   );
 
-  const handleAudioValueChange = async (
-    itemName: string,
-    value: string | number,
-  ) => {
+  const handleAudioValueChange = async (itemName: string, value: string | number) => {
     const wasSoloActive = Boolean(soloState.soloItem);
     if (wasSoloActive) {
       skipSoloRoutingRef.current = true;
@@ -362,10 +298,7 @@ function CategorySection({
     if (editTimeoutRef.current) {
       window.clearTimeout(editTimeoutRef.current);
     }
-    editTimeoutRef.current = window.setTimeout(
-      () => setIsEditingVolumes(false),
-      800,
-    );
+    editTimeoutRef.current = window.setTimeout(() => setIsEditingVolumes(false), 800);
     updateAudioConfiguredValue(itemName, value);
     if (wasSoloActive) {
       const snapshot = soloSnapshotRef.current.length
@@ -380,9 +313,7 @@ function CategorySection({
           category: categoryName,
           updates,
         });
-        soloSnapshotRef.current = audioConfiguredRef.current.length
-          ? audioConfiguredRef.current
-          : items;
+        soloSnapshotRef.current = audioConfiguredRef.current.length ? audioConfiguredRef.current : items;
       } catch (error) {
         reportUserError({
           operation: "AUDIO_MIXER_UPDATE",
@@ -398,9 +329,7 @@ function CategorySection({
     }
     await handleValueChange(itemName, value);
     if (!soloState.soloItem) {
-      soloSnapshotRef.current = audioConfiguredRef.current.length
-        ? audioConfiguredRef.current
-        : items;
+      soloSnapshotRef.current = audioConfiguredRef.current.length ? audioConfiguredRef.current : items;
     }
   };
 
@@ -465,11 +394,7 @@ function CategorySection({
     try {
       const updates: Record<string, string | number> = {};
       for (const item of items) {
-        const target = await resolveAudioMixerResetValue(
-          categoryName,
-          item.name,
-          item.options,
-        );
+        const target = await resolveAudioMixerResetValue(categoryName, item.name, item.options);
         if (target === undefined) continue;
         if (isAudioMixerValueEqual(item.value, target)) continue;
         updates[item.name] = target;
@@ -513,8 +438,7 @@ function CategorySection({
     await refetch();
   };
 
-  const displayItems =
-    isAudioMixer && audioConfiguredItems.length ? audioConfiguredItems : items;
+  const displayItems = isAudioMixer && audioConfiguredItems.length ? audioConfiguredItems : items;
 
   return (
     <motion.div
@@ -539,10 +463,7 @@ function CategorySection({
           </div>
           <span className="font-medium text-sm">{categoryName}</span>
         </div>
-        <motion.div
-          animate={{ rotate: isOpen ? 180 : 0 }}
-          transition={{ duration: 0.2 }}
-        >
+        <motion.div animate={{ rotate: isOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
           <ChevronDown className="h-5 w-5 text-muted-foreground" />
         </motion.div>
       </button>
@@ -556,10 +477,7 @@ function CategorySection({
             transition={{ duration: 0.2 }}
           >
             <div className="border-t border-border px-4 pt-2 pb-3">
-              <div
-                className="flex items-center justify-between gap-2 py-2"
-                data-testid="config-group-actions"
-              >
+              <div className="flex items-center justify-between gap-2 py-2" data-testid="config-group-actions">
                 <div className="flex items-center gap-2">
                   {categoryName === "Audio Mixer" && (
                     <Button
@@ -577,23 +495,14 @@ function CategorySection({
                       variant="outline"
                       size="sm"
                       onClick={handleSyncClock}
-                      disabled={
-                        isLoading ||
-                        items.length === 0 ||
-                        updateConfigBatch.isPending
-                      }
+                      disabled={isLoading || items.length === 0 || updateConfigBatch.isPending}
                       className="text-xs"
                     >
                       Sync clock
                     </Button>
                   )}
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleRefresh}
-                  className="text-xs"
-                >
+                <Button variant="ghost" size="sm" onClick={handleRefresh} className="text-xs">
                   <RefreshCw className="h-3 w-3 mr-1" />
                   Refresh
                 </Button>
@@ -604,31 +513,18 @@ function CategorySection({
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
               ) : items.length === 0 ? (
-                <div className="py-4 text-center text-sm text-muted-foreground">
-                  No settings available
-                </div>
+                <div className="py-4 text-center text-sm text-muted-foreground">No settings available</div>
               ) : (
-                <div
-                  className="divide-y divide-border"
-                  data-testid="config-group-list"
-                >
+                <div className="divide-y divide-border" data-testid="config-group-list">
                   {displayItems.map((item) => {
-                    const isSidVolume =
-                      isAudioMixer && isSidVolumeName(item.name);
-                    const isSoloed =
-                      isSidVolume && soloState.soloItem === item.name;
-                    const isMutedBySolo =
-                      isSidVolume &&
-                      soloState.soloItem &&
-                      soloState.soloItem !== item.name;
+                    const isSidVolume = isAudioMixer && isSidVolumeName(item.name);
+                    const isSoloed = isSidVolume && soloState.soloItem === item.name;
+                    const isMutedBySolo = isSidVolume && soloState.soloItem && soloState.soloItem !== item.name;
                     const isDhcpStaticField =
-                      (categoryName === "Ethernet Settings" ||
-                        categoryName === "WiFi settings") &&
+                      (categoryName === "Ethernet Settings" || categoryName === "WiFi settings") &&
                       DHCP_STATIC_FIELDS.has(item.name);
                     const isReadOnly = isDhcpEnabled && isDhcpStaticField;
-                    const testIdBase = item.name
-                      .toLowerCase()
-                      .replace(/\s+/g, "-");
+                    const testIdBase = item.name.toLowerCase().replace(/\s+/g, "-");
                     const rowClassName = cn(
                       isSidVolume && "rounded-md px-3",
                       isSoloed && "bg-primary/10",
@@ -637,25 +533,16 @@ function CategorySection({
 
                     const rightAccessory = isSidVolume ? (
                       <div className="flex items-center gap-3">
-                        {isMutedBySolo && (
-                          <span className="text-[11px] font-medium text-muted-foreground">
-                            Muted
-                          </span>
-                        )}
+                        {isMutedBySolo && <span className="text-[11px] font-medium text-muted-foreground">Muted</span>}
                         <div className="flex items-center gap-2">
-                          <Label
-                            htmlFor={`solo-${item.name}`}
-                            className="text-[11px] uppercase tracking-wide"
-                          >
+                          <Label htmlFor={`solo-${item.name}`} className="text-[11px] uppercase tracking-wide">
                             Solo
                           </Label>
                           <Switch
                             id={`solo-${item.name}`}
                             checked={isSoloed}
                             aria-label={`Solo ${item.name}`}
-                            onCheckedChange={() =>
-                              dispatchSolo({ type: "toggle", item: item.name })
-                            }
+                            onCheckedChange={() => dispatchSolo({ type: "toggle", item: item.name })}
                             disabled={isEditingVolumes}
                             data-testid={`audio-mixer-solo-${testIdBase}`}
                           />
@@ -672,24 +559,14 @@ function CategorySection({
                         options={item.options}
                         details={item.details}
                         onValueChange={(v) =>
-                          isSidVolume
-                            ? handleAudioValueChange(item.name, v)
-                            : handleValueChange(item.name, v)
+                          isSidVolume ? handleAudioValueChange(item.name, v) : handleValueChange(item.name, v)
                         }
                         isLoading={setConfig.isPending}
                         readOnly={isReadOnly}
                         className={rowClassName}
                         rightAccessory={rightAccessory}
-                        valueTestId={
-                          isSidVolume
-                            ? `audio-mixer-value-${testIdBase}`
-                            : undefined
-                        }
-                        sliderTestId={
-                          isSidVolume
-                            ? `audio-mixer-slider-${testIdBase}`
-                            : undefined
-                        }
+                        valueTestId={isSidVolume ? `audio-mixer-value-${testIdBase}` : undefined}
+                        sliderTestId={isSidVolume ? `audio-mixer-slider-${testIdBase}` : undefined}
                       />
                     );
                   })}
@@ -716,19 +593,12 @@ export default function ConfigBrowserPage() {
     if (!categoriesData?.categories) return [];
     if (!searchQuery) return categoriesData.categories;
 
-    return categoriesData.categories.filter((cat) =>
-      cat.toLowerCase().includes(searchQuery.toLowerCase()),
-    );
+    return categoriesData.categories.filter((cat) => cat.toLowerCase().includes(searchQuery.toLowerCase()));
   }, [categoriesData?.categories, searchQuery]);
 
   return (
     <div className="min-h-screen pb-24 pt-[var(--app-bar-height)]">
-      <AppBar
-        title="Config"
-        subtitle={
-          <span>{categoriesData?.categories.length || 0} categories</span>
-        }
-      >
+      <AppBar title="Config" subtitle={<span>{categoriesData?.categories.length || 0} categories</span>}>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -743,12 +613,8 @@ export default function ConfigBrowserPage() {
       <main className="container py-4 space-y-3">
         {!status.isConnected ? (
           <div className="bg-destructive/10 border border-destructive/20 rounded-xl p-4 text-center">
-            <p className="text-sm text-destructive font-medium">
-              Not connected
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Configure connection in Settings
-            </p>
+            <p className="text-sm text-destructive font-medium">Not connected</p>
+            <p className="text-xs text-muted-foreground mt-1">Configure connection in Settings</p>
           </div>
         ) : isLoading ? (
           <div className="flex items-center justify-center py-16">
@@ -756,9 +622,7 @@ export default function ConfigBrowserPage() {
           </div>
         ) : filteredCategories.length === 0 ? (
           <div className="py-8 text-center text-sm text-muted-foreground">
-            {searchQuery
-              ? "No categories match your search"
-              : "No categories available"}
+            {searchQuery ? "No categories match your search" : "No categories available"}
           </div>
         ) : (
           filteredCategories.map((category, index) => (

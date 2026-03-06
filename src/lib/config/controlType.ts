@@ -6,12 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-export type ControlKind =
-  | "password"
-  | "checkbox"
-  | "slider"
-  | "select"
-  | "text";
+export type ControlKind = "password" | "checkbox" | "slider" | "select" | "text";
 
 export interface MenuItemDescriptor {
   name: string;
@@ -26,19 +21,15 @@ export interface CheckboxMapping {
 }
 
 const norm = (v: string) => v.trim().toLowerCase();
-const normalizeOption = (v: string) =>
-  v.trim().replace(/\s+/g, " ").toLowerCase();
-const numericWithUnitPattern =
-  /^\s*[+-]?\d+(?:\.\d+)?\s*(db|mhz|khz|hz|%|ms|s)?\s*$/i;
+const normalizeOption = (v: string) => v.trim().replace(/\s+/g, " ").toLowerCase();
+const numericWithUnitPattern = /^\s*[+-]?\d+(?:\.\d+)?\s*(db|mhz|khz|hz|%|ms|s)?\s*$/i;
 const maxSliderOptions = 40;
 
-const getNormalizedOptions = (values: string[] | undefined) =>
-  (values ?? []).map((v) => normalizeOption(String(v)));
+const getNormalizedOptions = (values: string[] | undefined) => (values ?? []).map((v) => normalizeOption(String(v)));
 
 const isNumericLike = (value: string) => numericWithUnitPattern.test(value);
 
-const isAllNumericLike = (values: string[]) =>
-  values.length > 0 && values.every(isNumericLike);
+const isAllNumericLike = (values: string[]) => values.length > 0 && values.every(isNumericLike);
 
 const isOffLowMediumHigh = (values: string[]) => {
   const normalized = new Set(values.map(normalizeOption));
@@ -53,9 +44,7 @@ const isOffLowMediumHigh = (values: string[]) => {
 
 const isLeftRightCenter = (values: string[]) => {
   const normalized = values.map((value) => normalizeOption(value));
-  const hasCenter = normalized.some(
-    (value) => value === "center" || value === "centre",
-  );
+  const hasCenter = normalized.some((value) => value === "center" || value === "centre");
   const hasLeft = normalized.some((value) => value.startsWith("left"));
   const hasRight = normalized.some((value) => value.startsWith("right"));
   return hasCenter && hasLeft && hasRight;
@@ -64,15 +53,13 @@ const isLeftRightCenter = (values: string[]) => {
 const isAudioMixerVolume = (name: string, category?: string) => {
   const normalizedName = normalizeOption(name);
   const normalizedCategory = category ? normalizeOption(category) : "";
-  if (normalizedCategory === "audio mixer" && normalizedName.startsWith("vol "))
-    return true;
+  if (normalizedCategory === "audio mixer" && normalizedName.startsWith("vol ")) return true;
   return normalizedName.includes("volume") || normalizedName.startsWith("vol ");
 };
 
 const shouldUseSlider = (item: MenuItemDescriptor) => {
   const possibleValues = (item.possibleValues ?? []).map(String);
-  if (possibleValues.length < 2 || possibleValues.length > maxSliderOptions)
-    return false;
+  if (possibleValues.length < 2 || possibleValues.length > maxSliderOptions) return false;
 
   if (isAudioMixerVolume(item.name, item.category)) return true;
 
@@ -89,9 +76,7 @@ const shouldUseSlider = (item: MenuItemDescriptor) => {
   return false;
 };
 
-export function getCheckboxMapping(
-  possibleValues: string[] | undefined,
-): CheckboxMapping | undefined {
+export function getCheckboxMapping(possibleValues: string[] | undefined): CheckboxMapping | undefined {
   const values = (possibleValues ?? []).map(String);
   if (values.length === 0) return undefined;
 
@@ -108,9 +93,7 @@ export function getCheckboxMapping(
   }
 
   const isOnOff =
-    normalizedDistinct.length === 2 &&
-    normalizedDistinct.includes("on") &&
-    normalizedDistinct.includes("off");
+    normalizedDistinct.length === 2 && normalizedDistinct.includes("on") && normalizedDistinct.includes("off");
   if (isOnOff) {
     const on = values.find((v) => norm(v) === "on") ?? "on";
     const off = values.find((v) => norm(v) === "off") ?? "off";

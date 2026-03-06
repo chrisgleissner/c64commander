@@ -79,10 +79,7 @@ const safeReadState = (): PersistedState => {
         {
           storageKey: STORAGE_KEY,
           backupStorageKey: BACKUP_STORAGE_KEY,
-          version:
-            typeof parsed === "object" && parsed
-              ? (parsed as { version?: unknown }).version
-              : null,
+          version: typeof parsed === "object" && parsed ? (parsed as { version?: unknown }).version : null,
         },
       );
       if (typeof localStorage !== "undefined") {
@@ -98,14 +95,10 @@ const safeReadState = (): PersistedState => {
       randomSessionsByPlaylistId: parsed.randomSessionsByPlaylistId ?? {},
     };
   } catch (error) {
-    addLog(
-      "warn",
-      "Failed to parse localStorage playlist repository state. Resetting repository state.",
-      {
-        storageKey: STORAGE_KEY,
-        error: (error as Error).message,
-      },
-    );
+    addLog("warn", "Failed to parse localStorage playlist repository state. Resetting repository state.", {
+      storageKey: STORAGE_KEY,
+      error: (error as Error).message,
+    });
     return defaultState();
   }
 };
@@ -139,15 +132,15 @@ class LocalStoragePlaylistDataRepository implements PlaylistDataRepository {
   }
 
   async replacePlaylistItems(playlistId: string, items: PlaylistItemRecord[]) {
-    this.state.playlistItemsByPlaylistId[playlistId] = [...items].sort(
-      (left, right) => left.sortKey.localeCompare(right.sortKey),
+    this.state.playlistItemsByPlaylistId[playlistId] = [...items].sort((left, right) =>
+      left.sortKey.localeCompare(right.sortKey),
     );
     this.commit();
   }
 
   async getPlaylistItems(playlistId: string) {
-    return [...(this.state.playlistItemsByPlaylistId[playlistId] ?? [])].sort(
-      (left, right) => left.sortKey.localeCompare(right.sortKey),
+    return [...(this.state.playlistItemsByPlaylistId[playlistId] ?? [])].sort((left, right) =>
+      left.sortKey.localeCompare(right.sortKey),
     );
   }
 
@@ -160,9 +153,7 @@ class LocalStoragePlaylistDataRepository implements PlaylistDataRepository {
     return this.state.sessionsByPlaylistId[playlistId] ?? null;
   }
 
-  async queryPlaylist(
-    options: PlaylistQueryOptions,
-  ): Promise<PlaylistQueryResult> {
+  async queryPlaylist(options: PlaylistQueryOptions): Promise<PlaylistQueryResult> {
     const playlistItems = await this.getPlaylistItems(options.playlistId);
     const rows: PlaylistQueryRow[] = playlistItems
       .map((playlistItem) => {
@@ -173,9 +164,7 @@ class LocalStoragePlaylistDataRepository implements PlaylistDataRepository {
       .filter((row): row is PlaylistQueryRow => Boolean(row));
 
     const query = normalizeQuery(options.query);
-    const categoryFilter = options.categoryFilter?.length
-      ? new Set(options.categoryFilter)
-      : null;
+    const categoryFilter = options.categoryFilter?.length ? new Set(options.categoryFilter) : null;
 
     const withFilter = rows.filter((row) => {
       if (categoryFilter) {
@@ -196,9 +185,7 @@ class LocalStoragePlaylistDataRepository implements PlaylistDataRepository {
         const pathDiff = left.track.path.localeCompare(right.track.path);
         if (pathDiff !== 0) return pathDiff;
       }
-      return left.playlistItem.sortKey.localeCompare(
-        right.playlistItem.sortKey,
-      );
+      return left.playlistItem.sortKey.localeCompare(right.playlistItem.sortKey);
     });
 
     const offset = Math.max(0, options.offset);
@@ -209,17 +196,9 @@ class LocalStoragePlaylistDataRepository implements PlaylistDataRepository {
     };
   }
 
-  async createSession(
-    playlistId: string,
-    orderedPlaylistItemIds: string[],
-    seed?: number,
-  ) {
+  async createSession(playlistId: string, orderedPlaylistItemIds: string[], seed?: number) {
     const resolvedSeed =
-      typeof seed === "number"
-        ? seed
-        : stableHash(
-            `${playlistId}:${orderedPlaylistItemIds.join("|")}:${Date.now()}`,
-          );
+      typeof seed === "number" ? seed : stableHash(`${playlistId}:${orderedPlaylistItemIds.join("|")}:${Date.now()}`);
     const order = seededShuffle(orderedPlaylistItemIds, resolvedSeed);
     const session: RandomPlaySession = {
       playlistId,

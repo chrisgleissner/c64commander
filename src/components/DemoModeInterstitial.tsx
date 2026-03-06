@@ -19,10 +19,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useConnectionState } from "@/hooks/useConnectionState";
-import {
-  dismissDemoInterstitial,
-  discoverConnection,
-} from "@/lib/connection/connectionManager";
+import { dismissDemoInterstitial, discoverConnection } from "@/lib/connection/connectionManager";
 import { resolveDeviceHostFromStorage } from "@/lib/c64api";
 import { saveConfiguredHostAndRetry } from "@/lib/connection/hostEdit";
 
@@ -65,12 +62,8 @@ export function DemoModeInterstitial() {
         <DialogHeader>
           <DialogTitle>Demo Mode</DialogTitle>
           <DialogDescription>
-            No C64U was found at{" "}
-            <strong data-testid="demo-interstitial-hostname">
-              {attemptedHost}
-            </strong>
-            . You can continue in Demo Mode using the built-in simulated device,
-            or retry connecting to real hardware.
+            No C64U was found at <strong data-testid="demo-interstitial-hostname">{attemptedHost}</strong>. You can
+            continue in Demo Mode using the built-in simulated device, or retry connecting to real hardware.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-2 py-2">
@@ -86,10 +79,7 @@ export function DemoModeInterstitial() {
             placeholder={attemptedHost}
           />
           {hostError ? (
-            <p
-              className="text-xs text-destructive"
-              data-testid="demo-interstitial-host-error"
-            >
+            <p className="text-xs text-destructive" data-testid="demo-interstitial-host-error">
               {hostError}
             </p>
           ) : null}

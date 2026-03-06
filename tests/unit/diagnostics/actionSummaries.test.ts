@@ -11,8 +11,7 @@ import { buildActionSummaries } from "@/lib/diagnostics/actionSummaries";
 import type { TraceEvent } from "@/lib/tracing/types";
 
 const buildTrace = (
-  overrides: Partial<TraceEvent> &
-    Pick<TraceEvent, "id" | "type" | "correlationId">,
+  overrides: Partial<TraceEvent> & Pick<TraceEvent, "id" | "type" | "correlationId">,
 ): TraceEvent => ({
   id: overrides.id,
   timestamp: overrides.timestamp ?? "2024-01-01T00:00:00.000Z",
@@ -122,18 +121,12 @@ describe("buildActionSummaries", () => {
 
     const restEffect = first.effects.find((effect) => effect.type === "REST");
     expect(restEffect).toBeDefined();
-    expect(restEffect && "method" in restEffect ? restEffect.method : "").toBe(
-      "GET",
-    );
-    expect(restEffect && "path" in restEffect ? restEffect.path : "").toBe(
-      "/v1/info",
-    );
+    expect(restEffect && "method" in restEffect ? restEffect.method : "").toBe("GET");
+    expect(restEffect && "path" in restEffect ? restEffect.path : "").toBe("/v1/info");
 
     const ftpEffect = first.effects.find((effect) => effect.type === "FTP");
     expect(ftpEffect).toBeDefined();
-    expect(
-      ftpEffect && "operation" in ftpEffect ? ftpEffect.operation : "",
-    ).toBe("list");
+    expect(ftpEffect && "operation" in ftpEffect ? ftpEffect.operation : "").toBe("list");
 
     const second = summaries[1];
     expect(second.correlationId).toBe("COR-0002");
@@ -279,9 +272,7 @@ describe("buildActionSummaries", () => {
       }),
     ];
     const [summary] = buildActionSummaries(traces);
-    const errorEffects = (summary.effects ?? []).filter(
-      (effect) => effect.type === "ERROR",
-    );
+    const errorEffects = (summary.effects ?? []).filter((effect) => effect.type === "ERROR");
     expect(errorEffects).toHaveLength(2);
     expect(errorEffects).toEqual(
       expect.arrayContaining([
@@ -357,9 +348,7 @@ describe("buildActionSummaries", () => {
     ];
     const [summary] = buildActionSummaries(traces);
     const restEffect = summary.effects?.find((e) => e.type === "REST");
-    expect(
-      restEffect && "error" in restEffect ? restEffect.error : undefined,
-    ).toBe("42");
+    expect(restEffect && "error" in restEffect ? restEffect.error : undefined).toBe("42");
   });
 
   it("sorts by startRelativeMs then by correlationId", () => {
@@ -453,14 +442,8 @@ describe("buildActionSummaries", () => {
     const [summary] = buildActionSummaries(traces);
     expect(summary.restCount).toBe(1);
     const restEffect = summary.effects?.find((e) => e.type === "REST");
-    expect(
-      restEffect && "error" in restEffect ? restEffect.error : undefined,
-    ).toBe("timeout");
-    expect(
-      restEffect && "durationMs" in restEffect
-        ? restEffect.durationMs
-        : undefined,
-    ).toBeNull();
+    expect(restEffect && "error" in restEffect ? restEffect.error : undefined).toBe("timeout");
+    expect(restEffect && "durationMs" in restEffect ? restEffect.durationMs : undefined).toBeNull();
   });
 
   it("includes deterministic label on REST effects", () => {
@@ -575,9 +558,7 @@ describe("buildActionSummaries", () => {
     ];
     const [summary] = buildActionSummaries(traces);
     const restEffect = summary.effects?.find((e) => e.type === "REST");
-    expect(
-      restEffect && "status" in restEffect ? restEffect.status : "missing",
-    ).toBeNull();
+    expect(restEffect && "status" in restEffect ? restEffect.status : "missing").toBeNull();
   });
 
   it("surfaces trigger from action-start.data into ActionSummary", () => {
@@ -740,13 +721,9 @@ describe("buildActionSummaries", () => {
       }),
     ];
     const [summary] = buildActionSummaries(traces);
-    const errorEffects = (summary.effects ?? []).filter(
-      (e) => e.type === "ERROR",
-    );
+    const errorEffects = (summary.effects ?? []).filter((e) => e.type === "ERROR");
     expect(errorEffects.length).toBeGreaterThanOrEqual(1);
-    const unknownEffect = errorEffects.find(
-      (e) => "message" in e && e.message === "unknown error",
-    );
+    const unknownEffect = errorEffects.find((e) => "message" in e && e.message === "unknown error");
     expect(unknownEffect).toBeDefined();
   });
 
@@ -775,13 +752,9 @@ describe("buildActionSummaries", () => {
       }),
     ];
     const [summary] = buildActionSummaries(traces);
-    const errorEffects = (summary.effects ?? []).filter(
-      (e) => e.type === "ERROR",
-    );
+    const errorEffects = (summary.effects ?? []).filter((e) => e.type === "ERROR");
     // duplicate 'disk full' should appear only once
-    expect(
-      errorEffects.filter((e) => "message" in e && e.message === "disk full"),
-    ).toHaveLength(1);
+    expect(errorEffects.filter((e) => "message" in e && e.message === "disk full")).toHaveLength(1);
   });
 
   it("adds default error effect when no error events and no error field but status is error", () => {
@@ -802,15 +775,11 @@ describe("buildActionSummaries", () => {
       }),
     ];
     const [summary] = buildActionSummaries(traces);
-    const errorEffects = (summary.effects ?? []).filter(
-      (e) => e.type === "ERROR",
-    );
+    const errorEffects = (summary.effects ?? []).filter((e) => e.type === "ERROR");
     expect(errorEffects).toHaveLength(1);
-    expect(
-      errorEffects[0] && "message" in errorEffects[0]
-        ? errorEffects[0].message
-        : "",
-    ).toBe("action ended with error");
+    expect(errorEffects[0] && "message" in errorEffects[0] ? errorEffects[0].message : "").toBe(
+      "action ended with error",
+    );
   });
 
   it("includes product from REST response body", () => {
@@ -855,9 +824,7 @@ describe("buildActionSummaries", () => {
     ];
     const [summary] = buildActionSummaries(traces);
     const restEffect = summary.effects?.find((e) => e.type === "REST");
-    expect(
-      restEffect && "product" in restEffect ? restEffect.product : undefined,
-    ).toBe("1541ultimate2+");
+    expect(restEffect && "product" in restEffect ? restEffect.product : undefined).toBe("1541ultimate2+");
   });
 
   it("treats array body as null responseBody so product is absent", () => {
@@ -897,9 +864,7 @@ describe("buildActionSummaries", () => {
     ];
     const [summary] = buildActionSummaries(traces);
     const restEffect = summary.effects?.find((e) => e.type === "REST");
-    expect(
-      restEffect && "product" in restEffect ? restEffect.product : undefined,
-    ).toBeUndefined();
+    expect(restEffect && "product" in restEffect ? restEffect.product : undefined).toBeUndefined();
   });
 
   it("falls back to endStatus when response has no status key", () => {
@@ -940,9 +905,7 @@ describe("buildActionSummaries", () => {
     const [summary] = buildActionSummaries(traces);
     const restEffect = summary.effects?.find((e) => e.type === "REST");
     // endStatus = 'success', used as responseStatus fallback
-    expect(
-      restEffect && "status" in restEffect ? restEffect.status : "missing",
-    ).toBe("success");
+    expect(restEffect && "status" in restEffect ? restEffect.status : "missing").toBe("success");
   });
 
   it("falls back to url when normalizedUrl absent in REST request", () => {
@@ -982,9 +945,7 @@ describe("buildActionSummaries", () => {
     ];
     const [summary] = buildActionSummaries(traces);
     const restEffect = summary.effects?.find((e) => e.type === "REST");
-    expect(restEffect && "path" in restEffect ? restEffect.path : "").toBe(
-      "http://device/v1/configs",
-    );
+    expect(restEffect && "path" in restEffect ? restEffect.path : "").toBe("http://device/v1/configs");
   });
 
   it("leaves no error field on pending REST request when endError is null", () => {
@@ -1018,9 +979,7 @@ describe("buildActionSummaries", () => {
     const [summary] = buildActionSummaries(traces);
     const restEffect = summary.effects?.find((e) => e.type === "REST");
     expect(restEffect).toBeDefined();
-    expect(
-      restEffect && "error" in restEffect ? restEffect.error : "no-field",
-    ).toBe("no-field");
+    expect(restEffect && "error" in restEffect ? restEffect.error : "no-field").toBe("no-field");
   });
 
   it("returns null errorMessage when no error field and no error events exist", () => {
@@ -1138,12 +1097,8 @@ describe("buildActionSummaries", () => {
     ];
     const [summary] = buildActionSummaries(traces);
     const restEffect = summary.effects?.find((e) => e.type === "REST");
-    expect(restEffect && "method" in restEffect ? restEffect.method : "").toBe(
-      "UNKNOWN",
-    );
-    expect(restEffect && "path" in restEffect ? restEffect.path : "").toBe(
-      "unknown",
-    );
+    expect(restEffect && "method" in restEffect ? restEffect.method : "").toBe("UNKNOWN");
+    expect(restEffect && "path" in restEffect ? restEffect.path : "").toBe("unknown");
   });
 
   it("falls back to UNKNOWN method and unknown path for unmatched pending rest-request with no data", () => {
@@ -1173,12 +1128,8 @@ describe("buildActionSummaries", () => {
     ];
     const [summary] = buildActionSummaries(traces);
     const restEffect = summary.effects?.find((e) => e.type === "REST");
-    expect(restEffect && "method" in restEffect ? restEffect.method : "").toBe(
-      "UNKNOWN",
-    );
-    expect(restEffect && "path" in restEffect ? restEffect.path : "").toBe(
-      "unknown",
-    );
+    expect(restEffect && "method" in restEffect ? restEffect.method : "").toBe("UNKNOWN");
+    expect(restEffect && "path" in restEffect ? restEffect.path : "").toBe("unknown");
   });
 
   it("returns null status when readNumber returns null for non-numeric string status", () => {
@@ -1219,9 +1170,7 @@ describe("buildActionSummaries", () => {
     ];
     const [summary] = buildActionSummaries(traces);
     const restEffect = summary.effects?.find((e) => e.type === "REST");
-    expect(
-      restEffect && "status" in restEffect ? restEffect.status : "missing",
-    ).toBeNull();
+    expect(restEffect && "status" in restEffect ? restEffect.status : "missing").toBeNull();
   });
 
   it("uses null endStatus fallback when rest-response has no status key and actionEnd has no status", () => {
@@ -1262,9 +1211,7 @@ describe("buildActionSummaries", () => {
     ];
     const [summary] = buildActionSummaries(traces);
     const restEffect = summary.effects?.find((e) => e.type === "REST");
-    expect(
-      restEffect && "status" in restEffect ? restEffect.status : "missing",
-    ).toBeNull();
+    expect(restEffect && "status" in restEffect ? restEffect.status : "missing").toBeNull();
   });
 
   it("falls back to unknown operation, path and null target for FTP event missing fields", () => {
@@ -1294,15 +1241,9 @@ describe("buildActionSummaries", () => {
     ];
     const [summary] = buildActionSummaries(traces);
     const ftpEffect = summary.effects?.find((e) => e.type === "FTP");
-    expect(
-      ftpEffect && "operation" in ftpEffect ? ftpEffect.operation : "",
-    ).toBe("unknown");
-    expect(ftpEffect && "path" in ftpEffect ? ftpEffect.path : "").toBe(
-      "unknown",
-    );
-    expect(
-      ftpEffect && "target" in ftpEffect ? ftpEffect.target : "missing",
-    ).toBeNull();
+    expect(ftpEffect && "operation" in ftpEffect ? ftpEffect.operation : "").toBe("unknown");
+    expect(ftpEffect && "path" in ftpEffect ? ftpEffect.path : "").toBe("unknown");
+    expect(ftpEffect && "target" in ftpEffect ? ftpEffect.target : "missing").toBeNull();
   });
 
   it("resolves origin from actionEnd when no action-start event exists", () => {

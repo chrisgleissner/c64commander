@@ -19,9 +19,7 @@ type TraceEvent = {
   data: Record<string, unknown>;
 };
 
-const makeEvent = (
-  overrides: Partial<TraceEvent> & { type: string },
-): TraceEvent => ({
+const makeEvent = (overrides: Partial<TraceEvent> & { type: string }): TraceEvent => ({
   id: overrides.id ?? "EVT-0000",
   timestamp: overrides.timestamp ?? new Date(0).toISOString(),
   relativeMs: overrides.relativeMs ?? 0,
@@ -402,9 +400,7 @@ describe("compareTracesEssential", () => {
     ];
 
     const result = compareTracesEssential(expected, actual);
-    expect(
-      result.errors.some((error) => error.includes("Ordering violation")),
-    ).toBe(true);
+    expect(result.errors.some((error) => error.includes("Ordering violation"))).toBe(true);
     expect(result.diff.orderingViolations.length).toBeGreaterThan(0);
   });
 

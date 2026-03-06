@@ -4,10 +4,7 @@ import path from "node:path";
 import os from "node:os";
 import { spawnSync } from "node:child_process";
 
-const scriptPath = path.resolve(
-  process.cwd(),
-  "scripts/check-coverage-threshold.mjs",
-);
+const scriptPath = path.resolve(process.cwd(), "scripts/check-coverage-threshold.mjs");
 
 const runScript = (cwd: string, env: Record<string, string> = {}) => {
   return spawnSync(process.execPath, [scriptPath], {
@@ -87,18 +84,14 @@ describe("check-coverage-threshold", () => {
       });
 
       expect(result.status).toBe(1);
-      expect(result.stderr).toContain(
-        "Branch coverage below minimum threshold",
-      );
+      expect(result.stderr).toContain("Branch coverage below minimum threshold");
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
   });
 
   it("prefers DA/BRDA detail records over inconsistent summary counters", () => {
-    const root = mkdtempSync(
-      path.join(os.tmpdir(), "coverage-detail-preferred-"),
-    );
+    const root = mkdtempSync(path.join(os.tmpdir(), "coverage-detail-preferred-"));
     try {
       mkdirSync(path.join(root, "coverage"), { recursive: true });
       writeFileSync(

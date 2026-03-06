@@ -7,16 +7,8 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  createActionContext,
-  runWithActionTrace,
-  runWithImplicitAction,
-} from "@/lib/tracing/actionTrace";
-import {
-  clearTraceEvents,
-  getTraceEvents,
-  resetTraceSession,
-} from "@/lib/tracing/traceSession";
+import { createActionContext, runWithActionTrace, runWithImplicitAction } from "@/lib/tracing/actionTrace";
+import { clearTraceEvents, getTraceEvents, resetTraceSession } from "@/lib/tracing/traceSession";
 import {
   resetDiagnosticsOverlayState,
   setDiagnosticsOverlayActive,
@@ -37,11 +29,7 @@ describe("diagnostics overlay suppression", () => {
 
   it("suppresses action traces while overlay is active", async () => {
     setDiagnosticsOverlayActive(true);
-    const context = createActionContext(
-      "Diagnostics.tabSwitch",
-      "user",
-      "SettingsPage",
-    );
+    const context = createActionContext("Diagnostics.tabSwitch", "user", "SettingsPage");
 
     await runWithActionTrace(context, async () => undefined);
 
@@ -50,15 +38,9 @@ describe("diagnostics overlay suppression", () => {
 
   it("allows traces during diagnostics share override", async () => {
     setDiagnosticsOverlayActive(true);
-    const context = createActionContext(
-      "Diagnostics.share",
-      "user",
-      "SettingsPage",
-    );
+    const context = createActionContext("Diagnostics.share", "user", "SettingsPage");
 
-    await withDiagnosticsTraceOverride(() =>
-      runWithActionTrace(context, async () => undefined),
-    );
+    await withDiagnosticsTraceOverride(() => runWithActionTrace(context, async () => undefined));
 
     const events = getTraceEvents();
     expect(events.some((event) => event.type === "action-start")).toBe(true);
@@ -67,11 +49,7 @@ describe("diagnostics overlay suppression", () => {
 
   it("records actions and errors when suppressed action throws", async () => {
     setDiagnosticsOverlayActive(true);
-    const context = createActionContext(
-      "Diagnostics.fail",
-      "user",
-      "SettingsPage",
-    );
+    const context = createActionContext("Diagnostics.fail", "user", "SettingsPage");
 
     await expect(
       runWithActionTrace(context, async () => {

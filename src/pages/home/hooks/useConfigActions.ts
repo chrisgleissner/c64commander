@@ -10,12 +10,8 @@ export function useConfigActions() {
   const api = getC64API();
   const queryClient = useQueryClient();
   const trace = useActionTrace();
-  const [configOverrides, setConfigOverrides] = useState<
-    Record<string, string | number>
-  >({});
-  const [configWritePending, setConfigWritePending] = useState<
-    Record<string, boolean>
-  >({});
+  const [configOverrides, setConfigOverrides] = useState<Record<string, string | number>>({});
+  const [configWritePending, setConfigWritePending] = useState<Record<string, boolean>>({});
 
   const updateConfigValue = trace(async function updateConfigValue(
     category: string,
@@ -36,9 +32,7 @@ export function useConfigActions() {
       }
       await queryClient.invalidateQueries({
         predicate: (query) =>
-          Array.isArray(query.queryKey) &&
-          query.queryKey[0] === "c64-config-items" &&
-          query.queryKey[1] === category,
+          Array.isArray(query.queryKey) && query.queryKey[0] === "c64-config-items" && query.queryKey[1] === category,
       });
       if (options.refreshDrives) {
         await queryClient.fetchQuery({
@@ -73,12 +67,7 @@ export function useConfigActions() {
     }
   });
 
-  const resolveConfigValue = (
-    payload: unknown,
-    category: string,
-    itemName: string,
-    fallback: string | number,
-  ) => {
+  const resolveConfigValue = (payload: unknown, category: string, itemName: string, fallback: string | number) => {
     const override = configOverrides[buildConfigKey(category, itemName)];
     if (override !== undefined) return override;
     const value = readItemValue(payload, category, itemName);

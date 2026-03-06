@@ -11,10 +11,7 @@ import {
   loadHvscUpdateArchiveBuffer,
   loadHvscUpdateMockArchiveBuffer,
 } from "../../fixtures/hvsc/ensureHvscUpdateArchive";
-import {
-  ingestArchiveBuffer,
-  type IngestArchiveBufferOptions,
-} from "@/lib/hvsc/hvscIngestionRuntime";
+import { ingestArchiveBuffer, type IngestArchiveBufferOptions } from "@/lib/hvsc/hvscIngestionRuntime";
 import type { PipelineStateMachine } from "@/lib/hvsc/hvscIngestionPipeline";
 
 vi.mock("@/lib/hvsc/hvscFilesystem", () => ({
@@ -62,9 +59,7 @@ const makePipeline = (): PipelineStateMachine & { transitions: string[] } => {
   } as PipelineStateMachine & { transitions: string[] };
 };
 
-const makeOptions = (
-  overrides: Partial<IngestArchiveBufferOptions> = {},
-): IngestArchiveBufferOptions => ({
+const makeOptions = (overrides: Partial<IngestArchiveBufferOptions> = {}): IngestArchiveBufferOptions => ({
   plan: { type: "update", version: 84 },
   archiveName: "HVSC_Update_84.7z",
   archiveBuffer: new Uint8Array(),
@@ -96,9 +91,12 @@ describe("hvscIngestionPipeline", () => {
       }),
     );
     expect(markUpdateApplied).toHaveBeenCalledWith(84, "success");
-    expect(
-      (options.pipeline as ReturnType<typeof makePipeline>).transitions,
-    ).toEqual(["EXTRACTING", "EXTRACTED", "INGESTING", "READY"]);
+    expect((options.pipeline as ReturnType<typeof makePipeline>).transitions).toEqual([
+      "EXTRACTING",
+      "EXTRACTED",
+      "INGESTING",
+      "READY",
+    ]);
     expect(writeLibraryFile).toHaveBeenCalled();
   }, 120000);
 
@@ -110,16 +108,9 @@ describe("hvscIngestionPipeline", () => {
     });
     await ingestArchiveBuffer(options);
 
-    expect(writeLibraryFile).toHaveBeenCalledWith(
-      "/DOCUMENTS/Songlengths.txt",
-      expect.any(Uint8Array),
-    );
-    expect(deleteLibraryFile).toHaveBeenCalledWith(
-      "/MUSICIANS/B/Bjerregaard_Johannes/Old_Tune.sid",
-    );
-    expect(deleteLibraryFile).toHaveBeenCalledWith(
-      "/MUSICIANS/B/Bjerregaard_Johannes/Gone.sid",
-    );
+    expect(writeLibraryFile).toHaveBeenCalledWith("/DOCUMENTS/Songlengths.txt", expect.any(Uint8Array));
+    expect(deleteLibraryFile).toHaveBeenCalledWith("/MUSICIANS/B/Bjerregaard_Johannes/Old_Tune.sid");
+    expect(deleteLibraryFile).toHaveBeenCalledWith("/MUSICIANS/B/Bjerregaard_Johannes/Gone.sid");
   }, 60000);
 
   it("normalizes update paths for library writes", async () => {
@@ -131,12 +122,8 @@ describe("hvscIngestionPipeline", () => {
     await ingestArchiveBuffer(options);
 
     const calls = vi.mocked(writeLibraryFile).mock.calls.map((call) => call[0]);
-    expect(calls).toContain(
-      "/fix/MUSICIANS/A/Adrock_and_Deadeye/James_Bond.sid",
-    );
-    expect(calls).toContain(
-      "/fix/MUSICIANS/B/Bjerregaard_Johannes/Cute_Tune.sid",
-    );
+    expect(calls).toContain("/fix/MUSICIANS/A/Adrock_and_Deadeye/James_Bond.sid");
+    expect(calls).toContain("/fix/MUSICIANS/B/Bjerregaard_Johannes/Cute_Tune.sid");
   }, 60000);
 
   it("resets library root for baseline plans", async () => {
@@ -174,9 +161,7 @@ describe("hvscIngestionPipeline", () => {
       emitProgress,
     });
 
-    await expect(ingestArchiveBuffer(options)).rejects.toThrow(
-      "HVSC update cancelled",
-    );
+    await expect(ingestArchiveBuffer(options)).rejects.toThrow("HVSC update cancelled");
   }, 120000);
 
   it("fails with corrupt archive buffers", async () => {

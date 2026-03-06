@@ -35,16 +35,12 @@ describe("mapTargetDisplayLabel", () => {
   it("maps real-device unknown or missing product to device", () => {
     expect(mapTargetDisplayLabel("real-device")).toBe("device");
     expect(mapTargetDisplayLabel("real-device", null)).toBe("device");
-    expect(mapTargetDisplayLabel("real-device", "unknown-model")).toBe(
-      "device",
-    );
+    expect(mapTargetDisplayLabel("real-device", "unknown-model")).toBe("device");
   });
 
   it("keeps mock mapping even when product leaks mock labels under real-device", () => {
     expect(mapTargetDisplayLabel("real-device", "internal-mock")).toBe("demo");
-    expect(mapTargetDisplayLabel("real-device", "external-mock")).toBe(
-      "sandbox",
-    );
+    expect(mapTargetDisplayLabel("real-device", "external-mock")).toBe("sandbox");
     expect(mapTargetDisplayLabel("real-device", "sandbox")).toBe("sandbox");
     expect(mapTargetDisplayLabel("real-device", "demo")).toBe("demo");
   });
@@ -53,12 +49,8 @@ describe("mapTargetDisplayLabel", () => {
     expect(mapTargetDisplayLabel("real-device", "C64 Ultimate")).toBe("c64u");
     expect(mapTargetDisplayLabel("real-device", "Ultimate64")).toBe("u64");
     expect(mapTargetDisplayLabel("real-device", "Ultimate 64")).toBe("u64");
-    expect(mapTargetDisplayLabel("real-device", "Ultimate 64 Elite")).toBe(
-      "u64e",
-    );
-    expect(mapTargetDisplayLabel("real-device", "Ultimate 64-II")).toBe(
-      "u64e2",
-    );
+    expect(mapTargetDisplayLabel("real-device", "Ultimate 64 Elite")).toBe("u64e");
+    expect(mapTargetDisplayLabel("real-device", "Ultimate 64-II")).toBe("u64e2");
     expect(mapTargetDisplayLabel("real-device", "U64E MK2")).toBe("u64e2");
   });
 

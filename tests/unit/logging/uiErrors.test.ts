@@ -66,10 +66,6 @@ describe("reportUserError", () => {
       "HOME_ACTION: Error",
       expect.objectContaining({ recoverableConnectivityIssue: true }),
     );
-    expect(addLog).not.toHaveBeenCalledWith(
-      "warn",
-      expect.anything(),
-      expect.anything(),
-    );
+    expect(addLog).not.toHaveBeenCalledWith("warn", expect.anything(), expect.anything());
   });
 });

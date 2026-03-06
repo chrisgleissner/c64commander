@@ -71,18 +71,15 @@ vi.mock("@/lib/machine/ramOperations", () => ({
 }));
 
 vi.mock("@/lib/machine/ramDumpStorage", () => ({
-  buildRamDumpFileName: (...args: unknown[]) =>
-    buildRamDumpFileNameMock(...args),
+  buildRamDumpFileName: (...args: unknown[]) => buildRamDumpFileNameMock(...args),
   pickRamDumpFile: (...args: unknown[]) => pickRamDumpFileMock(...args),
   selectRamDumpFolder: (...args: unknown[]) => selectRamDumpFolderMock(...args),
-  writeRamDumpToFolder: (...args: unknown[]) =>
-    writeRamDumpToFolderMock(...args),
+  writeRamDumpToFolder: (...args: unknown[]) => writeRamDumpToFolderMock(...args),
 }));
 
 vi.mock("@/lib/config/ramDumpFolderStore", () => ({
   loadRamDumpFolderConfig: () => loadRamDumpFolderConfigMock(),
-  saveRamDumpFolderConfig: (...args: unknown[]) =>
-    saveRamDumpFolderConfigMock(...args),
+  saveRamDumpFolderConfig: (...args: unknown[]) => saveRamDumpFolderConfigMock(...args),
 }));
 
 vi.mock("@/lib/disks/resetDrives", () => ({
@@ -171,9 +168,7 @@ describe("useHomeActions", () => {
       "ram-dump.bin",
       expect.any(Uint8Array),
     );
-    expect(toastMock).toHaveBeenCalledWith(
-      expect.objectContaining({ title: "RAM dump saved" }),
-    );
+    expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: "RAM dump saved" }));
   });
 
   it("validates RAM dump size and reports load errors", async () => {
@@ -187,9 +182,7 @@ describe("useHomeActions", () => {
       await result.current.handleLoadRam();
     });
 
-    expect(saveRamDumpFolderConfigMock).toHaveBeenCalledWith(
-      expect.objectContaining({ rootName: "Music" }),
-    );
+    expect(saveRamDumpFolderConfigMock).toHaveBeenCalledWith(expect.objectContaining({ rootName: "Music" }));
     expect(loadFullRamImageMock).not.toHaveBeenCalled();
     expect(reportUserErrorMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -217,9 +210,7 @@ describe("useHomeActions", () => {
   });
 
   it("reports folder selection failures and clears task pending flag", async () => {
-    selectRamDumpFolderMock.mockRejectedValueOnce(
-      new Error("picker unavailable"),
-    );
+    selectRamDumpFolderMock.mockRejectedValueOnce(new Error("picker unavailable"));
     const { result } = renderHook(() => useHomeActions());
 
     await act(async () => {
@@ -245,14 +236,8 @@ describe("useHomeActions", () => {
       await result.current.handleResetPrinter(refreshDrivesFromDevice);
     });
 
-    expect(resetDiskDevicesMock).toHaveBeenCalledWith(
-      apiMock,
-      drivesState.value,
-    );
-    expect(resetPrinterDeviceMock).toHaveBeenCalledWith(
-      apiMock,
-      drivesState.value,
-    );
+    expect(resetDiskDevicesMock).toHaveBeenCalledWith(apiMock, drivesState.value);
+    expect(resetPrinterDeviceMock).toHaveBeenCalledWith(apiMock, drivesState.value);
     expect(refreshDrivesFromDevice).toHaveBeenCalledTimes(2);
   });
 

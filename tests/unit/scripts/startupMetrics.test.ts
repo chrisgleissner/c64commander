@@ -31,9 +31,7 @@ describe("startup metrics parser", () => {
   });
 
   it("detects startup HVSC download markers", () => {
-    const metrics = parseStartupMetricsFromLines([
-      "CapacitorHttp GET https://hvsc.c64.org/hvsc-update-84.7z",
-    ]);
+    const metrics = parseStartupMetricsFromLines(["CapacitorHttp GET https://hvsc.c64.org/hvsc-update-84.7z"]);
     expect(metrics.HvscStartupDownloads).toBeGreaterThan(0);
   });
 
@@ -62,10 +60,7 @@ describe("startup metrics parser", () => {
       const filePath = path.join(root, "logcat.txt");
       writeFileSync(
         filePath,
-        [
-          "CapacitorHttp GET http://c64u/v1/configs/video",
-          "CapacitorHttp status=200",
-        ].join("\n"),
+        ["CapacitorHttp GET http://c64u/v1/configs/video", "CapacitorHttp status=200"].join("\n"),
         "utf8",
       );
 

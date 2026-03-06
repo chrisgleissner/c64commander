@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  resolveVolumeSyncDecision,
-  type VolumeUiTarget,
-} from "@/pages/playFiles/playbackGuards";
+import { resolveVolumeSyncDecision, type VolumeUiTarget } from "@/pages/playFiles/playbackGuards";
 
 describe("playbackGuards resolveVolumeSyncDecision", () => {
   it("applies sync when there is no pending ui target", () => {

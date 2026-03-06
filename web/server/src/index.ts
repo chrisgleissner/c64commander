@@ -6,12 +6,7 @@ import { URL } from "node:url";
 import { PassThrough } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { Client as FtpClient } from "basic-ftp";
-import {
-  normalizePassword,
-  safeCompare,
-  sanitizeHost,
-  isTrustedInsecureHost,
-} from "./hostValidation.js";
+import { normalizePassword, safeCompare, sanitizeHost, isTrustedInsecureHost } from "./hostValidation.js";
 import { applySecurityHeaders, getClientIp } from "./securityHeaders.js";
 import { readBody, readJsonBody, writeJson, writeText } from "./httpIO.js";
 import { createStaticAssetServer } from "./staticAssets.js";
@@ -43,9 +38,7 @@ const PORT = Number(process.env.PORT ?? "8064");
 const HOST = process.env.HOST ?? "0.0.0.0";
 const configDir = process.env.WEB_CONFIG_DIR ?? "/config";
 const configPath = path.join(configDir, "web-config.json");
-const distDir = process.env.WEB_DIST_DIR
-  ? path.resolve(process.env.WEB_DIST_DIR)
-  : path.resolve(process.cwd(), "dist");
+const distDir = process.env.WEB_DIST_DIR ? path.resolve(process.env.WEB_DIST_DIR) : path.resolve(process.cwd(), "dist");
 
 const hopByHopHeaders = new Set([
   "connection",
@@ -70,16 +63,12 @@ const isSecureCookieEnabled = (() => {
 })();
 
 const allowRemoteFtpHosts = (() => {
-  const value = (process.env.WEB_ALLOW_REMOTE_FTP_HOSTS ?? "")
-    .trim()
-    .toLowerCase();
+  const value = (process.env.WEB_ALLOW_REMOTE_FTP_HOSTS ?? "").trim().toLowerCase();
   return value === "true" || value === "1";
 })();
 
 const allowRemoteRestHosts = (() => {
-  const value = (process.env.WEB_ALLOW_REMOTE_REST_HOSTS ?? "")
-    .trim()
-    .toLowerCase();
+  const value = (process.env.WEB_ALLOW_REMOTE_REST_HOSTS ?? "").trim().toLowerCase();
   return value === "true" || value === "1";
 })();
 
@@ -90,11 +79,7 @@ const appendServerLog = (entry: ServerLogEntry) => {
   }
 };
 
-const log = (
-  level: ServerLogLevel,
-  message: string,
-  details?: Record<string, unknown>,
-) => {
+const log = (level: ServerLogLevel, message: string, details?: Record<string, unknown>) => {
   const timestamp = new Date().toISOString();
   const payload = {
     timestamp,
@@ -126,9 +111,7 @@ const errorDetails = (error: unknown) => {
     return {
       errorName: error.name,
       errorMessage: error.message,
-      ...(process.env.NODE_ENV === "production"
-        ? {}
-        : { errorStack: error.stack }),
+      ...(process.env.NODE_ENV === "production" ? {} : { errorStack: error.stack }),
     };
   }
   return { errorMessage: String(error) };
@@ -165,22 +148,12 @@ const buildDefaultConfig = (): AppConfig => ({
 const isConfigPermissionError = (error: unknown) => {
   const direct = error as NodeJS.ErrnoException | undefined;
   const directCode = direct?.code;
-  if (
-    directCode === "EACCES" ||
-    directCode === "EPERM" ||
-    directCode === "EROFS"
-  ) {
+  if (directCode === "EACCES" || directCode === "EPERM" || directCode === "EROFS") {
     return true;
   }
-  const cause = (error as { cause?: unknown } | undefined)?.cause as
-    | NodeJS.ErrnoException
-    | undefined;
+  const cause = (error as { cause?: unknown } | undefined)?.cause as NodeJS.ErrnoException | undefined;
   const causeCode = cause?.code;
-  if (
-    causeCode === "EACCES" ||
-    causeCode === "EPERM" ||
-    causeCode === "EROFS"
-  ) {
+  if (causeCode === "EACCES" || causeCode === "EPERM" || causeCode === "EROFS") {
     return true;
   }
   const message = (error as Error | undefined)?.message || "";
@@ -193,15 +166,11 @@ const loadConfig = async (): Promise<AppConfig> => {
     await fs.mkdir(configDir, { recursive: true });
   } catch (error) {
     if (isConfigPermissionError(error)) {
-      log(
-        "warn",
-        "Web config directory is not writable; using runtime defaults only",
-        {
-          configDir,
-          configPath,
-          ...errorDetails(error),
-        },
-      );
+      log("warn", "Web config directory is not writable; using runtime defaults only", {
+        configDir,
+        configPath,
+        ...errorDetails(error),
+      });
       return defaultConfig;
     }
     throw error;
@@ -210,8 +179,7 @@ const loadConfig = async (): Promise<AppConfig> => {
     const raw = await fs.readFile(configPath, "utf8");
     const parsed = JSON.parse(raw) as Partial<AppConfig>;
     const networkPassword = normalizePassword(parsed.networkPassword);
-    const defaultDeviceHost =
-      sanitizeHost(parsed.defaultDeviceHost) ?? defaultConfig.defaultDeviceHost;
+    const defaultDeviceHost = sanitizeHost(parsed.defaultDeviceHost) ?? defaultConfig.defaultDeviceHost;
     return { networkPassword, defaultDeviceHost };
   } catch (error) {
     const err = error as NodeJS.ErrnoException;
@@ -222,26 +190,18 @@ const loadConfig = async (): Promise<AppConfig> => {
         if (!isConfigPermissionError(saveError)) {
           throw saveError;
         }
-        log(
-          "warn",
-          "Web config file missing and cannot be created; using runtime defaults only",
-          {
-            configPath,
-            ...errorDetails(saveError),
-          },
-        );
+        log("warn", "Web config file missing and cannot be created; using runtime defaults only", {
+          configPath,
+          ...errorDetails(saveError),
+        });
       }
       return defaultConfig;
     }
     if (isConfigPermissionError(error)) {
-      log(
-        "warn",
-        "Web config file is not readable; using runtime defaults only",
-        {
-          configPath,
-          ...errorDetails(error),
-        },
-      );
+      log("warn", "Web config file is not readable; using runtime defaults only", {
+        configPath,
+        ...errorDetails(error),
+      });
       return defaultConfig;
     }
     if (error instanceof SyntaxError) {
@@ -265,23 +225,16 @@ const saveConfig = async (config: AppConfig): Promise<void> => {
     const payload = JSON.stringify(config, null, 2);
     await fs.writeFile(configPath, payload, "utf8");
   } catch (error) {
-    throw new Error(
-      `Failed to persist web config at ${configPath}: ${(error as Error)?.message || String(error)}`,
-      { cause: error as Error },
-    );
+    throw new Error(`Failed to persist web config at ${configPath}: ${(error as Error)?.message || String(error)}`, {
+      cause: error as Error,
+    });
   }
 };
 
 const requiresLogin = (config: AppConfig) => Boolean(config.networkPassword);
 
-const handleRestProxy = async (
-  req: IncomingMessage,
-  res: ServerResponse,
-  config: AppConfig,
-  requestUrl: URL,
-) => {
-  const targetHost =
-    sanitizeHost(req.headers["x-c64u-host"]) ?? config.defaultDeviceHost;
+const handleRestProxy = async (req: IncomingMessage, res: ServerResponse, config: AppConfig, requestUrl: URL) => {
+  const targetHost = sanitizeHost(req.headers["x-c64u-host"]) ?? config.defaultDeviceHost;
   if (!allowRemoteRestHosts && !isTrustedInsecureHost(targetHost)) {
     writeJson(res, 403, {
       error: "REST host override is disabled for non-local targets",
@@ -289,9 +242,7 @@ const handleRestProxy = async (
     return;
   }
   const proxiedPath = requestUrl.pathname.replace(/^\/api\/rest/, "") || "/";
-  const target = new URL(
-    `http://${targetHost}${proxiedPath}${requestUrl.search}`,
-  );
+  const target = new URL(`http://${targetHost}${proxiedPath}${requestUrl.search}`);
   const body = await readBody(req);
   const outgoingHeaders: Record<string, string> = {};
   for (const [key, value] of Object.entries(req.headers)) {
@@ -342,11 +293,7 @@ const collectStream = async (stream: PassThrough): Promise<Buffer> => {
   });
 };
 
-const handleFtpList = async (
-  req: IncomingMessage,
-  res: ServerResponse,
-  config: AppConfig,
-) => {
+const handleFtpList = async (req: IncomingMessage, res: ServerResponse, config: AppConfig) => {
   const payload = await readJsonBody<{
     host?: string;
     port?: number;
@@ -396,11 +343,7 @@ const handleFtpList = async (
   }
 };
 
-const handleFtpRead = async (
-  req: IncomingMessage,
-  res: ServerResponse,
-  config: AppConfig,
-) => {
+const handleFtpRead = async (req: IncomingMessage, res: ServerResponse, config: AppConfig) => {
   const payload = await readJsonBody<{
     host?: string;
     port?: number;

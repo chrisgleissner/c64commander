@@ -28,11 +28,7 @@ describe("homeStreams", () => {
       },
     });
 
-    expect(entries.map((entry) => entry.label)).toEqual([
-      "VIC",
-      "Audio",
-      "Debug",
-    ]);
+    expect(entries.map((entry) => entry.label)).toEqual(["VIC", "Audio", "Debug"]);
     expect(entries[0]).toMatchObject({
       enabled: true,
       ip: "239.0.1.64",
@@ -59,15 +55,11 @@ describe("homeStreams", () => {
 
   it("builds stream config values", () => {
     expect(buildStreamConfigValue(false, "239.0.1.64", "11000")).toBe("off");
-    expect(buildStreamConfigValue(true, "239.0.1.64", "11000")).toBe(
-      "239.0.1.64:11000",
-    );
+    expect(buildStreamConfigValue(true, "239.0.1.64", "11000")).toBe("239.0.1.64:11000");
   });
 
   it("formats and parses stream endpoint labels", () => {
-    expect(buildStreamEndpointLabel("239.0.1.64", "11000")).toBe(
-      "239.0.1.64:11000",
-    );
+    expect(buildStreamEndpointLabel("239.0.1.64", "11000")).toBe("239.0.1.64:11000");
     expect(parseStreamEndpoint("239.0.1.64:11000")).toEqual({
       ip: "239.0.1.64",
       port: "11000",

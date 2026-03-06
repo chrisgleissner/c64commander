@@ -16,11 +16,7 @@ export const readJsonBody = async <T>(req: IncomingMessage): Promise<T> => {
   return JSON.parse(body.toString("utf8")) as T;
 };
 
-export const writeJson = (
-  res: ServerResponse,
-  status: number,
-  payload: unknown,
-) => {
+export const writeJson = (res: ServerResponse, status: number, payload: unknown) => {
   const body = Buffer.from(JSON.stringify(payload));
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",

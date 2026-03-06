@@ -21,10 +21,7 @@ vi.mock("@/lib/playlistRepository/indexedDbRepository", () => {
 import { isNativePlatform } from "@/lib/native/platform";
 import { getIndexedDbPlaylistDataRepository } from "@/lib/playlistRepository/indexedDbRepository";
 import { getLocalStoragePlaylistDataRepository } from "@/lib/playlistRepository/localStorageRepository";
-import {
-  getPlaylistDataRepository,
-  resetPlaylistDataRepositoryForTests,
-} from "@/lib/playlistRepository/factory";
+import { getPlaylistDataRepository, resetPlaylistDataRepositoryForTests } from "@/lib/playlistRepository/factory";
 
 describe("playlist repository factory", () => {
   beforeEach(() => {

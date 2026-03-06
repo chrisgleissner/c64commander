@@ -7,11 +7,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import {
-  LED_FIXED_COLORS,
-  getLedColorRgb,
-  rgbToCss,
-} from "@/lib/config/ledColors";
+import { LED_FIXED_COLORS, getLedColorRgb, rgbToCss } from "@/lib/config/ledColors";
 
 describe("ledColors", () => {
   describe("LED_FIXED_COLORS", () => {

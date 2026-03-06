@@ -1,57 +1,29 @@
 import { normalizeConfigItem } from "@/lib/config/normalizeConfigItem";
 import { normalizeOptionToken } from "./uiLogic";
 
-export const buildConfigKey = (category: string, itemName: string) =>
-  `${category}::${itemName}`;
+export const buildConfigKey = (category: string, itemName: string) => `${category}::${itemName}`;
 
-export const readItemValue = (
-  payload: unknown,
-  categoryName: string,
-  itemName: string,
-) => {
+export const readItemValue = (payload: unknown, categoryName: string, itemName: string) => {
   const record = payload as Record<string, unknown> | undefined;
-  const categoryBlock = (record?.[categoryName] ?? record) as
-    | Record<string, unknown>
-    | undefined;
-  const items = (categoryBlock?.items ?? categoryBlock) as
-    | Record<string, unknown>
-    | undefined;
-  if (!items || !Object.prototype.hasOwnProperty.call(items, itemName))
-    return undefined;
+  const categoryBlock = (record?.[categoryName] ?? record) as Record<string, unknown> | undefined;
+  const items = (categoryBlock?.items ?? categoryBlock) as Record<string, unknown> | undefined;
+  if (!items || !Object.prototype.hasOwnProperty.call(items, itemName)) return undefined;
   return normalizeConfigItem(items[itemName]).value;
 };
 
-export const readItemOptions = (
-  payload: unknown,
-  categoryName: string,
-  itemName: string,
-) => {
+export const readItemOptions = (payload: unknown, categoryName: string, itemName: string) => {
   const record = payload as Record<string, unknown> | undefined;
-  const categoryBlock = (record?.[categoryName] ?? record) as
-    | Record<string, unknown>
-    | undefined;
-  const items = (categoryBlock?.items ?? categoryBlock) as
-    | Record<string, unknown>
-    | undefined;
-  if (!items || !Object.prototype.hasOwnProperty.call(items, itemName))
-    return [];
+  const categoryBlock = (record?.[categoryName] ?? record) as Record<string, unknown> | undefined;
+  const items = (categoryBlock?.items ?? categoryBlock) as Record<string, unknown> | undefined;
+  if (!items || !Object.prototype.hasOwnProperty.call(items, itemName)) return [];
   return normalizeConfigItem(items[itemName]).options ?? [];
 };
 
-export const readItemDetails = (
-  payload: unknown,
-  categoryName: string,
-  itemName: string,
-) => {
+export const readItemDetails = (payload: unknown, categoryName: string, itemName: string) => {
   const record = payload as Record<string, unknown> | undefined;
-  const categoryBlock = (record?.[categoryName] ?? record) as
-    | Record<string, unknown>
-    | undefined;
-  const items = (categoryBlock?.items ?? categoryBlock) as
-    | Record<string, unknown>
-    | undefined;
-  if (!items || !Object.prototype.hasOwnProperty.call(items, itemName))
-    return undefined;
+  const categoryBlock = (record?.[categoryName] ?? record) as Record<string, unknown> | undefined;
+  const items = (categoryBlock?.items ?? categoryBlock) as Record<string, unknown> | undefined;
+  if (!items || !Object.prototype.hasOwnProperty.call(items, itemName)) return undefined;
   return normalizeConfigItem(items[itemName]).details;
 };
 
@@ -77,15 +49,10 @@ export const parseNumericValue = (value: string | number, fallback: number) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
-export const resolveTurboControlValue = (
-  cpuSpeed: string,
-  options: string[],
-) => {
+export const resolveTurboControlValue = (cpuSpeed: string, options: string[]) => {
   const speed = parseNumericValue(cpuSpeed, 1);
   const desired = speed <= 1 ? "Off" : "Manual";
-  const match = options.find(
-    (option) => normalizeOptionToken(option) === normalizeOptionToken(desired),
-  );
+  const match = options.find((option) => normalizeOptionToken(option) === normalizeOptionToken(desired));
   return match ?? options[0] ?? desired;
 };
 

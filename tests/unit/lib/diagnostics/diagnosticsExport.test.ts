@@ -44,19 +44,14 @@ describe("diagnosticsExport", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     isNativePlatform.mockReturnValue(false);
-    (
-      window as unknown as { __c64uDiagnosticsShareOverride?: unknown }
-    ).__c64uDiagnosticsShareOverride = undefined;
+    (window as unknown as { __c64uDiagnosticsShareOverride?: unknown }).__c64uDiagnosticsShareOverride = undefined;
   });
 
   it("uses diagnostics share override when present", async () => {
     const override = vi.fn(async () => undefined);
-    (
-      window as unknown as { __c64uDiagnosticsShareOverride?: unknown }
-    ).__c64uDiagnosticsShareOverride = override;
+    (window as unknown as { __c64uDiagnosticsShareOverride?: unknown }).__c64uDiagnosticsShareOverride = override;
 
-    const { shareDiagnosticsZip } =
-      await import("@/lib/diagnostics/diagnosticsExport");
+    const { shareDiagnosticsZip } = await import("@/lib/diagnostics/diagnosticsExport");
     await shareDiagnosticsZip("logs", [{ id: 1 }]);
 
     expect(override).toHaveBeenCalledTimes(1);
@@ -76,12 +71,8 @@ describe("diagnosticsExport", () => {
         configurable: true,
       });
     }
-    const createObjectURL = vi
-      .spyOn(URL, "createObjectURL")
-      .mockReturnValue("blob:test");
-    const revokeObjectURL = vi
-      .spyOn(URL, "revokeObjectURL")
-      .mockImplementation(() => undefined);
+    const createObjectURL = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:test");
+    const revokeObjectURL = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
     const click = vi.fn();
     const createElement = vi.spyOn(document, "createElement").mockReturnValue({
       href: "",
@@ -89,8 +80,7 @@ describe("diagnosticsExport", () => {
       click,
     } as unknown as HTMLAnchorElement);
 
-    const { shareDiagnosticsZip } =
-      await import("@/lib/diagnostics/diagnosticsExport");
+    const { shareDiagnosticsZip } = await import("@/lib/diagnostics/diagnosticsExport");
     await shareDiagnosticsZip("traces", [{ trace: true }]);
 
     expect(createObjectURL).toHaveBeenCalledTimes(1);
@@ -108,8 +98,7 @@ describe("diagnosticsExport", () => {
     getUri.mockResolvedValue({ uri: "file://cache/export.zip" });
     share.mockResolvedValue(undefined);
 
-    const { shareDiagnosticsZip } =
-      await import("@/lib/diagnostics/diagnosticsExport");
+    const { shareDiagnosticsZip } = await import("@/lib/diagnostics/diagnosticsExport");
     await shareDiagnosticsZip("actions", [{ action: "A" }]);
 
     expect(writeFile).toHaveBeenCalledTimes(1);
@@ -121,16 +110,11 @@ describe("diagnosticsExport", () => {
     const override = vi.fn(async () => {
       throw new Error("override failed");
     });
-    (
-      window as unknown as { __c64uDiagnosticsShareOverride?: unknown }
-    ).__c64uDiagnosticsShareOverride = override;
+    (window as unknown as { __c64uDiagnosticsShareOverride?: unknown }).__c64uDiagnosticsShareOverride = override;
 
-    const { shareDiagnosticsZip } =
-      await import("@/lib/diagnostics/diagnosticsExport");
+    const { shareDiagnosticsZip } = await import("@/lib/diagnostics/diagnosticsExport");
 
-    await expect(
-      shareDiagnosticsZip("error-logs", [{ id: 1 }]),
-    ).rejects.toThrow("override failed");
+    await expect(shareDiagnosticsZip("error-logs", [{ id: 1 }])).rejects.toThrow("override failed");
     expect(addErrorLog).toHaveBeenCalledWith(
       "Diagnostics share override failed",
       expect.objectContaining({ error: "override failed" }),

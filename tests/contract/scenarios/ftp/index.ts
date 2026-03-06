@@ -287,9 +287,7 @@ export function buildFtpScenarios(): FtpScenario[] {
       safe: true,
       run: async ({ config, log }) => {
         for (const n of [2, 3]) {
-          const sessions = Array.from({ length: n }, () =>
-            makeFtpClient(config),
-          );
+          const sessions = Array.from({ length: n }, () => makeFtpClient(config));
           const results: Array<{ ok: boolean; latencyMs: number }> = [];
           try {
             // Connect all sessions

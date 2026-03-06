@@ -14,12 +14,6 @@ export type SecureStoragePlugin = {
   clearPassword: () => Promise<void>;
 };
 
-export const SecureStorage = registerPlugin<SecureStoragePlugin>(
-  "SecureStorage",
-  {
-    web: () =>
-      import("./secureStorage.web").then(
-        (module) => new module.SecureStorageWeb(),
-      ),
-  },
-);
+export const SecureStorage = registerPlugin<SecureStoragePlugin>("SecureStorage", {
+  web: () => import("./secureStorage.web").then((module) => new module.SecureStorageWeb()),
+});

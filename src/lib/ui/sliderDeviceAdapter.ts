@@ -51,9 +51,7 @@ export type SliderDeviceAdapter = {
  *         onValueCommit={vals => adapter.onCommit(vals[0])} />
  * ```
  */
-export const createSliderDeviceAdapter = (
-  options: SliderDeviceAdapterOptions,
-): SliderDeviceAdapter => {
+export const createSliderDeviceAdapter = (options: SliderDeviceAdapterOptions): SliderDeviceAdapter => {
   const { setLocalValue, applyToDevice, transform } = options;
   let pendingApply = false;
   let latestValue: number | null = null;

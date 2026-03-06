@@ -11,9 +11,7 @@ import path from "node:path";
 
 const args = parseArgs(process.argv.slice(2));
 if (!args.left || !args.right) {
-  throw new Error(
-    "Usage: compare --left <runDirA> --right <runDirB> [--out <dir>]",
-  );
+  throw new Error("Usage: compare --left <runDirA> --right <runDirB> [--out <dir>]");
 }
 
 const left = loadRun(args.left);
@@ -21,18 +19,9 @@ const right = loadRun(args.right);
 
 const latencyDelta = compareLatency(left.latency, right.latency);
 const cooldownDelta = compareCooldowns(left.cooldowns, right.cooldowns);
-const concurrencyDelta = compareConcurrency(
-  left.concurrency,
-  right.concurrency,
-);
+const concurrencyDelta = compareConcurrency(left.concurrency, right.concurrency);
 
-const summary = renderSummary(
-  latencyDelta,
-  cooldownDelta,
-  concurrencyDelta,
-  args.left,
-  args.right,
-);
+const summary = renderSummary(latencyDelta, cooldownDelta, concurrencyDelta, args.left, args.right);
 
 const outDir = args.out || process.cwd();
 fs.mkdirSync(outDir, { recursive: true });
@@ -79,10 +68,7 @@ function compareLatency(left: any, right: any) {
   return deltas;
 }
 
-function compareCooldowns(
-  left: { rest: any; ftp: any },
-  right: { rest: any; ftp: any },
-) {
+function compareCooldowns(left: { rest: any; ftp: any }, right: { rest: any; ftp: any }) {
   return {
     rest: diffCooldownSet(left.rest, right.rest),
     ftp: diffCooldownSet(left.ftp, right.ftp),
@@ -100,8 +86,7 @@ function diffCooldownSet(left: any, right: any) {
     if (!l) continue;
     deltas.push({
       id: op.id,
-      recommendedDelta:
-        (op.recommendedDelayMs || 0) - (l.recommendedDelayMs || 0),
+      recommendedDelta: (op.recommendedDelayMs || 0) - (l.recommendedDelayMs || 0),
     });
   }
   return deltas;
@@ -111,30 +96,17 @@ function compareConcurrency(left: any, right: any) {
   const leftLimits = left.limits || {};
   const rightLimits = right.limits || {};
   return {
-    restMaxInFlight:
-      (rightLimits.restMaxInFlight || 0) - (leftLimits.restMaxInFlight || 0),
-    ftpMaxSessions:
-      (rightLimits.ftpMaxSessions || 0) - (leftLimits.ftpMaxSessions || 0),
-    mixedMaxInFlight:
-      (rightLimits.mixedMaxInFlight || 0) - (leftLimits.mixedMaxInFlight || 0),
+    restMaxInFlight: (rightLimits.restMaxInFlight || 0) - (leftLimits.restMaxInFlight || 0),
+    ftpMaxSessions: (rightLimits.ftpMaxSessions || 0) - (leftLimits.ftpMaxSessions || 0),
+    mixedMaxInFlight: (rightLimits.mixedMaxInFlight || 0) - (leftLimits.mixedMaxInFlight || 0),
   };
 }
 
-function renderSummary(
-  latency: any[],
-  cooldowns: any,
-  concurrency: any,
-  leftDir: string,
-  rightDir: string,
-): string {
+function renderSummary(latency: any[], cooldowns: any, concurrency: any, leftDir: string, rightDir: string): string {
   const latencyUp = latency.filter((d) => d.p95Delta > 0).length;
   const latencyDown = latency.filter((d) => d.p95Delta < 0).length;
-  const restCooldownUp = cooldowns.rest.filter(
-    (d: any) => d.recommendedDelta > 0,
-  ).length;
-  const ftpCooldownUp = cooldowns.ftp.filter(
-    (d: any) => d.recommendedDelta > 0,
-  ).length;
+  const restCooldownUp = cooldowns.rest.filter((d: any) => d.recommendedDelta > 0).length;
+  const ftpCooldownUp = cooldowns.ftp.filter((d: any) => d.recommendedDelta > 0).length;
 
   return [
     "# AUTH comparison",

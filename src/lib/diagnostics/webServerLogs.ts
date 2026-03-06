@@ -1,9 +1,4 @@
-import {
-  addLog,
-  setExternalLogs,
-  type LogEntry,
-  type LogLevel,
-} from "@/lib/logging";
+import { addLog, setExternalLogs, type LogEntry, type LogLevel } from "@/lib/logging";
 
 type ServerLogEntry = {
   id: string;
@@ -23,12 +18,7 @@ const isWebPlatformServerMode = () => import.meta.env.VITE_WEB_PLATFORM === "1";
 
 const normalizeLogs = (logs: ServerLogEntry[]): LogEntry[] =>
   logs
-    .filter(
-      (entry) =>
-        entry &&
-        typeof entry.id === "string" &&
-        typeof entry.timestamp === "string",
-    )
+    .filter((entry) => entry && typeof entry.id === "string" && typeof entry.timestamp === "string")
     .map((entry) => ({
       id: `server-${entry.id}`,
       level: entry.level,

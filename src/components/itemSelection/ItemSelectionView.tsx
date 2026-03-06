@@ -65,41 +65,25 @@ export const ItemSelectionView = ({
         >
           Root
         </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onNavigateUp}
-          disabled={atRoot || isLoading}
-        >
+        <Button variant="ghost" size="sm" onClick={onNavigateUp} disabled={atRoot || isLoading}>
           <ArrowUp className="h-4 w-4 mr-1" />
           Up
         </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onRefresh}
-          disabled={isLoading}
-        >
+        <Button variant="outline" size="sm" onClick={onRefresh} disabled={isLoading}>
           <RefreshCw className="h-4 w-4 mr-1" />
           {isLoading ? "Loading…" : "Refresh"}
         </Button>
       </div>
 
       <div className="flex items-start gap-2 w-full min-w-0 font-semibold text-sm">
-        <Folder
-          className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0"
-          aria-hidden="true"
-        />
+        <Folder className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" aria-hidden="true" />
         <div className="min-w-0">
-          <span className="mr-1">Path:</span>{" "}
-          <PathWrap path={path} className="text-foreground" />
+          <span className="mr-1">Path:</span> <PathWrap path={path} className="text-foreground" />
         </div>
       </div>
 
       <div className="space-y-2">
-        {entries.length === 0 && (
-          <p className="text-xs text-muted-foreground">{emptyLabel}</p>
-        )}
+        {entries.length === 0 && <p className="text-xs text-muted-foreground">{emptyLabel}</p>}
         {entries.map((entry) => {
           const isSelected = selection.has(entry.path);
           const canSelect = entry.type === "file" || showFolderSelect;
@@ -139,22 +123,14 @@ export const ItemSelectionView = ({
               </div>
               <div className="flex min-w-0 flex-1 items-center gap-2 text-left">
                 {isFolder ? (
-                  <Folder
-                    className="h-4 w-4 shrink-0 text-muted-foreground"
-                    aria-hidden="true"
-                  />
+                  <Folder className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                 ) : (
                   <span className="h-4 w-4 shrink-0" aria-hidden="true" />
                 )}
-                <p className="text-sm font-medium break-words whitespace-normal">
-                  {entry.name}
-                </p>
+                <p className="text-sm font-medium break-words whitespace-normal">{entry.name}</p>
               </div>
               {isFolder ? (
-                <ChevronRight
-                  className="h-4 w-4 shrink-0 text-muted-foreground/70"
-                  aria-hidden="true"
-                />
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/70" aria-hidden="true" />
               ) : null}
             </div>
           );

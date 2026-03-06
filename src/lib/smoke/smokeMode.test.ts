@@ -119,8 +119,7 @@ describe("smokeMode", () => {
       });
       localStorageMock.getItem.mockReturnValue(configJson);
 
-      const { initializeSmokeMode, getSmokeConfig } =
-        await import("./smokeMode");
+      const { initializeSmokeMode, getSmokeConfig } = await import("./smokeMode");
       const result = await initializeSmokeMode();
 
       expect(result).not.toBeNull();
@@ -137,17 +136,11 @@ describe("smokeMode", () => {
       const result = await initializeSmokeMode();
 
       expect(result).toBeNull();
-      expect(addLog).toHaveBeenCalledWith(
-        "warn",
-        "Failed to parse smoke config from storage",
-        expect.any(Object),
-      );
+      expect(addLog).toHaveBeenCalledWith("warn", "Failed to parse smoke config from storage", expect.any(Object));
     });
 
     it("handles invalid config structure", async () => {
-      localStorageMock.getItem.mockReturnValue(
-        JSON.stringify({ target: "invalid" }),
-      );
+      localStorageMock.getItem.mockReturnValue(JSON.stringify({ target: "invalid" }));
 
       const { initializeSmokeMode } = await import("./smokeMode");
       const result = await initializeSmokeMode();
@@ -162,8 +155,7 @@ describe("smokeMode", () => {
       });
       localStorageMock.getItem.mockReturnValue(configJson);
 
-      const { saveDebugLoggingEnabled } =
-        await import("@/lib/config/appSettings");
+      const { saveDebugLoggingEnabled } = await import("@/lib/config/appSettings");
       const { initializeSmokeMode } = await import("./smokeMode");
       await initializeSmokeMode();
 
@@ -180,10 +172,7 @@ describe("smokeMode", () => {
       const { initializeSmokeMode } = await import("./smokeMode");
       await initializeSmokeMode();
 
-      expect(localStorageMock.setItem).toHaveBeenCalledWith(
-        "c64u_device_host",
-        "192.168.1.100",
-      );
+      expect(localStorageMock.setItem).toHaveBeenCalledWith("c64u_device_host", "192.168.1.100");
     });
 
     it("skips native smoke file read on startup when no bootstrap signal is present", async () => {

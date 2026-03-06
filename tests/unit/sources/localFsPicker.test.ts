@@ -36,13 +36,12 @@ vi.mock("@/lib/native/folderPicker", () => ({
 const ingestLocalArchivesMock = vi.fn();
 
 vi.mock("@/lib/sources/localArchiveIngestion", async () => {
-  const actual = await vi.importActual<
-    typeof import("@/lib/sources/localArchiveIngestion")
-  >("@/lib/sources/localArchiveIngestion");
+  const actual = await vi.importActual<typeof import("@/lib/sources/localArchiveIngestion")>(
+    "@/lib/sources/localArchiveIngestion",
+  );
   return {
     ...actual,
-    ingestLocalArchives: (...args: unknown[]) =>
-      ingestLocalArchivesMock(...args),
+    ingestLocalArchives: (...args: unknown[]) => ingestLocalArchivesMock(...args),
   };
 });
 
@@ -99,8 +98,7 @@ describe("localFsPicker", () => {
 
   it("enumerates SAF results on ios using same native path as android", async () => {
     platformState.value = "ios";
-    const treeUri =
-      "file:///private/var/mobile/Containers/Shared/AppGroup/Music";
+    const treeUri = "file:///private/var/mobile/Containers/Shared/AppGroup/Music";
     pickDirectoryMock.mockResolvedValue({
       treeUri,
       rootName: "Music",
@@ -135,9 +133,7 @@ describe("localFsPicker", () => {
       permissionPersisted: false,
     });
 
-    await expect(browseLocalSidFiles(null)).rejects.toThrow(
-      "Native folder picker returned an unsupported response.",
-    );
+    await expect(browseLocalSidFiles(null)).rejects.toThrow("Native folder picker returned an unsupported response.");
   });
 
   it("falls back to input click when directory picker is unavailable on web", async () => {
@@ -173,8 +169,7 @@ describe("localFsPicker", () => {
     const nestedFile = {
       kind: "file",
       name: "Nested.sid",
-      getFile: () =>
-        Promise.resolve(new File([new Uint8Array([9])], "Nested.sid")),
+      getFile: () => Promise.resolve(new File([new Uint8Array([9])], "Nested.sid")),
     };
     const nestedDir = {
       kind: "directory",
@@ -209,10 +204,7 @@ describe("localFsPicker", () => {
 
     expect(showDirectoryPicker).toHaveBeenCalledTimes(1);
     expect(result).toHaveLength(2);
-    expect(result?.map((file) => file.name)).toEqual([
-      "Track.sid",
-      "Nested.sid",
-    ]);
+    expect(result?.map((file) => file.name)).toEqual(["Track.sid", "Nested.sid"]);
     expect(ingestLocalArchivesMock).toHaveBeenCalledWith(expect.any(Array));
   });
 });

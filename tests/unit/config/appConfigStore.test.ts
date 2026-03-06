@@ -21,8 +21,7 @@ import {
 
 vi.mock("@/lib/c64api", () => ({
   buildBaseUrlFromDeviceHost: (host?: string) => `http://${host ?? "c64u"}`,
-  resolveDeviceHostFromStorage: () =>
-    localStorage.getItem("c64u_device_host") || "c64u",
+  resolveDeviceHostFromStorage: () => localStorage.getItem("c64u_device_host") || "c64u",
 }));
 
 describe("appConfigStore", () => {

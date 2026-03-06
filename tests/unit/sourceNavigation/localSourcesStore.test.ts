@@ -59,9 +59,7 @@ describe("localSourcesStore", () => {
     pickDirectoryMock.mockReset();
     platformState.value = "web";
     platformState.native = false;
-    (
-      FolderPicker.listChildren as unknown as ReturnType<typeof vi.fn>
-    ).mockReset();
+    (FolderPicker.listChildren as unknown as ReturnType<typeof vi.fn>).mockReset();
   });
 
   it("creates a local source from file list and tracks runtime files", () => {
@@ -76,9 +74,7 @@ describe("localSourcesStore", () => {
     expect(result.runtimeFiles["/MyFolder/song.sid"]).toBeDefined();
 
     setLocalSourceRuntimeFiles(result.source.id, result.runtimeFiles);
-    expect(
-      getLocalSourceRuntimeFile(result.source.id, "MyFolder/song.sid"),
-    ).toBe(files[0]);
+    expect(getLocalSourceRuntimeFile(result.source.id, "MyFolder/song.sid")).toBe(files[0]);
   });
 
   it("saves and loads local sources from storage", () => {
@@ -118,9 +114,7 @@ describe("localSourcesStore", () => {
     const result = await createLocalSourceFromPicker(null);
     expect(result?.source.rootName).toBe("Phone");
     expect(result?.source.entries).toBeUndefined();
-    expect(result?.source.android?.treeUri).toBe(
-      "content://tree/primary%3AMusic",
-    );
+    expect(result?.source.android?.treeUri).toBe("content://tree/primary%3AMusic");
   });
 
   it("keeps rootPath as / for SAF sources regardless of rootName", async () => {
@@ -178,9 +172,7 @@ describe("localSourcesStore", () => {
       treeUri: "content://tree/primary%3AMusic",
       rootName: "Phone",
       permissionPersisted: true,
-      files: [
-        { name: "song.sid", path: "/Phone/song.sid", uri: "file://song.sid" },
-      ],
+      files: [{ name: "song.sid", path: "/Phone/song.sid", uri: "file://song.sid" }],
     });
 
     await expect(createLocalSourceFromPicker(null)).rejects.toThrow(
@@ -331,9 +323,7 @@ describe("localSourcesStore", () => {
 
     it("throws when SAF picker fails", async () => {
       pickDirectoryMock.mockRejectedValue(new Error("User cancelled"));
-      await expect(createLocalSourceFromPicker(null)).rejects.toThrow(
-        "User cancelled",
-      );
+      await expect(createLocalSourceFromPicker(null)).rejects.toThrow("User cancelled");
     });
 
     it("throws when SAF permission cannot be persisted", async () => {
@@ -354,8 +344,7 @@ describe("localSourcesStore", () => {
     });
 
     it("validates SAF source via native listChildren", async () => {
-      const listChildrenMock =
-        FolderPicker.listChildren as unknown as ReturnType<typeof vi.fn>;
+      const listChildrenMock = FolderPicker.listChildren as unknown as ReturnType<typeof vi.fn>;
       listChildrenMock.mockResolvedValue({ entries: [] });
 
       saveLocalSources([
@@ -411,8 +400,7 @@ describe("localSourcesStore", () => {
     });
 
     it("returns false when SAF listChildren throws an error (BRDA:258)", async () => {
-      const listChildrenMock =
-        FolderPicker.listChildren as unknown as ReturnType<typeof vi.fn>;
+      const listChildrenMock = FolderPicker.listChildren as unknown as ReturnType<typeof vi.fn>;
       listChildrenMock.mockRejectedValueOnce(new Error("Permission denied"));
 
       saveLocalSources([
@@ -496,10 +484,7 @@ describe("localSourcesStore", () => {
     });
   });
 });
-import {
-  requireLocalSourceEntries,
-  getLocalSourceListingMode,
-} from "@/lib/sourceNavigation/localSourcesStore";
+import { requireLocalSourceEntries, getLocalSourceListingMode } from "@/lib/sourceNavigation/localSourcesStore";
 
 describe("requireLocalSourceEntries", () => {
   it("throws for SAF sources", () => {
@@ -507,17 +492,13 @@ describe("requireLocalSourceEntries", () => {
       id: "s1",
       android: { treeUri: "content://tree" },
     } as any;
-    expect(() => requireLocalSourceEntries(source, "test")).toThrow(
-      "SAF sources do not expose entry listings",
-    );
+    expect(() => requireLocalSourceEntries(source, "test")).toThrow("SAF sources do not expose entry listings");
     expect(getLocalSourceListingMode(source)).toBe("saf");
   });
 
   it("throws for missing entries in non-SAF sources", () => {
     const source = { id: "s2" } as any;
-    expect(() => requireLocalSourceEntries(source, "test")).toThrow(
-      "Local source entries are missing or invalid",
-    );
+    expect(() => requireLocalSourceEntries(source, "test")).toThrow("Local source entries are missing or invalid");
     expect(getLocalSourceListingMode(source)).toBe("entries");
   });
 

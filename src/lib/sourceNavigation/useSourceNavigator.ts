@@ -23,8 +23,7 @@ export type SourceNavigatorState = {
   refresh: () => void;
 };
 
-const buildNavKey = (source: SourceLocation) =>
-  `c64u_source_nav:${source.type}:${source.id}`;
+const buildNavKey = (source: SourceLocation) => `c64u_source_nav:${source.type}:${source.id}`;
 
 const getStoredPath = (source: SourceLocation) => {
   if (typeof localStorage === "undefined") return null;
@@ -37,9 +36,7 @@ const setStoredPath = (source: SourceLocation, path: string) => {
   localStorage.setItem(buildNavKey(source), path);
 };
 
-export const useSourceNavigator = (
-  source: SourceLocation | null,
-): SourceNavigatorState => {
+export const useSourceNavigator = (source: SourceLocation | null): SourceNavigatorState => {
   const [path, setPath] = useState("/");
   const [entries, setEntries] = useState<SourceEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -118,9 +115,7 @@ export const useSourceNavigator = (
   useEffect(() => {
     if (!source) return;
     const stored = getStoredPath(source);
-    const initialPath = stored
-      ? ensureWithinRoot(stored, source.rootPath)
-      : source.rootPath;
+    const initialPath = stored ? ensureWithinRoot(stored, source.rootPath) : source.rootPath;
     void loadEntries(initialPath);
   }, [loadEntries, source]);
 

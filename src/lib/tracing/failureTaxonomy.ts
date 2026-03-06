@@ -8,14 +8,7 @@
 
 import { LocalSourceListingError } from "@/lib/sourceNavigation/localSourceErrors";
 
-export type FailureCategory =
-  | "network"
-  | "timeout"
-  | "cancelled"
-  | "user"
-  | "integration"
-  | "storage"
-  | "unknown";
+export type FailureCategory = "network" | "timeout" | "cancelled" | "user" | "integration" | "storage" | "unknown";
 
 export type FailureClass =
   | "user-cancellation"
@@ -54,9 +47,7 @@ const isAbortError = (error: Error, message: string) =>
 const isTimeoutError = (message: string) => /timed out|timeout/i.test(message);
 
 const isNetworkError = (message: string) =>
-  /failed to fetch|networkerror|network request failed|unknown host|enotfound|dns|offline|econn|socket/i.test(
-    message,
-  );
+  /failed to fetch|networkerror|network request failed|unknown host|enotfound|dns|offline|econn|socket/i.test(message);
 
 const isUserError = (message: string) =>
   /no file selected|no directory selected|selection canceled|selection cancelled|permission rejected|permission denied/i.test(
@@ -64,11 +55,9 @@ const isUserError = (message: string) =>
   );
 
 const isStorageError = (error: Error, message: string) =>
-  error.name === "QuotaExceededError" ||
-  /storage|filesystem|file system|no such file|not found/i.test(message);
+  error.name === "QuotaExceededError" || /storage|filesystem|file system|no such file|not found/i.test(message);
 
-const isIntegrationError = (message: string) =>
-  /plugin|bridge|capacitor|native/i.test(message);
+const isIntegrationError = (message: string) => /plugin|bridge|capacitor|native/i.test(message);
 
 const isPermissionError = (message: string) =>
   /permission denied|permission rejected|not allowed|securityexception|notallowederror|operation not permitted|ep[er]m/i.test(
@@ -76,19 +65,15 @@ const isPermissionError = (message: string) =>
   );
 
 const isWriteError = (message: string) =>
-  /write|saving|persist|store|mkdir|create|overwrite|cannot write|failed to write/i.test(
-    message,
-  );
+  /write|saving|persist|store|mkdir|create|overwrite|cannot write|failed to write/i.test(message);
 
 const isParseError = (error: Error, message: string) =>
-  error.name === "SyntaxError" ||
-  /parse|malformed|invalid (json|yaml|format)|unexpected token/i.test(message);
+  error.name === "SyntaxError" || /parse|malformed|invalid (json|yaml|format)|unexpected token/i.test(message);
 
 const isMetadataAbsentError = (message: string) =>
   /not found|missing|no songlength|no duration|metadata.*absent/i.test(message);
 
-const isDevicePlaybackError = (message: string) =>
-  /sidplay|runner|c64u|device.*error|playback.*failed/i.test(message);
+const isDevicePlaybackError = (message: string) => /sidplay|runner|c64u|device.*error|playback.*failed/i.test(message);
 
 const resolveErrorType = (error: Error) => {
   if (error instanceof LocalSourceListingError) {
@@ -98,14 +83,8 @@ const resolveErrorType = (error: Error) => {
   return null;
 };
 
-export const classifyError = (
-  error: unknown,
-  categoryHint?: FailureCategory,
-): FailureClassification => {
-  const err =
-    error instanceof Error
-      ? error
-      : new Error(normalizeMessage(error) || "Unknown error");
+export const classifyError = (error: unknown, categoryHint?: FailureCategory): FailureClassification => {
+  const err = error instanceof Error ? error : new Error(normalizeMessage(error) || "Unknown error");
   const message = normalizeMessage(err).toLowerCase();
 
   let category: FailureCategory = categoryHint ?? "unknown";
@@ -117,10 +96,7 @@ export const classifyError = (
       category = "timeout";
     } else if (isNetworkError(message)) {
       category = "network";
-    } else if (
-      err instanceof LocalSourceListingError ||
-      isStorageError(err, message)
-    ) {
+    } else if (err instanceof LocalSourceListingError || isStorageError(err, message)) {
       category = "storage";
     } else if (isUserError(message)) {
       category = "user";
@@ -139,17 +115,12 @@ export const classifyError = (
   } else if (isTimeoutError(message)) {
     failureClass = "network-transient";
   } else if (isNetworkError(message)) {
-    failureClass =
-      /unknown host|enotfound|dns|unreachable|ehostunreach|enetunreach/i.test(
-        message,
-      )
-        ? "network-unreachable"
-        : "network-transient";
+    failureClass = /unknown host|enotfound|dns|unreachable|ehostunreach|enetunreach/i.test(message)
+      ? "network-unreachable"
+      : "network-transient";
   } else if (
     err.name === "QuotaExceededError" ||
-    /no space|out of memory|oom|resource exhausted|insufficient storage/i.test(
-      message,
-    )
+    /no space|out of memory|oom|resource exhausted|insufficient storage/i.test(message)
   ) {
     failureClass = "resource-exhausted";
   } else if (isParseError(err, message)) {
@@ -159,13 +130,9 @@ export const classifyError = (
   } else if (isWriteError(message)) {
     failureClass = "io-write-failure";
   } else if (err instanceof LocalSourceListingError) {
-    failureClass = err.code.startsWith("saf-")
-      ? "permission-denied"
-      : "io-read-failure";
+    failureClass = err.code.startsWith("saf-") ? "permission-denied" : "io-read-failure";
   } else if (isStorageError(err, message)) {
-    failureClass = isWriteError(message)
-      ? "io-write-failure"
-      : "io-read-failure";
+    failureClass = isWriteError(message) ? "io-write-failure" : "io-read-failure";
   } else if (isMetadataAbsentError(message)) {
     failureClass = "metadata-absent";
   } else if (isDevicePlaybackError(message)) {

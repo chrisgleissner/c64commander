@@ -26,18 +26,13 @@ export function generateUUID(): string {
  * Manually save coverage from a page.
  * Call this at the end of your test before assertions.
  */
-export async function saveCoverage(
-  page: Page,
-  testName?: string,
-): Promise<void> {
+export async function saveCoverage(page: Page, testName?: string): Promise<void> {
   try {
     const coverage = await page.evaluate(() => window.__coverage__);
     if (coverage) {
       await fs.promises.mkdir(istanbulCLIOutput, { recursive: true });
       const uuid = generateUUID();
-      const safeName = testName
-        ? testName.replace(/[^a-z0-9]/gi, "_").substring(0, 50)
-        : "test";
+      const safeName = testName ? testName.replace(/[^a-z0-9]/gi, "_").substring(0, 50) : "test";
       const fileName = `coverage-${safeName}-${uuid}.json`;
       const filePath = path.join(istanbulCLIOutput, fileName);
       await fs.promises.writeFile(filePath, JSON.stringify(coverage));

@@ -11,10 +11,7 @@ import { getPlatform } from "@/lib/native/platform";
 import { buildLocalPlayFileFromTree } from "@/lib/playback/fileLibraryUtils";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 import type { LocalSidFile } from "./LocalFsSongSource";
-import {
-  ingestLocalArchives,
-  isSupportedLocalArchive,
-} from "./localArchiveIngestion";
+import { ingestLocalArchives, isSupportedLocalArchive } from "./localArchiveIngestion";
 
 type FileSystemHandleLike = {
   kind: "file" | "directory";
@@ -31,9 +28,7 @@ type FileSystemDirectoryHandleLike = FileSystemHandleLike & {
   entries: () => AsyncIterableIterator<[string, FileSystemHandleLike]>;
 };
 
-const isDirectoryHandle = (
-  handle: FileSystemHandleLike,
-): handle is FileSystemDirectoryHandleLike =>
+const isDirectoryHandle = (handle: FileSystemHandleLike): handle is FileSystemDirectoryHandleLike =>
   handle.kind === "directory" && "entries" in handle;
 
 export const prepareDirectoryInput = (input: HTMLInputElement | null) => {
@@ -42,19 +37,14 @@ export const prepareDirectoryInput = (input: HTMLInputElement | null) => {
   input.setAttribute("directory", "");
 };
 
-const isSupportedLocalFile = (name: string) =>
-  name.toLowerCase().endsWith(".sid") || isSupportedLocalArchive(name);
+const isSupportedLocalFile = (name: string) => name.toLowerCase().endsWith(".sid") || isSupportedLocalArchive(name);
 
-export const filterLocalInputFiles = (
-  files: FileList | null,
-): LocalSidFile[] => {
+export const filterLocalInputFiles = (files: FileList | null): LocalSidFile[] => {
   if (!files || files.length === 0) return [];
   return Array.from(files).filter((file) => isSupportedLocalFile(file.name));
 };
 
-const listSafFiles = async (
-  treeUri: string,
-): Promise<{ name: string; path: string }[]> => {
+const listSafFiles = async (treeUri: string): Promise<{ name: string; path: string }[]> => {
   const queue = ["/"];
   const files: { name: string; path: string }[] = [];
   while (queue.length) {
@@ -72,9 +62,7 @@ const listSafFiles = async (
   return files;
 };
 
-export const browseLocalSidFiles = async (
-  input: HTMLInputElement | null,
-): Promise<LocalSidFile[] | null> => {
+export const browseLocalSidFiles = async (input: HTMLInputElement | null): Promise<LocalSidFile[] | null> => {
   if (getPlatform() === "android" || getPlatform() === "ios") {
     const result = await FolderPicker.pickDirectory();
     const treeUri = result?.treeUri;
@@ -84,9 +72,7 @@ export const browseLocalSidFiles = async (
     const entries = await listSafFiles(treeUri);
     const candidates = entries
       .filter((entry) => isSupportedLocalFile(entry.name))
-      .map((entry) =>
-        buildLocalPlayFileFromTree(entry.name, entry.path, treeUri),
-      );
+      .map((entry) => buildLocalPlayFileFromTree(entry.name, entry.path, treeUri));
     const ingestion = await ingestLocalArchives(candidates);
     return ingestion.files;
   }
@@ -105,10 +91,7 @@ export const browseLocalSidFiles = async (
   const directoryHandle = await picker();
   const files: File[] = [];
 
-  const walkDirectory = async (
-    dirHandle: FileSystemDirectoryHandleLike,
-    prefix: string,
-  ) => {
+  const walkDirectory = async (dirHandle: FileSystemDirectoryHandleLike, prefix: string) => {
     for await (const [name, handle] of dirHandle.entries()) {
       if (handle.kind === "file") {
         const file = await (handle as FileSystemFileHandleLike).getFile();

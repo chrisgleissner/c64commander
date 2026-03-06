@@ -104,10 +104,7 @@ export const HvscControls = ({
   })();
 
   return (
-    <div
-      className="bg-card border border-border rounded-xl p-4 space-y-4"
-      data-testid="hvsc-controls"
-    >
+    <div className="bg-card border border-border rounded-xl p-4 space-y-4" data-testid="hvsc-controls">
       <div className="flex items-center justify-between gap-2">
         <div>
           <p className="text-sm font-medium">HVSC</p>
@@ -116,9 +113,7 @@ export const HvscControls = ({
               ? `Installed version ${hvscInstalledVersion ?? "—"}`
               : "Download HVSC to browse the SID collection."}
           </p>
-          <p className="text-[11px] text-muted-foreground">
-            Status: {phaseLabel}
-          </p>
+          <p className="text-[11px] text-muted-foreground">Status: {phaseLabel}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:justify-end">
           <Button
@@ -140,13 +135,7 @@ export const HvscControls = ({
             Ingest HVSC
           </Button>
           {(hvscSummaryState !== "idle" || hvscInlineError) && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onReset}
-              disabled={hvscUpdating}
-              className="whitespace-normal"
-            >
+            <Button variant="ghost" size="sm" onClick={onReset} disabled={hvscUpdating} className="whitespace-normal">
               Reset status
             </Button>
           )}
@@ -165,23 +154,16 @@ export const HvscControls = ({
       </div>
 
       {hvscSummaryState !== "idle" && (
-        <div
-          className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs"
-          data-testid="hvsc-summary"
-        >
+        <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs" data-testid="hvsc-summary">
           {hvscSummaryState === "success" ? (
             <div className="space-y-1">
-              <p className="text-sm font-medium">
-                HVSC downloaded successfully
-              </p>
+              <p className="text-sm font-medium">HVSC downloaded successfully</p>
               <p>
-                Ingested {hvscIngestionIngestedSongs} of{" "}
-                {hvscIngestionTotalSongs} songs.
+                Ingested {hvscIngestionIngestedSongs} of {hvscIngestionTotalSongs} songs.
               </p>
               {hvscSonglengthSyntaxErrors > 0 && (
                 <p className="text-amber-700 dark:text-amber-400">
-                  {hvscSonglengthSyntaxErrors} songlength entries had syntax
-                  errors and were ignored.
+                  {hvscSonglengthSyntaxErrors} songlength entries had syntax errors and were ignored.
                 </p>
               )}
               <p>Files extracted: {hvscSummaryFilesExtracted ?? "—"}</p>
@@ -193,10 +175,7 @@ export const HvscControls = ({
               <p className="text-sm font-medium">HVSC download failed</p>
               <p>{hvscSummaryFailureLabel}</p>
               {hvscIngestionFailedSongs > 0 && (
-                <p>
-                  {hvscIngestionFailedSongs} songs could not be imported. Check
-                  diagnostics logs for details.
-                </p>
+                <p>{hvscIngestionFailedSongs} songs could not be imported. Check diagnostics logs for details.</p>
               )}
             </div>
           )}
@@ -205,19 +184,14 @@ export const HvscControls = ({
 
       {!hvscAvailable && (
         <p className="text-xs text-muted-foreground">
-          HVSC controls are available on native builds or when a mock bridge is
-          enabled.
+          HVSC controls are available on native builds or when a mock bridge is enabled.
         </p>
       )}
       {hvscAvailable && !hvscInstalled && !hvscUpdating && !hvscCanIngest && (
-        <p className="text-xs text-muted-foreground">
-          Download HVSC to cache the archives before ingesting.
-        </p>
+        <p className="text-xs text-muted-foreground">Download HVSC to cache the archives before ingesting.</p>
       )}
 
-      {(hvscPhase === "download" ||
-        hvscPhase === "extract" ||
-        hvscPhase === "index") && (
+      {(hvscPhase === "download" || hvscPhase === "extract" || hvscPhase === "index") && (
         <div className="space-y-2" data-testid="hvsc-progress">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span>{hvscActionLabel || "Processing HVSC…"}</span>
@@ -227,8 +201,7 @@ export const HvscControls = ({
             <div className="flex items-center justify-between text-[11px] text-muted-foreground">
               <span>Download</span>
               <span>
-                {hvscDownloadPercent !== null &&
-                hvscDownloadPercent !== undefined
+                {hvscDownloadPercent !== null && hvscDownloadPercent !== undefined
                   ? `${Math.round(hvscDownloadPercent)}%`
                   : "—"}
               </span>
@@ -253,8 +226,7 @@ export const HvscControls = ({
             <div className="flex items-center justify-between text-[11px] text-muted-foreground">
               <span>Extraction + indexing</span>
               <span>
-                {hvscExtractionPercent !== null &&
-                hvscExtractionPercent !== undefined
+                {hvscExtractionPercent !== null && hvscExtractionPercent !== undefined
                   ? `${Math.round(hvscExtractionPercent)}%`
                   : "—"}
               </span>
@@ -271,9 +243,7 @@ export const HvscControls = ({
               className="flex items-center justify-between text-[11px] text-muted-foreground"
               data-testid="hvsc-extraction-elapsed"
             >
-              <span>
-                Elapsed: {formatHvscDuration(hvscExtractionElapsedMs)}
-              </span>
+              <span>Elapsed: {formatHvscDuration(hvscExtractionElapsedMs)}</span>
               <span>Status: {hvscExtractionStatus}</span>
             </div>
           </div>
@@ -285,14 +255,11 @@ export const HvscControls = ({
         </div>
       )}
 
-      {hvscInlineError && (
-        <p className="text-xs text-destructive">{hvscInlineError}</p>
-      )}
+      {hvscInlineError && <p className="text-xs text-destructive">{hvscInlineError}</p>}
       {hvscInstalled && hvscAvailable ? (
         <div className="rounded-lg border border-border bg-muted/30 p-3">
           <p className="text-xs text-muted-foreground">
-            Browse and add HVSC songs from the shared “Add items” source
-            chooser.
+            Browse and add HVSC songs from the shared “Add items” source chooser.
           </p>
         </div>
       ) : null}

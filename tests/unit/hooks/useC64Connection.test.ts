@@ -70,8 +70,7 @@ vi.mock("@/lib/c64api", () => ({
   C64_DEFAULTS: { DEFAULT_DEVICE_HOST: "c64u" },
   getDefaultBaseUrl: () => "http://default",
   buildBaseUrlFromDeviceHost: (host?: string) => `http://${host ?? "c64u"}`,
-  getDeviceHostFromBaseUrl: (baseUrl?: string) =>
-    baseUrl?.replace(/^https?:\/\//, "") ?? "c64u",
+  getDeviceHostFromBaseUrl: (baseUrl?: string) => baseUrl?.replace(/^https?:\/\//, "") ?? "c64u",
   normalizeDeviceHost: (host?: string) => host?.trim() || "c64u",
   resolveDeviceHostFromStorage: () => "c64u",
   getC64APIConfigSnapshot: () => ({
@@ -177,14 +176,8 @@ describe("useC64Connection", () => {
     act(() => {
       result.current.updateConfig("host.local", "pw");
     });
-    expect(updateC64APIConfigMock).toHaveBeenCalledWith(
-      "http://host.local",
-      "pw",
-      "host.local",
-    );
-    await waitFor(() =>
-      expect(result.current.baseUrl).toBe("http://host.local"),
-    );
+    expect(updateC64APIConfigMock).toHaveBeenCalledWith("http://host.local", "pw", "host.local");
+    await waitFor(() => expect(result.current.baseUrl).toBe("http://host.local"));
     expect(result.current.password).toBe("pw");
     expect(result.current.deviceHost).toBe("host.local");
   });
@@ -224,9 +217,7 @@ describe("useC64Connection", () => {
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: ["c64-all-config"],
     });
-    expect(invalidateSpy.mock.calls.some(([arg]) => "predicate" in arg)).toBe(
-      false,
-    );
+    expect(invalidateSpy.mock.calls.some(([arg]) => "predicate" in arg)).toBe(false);
   });
 
   it("ignores connection change events without effective settings delta", async () => {
@@ -251,9 +242,7 @@ describe("useC64Connection", () => {
     const { wrapper } = createWrapper();
     const { result } = renderHook(() => useC64Categories(), { wrapper });
 
-    await waitFor(() =>
-      expect(result.current.data?.categories).toEqual(["Audio"]),
-    );
+    await waitFor(() => expect(result.current.data?.categories).toEqual(["Audio"]));
   });
 
   it("marks config changes on mutation success", async () => {
@@ -428,9 +417,7 @@ describe("useC64Connection", () => {
     await waitFor(() => expect(result.current.status.isConnected).toBe(true));
 
     act(() => {
-      window.dispatchEvent(
-        new CustomEvent("c64u-connection-change", { detail: null }),
-      );
+      window.dispatchEvent(new CustomEvent("c64u-connection-change", { detail: null }));
     });
 
     expect(invalidateSpy).not.toHaveBeenCalled();
@@ -512,10 +499,7 @@ describe("useC64Connection", () => {
     });
 
     const { wrapper } = createWrapper();
-    const { result } = renderHook(
-      () => useC64ConfigItems("Audio", ["Volume"]),
-      { wrapper },
-    );
+    const { result } = renderHook(() => useC64ConfigItems("Audio", ["Volume"]), { wrapper });
 
     expect(result.current.data).toEqual({
       Audio: {
@@ -526,9 +510,7 @@ describe("useC64Connection", () => {
       errors: [],
     });
 
-    await waitFor(() =>
-      expect(mockApi.getConfigItems).toHaveBeenCalledWith("Audio", ["Volume"]),
-    );
+    await waitFor(() => expect(mockApi.getConfigItems).toHaveBeenCalledWith("Audio", ["Volume"]));
   });
 
   it("supports nested snapshot category blocks for config-items placeholder data", async () => {
@@ -543,15 +525,10 @@ describe("useC64Connection", () => {
         },
       },
     });
-    mockApi.getConfigItems = vi
-      .fn()
-      .mockResolvedValue({ Audio: { items: {} }, errors: [] });
+    mockApi.getConfigItems = vi.fn().mockResolvedValue({ Audio: { items: {} }, errors: [] });
 
     const { wrapper } = createWrapper();
-    const { result } = renderHook(
-      () => useC64ConfigItems("Audio", ["Volume"]),
-      { wrapper },
-    );
+    const { result } = renderHook(() => useC64ConfigItems("Audio", ["Volume"]), { wrapper });
 
     expect(result.current.data).toEqual({
       Audio: {

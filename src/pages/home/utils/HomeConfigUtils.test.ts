@@ -85,11 +85,7 @@ describe("HomeConfigUtils", () => {
           },
         },
       };
-      expect(readItemOptions(payload, "Audio", "Mode")).toEqual([
-        "Mono",
-        "Stereo",
-        "Surround",
-      ]);
+      expect(readItemOptions(payload, "Audio", "Mode")).toEqual(["Mono", "Stereo", "Surround"]);
     });
 
     it("returns empty array when options not present", () => {
@@ -133,33 +129,25 @@ describe("HomeConfigUtils", () => {
     it("returns override when present", () => {
       const payload = { Audio: { items: { Volume: { value: "50" } } } };
       const overrides = { "Audio::Volume": 75 };
-      expect(resolveConfigValue(payload, "Audio", "Volume", 0, overrides)).toBe(
-        75,
-      );
+      expect(resolveConfigValue(payload, "Audio", "Volume", 0, overrides)).toBe(75);
     });
 
     it("returns value from payload when no override", () => {
       const payload = { Audio: { items: { Volume: { value: "50" } } } };
       const overrides = {};
-      expect(resolveConfigValue(payload, "Audio", "Volume", 0, overrides)).toBe(
-        "50",
-      );
+      expect(resolveConfigValue(payload, "Audio", "Volume", 0, overrides)).toBe("50");
     });
 
     it("returns fallback when value is undefined", () => {
       const payload = { Audio: { items: {} } };
       const overrides = {};
-      expect(
-        resolveConfigValue(payload, "Audio", "Volume", 100, overrides),
-      ).toBe(100);
+      expect(resolveConfigValue(payload, "Audio", "Volume", 100, overrides)).toBe(100);
     });
 
     it("returns numeric override", () => {
       const payload = { Audio: { items: { Volume: { value: "50" } } } };
       const overrides = { "Audio::Volume": 100 };
-      expect(resolveConfigValue(payload, "Audio", "Volume", 0, overrides)).toBe(
-        100,
-      );
+      expect(resolveConfigValue(payload, "Audio", "Volume", 0, overrides)).toBe(100);
     });
   });
 
@@ -201,24 +189,16 @@ describe("HomeConfigUtils", () => {
   describe("resolveTurboControlValue", () => {
     it("returns Off for speed <= 1", () => {
       expect(resolveTurboControlValue("1 MHz", ["Off", "Manual"])).toBe("Off");
-      expect(resolveTurboControlValue("0.5 MHz", ["Off", "Manual"])).toBe(
-        "Off",
-      );
+      expect(resolveTurboControlValue("0.5 MHz", ["Off", "Manual"])).toBe("Off");
     });
 
     it("returns Manual for speed > 1", () => {
-      expect(resolveTurboControlValue("2 MHz", ["Off", "Manual"])).toBe(
-        "Manual",
-      );
-      expect(resolveTurboControlValue("8 MHz", ["Off", "Manual"])).toBe(
-        "Manual",
-      );
+      expect(resolveTurboControlValue("2 MHz", ["Off", "Manual"])).toBe("Manual");
+      expect(resolveTurboControlValue("8 MHz", ["Off", "Manual"])).toBe("Manual");
     });
 
     it("returns first option when desired not found", () => {
-      expect(resolveTurboControlValue("2 MHz", ["Auto", "Custom"])).toBe(
-        "Auto",
-      );
+      expect(resolveTurboControlValue("2 MHz", ["Auto", "Custom"])).toBe("Auto");
     });
 
     it("returns desired value when no options available", () => {
@@ -226,17 +206,13 @@ describe("HomeConfigUtils", () => {
     });
 
     it("matches case-insensitively", () => {
-      expect(resolveTurboControlValue("2 MHz", ["off", "manual"])).toBe(
-        "manual",
-      );
+      expect(resolveTurboControlValue("2 MHz", ["off", "manual"])).toBe("manual");
     });
   });
 
   describe("formatPrinterLabel", () => {
     it("formats Page top margin", () => {
-      expect(formatPrinterLabel("Page top margin (default is 5)")).toBe(
-        "Margin",
-      );
+      expect(formatPrinterLabel("Page top margin (default is 5)")).toBe("Margin");
     });
 
     it("formats Page height", () => {
@@ -282,9 +258,7 @@ describe("HomeConfigUtils", () => {
     });
 
     it("formats IBM Graphics Printer", () => {
-      expect(formatPrinterOptionLabel("IBM Graphics Printer")).toBe(
-        "IBM Graphics",
-      );
+      expect(formatPrinterOptionLabel("IBM Graphics Printer")).toBe("IBM Graphics");
     });
 
     it("formats Commodore MPS", () => {
@@ -372,9 +346,7 @@ describe("HomeConfigUtils", () => {
     });
 
     it("returns trimmed original for unknown values", () => {
-      expect(formatPrinterOptionLabel("  Unknown Value  ")).toBe(
-        "Unknown Value",
-      );
+      expect(formatPrinterOptionLabel("  Unknown Value  ")).toBe("Unknown Value");
     });
   });
 });

@@ -12,12 +12,7 @@ import { unzipSync, strFromU8 } from "fflate";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
 import { seedUiMocks } from "./uiMocks";
 import { saveCoverageFromPage } from "./withCoverage";
-import {
-  assertNoUiIssues,
-  attachStepScreenshot,
-  finalizeEvidence,
-  startStrictUiMonitoring,
-} from "./testArtifacts";
+import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from "./testArtifacts";
 import type { TraceEvent } from "../src/lib/tracing/types";
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
@@ -26,18 +21,13 @@ const snap = async (page: Page, testInfo: TestInfo, label: string) => {
 
 const waitForTracing = async (page: Page) => {
   await page.waitForFunction(() =>
-    Boolean(
-      (window as Window & { __c64uTracing?: { seedTraces?: unknown } })
-        .__c64uTracing?.seedTraces,
-    ),
+    Boolean((window as Window & { __c64uTracing?: { seedTraces?: unknown } }).__c64uTracing?.seedTraces),
   );
 };
 
 const decodeZip = (zipData: number[]) => {
   const files = unzipSync(new Uint8Array(zipData));
-  return Object.fromEntries(
-    Object.entries(files).map(([name, data]) => [name, strFromU8(data)]),
-  );
+  return Object.fromEntries(Object.entries(files).map(([name, data]) => [name, strFromU8(data)]));
 };
 
 const seedActivityDots = async (page: Page) => {
@@ -105,9 +95,7 @@ test.describe("Home header and diagnostics overlay", () => {
     }
   });
 
-  test("home header renders brand layout without distortion", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("home header renders brand layout without distortion", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/", { waitUntil: "domcontentloaded" });
     await snap(page, testInfo, "home-open");
 
@@ -128,18 +116,12 @@ test.describe("Home header and diagnostics overlay", () => {
     const homeHeaderBox = await header.boundingBox();
     await page.goto("/play", { waitUntil: "domcontentloaded" });
     const playHeaderBox = await header.boundingBox();
-    expect(
-      Math.abs((homeHeaderBox?.height ?? 0) - (playHeaderBox?.height ?? 0)),
-    ).toBeLessThanOrEqual(1);
+    expect(Math.abs((homeHeaderBox?.height ?? 0) - (playHeaderBox?.height ?? 0))).toBeLessThanOrEqual(1);
 
     await expect(page.getByTestId("home-header-logo")).toHaveCount(0);
-    await expect(page.getByText("C64 Commander", { exact: true })).toHaveCount(
-      0,
-    );
+    await expect(page.getByText("C64 Commander", { exact: true })).toHaveCount(0);
 
-    const diagnosticsIndicator = page.getByTestId(
-      "diagnostics-activity-indicator",
-    );
+    const diagnosticsIndicator = page.getByTestId("diagnostics-activity-indicator");
     const connectivityIndicator = page.getByTestId("connectivity-indicator");
     await expect(diagnosticsIndicator).toBeVisible();
     await expect(connectivityIndicator).toBeVisible();
@@ -147,9 +129,9 @@ test.describe("Home header and diagnostics overlay", () => {
       diagnosticsIndicator.boundingBox(),
       connectivityIndicator.boundingBox(),
     ]);
-    expect(
-      (diagnosticsBox?.x ?? 0) + (diagnosticsBox?.width ?? 0),
-    ).toBeLessThan(connectivityBox?.x ?? Number.MAX_SAFE_INTEGER);
+    expect((diagnosticsBox?.x ?? 0) + (diagnosticsBox?.width ?? 0)).toBeLessThan(
+      connectivityBox?.x ?? Number.MAX_SAFE_INTEGER,
+    );
 
     await page.addInitScript(() => {
       const now = Date.now();
@@ -162,9 +144,7 @@ test.describe("Home header and diagnostics overlay", () => {
         correlationId: string;
         data: Record<string, unknown>;
       };
-      (
-        window as Window & { __c64uSeedTraces?: TraceEvent[] }
-      ).__c64uSeedTraces = [
+      (window as Window & { __c64uSeedTraces?: TraceEvent[] }).__c64uSeedTraces = [
         {
           id: "EVT-dot-1",
           timestamp: new Date(now).toISOString(),
@@ -199,9 +179,7 @@ test.describe("Home header and diagnostics overlay", () => {
           __c64uSeedTraces?: TraceEvent[];
         }
       ).__c64uTracing;
-      const seed =
-        (window as Window & { __c64uSeedTraces?: TraceEvent[] })
-          .__c64uSeedTraces ?? [];
+      const seed = (window as Window & { __c64uSeedTraces?: TraceEvent[] }).__c64uSeedTraces ?? [];
       tracing?.seedTraces?.(seed);
     });
     const restDot = page.getByTestId("diagnostics-activity-rest");
@@ -209,24 +187,15 @@ test.describe("Home header and diagnostics overlay", () => {
     await expect(restDot).toBeVisible();
     await expect(ftpDot).toBeVisible();
 
-    const [restBox, ftpBox] = await Promise.all([
-      restDot.boundingBox(),
-      ftpDot.boundingBox(),
-    ]);
+    const [restBox, ftpBox] = await Promise.all([restDot.boundingBox(), ftpDot.boundingBox()]);
     expect(restBox?.x ?? 0).toBeLessThan(ftpBox?.x ?? 0);
-    expect((restBox?.x ?? 0) + (restBox?.width ?? 0)).toBeLessThan(
-      ftpBox?.x ?? Number.MAX_SAFE_INTEGER,
-    );
+    expect((restBox?.x ?? 0) + (restBox?.width ?? 0)).toBeLessThan(ftpBox?.x ?? Number.MAX_SAFE_INTEGER);
   });
 
-  test("status indicators open diagnostics on Actions tab", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("status indicators open diagnostics on Actions tab", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.addInitScript(() => {
       const now = Date.now();
-      (
-        window as Window & { __c64uSeedTraces?: TraceEvent[] }
-      ).__c64uSeedTraces = [
+      (window as Window & { __c64uSeedTraces?: TraceEvent[] }).__c64uSeedTraces = [
         {
           id: "EVT-9000",
           timestamp: new Date(now).toISOString(),
@@ -272,9 +241,7 @@ test.describe("Home header and diagnostics overlay", () => {
           __c64uSeedTraces?: TraceEvent[];
         }
       ).__c64uTracing;
-      const seed =
-        (window as Window & { __c64uSeedTraces?: TraceEvent[] })
-          .__c64uSeedTraces ?? [];
+      const seed = (window as Window & { __c64uSeedTraces?: TraceEvent[] }).__c64uSeedTraces ?? [];
       tracing?.seedTraces?.(seed);
     });
 
@@ -290,11 +257,7 @@ test.describe("Home header and diagnostics overlay", () => {
       await expect(dialog).toBeVisible();
       const actionsTab = dialog.getByRole("tab", { name: /Actions/i });
       await expect(actionsTab).toHaveAttribute("aria-selected", "true");
-      await snap(
-        page,
-        testInfo,
-        `diagnostics-open-${await indicator.getAttribute("data-testid")}`,
-      );
+      await snap(page, testInfo, `diagnostics-open-${await indicator.getAttribute("data-testid")}`);
       await dialog.getByRole("button", { name: "Close" }).click();
     }
   });
@@ -324,11 +287,7 @@ test.describe("Home header and diagnostics overlay", () => {
 
       const whileOpenPath = await page.evaluate(() => window.location.pathname);
       expect(whileOpenPath).toBe(before.path);
-      await snap(
-        page,
-        testInfo,
-        `diagnostics-modal-open-${route.replace("/", "")}`,
-      );
+      await snap(page, testInfo, `diagnostics-modal-open-${route.replace("/", "")}`);
 
       await dialog.getByRole("button", { name: "Close" }).click();
       await expect(dialog).toBeHidden();
@@ -339,21 +298,13 @@ test.describe("Home header and diagnostics overlay", () => {
       }));
       expect(after.path).toBe(before.path);
       expect(after.scrollY).toBe(before.scrollY);
-      await snap(
-        page,
-        testInfo,
-        `diagnostics-modal-closed-${route.replace("/", "")}`,
-      );
+      await snap(page, testInfo, `diagnostics-modal-closed-${route.replace("/", "")}`);
     }
   });
 
-  test("clear all diagnostics empties every tab", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("clear all diagnostics empties every tab", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.addInitScript(() => {
-      (
-        window as Window & { __c64uTestProbeEnabled?: boolean }
-      ).__c64uTestProbeEnabled = true;
+      (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled = true;
       const logs = [
         {
           id: "err-1",
@@ -414,9 +365,7 @@ test.describe("Home header and diagnostics overlay", () => {
       tracing?.seedTraces?.(events);
     });
 
-    await page
-      .getByRole("button", { name: "Diagnostics", exact: true })
-      .click();
+    await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: /Diagnostics/i });
     await expect(dialog).toBeVisible();
 
@@ -432,24 +381,16 @@ test.describe("Home header and diagnostics overlay", () => {
 
     await dialog.getByRole("tab", { name: /^Logs$/i }).click();
     await expect(dialog.getByText("Seed log")).toHaveCount(0);
-    await expect(
-      dialog.getByText("Diagnostics cleared from global overlay"),
-    ).toHaveCount(0);
+    await expect(dialog.getByText("Diagnostics cleared from global overlay")).toHaveCount(0);
 
     await dialog.getByRole("tab", { name: /^Traces$/i }).click();
-    await expect(
-      dialog.locator('[data-testid="trace-item-EVT-9100"]'),
-    ).toHaveCount(0);
+    await expect(dialog.locator('[data-testid="trace-item-EVT-9100"]')).toHaveCount(0);
 
     await dialog.getByRole("tab", { name: /^Actions$/i }).click();
-    await expect(
-      dialog.locator('[data-testid="action-summary-COR-9100"]'),
-    ).toHaveCount(0);
+    await expect(dialog.locator('[data-testid="action-summary-COR-9100"]')).toHaveCount(0);
   });
 
-  test("per-tab share exports only the active tab", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("per-tab share exports only the active tab", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.addInitScript(() => {
       const logs = [
         {
@@ -469,24 +410,19 @@ test.describe("Home header and diagnostics overlay", () => {
       ];
       localStorage.setItem("c64u_app_logs", JSON.stringify(logs));
 
-      (
-        window as Window & { __c64uDiagnosticsSharePayloads?: unknown[] }
-      ).__c64uDiagnosticsSharePayloads = [];
+      (window as Window & { __c64uDiagnosticsSharePayloads?: unknown[] }).__c64uDiagnosticsSharePayloads = [];
       (
         window as Window & {
           __c64uDiagnosticsShareOverride?: (payload: any) => void;
         }
       ).__c64uDiagnosticsShareOverride = (payload) => {
         const list =
-          (window as Window & { __c64uDiagnosticsSharePayloads?: unknown[] })
-            .__c64uDiagnosticsSharePayloads ?? [];
+          (window as Window & { __c64uDiagnosticsSharePayloads?: unknown[] }).__c64uDiagnosticsSharePayloads ?? [];
         list.push({
           ...payload,
           zipData: Array.from(payload.zipData ?? []),
         });
-        (
-          window as Window & { __c64uDiagnosticsSharePayloads?: unknown[] }
-        ).__c64uDiagnosticsSharePayloads = list;
+        (window as Window & { __c64uDiagnosticsSharePayloads?: unknown[] }).__c64uDiagnosticsSharePayloads = list;
       };
     });
 
@@ -531,9 +467,7 @@ test.describe("Home header and diagnostics overlay", () => {
       tracing?.seedTraces?.(events);
     });
 
-    await page
-      .getByRole("button", { name: "Diagnostics", exact: true })
-      .click();
+    await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: /Diagnostics/i });
     await expect(dialog).toBeVisible();
 
@@ -559,9 +493,7 @@ test.describe("Home header and diagnostics overlay", () => {
         .toBeGreaterThan(0);
 
       const payloads = (await page.evaluate(
-        () =>
-          (window as Window & { __c64uDiagnosticsSharePayloads?: unknown[] })
-            .__c64uDiagnosticsSharePayloads ?? [],
+        () => (window as Window & { __c64uDiagnosticsSharePayloads?: unknown[] }).__c64uDiagnosticsSharePayloads ?? [],
       )) as Array<{ tab: string; zipData: number[] }>;
       const payload = payloads[payloads.length - 1];
       const files = decodeZip(payload.zipData);
@@ -571,48 +503,25 @@ test.describe("Home header and diagnostics overlay", () => {
       await snap(page, testInfo, `share-${tabLabel.toLowerCase()}`);
     };
 
-    await shareForTab(
-      "Errors",
-      "diagnostics-share-errors",
-      "error-logs.json",
-      (data) => {
-        const entries = data as Array<{ id: string; level?: string }>;
-        expect(entries.some((entry) => entry.id === "err-1")).toBeTruthy();
-        expect(
-          entries.every(
-            (entry) => entry.level === "warn" || entry.level === "error",
-          ),
-        ).toBeTruthy();
-      },
-    );
+    await shareForTab("Errors", "diagnostics-share-errors", "error-logs.json", (data) => {
+      const entries = data as Array<{ id: string; level?: string }>;
+      expect(entries.some((entry) => entry.id === "err-1")).toBeTruthy();
+      expect(entries.every((entry) => entry.level === "warn" || entry.level === "error")).toBeTruthy();
+    });
     await shareForTab("Logs", "diagnostics-share-logs", "logs.json", (data) => {
       const entries = data as Array<{ id: string }>;
       expect(entries.some((entry) => entry.id === "err-1")).toBeTruthy();
       expect(entries.some((entry) => entry.id === "log-1")).toBeTruthy();
     });
-    await shareForTab(
-      "Traces",
-      "diagnostics-share-traces",
-      "traces.json",
-      (data) => {
-        const entries = data as Array<{ id: string }>;
-        const ids = entries.map((entry) => entry.id);
-        expect(ids).toEqual(
-          expect.arrayContaining(["EVT-9200", "EVT-9201", "EVT-9202"]),
-        );
-      },
-    );
-    await shareForTab(
-      "Actions",
-      "diagnostics-share-actions",
-      "actions.json",
-      (data) => {
-        const entries = data as Array<{ correlationId?: string }>;
-        expect(
-          entries.some((entry) => entry.correlationId === "COR-9200"),
-        ).toBeTruthy();
-      },
-    );
+    await shareForTab("Traces", "diagnostics-share-traces", "traces.json", (data) => {
+      const entries = data as Array<{ id: string }>;
+      const ids = entries.map((entry) => entry.id);
+      expect(ids).toEqual(expect.arrayContaining(["EVT-9200", "EVT-9201", "EVT-9202"]));
+    });
+    await shareForTab("Actions", "diagnostics-share-actions", "actions.json", (data) => {
+      const entries = data as Array<{ correlationId?: string }>;
+      expect(entries.some((entry) => entry.correlationId === "COR-9200")).toBeTruthy();
+    });
   });
 
   test("app header and footer remain fixed during scroll on core pages", async ({
@@ -638,10 +547,7 @@ test.describe("Home header and diagnostics overlay", () => {
       await expect(header).toBeVisible();
       await expect(footer).toBeVisible();
 
-      const [headerBefore, footerBefore] = await Promise.all([
-        header.boundingBox(),
-        footer.boundingBox(),
-      ]);
+      const [headerBefore, footerBefore] = await Promise.all([header.boundingBox(), footer.boundingBox()]);
 
       await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
       await page.waitForTimeout(100);
@@ -654,25 +560,15 @@ test.describe("Home header and diagnostics overlay", () => {
 
       expect(scrollY).toBeGreaterThan(0);
 
-      const headerDelta = Math.abs(
-        (headerAfter?.y ?? 0) - (headerBefore?.y ?? 0),
-      );
-      const footerDelta = Math.abs(
-        (footerAfter?.y ?? 0) - (footerBefore?.y ?? 0),
-      );
-      const headerHeightDelta = Math.abs(
-        (headerAfter?.height ?? 0) - (headerBefore?.height ?? 0),
-      );
+      const headerDelta = Math.abs((headerAfter?.y ?? 0) - (headerBefore?.y ?? 0));
+      const footerDelta = Math.abs((footerAfter?.y ?? 0) - (footerBefore?.y ?? 0));
+      const headerHeightDelta = Math.abs((headerAfter?.height ?? 0) - (headerBefore?.height ?? 0));
 
       expect(headerDelta).toBeLessThanOrEqual(0.5);
       expect(footerDelta).toBeLessThanOrEqual(0.5);
       expect(headerHeightDelta).toBeLessThanOrEqual(0.5);
 
-      await snap(
-        page,
-        testInfo,
-        `fixed-header-${path.replace("/", "") || "home"}`,
-      );
+      await snap(page, testInfo, `fixed-header-${path.replace("/", "") || "home"}`);
     }
   });
 
@@ -680,24 +576,19 @@ test.describe("Home header and diagnostics overlay", () => {
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await page.addInitScript(() => {
-      (
-        window as Window & { __c64uDiagnosticsSharePayloads?: unknown[] }
-      ).__c64uDiagnosticsSharePayloads = [];
+      (window as Window & { __c64uDiagnosticsSharePayloads?: unknown[] }).__c64uDiagnosticsSharePayloads = [];
       (
         window as Window & {
           __c64uDiagnosticsShareOverride?: (payload: any) => void;
         }
       ).__c64uDiagnosticsShareOverride = (payload) => {
         const list =
-          (window as Window & { __c64uDiagnosticsSharePayloads?: unknown[] })
-            .__c64uDiagnosticsSharePayloads ?? [];
+          (window as Window & { __c64uDiagnosticsSharePayloads?: unknown[] }).__c64uDiagnosticsSharePayloads ?? [];
         list.push({
           ...payload,
           zipData: Array.from(payload.zipData ?? []),
         });
-        (
-          window as Window & { __c64uDiagnosticsSharePayloads?: unknown[] }
-        ).__c64uDiagnosticsSharePayloads = list;
+        (window as Window & { __c64uDiagnosticsSharePayloads?: unknown[] }).__c64uDiagnosticsSharePayloads = list;
       };
     });
 
@@ -741,8 +632,7 @@ test.describe("Home header and diagnostics overlay", () => {
       window.__c64uTracing?.seedTraces?.(events);
     });
 
-    const getTraceCount = () =>
-      page.evaluate(() => window.__c64uTracing?.getTraces?.().length ?? 0);
+    const getTraceCount = () => page.evaluate(() => window.__c64uTracing?.getTraces?.().length ?? 0);
     const getLogCount = () =>
       page.evaluate(() => {
         const raw = localStorage.getItem("c64u_app_logs");
@@ -764,9 +654,7 @@ test.describe("Home header and diagnostics overlay", () => {
 
     const beforeOpenTraces = await getStableTraceCount();
 
-    await page
-      .getByRole("button", { name: "Diagnostics", exact: true })
-      .click();
+    await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: /Diagnostics/i });
     await expect(dialog).toBeVisible();
 
@@ -779,9 +667,7 @@ test.describe("Home header and diagnostics overlay", () => {
     await dialog.getByRole("tab", { name: /^Logs$/i }).click();
     await dialog.getByRole("tab", { name: /^Traces$/i }).click();
 
-    const tracesPanel = dialog.locator(
-      '[role="tabpanel"][data-state="active"]',
-    );
+    const tracesPanel = dialog.locator('[role="tabpanel"][data-state="active"]');
     await tracesPanel.evaluate((panel: HTMLElement) => {
       panel.scrollTop = panel.scrollHeight;
     });
@@ -791,9 +677,7 @@ test.describe("Home header and diagnostics overlay", () => {
     await traceItem.click();
 
     await dialog.getByRole("tab", { name: /^Actions$/i }).click();
-    const actionItem = dialog
-      .locator('[data-testid^="action-summary-"]')
-      .first();
+    const actionItem = dialog.locator('[data-testid^="action-summary-"]').first();
     await actionItem.click();
     await actionItem.click();
 
@@ -807,9 +691,7 @@ test.describe("Home header and diagnostics overlay", () => {
     const tracesAfterShare = await getTraceCount();
     await page.evaluate(() => {
       const error = new Error("Diagnostics overlay error");
-      window.dispatchEvent(
-        new ErrorEvent("error", { message: error.message, error }),
-      );
+      window.dispatchEvent(new ErrorEvent("error", { message: error.message, error }));
     });
     await expect.poll(getTraceCount).toBeGreaterThan(tracesAfterShare);
     await expect.poll(getLogCount).toBeGreaterThan(baselineLogs);

@@ -101,9 +101,7 @@ describe("useSonglengths", () => {
       });
     });
 
-    expect(localStorage.getItem("c64u_songlengths_file:v1")).toContain(
-      "file://sl.txt",
-    );
+    expect(localStorage.getItem("c64u_songlengths_file:v1")).toContain("file://sl.txt");
   });
 
   it("ignores invalid file types", () => {
@@ -163,9 +161,7 @@ describe("useSonglengths", () => {
       result.current.handleSonglengthsInput([file]);
     });
     await waitFor(() => {
-      expect(result.current.songlengthsSummary.error).toBe(
-        "Songlengths file contains no entries.",
-      );
+      expect(result.current.songlengthsSummary.error).toBe("Songlengths file contains no entries.");
     });
     expect(result.current.songlengthsSummary.entryCount).toBe(0);
   });
@@ -176,14 +172,10 @@ describe("useSonglengths", () => {
       arrayBuffer: async () => new TextEncoder().encode("md5=123").buffer,
     } as unknown as LocalPlayFile;
     act(() => {
-      result.current.mergeSonglengthsFiles([
-        { path: "/some/dir/Songlengths.txt", file: fakeFile },
-      ]);
+      result.current.mergeSonglengthsFiles([{ path: "/some/dir/Songlengths.txt", file: fakeFile }]);
     });
     await waitFor(() => {
-      expect(result.current.songlengthsSummary.fileName).toBe(
-        "Songlengths.txt",
-      );
+      expect(result.current.songlengthsSummary.fileName).toBe("Songlengths.txt");
     });
   });
 

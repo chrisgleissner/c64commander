@@ -10,12 +10,7 @@ import { test, expect } from "@playwright/test";
 import type { Page, TestInfo } from "@playwright/test";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
 import { seedUiMocks } from "./uiMocks";
-import {
-  allowWarnings,
-  assertNoUiIssues,
-  finalizeEvidence,
-  startStrictUiMonitoring,
-} from "./testArtifacts";
+import { allowWarnings, assertNoUiIssues, finalizeEvidence, startStrictUiMonitoring } from "./testArtifacts";
 import { saveCoverageFromPage } from "./withCoverage";
 
 const MODAL_CLOSE_CLASSES = [
@@ -29,9 +24,7 @@ const MODAL_CLOSE_CLASSES = [
 
 const seedOfflineState = async (page: Page) => {
   await page.addInitScript(() => {
-    (
-      window as Window & { __c64uExpectedBaseUrl?: string }
-    ).__c64uExpectedBaseUrl = "http://127.0.0.1:1";
+    (window as Window & { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl = "http://127.0.0.1:1";
     localStorage.setItem("c64u_automatic_demo_mode_enabled", "0");
     localStorage.setItem("c64u_startup_discovery_window_ms", "1000");
     localStorage.setItem("c64u_discovery_probe_timeout_ms", "600");
@@ -58,29 +51,20 @@ test.describe("Modal close-button consistency", () => {
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
-    allowWarnings(
-      testInfo,
-      "Expected probe failures during offline discovery.",
-    );
+    allowWarnings(testInfo, "Expected probe failures during offline discovery.");
     await seedOfflineState(page);
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
 
     const indicator = page.getByTestId("connectivity-indicator");
-    await expect(indicator).toHaveAttribute(
-      "data-connection-state",
-      "OFFLINE_NO_DEMO",
-      { timeout: 10000 },
-    );
+    await expect(indicator).toHaveAttribute("data-connection-state", "OFFLINE_NO_DEMO", { timeout: 10000 });
     await indicator.click();
 
     const dialog = page.getByTestId("connection-status-popover");
     await expect(dialog).toBeVisible();
     // Ensures the time is shown in numeric format (e.g. "5s ago", "2m 3s ago") rather than
     // text like "just now" that was removed in a previous fix.
-    await expect(dialog).toContainText(
-      /Last request:\s+(\d+s ago|\d+m \d+s ago|none yet|unknown)/i,
-    );
+    await expect(dialog).toContainText(/Last request:\s+(\d+s ago|\d+m \d+s ago|none yet|unknown)/i);
     await expect(dialog).not.toContainText("just now");
     await expect(dialog).not.toContainText("Communication");
   });
@@ -89,20 +73,13 @@ test.describe("Modal close-button consistency", () => {
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
-    allowWarnings(
-      testInfo,
-      "Expected probe failures during offline discovery.",
-    );
+    allowWarnings(testInfo, "Expected probe failures during offline discovery.");
     await seedOfflineState(page);
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
 
     const indicator = page.getByTestId("connectivity-indicator");
-    await expect(indicator).toHaveAttribute(
-      "data-connection-state",
-      "OFFLINE_NO_DEMO",
-      { timeout: 10000 },
-    );
+    await expect(indicator).toHaveAttribute("data-connection-state", "OFFLINE_NO_DEMO", { timeout: 10000 });
     await indicator.click();
 
     const dialog = page.getByTestId("connection-status-popover");
@@ -112,9 +89,7 @@ test.describe("Modal close-button consistency", () => {
     await expect(closeBtn).toBeVisible();
     const classAttr = (await closeBtn.getAttribute("class")) ?? "";
     for (const cls of MODAL_CLOSE_CLASSES) {
-      expect(classAttr, `close button should have class: ${cls}`).toContain(
-        cls,
-      );
+      expect(classAttr, `close button should have class: ${cls}`).toContain(cls);
     }
   });
 
@@ -125,9 +100,7 @@ test.describe("Modal close-button consistency", () => {
     server = await createMockC64Server({});
     await page.addInitScript(
       ({ url }: { url: string }) => {
-        (
-          window as Window & { __c64uExpectedBaseUrl?: string }
-        ).__c64uExpectedBaseUrl = url;
+        (window as Window & { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl = url;
       },
       { url: server.baseUrl },
     );
@@ -137,11 +110,7 @@ test.describe("Modal close-button consistency", () => {
 
     // Open connection status and navigate to diagnostics via the diagnostics section.
     const indicator = page.getByTestId("connectivity-indicator");
-    await expect(indicator).toHaveAttribute(
-      "data-connection-state",
-      "REAL_CONNECTED",
-      { timeout: 10000 },
-    );
+    await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 10000 });
     await indicator.click();
     const connDialog = page.getByTestId("connection-status-popover");
     await expect(connDialog).toBeVisible();
@@ -156,10 +125,7 @@ test.describe("Modal close-button consistency", () => {
     await expect(closeBtn).toBeVisible();
     const classAttr = (await closeBtn.getAttribute("class")) ?? "";
     for (const cls of MODAL_CLOSE_CLASSES) {
-      expect(
-        classAttr,
-        `diagnostics close button should have class: ${cls}`,
-      ).toContain(cls);
+      expect(classAttr, `diagnostics close button should have class: ${cls}`).toContain(cls);
     }
   });
 });

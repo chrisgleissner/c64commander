@@ -31,9 +31,7 @@ const waitForInterval = async () => {
   lastWriteAt = Date.now();
 };
 
-export const scheduleConfigWrite = async <T>(
-  task: () => Promise<T>,
-): Promise<T> => {
+export const scheduleConfigWrite = async <T>(task: () => Promise<T>): Promise<T> => {
   const run = async () => {
     await waitForInterval();
     return task();

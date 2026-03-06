@@ -4,14 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 
-const budgetsScript = path.resolve(
-  process.cwd(),
-  "scripts/startup/assert-startup-budgets.mjs",
-);
-const hvscScript = path.resolve(
-  process.cwd(),
-  "scripts/startup/assert-hvsc-startup-safety.mjs",
-);
+const budgetsScript = path.resolve(process.cwd(), "scripts/startup/assert-startup-budgets.mjs");
+const hvscScript = path.resolve(process.cwd(), "scripts/startup/assert-hvsc-startup-safety.mjs");
 
 const run = (script: string, filePath: string) =>
   spawnSync(process.execPath, [script, `--file=${filePath}`], {
@@ -19,10 +13,7 @@ const run = (script: string, filePath: string) =>
     env: process.env,
   });
 
-const writeSummary = (
-  filePath: string,
-  overrides: Record<string, unknown> = {},
-) => {
+const writeSummary = (filePath: string, overrides: Record<string, unknown> = {}) => {
   const base = {
     metrics: {
       StartupRequestCount: { p95: 20 },
@@ -34,11 +25,7 @@ const writeSummary = (
       HvscStartupDownloads: { p95: 0 },
     },
   };
-  writeFileSync(
-    filePath,
-    JSON.stringify({ ...base, ...overrides }, null, 2),
-    "utf8",
-  );
+  writeFileSync(filePath, JSON.stringify({ ...base, ...overrides }, null, 2), "utf8");
 };
 
 describe("startup gating scripts", () => {

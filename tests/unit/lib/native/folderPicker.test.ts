@@ -93,9 +93,7 @@ describe("FolderPicker", () => {
         pickDirectory: overridePick,
       };
 
-      expect(() => FolderPicker.pickDirectory()).toThrow(
-        "Android SAF picker is required",
-      );
+      expect(() => FolderPicker.pickDirectory()).toThrow("Android SAF picker is required");
     });
 
     it("allows override on android if enabled via probe", async () => {

@@ -134,9 +134,7 @@ describe("SecureStorageWeb", () => {
 
     const storage = new SecureStorageWeb();
 
-    await expect(storage.setPassword({ value: "x" })).rejects.toThrow(
-      "backend failed",
-    );
+    await expect(storage.setPassword({ value: "x" })).rejects.toThrow("backend failed");
   });
 
   it("falls back to HTTP status message when backend error payload is not JSON", async () => {
@@ -154,8 +152,6 @@ describe("SecureStorageWeb", () => {
 
     const storage = new SecureStorageWeb();
 
-    await expect(storage.clearPassword()).rejects.toThrow(
-      "Secure storage request failed: HTTP 503",
-    );
+    await expect(storage.clearPassword()).rejects.toThrow("Secure storage request failed: HTTP 503");
   });
 });

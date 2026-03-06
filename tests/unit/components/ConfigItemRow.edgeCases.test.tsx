@@ -14,13 +14,10 @@ import { useC64ConfigItem } from "@/hooks/useC64Connection";
 
 // Mock the C64 connection hook so we don't need a real server for edge case tests
 vi.mock("@/hooks/useC64Connection", async (importOriginal) => {
-  const orig =
-    await importOriginal<typeof import("@/hooks/useC64Connection")>();
+  const orig = await importOriginal<typeof import("@/hooks/useC64Connection")>();
   return {
     ...orig,
-    useC64ConfigItem: vi
-      .fn()
-      .mockReturnValue({ data: undefined, isLoading: false }),
+    useC64ConfigItem: vi.fn().mockReturnValue({ data: undefined, isLoading: false }),
   };
 });
 
@@ -33,50 +30,27 @@ function renderWithQuery(ui: React.ReactElement) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  return render(
-    <QueryClientProvider client={client}>{ui}</QueryClientProvider>,
-  );
+  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
 }
 
 const mockConfigItem = vi.mocked(useC64ConfigItem);
 
 describe("ConfigItemRow — select with empty option", () => {
   it("renders empty option as (empty) sentinel and selects it", () => {
-    renderWithQuery(
-      <ConfigItemRow
-        name="Mode"
-        value=""
-        options={["", "PAL", "NTSC"]}
-        onValueChange={vi.fn()}
-      />,
-    );
+    renderWithQuery(<ConfigItemRow name="Mode" value="" options={["", "PAL", "NTSC"]} onValueChange={vi.fn()} />);
     // select with value='' should render (empty) as placeholder placeholder
     expect(screen.getByLabelText("Mode select")).toBeTruthy();
   });
 
   it("renders select with (empty) display label when displayValue is empty string", () => {
-    renderWithQuery(
-      <ConfigItemRow
-        name="Output"
-        value=""
-        options={["HDMI", "Component"]}
-        onValueChange={vi.fn()}
-      />,
-    );
+    renderWithQuery(<ConfigItemRow name="Output" value="" options={["HDMI", "Component"]} onValueChange={vi.fn()} />);
     // displayValueLabel='(empty)' shown in placeholder
     const trigger = screen.getByLabelText("Output select");
     expect(trigger).toBeTruthy();
   });
 
   it("appends current value to options when it is not in optionList", () => {
-    renderWithQuery(
-      <ConfigItemRow
-        name="Video"
-        value="Custom"
-        options={["PAL", "NTSC"]}
-        onValueChange={vi.fn()}
-      />,
-    );
+    renderWithQuery(<ConfigItemRow name="Video" value="Custom" options={["PAL", "NTSC"]} onValueChange={vi.fn()} />);
     // 'Custom' not in options, should still render select with it
     expect(screen.getByLabelText("Video select")).toBeTruthy();
   });
@@ -102,12 +76,7 @@ describe("ConfigItemRow — select with empty option", () => {
 describe("ConfigItemRow — slider edge cases", () => {
   it("renders slider with Centre (British spelling) in left/centre/right options", () => {
     renderWithQuery(
-      <ConfigItemRow
-        name="Pan"
-        value="Centre"
-        options={["Left 40", "Centre", "Right 40"]}
-        onValueChange={vi.fn()}
-      />,
+      <ConfigItemRow name="Pan" value="Centre" options={["Left 40", "Centre", "Right 40"]} onValueChange={vi.fn()} />,
     );
     expect(screen.getByLabelText("Pan slider")).toBeTruthy();
     expect(screen.getByText("Centre")).toBeTruthy();
@@ -264,12 +233,7 @@ describe("ConfigItemRow — text input readOnly and key handling", () => {
   it("isReadOnly via SID Detected Socket name prefix", () => {
     const onValueChange = vi.fn();
     renderWithQuery(
-      <ConfigItemRow
-        name="SID Detected Socket 1"
-        value="MOS6581"
-        options={[]}
-        onValueChange={onValueChange}
-      />,
+      <ConfigItemRow name="SID Detected Socket 1" value="MOS6581" options={[]} onValueChange={onValueChange} />,
     );
     const input = screen.getByLabelText("SID Detected Socket 1 text input");
     expect(input).toHaveProperty("disabled", true);
@@ -288,9 +252,7 @@ describe("ConfigItemRow — text input readOnly and key handling", () => {
         onValueChange={onValueChange}
       />,
     );
-    const input = screen.getByLabelText(
-      "Hostname text input",
-    ) as HTMLInputElement;
+    const input = screen.getByLabelText("Hostname text input") as HTMLInputElement;
     // Focus to start editing
     fireEvent.focus(input);
     // Change the value
@@ -311,9 +273,7 @@ describe("ConfigItemRow — text input readOnly and key handling", () => {
         onValueChange={onValueChange}
       />,
     );
-    const input = screen.getByLabelText(
-      "Hostname text input",
-    ) as HTMLInputElement;
+    const input = screen.getByLabelText("Hostname text input") as HTMLInputElement;
     fireEvent.focus(input);
     fireEvent.change(input, { target: { value: "edited" } });
     fireEvent.blur(input);
@@ -337,14 +297,7 @@ describe("ConfigItemRow — fetched config shapes", () => {
       isLoading: false,
     });
 
-    renderWithQuery(
-      <ConfigItemRow
-        category="Test Category"
-        name="Mode"
-        value="PAL"
-        onValueChange={vi.fn()}
-      />,
-    );
+    renderWithQuery(<ConfigItemRow category="Test Category" name="Mode" value="PAL" onValueChange={vi.fn()} />);
     // Should render a checkbox or select based on the options
     await waitFor(() => {
       // With 2 options that aren't Enabled/Disabled or On/Off, should be select
@@ -360,14 +313,7 @@ describe("ConfigItemRow — fetched config shapes", () => {
       isLoading: false,
     });
 
-    renderWithQuery(
-      <ConfigItemRow
-        category="Cat"
-        name="Item"
-        value="A"
-        onValueChange={vi.fn()}
-      />,
-    );
+    renderWithQuery(<ConfigItemRow category="Cat" name="Item" value="A" onValueChange={vi.fn()} />);
     await waitFor(() => {
       expect(screen.getByLabelText("Item select")).toBeTruthy();
     });
@@ -392,14 +338,7 @@ describe("ConfigItemRow — fetched config shapes", () => {
       isLoading: false,
     });
 
-    renderWithQuery(
-      <ConfigItemRow
-        category="Cat"
-        name="Vol"
-        value="0 dB"
-        onValueChange={vi.fn()}
-      />,
-    );
+    renderWithQuery(<ConfigItemRow category="Cat" name="Vol" value="0 dB" onValueChange={vi.fn()} />);
     await waitFor(() => {
       // Presets from details should lead to a select/slider
       expect(screen.getByText("Vol")).toBeTruthy();
@@ -414,14 +353,7 @@ describe("ConfigItemRow — fetched config shapes", () => {
       isLoading: false,
     });
 
-    renderWithQuery(
-      <ConfigItemRow
-        category="Cat"
-        name="Item"
-        value=""
-        onValueChange={vi.fn()}
-      />,
-    );
+    renderWithQuery(<ConfigItemRow category="Cat" name="Item" value="" onValueChange={vi.fn()} />);
     await waitFor(() => {
       expect(screen.getByLabelText("Item select")).toBeTruthy();
     });
@@ -437,14 +369,7 @@ describe("ConfigItemRow — fetched config shapes", () => {
       isLoading: false,
     });
 
-    renderWithQuery(
-      <ConfigItemRow
-        category="Cat"
-        name="Item"
-        value=""
-        onValueChange={vi.fn()}
-      />,
-    );
+    renderWithQuery(<ConfigItemRow category="Cat" name="Item" value="" onValueChange={vi.fn()} />);
     await waitFor(() => {
       expect(screen.getByLabelText("Item select")).toBeTruthy();
     });
@@ -456,14 +381,7 @@ describe("ConfigItemRow — fetched config shapes", () => {
       isLoading: false,
     });
 
-    renderWithQuery(
-      <ConfigItemRow
-        category="Cat"
-        name="Item"
-        value=""
-        onValueChange={vi.fn()}
-      />,
-    );
+    renderWithQuery(<ConfigItemRow category="Cat" name="Item" value="" onValueChange={vi.fn()} />);
     await waitFor(() => {
       expect(screen.getByLabelText("Item select")).toBeTruthy();
     });
@@ -477,14 +395,7 @@ describe("ConfigItemRow — fetched config shapes", () => {
       isLoading: false,
     });
 
-    renderWithQuery(
-      <ConfigItemRow
-        category="Cat"
-        name="Item"
-        value=""
-        onValueChange={vi.fn()}
-      />,
-    );
+    renderWithQuery(<ConfigItemRow category="Cat" name="Item" value="" onValueChange={vi.fn()} />);
     await waitFor(() => {
       expect(screen.getByLabelText("Item select")).toBeTruthy();
     });
@@ -507,14 +418,7 @@ describe("ConfigItemRow — fetched config shapes", () => {
       isLoading: false,
     });
 
-    renderWithQuery(
-      <ConfigItemRow
-        category="Cat"
-        name="Freq"
-        value="50"
-        onValueChange={vi.fn()}
-      />,
-    );
+    renderWithQuery(<ConfigItemRow category="Cat" name="Freq" value="50" onValueChange={vi.fn()} />);
     await waitFor(() => {
       expect(screen.getByLabelText("Freq slider")).toBeTruthy();
     });
@@ -526,14 +430,7 @@ describe("ConfigItemRow — fetched config shapes", () => {
       isLoading: true,
     });
 
-    renderWithQuery(
-      <ConfigItemRow
-        category="Cat"
-        name="Item"
-        value="val"
-        onValueChange={vi.fn()}
-      />,
-    );
+    renderWithQuery(<ConfigItemRow category="Cat" name="Item" value="val" onValueChange={vi.fn()} />);
     // In loading state, the text input should be present with spinner
     await waitFor(() => {
       expect(screen.getByLabelText("Item text input")).toBeTruthy();
@@ -546,9 +443,7 @@ describe("ConfigItemRow — fetched config shapes", () => {
       isLoading: false,
     });
 
-    renderWithQuery(
-      <ConfigItemRow name="Item" value="A" onValueChange={vi.fn()} />,
-    );
+    renderWithQuery(<ConfigItemRow name="Item" value="A" onValueChange={vi.fn()} />);
     await waitFor(() => {
       expect(screen.getByLabelText("Item select")).toBeTruthy();
     });
@@ -560,9 +455,7 @@ describe("ConfigItemRow — fetched config shapes", () => {
       isLoading: false,
     });
 
-    renderWithQuery(
-      <ConfigItemRow name="MyItem" value="X" onValueChange={vi.fn()} />,
-    );
+    renderWithQuery(<ConfigItemRow name="MyItem" value="X" onValueChange={vi.fn()} />);
     await waitFor(() => {
       expect(screen.getByLabelText("MyItem select")).toBeTruthy();
     });
@@ -574,9 +467,7 @@ describe("ConfigItemRow — fetched config shapes", () => {
       isLoading: false,
     });
 
-    renderWithQuery(
-      <ConfigItemRow name="PropItem" value="P" onValueChange={vi.fn()} />,
-    );
+    renderWithQuery(<ConfigItemRow name="PropItem" value="P" onValueChange={vi.fn()} />);
     await waitFor(() => {
       expect(screen.getByLabelText("PropItem select")).toBeTruthy();
     });
@@ -588,9 +479,7 @@ describe("ConfigItemRow — fetched config shapes", () => {
       isLoading: false,
     });
 
-    renderWithQuery(
-      <ConfigItemRow name="Item" value="val" onValueChange={vi.fn()} />,
-    );
+    renderWithQuery(<ConfigItemRow name="Item" value="val" onValueChange={vi.fn()} />);
     // No options from response → text input
     expect(screen.getByLabelText("Item text input")).toBeTruthy();
   });
@@ -601,14 +490,7 @@ describe("ConfigItemRow — fetched config shapes", () => {
       isLoading: false,
     });
 
-    renderWithQuery(
-      <ConfigItemRow
-        category="Cat"
-        name="Item"
-        value="val"
-        onValueChange={vi.fn()}
-      />,
-    );
+    renderWithQuery(<ConfigItemRow category="Cat" name="Item" value="val" onValueChange={vi.fn()} />);
     // Primitive itemBlock → no options → text input
     expect(screen.getByLabelText("Item text input")).toBeTruthy();
   });
@@ -617,17 +499,9 @@ describe("ConfigItemRow — fetched config shapes", () => {
 describe("ConfigItemRow — label prop", () => {
   it("uses label prop instead of name when provided", () => {
     renderWithQuery(
-      <ConfigItemRow
-        name="technical_name"
-        label="Human Label"
-        value="val"
-        options={[]}
-        onValueChange={vi.fn()}
-      />,
+      <ConfigItemRow name="technical_name" label="Human Label" value="val" options={[]} onValueChange={vi.fn()} />,
     );
-    expect(screen.getByTestId("config-item-label")).toHaveTextContent(
-      "Human Label",
-    );
+    expect(screen.getByTestId("config-item-label")).toHaveTextContent("Human Label");
   });
 });
 

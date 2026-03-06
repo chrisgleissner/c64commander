@@ -93,10 +93,7 @@ const connectionMock = {
 };
 const drivesMock = {
   data: {
-    drives: [
-      { a: { bus_id: 8, enabled: true } },
-      { b: { bus_id: 9, enabled: true } },
-    ],
+    drives: [{ a: { bus_id: 8, enabled: true } }, { b: { bus_id: 9, enabled: true } }],
   } as any,
 };
 
@@ -183,10 +180,7 @@ describe("HomeDiskManager targeted branch coverage", () => {
       deviceInfo: { unique_id: "test-device" },
     };
     drivesMock.data = {
-      drives: [
-        { a: { bus_id: 8, enabled: true } },
-        { b: { bus_id: 9, enabled: true } },
-      ],
+      drives: [{ a: { bus_id: 8, enabled: true } }, { b: { bus_id: 9, enabled: true } }],
     };
     useDiskLibraryMock.disks = [];
     useDiskLibraryMock.runtimeFiles = {};
@@ -195,10 +189,7 @@ describe("HomeDiskManager targeted branch coverage", () => {
   // ── getStatusMessageColorClass: message === 'OK' (TRUE branch) ─────────────
   it("renders drive status with color class when last_error is DOS code 0 (OK)", () => {
     drivesMock.data = {
-      drives: [
-        { a: { bus_id: 8, enabled: true, last_error: "0,OK,00,00" } },
-        { b: { bus_id: 9, enabled: true } },
-      ],
+      drives: [{ a: { bus_id: 8, enabled: true, last_error: "0,OK,00,00" } }, { b: { bus_id: 9, enabled: true } }],
     };
     renderComponent();
     // Drive A should show a status indicator; status message 'OK' should be rendered
@@ -248,10 +239,7 @@ describe("HomeDiskManager targeted branch coverage", () => {
   it("renders drive status with null message for unused DOS code", () => {
     // Codes 2-19 are "unused" and produce message: null
     drivesMock.data = {
-      drives: [
-        { a: { bus_id: 8, enabled: true, last_error: "5,UNUSED,00,00" } },
-        { b: { bus_id: 9, enabled: true } },
-      ],
+      drives: [{ a: { bus_id: 8, enabled: true, last_error: "5,UNUSED,00,00" } }, { b: { bus_id: 9, enabled: true } }],
     };
     renderComponent();
     expect(document.body).toBeTruthy();
@@ -575,10 +563,7 @@ describe("HomeDiskManager targeted branch coverage", () => {
   // ── drive power enabled/disabled display ──────────────────────────────────
   it('shows "Turn Off" label when drive is enabled', () => {
     drivesMock.data = {
-      drives: [
-        { a: { bus_id: 8, enabled: true } },
-        { b: { bus_id: 9, enabled: true } },
-      ],
+      drives: [{ a: { bus_id: 8, enabled: true } }, { b: { bus_id: 9, enabled: true } }],
     };
     renderComponent();
     const turnOffButtons = screen.queryAllByText("Turn Off");
@@ -589,10 +574,7 @@ describe("HomeDiskManager targeted branch coverage", () => {
   // ── drive power disabled display ──────────────────────────────────────────
   it('shows "Turn On" label when drive is disabled', () => {
     drivesMock.data = {
-      drives: [
-        { a: { bus_id: 8, enabled: false } },
-        { b: { bus_id: 9, enabled: false } },
-      ],
+      drives: [{ a: { bus_id: 8, enabled: false } }, { b: { bus_id: 9, enabled: false } }],
     };
     renderComponent();
     const turnOnButtons = screen.queryAllByText("Turn On");
@@ -615,10 +597,7 @@ describe("HomeDiskManager targeted branch coverage", () => {
   // softIecConfigBusId ?? softIecDevice?.busId ?? 11
   it("uses softIec default bus ID 11 when no config and no device", () => {
     drivesMock.data = {
-      drives: [
-        { a: { bus_id: 8, enabled: true } },
-        { b: { bus_id: 9, enabled: true } },
-      ],
+      drives: [{ a: { bus_id: 8, enabled: true } }, { b: { bus_id: 9, enabled: true } }],
     };
     // No softiec device → softIecDevice=null → busId defaults to 11
     renderComponent();

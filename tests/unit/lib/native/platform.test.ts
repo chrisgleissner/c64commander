@@ -23,10 +23,8 @@ describe("platform", () => {
     vi.unstubAllEnvs();
 
     // Restore defaults
-    if (Capacitor.getPlatform)
-      vi.mocked(Capacitor.getPlatform).mockReturnValue("web");
-    if (Capacitor.isNativePlatform)
-      vi.mocked(Capacitor.isNativePlatform).mockReturnValue(false);
+    if (Capacitor.getPlatform) vi.mocked(Capacitor.getPlatform).mockReturnValue("web");
+    if (Capacitor.isNativePlatform) vi.mocked(Capacitor.isNativePlatform).mockReturnValue(false);
   });
 
   afterEach(() => {

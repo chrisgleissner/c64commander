@@ -35,11 +35,7 @@ export type PlaylistItem = {
   modifiedAt?: string | null;
   addedAt?: string | null;
   status?: "ready" | "unavailable";
-  unavailableReason?:
-    | "source-revoked"
-    | "file-inaccessible"
-    | "hvsc-unavailable"
-    | null;
+  unavailableReason?: "source-revoked" | "file-inaccessible" | "hvsc-unavailable" | null;
 };
 
 export type StoredPlaylistState = {
@@ -54,11 +50,7 @@ export type StoredPlaylistState = {
     modifiedAt?: string | null;
     addedAt?: string | null;
     status?: "ready" | "unavailable";
-    unavailableReason?:
-      | "source-revoked"
-      | "file-inaccessible"
-      | "hvsc-unavailable"
-      | null;
+    unavailableReason?: "source-revoked" | "file-inaccessible" | "hvsc-unavailable" | null;
   }>;
   currentIndex?: number;
 };

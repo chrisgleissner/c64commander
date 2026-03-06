@@ -20,30 +20,15 @@ import {
   normalizeDeviceHost,
   resolveDeviceHostFromStorage,
 } from "@/lib/c64api";
-import {
-  getPassword as loadStoredPassword,
-  hasStoredPasswordFlag,
-} from "@/lib/secureStorage";
-import {
-  getActiveBaseUrl,
-  updateHasChanges,
-  loadInitialSnapshot,
-} from "@/lib/config/appConfigStore";
+import { getPassword as loadStoredPassword, hasStoredPasswordFlag } from "@/lib/secureStorage";
+import { getActiveBaseUrl, updateHasChanges, loadInitialSnapshot } from "@/lib/config/appConfigStore";
 import { useConnectionState } from "@/hooks/useConnectionState";
 import { invalidateForConnectionSettingsChange } from "@/lib/query/c64QueryInvalidation";
-import {
-  getInfoRefreshMinIntervalMs,
-  shouldRunRateLimited,
-} from "@/lib/query/c64PollingGovernance";
+import { getInfoRefreshMinIntervalMs, shouldRunRateLimited } from "@/lib/query/c64PollingGovernance";
 import { addLog } from "@/lib/logging";
 
 export interface ConnectionStatus {
-  state:
-    | "UNKNOWN"
-    | "DISCOVERING"
-    | "REAL_CONNECTED"
-    | "DEMO_ACTIVE"
-    | "OFFLINE_NO_DEMO";
+  state: "UNKNOWN" | "DISCOVERING" | "REAL_CONNECTED" | "DEMO_ACTIVE" | "OFFLINE_NO_DEMO";
   connectionState: "connected" | "disconnected";
   isConnected: boolean;
   isDemo: boolean;
@@ -94,9 +79,7 @@ export function useC64Connection() {
         __c64uIntent: "background",
       });
     },
-    enabled:
-      connection.state === "REAL_CONNECTED" ||
-      connection.state === "DEMO_ACTIVE",
+    enabled: connection.state === "REAL_CONNECTED" || connection.state === "DEMO_ACTIVE",
     retry: 1,
     retryDelay: 1000,
     staleTime: 30000,
@@ -104,13 +87,7 @@ export function useC64Connection() {
 
   const rateLimitedInfoRefetch = useCallback(() => {
     const nowMs = Date.now();
-    if (
-      !shouldRunRateLimited(
-        lastInfoRefreshAtRef.current,
-        getInfoRefreshMinIntervalMs(),
-        nowMs,
-      )
-    ) {
+    if (!shouldRunRateLimited(lastInfoRefreshAtRef.current, getInfoRefreshMinIntervalMs(), nowMs)) {
       return;
     }
     lastInfoRefreshAtRef.current = nowMs;
@@ -137,16 +114,9 @@ export function useC64Connection() {
       if (!detail) return;
       const current = settingsRef.current;
       const next = {
-        baseUrl:
-          typeof detail.baseUrl === "string" ? detail.baseUrl : current.baseUrl,
-        password:
-          typeof detail.password === "string"
-            ? detail.password
-            : current.password,
-        deviceHost:
-          typeof detail.deviceHost === "string"
-            ? detail.deviceHost
-            : current.deviceHost,
+        baseUrl: typeof detail.baseUrl === "string" ? detail.baseUrl : current.baseUrl,
+        password: typeof detail.password === "string" ? detail.password : current.password,
+        deviceHost: typeof detail.deviceHost === "string" ? detail.deviceHost : current.deviceHost,
       };
       const baseUrlChanged = next.baseUrl !== current.baseUrl;
       const passwordChanged = next.password !== current.password;
@@ -164,10 +134,7 @@ export function useC64Connection() {
     window.addEventListener("c64u-connection-change", handler as EventListener);
     return () => {
       isMounted = false;
-      window.removeEventListener(
-        "c64u-connection-change",
-        handler as EventListener,
-      );
+      window.removeEventListener("c64u-connection-change", handler as EventListener);
     };
   }, [queryClient, rateLimitedInfoRefetch]);
 
@@ -202,20 +169,10 @@ export function useC64Connection() {
   const status: ConnectionStatus = {
     state: connection.state,
     connectionState:
-      connection.state === "REAL_CONNECTED" ||
-      connection.state === "DEMO_ACTIVE"
-        ? "connected"
-        : "disconnected",
-    isConnected:
-      connection.state === "REAL_CONNECTED" ||
-      connection.state === "DEMO_ACTIVE",
+      connection.state === "REAL_CONNECTED" || connection.state === "DEMO_ACTIVE" ? "connected" : "disconnected",
+    isConnected: connection.state === "REAL_CONNECTED" || connection.state === "DEMO_ACTIVE",
     isDemo: connection.state === "DEMO_ACTIVE",
-    deviceType:
-      connection.state === "REAL_CONNECTED"
-        ? "real"
-        : connection.state === "DEMO_ACTIVE"
-          ? "demo"
-          : null,
+    deviceType: connection.state === "REAL_CONNECTED" ? "real" : connection.state === "DEMO_ACTIVE" ? "demo" : null,
     isConnecting: connection.state === "DISCOVERING",
     error: error ? (error as Error).message : null,
     deviceInfo: deviceInfo || null,
@@ -257,21 +214,14 @@ export function useC64Category(category: string, enabled = true) {
   });
 }
 
-export function useC64ConfigItems(
-  category: string,
-  items: string[],
-  enabled = true,
-) {
+export function useC64ConfigItems(category: string, items: string[], enabled = true) {
   const itemKey = items.join("|");
   const snapshot = loadInitialSnapshot(getC64APIConfigSnapshot().baseUrl);
   const placeholderData = (() => {
     if (!snapshot?.data?.[category]) return undefined;
     const categoryPayload = snapshot.data[category] as Record<string, unknown>;
-    const categoryBlock =
-      (categoryPayload as Record<string, unknown>)[category] ?? categoryPayload;
-    const itemsBlock =
-      (categoryBlock as { items?: Record<string, unknown> }).items ??
-      categoryBlock;
+    const categoryBlock = (categoryPayload as Record<string, unknown>)[category] ?? categoryPayload;
+    const itemsBlock = (categoryBlock as { items?: Record<string, unknown> }).items ?? categoryBlock;
     if (!itemsBlock || typeof itemsBlock !== "object") return undefined;
     const selected: Record<string, unknown> = {};
     items.forEach((item) => {
@@ -314,18 +264,15 @@ export function useC64AllConfig() {
           configs[cat] = await api.getCategory(cat);
         } catch (catError) {
           // Per-category failures are tolerated; callers can render partial config safely.
-          addLog(
-            "debug",
-            "Config category fetch failed; partial config in use",
-            { category: cat, error: (catError as Error).message },
-          );
+          addLog("debug", "Config category fetch failed; partial config in use", {
+            category: cat,
+            error: (catError as Error).message,
+          });
         }
       }
 
       if (cats.categories.length > 0 && Object.keys(configs).length === 0) {
-        throw new Error(
-          "Failed to fetch configuration data for all categories",
-        );
+        throw new Error("Failed to fetch configuration data for all categories");
       }
 
       return configs;
@@ -339,15 +286,7 @@ export function useC64SetConfig() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({
-      category,
-      item,
-      value,
-    }: {
-      category: string;
-      item: string;
-      value: string | number;
-    }) => {
+    mutationFn: async ({ category, item, value }: { category: string; item: string; value: string | number }) => {
       const api = getC64API();
       return api.setConfigValue(category, item, value);
     },
@@ -387,11 +326,7 @@ export function useC64UpdateConfigBatch() {
   });
 }
 
-export function useC64ConfigItem(
-  category?: string,
-  item?: string,
-  enabled = true,
-) {
+export function useC64ConfigItem(category?: string, item?: string, enabled = true) {
   return useQuery({
     queryKey: ["c64-config-item", category, item],
     queryFn: async () => {

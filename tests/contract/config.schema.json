@@ -97,12 +97,7 @@
     "timeouts": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "restTimeoutMs",
-        "ftpTimeoutMs",
-        "scenarioTimeoutMs",
-        "maxDestructiveScenarioMs"
-      ],
+      "required": ["restTimeoutMs", "ftpTimeoutMs", "scenarioTimeoutMs", "maxDestructiveScenarioMs"],
       "properties": {
         "restTimeoutMs": {
           "type": "integer",

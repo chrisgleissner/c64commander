@@ -23,17 +23,11 @@ export const setPlaybackTraceSnapshot = (next: TracePlaybackContext | null) => {
   emit();
 };
 
-export const subscribePlaybackTraceSnapshot = (
-  listener: (next: TracePlaybackContext | null) => void,
-) => {
+export const subscribePlaybackTraceSnapshot = (listener: (next: TracePlaybackContext | null) => void) => {
   listeners.add(listener);
   listener(snapshot);
   return () => listeners.delete(listener);
 };
 
 export const usePlaybackTraceSnapshot = () =>
-  useSyncExternalStore(
-    subscribePlaybackTraceSnapshot,
-    getPlaybackTraceSnapshot,
-    getPlaybackTraceSnapshot,
-  );
+  useSyncExternalStore(subscribePlaybackTraceSnapshot, getPlaybackTraceSnapshot, getPlaybackTraceSnapshot);

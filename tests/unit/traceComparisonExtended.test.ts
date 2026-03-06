@@ -84,12 +84,7 @@ describe("traceComparison extended", () => {
   describe("resolveGoldenDirForEvidence", () => {
     // Reconstruct evidenceRoot as it is defined in traceComparison.js (implied, not exported, but logic assumes it)
     // Actually we can't easily access the internal 'evidenceRoot' var, but we know it is path.resolve(process.cwd(), 'test-results', 'evidence', 'playwright')
-    const evidenceBase = path.resolve(
-      process.cwd(),
-      "test-results",
-      "evidence",
-      "playwright",
-    );
+    const evidenceBase = path.resolve(process.cwd(), "test-results", "evidence", "playwright");
 
     it("resolves directly if no suite", () => {
       const evidenceDir = path.join(evidenceBase, "my-test");
@@ -494,10 +489,7 @@ describe("traceComparison extended", () => {
       const result = await compareOrPromoteTraceFiles("/golden", "/evidence");
       expect(result.promoted).toBe(true);
       expect(fsp.mkdir).toHaveBeenCalledWith("/golden", expect.anything());
-      expect(fsp.copyFile).toHaveBeenCalledWith(
-        expect.stringContaining("evidence"),
-        expect.stringContaining("golden"),
-      );
+      expect(fsp.copyFile).toHaveBeenCalledWith(expect.stringContaining("evidence"), expect.stringContaining("golden"));
     });
 
     it("compares if golden exists", async () => {

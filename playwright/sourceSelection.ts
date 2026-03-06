@@ -8,12 +8,7 @@
 
 import type { Locator, Page } from "@playwright/test";
 
-export type SourceSelectionLabel =
-  | "C64U"
-  | "Local"
-  | "HVSC"
-  | "C64 Ultimate"
-  | "This device";
+export type SourceSelectionLabel = "C64U" | "Local" | "HVSC" | "C64 Ultimate" | "This device";
 
 const getInterstitialTestId = (label: SourceSelectionLabel) => {
   if (label === "C64U" || label === "C64 Ultimate") return "import-option-c64u";
@@ -21,18 +16,13 @@ const getInterstitialTestId = (label: SourceSelectionLabel) => {
   return "import-option-local";
 };
 
-const normalizeLabel = (
-  label: SourceSelectionLabel,
-): "C64U" | "Local" | "HVSC" => {
+const normalizeLabel = (label: SourceSelectionLabel): "C64U" | "Local" | "HVSC" => {
   if (label === "C64 Ultimate") return "C64U";
   if (label === "This device") return "Local";
   return label;
 };
 
-export const getSourceSelectionButton = (
-  container: Page | Locator,
-  label: SourceSelectionLabel,
-) =>
+export const getSourceSelectionButton = (container: Page | Locator, label: SourceSelectionLabel) =>
   container
     .getByTestId(getInterstitialTestId(label))
     .or(

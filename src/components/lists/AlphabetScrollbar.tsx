@@ -18,12 +18,7 @@ type Props = {
 
 const LETTERS = "#ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 
-export function AlphabetScrollbar({
-  items,
-  scrollContainerRef,
-  onLetterSelect,
-  onScrollToIndex,
-}: Props) {
+export function AlphabetScrollbar({ items, scrollContainerRef, onLetterSelect, onScrollToIndex }: Props) {
   const [visible, setVisible] = useState(false);
   const [activeLetter, setActiveLetter] = useState<string | null>(null);
   const [isEligible, setIsEligible] = useState(false);
@@ -73,9 +68,7 @@ export function AlphabetScrollbar({
           typeof CSS !== "undefined" && "escape" in CSS
             ? CSS.escape(targetItem.id)
             : targetItem.id.replace(/"/g, '\\"');
-        const targetRow = container.querySelector(
-          `[data-row-id="${safeId}"]`,
-        ) as HTMLElement | null;
+        const targetRow = container.querySelector(`[data-row-id="${safeId}"]`) as HTMLElement | null;
 
         if (targetRow) {
           targetRow.scrollIntoView({ block: "start", behavior: "smooth" });
@@ -159,9 +152,7 @@ export function AlphabetScrollbar({
 
     const updateEligibility = () => {
       if (!container) return;
-      const eligible =
-        items.length >= LETTERS.length ||
-        container.scrollHeight > container.clientHeight * 1.1;
+      const eligible = items.length >= LETTERS.length || container.scrollHeight > container.clientHeight * 1.1;
       setIsEligible(eligible);
       if (!eligible) {
         setVisible(false);
@@ -177,10 +168,7 @@ export function AlphabetScrollbar({
         return;
       }
       updateEligibility();
-      resizeObserver =
-        typeof ResizeObserver !== "undefined"
-          ? new ResizeObserver(updateEligibility)
-          : null;
+      resizeObserver = typeof ResizeObserver !== "undefined" ? new ResizeObserver(updateEligibility) : null;
       resizeObserver?.observe(container);
       window.addEventListener("resize", updateEligibility);
     };
@@ -227,9 +215,7 @@ export function AlphabetScrollbar({
                 key={letter}
                 className={cn(
                   "text-xs font-semibold leading-none py-0.5 px-1 rounded transition-colors",
-                  activeLetter === letter
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground",
+                  activeLetter === letter ? "bg-primary text-primary-foreground" : "text-muted-foreground",
                 )}
               >
                 {letter}

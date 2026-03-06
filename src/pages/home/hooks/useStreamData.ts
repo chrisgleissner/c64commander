@@ -38,24 +38,14 @@ export function useStreamData(
   );
 
   const streamControlEntries = useMemo(
-    () =>
-      buildStreamControlEntries(
-        streamCategory as Record<string, unknown> | undefined,
-      ),
+    () => buildStreamControlEntries(streamCategory as Record<string, unknown> | undefined),
     [streamCategory],
   );
 
-  const [streamDrafts, setStreamDrafts] = useState<
-    Record<string, { ip: string; port: string; endpoint: string }>
-  >({});
-  const [activeStreamEditorKey, setActiveStreamEditorKey] =
-    useState<StreamKey | null>(null);
-  const [streamEditorError, setStreamEditorError] = useState<string | null>(
-    null,
-  );
-  const [streamActionPending, setStreamActionPending] = useState<
-    Record<string, boolean>
-  >({});
+  const [streamDrafts, setStreamDrafts] = useState<Record<string, { ip: string; port: string; endpoint: string }>>({});
+  const [activeStreamEditorKey, setActiveStreamEditorKey] = useState<StreamKey | null>(null);
+  const [streamEditorError, setStreamEditorError] = useState<string | null>(null);
+  const [streamActionPending, setStreamActionPending] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     setStreamDrafts((previous) => {
@@ -75,9 +65,7 @@ export function useStreamData(
     });
   }, [activeStreamEditorKey, streamControlEntries, configWritePending]);
 
-  const handleStreamStart = trace(async function handleStreamStart(
-    key: StreamKey,
-  ) {
+  const handleStreamStart = trace(async function handleStreamStart(key: StreamKey) {
     const entry = streamControlEntries.find((value) => value.key === key);
     if (!entry) return;
     const draft = streamDrafts[key] ?? {
@@ -116,9 +104,7 @@ export function useStreamData(
     }
   });
 
-  const handleStreamStop = trace(async function handleStreamStop(
-    key: StreamKey,
-  ) {
+  const handleStreamStop = trace(async function handleStreamStop(key: StreamKey) {
     const entry = streamControlEntries.find((value) => value.key === key);
     if (!entry) return;
     setStreamEditorError(null);
@@ -185,14 +171,10 @@ export function useStreamData(
       }));
     }
     setStreamEditorError(null);
-    setActiveStreamEditorKey((previous) =>
-      previous === key ? null : previous,
-    );
+    setActiveStreamEditorKey((previous) => (previous === key ? null : previous));
   };
 
-  const handleStreamCommit = trace(async function handleStreamCommit(
-    key: StreamKey,
-  ) {
+  const handleStreamCommit = trace(async function handleStreamCommit(key: StreamKey) {
     const entry = streamControlEntries.find((value) => value.key === key);
     if (!entry) return false;
     const current = streamDrafts[key] ?? {

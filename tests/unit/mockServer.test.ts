@@ -7,12 +7,7 @@
  */
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import {
-  getActiveMockBaseUrl,
-  getActiveMockFtpPort,
-  startMockServer,
-  stopMockServer,
-} from "@/lib/mock/mockServer";
+import { getActiveMockBaseUrl, getActiveMockFtpPort, startMockServer, stopMockServer } from "@/lib/mock/mockServer";
 import { addErrorLog } from "@/lib/logging";
 import { MockC64U } from "@/lib/native/mockC64u";
 import { getMockConfigPayload } from "@/lib/mock/mockConfig";
@@ -68,12 +63,9 @@ describe("mockServer", () => {
     vi.mocked(MockC64U.startServer).mockRejectedValue(error);
 
     await expect(startMockServer()).rejects.toThrow("Start failed");
-    expect(vi.mocked(addErrorLog)).toHaveBeenCalledWith(
-      "Mock C64U server failed to start",
-      {
-        error: "Start failed",
-      },
-    );
+    expect(vi.mocked(addErrorLog)).toHaveBeenCalledWith("Mock C64U server failed to start", {
+      error: "Start failed",
+    });
   });
 
   it("logs and rethrows stop failures", async () => {
@@ -84,11 +76,8 @@ describe("mockServer", () => {
 
     await startMockServer();
     await expect(stopMockServer()).rejects.toThrow("Stop failed");
-    expect(vi.mocked(addErrorLog)).toHaveBeenCalledWith(
-      "Mock C64U server failed to stop",
-      {
-        error: "Stop failed",
-      },
-    );
+    expect(vi.mocked(addErrorLog)).toHaveBeenCalledWith("Mock C64U server failed to stop", {
+      error: "Stop failed",
+    });
   });
 });

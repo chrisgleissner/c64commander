@@ -38,13 +38,7 @@ export function TabBar() {
               key={tab.path}
               id={tabId}
               data-testid={tabId}
-              onClick={wrapUserEvent(
-                () => navigate(tab.path),
-                "click",
-                "Tab",
-                { title: tab.label },
-                "Tab",
-              )}
+              onClick={wrapUserEvent(() => navigate(tab.path), "click", "Tab", { title: tab.label }, "Tab")}
               className={`tab-item touch-none ${isActive ? "active" : ""}`}
             >
               <div className="relative">

@@ -38,10 +38,7 @@ const scheduleAfterFirstPaint = (work: () => void) => {
   }
   const runWhenIdle = () => {
     const win = window as Window & {
-      requestIdleCallback?: (
-        callback: () => void,
-        options?: { timeout: number },
-      ) => number;
+      requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
     };
     if (typeof win.requestIdleCallback === "function") {
       win.requestIdleCallback(() => work(), { timeout: 1200 });

@@ -52,12 +52,7 @@ describe("PlaybackSettingsPanel", () => {
 
   it("invokes change handler from compact action button", () => {
     const onChooseSonglengthsFile = vi.fn();
-    render(
-      <PlaybackSettingsPanel
-        {...baseProps}
-        onChooseSonglengthsFile={onChooseSonglengthsFile}
-      />,
-    );
+    render(<PlaybackSettingsPanel {...baseProps} onChooseSonglengthsFile={onChooseSonglengthsFile} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Change" }));
     expect(onChooseSonglengthsFile).toHaveBeenCalledTimes(1);
@@ -65,18 +60,10 @@ describe("PlaybackSettingsPanel", () => {
 
   it("uses Subsong terminology for multi-subsong selector", () => {
     render(
-      <PlaybackSettingsPanel
-        {...baseProps}
-        songSelectorVisible
-        songPickerOpen
-        clampedSongNr={2}
-        subsongCount={5}
-      />,
+      <PlaybackSettingsPanel {...baseProps} songSelectorVisible songPickerOpen clampedSongNr={2} subsongCount={5} />,
     );
 
-    expect(
-      screen.getByRole("button", { name: "Subsong 2/5" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Subsong 2/5" })).toBeInTheDocument();
     expect(screen.getByText("Available subsongs: 1–5")).toBeInTheDocument();
   });
 });

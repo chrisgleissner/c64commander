@@ -42,9 +42,7 @@ describe("c64QueryInvalidation", () => {
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: ["c64-config-items"],
     });
-    expect(invalidateSpy.mock.calls.some(([arg]) => "predicate" in arg)).toBe(
-      false,
-    );
+    expect(invalidateSpy.mock.calls.some(([arg]) => "predicate" in arg)).toBe(false);
   });
 
   it("invalidates all targeted connection-setting prefixes", () => {
@@ -74,28 +72,14 @@ describe("c64QueryInvalidation", () => {
     const queryClient = new QueryClient();
     const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
 
-    invalidateForConnectionStateTransition(
-      queryClient,
-      "DISCOVERING",
-      "REAL_CONNECTED",
-    );
-    invalidateForConnectionStateTransition(
-      queryClient,
-      "REAL_CONNECTED",
-      "DISCOVERING",
-    );
-    invalidateForConnectionStateTransition(
-      queryClient,
-      "DISCOVERING",
-      "DISCOVERING",
-    );
+    invalidateForConnectionStateTransition(queryClient, "DISCOVERING", "REAL_CONNECTED");
+    invalidateForConnectionStateTransition(queryClient, "REAL_CONNECTED", "DISCOVERING");
+    invalidateForConnectionStateTransition(queryClient, "DISCOVERING", "DISCOVERING");
 
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["c64-info"] });
     expect(
-      invalidateSpy.mock.calls.filter(
-        ([arg]) =>
-          JSON.stringify(arg) === JSON.stringify({ queryKey: ["c64-info"] }),
-      ).length,
+      invalidateSpy.mock.calls.filter(([arg]) => JSON.stringify(arg) === JSON.stringify({ queryKey: ["c64-info"] }))
+        .length,
     ).toBe(2);
     expect(invalidateSpy.mock.calls.length).toBe(2);
   });

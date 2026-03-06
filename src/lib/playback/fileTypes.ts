@@ -8,20 +8,13 @@
 
 export type PlayFileCategory = "sid" | "mod" | "prg" | "crt" | "disk";
 
-const normalizeExtension = (value: string) =>
-  value.replace(/^\./, "").toLowerCase();
+const normalizeExtension = (value: string) => value.replace(/^\./, "").toLowerCase();
 
 const SID_EXTENSIONS = new Set(["sid"]);
 const MOD_EXTENSIONS = new Set(["mod"]);
 const PRG_EXTENSIONS = new Set(["prg"]);
 const CRT_EXTENSIONS = new Set(["crt"]);
-export const DISK_IMAGE_EXTENSIONS = new Set([
-  "d64",
-  "g64",
-  "d71",
-  "g71",
-  "d81",
-]);
+export const DISK_IMAGE_EXTENSIONS = new Set(["d64", "g64", "d71", "g71", "d81"]);
 
 export const SUPPORTED_PLAY_EXTENSIONS = new Set([
   ...SID_EXTENSIONS,
@@ -38,8 +31,7 @@ export const getFileExtension = (value: string) => {
   return normalizeExtension(base.slice(idx + 1));
 };
 
-export const isSupportedPlayFile = (value: string) =>
-  SUPPORTED_PLAY_EXTENSIONS.has(getFileExtension(value));
+export const isSupportedPlayFile = (value: string) => SUPPORTED_PLAY_EXTENSIONS.has(getFileExtension(value));
 
 export const getPlayCategory = (value: string): PlayFileCategory | null => {
   const ext = getFileExtension(value);

@@ -8,13 +8,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { addErrorLog } from "@/lib/logging";
-import {
-  buildDiskId,
-  createDiskEntry,
-  getDiskName,
-  normalizeDiskPath,
-  type DiskEntry,
-} from "@/lib/disks/diskTypes";
+import { buildDiskId, createDiskEntry, getDiskName, normalizeDiskPath, type DiskEntry } from "@/lib/disks/diskTypes";
 import { loadDiskLibrary, saveDiskLibrary } from "@/lib/disks/diskStore";
 import { buildDiskTreeState } from "@/lib/disks/diskTree";
 
@@ -65,21 +59,18 @@ export const useDiskLibrary = (uniqueId: string | null): DiskLibrary => {
     saveDiskLibrary(uniqueId, { disks });
   }, [disks, uniqueId]);
 
-  const addDisks = useCallback(
-    (entries: DiskEntry[], runtime: Record<string, File> = {}) => {
-      setRuntimeFiles((prev) => ({ ...prev, ...runtime }));
-      setDisks((prev) => {
-        const next = [...prev];
-        const existing = new Set(prev.map((disk) => disk.id));
-        entries.forEach((entry) => {
-          if (existing.has(entry.id)) return;
-          next.push(entry);
-        });
-        return next;
+  const addDisks = useCallback((entries: DiskEntry[], runtime: Record<string, File> = {}) => {
+    setRuntimeFiles((prev) => ({ ...prev, ...runtime }));
+    setDisks((prev) => {
+      const next = [...prev];
+      const existing = new Set(prev.map((disk) => disk.id));
+      entries.forEach((entry) => {
+        if (existing.has(entry.id)) return;
+        next.push(entry);
       });
-    },
-    [],
-  );
+      return next;
+    });
+  }, []);
 
   const removeDisk = useCallback((diskId: string) => {
     setRuntimeFiles((prev) => {
@@ -90,34 +81,17 @@ export const useDiskLibrary = (uniqueId: string | null): DiskLibrary => {
     setDisks((prev) => prev.filter((disk) => disk.id !== diskId));
   }, []);
 
-  const updateDiskGroup = useCallback(
-    (diskId: string, group: string | null) => {
-      setDisks((prev) =>
-        prev.map((disk) =>
-          disk.id === diskId ? { ...disk, group: group || null } : disk,
-        ),
-      );
-    },
-    [],
-  );
-
-  const updateDiskName = useCallback((diskId: string, name: string) => {
-    setDisks((prev) =>
-      prev.map((disk) =>
-        disk.id === diskId ? { ...disk, name: name.trim() || disk.name } : disk,
-      ),
-    );
+  const updateDiskGroup = useCallback((diskId: string, group: string | null) => {
+    setDisks((prev) => prev.map((disk) => (disk.id === diskId ? { ...disk, group: group || null } : disk)));
   }, []);
 
-  const getDiskById = useCallback(
-    (diskId: string) => disks.find((disk) => disk.id === diskId),
-    [disks],
-  );
+  const updateDiskName = useCallback((diskId: string, name: string) => {
+    setDisks((prev) => prev.map((disk) => (disk.id === diskId ? { ...disk, name: name.trim() || disk.name } : disk)));
+  }, []);
 
-  const tree = useMemo(
-    () => buildDiskTreeState(disks, filter),
-    [disks, filter],
-  );
+  const getDiskById = useCallback((diskId: string) => disks.find((disk) => disk.id === diskId), [disks]);
+
+  const tree = useMemo(() => buildDiskTreeState(disks, filter), [disks, filter]);
 
   return {
     disks,
@@ -133,11 +107,7 @@ export const useDiskLibrary = (uniqueId: string | null): DiskLibrary => {
   };
 };
 
-export const buildDiskEntryFromPath = (
-  location: "local" | "ultimate",
-  path: string,
-  group?: string | null,
-) => {
+export const buildDiskEntryFromPath = (location: "local" | "ultimate", path: string, group?: string | null) => {
   const normalized = normalizeDiskPath(path);
   return createDiskEntry({
     path: normalized,
@@ -146,10 +116,7 @@ export const buildDiskEntryFromPath = (
   });
 };
 
-export const buildDiskEntryFromDrive = (
-  location: "local" | "ultimate",
-  path?: string | null,
-) => {
+export const buildDiskEntryFromDrive = (location: "local" | "ultimate", path?: string | null) => {
   if (!path) return null;
   try {
     const normalized = normalizeDiskPath(path);
@@ -163,5 +130,4 @@ export const buildDiskEntryFromDrive = (
   }
 };
 
-export const toDisplayName = (disk: DiskEntry) =>
-  disk.name || getDiskName(disk.path);
+export const toDisplayName = (disk: DiskEntry) => disk.name || getDiskName(disk.path);

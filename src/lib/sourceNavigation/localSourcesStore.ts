@@ -90,9 +90,7 @@ export const loadLocalSources = (): LocalSourceRecord[] => {
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw) as LocalSourceRecord[];
-    return Array.isArray(parsed)
-      ? parsed.map((source) => normalizeLocalSource(source))
-      : [];
+    return Array.isArray(parsed) ? parsed.map((source) => normalizeLocalSource(source)) : [];
   } catch (error) {
     console.warn("Failed to load local sources from storage", { error });
     return [];
@@ -104,10 +102,7 @@ export const saveLocalSources = (sources: LocalSourceRecord[]) => {
   localStorage.setItem(STORE_KEY, JSON.stringify(sources));
 };
 
-export const setLocalSourceRuntimeFiles = (
-  sourceId: string,
-  files: Record<string, File>,
-) => {
+export const setLocalSourceRuntimeFiles = (sourceId: string, files: Record<string, File>) => {
   runtimeFilesBySource.set(sourceId, files);
 };
 
@@ -116,24 +111,17 @@ export const getLocalSourceRuntimeFile = (sourceId: string, path: string) => {
   return runtimeFilesBySource.get(sourceId)?.[normalized];
 };
 
-export const createLocalSourceFromFileList = (
-  files: FileList | File[],
-  label?: string,
-): LocalSourceBuildResult => {
+export const createLocalSourceFromFileList = (files: FileList | File[], label?: string): LocalSourceBuildResult => {
   const list = Array.from(files);
   const first = list[0] as File & { webkitRelativePath?: string };
-  const rootName =
-    first?.webkitRelativePath?.split("/")?.[0] || label || "Folder";
+  const rootName = first?.webkitRelativePath?.split("/")?.[0] || label || "Folder";
   const rootPath = buildRootPath(rootName);
   const sourceId = safeRandomId();
   const createdAt = new Date().toISOString();
   const runtimeFiles: Record<string, File> = {};
   const entries: LocalSourceEntry[] = list.map((file) => {
-    const relative =
-      (file as File & { webkitRelativePath?: string }).webkitRelativePath ||
-      file.name;
-    const withLabel =
-      label && !relative.includes("/") ? `${label}/${relative}` : relative;
+    const relative = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
+    const withLabel = label && !relative.includes("/") ? `${label}/${relative}` : relative;
     const relativePath = withLabel.replace(/^\/+/, "");
     const normalizedPath = normalizeSourcePath(relativePath);
     runtimeFiles[normalizedPath] = file;
@@ -234,10 +222,7 @@ export const createLocalSourceFromPicker = async (
 
   const directoryHandle = await picker();
   const files: File[] = [];
-  const walkDirectory = async (
-    dirHandle: FileSystemDirectoryHandle,
-    prefix: string,
-  ) => {
+  const walkDirectory = async (dirHandle: FileSystemDirectoryHandle, prefix: string) => {
     for await (const [name, handle] of (dirHandle as any).entries()) {
       if ((handle as FileSystemHandle).kind === "file") {
         const file = await (handle as FileSystemFileHandle).getFile();
@@ -246,10 +231,7 @@ export const createLocalSourceFromPicker = async (
         });
         files.push(file);
       } else if ((handle as FileSystemHandle).kind === "directory") {
-        await walkDirectory(
-          handle as FileSystemDirectoryHandle,
-          `${prefix}${name}/`,
-        );
+        await walkDirectory(handle as FileSystemDirectoryHandle, `${prefix}${name}/`);
       }
     }
   };
@@ -258,33 +240,21 @@ export const createLocalSourceFromPicker = async (
   return createLocalSourceFromFileList(files, directoryHandle.name);
 };
 
-export const getLocalSourceListingMode = (
-  source: LocalSourceRecord,
-): LocalSourceListingMode => (source.android?.treeUri ? "saf" : "entries");
+export const getLocalSourceListingMode = (source: LocalSourceRecord): LocalSourceListingMode =>
+  source.android?.treeUri ? "saf" : "entries";
 
-export const requireLocalSourceEntries = (
-  source: LocalSourceRecord,
-  context: string,
-): LocalSourceEntry[] => {
+export const requireLocalSourceEntries = (source: LocalSourceRecord, context: string): LocalSourceEntry[] => {
   if (getLocalSourceListingMode(source) === "saf") {
-    throw new LocalSourceListingError(
-      "SAF sources do not expose entry listings.",
-      "saf-listing-unavailable",
-      {
-        sourceId: source.id,
-        context,
-      },
-    );
+    throw new LocalSourceListingError("SAF sources do not expose entry listings.", "saf-listing-unavailable", {
+      sourceId: source.id,
+      context,
+    });
   }
   if (!Array.isArray(source.entries)) {
-    throw new LocalSourceListingError(
-      "Local source entries are missing or invalid.",
-      "local-entries-missing",
-      {
-        sourceId: source.id,
-        context,
-      },
-    );
+    throw new LocalSourceListingError("Local source entries are missing or invalid.", "local-entries-missing", {
+      sourceId: source.id,
+      context,
+    });
   }
   return source.entries;
 };

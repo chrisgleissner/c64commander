@@ -19,9 +19,7 @@ describe("hvscStateStore", () => {
   beforeEach(() => {
     if (typeof globalThis.localStorage === "undefined") {
       const store = new Map<string, string>();
-      (
-        globalThis as typeof globalThis & { localStorage?: Storage }
-      ).localStorage = {
+      (globalThis as typeof globalThis & { localStorage?: Storage }).localStorage = {
         getItem: (key: string) => store.get(key) ?? null,
         setItem: (key: string, value: string) => {
           store.set(key, value);

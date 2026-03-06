@@ -7,10 +7,7 @@
  */
 
 import { describe, expect, it, vi } from "vitest";
-import {
-  parseSonglengths,
-  resolveSonglengthsDurationMs,
-} from "@/lib/sid/songlengths";
+import { parseSonglengths, resolveSonglengthsDurationMs } from "@/lib/sid/songlengths";
 
 vi.mock("@/lib/sid/sidUtils", () => ({
   computeSidMd5: async () => "deadbeefdeadbeefdeadbeefdeadbeef",
@@ -24,12 +21,7 @@ describe("songlengths helpers", () => {
       lastModified: Date.now(),
       arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
     };
-    const duration = await resolveSonglengthsDurationMs(
-      data,
-      "/songs/demo.sid",
-      file,
-      1,
-    );
+    const duration = await resolveSonglengthsDurationMs(data, "/songs/demo.sid", file, 1);
     expect(duration).toBe(25 * 1000);
   });
 
@@ -41,12 +33,7 @@ describe("songlengths helpers", () => {
       lastModified: Date.now(),
       arrayBuffer: async () => buffer,
     };
-    const duration = await resolveSonglengthsDurationMs(
-      data,
-      "/missing.sid",
-      file,
-      2,
-    );
+    const duration = await resolveSonglengthsDurationMs(data, "/missing.sid", file, 2);
     expect(duration).toBe(55 * 1000);
   });
 });

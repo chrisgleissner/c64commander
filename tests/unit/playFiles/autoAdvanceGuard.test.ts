@@ -48,18 +48,10 @@ function buildAutoAdvanceGuard(
 // ---------------------------------------------------------------------------
 // Reconciliation check (mirrors syncPlaybackTimeline guard check)
 // ---------------------------------------------------------------------------
-function shouldAutoAdvance(
-  guard: AutoAdvanceGuard | null,
-  now: number,
-  expectedTrackInstanceId?: number,
-): boolean {
+function shouldAutoAdvance(guard: AutoAdvanceGuard | null, now: number, expectedTrackInstanceId?: number): boolean {
   if (!guard) return false;
   if (guard.autoFired || guard.userCancelled) return false;
-  if (
-    typeof expectedTrackInstanceId === "number" &&
-    guard.trackInstanceId !== expectedTrackInstanceId
-  )
-    return false;
+  if (typeof expectedTrackInstanceId === "number" && guard.trackInstanceId !== expectedTrackInstanceId) return false;
   return now >= guard.dueAtMs;
 }
 
@@ -71,13 +63,7 @@ describe("autoAdvanceGuard: format matrix (Issue 2)", () => {
   const DURATION_MS = 5000;
   const NOW = Date.now();
 
-  const allCategories: PlayFileCategory[] = [
-    "sid",
-    "mod",
-    "prg",
-    "crt",
-    "disk",
-  ];
+  const allCategories: PlayFileCategory[] = ["sid", "mod", "prg", "crt", "disk"];
 
   for (const category of allCategories) {
     it(`arms guard for category '${category}' when resolvedDuration is a number`, () => {

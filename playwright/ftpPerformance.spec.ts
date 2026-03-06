@@ -12,12 +12,7 @@ import type { Locator, Page, TestInfo } from "@playwright/test";
 import { seedUiMocks } from "./uiMocks";
 import { seedFtpConfig, startFtpTestServers } from "./ftpTestUtils";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
-import {
-  assertNoUiIssues,
-  attachStepScreenshot,
-  finalizeEvidence,
-  startStrictUiMonitoring,
-} from "./testArtifacts";
+import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from "./testArtifacts";
 import { enableTraceAssertions } from "./traceUtils";
 import { clickSourceSelectionButton } from "./sourceSelection";
 
@@ -39,10 +34,7 @@ test.describe("FTP performance", () => {
   };
 
   const openRemoteFolder = async (container: Page | Locator, name: string) => {
-    await container
-      .locator('[data-testid="source-entry-row"]', { hasText: name })
-      .first()
-      .click();
+    await container.locator('[data-testid="source-entry-row"]', { hasText: name }).first().click();
   };
 
   test.beforeAll(async () => {
@@ -76,9 +68,7 @@ test.describe("FTP performance", () => {
     }
   });
 
-  test("FTP navigation uses cache across reloads", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("FTP navigation uses cache across reloads", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     const counts = new Map<string, number>();
     await page.route("**/v1/ftp/list", async (route) => {
       const body = route.request().postData();
@@ -92,18 +82,13 @@ test.describe("FTP performance", () => {
 
     await page.goto("/play");
     await snap(page, testInfo, "play-open");
-    await page
-      .getByRole("button", { name: /Add items|Add more items/i })
-      .click();
+    await page.getByRole("button", { name: /Add items|Add more items/i }).click();
     const dialog = page.getByRole("dialog");
     await clickSourceSelectionButton(dialog, "C64 Ultimate");
     await ensureRemoteRoot(page);
     await expect(dialog.getByText("Usb0", { exact: true })).toBeVisible();
     await snap(page, testInfo, "c64u-root");
-    await dialog
-      .locator('[data-testid="source-entry-row"]', { hasText: "Usb0" })
-      .first()
-      .click();
+    await dialog.locator('[data-testid="source-entry-row"]', { hasText: "Usb0" }).first().click();
     await expect(dialog.getByText("Games", { exact: true })).toBeVisible();
     await snap(page, testInfo, "c64u-opened");
 
@@ -113,34 +98,23 @@ test.describe("FTP performance", () => {
     await page.reload();
     await snap(page, testInfo, "reloaded");
 
-    await page
-      .getByRole("button", { name: /Add items|Add more items/i })
-      .click();
+    await page.getByRole("button", { name: /Add items|Add more items/i }).click();
     const reloadDialog = page.getByRole("dialog");
     await clickSourceSelectionButton(reloadDialog, "C64 Ultimate");
     await ensureRemoteRoot(page);
     await expect(reloadDialog.getByText("Usb0", { exact: true })).toBeVisible();
-    await reloadDialog
-      .locator('[data-testid="source-entry-row"]', { hasText: "Usb0" })
-      .first()
-      .click();
-    await expect(
-      reloadDialog.getByText("Games", { exact: true }),
-    ).toBeVisible();
+    await reloadDialog.locator('[data-testid="source-entry-row"]', { hasText: "Usb0" }).first().click();
+    await expect(reloadDialog.getByText("Games", { exact: true })).toBeVisible();
     await snap(page, testInfo, "cache-hit");
 
     const secondCount = counts.get("/Usb0") ?? 0;
     expect(secondCount).toBe(firstCount);
   });
 
-  test("FTP navigation shows minimal loading delay", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("FTP navigation shows minimal loading delay", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/play");
     await snap(page, testInfo, "play-open");
-    await page
-      .getByRole("button", { name: /Add items|Add more items/i })
-      .click();
+    await page.getByRole("button", { name: /Add items|Add more items/i }).click();
     const dialog = page.getByRole("dialog");
     await clickSourceSelectionButton(dialog, "C64 Ultimate");
     await expect(page.getByText("Usb0", { exact: true })).toBeVisible();
@@ -162,9 +136,7 @@ test.describe("FTP performance", () => {
 
     await page.goto("/play");
     await snap(page, testInfo, "play-open");
-    await page
-      .getByRole("button", { name: /Add items|Add more items/i })
-      .click();
+    await page.getByRole("button", { name: /Add items|Add more items/i }).click();
     const dialog = page.getByRole("dialog");
     await clickSourceSelectionButton(dialog, "C64 Ultimate");
 
@@ -188,9 +160,7 @@ test.describe("FTP performance", () => {
     });
 
     await page.goto("/play");
-    await page
-      .getByRole("button", { name: /Add items|Add more items/i })
-      .click();
+    await page.getByRole("button", { name: /Add items|Add more items/i }).click();
     const dialog = page.getByRole("dialog");
     await clickSourceSelectionButton(dialog, "C64 Ultimate");
     await ensureRemoteRoot(page);
@@ -210,9 +180,7 @@ test.describe("FTP performance", () => {
     await expect(dialog).toBeHidden({ timeout: 15000 });
     const elapsedMs = Date.now() - startedAt;
 
-    await expect(page.getByTestId("playlist-list")).toContainText(
-      "Mega Disk 01.d64",
-    );
+    await expect(page.getByTestId("playlist-list")).toContainText("Mega Disk 01.d64");
     expect(readCount).toBe(0);
     expect(elapsedMs).toBeLessThan(7000);
     await snap(page, testInfo, "mega-collection-imported");

@@ -1,39 +1,28 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const {
-  toastSpy,
-  reportUserErrorSpy,
-  c64ApiMockRef,
-  queryClientMockRef,
-  updateConfigValueSpy,
-  resolveConfigValueSpy,
-} = vi.hoisted(() => ({
-  toastSpy: vi.fn(),
-  reportUserErrorSpy: vi.fn(),
-  c64ApiMockRef: {
-    current: {
-      setConfigValue: vi.fn().mockResolvedValue({}),
-      mountDrive: vi.fn().mockResolvedValue({}),
-      getDrives: vi.fn().mockResolvedValue({ drives: [] }),
+const { toastSpy, reportUserErrorSpy, c64ApiMockRef, queryClientMockRef, updateConfigValueSpy, resolveConfigValueSpy } =
+  vi.hoisted(() => ({
+    toastSpy: vi.fn(),
+    reportUserErrorSpy: vi.fn(),
+    c64ApiMockRef: {
+      current: {
+        setConfigValue: vi.fn().mockResolvedValue({}),
+        mountDrive: vi.fn().mockResolvedValue({}),
+        getDrives: vi.fn().mockResolvedValue({ drives: [] }),
+      },
     },
-  },
-  queryClientMockRef: {
-    current: {
-      invalidateQueries: vi.fn().mockResolvedValue(undefined),
-      fetchQuery: vi.fn().mockResolvedValue(undefined),
+    queryClientMockRef: {
+      current: {
+        invalidateQueries: vi.fn().mockResolvedValue(undefined),
+        fetchQuery: vi.fn().mockResolvedValue(undefined),
+      },
     },
-  },
-  updateConfigValueSpy: vi.fn().mockResolvedValue(undefined),
-  resolveConfigValueSpy: vi.fn(
-    (
-      _payload: unknown,
-      _category: string,
-      _itemName: string,
-      fallback: string | number,
-    ) => fallback,
-  ),
-}));
+    updateConfigValueSpy: vi.fn().mockResolvedValue(undefined),
+    resolveConfigValueSpy: vi.fn(
+      (_payload: unknown, _category: string, _itemName: string, fallback: string | number) => fallback,
+    ),
+  }));
 
 vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => queryClientMockRef.current,
@@ -44,8 +33,7 @@ vi.mock("@/lib/c64api", () => ({
 }));
 
 vi.mock("@/hooks/useActionTrace", () => ({
-  useActionTrace: () =>
-    Object.assign((fn: (...args: any[]) => any) => fn, { scope: vi.fn() }),
+  useActionTrace: () => Object.assign((fn: (...args: any[]) => any) => fn, { scope: vi.fn() }),
 }));
 
 vi.mock("@/hooks/use-toast", () => ({
@@ -85,9 +73,7 @@ vi.mock("@/pages/home/hooks/ConfigActionsContext", async () => {
       updateConfigValue: updateConfigValueSpy,
       resolveConfigValue: resolveConfigValueSpy,
     }),
-    ConfigActionsProvider: ({ children }: { children: React.ReactNode }) => (
-      <>{children}</>
-    ),
+    ConfigActionsProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   };
 });
 
@@ -123,36 +109,23 @@ vi.mock("@/pages/home/DriveCard", () => ({
   DriveCard: (props: any) => (
     <div data-testid={`drive-card-${props.testIdSuffix}`}>
       <span data-testid="drive-name">{props.name}</span>
-      <span data-testid="drive-enabled">
-        {props.enabled ? "Enabled" : "Disabled"}
-      </span>
+      <span data-testid="drive-enabled">{props.enabled ? "Enabled" : "Disabled"}</span>
       <span data-testid="drive-bus">{props.busIdValue}</span>
-      {props.typeValue && (
-        <span data-testid="drive-type">{props.typeValue}</span>
-      )}
+      {props.typeValue && <span data-testid="drive-type">{props.typeValue}</span>}
       <span data-testid="drive-mounted">{props.mountedPath ?? "none"}</span>
       <span data-testid="drive-status">{props.statusSummary}</span>
       <button data-testid="drive-toggle" onClick={props.onToggle}>
         Toggle
       </button>
-      <button
-        data-testid="drive-bus-change"
-        onClick={() => props.onBusIdChange?.("9")}
-      >
+      <button data-testid="drive-bus-change" onClick={() => props.onBusIdChange?.("9")}>
         ChangeBus
       </button>
       {props.onTypeChange && (
-        <button
-          data-testid="drive-type-change"
-          onClick={() => props.onTypeChange?.("1571")}
-        >
+        <button data-testid="drive-type-change" onClick={() => props.onTypeChange?.("1571")}>
           ChangeType
         </button>
       )}
-      <button
-        data-testid="drive-mount-click"
-        onClick={props.onMountedPathClick}
-      >
+      <button data-testid="drive-mount-click" onClick={props.onMountedPathClick}>
         Mount
       </button>
       <button data-testid="drive-status-click" onClick={props.onStatusClick}>
@@ -166,11 +139,7 @@ vi.mock("@/components/SectionHeader", () => ({
   SectionHeader: (props: any) => (
     <div data-testid={props.resetTestId}>
       <span>{props.title}</span>
-      <button
-        onClick={props.resetAction}
-        disabled={props.resetDisabled}
-        data-testid="drives-reset-btn"
-      >
+      <button onClick={props.resetAction} disabled={props.resetDisabled} data-testid="drives-reset-btn">
         Reset
       </button>
     </div>
@@ -182,12 +151,7 @@ vi.mock("@/components/itemSelection/ItemSelectionDialog", () => ({
   ItemSelectionDialog: (props: any) => (
     <div data-testid="item-selection-dialog" data-open={props.open}>
       {props.open && (
-        <button
-          data-testid="confirm-mount"
-          onClick={() =>
-            props.onConfirm?.(null, [{ path: "/USB0/games/test.d64" }])
-          }
-        >
+        <button data-testid="confirm-mount" onClick={() => props.onConfirm?.(null, [{ path: "/USB0/games/test.d64" }])}>
           Confirm
         </button>
       )}
@@ -225,18 +189,14 @@ describe("DriveManager", () => {
 
   const defaultProps = {
     isConnected: true,
-    handleAction: vi
-      .fn()
-      .mockImplementation(async (action: () => Promise<void>) => {
-        await action();
-      }),
+    handleAction: vi.fn().mockImplementation(async (action: () => Promise<void>) => {
+      await action();
+    }),
     machineTaskBusy: false,
     machineTaskId: null as string | null,
-    onResetDrives: vi
-      .fn()
-      .mockImplementation(async (cb: () => Promise<void>) => {
-        await cb();
-      }),
+    onResetDrives: vi.fn().mockImplementation(async (cb: () => Promise<void>) => {
+      await cb();
+    }),
   };
 
   it("renders Drives section header", () => {
@@ -367,10 +327,7 @@ describe("DriveManager", () => {
       });
       fireEvent.click(screen.getByTestId("confirm-mount"));
       await vi.waitFor(() => {
-        expect(c64ApiMockRef.current.mountDrive).toHaveBeenCalledWith(
-          "a",
-          "/USB0/games/test.d64",
-        );
+        expect(c64ApiMockRef.current.mountDrive).toHaveBeenCalledWith("a", "/USB0/games/test.d64");
       });
     });
 
@@ -384,10 +341,7 @@ describe("DriveManager", () => {
       });
       fireEvent.click(screen.getByTestId("confirm-mount"));
       await vi.waitFor(() => {
-        expect(c64ApiMockRef.current.mountDrive).toHaveBeenCalledWith(
-          "b",
-          "/USB0/games/test.d64",
-        );
+        expect(c64ApiMockRef.current.mountDrive).toHaveBeenCalledWith("b", "/USB0/games/test.d64");
       });
     });
   });
@@ -419,9 +373,7 @@ describe("DriveManager", () => {
       fireEvent.click(statusBtns[0]);
       // Dialog becomes open
       const dialogs = screen.getAllByTestId("dialog");
-      const statusDialog = dialogs.find(
-        (d) => d.getAttribute("data-open") === "true",
-      );
+      const statusDialog = dialogs.find((d) => d.getAttribute("data-open") === "true");
       expect(statusDialog).toBeDefined();
     });
   });
@@ -443,12 +395,7 @@ describe("DriveManager", () => {
 
     it("shows Soft IEC default path from resolveConfigValue", () => {
       resolveConfigValueSpy.mockImplementation(
-        (
-          _payload: unknown,
-          _category: string,
-          itemName: string,
-          fallback: string | number,
-        ) => {
+        (_payload: unknown, _category: string, itemName: string, fallback: string | number) => {
           if (itemName === "Default Path") return "/SD/";
           return fallback;
         },

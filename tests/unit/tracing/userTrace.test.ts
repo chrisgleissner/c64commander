@@ -76,13 +76,7 @@ describe("userTrace", () => {
 
     it("falls back to default label", async () => {
       const handler = vi.fn();
-      const wrapped = wrapUserEvent(
-        handler,
-        "click",
-        "Btn",
-        {},
-        "FallbackLabel",
-      );
+      const wrapped = wrapUserEvent(handler, "click", "Btn", {}, "FallbackLabel");
       await wrapped({ nativeEvent: {} } as any);
       expect(handler).toHaveBeenCalled();
     });

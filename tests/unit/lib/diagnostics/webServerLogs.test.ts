@@ -163,9 +163,7 @@ describe("webServerLogs bridge", () => {
     const dispose = startWebServerLogBridge();
     await vi.advanceTimersByTimeAsync(10);
 
-    expect(setExternalLogs).toHaveBeenCalledWith([
-      expect.objectContaining({ id: "server-valid", message: "good" }),
-    ]);
+    expect(setExternalLogs).toHaveBeenCalledWith([expect.objectContaining({ id: "server-valid", message: "good" })]);
     dispose();
   });
 

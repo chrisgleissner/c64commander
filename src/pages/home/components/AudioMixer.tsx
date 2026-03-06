@@ -28,56 +28,25 @@ import { SID_SLIDER_STEP } from "../constants";
 interface AudioMixerProps {
   isConnected: boolean;
   machineTaskBusy: boolean;
-  runMachineTask: (
-    taskId: string,
-    action: () => Promise<void>,
-    title: string,
-    desc?: string,
-  ) => Promise<void>;
+  runMachineTask: (taskId: string, action: () => Promise<void>, title: string, desc?: string) => Promise<void>;
 }
 
-export function AudioMixer({
-  isConnected,
-  machineTaskBusy,
-  runMachineTask,
-}: AudioMixerProps) {
+export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: AudioMixerProps) {
   const api = getC64API();
   const trace = useActionTrace("AudioMixer");
-  const {
-    configOverrides,
-    configWritePending,
-    updateConfigValue,
-    resolveConfigValue,
-  } = useSharedConfigActions();
+  const { configOverrides, configWritePending, updateConfigValue, resolveConfigValue } = useSharedConfigActions();
 
-  const {
-    sidControlEntries,
-    sidSilenceTargets,
-    sidAddressingCategory,
-    ultiSidCategory,
-    sidSocketsCategory,
-  } = useSidData(isConnected, configOverrides);
+  const { sidControlEntries, sidSilenceTargets, sidAddressingCategory, ultiSidCategory, sidSocketsCategory } =
+    useSidData(isConnected, configOverrides);
 
-  const [activeSliders, setActiveSliders] = useState<Record<string, number>>(
-    {},
-  );
+  const [activeSliders, setActiveSliders] = useState<Record<string, number>>({});
 
   const ultiSidConfig = ultiSidCategory as Record<string, unknown> | undefined;
   const ultiSid1ProfileValue = String(
-    resolveConfigValue(
-      ultiSidConfig,
-      "UltiSID Configuration",
-      "UltiSID 1 Filter Curve",
-      "—",
-    ),
+    resolveConfigValue(ultiSidConfig, "UltiSID Configuration", "UltiSID 1 Filter Curve", "—"),
   );
   const ultiSid2ProfileValue = String(
-    resolveConfigValue(
-      ultiSidConfig,
-      "UltiSID Configuration",
-      "UltiSID 2 Filter Curve",
-      "—",
-    ),
+    resolveConfigValue(ultiSidConfig, "UltiSID Configuration", "UltiSID 2 Filter Curve", "—"),
   );
   const ultiSid1ProfileSelectOptions = readItemOptions(
     ultiSidConfig,
@@ -153,9 +122,7 @@ export function AudioMixer({
       return;
     }
 
-    const addressOptions = entry.addressOptions.length
-      ? entry.addressOptions
-      : [entry.address];
+    const addressOptions = entry.addressOptions.length ? entry.addressOptions : [entry.address];
     const nextValue = enabled
       ? resolveSidAddressDisableValue(addressOptions)
       : resolveSidAddressEnableValue(addressOptions);
@@ -198,20 +165,13 @@ export function AudioMixer({
         {sidControlEntries.map((entry) => {
           const volumeKey = buildConfigKey("Audio Mixer", entry.volumeItem);
           const panKey = buildConfigKey("Audio Mixer", entry.panItem);
-          const addressKey = buildConfigKey(
-            "SID Addressing",
-            entry.addressItem,
-          );
+          const addressKey = buildConfigKey("SID Addressing", entry.addressItem);
 
           const statusValue = sidStatusMap.get(entry.key);
           const isSidEnabled = statusValue !== false;
 
-          const volumeOptions = entry.volumeOptions.length
-            ? entry.volumeOptions
-            : [entry.volume];
-          const panOptions = entry.panOptions.length
-            ? entry.panOptions
-            : [entry.pan];
+          const volumeOptions = entry.volumeOptions.length ? entry.volumeOptions : [entry.volume];
+          const panOptions = entry.panOptions.length ? entry.panOptions : [entry.pan];
           const volumeIndex = resolveOptionIndex(volumeOptions, entry.volume);
           const panIndex = resolveOptionIndex(panOptions, entry.pan);
           const volumeCenterIndex = resolveVolumeCenterIndex(volumeOptions);
@@ -223,53 +183,28 @@ export function AudioMixer({
           const volumePending = Boolean(configWritePending[volumeKey]);
           const panPending = Boolean(configWritePending[panKey]);
 
-          const baseAddressLabel = formatSidBaseAddress(
-            entry.addressRaw ?? entry.address,
-          );
+          const baseAddressLabel = formatSidBaseAddress(entry.addressRaw ?? entry.address);
           const activeVolumeValue = activeSliders[volumeSliderId];
           const activePanValue = activeSliders[panSliderId];
-          const volumeSliderValue = clampSliderValue(
-            activeVolumeValue ?? volumeIndex,
-            volumeMax,
-          );
-          const panSliderValue = clampSliderValue(
-            activePanValue ?? panIndex,
-            panMax,
-          );
+          const volumeSliderValue = clampSliderValue(activeVolumeValue ?? volumeIndex, volumeMax);
+          const panSliderValue = clampSliderValue(activePanValue ?? panIndex, panMax);
 
-          const isUltiSid =
-            entry.key === "ultiSid1" || entry.key === "ultiSid2";
+          const isUltiSid = entry.key === "ultiSid1" || entry.key === "ultiSid2";
           const resolveVolumeIndexValue = (value: number) =>
-            resolveSliderIndex(
-              applySoftDetent(value, volumeCenterIndex),
-              volumeMax,
-            );
+            resolveSliderIndex(applySoftDetent(value, volumeCenterIndex), volumeMax);
           const resolvePanIndexValue = (value: number) =>
             resolveSliderIndex(applySoftDetent(value, panCenterIndex), panMax);
           const resolveVolumeOption = (value: number) =>
-            volumeOptions[resolveVolumeIndexValue(value)] ??
-            volumeOptions[0] ??
-            entry.volume;
+            volumeOptions[resolveVolumeIndexValue(value)] ?? volumeOptions[0] ?? entry.volume;
           const resolvePanOption = (value: number) =>
-            panOptions[resolvePanIndexValue(value)] ??
-            panOptions[0] ??
-            entry.pan;
+            panOptions[resolvePanIndexValue(value)] ?? panOptions[0] ?? entry.pan;
           const volumeValueFormatter = (value: number) =>
-            formatDbValue(
-              String(
-                volumeOptions[Math.round(value)] ?? volumeOptions[0] ?? "",
-              ),
-            );
+            formatDbValue(String(volumeOptions[Math.round(value)] ?? volumeOptions[0] ?? ""));
           const panValueFormatter = (value: number) =>
-            formatPanValue(
-              String(panOptions[Math.round(value)] ?? panOptions[0] ?? ""),
-            );
+            formatPanValue(String(panOptions[Math.round(value)] ?? panOptions[0] ?? ""));
 
           const handleVolumeLocalChange = (val: number) => {
-            const snapped = clampSliderValue(
-              applySoftDetent(val, volumeCenterIndex),
-              volumeMax,
-            );
+            const snapped = clampSliderValue(applySoftDetent(val, volumeCenterIndex), volumeMax);
             setActiveSliders((prev) => ({
               ...prev,
               [volumeSliderId]: snapped,
@@ -304,10 +239,7 @@ export function AudioMixer({
             );
           };
           const handlePanLocalChange = (val: number) => {
-            const snapped = clampSliderValue(
-              applySoftDetent(val, panCenterIndex),
-              panMax,
-            );
+            const snapped = clampSliderValue(applySoftDetent(val, panCenterIndex), panMax);
             setActiveSliders((prev) => ({ ...prev, [panSliderId]: snapped }));
           };
           const handlePanLocalCommit = (_val: number) => {
@@ -319,24 +251,13 @@ export function AudioMixer({
           };
           const handlePanAsyncChange = (val: number) => {
             const v = resolvePanOption(val);
-            void updateConfigValue(
-              "Audio Mixer",
-              entry.panItem,
-              v,
-              "HOME_SID_PAN",
-              `${entry.label} pan updated`,
-              { suppressToast: true },
-            );
+            void updateConfigValue("Audio Mixer", entry.panItem, v, "HOME_SID_PAN", `${entry.label} pan updated`, {
+              suppressToast: true,
+            });
           };
           const handlePanAsyncCommit = (val: number) => {
             const v = resolvePanOption(val);
-            void updateConfigValue(
-              "Audio Mixer",
-              entry.panItem,
-              v,
-              "HOME_SID_PAN",
-              `${entry.label} pan updated`,
-            );
+            void updateConfigValue("Audio Mixer", entry.panItem, v, "HOME_SID_PAN", `${entry.label} pan updated`);
           };
 
           // Identity / Filter
@@ -364,9 +285,7 @@ export function AudioMixer({
                 configWritePending[
                   buildConfigKey(
                     "UltiSID Configuration",
-                    entry.key === "ultiSid1"
-                      ? "UltiSID 1 Filter Curve"
-                      : "UltiSID 2 Filter Curve",
+                    entry.key === "ultiSid1" ? "UltiSID 1 Filter Curve" : "UltiSID 2 Filter Curve",
                   )
                 ],
               )
@@ -378,9 +297,7 @@ export function AudioMixer({
             "SID Addressing",
             entry.addressItem,
           ).map(String);
-          const addressSelectValue = resolveSelectValue(
-            String(entry.addressRaw ?? entry.address),
-          );
+          const addressSelectValue = resolveSelectValue(String(entry.addressRaw ?? entry.address));
           const addressPending = Boolean(configWritePending[addressKey]);
 
           // Shaping Controls
@@ -414,11 +331,7 @@ export function AudioMixer({
                   `HOME_ULTISID_RES_${ultiIndex}`,
                   `UltiSID ${ultiIndex} resonance updated`,
                 ),
-              pending: Boolean(
-                configWritePending[
-                  buildConfigKey("UltiSID Configuration", resonanceItem)
-                ],
-              ),
+              pending: Boolean(configWritePending[buildConfigKey("UltiSID Configuration", resonanceItem)]),
             });
             shapingControls.push({
               label: "Wave",
@@ -443,11 +356,7 @@ export function AudioMixer({
                   `HOME_ULTISID_WAVE_${ultiIndex}`,
                   `UltiSID ${ultiIndex} waveform updated`,
                 ),
-              pending: Boolean(
-                configWritePending[
-                  buildConfigKey("UltiSID Configuration", waveformItem)
-                ],
-              ),
+              pending: Boolean(configWritePending[buildConfigKey("UltiSID Configuration", waveformItem)]),
             });
             shapingControls.push({
               label: "Digis",
@@ -472,11 +381,7 @@ export function AudioMixer({
                   `HOME_ULTISID_DIGIS_${ultiIndex}`,
                   `UltiSID ${ultiIndex} digis updated`,
                 ),
-              pending: Boolean(
-                configWritePending[
-                  buildConfigKey("UltiSID Configuration", digisItem)
-                ],
-              ),
+              pending: Boolean(configWritePending[buildConfigKey("UltiSID Configuration", digisItem)]),
             });
           } else {
             const socketIndex = entry.key === "socket1" ? 1 : 2;
@@ -506,11 +411,7 @@ export function AudioMixer({
                   `HOME_SID_RES_${socketIndex}`,
                   `SID Socket ${socketIndex} resistor updated`,
                 ),
-              pending: Boolean(
-                configWritePending[
-                  buildConfigKey("SID Sockets Configuration", resistorItem)
-                ],
-              ),
+              pending: Boolean(configWritePending[buildConfigKey("SID Sockets Configuration", resistorItem)]),
             });
             shapingControls.push({
               label: "Cap",
@@ -535,23 +436,13 @@ export function AudioMixer({
                   `HOME_SID_CAP_${socketIndex}`,
                   `SID Socket ${socketIndex} capacitor updated`,
                 ),
-              pending: Boolean(
-                configWritePending[
-                  buildConfigKey("SID Sockets Configuration", capacitorItem)
-                ],
-              ),
+              pending: Boolean(configWritePending[buildConfigKey("SID Sockets Configuration", capacitorItem)]),
             });
           }
 
           const socketItemName =
-            entry.key === "socket1"
-              ? "SID Socket 1"
-              : entry.key === "socket2"
-                ? "SID Socket 2"
-                : null;
-          const toggleKey = socketItemName
-            ? buildConfigKey("SID Sockets Configuration", socketItemName)
-            : addressKey;
+            entry.key === "socket1" ? "SID Socket 1" : entry.key === "socket2" ? "SID Socket 2" : null;
+          const toggleKey = socketItemName ? buildConfigKey("SID Sockets Configuration", socketItemName) : addressKey;
           const togglePending = Boolean(configWritePending[toggleKey]);
 
           return (
@@ -559,9 +450,7 @@ export function AudioMixer({
               key={entry.key}
               name={entry.label}
               power={isSidEnabled}
-              onPowerToggle={() =>
-                void handleSidEnableToggle(entry, isSidEnabled)
-              }
+              onPowerToggle={() => void handleSidEnableToggle(entry, isSidEnabled)}
               powerPending={togglePending}
               identityLabel={identityLabel}
               identityValue={identitySelectValue || identityValue} // Prefer SelectValue (resolved)
@@ -570,9 +459,7 @@ export function AudioMixer({
                 if (isUltiSid) {
                   void updateConfigValue(
                     "UltiSID Configuration",
-                    entry.key === "ultiSid1"
-                      ? "UltiSID 1 Filter Curve"
-                      : "UltiSID 2 Filter Curve",
+                    entry.key === "ultiSid1" ? "UltiSID 1 Filter Curve" : "UltiSID 2 Filter Curve",
                     resolveSelectValue(val),
                     "HOME_ULTISID_PROFILE",
                     "UltiSID filter curve updated",

@@ -36,8 +36,7 @@ const GOLDEN_TRACE_TEST_IDS = new Set<string>([
 
 const hasGoldenTraceAnnotation = (testInfo: TestInfo) =>
   testInfo.annotations.some(
-    (annotation: TestInfo["annotations"][number]) =>
-      annotation.type === GOLDEN_TRACE_ANNOTATION,
+    (annotation: TestInfo["annotations"][number]) => annotation.type === GOLDEN_TRACE_ANNOTATION,
   );
 
 export const enableGoldenTrace = (testInfo: TestInfo, reason?: string) => {
@@ -72,8 +71,7 @@ export const assertGoldenTraceEligibility = (testInfo: TestInfo) => {
   return status;
 };
 
-export const shouldCompareGoldenTrace = (testInfo: TestInfo) =>
-  getGoldenTraceStatus(testInfo).shouldCompare;
+export const shouldCompareGoldenTrace = (testInfo: TestInfo) => getGoldenTraceStatus(testInfo).shouldCompare;
 
 export const shouldRecordGoldenTrace = (testInfo: TestInfo) => {
   if (process.env.RECORD_TRACES !== "1") return false;

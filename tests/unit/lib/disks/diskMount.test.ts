@@ -38,11 +38,7 @@ import {
   getLocalSourceRuntimeFile,
   requireLocalSourceEntries,
 } from "@/lib/sourceNavigation/localSourcesStore";
-import {
-  buildDiskMountType,
-  resolveLocalDiskBlob,
-  mountDiskToDrive,
-} from "@/lib/disks/diskMount";
+import { buildDiskMountType, resolveLocalDiskBlob, mountDiskToDrive } from "@/lib/disks/diskMount";
 
 describe("diskMount", () => {
   beforeEach(() => {
@@ -66,10 +62,7 @@ describe("diskMount", () => {
   describe("resolveLocalDiskBlob", () => {
     it("returns runtimeFile when provided", async () => {
       const file = new File(["test"], "test.d64");
-      const blob = await resolveLocalDiskBlob(
-        { path: "/test.d64", location: "local" } as any,
-        file,
-      );
+      const blob = await resolveLocalDiskBlob({ path: "/test.d64", location: "local" } as any, file);
       expect(blob).toBe(file);
     });
 
@@ -105,9 +98,7 @@ describe("diskMount", () => {
     });
 
     it("falls back to local sources when no direct uri", async () => {
-      vi.mocked(loadLocalSources).mockReturnValue([
-        { id: "src1", android: { treeUri: "tree://source" } } as any,
-      ]);
+      vi.mocked(loadLocalSources).mockReturnValue([{ id: "src1", android: { treeUri: "tree://source" } } as any]);
       vi.mocked(FolderPicker.readFileFromTree).mockResolvedValue({
         data: btoa("source data"),
       });
@@ -150,17 +141,14 @@ describe("diskMount", () => {
 
     it("throws when no source can resolve the file", async () => {
       vi.mocked(loadLocalSources).mockReturnValue([]);
-      await expect(
-        resolveLocalDiskBlob({ path: "/test.d64", location: "local" } as any),
-      ).rejects.toThrow("Local disk access is missing");
+      await expect(resolveLocalDiskBlob({ path: "/test.d64", location: "local" } as any)).rejects.toThrow(
+        "Local disk access is missing",
+      );
     });
 
     it("tries matching source by sourceId first", async () => {
       const runtimeFile = new File(["data"], "test.d64");
-      vi.mocked(loadLocalSources).mockReturnValue([
-        { id: "src1" } as any,
-        { id: "src2" } as any,
-      ]);
+      vi.mocked(loadLocalSources).mockReturnValue([{ id: "src1" } as any, { id: "src2" } as any]);
       vi.mocked(getLocalSourceRuntimeFile).mockImplementation((id: string) =>
         id === "src2" ? (runtimeFile as any) : null,
       );
@@ -171,10 +159,7 @@ describe("diskMount", () => {
         sourceId: "src2",
       } as any);
       expect(blob).toBe(runtimeFile);
-      expect(getLocalSourceRuntimeFile).toHaveBeenCalledWith(
-        "src2",
-        "/test.d64",
-      );
+      expect(getLocalSourceRuntimeFile).toHaveBeenCalledWith("src2", "/test.d64");
     });
 
     it("handles tree read error gracefully and tries next source", async () => {
@@ -207,12 +192,7 @@ describe("diskMount", () => {
         path: "/disk.d64",
         location: "ultimate",
       } as any);
-      expect(mockApi.mountDrive).toHaveBeenCalledWith(
-        "a",
-        "/disk.d64",
-        "d64",
-        "readwrite",
-      );
+      expect(mockApi.mountDrive).toHaveBeenCalledWith("a", "/disk.d64", "d64", "readwrite");
     });
 
     it("throws for unsupported disk type", async () => {
@@ -226,18 +206,8 @@ describe("diskMount", () => {
 
     it("uploads local disk blob via API", async () => {
       const file = new File(["test"], "disk.d64");
-      await mountDiskToDrive(
-        mockApi as any,
-        "b",
-        { path: "/disk.d64", location: "local" } as any,
-        file,
-      );
-      expect(mockApi.mountDriveUpload).toHaveBeenCalledWith(
-        "b",
-        file,
-        "d64",
-        "readwrite",
-      );
+      await mountDiskToDrive(mockApi as any, "b", { path: "/disk.d64", location: "local" } as any, file);
+      expect(mockApi.mountDriveUpload).toHaveBeenCalledWith("b", file, "d64", "readwrite");
     });
 
     it("logs and rethrows on mount failure", async () => {

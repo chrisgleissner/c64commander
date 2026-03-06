@@ -17,11 +17,7 @@ import type {
   HvscStatus,
   HvscUpdateStatus,
 } from "./hvscTypes";
-import {
-  buildHvscBaselineUrl,
-  buildHvscUpdateUrl,
-  fetchLatestHvscVersions,
-} from "./hvscReleaseService";
+import { buildHvscBaselineUrl, buildHvscUpdateUrl, fetchLatestHvscVersions } from "./hvscReleaseService";
 import {
   ensureHvscDirs,
   listHvscFolder,
@@ -32,30 +28,13 @@ import {
   resetLibraryRoot,
   resetSonglengthsCache,
 } from "./hvscFilesystem";
-import {
-  loadHvscState,
-  updateHvscState,
-  isUpdateApplied,
-  markUpdateApplied,
-} from "./hvscStateStore";
-import {
-  loadHvscStatusSummary,
-  saveHvscStatusSummary,
-} from "./hvscStatusStore";
-import {
-  getHvscSonglengthsStats,
-  reloadHvscSonglengthsOnConfigChange,
-} from "./hvscSongLengthService";
+import { loadHvscState, updateHvscState, isUpdateApplied, markUpdateApplied } from "./hvscStateStore";
+import { loadHvscStatusSummary, saveHvscStatusSummary } from "./hvscStatusStore";
+import { getHvscSonglengthsStats, reloadHvscSonglengthsOnConfigChange } from "./hvscSongLengthService";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
-import {
-  buildSidTrackSubsongs,
-  parseSidHeaderMetadata,
-} from "@/lib/sid/sidUtils";
-import {
-  clearHvscBrowseIndexSnapshot,
-  createHvscBrowseIndexMutable,
-} from "./hvscBrowseIndexStore";
+import { buildSidTrackSubsongs, parseSidHeaderMetadata } from "@/lib/sid/sidUtils";
+import { clearHvscBrowseIndexSnapshot, createHvscBrowseIndexMutable } from "./hvscBrowseIndexStore";
 import {
   resolveCachedArchive,
   getCacheStatusInternal,
@@ -105,21 +84,13 @@ const runtimeState: HvscIngestionRuntimeState = {
 
 const CACHE_STAT_FAILURE_ESCALATION_THRESHOLD = 2;
 
-const registerNativeProgressListener = (
-  token: string,
-  listener: HvscProgressListenerHandle,
-) => {
-  const listeners =
-    runtimeState.nativeListenersByToken.get(token) ??
-    new Set<HvscProgressListenerHandle>();
+const registerNativeProgressListener = (token: string, listener: HvscProgressListenerHandle) => {
+  const listeners = runtimeState.nativeListenersByToken.get(token) ?? new Set<HvscProgressListenerHandle>();
   listeners.add(listener);
   runtimeState.nativeListenersByToken.set(token, listeners);
 };
 
-const removeNativeProgressListener = async (
-  token: string,
-  listener: HvscProgressListenerHandle,
-) => {
+const removeNativeProgressListener = async (token: string, listener: HvscProgressListenerHandle) => {
   const listeners = runtimeState.nativeListenersByToken.get(token);
   try {
     await listener.remove();
@@ -141,9 +112,7 @@ const removeNativeProgressListener = async (
 };
 
 const drainNativeProgressListeners = async (token?: string) => {
-  const tokens = token
-    ? [token]
-    : Array.from(runtimeState.nativeListenersByToken.keys());
+  const tokens = token ? [token] : Array.from(runtimeState.nativeListenersByToken.keys());
   for (const itemToken of tokens) {
     const listeners = runtimeState.nativeListenersByToken.get(itemToken);
     if (!listeners?.size) {
@@ -164,9 +133,7 @@ const resetCacheStatFailure = (archiveName: string) => {
 const reportCacheStatFailure = (
   archiveName: string,
   error: unknown,
-  emitProgress?: (
-    event: Omit<HvscProgressEvent, "ingestionId" | "elapsedTimeMs">,
-  ) => void,
+  emitProgress?: (event: Omit<HvscProgressEvent, "ingestionId" | "elapsedTimeMs">) => void,
 ) => {
   const failures = (runtimeState.cacheStatFailures.get(archiveName) ?? 0) + 1;
   runtimeState.cacheStatFailures.set(archiveName, failures);
@@ -200,14 +167,11 @@ const formatPathListPreview = (paths: string[]) => {
   if (!paths.length) return "none";
   const previewLimit = 10;
   const preview = paths.slice(0, previewLimit).join(", ");
-  return paths.length > previewLimit
-    ? `${preview} (+${paths.length - previewLimit} more)`
-    : preview;
+  return paths.length > previewLimit ? `${preview} (+${paths.length - previewLimit} more)` : preview;
 };
 
 /** True while an ingestion task (install/update or cached ingest) is executing. */
-export const isIngestionRuntimeActive = () =>
-  runtimeState.activeIngestionRunning;
+export const isIngestionRuntimeActive = () => runtimeState.activeIngestionRunning;
 
 // ── Cold-start recovery ──────────────────────────────────────────
 
@@ -221,11 +185,7 @@ export const isIngestionRuntimeActive = () =>
 export const recoverStaleIngestionState = (): boolean => {
   if (runtimeState.activeIngestionRunning) return false;
   const state = loadHvscState();
-  if (
-    state.ingestionState !== "installing" &&
-    state.ingestionState !== "updating"
-  )
-    return false;
+  if (state.ingestionState !== "installing" && state.ingestionState !== "updating") return false;
   addLog("warn", "HVSC cold-start recovery: resetting stale ingestion state", {
     ingestionState: state.ingestionState,
   });
@@ -235,10 +195,7 @@ export const recoverStaleIngestionState = (): boolean => {
   });
   const summary = loadHvscStatusSummary();
   const now = new Date().toISOString();
-  if (
-    summary.download.status === "in-progress" ||
-    summary.extraction.status === "in-progress"
-  ) {
+  if (summary.download.status === "in-progress" || summary.extraction.status === "in-progress") {
     saveHvscStatusSummary({
       ...summary,
       download:
@@ -268,17 +225,12 @@ export const recoverStaleIngestionState = (): boolean => {
 };
 
 const ensureNotCancelled = (token?: string) => {
-  ensureNotCancelledWith(runtimeState.cancelTokens, token, (patch) =>
-    updateHvscState(patch as any),
-  );
+  ensureNotCancelledWith(runtimeState.cancelTokens, token, (patch) => updateHvscState(patch as any));
 };
 
 const canUseNativeHvscIngestion = () => {
   try {
-    return (
-      Capacitor.isNativePlatform() &&
-      Capacitor.isPluginAvailable("HvscIngestion")
-    );
+    return Capacitor.isNativePlatform() && Capacitor.isPluginAvailable("HvscIngestion");
   } catch (error) {
     addLog("warn", "Failed to probe HvscIngestion native plugin", {
       error: (error as Error).message,
@@ -305,23 +257,17 @@ const resolveHvscIngestionMode = () => {
     return "native" as const;
   }
   if (!canUseNonNativeHvscIngestion()) {
-    addLog(
-      "warn",
-      "HVSC native ingestion plugin unavailable; falling back to non-native ingestion path",
-      {
-        nativeAvailable: false,
-        overrideEnabled: false,
-      },
-    );
+    addLog("warn", "HVSC native ingestion plugin unavailable; falling back to non-native ingestion path", {
+      nativeAvailable: false,
+      overrideEnabled: false,
+    });
   }
   return "non-native" as const;
 };
 
 // ── Listener management ──────────────────────────────────────────
 
-export const addHvscProgressListener = async (
-  listener: (event: HvscProgressEvent) => void,
-) => {
+export const addHvscProgressListener = async (listener: (event: HvscProgressEvent) => void) => {
   return addProgressListener(listener);
 };
 
@@ -329,8 +275,7 @@ export const addHvscProgressListener = async (
 
 export const getHvscStatus = async (): Promise<HvscStatus> => loadHvscState();
 
-export const getHvscCacheStatus = async (): Promise<HvscCacheStatus> =>
-  getCacheStatusInternal();
+export const getHvscCacheStatus = async (): Promise<HvscCacheStatus> => getCacheStatusInternal();
 
 export const checkForHvscUpdates = async (): Promise<HvscUpdateStatus> => {
   const { baselineVersion, updateVersion } = await fetchLatestHvscVersions();
@@ -338,15 +283,9 @@ export const checkForHvscUpdates = async (): Promise<HvscUpdateStatus> => {
   const installedVersion = current.installedVersion ?? 0;
   const requiredUpdates =
     installedVersion === 0 && updateVersion > baselineVersion
-      ? Array.from(
-          { length: updateVersion - baselineVersion },
-          (_, i) => baselineVersion + i + 1,
-        )
+      ? Array.from({ length: updateVersion - baselineVersion }, (_, i) => baselineVersion + i + 1)
       : installedVersion > 0 && installedVersion < updateVersion
-        ? Array.from(
-            { length: updateVersion - installedVersion },
-            (_, i) => installedVersion + i + 1,
-          )
+        ? Array.from({ length: updateVersion - installedVersion }, (_, i) => installedVersion + i + 1)
         : [];
   return {
     latestVersion: updateVersion,
@@ -363,11 +302,7 @@ export const checkForHvscUpdates = async (): Promise<HvscUpdateStatus> => {
  * Both paths must use this function so the message format and ingestionState transitions
  * are identical at the facade boundary.
  */
-export const buildIngestionFailureMessage = (
-  failedSongs: number,
-  totalSongs: number,
-  failedPaths: string[],
-) => {
+export const buildIngestionFailureMessage = (failedSongs: number, totalSongs: number, failedPaths: string[]) => {
   const base = `HVSC ingestion failed: ${failedSongs} of ${totalSongs} songs could not be ingested`;
   if (!failedPaths.length) {
     return `${base} (no paths reported)`;
@@ -406,8 +341,7 @@ export const applyIngestionSuccess = ({
       totalSongs,
       ingestedSongs,
       failedSongs,
-      songlengthSyntaxErrors:
-        getHvscSonglengthsStats().backendStats.rejectedLines,
+      songlengthSyntaxErrors: getHvscSonglengthsStats().backendStats.rejectedLines,
       failedPaths,
       completedAt: new Date().toISOString(),
       archiveName,
@@ -432,11 +366,7 @@ export const applyIngestionFailureAndThrow = ({
   failedSongs: number;
   failedPaths: string[];
 }): never => {
-  const failedMessage = buildIngestionFailureMessage(
-    failedSongs,
-    totalSongs,
-    failedPaths,
-  );
+  const failedMessage = buildIngestionFailureMessage(failedSongs, totalSongs, failedPaths);
   updateHvscState({
     ingestionState: "error",
     ingestionError: failedMessage,
@@ -444,8 +374,7 @@ export const applyIngestionFailureAndThrow = ({
       totalSongs,
       ingestedSongs,
       failedSongs,
-      songlengthSyntaxErrors:
-        getHvscSonglengthsStats().backendStats.rejectedLines,
+      songlengthSyntaxErrors: getHvscSonglengthsStats().backendStats.rejectedLines,
       failedPaths,
       completedAt: new Date().toISOString(),
       archiveName,
@@ -460,9 +389,7 @@ export type IngestArchiveBufferOptions = {
   archiveBuffer: Uint8Array;
   cancelToken: string;
   cancelTokens: Map<string, { cancelled: boolean }>;
-  emitProgress: (
-    event: Omit<HvscProgressEvent, "ingestionId" | "elapsedTimeMs">,
-  ) => void;
+  emitProgress: (event: Omit<HvscProgressEvent, "ingestionId" | "elapsedTimeMs">) => void;
   pipeline: PipelineStateMachine;
   baselineInstalled: number | null;
 };
@@ -478,18 +405,8 @@ export type IngestArchiveBufferResult = {
  * Pipeline state must be DOWNLOADED on entry. Transitions:
  * EXTRACTING → EXTRACTED → INGESTING → READY.
  */
-export const ingestArchiveBuffer = async (
-  options: IngestArchiveBufferOptions,
-): Promise<IngestArchiveBufferResult> => {
-  const {
-    plan,
-    archiveName,
-    archiveBuffer,
-    cancelToken,
-    cancelTokens,
-    emitProgress,
-    pipeline,
-  } = options;
+export const ingestArchiveBuffer = async (options: IngestArchiveBufferOptions): Promise<IngestArchiveBufferResult> => {
+  const { plan, archiveName, archiveBuffer, cancelToken, cancelTokens, emitProgress, pipeline } = options;
   let { baselineInstalled } = options;
   const ingestionSummary = {
     totalSongs: 0,
@@ -553,14 +470,9 @@ export const ingestArchiveBuffer = async (
       }
 
       const lowered = normalized.toLowerCase();
-      if (
-        lowered.endsWith("songlengths.md5") ||
-        lowered.endsWith("songlengths.txt")
-      ) {
+      if (lowered.endsWith("songlengths.md5") || lowered.endsWith("songlengths.txt")) {
         const targetPath =
-          plan.type === "baseline"
-            ? normalizeLibraryPath(normalized)
-            : normalizeUpdateLibraryPath(normalized);
+          plan.type === "baseline" ? normalizeLibraryPath(normalized) : normalizeUpdateLibraryPath(normalized);
         if (targetPath) {
           await writeLibraryFile(targetPath, data);
           emitProgress({
@@ -573,9 +485,7 @@ export const ingestArchiveBuffer = async (
       }
 
       const virtualPath =
-        plan.type === "baseline"
-          ? normalizeVirtualPath(normalized)
-          : normalizeUpdateVirtualPath(normalized);
+        plan.type === "baseline" ? normalizeVirtualPath(normalized) : normalizeUpdateVirtualPath(normalized);
       if (!virtualPath) return;
       ingestionSummary.totalSongs += 1;
       try {
@@ -583,10 +493,7 @@ export const ingestArchiveBuffer = async (
         let trackSubsongs = null;
         try {
           sidMetadata = parseSidHeaderMetadata(data);
-          trackSubsongs = buildSidTrackSubsongs(
-            sidMetadata.songs,
-            sidMetadata.startSong,
-          );
+          trackSubsongs = buildSidTrackSubsongs(sidMetadata.songs, sidMetadata.startSong);
         } catch (parseError) {
           const failure = classifyError(parseError);
           addLog("warn", "HVSC SID metadata parse failed; continuing ingest", {
@@ -696,8 +603,7 @@ export const ingestArchiveBuffer = async (
     });
     throw error;
   }
-  ingestionSummary.songlengthSyntaxErrors =
-    getHvscSonglengthsStats().backendStats.rejectedLines;
+  ingestionSummary.songlengthSyntaxErrors = getHvscSonglengthsStats().backendStats.rejectedLines;
 
   if (ingestionSummary.failedSongs > 0) {
     applyIngestionFailureAndThrow({
@@ -743,20 +649,11 @@ const ingestArchivePathNative = async (options: {
   archivePath: string;
   archiveName: string;
   cancelToken: string;
-  emitProgress: (
-    event: Omit<HvscProgressEvent, "ingestionId" | "elapsedTimeMs">,
-  ) => void;
+  emitProgress: (event: Omit<HvscProgressEvent, "ingestionId" | "elapsedTimeMs">) => void;
   pipeline: PipelineStateMachine;
   baselineInstalled: number | null;
 }): Promise<{ baselineInstalled: number | null }> => {
-  const {
-    plan,
-    archivePath,
-    archiveName,
-    cancelToken,
-    emitProgress,
-    pipeline,
-  } = options;
+  const { plan, archivePath, archiveName, cancelToken, emitProgress, pipeline } = options;
   let { baselineInstalled } = options;
 
   if (plan.type === "baseline") {
@@ -773,21 +670,19 @@ const ingestArchivePathNative = async (options: {
   const { getHvscCacheDir } = await import("./hvscFilesystem");
   const relativeArchivePath = `${getHvscCacheDir()}/${archivePath}`;
 
-  const progressListener = await HvscIngestion.addProgressListener(
-    (nativeEvent) => {
-      emitProgress({
-        stage: nativeEvent.stage || "archive_extraction",
-        message: nativeEvent.message || `Processing ${archiveName}…`,
-        archiveName,
-        currentFile: nativeEvent.currentFile,
-        processedCount: nativeEvent.processedCount,
-        totalCount: nativeEvent.totalCount,
-        percent: nativeEvent.percent,
-        songsUpserted: nativeEvent.songsUpserted,
-        songsDeleted: nativeEvent.songsDeleted,
-      });
-    },
-  );
+  const progressListener = await HvscIngestion.addProgressListener((nativeEvent) => {
+    emitProgress({
+      stage: nativeEvent.stage || "archive_extraction",
+      message: nativeEvent.message || `Processing ${archiveName}…`,
+      archiveName,
+      currentFile: nativeEvent.currentFile,
+      processedCount: nativeEvent.processedCount,
+      totalCount: nativeEvent.totalCount,
+      percent: nativeEvent.percent,
+      songsUpserted: nativeEvent.songsUpserted,
+      songsDeleted: nativeEvent.songsDeleted,
+    });
+  });
   registerNativeProgressListener(cancelToken, progressListener);
 
   try {
@@ -842,8 +737,7 @@ const ingestArchivePathNative = async (options: {
       totalSongs: result.metadataRows,
       ingestedSongs: result.songsIngested,
       failedSongs: result.failedSongs,
-      songlengthSyntaxErrors:
-        getHvscSonglengthsStats().backendStats.rejectedLines,
+      songlengthSyntaxErrors: getHvscSonglengthsStats().backendStats.rejectedLines,
       songsDeleted: result.songsDeleted,
     });
     return { baselineInstalled };
@@ -854,9 +748,7 @@ const ingestArchivePathNative = async (options: {
 
 // ── Install / update (from network) ─────────────────────────────
 
-export const installOrUpdateHvsc = async (
-  cancelToken: string,
-): Promise<HvscStatus> => {
+export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStatus> => {
   if (runtimeState.activeIngestionRunning) {
     const error = new Error("HVSC ingestion already running");
     addErrorLog("HVSC install/update blocked", { error: error.message });
@@ -877,8 +769,7 @@ export const installOrUpdateHvsc = async (
   let currentPipelineState: HvscPipelineState | null = null;
   let baselineInstalled: number | null = null;
   try {
-    const { baselineVersion, updateVersion, baseUrl } =
-      await fetchLatestHvscVersions();
+    const { baselineVersion, updateVersion, baseUrl } = await fetchLatestHvscVersions();
     updateHvscState({ lastUpdateCheckUtcMs: Date.now() });
     const current = loadHvscState();
     baselineInstalled = current.installedBaselineVersion ?? null;
@@ -888,11 +779,7 @@ export const installOrUpdateHvsc = async (
     }
     const startVersion = current.installedVersion || baselineVersion;
     if (startVersion < updateVersion) {
-      for (
-        let version = startVersion + 1;
-        version <= updateVersion;
-        version += 1
-      ) {
+      for (let version = startVersion + 1; version <= updateVersion; version += 1) {
         plans.push({ type: "update", version });
       }
     }
@@ -989,8 +876,7 @@ export const installOrUpdateHvsc = async (
             : await ingestArchiveBuffer({
                 plan,
                 archiveName: archivePath,
-                archiveBuffer:
-                  downloadedBuffer ?? (await readArchiveBuffer(archivePath)),
+                archiveBuffer: downloadedBuffer ?? (await readArchiveBuffer(archivePath)),
                 cancelToken,
                 cancelTokens: runtimeState.cancelTokens,
                 emitProgress,
@@ -1066,11 +952,7 @@ export const installOrUpdateHvsc = async (
   } catch (error) {
     const failure = classifyError(error);
     if (currentArchiveType === "update" && currentArchiveVersion) {
-      markUpdateApplied(
-        currentArchiveVersion,
-        "failed",
-        (error as Error).message,
-      );
+      markUpdateApplied(currentArchiveVersion, "failed", (error as Error).message);
     }
     if (currentArchive && !currentArchiveComplete) {
       const { deleteCachedArchive } = await import("./hvscFilesystem");
@@ -1110,9 +992,7 @@ export const installOrUpdateHvsc = async (
 
 // ── Ingest cached (from previously downloaded archives) ──────────
 
-export const ingestCachedHvsc = async (
-  cancelToken: string,
-): Promise<HvscStatus> => {
+export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus> => {
   if (runtimeState.activeIngestionRunning) {
     const error = new Error("HVSC ingestion already running");
     addErrorLog("HVSC cached ingestion blocked", { error: error.message });
@@ -1142,9 +1022,7 @@ export const ingestCachedHvsc = async (
       plans.push({ type: "baseline", version: cache.baselineVersion });
     }
     const startVersion = current.installedVersion || cache.baselineVersion || 0;
-    const updates = cache.updateVersions.filter(
-      (version) => version > startVersion,
-    );
+    const updates = cache.updateVersions.filter((version) => version > startVersion);
     updates.forEach((version) => plans.push({ type: "update", version }));
 
     if (!plans.length) {
@@ -1273,11 +1151,7 @@ export const ingestCachedHvsc = async (
   } catch (error) {
     const failure = classifyError(error);
     if (currentArchiveType === "update" && currentArchiveVersion) {
-      markUpdateApplied(
-        currentArchiveVersion,
-        "failed",
-        (error as Error).message,
-      );
+      markUpdateApplied(currentArchiveVersion, "failed", (error as Error).message);
     }
     addErrorLog("HVSC cached ingest failed", {
       ingestionId,
@@ -1336,19 +1210,13 @@ export const cancelHvscInstall = async (cancelToken: string): Promise<void> => {
 
 // ── Folder / song / duration queries ─────────────────────────────
 
-export const getHvscFolderListing = async (
-  path: string,
-): Promise<HvscFolderListing> => listHvscFolder(path);
+export const getHvscFolderListing = async (path: string): Promise<HvscFolderListing> => listHvscFolder(path);
 
-export const getHvscSong = async (options: {
-  id?: number;
-  virtualPath?: string;
-}): Promise<HvscSong> => {
+export const getHvscSong = async (options: { id?: number; virtualPath?: string }): Promise<HvscSong> => {
   if (!options.virtualPath) throw new Error("Song not found");
   const song = await getHvscSongByVirtualPath(options.virtualPath);
   if (!song) throw new Error("Song not found");
   return song;
 };
 
-export const getHvscDurationByMd5Seconds = async (md5: string) =>
-  getHvscDurationByMd5(md5);
+export const getHvscDurationByMd5Seconds = async (md5: string) => getHvscDurationByMd5(md5);

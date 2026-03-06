@@ -7,13 +7,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import {
-  render,
-  screen,
-  fireEvent,
-  within,
-  waitFor,
-} from "@testing-library/react";
+import { render, screen, fireEvent, within, waitFor } from "@testing-library/react";
 import { HomeDiskManager } from "@/components/disks/HomeDiskManager";
 
 // Mock child components
@@ -21,9 +15,7 @@ vi.mock("@/components/lists/SelectableActionList", () => ({
   SelectableActionList: ({ items, headerActions, onRemoveSelected }: any) => (
     <div data-testid="mock-action-list">
       <div data-testid="header-actions">{headerActions}</div>
-      {onRemoveSelected && (
-        <button onClick={onRemoveSelected}>Delete Selected</button>
-      )}
+      {onRemoveSelected && <button onClick={onRemoveSelected}>Delete Selected</button>}
       {items.map((item: any) => (
         <div key={item.id} data-testid={`disk-item-${item.id}`}>
           <span data-testid="disk-title">{item.title}</span>
@@ -42,9 +34,7 @@ vi.mock("@/components/lists/SelectableActionList", () => ({
           {/* Selection */}
           <button
             data-testid={`select-${item.id}`}
-            onClick={() =>
-              item.onSelectToggle && item.onSelectToggle(!item.selected)
-            }
+            onClick={() => item.onSelectToggle && item.onSelectToggle(!item.selected)}
           >
             {item.selected ? "Selected" : "Select"}
           </button>
@@ -96,10 +86,7 @@ const mockStatus = {
 };
 
 const mockDrivesData = {
-  drives: [
-    { a: { bus_id: 8, enabled: true } },
-    { b: { bus_id: 9, enabled: true } },
-  ],
+  drives: [{ a: { bus_id: 8, enabled: true } }, { b: { bus_id: 9, enabled: true } }],
 };
 
 const useC64ConnectionMock = {
@@ -220,9 +207,7 @@ describe("HomeDiskManager", () => {
     expect(screen.getByText("Drive A")).toBeInTheDocument();
     expect(screen.getByText("Drive B")).toBeInTheDocument();
     expect(screen.queryByText(/^Printer$/i)).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: /reset printer/i }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /reset printer/i })).not.toBeInTheDocument();
     expect(screen.getAllByText("No disk mounted").length).toBeGreaterThan(0);
     expect(screen.getByText("disk1.d64")).toBeInTheDocument();
     expect(screen.getByText("disk2.d64")).toBeInTheDocument();
@@ -265,9 +250,7 @@ describe("HomeDiskManager", () => {
 
     renderComponent();
 
-    expect(
-      screen.queryByText(/service error reported/i),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/service error reported/i)).not.toBeInTheDocument();
   });
 
   it("renders actionable Soft IEC errors from device state", () => {
@@ -307,15 +290,9 @@ describe("HomeDiskManager", () => {
 
     renderComponent();
 
-    expect(
-      screen.getByTestId("drive-status-message-soft-iec"),
-    ).toHaveTextContent("DRIVE NOT READY");
-    expect(screen.getByTestId("drive-status-raw-soft-iec")).toHaveTextContent(
-      "74,DRIVE NOT READY,00,00",
-    );
-    expect(
-      screen.queryByTestId("drive-status-details-text"),
-    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("drive-status-message-soft-iec")).toHaveTextContent("DRIVE NOT READY");
+    expect(screen.getByTestId("drive-status-raw-soft-iec")).toHaveTextContent("74,DRIVE NOT READY,00,00");
+    expect(screen.queryByTestId("drive-status-details-text")).not.toBeInTheDocument();
     expect(screen.queryByText("Message:")).not.toBeInTheDocument();
     expect(screen.queryByText("Details:")).not.toBeInTheDocument();
   });
@@ -339,12 +316,7 @@ describe("HomeDiskManager", () => {
     fireEvent.click(driveABtn);
 
     await waitFor(() => {
-      expect(mockMountDisk).toHaveBeenCalledWith(
-        "a",
-        "/disk2.d64",
-        "d64",
-        "readwrite",
-      );
+      expect(mockMountDisk).toHaveBeenCalledWith("a", "/disk2.d64", "d64", "readwrite");
     });
   });
 
@@ -361,10 +333,7 @@ describe("HomeDiskManager", () => {
 
     fireEvent.click(within(dialog).getByText("Save"));
 
-    expect(useDiskLibraryMock.updateDiskName).toHaveBeenCalledWith(
-      "local/disk1.d64",
-      "cool-disk.d64",
-    );
+    expect(useDiskLibraryMock.updateDiskName).toHaveBeenCalledWith("local/disk1.d64", "cool-disk.d64");
   });
 
   it("handles group assignment", () => {
@@ -380,10 +349,7 @@ describe("HomeDiskManager", () => {
 
     fireEvent.click(within(dialog).getByText("Create & assign"));
 
-    expect(useDiskLibraryMock.updateDiskGroup).toHaveBeenCalledWith(
-      "local/disk1.d64",
-      "Games",
-    );
+    expect(useDiskLibraryMock.updateDiskGroup).toHaveBeenCalledWith("local/disk1.d64", "Games");
   });
 
   it("handles deletion flow", () => {
@@ -399,9 +365,7 @@ describe("HomeDiskManager", () => {
 
     // Since handleDeleteDisk is internal, we can check if removeDisk was called
     // But handleDeleteDisk calls diskLibrary.removeDisk
-    expect(useDiskLibraryMock.removeDisk).toHaveBeenCalledWith(
-      "local/disk1.d64",
-    );
+    expect(useDiskLibraryMock.removeDisk).toHaveBeenCalledWith("local/disk1.d64");
   });
 
   it("handles bulk delete", async () => {
@@ -417,21 +381,15 @@ describe("HomeDiskManager", () => {
     fireEvent.click(deleteBtn);
 
     const dialog = screen.getByTestId("dialog");
-    expect(
-      within(dialog).getByText(/Remove selected disks\?/),
-    ).toBeInTheDocument();
+    expect(within(dialog).getByText(/Remove selected disks\?/)).toBeInTheDocument();
 
     fireEvent.click(within(dialog).getByText("Remove"));
 
     // handleBulkDelete calls removeDisk individually for selected items (and unmounts if needed)
     await waitFor(() => {
       expect(useDiskLibraryMock.removeDisk).toHaveBeenCalledTimes(2);
-      expect(useDiskLibraryMock.removeDisk).toHaveBeenCalledWith(
-        "local/disk1.d64",
-      );
-      expect(useDiskLibraryMock.removeDisk).toHaveBeenCalledWith(
-        "ultimate/disk2.d64",
-      );
+      expect(useDiskLibraryMock.removeDisk).toHaveBeenCalledWith("local/disk1.d64");
+      expect(useDiskLibraryMock.removeDisk).toHaveBeenCalledWith("ultimate/disk2.d64");
     });
   });
 

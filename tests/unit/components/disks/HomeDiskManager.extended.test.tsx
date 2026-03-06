@@ -7,13 +7,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import {
-  render,
-  screen,
-  fireEvent,
-  within,
-  waitFor,
-} from "@testing-library/react";
+import { render, screen, fireEvent, within, waitFor } from "@testing-library/react";
 import { HomeDiskManager } from "@/components/disks/HomeDiskManager";
 
 // Mock child components
@@ -21,9 +15,7 @@ vi.mock("@/components/lists/SelectableActionList", () => ({
   SelectableActionList: ({ items, headerActions, onRemoveSelected }: any) => (
     <div data-testid="mock-action-list">
       <div data-testid="header-actions">{headerActions}</div>
-      {onRemoveSelected && (
-        <button onClick={onRemoveSelected}>Delete Selected</button>
-      )}
+      {onRemoveSelected && <button onClick={onRemoveSelected}>Delete Selected</button>}
       {items.map((item: any) => (
         <div key={item.id} data-testid={`disk-item-${item.id}`}>
           <span data-testid="disk-title">{item.title}</span>
@@ -37,17 +29,14 @@ vi.mock("@/components/lists/SelectableActionList", () => ({
 
 vi.mock("@/components/itemSelection/ItemSelectionDialog", () => ({
   ItemSelectionDialog: (props: any) => {
-    const { open, onOpenChange, onAddLocalSource, onConfirm, onCancelScan } =
-      props;
+    const { open, onOpenChange, onAddLocalSource, onConfirm, onCancelScan } = props;
     if (!open) return null;
     return (
       <div data-testid="item-selection-dialog">
         <button onClick={() => onOpenChange(false)}>Close</button>
         {onCancelScan && <button onClick={onCancelScan}>Cancel Scan</button>}
 
-        {onAddLocalSource && (
-          <button onClick={onAddLocalSource}>Add Source</button>
-        )}
+        {onAddLocalSource && <button onClick={onAddLocalSource}>Add Source</button>}
 
         <button
           onClick={() => {
@@ -58,9 +47,7 @@ vi.mock("@/components/itemSelection/ItemSelectionDialog", () => ({
               type: "local",
               listEntries: vi.fn().mockResolvedValue([]),
             };
-            onConfirm(mockSource, [
-              { type: "file", name: "imported.d64", path: "/imported.d64" },
-            ]);
+            onConfirm(mockSource, [{ type: "file", name: "imported.d64", path: "/imported.d64" }]);
           }}
         >
           Import File
@@ -88,9 +75,7 @@ vi.mock("@/components/itemSelection/ItemSelectionDialog", () => ({
               ]),
               listEntries: vi.fn().mockResolvedValue([]),
             };
-            onConfirm(mockSource, [
-              { type: "dir", name: "Nested", path: "/nested" },
-            ]);
+            onConfirm(mockSource, [{ type: "dir", name: "Nested", path: "/nested" }]);
           }}
         >
           Import Directory
@@ -112,9 +97,7 @@ vi.mock("@/components/itemSelection/ItemSelectionDialog", () => ({
               ]),
               listEntries: vi.fn().mockResolvedValue([]),
             };
-            onConfirm(mockSource, [
-              { type: "dir", name: "Empty", path: "/empty" },
-            ]);
+            onConfirm(mockSource, [{ type: "dir", name: "Empty", path: "/empty" }]);
           }}
         >
           Import Empty
@@ -130,9 +113,7 @@ vi.mock("@/components/itemSelection/ItemSelectionDialog", () => ({
               listFilesRecursive: vi.fn().mockResolvedValue([]), // Return empty to trigger fallback check
               listEntries: vi.fn().mockResolvedValue([]),
             };
-            onConfirm(mockSource, [
-              { type: "dir", name: "Root", path: "/root" },
-            ]);
+            onConfirm(mockSource, [{ type: "dir", name: "Root", path: "/root" }]);
           }}
         >
           Import Root
@@ -145,9 +126,7 @@ vi.mock("@/components/itemSelection/ItemSelectionDialog", () => ({
 vi.mock("@/components/itemSelection/AddItemsProgressOverlay", () => ({
   AddItemsProgressOverlay: (props: any) => (
     <div data-testid="progress-overlay">
-      {props.visible && (
-        <button onClick={props.onCancel}>Cancel Overlay</button>
-      )}
+      {props.visible && <button onClick={props.onCancel}>Cancel Overlay</button>}
     </div>
   ),
 }));
@@ -352,9 +331,7 @@ describe("HomeDiskManager Extended", () => {
     fireEvent.click(within(dialog).getByText(/Drive A/));
 
     await waitFor(() => {
-      expect(
-        screen.getByRole("button", { name: "Drive A Eject disk" }),
-      ).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Drive A Eject disk" })).toBeInTheDocument();
     });
 
     const ejectBtn = screen.getByRole("button", { name: "Drive A Eject disk" });
@@ -362,9 +339,7 @@ describe("HomeDiskManager Extended", () => {
 
     await waitFor(() => {
       expect(mockUnmountDrive).toHaveBeenCalledWith("a");
-      expect(
-        screen.getByRole("button", { name: "Drive A Mount disk" }),
-      ).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Drive A Mount disk" })).toBeInTheDocument();
     });
   }, 15000);
 
@@ -410,12 +385,8 @@ describe("HomeDiskManager Extended", () => {
 
     await waitFor(
       () => {
-        expect(
-          screen.getByRole("button", { name: "Drive A next disk" }),
-        ).toBeInTheDocument();
-        expect(
-          screen.getByRole("button", { name: "Drive A previous disk" }),
-        ).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "Drive A next disk" })).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "Drive A previous disk" })).toBeInTheDocument();
       },
       { timeout: 15000 },
     );
@@ -424,12 +395,7 @@ describe("HomeDiskManager Extended", () => {
 
     await waitFor(
       () => {
-        expect(mockMountDisk).toHaveBeenCalledWith(
-          "a",
-          "/disk2.d64",
-          "d64",
-          "readwrite",
-        );
+        expect(mockMountDisk).toHaveBeenCalledWith("a", "/disk2.d64", "d64", "readwrite");
       },
       { timeout: 15000 },
     );
@@ -551,9 +517,7 @@ describe("HomeDiskManager Extended", () => {
 
     await waitFor(() => {
       expect(useDiskLibraryMock.addDisks).toHaveBeenCalledWith(
-        expect.arrayContaining([
-          expect.objectContaining({ path: "fallback.d64" }),
-        ]),
+        expect.arrayContaining([expect.objectContaining({ path: "fallback.d64" })]),
         expect.anything(),
       );
     });
@@ -581,9 +545,7 @@ describe("HomeDiskManager Extended", () => {
     await waitFor(() => {
       expect(mockAddSourceFromFiles).toHaveBeenCalled();
       expect(useDiskLibraryMock.addDisks).toHaveBeenCalledWith(
-        expect.arrayContaining([
-          expect.objectContaining({ path: "upload.d64" }),
-        ]),
+        expect.arrayContaining([expect.objectContaining({ path: "upload.d64" })]),
         expect.anything(),
       );
     });

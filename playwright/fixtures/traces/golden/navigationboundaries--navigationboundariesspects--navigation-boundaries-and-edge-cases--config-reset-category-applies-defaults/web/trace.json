@@ -3315,14 +3315,7 @@
           "items": {
             "System Mode": {
               "selected": "PAL",
-              "options": [
-                "PAL",
-                "NTSC",
-                "PAL-60",
-                "NTSC-50",
-                "PAL-60/L",
-                "NTSC-50/L"
-              ]
+              "options": ["PAL", "NTSC", "PAL-60", "NTSC-50", "PAL-60/L", "NTSC-50/L"]
             },
             "Digital Video Mode": {
               "selected": "Auto",
@@ -3609,14 +3602,7 @@
           "items": {
             "System Mode": {
               "selected": "NTSC",
-              "options": [
-                "PAL",
-                "NTSC",
-                "PAL-60",
-                "NTSC-50",
-                "PAL-60/L",
-                "NTSC-50/L"
-              ]
+              "options": ["PAL", "NTSC", "PAL-60", "NTSC-50", "PAL-60/L", "NTSC-50/L"]
             },
             "Digital Video Mode": {
               "selected": "Auto",

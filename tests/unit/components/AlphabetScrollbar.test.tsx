@@ -10,11 +10,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { AlphabetScrollbar } from "@/components/lists/AlphabetScrollbar";
 
-const setScrollMetrics = (
-  element: HTMLElement,
-  scrollHeight: number,
-  clientHeight: number,
-) => {
+const setScrollMetrics = (element: HTMLElement, scrollHeight: number, clientHeight: number) => {
   Object.defineProperty(element, "scrollHeight", {
     value: scrollHeight,
     configurable: true,
@@ -27,11 +23,8 @@ const setScrollMetrics = (
 
 const createScrollContainer = () => {
   const container = document.createElement("div");
-  container.innerHTML =
-    '<div data-row-id="alpha"></div><div data-row-id="beta"></div>';
-  container
-    .querySelectorAll("[data-row-id]")
-    .forEach((node) => Object.assign(node, { scrollIntoView: vi.fn() }));
+  container.innerHTML = '<div data-row-id="alpha"></div><div data-row-id="beta"></div>';
+  container.querySelectorAll("[data-row-id]").forEach((node) => Object.assign(node, { scrollIntoView: vi.fn() }));
   return container;
 };
 
@@ -47,11 +40,7 @@ describe("AlphabetScrollbar", () => {
     ];
 
     render(
-      <AlphabetScrollbar
-        items={items}
-        scrollContainerRef={{ current: container }}
-        onLetterSelect={onLetterSelect}
-      />,
+      <AlphabetScrollbar items={items} scrollContainerRef={{ current: container }} onLetterSelect={onLetterSelect} />,
     );
 
     const touchArea = await screen.findByTestId("alphabet-touch-area");
@@ -85,12 +74,7 @@ describe("AlphabetScrollbar", () => {
       { id: "beta", title: "Beta" },
     ];
 
-    render(
-      <AlphabetScrollbar
-        items={items}
-        scrollContainerRef={{ current: container }}
-      />,
-    );
+    render(<AlphabetScrollbar items={items} scrollContainerRef={{ current: container }} />);
 
     await act(async () => {
       await Promise.resolve();
@@ -230,11 +214,7 @@ describe("AlphabetScrollbar", () => {
     ];
 
     render(
-      <AlphabetScrollbar
-        items={items}
-        scrollContainerRef={{ current: container }}
-        onScrollToIndex={onScrollToIndex}
-      />,
+      <AlphabetScrollbar items={items} scrollContainerRef={{ current: container }} onScrollToIndex={onScrollToIndex} />,
     );
 
     const touchArea = await screen.findByTestId("alphabet-touch-area");
@@ -264,11 +244,7 @@ describe("AlphabetScrollbar", () => {
     const items = [{ id: "alpha", title: "Alpha" }];
 
     render(
-      <AlphabetScrollbar
-        items={items}
-        scrollContainerRef={{ current: container }}
-        onLetterSelect={onLetterSelect}
-      />,
+      <AlphabetScrollbar items={items} scrollContainerRef={{ current: container }} onLetterSelect={onLetterSelect} />,
     );
 
     const touchArea = await screen.findByTestId("alphabet-touch-area");
@@ -360,12 +336,7 @@ describe("AlphabetScrollbar", () => {
     const container = document.createElement("div");
     setScrollMetrics(container, 100, 100); // not scrollable
 
-    render(
-      <AlphabetScrollbar
-        items={[]}
-        scrollContainerRef={{ current: container }}
-      />,
-    );
+    render(<AlphabetScrollbar items={[]} scrollContainerRef={{ current: container }} />);
 
     await act(async () => {
       await Promise.resolve();
@@ -393,12 +364,7 @@ describe("AlphabetScrollbar", () => {
     const container = createScrollContainer();
     setScrollMetrics(container, 1000, 100);
 
-    render(
-      <AlphabetScrollbar
-        items={[{ id: "alpha", title: "Alpha" }]}
-        scrollContainerRef={{ current: container }}
-      />,
-    );
+    render(<AlphabetScrollbar items={[{ id: "alpha", title: "Alpha" }]} scrollContainerRef={{ current: container }} />);
 
     await act(async () => {
       await Promise.resolve();
@@ -416,12 +382,7 @@ describe("AlphabetScrollbar", () => {
   });
 
   it("handles null scrollContainerRef gracefully", async () => {
-    render(
-      <AlphabetScrollbar
-        items={[{ id: "alpha", title: "Alpha" }]}
-        scrollContainerRef={{ current: null }}
-      />,
-    );
+    render(<AlphabetScrollbar items={[{ id: "alpha", title: "Alpha" }]} scrollContainerRef={{ current: null }} />);
 
     await act(async () => {
       await Promise.resolve();

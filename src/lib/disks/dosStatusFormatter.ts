@@ -34,8 +34,7 @@ const DOS_STATUS_BY_CODE: Record<number, DosStatusRule> = {
   1: {
     severity: "INFO",
     message: "FILES SCRATCHED",
-    details:
-      "Informational response after a scratch or delete command. It confirms file removal, not a failure.",
+    details: "Informational response after a scratch or delete command. It confirms file removal, not a failure.",
   },
   20: {
     severity: "ERROR",
@@ -76,8 +75,7 @@ const DOS_STATUS_BY_CODE: Record<number, DosStatusRule> = {
   26: {
     severity: "WARN",
     message: "WRITE PROTECT ON",
-    details:
-      "A write was attempted while write-protect is active. Disable protection, if intended, and retry.",
+    details: "A write was attempted while write-protect is active. Disable protection, if intended, and retry.",
   },
   27: {
     severity: "ERROR",
@@ -100,20 +98,17 @@ const DOS_STATUS_BY_CODE: Record<number, DosStatusRule> = {
   30: {
     severity: "ERROR",
     message: "SYNTAX ERROR (General Syntax)",
-    details:
-      "DOS could not parse the command structure. Verify command shape and argument count.",
+    details: "DOS could not parse the command structure. Verify command shape and argument count.",
   },
   31: {
     severity: "ERROR",
     message: "SYNTAX ERROR (Invalid Command)",
-    details:
-      "Command keyword is unknown or in the wrong position. Ensure a valid DOS command starts at character one.",
+    details: "Command keyword is unknown or in the wrong position. Ensure a valid DOS command starts at character one.",
   },
   32: {
     severity: "ERROR",
     message: "SYNTAX ERROR (Long Line)",
-    details:
-      "The command line exceeded DOS length limits. Shorten the command and retry.",
+    details: "The command line exceeded DOS length limits. Shorten the command and retry.",
   },
   33: {
     severity: "ERROR",
@@ -130,38 +125,32 @@ const DOS_STATUS_BY_CODE: Record<number, DosStatusRule> = {
   39: {
     severity: "ERROR",
     message: "SYNTAX ERROR (Invalid Command)",
-    details:
-      "Command channel content could not be resolved by DOS. Check spelling and command-channel syntax.",
+    details: "Command channel content could not be resolved by DOS. Check spelling and command-channel syntax.",
   },
   50: {
     severity: "ERROR",
     message: "RECORD NOT PRESENT",
-    details:
-      "A relative record read moved beyond end-of-file. Reposition before further INPUT# or GET# operations.",
+    details: "A relative record read moved beyond end-of-file. Reposition before further INPUT# or GET# operations.",
   },
   51: {
     severity: "ERROR",
     message: "OVERFLOW IN RECORD",
-    details:
-      "PRINT# output exceeded the configured record boundary, so trailing data was truncated.",
+    details: "PRINT# output exceeded the configured record boundary, so trailing data was truncated.",
   },
   52: {
     severity: "ERROR",
     message: "FILE TOO LARGE",
-    details:
-      "The relative record position would overflow available disk capacity. Reduce data size or free space.",
+    details: "The relative record position would overflow available disk capacity. Reduce data size or free space.",
   },
   60: {
     severity: "ERROR",
     message: "WRITE FILE OPEN",
-    details:
-      "A file still open for writing was accessed for reading. Close the writer handle before reading.",
+    details: "A file still open for writing was accessed for reading. Close the writer handle before reading.",
   },
   61: {
     severity: "ERROR",
     message: "FILE NOT OPEN",
-    details:
-      "The requested file or channel is not open in DOS. Open it first, then retry access.",
+    details: "The requested file or channel is not open in DOS. Open it first, then retry access.",
   },
   62: {
     severity: "ERROR",
@@ -171,8 +160,7 @@ const DOS_STATUS_BY_CODE: Record<number, DosStatusRule> = {
   63: {
     severity: "WARN",
     message: "FILE EXISTS",
-    details:
-      "Creation target already exists. Use another filename or rename the existing file.",
+    details: "Creation target already exists. Use another filename or rename the existing file.",
   },
   64: {
     severity: "ERROR",
@@ -188,20 +176,17 @@ const DOS_STATUS_BY_CODE: Record<number, DosStatusRule> = {
   66: {
     severity: "ERROR",
     message: "ILLEGAL TRACK AND SECTOR",
-    details:
-      "Access targeted a track or sector outside the active disk format.",
+    details: "Access targeted a track or sector outside the active disk format.",
   },
   67: {
     severity: "ERROR",
     message: "ILLEGAL SYSTEM T OR S",
-    details:
-      "DOS attempted to access a reserved system track or sector that is not valid for user data operations.",
+    details: "DOS attempted to access a reserved system track or sector that is not valid for user data operations.",
   },
   70: {
     severity: "ERROR",
     message: "NO CHANNEL (Available)",
-    details:
-      "All DOS channels are in use. Close unused channels or files and retry.",
+    details: "All DOS channels are in use. Close unused channels or files and retry.",
   },
   71: {
     severity: "ERROR",
@@ -224,8 +209,7 @@ const DOS_STATUS_BY_CODE: Record<number, DosStatusRule> = {
   74: {
     severity: "WARN",
     message: "DRIVE NOT READY",
-    details:
-      "The drive cannot access media because no disk is ready, present, or seated correctly.",
+    details: "The drive cannot access media because no disk is ready, present, or seated correctly.",
   },
 };
 
@@ -258,8 +242,7 @@ export const formatDiskDosStatus = (rawStatus: string): DiskDosStatus => {
       code,
       severity: "INFO",
       message: null,
-      details:
-        "DOS reserves status codes 2 through 19. They are unused in normal operation and should be ignored.",
+      details: "DOS reserves status codes 2 through 19. They are unused in normal operation and should be ignored.",
       raw: rawStatus,
     };
   }

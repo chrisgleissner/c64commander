@@ -7,10 +7,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  JsonMediaIndex,
-  LocalStorageMediaIndexStorage,
-} from "./localStorageMediaIndex";
+import { JsonMediaIndex, LocalStorageMediaIndexStorage } from "./localStorageMediaIndex";
 import type { MediaEntry, MediaIndexStorage } from "./mediaIndex";
 
 const STORAGE_KEY = "c64u_media_index:v1";
@@ -67,9 +64,7 @@ describe("LocalStorageMediaIndexStorage", () => {
     it("returns null when JSON parse fails", async () => {
       localStorageMock.getItem.mockReturnValue("invalid json");
 
-      const consoleWarnSpy = vi
-        .spyOn(console, "warn")
-        .mockImplementation(() => {});
+      const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
       const storage = new LocalStorageMediaIndexStorage();
       const result = await storage.read();
@@ -87,9 +82,7 @@ describe("LocalStorageMediaIndexStorage", () => {
       const snapshot = {
         version: 1 as const,
         updatedAt: "2024-01-01T00:00:00.000Z",
-        entries: [
-          { path: "/music/song.sid", name: "song.sid", type: "sid" as const },
-        ],
+        entries: [{ path: "/music/song.sid", name: "song.sid", type: "sid" as const }],
       };
       localStorageMock.getItem.mockReturnValue(JSON.stringify(snapshot));
 
@@ -122,18 +115,13 @@ describe("LocalStorageMediaIndexStorage", () => {
       const snapshot = {
         version: 1 as const,
         updatedAt: "2024-01-01T00:00:00.000Z",
-        entries: [
-          { path: "/music/song.sid", name: "song.sid", type: "sid" as const },
-        ],
+        entries: [{ path: "/music/song.sid", name: "song.sid", type: "sid" as const }],
       };
 
       const storage = new LocalStorageMediaIndexStorage();
       await storage.write(snapshot);
 
-      expect(localStorageMock.setItem).toHaveBeenCalledWith(
-        STORAGE_KEY,
-        JSON.stringify(snapshot),
-      );
+      expect(localStorageMock.setItem).toHaveBeenCalledWith(STORAGE_KEY, JSON.stringify(snapshot));
     });
   });
 });
@@ -196,16 +184,12 @@ describe("JsonMediaIndex", () => {
       const snapshot1 = {
         version: 1 as const,
         updatedAt: "2024-01-01T00:00:00.000Z",
-        entries: [
-          { path: "/music/song1.sid", name: "song1.sid", type: "sid" as const },
-        ],
+        entries: [{ path: "/music/song1.sid", name: "song1.sid", type: "sid" as const }],
       };
       const snapshot2 = {
         version: 1 as const,
         updatedAt: "2024-01-02T00:00:00.000Z",
-        entries: [
-          { path: "/music/song2.sid", name: "song2.sid", type: "sid" as const },
-        ],
+        entries: [{ path: "/music/song2.sid", name: "song2.sid", type: "sid" as const }],
       };
 
       readMock.mockResolvedValueOnce(snapshot1);
@@ -232,9 +216,7 @@ describe("JsonMediaIndex", () => {
       const index = new JsonMediaIndex(storage);
       await index.load();
 
-      const entries: MediaEntry[] = [
-        { path: "/music/song.sid", name: "song.sid", type: "sid" },
-      ];
+      const entries: MediaEntry[] = [{ path: "/music/song.sid", name: "song.sid", type: "sid" }];
       index.setEntries(entries);
 
       await index.save();
@@ -304,9 +286,7 @@ describe("JsonMediaIndex", () => {
       const snapshot = {
         version: 1 as const,
         updatedAt: "2024-01-01T00:00:00.000Z",
-        entries: [
-          { path: "/music/song.sid", name: "song.sid", type: "sid" as const },
-        ],
+        entries: [{ path: "/music/song.sid", name: "song.sid", type: "sid" as const }],
       };
       readMock.mockResolvedValue(snapshot);
 
@@ -354,9 +334,7 @@ describe("JsonMediaIndex", () => {
       const index = new JsonMediaIndex(storage);
       await index.load();
 
-      const entries1: MediaEntry[] = [
-        { path: "/music/song1.sid", name: "song1.sid", type: "sid" },
-      ];
+      const entries1: MediaEntry[] = [{ path: "/music/song1.sid", name: "song1.sid", type: "sid" }];
       index.setEntries(entries1);
 
       expect(index.getAll()).toHaveLength(1);

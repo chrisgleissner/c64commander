@@ -15,10 +15,6 @@ export const calculateHvscProgress = (
     return Math.max(0, Math.min(100, Math.floor(explicitPercent)));
   }
   if (processedCount === null || processedCount === undefined) return null;
-  if (totalCount === null || totalCount === undefined || totalCount <= 0)
-    return null;
-  return Math.max(
-    0,
-    Math.min(100, Math.floor((processedCount / totalCount) * 100)),
-  );
+  if (totalCount === null || totalCount === undefined || totalCount <= 0) return null;
+  return Math.max(0, Math.min(100, Math.floor((processedCount / totalCount) * 100)));
 };

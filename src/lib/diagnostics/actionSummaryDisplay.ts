@@ -8,19 +8,13 @@
 
 import { mapTargetDisplayLabel } from "@/lib/diagnostics/targetDisplayMapper";
 
-export const formatActionSummaryOrigin = (
-  origin?: string | null,
-  originalOrigin?: string | null,
-): string => {
+export const formatActionSummaryOrigin = (origin?: string | null, originalOrigin?: string | null): string => {
   const normalizedOrigin = origin ?? "unknown";
   if (!originalOrigin) return normalizedOrigin;
   return `${originalOrigin} → ${normalizedOrigin}`;
 };
 
-export const formatActionEffectTarget = (
-  target?: string | null,
-  product?: string | null,
-): string => {
+export const formatActionEffectTarget = (target?: string | null, product?: string | null): string => {
   return mapTargetDisplayLabel(target, product);
 };
 
@@ -35,27 +29,14 @@ export const formatActionEffectTarget = (
  *   < 100 h     → "{H}h{M}m"  e.g. "1h0m", "99h59m"
  *   ≥ 100 h     → "{H}h"      e.g. "100h"
  */
-export const formatTriggerDisplay = (trigger: {
-  kind: string;
-  name: string;
-  intervalMs?: number | null;
-}): string => {
+export const formatTriggerDisplay = (trigger: { kind: string; name: string; intervalMs?: number | null }): string => {
   const suffix = trigger.name !== trigger.kind ? ` (${trigger.name})` : "";
-  const interval =
-    trigger.intervalMs != null ? ` · ${trigger.intervalMs}ms` : "";
+  const interval = trigger.intervalMs != null ? ` · ${trigger.intervalMs}ms` : "";
   return `${trigger.kind}${suffix}${interval}`;
 };
 
-export const formatActionDuration = (
-  durationMs: number | null | undefined,
-): string => {
-  if (
-    durationMs === null ||
-    durationMs === undefined ||
-    !Number.isFinite(durationMs) ||
-    durationMs < 0
-  )
-    return "—";
+export const formatActionDuration = (durationMs: number | null | undefined): string => {
+  if (durationMs === null || durationMs === undefined || !Number.isFinite(durationMs) || durationMs < 0) return "—";
 
   if (durationMs < 999.5) {
     return `${Math.round(durationMs)}ms`;

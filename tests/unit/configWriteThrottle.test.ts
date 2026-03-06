@@ -7,10 +7,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  scheduleConfigWrite,
-  resetConfigWriteThrottle,
-} from "@/lib/config/configWriteThrottle";
+import { scheduleConfigWrite, resetConfigWriteThrottle } from "@/lib/config/configWriteThrottle";
 import { saveConfigWriteIntervalMs } from "@/lib/config/appSettings";
 import { addErrorLog } from "@/lib/logging";
 

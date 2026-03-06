@@ -107,25 +107,15 @@ const decodeSidAddressByte = (byte: number): number | null => {
   return address;
 };
 
-const getBytes = (buffer: Uint8Array | ArrayBuffer) =>
-  buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+const getBytes = (buffer: Uint8Array | ArrayBuffer) => (buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer));
 
-export const parseSidHeaderMetadata = (
-  buffer: Uint8Array | ArrayBuffer,
-): SidHeaderMetadata => {
+export const parseSidHeaderMetadata = (buffer: Uint8Array | ArrayBuffer): SidHeaderMetadata => {
   const bytes = getBytes(buffer);
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   if (view.byteLength < 124) {
-    throw new Error(
-      `Invalid SID header: expected at least 124 bytes, got ${view.byteLength}`,
-    );
+    throw new Error(`Invalid SID header: expected at least 124 bytes, got ${view.byteLength}`);
   }
-  const magic = String.fromCharCode(
-    view.getUint8(0),
-    view.getUint8(1),
-    view.getUint8(2),
-    view.getUint8(3),
-  );
+  const magic = String.fromCharCode(view.getUint8(0), view.getUint8(1), view.getUint8(2), view.getUint8(3));
   if (magic !== "PSID" && magic !== "RSID") {
     throw new Error(`Unsupported SID magic: ${magic}`);
   }
@@ -145,26 +135,20 @@ export const parseSidHeaderMetadata = (
   const author = decodeWindows1252(bytes.subarray(54, 86));
   const released = decodeWindows1252(bytes.subarray(86, 118));
 
-  const flags =
-    version >= 2 && view.byteLength >= 120 ? view.getUint16(118, false) : null;
+  const flags = version >= 2 && view.byteLength >= 120 ? view.getUint16(118, false) : null;
   const clockBits = flags !== null ? (flags >> 2) & 0b11 : 0;
   const sid1ModelBits = flags !== null ? (flags >> 4) & 0b11 : 0;
   const sid2ModelBits = flags !== null ? (flags >> 6) & 0b11 : 0;
   const sid3ModelBits = flags !== null ? (flags >> 8) & 0b11 : 0;
-  const sid2Adress =
-    version >= 3 && view.byteLength >= 123 ? view.getUint8(122) : null;
-  const sid3Adress =
-    version >= 4 && view.byteLength >= 124 ? view.getUint8(123) : null;
+  const sid2Adress = version >= 3 && view.byteLength >= 123 ? view.getUint8(122) : null;
+  const sid3Adress = version >= 4 && view.byteLength >= 124 ? view.getUint8(123) : null;
 
-  const sid2Address =
-    sid2Adress !== null ? decodeSidAddressByte(sid2Adress) : null;
-  const sid3Address =
-    sid3Adress !== null ? decodeSidAddressByte(sid3Adress) : null;
+  const sid2Address = sid2Adress !== null ? decodeSidAddressByte(sid2Adress) : null;
+  const sid3Address = sid3Adress !== null ? decodeSidAddressByte(sid3Adress) : null;
 
   const sid2Model = sid2Adress ? decodeSidModel(sid2ModelBits) : null;
   const sid3Model = sid3Adress ? decodeSidModel(sid3ModelBits) : null;
-  const sidChipCount =
-    1 + Number(Boolean(sid2Adress)) + Number(Boolean(sid3Adress));
+  const sidChipCount = 1 + Number(Boolean(sid2Adress)) + Number(Boolean(sid3Adress));
 
   const parserWarnings: string[] = [];
   let rsidValid: boolean | null = null;
@@ -206,15 +190,9 @@ export const parseSidHeaderMetadata = (
   };
 };
 
-export const buildSidTrackSubsongs = (
-  songs: number,
-  startSong: number,
-): SidTrackSubsong[] => {
+export const buildSidTrackSubsongs = (songs: number, startSong: number): SidTrackSubsong[] => {
   const totalSongs = Math.max(1, Math.floor(songs || 1));
-  const defaultSong = Math.min(
-    totalSongs,
-    Math.max(1, Math.floor(startSong || 1)),
-  );
+  const defaultSong = Math.min(totalSongs, Math.max(1, Math.floor(startSong || 1)));
   return Array.from({ length: totalSongs }, (_, index) => {
     const songNr = index + 1;
     return {
@@ -234,9 +212,7 @@ export const createSslPayload = (durationMs: number) => {
     throw new Error("Invalid SID duration: value must be finite milliseconds");
   }
   if (durationMs < 0) {
-    throw new Error(
-      "Invalid SID duration: value must be non-negative milliseconds",
-    );
+    throw new Error("Invalid SID duration: value must be non-negative milliseconds");
   }
   const totalSeconds = Math.floor(durationMs / 1000);
   const maxSeconds = 99 * 60 + 59;
@@ -245,8 +221,7 @@ export const createSslPayload = (durationMs: number) => {
   }
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
-  const bcd = (value: number) =>
-    ((Math.floor(value / 10) & 0xf) << 4) | (value % 10);
+  const bcd = (value: number) => ((Math.floor(value / 10) & 0xf) << 4) | (value % 10);
   return new Uint8Array([bcd(minutes), bcd(seconds)]);
 };
 
@@ -263,21 +238,14 @@ export const getSidSongCount = (buffer: ArrayBuffer) => {
   try {
     const view = new DataView(buffer);
     if (view.byteLength < 18) return 1;
-    const magic = String.fromCharCode(
-      view.getUint8(0),
-      view.getUint8(1),
-      view.getUint8(2),
-      view.getUint8(3),
-    );
+    const magic = String.fromCharCode(view.getUint8(0), view.getUint8(1), view.getUint8(2), view.getUint8(3));
     if (magic !== "PSID" && magic !== "RSID") return 1;
     const songs = view.getUint16(14, false);
     return songs > 0 ? songs : 1;
   } catch (error) {
     const isBuffer = buffer instanceof ArrayBuffer;
     const byteLength = isBuffer ? buffer.byteLength : 0;
-    const headerBytes = isBuffer
-      ? Array.from(new Uint8Array(buffer, 0, Math.min(4, buffer.byteLength)))
-      : [];
+    const headerBytes = isBuffer ? Array.from(new Uint8Array(buffer, 0, Math.min(4, buffer.byteLength))) : [];
     console.warn("Failed to read SID song count", {
       byteLength,
       headerBytes,

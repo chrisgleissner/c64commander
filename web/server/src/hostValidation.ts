@@ -5,8 +5,7 @@ const isPrivateIpv4 = (hostname: string) => {
   const match = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(hostname);
   if (!match) return false;
   const octets = match.slice(1).map((value) => Number(value));
-  if (octets.some((value) => Number.isNaN(value) || value < 0 || value > 255))
-    return false;
+  if (octets.some((value) => Number.isNaN(value) || value < 0 || value > 255)) return false;
   if (octets[0] === 10) return true;
   if (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) return true;
   if (octets[0] === 192 && octets[1] === 168) return true;
@@ -46,9 +45,7 @@ export const isTrustedInsecureHost = (hostValue: string) => {
   }
 
   const hostWithoutPort =
-    lower.includes(":") && lower.indexOf(":") === lower.lastIndexOf(":")
-      ? lower.split(":")[0]
-      : lower;
+    lower.includes(":") && lower.indexOf(":") === lower.lastIndexOf(":") ? lower.split(":")[0] : lower;
   return isPrivateIpv4(hostWithoutPort) || isPrivateIpv6(hostWithoutPort);
 };
 
@@ -70,9 +67,7 @@ export const sanitizeHost = (value: unknown): string | null => {
   const isValidHostname = (hostname: string) => {
     if (hostname.length > 253) return false;
     const labels = hostname.split(".");
-    return labels.every((label) =>
-      /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(label),
-    );
+    return labels.every((label) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(label));
   };
 
   const parsePort = (portValue: string) => {

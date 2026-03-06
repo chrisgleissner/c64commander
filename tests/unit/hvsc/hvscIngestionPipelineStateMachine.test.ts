@@ -7,10 +7,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  createArchivePipelineStateMachine,
-  type HvscPipelineState,
-} from "@/lib/hvsc/hvscIngestionPipeline";
+import { createArchivePipelineStateMachine, type HvscPipelineState } from "@/lib/hvsc/hvscIngestionPipeline";
 
 vi.mock("@/lib/logging", () => ({
   addErrorLog: vi.fn(),
@@ -51,25 +48,19 @@ describe("hvscIngestionPipeline state machine", () => {
 
   it("throws on illegal transition from IDLE to EXTRACTING", () => {
     const sm = createArchivePipelineStateMachine(params);
-    expect(() => sm.transition("EXTRACTING")).toThrow(
-      "Illegal HVSC pipeline transition IDLE -> EXTRACTING",
-    );
+    expect(() => sm.transition("EXTRACTING")).toThrow("Illegal HVSC pipeline transition IDLE -> EXTRACTING");
   });
 
   it("throws on backward transition", () => {
     const sm = createArchivePipelineStateMachine(params);
     sm.transition("DOWNLOADING");
-    expect(() => sm.transition("IDLE" as HvscPipelineState)).toThrow(
-      "Illegal HVSC pipeline transition",
-    );
+    expect(() => sm.transition("IDLE" as HvscPipelineState)).toThrow("Illegal HVSC pipeline transition");
   });
 
   it("throws on repeated transition to same state", () => {
     const sm = createArchivePipelineStateMachine(params);
     sm.transition("DOWNLOADING");
-    expect(() => sm.transition("DOWNLOADING")).toThrow(
-      "Illegal HVSC pipeline transition",
-    );
+    expect(() => sm.transition("DOWNLOADING")).toThrow("Illegal HVSC pipeline transition");
   });
 
   it("throws from terminal READY state", () => {
@@ -80,9 +71,7 @@ describe("hvscIngestionPipeline state machine", () => {
     sm.transition("EXTRACTED");
     sm.transition("INGESTING");
     sm.transition("READY");
-    expect(() => sm.transition("IDLE" as HvscPipelineState)).toThrow(
-      "Illegal HVSC pipeline transition",
-    );
+    expect(() => sm.transition("IDLE" as HvscPipelineState)).toThrow("Illegal HVSC pipeline transition");
   });
 
   it("accepts optional details on transition", () => {

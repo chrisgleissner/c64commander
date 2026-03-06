@@ -9,18 +9,9 @@
 import { listFtpDirectory, readFtpFile } from "@/lib/ftp/ftpClient";
 import { FtpClient } from "@/lib/native/ftpClient";
 import { withFtpInteraction } from "@/lib/deviceInteraction/deviceInteractionManager";
-import {
-  getActiveAction,
-  runWithImplicitAction,
-} from "@/lib/tracing/actionTrace";
-import {
-  recordFtpOperation,
-  recordTraceError,
-} from "@/lib/tracing/traceSession";
-import {
-  decrementFtpInFlight,
-  incrementFtpInFlight,
-} from "@/lib/diagnostics/diagnosticsActivity";
+import { getActiveAction, runWithImplicitAction } from "@/lib/tracing/actionTrace";
+import { recordFtpOperation, recordTraceError } from "@/lib/tracing/traceSession";
+import { decrementFtpInFlight, incrementFtpInFlight } from "@/lib/diagnostics/diagnosticsActivity";
 import { addErrorLog } from "@/lib/logging";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -35,9 +26,7 @@ vi.mock("@/lib/deviceInteraction/deviceInteractionManager", () => ({
 }));
 vi.mock("@/lib/tracing/actionTrace", () => ({
   getActiveAction: vi.fn(),
-  runWithImplicitAction: vi.fn(async (_name, fn) =>
-    fn({ id: "implicit-action" }),
-  ),
+  runWithImplicitAction: vi.fn(async (_name, fn) => fn({ id: "implicit-action" })),
 }));
 vi.mock("@/lib/tracing/traceSession");
 vi.mock("@/lib/diagnostics/diagnosticsActivity");
@@ -83,9 +72,7 @@ describe("ftpClient", () => {
       const error = new Error("FTP Error");
       vi.mocked(FtpClient.listDirectory).mockRejectedValue(error);
 
-      await expect(
-        listFtpDirectory({ ...mockListOptions, path: "/" }),
-      ).rejects.toThrow("FTP Error");
+      await expect(listFtpDirectory({ ...mockListOptions, path: "/" })).rejects.toThrow("FTP Error");
 
       expect(addErrorLog).toHaveBeenCalled();
       expect(recordTraceError).toHaveBeenCalled();
@@ -100,10 +87,7 @@ describe("ftpClient", () => {
       await listFtpDirectory({ ...mockListOptions });
 
       expect(runWithImplicitAction).not.toHaveBeenCalled();
-      expect(recordFtpOperation).toHaveBeenCalledWith(
-        mockAction,
-        expect.anything(),
-      );
+      expect(recordFtpOperation).toHaveBeenCalledWith(mockAction, expect.anything());
     });
   });
 

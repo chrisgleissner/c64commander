@@ -206,15 +206,7 @@
   "UltiSID Configuration": {
     "UltiSID 1 Filter Curve": {
       "value": "U2 High",
-      "options": [
-        "8580 Lo",
-        "8580 Hi",
-        "6581",
-        "6581 Alt",
-        "U2 Low",
-        "U2 Mid",
-        "U2 High"
-      ]
+      "options": ["8580 Lo", "8580 Hi", "6581", "6581 Alt", "U2 Low", "U2 Mid", "U2 High"]
     }
   },
   "Data Streams": {

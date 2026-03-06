@@ -31,17 +31,13 @@ const traceProgressTypes = new Set([
   "error",
 ]);
 
-export const readProgressSnapshot = async (
-  page: Page,
-): Promise<ProgressSnapshot> => {
+export const readProgressSnapshot = async (page: Page): Promise<ProgressSnapshot> => {
   const progressTypes = Array.from(traceProgressTypes);
   return page.evaluate((types) => {
     const traceProgressTypes = new Set(types);
     const route = location.pathname || "";
     const title = document.title || "";
-    const heading = Array.from(
-      document.querySelectorAll('h1,[data-testid="page-title"]'),
-    )
+    const heading = Array.from(document.querySelectorAll('h1,[data-testid="page-title"]'))
       .map((el) => (el.textContent || "").trim())
       .filter(Boolean)
       .slice(0, 3)
@@ -55,9 +51,7 @@ export const readProgressSnapshot = async (
     const navKey = `${window.history.length}:${historyState?.idx ?? ""}:${historyState?.key ?? ""}`;
 
     const traces =
-      (
-        window as Window & { __c64uTracing?: { getTraces?: () => any[] } }
-      ).__c64uTracing?.getTraces?.() ?? [];
+      (window as Window & { __c64uTracing?: { getTraces?: () => any[] } }).__c64uTracing?.getTraces?.() ?? [];
     let traceKey = "";
     const start = Math.max(0, traces.length - 40);
     for (let i = traces.length - 1; i >= start; i -= 1) {
@@ -86,9 +80,7 @@ export const readProgressSnapshot = async (
       const playing = context.playback?.isPlaying ? "playing" : "stopped";
       const currentItem = context.playback?.currentItemId ?? "";
       const queueLength =
-        typeof context.playback?.queueLength === "number"
-          ? String(context.playback?.queueLength)
-          : "";
+        typeof context.playback?.queueLength === "number" ? String(context.playback?.queueLength) : "";
       stateKey = `${deviceState}:${playing}:${currentItem}:${queueLength}`;
       break;
     }
@@ -102,10 +94,7 @@ export const readProgressSnapshot = async (
   }, progressTypes);
 };
 
-export const diffProgress = (
-  prev: ProgressSnapshot,
-  next: ProgressSnapshot,
-): ProgressDelta => ({
+export const diffProgress = (prev: ProgressSnapshot, next: ProgressSnapshot): ProgressDelta => ({
   screenChanged: prev.screenKey !== next.screenKey,
   navigationChanged: prev.navKey !== next.navKey,
   traceChanged: prev.traceKey !== next.traceKey,
@@ -113,7 +102,4 @@ export const diffProgress = (
 });
 
 export const hasMeaningfulProgress = (delta: ProgressDelta) =>
-  delta.screenChanged ||
-  delta.navigationChanged ||
-  delta.traceChanged ||
-  delta.stateChanged;
+  delta.screenChanged || delta.navigationChanged || delta.traceChanged || delta.stateChanged;

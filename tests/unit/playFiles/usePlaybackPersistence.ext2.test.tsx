@@ -11,10 +11,7 @@ import { renderHook, waitFor, act } from "@testing-library/react";
 import { useRef, useState } from "react";
 import { usePlaybackPersistence } from "@/pages/playFiles/hooks/usePlaybackPersistence";
 import type { PlayableEntry, PlaylistItem } from "@/pages/playFiles/types";
-import {
-  buildPlaylistStorageKey,
-  PLAYBACK_SESSION_KEY,
-} from "@/pages/playFiles/playFilesUtils";
+import { buildPlaylistStorageKey, PLAYBACK_SESSION_KEY } from "@/pages/playFiles/playFilesUtils";
 import { resetPlaylistDataRepositoryForTests } from "@/lib/playlistRepository";
 
 vi.mock("@/pages/playFiles/hooks/playbackPersistenceBudget", () => ({
@@ -178,9 +175,7 @@ describe("usePlaybackPersistence – edge cases", () => {
     // Store a JSON string that is not an object – this triggers line 221 branch
     sessionStorage.setItem("c64u_playback_session:v1", '"hello"');
 
-    const { result } = renderHook(() =>
-      usePlaybackHarness({ playlistStorageKey }),
-    );
+    const { result } = renderHook(() => usePlaybackHarness({ playlistStorageKey }));
 
     await waitFor(() => {
       expect(result.current.playlist).toHaveLength(1);
@@ -194,9 +189,7 @@ describe("usePlaybackPersistence – edge cases", () => {
     // Corrupt JSON as the primary key
     localStorage.setItem(playlistStorageKey, "{NOT_VALID_JSON}");
 
-    const { result } = renderHook(() =>
-      usePlaybackHarness({ playlistStorageKey }),
-    );
+    const { result } = renderHook(() => usePlaybackHarness({ playlistStorageKey }));
 
     await waitFor(() => {
       // Should complete without throwing; playlist is empty (no fallback data)
@@ -207,14 +200,9 @@ describe("usePlaybackPersistence – edge cases", () => {
   it("all parsed localStorage candidates have empty items → fallback to candidates[0]", async () => {
     const playlistStorageKey = buildPlaylistStorageKey("device-1");
     // Put an empty items array under the storage key
-    localStorage.setItem(
-      playlistStorageKey,
-      JSON.stringify({ items: [], currentIndex: -1 }),
-    );
+    localStorage.setItem(playlistStorageKey, JSON.stringify({ items: [], currentIndex: -1 }));
 
-    const { result } = renderHook(() =>
-      usePlaybackHarness({ playlistStorageKey }),
-    );
+    const { result } = renderHook(() => usePlaybackHarness({ playlistStorageKey }));
 
     await waitFor(() => {
       // Candidates[0] is used but has empty items, so playlist stays empty
@@ -254,9 +242,7 @@ describe("usePlaybackPersistence – edge cases", () => {
       }),
     );
 
-    const { result } = renderHook(() =>
-      usePlaybackHarness({ playlistStorageKey }),
-    );
+    const { result } = renderHook(() => usePlaybackHarness({ playlistStorageKey }));
 
     await waitFor(() => {
       expect(result.current.playlist).toHaveLength(1);
@@ -285,9 +271,7 @@ describe("usePlaybackPersistence – edge cases", () => {
       }),
     );
 
-    const { result } = renderHook(() =>
-      usePlaybackHarness({ playlistStorageKey }),
-    );
+    const { result } = renderHook(() => usePlaybackHarness({ playlistStorageKey }));
 
     await waitFor(() => {
       expect(result.current.playlist).toHaveLength(1);
@@ -314,10 +298,7 @@ describe("usePlaybackPersistence – edge cases", () => {
     };
     const playlistStorageKey = buildPlaylistStorageKey("device-1");
     // Storage key exists but has no items
-    localStorage.setItem(
-      playlistStorageKey,
-      JSON.stringify({ items: [], currentIndex: -1 }),
-    );
+    localStorage.setItem(playlistStorageKey, JSON.stringify({ items: [], currentIndex: -1 }));
 
     const { result } = renderHook(() =>
       usePlaybackHarness({
@@ -353,9 +334,7 @@ describe("usePlaybackPersistence – edge cases", () => {
       }),
     );
 
-    const { result } = renderHook(() =>
-      usePlaybackHarness({ playlistStorageKey }),
-    );
+    const { result } = renderHook(() => usePlaybackHarness({ playlistStorageKey }));
 
     await waitFor(() => {
       expect(result.current.playlist).toHaveLength(1);
@@ -404,19 +383,15 @@ describe("usePlaybackPersistence – edge cases", () => {
     // Spy on sessionStorage.setItem specifically (not Storage.prototype)
     // Capture the original prototype method before spying to avoid recursion
     const originalProtoSetItem = Storage.prototype.setItem;
-    const setItemSpy = vi
-      .spyOn(sessionStorage, "setItem")
-      .mockImplementation((key: string, value: string) => {
-        if (key === "c64u_playback_session:v1") {
-          throw new Error("Storage quota exceeded");
-        }
-        // Use prototype directly to avoid calling the spy again
-        originalProtoSetItem.call(sessionStorage, key, value);
-      });
+    const setItemSpy = vi.spyOn(sessionStorage, "setItem").mockImplementation((key: string, value: string) => {
+      if (key === "c64u_playback_session:v1") {
+        throw new Error("Storage quota exceeded");
+      }
+      // Use prototype directly to avoid calling the spy again
+      originalProtoSetItem.call(sessionStorage, key, value);
+    });
 
-    const { result } = renderHook(() =>
-      usePlaybackHarness({ playlistStorageKey }),
-    );
+    const { result } = renderHook(() => usePlaybackHarness({ playlistStorageKey }));
 
     await waitFor(() => {
       expect(result.current.playlist).toHaveLength(1);

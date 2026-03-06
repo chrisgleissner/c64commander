@@ -65,10 +65,7 @@ describe("sid volume control helpers", () => {
       ultiSid2: false,
     };
     const enabled = filterEnabledSidVolumeItems(items, enablement);
-    expect(enabled.map((item) => item.name)).toEqual([
-      "Vol UltiSid 1",
-      "Vol Socket 1",
-    ]);
+    expect(enabled.map((item) => item.name)).toEqual(["Vol UltiSid 1", "Vol Socket 1"]);
 
     const updates = buildEnabledSidVolumeUpdates(items, enablement, "-6 dB");
     expect(updates).toEqual({
@@ -112,23 +109,13 @@ describe("sid volume control helpers", () => {
       ultiSid2: false,
     };
     const snapshot = buildEnabledSidVolumeSnapshot(items, enablement);
-    const restoreFromSnapshot = buildEnabledSidRestoreUpdates(
-      items,
-      enablement,
-      snapshot,
-      null,
-    );
+    const restoreFromSnapshot = buildEnabledSidRestoreUpdates(items, enablement, snapshot, null);
     expect(restoreFromSnapshot).toEqual({
       "Vol Socket 1": " 0 dB",
       "Vol Socket 2": "-6 dB",
     });
 
-    const restoreFromFallback = buildEnabledSidRestoreUpdates(
-      items,
-      enablement,
-      null,
-      "+6 dB",
-    );
+    const restoreFromFallback = buildEnabledSidRestoreUpdates(items, enablement, null, "+6 dB");
     expect(restoreFromFallback).toEqual({
       "Vol Socket 1": "+6 dB",
       "Vol Socket 2": "+6 dB",
@@ -139,9 +126,7 @@ describe("sid volume control helpers", () => {
     const steps = buildSidVolumeSteps(options);
     expect(steps.length).toBeGreaterThan(0);
     expect(steps[0]?.isOff).toBe(true);
-    const numericSteps = steps.filter(
-      (step) => !step.isOff && step.numeric !== null,
-    );
+    const numericSteps = steps.filter((step) => !step.isOff && step.numeric !== null);
     expect(numericSteps[0]?.numeric).toBe(-6);
     expect(numericSteps[numericSteps.length - 1]?.numeric).toBe(6);
   });

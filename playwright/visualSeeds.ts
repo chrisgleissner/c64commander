@@ -256,19 +256,10 @@ export const installFixedClock = async (page: Page) => {
 export const installStableStorage = async (page: Page) => {
   await page.addInitScript(
     ({ playlist, disks, logs, hvscSummary, fixedNowIso }) => {
-      localStorage.setItem(
-        "c64u_playlist:v1:TEST-123",
-        JSON.stringify(playlist),
-      );
-      localStorage.setItem(
-        "c64u_playlist:v1:default",
-        JSON.stringify(playlist),
-      );
+      localStorage.setItem("c64u_playlist:v1:TEST-123", JSON.stringify(playlist));
+      localStorage.setItem("c64u_playlist:v1:default", JSON.stringify(playlist));
       localStorage.setItem("c64u_last_device_id", "TEST-123");
-      localStorage.setItem(
-        "c64u_disk_library:TEST-123",
-        JSON.stringify({ disks }),
-      );
+      localStorage.setItem("c64u_disk_library:TEST-123", JSON.stringify({ disks }));
       localStorage.setItem("c64u_app_logs", JSON.stringify(logs));
       localStorage.setItem("c64u_hvsc_status:v1", JSON.stringify(hvscSummary));
       localStorage.setItem("c64u_feature_flag:hvsc_enabled", "1");

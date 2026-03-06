@@ -13,20 +13,12 @@ const compact = (value: string): string => value.replace(/[^a-z0-9]+/g, "");
 const resolveMockLabel = (value?: string | null): "demo" | "sandbox" | null => {
   const normalized = compact((value ?? "").trim().toLowerCase());
   if (!normalized) return null;
-  if (
-    normalized === "mock" ||
-    normalized === "internalmock" ||
-    normalized === "demo"
-  )
-    return "demo";
-  if (normalized === "externalmock" || normalized === "sandbox")
-    return "sandbox";
+  if (normalized === "mock" || normalized === "internalmock" || normalized === "demo") return "demo";
+  if (normalized === "externalmock" || normalized === "sandbox") return "sandbox";
   return null;
 };
 
-const normalizeKnownProduct = (
-  value?: string | null,
-): "c64u" | "u64" | "u64e" | "u64e2" | null => {
+const normalizeKnownProduct = (value?: string | null): "c64u" | "u64" | "u64e" | "u64e2" | null => {
   const raw = (value ?? "").trim().toLowerCase();
   const normalized = compact(raw);
   if (!raw) return null;
@@ -40,20 +32,12 @@ const normalizeKnownProduct = (
   ) {
     return "u64e2";
   }
-  if (
-    normalized === "u64e" ||
-    normalized.includes("u64e") ||
-    normalized.includes("ultimate64elite")
-  )
-    return "u64e";
+  if (normalized === "u64e" || normalized.includes("u64e") || normalized.includes("ultimate64elite")) return "u64e";
   if (normalized === "u64" || normalized.includes("ultimate64")) return "u64";
   return null;
 };
 
-export const mapTargetDisplayLabel = (
-  targetType?: string | null,
-  product?: string | null,
-): string => {
+export const mapTargetDisplayLabel = (targetType?: string | null, product?: string | null): string => {
   const normalizedTargetType = (targetType ?? "").trim().toLowerCase();
   const mockLabelFromTarget = resolveMockLabel(normalizedTargetType);
   if (mockLabelFromTarget) return mockLabelFromTarget;
@@ -65,11 +49,7 @@ export const mapTargetDisplayLabel = (
     return normalizeKnownProduct(product) ?? "device";
   }
 
-  if (
-    KNOWN_PRODUCT_TOKENS.has(
-      normalizedTargetType as "c64u" | "u64" | "u64e" | "u64e2",
-    )
-  ) {
+  if (KNOWN_PRODUCT_TOKENS.has(normalizedTargetType as "c64u" | "u64" | "u64e" | "u64e2")) {
     return normalizedTargetType;
   }
 

@@ -40,10 +40,7 @@ describe("ramDumpFolderStore", () => {
   });
 
   it("returns null for invalid payload", () => {
-    localStorage.setItem(
-      "c64u_ram_dump_folder:v1",
-      JSON.stringify({ nope: true }),
-    );
+    localStorage.setItem("c64u_ram_dump_folder:v1", JSON.stringify({ nope: true }));
     expect(loadRamDumpFolderConfig()).toBeNull();
   });
 

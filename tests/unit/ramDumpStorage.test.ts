@@ -15,36 +15,34 @@ import {
   writeRamDumpToFolder,
 } from "@/lib/machine/ramDumpStorage";
 
-const { folderPickerMock, storeMock, platformMock, loggingMock, sidUtilsMock } =
-  vi.hoisted(() => ({
-    folderPickerMock: {
-      pickDirectory: vi.fn(),
-      pickFile: vi.fn(),
-      readFile: vi.fn(),
-      readFileFromTree: vi.fn(),
-      listChildren: vi.fn(),
-      getPersistedUris: vi.fn(),
-      writeFileToTree: vi.fn(),
-    },
-    storeMock: {
-      loadRamDumpFolderConfig: vi.fn(),
-      saveRamDumpFolderConfig: vi.fn(),
-      deriveRamDumpFolderDisplayPath: vi.fn(
-        (treeUri: string, rootName?: string | null) =>
-          rootName ? `Derived/${rootName}` : `Derived/${treeUri}`,
-      ),
-    },
-    platformMock: {
-      getPlatform: vi.fn(),
-      isNativePlatform: vi.fn(),
-    },
-    loggingMock: {
-      addErrorLog: vi.fn(),
-    },
-    sidUtilsMock: {
-      base64ToUint8: vi.fn((base64: string) => new Uint8Array([1, 2, 3])),
-    },
-  }));
+const { folderPickerMock, storeMock, platformMock, loggingMock, sidUtilsMock } = vi.hoisted(() => ({
+  folderPickerMock: {
+    pickDirectory: vi.fn(),
+    pickFile: vi.fn(),
+    readFile: vi.fn(),
+    readFileFromTree: vi.fn(),
+    listChildren: vi.fn(),
+    getPersistedUris: vi.fn(),
+    writeFileToTree: vi.fn(),
+  },
+  storeMock: {
+    loadRamDumpFolderConfig: vi.fn(),
+    saveRamDumpFolderConfig: vi.fn(),
+    deriveRamDumpFolderDisplayPath: vi.fn((treeUri: string, rootName?: string | null) =>
+      rootName ? `Derived/${rootName}` : `Derived/${treeUri}`,
+    ),
+  },
+  platformMock: {
+    getPlatform: vi.fn(),
+    isNativePlatform: vi.fn(),
+  },
+  loggingMock: {
+    addErrorLog: vi.fn(),
+  },
+  sidUtilsMock: {
+    base64ToUint8: vi.fn((base64: string) => new Uint8Array([1, 2, 3])),
+  },
+}));
 
 vi.mock("@/lib/native/folderPicker", () => ({
   FolderPicker: folderPickerMock,
@@ -63,10 +61,7 @@ describe("ramDumpStorage", () => {
   });
 
   it("builds RAM dump filename with context and sanitization", () => {
-    const name = buildRamDumpFileName(
-      new Date("2026-02-07T03:04:05Z"),
-      "My context!!",
-    );
+    const name = buildRamDumpFileName(new Date("2026-02-07T03:04:05Z"), "My context!!");
     expect(name).toBe("c64u-ram-2026-02-07T03-04-05Z-my-context.bin");
   });
 
@@ -105,24 +100,18 @@ describe("ramDumpStorage", () => {
 
   it("throws when selecting folder on non-native platform", async () => {
     platformMock.isNativePlatform.mockReturnValue(false);
-    await expect(selectRamDumpFolder()).rejects.toThrow(
-      "only supported on Android",
-    );
+    await expect(selectRamDumpFolder()).rejects.toThrow("only supported on Android");
   });
 
   it("throws when folder selection returns invalid result", async () => {
     folderPickerMock.pickDirectory.mockResolvedValue(null);
-    await expect(selectRamDumpFolder()).rejects.toThrow(
-      "permission could not be persisted",
-    );
+    await expect(selectRamDumpFolder()).rejects.toThrow("permission could not be persisted");
 
     folderPickerMock.pickDirectory.mockResolvedValue({
       treeUri: "uri",
       permissionPersisted: false,
     });
-    await expect(selectRamDumpFolder()).rejects.toThrow(
-      "permission could not be persisted",
-    );
+    await expect(selectRamDumpFolder()).rejects.toThrow("permission could not be persisted");
   });
 
   it("writes RAM dump file into selected folder", async () => {
@@ -151,9 +140,7 @@ describe("ramDumpStorage", () => {
   });
 
   it("logs and throws write errors", async () => {
-    folderPickerMock.writeFileToTree.mockRejectedValue(
-      new Error("Write failed"),
-    );
+    folderPickerMock.writeFileToTree.mockRejectedValue(new Error("Write failed"));
 
     await expect(
       writeRamDumpToFolder(
@@ -168,9 +155,7 @@ describe("ramDumpStorage", () => {
 
   it("throws writing on non-native platform", async () => {
     platformMock.isNativePlatform.mockReturnValue(false);
-    await expect(
-      writeRamDumpToFolder({} as any, "f", new Uint8Array()),
-    ).rejects.toThrow("only supported on Android");
+    await expect(writeRamDumpToFolder({} as any, "f", new Uint8Array())).rejects.toThrow("only supported on Android");
   });
 
   describe("pickRamDumpFile", () => {
@@ -236,9 +221,7 @@ describe("ramDumpStorage", () => {
       const file = new File(["123"], "test.bin", {
         type: "application/octet-stream",
       });
-      file.arrayBuffer = vi
-        .fn()
-        .mockResolvedValue(new Uint8Array([49, 50, 51]).buffer);
+      file.arrayBuffer = vi.fn().mockResolvedValue(new Uint8Array([49, 50, 51]).buffer);
       // Stub input element
       const inputMock = {
         click: vi.fn(),
@@ -281,9 +264,7 @@ describe("ramDumpStorage", () => {
       } as any;
       vi.spyOn(document, "createElement").mockReturnValue(inputMock);
 
-      await expect(pickRamDumpFile()).rejects.toThrow(
-        "No RAM dump file selected",
-      );
+      await expect(pickRamDumpFile()).rejects.toThrow("No RAM dump file selected");
     });
   });
 });

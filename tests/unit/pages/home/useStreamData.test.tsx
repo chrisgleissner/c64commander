@@ -66,11 +66,7 @@ describe("useStreamData", () => {
   // 1. Returns initial empty stream state
   it("returns initial empty stream state when no config data", () => {
     const { result } = renderHook(() =>
-      useStreamData(
-        defaultProps.isConnected,
-        defaultProps.configWritePending,
-        defaultProps.updateConfigValue,
-      ),
+      useStreamData(defaultProps.isConnected, defaultProps.configWritePending, defaultProps.updateConfigValue),
     );
 
     expect(result.current.streamControlEntries).toHaveLength(3);
@@ -83,11 +79,7 @@ describe("useStreamData", () => {
   it("handleStreamFieldChange updates draft", () => {
     withStreamConfig();
     const { result } = renderHook(() =>
-      useStreamData(
-        defaultProps.isConnected,
-        defaultProps.configWritePending,
-        defaultProps.updateConfigValue,
-      ),
+      useStreamData(defaultProps.isConnected, defaultProps.configWritePending, defaultProps.updateConfigValue),
     );
 
     act(() => {
@@ -105,11 +97,7 @@ describe("useStreamData", () => {
   it("handleStreamEditOpen populates drafts from entry", () => {
     withStreamConfig("192.168.1.10", "11000");
     const { result } = renderHook(() =>
-      useStreamData(
-        defaultProps.isConnected,
-        defaultProps.configWritePending,
-        defaultProps.updateConfigValue,
-      ),
+      useStreamData(defaultProps.isConnected, defaultProps.configWritePending, defaultProps.updateConfigValue),
     );
 
     act(() => {
@@ -128,11 +116,7 @@ describe("useStreamData", () => {
   it("handleStreamEditCancel resets draft to entry values", () => {
     withStreamConfig("192.168.1.10", "11000");
     const { result } = renderHook(() =>
-      useStreamData(
-        defaultProps.isConnected,
-        defaultProps.configWritePending,
-        defaultProps.updateConfigValue,
-      ),
+      useStreamData(defaultProps.isConnected, defaultProps.configWritePending, defaultProps.updateConfigValue),
     );
 
     act(() => {
@@ -158,11 +142,7 @@ describe("useStreamData", () => {
     withStreamConfig("192.168.1.10", "11000");
     mockStartStream.mockResolvedValue(undefined);
     const { result } = renderHook(() =>
-      useStreamData(
-        defaultProps.isConnected,
-        defaultProps.configWritePending,
-        defaultProps.updateConfigValue,
-      ),
+      useStreamData(defaultProps.isConnected, defaultProps.configWritePending, defaultProps.updateConfigValue),
     );
 
     await act(async () => {
@@ -177,11 +157,7 @@ describe("useStreamData", () => {
   it("handleStreamStart with invalid host shows error", async () => {
     withStreamConfig("192.168.1.10", "11000");
     const { result } = renderHook(() =>
-      useStreamData(
-        defaultProps.isConnected,
-        defaultProps.configWritePending,
-        defaultProps.updateConfigValue,
-      ),
+      useStreamData(defaultProps.isConnected, defaultProps.configWritePending, defaultProps.updateConfigValue),
     );
 
     act(() => {
@@ -206,11 +182,7 @@ describe("useStreamData", () => {
   it("handleStreamStart with invalid port shows error", async () => {
     withStreamConfig("192.168.1.10", "11000");
     const { result } = renderHook(() =>
-      useStreamData(
-        defaultProps.isConnected,
-        defaultProps.configWritePending,
-        defaultProps.updateConfigValue,
-      ),
+      useStreamData(defaultProps.isConnected, defaultProps.configWritePending, defaultProps.updateConfigValue),
     );
 
     act(() => {
@@ -222,9 +194,7 @@ describe("useStreamData", () => {
     });
 
     expect(mockStartStream).not.toHaveBeenCalled();
-    expect(mockReportUserError).toHaveBeenCalledWith(
-      expect.objectContaining({ operation: "STREAM_VALIDATE" }),
-    );
+    expect(mockReportUserError).toHaveBeenCalledWith(expect.objectContaining({ operation: "STREAM_VALIDATE" }));
     expect(result.current.streamEditorError).toBeTruthy();
   });
 
@@ -233,11 +203,7 @@ describe("useStreamData", () => {
     withStreamConfig();
     mockStopStream.mockResolvedValue(undefined);
     const { result } = renderHook(() =>
-      useStreamData(
-        defaultProps.isConnected,
-        defaultProps.configWritePending,
-        defaultProps.updateConfigValue,
-      ),
+      useStreamData(defaultProps.isConnected, defaultProps.configWritePending, defaultProps.updateConfigValue),
     );
 
     await act(async () => {
@@ -253,11 +219,7 @@ describe("useStreamData", () => {
     withStreamConfig();
     mockStopStream.mockRejectedValue(new Error("network failure"));
     const { result } = renderHook(() =>
-      useStreamData(
-        defaultProps.isConnected,
-        defaultProps.configWritePending,
-        defaultProps.updateConfigValue,
-      ),
+      useStreamData(defaultProps.isConnected, defaultProps.configWritePending, defaultProps.updateConfigValue),
     );
 
     await act(async () => {
@@ -277,11 +239,7 @@ describe("useStreamData", () => {
     withStreamConfig();
     mockStartStream.mockRejectedValue(new Error("connection refused"));
     const { result } = renderHook(() =>
-      useStreamData(
-        defaultProps.isConnected,
-        defaultProps.configWritePending,
-        defaultProps.updateConfigValue,
-      ),
+      useStreamData(defaultProps.isConnected, defaultProps.configWritePending, defaultProps.updateConfigValue),
     );
 
     await act(async () => {
@@ -300,11 +258,7 @@ describe("useStreamData", () => {
   it("handleStreamCommit with valid endpoint calls updateConfigValue", async () => {
     withStreamConfig("192.168.1.10", "11000");
     const { result } = renderHook(() =>
-      useStreamData(
-        defaultProps.isConnected,
-        defaultProps.configWritePending,
-        defaultProps.updateConfigValue,
-      ),
+      useStreamData(defaultProps.isConnected, defaultProps.configWritePending, defaultProps.updateConfigValue),
     );
 
     act(() => {
@@ -334,11 +288,7 @@ describe("useStreamData", () => {
   it("handleStreamCommit with invalid host returns false", async () => {
     withStreamConfig();
     const { result } = renderHook(() =>
-      useStreamData(
-        defaultProps.isConnected,
-        defaultProps.configWritePending,
-        defaultProps.updateConfigValue,
-      ),
+      useStreamData(defaultProps.isConnected, defaultProps.configWritePending, defaultProps.updateConfigValue),
     );
 
     act(() => {
@@ -367,11 +317,7 @@ describe("useStreamData", () => {
   it("handleStreamCommit with invalid port returns false", async () => {
     withStreamConfig();
     const { result } = renderHook(() =>
-      useStreamData(
-        defaultProps.isConnected,
-        defaultProps.configWritePending,
-        defaultProps.updateConfigValue,
-      ),
+      useStreamData(defaultProps.isConnected, defaultProps.configWritePending, defaultProps.updateConfigValue),
     );
 
     act(() => {
@@ -400,11 +346,7 @@ describe("useStreamData", () => {
   it("handleStreamCommit with parse error returns false", async () => {
     withStreamConfig();
     const { result } = renderHook(() =>
-      useStreamData(
-        defaultProps.isConnected,
-        defaultProps.configWritePending,
-        defaultProps.updateConfigValue,
-      ),
+      useStreamData(defaultProps.isConnected, defaultProps.configWritePending, defaultProps.updateConfigValue),
     );
 
     act(() => {
@@ -434,11 +376,7 @@ describe("useStreamData", () => {
   it("handleStreamStart with no matching entry returns early", async () => {
     withStreamConfig();
     const { result } = renderHook(() =>
-      useStreamData(
-        defaultProps.isConnected,
-        defaultProps.configWritePending,
-        defaultProps.updateConfigValue,
-      ),
+      useStreamData(defaultProps.isConnected, defaultProps.configWritePending, defaultProps.updateConfigValue),
     );
 
     await act(async () => {
@@ -452,11 +390,7 @@ describe("useStreamData", () => {
   it("handleStreamStop with no matching entry returns early", async () => {
     withStreamConfig();
     const { result } = renderHook(() =>
-      useStreamData(
-        defaultProps.isConnected,
-        defaultProps.configWritePending,
-        defaultProps.updateConfigValue,
-      ),
+      useStreamData(defaultProps.isConnected, defaultProps.configWritePending, defaultProps.updateConfigValue),
     );
 
     await act(async () => {
@@ -470,11 +404,7 @@ describe("useStreamData", () => {
   it("handleStreamEditOpen with no matching entry is a no-op", () => {
     withStreamConfig();
     const { result } = renderHook(() =>
-      useStreamData(
-        defaultProps.isConnected,
-        defaultProps.configWritePending,
-        defaultProps.updateConfigValue,
-      ),
+      useStreamData(defaultProps.isConnected, defaultProps.configWritePending, defaultProps.updateConfigValue),
     );
 
     act(() => {
@@ -488,11 +418,7 @@ describe("useStreamData", () => {
   it("handleStreamEditCancel keeps active editor when canceling a different key", () => {
     withStreamConfig();
     const { result } = renderHook(() =>
-      useStreamData(
-        defaultProps.isConnected,
-        defaultProps.configWritePending,
-        defaultProps.updateConfigValue,
-      ),
+      useStreamData(defaultProps.isConnected, defaultProps.configWritePending, defaultProps.updateConfigValue),
     );
 
     // Open 'vic' editor
@@ -512,18 +438,12 @@ describe("useStreamData", () => {
   it("handleStreamCommit with no matching entry returns false", async () => {
     withStreamConfig();
     const { result } = renderHook(() =>
-      useStreamData(
-        defaultProps.isConnected,
-        defaultProps.configWritePending,
-        defaultProps.updateConfigValue,
-      ),
+      useStreamData(defaultProps.isConnected, defaultProps.configWritePending, defaultProps.updateConfigValue),
     );
 
     let committed: boolean | undefined;
     await act(async () => {
-      committed = await result.current.handleStreamCommit(
-        "nonexistent" as StreamKey,
-      );
+      committed = await result.current.handleStreamCommit("nonexistent" as StreamKey);
     });
 
     expect(committed).toBe(false);

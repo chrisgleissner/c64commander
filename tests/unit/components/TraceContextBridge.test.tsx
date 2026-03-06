@@ -33,11 +33,7 @@ vi.mock("@/lib/tracing/traceBridge", () => ({
 }));
 
 import { TraceContextBridge } from "@/components/TraceContextBridge";
-import {
-  getTraceContextSnapshot,
-  setTracePlaybackContext,
-  setTraceUiContext,
-} from "@/lib/tracing/traceContext";
+import { getTraceContextSnapshot, setTracePlaybackContext, setTraceUiContext } from "@/lib/tracing/traceContext";
 import { setPlaybackTraceSnapshot } from "@/pages/playFiles/playbackTraceStore";
 
 describe("TraceContextBridge", () => {

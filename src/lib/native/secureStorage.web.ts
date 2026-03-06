@@ -25,10 +25,7 @@ const fetchJson = async <T>(url: string, options?: RequestInit): Promise<T> => {
   });
   if (!response.ok) {
     const payload = await response.json().catch(() => null);
-    throw new Error(
-      payload?.error ||
-        `Secure storage request failed: HTTP ${response.status}`,
-    );
+    throw new Error(payload?.error || `Secure storage request failed: HTTP ${response.status}`);
   }
   return response.json() as Promise<T>;
 };
@@ -39,8 +36,7 @@ const readOverride = () => {
   if (typeof window === "undefined" || !allowTestOverride()) {
     return { hasOverride: false, value: null };
   }
-  const override = (window as SecureStorageOverrideWindow)
-    .__c64uSecureStorageOverride;
+  const override = (window as SecureStorageOverrideWindow).__c64uSecureStorageOverride;
   if (!override || !("password" in override)) {
     return { hasOverride: false, value: null };
   }
@@ -66,12 +62,9 @@ export class SecureStorageWeb implements SecureStoragePlugin {
       return { value: override.value };
     }
     if (isWebPlatformServerMode()) {
-      const payload = await fetchJson<{ value: string | null }>(
-        "/api/secure-storage/password",
-        {
-          method: "GET",
-        },
-      );
+      const payload = await fetchJson<{ value: string | null }>("/api/secure-storage/password", {
+        method: "GET",
+      });
       storedPassword = payload.value ?? null;
       return { value: storedPassword };
     }

@@ -31,9 +31,7 @@ const mockFolderPicker = async (data: string) => {
 
 const mockFolderPickerTree = async (data: string) => {
   const { FolderPicker } = await import("@/lib/native/folderPicker");
-  (FolderPicker.readFileFromTree as ReturnType<typeof vi.fn>).mockResolvedValue(
-    { data },
-  );
+  (FolderPicker.readFileFromTree as ReturnType<typeof vi.fn>).mockResolvedValue({ data });
 };
 
 describe("fileLibraryUtils", () => {
@@ -46,28 +44,18 @@ describe("fileLibraryUtils", () => {
   });
 
   it("falls back to hvsc when hvsc source has no sourceId", () => {
-    expect(buildFileLibraryId("hvsc", "/MUSICIANS/test.sid")).toBe(
-      "hvsc:/MUSICIANS/test.sid",
-    );
-    expect(buildFileLibraryId("hvsc", "/MUSICIANS/test.sid", null)).toBe(
-      "hvsc:/MUSICIANS/test.sid",
-    );
+    expect(buildFileLibraryId("hvsc", "/MUSICIANS/test.sid")).toBe("hvsc:/MUSICIANS/test.sid");
+    expect(buildFileLibraryId("hvsc", "/MUSICIANS/test.sid", null)).toBe("hvsc:/MUSICIANS/test.sid");
   });
 
   it("falls back to local when local source has no sourceId", () => {
     expect(buildFileLibraryId("local", "/test.sid")).toBe("local:/test.sid");
-    expect(buildFileLibraryId("local", "/test.sid", null)).toBe(
-      "local:/test.sid",
-    );
+    expect(buildFileLibraryId("local", "/test.sid", null)).toBe("local:/test.sid");
   });
 
   it("builds local play files that read from FolderPicker", async () => {
     await mockFolderPicker(btoa("hello"));
-    const file = buildLocalPlayFileFromUri(
-      "demo.sid",
-      "/demo.sid",
-      "content://demo/sid",
-    );
+    const file = buildLocalPlayFileFromUri("demo.sid", "/demo.sid", "content://demo/sid");
     const buffer = await file.arrayBuffer();
     const text = new TextDecoder().decode(new Uint8Array(buffer));
 
@@ -78,11 +66,7 @@ describe("fileLibraryUtils", () => {
 
   it("builds local play files that read from SAF tree URIs", async () => {
     await mockFolderPickerTree(btoa("tree-data"));
-    const file = buildLocalPlayFileFromTree(
-      "demo.sid",
-      "/demo.sid",
-      "content://tree",
-    );
+    const file = buildLocalPlayFileFromTree("demo.sid", "/demo.sid", "content://tree");
     const buffer = await file.arrayBuffer();
     const text = new TextDecoder().decode(new Uint8Array(buffer));
 

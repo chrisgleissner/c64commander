@@ -10,14 +10,7 @@ describe("ConfigItemRow text input buffering", () => {
   it("keeps focus while typing and commits once on blur", () => {
     const onValueChange = vi.fn();
 
-    render(
-      <ConfigItemRow
-        category="Clock Settings"
-        name="Clock Year"
-        value="2025"
-        onValueChange={onValueChange}
-      />,
-    );
+    render(<ConfigItemRow category="Clock Settings" name="Clock Year" value="2025" onValueChange={onValueChange} />);
 
     const input = screen.getByLabelText("Clock Year text input");
     act(() => {
@@ -44,35 +37,18 @@ describe("ConfigItemRow text input buffering", () => {
     const onValueChange = vi.fn();
 
     const { rerender } = render(
-      <ConfigItemRow
-        category="Clock Settings"
-        name="Clock Year"
-        value="2025"
-        onValueChange={onValueChange}
-      />,
+      <ConfigItemRow category="Clock Settings" name="Clock Year" value="2025" onValueChange={onValueChange} />,
     );
 
-    const input = screen.getByLabelText(
-      "Clock Year text input",
-    ) as HTMLInputElement;
+    const input = screen.getByLabelText("Clock Year text input") as HTMLInputElement;
     act(() => {
       input.focus();
     });
     fireEvent.change(input, { target: { value: "202" } });
 
-    rerender(
-      <ConfigItemRow
-        category="Clock Settings"
-        name="Clock Year"
-        value="1999"
-        onValueChange={onValueChange}
-      />,
-    );
+    rerender(<ConfigItemRow category="Clock Settings" name="Clock Year" value="1999" onValueChange={onValueChange} />);
 
-    expect(
-      (screen.getByLabelText("Clock Year text input") as HTMLInputElement)
-        .value,
-    ).toBe("202");
+    expect((screen.getByLabelText("Clock Year text input") as HTMLInputElement).value).toBe("202");
     fireEvent.blur(screen.getByLabelText("Clock Year text input"));
     expect(onValueChange).toHaveBeenCalledWith("202");
   });
@@ -80,14 +56,7 @@ describe("ConfigItemRow text input buffering", () => {
   it("commits on Enter without per-character dispatch", () => {
     const onValueChange = vi.fn();
 
-    render(
-      <ConfigItemRow
-        category="Clock Settings"
-        name="Clock Year"
-        value="2025"
-        onValueChange={onValueChange}
-      />,
-    );
+    render(<ConfigItemRow category="Clock Settings" name="Clock Year" value="2025" onValueChange={onValueChange} />);
 
     const input = screen.getByLabelText("Clock Year text input");
     act(() => {

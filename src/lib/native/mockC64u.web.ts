@@ -23,8 +23,7 @@ export class MockC64UWeb implements MockC64UPlugin {
     if (override) {
       const url = new URL(override);
       const port = url.port ? Number(url.port) : 80;
-      const ftpPort = (window as Window & { __c64uMockServerFtpPort?: number })
-        .__c64uMockServerFtpPort;
+      const ftpPort = (window as Window & { __c64uMockServerFtpPort?: number }).__c64uMockServerFtpPort;
       return { baseUrl: override, port, ftpPort };
     }
     throw new Error("Mock C64U server is only available on native platforms.");

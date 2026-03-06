@@ -28,8 +28,7 @@ const isNativePlatform = () => {
   }
 };
 
-const normalizeBaseUrl = (baseUrl: string) =>
-  baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
+const normalizeBaseUrl = (baseUrl: string) => (baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
 
 const resolveHvscBaseUrl = (override?: string) => {
   if (override) return normalizeBaseUrl(override);
@@ -68,23 +67,17 @@ const fetchHvscIndex = async (baseUrl: string) => {
     if (response.status < 200 || response.status >= 300) {
       throw new Error(`HVSC release fetch failed: ${response.status}`);
     }
-    return typeof response.data === "string"
-      ? response.data
-      : JSON.stringify(response.data ?? "");
+    return typeof response.data === "string" ? response.data : JSON.stringify(response.data ?? "");
   }
 
   const response = await fetch(baseUrl, { cache: "no-store" });
   if (!response.ok) {
-    throw new Error(
-      `HVSC release fetch failed: ${response.status} ${response.statusText}`,
-    );
+    throw new Error(`HVSC release fetch failed: ${response.status} ${response.statusText}`);
   }
   return response.text();
 };
 
-export const fetchLatestHvscVersions = async (
-  baseUrl?: string,
-): Promise<HvscReleaseStatus> => {
+export const fetchLatestHvscVersions = async (baseUrl?: string): Promise<HvscReleaseStatus> => {
   const resolvedBaseUrl = resolveHvscBaseUrl(baseUrl);
   const html = await fetchHvscIndex(resolvedBaseUrl);
   const baselineRegex = /HVSC_(\d+)-all-of-them\.7z/gi;
@@ -96,12 +89,8 @@ export const fetchLatestHvscVersions = async (
     .map((match) => Number(match[1]))
     .filter((value) => Number.isFinite(value));
 
-  const baselineVersion = baselineVersions.length
-    ? Math.max(...baselineVersions)
-    : 0;
-  const updateVersion = updateVersions.length
-    ? Math.max(...updateVersions)
-    : baselineVersion;
+  const baselineVersion = baselineVersions.length ? Math.max(...baselineVersions) : 0;
+  const updateVersion = updateVersions.length ? Math.max(...updateVersions) : baselineVersion;
   return { baselineVersion, updateVersion, baseUrl: resolvedBaseUrl };
 };
 

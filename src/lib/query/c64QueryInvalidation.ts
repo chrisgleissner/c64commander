@@ -26,14 +26,7 @@ const routePrefixMap: Array<{
 }> = [
   {
     routePrefix: "/config",
-    prefixes: [
-      "c64-info",
-      "c64-categories",
-      "c64-category",
-      "c64-config-item",
-      "c64-config-items",
-      "c64-all-config",
-    ],
+    prefixes: ["c64-info", "c64-categories", "c64-category", "c64-config-item", "c64-config-items", "c64-all-config"],
   },
   {
     routePrefix: "/disks",
@@ -57,47 +50,31 @@ const routePrefixMap: Array<{
   },
 ];
 
-const uniquePrefixes = (prefixes: ReadonlyArray<C64QueryPrefix>) =>
-  Array.from(new Set(prefixes));
+const uniquePrefixes = (prefixes: ReadonlyArray<C64QueryPrefix>) => Array.from(new Set(prefixes));
 
-const invalidateByPrefix = (
-  queryClient: QueryClient,
-  prefixes: ReadonlyArray<C64QueryPrefix>,
-) => {
+const invalidateByPrefix = (queryClient: QueryClient, prefixes: ReadonlyArray<C64QueryPrefix>) => {
   uniquePrefixes(prefixes).forEach((prefix) => {
     queryClient.invalidateQueries({ queryKey: [prefix] });
   });
 };
 
-export const getRouteInvalidationPrefixes = (
-  pathname: string,
-): ReadonlyArray<C64QueryPrefix> => {
+export const getRouteInvalidationPrefixes = (pathname: string): ReadonlyArray<C64QueryPrefix> => {
   const normalizedPath = pathname.trim() || "/";
   const matchedEntry = routePrefixMap.find(({ routePrefix }) =>
-    routePrefix === "/"
-      ? normalizedPath === "/"
-      : normalizedPath.startsWith(routePrefix),
+    routePrefix === "/" ? normalizedPath === "/" : normalizedPath.startsWith(routePrefix),
   );
   return matchedEntry?.prefixes ?? ["c64-info"];
 };
 
-export const invalidateForRouteChange = (
-  queryClient: QueryClient,
-  pathname: string,
-) => {
+export const invalidateForRouteChange = (queryClient: QueryClient, pathname: string) => {
   invalidateByPrefix(queryClient, getRouteInvalidationPrefixes(pathname));
 };
 
-export const invalidateForVisibilityResume = (
-  queryClient: QueryClient,
-  pathname: string,
-) => {
+export const invalidateForVisibilityResume = (queryClient: QueryClient, pathname: string) => {
   invalidateByPrefix(queryClient, getRouteInvalidationPrefixes(pathname));
 };
 
-export const invalidateForConnectionSettingsChange = (
-  queryClient: QueryClient,
-) => {
+export const invalidateForConnectionSettingsChange = (queryClient: QueryClient) => {
   invalidateByPrefix(queryClient, connectionSettingsPrefixes);
 };
 

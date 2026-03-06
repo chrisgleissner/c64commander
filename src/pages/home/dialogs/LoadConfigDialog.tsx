@@ -22,13 +22,7 @@ interface LoadConfigDialogProps {
   applyingConfigId: string | null;
 }
 
-export function LoadConfigDialog({
-  open,
-  onOpenChange,
-  configs,
-  onLoad,
-  applyingConfigId,
-}: LoadConfigDialogProps) {
+export function LoadConfigDialog({ open, onOpenChange, configs, onLoad, applyingConfigId }: LoadConfigDialogProps) {
   const isApplying = applyingConfigId !== null;
 
   return (
@@ -36,15 +30,11 @@ export function LoadConfigDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Load from App</DialogTitle>
-          <DialogDescription>
-            Select a saved configuration to apply to the C64U.
-          </DialogDescription>
+          <DialogDescription>Select a saved configuration to apply to the C64U.</DialogDescription>
         </DialogHeader>
         <div className="space-y-2 max-h-[60vh] overflow-y-auto">
           {configs.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No saved configurations yet.
-            </p>
+            <p className="text-sm text-muted-foreground">No saved configurations yet.</p>
           ) : (
             configs.map((config) => (
               <Button

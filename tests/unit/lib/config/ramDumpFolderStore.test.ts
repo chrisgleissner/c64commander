@@ -24,39 +24,25 @@ describe("ramDumpFolderStore", () => {
   describe("deriveRamDumpFolderDisplayPath", () => {
     it("returns fallback if treeUri is empty", () => {
       expect(deriveRamDumpFolderDisplayPath("", "fallback")).toBe("fallback");
-      expect(deriveRamDumpFolderDisplayPath("   ", "fallback")).toBe(
-        "fallback",
-      );
-      expect(deriveRamDumpFolderDisplayPath(null as any, "fallback")).toBe(
-        "fallback",
-      );
+      expect(deriveRamDumpFolderDisplayPath("   ", "fallback")).toBe("fallback");
+      expect(deriveRamDumpFolderDisplayPath(null as any, "fallback")).toBe("fallback");
     });
 
     it("handles primary volume paths", () => {
-      expect(deriveRamDumpFolderDisplayPath("tree/primary:foo/bar")).toBe(
-        "Internal storage/foo/bar",
-      );
-      expect(deriveRamDumpFolderDisplayPath("tree/primary:foo\\bar")).toBe(
-        "Internal storage/foo/bar",
-      );
+      expect(deriveRamDumpFolderDisplayPath("tree/primary:foo/bar")).toBe("Internal storage/foo/bar");
+      expect(deriveRamDumpFolderDisplayPath("tree/primary:foo\\bar")).toBe("Internal storage/foo/bar");
     });
 
     it("handles other volume IDs", () => {
-      expect(deriveRamDumpFolderDisplayPath("tree/ABCD-1234:stuff")).toBe(
-        "ABCD-1234/stuff",
-      );
+      expect(deriveRamDumpFolderDisplayPath("tree/ABCD-1234:stuff")).toBe("ABCD-1234/stuff");
     });
 
     it("normalizes slashes", () => {
-      expect(deriveRamDumpFolderDisplayPath("tree/primary:a//b")).toBe(
-        "Internal storage/a/b",
-      );
+      expect(deriveRamDumpFolderDisplayPath("tree/primary:a//b")).toBe("Internal storage/a/b");
     });
 
     it("decodes URI components", () => {
-      expect(deriveRamDumpFolderDisplayPath("tree/primary:My%20Folder")).toBe(
-        "Internal storage/My Folder",
-      );
+      expect(deriveRamDumpFolderDisplayPath("tree/primary:My%20Folder")).toBe("Internal storage/My Folder");
     });
 
     it("handles malformed URIs", () => {
@@ -68,20 +54,14 @@ describe("ramDumpFolderStore", () => {
       // "primary%" match('tree/...') -> null.
       // returns fallback.
 
-      expect(deriveRamDumpFolderDisplayPath("tree/primary%", "fallback")).toBe(
-        "primary%/fallback",
-      );
+      expect(deriveRamDumpFolderDisplayPath("tree/primary%", "fallback")).toBe("primary%/fallback");
     });
 
     it("handles volume with colon-only path (BRDA:57 FALSE — normalizedPath empty, no fallback)", () => {
       // treeUri matches tree/primary: → treeId='primary:', parts=['primary',''], rawPath=''
       // normalizedPath is empty, fallback (rootName) is null → returns volumeLabel only
-      expect(
-        deriveRamDumpFolderDisplayPath("content://tree/primary:", null),
-      ).toBe("Internal storage");
-      expect(deriveRamDumpFolderDisplayPath("content://tree/primary:")).toBe(
-        "Internal storage",
-      );
+      expect(deriveRamDumpFolderDisplayPath("content://tree/primary:", null)).toBe("Internal storage");
+      expect(deriveRamDumpFolderDisplayPath("content://tree/primary:")).toBe("Internal storage");
     });
   });
 
@@ -104,9 +84,7 @@ describe("ramDumpFolderStore", () => {
     });
 
     it("returns null if config is valid JSON but invalid structure", () => {
-      vi.mocked(localStorage.getItem).mockReturnValue(
-        JSON.stringify({ bad: "data" }),
-      );
+      vi.mocked(localStorage.getItem).mockReturnValue(JSON.stringify({ bad: "data" }));
       expect(loadRamDumpFolderConfig()).toBeNull();
     });
 
@@ -169,10 +147,7 @@ describe("ramDumpFolderStore", () => {
 
       saveRamDumpFolderConfig(config);
 
-      expect(localStorage.setItem).toHaveBeenCalledWith(
-        "c64u_ram_dump_folder:v1",
-        JSON.stringify(config),
-      );
+      expect(localStorage.setItem).toHaveBeenCalledWith("c64u_ram_dump_folder:v1", JSON.stringify(config));
       expect(window.dispatchEvent).toHaveBeenCalled();
 
       vi.unstubAllGlobals();
@@ -194,9 +169,7 @@ describe("ramDumpFolderStore", () => {
 
       clearRamDumpFolderConfig();
 
-      expect(localStorage.removeItem).toHaveBeenCalledWith(
-        "c64u_ram_dump_folder:v1",
-      );
+      expect(localStorage.removeItem).toHaveBeenCalledWith("c64u_ram_dump_folder:v1");
       expect(window.dispatchEvent).toHaveBeenCalled();
 
       vi.unstubAllGlobals();

@@ -7,10 +7,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import {
-  formatDiagnosticsTimestamp,
-  splitDiagnosticsTimestamp,
-} from "@/lib/diagnostics/timeFormat";
+import { formatDiagnosticsTimestamp, splitDiagnosticsTimestamp } from "@/lib/diagnostics/timeFormat";
 
 describe("diagnostics time formatting", () => {
   it("formats the same timestamp across input types", () => {

@@ -12,12 +12,7 @@ import { createMockC64Server } from "../tests/mocks/mockC64Server";
 import type { TraceEvent } from "../src/lib/tracing/types";
 import { seedUiMocks } from "./uiMocks";
 import { saveCoverageFromPage } from "./withCoverage";
-import {
-  assertNoUiIssues,
-  attachStepScreenshot,
-  finalizeEvidence,
-  startStrictUiMonitoring,
-} from "./testArtifacts";
+import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from "./testArtifacts";
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
@@ -25,10 +20,7 @@ const snap = async (page: Page, testInfo: TestInfo, label: string) => {
 
 const waitForTracing = async (page: Page) => {
   await page.waitForFunction(() =>
-    Boolean(
-      (window as Window & { __c64uTracing?: { seedTraces?: unknown } })
-        .__c64uTracing?.seedTraces,
-    ),
+    Boolean((window as Window & { __c64uTracing?: { seedTraces?: unknown } }).__c64uTracing?.seedTraces),
   );
 };
 
@@ -51,9 +43,7 @@ test.describe("Diagnostics Actions tab", () => {
     }
   });
 
-  test("shows action summaries with badges and details", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("shows action summaries with badges and details", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/settings", { waitUntil: "domcontentloaded" });
     await snap(page, testInfo, "settings-open");
 
@@ -63,10 +53,7 @@ test.describe("Diagnostics Actions tab", () => {
       const tracing = (
         window as Window & {
           __c64uTracing?: {
-            resetTraceSession?: (
-              eventIdStart?: number,
-              correlationIdStart?: number,
-            ) => void;
+            resetTraceSession?: (eventIdStart?: number, correlationIdStart?: number) => void;
           };
         }
       ).__c64uTracing;
@@ -183,12 +170,8 @@ test.describe("Diagnostics Actions tab", () => {
     }, events);
 
     // Open the diagnostics dialog
-    await page
-      .getByRole("button", { name: "Diagnostics", exact: true })
-      .click();
-    await expect(
-      page.getByRole("dialog", { name: "Diagnostics" }),
-    ).toBeVisible();
+    await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "Diagnostics" })).toBeVisible();
     await snap(page, testInfo, "diagnostics-open");
 
     // Navigate to Actions tab
@@ -198,37 +181,18 @@ test.describe("Diagnostics Actions tab", () => {
     await expect(page.getByTestId("action-summary-COR-0900")).toBeVisible();
 
     // Verify badge counts
-    await expect(page.getByTestId("action-rest-count-COR-0900")).toHaveText(
-      "REST×1",
-    );
-    await expect(page.getByTestId("action-ftp-count-COR-0900")).toHaveText(
-      "FTP×1",
-    );
-    await expect(page.getByTestId("action-error-count-COR-0900")).toHaveText(
-      "ERR×1",
-    );
+    await expect(page.getByTestId("action-rest-count-COR-0900")).toHaveText("REST×1");
+    await expect(page.getByTestId("action-ftp-count-COR-0900")).toHaveText("FTP×1");
+    await expect(page.getByTestId("action-error-count-COR-0900")).toHaveText("ERR×1");
     await snap(page, testInfo, "actions-tab");
 
     // Expand the action details
-    await page
-      .getByTestId("action-summary-COR-0900")
-      .locator("summary")
-      .click();
-    await expect(
-      page.getByTestId("action-rest-effect-COR-0900-0"),
-    ).toBeVisible();
-    await expect(
-      page.getByTestId("action-ftp-effect-COR-0900-0"),
-    ).toBeVisible();
-    await expect(
-      page.getByTestId("action-error-effect-COR-0900-0"),
-    ).toBeVisible();
-    await expect(page.getByTestId("action-rest-effect-COR-0900-1")).toHaveCount(
-      0,
-    );
-    await expect(page.getByTestId("action-ftp-effect-COR-0900-1")).toHaveCount(
-      0,
-    );
+    await page.getByTestId("action-summary-COR-0900").locator("summary").click();
+    await expect(page.getByTestId("action-rest-effect-COR-0900-0")).toBeVisible();
+    await expect(page.getByTestId("action-ftp-effect-COR-0900-0")).toBeVisible();
+    await expect(page.getByTestId("action-error-effect-COR-0900-0")).toBeVisible();
+    await expect(page.getByTestId("action-rest-effect-COR-0900-1")).toHaveCount(0);
+    await expect(page.getByTestId("action-ftp-effect-COR-0900-1")).toHaveCount(0);
     await expect(page.getByText("No REST effects.")).toHaveCount(0);
     await expect(page.getByText("No FTP effects.")).toHaveCount(0);
     await snap(page, testInfo, "actions-expanded");
@@ -244,10 +208,7 @@ test.describe("Diagnostics Actions tab", () => {
       const tracing = (
         window as Window & {
           __c64uTracing?: {
-            resetTraceSession?: (
-              eventIdStart?: number,
-              correlationIdStart?: number,
-            ) => void;
+            resetTraceSession?: (eventIdStart?: number, correlationIdStart?: number) => void;
           };
         }
       ).__c64uTracing;
@@ -405,36 +366,17 @@ test.describe("Diagnostics Actions tab", () => {
       });
     }, events);
 
-    await page
-      .getByRole("button", { name: "Diagnostics", exact: true })
-      .click();
-    await expect(
-      page.getByRole("dialog", { name: "Diagnostics" }),
-    ).toBeVisible();
+    await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "Diagnostics" })).toBeVisible();
     await page.getByRole("tab", { name: "Actions" }).click();
 
-    await page
-      .getByTestId("action-summary-COR-0700")
-      .locator("summary")
-      .click();
-    await page
-      .getByTestId("action-summary-COR-0710")
-      .locator("summary")
-      .click();
-    await page
-      .getByTestId("action-summary-COR-0720")
-      .locator("summary")
-      .click();
+    await page.getByTestId("action-summary-COR-0700").locator("summary").click();
+    await page.getByTestId("action-summary-COR-0710").locator("summary").click();
+    await page.getByTestId("action-summary-COR-0720").locator("summary").click();
 
-    await expect(
-      page.getByTestId("action-rest-effect-COR-0700-0"),
-    ).toContainText("target: demo");
-    await expect(
-      page.getByTestId("action-rest-effect-COR-0710-0"),
-    ).toContainText("target: sandbox");
-    await expect(
-      page.getByTestId("action-rest-effect-COR-0720-0"),
-    ).toContainText("target: device");
+    await expect(page.getByTestId("action-rest-effect-COR-0700-0")).toContainText("target: demo");
+    await expect(page.getByTestId("action-rest-effect-COR-0710-0")).toContainText("target: sandbox");
+    await expect(page.getByTestId("action-rest-effect-COR-0720-0")).toContainText("target: device");
     await expect(page.getByText(/target:\s*mock\b/i)).toHaveCount(0);
     await snap(page, testInfo, "actions-target-labels");
   });

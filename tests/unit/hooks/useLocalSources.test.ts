@@ -32,9 +32,7 @@ describe("useLocalSources", () => {
   });
 
   it("initializes with stored sources", () => {
-    vi.mocked(loadLocalSources).mockReturnValue([
-      { id: "stored", name: "Stored" },
-    ] as any);
+    vi.mocked(loadLocalSources).mockReturnValue([{ id: "stored", name: "Stored" }] as any);
     const { result } = renderHook(() => useLocalSources());
     expect(result.current.sources).toHaveLength(1);
     expect(result.current.sources[0].id).toBe("stored");

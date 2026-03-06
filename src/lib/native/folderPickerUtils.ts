@@ -16,8 +16,7 @@ type FolderEntryCandidate = {
   webkitRelativePath?: string;
 };
 
-const normalizePath = (value: string) =>
-  value.startsWith("/") ? value : `/${value}`;
+const normalizePath = (value: string) => (value.startsWith("/") ? value : `/${value}`);
 
 const toPickedFolderEntry = (value: unknown): PickedFolderEntry | null => {
   if (!value || typeof value !== "object") return null;
@@ -42,17 +41,12 @@ const isArrayLike = (value: unknown): value is ArrayLike<PickedFolderEntry> =>
 
 const isIterable = (value: unknown): value is Iterable<PickedFolderEntry> =>
   Boolean(
-    value &&
-    typeof value === "object" &&
-    typeof (value as Iterable<PickedFolderEntry>)[Symbol.iterator] ===
-      "function",
+    value && typeof value === "object" && typeof (value as Iterable<PickedFolderEntry>)[Symbol.iterator] === "function",
   );
 
 const normalizeEntries = (entries: unknown[]): PickedFolderEntry[] | null => {
   if (!entries.length) return [];
-  const normalized = entries
-    .map(toPickedFolderEntry)
-    .filter((entry): entry is PickedFolderEntry => Boolean(entry));
+  const normalized = entries.map(toPickedFolderEntry).filter((entry): entry is PickedFolderEntry => Boolean(entry));
   if (!normalized.length) return null;
   return normalized;
 };
@@ -68,17 +62,14 @@ const entriesFromObject = (value: object): PickedFolderEntry[] | null => {
   return normalizeEntries(values);
 };
 
-export const coerceFolderPickerEntries = (
-  files: unknown,
-): PickedFolderEntry[] | null => {
+export const coerceFolderPickerEntries = (files: unknown): PickedFolderEntry[] | null => {
   if (!files) return [];
   if (Array.isArray(files)) return normalizeEntries(files);
   if (typeof files === "string") {
     try {
       const parsed = JSON.parse(files) as unknown;
       if (Array.isArray(parsed)) return normalizeEntries(parsed);
-      if (parsed && typeof parsed === "object")
-        return entriesFromObject(parsed as object);
+      if (parsed && typeof parsed === "object") return entriesFromObject(parsed as object);
     } catch (error) {
       console.warn("Failed to parse folder picker entries", { error });
       return null;

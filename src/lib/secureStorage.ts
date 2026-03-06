@@ -14,8 +14,7 @@ let cachedPassword: string | null = null;
 let passwordLoaded = false;
 let passwordLoadPromise: Promise<string | null> | null = null;
 
-export const hasStoredPasswordFlag = () =>
-  localStorage.getItem(HAS_PASSWORD_KEY) === "1";
+export const hasStoredPasswordFlag = () => localStorage.getItem(HAS_PASSWORD_KEY) === "1";
 
 const setHasPasswordFlag = (value: boolean) => {
   if (value) {

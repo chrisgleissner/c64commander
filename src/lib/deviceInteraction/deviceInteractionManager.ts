@@ -59,9 +59,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const isTestEnv = () => {
   if (typeof import.meta !== "undefined") {
-    const env = (import.meta as ImportMeta).env as
-      | { VITE_ENABLE_TEST_PROBES?: string }
-      | undefined;
+    const env = (import.meta as ImportMeta).env as { VITE_ENABLE_TEST_PROBES?: string } | undefined;
     if (env?.VITE_ENABLE_TEST_PROBES === "1") return true;
   }
   if (typeof window !== "undefined") {
@@ -69,11 +67,7 @@ const isTestEnv = () => {
     if (win.__c64uTestProbeEnabled) return true;
   }
   if (typeof process !== "undefined") {
-    if (
-      process.env.VITEST === "true" ||
-      process.env.NODE_ENV === "test" ||
-      process.env.PLAYWRIGHT === "1"
-    ) {
+    if (process.env.VITEST === "true" || process.env.NODE_ENV === "test" || process.env.PLAYWRIGHT === "1") {
       return true;
     }
   }
@@ -82,10 +76,7 @@ const isTestEnv = () => {
 
 class InteractionScheduler {
   private running = 0;
-  private readonly queues: Record<
-    InteractionIntent,
-    Array<QueueTask<unknown>>
-  > = {
+  private readonly queues: Record<InteractionIntent, Array<QueueTask<unknown>>> = {
     user: [],
     system: [],
     background: [],
@@ -108,8 +99,7 @@ class InteractionScheduler {
   private takeNext(): QueueTask<unknown> | null {
     if (this.queues.user.length) return this.queues.user.shift() ?? null;
     if (this.queues.system.length) return this.queues.system.shift() ?? null;
-    if (this.queues.background.length)
-      return this.queues.background.shift() ?? null;
+    if (this.queues.background.length) return this.queues.background.shift() ?? null;
     return null;
   }
 
@@ -202,13 +192,9 @@ const isCriticalRestError = (error: Error) => {
 };
 
 const computeBackoff = (streak: number) => {
-  if (config.backoffBaseMs <= 0 || config.backoffMaxMs <= 0 || streak <= 0)
-    return 0;
+  if (config.backoffBaseMs <= 0 || config.backoffMaxMs <= 0 || streak <= 0) return 0;
   const factor = Math.max(1, config.backoffFactor);
-  const backoff = Math.min(
-    config.backoffMaxMs,
-    Math.round(config.backoffBaseMs * Math.pow(factor, streak - 1)),
-  );
+  const backoff = Math.min(config.backoffMaxMs, Math.round(config.backoffBaseMs * Math.pow(factor, streak - 1)));
   return backoff;
 };
 
@@ -220,14 +206,8 @@ const updateRestFailure = (error: Error) => {
   if (backoffMs > 0) {
     restBackoffUntilMs = Math.max(restBackoffUntilMs, now + backoffMs);
   }
-  if (
-    config.circuitBreakerThreshold > 0 &&
-    restErrorStreak >= config.circuitBreakerThreshold
-  ) {
-    restCircuitUntilMs = Math.max(
-      restCircuitUntilMs,
-      now + config.circuitBreakerCooldownMs,
-    );
+  if (config.circuitBreakerThreshold > 0 && restErrorStreak >= config.circuitBreakerThreshold) {
+    restCircuitUntilMs = Math.max(restCircuitUntilMs, now + config.circuitBreakerCooldownMs);
     setCircuitOpenUntil(restCircuitUntilMs, error.message);
   }
 };
@@ -246,14 +226,8 @@ const updateFtpFailure = (error: Error) => {
   if (backoffMs > 0) {
     ftpBackoffUntilMs = Math.max(ftpBackoffUntilMs, now + backoffMs);
   }
-  if (
-    config.circuitBreakerThreshold > 0 &&
-    ftpErrorStreak >= config.circuitBreakerThreshold
-  ) {
-    ftpCircuitUntilMs = Math.max(
-      ftpCircuitUntilMs,
-      now + config.circuitBreakerCooldownMs,
-    );
+  if (config.circuitBreakerThreshold > 0 && ftpErrorStreak >= config.circuitBreakerThreshold) {
+    ftpCircuitUntilMs = Math.max(ftpCircuitUntilMs, now + config.circuitBreakerCooldownMs);
   }
 };
 
@@ -289,10 +263,7 @@ const resolveRestPolicy = (method: string, path: string, baseUrl: string) => {
   return { key: null, cacheMs: 0, cooldownMs: 0 };
 };
 
-const shouldBlockForState = (
-  intent: InteractionIntent,
-  allowDuringDiscovery?: boolean,
-) => {
+const shouldBlockForState = (intent: InteractionIntent, allowDuringDiscovery?: boolean) => {
   if (isTestEnv()) return false;
   const state = getDeviceStateSnapshot().state;
   if (state === "UNKNOWN" || state === "DISCOVERING") {
@@ -325,10 +296,7 @@ const applyCooldown = async (
   await sleep(waitMs);
 };
 
-export const withRestInteraction = async <T>(
-  meta: RestRequestMeta,
-  handler: () => Promise<T>,
-): Promise<T> => {
+export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () => Promise<T>): Promise<T> => {
   if (isTestEnv()) {
     markDeviceRequestStart();
     try {
@@ -352,10 +320,7 @@ export const withRestInteraction = async <T>(
   }
 
   const now = Date.now();
-  if (
-    restCircuitUntilMs > now &&
-    !(meta.intent === "user" && config.allowUserOverrideCircuit)
-  ) {
+  if (restCircuitUntilMs > now && !(meta.intent === "user" && config.allowUserOverrideCircuit)) {
     recordDeviceGuard(meta.action, {
       decision: "block",
       reason: "circuit-open",
@@ -363,11 +328,7 @@ export const withRestInteraction = async <T>(
     });
     throw new Error("Device circuit open");
   }
-  if (
-    restCircuitUntilMs > now &&
-    meta.intent === "user" &&
-    config.allowUserOverrideCircuit
-  ) {
+  if (restCircuitUntilMs > now && meta.intent === "user" && config.allowUserOverrideCircuit) {
     recordDeviceGuard(meta.action, {
       decision: "override",
       reason: "circuit-open",
@@ -409,12 +370,7 @@ export const withRestInteraction = async <T>(
     }
 
     if (!meta.bypassCooldown) {
-      await applyCooldown(
-        policy.key,
-        policy.cooldownMs,
-        meta.intent,
-        meta.action,
-      );
+      await applyCooldown(policy.key, policy.cooldownMs, meta.intent, meta.action);
     }
 
     if (!meta.bypassCooldown && policy.key && policy.cooldownMs > 0) {
@@ -457,10 +413,7 @@ export const withRestInteraction = async <T>(
   return scheduledPromise;
 };
 
-export const withFtpInteraction = async <T>(
-  meta: FtpRequestMeta,
-  handler: () => Promise<T>,
-): Promise<T> => {
+export const withFtpInteraction = async <T>(meta: FtpRequestMeta, handler: () => Promise<T>): Promise<T> => {
   if (isTestEnv()) {
     markDeviceRequestStart();
     try {
@@ -484,10 +437,7 @@ export const withFtpInteraction = async <T>(
   }
 
   const now = Date.now();
-  if (
-    ftpCircuitUntilMs > now &&
-    !(meta.intent === "user" && config.allowUserOverrideCircuit)
-  ) {
+  if (ftpCircuitUntilMs > now && !(meta.intent === "user" && config.allowUserOverrideCircuit)) {
     recordDeviceGuard(meta.action, {
       decision: "block",
       reason: "circuit-open",
@@ -495,11 +445,7 @@ export const withFtpInteraction = async <T>(
     });
     throw new Error("FTP circuit open");
   }
-  if (
-    ftpCircuitUntilMs > now &&
-    meta.intent === "user" &&
-    config.allowUserOverrideCircuit
-  ) {
+  if (ftpCircuitUntilMs > now && meta.intent === "user" && config.allowUserOverrideCircuit) {
     recordDeviceGuard(meta.action, {
       decision: "override",
       reason: "circuit-open",

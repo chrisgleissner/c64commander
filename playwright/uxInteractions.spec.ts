@@ -20,12 +20,7 @@
 import { test, expect } from "@playwright/test";
 import { saveCoverageFromPage } from "./withCoverage";
 import type { Page, TestInfo } from "@playwright/test";
-import {
-  assertNoUiIssues,
-  attachStepScreenshot,
-  finalizeEvidence,
-  startStrictUiMonitoring,
-} from "./testArtifacts";
+import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from "./testArtifacts";
 import { enableTraceAssertions } from "./traceUtils";
 import { enableGoldenTrace } from "./goldenTraceRegistry";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
@@ -67,9 +62,7 @@ test.describe("UX Interaction Patterns", () => {
     await page.waitForLoadState("networkidle");
   };
 
-  test("source selection precedes navigation - local source @allow-warnings", async ({
-    page,
-  }, testInfo: TestInfo) => {
+  test("source selection precedes navigation - local source @allow-warnings", async ({ page }, testInfo: TestInfo) => {
     testInfo.annotations.push({ type: "allow-warnings" });
 
     // Navigate directly to Play page
@@ -92,12 +85,8 @@ test.describe("UX Interaction Patterns", () => {
     // Should show source selection: C64 Ultimate and This device
     const { localButton, c64uButton } = getSourceButtons(page);
 
-    const localVisible = await localButton
-      .isVisible({ timeout: 2000 })
-      .catch(() => false);
-    const c64uVisible = await c64uButton
-      .isVisible({ timeout: 2000 })
-      .catch(() => false);
+    const localVisible = await localButton.isVisible({ timeout: 2000 }).catch(() => false);
+    const c64uVisible = await c64uButton.isVisible({ timeout: 2000 }).catch(() => false);
 
     if (!localVisible && !c64uVisible) {
       await attachStepScreenshot(page, testInfo, "source-buttons-not-found");
@@ -107,9 +96,7 @@ test.describe("UX Interaction Patterns", () => {
     await attachStepScreenshot(page, testInfo, "source-buttons-visible");
   });
 
-  test("source selection precedes navigation - C64U source @allow-warnings", async ({
-    page,
-  }, testInfo: TestInfo) => {
+  test("source selection precedes navigation - C64U source @allow-warnings", async ({ page }, testInfo: TestInfo) => {
     testInfo.annotations.push({ type: "allow-warnings" });
 
     await page.goto("/play");
@@ -140,9 +127,7 @@ test.describe("UX Interaction Patterns", () => {
     const backButton = page.getByRole("button", {
       name: /Back|Up|Parent|Root/i,
     });
-    const hasNavigation = await backButton
-      .isVisible({ timeout: 2000 })
-      .catch(() => false);
+    const hasNavigation = await backButton.isVisible({ timeout: 2000 }).catch(() => false);
     if (hasNavigation) {
       await attachStepScreenshot(page, testInfo, "c64u-navigation-available");
     } else {
@@ -150,9 +135,7 @@ test.describe("UX Interaction Patterns", () => {
     }
   });
 
-  test("selection view navigation stays within source scope @allow-warnings", async ({
-    page,
-  }, testInfo: TestInfo) => {
+  test("selection view navigation stays within source scope @allow-warnings", async ({ page }, testInfo: TestInfo) => {
     testInfo.annotations.push({ type: "allow-warnings" });
 
     await page.goto("/play");
@@ -179,21 +162,13 @@ test.describe("UX Interaction Patterns", () => {
     await attachStepScreenshot(page, testInfo, "at-source-root");
 
     // At source root, "Up" button should be disabled or hidden
-    const upButton = page
-      .getByRole("button", { name: /Back|Up|Parent/i })
-      .first();
-    const upVisible = await upButton
-      .isVisible({ timeout: 2000 })
-      .catch(() => false);
+    const upButton = page.getByRole("button", { name: /Back|Up|Parent/i }).first();
+    const upVisible = await upButton.isVisible({ timeout: 2000 }).catch(() => false);
 
     if (upVisible) {
       const isDisabled = await upButton.isDisabled().catch(() => false);
       if (isDisabled) {
-        await attachStepScreenshot(
-          page,
-          testInfo,
-          "up-button-disabled-at-root",
-        );
+        await attachStepScreenshot(page, testInfo, "up-button-disabled-at-root");
       } else {
         await attachStepScreenshot(page, testInfo, "up-button-enabled-at-root");
       }
@@ -209,17 +184,11 @@ test.describe("UX Interaction Patterns", () => {
       await attachStepScreenshot(page, testInfo, "navigated-into-folder");
 
       // Now "Up" should be enabled
-      const upNowEnabled = await upButton
-        .isVisible({ timeout: 2000 })
-        .catch(() => false);
+      const upNowEnabled = await upButton.isVisible({ timeout: 2000 }).catch(() => false);
       if (upNowEnabled) {
         const stillDisabled = await upButton.isDisabled().catch(() => false);
         if (!stillDisabled) {
-          await attachStepScreenshot(
-            page,
-            testInfo,
-            "up-button-enabled-in-subfolder",
-          );
+          await attachStepScreenshot(page, testInfo, "up-button-enabled-in-subfolder");
         }
       }
     } else {
@@ -227,9 +196,7 @@ test.describe("UX Interaction Patterns", () => {
     }
   });
 
-  test("bulk actions: select all and deselect all @allow-warnings", async ({
-    page,
-  }, testInfo: TestInfo) => {
+  test("bulk actions: select all and deselect all @allow-warnings", async ({ page }, testInfo: TestInfo) => {
     testInfo.annotations.push({ type: "allow-warnings" });
 
     await page.goto("/play");
@@ -267,9 +234,7 @@ test.describe("UX Interaction Patterns", () => {
       const deselectButton = page.getByRole("button", {
         name: /Deselect All|Clear Selection|Deselect all/i,
       });
-      if (
-        await deselectButton.isVisible({ timeout: 2000 }).catch(() => false)
-      ) {
+      if (await deselectButton.isVisible({ timeout: 2000 }).catch(() => false)) {
         await deselectButton.click();
         await waitForUiStable(page);
         await attachStepScreenshot(page, testInfo, "all-items-deselected");
@@ -281,9 +246,7 @@ test.describe("UX Interaction Patterns", () => {
     }
   });
 
-  test("bulk remove from playlist shows confirmation @allow-warnings", async ({
-    page,
-  }, testInfo: TestInfo) => {
+  test("bulk remove from playlist shows confirmation @allow-warnings", async ({ page }, testInfo: TestInfo) => {
     testInfo.annotations.push({ type: "allow-warnings" });
 
     await page.goto("/play");
@@ -292,9 +255,7 @@ test.describe("UX Interaction Patterns", () => {
     await attachStepScreenshot(page, testInfo, "playlist-view");
 
     // Check if there are items in the playlist
-    const playlistItems = page.locator(
-      '[data-testid="playlist-item"], .playlist-item, [role="listitem"]',
-    );
+    const playlistItems = page.locator('[data-testid="playlist-item"], .playlist-item, [role="listitem"]');
     const itemCount = await playlistItems.count();
 
     if (itemCount === 0) {
@@ -306,9 +267,7 @@ test.describe("UX Interaction Patterns", () => {
     const selectAllButton = page.getByRole("button", {
       name: /Select All|Select all/i,
     });
-    if (
-      !(await selectAllButton.isVisible({ timeout: 2000 }).catch(() => false))
-    ) {
+    if (!(await selectAllButton.isVisible({ timeout: 2000 }).catch(() => false))) {
       await attachStepScreenshot(page, testInfo, "select-all-not-available");
       return;
     }
@@ -331,12 +290,8 @@ test.describe("UX Interaction Patterns", () => {
     await attachStepScreenshot(page, testInfo, "after-remove-clicked");
 
     // Should show confirmation dialog
-    const confirmDialog = page
-      .getByRole("dialog")
-      .or(page.getByRole("alertdialog"));
-    const dialogVisible = await confirmDialog
-      .isVisible({ timeout: 2000 })
-      .catch(() => false);
+    const confirmDialog = page.getByRole("dialog").or(page.getByRole("alertdialog"));
+    const dialogVisible = await confirmDialog.isVisible({ timeout: 2000 }).catch(() => false);
 
     if (dialogVisible) {
       await attachStepScreenshot(page, testInfo, "confirmation-dialog-shown");
@@ -359,16 +314,10 @@ test.describe("UX Interaction Patterns", () => {
 
     // In playlist view, should have playback controls
     const playButton = page.getByRole("button", { name: /Play|Pause|Resume/i });
-    const playControlsExist = await playButton
-      .isVisible({ timeout: 2000 })
-      .catch(() => false);
+    const playControlsExist = await playButton.isVisible({ timeout: 2000 }).catch(() => false);
 
     if (playControlsExist) {
-      await attachStepScreenshot(
-        page,
-        testInfo,
-        "playback-controls-in-playlist",
-      );
+      await attachStepScreenshot(page, testInfo, "playback-controls-in-playlist");
     }
 
     // Now open selection view
@@ -392,22 +341,12 @@ test.describe("UX Interaction Patterns", () => {
       const playButtonInSelection = page.getByRole("button", {
         name: /Play|Pause|Resume/i,
       });
-      const hasPlaybackControls = await playButtonInSelection
-        .isVisible({ timeout: 1000 })
-        .catch(() => false);
+      const hasPlaybackControls = await playButtonInSelection.isVisible({ timeout: 1000 }).catch(() => false);
 
       if (!hasPlaybackControls) {
-        await attachStepScreenshot(
-          page,
-          testInfo,
-          "no-playback-controls-in-selection",
-        );
+        await attachStepScreenshot(page, testInfo, "no-playback-controls-in-selection");
       } else {
-        await attachStepScreenshot(
-          page,
-          testInfo,
-          "unexpected-playback-controls-in-selection",
-        );
+        await attachStepScreenshot(page, testInfo, "unexpected-playback-controls-in-selection");
       }
     } else {
       await attachStepScreenshot(page, testInfo, "c64u-source-not-available");
@@ -428,22 +367,12 @@ test.describe("UX Interaction Patterns", () => {
     const mountButton = page.getByRole("button", {
       name: /Mount|Unmount|Eject/i,
     });
-    const hasMountControls = await mountButton
-      .isVisible({ timeout: 1000 })
-      .catch(() => false);
+    const hasMountControls = await mountButton.isVisible({ timeout: 1000 }).catch(() => false);
 
     if (!hasMountControls) {
-      await attachStepScreenshot(
-        page,
-        testInfo,
-        "no-mount-controls-on-play-page",
-      );
+      await attachStepScreenshot(page, testInfo, "no-mount-controls-on-play-page");
     } else {
-      await attachStepScreenshot(
-        page,
-        testInfo,
-        "unexpected-mount-controls-on-play-page",
-      );
+      await attachStepScreenshot(page, testInfo, "unexpected-mount-controls-on-play-page");
     }
 
     // Navigate to Disks page
@@ -457,22 +386,12 @@ test.describe("UX Interaction Patterns", () => {
     const mountButtonOnDisks = page.getByRole("button", {
       name: /Mount|Unmount|Eject/i,
     });
-    const hasMountControlsOnDisks = await mountButtonOnDisks
-      .isVisible({ timeout: 2000 })
-      .catch(() => false);
+    const hasMountControlsOnDisks = await mountButtonOnDisks.isVisible({ timeout: 2000 }).catch(() => false);
 
     if (hasMountControlsOnDisks) {
-      await attachStepScreenshot(
-        page,
-        testInfo,
-        "mount-controls-on-disks-page",
-      );
+      await attachStepScreenshot(page, testInfo, "mount-controls-on-disks-page");
     } else {
-      await attachStepScreenshot(
-        page,
-        testInfo,
-        "mount-controls-not-found-on-disks-page",
-      );
+      await attachStepScreenshot(page, testInfo, "mount-controls-not-found-on-disks-page");
     }
   });
 
@@ -495,9 +414,7 @@ test.describe("UX Interaction Patterns", () => {
       await attachStepScreenshot(page, testInfo, "intent-based-add-button");
 
       // Should not contain technical terms like "Browse", "Filesystem", "Directory"
-      const hasTechnicalTerms = /browse|filesystem|directory/i.test(
-        buttonText || "",
-      );
+      const hasTechnicalTerms = /browse|filesystem|directory/i.test(buttonText || "");
       if (hasTechnicalTerms) {
         await attachStepScreenshot(page, testInfo, "technical-terms-in-button");
       }
@@ -528,18 +445,14 @@ test.describe("UX Interaction Patterns", () => {
 
     // Look for intent-based headings or instructions
     const heading = page.getByRole("heading", { name: /Choose|Select|Pick/i });
-    const headingVisible = await heading
-      .isVisible({ timeout: 2000 })
-      .catch(() => false);
+    const headingVisible = await heading.isVisible({ timeout: 2000 }).catch(() => false);
 
     if (headingVisible) {
       const headingText = await heading.textContent();
       await attachStepScreenshot(page, testInfo, "intent-based-heading");
 
       // Should contain "source" or similar intent
-      const hasSourceLanguage = /source|location|where/i.test(
-        headingText || "",
-      );
+      const hasSourceLanguage = /source|location|where/i.test(headingText || "");
       if (hasSourceLanguage) {
         await attachStepScreenshot(page, testInfo, "source-language-present");
       }
@@ -576,9 +489,7 @@ test.describe("UX Interaction Patterns", () => {
     await waitForUiStable(page);
 
     // Get initial position of a control element (e.g., "Add" button)
-    const controlButton = page
-      .getByRole("button", { name: /Add|Select/i })
-      .first();
+    const controlButton = page.getByRole("button", { name: /Add|Select/i }).first();
     const initialBox = await controlButton.boundingBox().catch(() => null);
 
     if (!initialBox) {
@@ -624,9 +535,7 @@ test.describe("UX Interaction Patterns", () => {
     const viewAllButton = page.getByRole("button", {
       name: /View all|Show all|See all/i,
     });
-    const hasViewAll = await viewAllButton
-      .isVisible({ timeout: 2000 })
-      .catch(() => false);
+    const hasViewAll = await viewAllButton.isVisible({ timeout: 2000 }).catch(() => false);
 
     if (hasViewAll) {
       await attachStepScreenshot(page, testInfo, "view-all-present");
@@ -635,21 +544,13 @@ test.describe("UX Interaction Patterns", () => {
       await attachStepScreenshot(page, testInfo, "full-list-opened");
 
       // Should show a scrollable panel with all items
-      const fullListPanel = page
-        .getByRole("dialog")
-        .or(page.locator("[data-full-list], [data-view-all-panel]"));
-      const panelVisible = await fullListPanel
-        .isVisible({ timeout: 2000 })
-        .catch(() => false);
+      const fullListPanel = page.getByRole("dialog").or(page.locator("[data-full-list], [data-view-all-panel]"));
+      const panelVisible = await fullListPanel.isVisible({ timeout: 2000 }).catch(() => false);
 
       if (panelVisible) {
         await attachStepScreenshot(page, testInfo, "scrollable-panel-shown");
       } else {
-        await attachStepScreenshot(
-          page,
-          testInfo,
-          "full-list-display-variation",
-        );
+        await attachStepScreenshot(page, testInfo, "full-list-display-variation");
       }
     } else {
       await attachStepScreenshot(page, testInfo, "no-truncation-or-view-all");
@@ -684,10 +585,7 @@ test.describe("UX Interaction Patterns", () => {
       // Navigate deep to get a long path
       const folder = page.getByRole("button", { name: /folder|dir/i }).first();
       let depth = 0;
-      while (
-        (await folder.isVisible({ timeout: 1000 }).catch(() => false)) &&
-        depth < 3
-      ) {
+      while ((await folder.isVisible({ timeout: 1000 }).catch(() => false)) && depth < 3) {
         await folder.click();
         await waitForUiStable(page);
         depth++;
@@ -698,9 +596,7 @@ test.describe("UX Interaction Patterns", () => {
 
         // Check for horizontal scroll
         const hasHorizontalScroll = await page.evaluate(
-          () =>
-            document.documentElement.scrollWidth >
-            document.documentElement.clientWidth,
+          () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
         );
         expect(hasHorizontalScroll).toBe(false);
         await attachStepScreenshot(page, testInfo, "no-horizontal-scroll");
@@ -712,9 +608,7 @@ test.describe("UX Interaction Patterns", () => {
     }
   });
 
-  test("selection count is displayed when items are selected @allow-warnings", async ({
-    page,
-  }, testInfo: TestInfo) => {
+  test("selection count is displayed when items are selected @allow-warnings", async ({ page }, testInfo: TestInfo) => {
     testInfo.annotations.push({ type: "allow-warnings" });
 
     await page.goto("/play");
@@ -739,21 +633,15 @@ test.describe("UX Interaction Patterns", () => {
     await waitForUiStable(page);
 
     // Select an item without being blocked by transient toasts.
-    const firstEntryCheckbox = page
-      .locator('[data-testid="source-entry-row"] [role="checkbox"]')
-      .first();
-    if (
-      await firstEntryCheckbox.isVisible({ timeout: 2000 }).catch(() => false)
-    ) {
+    const firstEntryCheckbox = page.locator('[data-testid="source-entry-row"] [role="checkbox"]').first();
+    if (await firstEntryCheckbox.isVisible({ timeout: 2000 }).catch(() => false)) {
       await firstEntryCheckbox.click();
       await waitForUiStable(page);
       await attachStepScreenshot(page, testInfo, "item-selected");
 
       // Look for selection count display
       const selectionCount = page.getByText(/1 selected|Selected: 1|1 item/i);
-      const hasSelectionCount = await selectionCount
-        .isVisible({ timeout: 2000 })
-        .catch(() => false);
+      const hasSelectionCount = await selectionCount.isVisible({ timeout: 2000 }).catch(() => false);
 
       if (hasSelectionCount) {
         await attachStepScreenshot(page, testInfo, "selection-count-displayed");
@@ -765,9 +653,7 @@ test.describe("UX Interaction Patterns", () => {
     }
   });
 
-  test('quick "Root" action available in selection view @allow-warnings', async ({
-    page,
-  }, testInfo: TestInfo) => {
+  test('quick "Root" action available in selection view @allow-warnings', async ({ page }, testInfo: TestInfo) => {
     testInfo.annotations.push({ type: "allow-warnings" });
 
     await page.goto("/play");
@@ -794,9 +680,7 @@ test.describe("UX Interaction Patterns", () => {
 
     // Look for "Root" quick action button
     const rootButton = page.getByRole("button", { name: /Root|Go to root/i });
-    const hasRootButton = await rootButton
-      .isVisible({ timeout: 2000 })
-      .catch(() => false);
+    const hasRootButton = await rootButton.isVisible({ timeout: 2000 }).catch(() => false);
 
     if (hasRootButton) {
       await attachStepScreenshot(page, testInfo, "root-button-available");
@@ -805,9 +689,7 @@ test.describe("UX Interaction Patterns", () => {
     }
   });
 
-  test("modal dialogs for mount actions @allow-warnings", async ({
-    page,
-  }, testInfo: TestInfo) => {
+  test("modal dialogs for mount actions @allow-warnings", async ({ page }, testInfo: TestInfo) => {
     testInfo.annotations.push({ type: "allow-warnings" });
 
     await page.goto("/disks");
@@ -827,9 +709,7 @@ test.describe("UX Interaction Patterns", () => {
 
     // Should show a modal dialog
     const dialog = page.getByRole("dialog").or(page.getByRole("alertdialog"));
-    const dialogVisible = await dialog
-      .isVisible({ timeout: 2000 })
-      .catch(() => false);
+    const dialogVisible = await dialog.isVisible({ timeout: 2000 }).catch(() => false);
 
     if (dialogVisible) {
       await attachStepScreenshot(page, testInfo, "modal-dialog-shown");
@@ -838,9 +718,7 @@ test.describe("UX Interaction Patterns", () => {
     }
   });
 
-  test("clear confirmation on destructive playlist action @allow-warnings", async ({
-    page,
-  }, testInfo: TestInfo) => {
+  test("clear confirmation on destructive playlist action @allow-warnings", async ({ page }, testInfo: TestInfo) => {
     testInfo.annotations.push({ type: "allow-warnings" });
 
     await page.goto("/play");
@@ -848,17 +726,11 @@ test.describe("UX Interaction Patterns", () => {
     await attachStepScreenshot(page, testInfo, "playlist-view");
 
     // Check if there are items
-    const playlistItems = page.locator(
-      '[data-testid="playlist-item"], .playlist-item, [role="listitem"]',
-    );
+    const playlistItems = page.locator('[data-testid="playlist-item"], .playlist-item, [role="listitem"]');
     const itemCount = await playlistItems.count();
 
     if (itemCount === 0) {
-      await attachStepScreenshot(
-        page,
-        testInfo,
-        "empty-playlist-no-items-to-clear",
-      );
+      await attachStepScreenshot(page, testInfo, "empty-playlist-no-items-to-clear");
       return;
     }
 
@@ -876,19 +748,12 @@ test.describe("UX Interaction Patterns", () => {
     await attachStepScreenshot(page, testInfo, "clear-clicked");
 
     // Should show confirmation dialog
-    const confirmDialog = page
-      .getByRole("dialog")
-      .or(page.getByRole("alertdialog"));
-    const dialogVisible = await confirmDialog
-      .isVisible({ timeout: 2000 })
-      .catch(() => false);
+    const confirmDialog = page.getByRole("dialog").or(page.getByRole("alertdialog"));
+    const dialogVisible = await confirmDialog.isVisible({ timeout: 2000 }).catch(() => false);
 
     if (dialogVisible) {
       const dialogText = await confirmDialog.textContent();
-      if (
-        dialogText?.toLowerCase().includes("clear") ||
-        dialogText?.toLowerCase().includes("remove")
-      ) {
+      if (dialogText?.toLowerCase().includes("clear") || dialogText?.toLowerCase().includes("remove")) {
         await attachStepScreenshot(page, testInfo, "clear-confirmation-shown");
       } else {
         await attachStepScreenshot(page, testInfo, "dialog-shown-but-unclear");
@@ -898,9 +763,7 @@ test.describe("UX Interaction Patterns", () => {
     }
   });
 
-  test("HVSC metadata used for song display @allow-warnings", async ({
-    page,
-  }, testInfo: TestInfo) => {
+  test("HVSC metadata used for song display @allow-warnings", async ({ page }, testInfo: TestInfo) => {
     testInfo.annotations.push({ type: "allow-warnings" });
 
     await page.goto("/play");
@@ -911,12 +774,8 @@ test.describe("UX Interaction Patterns", () => {
     const hvscAuthor = page.getByText(/.* - .*/); // Pattern: "Author - Title"
     const hvscDuration = page.getByText(/\d+:\d+/); // Pattern: "3:45"
 
-    const hasAuthorInfo = await hvscAuthor
-      .isVisible({ timeout: 2000 })
-      .catch(() => false);
-    const hasDurationInfo = await hvscDuration
-      .isVisible({ timeout: 2000 })
-      .catch(() => false);
+    const hasAuthorInfo = await hvscAuthor.isVisible({ timeout: 2000 }).catch(() => false);
+    const hasDurationInfo = await hvscDuration.isVisible({ timeout: 2000 }).catch(() => false);
 
     if (hasAuthorInfo || hasDurationInfo) {
       await attachStepScreenshot(page, testInfo, "hvsc-metadata-displayed");
@@ -944,12 +803,8 @@ test.describe("UX Interaction Patterns", () => {
     await waitForUiStable(page);
 
     const { localButton, c64uButton } = getSourceButtons(page);
-    const localVisible = await localButton
-      .isVisible({ timeout: 2000 })
-      .catch(() => false);
-    const c64uVisible = await c64uButton
-      .isVisible({ timeout: 2000 })
-      .catch(() => false);
+    const localVisible = await localButton.isVisible({ timeout: 2000 }).catch(() => false);
+    const c64uVisible = await c64uButton.isVisible({ timeout: 2000 }).catch(() => false);
 
     if (localVisible && c64uVisible) {
       await expect(localButton).toContainText("Local");
@@ -962,9 +817,7 @@ test.describe("UX Interaction Patterns", () => {
     }
   });
 
-  test("no unrestricted filesystem access language @allow-warnings", async ({
-    page,
-  }, testInfo: TestInfo) => {
+  test("no unrestricted filesystem access language @allow-warnings", async ({ page }, testInfo: TestInfo) => {
     enableGoldenTrace(testInfo);
     testInfo.annotations.push({ type: "allow-warnings" });
 
@@ -973,32 +826,18 @@ test.describe("UX Interaction Patterns", () => {
 
     // Check entire page for forbidden terms
     const pageContent = await page.textContent("body");
-    const forbiddenTerms = [
-      "browse filesystem",
-      "root directory",
-      "drill up",
-      "filesystem",
-      "browse files",
-    ];
+    const forbiddenTerms = ["browse filesystem", "root directory", "drill up", "filesystem", "browse files"];
 
-    const foundForbidden = forbiddenTerms.filter((term) =>
-      pageContent?.toLowerCase().includes(term.toLowerCase()),
-    );
+    const foundForbidden = forbiddenTerms.filter((term) => pageContent?.toLowerCase().includes(term.toLowerCase()));
 
     if (foundForbidden.length > 0) {
-      await attachStepScreenshot(
-        page,
-        testInfo,
-        `forbidden-terms-found-${foundForbidden.join("-")}`,
-      );
+      await attachStepScreenshot(page, testInfo, `forbidden-terms-found-${foundForbidden.join("-")}`);
     } else {
       await attachStepScreenshot(page, testInfo, "no-forbidden-terms");
     }
   });
 
-  test("playlist actions easily discoverable @allow-warnings", async ({
-    page,
-  }, testInfo: TestInfo) => {
+  test("playlist actions easily discoverable @allow-warnings", async ({ page }, testInfo: TestInfo) => {
     testInfo.annotations.push({ type: "allow-warnings" });
 
     await page.goto("/play");
@@ -1010,24 +849,14 @@ test.describe("UX Interaction Patterns", () => {
     const addButton = page.getByRole("button", { name: /Add items|Add/i });
     const removeButton = page.getByRole("button", { name: /Remove|Delete/i });
 
-    const hasPlay = await playButton
-      .isVisible({ timeout: 2000 })
-      .catch(() => false);
-    const hasAdd = await addButton
-      .isVisible({ timeout: 2000 })
-      .catch(() => false);
-    const hasRemove = await removeButton
-      .isVisible({ timeout: 2000 })
-      .catch(() => false);
+    const hasPlay = await playButton.isVisible({ timeout: 2000 }).catch(() => false);
+    const hasAdd = await addButton.isVisible({ timeout: 2000 }).catch(() => false);
+    const hasRemove = await removeButton.isVisible({ timeout: 2000 }).catch(() => false);
 
     const actionCount = [hasPlay, hasAdd, hasRemove].filter(Boolean).length;
 
     if (actionCount >= 2) {
-      await attachStepScreenshot(
-        page,
-        testInfo,
-        "playlist-actions-discoverable",
-      );
+      await attachStepScreenshot(page, testInfo, "playlist-actions-discoverable");
     } else {
       await attachStepScreenshot(page, testInfo, "playlist-actions-limited");
     }

@@ -46,11 +46,8 @@ export function StreamStatus({ isConnected }: StreamStatusProps) {
             endpoint: buildStreamEndpointLabel(entry.ip, entry.port),
           };
           const pending =
-            Boolean(
-              configWritePending[
-                buildConfigKey("Data Streams", entry.itemName)
-              ],
-            ) || Boolean(streamActionPending[entry.key]);
+            Boolean(configWritePending[buildConfigKey("Data Streams", entry.itemName)]) ||
+            Boolean(streamActionPending[entry.key]);
           return (
             <div
               key={entry.key}
@@ -69,9 +66,7 @@ export function StreamStatus({ isConnected }: StreamStatusProps) {
                   data-testid={`home-stream-edit-toggle-${entry.key}`}
                   aria-label={`Edit ${entry.label} stream target`}
                 >
-                  <span className="font-semibold text-foreground w-12">
-                    {entry.label.toUpperCase()}
-                  </span>
+                  <span className="font-semibold text-foreground w-12">{entry.label.toUpperCase()}</span>
                   <span
                     className="font-semibold text-foreground truncate"
                     data-testid={`home-stream-endpoint-display-${entry.key}`}
@@ -106,18 +101,13 @@ export function StreamStatus({ isConnected }: StreamStatusProps) {
                 <div className="mt-2 rounded-md border border-border/60 bg-background p-2.5">
                   <div className="grid grid-cols-1 gap-2 text-[11px] md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-end">
                     <div className="space-y-1">
-                      <label
-                        htmlFor={`home-stream-endpoint-${entry.key}`}
-                        className="text-muted-foreground"
-                      >
+                      <label htmlFor={`home-stream-endpoint-${entry.key}`} className="text-muted-foreground">
                         IP:PORT
                       </label>
                       <Input
                         id={`home-stream-endpoint-${entry.key}`}
                         value={draft.endpoint}
-                        onChange={(event) =>
-                          handleStreamFieldChange(entry.key, event.target.value)
-                        }
+                        onChange={(event) => handleStreamFieldChange(entry.key, event.target.value)}
                         disabled={!isConnected || pending}
                         data-testid={`home-stream-endpoint-${entry.key}`}
                         aria-label={`${entry.label} stream endpoint`}
@@ -144,10 +134,7 @@ export function StreamStatus({ isConnected }: StreamStatusProps) {
                     </Button>
                   </div>
                   {streamEditorError && (
-                    <p
-                      className="mt-2 text-[11px] text-destructive"
-                      data-testid={`home-stream-error-${entry.key}`}
-                    >
+                    <p className="mt-2 text-[11px] text-destructive" data-testid={`home-stream-error-${entry.key}`}>
                       {streamEditorError}
                     </p>
                   )}

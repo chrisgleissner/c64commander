@@ -49,9 +49,7 @@
   },
   "issue5": {
     "status": "DONE",
-    "pre_fix_failure_evidence": [
-      "Same root cause as Issue 4: full in-memory extraction buffer"
-    ],
+    "pre_fix_failure_evidence": ["Same root cause as Issue 4: full in-memory extraction buffer"],
     "post_fix_pass_evidence": ["Resolved by Issue 4 streaming fix"]
   },
   "issue6": {

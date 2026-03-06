@@ -6,22 +6,12 @@ import { normalizeDriveDevices } from "@/lib/drives/driveDevices";
 export function usePrinterData(isConnected: boolean) {
   const { data: drivesData, refetch: refetchDrives } = useC64Drives();
 
-  const { data: printerConfig } = useC64ConfigItems(
-    "Printer Settings",
-    [...PRINTER_HOME_ITEMS],
-    isConnected,
-  );
+  const { data: printerConfig } = useC64ConfigItems("Printer Settings", [...PRINTER_HOME_ITEMS], isConnected);
 
-  const normalizedDriveModel = useMemo(
-    () => normalizeDriveDevices(drivesData ?? null),
-    [drivesData],
-  );
+  const normalizedDriveModel = useMemo(() => normalizeDriveDevices(drivesData ?? null), [drivesData]);
 
   const drivesByClass = useMemo(
-    () =>
-      new Map(
-        normalizedDriveModel.devices.map((entry) => [entry.class, entry]),
-      ),
+    () => new Map(normalizedDriveModel.devices.map((entry) => [entry.class, entry])),
     [normalizedDriveModel.devices],
   );
 

@@ -24,11 +24,7 @@ vi.mock("fflate", () => ({
     constructor(
       onFile: (entry: {
         name: string;
-        ondata?: (
-          error: Error | null,
-          chunk: Uint8Array,
-          final: boolean,
-        ) => void;
+        ondata?: (error: Error | null, chunk: Uint8Array, final: boolean) => void;
         start: () => void;
       }) => void,
     ) {
@@ -39,17 +35,12 @@ vi.mock("fflate", () => ({
 
     push(chunk: Uint8Array, final: boolean) {
       if (!final) return;
-      const files = vi.mocked(unzipSync)(chunk as any) as Record<
-        string,
-        Uint8Array
-      >;
+      const files = vi.mocked(unzipSync)(chunk as any) as Record<string, Uint8Array>;
       Object.entries(files || {}).forEach(([name, data]) => {
         if (!(data instanceof Uint8Array)) return;
         const entry = {
           name,
-          ondata: undefined as
-            | ((error: Error | null, chunk: Uint8Array, final: boolean) => void)
-            | undefined,
+          ondata: undefined as ((error: Error | null, chunk: Uint8Array, final: boolean) => void) | undefined,
           start: () => {
             entry.ondata?.(null, data, true);
           },
@@ -185,10 +176,7 @@ describe("hvscArchiveExtraction errors", () => {
         onEntry,
       });
 
-      expect(onEntry).toHaveBeenCalledWith(
-        expect.stringMatching(/sub\/deep.sid/),
-        expect.any(Uint8Array),
-      );
+      expect(onEntry).toHaveBeenCalledWith(expect.stringMatching(/sub\/deep.sid/), expect.any(Uint8Array));
     });
   });
 });

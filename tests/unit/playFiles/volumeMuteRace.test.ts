@@ -58,9 +58,7 @@ describe("applyAudioMixerUpdates rethrow contract", () => {
     const onToast = vi.fn();
     const mutateAsync = vi.fn().mockRejectedValue(new Error("network"));
 
-    await expect(
-      applyAudioMixerUpdates(mutateAsync, "Restore (stop)", onError, onToast),
-    ).resolves.toBeUndefined();
+    await expect(applyAudioMixerUpdates(mutateAsync, "Restore (stop)", onError, onToast)).resolves.toBeUndefined();
 
     expect(onError).toHaveBeenCalledWith("network", "Restore (stop)");
     expect(onToast).toHaveBeenCalledTimes(1);
@@ -71,9 +69,7 @@ describe("applyAudioMixerUpdates rethrow contract", () => {
     const onToast = vi.fn();
     const mutateAsync = vi.fn().mockRejectedValue(new Error("timeout"));
 
-    await expect(
-      applyAudioMixerUpdates(mutateAsync, "Volume", onError, onToast),
-    ).rejects.toThrow("timeout");
+    await expect(applyAudioMixerUpdates(mutateAsync, "Volume", onError, onToast)).rejects.toThrow("timeout");
 
     expect(onError).not.toHaveBeenCalled();
     expect(onToast).not.toHaveBeenCalled();
@@ -81,16 +77,12 @@ describe("applyAudioMixerUpdates rethrow contract", () => {
 
   it("rethrows for Mute context", async () => {
     const mutateAsync = vi.fn().mockRejectedValue(new Error("unreachable"));
-    await expect(
-      applyAudioMixerUpdates(mutateAsync, "Mute", vi.fn(), vi.fn()),
-    ).rejects.toThrow("unreachable");
+    await expect(applyAudioMixerUpdates(mutateAsync, "Mute", vi.fn(), vi.fn())).rejects.toThrow("unreachable");
   });
 
   it("rethrows for Unmute context", async () => {
     const mutateAsync = vi.fn().mockRejectedValue(new Error("device lost"));
-    await expect(
-      applyAudioMixerUpdates(mutateAsync, "Unmute", vi.fn(), vi.fn()),
-    ).rejects.toThrow("device lost");
+    await expect(applyAudioMixerUpdates(mutateAsync, "Unmute", vi.fn(), vi.fn())).rejects.toThrow("device lost");
   });
 
   it("does not call onError or onToast on success", async () => {
@@ -198,10 +190,7 @@ describe("scheduleVolumeUpdate: dispatch gated on write", () => {
 /**
  * Replica of the fixed mute path in handleToggleMute.
  */
-async function handleMute(opts: {
-  writeMute: () => Promise<void>;
-  dispatch: (action: string) => void;
-}): Promise<void> {
+async function handleMute(opts: { writeMute: () => Promise<void>; dispatch: (action: string) => void }): Promise<void> {
   const { writeMute, dispatch } = opts;
   await writeMute(); // throws on failure — caller sees rejection
   dispatch("mute");

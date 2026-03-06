@@ -63,10 +63,7 @@ import {
   recordDeviceGuard,
   TRACE_SESSION,
 } from "@/lib/tracing/traceSession";
-import {
-  getCurrentTraceIdCounters,
-  setTraceIdCounters,
-} from "@/lib/tracing/traceIds";
+import { getCurrentTraceIdCounters, setTraceIdCounters } from "@/lib/tracing/traceIds";
 import type { TraceActionContext } from "@/lib/tracing/types";
 
 const action: TraceActionContext = {
@@ -111,12 +108,8 @@ describe("traceSession", () => {
 
     const events = getTraceEvents();
     expect(events.some((event) => event.type === "action-start")).toBe(true);
-    expect(events.some((event) => event.type === "action-scope-start")).toBe(
-      true,
-    );
-    expect(events.some((event) => event.type === "action-scope-end")).toBe(
-      true,
-    );
+    expect(events.some((event) => event.type === "action-scope-start")).toBe(true);
+    expect(events.some((event) => event.type === "action-scope-end")).toBe(true);
     expect(events.some((event) => event.type === "action-end")).toBe(true);
   });
 
@@ -142,9 +135,7 @@ describe("traceSession", () => {
     });
 
     const events = getTraceEvents();
-    const decisions = events.filter(
-      (event) => event.type === "backend-decision",
-    );
+    const decisions = events.filter((event) => event.type === "backend-decision");
     expect(decisions).toHaveLength(1);
   });
 
@@ -292,16 +283,10 @@ describe("traceSession", () => {
     });
 
     persistTracesToSession();
-    expect(consoleSpy).toHaveBeenCalledWith(
-      "Failed to persist traces:",
-      expect.any(Error),
-    );
+    expect(consoleSpy).toHaveBeenCalledWith("Failed to persist traces:", expect.any(Error));
 
     restoreTracesFromSession();
-    expect(consoleSpy).toHaveBeenCalledWith(
-      "Failed to restore traces:",
-      expect.any(Error),
-    );
+    expect(consoleSpy).toHaveBeenCalledWith("Failed to restore traces:", expect.any(Error));
   });
 
   it("records action-end with error status", () => {
@@ -313,9 +298,7 @@ describe("traceSession", () => {
     recordActionEnd(action, new Error("failed"));
     const events = getTraceEvents();
     const endEvent = events.find((e) => e.type === "action-end");
-    expect(endEvent?.data).toEqual(
-      expect.objectContaining({ status: "error" }),
-    );
+    expect(endEvent?.data).toEqual(expect.objectContaining({ status: "error" }));
   });
 
   it("records action-scope-end with error status", () => {
@@ -327,9 +310,7 @@ describe("traceSession", () => {
     recordActionScopeEnd(action, "scope", new Error("oops"));
     const events = getTraceEvents();
     const scopeEnd = events.find((e) => e.type === "action-scope-end");
-    expect(scopeEnd?.data).toEqual(
-      expect.objectContaining({ status: "error" }),
-    );
+    expect(scopeEnd?.data).toEqual(expect.objectContaining({ status: "error" }));
   });
 
   it("records rest-response with errorMessage parameter", () => {
@@ -347,9 +328,7 @@ describe("traceSession", () => {
     });
     const events = getTraceEvents();
     const resp = events.find((e) => e.type === "rest-response");
-    expect(resp?.data).toEqual(
-      expect.objectContaining({ error: "custom error msg" }),
-    );
+    expect(resp?.data).toEqual(expect.objectContaining({ error: "custom error msg" }));
   });
 
   it("records rest-response with error.message fallback", () => {
@@ -366,9 +345,7 @@ describe("traceSession", () => {
     });
     const events = getTraceEvents();
     const resp = events.find((e) => e.type === "rest-response");
-    expect(resp?.data).toEqual(
-      expect.objectContaining({ error: "from error obj" }),
-    );
+    expect(resp?.data).toEqual(expect.objectContaining({ error: "from error obj" }));
   });
 
   it("records rest-response with null error when both null", () => {
@@ -425,9 +402,7 @@ describe("traceSession", () => {
         body: null,
       },
     );
-    const decisions = getTraceEvents().filter(
-      (e) => e.type === "backend-decision",
-    );
+    const decisions = getTraceEvents().filter((e) => e.type === "backend-decision");
     expect(decisions).toHaveLength(1);
   });
 
@@ -533,9 +508,7 @@ describe("traceSession", () => {
     const events = getTraceEvents();
     const resp = events.find((e) => e.type === "rest-response");
     expect((resp?.data as Record<string, unknown>)?.status).toBeNull();
-    expect((resp?.data as Record<string, unknown>)?.error).toBe(
-      "network error",
-    );
+    expect((resp?.data as Record<string, unknown>)?.error).toBe("network error");
   });
 
   it("suppresses non-error events when diagnostics side effects are suppressed", () => {
@@ -600,9 +573,7 @@ describe("traceSession", () => {
     });
     const events = getTraceEvents();
     const ftpEvent = events.find((e) => e.type === "ftp-operation");
-    expect((ftpEvent?.data as Record<string, unknown>)?.error).toBe(
-      "connection refused",
-    );
+    expect((ftpEvent?.data as Record<string, unknown>)?.error).toBe("connection refused");
   });
 
   it("persistTracesToSession is a no-op when sessionStorage is unavailable", () => {

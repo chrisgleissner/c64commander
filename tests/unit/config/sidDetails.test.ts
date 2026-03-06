@@ -7,10 +7,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import {
-  buildSidDetailEntries,
-  parseSidBaseAddress,
-} from "@/lib/config/sidDetails";
+import { buildSidDetailEntries, parseSidBaseAddress } from "@/lib/config/sidDetails";
 
 describe("sidDetails", () => {
   it("builds ordered SID detail entries with formatted values", () => {
@@ -41,12 +38,7 @@ describe("sidDetails", () => {
       },
     );
 
-    expect(entries.map((entry) => entry.label)).toEqual([
-      "SID Socket 1",
-      "SID Socket 2",
-      "UltiSID 1",
-      "UltiSID 2",
-    ]);
+    expect(entries.map((entry) => entry.label)).toEqual(["SID Socket 1", "SID Socket 2", "UltiSID 1", "UltiSID 2"]);
     expect(entries[0]).toMatchObject({
       volume: "0 dB",
       pan: "Center",

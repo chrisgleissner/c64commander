@@ -8,10 +8,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 import { zipSync } from "fflate";
-import {
-  archiveNameHash,
-  extractArchiveEntries,
-} from "@/lib/hvsc/hvscArchiveExtraction";
+import { archiveNameHash, extractArchiveEntries } from "@/lib/hvsc/hvscArchiveExtraction";
 import {
   ensureHvscUpdateArchive,
   hasMockFixture,
@@ -45,10 +42,7 @@ type ExtractionSummary = {
   progress: number[];
 };
 
-const collectArchiveSummary = async (
-  archiveName: string,
-  buffer: Uint8Array,
-): Promise<ExtractionSummary> => {
+const collectArchiveSummary = async (archiveName: string, buffer: Uint8Array): Promise<ExtractionSummary> => {
   const entries: string[] = [];
   const sidSizes: number[] = [];
   const songlengthSamples: string[] = [];
@@ -71,10 +65,7 @@ const collectArchiveSummary = async (
       if (entryPath.toLowerCase().endsWith(".sid")) {
         sidSizes.push(data.length);
       }
-      if (
-        /songlengths\.(md5|txt)$/i.test(entryPath) &&
-        songlengthSamples.length < 2
-      ) {
+      if (/songlengths\.(md5|txt)$/i.test(entryPath) && songlengthSamples.length < 2) {
         songlengthSamples.push(decoder.decode(data));
       }
       if (isDeletionList(entryPath) && deletionSamples.length < 2) {
@@ -134,9 +125,7 @@ const assertArchiveSummary = (
         .map((line) => line.trim())
         .filter(Boolean);
       expect(lines.length).toBeGreaterThan(0);
-      lines.forEach((line) =>
-        expect(line.toLowerCase().endsWith(".sid")).toBe(true),
-      );
+      lines.forEach((line) => expect(line.toLowerCase().endsWith(".sid")).toBe(true));
     });
   } else {
     expect(summary.deletionSamples.length).toBe(0);
@@ -148,24 +137,14 @@ describe("hvscArchiveExtraction", () => {
     await ensureHvscUpdateArchive();
     const buffer = await loadHvscUpdateArchiveBuffer();
     const summary = await collectArchiveSummary("HVSC_Update_84.7z", buffer);
-    assertArchiveSummary(
-      summary,
-      REAL_EXPECTED_ENTRY_COUNT,
-      REAL_KNOWN_ENTRIES,
-      false,
-    );
+    assertArchiveSummary(summary, REAL_EXPECTED_ENTRY_COUNT, REAL_KNOWN_ENTRIES, false);
   }, 120000);
 
   it("extracts HVSC_Update_mock.7z fixture with expected entries", async () => {
     expect(hasMockFixture()).toBe(true);
     const buffer = await loadHvscUpdateMockArchiveBuffer();
     const summary = await collectArchiveSummary("HVSC_Update_mock.7z", buffer);
-    assertArchiveSummary(
-      summary,
-      MOCK_EXPECTED_ENTRY_COUNT,
-      MOCK_KNOWN_ENTRIES,
-      true,
-    );
+    assertArchiveSummary(summary, MOCK_EXPECTED_ENTRY_COUNT, MOCK_KNOWN_ENTRIES, true);
   }, 60000);
 
   it("retries seven-zip module initialization after rejection", async () => {
@@ -205,8 +184,7 @@ describe("hvscArchiveExtraction", () => {
       },
     }));
 
-    const { extractArchiveEntries: extractArchiveEntriesWithRetry } =
-      await import("@/lib/hvsc/hvscArchiveExtraction");
+    const { extractArchiveEntries: extractArchiveEntriesWithRetry } = await import("@/lib/hvsc/hvscArchiveExtraction");
     await expect(
       extractArchiveEntriesWithRetry({
         archiveName: "HVSC_Update_84.7z",
@@ -263,9 +241,9 @@ describe("hvscArchiveExtraction", () => {
   it("extracts high file-count synthetic zip archives", async () => {
     const syntheticFiles: Record<string, Uint8Array> = {};
     for (let index = 0; index < 200; index += 1) {
-      syntheticFiles[
-        `HVSC/C64Music/SYNTH/${index.toString().padStart(5, "0")}.sid`
-      ] = new TextEncoder().encode(`sid-${index}`);
+      syntheticFiles[`HVSC/C64Music/SYNTH/${index.toString().padStart(5, "0")}.sid`] = new TextEncoder().encode(
+        `sid-${index}`,
+      );
     }
     const archiveBuffer = zipSync(syntheticFiles);
     let sidCount = 0;
@@ -347,17 +325,13 @@ describe("archiveNameHash determinism (P0-C)", () => {
   });
 
   it("returns different hashes for different archive names", () => {
-    expect(archiveNameHash("HVSC_Update_84.7z")).not.toBe(
-      archiveNameHash("HVSC_Update_85.7z"),
-    );
+    expect(archiveNameHash("HVSC_Update_84.7z")).not.toBe(archiveNameHash("HVSC_Update_85.7z"));
     expect(archiveNameHash("a.7z")).not.toBe(archiveNameHash("b.7z"));
   });
 
   it("output is a fixed-length 16-char hex string regardless of input length", () => {
     const short = archiveNameHash("a.7z");
-    const long = archiveNameHash(
-      "HVSC_Update_84_very_long_archive_name_for_testing.7z",
-    );
+    const long = archiveNameHash("HVSC_Update_84_very_long_archive_name_for_testing.7z");
     expect(short).toMatch(/^[0-9a-f]{16}$/);
     expect(long).toMatch(/^[0-9a-f]{16}$/);
   });

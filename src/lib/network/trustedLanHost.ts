@@ -39,8 +39,7 @@ const isPrivateIpv4Host = (host: string) => {
   if (!match) return false;
 
   const octets = match.slice(1).map((value) => Number(value));
-  if (octets.some((value) => Number.isNaN(value) || value < 0 || value > 255))
-    return false;
+  if (octets.some((value) => Number.isNaN(value) || value < 0 || value > 255)) return false;
   if (octets[0] === 10) return true;
   if (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) return true;
   if (octets[0] === 192 && octets[1] === 168) return true;
@@ -74,12 +73,7 @@ export const isTrustedLanDeviceHost = (hostInput: string) => {
   const host = splitHostAndPort(normalized);
   if (!host) return false;
 
-  if (
-    host === "c64u" ||
-    host === "localhost" ||
-    host === "127.0.0.1" ||
-    host === "::1"
-  ) {
+  if (host === "c64u" || host === "localhost" || host === "127.0.0.1" || host === "::1") {
     return true;
   }
 

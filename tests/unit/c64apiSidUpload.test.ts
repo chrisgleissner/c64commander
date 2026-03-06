@@ -34,9 +34,7 @@ describe("C64API playSidUpload", () => {
   });
 
   it("uses fetch for multipart uploads even on native platforms", async () => {
-    const fetchSpy = vi.fn(
-      async () => new Response(JSON.stringify({ errors: [] }), { status: 200 }),
-    );
+    const fetchSpy = vi.fn(async () => new Response(JSON.stringify({ errors: [] }), { status: 200 }));
     global.fetch = fetchSpy as unknown as typeof fetch;
 
     (window as any).Capacitor = {
@@ -45,11 +43,7 @@ describe("C64API playSidUpload", () => {
 
     const requestSpy = vi.spyOn(CapacitorHttp, "request");
 
-    const api = new C64API(
-      "http://127.0.0.1:1234",
-      undefined,
-      "127.0.0.1:1234",
-    );
+    const api = new C64API("http://127.0.0.1:1234", undefined, "127.0.0.1:1234");
     const sidFile = new Blob([new Uint8Array([0x50, 0x53, 0x49, 0x44])], {
       type: "audio/sid",
     });
@@ -68,16 +62,10 @@ describe("C64API playSidUpload", () => {
     const fetchSpy = vi
       .fn()
       .mockRejectedValueOnce(new Error("Request timed out"))
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ errors: [] }), { status: 200 }),
-      );
+      .mockResolvedValueOnce(new Response(JSON.stringify({ errors: [] }), { status: 200 }));
     global.fetch = fetchSpy as unknown as typeof fetch;
 
-    const api = new C64API(
-      "http://127.0.0.1:1234",
-      undefined,
-      "127.0.0.1:1234",
-    );
+    const api = new C64API("http://127.0.0.1:1234", undefined, "127.0.0.1:1234");
     const sidFile = new Blob([new Uint8Array([0x50, 0x53, 0x49, 0x44])], {
       type: "audio/sid",
     });
@@ -101,16 +89,10 @@ describe("C64API playSidUpload", () => {
           statusText: "Service Unavailable",
         }),
       )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ errors: [] }), { status: 200 }),
-      );
+      .mockResolvedValueOnce(new Response(JSON.stringify({ errors: [] }), { status: 200 }));
     global.fetch = fetchSpy as unknown as typeof fetch;
 
-    const api = new C64API(
-      "http://127.0.0.1:1234",
-      undefined,
-      "127.0.0.1:1234",
-    );
+    const api = new C64API("http://127.0.0.1:1234", undefined, "127.0.0.1:1234");
     const sidFile = new Blob([new Uint8Array([0x50, 0x53, 0x49, 0x44])], {
       type: "audio/sid",
     });
@@ -122,16 +104,10 @@ describe("C64API playSidUpload", () => {
   it("does not retry permanent 4xx failures", async () => {
     const fetchSpy = vi
       .fn()
-      .mockResolvedValueOnce(
-        new Response("bad request", { status: 400, statusText: "Bad Request" }),
-      );
+      .mockResolvedValueOnce(new Response("bad request", { status: 400, statusText: "Bad Request" }));
     global.fetch = fetchSpy as unknown as typeof fetch;
 
-    const api = new C64API(
-      "http://127.0.0.1:1234",
-      undefined,
-      "127.0.0.1:1234",
-    );
+    const api = new C64API("http://127.0.0.1:1234", undefined, "127.0.0.1:1234");
     const sidFile = new Blob([new Uint8Array([0x50, 0x53, 0x49, 0x44])], {
       type: "audio/sid",
     });

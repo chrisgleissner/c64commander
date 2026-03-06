@@ -8,10 +8,7 @@
 
 import { computeSidMd5, getSidSongCount } from "@/lib/sid/sidUtils";
 import { addErrorLog } from "@/lib/logging";
-import type {
-  SongLengthResolveQuery,
-  SongLengthResolution,
-} from "@/lib/songlengths";
+import type { SongLengthResolveQuery, SongLengthResolution } from "@/lib/songlengths";
 import type { SongEntry, SongFolder, SongSource } from "./SongSource";
 
 export type LocalSidFile =
@@ -25,22 +22,13 @@ export type LocalSidFile =
 
 export type LocalFsSongSourceOptions = {
   lookupDurationSeconds?: (md5: string) => Promise<number | null | undefined>;
-  lookupDurationsByMd5Seconds?: (
-    md5: string,
-  ) => Promise<number[] | null | undefined>;
-  resolveSonglength?: (
-    query: SongLengthResolveQuery,
-  ) => Promise<SongLengthResolution>;
-  onSongMetadataResolved?: (update: {
-    path: string;
-    entries: SongEntry[];
-  }) => void;
+  lookupDurationsByMd5Seconds?: (md5: string) => Promise<number[] | null | undefined>;
+  resolveSonglength?: (query: SongLengthResolveQuery) => Promise<SongLengthResolution>;
+  onSongMetadataResolved?: (update: { path: string; entries: SongEntry[] }) => void;
 };
 
-const normalizeLocalPath = (path: string) =>
-  path.startsWith("/") ? path : `/${path}`;
-const getLocalPath = (file: LocalSidFile) =>
-  normalizeLocalPath(file.webkitRelativePath || file.name);
+const normalizeLocalPath = (path: string) => (path.startsWith("/") ? path : `/${path}`);
+const getLocalPath = (file: LocalSidFile) => normalizeLocalPath(file.webkitRelativePath || file.name);
 const getPartialPath = (path: string) => {
   const normalized = normalizeLocalPath(path);
   const separator = normalized.lastIndexOf("/");
@@ -48,10 +36,7 @@ const getPartialPath = (path: string) => {
   return normalized.slice(0, separator);
 };
 
-const resolveDurationForSong = (
-  durations: number[] | null | undefined,
-  songNr?: number | null,
-) => {
+const resolveDurationForSong = (durations: number[] | null | undefined, songNr?: number | null) => {
   if (!durations || durations.length === 0) return null;
   const index = songNr && songNr > 0 ? songNr - 1 : 0;
   if (index < 0 || index >= durations.length) return null;
@@ -66,18 +51,14 @@ const buildSongEntries = (
 ): SongEntry[] => {
   const count = Math.max(1, subsongCount || 1);
   const baseId = `${file.name}-${file.lastModified ?? 0}-${pathValue}`;
-  const makeTitle = (songNr: number) =>
-    count > 1 ? `${file.name} (Song ${songNr}/${count})` : file.name;
+  const makeTitle = (songNr: number) => (count > 1 ? `${file.name} (Song ${songNr}/${count})` : file.name);
   if (count === 1) {
     return [
       {
         id: baseId,
         path: pathValue,
         title: makeTitle(1),
-        durationMs:
-          durationsSeconds?.[0] !== undefined
-            ? durationsSeconds[0] * 1000
-            : undefined,
+        durationMs: durationsSeconds?.[0] !== undefined ? durationsSeconds[0] * 1000 : undefined,
         songNr: 1,
         subsongCount: 1,
         source: "local",
@@ -89,10 +70,7 @@ const buildSongEntries = (
     id: `${baseId}:${index + 1}`,
     path: pathValue,
     title: makeTitle(index + 1),
-    durationMs:
-      durationsSeconds?.[index] !== undefined
-        ? durationsSeconds[index] * 1000
-        : undefined,
+    durationMs: durationsSeconds?.[index] !== undefined ? durationsSeconds[index] * 1000 : undefined,
     songNr: index + 1,
     subsongCount: count,
     source: "local",
@@ -102,22 +80,14 @@ const buildSongEntries = (
 
 const extractDurations = (resolution: SongLengthResolution) => {
   if (resolution.durations?.length) return resolution.durations;
-  if (
-    resolution.durationSeconds !== null &&
-    resolution.durationSeconds !== undefined
-  ) {
+  if (resolution.durationSeconds !== null && resolution.durationSeconds !== undefined) {
     return [resolution.durationSeconds];
   }
   return null;
 };
 
-const isMd5FallbackCandidate = (
-  resolution: SongLengthResolution,
-  durations: number[] | null,
-) =>
-  !durations &&
-  resolution.strategy !== "md5" &&
-  resolution.strategy !== "unavailable";
+const isMd5FallbackCandidate = (resolution: SongLengthResolution, durations: number[] | null) =>
+  !durations && resolution.strategy !== "md5" && resolution.strategy !== "unavailable";
 
 const readSidHeader = async (file: LocalSidFile) => {
   const slice = (file as File).slice;
@@ -128,21 +98,13 @@ const readSidHeader = async (file: LocalSidFile) => {
   return fullBuffer.byteLength > 0x20 ? fullBuffer.slice(0, 0x20) : fullBuffer;
 };
 
-export const createLocalFsSongSource = (
-  files: LocalSidFile[],
-  options: LocalFsSongSourceOptions = {},
-): SongSource => {
+export const createLocalFsSongSource = (files: LocalSidFile[], options: LocalFsSongSourceOptions = {}): SongSource => {
   const metadataByPath = new Map<string, SongEntry[]>();
   const durationLookupByPath = new Map<string, number[] | null>();
   const metadataScanInFlight = new Map<string, Promise<void>>();
 
-  const resolveDurationsForFile = async (
-    file: LocalSidFile,
-    pathValue: string,
-    buffer?: ArrayBuffer,
-  ) => {
-    if (durationLookupByPath.has(pathValue))
-      return durationLookupByPath.get(pathValue) ?? null;
+  const resolveDurationsForFile = async (file: LocalSidFile, pathValue: string, buffer?: ArrayBuffer) => {
+    if (durationLookupByPath.has(pathValue)) return durationLookupByPath.get(pathValue) ?? null;
     let durations: number[] | null = null;
     try {
       if (options.resolveSonglength) {
@@ -171,8 +133,7 @@ export const createLocalFsSongSource = (
         const fullBuffer = buffer ?? (await file.arrayBuffer());
         const md5 = await computeSidMd5(fullBuffer);
         const resolved = await options.lookupDurationSeconds(md5);
-        durations =
-          resolved !== null && resolved !== undefined ? [resolved] : null;
+        durations = resolved !== null && resolved !== undefined ? [resolved] : null;
       }
     } catch (error) {
       addErrorLog("SID duration lookup failed", {
@@ -185,12 +146,8 @@ export const createLocalFsSongSource = (
     return durations;
   };
 
-  const scanSongMetadataInBackground = (
-    file: LocalSidFile,
-    pathValue: string,
-  ) => {
-    if (metadataByPath.has(pathValue) || metadataScanInFlight.has(pathValue))
-      return;
+  const scanSongMetadataInBackground = (file: LocalSidFile, pathValue: string) => {
+    if (metadataByPath.has(pathValue) || metadataScanInFlight.has(pathValue)) return;
     const scanTask = (async () => {
       await new Promise<void>((resolve) => setTimeout(resolve, 0));
       let subsongCount = 1;
@@ -206,12 +163,7 @@ export const createLocalFsSongSource = (
           path: pathValue,
         });
       }
-      const entries = buildSongEntries(
-        file,
-        pathValue,
-        subsongCount,
-        durationsSeconds,
-      );
+      const entries = buildSongEntries(file, pathValue, subsongCount, durationsSeconds);
       metadataByPath.set(pathValue, entries);
       options.onSongMetadataResolved?.({
         path: pathValue,
@@ -248,9 +200,7 @@ export const createLocalFsSongSource = (
 
   const listSongs = async (path: string): Promise<SongEntry[]> => {
     const normalized = normalizeLocalPath(path || "/");
-    const candidates = files.filter((file) =>
-      getLocalPath(file).toLowerCase().startsWith(normalized.toLowerCase()),
-    );
+    const candidates = files.filter((file) => getLocalPath(file).toLowerCase().startsWith(normalized.toLowerCase()));
     const entries = candidates.flatMap((file) => {
       const pathValue = getLocalPath(file);
       const knownEntries = metadataByPath.get(pathValue);
@@ -259,9 +209,7 @@ export const createLocalFsSongSource = (
       return buildSongEntries(file, pathValue, 1, null);
     });
     return entries.sort(
-      (left, right) =>
-        left.path.localeCompare(right.path) ||
-        (left.songNr ?? 1) - (right.songNr ?? 1),
+      (left, right) => left.path.localeCompare(right.path) || (left.songNr ?? 1) - (right.songNr ?? 1),
     );
   };
 
@@ -274,10 +222,7 @@ export const createLocalFsSongSource = (
     if (durationMs === undefined) {
       const pathValue = normalizeLocalPath(entry.path);
       const durations = await resolveDurationsForFile(file, pathValue, buffer);
-      const seconds = resolveDurationForSong(
-        durations ?? null,
-        entry.songNr ?? null,
-      );
+      const seconds = resolveDurationForSong(durations ?? null, entry.songNr ?? null);
       if (seconds !== null) durationMs = seconds * 1000;
     }
     return { data, durationMs, title: entry.title, path: entry.path };

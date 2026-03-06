@@ -44,10 +44,7 @@ const reserveFreePort = async (): Promise<number> => {
   return address.port;
 };
 
-const startStandaloneServer = async (
-  configDir: string,
-  port: number,
-): Promise<ChildProcess> => {
+const startStandaloneServer = async (configDir: string, port: number): Promise<ChildProcess> => {
   const serverEntry = path.resolve("web/server/dist/index.js");
   const distDir = path.resolve("dist");
   await access(serverEntry);
@@ -109,10 +106,7 @@ const ensureWebAuthApi = async (request: RequestLike): Promise<boolean> => {
       requiresLogin?: unknown;
       authenticated?: unknown;
     };
-    return (
-      typeof payload.requiresLogin === "boolean" &&
-      typeof payload.authenticated === "boolean"
-    );
+    return typeof payload.requiresLogin === "boolean" && typeof payload.authenticated === "boolean";
   } catch (error) {
     console.warn("Failed to parse /auth/status payload in web auth probe", {
       error,
@@ -121,9 +115,7 @@ const ensureWebAuthApi = async (request: RequestLike): Promise<boolean> => {
   }
 };
 
-const cookieFromSetCookieHeader = (
-  setCookieHeader: string | undefined,
-): string => {
+const cookieFromSetCookieHeader = (setCookieHeader: string | undefined): string => {
   if (!setCookieHeader) {
     return "";
   }
@@ -162,9 +154,7 @@ const resolveReachableProxyHost = async (
     }
   }
 
-  throw new Error(
-    `Unable to reach upstream through REST proxy. Attempts: ${JSON.stringify(attempts)}`,
-  );
+  throw new Error(`Unable to reach upstream through REST proxy. Attempts: ${JSON.stringify(attempts)}`);
 };
 
 test.describe("Web platform auth + proxy @web-platform", () => {
@@ -200,10 +190,7 @@ test.describe("Web platform auth + proxy @web-platform", () => {
     });
   });
 
-  test("health and root page load with no password", async ({
-    page,
-    request,
-  }) => {
+  test("health and root page load with no password", async ({ page, request }) => {
     const health = await request.get("/healthz");
     expect(health.status()).toBe(200);
     const root = await page.goto("/");
@@ -212,29 +199,21 @@ test.describe("Web platform auth + proxy @web-platform", () => {
 
   test("auth matrix and protected routes", async ({ page, request }) => {
     if (!(await ensureWebAuthApi(request))) {
-      test.skip(
-        true,
-        "Web platform auth JSON endpoints are unavailable in this runtime",
-      );
+      test.skip(true, "Web platform auth JSON endpoints are unavailable in this runtime");
     }
 
     const setPassword = await request.put("/api/secure-storage/password", {
       data: { value: "secret" },
     });
     if (setPassword.status() === 404) {
-      test.skip(
-        true,
-        "Web platform secure-storage endpoints are unavailable in this runtime",
-      );
+      test.skip(true, "Web platform secure-storage endpoints are unavailable in this runtime");
     }
     if (setPassword.status() === 401) {
       const login = await request.post("/auth/login", {
         data: { password: "secret" },
       });
       expect(login.status()).toBe(200);
-      const loginCookie = cookieFromSetCookieHeader(
-        login.headers()["set-cookie"],
-      );
+      const loginCookie = cookieFromSetCookieHeader(login.headers()["set-cookie"]);
       expect(loginCookie).not.toBe("");
       const retry = await request.put("/api/secure-storage/password", {
         data: { value: "secret" },
@@ -265,9 +244,7 @@ test.describe("Web platform auth + proxy @web-platform", () => {
       data: { password: "secret" },
     });
     expect(okLoginResponse.status()).toBe(200);
-    const authCookie = cookieFromSetCookieHeader(
-      okLoginResponse.headers()["set-cookie"],
-    );
+    const authCookie = cookieFromSetCookieHeader(okLoginResponse.headers()["set-cookie"]);
     expect(authCookie).not.toBe("");
 
     const unlockedRoot = await request.get("/", {
@@ -276,19 +253,12 @@ test.describe("Web platform auth + proxy @web-platform", () => {
     expect(unlockedRoot.status()).toBe(200);
 
     try {
-      const { response: proxyOk } = await resolveReachableProxyHost(
-        request,
-        upstreamPort,
-        authCookie,
-      );
+      const { response: proxyOk } = await resolveReachableProxyHost(request, upstreamPort, authCookie);
       expect(proxyOk.status()).toBe(200);
       const payload = (await proxyOk.json()) as { version: string };
       expect(payload.version).toBe("3.12.0");
     } catch (error) {
-      if (
-        !(error instanceof Error) ||
-        !error.message.includes("Unable to reach upstream through REST proxy")
-      ) {
+      if (!(error instanceof Error) || !error.message.includes("Unable to reach upstream through REST proxy")) {
         throw error;
       }
       const proxyFallback = await request.get("/api/rest/v1/version", {
@@ -303,23 +273,14 @@ test.describe("Web platform auth + proxy @web-platform", () => {
     }
   });
 
-  test("high-value click path: Play page opens Add items modal", async ({
-    page,
-    request,
-  }) => {
+  test("high-value click path: Play page opens Add items modal", async ({ page, request }) => {
     if (!(await ensureWebAuthApi(request))) {
-      test.skip(
-        true,
-        "Web platform auth JSON endpoints are unavailable in this runtime",
-      );
+      test.skip(true, "Web platform auth JSON endpoints are unavailable in this runtime");
     }
 
     const clearPassword = await request.delete("/api/secure-storage/password");
     if (clearPassword.status() === 404) {
-      test.skip(
-        true,
-        "Web platform secure-storage endpoints are unavailable in this runtime",
-      );
+      test.skip(true, "Web platform secure-storage endpoints are unavailable in this runtime");
     }
     if (clearPassword.status() === 401) {
       const login = await request.post("/auth/login", {
@@ -328,9 +289,7 @@ test.describe("Web platform auth + proxy @web-platform", () => {
       if (login.status() !== 200) {
         test.skip(true, "Unable to reset auth state with known test password");
       }
-      const loginCookie = cookieFromSetCookieHeader(
-        login.headers()["set-cookie"],
-      );
+      const loginCookie = cookieFromSetCookieHeader(login.headers()["set-cookie"]);
       if (!loginCookie) {
         test.skip(true, "Unable to obtain auth cookie for deterministic setup");
       }
@@ -338,10 +297,7 @@ test.describe("Web platform auth + proxy @web-platform", () => {
         headers: { Cookie: loginCookie },
       });
       if (retryClear.status() !== 200) {
-        test.skip(
-          true,
-          "Unable to clear configured password for deterministic setup",
-        );
+        test.skip(true, "Unable to clear configured password for deterministic setup");
       }
     } else {
       expect(clearPassword.status()).toBe(200);
@@ -356,22 +312,14 @@ test.describe("Web platform auth + proxy @web-platform", () => {
     await expect(page.getByRole("dialog")).toBeVisible();
   });
 
-  test("edge path: unreachable upstream returns deterministic proxy error", async ({
-    request,
-  }) => {
+  test("edge path: unreachable upstream returns deterministic proxy error", async ({ request }) => {
     if (!(await ensureWebAuthApi(request))) {
-      test.skip(
-        true,
-        "Web platform auth JSON endpoints are unavailable in this runtime",
-      );
+      test.skip(true, "Web platform auth JSON endpoints are unavailable in this runtime");
     }
 
     const clearPassword = await request.delete("/api/secure-storage/password");
     if (clearPassword.status() === 404) {
-      test.skip(
-        true,
-        "Web platform secure-storage endpoints are unavailable in this runtime",
-      );
+      test.skip(true, "Web platform secure-storage endpoints are unavailable in this runtime");
     }
     if (clearPassword.status() === 401) {
       const login = await request.post("/auth/login", {
@@ -380,9 +328,7 @@ test.describe("Web platform auth + proxy @web-platform", () => {
       if (login.status() !== 200) {
         test.skip(true, "Unable to reset auth state with known test password");
       }
-      const loginCookie = cookieFromSetCookieHeader(
-        login.headers()["set-cookie"],
-      );
+      const loginCookie = cookieFromSetCookieHeader(login.headers()["set-cookie"]);
       if (!loginCookie) {
         test.skip(true, "Unable to obtain auth cookie for deterministic setup");
       }
@@ -390,10 +336,7 @@ test.describe("Web platform auth + proxy @web-platform", () => {
         headers: { Cookie: loginCookie },
       });
       if (retryClear.status() !== 200) {
-        test.skip(
-          true,
-          "Unable to clear configured password for deterministic setup",
-        );
+        test.skip(true, "Unable to clear configured password for deterministic setup");
       }
     } else {
       expect(clearPassword.status()).toBe(200);
@@ -409,20 +352,12 @@ test.describe("Web platform auth + proxy @web-platform", () => {
     expect(payload.error).toContain("REST proxy upstream request failed");
   });
 
-  test("persistence: password survives server restart with shared /config", async ({
-    request,
-  }, testInfo) => {
+  test("persistence: password survives server restart with shared /config", async ({ request }, testInfo) => {
     if (testInfo.project.name !== "web") {
-      test.skip(
-        true,
-        "Standalone web-server restart check is only supported in web project",
-      );
+      test.skip(true, "Standalone web-server restart check is only supported in web project");
     }
     if (!(await ensureWebAuthApi(request))) {
-      test.skip(
-        true,
-        "Web platform auth JSON endpoints are unavailable in this runtime",
-      );
+      test.skip(true, "Web platform auth JSON endpoints are unavailable in this runtime");
     }
 
     const configDir = await mkdtemp(path.join(os.tmpdir(), "c64-web-config-"));
@@ -432,14 +367,11 @@ test.describe("Web platform auth + proxy @web-platform", () => {
     try {
       firstServer = await startStandaloneServer(configDir, port);
 
-      const setPassword = await fetch(
-        `http://127.0.0.1:${port}/api/secure-storage/password`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ value: "secret" }),
-        },
-      );
+      const setPassword = await fetch(`http://127.0.0.1:${port}/api/secure-storage/password`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ value: "secret" }),
+      });
       expect(setPassword.status).toBe(200);
 
       await stopStandaloneServer(firstServer);
@@ -448,9 +380,7 @@ test.describe("Web platform auth + proxy @web-platform", () => {
       const rootBlocked = await fetch(`http://127.0.0.1:${port}/`);
       expect(rootBlocked.status).toBe(401);
 
-      const statusAfterRestart = await fetch(
-        `http://127.0.0.1:${port}/auth/status`,
-      );
+      const statusAfterRestart = await fetch(`http://127.0.0.1:${port}/auth/status`);
       expect(statusAfterRestart.status).toBe(200);
       const statusPayload = (await statusAfterRestart.json()) as {
         requiresLogin: boolean;

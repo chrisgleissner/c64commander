@@ -11,11 +11,7 @@ import { parseSonglengths } from "@/lib/sid/songlengths";
 import { HvscSongSource } from "@/lib/hvsc/hvscSource";
 import { buildPlayPlan, executePlayPlan } from "@/lib/playback/playbackRouter";
 import { getC64API } from "@/lib/c64api";
-import {
-  isAudioMixerValueEqual,
-  normalizeAudioMixerValue,
-  resolveAudioMixerResetValue,
-} from "@/lib/config/audioMixer";
+import { isAudioMixerValueEqual, normalizeAudioMixerValue, resolveAudioMixerResetValue } from "@/lib/config/audioMixer";
 import {
   buildSoloRoutingUpdates,
   isSidVolumeName,
@@ -26,11 +22,7 @@ import { AUDIO_MIXER_VOLUME_ITEMS } from "@/lib/config/configItems";
 import { useSidPlayer } from "@/hooks/useSidPlayer";
 import { useListPreviewLimit } from "@/hooks/useListPreviewLimit";
 import { useC64Connection } from "@/hooks/useC64Connection";
-import {
-  buildDiskEntryFromDrive,
-  buildDiskEntryFromPath,
-  useDiskLibrary,
-} from "@/hooks/useDiskLibrary";
+import { buildDiskEntryFromDrive, buildDiskEntryFromPath, useDiskLibrary } from "@/hooks/useDiskLibrary";
 import {
   FeatureFlagManager,
   InMemoryFeatureFlagRepository,
@@ -42,22 +34,14 @@ import {
   setDeveloperModeEnabled,
   subscribeDeveloperMode,
 } from "@/lib/config/developerModeStore";
-import {
-  clampListPreviewLimit,
-  getListPreviewLimit,
-  setListPreviewLimit,
-} from "@/lib/uiPreferences";
+import { clampListPreviewLimit, getListPreviewLimit, setListPreviewLimit } from "@/lib/uiPreferences";
 import { startMockServer, stopMockServer } from "@/lib/mock/mockServer";
 import { FeatureFlags } from "@/lib/native/featureFlags";
 import { addLog } from "@/lib/logging";
 
 type ProbeStatus = "idle" | "running" | "done" | "error";
 
-const runProbe = async (
-  label: string,
-  runner: () => Promise<void>,
-  errors: string[],
-) => {
+const runProbe = async (label: string, runner: () => Promise<void>, errors: string[]) => {
   try {
     await runner();
   } catch (error) {
@@ -93,25 +77,10 @@ export default function CoverageProbePage() {
       await runProbe(
         "audio mixer",
         async () => {
-          const volReset = await resolveAudioMixerResetValue(
-            "Audio Mixer",
-            "Vol UltiSid 1",
-            ["+1 dB", "0 dB"],
-          );
-          const volResetApi = await resolveAudioMixerResetValue(
-            "Audio Mixer",
-            "Vol UltiSid 1",
-          );
-          const panReset = await resolveAudioMixerResetValue(
-            "Audio Mixer",
-            "Pan 1",
-            ["Left", "Center", "Right"],
-          );
-          const otherReset = await resolveAudioMixerResetValue(
-            "Audio Mixer",
-            "Other",
-            ["A", "B"],
-          );
+          const volReset = await resolveAudioMixerResetValue("Audio Mixer", "Vol UltiSid 1", ["+1 dB", "0 dB"]);
+          const volResetApi = await resolveAudioMixerResetValue("Audio Mixer", "Vol UltiSid 1");
+          const panReset = await resolveAudioMixerResetValue("Audio Mixer", "Pan 1", ["Left", "Center", "Right"]);
+          const otherReset = await resolveAudioMixerResetValue("Audio Mixer", "Other", ["A", "B"]);
           normalizeAudioMixerValue(" 0 dB");
           if (!isAudioMixerValueEqual(volReset, "0 dB")) {
             throw new Error("Volume reset not resolved");
@@ -138,10 +107,7 @@ export default function CoverageProbePage() {
           resolveAudioMixerMuteValue(["-12 dB", "-6 dB", "0 dB"]);
           resolveAudioMixerMuteValue(["Muted", "On"]);
           resolveAudioMixerMuteValue([]);
-          soloReducer(
-            { soloItem: null },
-            { type: "toggle", item: "Vol UltiSid 1" },
-          );
+          soloReducer({ soloItem: null }, { type: "toggle", item: "Vol UltiSid 1" });
           soloReducer({ soloItem: "Vol UltiSid 1" }, { type: "reset" });
           buildSoloRoutingUpdates(
             [
@@ -217,24 +183,13 @@ export default function CoverageProbePage() {
               durationMs: 1000,
             }),
           );
-          await executePlayPlan(
-            api,
-            buildPlayPlan({ source: "ultimate", path: "/music.mod" }),
-          );
-          await executePlayPlan(
-            api,
-            buildPlayPlan({ source: "ultimate", path: "/demo.prg" }),
-            { loadMode: "load" },
-          );
-          await executePlayPlan(
-            api,
-            buildPlayPlan({ source: "ultimate", path: "/demo.crt" }),
-          );
-          await executePlayPlan(
-            api,
-            buildPlayPlan({ source: "ultimate", path: "/disk.d64" }),
-            { drive: "b", rebootBeforeMount: true },
-          );
+          await executePlayPlan(api, buildPlayPlan({ source: "ultimate", path: "/music.mod" }));
+          await executePlayPlan(api, buildPlayPlan({ source: "ultimate", path: "/demo.prg" }), { loadMode: "load" });
+          await executePlayPlan(api, buildPlayPlan({ source: "ultimate", path: "/demo.crt" }));
+          await executePlayPlan(api, buildPlayPlan({ source: "ultimate", path: "/disk.d64" }), {
+            drive: "b",
+            rebootBeforeMount: true,
+          });
         },
         failures,
       );
@@ -290,12 +245,13 @@ export default function CoverageProbePage() {
       await runProbe(
         "feature flags",
         async () => {
-          const defaults = Object.entries(FEATURE_FLAG_DEFINITIONS).reduce<
-            Record<string, boolean>
-          >((acc, [key, value]) => {
-            acc[key] = value.defaultValue;
-            return acc;
-          }, {});
+          const defaults = Object.entries(FEATURE_FLAG_DEFINITIONS).reduce<Record<string, boolean>>(
+            (acc, [key, value]) => {
+              acc[key] = value.defaultValue;
+              return acc;
+            },
+            {},
+          );
           const manager = new FeatureFlagManager(
             new InMemoryFeatureFlagRepository({ hvsc_enabled: true }),
             defaults as Record<"hvsc_enabled", boolean>,
@@ -378,17 +334,12 @@ export default function CoverageProbePage() {
   }, [probes, status]);
 
   return (
-    <div
-      className="min-h-screen p-6 space-y-4"
-      data-testid="coverage-probe-page"
-    >
+    <div className="min-h-screen p-6 space-y-4" data-testid="coverage-probe-page">
       <h1 className="text-xl font-semibold">Coverage probes</h1>
       <p className="text-sm text-muted-foreground">
         Status: <span data-testid="coverage-probe-status">{status}</span>
       </p>
-      <p className="text-xs text-muted-foreground">
-        Started: {new Date(startedAt).toLocaleTimeString()}
-      </p>
+      <p className="text-xs text-muted-foreground">Started: {new Date(startedAt).toLocaleTimeString()}</p>
       {errors.length ? (
         <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3">
           <p className="text-sm font-medium text-destructive">Errors</p>

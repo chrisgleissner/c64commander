@@ -9,15 +9,7 @@
 import { wrapUserEvent } from "@/lib/tracing/userTrace";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import {
-  Music,
-  Shuffle,
-  SkipBack,
-  SkipForward,
-  Play,
-  Folder,
-  FolderOpen,
-} from "lucide-react";
+import { Music, Shuffle, SkipBack, SkipForward, Play, Folder, FolderOpen } from "lucide-react";
 import { Button, StatefulButton } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -41,21 +33,10 @@ import {
   HvscSongSource,
 } from "@/lib/hvsc";
 import { calculateHvscProgress } from "@/lib/hvsc/hvscProgress";
-import {
-  createLocalFsSongSource,
-  type LocalSidFile,
-} from "@/lib/sources/LocalFsSongSource";
+import { createLocalFsSongSource, type LocalSidFile } from "@/lib/sources/LocalFsSongSource";
 import { ingestLocalArchives } from "@/lib/sources/localArchiveIngestion";
-import {
-  browseLocalSidFiles,
-  filterLocalInputFiles,
-  prepareDirectoryInput,
-} from "@/lib/sources/localFsPicker";
-import type {
-  SongEntry,
-  SongFolder,
-  SongSource,
-} from "@/lib/sources/SongSource";
+import { browseLocalSidFiles, filterLocalInputFiles, prepareDirectoryInput } from "@/lib/sources/localFsPicker";
+import type { SongEntry, SongFolder, SongSource } from "@/lib/sources/SongSource";
 
 const formatTime = (ms?: number) => {
   if (!ms && ms !== 0) return "—";
@@ -80,15 +61,9 @@ const formatBytes = (bytes?: number | null) => {
 
 const HVSC_PROGRESS_LOG_INTERVAL = 500;
 
-const mergeLocalSongMetadata = (
-  current: SongEntry[],
-  filePath: string,
-  nextEntries: SongEntry[],
-) =>
+const mergeLocalSongMetadata = (current: SongEntry[], filePath: string, nextEntries: SongEntry[]) =>
   [...current.filter((entry) => entry.path !== filePath), ...nextEntries].sort(
-    (left, right) =>
-      left.path.localeCompare(right.path) ||
-      (left.songNr ?? 1) - (right.songNr ?? 1),
+    (left, right) => left.path.localeCompare(right.path) || (left.songNr ?? 1) - (right.songNr ?? 1),
   );
 
 export default function MusicPlayerPage() {
@@ -113,24 +88,14 @@ export default function MusicPlayerPage() {
   const [hvscIngestionId, setHvscIngestionId] = useState<string | null>(null);
   const [hvscActionLabel, setHvscActionLabel] = useState<string | null>(null);
   const [hvscCurrentFile, setHvscCurrentFile] = useState<string | null>(null);
-  const [hvscProcessedCount, setHvscProcessedCount] = useState<number | null>(
-    null,
-  );
+  const [hvscProcessedCount, setHvscProcessedCount] = useState<number | null>(null);
   const [hvscTotalCount, setHvscTotalCount] = useState<number | null>(null);
-  const [hvscDownloadedBytes, setHvscDownloadedBytes] = useState<number | null>(
-    null,
-  );
+  const [hvscDownloadedBytes, setHvscDownloadedBytes] = useState<number | null>(null);
   const [hvscErrorMessage, setHvscErrorMessage] = useState<string | null>(null);
-  const [hvscSongsUpserted, setHvscSongsUpserted] = useState<number | null>(
-    null,
-  );
+  const [hvscSongsUpserted, setHvscSongsUpserted] = useState<number | null>(null);
   const [hvscSongsDeleted, setHvscSongsDeleted] = useState<number | null>(null);
-  const [hvscLastAction, setHvscLastAction] = useState<
-    "update" | "ingest" | null
-  >(null);
-  const [hvscCacheBaseline, setHvscCacheBaseline] = useState<number | null>(
-    null,
-  );
+  const [hvscLastAction, setHvscLastAction] = useState<"update" | "ingest" | null>(null);
+  const [hvscCacheBaseline, setHvscCacheBaseline] = useState<number | null>(null);
   const [hvscCacheUpdates, setHvscCacheUpdates] = useState<number[]>([]);
   const hvscStatsRef = useRef({
     downloadedBytes: null as number | null,
@@ -158,18 +123,12 @@ export default function MusicPlayerPage() {
     selectedLocalFolderRef.current = selectedLocalFolder;
   }, [selectedLocalFolder]);
 
-  const handleLocalSongMetadataResolved = useCallback(
-    (update: { path: string; entries: SongEntry[] }) => {
-      const activeFolder = selectedLocalFolderRef.current;
-      if (!activeFolder) return;
-      if (!update.path.toLowerCase().startsWith(activeFolder.toLowerCase()))
-        return;
-      setLocalSongs((previous) =>
-        mergeLocalSongMetadata(previous, update.path, update.entries),
-      );
-    },
-    [],
-  );
+  const handleLocalSongMetadataResolved = useCallback((update: { path: string; entries: SongEntry[] }) => {
+    const activeFolder = selectedLocalFolderRef.current;
+    if (!activeFolder) return;
+    if (!update.path.toLowerCase().startsWith(activeFolder.toLowerCase())) return;
+    setLocalSongs((previous) => mergeLocalSongMetadata(previous, update.path, update.entries));
+  }, []);
 
   useEffect(() => {
     getHvscStatus()
@@ -200,11 +159,7 @@ export default function MusicPlayerPage() {
 
   useEffect(() => {
     refreshHvscCacheStatus();
-  }, [
-    refreshHvscCacheStatus,
-    hvscStatus?.installedVersion,
-    hvscStatus?.ingestionState,
-  ]);
+  }, [refreshHvscCacheStatus, hvscStatus?.installedVersion, hvscStatus?.ingestionState]);
 
   useEffect(() => {
     if (hvscStatus?.ingestionState === "error" && hvscStatus.ingestionError) {
@@ -214,11 +169,7 @@ export default function MusicPlayerPage() {
         installedVersion: hvscStatus.installedVersion,
       });
     }
-  }, [
-    hvscStatus?.ingestionError,
-    hvscStatus?.ingestionState,
-    hvscStatus?.installedVersion,
-  ]);
+  }, [hvscStatus?.ingestionError, hvscStatus?.ingestionState, hvscStatus?.installedVersion]);
 
   useEffect(() => {
     let removeListener: (() => Promise<void>) | null = null;
@@ -236,10 +187,7 @@ export default function MusicPlayerPage() {
           errorCause: event.errorCause,
         };
 
-        if (
-          event.ingestionId &&
-          event.ingestionId !== hvscLogRef.current.ingestionId
-        ) {
+        if (event.ingestionId && event.ingestionId !== hvscLogRef.current.ingestionId) {
           hvscLogRef.current = {
             ingestionId: event.ingestionId,
             lastStage: null,
@@ -271,11 +219,7 @@ export default function MusicPlayerPage() {
           setHvscTotalCount(event.totalCount);
         }
 
-        const derivedPercent = calculateHvscProgress(
-          event.processedCount,
-          event.totalCount,
-          event.percent,
-        );
+        const derivedPercent = calculateHvscProgress(event.processedCount, event.totalCount, event.percent);
         if (derivedPercent !== null) {
           setHvscProgress(derivedPercent);
         }
@@ -305,14 +249,8 @@ export default function MusicPlayerPage() {
           hvscLogRef.current.lastStage = event.stage;
         }
 
-        if (
-          typeof event.processedCount === "number" &&
-          typeof event.totalCount === "number"
-        ) {
-          if (
-            event.processedCount - hvscLogRef.current.lastProcessed >=
-            HVSC_PROGRESS_LOG_INTERVAL
-          ) {
+        if (typeof event.processedCount === "number" && typeof event.totalCount === "number") {
+          if (event.processedCount - hvscLogRef.current.lastProcessed >= HVSC_PROGRESS_LOG_INTERVAL) {
             hvscLogRef.current.lastProcessed = event.processedCount;
             addLog("info", "HVSC ingestion progress", logPayload);
           }
@@ -353,45 +291,26 @@ export default function MusicPlayerPage() {
 
   const hvscFolderOptions = useMemo(() => {
     if (!hvscFolderFilter) return hvscFolders;
-    return hvscFolders.filter((folder) =>
-      folder.path.toLowerCase().includes(hvscFolderFilter.toLowerCase()),
-    );
+    return hvscFolders.filter((folder) => folder.path.toLowerCase().includes(hvscFolderFilter.toLowerCase()));
   }, [hvscFolders, hvscFolderFilter]);
 
   const hvscSource = HvscSongSource;
   const hvscInstalled = Boolean(hvscStatus?.installedVersion);
-  const hvscUpdating =
-    hvscLoading ||
-    ["installing", "updating"].includes(hvscStatus?.ingestionState ?? "");
+  const hvscUpdating = hvscLoading || ["installing", "updating"].includes(hvscStatus?.ingestionState ?? "");
   const hvscBridgeAvailable = isHvscBridgeAvailable();
-  const hvscHasCache =
-    Boolean(hvscCacheBaseline) || hvscCacheUpdates.length > 0;
-  const hvscCanIngest =
-    hvscBridgeAvailable && !hvscInstalled && hvscHasCache && !hvscUpdating;
-  const hvscProgressPercent = calculateHvscProgress(
-    hvscProcessedCount,
-    hvscTotalCount,
-    hvscProgress,
-  );
+  const hvscHasCache = Boolean(hvscCacheBaseline) || hvscCacheUpdates.length > 0;
+  const hvscCanIngest = hvscBridgeAvailable && !hvscInstalled && hvscHasCache && !hvscUpdating;
+  const hvscProgressPercent = calculateHvscProgress(hvscProcessedCount, hvscTotalCount, hvscProgress);
   const hvscProgressVisible = Boolean(
-    hvscLoading ||
-    hvscStage ||
-    hvscProcessedCount !== null ||
-    hvscTotalCount !== null ||
-    hvscProgressPercent !== null,
+    hvscLoading || hvscStage || hvscProcessedCount !== null || hvscTotalCount !== null || hvscProgressPercent !== null,
   );
   const hvscInlineError =
-    hvscErrorMessage ||
-    (!hvscLoading && hvscStatus?.ingestionState === "error"
-      ? hvscStatus.ingestionError
-      : null);
+    hvscErrorMessage || (!hvscLoading && hvscStatus?.ingestionState === "error" ? hvscStatus.ingestionError : null);
 
   const localSource = useMemo(
     () =>
       createLocalFsSongSource(localFiles, {
-        resolveSonglength: hvscStatus?.installedVersion
-          ? resolveHvscSonglength
-          : undefined,
+        resolveSonglength: hvscStatus?.installedVersion ? resolveHvscSonglength : undefined,
         onSongMetadataResolved: handleLocalSongMetadataResolved,
       }),
     [handleLocalSongMetadataResolved, localFiles, hvscStatus?.installedVersion],
@@ -399,9 +318,7 @@ export default function MusicPlayerPage() {
 
   const localFolders = useMemo(() => {
     if (!localFolderFilter) return localFolderPaths;
-    return localFolderPaths.filter((folder) =>
-      folder.path.toLowerCase().includes(localFolderFilter.toLowerCase()),
-    );
+    return localFolderPaths.filter((folder) => folder.path.toLowerCase().includes(localFolderFilter.toLowerCase()));
   }, [localFolderPaths, localFolderFilter]);
 
   useEffect(() => {
@@ -493,10 +410,7 @@ export default function MusicPlayerPage() {
         requiredUpdates: updateStatus.requiredUpdates,
         baselineVersion: updateStatus.baselineVersion,
       });
-      if (
-        !updateStatus.requiredUpdates.length &&
-        updateStatus.installedVersion > 0
-      ) {
+      if (!updateStatus.requiredUpdates.length && updateStatus.installedVersion > 0) {
         toast({
           title: "HVSC up to date",
           description: "No new updates detected.",
@@ -508,10 +422,7 @@ export default function MusicPlayerPage() {
         setHvscStatus(status);
         return;
       }
-      currentAction =
-        updateStatus.installedVersion > 0
-          ? "Applying updates…"
-          : "Installing HVSC…";
+      currentAction = updateStatus.installedVersion > 0 ? "Applying updates…" : "Installing HVSC…";
       setHvscActionLabel(currentAction);
       await installOrUpdateHvsc("hvsc-install");
       const status = await getHvscStatus();
@@ -519,15 +430,9 @@ export default function MusicPlayerPage() {
       refreshHvscCacheStatus();
       const stats = hvscStatsRef.current;
       const statsDescription = [
-        stats.downloadedBytes !== null
-          ? `Downloaded ${formatBytes(stats.downloadedBytes)}`
-          : null,
-        stats.songsUpserted !== null
-          ? `${stats.songsUpserted.toLocaleString()} songs indexed`
-          : null,
-        stats.songsDeleted !== null
-          ? `${stats.songsDeleted.toLocaleString()} removed`
-          : null,
+        stats.downloadedBytes !== null ? `Downloaded ${formatBytes(stats.downloadedBytes)}` : null,
+        stats.songsUpserted !== null ? `${stats.songsUpserted.toLocaleString()} songs indexed` : null,
+        stats.songsDeleted !== null ? `${stats.songsDeleted.toLocaleString()} removed` : null,
       ]
         .filter(Boolean)
         .join(" · ");
@@ -747,8 +652,7 @@ export default function MusicPlayerPage() {
 
   const handlePlayRandomLocalFolder = async () => {
     if (!localFolders.length) return;
-    const randomFolder =
-      localFolders[Math.floor(Math.random() * localFolders.length)];
+    const randomFolder = localFolders[Math.floor(Math.random() * localFolders.length)];
     setSelectedLocalFolder(randomFolder.path);
 
     try {
@@ -769,9 +673,7 @@ export default function MusicPlayerPage() {
           };
         }),
       );
-      const queue = shuffle
-        ? queueTracks.sort(() => Math.random() - 0.5)
-        : queueTracks;
+      const queue = shuffle ? queueTracks.sort(() => Math.random() - 0.5) : queueTracks;
       await playQueue(queue);
       toast({
         title: "Playing random folder",
@@ -803,25 +705,17 @@ export default function MusicPlayerPage() {
     }
   };
 
-  const hvscRetryHandler =
-    hvscLastAction === "ingest" ? handleHvscIngest : handleHvscUpdate;
-  const hvscCanRetry = Boolean(
-    hvscInlineError && hvscLastAction && !hvscLoading,
-  );
+  const hvscRetryHandler = hvscLastAction === "ingest" ? handleHvscIngest : handleHvscUpdate;
+  const hvscCanRetry = Boolean(hvscInlineError && hvscLastAction && !hvscLoading);
 
-  const progressPercent = durationMs
-    ? Math.min(100, (elapsedMs / durationMs) * 100)
-    : 0;
-  const remainingMs = durationMs
-    ? Math.max(0, durationMs - elapsedMs)
-    : undefined;
+  const progressPercent = durationMs ? Math.min(100, (elapsedMs / durationMs) * 100) : 0;
+  const remainingMs = durationMs ? Math.max(0, durationMs - elapsedMs) : undefined;
   const remainingLabel = durationMs ? `-${formatTime(remainingMs)}` : "—";
   const currentSubsongLabel =
     currentTrack?.subsongCount && currentTrack.subsongCount > 1
       ? `Song ${currentTrack.songNr ?? 1}/${currentTrack.subsongCount}`
       : null;
-  const nowPlayingPathLabel =
-    currentTrack?.path ?? currentTrack?.source?.toUpperCase() ?? "—";
+  const nowPlayingPathLabel = currentTrack?.path ?? currentTrack?.source?.toUpperCase() ?? "—";
 
   const handlePlayCurrentTrack = useCallback(async () => {
     if (!currentTrack) return;
@@ -849,9 +743,7 @@ export default function MusicPlayerPage() {
             </div>
             <div>
               <h1 className="c64-header text-xl">SID Player</h1>
-              <p className="text-xs text-muted-foreground">
-                HVSC + local collections with live playback control
-              </p>
+              <p className="text-xs text-muted-foreground">HVSC + local collections with live playback control</p>
             </div>
           </div>
         </div>
@@ -866,30 +758,20 @@ export default function MusicPlayerPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-muted-foreground">Now Playing</p>
-              <p className="font-medium">
-                {currentTrack?.title ?? "No track selected"}
-              </p>
+              <p className="font-medium">{currentTrack?.title ?? "No track selected"}</p>
               <p className="text-xs text-muted-foreground">
                 {nowPlayingPathLabel}
                 {currentSubsongLabel ? ` · ${currentSubsongLabel}` : ""}
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <Checkbox
-                checked={shuffle}
-                onCheckedChange={(checked) => setShuffle(Boolean(checked))}
-              />
+              <Checkbox checked={shuffle} onCheckedChange={(checked) => setShuffle(Boolean(checked))} />
               <span className="text-xs text-muted-foreground">Shuffle</span>
             </div>
           </div>
 
           <div className="flex items-center justify-center gap-3">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => previous()}
-              disabled={!queue.length}
-            >
+            <Button variant="outline" size="icon" onClick={() => previous()} disabled={!queue.length}>
               <SkipBack className="h-4 w-4" />
             </Button>
             <StatefulButton
@@ -901,12 +783,7 @@ export default function MusicPlayerPage() {
               <Play className="h-4 w-4 mr-2" />
               {isPlaying ? "Restart" : "Play"}
             </StatefulButton>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => next()}
-              disabled={!queue.length}
-            >
+            <Button variant="outline" size="icon" onClick={() => next()} disabled={!queue.length}>
               <SkipForward className="h-4 w-4" />
             </Button>
           </div>
@@ -942,15 +819,9 @@ export default function MusicPlayerPage() {
                     variant="outline"
                     size="sm"
                     onClick={handleHvscUpdate}
-                    disabled={
-                      hvscLoading || hvscUpdating || !hvscBridgeAvailable
-                    }
+                    disabled={hvscLoading || hvscUpdating || !hvscBridgeAvailable}
                   >
-                    {hvscLoading
-                      ? "Updating…"
-                      : hvscInstalled
-                        ? "Update"
-                        : "Install"}
+                    {hvscLoading ? "Updating…" : hvscInstalled ? "Update" : "Install"}
                   </Button>
                   {hvscCanIngest && (
                     <Button
@@ -965,15 +836,9 @@ export default function MusicPlayerPage() {
                 </div>
               </div>
               {!hvscBridgeAvailable && (
-                <p className="text-xs text-muted-foreground">
-                  HVSC updates require the native app build.
-                </p>
+                <p className="text-xs text-muted-foreground">HVSC updates require the native app build.</p>
               )}
-              {hvscActionLabel && (
-                <p className="text-xs text-muted-foreground">
-                  {hvscActionLabel}
-                </p>
-              )}
+              {hvscActionLabel && <p className="text-xs text-muted-foreground">{hvscActionLabel}</p>}
               {hvscProgressVisible && (
                 <div className="space-y-1">
                   <Progress value={hvscProgressPercent ?? 0} />
@@ -983,9 +848,7 @@ export default function MusicPlayerPage() {
                         ? `SID files: ${(hvscProcessedCount ?? 0).toLocaleString()} / ${hvscTotalCount.toLocaleString()}`
                         : "Discovering SID files…"}
                     </span>
-                    {hvscProgressPercent !== null && (
-                      <span>{hvscProgressPercent}%</span>
-                    )}
+                    {hvscProgressPercent !== null && <span>{hvscProgressPercent}%</span>}
                   </div>
                   {hvscCurrentFile && (
                     <p className="text-[11px] text-muted-foreground break-words whitespace-normal">
@@ -996,32 +859,23 @@ export default function MusicPlayerPage() {
               )}
               {hvscStatus?.lastUpdateCheckUtcMs && (
                 <p className="text-xs text-muted-foreground">
-                  Last checked:{" "}
-                  {new Date(hvscStatus.lastUpdateCheckUtcMs).toLocaleString()}
+                  Last checked: {new Date(hvscStatus.lastUpdateCheckUtcMs).toLocaleString()}
                 </p>
               )}
               {hvscDownloadedBytes !== null && (
-                <p className="text-xs text-muted-foreground">
-                  Last download: {formatBytes(hvscDownloadedBytes)}
-                </p>
+                <p className="text-xs text-muted-foreground">Last download: {formatBytes(hvscDownloadedBytes)}</p>
               )}
               {hvscSongsUpserted !== null && (
                 <p className="text-xs text-muted-foreground">
                   Songs indexed: {hvscSongsUpserted.toLocaleString()}
-                  {hvscSongsDeleted !== null
-                    ? ` · Removed ${hvscSongsDeleted.toLocaleString()}`
-                    : ""}
+                  {hvscSongsDeleted !== null ? ` · Removed ${hvscSongsDeleted.toLocaleString()}` : ""}
                 </p>
               )}
               {hvscInlineError && (
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-xs text-destructive">{hvscInlineError}</p>
                   {hvscCanRetry && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={hvscRetryHandler}
-                    >
+                    <Button variant="outline" size="sm" onClick={hvscRetryHandler}>
                       Retry
                     </Button>
                   )}
@@ -1033,9 +887,7 @@ export default function MusicPlayerPage() {
               <div className="flex items-center justify-between gap-2">
                 <div>
                   <p className="text-sm font-medium">Browse folders</p>
-                  <p className="text-xs text-muted-foreground">
-                    Play a folder recursively
-                  </p>
+                  <p className="text-xs text-muted-foreground">Play a folder recursively</p>
                 </div>
                 <Button
                   variant="default"
@@ -1056,18 +908,12 @@ export default function MusicPlayerPage() {
                 {hvscFolderOptions.slice(0, 24).map((folder) => (
                   <Button
                     key={folder.path}
-                    variant={
-                      folder.path === selectedHvscFolder
-                        ? "secondary"
-                        : "outline"
-                    }
+                    variant={folder.path === selectedHvscFolder ? "secondary" : "outline"}
                     className="justify-start min-w-0 whitespace-normal items-start"
                     onClick={() => setSelectedHvscFolder(folder.path)}
                   >
                     <Folder className="h-4 w-4 mr-2 shrink-0" />
-                    <span className="break-words whitespace-normal">
-                      {folder.path}
-                    </span>
+                    <span className="break-words whitespace-normal">{folder.path}</span>
                   </Button>
                 ))}
               </div>
@@ -1077,21 +923,14 @@ export default function MusicPlayerPage() {
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium">Tracks</p>
                 <p className="text-xs text-muted-foreground">
-                  {hvscSongs.length
-                    ? `${hvscSongs.length} tracks`
-                    : "Select a folder"}
+                  {hvscSongs.length ? `${hvscSongs.length} tracks` : "Select a folder"}
                 </p>
               </div>
               <div className="space-y-2 max-h-[320px] overflow-y-auto pr-2">
                 {hvscSongs.slice(0, 80).map((entry) => (
-                  <div
-                    key={entry.id}
-                    className="flex items-center justify-between gap-2"
-                  >
+                  <div key={entry.id} className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="text-sm font-medium break-words whitespace-normal">
-                        {entry.title}
-                      </p>
+                      <p className="text-sm font-medium break-words whitespace-normal">{entry.title}</p>
                       <p className="text-xs text-muted-foreground break-words whitespace-normal">
                         {entry.path}
                         {entry.subsongCount && entry.subsongCount > 1
@@ -1111,8 +950,7 @@ export default function MusicPlayerPage() {
                 ))}
                 {hvscSongs.length > 80 && (
                   <p className="text-xs text-muted-foreground">
-                    Showing first 80 tracks. Use folder filters to narrow the
-                    list.
+                    Showing first 80 tracks. Use folder filters to narrow the list.
                   </p>
                 )}
               </div>
@@ -1125,9 +963,7 @@ export default function MusicPlayerPage() {
                 <div>
                   <p className="text-sm font-medium">Local SID folders</p>
                   <p className="text-xs text-muted-foreground">
-                    {localFiles.length
-                      ? `${localFiles.length} SID files selected`
-                      : "Pick a folder on your device"}
+                    {localFiles.length ? `${localFiles.length} SID files selected` : "Pick a folder on your device"}
                   </p>
                 </div>
                 <div className="inline-flex">
@@ -1144,11 +980,7 @@ export default function MusicPlayerPage() {
                       "LocalFolderInput",
                     )}
                   />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleLocalFolderBrowse}
-                  >
+                  <Button variant="outline" size="sm" onClick={handleLocalFolderBrowse}>
                     <FolderOpen className="h-4 w-4 mr-1" />
                     Pick folder
                   </Button>
@@ -1160,9 +992,7 @@ export default function MusicPlayerPage() {
               <div className="flex items-center justify-between gap-2">
                 <div>
                   <p className="text-sm font-medium">Browse folders</p>
-                  <p className="text-xs text-muted-foreground">
-                    Play a folder recursively
-                  </p>
+                  <p className="text-xs text-muted-foreground">Play a folder recursively</p>
                 </div>
                 <div className="flex gap-2">
                   <Button
@@ -1173,12 +1003,7 @@ export default function MusicPlayerPage() {
                   >
                     Random folder
                   </Button>
-                  <Button
-                    variant="default"
-                    size="sm"
-                    onClick={handlePlayLocalFolder}
-                    disabled={!localSongs.length}
-                  >
+                  <Button variant="default" size="sm" onClick={handlePlayLocalFolder} disabled={!localSongs.length}>
                     Play folder
                   </Button>
                 </div>
@@ -1193,18 +1018,12 @@ export default function MusicPlayerPage() {
                 {localFolders.slice(0, 24).map((folder) => (
                   <Button
                     key={folder.path}
-                    variant={
-                      folder.path === selectedLocalFolder
-                        ? "secondary"
-                        : "outline"
-                    }
+                    variant={folder.path === selectedLocalFolder ? "secondary" : "outline"}
                     className="justify-start min-w-0 whitespace-normal items-start"
                     onClick={() => setSelectedLocalFolder(folder.path)}
                   >
                     <Folder className="h-4 w-4 mr-2 shrink-0" />
-                    <span className="break-words whitespace-normal">
-                      {folder.path}
-                    </span>
+                    <span className="break-words whitespace-normal">{folder.path}</span>
                   </Button>
                 ))}
               </div>
@@ -1214,21 +1033,14 @@ export default function MusicPlayerPage() {
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium">Tracks</p>
                 <p className="text-xs text-muted-foreground">
-                  {localSongs.length
-                    ? `${localSongs.length} tracks`
-                    : "Select a folder"}
+                  {localSongs.length ? `${localSongs.length} tracks` : "Select a folder"}
                 </p>
               </div>
               <div className="space-y-2 max-h-[320px] overflow-y-auto pr-2">
                 {localSongs.slice(0, 80).map((entry) => (
-                  <div
-                    key={entry.id}
-                    className="flex items-center justify-between gap-2"
-                  >
+                  <div key={entry.id} className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="text-sm font-medium break-words whitespace-normal">
-                        {entry.title}
-                      </p>
+                      <p className="text-sm font-medium break-words whitespace-normal">{entry.title}</p>
                       <p className="text-xs text-muted-foreground break-words whitespace-normal">
                         {entry.path}
                         {entry.subsongCount && entry.subsongCount > 1
@@ -1236,19 +1048,14 @@ export default function MusicPlayerPage() {
                           : ""}
                       </p>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handlePlayLocalTrack(entry)}
-                    >
+                    <Button variant="ghost" size="sm" onClick={() => handlePlayLocalTrack(entry)}>
                       Play
                     </Button>
                   </div>
                 ))}
                 {localSongs.length > 80 && (
                   <p className="text-xs text-muted-foreground">
-                    Showing first 80 tracks. Use folder filters to narrow the
-                    list.
+                    Showing first 80 tracks. Use folder filters to narrow the list.
                   </p>
                 )}
               </div>

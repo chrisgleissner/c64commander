@@ -16,8 +16,7 @@ export type SliderAsyncQueue = {
   cancel: () => void;
 };
 
-export const clampSliderValue = (value: number, min: number, max: number) =>
-  Math.min(max, Math.max(min, value));
+export const clampSliderValue = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 export const resolveMidpointSnap = (params: {
   value: number;
@@ -29,24 +28,15 @@ export const resolveMidpointSnap = (params: {
 }) => {
   const range = Math.max(0, params.max - params.min);
   if (!Number.isFinite(range) || range <= 0) return params.value;
-  const stepRange =
-    params.step !== undefined ? Math.abs(params.step) * 0.75 : undefined;
+  const stepRange = params.step !== undefined ? Math.abs(params.step) * 0.75 : undefined;
   const defaultRange = range * DEFAULT_MIDPOINT_SNAP_RATIO;
   const snapRange =
-    params.snapRange !== undefined
-      ? Math.max(0, params.snapRange)
-      : Math.max(stepRange ?? 0, defaultRange);
+    params.snapRange !== undefined ? Math.max(0, params.snapRange) : Math.max(stepRange ?? 0, defaultRange);
   if (snapRange <= 0) return params.value;
-  return Math.abs(params.value - params.midpoint) <= snapRange
-    ? params.midpoint
-    : params.value;
+  return Math.abs(params.value - params.midpoint) <= snapRange ? params.midpoint : params.value;
 };
 
-export const resolveMidpointPercent = (
-  midpoint: number,
-  min: number,
-  max: number,
-) => {
+export const resolveMidpointPercent = (midpoint: number, min: number, max: number) => {
   const range = max - min;
   if (!Number.isFinite(range) || range === 0) return 0;
   return Math.max(0, Math.min(100, ((midpoint - min) / range) * 100));
@@ -60,14 +50,11 @@ export const shouldTriggerMidpointHaptic = (params: {
   lastTriggerMs: number | null;
   minIntervalMs?: number;
 }) => {
-  const { previous, next, midpoint, nowMs, lastTriggerMs, minIntervalMs } =
-    params;
+  const { previous, next, midpoint, nowMs, lastTriggerMs, minIntervalMs } = params;
   const interval = minIntervalMs ?? DEFAULT_MIDPOINT_HAPTIC_INTERVAL_MS;
   if (lastTriggerMs !== null && nowMs - lastTriggerMs < interval) return false;
   if (previous === null) return next === midpoint;
-  const crossed =
-    (previous < midpoint && next >= midpoint) ||
-    (previous > midpoint && next <= midpoint);
+  const crossed = (previous < midpoint && next >= midpoint) || (previous > midpoint && next <= midpoint);
   const snapped = next === midpoint && previous !== midpoint;
   return crossed || snapped;
 };

@@ -30,10 +30,7 @@ describe("uiPreferences", () => {
   });
 
   it("returns defaults when localStorage is unavailable", () => {
-    const original = Object.getOwnPropertyDescriptor(
-      globalThis,
-      "localStorage",
-    );
+    const original = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
     Object.defineProperty(globalThis, "localStorage", {
       value: undefined,
       configurable: true,
@@ -61,10 +58,7 @@ describe("uiPreferences", () => {
 
   it("setListPreviewLimit is a no-op when localStorage is unavailable", () => {
     // Covers: if (typeof localStorage === 'undefined') return in setListPreviewLimit (line 28)
-    const original = Object.getOwnPropertyDescriptor(
-      globalThis,
-      "localStorage",
-    );
+    const original = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
     Object.defineProperty(globalThis, "localStorage", {
       value: undefined,
       configurable: true,

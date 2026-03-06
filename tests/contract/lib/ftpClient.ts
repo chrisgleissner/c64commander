@@ -48,9 +48,7 @@ export class FtpClient {
     await withTimeout(
       new Promise<void>((resolve, reject) => {
         this.control.once("error", reject);
-        this.control.connect(this.config.port, this.config.host, () =>
-          resolve(),
-        );
+        this.control.connect(this.config.port, this.config.host, () => resolve());
       }),
       this.config.timeoutMs,
       "FTP control connect timeout",
@@ -59,9 +57,7 @@ export class FtpClient {
     await this.sendCommand(`USER ${this.config.user}`);
     const passResponse = await this.sendCommand(`PASS ${this.config.password}`);
     if (passResponse.response.code !== 230) {
-      throw new Error(
-        `FTP auth failed: ${passResponse.response.code} ${passResponse.response.message}`,
-      );
+      throw new Error(`FTP auth failed: ${passResponse.response.code} ${passResponse.response.message}`);
     }
     this.connected = true;
   }
@@ -128,9 +124,7 @@ export class FtpClient {
     return this.sendCommand(`MLST ${path}`.trim());
   }
 
-  async retr(
-    path: string,
-  ): Promise<{ result: FtpCommandResult; data: Buffer }> {
+  async retr(path: string): Promise<{ result: FtpCommandResult; data: Buffer }> {
     const { socket, close } = await this.openDataConnection();
     const start = Date.now();
     const correlationId = randomUUID();
@@ -275,9 +269,7 @@ export class FtpClient {
     );
   }
 
-  private async transferWithData(
-    command: string,
-  ): Promise<{ result: FtpCommandResult; data: string }> {
+  private async transferWithData(command: string): Promise<{ result: FtpCommandResult; data: string }> {
     const { socket, close } = await this.openDataConnection();
     const start = Date.now();
     const correlationId = randomUUID();
@@ -290,9 +282,7 @@ export class FtpClient {
         data: "",
       };
     }
-    const data = (await readAll(socket, this.config.timeoutMs)).toString(
-      "utf8",
-    );
+    const data = (await readAll(socket, this.config.timeoutMs)).toString("utf8");
     close();
     const post = await this.readResponse();
     return {
@@ -310,9 +300,7 @@ export class FtpClient {
       if (response.response.code !== 227) {
         throw new Error(`PASV failed: ${response.response.message}`);
       }
-      const match = response.response.message.match(
-        /\((\d+),(\d+),(\d+),(\d+),(\d+),(\d+)\)/,
-      );
+      const match = response.response.message.match(/\((\d+),(\d+),(\d+),(\d+),(\d+),(\d+)\)/);
       if (!match) {
         throw new Error(`PASV parse failed: ${response.response.message}`);
       }
@@ -357,13 +345,9 @@ export class FtpClient {
 
       const localAddress = this.control.localAddress || "127.0.0.1";
       if (!localAddress.includes(".")) {
-        throw new Error(
-          `FTP PORT requires IPv4 local address, got '${localAddress}'`,
-        );
+        throw new Error(`FTP PORT requires IPv4 local address, got '${localAddress}'`);
       }
-      const [a, b, c, d] = localAddress
-        .split(".")
-        .map((part) => parseInt(part, 10));
+      const [a, b, c, d] = localAddress.split(".").map((part) => parseInt(part, 10));
       const pHi = Math.floor(port / 256);
       const pLo = port % 256;
       await this.sendCommand(`PORT ${a},${b},${c},${d},${pHi},${pLo}`);
@@ -407,11 +391,7 @@ async function readAll(socket: net.Socket, timeoutMs: number): Promise<Buffer> {
   );
 }
 
-async function withTimeout<T>(
-  promise: Promise<T>,
-  timeoutMs: number,
-  message: string,
-): Promise<T> {
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
   let timeout: NodeJS.Timeout | undefined;
   const timer = new Promise<never>((_, reject) => {
     timeout = setTimeout(() => reject(new Error(message)), timeoutMs);

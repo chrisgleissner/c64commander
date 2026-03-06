@@ -39,10 +39,7 @@ export const createHvscSourceLocation = (rootPath: string): SourceLocation => {
     return [...folders, ...songs].sort((a, b) => a.name.localeCompare(b.name));
   };
 
-  const listFilesRecursive = async (
-    path: string,
-    options?: { signal?: AbortSignal },
-  ): Promise<SourceEntry[]> => {
+  const listFilesRecursive = async (path: string, options?: { signal?: AbortSignal }): Promise<SourceEntry[]> => {
     const queue = [normalizeHvscPath(path)];
     const visited = new Set<string>();
     const files: SourceEntry[] = [];
@@ -54,9 +51,7 @@ export const createHvscSourceLocation = (rootPath: string): SourceLocation => {
       if (!next || visited.has(next)) continue;
       visited.add(next);
       const listing = await getHvscFolderListing(next);
-      listing.folders.forEach((folder) =>
-        queue.push(normalizeHvscPath(folder)),
-      );
+      listing.folders.forEach((folder) => queue.push(normalizeHvscPath(folder)));
       listing.songs.forEach((song) => files.push(songToEntry(song)));
     }
     return files;

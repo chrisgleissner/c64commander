@@ -8,11 +8,7 @@
 
 import { renderHook, act } from "@testing-library/react";
 import { useListPreviewLimit } from "@/hooks/useListPreviewLimit";
-import {
-  getListPreviewLimit,
-  setListPreviewLimit,
-  clampListPreviewLimit,
-} from "@/lib/uiPreferences";
+import { getListPreviewLimit, setListPreviewLimit, clampListPreviewLimit } from "@/lib/uiPreferences";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/uiPreferences", () => ({

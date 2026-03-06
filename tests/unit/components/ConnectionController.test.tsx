@@ -5,12 +5,7 @@ import { render } from "@testing-library/react";
 import { ConnectionController } from "@/components/ConnectionController";
 
 const connectionState = {
-  value: "UNKNOWN" as
-    | "UNKNOWN"
-    | "DISCOVERING"
-    | "REAL_CONNECTED"
-    | "DEMO_ACTIVE"
-    | "OFFLINE_NO_DEMO",
+  value: "UNKNOWN" as "UNKNOWN" | "DISCOVERING" | "REAL_CONNECTED" | "DEMO_ACTIVE" | "OFFLINE_NO_DEMO",
 };
 
 const discoverConnectionMock = vi.fn();
@@ -266,15 +261,11 @@ describe("ConnectionController", () => {
     vi.stubEnv("VITE_ENABLE_TEST_PROBES", "1");
 
     const callbacks: Array<() => void> = [];
-    const setTimeoutSpy = vi.spyOn(window, "setTimeout").mockImplementation(((
-      cb: TimerHandler,
-    ) => {
+    const setTimeoutSpy = vi.spyOn(window, "setTimeout").mockImplementation(((cb: TimerHandler) => {
       callbacks.push(cb as () => void);
       return callbacks.length as unknown as number;
     }) as typeof window.setTimeout);
-    const clearTimeoutSpy = vi
-      .spyOn(window, "clearTimeout")
-      .mockImplementation(() => undefined);
+    const clearTimeoutSpy = vi.spyOn(window, "clearTimeout").mockImplementation(() => undefined);
 
     try {
       windowWithProbeGate.__c64uAllowBackgroundRediscovery = true;

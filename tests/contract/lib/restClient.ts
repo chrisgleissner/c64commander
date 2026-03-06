@@ -79,9 +79,7 @@ export class RestClient {
   }
 }
 
-function normalizeHeaders(
-  headers: Record<string, unknown>,
-): Record<string, string | string[] | undefined> {
+function normalizeHeaders(headers: Record<string, unknown>): Record<string, string | string[] | undefined> {
   const normalized: Record<string, string | string[] | undefined> = {};
   for (const [key, value] of Object.entries(headers)) {
     if (typeof value === "string" || Array.isArray(value)) {

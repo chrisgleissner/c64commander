@@ -11,10 +11,7 @@ export type PlaylistTotals = {
   remaining?: number;
 };
 
-export const calculatePlaylistTotals = (
-  durations: Array<number | undefined>,
-  playedMs: number,
-): PlaylistTotals => {
+export const calculatePlaylistTotals = (durations: Array<number | undefined>, playedMs: number): PlaylistTotals => {
   if (!durations.length) return { total: undefined, remaining: undefined };
   const allKnown = durations.every((value) => value !== undefined);
   if (!allKnown) return { total: undefined, remaining: undefined };

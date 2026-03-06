@@ -28,21 +28,15 @@ describe("hasChaosEvidence", () => {
   });
 
   it("returns false for non-chaos interactions", () => {
-    expect(hasChaosEvidence(["s=1 a=click btn-home", "s=2 a=tab music"])).toBe(
-      false,
-    );
+    expect(hasChaosEvidence(["s=1 a=click btn-home", "s=2 a=tab music"])).toBe(false);
   });
 
   it("detects network-offline", () => {
-    expect(
-      hasChaosEvidence(["s=37 a=network-offline network offline 1945ms"]),
-    ).toBe(true);
+    expect(hasChaosEvidence(["s=37 a=network-offline network offline 1945ms"])).toBe(true);
   });
 
   it("detects connection-flap", () => {
-    expect(
-      hasChaosEvidence(["s=12 a=connection-flap 500ms on/500ms off"]),
-    ).toBe(true);
+    expect(hasChaosEvidence(["s=12 a=connection-flap 500ms on/500ms off"])).toBe(true);
   });
 
   it("detects latency-spike", () => {
@@ -73,39 +67,19 @@ describe("classifyDomain", () => {
   const noInteractions: string[] = [];
 
   it("returns FUZZ_INFRASTRUCTURE for DiagnosticsBridge message", () => {
-    expect(
-      classifyDomain(
-        { message: "DiagnosticsBridge unavailable" },
-        noInteractions,
-      ),
-    ).toBe("FUZZ_INFRASTRUCTURE");
+    expect(classifyDomain({ message: "DiagnosticsBridge unavailable" }, noInteractions)).toBe("FUZZ_INFRASTRUCTURE");
   });
 
   it("returns FUZZ_INFRASTRUCTURE for Category config fetch failed", () => {
-    expect(
-      classifyDomain(
-        { message: "Category config fetch failed" },
-        noInteractions,
-      ),
-    ).toBe("FUZZ_INFRASTRUCTURE");
+    expect(classifyDomain({ message: "Category config fetch failed" }, noInteractions)).toBe("FUZZ_INFRASTRUCTURE");
   });
 
   it("returns FUZZ_INFRASTRUCTURE for HVSC filesystem message", () => {
-    expect(
-      classifyDomain(
-        { message: "HVSC filesystem: not loaded" },
-        noInteractions,
-      ),
-    ).toBe("FUZZ_INFRASTRUCTURE");
+    expect(classifyDomain({ message: "HVSC filesystem: not loaded" }, noInteractions)).toBe("FUZZ_INFRASTRUCTURE");
   });
 
   it("returns FUZZ_INFRASTRUCTURE for localStorage init failed", () => {
-    expect(
-      classifyDomain(
-        { message: "[fuzz] localStorage init failed" },
-        noInteractions,
-      ),
-    ).toBe("FUZZ_INFRASTRUCTURE");
+    expect(classifyDomain({ message: "[fuzz] localStorage init failed" }, noInteractions)).toBe("FUZZ_INFRASTRUCTURE");
   });
 
   it("returns FUZZ_INFRASTRUCTURE for stale element errors from fuzz runner frames", () => {
@@ -113,9 +87,7 @@ describe("classifyDomain", () => {
       classifyDomain(
         {
           message: "Element is not attached",
-          topFrames: [
-            "safeClick (file:///home/chris/dev/c64/c64commander/playwright/fuzz/chaosRunner.fuzz.ts:463:5)",
-          ],
+          topFrames: ["safeClick (file:///home/chris/dev/c64/c64commander/playwright/fuzz/chaosRunner.fuzz.ts:463:5)"],
         },
         noInteractions,
       ),
@@ -123,134 +95,67 @@ describe("classifyDomain", () => {
   });
 
   it("returns DEVICE_ACTION for HOME_ prefixed message", () => {
-    expect(
-      classifyDomain(
-        { message: "HOME_RESET: failed to reset" },
-        noInteractions,
-      ),
-    ).toBe("DEVICE_ACTION");
+    expect(classifyDomain({ message: "HOME_RESET: failed to reset" }, noInteractions)).toBe("DEVICE_ACTION");
   });
 
   it("returns DEVICE_ACTION for AUDIO_ROUTING message", () => {
-    expect(
-      classifyDomain(
-        { message: "AUDIO_ROUTING: output unavailable" },
-        noInteractions,
-      ),
-    ).toBe("DEVICE_ACTION");
+    expect(classifyDomain({ message: "AUDIO_ROUTING: output unavailable" }, noInteractions)).toBe("DEVICE_ACTION");
   });
 
   it("returns DEVICE_ACTION for RAM operation retry message", () => {
-    expect(
-      classifyDomain(
-        { message: "RAM operation retry 3 failed" },
-        noInteractions,
-      ),
-    ).toBe("DEVICE_ACTION");
+    expect(classifyDomain({ message: "RAM operation retry 3 failed" }, noInteractions)).toBe("DEVICE_ACTION");
   });
 
   it("returns DEVICE_ACTION for machine pause/resume failure message", () => {
-    expect(
-      classifyDomain(
-        { message: "Machine pause/resume failed" },
-        noInteractions,
-      ),
-    ).toBe("DEVICE_ACTION");
+    expect(classifyDomain({ message: "Machine pause/resume failed" }, noInteractions)).toBe("DEVICE_ACTION");
   });
 
   it("returns DEVICE_ACTION for RESET_DRIVES message", () => {
-    expect(
-      classifyDomain(
-        { message: "RESET_DRIVES failed with HTTP 404" },
-        noInteractions,
-      ),
-    ).toBe("DEVICE_ACTION");
+    expect(classifyDomain({ message: "RESET_DRIVES failed with HTTP 404" }, noInteractions)).toBe("DEVICE_ACTION");
   });
 
   it("returns NETWORK for C64 API request failed", () => {
-    expect(
-      classifyDomain({ message: "C64 API request failed" }, noInteractions),
-    ).toBe("NETWORK");
+    expect(classifyDomain({ message: "C64 API request failed" }, noInteractions)).toBe("NETWORK");
   });
 
   it("returns NETWORK for FTP listing failed", () => {
-    expect(
-      classifyDomain(
-        { message: "FTP listing failed: connection refused" },
-        noInteractions,
-      ),
-    ).toBe("NETWORK");
+    expect(classifyDomain({ message: "FTP listing failed: connection refused" }, noInteractions)).toBe("NETWORK");
   });
 
   it("returns NETWORK for Source browse failed", () => {
-    expect(
-      classifyDomain({ message: "Source browse failed" }, noInteractions),
-    ).toBe("NETWORK");
+    expect(classifyDomain({ message: "Source browse failed" }, noInteractions)).toBe("NETWORK");
   });
 
   it("returns FUZZ_INFRASTRUCTURE for HVSC paged folder listing failed", () => {
-    expect(
-      classifyDomain(
-        { message: "HVSC paged folder listing failed" },
-        noInteractions,
-      ),
-    ).toBe("FUZZ_INFRASTRUCTURE");
+    expect(classifyDomain({ message: "HVSC paged folder listing failed" }, noInteractions)).toBe("FUZZ_INFRASTRUCTURE");
   });
 
   it("returns FUZZ_INFRASTRUCTURE for HVSC songlengths message", () => {
-    expect(
-      classifyDomain(
-        { message: "HVSC songlengths directory bootstrap failed" },
-        noInteractions,
-      ),
-    ).toBe("FUZZ_INFRASTRUCTURE");
+    expect(classifyDomain({ message: "HVSC songlengths directory bootstrap failed" }, noInteractions)).toBe(
+      "FUZZ_INFRASTRUCTURE",
+    );
   });
 
   it("returns BACKEND for JSON parse error", () => {
-    expect(
-      classifyDomain(
-        { message: "JSON parse error in response body" },
-        noInteractions,
-      ),
-    ).toBe("BACKEND");
+    expect(classifyDomain({ message: "JSON parse error in response body" }, noInteractions)).toBe("BACKEND");
   });
 
   it("returns UI for TypeError exception", () => {
-    expect(
-      classifyDomain(
-        { message: "TypeError: Cannot read properties of undefined" },
-        noInteractions,
-      ),
-    ).toBe("UI");
+    expect(classifyDomain({ message: "TypeError: Cannot read properties of undefined" }, noInteractions)).toBe("UI");
   });
 
   it("returns UI for exception field matching a source label (exception field is not used for UI detection)", () => {
     // The exception field is always a source label (app.log.error, console.error etc.),
     // not a native JS exception type. Domain UI is determined only from message + topFrames.
-    expect(
-      classifyDomain(
-        { message: "render failed", exception: "TypeError" },
-        noInteractions,
-      ),
-    ).toBe("UNKNOWN");
+    expect(classifyDomain({ message: "render failed", exception: "TypeError" }, noInteractions)).toBe("UNKNOWN");
   });
 
   it("returns UI for is not a function message", () => {
-    expect(
-      classifyDomain(
-        { message: "handlePress is not a function" },
-        noInteractions,
-      ),
-    ).toBe("UI");
+    expect(classifyDomain({ message: "handlePress is not a function" }, noInteractions)).toBe("UI");
   });
 
   it("returns UNKNOWN for unrecognised message", () => {
-    expect(
-      classifyDomain(
-        { message: "Something entirely unknown happened" },
-        noInteractions,
-      ),
-    ).toBe("UNKNOWN");
+    expect(classifyDomain({ message: "Something entirely unknown happened" }, noInteractions)).toBe("UNKNOWN");
   });
 
   it("returns UNKNOWN for empty signature", () => {
@@ -259,12 +164,7 @@ describe("classifyDomain", () => {
 
   it("returns NETWORK for app.log exception with chaos evidence", () => {
     const chaos = ["s=5 a=network-offline 2000ms"];
-    expect(
-      classifyDomain(
-        { exception: "app.log.error", message: "Unexpected failure" },
-        chaos,
-      ),
-    ).toBe("NETWORK");
+    expect(classifyDomain({ exception: "app.log.error", message: "Unexpected failure" }, chaos)).toBe("NETWORK");
   });
 
   it("all returned domains are in the DOMAINS list", () => {
@@ -338,9 +238,7 @@ describe("classifyIssue", () => {
       signature: {
         message: "Element is not attached",
         exception: "Error",
-        topFrames: [
-          "safeClick (file:///home/chris/dev/c64/c64commander/playwright/fuzz/chaosRunner.fuzz.ts:463:5)",
-        ],
+        topFrames: ["safeClick (file:///home/chris/dev/c64/c64commander/playwright/fuzz/chaosRunner.fuzz.ts:463:5)"],
       },
       severityCounts: { errorLog: 1 },
       examples: [{ lastInteractions: [] }],
@@ -352,27 +250,21 @@ describe("classifyIssue", () => {
 
   it("classifies HOME_ device action with chaos as EXPECTED HIGH", () => {
     const chaos = ["s=5 a=network-offline 3000ms"];
-    const result = classifyIssue(
-      makeGroup("HOME_RESET: failed", { errorLog: 2 }, chaos),
-    );
+    const result = classifyIssue(makeGroup("HOME_RESET: failed", { errorLog: 2 }, chaos));
     expect(result.classification).toBe("EXPECTED");
     expect(result.confidence).toBe("HIGH");
     expect(result.domain).toBe("DEVICE_ACTION");
   });
 
   it("classifies HOME_ device action without chaos as EXPECTED MEDIUM", () => {
-    const result = classifyIssue(
-      makeGroup("HOME_RESET: failed", { errorLog: 2 }, []),
-    );
+    const result = classifyIssue(makeGroup("HOME_RESET: failed", { errorLog: 2 }, []));
     expect(result.classification).toBe("EXPECTED");
     expect(result.confidence).toBe("MEDIUM");
     expect(result.domain).toBe("DEVICE_ACTION");
   });
 
   it("classifies machine pause/resume failure without chaos as EXPECTED MEDIUM", () => {
-    const result = classifyIssue(
-      makeGroup("Machine pause/resume failed", { errorLog: 1 }, []),
-    );
+    const result = classifyIssue(makeGroup("Machine pause/resume failed", { errorLog: 1 }, []));
     expect(result.classification).toBe("EXPECTED");
     expect(result.confidence).toBe("MEDIUM");
     expect(result.domain).toBe("DEVICE_ACTION");
@@ -382,79 +274,54 @@ describe("classifyIssue", () => {
     // "Config write queue: preceding task failed" appears when a config write fails
     // because the mock server returns 404, causing subsequent queue entries to fail.
     // Always EXPECTED in fuzz environment.
-    const result = classifyIssue(
-      makeGroup(
-        "Config write queue: preceding task failed",
-        { errorLog: 1 },
-        [],
-      ),
-    );
+    const result = classifyIssue(makeGroup("Config write queue: preceding task failed", { errorLog: 1 }, []));
     expect(result.classification).toBe("EXPECTED");
     expect(result.domain).toBe("DEVICE_ACTION");
     expect(result.confidence).toBe("MEDIUM");
   });
 
   it("classifies Config write queue message without chaos confirmation", () => {
-    const result = classifyDomain(
-      { message: "Config write queue: preceding task failed" },
-      [],
-    );
+    const result = classifyDomain({ message: "Config write queue: preceding task failed" }, []);
     expect(result).toBe("DEVICE_ACTION");
   });
 
   it("classifies STREAM_VALIDATE device operation as DEVICE_ACTION EXPECTED", () => {
     // STREAM_VALIDATE, STREAM_STOP etc. are audio streaming device ops that always fail
     // in fuzz mode because the mock server does not implement the streaming API.
-    const result = classifyIssue(
-      makeGroup("STREAM_VALIDATE: Invalid stream host", { errorLog: 1 }, []),
-    );
+    const result = classifyIssue(makeGroup("STREAM_VALIDATE: Invalid stream host", { errorLog: 1 }, []));
     expect(result.classification).toBe("EXPECTED");
     expect(result.domain).toBe("DEVICE_ACTION");
   });
 
   it("classifies STREAM_STOP failure as DEVICE_ACTION EXPECTED", () => {
-    const result = classifyIssue(
-      makeGroup("STREAM_STOP: Stream stop failed", { warnLog: 1 }, []),
-    );
+    const result = classifyIssue(makeGroup("STREAM_STOP: Stream stop failed", { warnLog: 1 }, []));
     expect(result.classification).toBe("EXPECTED");
     expect(result.domain).toBe("DEVICE_ACTION");
   });
 
   it("classifyDomain maps STREAM_ prefixed messages to DEVICE_ACTION", () => {
-    expect(
-      classifyDomain({ message: "STREAM_VALIDATE: host unreachable" }, []),
-    ).toBe("DEVICE_ACTION");
-    expect(classifyDomain({ message: "STREAM_STOP: timeout" }, [])).toBe(
-      "DEVICE_ACTION",
-    );
-    expect(
-      classifyDomain({ message: "STREAM_START: connection refused" }, []),
-    ).toBe("DEVICE_ACTION");
+    expect(classifyDomain({ message: "STREAM_VALIDATE: host unreachable" }, [])).toBe("DEVICE_ACTION");
+    expect(classifyDomain({ message: "STREAM_STOP: timeout" }, [])).toBe("DEVICE_ACTION");
+    expect(classifyDomain({ message: "STREAM_START: connection refused" }, [])).toBe("DEVICE_ACTION");
   });
 
   it("classifies C64 API request failed with chaos as EXPECTED HIGH", () => {
     const chaos = ["s=10 a=connection-flap 200ms"];
-    const result = classifyIssue(
-      makeGroup("C64 API request failed", { errorLog: 5 }, chaos),
-    );
+    const result = classifyIssue(makeGroup("C64 API request failed", { errorLog: 5 }, chaos));
     expect(result.classification).toBe("EXPECTED");
     expect(result.confidence).toBe("HIGH");
     expect(result.domain).toBe("NETWORK");
   });
 
   it("classifies C64 API request failed without chaos as EXPECTED MEDIUM", () => {
-    const result = classifyIssue(
-      makeGroup("C64 API request failed", { errorLog: 3 }, []),
-    );
+    const result = classifyIssue(makeGroup("C64 API request failed", { errorLog: 3 }, []));
     expect(result.classification).toBe("EXPECTED");
     expect(result.confidence).toBe("MEDIUM");
     expect(result.domain).toBe("NETWORK");
   });
 
   it("classifies FTP listing failed without chaos as EXPECTED MEDIUM", () => {
-    const result = classifyIssue(
-      makeGroup("FTP listing failed: connection refused", { errorLog: 1 }, []),
-    );
+    const result = classifyIssue(makeGroup("FTP listing failed: connection refused", { errorLog: 1 }, []));
     expect(result.classification).toBe("EXPECTED");
     expect(result.confidence).toBe("MEDIUM");
   });
@@ -499,26 +366,20 @@ describe("classifyIssue", () => {
   });
 
   it("classifies JSON parse error as UNCERTAIN MEDIUM", () => {
-    const result = classifyIssue(
-      makeGroup("JSON parse error in config response", { errorLog: 2 }),
-    );
+    const result = classifyIssue(makeGroup("JSON parse error in config response", { errorLog: 2 }));
     expect(result.classification).toBe("UNCERTAIN");
     expect(result.confidence).toBe("MEDIUM");
     expect(result.domain).toBe("BACKEND");
   });
 
   it("classifies NETWORK without chaos and not a known mock failure as UNCERTAIN MEDIUM", () => {
-    const result = classifyIssue(
-      makeGroup("ECONNREFUSED to device", { errorLog: 1 }, []),
-    );
+    const result = classifyIssue(makeGroup("ECONNREFUSED to device", { errorLog: 1 }, []));
     expect(result.classification).toBe("UNCERTAIN");
     expect(result.confidence).toBe("MEDIUM");
   });
 
   it("classifies unknown domain without crash as UNCERTAIN LOW", () => {
-    const result = classifyIssue(
-      makeGroup("Something entirely unknown happened"),
-    );
+    const result = classifyIssue(makeGroup("Something entirely unknown happened"));
     expect(result.classification).toBe("UNCERTAIN");
     expect(result.confidence).toBe("LOW");
     expect(result.domain).toBe("UNKNOWN");
@@ -561,9 +422,7 @@ describe("classifyIssue", () => {
       issue_group_id: "x",
       signature: { message: "C64 API request failed" },
     };
-    const result = classifyIssue(
-      group as unknown as Parameters<typeof classifyIssue>[0],
-    );
+    const result = classifyIssue(group as unknown as Parameters<typeof classifyIssue>[0]);
     expect(result.classification).toBeDefined();
   });
 
@@ -643,8 +502,7 @@ describe("classifyAllIssues", () => {
 
 describe("renderReadme section structure", () => {
   it("contains all three section headings", async () => {
-    const { renderReadme } =
-      await import("../../../scripts/fuzzReportUtils.mjs");
+    const { renderReadme } = await import("../../../scripts/fuzzReportUtils.mjs");
     const groups = [
       {
         issue_group_id: "real-issue",
@@ -680,8 +538,7 @@ describe("renderReadme section structure", () => {
   });
 
   it("places crash issue under REAL section", async () => {
-    const { renderReadme } =
-      await import("../../../scripts/fuzzReportUtils.mjs");
+    const { renderReadme } = await import("../../../scripts/fuzzReportUtils.mjs");
     const groups = [
       {
         issue_group_id: "the-crash",
@@ -696,11 +553,7 @@ describe("renderReadme section structure", () => {
       },
     ];
     const map = classifyAllIssues(groups);
-    const readme = renderReadme(
-      { platform: "android-phone", shardTotal: 1, sessions: 5 },
-      groups,
-      map,
-    );
+    const readme = renderReadme({ platform: "android-phone", shardTotal: 1, sessions: 5 }, groups, map);
     const realIdx = readme.indexOf("# REAL Issues");
     const uncIdx = readme.indexOf("# UNCERTAIN Issues");
     const issueIdx = readme.indexOf("## the-crash");
@@ -709,8 +562,7 @@ describe("renderReadme section structure", () => {
   });
 
   it("places diagnostic bridge issue under EXPECTED section", async () => {
-    const { renderReadme } =
-      await import("../../../scripts/fuzzReportUtils.mjs");
+    const { renderReadme } = await import("../../../scripts/fuzzReportUtils.mjs");
     const groups = [
       {
         issue_group_id: "diag-bridge",
@@ -725,19 +577,14 @@ describe("renderReadme section structure", () => {
       },
     ];
     const map = classifyAllIssues(groups);
-    const readme = renderReadme(
-      { platform: "android-phone", shardTotal: 1, sessions: 5 },
-      groups,
-      map,
-    );
+    const readme = renderReadme({ platform: "android-phone", shardTotal: 1, sessions: 5 }, groups, map);
     const expIdx = readme.indexOf("# EXPECTED Issues");
     const issueIdx = readme.indexOf("## diag-bridge");
     expect(issueIdx).toBeGreaterThan(expIdx);
   });
 
   it("includes Message before Exception in issue entry", async () => {
-    const { renderReadme } =
-      await import("../../../scripts/fuzzReportUtils.mjs");
+    const { renderReadme } = await import("../../../scripts/fuzzReportUtils.mjs");
     const groups = [
       {
         issue_group_id: "order-test",
@@ -752,11 +599,7 @@ describe("renderReadme section structure", () => {
       },
     ];
     const map = classifyAllIssues(groups);
-    const readme = renderReadme(
-      { platform: "android-phone", shardTotal: 1, sessions: 3 },
-      groups,
-      map,
-    );
+    const readme = renderReadme({ platform: "android-phone", shardTotal: 1, sessions: 3 }, groups, map);
     const msgIdx = readme.indexOf("- Message:");
     const excIdx = readme.indexOf("- Exception:");
     expect(msgIdx).toBeGreaterThan(-1);
@@ -767,8 +610,7 @@ describe("renderReadme section structure", () => {
 
 describe("renderSummary", () => {
   it("contains REAL issues section when there are real issues", async () => {
-    const { renderSummary } =
-      await import("../../../scripts/fuzzReportUtils.mjs");
+    const { renderSummary } = await import("../../../scripts/fuzzReportUtils.mjs");
     const groups = [
       {
         issue_group_id: "crash-1",
@@ -783,19 +625,14 @@ describe("renderSummary", () => {
       },
     ];
     const map = classifyAllIssues(groups);
-    const summary = renderSummary(
-      { platform: "android-phone", shardTotal: 1, sessions: 4 },
-      groups,
-      map,
-    );
+    const summary = renderSummary({ platform: "android-phone", shardTotal: 1, sessions: 4 }, groups, map);
     expect(summary).toContain("# Fuzz Issue Summary");
     expect(summary).toContain("## REAL Issues");
     expect(summary).toContain("crash-1");
   });
 
   it("does not contain REAL section when no real issues", async () => {
-    const { renderSummary } =
-      await import("../../../scripts/fuzzReportUtils.mjs");
+    const { renderSummary } = await import("../../../scripts/fuzzReportUtils.mjs");
     const groups = [
       {
         issue_group_id: "infra-1",
@@ -810,11 +647,7 @@ describe("renderSummary", () => {
       },
     ];
     const map = classifyAllIssues(groups);
-    const summary = renderSummary(
-      { platform: "android-phone", shardTotal: 1, sessions: 2 },
-      groups,
-      map,
-    );
+    const summary = renderSummary({ platform: "android-phone", shardTotal: 1, sessions: 2 }, groups, map);
     expect(summary).not.toContain("## REAL Issues");
   });
 });
@@ -939,9 +772,7 @@ describe("classifyIssue: UNCERTAIN fallthrough — non-null explanation (Bug D r
   });
 
   it("UNKNOWN domain fallthrough has non-null explanation", () => {
-    const result = classifyIssue(
-      makeGroup("Something entirely unrecognised happened"),
-    );
+    const result = classifyIssue(makeGroup("Something entirely unrecognised happened"));
     expect(result.classification).toBe("UNCERTAIN");
     expect(result.domain).toBe("UNKNOWN");
     expect(result.explanation).toBeTruthy();
@@ -949,9 +780,7 @@ describe("classifyIssue: UNCERTAIN fallthrough — non-null explanation (Bug D r
   });
 
   it("UNKNOWN domain fallthrough explanation mentions the domain name", () => {
-    const result = classifyIssue(
-      makeGroup("Something entirely unrecognised happened"),
-    );
+    const result = classifyIssue(makeGroup("Something entirely unrecognised happened"));
     expect(result.explanation).toContain("UNKNOWN");
   });
 
@@ -992,15 +821,11 @@ describe("classifyIssue: UNCERTAIN fallthrough — non-null explanation (Bug D r
 
   it("BACKEND and NETWORK UNCERTAIN cases also have non-null explanation (regression guard)", () => {
     // These were already non-null before the fix; ensure they remain so
-    const backendResult = classifyIssue(
-      makeGroup("JSON parse error in config response", { errorLog: 2 }),
-    );
+    const backendResult = classifyIssue(makeGroup("JSON parse error in config response", { errorLog: 2 }));
     expect(backendResult.classification).toBe("UNCERTAIN");
     expect(backendResult.explanation).toBeTruthy();
 
-    const networkResult = classifyIssue(
-      makeGroup("ECONNREFUSED to device", { errorLog: 1 }, []),
-    );
+    const networkResult = classifyIssue(makeGroup("ECONNREFUSED to device", { errorLog: 1 }, []));
     expect(networkResult.classification).toBe("UNCERTAIN");
     expect(networkResult.explanation).toBeTruthy();
   });

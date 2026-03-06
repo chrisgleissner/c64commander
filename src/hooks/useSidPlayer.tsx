@@ -6,15 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { getC64API } from "@/lib/c64api";
 import { createSslPayload } from "@/lib/sid/sidUtils";
 
@@ -50,9 +42,7 @@ type SidPlayerContextValue = {
 const SidPlayerContext = createContext<SidPlayerContextValue | null>(null);
 
 const buildId = () =>
-  (typeof crypto !== "undefined" &&
-    "randomUUID" in crypto &&
-    crypto.randomUUID()) ||
+  (typeof crypto !== "undefined" && "randomUUID" in crypto && crypto.randomUUID()) ||
   `${Date.now()}-${Math.round(Math.random() * 1e6)}`;
 
 const resolveBlob = (track: SidTrack) => {
@@ -78,10 +68,7 @@ export function SidPlayerProvider({ children }: { children: React.ReactNode }) {
   const [durationMs, setDurationMs] = useState<number | undefined>(undefined);
   const startedAtRef = useRef<number | null>(null);
 
-  const currentTrack = useMemo(
-    () => queue[currentIndex] ?? null,
-    [queue, currentIndex],
-  );
+  const currentTrack = useMemo(() => queue[currentIndex] ?? null, [queue, currentIndex]);
 
   const playTrackInternal = useCallback(async (track: SidTrack) => {
     const api = getC64API();
@@ -184,11 +171,7 @@ export function SidPlayerProvider({ children }: { children: React.ReactNode }) {
     setShuffle,
   };
 
-  return (
-    <SidPlayerContext.Provider value={value}>
-      {children}
-    </SidPlayerContext.Provider>
-  );
+  return <SidPlayerContext.Provider value={value}>{children}</SidPlayerContext.Provider>;
 }
 
 /**

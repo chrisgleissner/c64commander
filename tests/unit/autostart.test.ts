@@ -35,10 +35,7 @@ describe("autostart", () => {
     await task;
 
     expect(api.writeMemory).toHaveBeenCalledWith("0277", AUTOSTART_SEQUENCE);
-    expect(api.writeMemory).toHaveBeenCalledWith(
-      "00C6",
-      new Uint8Array([AUTOSTART_SEQUENCE.length]),
-    );
+    expect(api.writeMemory).toHaveBeenCalledWith("00C6", new Uint8Array([AUTOSTART_SEQUENCE.length]));
   });
 
   it("throws when keyboard buffer stays busy", async () => {
@@ -50,9 +47,7 @@ describe("autostart", () => {
       pollIntervalMs: 10,
       maxAttempts: 3,
     });
-    const assertion = expect(task).rejects.toThrow(
-      "Keyboard buffer remained busy",
-    );
+    const assertion = expect(task).rejects.toThrow("Keyboard buffer remained busy");
     await vi.runAllTimersAsync();
     await assertion;
   });

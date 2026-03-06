@@ -7,10 +7,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import {
-  exportSettingsSnapshot,
-  importSettingsJson,
-} from "@/lib/config/settingsTransfer";
+import { exportSettingsSnapshot, importSettingsJson } from "@/lib/config/settingsTransfer";
 import * as appSettings from "@/lib/config/appSettings";
 import * as deviceSafetySettings from "@/lib/config/deviceSafetySettings";
 
@@ -113,9 +110,7 @@ describe("settingsTransfer", () => {
       expect(result).toEqual({ ok: true });
 
       expect(appSettings.saveDebugLoggingEnabled).toHaveBeenCalledWith(true);
-      expect(deviceSafetySettings.saveDeviceSafetyMode).toHaveBeenCalledWith(
-        "BALANCED",
-      );
+      expect(deviceSafetySettings.saveDeviceSafetyMode).toHaveBeenCalledWith("BALANCED");
     });
 
     it("rejects invalid JSON", () => {
@@ -170,58 +165,31 @@ describe("settingsTransfer", () => {
     });
 
     it("rejects non-object appSettings", () => {
-      expect(
-        importSettingsJson(
-          JSON.stringify({ ...validPayload, appSettings: null }),
-        ),
-      ).toEqual({ ok: false, error: "appSettings must be an object." });
-      expect(
-        importSettingsJson(
-          JSON.stringify({ ...validPayload, appSettings: "string" }),
-        ),
-      ).toEqual({ ok: false, error: "appSettings must be an object." });
+      expect(importSettingsJson(JSON.stringify({ ...validPayload, appSettings: null }))).toEqual({
+        ok: false,
+        error: "appSettings must be an object.",
+      });
+      expect(importSettingsJson(JSON.stringify({ ...validPayload, appSettings: "string" }))).toEqual({
+        ok: false,
+        error: "appSettings must be an object.",
+      });
     });
 
     it("rejects non-object deviceSafety", () => {
-      expect(
-        importSettingsJson(
-          JSON.stringify({ ...validPayload, deviceSafety: null }),
-        ),
-      ).toEqual({ ok: false, error: "deviceSafety must be an object." });
+      expect(importSettingsJson(JSON.stringify({ ...validPayload, deviceSafety: null }))).toEqual({
+        ok: false,
+        error: "deviceSafety must be an object.",
+      });
     });
 
     it("validates each appSettings field individually", () => {
       const fields: Array<[string, unknown, string]> = [
-        [
-          "configWriteIntervalMs",
-          "string",
-          "configWriteIntervalMs must be a number.",
-        ],
-        [
-          "automaticDemoModeEnabled",
-          "x",
-          "automaticDemoModeEnabled must be boolean.",
-        ],
-        [
-          "startupDiscoveryWindowMs",
-          null,
-          "startupDiscoveryWindowMs must be a number.",
-        ],
-        [
-          "backgroundRediscoveryIntervalMs",
-          "bad",
-          "backgroundRediscoveryIntervalMs must be a number.",
-        ],
-        [
-          "discoveryProbeTimeoutMs",
-          "notanumber",
-          "discoveryProbeTimeoutMs must be a number.",
-        ],
-        [
-          "diskAutostartMode",
-          "usb",
-          "diskAutostartMode must be kernal or dma.",
-        ],
+        ["configWriteIntervalMs", "string", "configWriteIntervalMs must be a number."],
+        ["automaticDemoModeEnabled", "x", "automaticDemoModeEnabled must be boolean."],
+        ["startupDiscoveryWindowMs", null, "startupDiscoveryWindowMs must be a number."],
+        ["backgroundRediscoveryIntervalMs", "bad", "backgroundRediscoveryIntervalMs must be a number."],
+        ["discoveryProbeTimeoutMs", "notanumber", "discoveryProbeTimeoutMs must be a number."],
+        ["diskAutostartMode", "usb", "diskAutostartMode must be kernal or dma."],
       ];
       for (const [field, value, expectedError] of fields) {
         const invalid = {

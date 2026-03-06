@@ -13,21 +13,10 @@ import type { LocalPlayFile } from "@/lib/playback/playbackRouter";
 import { buildLocalPlayFileFromUri } from "@/lib/playback/fileLibraryUtils";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 import { countSonglengthsEntries } from "@/lib/sid/songlengths";
-import {
-  InMemoryTextBackend,
-  SongLengthServiceFacade,
-  type InMemorySongLengthSnapshot,
-} from "@/lib/songlengths";
-import {
-  collectSonglengthsSearchPaths,
-  DOCUMENTS_FOLDER,
-  isSonglengthsFileName,
-} from "@/lib/sid/songlengthsDiscovery";
+import { InMemoryTextBackend, SongLengthServiceFacade, type InMemorySongLengthSnapshot } from "@/lib/songlengths";
+import { collectSonglengthsSearchPaths, DOCUMENTS_FOLDER, isSonglengthsFileName } from "@/lib/sid/songlengthsDiscovery";
 import { getParentPath } from "@/lib/playback/localFileBrowser";
-import {
-  getLocalFilePath,
-  normalizeLocalPath,
-} from "@/pages/playFiles/playFilesUtils";
+import { getLocalFilePath, normalizeLocalPath } from "@/pages/playFiles/playFilesUtils";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 
 import { getPlatform, isNativePlatform } from "@/lib/native/platform";
@@ -94,20 +83,15 @@ type SonglengthsResolverBundle = {
   snapshot: InMemorySongLengthSnapshot;
 };
 
-export const useSonglengths = ({
-  playlist,
-}: UseSonglengthsParams): UseSonglengthsResult => {
-  const [songlengthsFiles, setSonglengthsFiles] = useState<
-    SonglengthsFileEntry[]
-  >([]);
-  const [songlengthsSummary, setSonglengthsSummary] =
-    useState<SonglengthsSummary>({
-      fileName: null,
-      path: null,
-      sizeLabel: null,
-      entryCount: null,
-      error: null,
-    });
+export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengthsResult => {
+  const [songlengthsFiles, setSonglengthsFiles] = useState<SonglengthsFileEntry[]>([]);
+  const [songlengthsSummary, setSonglengthsSummary] = useState<SonglengthsSummary>({
+    fileName: null,
+    path: null,
+    sizeLabel: null,
+    entryCount: null,
+    error: null,
+  });
   const songlengthsCacheRef = useRef(
     new Map<
       string,
@@ -149,11 +133,7 @@ export const useSonglengths = ({
     try {
       const stored = JSON.parse(raw) as PersistedSonglengthsFile;
       if (!stored?.uri || !stored?.name || !stored?.path) return;
-      const file = buildLocalPlayFileFromUri(
-        stored.name,
-        stored.path,
-        stored.uri,
-      );
+      const file = buildLocalPlayFileFromUri(stored.name, stored.path, stored.uri);
       setSonglengthsFiles([
         {
           path: stored.path,
@@ -202,10 +182,7 @@ export const useSonglengths = ({
   }, [playlist, songlengthsFiles]);
 
   const globalSonglengthsFiles = useMemo(
-    () =>
-      songlengthsFiles
-        .filter((entry) => entry.scope === "global")
-        .map((entry) => entry.file),
+    () => songlengthsFiles.filter((entry) => entry.scope === "global").map((entry) => entry.file),
     [songlengthsFiles],
   );
 
@@ -231,28 +208,17 @@ export const useSonglengths = ({
         });
         return;
       }
-      const fileName =
-        entry.name ??
-        entry.file.name ??
-        entry.path.split("/").pop() ??
-        entry.path;
+      const fileName = entry.name ?? entry.file.name ?? entry.path.split("/").pop() ?? entry.path;
       const path = entry.path;
       try {
         const buffer = await entry.file.arrayBuffer();
-        const sizeBytes =
-          entry.file instanceof File
-            ? entry.file.size
-            : (entry.sizeBytes ?? buffer.byteLength);
+        const sizeBytes = entry.file instanceof File ? entry.file.size : (entry.sizeBytes ?? buffer.byteLength);
         const text = new TextDecoder().decode(new Uint8Array(buffer));
         const backend = new InMemoryTextBackend();
         const service = new SongLengthServiceFacade(backend, {
           serviceId: "play-songlengths-summary",
         });
-        await service.loadOnColdStart(
-          path,
-          async () => [{ path, content: text }],
-          "play-songlengths",
-        );
+        await service.loadOnColdStart(path, async () => [{ path, content: text }], "play-songlengths");
         const entryCount = countSonglengthsEntries(backend.exportSnapshot());
         if (!entryCount) {
           setSonglengthsSummary({
@@ -277,8 +243,7 @@ export const useSonglengths = ({
           path,
           sizeLabel: null,
           entryCount: null,
-          error:
-            (error as Error).message || "Songlengths file could not be read.",
+          error: (error as Error).message || "Songlengths file could not be read.",
         });
       }
     },
@@ -299,9 +264,7 @@ export const useSonglengths = ({
       const filesByDir = extraFiles?.length
         ? extraFiles.reduce((map, entry) => {
             const normalizedPath = normalizeSourcePath(entry.path);
-            const folder =
-              normalizedPath.slice(0, normalizedPath.lastIndexOf("/") + 1) ||
-              "/";
+            const folder = normalizedPath.slice(0, normalizedPath.lastIndexOf("/") + 1) || "/";
             map.set(folder, entry.file);
             return map;
           }, new Map(songlengthsFilesByDir))
@@ -312,21 +275,15 @@ export const useSonglengths = ({
         const candidate = filesByDir.get(current);
         if (candidate) files.set(getLocalFilePath(candidate), candidate);
         const docsCandidate = filesByDir.get(`${current}${DOCUMENTS_FOLDER}/`);
-        if (docsCandidate)
-          files.set(getLocalFilePath(docsCandidate), docsCandidate);
+        if (docsCandidate) files.set(getLocalFilePath(docsCandidate), docsCandidate);
         if (current === "/") break;
         current = getParentPath(current);
       }
-      const globalFiles = globalSonglengthsFiles.filter(
-        (file) => !files.has(getLocalFilePath(file)),
-      );
+      const globalFiles = globalSonglengthsFiles.filter((file) => !files.has(getLocalFilePath(file)));
       if (!files.size && globalFiles.length === 0) return null;
 
       const signature = [...Array.from(files.values()), ...globalFiles]
-        .map(
-          (file) =>
-            `${getLocalFilePath(file)}:${typeof file.lastModified === "number" ? file.lastModified : 0}`,
-        )
+        .map((file) => `${getLocalFilePath(file)}:${typeof file.lastModified === "number" ? file.lastModified : 0}`)
         .sort()
         .join("|");
       const cached = songlengthsCacheRef.current.get(cacheKey);
@@ -335,22 +292,14 @@ export const useSonglengths = ({
       }
 
       const loader = (async () => {
-        const ordered = [
-          ...Array.from(files.values()).reverse(),
-          ...globalFiles,
-        ];
+        const ordered = [...Array.from(files.values()).reverse(), ...globalFiles];
         const sourceFiles: Array<{ path: string; content: string }> = [];
         for (const file of ordered) {
           try {
             const filePath = getLocalFilePath(file);
-            const mtime =
-              typeof file.lastModified === "number" ? file.lastModified : 0;
+            const mtime = typeof file.lastModified === "number" ? file.lastModified : 0;
             const cachedEntry = songlengthsFileCacheRef.current.get(filePath);
-            if (
-              cachedEntry &&
-              cachedEntry.mtime === mtime &&
-              cachedEntry.content !== null
-            ) {
+            if (cachedEntry && cachedEntry.mtime === mtime && cachedEntry.content !== null) {
               sourceFiles.push({
                 path: filePath,
                 content: cachedEntry.content,
@@ -362,8 +311,7 @@ export const useSonglengths = ({
             sourceFiles.push({ path: filePath, content });
           } catch (error) {
             const filePath = getLocalFilePath(file);
-            const mtime =
-              typeof file.lastModified === "number" ? file.lastModified : 0;
+            const mtime = typeof file.lastModified === "number" ? file.lastModified : 0;
             songlengthsFileCacheRef.current.set(filePath, {
               mtime,
               content: null,
@@ -392,12 +340,7 @@ export const useSonglengths = ({
               reason,
             });
           },
-          onAmbiguous: ({
-            fileName,
-            partialPath,
-            candidateCount,
-            candidates,
-          }) => {
+          onAmbiguous: ({ fileName, partialPath, candidateCount, candidates }) => {
             addErrorLog("Songlengths ambiguity detected", {
               fileName,
               partialPath,
@@ -409,11 +352,7 @@ export const useSonglengths = ({
         const service = new SongLengthServiceFacade(backend, {
           serviceId: "play-songlengths",
         });
-        const stats = await service.loadOnColdStart(
-          cacheKey,
-          async () => sourceFiles,
-          "play-songlengths",
-        );
+        const stats = await service.loadOnColdStart(cacheKey, async () => sourceFiles, "play-songlengths");
         if (stats.status !== "ready") return null;
         return { service, snapshot: backend.exportSnapshot() };
       })();
@@ -443,76 +382,63 @@ export const useSonglengths = ({
       return;
     }
     const path = normalizeSourcePath(getLocalFilePath(file));
-    setSonglengthsFiles([
-      { path, file, name: file.name, sizeBytes: file.size, scope: "global" },
-    ]);
+    setSonglengthsFiles([{ path, file, name: file.name, sizeBytes: file.size, scope: "global" }]);
     if (typeof localStorage !== "undefined") {
       localStorage.removeItem(persistedKey);
     }
   }, []);
 
-  const handleSonglengthsPicked = useCallback(
-    (picked: PersistedSonglengthsFile) => {
-      if (!picked?.uri || !picked?.name) return;
-      if (!isSonglengthsFileName(picked.name)) {
-        toast({
-          title: "Unsupported file",
-          description: "Choose a .txt or .md5 songlengths file.",
-        });
-        return;
-      }
-      const path = normalizeSourcePath(picked.path || `/${picked.name}`);
-      const file = buildLocalPlayFileFromUri(picked.name, path, picked.uri);
-      setSonglengthsFiles([
-        {
+  const handleSonglengthsPicked = useCallback((picked: PersistedSonglengthsFile) => {
+    if (!picked?.uri || !picked?.name) return;
+    if (!isSonglengthsFileName(picked.name)) {
+      toast({
+        title: "Unsupported file",
+        description: "Choose a .txt or .md5 songlengths file.",
+      });
+      return;
+    }
+    const path = normalizeSourcePath(picked.path || `/${picked.name}`);
+    const file = buildLocalPlayFileFromUri(picked.name, path, picked.uri);
+    setSonglengthsFiles([
+      {
+        path,
+        file,
+        uri: picked.uri,
+        name: picked.name,
+        sizeBytes: picked.sizeBytes ?? null,
+        modifiedAt: picked.modifiedAt ?? null,
+        scope: "global",
+      },
+    ]);
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(
+        persistedKey,
+        JSON.stringify({
           path,
-          file,
           uri: picked.uri,
           name: picked.name,
           sizeBytes: picked.sizeBytes ?? null,
           modifiedAt: picked.modifiedAt ?? null,
-          scope: "global",
-        },
-      ]);
-      if (typeof localStorage !== "undefined") {
-        localStorage.setItem(
-          persistedKey,
-          JSON.stringify({
-            path,
-            uri: picked.uri,
-            name: picked.name,
-            sizeBytes: picked.sizeBytes ?? null,
-            modifiedAt: picked.modifiedAt ?? null,
-          }),
-        );
-      }
-    },
-    [],
-  );
+        }),
+      );
+    }
+  }, []);
 
-  const mergeSonglengthsFiles = useCallback(
-    (entries: SonglengthsFileEntry[]) => {
-      setSonglengthsFiles((prev) => {
-        const seen = new Set(prev.map((entry) => entry.path));
-        const next = [...prev];
-        entries.forEach((entry) => {
-          if (seen.has(entry.path)) return;
-          seen.add(entry.path);
-          next.push(entry);
-        });
-        return next;
+  const mergeSonglengthsFiles = useCallback((entries: SonglengthsFileEntry[]) => {
+    setSonglengthsFiles((prev) => {
+      const seen = new Set(prev.map((entry) => entry.path));
+      const next = [...prev];
+      entries.forEach((entry) => {
+        if (seen.has(entry.path)) return;
+        seen.add(entry.path);
+        next.push(entry);
       });
-    },
-    [],
-  );
+      return next;
+    });
+  }, []);
 
   const resolveDurationMsWithFacade = useCallback(
-    async (
-      service: SongLengthServiceFacade,
-      path: string,
-      file?: LocalPlayFile | null,
-      songNr?: number | null,
-    ) => {
+    async (service: SongLengthServiceFacade, path: string, file?: LocalPlayFile | null, songNr?: number | null) => {
       const normalizedPath = normalizeLocalPath(path || "/");
       const fileName = normalizedPath.split("/").pop() ?? null;
       const resolvedByPath = service.resolveDurationSeconds({
@@ -534,9 +460,7 @@ export const useSonglengths = ({
           md5,
           songNr: songNr ?? null,
         });
-        return resolvedByMd5.durationSeconds !== null
-          ? resolvedByMd5.durationSeconds * 1000
-          : null;
+        return resolvedByMd5.durationSeconds !== null ? resolvedByMd5.durationSeconds * 1000 : null;
       } catch (error) {
         addErrorLog("Failed to resolve songlength via facade md5 fallback", {
           path: normalizedPath,
@@ -550,22 +474,14 @@ export const useSonglengths = ({
   );
 
   const applySonglengthsToItems = useCallback(
-    async (
-      items: PlaylistItem[],
-      songlengthsOverrides?: SonglengthsFileEntry[],
-    ) => {
+    async (items: PlaylistItem[], songlengthsOverrides?: SonglengthsFileEntry[]) => {
       const updated = await Promise.all(
         items.map(async (item) => {
           if (item.category !== "sid") return item;
           const isLocal = item.request.source === "local";
           const filePath =
-            isLocal && item.request.file
-              ? getLocalFilePath(item.request.file)
-              : normalizeLocalPath(item.request.path);
-          const bundle = await loadSonglengthBundleForPath(
-            filePath,
-            songlengthsOverrides,
-          );
+            isLocal && item.request.file ? getLocalFilePath(item.request.file) : normalizeLocalPath(item.request.path);
+          const bundle = await loadSonglengthBundleForPath(filePath, songlengthsOverrides);
           if (!bundle) return item;
           const resolvedDurationMs = await resolveDurationMsWithFacade(
             bundle.service,
@@ -589,17 +505,9 @@ export const useSonglengths = ({
       songNr?: number | null,
       songlengthsOverrides?: SonglengthsFileEntry[],
     ) => {
-      const bundle = await loadSonglengthBundleForPath(
-        path,
-        songlengthsOverrides,
-      );
+      const bundle = await loadSonglengthBundleForPath(path, songlengthsOverrides);
       if (!bundle) return null;
-      return resolveDurationMsWithFacade(
-        bundle.service,
-        path,
-        file ?? null,
-        songNr ?? null,
-      );
+      return resolveDurationMsWithFacade(bundle.service, path, file ?? null, songNr ?? null);
     },
     [loadSonglengthBundleForPath, resolveDurationMsWithFacade],
   );

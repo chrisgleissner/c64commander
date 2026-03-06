@@ -8,16 +8,9 @@
 
 import { useCallback, useMemo } from "react";
 import type { TraceOrigin } from "@/lib/tracing/types";
-import {
-  createActionContext,
-  runActionScope,
-  runWithActionTrace,
-} from "@/lib/tracing/actionTrace";
+import { createActionContext, runActionScope, runWithActionTrace } from "@/lib/tracing/actionTrace";
 
-const inferActionName = (
-  componentName: string | undefined,
-  fn: (...args: unknown[]) => unknown,
-) => {
+const inferActionName = (componentName: string | undefined, fn: (...args: unknown[]) => unknown) => {
   if (componentName) {
     const fnName = fn.name || "anonymousAction";
     return `${componentName}.${fnName}`;
@@ -35,13 +28,7 @@ const inferComponentNameFromStack = () => {
       .map((line) => line.replace(/^at\s+/, "").split(" ")[0])
       .filter(
         (name) =>
-          name &&
-          ![
-            "useActionTrace",
-            "renderWithHooks",
-            "mountIndeterminateComponent",
-            "beginWork",
-          ].includes(name),
+          name && !["useActionTrace", "renderWithHooks", "mountIndeterminateComponent", "beginWork"].includes(name),
       );
     return candidates[0];
   } catch (error) {
@@ -62,11 +49,7 @@ export const useActionTrace = (componentName?: string): ActionTraceWrapper => {
     <T extends (...args: any[]) => any>(fn: T) => {
       const actionName = inferActionName(resolvedComponent, fn);
       const traced = ((...args: Parameters<T>) => {
-        const context = createActionContext(
-          actionName,
-          origin,
-          resolvedComponent ?? null,
-        );
+        const context = createActionContext(actionName, origin, resolvedComponent ?? null);
         return runWithActionTrace(context, () => fn(...args));
       }) as T;
       return traced;

@@ -21,17 +21,10 @@ export type HvscState = HvscStatus & {
 
 const STORAGE_KEY = "c64u_hvsc_state:v1";
 
-const validIngestionStates = new Set<HvscIngestionState>([
-  "idle",
-  "installing",
-  "updating",
-  "ready",
-  "error",
-]);
+const validIngestionStates = new Set<HvscIngestionState>(["idle", "installing", "updating", "ready", "error"]);
 
 const toIngestionState = (value: unknown): HvscIngestionState =>
-  typeof value === "string" &&
-  validIngestionStates.has(value as HvscIngestionState)
+  typeof value === "string" && validIngestionStates.has(value as HvscIngestionState)
     ? (value as HvscIngestionState)
     : "idle";
 
@@ -86,11 +79,7 @@ export const updateHvscState = (partial: Partial<HvscState>) => {
   return next;
 };
 
-export const markUpdateApplied = (
-  version: number,
-  status: "success" | "failed",
-  error?: string | null,
-) => {
+export const markUpdateApplied = (version: number, status: "success" | "failed", error?: string | null) => {
   const current = loadHvscState();
   const next: HvscState = {
     ...current,

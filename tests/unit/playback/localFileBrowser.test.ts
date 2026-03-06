@@ -7,11 +7,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import {
-  listLocalFiles,
-  listLocalFolders,
-  getParentPath,
-} from "@/lib/playback/localFileBrowser";
+import { listLocalFiles, listLocalFolders, getParentPath } from "@/lib/playback/localFileBrowser";
 
 const makeFile = (path: string, size = 100, lastModified = 1000) => {
   const parts = path.split("/");

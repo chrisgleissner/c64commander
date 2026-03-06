@@ -51,10 +51,7 @@ export function percentiles(sortedSamples: number[]): Percentiles {
     if (sortedSamples.length === 0) {
       return 0;
     }
-    const idx = Math.min(
-      sortedSamples.length - 1,
-      Math.max(0, Math.ceil(q * sortedSamples.length) - 1),
-    );
+    const idx = Math.min(sortedSamples.length - 1, Math.max(0, Math.ceil(q * sortedSamples.length) - 1));
     return sortedSamples[idx];
   };
   return {

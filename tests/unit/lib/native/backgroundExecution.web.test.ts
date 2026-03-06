@@ -24,13 +24,9 @@ describe("BackgroundExecutionWeb", () => {
   it("logs when wake lock is unavailable", async () => {
     const plugin = new BackgroundExecutionWeb();
     await plugin.start();
-    expect(addLogMock).toHaveBeenCalledWith(
-      "info",
-      "Background execution wake lock unavailable on web",
-      {
-        source: "background-execution-web",
-      },
-    );
+    expect(addLogMock).toHaveBeenCalledWith("info", "Background execution wake lock unavailable on web", {
+      source: "background-execution-web",
+    });
   });
 
   it("acquires and releases wake lock when available", async () => {
@@ -62,14 +58,10 @@ describe("BackgroundExecutionWeb", () => {
     const plugin = new BackgroundExecutionWeb();
     await plugin.start();
 
-    expect(addLogMock).toHaveBeenCalledWith(
-      "warn",
-      "Web wake lock request failed",
-      {
-        source: "background-execution-web",
-        error: "denied",
-      },
-    );
+    expect(addLogMock).toHaveBeenCalledWith("warn", "Web wake lock request failed", {
+      source: "background-execution-web",
+      error: "denied",
+    });
   });
 
   it("logs wake lock release failures", async () => {
@@ -85,14 +77,10 @@ describe("BackgroundExecutionWeb", () => {
     await plugin.start();
     await plugin.stop();
 
-    expect(addLogMock).toHaveBeenCalledWith(
-      "warn",
-      "Web wake lock release failed",
-      {
-        source: "background-execution-web",
-        error: "release-failed",
-      },
-    );
+    expect(addLogMock).toHaveBeenCalledWith("warn", "Web wake lock release failed", {
+      source: "background-execution-web",
+      error: "release-failed",
+    });
   });
 
   it("fires backgroundAutoSkipDue event at due time", async () => {
@@ -136,13 +124,9 @@ describe("BackgroundExecutionWeb", () => {
     await plugin.addListener("backgroundAutoSkipDue" as never, listener);
     await plugin.addListener("unsupported-event" as never, listener);
 
-    expect(addLogMock).toHaveBeenCalledWith(
-      "warn",
-      "Unsupported web background execution listener event",
-      {
-        source: "background-execution-web",
-        eventName: "unsupported-event",
-      },
-    );
+    expect(addLogMock).toHaveBeenCalledWith("warn", "Unsupported web background execution listener event", {
+      source: "background-execution-web",
+      eventName: "unsupported-event",
+    });
   });
 });

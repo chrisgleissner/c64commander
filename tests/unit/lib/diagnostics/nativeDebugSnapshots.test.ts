@@ -8,18 +8,12 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const getLogs = vi.fn(() => [
-  { id: "2", timestamp: "2025-01-02T00:00:00Z", message: "log" },
-]);
-const getErrorLogs = vi.fn(() => [
-  { id: "1", timestamp: "2025-01-01T00:00:00Z", message: "err" },
-]);
+const getLogs = vi.fn(() => [{ id: "2", timestamp: "2025-01-02T00:00:00Z", message: "log" }]);
+const getErrorLogs = vi.fn(() => [{ id: "1", timestamp: "2025-01-01T00:00:00Z", message: "err" }]);
 const addErrorLog = vi.fn();
 const buildActionSummaries = vi.fn(() => [{ id: "a1" }]);
 const buildNetworkSnapshot = vi.fn(() => ({ status: "ok" }));
-const getTraceEvents = vi.fn(() => [
-  { id: "t1", timestamp: "2025-01-01T00:00:00Z" },
-]);
+const getTraceEvents = vi.fn(() => [{ id: "t1", timestamp: "2025-01-01T00:00:00Z" }]);
 const getPlatform = vi.fn(() => "ios");
 const pushNativeDebugSnapshots = vi.fn(async () => undefined);
 
@@ -57,8 +51,7 @@ describe("nativeDebugSnapshots", () => {
   });
 
   it("publishes immediately and on throttled update events", async () => {
-    const { startNativeDebugSnapshotPublisher } =
-      await import("@/lib/diagnostics/nativeDebugSnapshots");
+    const { startNativeDebugSnapshotPublisher } = await import("@/lib/diagnostics/nativeDebugSnapshots");
 
     const stop = startNativeDebugSnapshotPublisher();
     await vi.runAllTimersAsync();
@@ -75,8 +68,7 @@ describe("nativeDebugSnapshots", () => {
 
   it("logs publish errors and noops on non-ios platform", async () => {
     pushNativeDebugSnapshots.mockRejectedValueOnce(new Error("push failed"));
-    const { startNativeDebugSnapshotPublisher } =
-      await import("@/lib/diagnostics/nativeDebugSnapshots");
+    const { startNativeDebugSnapshotPublisher } = await import("@/lib/diagnostics/nativeDebugSnapshots");
 
     const stop = startNativeDebugSnapshotPublisher();
     await vi.runAllTimersAsync();

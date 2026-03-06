@@ -8,10 +8,7 @@
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  ItemSelectionDialog,
-  type SourceGroup,
-} from "@/components/itemSelection/ItemSelectionDialog";
+import { ItemSelectionDialog, type SourceGroup } from "@/components/itemSelection/ItemSelectionDialog";
 import { useSourceNavigator } from "@/lib/sourceNavigation/useSourceNavigator";
 import type { SourceEntry } from "@/lib/sourceNavigation/types";
 import { reportUserError } from "@/lib/uiErrors";
@@ -77,9 +74,7 @@ describe("ItemSelectionDialog source picker", () => {
       name: /add file \/ folder/i,
     });
     expect(addButtons).toHaveLength(2);
-    expect(
-      screen.getByTestId("import-selection-interstitial"),
-    ).toBeInTheDocument();
+    expect(screen.getByTestId("import-selection-interstitial")).toBeInTheDocument();
     expect(screen.getByTestId("import-option-c64u")).toBeInTheDocument();
     expect(screen.getByTestId("import-option-local")).toBeInTheDocument();
   });
@@ -134,31 +129,24 @@ describe("ItemSelectionDialog source picker", () => {
 
     const checkbox = screen.getAllByRole("checkbox")[0];
     fireEvent.click(checkbox);
-    expect(screen.getByTestId("add-items-selection-count")).toHaveTextContent(
-      "1 selected",
-    );
+    expect(screen.getByTestId("add-items-selection-count")).toHaveTextContent("1 selected");
 
     fireEvent.click(screen.getByTestId("add-items-confirm"));
     await vi.runAllTimersAsync();
 
-    expect(onConfirm).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "ultimate" }),
-      [
-        expect.objectContaining({
-          type: "file",
-          name: "song.sid",
-          path: "/song.sid",
-        }),
-      ],
-    );
+    expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ id: "ultimate" }), [
+      expect.objectContaining({
+        type: "file",
+        name: "song.sid",
+        path: "/song.sid",
+      }),
+    ]);
     expect(onOpenChange).toHaveBeenCalledWith(false);
     vi.useRealTimers();
   });
 
   it("reports an error when confirmation fails", async () => {
-    const entries: SourceEntry[] = [
-      { type: "file", name: "song.sid", path: "/song.sid" },
-    ];
+    const entries: SourceEntry[] = [{ type: "file", name: "song.sid", path: "/song.sid" }];
     vi.mocked(useSourceNavigator).mockReturnValue({
       path: "/",
       entries,
@@ -409,10 +397,9 @@ describe("ItemSelectionDialog source picker", () => {
 
     await waitFor(() => {
       expect(onAutoConfirmStart).toHaveBeenCalled();
-      expect(onConfirm).toHaveBeenCalledWith(
-        expect.objectContaining({ id: "local-1" }),
-        [expect.objectContaining({ type: "dir", path: "/" })],
-      );
+      expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ id: "local-1" }), [
+        expect.objectContaining({ type: "dir", path: "/" }),
+      ]);
       expect(onOpenChange).toHaveBeenCalledWith(false);
     });
   });
@@ -430,9 +417,7 @@ describe("ItemSelectionDialog source picker", () => {
       refresh: vi.fn(),
     });
 
-    const throwingConfirm = vi
-      .fn()
-      .mockRejectedValue(new Error("confirm failed"));
+    const throwingConfirm = vi.fn().mockRejectedValue(new Error("confirm failed"));
     const sourceGroups: SourceGroup[] = [
       {
         label: "This device",
@@ -456,9 +441,7 @@ describe("ItemSelectionDialog source picker", () => {
     fireEvent.click(screen.getByTestId("import-option-local"));
 
     await waitFor(() => {
-      expect(vi.mocked(reportUserError)).toHaveBeenCalledWith(
-        expect.objectContaining({ operation: "ITEM_SELECTION" }),
-      );
+      expect(vi.mocked(reportUserError)).toHaveBeenCalledWith(expect.objectContaining({ operation: "ITEM_SELECTION" }));
     });
   });
 
@@ -544,9 +527,7 @@ describe("ItemSelectionDialog source picker", () => {
     const c64uButton = screen.getByTestId("import-option-c64u");
     fireEvent.click(c64uButton);
     // No crash, no source selected
-    expect(
-      screen.queryByTestId("import-selection-interstitial"),
-    ).toBeInTheDocument();
+    expect(screen.queryByTestId("import-selection-interstitial")).toBeInTheDocument();
   });
 
   it("shows progress footer with cancel scan button when scanning", async () => {

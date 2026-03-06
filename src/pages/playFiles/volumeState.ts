@@ -19,10 +19,7 @@ export type VolumeAction =
   | { type: "mute"; reason: "manual" | "pause" }
   | { type: "unmute"; reason: "manual" | "pause" | "sync"; index?: number };
 
-export const reduceVolumeState = (
-  state: VolumeState,
-  action: VolumeAction,
-): VolumeState => {
+export const reduceVolumeState = (state: VolumeState, action: VolumeAction): VolumeState => {
   switch (action.type) {
     case "reset":
       return { index: action.index, muted: false, reason: null };

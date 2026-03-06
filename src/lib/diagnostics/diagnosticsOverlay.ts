@@ -17,17 +17,13 @@ export const requestDiagnosticsOpen = (tab: DiagnosticsTabKey) => {
   } catch (error) {
     console.warn("Unable to persist diagnostics open request:", error);
   }
-  window.dispatchEvent(
-    new CustomEvent("c64u-diagnostics-open-request", { detail: { tab } }),
-  );
+  window.dispatchEvent(new CustomEvent("c64u-diagnostics-open-request", { detail: { tab } }));
 };
 
 export const consumeDiagnosticsOpenRequest = (): DiagnosticsTabKey | null => {
   if (typeof window === "undefined") return null;
   try {
-    const tab = sessionStorage.getItem(
-      DIAGNOSTICS_OPEN_KEY,
-    ) as DiagnosticsTabKey | null;
+    const tab = sessionStorage.getItem(DIAGNOSTICS_OPEN_KEY) as DiagnosticsTabKey | null;
     if (tab) {
       sessionStorage.removeItem(DIAGNOSTICS_OPEN_KEY);
       return tab;

@@ -39,12 +39,10 @@ export type HvscBrowseIndexSnapshot = {
   folders: Record<string, HvscBrowseFolderRow>;
 };
 
-const normalizePath = (path: string) =>
-  path.startsWith("/") ? path : `/${path}`;
+const normalizePath = (path: string) => (path.startsWith("/") ? path : `/${path}`);
 const normalizeFolderPath = (path: string) => {
   const normalized = normalizePath(path || "/");
-  if (normalized.length > 1 && normalized.endsWith("/"))
-    return normalized.slice(0, -1);
+  if (normalized.length > 1 && normalized.endsWith("/")) return normalized.slice(0, -1);
   return normalized;
 };
 
@@ -77,12 +75,7 @@ const decodeUtf8Base64 = (value: string) => {
 };
 
 const hashPath = (value: string) =>
-  Math.abs(
-    Array.from(value).reduce(
-      (hash, char) => (hash * 31 + char.charCodeAt(0)) | 0,
-      0,
-    ),
-  );
+  Math.abs(Array.from(value).reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) | 0, 0));
 
 const getParentFolder = (virtualPath: string) => {
   const normalized = normalizePath(virtualPath);
@@ -105,13 +98,8 @@ const toIndexedSong = (entry: MediaEntry): HvscBrowseIndexedSong => ({
   trackSubsongs: null,
 });
 
-const buildFoldersFromSongs = (
-  songs: Record<string, HvscBrowseIndexedSong>,
-) => {
-  const folderMap = new Map<
-    string,
-    { folders: Set<string>; songs: Set<string> }
-  >();
+const buildFoldersFromSongs = (songs: Record<string, HvscBrowseIndexedSong>) => {
+  const folderMap = new Map<string, { folders: Set<string>; songs: Set<string> }>();
   const ensureFolder = (path: string) => {
     const normalized = normalizeFolderPath(path);
     const current = folderMap.get(normalized);
@@ -129,9 +117,7 @@ const buildFoldersFromSongs = (
     for (let index = 0; index < segments.length - 1; index += 1) {
       const folderName = segments[index];
       const parent = ensureFolder(currentPath);
-      const nextPath = normalizeFolderPath(
-        `${currentPath === "/" ? "" : currentPath}/${folderName}`,
-      );
+      const nextPath = normalizeFolderPath(`${currentPath === "/" ? "" : currentPath}/${folderName}`);
       parent.folders.add(nextPath);
       ensureFolder(nextPath);
       currentPath = nextPath;
@@ -151,19 +137,18 @@ const buildFoldersFromSongs = (
   return folders;
 };
 
-export const createEmptyHvscBrowseIndexSnapshot =
-  (): HvscBrowseIndexSnapshot => ({
-    schemaVersion: SCHEMA_VERSION,
-    updatedAt: new Date().toISOString(),
-    songs: {},
-    folders: {
-      "/": {
-        path: "/",
-        folders: [],
-        songs: [],
-      },
+export const createEmptyHvscBrowseIndexSnapshot = (): HvscBrowseIndexSnapshot => ({
+  schemaVersion: SCHEMA_VERSION,
+  updatedAt: new Date().toISOString(),
+  songs: {},
+  folders: {
+    "/": {
+      path: "/",
+      folders: [],
+      songs: [],
     },
-  });
+  },
+});
 
 const normalizeSnapshot = (snapshot: HvscBrowseIndexSnapshot | null) => {
   if (!snapshot) return createEmptyHvscBrowseIndexSnapshot();
@@ -253,9 +238,7 @@ const writeFilesystemSnapshot = async (snapshot: HvscBrowseIndexSnapshot) => {
   });
 };
 
-const writeFilesystemMediaIndexSnapshot = async (
-  snapshot: HvscBrowseIndexSnapshot,
-) => {
+const writeFilesystemMediaIndexSnapshot = async (snapshot: HvscBrowseIndexSnapshot) => {
   const entries = Object.values(snapshot.songs).map((song) => ({
     path: song.virtualPath,
     name: song.fileName,
@@ -291,9 +274,7 @@ const writeLocalStorageSnapshot = (snapshot: HvscBrowseIndexSnapshot) => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
 };
 
-const writeLocalStorageMediaIndexSnapshot = (
-  snapshot: HvscBrowseIndexSnapshot,
-) => {
+const writeLocalStorageMediaIndexSnapshot = (snapshot: HvscBrowseIndexSnapshot) => {
   if (typeof localStorage === "undefined") return;
   const entries = Object.values(snapshot.songs).map((song) => ({
     path: song.virtualPath,
@@ -320,9 +301,7 @@ export const loadHvscBrowseIndexSnapshot = async () => {
   return readLocalStorageSnapshot();
 };
 
-export const saveHvscBrowseIndexSnapshot = async (
-  snapshot: HvscBrowseIndexSnapshot,
-) => {
+export const saveHvscBrowseIndexSnapshot = async (snapshot: HvscBrowseIndexSnapshot) => {
   const normalized: HvscBrowseIndexSnapshot = {
     schemaVersion: SCHEMA_VERSION,
     updatedAt: new Date().toISOString(),
@@ -344,9 +323,7 @@ export const saveHvscBrowseIndexSnapshot = async (
   writeLocalStorageMediaIndexSnapshot(normalized);
 };
 
-export const buildHvscBrowseIndexFromEntries = (
-  entries: MediaEntry[],
-): HvscBrowseIndexSnapshot => {
+export const buildHvscBrowseIndexFromEntries = (entries: MediaEntry[]): HvscBrowseIndexSnapshot => {
   const songs = Object.fromEntries(
     entries.map((entry) => {
       const song = toIndexedSong(entry);
@@ -361,14 +338,11 @@ export const buildHvscBrowseIndexFromEntries = (
   };
 };
 
-export const createHvscBrowseIndexMutable = async (
-  mode: "baseline" | "update",
-) => {
+export const createHvscBrowseIndexMutable = async (mode: "baseline" | "update") => {
   const snapshot =
     mode === "baseline"
       ? createEmptyHvscBrowseIndexSnapshot()
-      : ((await loadHvscBrowseIndexSnapshot()) ??
-        createEmptyHvscBrowseIndexSnapshot());
+      : ((await loadHvscBrowseIndexSnapshot()) ?? createEmptyHvscBrowseIndexSnapshot());
 
   return {
     upsertSong: (song: HvscBrowseIndexedSong) => {
@@ -408,11 +382,7 @@ export const listFolderFromBrowseIndex = (
   };
 
   const folders = row.folders
-    .filter(
-      (folder) =>
-        normalizedQuery.length === 0 ||
-        folder.toLowerCase().includes(normalizedQuery),
-    )
+    .filter((folder) => normalizedQuery.length === 0 || folder.toLowerCase().includes(normalizedQuery))
     .sort((a, b) => a.localeCompare(b));
 
   const matchedSongs = row.songs
@@ -423,15 +393,9 @@ export const listFolderFromBrowseIndex = (
       return (
         song.fileName.toLowerCase().includes(normalizedQuery) ||
         song.virtualPath.toLowerCase().includes(normalizedQuery) ||
-        (song.sidMetadata?.name ?? "")
-          .toLowerCase()
-          .includes(normalizedQuery) ||
-        (song.sidMetadata?.author ?? "")
-          .toLowerCase()
-          .includes(normalizedQuery) ||
-        (song.sidMetadata?.released ?? "")
-          .toLowerCase()
-          .includes(normalizedQuery)
+        (song.sidMetadata?.name ?? "").toLowerCase().includes(normalizedQuery) ||
+        (song.sidMetadata?.author ?? "").toLowerCase().includes(normalizedQuery) ||
+        (song.sidMetadata?.released ?? "").toLowerCase().includes(normalizedQuery)
       );
     })
     .sort((a, b) => a.fileName.localeCompare(b.fileName));
@@ -455,10 +419,7 @@ export const listFolderFromBrowseIndex = (
   };
 };
 
-export const verifyHvscBrowseIndexIntegrity = async (
-  snapshot: HvscBrowseIndexSnapshot,
-  sampleSize = 12,
-) => {
+export const verifyHvscBrowseIndexIntegrity = async (snapshot: HvscBrowseIndexSnapshot, sampleSize = 12) => {
   const paths = Object.keys(snapshot.songs);
   if (!paths.length) {
     return {
@@ -497,17 +458,11 @@ export const verifyHvscBrowseIndexIntegrity = async (
   };
 };
 
-export const getHvscSongFromBrowseIndex = (
-  snapshot: HvscBrowseIndexSnapshot,
-  virtualPath: string,
-) => {
+export const getHvscSongFromBrowseIndex = (snapshot: HvscBrowseIndexSnapshot, virtualPath: string) => {
   return snapshot.songs[normalizePath(virtualPath)] ?? null;
 };
 
-export const getHvscFoldersWithParent = (
-  snapshot: HvscBrowseIndexSnapshot,
-  parentPath: string,
-) => {
+export const getHvscFoldersWithParent = (snapshot: HvscBrowseIndexSnapshot, parentPath: string) => {
   const normalizedParent = normalizeFolderPath(parentPath);
   const row = snapshot.folders[normalizedParent];
   if (!row) return [] as Array<{ folderPath: string; folderName: string }>;
@@ -517,10 +472,7 @@ export const getHvscFoldersWithParent = (
   }));
 };
 
-export const listHvscFolderTracks = (
-  snapshot: HvscBrowseIndexSnapshot,
-  folderPath: string,
-) => {
+export const listHvscFolderTracks = (snapshot: HvscBrowseIndexSnapshot, folderPath: string) => {
   const normalizedPath = normalizeFolderPath(folderPath);
   const row = snapshot.folders[normalizedPath];
   if (!row) return [] as Array<{ trackId: string; fileName: string }>;

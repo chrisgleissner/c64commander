@@ -32,12 +32,7 @@ describe("hvscSourceAdapter", () => {
     const source = createHvscSourceLocation("/ROOT");
     const entries = await source.listEntries("/ROOT");
 
-    expect(entries.map((entry) => entry.name)).toEqual([
-      "A",
-      "a.sid",
-      "B",
-      "z.sid",
-    ]);
+    expect(entries.map((entry) => entry.name)).toEqual(["A", "a.sid", "B", "z.sid"]);
     expect(entries[0]).toMatchObject({ type: "dir", path: "/ROOT/A" });
   });
 
@@ -74,8 +69,6 @@ describe("hvscSourceAdapter", () => {
     controller.abort();
     const source = createHvscSourceLocation("/ROOT");
 
-    await expect(
-      source.listFilesRecursive("/ROOT", { signal: controller.signal }),
-    ).rejects.toThrow("Aborted");
+    await expect(source.listFilesRecursive("/ROOT", { signal: controller.signal })).rejects.toThrow("Aborted");
   });
 });

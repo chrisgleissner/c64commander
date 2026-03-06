@@ -6,22 +6,14 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type {
-  FtpClientPlugin,
-  FtpListOptions,
-  FtpEntry,
-  FtpReadOptions,
-} from "./ftpClient";
+import type { FtpClientPlugin, FtpListOptions, FtpEntry, FtpReadOptions } from "./ftpClient";
 import { getFtpBridgeUrl } from "@/lib/ftp/ftpConfig";
 
 const FTP_BRIDGE_TIMEOUT_MS = 5000;
 const FTP_BRIDGE_MAX_ATTEMPTS = 3;
 
 const isRetryableFtpBridgeFailure = (error: unknown, status?: number) => {
-  const resolvedStatus =
-    typeof status === "number"
-      ? status
-      : (error as { status?: number } | undefined)?.status;
+  const resolvedStatus = typeof status === "number" ? status : (error as { status?: number } | undefined)?.status;
   if (typeof resolvedStatus === "number" && resolvedStatus >= 500) {
     return true;
   }
@@ -42,10 +34,7 @@ const runWithRetry = async <T>(operation: () => Promise<T>) => {
       return await operation();
     } catch (error) {
       lastError = error;
-      if (
-        attempt >= FTP_BRIDGE_MAX_ATTEMPTS ||
-        !isRetryableFtpBridgeFailure(error)
-      ) {
+      if (attempt >= FTP_BRIDGE_MAX_ATTEMPTS || !isRetryableFtpBridgeFailure(error)) {
         throw error;
       }
       await new Promise<void>((resolve) => {
@@ -57,9 +46,7 @@ const runWithRetry = async <T>(operation: () => Promise<T>) => {
 };
 
 export class FtpClientWeb implements FtpClientPlugin {
-  async listDirectory(
-    options: FtpListOptions,
-  ): Promise<{ entries: FtpEntry[] }> {
+  async listDirectory(options: FtpListOptions): Promise<{ entries: FtpEntry[] }> {
     const bridgeUrl = getFtpBridgeUrl();
     if (!bridgeUrl) {
       throw new Error("FTP browsing is unavailable: missing FTP bridge URL.");
@@ -67,10 +54,7 @@ export class FtpClientWeb implements FtpClientPlugin {
 
     return runWithRetry(async () => {
       const controller = new AbortController();
-      const timeoutId = window.setTimeout(
-        () => controller.abort(),
-        FTP_BRIDGE_TIMEOUT_MS,
-      );
+      const timeoutId = window.setTimeout(() => controller.abort(), FTP_BRIDGE_TIMEOUT_MS);
 
       let response: Response;
       try {
@@ -98,8 +82,7 @@ export class FtpClientWeb implements FtpClientPlugin {
 
       if (!response.ok) {
         const errorPayload = await response.json().catch(() => null);
-        const message =
-          errorPayload?.error || `FTP bridge error: HTTP ${response.status}`;
+        const message = errorPayload?.error || `FTP bridge error: HTTP ${response.status}`;
         const error = new Error(message) as Error & { status?: number };
         error.status = response.status;
         if (isRetryableFtpBridgeFailure(error, response.status)) {
@@ -113,22 +96,15 @@ export class FtpClientWeb implements FtpClientPlugin {
     });
   }
 
-  async readFile(
-    options: FtpReadOptions,
-  ): Promise<{ data: string; sizeBytes?: number }> {
+  async readFile(options: FtpReadOptions): Promise<{ data: string; sizeBytes?: number }> {
     const bridgeUrl = getFtpBridgeUrl();
     if (!bridgeUrl) {
-      throw new Error(
-        "FTP file download is unavailable: missing FTP bridge URL.",
-      );
+      throw new Error("FTP file download is unavailable: missing FTP bridge URL.");
     }
 
     return runWithRetry(async () => {
       const controller = new AbortController();
-      const timeoutId = window.setTimeout(
-        () => controller.abort(),
-        FTP_BRIDGE_TIMEOUT_MS,
-      );
+      const timeoutId = window.setTimeout(() => controller.abort(), FTP_BRIDGE_TIMEOUT_MS);
 
       let response: Response;
       try {
@@ -149,8 +125,7 @@ export class FtpClientWeb implements FtpClientPlugin {
 
       if (!response.ok) {
         const errorPayload = await response.json().catch(() => null);
-        const message =
-          errorPayload?.error || `FTP bridge error: HTTP ${response.status}`;
+        const message = errorPayload?.error || `FTP bridge error: HTTP ${response.status}`;
         const error = new Error(message) as Error & { status?: number };
         error.status = response.status;
         if (isRetryableFtpBridgeFailure(error, response.status)) {
@@ -169,10 +144,7 @@ export class FtpClientWeb implements FtpClientPlugin {
 
       return {
         data: payload.data,
-        sizeBytes:
-          typeof payload.sizeBytes === "number"
-            ? payload.sizeBytes
-            : payload.data.length,
+        sizeBytes: typeof payload.sizeBytes === "number" ? payload.sizeBytes : payload.data.length,
       };
     });
   }

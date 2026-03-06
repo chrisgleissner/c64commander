@@ -18,10 +18,7 @@ import {
   setExternalLogs,
 } from "@/lib/logging";
 import { shouldSuppressDiagnosticsSideEffects } from "@/lib/diagnostics/diagnosticsOverlayState";
-import {
-  installConsoleDiagnosticsBridge,
-  logger,
-} from "@/lib/diagnostics/logger";
+import { installConsoleDiagnosticsBridge, logger } from "@/lib/diagnostics/logger";
 
 vi.mock("@/lib/diagnostics/diagnosticsOverlayState", () => ({
   shouldSuppressDiagnosticsSideEffects: vi.fn().mockReturnValue(false),
@@ -50,10 +47,7 @@ const ensureWindow = () => {
     value: windowMock,
     configurable: true,
   });
-  if (
-    typeof (globalThis as { CustomEvent?: typeof CustomEvent }).CustomEvent ===
-    "undefined"
-  ) {
+  if (typeof (globalThis as { CustomEvent?: typeof CustomEvent }).CustomEvent === "undefined") {
     class CustomEventShim<T = any> extends Event {
       detail?: T;
       constructor(type: string, params?: CustomEventInit<T>) {
@@ -136,16 +130,11 @@ describe("logging", () => {
 
   it("captures error stacks with trimming", () => {
     const error = new Error("boom");
-    error.stack = Array.from(
-      { length: 120 },
-      (_, index) => `line-${index + 1}`,
-    ).join("\n");
+    error.stack = Array.from({ length: 120 }, (_, index) => `line-${index + 1}`).join("\n");
 
     const details = buildErrorLogDetails(error, { context: "rest" });
 
-    expect(details.error).toEqual(
-      expect.objectContaining({ name: "Error", message: "boom" }),
-    );
+    expect(details.error).toEqual(expect.objectContaining({ name: "Error", message: "boom" }));
     expect(details.errorName).toBe("Error");
     expect(details.errorStack).toContain("line-1");
     expect(details.errorStack).toContain("stack truncated");
@@ -180,18 +169,13 @@ describe("logging", () => {
   it("preserves existing error message in details", () => {
     const error = new Error("original");
     const details = buildErrorLogDetails(error, { error: "override" });
-    expect(details.error).toEqual(
-      expect.objectContaining({ message: "override" }),
-    );
+    expect(details.error).toEqual(expect.objectContaining({ message: "override" }));
   });
 
   it("treats warnings as problem logs in Errors tab selector", () => {
     addLog("warn", "slow response");
     addErrorLog("boom");
-    expect(getErrorLogs().map((entry) => entry.level)).toEqual([
-      "error",
-      "warn",
-    ]);
+    expect(getErrorLogs().map((entry) => entry.level)).toEqual(["error", "warn"]);
   });
 
   it("writes canonical error payloads through diagnostics logger wrapper", () => {
@@ -263,9 +247,7 @@ describe("logging", () => {
     console.warn();
     uninstallBridge();
 
-    const log = getLogs().find(
-      (entry) => entry.level === "warn" && entry.message === "",
-    );
+    const log = getLogs().find((entry) => entry.level === "warn" && entry.message === "");
     expect(log).toBeDefined();
   });
 

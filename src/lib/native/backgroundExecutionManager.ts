@@ -19,13 +19,9 @@ type BackgroundExecutionLogContext = {
 
 let activeCount = 0;
 
-const toError = (value: unknown) =>
-  value instanceof Error ? value : new Error(String(value));
+const toError = (value: unknown) => (value instanceof Error ? value : new Error(String(value)));
 
-const buildFailureDetails = (
-  error: unknown,
-  logContext: BackgroundExecutionLogContext,
-) => {
+const buildFailureDetails = (error: unknown, logContext: BackgroundExecutionLogContext) => {
   const failure = classifyError(error);
   const normalizedError = toError(error);
   return {
@@ -39,43 +35,29 @@ const buildFailureDetails = (
 
 const buildOperationError = (operation: "start" | "stop", error: unknown) => {
   const normalizedError = toError(error);
-  return new Error(
-    `Background execution ${operation} failed: ${normalizedError.message}`,
-  );
+  return new Error(`Background execution ${operation} failed: ${normalizedError.message}`);
 };
 
-export const startBackgroundExecution = async (
-  logContext: BackgroundExecutionLogContext,
-) => {
+export const startBackgroundExecution = async (logContext: BackgroundExecutionLogContext) => {
   activeCount += 1;
   if (activeCount > 1) return;
   try {
     await BackgroundExecution.start();
   } catch (error) {
     activeCount = Math.max(0, activeCount - 1);
-    addLog(
-      "error",
-      "Background execution start failed",
-      buildFailureDetails(error, logContext),
-    );
+    addLog("error", "Background execution start failed", buildFailureDetails(error, logContext));
     throw buildOperationError("start", error);
   }
 };
 
-export const stopBackgroundExecution = async (
-  logContext: BackgroundExecutionLogContext,
-) => {
+export const stopBackgroundExecution = async (logContext: BackgroundExecutionLogContext) => {
   if (activeCount <= 0) return;
   activeCount = Math.max(0, activeCount - 1);
   if (activeCount > 0) return;
   try {
     await BackgroundExecution.stop();
   } catch (error) {
-    addLog(
-      "error",
-      "Background execution stop failed",
-      buildFailureDetails(error, logContext),
-    );
+    addLog("error", "Background execution stop failed", buildFailureDetails(error, logContext));
     throw buildOperationError("stop", error);
   }
 };

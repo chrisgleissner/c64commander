@@ -35,9 +35,7 @@ describe("resolveNativeTraceContext", () => {
       },
     });
 
-    expect(
-      resolveNativeTraceContext({ correlationId: "corr-42" } as never),
-    ).toEqual({
+    expect(resolveNativeTraceContext({ correlationId: "corr-42" } as never)).toEqual({
       correlationId: "corr-42",
       trackInstanceId: 42,
       playlistItemId: "item-42",

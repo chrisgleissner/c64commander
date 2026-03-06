@@ -36,11 +36,7 @@ const parseUrl = (url: string) => {
     const parsed = new URL(url);
     return {
       hostname: parsed.hostname,
-      port: parsed.port
-        ? Number(parsed.port)
-        : parsed.protocol === "https:"
-          ? 443
-          : 80,
+      port: parsed.port ? Number(parsed.port) : parsed.protocol === "https:" ? 443 : 80,
       protocol: parsed.protocol.replace(":", ""),
     };
   } catch {
@@ -50,14 +46,10 @@ const parseUrl = (url: string) => {
 
 export const buildNetworkSnapshot = (): NetworkSnapshot => {
   const events = getTraceEvents();
-  const requestMap = new Map<
-    string,
-    { request?: TraceEvent; response?: TraceEvent }
-  >();
+  const requestMap = new Map<string, { request?: TraceEvent; response?: TraceEvent }>();
 
   for (const event of events) {
-    if (event.type !== "rest-request" && event.type !== "rest-response")
-      continue;
+    if (event.type !== "rest-request" && event.type !== "rest-response") continue;
 
     const correlationId = event.correlationId;
     const entry = requestMap.get(correlationId) ?? {};
@@ -87,8 +79,7 @@ export const buildNetworkSnapshot = (): NetworkSnapshot => {
     const error = resData?.error as Record<string, unknown> | undefined;
     const durationMs = (resData?.durationMs as number) ?? null;
 
-    const isSuccess =
-      httpStatus !== null && httpStatus >= 200 && httpStatus < 400;
+    const isSuccess = httpStatus !== null && httpStatus >= 200 && httpStatus < 400;
     if (isSuccess) {
       successCount++;
     } else if (response) {
@@ -97,10 +88,7 @@ export const buildNetworkSnapshot = (): NetworkSnapshot => {
 
     requests.push({
       hostname,
-      resolvedIp:
-        hostname === "127.0.0.1" || hostname === "localhost"
-          ? "127.0.0.1"
-          : hostname,
+      resolvedIp: hostname === "127.0.0.1" || hostname === "localhost" ? "127.0.0.1" : hostname,
       port,
       protocol,
       durationMs,

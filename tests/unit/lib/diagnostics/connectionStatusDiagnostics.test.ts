@@ -10,10 +10,7 @@ import { describe, expect, it } from "vitest";
 import { buildConnectionDiagnosticsSummary } from "@/lib/diagnostics/connectionStatusDiagnostics";
 import type { TraceEvent } from "@/lib/tracing/types";
 
-const createTraceEvent = (
-  type: TraceEvent["type"],
-  data: Record<string, unknown>,
-): TraceEvent => ({
+const createTraceEvent = (type: TraceEvent["type"], data: Record<string, unknown>): TraceEvent => ({
   id: `${type}-1`,
   timestamp: "2026-01-01T00:00:00.000Z",
   relativeMs: 0,
@@ -44,11 +41,7 @@ describe("connectionStatusDiagnostics", () => {
     const logs = [{}, {}, {}, {}];
     const errorLogs = [{}, {}];
 
-    const summary = buildConnectionDiagnosticsSummary(
-      traceEvents,
-      logs,
-      errorLogs,
-    );
+    const summary = buildConnectionDiagnosticsSummary(traceEvents, logs, errorLogs);
 
     expect(summary.rest).toEqual({ total: 2, failed: 1, severity: "high" });
     expect(summary.ftp).toEqual({ total: 2, failed: 1, severity: "high" });
@@ -111,14 +104,8 @@ describe("connectionStatusDiagnostics", () => {
   });
 
   it("uses null for FTP result when it is not a string (BRDA:48 FALSE)", () => {
-    const traceEvents: TraceEvent[] = [
-      createTraceEvent("ftp-operation", { result: 42, error: null }),
-    ];
-    const summary = buildConnectionDiagnosticsSummary(
-      traceEvents as any,
-      [],
-      [],
-    );
+    const traceEvents: TraceEvent[] = [createTraceEvent("ftp-operation", { result: 42, error: null })];
+    const summary = buildConnectionDiagnosticsSummary(traceEvents as any, [], []);
     // result not a string → null, no error → not failed
     expect(summary.ftp.total).toBe(1);
     expect(summary.ftp.failed).toBe(0);

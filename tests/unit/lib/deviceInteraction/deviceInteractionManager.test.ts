@@ -148,14 +148,8 @@ describe("deviceInteractionManager", () => {
     const cached = await withRestInteraction(meta, handler);
     expect(cached).toEqual({ status: "ok" });
     expect(handler).toHaveBeenCalledTimes(1);
-    expect(recordDeviceGuard).toHaveBeenCalledWith(
-      action,
-      expect.objectContaining({ decision: "coalesce" }),
-    );
-    expect(recordDeviceGuard).toHaveBeenCalledWith(
-      action,
-      expect.objectContaining({ decision: "cache" }),
-    );
+    expect(recordDeviceGuard).toHaveBeenCalledWith(action, expect.objectContaining({ decision: "coalesce" }));
+    expect(recordDeviceGuard).toHaveBeenCalledWith(action, expect.objectContaining({ decision: "cache" }));
   });
 
   it("blocks REST calls when device is in error state", async () => {
@@ -179,9 +173,7 @@ describe("deviceInteractionManager", () => {
       baseUrl: "http://device",
     };
 
-    await expect(withRestInteraction(meta, vi.fn())).rejects.toThrow(
-      "Device not ready for requests",
-    );
+    await expect(withRestInteraction(meta, vi.fn())).rejects.toThrow("Device not ready for requests");
     expect(recordDeviceGuard).toHaveBeenCalledWith(
       action,
       expect.objectContaining({ decision: "block", reason: "state" }),
@@ -215,16 +207,12 @@ describe("deviceInteractionManager", () => {
 
     const handler = vi.fn().mockRejectedValue(new Error("Network timed out"));
 
-    await expect(withRestInteraction(meta, handler)).rejects.toThrow(
-      "Network timed out",
-    );
+    await expect(withRestInteraction(meta, handler)).rejects.toThrow("Network timed out");
 
     const second = withRestInteraction(meta, handler);
     await expect(second).rejects.toThrow("Network timed out");
 
-    await expect(withRestInteraction(meta, handler)).rejects.toThrow(
-      "Device circuit open",
-    );
+    await expect(withRestInteraction(meta, handler)).rejects.toThrow("Device circuit open");
     expect(recordDeviceGuard).toHaveBeenCalledWith(
       action,
       expect.objectContaining({ decision: "defer", reason: "backoff" }),
@@ -262,9 +250,7 @@ describe("deviceInteractionManager", () => {
     await expect(second).resolves.toBeUndefined();
 
     const failingHandler = vi.fn().mockRejectedValue(new Error("FTP failed"));
-    await expect(withFtpInteraction(meta, failingHandler)).rejects.toThrow(
-      "FTP failed",
-    );
+    await expect(withFtpInteraction(meta, failingHandler)).rejects.toThrow("FTP failed");
     expect(addErrorLog).toHaveBeenCalledWith(
       "FTP request failed",
       expect.objectContaining({ operation: "list", path: "/root" }),
@@ -289,17 +275,11 @@ describe("deviceInteractionManager", () => {
 
     const handler = vi.fn().mockRejectedValue(new Error("Network timed out"));
     // Need 2 failures to trigger circuit (default threshold=2)
-    await expect(withRestInteraction(criticalMeta, handler)).rejects.toThrow(
-      "Network timed out",
-    );
-    await expect(withRestInteraction(criticalMeta, handler)).rejects.toThrow(
-      "Network timed out",
-    );
+    await expect(withRestInteraction(criticalMeta, handler)).rejects.toThrow("Network timed out");
+    await expect(withRestInteraction(criticalMeta, handler)).rejects.toThrow("Network timed out");
 
     // Circuit should block system intent
-    await expect(withRestInteraction(criticalMeta, handler)).rejects.toThrow(
-      "Device circuit open",
-    );
+    await expect(withRestInteraction(criticalMeta, handler)).rejects.toThrow("Device circuit open");
 
     // User intent should override the circuit (allowUserOverrideCircuit=true)
     const userMeta = {
@@ -335,17 +315,11 @@ describe("deviceInteractionManager", () => {
 
     const handler = vi.fn().mockRejectedValue(new Error("FTP timeout"));
     // Need 2 failures to open circuit (default threshold=2)
-    await expect(withFtpInteraction(meta, handler)).rejects.toThrow(
-      "FTP timeout",
-    );
-    await expect(withFtpInteraction(meta, handler)).rejects.toThrow(
-      "FTP timeout",
-    );
+    await expect(withFtpInteraction(meta, handler)).rejects.toThrow("FTP timeout");
+    await expect(withFtpInteraction(meta, handler)).rejects.toThrow("FTP timeout");
 
     // Circuit should now be open for FTP (system intent blocked)
-    await expect(withFtpInteraction(meta, handler)).rejects.toThrow(
-      "FTP circuit open",
-    );
+    await expect(withFtpInteraction(meta, handler)).rejects.toThrow("FTP circuit open");
     expect(recordDeviceGuard).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ decision: "block", reason: "circuit-open" }),
@@ -368,9 +342,7 @@ describe("deviceInteractionManager", () => {
     };
 
     const handler = vi.fn().mockRejectedValue(new Error("Smoke mode blocked"));
-    await expect(withRestInteraction(meta, handler)).rejects.toThrow(
-      "Smoke mode blocked",
-    );
+    await expect(withRestInteraction(meta, handler)).rejects.toThrow("Smoke mode blocked");
 
     // Should NOT open circuit since smoke mode blocked is not critical
     const handler2 = vi.fn().mockResolvedValue("ok");
@@ -394,20 +366,12 @@ describe("deviceInteractionManager", () => {
       baseUrl: "http://device",
     };
 
-    const handler = vi
-      .fn()
-      .mockRejectedValue(new Error("HTTP 429 Too Many Requests"));
+    const handler = vi.fn().mockRejectedValue(new Error("HTTP 429 Too Many Requests"));
     // Need 2 failures to trigger circuit (default threshold=2)
-    await expect(withRestInteraction(meta, handler)).rejects.toThrow(
-      "HTTP 429",
-    );
-    await expect(withRestInteraction(meta, handler)).rejects.toThrow(
-      "HTTP 429",
-    );
+    await expect(withRestInteraction(meta, handler)).rejects.toThrow("HTTP 429");
+    await expect(withRestInteraction(meta, handler)).rejects.toThrow("HTTP 429");
 
-    await expect(withRestInteraction(meta, handler)).rejects.toThrow(
-      "Device circuit open",
-    );
+    await expect(withRestInteraction(meta, handler)).rejects.toThrow("Device circuit open");
   });
 
   it("treats host unreachable as critical REST error", async () => {
@@ -428,16 +392,10 @@ describe("deviceInteractionManager", () => {
 
     const handler = vi.fn().mockRejectedValue(new Error("Host unreachable"));
     // Need 2 failures to trigger circuit (default threshold=2)
-    await expect(withRestInteraction(meta, handler)).rejects.toThrow(
-      "Host unreachable",
-    );
-    await expect(withRestInteraction(meta, handler)).rejects.toThrow(
-      "Host unreachable",
-    );
+    await expect(withRestInteraction(meta, handler)).rejects.toThrow("Host unreachable");
+    await expect(withRestInteraction(meta, handler)).rejects.toThrow("Host unreachable");
 
-    await expect(withRestInteraction(meta, handler)).rejects.toThrow(
-      "Device circuit open",
-    );
+    await expect(withRestInteraction(meta, handler)).rejects.toThrow("Device circuit open");
   });
 
   it("does not treat HTTP 4xx (except 429) as critical", async () => {
@@ -457,15 +415,9 @@ describe("deviceInteractionManager", () => {
 
     // 404 is not critical so even multiple failures should not open circuit
     const handler = vi.fn().mockRejectedValue(new Error("HTTP 404 Not Found"));
-    await expect(withRestInteraction(meta, handler)).rejects.toThrow(
-      "HTTP 404",
-    );
-    await expect(withRestInteraction(meta, handler)).rejects.toThrow(
-      "HTTP 404",
-    );
-    await expect(withRestInteraction(meta, handler)).rejects.toThrow(
-      "HTTP 404",
-    );
+    await expect(withRestInteraction(meta, handler)).rejects.toThrow("HTTP 404");
+    await expect(withRestInteraction(meta, handler)).rejects.toThrow("HTTP 404");
+    await expect(withRestInteraction(meta, handler)).rejects.toThrow("HTTP 404");
 
     // Should NOT open circuit since 404 is not critical
     const handler2 = vi.fn().mockResolvedValue("ok");
@@ -512,9 +464,7 @@ describe("deviceInteractionManager", () => {
       baseUrl: "http://device",
     };
 
-    await expect(withRestInteraction(meta, vi.fn())).rejects.toThrow(
-      "Device not ready for requests",
-    );
+    await expect(withRestInteraction(meta, vi.fn())).rejects.toThrow("Device not ready for requests");
   });
 
   it("allows system intent during DISCOVERING state when allowDuringDiscovery is set", async () => {
@@ -584,10 +534,7 @@ describe("deviceInteractionManager", () => {
     await withRestInteraction(meta, handler1);
 
     const handler2 = vi.fn().mockResolvedValue({ v: 2 });
-    const result = await withRestInteraction(
-      { ...meta, bypassCache: true },
-      handler2,
-    );
+    const result = await withRestInteraction({ ...meta, bypassCache: true }, handler2);
     expect(result).toEqual({ v: 2 });
     expect(handler2).toHaveBeenCalled();
   });
@@ -608,14 +555,9 @@ describe("deviceInteractionManager", () => {
     };
 
     // One critical error, then success should reset the streak
-    const handler = vi
-      .fn()
-      .mockRejectedValueOnce(new Error("Network error"))
-      .mockResolvedValueOnce("recovered");
+    const handler = vi.fn().mockRejectedValueOnce(new Error("Network error")).mockResolvedValueOnce("recovered");
 
-    await expect(withRestInteraction(meta, handler)).rejects.toThrow(
-      "Network error",
-    );
+    await expect(withRestInteraction(meta, handler)).rejects.toThrow("Network error");
     const result = await withRestInteraction(meta, handler);
     expect(result).toBe("recovered");
   });

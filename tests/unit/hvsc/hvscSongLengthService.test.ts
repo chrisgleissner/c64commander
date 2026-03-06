@@ -126,9 +126,7 @@ describe("hvscSongLengthService", () => {
       vi.mocked(Filesystem.readdir)
         .mockResolvedValueOnce({ files: ["Songlengths.md5"] } as any)
         .mockResolvedValueOnce({ files: [] } as any);
-      vi.mocked(Filesystem.stat).mockRejectedValueOnce(
-        new Error("File does not exist"),
-      );
+      vi.mocked(Filesystem.stat).mockRejectedValueOnce(new Error("File does not exist"));
 
       const files = await __test__.discoverSonglengthFiles();
 
@@ -166,9 +164,7 @@ describe("hvscSongLengthService", () => {
         .mockResolvedValueOnce({ files: ["Songlengths.md5"] } as any)
         .mockResolvedValueOnce({ files: [] } as any);
       vi.mocked(Filesystem.stat).mockResolvedValueOnce({ type: "file" } as any);
-      vi.mocked(Filesystem.readFile).mockRejectedValueOnce(
-        new Error("File not found"),
-      );
+      vi.mocked(Filesystem.readFile).mockRejectedValueOnce(new Error("File not found"));
 
       const files = await __test__.discoverSonglengthFiles();
       expect(files).toEqual([]);
@@ -180,9 +176,7 @@ describe("hvscSongLengthService", () => {
         .mockResolvedValueOnce({ files: ["Songlengths.md5"] } as any)
         .mockResolvedValueOnce({ files: [] } as any);
       vi.mocked(Filesystem.stat).mockResolvedValueOnce({ type: "file" } as any);
-      vi.mocked(Filesystem.readFile).mockRejectedValueOnce(
-        new Error("Permission denied"),
-      );
+      vi.mocked(Filesystem.readFile).mockRejectedValueOnce(new Error("Permission denied"));
 
       const files = await __test__.discoverSonglengthFiles();
       expect(files).toEqual([]);
@@ -221,44 +215,30 @@ describe("hvscSongLengthService", () => {
 
   describe("ensureSonglengthDirectory", () => {
     it("handles mkdir errors for missing paths", async () => {
-      vi.mocked(Filesystem.mkdir).mockRejectedValueOnce(
-        new Error("does not exist"),
-      );
+      vi.mocked(Filesystem.mkdir).mockRejectedValueOnce(new Error("does not exist"));
       await __test__.ensureSonglengthDirectory("hvsc/library");
     });
 
     it("handles mkdir generic errors", async () => {
-      vi.mocked(Filesystem.mkdir).mockRejectedValueOnce(
-        new Error("Permission denied"),
-      );
+      vi.mocked(Filesystem.mkdir).mockRejectedValueOnce(new Error("Permission denied"));
       await __test__.ensureSonglengthDirectory("hvsc/library");
     });
   });
 
   describe("isMissingPathError", () => {
     it("detects missing file errors", () => {
-      expect(
-        __test__.isMissingPathError(new Error("File does not exist")),
-      ).toBe(true);
-      expect(
-        __test__.isMissingPathError(new Error("no such file or directory")),
-      ).toBe(true);
+      expect(__test__.isMissingPathError(new Error("File does not exist"))).toBe(true);
+      expect(__test__.isMissingPathError(new Error("no such file or directory"))).toBe(true);
       expect(__test__.isMissingPathError(new Error("not found"))).toBe(true);
     });
 
     it("returns false for non-missing errors", () => {
-      expect(__test__.isMissingPathError(new Error("Permission denied"))).toBe(
-        false,
-      );
+      expect(__test__.isMissingPathError(new Error("Permission denied"))).toBe(false);
     });
 
     it("handles nested error objects", () => {
-      expect(
-        __test__.isMissingPathError({ error: "File does not exist" }),
-      ).toBe(true);
-      expect(
-        __test__.isMissingPathError({ error: { message: "not found" } }),
-      ).toBe(true);
+      expect(__test__.isMissingPathError({ error: "File does not exist" })).toBe(true);
+      expect(__test__.isMissingPathError({ error: { message: "not found" } })).toBe(true);
     });
 
     it("handles null and undefined", () => {

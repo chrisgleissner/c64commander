@@ -59,13 +59,7 @@ export const ConfigSchema = z
         diskImagePath: z.string().optional(),
         diskDrive: z.union([z.literal("a"), z.literal("b")]).optional(),
         diskType: z.string().optional(),
-        diskMode: z
-          .union([
-            z.literal("readwrite"),
-            z.literal("readonly"),
-            z.literal("unlinked"),
-          ])
-          .optional(),
+        diskMode: z.union([z.literal("readwrite"), z.literal("readonly"), z.literal("unlinked")]).optional(),
         sidFilePath: z.string().optional(),
         sidSongNr: z.number().int().min(0).optional(),
         prgFilePath: z.string().optional(),
@@ -131,9 +125,7 @@ export function loadConfig(configPath?: string): HarnessConfig {
   if (!configPath) {
     return DefaultConfig;
   }
-  const absolutePath = path.isAbsolute(configPath)
-    ? configPath
-    : path.join(process.cwd(), configPath);
+  const absolutePath = path.isAbsolute(configPath) ? configPath : path.join(process.cwd(), configPath);
   const raw = fs.readFileSync(absolutePath, "utf8");
   const data = JSON.parse(raw);
   return ConfigSchema.parse({ ...DefaultConfig, ...data });

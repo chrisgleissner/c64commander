@@ -24,11 +24,7 @@ import {
   X,
 } from "lucide-react";
 import { useC64Connection } from "@/hooks/useC64Connection";
-import {
-  C64_DEFAULTS,
-  getDeviceHostFromBaseUrl,
-  resolveDeviceHostFromStorage,
-} from "@/lib/c64api";
+import { C64_DEFAULTS, getDeviceHostFromBaseUrl, resolveDeviceHostFromStorage } from "@/lib/c64api";
 import { AppBar } from "@/components/AppBar";
 import { useThemeContext } from "@/components/ThemeProvider";
 import { Input } from "@/components/ui/input";
@@ -36,13 +32,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import { reportUserError } from "@/lib/uiErrors";
 import {
@@ -65,13 +55,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  addErrorLog,
-  addLog,
-  clearLogs,
-  getErrorLogs,
-  getLogs,
-} from "@/lib/logging";
+import { addErrorLog, addLog, clearLogs, getErrorLogs, getLogs } from "@/lib/logging";
 import { formatDiagnosticsTimestamp } from "@/lib/diagnostics/timeFormat";
 import { buildActionSummaries } from "@/lib/diagnostics/actionSummaries";
 import { clearTraceEvents, getTraceEvents } from "@/lib/tracing/traceSession";
@@ -80,18 +64,9 @@ import { DiagnosticsListItem } from "@/components/diagnostics/DiagnosticsListIte
 import { ActionSummaryListItem } from "@/components/diagnostics/ActionSummaryListItem";
 import { shareDiagnosticsZip } from "@/lib/diagnostics/diagnosticsExport";
 import { resetDiagnosticsActivity } from "@/lib/diagnostics/diagnosticsActivity";
-import {
-  consumeDiagnosticsOpenRequest,
-  type DiagnosticsTabKey,
-} from "@/lib/diagnostics/diagnosticsOverlay";
-import {
-  setDiagnosticsOverlayActive,
-  withDiagnosticsTraceOverride,
-} from "@/lib/diagnostics/diagnosticsOverlayState";
-import {
-  resolveLogSeverity,
-  resolveTraceSeverity,
-} from "@/lib/diagnostics/diagnosticsSeverity";
+import { consumeDiagnosticsOpenRequest, type DiagnosticsTabKey } from "@/lib/diagnostics/diagnosticsOverlay";
+import { setDiagnosticsOverlayActive, withDiagnosticsTraceOverride } from "@/lib/diagnostics/diagnosticsOverlayState";
+import { resolveLogSeverity, resolveTraceSeverity } from "@/lib/diagnostics/diagnosticsSeverity";
 import { useDeveloperMode } from "@/hooks/useDeveloperMode";
 import { useFeatureFlag } from "@/hooks/useFeatureFlags";
 import { useListPreviewLimit } from "@/hooks/useListPreviewLimit";
@@ -99,11 +74,7 @@ import { wrapUserEvent } from "@/lib/tracing/userTrace";
 import { useActionTrace } from "@/hooks/useActionTrace";
 import { clampListPreviewLimit } from "@/lib/uiPreferences";
 import { getBuildInfo, getBuildInfoRows } from "@/lib/buildInfo";
-import {
-  getHvscBaseUrl,
-  getHvscBaseUrlOverride,
-  setHvscBaseUrlOverride,
-} from "@/lib/hvsc/hvscReleaseService";
+import { getHvscBaseUrl, getHvscBaseUrlOverride, setHvscBaseUrlOverride } from "@/lib/hvsc/hvscReleaseService";
 import {
   clampConfigWriteIntervalMs,
   clampDiscoveryProbeTimeoutMs,
@@ -145,10 +116,7 @@ import {
   resetDeviceSafetyOverrides,
   type DeviceSafetyMode,
 } from "@/lib/config/deviceSafetySettings";
-import {
-  exportSettingsJson,
-  importSettingsJson,
-} from "@/lib/config/settingsTransfer";
+import { exportSettingsJson, importSettingsJson } from "@/lib/config/settingsTransfer";
 import { FolderPicker, type SafPersistedUri } from "@/lib/native/folderPicker";
 import { getPlatform } from "@/lib/native/platform";
 import { redactTreeUri } from "@/lib/native/safUtils";
@@ -163,22 +131,12 @@ type Theme = "light" | "dark" | "system";
 
 export default function SettingsPage() {
   const navigate = useNavigate();
-  const {
-    status,
-    baseUrl,
-    runtimeBaseUrl,
-    password,
-    deviceHost,
-    updateConfig,
-    refetch,
-  } = useC64Connection();
+  const { status, baseUrl, runtimeBaseUrl, password, deviceHost, updateConfig, refetch } = useC64Connection();
   const connectionSnapshot = useConnectionState();
   const { theme, setTheme } = useThemeContext();
   const { isDeveloperModeEnabled, enableDeveloperMode } = useDeveloperMode();
-  const { value: isHvscEnabled, setValue: setHvscEnabled } =
-    useFeatureFlag("hvsc_enabled");
-  const { limit: listPreviewLimit, setLimit: setListPreviewLimit } =
-    useListPreviewLimit();
+  const { value: isHvscEnabled, setValue: setHvscEnabled } = useFeatureFlag("hvsc_enabled");
+  const { limit: listPreviewLimit, setLimit: setListPreviewLimit } = useListPreviewLimit();
   const trace = useActionTrace("SettingsPage");
   const buildInfo = getBuildInfo();
   const buildInfoRows = getBuildInfoRows(buildInfo);
@@ -186,14 +144,8 @@ export default function SettingsPage() {
   const setHvscEnabledAndPersist = (enabled: boolean) => {
     void setHvscEnabled(enabled);
     try {
-      localStorage.setItem(
-        "c64u_feature_flag:hvsc_enabled",
-        enabled ? "1" : "0",
-      );
-      sessionStorage.setItem(
-        "c64u_feature_flag:hvsc_enabled",
-        enabled ? "1" : "0",
-      );
+      localStorage.setItem("c64u_feature_flag:hvsc_enabled", enabled ? "1" : "0");
+      sessionStorage.setItem("c64u_feature_flag:hvsc_enabled", enabled ? "1" : "0");
     } catch (error) {
       addErrorLog("Feature flag storage failed", {
         error: (error as Error).message,
@@ -209,11 +161,8 @@ export default function SettingsPage() {
   const lastProbeFailedAtMs = connectionSnapshot.lastProbeFailedAtMs;
   const [isSaving, setIsSaving] = useState(false);
   const [logsDialogOpen, setLogsDialogOpen] = useState(false);
-  const [diagnosticsTab, setDiagnosticsTab] =
-    useState<DiagnosticsTabKey>("actions");
-  const [diagnosticsFilters, setDiagnosticsFilters] = useState<
-    Record<DiagnosticsTabKey, string>
-  >({
+  const [diagnosticsTab, setDiagnosticsTab] = useState<DiagnosticsTabKey>("actions");
+  const [diagnosticsFilters, setDiagnosticsFilters] = useState<Record<DiagnosticsTabKey, string>>({
     "error-logs": "",
     logs: "",
     traces: "",
@@ -222,96 +171,44 @@ export default function SettingsPage() {
   const [logs, setLogs] = useState(getLogs());
   const [errorLogs, setErrorLogs] = useState(getErrorLogs());
   const [traceEvents, setTraceEvents] = useState(getTraceEvents());
-  const actionSummaries = useMemo(
-    () => buildActionSummaries(traceEvents),
-    [traceEvents],
-  );
+  const actionSummaries = useMemo(() => buildActionSummaries(traceEvents), [traceEvents]);
   const activeDiagnosticsFilter = diagnosticsFilters[diagnosticsTab] ?? "";
-  const [listPreviewInput, setListPreviewInput] = useState(
-    String(listPreviewLimit),
+  const [listPreviewInput, setListPreviewInput] = useState(String(listPreviewLimit));
+  const [debugLoggingEnabled, setDebugLoggingEnabled] = useState(loadDebugLoggingEnabled());
+  const [hvscBaseUrlInput, setHvscBaseUrlInput] = useState(() => getHvscBaseUrlOverride() ?? "");
+  const [hvscBaseUrlPreview, setHvscBaseUrlPreview] = useState(() => getHvscBaseUrl());
+  const [configWriteIntervalMs, setConfigWriteIntervalMs] = useState(loadConfigWriteIntervalMs());
+  const [automaticDemoModeEnabled, setAutomaticDemoModeEnabled] = useState(loadAutomaticDemoModeEnabled());
+  const [diskAutostartMode, setDiskAutostartMode] = useState<DiskAutostartMode>(loadDiskAutostartMode());
+  const [startupDiscoveryWindowInput, setStartupDiscoveryWindowInput] = useState(
+    String(loadStartupDiscoveryWindowMs() / 1000),
   );
-  const [debugLoggingEnabled, setDebugLoggingEnabled] = useState(
-    loadDebugLoggingEnabled(),
+  const [backgroundRediscoveryIntervalInput, setBackgroundRediscoveryIntervalInput] = useState(
+    String(loadBackgroundRediscoveryIntervalMs() / 1000),
   );
-  const [hvscBaseUrlInput, setHvscBaseUrlInput] = useState(
-    () => getHvscBaseUrlOverride() ?? "",
-  );
-  const [hvscBaseUrlPreview, setHvscBaseUrlPreview] = useState(() =>
-    getHvscBaseUrl(),
-  );
-  const [configWriteIntervalMs, setConfigWriteIntervalMs] = useState(
-    loadConfigWriteIntervalMs(),
-  );
-  const [automaticDemoModeEnabled, setAutomaticDemoModeEnabled] = useState(
-    loadAutomaticDemoModeEnabled(),
-  );
-  const [diskAutostartMode, setDiskAutostartMode] = useState<DiskAutostartMode>(
-    loadDiskAutostartMode(),
-  );
-  const [startupDiscoveryWindowInput, setStartupDiscoveryWindowInput] =
-    useState(String(loadStartupDiscoveryWindowMs() / 1000));
-  const [
-    backgroundRediscoveryIntervalInput,
-    setBackgroundRediscoveryIntervalInput,
-  ] = useState(String(loadBackgroundRediscoveryIntervalMs() / 1000));
-  const [probeTimeoutInput, setProbeTimeoutInput] = useState(
-    String(loadDiscoveryProbeTimeoutMs() / 1000),
-  );
-  const [deviceSafetyConfig, setDeviceSafetyConfig] = useState(() =>
-    loadDeviceSafetyConfig(),
-  );
-  const [deviceSafetyMode, setDeviceSafetyMode] = useState<DeviceSafetyMode>(
-    deviceSafetyConfig.mode,
-  );
-  const [pendingSafetyMode, setPendingSafetyMode] =
-    useState<DeviceSafetyMode | null>(null);
+  const [probeTimeoutInput, setProbeTimeoutInput] = useState(String(loadDiscoveryProbeTimeoutMs() / 1000));
+  const [deviceSafetyConfig, setDeviceSafetyConfig] = useState(() => loadDeviceSafetyConfig());
+  const [deviceSafetyMode, setDeviceSafetyMode] = useState<DeviceSafetyMode>(deviceSafetyConfig.mode);
+  const [pendingSafetyMode, setPendingSafetyMode] = useState<DeviceSafetyMode | null>(null);
   const [relaxedWarningOpen, setRelaxedWarningOpen] = useState(false);
-  const [restConcurrencyInput, setRestConcurrencyInput] = useState(
-    String(deviceSafetyConfig.restMaxConcurrency),
-  );
-  const [ftpConcurrencyInput, setFtpConcurrencyInput] = useState(
-    String(deviceSafetyConfig.ftpMaxConcurrency),
-  );
-  const [infoCacheInput, setInfoCacheInput] = useState(
-    String(deviceSafetyConfig.infoCacheMs),
-  );
-  const [configsCacheInput, setConfigsCacheInput] = useState(
-    String(deviceSafetyConfig.configsCacheMs),
-  );
-  const [configsCooldownInput, setConfigsCooldownInput] = useState(
-    String(deviceSafetyConfig.configsCooldownMs),
-  );
-  const [drivesCooldownInput, setDrivesCooldownInput] = useState(
-    String(deviceSafetyConfig.drivesCooldownMs),
-  );
-  const [ftpCooldownInput, setFtpCooldownInput] = useState(
-    String(deviceSafetyConfig.ftpListCooldownMs),
-  );
-  const [backoffBaseInput, setBackoffBaseInput] = useState(
-    String(deviceSafetyConfig.backoffBaseMs),
-  );
-  const [backoffMaxInput, setBackoffMaxInput] = useState(
-    String(deviceSafetyConfig.backoffMaxMs),
-  );
-  const [backoffFactorInput, setBackoffFactorInput] = useState(
-    String(deviceSafetyConfig.backoffFactor),
-  );
+  const [restConcurrencyInput, setRestConcurrencyInput] = useState(String(deviceSafetyConfig.restMaxConcurrency));
+  const [ftpConcurrencyInput, setFtpConcurrencyInput] = useState(String(deviceSafetyConfig.ftpMaxConcurrency));
+  const [infoCacheInput, setInfoCacheInput] = useState(String(deviceSafetyConfig.infoCacheMs));
+  const [configsCacheInput, setConfigsCacheInput] = useState(String(deviceSafetyConfig.configsCacheMs));
+  const [configsCooldownInput, setConfigsCooldownInput] = useState(String(deviceSafetyConfig.configsCooldownMs));
+  const [drivesCooldownInput, setDrivesCooldownInput] = useState(String(deviceSafetyConfig.drivesCooldownMs));
+  const [ftpCooldownInput, setFtpCooldownInput] = useState(String(deviceSafetyConfig.ftpListCooldownMs));
+  const [backoffBaseInput, setBackoffBaseInput] = useState(String(deviceSafetyConfig.backoffBaseMs));
+  const [backoffMaxInput, setBackoffMaxInput] = useState(String(deviceSafetyConfig.backoffMaxMs));
+  const [backoffFactorInput, setBackoffFactorInput] = useState(String(deviceSafetyConfig.backoffFactor));
   const [circuitThresholdInput, setCircuitThresholdInput] = useState(
     String(deviceSafetyConfig.circuitBreakerThreshold),
   );
-  const [circuitCooldownInput, setCircuitCooldownInput] = useState(
-    String(deviceSafetyConfig.circuitBreakerCooldownMs),
-  );
-  const [probeIntervalInput, setProbeIntervalInput] = useState(
-    String(deviceSafetyConfig.discoveryProbeIntervalMs),
-  );
-  const [allowCircuitOverride, setAllowCircuitOverride] = useState(
-    deviceSafetyConfig.allowUserOverrideCircuit,
-  );
+  const [circuitCooldownInput, setCircuitCooldownInput] = useState(String(deviceSafetyConfig.circuitBreakerCooldownMs));
+  const [probeIntervalInput, setProbeIntervalInput] = useState(String(deviceSafetyConfig.discoveryProbeIntervalMs));
+  const [allowCircuitOverride, setAllowCircuitOverride] = useState(deviceSafetyConfig.allowUserOverrideCircuit);
   const [safUris, setSafUris] = useState<SafPersistedUri[]>([]);
-  const [safEntries, setSafEntries] = useState<
-    Array<{ name: string; path: string; type: string }>
-  >([]);
+  const [safEntries, setSafEntries] = useState<Array<{ name: string; path: string; type: string }>>([]);
   const [safBusy, setSafBusy] = useState(false);
   const [safError, setSafError] = useState<string | null>(null);
   const devTapTimestamps = useRef<number[]>([]);
@@ -366,9 +263,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     const handler = (event: Event) => {
-      const detail = (event as CustomEvent).detail as
-        | { key?: string; value?: unknown }
-        | undefined;
+      const detail = (event as CustomEvent).detail as { key?: string; value?: unknown } | undefined;
       if (!detail?.key) return;
       if (detail.key === "c64u_debug_logging_enabled") {
         setDebugLoggingEnabled(Boolean(detail.value));
@@ -380,14 +275,10 @@ export default function SettingsPage() {
         setAutomaticDemoModeEnabled(loadAutomaticDemoModeEnabled());
       }
       if (detail.key === "c64u_startup_discovery_window_ms") {
-        setStartupDiscoveryWindowInput(
-          String(loadStartupDiscoveryWindowMs() / 1000),
-        );
+        setStartupDiscoveryWindowInput(String(loadStartupDiscoveryWindowMs() / 1000));
       }
       if (detail.key === "c64u_background_rediscovery_interval_ms") {
-        setBackgroundRediscoveryIntervalInput(
-          String(loadBackgroundRediscoveryIntervalMs() / 1000),
-        );
+        setBackgroundRediscoveryIntervalInput(String(loadBackgroundRediscoveryIntervalMs() / 1000));
       }
       if (detail.key === "c64u_discovery_probe_timeout_ms") {
         setProbeTimeoutInput(String(loadDiscoveryProbeTimeoutMs() / 1000));
@@ -397,8 +288,7 @@ export default function SettingsPage() {
       }
     };
     window.addEventListener("c64u-app-settings-updated", handler);
-    return () =>
-      window.removeEventListener("c64u-app-settings-updated", handler);
+    return () => window.removeEventListener("c64u-app-settings-updated", handler);
   }, []);
 
   const refreshDeviceSafetyState = useCallback(() => {
@@ -424,15 +314,12 @@ export default function SettingsPage() {
   useEffect(() => {
     const handler = () => refreshDeviceSafetyState();
     window.addEventListener("c64u-device-safety-updated", handler);
-    return () =>
-      window.removeEventListener("c64u-device-safety-updated", handler);
+    return () => window.removeEventListener("c64u-device-safety-updated", handler);
   }, [refreshDeviceSafetyState]);
 
   useEffect(() => {
     const handleDiagnosticsRequest = (event: Event) => {
-      const detail = (event as CustomEvent).detail as
-        | { tab?: DiagnosticsTabKey }
-        | undefined;
+      const detail = (event as CustomEvent).detail as { tab?: DiagnosticsTabKey } | undefined;
       if (!detail?.tab) return;
       setDiagnosticsTab(detail.tab);
       setDiagnosticsDialogOpen(true);
@@ -442,15 +329,8 @@ export default function SettingsPage() {
       setDiagnosticsTab(pending);
       setDiagnosticsDialogOpen(true);
     }
-    window.addEventListener(
-      "c64u-diagnostics-open-request",
-      handleDiagnosticsRequest,
-    );
-    return () =>
-      window.removeEventListener(
-        "c64u-diagnostics-open-request",
-        handleDiagnosticsRequest,
-      );
+    window.addEventListener("c64u-diagnostics-open-request", handleDiagnosticsRequest);
+    return () => window.removeEventListener("c64u-diagnostics-open-request", handleDiagnosticsRequest);
   }, [setDiagnosticsDialogOpen]);
 
   useEffect(() => {
@@ -506,13 +386,9 @@ export default function SettingsPage() {
     }
   };
 
-  const normalizeDiagnosticsFilter = (value: string) =>
-    value.trim().toLowerCase();
+  const normalizeDiagnosticsFilter = (value: string) => value.trim().toLowerCase();
 
-  const matchesDiagnosticsFilter = (
-    filterText: string,
-    fields: Array<string | null | undefined>,
-  ) => {
+  const matchesDiagnosticsFilter = (filterText: string, fields: Array<string | null | undefined>) => {
     const normalized = normalizeDiagnosticsFilter(filterText);
     if (!normalized) return true;
     const haystack = fields.filter(Boolean).join(" ").toLowerCase();
@@ -564,8 +440,7 @@ export default function SettingsPage() {
     if (!normalizeDiagnosticsFilter(filterText)) return actionSummaries;
     return actionSummaries.filter((summary) => {
       const summaryTime = formatDiagnosticsTimestamp(summary.startTimestamp);
-      const durationLabel =
-        summary.durationMs !== null ? `${summary.durationMs} ms` : "Unknown";
+      const durationLabel = summary.durationMs !== null ? `${summary.durationMs} ms` : "Unknown";
       return matchesDiagnosticsFilter(filterText, [
         summary.actionName,
         summary.correlationId,
@@ -613,10 +488,7 @@ export default function SettingsPage() {
   const handleSaveConnection = trace(async function handleSaveConnection() {
     setIsSaving(true);
     try {
-      updateConfig(
-        deviceHostInput || C64_DEFAULTS.DEFAULT_DEVICE_HOST,
-        passwordInput || undefined,
-      );
+      updateConfig(deviceHostInput || C64_DEFAULTS.DEFAULT_DEVICE_HOST, passwordInput || undefined);
       await discoverConnection("settings");
       toast({ title: "Connection settings saved" });
     } catch (error) {
@@ -635,9 +507,7 @@ export default function SettingsPage() {
     if (isDeveloperModeEnabled) return;
     const now = Date.now();
     const windowMs = 3000;
-    const taps = devTapTimestamps.current.filter(
-      (timestamp) => now - timestamp < windowMs,
-    );
+    const taps = devTapTimestamps.current.filter((timestamp) => now - timestamp < windowMs);
     taps.push(now);
     devTapTimestamps.current = taps;
 
@@ -667,27 +537,21 @@ export default function SettingsPage() {
 
   const commitStartupDiscoveryWindow = () => {
     const parsed = Number(startupDiscoveryWindowInput);
-    const clamped = clampStartupDiscoveryWindowMs(
-      Math.round((Number.isFinite(parsed) ? parsed : 3) * 1000),
-    );
+    const clamped = clampStartupDiscoveryWindowMs(Math.round((Number.isFinite(parsed) ? parsed : 3) * 1000));
     saveStartupDiscoveryWindowMs(clamped);
     setStartupDiscoveryWindowInput(String(clamped / 1000));
   };
 
   const commitBackgroundRediscoveryInterval = () => {
     const parsed = Number(backgroundRediscoveryIntervalInput);
-    const clamped = clampBackgroundRediscoveryIntervalMs(
-      Math.round((Number.isFinite(parsed) ? parsed : 5) * 1000),
-    );
+    const clamped = clampBackgroundRediscoveryIntervalMs(Math.round((Number.isFinite(parsed) ? parsed : 5) * 1000));
     saveBackgroundRediscoveryIntervalMs(clamped);
     setBackgroundRediscoveryIntervalInput(String(clamped / 1000));
   };
 
   const commitProbeTimeout = () => {
     const parsed = Number(probeTimeoutInput);
-    const clamped = clampDiscoveryProbeTimeoutMs(
-      Math.round((Number.isFinite(parsed) ? parsed : 2.5) * 1000),
-    );
+    const clamped = clampDiscoveryProbeTimeoutMs(Math.round((Number.isFinite(parsed) ? parsed : 2.5) * 1000));
     saveDiscoveryProbeTimeoutMs(clamped);
     setProbeTimeoutInput(String(clamped / 1000));
   };
@@ -706,11 +570,7 @@ export default function SettingsPage() {
     refreshDeviceSafetyState();
   };
 
-  const commitDeviceSafetyNumber = (
-    value: string,
-    commit: (next: number) => void,
-    fallback: number,
-  ) => {
+  const commitDeviceSafetyNumber = (value: string, commit: (next: number) => void, fallback: number) => {
     const parsed = Number(value);
     commit(Number.isFinite(parsed) ? parsed : fallback);
     refreshDeviceSafetyState();
@@ -754,9 +614,7 @@ export default function SettingsPage() {
     }
   });
 
-  const handleImportSettings = trace(async function handleImportSettings(
-    file?: File | null,
-  ) {
+  const handleImportSettings = trace(async function handleImportSettings(file?: File | null) {
     if (!file) return;
     try {
       const content = await file.text();
@@ -773,12 +631,8 @@ export default function SettingsPage() {
       setDebugLoggingEnabled(loadDebugLoggingEnabled());
       setConfigWriteIntervalMs(loadConfigWriteIntervalMs());
       setAutomaticDemoModeEnabled(loadAutomaticDemoModeEnabled());
-      setStartupDiscoveryWindowInput(
-        String(loadStartupDiscoveryWindowMs() / 1000),
-      );
-      setBackgroundRediscoveryIntervalInput(
-        String(loadBackgroundRediscoveryIntervalMs() / 1000),
-      );
+      setStartupDiscoveryWindowInput(String(loadStartupDiscoveryWindowMs() / 1000));
+      setBackgroundRediscoveryIntervalInput(String(loadBackgroundRediscoveryIntervalMs() / 1000));
       setProbeTimeoutInput(String(loadDiscoveryProbeTimeoutMs() / 1000));
       setDiskAutostartMode(loadDiskAutostartMode());
       toast({ title: "Settings imported" });
@@ -827,17 +681,11 @@ export default function SettingsPage() {
                     "ThemeOption",
                   )}
                   className={`flex flex-col items-center gap-2 p-4 rounded-lg border transition-colors ${
-                    isActive
-                      ? "border-primary bg-primary/5"
-                      : "border-border hover:border-muted-foreground"
+                    isActive ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground"
                   }`}
                 >
-                  <Icon
-                    className={`h-6 w-6 ${isActive ? "text-primary" : "text-muted-foreground"}`}
-                  />
-                  <span className={`text-sm ${isActive ? "font-medium" : ""}`}>
-                    {option.label}
-                  </span>
+                  <Icon className={`h-6 w-6 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
+                  <span className={`text-sm ${isActive ? "font-medium" : ""}`}>{option.label}</span>
                 </button>
               );
             })}
@@ -869,12 +717,9 @@ export default function SettingsPage() {
                 placeholder={C64_DEFAULTS.DEFAULT_DEVICE_HOST}
                 className="font-sans"
               />
+              <p className="text-xs text-muted-foreground">Hostname or IP from the C64 menu.</p>
               <p className="text-xs text-muted-foreground">
-                Hostname or IP from the C64 menu.
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Currently using:{" "}
-                <span className="font-sans break-all">{runtimeDeviceHost}</span>
+                Currently using: <span className="font-sans break-all">{runtimeDeviceHost}</span>
                 {isDemoActive ? " (Demo mock)" : ""}
               </p>
               {isDemoActive ? (
@@ -889,10 +734,7 @@ export default function SettingsPage() {
             </div>
 
             <div className="space-y-2">
-              <Label
-                htmlFor="password"
-                className="text-sm flex items-center gap-1"
-              >
+              <Label htmlFor="password" className="text-sm flex items-center gap-1">
                 <Lock className="h-3 w-3" />
                 Network Password
               </Label>
@@ -904,9 +746,7 @@ export default function SettingsPage() {
                 placeholder="Optional"
                 className="font-sans"
               />
-              <p className="text-xs text-muted-foreground">
-                Network password from the C64 manual, if defined
-              </p>
+              <p className="text-xs text-muted-foreground">Network password from the C64 manual, if defined</p>
             </div>
           </div>
 
@@ -917,8 +757,7 @@ export default function SettingsPage() {
                   Automatic Demo Mode
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  When no hardware is found during discovery, automatically
-                  offer Demo Mode for this session.
+                  When no hardware is found during discovery, automatically offer Demo Mode for this session.
                 </p>
               </div>
               <Checkbox
@@ -934,14 +773,8 @@ export default function SettingsPage() {
           </div>
 
           <div className="flex gap-2 pt-2">
-            <Button
-              onClick={handleSaveConnection}
-              disabled={isSaving}
-              className="flex-1"
-            >
-              {isSaving ? (
-                <RefreshCw className="h-4 w-4 animate-spin mr-2" />
-              ) : null}
+            <Button onClick={handleSaveConnection} disabled={isSaving} className="flex-1">
+              {isSaving ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : null}
               Save & Connect
             </Button>
             <Button
@@ -950,9 +783,7 @@ export default function SettingsPage() {
               disabled={status.isConnecting}
               aria-label="Refresh connection"
             >
-              <RefreshCw
-                className={`h-4 w-4 ${status.isConnecting ? "animate-spin" : ""}`}
-              />
+              <RefreshCw className={`h-4 w-4 ${status.isConnecting ? "animate-spin" : ""}`} />
             </Button>
           </div>
 
@@ -1010,8 +841,7 @@ export default function SettingsPage() {
                   Enable Debug Logging
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  Emits all debug-level logs for diagnostics, including SAF and
-                  REST events.
+                  Emits all debug-level logs for diagnostics, including SAF and REST events.
                 </p>
               </div>
               <Checkbox
@@ -1034,12 +864,7 @@ export default function SettingsPage() {
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => void refreshSafPermissions()}
-                    disabled={safBusy}
-                  >
+                  <Button variant="outline" size="sm" onClick={() => void refreshSafPermissions()} disabled={safBusy}>
                     List persisted URIs
                   </Button>
                   <Button
@@ -1051,9 +876,7 @@ export default function SettingsPage() {
                     Enumerate first root
                   </Button>
                 </div>
-                {safError ? (
-                  <p className="text-xs text-destructive">{safError}</p>
-                ) : null}
+                {safError ? <p className="text-xs text-destructive">{safError}</p> : null}
                 {safUris.length ? (
                   <div className="text-xs text-muted-foreground break-words min-w-0">
                     Persisted:{" "}
@@ -1065,11 +888,7 @@ export default function SettingsPage() {
                 ) : null}
                 {safEntries.length ? (
                   <div className="max-h-28 overflow-auto whitespace-pre-line break-words min-w-0 text-xs text-muted-foreground">
-                    {safEntries
-                      .map(
-                        (entry) => `${entry.type.toUpperCase()}: ${entry.path}`,
-                      )
-                      .join("\n")}
+                    {safEntries.map((entry) => `${entry.type.toUpperCase()}: ${entry.path}`).join("\n")}
                   </div>
                 ) : null}
               </div>
@@ -1079,23 +898,14 @@ export default function SettingsPage() {
               <div className="space-y-1">
                 <p className="text-sm font-semibold">Settings transfer</p>
                 <p className="text-xs text-muted-foreground">
-                  Export or import non-sensitive settings (connection timing,
-                  safety presets, and diagnostics).
+                  Export or import non-sensitive settings (connection timing, safety presets, and diagnostics).
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleExportSettings}
-                >
+                <Button variant="outline" size="sm" onClick={handleExportSettings}>
                   Export settings
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => settingsFileInputRef.current?.click()}
-                >
+                <Button variant="outline" size="sm" onClick={() => settingsFileInputRef.current?.click()}>
                   Import settings
                 </Button>
               </div>
@@ -1150,8 +960,7 @@ export default function SettingsPage() {
                 }}
               />
               <p className="text-xs text-muted-foreground">
-                Controls how many playlist or disk items are shown before
-                opening View all. Default is 50.
+                Controls how many playlist or disk items are shown before opening View all. Default is 50.
               </p>
             </div>
 
@@ -1171,19 +980,14 @@ export default function SettingsPage() {
                   <SelectValue placeholder="Select load mode" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="kernal">
-                    Classic KERNAL load (LOAD"*",8,1)
-                  </SelectItem>
-                  <SelectItem value="dma">
-                    DMA (Direct Memory Access)
-                  </SelectItem>
+                  <SelectItem value="kernal">Classic KERNAL load (LOAD"*",8,1)</SelectItem>
+                  <SelectItem value="dma">DMA (Direct Memory Access)</SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                Classic KERNAL load mounts the disk and uses LOAD"*",8,1 then
-                RUN. DMA (Direct Memory Access) extracts the first PRG from a
-                D64/D71/D81 image and writes it directly to C64 memory for
-                faster starts. Some loaders may not like DMA.
+                Classic KERNAL load mounts the disk and uses LOAD"*",8,1 then RUN. DMA (Direct Memory Access) extracts
+                the first PRG from a D64/D71/D81 image and writes it directly to C64 memory for faster starts. Some
+                loaders may not like DMA.
               </p>
             </div>
           </div>
@@ -1210,8 +1014,7 @@ export default function SettingsPage() {
                   Automatic Demo Mode
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  When no hardware is found during discovery, automatically
-                  offer Demo Mode for this session.
+                  When no hardware is found during discovery, automatically offer Demo Mode for this session.
                 </p>
               </div>
               <Checkbox
@@ -1236,24 +1039,17 @@ export default function SettingsPage() {
                 max={15}
                 step={0.1}
                 value={startupDiscoveryWindowInput}
-                onChange={(event) =>
-                  setStartupDiscoveryWindowInput(event.target.value)
-                }
+                onChange={(event) => setStartupDiscoveryWindowInput(event.target.value)}
                 onBlur={commitStartupDiscoveryWindow}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") commitStartupDiscoveryWindow();
                 }}
               />
-              <p className="text-xs text-muted-foreground">
-                Default 3s. Range 0.5s–15s.
-              </p>
+              <p className="text-xs text-muted-foreground">Default 3s. Range 0.5s–15s.</p>
             </div>
 
             <div className="space-y-2">
-              <Label
-                htmlFor="background-rediscovery-interval"
-                className="font-medium"
-              >
+              <Label htmlFor="background-rediscovery-interval" className="font-medium">
                 Background Rediscovery Interval (seconds)
               </Label>
               <Input
@@ -1263,18 +1059,13 @@ export default function SettingsPage() {
                 max={60}
                 step={0.1}
                 value={backgroundRediscoveryIntervalInput}
-                onChange={(event) =>
-                  setBackgroundRediscoveryIntervalInput(event.target.value)
-                }
+                onChange={(event) => setBackgroundRediscoveryIntervalInput(event.target.value)}
                 onBlur={commitBackgroundRediscoveryInterval}
                 onKeyDown={(event) => {
-                  if (event.key === "Enter")
-                    commitBackgroundRediscoveryInterval();
+                  if (event.key === "Enter") commitBackgroundRediscoveryInterval();
                 }}
               />
-              <p className="text-xs text-muted-foreground">
-                Default 5s. Range 1s–60s.
-              </p>
+              <p className="text-xs text-muted-foreground">Default 5s. Range 1s–60s.</p>
             </div>
           </div>
         </motion.div>
@@ -1326,9 +1117,7 @@ export default function SettingsPage() {
             </div>
             {isDeveloperModeEnabled ? (
               <div className="space-y-2">
-                <Label className="text-sm font-medium">
-                  HVSC base URL override
-                </Label>
+                <Label className="text-sm font-medium">HVSC base URL override</Label>
                 <Input
                   value={hvscBaseUrlInput}
                   onChange={(event) => setHvscBaseUrlInput(event.target.value)}
@@ -1340,8 +1129,7 @@ export default function SettingsPage() {
                   data-testid="hvsc-base-url"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Leave blank to use the default HVSC mirror. Current base URL:{" "}
-                  {hvscBaseUrlPreview}
+                  Leave blank to use the default HVSC mirror. Current base URL: {hvscBaseUrlPreview}
                 </p>
               </div>
             ) : null}
@@ -1370,30 +1158,21 @@ export default function SettingsPage() {
             <Label className="text-sm font-medium">Safety Mode</Label>
             <Select
               value={deviceSafetyMode}
-              onValueChange={(value) =>
-                commitDeviceSafetyMode(value as DeviceSafetyMode)
-              }
+              onValueChange={(value) => commitDeviceSafetyMode(value as DeviceSafetyMode)}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select safety mode" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="RELAXED">
-                  Relaxed (higher concurrency, higher risk)
-                </SelectItem>
+                <SelectItem value="RELAXED">Relaxed (higher concurrency, higher risk)</SelectItem>
                 <SelectItem value="BALANCED">Balanced (recommended)</SelectItem>
-                <SelectItem value="CONSERVATIVE">
-                  Conservative (maximum safety)
-                </SelectItem>
-                <SelectItem value="TROUBLESHOOTING">
-                  Troubleshooting (low concurrency, extra logging)
-                </SelectItem>
+                <SelectItem value="CONSERVATIVE">Conservative (maximum safety)</SelectItem>
+                <SelectItem value="TROUBLESHOOTING">Troubleshooting (low concurrency, extra logging)</SelectItem>
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              Mode presets adjust concurrency limits, caching, cooldowns, and
-              backoff behavior. Troubleshooting mode also enables debug logging
-              for richer diagnostics.
+              Mode presets adjust concurrency limits, caching, cooldowns, and backoff behavior. Troubleshooting mode
+              also enables debug logging for richer diagnostics.
             </p>
           </div>
 
@@ -1401,8 +1180,7 @@ export default function SettingsPage() {
             <div className="space-y-1">
               <Label className="font-medium">Network timing</Label>
               <p className="text-xs text-muted-foreground">
-                Tune discovery timing to reduce connection churn or speed up
-                detection.
+                Tune discovery timing to reduce connection churn or speed up detection.
               </p>
             </div>
 
@@ -1417,24 +1195,17 @@ export default function SettingsPage() {
                 max={15}
                 step={0.1}
                 value={startupDiscoveryWindowInput}
-                onChange={(event) =>
-                  setStartupDiscoveryWindowInput(event.target.value)
-                }
+                onChange={(event) => setStartupDiscoveryWindowInput(event.target.value)}
                 onBlur={commitStartupDiscoveryWindow}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") commitStartupDiscoveryWindow();
                 }}
               />
-              <p className="text-xs text-muted-foreground">
-                Default 3s. Range 0.5s–15s.
-              </p>
+              <p className="text-xs text-muted-foreground">Default 3s. Range 0.5s–15s.</p>
             </div>
 
             <div className="space-y-2">
-              <Label
-                htmlFor="background-rediscovery-interval"
-                className="font-medium"
-              >
+              <Label htmlFor="background-rediscovery-interval" className="font-medium">
                 Background Rediscovery Interval (seconds)
               </Label>
               <Input
@@ -1444,18 +1215,13 @@ export default function SettingsPage() {
                 max={60}
                 step={0.1}
                 value={backgroundRediscoveryIntervalInput}
-                onChange={(event) =>
-                  setBackgroundRediscoveryIntervalInput(event.target.value)
-                }
+                onChange={(event) => setBackgroundRediscoveryIntervalInput(event.target.value)}
                 onBlur={commitBackgroundRediscoveryInterval}
                 onKeyDown={(event) => {
-                  if (event.key === "Enter")
-                    commitBackgroundRediscoveryInterval();
+                  if (event.key === "Enter") commitBackgroundRediscoveryInterval();
                 }}
               />
-              <p className="text-xs text-muted-foreground">
-                Default 5s. Range 1s–60s.
-              </p>
+              <p className="text-xs text-muted-foreground">Default 5s. Range 1s–60s.</p>
             </div>
 
             <div className="space-y-2">
@@ -1475,18 +1241,14 @@ export default function SettingsPage() {
                   if (event.key === "Enter") commitProbeTimeout();
                 }}
               />
-              <p className="text-xs text-muted-foreground">
-                Default 2.5s. Range 0.5s–10s.
-              </p>
+              <p className="text-xs text-muted-foreground">Default 2.5s. Range 0.5s–10s.</p>
             </div>
           </div>
 
           <div className="rounded-lg border border-border/70 p-3 space-y-4">
             <div className="space-y-2">
               <Label className="font-medium">Advanced Controls</Label>
-              <p className="text-xs text-muted-foreground">
-                Fine-tuned device protection changes apply immediately.
-              </p>
+              <p className="text-xs text-muted-foreground">Fine-tuned device protection changes apply immediately.</p>
               <Button
                 variant="outline"
                 className="w-full"
@@ -1513,20 +1275,16 @@ export default function SettingsPage() {
                 onChange={(event) => {
                   const parsed = Number(event.target.value);
                   if (Number.isFinite(parsed)) {
-                    setConfigWriteIntervalMs(
-                      clampConfigWriteIntervalMs(parsed),
-                    );
+                    setConfigWriteIntervalMs(clampConfigWriteIntervalMs(parsed));
                   }
                 }}
                 onBlur={() => saveConfigWriteIntervalMs(configWriteIntervalMs)}
                 onKeyDown={(event) => {
-                  if (event.key === "Enter")
-                    saveConfigWriteIntervalMs(configWriteIntervalMs);
+                  if (event.key === "Enter") saveConfigWriteIntervalMs(configWriteIntervalMs);
                 }}
               />
               <p className="text-xs text-muted-foreground">
-                Minimum delay between consecutive config write calls. Default
-                500 ms.
+                Minimum delay between consecutive config write calls. Default 500 ms.
               </p>
             </div>
 
@@ -1542,9 +1300,7 @@ export default function SettingsPage() {
                   max={4}
                   step={1}
                   value={restConcurrencyInput}
-                  onChange={(event) =>
-                    setRestConcurrencyInput(event.target.value)
-                  }
+                  onChange={(event) => setRestConcurrencyInput(event.target.value)}
                   onBlur={() =>
                     commitDeviceSafetyNumber(
                       restConcurrencyInput,
@@ -1566,9 +1322,7 @@ export default function SettingsPage() {
                   max={4}
                   step={1}
                   value={ftpConcurrencyInput}
-                  onChange={(event) =>
-                    setFtpConcurrencyInput(event.target.value)
-                  }
+                  onChange={(event) => setFtpConcurrencyInput(event.target.value)}
                   onBlur={() =>
                     commitDeviceSafetyNumber(
                       ftpConcurrencyInput,
@@ -1592,11 +1346,7 @@ export default function SettingsPage() {
                   value={infoCacheInput}
                   onChange={(event) => setInfoCacheInput(event.target.value)}
                   onBlur={() =>
-                    commitDeviceSafetyNumber(
-                      infoCacheInput,
-                      saveInfoCacheMs,
-                      deviceSafetyConfig.infoCacheMs,
-                    )
+                    commitDeviceSafetyNumber(infoCacheInput, saveInfoCacheMs, deviceSafetyConfig.infoCacheMs)
                   }
                 />
               </div>
@@ -1614,11 +1364,7 @@ export default function SettingsPage() {
                   value={configsCacheInput}
                   onChange={(event) => setConfigsCacheInput(event.target.value)}
                   onBlur={() =>
-                    commitDeviceSafetyNumber(
-                      configsCacheInput,
-                      saveConfigsCacheMs,
-                      deviceSafetyConfig.configsCacheMs,
-                    )
+                    commitDeviceSafetyNumber(configsCacheInput, saveConfigsCacheMs, deviceSafetyConfig.configsCacheMs)
                   }
                 />
               </div>
@@ -1634,9 +1380,7 @@ export default function SettingsPage() {
                   max={10000}
                   step={50}
                   value={configsCooldownInput}
-                  onChange={(event) =>
-                    setConfigsCooldownInput(event.target.value)
-                  }
+                  onChange={(event) => setConfigsCooldownInput(event.target.value)}
                   onBlur={() =>
                     commitDeviceSafetyNumber(
                       configsCooldownInput,
@@ -1658,9 +1402,7 @@ export default function SettingsPage() {
                   max={10000}
                   step={50}
                   value={drivesCooldownInput}
-                  onChange={(event) =>
-                    setDrivesCooldownInput(event.target.value)
-                  }
+                  onChange={(event) => setDrivesCooldownInput(event.target.value)}
                   onBlur={() =>
                     commitDeviceSafetyNumber(
                       drivesCooldownInput,
@@ -1706,11 +1448,7 @@ export default function SettingsPage() {
                   value={backoffBaseInput}
                   onChange={(event) => setBackoffBaseInput(event.target.value)}
                   onBlur={() =>
-                    commitDeviceSafetyNumber(
-                      backoffBaseInput,
-                      saveBackoffBaseMs,
-                      deviceSafetyConfig.backoffBaseMs,
-                    )
+                    commitDeviceSafetyNumber(backoffBaseInput, saveBackoffBaseMs, deviceSafetyConfig.backoffBaseMs)
                   }
                 />
               </div>
@@ -1728,11 +1466,7 @@ export default function SettingsPage() {
                   value={backoffMaxInput}
                   onChange={(event) => setBackoffMaxInput(event.target.value)}
                   onBlur={() =>
-                    commitDeviceSafetyNumber(
-                      backoffMaxInput,
-                      saveBackoffMaxMs,
-                      deviceSafetyConfig.backoffMaxMs,
-                    )
+                    commitDeviceSafetyNumber(backoffMaxInput, saveBackoffMaxMs, deviceSafetyConfig.backoffMaxMs)
                   }
                 />
               </div>
@@ -1748,15 +1482,9 @@ export default function SettingsPage() {
                   max={3}
                   step={0.1}
                   value={backoffFactorInput}
-                  onChange={(event) =>
-                    setBackoffFactorInput(event.target.value)
-                  }
+                  onChange={(event) => setBackoffFactorInput(event.target.value)}
                   onBlur={() =>
-                    commitDeviceSafetyNumber(
-                      backoffFactorInput,
-                      saveBackoffFactor,
-                      deviceSafetyConfig.backoffFactor,
-                    )
+                    commitDeviceSafetyNumber(backoffFactorInput, saveBackoffFactor, deviceSafetyConfig.backoffFactor)
                   }
                 />
               </div>
@@ -1772,9 +1500,7 @@ export default function SettingsPage() {
                   max={10}
                   step={1}
                   value={circuitThresholdInput}
-                  onChange={(event) =>
-                    setCircuitThresholdInput(event.target.value)
-                  }
+                  onChange={(event) => setCircuitThresholdInput(event.target.value)}
                   onBlur={() =>
                     commitDeviceSafetyNumber(
                       circuitThresholdInput,
@@ -1796,9 +1522,7 @@ export default function SettingsPage() {
                   max={20000}
                   step={100}
                   value={circuitCooldownInput}
-                  onChange={(event) =>
-                    setCircuitCooldownInput(event.target.value)
-                  }
+                  onChange={(event) => setCircuitCooldownInput(event.target.value)}
                   onBlur={() =>
                     commitDeviceSafetyNumber(
                       circuitCooldownInput,
@@ -1820,9 +1544,7 @@ export default function SettingsPage() {
                   max={2000}
                   step={50}
                   value={probeIntervalInput}
-                  onChange={(event) =>
-                    setProbeIntervalInput(event.target.value)
-                  }
+                  onChange={(event) => setProbeIntervalInput(event.target.value)}
                   onBlur={() =>
                     commitDeviceSafetyNumber(
                       probeIntervalInput,
@@ -1834,9 +1556,7 @@ export default function SettingsPage() {
               </div>
 
               <div className="space-y-2">
-                <Label className="text-sm">
-                  Allow user override when circuit is open
-                </Label>
+                <Label className="text-sm">Allow user override when circuit is open</Label>
                 <div className="flex items-center justify-between gap-3 rounded-md border border-border/70 p-2">
                   <span className="text-xs text-muted-foreground">
                     User-triggered actions can bypass circuit breaker.
@@ -1880,15 +1600,9 @@ export default function SettingsPage() {
 
           <div className="space-y-2 text-sm">
             {buildInfoRows.map((row) => (
-              <div
-                key={row.testId}
-                className="flex items-start justify-between gap-3"
-              >
+              <div key={row.testId} className="flex items-start justify-between gap-3">
                 <span className="text-muted-foreground">{row.label}</span>
-                <span
-                  className="font-semibold text-right break-words"
-                  data-testid={row.testId}
-                >
+                <span className="font-semibold text-right break-words" data-testid={row.testId}>
                   {row.value}
                 </span>
               </div>
@@ -1898,9 +1612,7 @@ export default function SettingsPage() {
               <span className="font-semibold">v0.1</span>
             </div>
             {isDeveloperModeEnabled ? (
-              <div className="text-xs font-semibold text-success">
-                Developer mode enabled
-              </div>
+              <div className="text-xs font-semibold text-success">Developer mode enabled</div>
             ) : null}
           </div>
 
@@ -1925,17 +1637,13 @@ export default function SettingsPage() {
         </motion.div>
       </main>
 
-      <Dialog
-        open={relaxedWarningOpen}
-        onOpenChange={(open) => !open && handleCancelRelaxedMode()}
-      >
+      <Dialog open={relaxedWarningOpen} onOpenChange={(open) => !open && handleCancelRelaxedMode()}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Enable Relaxed Safety Mode?</DialogTitle>
             <DialogDescription>
-              Relaxed mode increases concurrency and reduces protection. This
-              can overload or destabilize real hardware. Confirm only if you
-              understand the risks.
+              Relaxed mode increases concurrency and reduces protection. This can overload or destabilize real hardware.
+              Confirm only if you understand the risks.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -1953,9 +1661,7 @@ export default function SettingsPage() {
         <DialogContent className="max-h-[calc(100dvh-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-hidden">
           <DialogHeader>
             <DialogTitle>Diagnostics</DialogTitle>
-            <DialogDescription>
-              Review warnings/errors, logs, traces, and action summaries.
-            </DialogDescription>
+            <DialogDescription>Review warnings/errors, logs, traces, and action summaries.</DialogDescription>
           </DialogHeader>
           <div className="flex flex-wrap gap-2">
             <AlertDialog>
@@ -1968,8 +1674,8 @@ export default function SettingsPage() {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Clear diagnostics</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This will permanently clear all warning/error logs, logs,
-                    traces, and actions. This cannot be undone.
+                    This will permanently clear all warning/error logs, logs, traces, and actions. This cannot be
+                    undone.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -2018,38 +1724,20 @@ export default function SettingsPage() {
           </div>
           <Tabs
             value={diagnosticsTab}
-            onValueChange={(value) =>
-              setDiagnosticsTab(value as DiagnosticsTabKey)
-            }
+            onValueChange={(value) => setDiagnosticsTab(value as DiagnosticsTabKey)}
             className="space-y-3"
           >
             <TabsList className="grid grid-cols-4 w-full">
-              <TabsTrigger
-                value="error-logs"
-                className={diagnosticsTabTriggerClass}
-                aria-label="Errors"
-              >
+              <TabsTrigger value="error-logs" className={diagnosticsTabTriggerClass} aria-label="Errors">
                 Errors
               </TabsTrigger>
-              <TabsTrigger
-                value="logs"
-                className={diagnosticsTabTriggerClass}
-                aria-label="Logs"
-              >
+              <TabsTrigger value="logs" className={diagnosticsTabTriggerClass} aria-label="Logs">
                 Logs
               </TabsTrigger>
-              <TabsTrigger
-                value="traces"
-                className={diagnosticsTabTriggerClass}
-                aria-label="Traces"
-              >
+              <TabsTrigger value="traces" className={diagnosticsTabTriggerClass} aria-label="Traces">
                 Traces
               </TabsTrigger>
-              <TabsTrigger
-                value="actions"
-                className={diagnosticsTabTriggerClass}
-                aria-label="Actions"
-              >
+              <TabsTrigger value="actions" className={diagnosticsTabTriggerClass} aria-label="Actions">
                 Actions
               </TabsTrigger>
             </TabsList>
@@ -2058,24 +1746,18 @@ export default function SettingsPage() {
               className="space-y-3 max-h-[calc(100dvh-23rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-auto pr-2"
             >
               <div className="flex items-center justify-between gap-2">
-                <p className="text-xs text-muted-foreground">
-                  Total warnings/errors: {errorLogs.length}
-                </p>
+                <p className="text-xs text-muted-foreground">Total warnings/errors: {errorLogs.length}</p>
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() =>
-                    void withDiagnosticsTraceOverride(handleShareDiagnostics)
-                  }
+                  onClick={() => void withDiagnosticsTraceOverride(handleShareDiagnostics)}
                   data-testid="diagnostics-share-errors"
                 >
                   Share
                 </Button>
               </div>
               {filteredErrorLogs.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No warning or error logs recorded.
-                </p>
+                <p className="text-sm text-muted-foreground">No warning or error logs recorded.</p>
               ) : (
                 filteredErrorLogs.map((entry) => (
                   <DiagnosticsListItem
@@ -2105,24 +1787,18 @@ export default function SettingsPage() {
               className="space-y-3 max-h-[calc(100dvh-23rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-auto pr-2"
             >
               <div className="flex items-center justify-between gap-2">
-                <p className="text-xs text-muted-foreground">
-                  Total logs: {logs.length}
-                </p>
+                <p className="text-xs text-muted-foreground">Total logs: {logs.length}</p>
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() =>
-                    void withDiagnosticsTraceOverride(handleShareDiagnostics)
-                  }
+                  onClick={() => void withDiagnosticsTraceOverride(handleShareDiagnostics)}
                   data-testid="diagnostics-share-logs"
                 >
                   Share
                 </Button>
               </div>
               {filteredLogs.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No logs recorded.
-                </p>
+                <p className="text-sm text-muted-foreground">No logs recorded.</p>
               ) : (
                 filteredLogs.map((entry) => (
                   <DiagnosticsListItem
@@ -2152,24 +1828,18 @@ export default function SettingsPage() {
               className="space-y-3 max-h-[calc(100dvh-23rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-auto pr-2"
             >
               <div className="flex items-center justify-between gap-2">
-                <p className="text-xs text-muted-foreground">
-                  Total traces: {traceEvents.length}
-                </p>
+                <p className="text-xs text-muted-foreground">Total traces: {traceEvents.length}</p>
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() =>
-                    void withDiagnosticsTraceOverride(handleShareDiagnostics)
-                  }
+                  onClick={() => void withDiagnosticsTraceOverride(handleShareDiagnostics)}
                   data-testid="diagnostics-share-traces"
                 >
                   Share
                 </Button>
               </div>
               {filteredTraces.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No traces recorded.
-                </p>
+                <p className="text-sm text-muted-foreground">No traces recorded.</p>
               ) : (
                 <>
                   {filteredTraces.length > 100 && (
@@ -2202,34 +1872,23 @@ export default function SettingsPage() {
               className="space-y-3 max-h-[calc(100dvh-23rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-auto pr-2"
             >
               <div className="flex items-center justify-between gap-2">
-                <p className="text-xs text-muted-foreground">
-                  Total action summaries: {actionSummaries.length}
-                </p>
+                <p className="text-xs text-muted-foreground">Total action summaries: {actionSummaries.length}</p>
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() =>
-                    void withDiagnosticsTraceOverride(handleShareDiagnostics)
-                  }
+                  onClick={() => void withDiagnosticsTraceOverride(handleShareDiagnostics)}
                   data-testid="diagnostics-share-actions"
                 >
                   Share
                 </Button>
               </div>
               {filteredActions.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No actions recorded.
-                </p>
+                <p className="text-sm text-muted-foreground">No actions recorded.</p>
               ) : (
                 filteredActions
                   .slice(-100)
                   .reverse()
-                  .map((summary) => (
-                    <ActionSummaryListItem
-                      key={summary.correlationId}
-                      summary={summary}
-                    />
-                  ))
+                  .map((summary) => <ActionSummaryListItem key={summary.correlationId} summary={summary} />)
               )}
             </TabsContent>
           </Tabs>

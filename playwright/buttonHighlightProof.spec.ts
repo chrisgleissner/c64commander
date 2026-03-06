@@ -6,9 +6,7 @@ test.afterEach(async ({ page }, testInfo) => {
 });
 
 test.describe("CTA highlight proof", () => {
-  test("connectivity indicator flash clears after transient timeout", async ({
-    page,
-  }, testInfo) => {
+  test("connectivity indicator flash clears after transient timeout", async ({ page }, testInfo) => {
     await page.goto("/");
 
     const continueDemo = page.getByRole("button", {

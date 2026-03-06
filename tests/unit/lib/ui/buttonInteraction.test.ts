@@ -78,9 +78,7 @@ describe("buttonInteraction", () => {
 
     it("does nothing when currentTarget is null", () => {
       // Should not throw
-      expect(() =>
-        handlePointerButtonClick({ detail: 1, currentTarget: null }),
-      ).not.toThrow();
+      expect(() => handlePointerButtonClick({ detail: 1, currentTarget: null })).not.toThrow();
     });
   });
 
@@ -96,9 +94,7 @@ describe("buttonInteraction", () => {
     it("applies tap-flash on pointerup for interactive elements", () => {
       const el = makeButton();
       unregister = registerGlobalButtonInteractionModel();
-      el.dispatchEvent(
-        new PointerEvent("pointerup", { bubbles: true, pointerType: "touch" }),
-      );
+      el.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerType: "touch" }));
       expect(el.hasAttribute(CTA_HIGHLIGHT_ATTR)).toBe(true);
     });
 
@@ -121,9 +117,7 @@ describe("buttonInteraction", () => {
       unregister = registerGlobalButtonInteractionModel();
       unregister();
       unregister = null;
-      el.dispatchEvent(
-        new PointerEvent("pointerup", { bubbles: true, pointerType: "touch" }),
-      );
+      el.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerType: "touch" }));
       expect(el.hasAttribute(CTA_HIGHLIGHT_ATTR)).toBe(false);
     });
   });

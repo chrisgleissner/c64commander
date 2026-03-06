@@ -21,9 +21,7 @@ type DiagnosticsShareOverridePayload = {
   zipData: Uint8Array;
 };
 
-type DiagnosticsShareOverride = (
-  payload: DiagnosticsShareOverridePayload,
-) => Promise<void> | void;
+type DiagnosticsShareOverride = (payload: DiagnosticsShareOverridePayload) => Promise<void> | void;
 
 type DiagnosticsShareOverrideWindow = Window & {
   __c64uDiagnosticsShareOverride?: DiagnosticsShareOverride;
@@ -32,8 +30,7 @@ type DiagnosticsShareOverrideWindow = Window & {
 const isTestProbeEnabled = () => {
   try {
     if (typeof window !== "undefined") {
-      const enabled = (window as Window & { __c64uTestProbeEnabled?: boolean })
-        .__c64uTestProbeEnabled;
+      const enabled = (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled;
       if (enabled) return true;
     }
     return import.meta.env.VITE_ENABLE_TEST_PROBES === "1";
@@ -47,9 +44,7 @@ const isTestProbeEnabled = () => {
 
 const getShareOverride = (): DiagnosticsShareOverride | null => {
   if (typeof window === "undefined") return null;
-  const override =
-    (window as DiagnosticsShareOverrideWindow).__c64uDiagnosticsShareOverride ??
-    null;
+  const override = (window as DiagnosticsShareOverrideWindow).__c64uDiagnosticsShareOverride ?? null;
   if (override) return override;
   if (!isTestProbeEnabled()) return null;
   return null;
@@ -87,17 +82,10 @@ const buildDiagnosticsZipData = (tab: DiagnosticsExportTab, data: unknown) => {
   });
 };
 
-export const buildDiagnosticsZipBlob = (
-  tab: DiagnosticsExportTab,
-  data: unknown,
-) =>
+export const buildDiagnosticsZipBlob = (tab: DiagnosticsExportTab, data: unknown) =>
   new Blob([buildDiagnosticsZipData(tab, data)], { type: "application/zip" });
 
-const downloadDiagnosticsZip = (
-  filename: string,
-  tab: DiagnosticsExportTab,
-  data: unknown,
-) => {
+const downloadDiagnosticsZip = (filename: string, tab: DiagnosticsExportTab, data: unknown) => {
   const blob = buildDiagnosticsZipBlob(tab, data);
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -107,10 +95,7 @@ const downloadDiagnosticsZip = (
   window.setTimeout(() => URL.revokeObjectURL(url), 5000);
 };
 
-export const shareDiagnosticsZip = async (
-  tab: DiagnosticsExportTab,
-  data: unknown,
-) => {
+export const shareDiagnosticsZip = async (tab: DiagnosticsExportTab, data: unknown) => {
   const filename = `c64commander-diagnostics-${tab}.zip`;
   const override = getShareOverride();
   if (override) {

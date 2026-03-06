@@ -18,11 +18,7 @@ import {
   finalizeEvidence,
   startStrictUiMonitoring,
 } from "./testArtifacts";
-import {
-  clearTraces,
-  enableTraceAssertions,
-  expectRestTraceSequence,
-} from "./traceUtils";
+import { clearTraces, enableTraceAssertions, expectRestTraceSequence } from "./traceUtils";
 import { enableGoldenTrace } from "./goldenTraceRegistry";
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
@@ -48,9 +44,7 @@ test.describe("Settings connection management", () => {
     }
   });
 
-  test("change device host and save reconnects", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("change device host and save reconnects", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     enableGoldenTrace(testInfo);
     testInfo.annotations.push({
       type: "allow-warnings",
@@ -68,19 +62,13 @@ test.describe("Settings connection management", () => {
     await urlInput.fill("localhost:8064");
     await snap(page, testInfo, "url-changed");
 
-    await page
-      .getByRole("button", { name: /Save & Connect|Save connection/i })
-      .click();
+    await page.getByRole("button", { name: /Save & Connect|Save connection/i }).click();
     await snap(page, testInfo, "save-clicked");
 
-    await expect(
-      page.getByText(/Connection settings saved|Saved/i).first(),
-    ).toBeVisible();
+    await expect(page.getByText(/Connection settings saved|Saved/i).first()).toBeVisible();
     await snap(page, testInfo, "toast-shown");
 
-    const stored = await page.evaluate(() =>
-      localStorage.getItem("c64u_device_host"),
-    );
+    const stored = await page.evaluate(() => localStorage.getItem("c64u_device_host"));
     expect(stored).toBe("localhost:8064");
     await snap(page, testInfo, "url-saved");
   });
@@ -98,9 +86,7 @@ test.describe("Settings connection management", () => {
     await urlInput.fill("not-a-valid-url");
     await snap(page, testInfo, "invalid-url-entered");
 
-    await page
-      .getByRole("button", { name: /Save & Connect|Save connection/i })
-      .click();
+    await page.getByRole("button", { name: /Save & Connect|Save connection/i }).click();
     await snap(page, testInfo, "save-attempted");
 
     const hasError = await page
@@ -116,9 +102,7 @@ test.describe("Settings connection management", () => {
     }
   });
 
-  test("change password stores secure flag", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("change password stores secure flag", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     enableTraceAssertions(testInfo);
     await page.goto("/settings");
     await snap(page, testInfo, "settings-open");
@@ -131,23 +115,15 @@ test.describe("Settings connection management", () => {
     await snap(page, testInfo, "password-entered");
 
     await clearTraces(page);
-    await page
-      .getByRole("button", { name: /Save & Connect|Save connection/i })
-      .click();
+    await page.getByRole("button", { name: /Save & Connect|Save connection/i }).click();
     await snap(page, testInfo, "save-clicked");
 
-    await expect(
-      page.getByText(/Connection settings saved|Saved/i).first(),
-    ).toBeVisible();
+    await expect(page.getByText(/Connection settings saved|Saved/i).first()).toBeVisible();
     await snap(page, testInfo, "toast-shown");
 
-    const storedFlag = await page.evaluate(() =>
-      localStorage.getItem("c64u_has_password"),
-    );
+    const storedFlag = await page.evaluate(() => localStorage.getItem("c64u_has_password"));
     expect(storedFlag).toBe("1");
-    const legacyPassword = await page.evaluate(() =>
-      localStorage.getItem("c64u_password"),
-    );
+    const legacyPassword = await page.evaluate(() => localStorage.getItem("c64u_password"));
     expect(legacyPassword).toBeNull();
     await snap(page, testInfo, "password-saved");
 
@@ -158,25 +134,15 @@ test.describe("Settings connection management", () => {
     await clearTraces(page);
     await refreshButton.click();
 
-    const { requestEvent } = await expectRestTraceSequence(
-      page,
-      testInfo,
-      "/v1/info",
-    );
-    expect((requestEvent.data as { target?: string }).target).toBe(
-      "external-mock",
-    );
+    const { requestEvent } = await expectRestTraceSequence(page, testInfo, "/v1/info");
+    expect((requestEvent.data as { target?: string }).target).toBe("external-mock");
   });
 
-  test("select light theme applies theme class", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("select light theme applies theme class", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/settings");
     await snap(page, testInfo, "settings-open");
 
-    const lightThemeButton = page
-      .getByRole("button", { name: /Light|light theme/i })
-      .first();
+    const lightThemeButton = page.getByRole("button", { name: /Light|light theme/i }).first();
     await expect(lightThemeButton).toBeVisible();
     await snap(page, testInfo, "light-button-visible");
 
@@ -184,21 +150,16 @@ test.describe("Settings connection management", () => {
     await snap(page, testInfo, "light-selected");
 
     const htmlClass = await page.locator("html").getAttribute("class");
-    const isLight =
-      htmlClass?.includes("light") || !htmlClass?.includes("dark");
+    const isLight = htmlClass?.includes("light") || !htmlClass?.includes("dark");
     expect(isLight).toBe(true);
     await snap(page, testInfo, "light-theme-applied");
   });
 
-  test("select dark theme applies theme class", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("select dark theme applies theme class", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/settings");
     await snap(page, testInfo, "settings-open");
 
-    const darkThemeButton = page
-      .getByRole("button", { name: /Dark|dark theme/i })
-      .first();
+    const darkThemeButton = page.getByRole("button", { name: /Dark|dark theme/i }).first();
     await expect(darkThemeButton).toBeVisible();
     await snap(page, testInfo, "dark-button-visible");
 
@@ -210,9 +171,7 @@ test.describe("Settings connection management", () => {
     await snap(page, testInfo, "dark-theme-applied");
   });
 
-  test("automatic demo mode toggle is visible and persisted", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("automatic demo mode toggle is visible and persisted", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/settings");
     await snap(page, testInfo, "settings-open");
 
@@ -225,24 +184,18 @@ test.describe("Settings connection management", () => {
     await expect(autoDemoToggle).not.toBeChecked();
     await snap(page, testInfo, "auto-demo-off");
 
-    const storedOff = await page.evaluate(() =>
-      localStorage.getItem("c64u_automatic_demo_mode_enabled"),
-    );
+    const storedOff = await page.evaluate(() => localStorage.getItem("c64u_automatic_demo_mode_enabled"));
     expect(storedOff).toBe("0");
 
     await autoDemoToggle.click();
     await expect(autoDemoToggle).toBeChecked();
     await snap(page, testInfo, "auto-demo-on");
 
-    const storedOn = await page.evaluate(() =>
-      localStorage.getItem("c64u_automatic_demo_mode_enabled"),
-    );
+    const storedOn = await page.evaluate(() => localStorage.getItem("c64u_automatic_demo_mode_enabled"));
     expect(storedOn).toBe("1");
   });
 
-  test("settings sections appear in expected order", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("settings sections appear in expected order", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.addInitScript(() => {
       localStorage.setItem("c64u_dev_mode_enabled", "1");
     });
@@ -263,9 +216,7 @@ test.describe("Settings connection management", () => {
     ]);
   });
 
-  test("developer HVSC base url override persists", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("developer HVSC base url override persists", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/settings");
     await snap(page, testInfo, "settings-open");
 
@@ -280,9 +231,7 @@ test.describe("Settings connection management", () => {
     await hvscUrlInput.press("Enter");
     await snap(page, testInfo, "hvsc-base-url-set");
 
-    const stored = await page.evaluate(() =>
-      localStorage.getItem("c64u_hvsc_base_url"),
-    );
+    const stored = await page.evaluate(() => localStorage.getItem("c64u_hvsc_base_url"));
     expect(stored).toBe("http://example.com/hvsc/");
   });
 });

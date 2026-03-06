@@ -64,8 +64,7 @@ const mockSaveSummary = vi.fn();
 const mockUpdateSummaryFromEvent = vi.fn();
 
 vi.mock("@/lib/hvsc/hvscStatusStore", () => ({
-  updateHvscStatusSummaryFromEvent: (...args: unknown[]) =>
-    mockUpdateSummaryFromEvent(...args),
+  updateHvscStatusSummaryFromEvent: (...args: unknown[]) => mockUpdateSummaryFromEvent(...args),
   loadHvscStatusSummary: (...args: unknown[]) => mockLoadSummary(...args),
   saveHvscStatusSummary: (...args: unknown[]) => mockSaveSummary(...args),
 }));
@@ -93,10 +92,7 @@ vi.mock("@/lib/hvsc/hvscSongLengthService", () => ({
   reloadHvscSonglengthsOnConfigChange: vi.fn(async () => undefined),
 }));
 
-import {
-  recoverStaleIngestionState,
-  isIngestionRuntimeActive,
-} from "@/lib/hvsc/hvscIngestionRuntime";
+import { recoverStaleIngestionState, isIngestionRuntimeActive } from "@/lib/hvsc/hvscIngestionRuntime";
 
 describe("recoverStaleIngestionState", () => {
   beforeEach(() => {

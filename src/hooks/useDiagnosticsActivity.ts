@@ -37,18 +37,14 @@ export const useDiagnosticsActivity = (): DiagnosticsActivitySnapshot => {
 
   useEffect(() => {
     const handleTracesUpdated = () => setTraceEvents(getTraceEvents());
-    const handleActivityUpdated = () =>
-      setActivity(getDiagnosticsActivitySnapshot());
+    const handleActivityUpdated = () => setActivity(getDiagnosticsActivitySnapshot());
 
     window.addEventListener("c64u-traces-updated", handleTracesUpdated);
     window.addEventListener("c64u-activity-updated", handleActivityUpdated);
 
     return () => {
       window.removeEventListener("c64u-traces-updated", handleTracesUpdated);
-      window.removeEventListener(
-        "c64u-activity-updated",
-        handleActivityUpdated,
-      );
+      window.removeEventListener("c64u-activity-updated", handleActivityUpdated);
     };
   }, []);
 

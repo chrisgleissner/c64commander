@@ -14,12 +14,7 @@ import type { Page, TestInfo } from "@playwright/test";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
 import { seedUiMocks, uiFixtures } from "./uiMocks";
 import { seedFtpConfig, startFtpTestServers } from "./ftpTestUtils";
-import {
-  assertNoUiIssues,
-  attachStepScreenshot,
-  finalizeEvidence,
-  startStrictUiMonitoring,
-} from "./testArtifacts";
+import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from "./testArtifacts";
 import { enableTraceAssertions } from "./traceUtils";
 import { saveCoverageFromPage } from "./withCoverage";
 import { clickSourceSelectionButton } from "./sourceSelection";
@@ -30,15 +25,10 @@ const runGit = (args: string[]) => {
 };
 
 const resolveExpectedVersion = () => {
-  const envVersion =
-    process.env.VITE_APP_VERSION || process.env.VERSION_NAME || "";
+  const envVersion = process.env.VITE_APP_VERSION || process.env.VERSION_NAME || "";
   const gitSha =
-    process.env.VITE_GIT_SHA ||
-    process.env.GIT_SHA ||
-    process.env.GITHUB_SHA ||
-    runGit(["rev-parse", "HEAD"]);
-  const fullGitSha =
-    gitSha && gitSha.length < 8 ? runGit(["rev-parse", "HEAD"]) : gitSha;
+    process.env.VITE_GIT_SHA || process.env.GIT_SHA || process.env.GITHUB_SHA || runGit(["rev-parse", "HEAD"]);
+  const fullGitSha = gitSha && gitSha.length < 8 ? runGit(["rev-parse", "HEAD"]) : gitSha;
   const gitShaShort = fullGitSha ? fullGitSha.slice(0, 8) : "";
   const exactTag =
     (process.env.GITHUB_REF_TYPE === "tag" && process.env.GITHUB_REF_NAME) ||
@@ -52,18 +42,13 @@ const resolveExpectedVersion = () => {
   }
 
   if (envVersion) return envVersion;
-  const pkg = JSON.parse(
-    fs.readFileSync(path.resolve("package.json"), "utf8"),
-  ) as { version?: string };
+  const pkg = JSON.parse(fs.readFileSync(path.resolve("package.json"), "utf8")) as { version?: string };
   return pkg.version || "";
 };
 
 test.describe("UI coverage", () => {
   test.describe.configure({ mode: "parallel" });
-  const servers = new Map<
-    string,
-    Awaited<ReturnType<typeof createMockC64Server>>
-  >();
+  const servers = new Map<string, Awaited<ReturnType<typeof createMockC64Server>>>();
 
   test.beforeEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     enableTraceAssertions(testInfo);
@@ -72,8 +57,7 @@ test.describe("UI coverage", () => {
     servers.set(testInfo.testId, server);
     await seedUiMocks(page, server.baseUrl);
     await page.addStyleTag({
-      content:
-        '[aria-label="Notifications (F8)"] { pointer-events: none !important; }',
+      content: '[aria-label="Notifications (F8)"] { pointer-events: none !important; }',
     });
   });
 
@@ -96,8 +80,7 @@ test.describe("UI coverage", () => {
     scope: Page | ReturnType<Page["locator"]>,
     options: { maxClicks?: number; timeBudgetMs?: number } = {},
   ) => {
-    const locator =
-      "locator" in scope ? scope.locator("button") : scope.locator("button");
+    const locator = "locator" in scope ? scope.locator("button") : scope.locator("button");
     const handles = await locator.elementHandles();
     const maxClicks = options.maxClicks ?? 12;
     const deadline = Date.now() + (options.timeBudgetMs ?? 1500);
@@ -109,12 +92,7 @@ test.describe("UI coverage", () => {
         const button = el as HTMLButtonElement;
         const ariaDisabled = button.getAttribute("aria-disabled") === "true";
         const skipClick = button.hasAttribute("data-skip-click");
-        return (
-          !skipClick &&
-          !button.disabled &&
-          !ariaDisabled &&
-          button.offsetParent !== null
-        );
+        return !skipClick && !button.disabled && !ariaDisabled && button.offsetParent !== null;
       });
       if (!isClickable) continue;
       try {
@@ -125,9 +103,7 @@ test.describe("UI coverage", () => {
         console.warn("Button click failed during UI sweep", error);
       }
 
-      const closeButton = page
-        .getByRole("button", { name: /close|cancel|done|dismiss|back/i })
-        .first();
+      const closeButton = page.getByRole("button", { name: /close|cancel|done|dismiss|back/i }).first();
       try {
         if (!page.isClosed() && (await closeButton.isVisible())) {
           await closeButton.click();
@@ -160,12 +136,8 @@ test.describe("UI coverage", () => {
     const rootButton = page.locator('[data-testid="navigate-root"]');
     const visible = await rootButton.isVisible().catch(() => false);
     if (!visible) return;
-    const disabledAttr = await rootButton
-      .getAttribute("disabled")
-      .catch(() => null);
-    const ariaDisabled = await rootButton
-      .getAttribute("aria-disabled")
-      .catch(() => null);
+    const disabledAttr = await rootButton.getAttribute("disabled").catch(() => null);
+    const ariaDisabled = await rootButton.getAttribute("aria-disabled").catch(() => null);
     if (disabledAttr !== null || ariaDisabled === "true") return;
     try {
       await rootButton.click({ timeout: 2000 });
@@ -178,18 +150,14 @@ test.describe("UI coverage", () => {
     await attachStepScreenshot(page, testInfo, label);
   };
 
-  test("config widgets read/write and refresh", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("config widgets read/write and refresh", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     const server = servers.get(testInfo.testId);
     if (!server) {
       throw new Error("Missing mock C64 server for UI coverage test.");
     }
     await page.goto("/config", { waitUntil: "domcontentloaded" });
     await snap(page, testInfo, "config-open");
-    await expect(
-      page.getByRole("button", { name: "U64 Specific Settings" }),
-    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "U64 Specific Settings" })).toBeVisible();
     await page.getByRole("button", { name: "U64 Specific Settings" }).click();
 
     const selectTrigger = page.getByLabel("System Mode select");
@@ -209,27 +177,14 @@ test.describe("UI coverage", () => {
       });
     }
 
-    await expect
-      .poll(
-        () => server.getState()["U64 Specific Settings"]["System Mode"].value,
-      )
-      .toBe("NTSC");
-    await expect
-      .poll(
-        () =>
-          server.getState()["U64 Specific Settings"]["HDMI Scan lines"].value,
-      )
-      .toBe("Disabled");
-    await expect
-      .poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 1"].value)
-      .toBe("+6 dB");
+    await expect.poll(() => server.getState()["U64 Specific Settings"]["System Mode"].value).toBe("NTSC");
+    await expect.poll(() => server.getState()["U64 Specific Settings"]["HDMI Scan lines"].value).toBe("Disabled");
+    await expect.poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 1"].value).toBe("+6 dB");
 
     const refreshCount = server.requests.length;
     const refreshButton = page.getByRole("button", { name: "Refresh" }).first();
     await refreshButton.click();
-    await expect
-      .poll(() => server.requests.length)
-      .toBeGreaterThan(refreshCount);
+    await expect.poll(() => server.requests.length).toBeGreaterThan(refreshCount);
     await snap(page, testInfo, "config-refreshed");
 
     const systemModeSelect = page.getByLabel("System Mode select");
@@ -241,41 +196,28 @@ test.describe("UI coverage", () => {
     await snap(page, testInfo, "config-updated");
   });
 
-  test("config group actions stay at top of expanded section", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("config group actions stay at top of expanded section", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/config", { waitUntil: "domcontentloaded" });
     await snap(page, testInfo, "config-open");
     await page.getByRole("button", { name: "Audio Mixer" }).click();
     await snap(page, testInfo, "audio-mixer-expanded");
     const actions = page.getByTestId("config-group-actions");
     const list = page.getByTestId("config-group-list");
-    const [actionsBox, listBox] = await Promise.all([
-      actions.boundingBox(),
-      list.boundingBox(),
-    ]);
-    expect(actionsBox?.y ?? 0).toBeLessThan(
-      listBox?.y ?? Number.MAX_SAFE_INTEGER,
-    );
+    const [actionsBox, listBox] = await Promise.all([actions.boundingBox(), list.boundingBox()]);
+    expect(actionsBox?.y ?? 0).toBeLessThan(listBox?.y ?? Number.MAX_SAFE_INTEGER);
   });
 
-  test("home and disks pages render", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("home and disks pages render", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/", { waitUntil: "domcontentloaded" });
     await expect(page.getByRole("heading", { name: "HOME" })).toBeVisible();
     await snap(page, testInfo, "home-open");
 
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
-    await expect(
-      page.locator("header").getByRole("heading", { name: "Disks" }),
-    ).toBeVisible();
+    await expect(page.locator("header").getByRole("heading", { name: "Disks" })).toBeVisible();
     await snap(page, testInfo, "disks-open");
   });
 
-  test("source indicator icons invert in dark mode", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("source indicator icons invert in dark mode", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.addInitScript(() => {
       localStorage.setItem("c64u_theme", "system");
       const playlist = {
@@ -283,14 +225,8 @@ test.describe("UI coverage", () => {
         currentIndex: -1,
       };
       localStorage.setItem("c64u_last_device_id", "TEST-123");
-      localStorage.setItem(
-        "c64u_playlist:v1:TEST-123",
-        JSON.stringify(playlist),
-      );
-      localStorage.setItem(
-        "c64u_playlist:v1:default",
-        JSON.stringify(playlist),
-      );
+      localStorage.setItem("c64u_playlist:v1:TEST-123", JSON.stringify(playlist));
+      localStorage.setItem("c64u_playlist:v1:default", JSON.stringify(playlist));
       localStorage.setItem(
         "c64u_disk_library:TEST-123",
         JSON.stringify({
@@ -312,34 +248,24 @@ test.describe("UI coverage", () => {
     await page.goto("/play", { waitUntil: "domcontentloaded" });
     const playIcon = page.getByTestId("file-origin-icon").first();
     await expect(playIcon).toBeVisible();
-    const lightFilter = await playIcon.evaluate(
-      (el) => getComputedStyle(el).filter,
-    );
+    const lightFilter = await playIcon.evaluate((el) => getComputedStyle(el).filter);
     await snap(page, testInfo, "play-icons-light");
 
     await page.emulateMedia({ colorScheme: "dark" });
-    await expect
-      .poll(async () => playIcon.evaluate((el) => getComputedStyle(el).filter))
-      .not.toBe(lightFilter);
-    const darkFilter = await playIcon.evaluate(
-      (el) => getComputedStyle(el).filter,
-    );
+    await expect.poll(async () => playIcon.evaluate((el) => getComputedStyle(el).filter)).not.toBe(lightFilter);
+    const darkFilter = await playIcon.evaluate((el) => getComputedStyle(el).filter);
     expect(darkFilter).not.toBe("none");
     await snap(page, testInfo, "play-icons-dark");
 
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
     const diskIcon = page.getByTestId("file-origin-icon").first();
     await expect(diskIcon).toBeVisible();
-    const diskFilter = await diskIcon.evaluate(
-      (el) => getComputedStyle(el).filter,
-    );
+    const diskFilter = await diskIcon.evaluate((el) => getComputedStyle(el).filter);
     expect(diskFilter).not.toBe("none");
     await snap(page, testInfo, "disk-icons-dark");
   });
 
-  test("home page shows resolved version", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("home page shows resolved version", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/", { waitUntil: "domcontentloaded" });
     const expectedVersion = resolveExpectedVersion() || "—";
     const versionText = page.getByTestId("home-system-version");
@@ -350,9 +276,7 @@ test.describe("UI coverage", () => {
       if (tagMatch) {
         const escapedTag = tagMatch[1].replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         // Accept plain tags in local builds and SHA/branch/build suffixes in CI metadata.
-        await expect(versionText).toHaveText(
-          new RegExp(`^${escapedTag}(?:-[0-9a-z][0-9a-z-]{3,20})?$`, "i"),
-        );
+        await expect(versionText).toHaveText(new RegExp(`^${escapedTag}(?:-[0-9a-z][0-9a-z-]{3,20})?$`, "i"));
       } else {
         await expect(versionText).toHaveText(expectedVersion);
       }
@@ -360,9 +284,7 @@ test.describe("UI coverage", () => {
     await snap(page, testInfo, "home-version");
   });
 
-  test("config page renders and toggles a section", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("config page renders and toggles a section", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/config", { waitUntil: "domcontentloaded" });
     await snap(page, testInfo, "config-open");
     const section = page.getByRole("button", { name: "U64 Specific Settings" });
@@ -371,23 +293,15 @@ test.describe("UI coverage", () => {
     await snap(page, testInfo, "section-expanded");
   });
 
-  test("play page renders with HVSC controls", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("play page renders with HVSC controls", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await enableHvscDownloads(page);
     await page.goto("/play", { waitUntil: "domcontentloaded" });
-    await expect(
-      page.getByRole("heading", { name: "Play Files" }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Download HVSC" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Play Files" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Download HVSC" })).toBeVisible();
     await snap(page, testInfo, "play-hvsc");
   });
 
-  test("add-items shows progress feedback after confirm", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("add-items shows progress feedback after confirm", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     const ftpServers = await startFtpTestServers();
     await seedFtpConfig(page, {
       host: ftpServers.ftpServer.host,
@@ -401,26 +315,15 @@ test.describe("UI coverage", () => {
     });
     await page.goto("/play");
     await snap(page, testInfo, "play-open");
-    await page
-      .getByRole("button", { name: /Add items|Add more items/i })
-      .click();
+    await page.getByRole("button", { name: /Add items|Add more items/i }).click();
     const dialog = page.getByRole("dialog");
     await clickSourceSelectionButton(dialog, "C64 Ultimate");
     await ensureRemoteRoot(page);
     await expect(dialog.getByText("Usb0", { exact: true })).toBeVisible();
     await snap(page, testInfo, "c64u-root");
-    await dialog
-      .locator('[data-testid="source-entry-row"]', { hasText: "Usb0" })
-      .first()
-      .click();
-    await dialog
-      .locator('[data-testid="source-entry-row"]', { hasText: "Games" })
-      .first()
-      .click();
-    await dialog
-      .locator('[data-testid="source-entry-row"]', { hasText: "Turrican II" })
-      .first()
-      .click();
+    await dialog.locator('[data-testid="source-entry-row"]', { hasText: "Usb0" }).first().click();
+    await dialog.locator('[data-testid="source-entry-row"]', { hasText: "Games" }).first().click();
+    await dialog.locator('[data-testid="source-entry-row"]', { hasText: "Turrican II" }).first().click();
     await dialog
       .locator('[data-testid="source-entry-row"]', { hasText: "Disk 1.d64" })
       .first()
@@ -433,9 +336,7 @@ test.describe("UI coverage", () => {
     await ftpServers.close();
   });
 
-  test("selection state stays stable when filtering", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("selection state stays stable when filtering", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     const ftpServers = await startFtpTestServers();
     await seedFtpConfig(page, {
       host: ftpServers.ftpServer.host,
@@ -445,29 +346,16 @@ test.describe("UI coverage", () => {
     });
     await page.goto("/play");
     await snap(page, testInfo, "play-open");
-    await page
-      .getByRole("button", { name: /Add items|Add more items/i })
-      .click();
+    await page.getByRole("button", { name: /Add items|Add more items/i }).click();
     const dialog = page.getByRole("dialog");
     await clickSourceSelectionButton(dialog, "C64 Ultimate");
     await ensureRemoteRoot(page);
     await expect(dialog.getByText("Usb0", { exact: true })).toBeVisible();
-    await dialog
-      .locator('[data-testid="source-entry-row"]', { hasText: "Usb0" })
-      .first()
-      .click();
+    await dialog.locator('[data-testid="source-entry-row"]', { hasText: "Usb0" }).first().click();
     await expect(dialog.getByText("Games", { exact: true })).toBeVisible();
-    await dialog
-      .locator('[data-testid="source-entry-row"]', { hasText: "Games" })
-      .first()
-      .click();
-    await expect(
-      dialog.getByText("Turrican II", { exact: true }),
-    ).toBeVisible();
-    await dialog
-      .locator('[data-testid="source-entry-row"]', { hasText: "Turrican II" })
-      .first()
-      .click();
+    await dialog.locator('[data-testid="source-entry-row"]', { hasText: "Games" }).first().click();
+    await expect(dialog.getByText("Turrican II", { exact: true })).toBeVisible();
+    await dialog.locator('[data-testid="source-entry-row"]', { hasText: "Turrican II" }).first().click();
     await expect(dialog.getByText("Disk 1.d64", { exact: true })).toBeVisible();
     await dialog
       .locator('[data-testid="source-entry-row"]', { hasText: "Disk 1.d64" })
@@ -477,16 +365,12 @@ test.describe("UI coverage", () => {
     await snap(page, testInfo, "selection-made");
 
     await page.getByTestId("add-items-filter").fill("Disk");
-    await expect(page.getByTestId("add-items-selection-count")).toHaveText(
-      /1 selected/i,
-    );
+    await expect(page.getByTestId("add-items-selection-count")).toHaveText(/1 selected/i);
     await snap(page, testInfo, "filter-applied");
     await ftpServers.close();
   });
 
-  test("item browser does not overflow viewport width", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("item browser does not overflow viewport width", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     const ftpServers = await startFtpTestServers();
     await seedFtpConfig(page, {
       host: ftpServers.ftpServer.host,
@@ -496,39 +380,24 @@ test.describe("UI coverage", () => {
     });
     await page.goto("/play");
     await snap(page, testInfo, "play-open");
-    await page
-      .getByRole("button", { name: /Add items|Add more items/i })
-      .click();
+    await page.getByRole("button", { name: /Add items|Add more items/i }).click();
     const dialog = page.getByRole("dialog");
     await clickSourceSelectionButton(dialog, "C64 Ultimate");
     await ensureRemoteRoot(page);
-    await dialog
-      .locator('[data-testid="source-entry-row"]', { hasText: "Usb0" })
-      .first()
-      .click();
-    await dialog
-      .locator('[data-testid="source-entry-row"]', { hasText: "Games" })
-      .first()
-      .click();
-    await dialog
-      .locator('[data-testid="source-entry-row"]', { hasText: "Turrican II" })
-      .first()
-      .click();
+    await dialog.locator('[data-testid="source-entry-row"]', { hasText: "Usb0" }).first().click();
+    await dialog.locator('[data-testid="source-entry-row"]', { hasText: "Games" }).first().click();
+    await dialog.locator('[data-testid="source-entry-row"]', { hasText: "Turrican II" }).first().click();
     await snap(page, testInfo, "deep-folder");
 
     const hasOverflow = await page.evaluate(
-      () =>
-        document.documentElement.scrollWidth >
-        document.documentElement.clientWidth,
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
     );
     expect(hasOverflow).toBe(false);
     await snap(page, testInfo, "no-overflow");
     await ftpServers.close();
   });
 
-  test("settings and docs pages render", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("settings and docs pages render", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/settings", { waitUntil: "domcontentloaded" });
     await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
     await snap(page, testInfo, "settings-open");

@@ -24,9 +24,7 @@ const inferGroupBase = (name: string) => {
   return prefix;
 };
 
-export const assignDiskGroupsByPrefix = (
-  entries: Array<{ path: string; name: string }>,
-) => {
+export const assignDiskGroupsByPrefix = (entries: Array<{ path: string; name: string }>) => {
   const normalized = entries.map((entry) => ({
     ...entry,
     path: normalizeDiskPath(entry.path),

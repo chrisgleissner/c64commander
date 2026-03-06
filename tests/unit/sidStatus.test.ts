@@ -19,17 +19,7 @@ describe("sid status mapping", () => {
       ultiSid2: true,
     };
     const entries = buildSidStatusEntries(enablement);
-    expect(entries.map((entry) => entry.label)).toEqual([
-      "SID Socket 1",
-      "SID Socket 2",
-      "UltiSID 1",
-      "UltiSID 2",
-    ]);
-    expect(entries.map((entry) => entry.enabled)).toEqual([
-      true,
-      false,
-      undefined,
-      true,
-    ]);
+    expect(entries.map((entry) => entry.label)).toEqual(["SID Socket 1", "SID Socket 2", "UltiSID 1", "UltiSID 2"]);
+    expect(entries.map((entry) => entry.enabled)).toEqual([true, false, undefined, true]);
   });
 });

@@ -7,10 +7,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import {
-  reduceVolumeState,
-  type VolumeState,
-} from "@/pages/playFiles/volumeState";
+import { reduceVolumeState, type VolumeState } from "@/pages/playFiles/volumeState";
 
 describe("reduceVolumeState", () => {
   const base: VolumeState = { index: 2, muted: false, reason: null };

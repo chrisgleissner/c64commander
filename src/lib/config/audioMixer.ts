@@ -9,17 +9,14 @@
 import { ConfigResponse, getC64API } from "@/lib/c64api";
 import { addLog } from "@/lib/logging";
 
-const normalizeOption = (value: string) =>
-  value.trim().replace(/\s+/g, " ").toLowerCase();
+const normalizeOption = (value: string) => value.trim().replace(/\s+/g, " ").toLowerCase();
 
 const parseNumeric = (option: string) => {
   const match = option.trim().match(/[+-]?\d+(?:\.\d+)?/);
   return match ? Number(match[0]) : undefined;
 };
 
-export const normalizeAudioMixerValue = (
-  value: string | number | undefined,
-) => {
+export const normalizeAudioMixerValue = (value: string | number | undefined) => {
   if (value === undefined || value === null) return undefined;
   if (typeof value === "number") return value;
   const trimmed = value.trim();
@@ -29,18 +26,11 @@ export const normalizeAudioMixerValue = (
   return numeric ?? normalized;
 };
 
-export const isAudioMixerValueEqual = (
-  left: string | number | undefined,
-  right: string | number | undefined,
-) => normalizeAudioMixerValue(left) === normalizeAudioMixerValue(right);
+export const isAudioMixerValueEqual = (left: string | number | undefined, right: string | number | undefined) =>
+  normalizeAudioMixerValue(left) === normalizeAudioMixerValue(right);
 
-export const mergeAudioMixerOptions = (
-  options?: string[],
-  presets?: string[],
-) => {
-  const merged = [...(options ?? []), ...(presets ?? [])].map((value) =>
-    String(value),
-  );
+export const mergeAudioMixerOptions = (options?: string[], presets?: string[]) => {
+  const merged = [...(options ?? []), ...(presets ?? [])].map((value) => String(value));
   const seen = new Set<string>();
   const result: string[] = [];
   merged.forEach((value) => {
@@ -53,15 +43,9 @@ export const mergeAudioMixerOptions = (
 };
 
 const asRecord = (value: unknown): Record<string, unknown> | null =>
-  value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
+  value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
 
-const extractOptions = (
-  response: ConfigResponse,
-  category: string,
-  item: string,
-) => {
+const extractOptions = (response: ConfigResponse, category: string, item: string) => {
   const payload = response as Record<string, unknown>;
   const categoryBlock = payload[category] ?? payload;
   const categoryRecord = asRecord(categoryBlock);
@@ -75,16 +59,12 @@ const extractOptions = (
   const itemRecord = asRecord(itemBlock);
   if (!itemRecord) return [] as string[];
 
-  const optionsCandidate =
-    itemRecord.options ?? itemRecord.values ?? itemRecord.choices ?? [];
+  const optionsCandidate = itemRecord.options ?? itemRecord.values ?? itemRecord.choices ?? [];
   const detailsRecord = asRecord(itemRecord.details);
   const presetsCandidate = detailsRecord?.presets ?? itemRecord.presets ?? [];
   const optionsList = Array.isArray(optionsCandidate) ? optionsCandidate : [];
   const presetsList = Array.isArray(presetsCandidate) ? presetsCandidate : [];
-  return mergeAudioMixerOptions(
-    optionsList.map(String),
-    presetsList.map(String),
-  );
+  return mergeAudioMixerOptions(optionsList.map(String), presetsList.map(String));
 };
 
 export const resolveAudioMixerResetValue = async (
@@ -110,19 +90,13 @@ export const resolveAudioMixerResetValue = async (
   if (itemName.startsWith("Vol ")) {
     const zeroOption = options.find((option) => {
       const normalized = normalizeOption(option);
-      return (
-        normalized === "0 db" ||
-        normalized === "0db" ||
-        parseNumeric(option) === 0
-      );
+      return normalized === "0 db" || normalized === "0db" || parseNumeric(option) === 0;
     });
     return zeroOption ?? 0;
   }
 
   if (itemName.startsWith("Pan ")) {
-    const centerOption = options.find(
-      (option) => normalizeOption(option) === "center",
-    );
+    const centerOption = options.find((option) => normalizeOption(option) === "center");
     return centerOption ?? "Center";
   }
 

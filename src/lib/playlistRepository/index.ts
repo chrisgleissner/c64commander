@@ -19,7 +19,4 @@ export type {
 
 export { getLocalStoragePlaylistDataRepository } from "./localStorageRepository";
 export { getIndexedDbPlaylistDataRepository } from "./indexedDbRepository";
-export {
-  getPlaylistDataRepository,
-  resetPlaylistDataRepositoryForTests,
-} from "./factory";
+export { getPlaylistDataRepository, resetPlaylistDataRepositoryForTests } from "./factory";

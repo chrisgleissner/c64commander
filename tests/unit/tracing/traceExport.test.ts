@@ -10,9 +10,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/tracing/traceSession", () => ({
   exportTraceZip: vi.fn(() => new Uint8Array([1, 2, 3])),
-  getTraceEvents: vi.fn(() => [
-    { id: "trace-1", type: "rest", origin: "user" },
-  ]),
+  getTraceEvents: vi.fn(() => [{ id: "trace-1", type: "rest", origin: "user" }]),
   buildAppMetadata: vi.fn(() => ({ appVersion: "1.0.0", platform: "web" })),
 }));
 
@@ -42,11 +40,7 @@ vi.mock("@/lib/logging", () => ({
   addErrorLog: vi.fn(),
 }));
 
-import {
-  buildTraceZipBlob,
-  downloadTraceZip,
-  shareTraceZip,
-} from "@/lib/tracing/traceExport";
+import { buildTraceZipBlob, downloadTraceZip, shareTraceZip } from "@/lib/tracing/traceExport";
 import { exportTraceZip } from "@/lib/tracing/traceSession";
 import { Share } from "@capacitor/share";
 import { Filesystem, Directory } from "@capacitor/filesystem";
@@ -82,9 +76,7 @@ describe("traceExport", () => {
       configurable: true,
     });
     // Mock anchor click
-    const clickSpy = vi
-      .spyOn(HTMLAnchorElement.prototype, "click")
-      .mockImplementation(() => {});
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
 
     vi.useFakeTimers();
 
@@ -106,9 +98,7 @@ describe("traceExport", () => {
         value: createSpy,
         configurable: true,
       });
-      const clickSpy = vi
-        .spyOn(HTMLAnchorElement.prototype, "click")
-        .mockImplementation(() => {});
+      const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
 
       await shareTraceZip("web-trace.zip");
 
@@ -145,9 +135,7 @@ describe("traceExport", () => {
 
     it("handles errors on native", async () => {
       vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
-      vi.mocked(Filesystem.writeFile).mockRejectedValue(
-        new Error("Write failed"),
-      );
+      vi.mocked(Filesystem.writeFile).mockRejectedValue(new Error("Write failed"));
 
       await expect(shareTraceZip("fail.zip")).rejects.toThrow("Write failed");
       expect(addErrorLog).toHaveBeenCalledWith(

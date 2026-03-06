@@ -1,10 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getLocalStoragePlaylistDataRepository } from "@/lib/playlistRepository";
-import type {
-  PlaylistItemRecord,
-  PlaylistSessionRecord,
-  TrackRecord,
-} from "@/lib/playlistRepository";
+import type { PlaylistItemRecord, PlaylistSessionRecord, TrackRecord } from "@/lib/playlistRepository";
 import { addLog } from "@/lib/logging";
 
 vi.mock("@/lib/logging", () => ({
@@ -30,9 +26,7 @@ const buildTrack = (overrides: Partial<TrackRecord> = {}): TrackRecord => ({
   updatedAt: overrides.updatedAt ?? now,
 });
 
-const buildPlaylistItem = (
-  overrides: Partial<PlaylistItemRecord> = {},
-): PlaylistItemRecord => ({
+const buildPlaylistItem = (overrides: Partial<PlaylistItemRecord> = {}): PlaylistItemRecord => ({
   playlistItemId: overrides.playlistItemId ?? "item-1",
   playlistId: overrides.playlistId ?? "playlist-default",
   trackId: overrides.trackId ?? "track-1",
@@ -68,10 +62,7 @@ describe("localStorage playlist repository", () => {
       }),
     );
 
-    localStorage.setItem(
-      "c64u_playlist_repo:v1",
-      JSON.stringify({ version: 999, tracks: {} }),
-    );
+    localStorage.setItem("c64u_playlist_repo:v1", JSON.stringify({ version: 999, tracks: {} }));
     repository = getLocalStoragePlaylistDataRepository();
     result = await repository.queryPlaylist({
       playlistId: "playlist-default",
@@ -89,9 +80,7 @@ describe("localStorage playlist repository", () => {
         version: 999,
       }),
     );
-    expect(localStorage.getItem("c64u_playlist_repo:v1:backup")).toContain(
-      '"version":999',
-    );
+    expect(localStorage.getItem("c64u_playlist_repo:v1:backup")).toContain('"version":999');
   });
 
   it("persists tracks and playlist rows and supports deterministic query paging", async () => {
@@ -150,13 +139,8 @@ describe("localStorage playlist repository", () => {
     });
 
     expect(page1.totalMatchCount).toBe(3);
-    expect(page1.rows.map((row) => row.playlistItem.playlistItemId)).toEqual([
-      "item-1",
-      "item-2",
-    ]);
-    expect(page2.rows.map((row) => row.playlistItem.playlistItemId)).toEqual([
-      "item-3",
-    ]);
+    expect(page1.rows.map((row) => row.playlistItem.playlistItemId)).toEqual(["item-1", "item-2"]);
+    expect(page2.rows.map((row) => row.playlistItem.playlistItemId)).toEqual(["item-3"]);
   });
 
   it("applies category filter in query results", async () => {
@@ -198,9 +182,7 @@ describe("localStorage playlist repository", () => {
     });
 
     expect(filtered.totalMatchCount).toBe(1);
-    expect(filtered.rows.map((row) => row.playlistItem.playlistItemId)).toEqual(
-      ["item-song"],
-    );
+    expect(filtered.rows.map((row) => row.playlistItem.playlistItemId)).toEqual(["item-song"]);
   });
 
   it("returns deterministic paged results for large playlists", async () => {
@@ -244,9 +226,7 @@ describe("localStorage playlist repository", () => {
     expect(result.totalMatchCount).toBeGreaterThan(0);
     expect(result.rows).toHaveLength(25);
     expect(result.rows[0]?.playlistItem.playlistItemId).toMatch(/^item-/);
-    expect(result.rows.every((row) => row.track.category === "song")).toBe(
-      true,
-    );
+    expect(result.rows.every((row) => row.track.category === "song")).toBe(true);
   });
 
   it("stores playback session and deterministic random session cursor state", async () => {
@@ -268,15 +248,9 @@ describe("localStorage playlist repository", () => {
     };
 
     await repository.saveSession(playbackSession);
-    expect(await repository.getSession("playlist-default")).toEqual(
-      playbackSession,
-    );
+    expect(await repository.getSession("playlist-default")).toEqual(playbackSession);
 
-    const random = await repository.createSession(
-      "playlist-default",
-      ["item-1", "item-2", "item-3"],
-      777,
-    );
+    const random = await repository.createSession("playlist-default", ["item-1", "item-2", "item-3"], 777);
     expect(random.order).toHaveLength(3);
     const first = await repository.next("playlist-default");
     const second = await repository.next("playlist-default");
@@ -352,11 +326,7 @@ describe("localStorage playlist repository", () => {
       offset: 0,
       limit: 10,
     });
-    expect(byPath.rows.map((row) => row.playlistItem.playlistItemId)).toEqual([
-      "item-a",
-      "item-b",
-      "item-c",
-    ]);
+    expect(byPath.rows.map((row) => row.playlistItem.playlistItemId)).toEqual(["item-a", "item-b", "item-c"]);
 
     const categoryFiltered = await repository.queryPlaylist({
       playlistId: "playlist-default",
@@ -364,9 +334,7 @@ describe("localStorage playlist repository", () => {
       offset: 0,
       limit: 10,
     });
-    expect(
-      categoryFiltered.rows.map((row) => row.playlistItem.playlistItemId),
-    ).toEqual(["item-a", "item-b"]);
+    expect(categoryFiltered.rows.map((row) => row.playlistItem.playlistItemId)).toEqual(["item-a", "item-b"]);
   });
 
   it("searches across tracks including those with null category", async () => {
@@ -423,10 +391,7 @@ describe("localStorage playlist repository", () => {
   });
 
   it("supports repository operations when localStorage is unavailable", async () => {
-    const descriptor = Object.getOwnPropertyDescriptor(
-      globalThis,
-      "localStorage",
-    );
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
     Object.defineProperty(globalThis, "localStorage", {
       value: undefined,
       configurable: true,
@@ -478,10 +443,7 @@ describe("localStorage playlist repository", () => {
 
   it("recovers from partial valid state missing optional fields", async () => {
     // Store state with version=1 but missing tracks/playlistItems/sessions
-    localStorage.setItem(
-      "c64u_playlist_repo:v1",
-      JSON.stringify({ version: 1 }),
-    );
+    localStorage.setItem("c64u_playlist_repo:v1", JSON.stringify({ version: 1 }));
     const repository = getLocalStoragePlaylistDataRepository();
     const result = await repository.queryPlaylist({
       playlistId: "playlist-default",

@@ -56,8 +56,7 @@ const isStorageUsable = (storage?: Storage | null) => {
 };
 
 const ensureLocalStorage = () => {
-  const existingStorage = (globalThis as { localStorage?: Storage })
-    .localStorage;
+  const existingStorage = (globalThis as { localStorage?: Storage }).localStorage;
   if (isStorageUsable(existingStorage)) return;
   let storage: Storage | undefined = existingStorage;
   let shouldOverrideWindow = false;
@@ -69,10 +68,7 @@ const ensureLocalStorage = () => {
         storage = descriptor.get.call(window) as Storage;
       } catch (error) {
         shouldOverrideWindow = true;
-        console.warn(
-          "LocalStorage access failed in tests; falling back to memory storage.",
-          error,
-        );
+        console.warn("LocalStorage access failed in tests; falling back to memory storage.", error);
       }
     } else if (descriptor?.value) {
       storage = descriptor.value as Storage;
@@ -119,11 +115,8 @@ ensureLocalStorage();
 
 if (typeof window !== "undefined") {
   // Default to non-native platform in unit tests unless explicitly overridden.
-  (
-    globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }
-  ).__C64U_NATIVE_OVERRIDE__ = false;
-  (window as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ =
-    false;
+  (globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = false;
+  (window as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = false;
 
   ensureLocalStorage();
 

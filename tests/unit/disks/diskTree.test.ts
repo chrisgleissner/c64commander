@@ -41,9 +41,7 @@ describe("diskTree filtering", () => {
     const restored = buildDiskTreeState(disks, "");
 
     expect(collectFolderPaths(filtered.root).length).toBeGreaterThan(0);
-    expect(collectFolderPaths(restored.root).sort()).toEqual(
-      collectFolderPaths(original.root).sort(),
-    );
+    expect(collectFolderPaths(restored.root).sort()).toEqual(collectFolderPaths(original.root).sort());
   });
 
   it("keeps filter/unfilter cycles idempotent", () => {
@@ -52,12 +50,8 @@ describe("diskTree filtering", () => {
     const restored = buildDiskTreeState(disks, "");
     const filteredTwice = buildDiskTreeState(disks, "Two");
 
-    expect(collectFolderPaths(restored.root).sort()).toEqual(
-      collectFolderPaths(baseline.root).sort(),
-    );
-    expect(collectFolderPaths(filteredTwice.root).sort()).toEqual(
-      collectFolderPaths(filteredOnce.root).sort(),
-    );
+    expect(collectFolderPaths(restored.root).sort()).toEqual(collectFolderPaths(baseline.root).sort());
+    expect(collectFolderPaths(filteredTwice.root).sort()).toEqual(collectFolderPaths(filteredOnce.root).sort());
   });
 
   it("never duplicates root folders across builds", () => {

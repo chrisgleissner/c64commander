@@ -15,8 +15,7 @@ import {
   SONGLENGTHS_FILE_NAMES,
 } from "@/lib/sid/songlengthsDiscovery";
 
-const normalize = (paths: string[]) =>
-  paths.map((path) => path.replace(/\\/g, "/"));
+const normalize = (paths: string[]) => paths.map((path) => path.replace(/\\/g, "/"));
 
 describe("songlengthsDiscovery", () => {
   describe("isSonglengthsFileName", () => {
@@ -40,9 +39,7 @@ describe("songlengthsDiscovery", () => {
       const normalized = normalize(paths);
       SONGLENGTHS_FILE_NAMES.forEach((fileName) => {
         expect(normalized).toContain(`/Music/DEMOS/${fileName}`);
-        expect(normalized).toContain(
-          `/Music/DEMOS/${DOCUMENTS_FOLDER}/${fileName}`,
-        );
+        expect(normalized).toContain(`/Music/DEMOS/${DOCUMENTS_FOLDER}/${fileName}`);
         expect(normalized).toContain(`/Music/${fileName}`);
         expect(normalized).toContain(`/Music/${DOCUMENTS_FOLDER}/${fileName}`);
         expect(normalized).toContain(`/${fileName}`);
@@ -82,10 +79,7 @@ describe("songlengthsDiscovery", () => {
 
   describe("collectSonglengthsSearchPaths", () => {
     it("collects unique normalized paths across inputs", () => {
-      const paths = collectSonglengthsSearchPaths([
-        "/Music/DEMOS/demo.sid",
-        "/Music/DEMOS/demo2.sid",
-      ]);
+      const paths = collectSonglengthsSearchPaths(["/Music/DEMOS/demo.sid", "/Music/DEMOS/demo2.sid"]);
       SONGLENGTHS_FILE_NAMES.forEach((fileName) => {
         const matches = paths.filter((path) => path.endsWith(`/${fileName}`));
         const unique = new Set(matches);

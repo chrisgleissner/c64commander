@@ -23,15 +23,8 @@ import os from "node:os";
 import path from "node:path";
 
 const DEFAULT_UPDATE_URL = "https://hvsc.brona.dk/HVSC/HVSC_Update_84.7z";
-const DEFAULT_CACHE_DIR = path.join(
-  os.homedir(),
-  ".cache",
-  "c64commander",
-  "hvsc",
-);
-const LOCAL_MOCK_FIXTURE_PATH = path.resolve(
-  "android/app/src/test/fixtures/HVSC_Update_mock.7z",
-);
+const DEFAULT_CACHE_DIR = path.join(os.homedir(), ".cache", "c64commander", "hvsc");
+const LOCAL_MOCK_FIXTURE_PATH = path.resolve("android/app/src/test/fixtures/HVSC_Update_mock.7z");
 
 const downloadViaHttps = async (url: string, targetPath: string) => {
   const { request } = await import("node:https");
@@ -39,11 +32,7 @@ const downloadViaHttps = async (url: string, targetPath: string) => {
     const fileStream = createWriteStream(targetPath);
     const req = request(url, (res) => {
       if (res.statusCode && res.statusCode >= 400) {
-        reject(
-          new Error(
-            `Failed to download ${url}: ${res.statusCode} ${res.statusMessage}`,
-          ),
-        );
+        reject(new Error(`Failed to download ${url}: ${res.statusCode} ${res.statusMessage}`));
         return;
       }
       res.pipe(fileStream);
@@ -63,9 +52,7 @@ const downloadViaFetch = async (url: string, targetPath: string) => {
   }
   const response = await fetch(url);
   if (!response.ok) {
-    throw new Error(
-      `Failed to download ${url}: ${response.status} ${response.statusText}`,
-    );
+    throw new Error(`Failed to download ${url}: ${response.status} ${response.statusText}`);
   }
   const arrayBuffer = await response.arrayBuffer();
   await mkdir(path.dirname(targetPath), { recursive: true });
@@ -99,10 +86,9 @@ export const loadHvscUpdateArchiveBuffer = async (): Promise<Uint8Array> => {
 /**
  * Returns the mock archive as a Uint8Array buffer (no network).
  */
-export const loadHvscUpdateMockArchiveBuffer =
-  async (): Promise<Uint8Array> => {
-    return new Uint8Array(await readFile(LOCAL_MOCK_FIXTURE_PATH));
-  };
+export const loadHvscUpdateMockArchiveBuffer = async (): Promise<Uint8Array> => {
+  return new Uint8Array(await readFile(LOCAL_MOCK_FIXTURE_PATH));
+};
 
 /**
  * Returns true if the mock fixture exists (no network needed).

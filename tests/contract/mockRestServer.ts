@@ -141,18 +141,14 @@ export async function createMockRestServer(): Promise<MockRestServer> {
       return;
     }
 
-    const configCategoryMatch = parsed.pathname.match(
-      /^\/v1\/configs\/([^/]+)$/,
-    );
+    const configCategoryMatch = parsed.pathname.match(/^\/v1\/configs\/([^/]+)$/);
     if (method === "GET" && configCategoryMatch) {
       const category = decodeURIComponent(configCategoryMatch[1]);
       json(res, 200, { [category]: configState[category] ?? {}, errors: [] });
       return;
     }
 
-    const configItemMatch = parsed.pathname.match(
-      /^\/v1\/configs\/([^/]+)\/([^/]+)$/,
-    );
+    const configItemMatch = parsed.pathname.match(/^\/v1\/configs\/([^/]+)\/([^/]+)$/);
     if (configItemMatch && (method === "GET" || method === "PUT")) {
       const category = decodeURIComponent(configItemMatch[1]);
       const item = decodeURIComponent(configItemMatch[2]);
@@ -164,9 +160,7 @@ export async function createMockRestServer(): Promise<MockRestServer> {
       if (method === "PUT") {
         const nextValue = parsed.searchParams.get("value");
         if (nextValue !== null) {
-          entry.value = isNaN(Number(nextValue))
-            ? nextValue
-            : Number(nextValue);
+          entry.value = isNaN(Number(nextValue)) ? nextValue : Number(nextValue);
         }
       }
       json(res, 200, {
@@ -179,10 +173,7 @@ export async function createMockRestServer(): Promise<MockRestServer> {
     if (method === "POST" && parsed.pathname === "/v1/configs") {
       const body = await readBody(req);
       try {
-        const payload = JSON.parse(body) as Record<
-          string,
-          Record<string, string | number>
-        >;
+        const payload = JSON.parse(body) as Record<string, Record<string, string | number>>;
         Object.entries(payload).forEach(([category, items]) => {
           configState[category] = configState[category] ?? {};
           Object.entries(items).forEach(([item, value]) => {
@@ -197,14 +188,8 @@ export async function createMockRestServer(): Promise<MockRestServer> {
       return;
     }
 
-    if (
-      method === "GET" &&
-      parsed.pathname.startsWith("/v1/files/") &&
-      parsed.pathname.endsWith(":info")
-    ) {
-      const filePath = decodeURIComponent(
-        parsed.pathname.replace("/v1/files/", "").replace(":info", ""),
-      );
+    if (method === "GET" && parsed.pathname.startsWith("/v1/files/") && parsed.pathname.endsWith(":info")) {
+      const filePath = decodeURIComponent(parsed.pathname.replace("/v1/files/", "").replace(":info", ""));
       json(res, 200, {
         path: filePath,
         size: 0,
@@ -215,10 +200,7 @@ export async function createMockRestServer(): Promise<MockRestServer> {
     }
 
     if (method === "GET" && parsed.pathname === "/v1/machine:readmem") {
-      const length = Math.max(
-        1,
-        Number(parsed.searchParams.get("length") || "1"),
-      );
+      const length = Math.max(1, Number(parsed.searchParams.get("length") || "1"));
       json(res, 200, { data: new Array(length).fill(0), errors: [] });
       return;
     }
@@ -248,26 +230,20 @@ export async function createMockRestServer(): Promise<MockRestServer> {
       return;
     }
 
-    const driveActionMatch = parsed.pathname.match(
-      /^\/v1\/drives\/([^/]+):(on|off|reset)$/,
-    );
+    const driveActionMatch = parsed.pathname.match(/^\/v1\/drives\/([^/]+):(on|off|reset)$/);
     if (method === "PUT" && driveActionMatch) {
       const drive = driveActionMatch[1] as "a" | "b" | "softiec" | "printer";
       const action = driveActionMatch[2];
       if (driveState[drive]) {
         if (action === "on") driveState[drive].enabled = true;
         if (action === "off") driveState[drive].enabled = false;
-        if (action === "reset" && drive === "softiec")
-          delete driveState.softiec.last_error;
+        if (action === "reset" && drive === "softiec") delete driveState.softiec.last_error;
       }
       json(res, 200, { errors: [] });
       return;
     }
 
-    if (
-      method === "PUT" &&
-      parsed.pathname.match(/^\/v1\/drives\/[ab]:set_mode$/)
-    ) {
+    if (method === "PUT" && parsed.pathname.match(/^\/v1\/drives\/[ab]:set_mode$/)) {
       const drive = parsed.pathname.includes("/a:") ? "a" : "b";
       const mode = parsed.searchParams.get("mode");
       if (mode) driveState[drive].type = mode;
@@ -275,9 +251,7 @@ export async function createMockRestServer(): Promise<MockRestServer> {
       return;
     }
 
-    const driveMountMatch = parsed.pathname.match(
-      /^\/v1\/drives\/([ab]):mount$/,
-    );
+    const driveMountMatch = parsed.pathname.match(/^\/v1\/drives\/([ab]):mount$/);
     if (driveMountMatch && (method === "PUT" || method === "POST")) {
       const drive = driveMountMatch[1] as "a" | "b";
       if (method === "PUT") {
@@ -285,8 +259,7 @@ export async function createMockRestServer(): Promise<MockRestServer> {
         const normalized = image.startsWith("/") ? image : `/${image}`;
         const parts = normalized.split("/").filter(Boolean);
         driveState[drive].image_file = parts[parts.length - 1];
-        driveState[drive].image_path =
-          parts.length > 1 ? `/${parts.slice(0, -1).join("/")}` : "/";
+        driveState[drive].image_path = parts.length > 1 ? `/${parts.slice(0, -1).join("/")}` : "/";
       } else {
         driveState[drive].image_file = "upload.d64";
         driveState[drive].image_path = "/";
@@ -295,9 +268,7 @@ export async function createMockRestServer(): Promise<MockRestServer> {
       return;
     }
 
-    const driveRemoveMatch = parsed.pathname.match(
-      /^\/v1\/drives\/([ab]):remove$/,
-    );
+    const driveRemoveMatch = parsed.pathname.match(/^\/v1\/drives\/([ab]):remove$/);
     if (driveRemoveMatch && method === "PUT") {
       const drive = driveRemoveMatch[1] as "a" | "b";
       delete driveState[drive].image_file;
@@ -321,10 +292,7 @@ export async function createMockRestServer(): Promise<MockRestServer> {
       return;
     }
 
-    if (
-      parsed.pathname.match(/^\/v1\/files\/.*:create_d(64|71|81|np)$/) &&
-      method === "PUT"
-    ) {
+    if (parsed.pathname.match(/^\/v1\/files\/.*:create_d(64|71|81|np)$/) && method === "PUT") {
       json(res, 200, { errors: [] });
       return;
     }

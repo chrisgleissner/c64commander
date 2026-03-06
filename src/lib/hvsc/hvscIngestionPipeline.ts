@@ -20,23 +20,19 @@ export type HvscPipelineState =
   | "READY";
 
 export type PipelineStateMachine = {
-  transition: (
-    next: HvscPipelineState,
-    details?: Record<string, unknown>,
-  ) => void;
+  transition: (next: HvscPipelineState, details?: Record<string, unknown>) => void;
   current: () => HvscPipelineState;
 };
 
-const hvscPipelineTransitions: Record<HvscPipelineState, HvscPipelineState[]> =
-  {
-    IDLE: ["DOWNLOADING"],
-    DOWNLOADING: ["DOWNLOADED"],
-    DOWNLOADED: ["EXTRACTING"],
-    EXTRACTING: ["EXTRACTED"],
-    EXTRACTED: ["INGESTING"],
-    INGESTING: ["READY"],
-    READY: [],
-  };
+const hvscPipelineTransitions: Record<HvscPipelineState, HvscPipelineState[]> = {
+  IDLE: ["DOWNLOADING"],
+  DOWNLOADING: ["DOWNLOADED"],
+  DOWNLOADED: ["EXTRACTING"],
+  EXTRACTING: ["EXTRACTED"],
+  EXTRACTED: ["INGESTING"],
+  INGESTING: ["READY"],
+  READY: [],
+};
 
 export const createArchivePipelineStateMachine = (params: {
   archiveName: string;
@@ -44,15 +40,10 @@ export const createArchivePipelineStateMachine = (params: {
   archiveVersion: number;
 }): PipelineStateMachine => {
   let state: HvscPipelineState = "IDLE";
-  const transition = (
-    next: HvscPipelineState,
-    details: Record<string, unknown> = {},
-  ) => {
+  const transition = (next: HvscPipelineState, details: Record<string, unknown> = {}) => {
     const allowed = hvscPipelineTransitions[state];
     if (!allowed.includes(next)) {
-      const error = new Error(
-        `Illegal HVSC pipeline transition ${state} -> ${next}`,
-      );
+      const error = new Error(`Illegal HVSC pipeline transition ${state} -> ${next}`);
       addErrorLog("HVSC pipeline transition violation", {
         archiveName: params.archiveName,
         archiveType: params.archiveType,

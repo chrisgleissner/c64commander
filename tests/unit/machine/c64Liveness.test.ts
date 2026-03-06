@@ -21,8 +21,7 @@ const buildApi = (responses: Record<string, Uint8Array[]>) => {
       const index = counters.get(key) ?? 0;
       counters.set(key, index + 1);
       const values = responses[key] ?? [];
-      const value =
-        values[Math.min(index, values.length - 1)] ?? new Uint8Array(length);
+      const value = values[Math.min(index, values.length - 1)] ?? new Uint8Array(length);
       return value;
     },
   } satisfies MockApi;
@@ -96,11 +95,7 @@ describe("checkC64Liveness", () => {
     const api = buildApi({
       "00A2:3": [new Uint8Array([1, 0, 0]), new Uint8Array([1, 0, 0])],
       // rasterStart=10, attempt0=10 (no change), attempt1=20 (changed)
-      "D012:1": [
-        new Uint8Array([10]),
-        new Uint8Array([10]),
-        new Uint8Array([20]),
-      ],
+      "D012:1": [new Uint8Array([10]), new Uint8Array([10]), new Uint8Array([20])],
     });
 
     const result = await checkC64Liveness(api as any, {

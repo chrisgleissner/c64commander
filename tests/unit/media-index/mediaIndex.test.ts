@@ -10,9 +10,7 @@ import { describe, expect, it } from "vitest";
 import type { MediaIndexSnapshot, MediaIndexStorage } from "@/lib/media-index";
 import { JsonMediaIndex } from "@/lib/media-index";
 
-const createMemoryStorage = (
-  snapshot?: MediaIndexSnapshot | null,
-): MediaIndexStorage => {
+const createMemoryStorage = (snapshot?: MediaIndexSnapshot | null): MediaIndexStorage => {
   let current = snapshot ?? null;
   return {
     read: async () => current,

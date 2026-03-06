@@ -8,10 +8,7 @@ export const getClientIp = (req: IncomingMessage) => {
   return req.socket.remoteAddress ?? "unknown";
 };
 
-export const applySecurityHeaders = (
-  req: IncomingMessage,
-  res: ServerResponse,
-) => {
+export const applySecurityHeaders = (req: IncomingMessage, res: ServerResponse) => {
   res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
@@ -22,12 +19,8 @@ export const applySecurityHeaders = (
 
   const forwardedProto = req.headers["x-forwarded-proto"];
   const isForwardedHttps =
-    typeof forwardedProto === "string" &&
-    forwardedProto.split(",")[0].trim().toLowerCase() === "https";
+    typeof forwardedProto === "string" && forwardedProto.split(",")[0].trim().toLowerCase() === "https";
   if (isForwardedHttps) {
-    res.setHeader(
-      "Strict-Transport-Security",
-      "max-age=31536000; includeSubDomains",
-    );
+    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   }
 };

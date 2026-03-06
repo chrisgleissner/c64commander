@@ -69,33 +69,19 @@ const SID_LAYOUT: SidConfigDescriptor[] = [
 
 const getCategoryItems = (payload: unknown, categoryName: string) => {
   const record = payload as Record<string, unknown> | undefined;
-  const categoryBlock = (record?.[categoryName] ?? record) as
-    | Record<string, unknown>
-    | undefined;
-  return (categoryBlock?.items ?? categoryBlock) as
-    | Record<string, unknown>
-    | undefined;
+  const categoryBlock = (record?.[categoryName] ?? record) as Record<string, unknown> | undefined;
+  return (categoryBlock?.items ?? categoryBlock) as Record<string, unknown> | undefined;
 };
 
-const getItemValue = (
-  payload: unknown,
-  categoryName: string,
-  itemName: string,
-) => {
+const getItemValue = (payload: unknown, categoryName: string, itemName: string) => {
   const items = getCategoryItems(payload, categoryName);
-  if (!items || !Object.prototype.hasOwnProperty.call(items, itemName))
-    return undefined;
+  if (!items || !Object.prototype.hasOwnProperty.call(items, itemName)) return undefined;
   return normalizeConfigItem(items[itemName]).value;
 };
 
-const getItemOptions = (
-  payload: unknown,
-  categoryName: string,
-  itemName: string,
-) => {
+const getItemOptions = (payload: unknown, categoryName: string, itemName: string) => {
   const items = getCategoryItems(payload, categoryName);
-  if (!items || !Object.prototype.hasOwnProperty.call(items, itemName))
-    return [];
+  if (!items || !Object.prototype.hasOwnProperty.call(items, itemName)) return [];
   return normalizeConfigItem(items[itemName]).options ?? [];
 };
 
@@ -126,54 +112,32 @@ export const buildSidDetailEntries = (
   audioMixerCategory?: Record<string, unknown>,
   sidAddressingCategory?: Record<string, unknown>,
 ): SidDetailEntry[] =>
-  buildSidControlEntries(audioMixerCategory, sidAddressingCategory).map(
-    (entry) => ({
-      key: entry.key,
-      label: entry.label,
-      volume: entry.volume,
-      pan: entry.pan,
-      address: entry.address,
-      addressRaw: entry.addressRaw,
-    }),
-  );
+  buildSidControlEntries(audioMixerCategory, sidAddressingCategory).map((entry) => ({
+    key: entry.key,
+    label: entry.label,
+    volume: entry.volume,
+    pan: entry.pan,
+    address: entry.address,
+    addressRaw: entry.addressRaw,
+  }));
 
 export const buildSidControlEntries = (
   audioMixerCategory?: Record<string, unknown>,
   sidAddressingCategory?: Record<string, unknown>,
 ): SidControlEntry[] =>
   SID_LAYOUT.map((entry) => {
-    const volume = getItemValue(
-      audioMixerCategory,
-      "Audio Mixer",
-      entry.volumeItem,
-    );
+    const volume = getItemValue(audioMixerCategory, "Audio Mixer", entry.volumeItem);
     const pan = getItemValue(audioMixerCategory, "Audio Mixer", entry.panItem);
-    const addressRaw = getItemValue(
-      sidAddressingCategory,
-      "SID Addressing",
-      entry.addressItem,
-    );
+    const addressRaw = getItemValue(sidAddressingCategory, "SID Addressing", entry.addressItem);
     return {
       key: entry.key,
       label: entry.label,
       volumeItem: entry.volumeItem,
       panItem: entry.panItem,
       addressItem: entry.addressItem,
-      volumeOptions: getItemOptions(
-        audioMixerCategory,
-        "Audio Mixer",
-        entry.volumeItem,
-      ),
-      panOptions: getItemOptions(
-        audioMixerCategory,
-        "Audio Mixer",
-        entry.panItem,
-      ),
-      addressOptions: getItemOptions(
-        sidAddressingCategory,
-        "SID Addressing",
-        entry.addressItem,
-      ),
+      volumeOptions: getItemOptions(audioMixerCategory, "Audio Mixer", entry.volumeItem),
+      panOptions: getItemOptions(audioMixerCategory, "Audio Mixer", entry.panItem),
+      addressOptions: getItemOptions(sidAddressingCategory, "SID Addressing", entry.addressItem),
       volume: formatTextValue(volume),
       pan: formatTextValue(pan),
       address: formatAddressValue(addressRaw),

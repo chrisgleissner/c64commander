@@ -22,12 +22,7 @@ import {
   startStrictUiMonitoring,
 } from "./testArtifacts";
 import { clickSourceSelectionButton } from "./sourceSelection";
-import {
-  clearTraces,
-  enableTraceAssertions,
-  expectRestTraceSequence,
-  findTraceEvent,
-} from "./traceUtils";
+import { clearTraces, enableTraceAssertions, expectRestTraceSequence, findTraceEvent } from "./traceUtils";
 import { enableGoldenTrace } from "./goldenTraceRegistry";
 
 const waitForRequests = async (predicate: () => boolean) => {
@@ -78,10 +73,7 @@ const seedPlaylistStorage = async (
         items: seedItems,
         currentIndex: -1,
       };
-      localStorage.setItem(
-        "c64u_playlist:v1:TEST-123",
-        JSON.stringify(payload),
-      );
+      localStorage.setItem("c64u_playlist:v1:TEST-123", JSON.stringify(payload));
       localStorage.setItem("c64u_playlist:v1:default", JSON.stringify(payload));
       localStorage.setItem("c64u_last_device_id", "TEST-123");
     },
@@ -115,9 +107,7 @@ const runAdbShell = (serial: string, command: string) => {
     encoding: "utf-8",
   });
   if (result.status !== 0) {
-    throw new Error(
-      `adb shell failed for command "${command}": ${result.stderr || result.stdout}`,
-    );
+    throw new Error(`adb shell failed for command "${command}": ${result.stderr || result.stdout}`);
   }
 };
 
@@ -164,14 +154,10 @@ test.describe("Playback file browser", () => {
     }
   });
 
-  test("play page is available from tab bar", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("play page is available from tab bar", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.setViewportSize({ width: 360, height: 740 });
     await page.goto("/play");
-    await expect(
-      page.getByRole("heading", { name: "Play Files" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Play Files" })).toBeVisible();
     await snap(page, testInfo, "play-page-loaded");
   });
 
@@ -208,9 +194,7 @@ test.describe("Playback file browser", () => {
     await expect(playlistList).toContainText("local-demo.sid");
     await expect(playlistList).toContainText("/Music/local-demo.sid");
     await expect(playlistList).toContainText("Commando.sid");
-    await expect(playlistList).toContainText(
-      "/MUSICIANS/Hubbard_Rob/Commando.sid",
-    );
+    await expect(playlistList).toContainText("/MUSICIANS/Hubbard_Rob/Commando.sid");
     await expect(playlistList).toContainText("—:—");
     await expect(playlistList).not.toContainText("This device");
     await expect(playlistList).not.toContainText("C64 Ultimate");
@@ -218,9 +202,7 @@ test.describe("Playback file browser", () => {
     await snap(page, testInfo, "mixed-source-source-transparent");
   });
 
-  test("playback sends runner request to real device mock", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("playback sends runner request to real device mock", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     enableTraceAssertions(testInfo);
     await seedPlaylistStorage(page, [
       {
@@ -234,30 +216,18 @@ test.describe("Playback file browser", () => {
     await page.goto("/play");
     await snap(page, testInfo, "play-open");
 
-    await expect(page.getByTestId("playlist-list")).toContainText(
-      "Track_0001.sid",
-    );
+    await expect(page.getByTestId("playlist-list")).toContainText("Track_0001.sid");
 
     await clearTraces(page);
 
     await page.getByTestId("playlist-play").click();
-    await waitForRequests(() =>
-      server.requests.some((req) => req.url.startsWith("/v1/runners:sidplay")),
-    );
+    await waitForRequests(() => server.requests.some((req) => req.url.startsWith("/v1/runners:sidplay")));
 
-    const lastRequest = [...server.requests]
-      .reverse()
-      .find((req) => req.url.startsWith("/v1/runners:sidplay"));
+    const lastRequest = [...server.requests].reverse().find((req) => req.url.startsWith("/v1/runners:sidplay"));
     expect(lastRequest?.method).toBe("PUT");
 
-    const { requestEvent, related } = await expectRestTraceSequence(
-      page,
-      testInfo,
-      /\/v1\/runners:sidplay/,
-    );
-    expect((requestEvent.data as { target?: string }).target).toBe(
-      "external-mock",
-    );
+    const { requestEvent, related } = await expectRestTraceSequence(page, testInfo, /\/v1\/runners:sidplay/);
+    expect((requestEvent.data as { target?: string }).target).toBe("external-mock");
     const requestData = requestEvent.data as {
       lifecycleState?: unknown;
       sourceKind?: unknown;
@@ -266,37 +236,19 @@ test.describe("Playback file browser", () => {
       localAccessMode?: unknown;
     };
     expect(typeof requestData.lifecycleState).toBe("string");
-    expect(
-      Object.prototype.hasOwnProperty.call(requestData, "sourceKind"),
-    ).toBe(true);
-    expect(
-      requestData.sourceKind === null || requestData.sourceKind === "ultimate",
-    ).toBe(true);
-    expect(
-      Object.prototype.hasOwnProperty.call(requestData, "trackInstanceId"),
-    ).toBe(true);
-    expect(
-      typeof requestData.trackInstanceId === "number" ||
-        requestData.trackInstanceId === null,
-    ).toBe(true);
-    expect(
-      Object.prototype.hasOwnProperty.call(requestData, "playlistItemId"),
-    ).toBe(true);
-    expect(
-      typeof requestData.playlistItemId === "string" ||
-        requestData.playlistItemId === null,
-    ).toBe(true);
+    expect(Object.prototype.hasOwnProperty.call(requestData, "sourceKind")).toBe(true);
+    expect(requestData.sourceKind === null || requestData.sourceKind === "ultimate").toBe(true);
+    expect(Object.prototype.hasOwnProperty.call(requestData, "trackInstanceId")).toBe(true);
+    expect(typeof requestData.trackInstanceId === "number" || requestData.trackInstanceId === null).toBe(true);
+    expect(Object.prototype.hasOwnProperty.call(requestData, "playlistItemId")).toBe(true);
+    expect(typeof requestData.playlistItemId === "string" || requestData.playlistItemId === null).toBe(true);
     expect(requestData.localAccessMode).toBe(null);
     const decisionEvent = findTraceEvent(related, "backend-decision");
-    expect(
-      (decisionEvent?.data as { selectedTarget?: string }).selectedTarget,
-    ).toBe("external-mock");
+    expect((decisionEvent?.data as { selectedTarget?: string }).selectedTarget).toBe("external-mock");
     await snap(page, testInfo, "play-requested");
   });
 
-  test("playback state persists across navigation", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("playback state persists across navigation", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await seedPlaylistStorage(page, [
       {
         source: "ultimate" as const,
@@ -308,33 +260,20 @@ test.describe("Playback file browser", () => {
 
     await page.goto("/play");
     await page.getByTestId("playlist-play").click();
-    await waitForRequests(() =>
-      server.requests.some((req) => req.url.startsWith("/v1/runners:sidplay")),
-    );
+    await waitForRequests(() => server.requests.some((req) => req.url.startsWith("/v1/runners:sidplay")));
 
     const elapsed = page.getByTestId("playback-elapsed");
-    await expect
-      .poll(async () => parseTimeLabel(await elapsed.textContent()) ?? 0)
-      .toBeGreaterThan(0);
+    await expect.poll(async () => parseTimeLabel(await elapsed.textContent()) ?? 0).toBeGreaterThan(0);
     const firstElapsed = parseTimeLabel(await elapsed.textContent()) ?? 0;
     const initialSidplayCount = server.sidplayRequests.length;
 
     await page.getByRole("button", { name: "Disks", exact: true }).click();
-    await expect(
-      page.getByRole("heading", { name: "Disks", level: 1 }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Disks", level: 1 })).toBeVisible();
     await page.getByRole("button", { name: "Play", exact: true }).click();
-    await expect(
-      page.getByRole("heading", { name: "Play Files" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Play Files" })).toBeVisible();
 
-    await expect(page.getByTestId("playlist-play")).toHaveAttribute(
-      "aria-label",
-      "Stop",
-    );
-    await expect
-      .poll(async () => parseTimeLabel(await elapsed.textContent()) ?? 0)
-      .toBeGreaterThan(firstElapsed);
+    await expect(page.getByTestId("playlist-play")).toHaveAttribute("aria-label", "Stop");
+    await expect.poll(async () => parseTimeLabel(await elapsed.textContent()) ?? 0).toBeGreaterThan(firstElapsed);
     expect(server.sidplayRequests.length).toBe(initialSidplayCount);
     await snap(page, testInfo, "playback-persisted");
   });
@@ -342,10 +281,7 @@ test.describe("Playback file browser", () => {
   test("playback failure does not clear playlist across navigation", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
-    allowWarnings(
-      testInfo,
-      "Expected playback failure warnings for unreachable device.",
-    );
+    allowWarnings(testInfo, "Expected playback failure warnings for unreachable device.");
     await seedPlaylistStorage(page, [
       {
         source: "ultimate" as const,
@@ -358,51 +294,33 @@ test.describe("Playback file browser", () => {
     await page.goto("/play");
     await snap(page, testInfo, "play-open");
 
-    await waitForRequests(() =>
-      server.requests.some((req) => req.url.startsWith("/v1/info")),
+    await waitForRequests(() => server.requests.some((req) => req.url.startsWith("/v1/info")));
+    await waitForRequests(
+      () => server.requests.filter((req) => req.url.startsWith("/v1/configs/Audio%20Mixer")).length >= 1,
     );
     await waitForRequests(
       () =>
-        server.requests.filter((req) =>
-          req.url.startsWith("/v1/configs/Audio%20Mixer"),
-        ).length >= 1,
+        server.requests.filter((req) => req.url.startsWith("/v1/configs/SID%20Sockets%20Configuration")).length >= 1,
     );
     await waitForRequests(
-      () =>
-        server.requests.filter((req) =>
-          req.url.startsWith("/v1/configs/SID%20Sockets%20Configuration"),
-        ).length >= 1,
-    );
-    await waitForRequests(
-      () =>
-        server.requests.filter((req) =>
-          req.url.startsWith("/v1/configs/SID%20Addressing"),
-        ).length >= 1,
+      () => server.requests.filter((req) => req.url.startsWith("/v1/configs/SID%20Addressing")).length >= 1,
     );
 
     await clearTraces(page);
     server.setFaultMode("refused");
     await page.getByTestId("playlist-play").click();
-    await expect(
-      page.getByText("Playback failed", { exact: true }),
-    ).toBeVisible();
-    await expect(page.getByTestId("playlist-list")).toContainText(
-      "Track_0001.sid",
-    );
+    await expect(page.getByText("Playback failed", { exact: true })).toBeVisible();
+    await expect(page.getByTestId("playlist-list")).toContainText("Track_0001.sid");
     await snap(page, testInfo, "play-failed");
 
     await page.goto("/disks");
     await page.goto("/play");
-    await expect(page.getByTestId("playlist-list")).toContainText(
-      "Track_0001.sid",
-    );
+    await expect(page.getByTestId("playlist-list")).toContainText("Track_0001.sid");
     await snap(page, testInfo, "playlist-restored");
     server.setFaultMode("none");
   });
 
-  test("pause then stop never hangs", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("pause then stop never hangs", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     enableTraceAssertions(testInfo);
     await seedPlaylistStorage(page, [
       {
@@ -419,33 +337,22 @@ test.describe("Playback file browser", () => {
     await clearTraces(page);
 
     await page.getByTestId("playlist-play").click();
-    await waitForRequests(() =>
-      server.requests.some((req) => req.url.startsWith("/v1/runners:sidplay")),
-    );
+    await waitForRequests(() => server.requests.some((req) => req.url.startsWith("/v1/runners:sidplay")));
 
     await page.getByTestId("playlist-pause").click();
-    await waitForRequests(() =>
-      server.requests.some((req) => req.url.startsWith("/v1/machine:pause")),
-    );
+    await waitForRequests(() => server.requests.some((req) => req.url.startsWith("/v1/machine:pause")));
 
     await page.getByTestId("playlist-play").click();
-    await waitForRequests(() =>
-      server.requests.some((req) => req.url.startsWith("/v1/machine:reset")),
-    );
+    await waitForRequests(() => server.requests.some((req) => req.url.startsWith("/v1/machine:reset")));
 
-    await expect(page.getByTestId("playlist-play")).toHaveAttribute(
-      "aria-label",
-      "Play",
-    );
+    await expect(page.getByTestId("playlist-play")).toHaveAttribute("aria-label", "Play");
 
     await expectRestTraceSequence(page, testInfo, "/v1/machine:pause");
     await expectRestTraceSequence(page, testInfo, "/v1/machine:reset");
     await snap(page, testInfo, "pause-stop-complete");
   });
 
-  test("playback progression survives lock/unlock cycle", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("playback progression survives lock/unlock cycle", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     const deviceSerial = process.env.PLAYWRIGHT_ANDROID_SERIAL;
     enableTraceAssertions(testInfo);
     await seedPlaylistStorage(page, [
@@ -463,22 +370,15 @@ test.describe("Playback file browser", () => {
     await clearTraces(page);
 
     await page.getByTestId("playlist-play").click();
-    await waitForRequests(() =>
-      server.requests.some((req) => req.url.startsWith("/v1/runners:sidplay")),
-    );
+    await waitForRequests(() => server.requests.some((req) => req.url.startsWith("/v1/runners:sidplay")));
 
     const elapsed = page.getByTestId("playback-elapsed");
-    await expect
-      .poll(async () => parseTimeLabel(await elapsed.textContent()) ?? 0)
-      .toBeGreaterThan(0);
+    await expect.poll(async () => parseTimeLabel(await elapsed.textContent()) ?? 0).toBeGreaterThan(0);
     const elapsedBeforeLock = parseTimeLabel(await elapsed.textContent()) ?? 0;
 
     runDeviceLockUnlockCycle(deviceSerial);
 
-    await expect(page.getByTestId("playlist-play")).toHaveAttribute(
-      "aria-label",
-      "Stop",
-    );
+    await expect(page.getByTestId("playlist-play")).toHaveAttribute("aria-label", "Stop");
     await expect
       .poll(async () => parseTimeLabel(await elapsed.textContent()) ?? 0, {
         timeout: 15000,
@@ -488,9 +388,7 @@ test.describe("Playback file browser", () => {
     await snap(page, testInfo, "lock-unlock-recovered");
   });
 
-  test("volume slider updates during playback", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("volume slider updates during playback", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     enableTraceAssertions(testInfo);
     await seedPlaylistStorage(page, [
       {
@@ -503,9 +401,7 @@ test.describe("Playback file browser", () => {
 
     await page.goto("/play");
     await page.getByTestId("playlist-play").click();
-    await waitForRequests(() =>
-      server.requests.some((req) => req.url.startsWith("/v1/runners:sidplay")),
-    );
+    await waitForRequests(() => server.requests.some((req) => req.url.startsWith("/v1/runners:sidplay")));
 
     const slider = page.getByTestId("volume-slider").getByRole("slider");
     await slider.focus();
@@ -513,17 +409,13 @@ test.describe("Playback file browser", () => {
     await slider.press("ArrowRight");
 
     await waitForRequests(() =>
-      server.requests.some(
-        (req) => req.method === "POST" && req.url.startsWith("/v1/configs"),
-      ),
+      server.requests.some((req) => req.method === "POST" && req.url.startsWith("/v1/configs")),
     );
     await expectRestTraceSequence(page, testInfo, "/v1/configs");
     await snap(page, testInfo, "volume-update");
   });
 
-  test("mute only affects enabled SID chips", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("mute only affects enabled SID chips", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await server.close();
     server = await createMockC64Server({
       ...uiFixtures.configState,
@@ -538,46 +430,34 @@ test.describe("Playback file browser", () => {
       "Audio Mixer": {
         "Vol UltiSid 1": {
           value: "+2 dB",
-          options:
-            uiFixtures.configState["Audio Mixer"]["Vol UltiSid 1"].options,
+          options: uiFixtures.configState["Audio Mixer"]["Vol UltiSid 1"].options,
         },
         "Vol UltiSid 2": {
           value: "+1 dB",
-          options:
-            uiFixtures.configState["Audio Mixer"]["Vol UltiSid 2"].options,
+          options: uiFixtures.configState["Audio Mixer"]["Vol UltiSid 2"].options,
         },
         "Vol Socket 1": {
           value: " 0 dB",
-          options:
-            uiFixtures.configState["Audio Mixer"]["Vol Socket 1"].options,
+          options: uiFixtures.configState["Audio Mixer"]["Vol Socket 1"].options,
         },
         "Vol Socket 2": {
           value: "-6 dB",
-          options:
-            uiFixtures.configState["Audio Mixer"]["Vol Socket 2"].options,
+          options: uiFixtures.configState["Audio Mixer"]["Vol Socket 2"].options,
         },
       },
     });
     await seedUiMocks(page, server.baseUrl);
 
     const initialResponses = [
-      page.waitForResponse((response) =>
-        response.url().includes("/v1/configs/Audio%20Mixer"),
-      ),
-      page.waitForResponse((response) =>
-        response.url().includes("/v1/configs/SID%20Sockets%20Configuration"),
-      ),
-      page.waitForResponse((response) =>
-        response.url().includes("/v1/configs/SID%20Addressing"),
-      ),
+      page.waitForResponse((response) => response.url().includes("/v1/configs/Audio%20Mixer")),
+      page.waitForResponse((response) => response.url().includes("/v1/configs/SID%20Sockets%20Configuration")),
+      page.waitForResponse((response) => response.url().includes("/v1/configs/SID%20Addressing")),
     ];
     await page.goto("/play");
     await Promise.all(initialResponses);
     await page.getByTestId("volume-mute").click();
     await waitForRequests(() =>
-      server.requests.some(
-        (req) => req.method === "POST" && req.url.startsWith("/v1/configs"),
-      ),
+      server.requests.some((req) => req.method === "POST" && req.url.startsWith("/v1/configs")),
     );
 
     const mixer = server.getState()["Audio Mixer"];
@@ -588,20 +468,11 @@ test.describe("Playback file browser", () => {
     await snap(page, testInfo, "volume-mute-enabled-only");
   });
 
-  test("local SID playback uploads before play", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("local SID playback uploads before play", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/play");
     const indicator = page.getByTestId("connectivity-indicator");
-    await expect(indicator).toHaveAttribute(
-      "data-connection-state",
-      "REAL_CONNECTED",
-      { timeout: 5000 },
-    );
-    await addLocalFolder(
-      page,
-      path.resolve("playwright/fixtures/local-play-sids"),
-    );
+    await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 5000 });
+    await addLocalFolder(page, path.resolve("playwright/fixtures/local-play-sids"));
     await snap(page, testInfo, "local-playlist-ready");
 
     await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
@@ -611,31 +482,18 @@ test.describe("Playback file browser", () => {
     await page.getByTestId("playlist-play").click();
     await waitForRequests(() => server.sidplayRequests.length > 0);
 
-    await expect(indicator).toHaveAttribute(
-      "data-connection-state",
-      "REAL_CONNECTED",
-    );
+    await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED");
 
-    const lastUpload =
-      server.sidplayRequests[server.sidplayRequests.length - 1];
+    const lastUpload = server.sidplayRequests[server.sidplayRequests.length - 1];
     expect(lastUpload.method).toBe("POST");
     await snap(page, testInfo, "local-playback-uploaded");
   });
 
-  test("local SID playback does not throw unavailable error", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("local SID playback does not throw unavailable error", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/play");
     const indicator = page.getByTestId("connectivity-indicator");
-    await expect(indicator).toHaveAttribute(
-      "data-connection-state",
-      "REAL_CONNECTED",
-      { timeout: 5000 },
-    );
-    await addLocalFolder(
-      page,
-      path.resolve("playwright/fixtures/local-play-sids"),
-    );
+    await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 5000 });
+    await addLocalFolder(page, path.resolve("playwright/fixtures/local-play-sids"));
     await expect(page.getByTestId("playlist-item")).toHaveCount(2);
 
     await page.getByTestId("playlist-play").click();
@@ -646,9 +504,7 @@ test.describe("Playback file browser", () => {
       if (!raw) return false;
       try {
         const logs = JSON.parse(raw) as Array<{ message: string }>;
-        return logs.some((entry) =>
-          entry.message.includes("Local file unavailable"),
-        );
+        return logs.some((entry) => entry.message.includes("Local file unavailable"));
       } catch {
         return false;
       }
@@ -657,13 +513,8 @@ test.describe("Playback file browser", () => {
     await snap(page, testInfo, "local-no-unavailable-error");
   });
 
-  test("playback errors emit log entries", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
-    allowWarnings(
-      testInfo,
-      "Expected playback failure warnings for unreachable device.",
-    );
+  test("playback errors emit log entries", async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    allowWarnings(testInfo, "Expected playback failure warnings for unreachable device.");
     server.setReachable(false);
     await seedPlaylistStorage(page, [
       {
@@ -684,9 +535,7 @@ test.describe("Playback file browser", () => {
           if (!raw) return false;
           try {
             const logs = JSON.parse(raw) as Array<{ message: string }>;
-            return logs.some((entry) =>
-              entry.message.includes("PLAYBACK_START: Playback failed"),
-            );
+            return logs.some((entry) => entry.message.includes("PLAYBACK_START: Playback failed"));
           } catch {
             return false;
           }
@@ -729,9 +578,7 @@ test.describe("Playback file browser", () => {
       expect(heightRatio).toBeLessThan(0.9);
       expect(widthRatio).toBeLessThan(0.92);
       expect(dialogBox.y).toBeGreaterThan(viewport.height * 0.05);
-      expect(dialogBox.y + dialogBox.height).toBeLessThan(
-        viewport.height * 0.98,
-      );
+      expect(dialogBox.y + dialogBox.height).toBeLessThan(viewport.height * 0.98);
     }
 
     // Verify list is populated
@@ -740,9 +587,7 @@ test.describe("Playback file browser", () => {
     const scrollArea = page.locator('[data-virtuoso-scroller="true"]');
     await expect
       .poll(async () => {
-        const scrollable = await scrollArea.evaluate(
-          (node: HTMLElement) => node.scrollHeight > node.clientHeight,
-        );
+        const scrollable = await scrollArea.evaluate((node: HTMLElement) => node.scrollHeight > node.clientHeight);
         return scrollable;
       })
       .toBeTruthy();
@@ -807,12 +652,8 @@ test.describe("Playback file browser", () => {
     const viewAllFilter = page.getByTestId("view-all-filter-input");
     await viewAllFilter.fill("Gamma");
     await snap(page, testInfo, "view-all-filtered");
-    await expect(page.locator('[data-virtuoso-scroller="true"]')).toContainText(
-      "Gamma.sid",
-    );
-    await expect(
-      page.locator('[data-virtuoso-scroller="true"]'),
-    ).not.toContainText("Alpha.sid");
+    await expect(page.locator('[data-virtuoso-scroller="true"]')).toContainText("Gamma.sid");
+    await expect(page.locator('[data-virtuoso-scroller="true"]')).not.toContainText("Alpha.sid");
   });
 
   test('play add button uses "Add items" label and opens dialog', async ({
@@ -826,9 +667,7 @@ test.describe("Playback file browser", () => {
     await snap(page, testInfo, "add-items-opened");
   });
 
-  test("alphabet overlay does not affect list metrics", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("alphabet overlay does not affect list metrics", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.addInitScript(() => {
       localStorage.setItem("c64u_list_preview_limit", "5");
     });
@@ -838,15 +677,11 @@ test.describe("Playback file browser", () => {
     await page.getByRole("button", { name: "View all" }).click();
     await expect(page.getByRole("dialog")).toBeVisible();
     const scrollArea = page.locator('[data-virtuoso-scroller="true"]');
-    await expect(
-      scrollArea.getByText("A-Track-001.sid", { exact: true }),
-    ).toBeVisible();
+    await expect(scrollArea.getByText("A-Track-001.sid", { exact: true })).toBeVisible();
     await expect(scrollArea).toBeVisible();
     await expect
       .poll(async () => {
-        const isEligible = await scrollArea.evaluate(
-          (node: HTMLElement) => node.scrollHeight > node.clientHeight * 2,
-        );
+        const isEligible = await scrollArea.evaluate((node: HTMLElement) => node.scrollHeight > node.clientHeight * 2);
         return isEligible;
       })
       .toBe(true);
@@ -865,31 +700,21 @@ test.describe("Playback file browser", () => {
     const targetX = box.x + box.width / 2;
     const targetY = box.y + box.height * 0.6;
     const touchPoint = { identifier: 1, clientX: targetX, clientY: targetY };
-    await page.dispatchEvent(
-      '[data-testid="alphabet-touch-area"]',
-      "touchstart",
-      {
-        touches: [touchPoint],
-        targetTouches: [touchPoint],
-        changedTouches: [touchPoint],
-      },
-    );
-    await page.dispatchEvent(
-      '[data-testid="alphabet-touch-area"]',
-      "touchmove",
-      {
-        touches: [touchPoint],
-        targetTouches: [touchPoint],
-        changedTouches: [touchPoint],
-      },
-    );
+    await page.dispatchEvent('[data-testid="alphabet-touch-area"]', "touchstart", {
+      touches: [touchPoint],
+      targetTouches: [touchPoint],
+      changedTouches: [touchPoint],
+    });
+    await page.dispatchEvent('[data-testid="alphabet-touch-area"]', "touchmove", {
+      touches: [touchPoint],
+      targetTouches: [touchPoint],
+      changedTouches: [touchPoint],
+    });
     await expect
       .poll(async () => {
         const opacity = await page
           .getByTestId("alphabet-overlay")
-          .evaluate((node: HTMLElement) =>
-            Number(window.getComputedStyle(node).opacity),
-          );
+          .evaluate((node: HTMLElement) => Number(window.getComputedStyle(node).opacity));
         return opacity;
       })
       .toBeGreaterThan(0.2);
@@ -902,9 +727,7 @@ test.describe("Playback file browser", () => {
 
     expect(afterMetrics.width).toEqual(initialMetrics.width);
     expect(afterMetrics.height).toEqual(initialMetrics.height);
-    expect(
-      Math.abs(afterMetrics.scrollHeight - initialMetrics.scrollHeight),
-    ).toBeLessThanOrEqual(400);
+    expect(Math.abs(afterMetrics.scrollHeight - initialMetrics.scrollHeight)).toBeLessThanOrEqual(400);
     await snap(page, testInfo, "alphabet-overlay-metrics");
   });
 
@@ -920,15 +743,11 @@ test.describe("Playback file browser", () => {
     await page.getByRole("button", { name: "View all" }).click();
     await expect(page.getByRole("dialog")).toBeVisible();
     const scrollArea = page.locator('[data-virtuoso-scroller="true"]');
-    await expect(
-      scrollArea.getByText("A-Track-001.sid", { exact: true }),
-    ).toBeVisible();
+    await expect(scrollArea.getByText("A-Track-001.sid", { exact: true })).toBeVisible();
     await expect(scrollArea).toBeVisible();
     await expect
       .poll(async () => {
-        const isEligible = await scrollArea.evaluate(
-          (node: HTMLElement) => node.scrollHeight > node.clientHeight * 2,
-        );
+        const isEligible = await scrollArea.evaluate((node: HTMLElement) => node.scrollHeight > node.clientHeight * 2);
         return isEligible;
       })
       .toBe(true);
@@ -943,38 +762,26 @@ test.describe("Playback file browser", () => {
     const clientX = box.x + box.width / 2;
 
     const touchPoint = { identifier: 1, clientX, clientY: targetY };
-    await page.dispatchEvent(
-      '[data-testid="alphabet-touch-area"]',
-      "touchstart",
-      {
-        touches: [touchPoint],
-        targetTouches: [touchPoint],
-        changedTouches: [touchPoint],
-      },
-    );
-    await page.dispatchEvent(
-      '[data-testid="alphabet-touch-area"]',
-      "touchmove",
-      {
-        touches: [touchPoint],
-        targetTouches: [touchPoint],
-        changedTouches: [touchPoint],
-      },
-    );
+    await page.dispatchEvent('[data-testid="alphabet-touch-area"]', "touchstart", {
+      touches: [touchPoint],
+      targetTouches: [touchPoint],
+      changedTouches: [touchPoint],
+    });
+    await page.dispatchEvent('[data-testid="alphabet-touch-area"]', "touchmove", {
+      touches: [touchPoint],
+      targetTouches: [touchPoint],
+      changedTouches: [touchPoint],
+    });
 
     await expect(page.getByTestId("alphabet-badge")).toBeVisible();
-    await expect(
-      scrollArea.getByText("Z-Track-001.sid", { exact: true }),
-    ).toBeVisible();
+    await expect(scrollArea.getByText("Z-Track-001.sid", { exact: true })).toBeVisible();
     await snap(page, testInfo, "alphabet-jump");
 
     await expect
       .poll(async () => {
         const overlayOpacity = await page
           .getByTestId("alphabet-overlay")
-          .evaluate(
-            (node: HTMLElement) => window.getComputedStyle(node).opacity,
-          );
+          .evaluate((node: HTMLElement) => window.getComputedStyle(node).opacity);
         return Number(overlayOpacity);
       })
       .toBeLessThan(0.2);
@@ -1059,9 +866,7 @@ test.describe("Playback file browser", () => {
     await expect(counters).toContainText("Remaining: 3:04");
   });
 
-  test("stop does not auto-resume playback", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("stop does not auto-resume playback", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await seedPlaylistStorage(page, [
       {
         source: "ultimate" as const,
@@ -1102,9 +907,7 @@ test.describe("Playback file browser", () => {
     await snap(page, testInfo, "no-autoresume");
   });
 
-  test("played time advances steadily while playing", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("played time advances steadily while playing", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await seedPlaylistStorage(page, [
       {
         source: "ultimate" as const,
@@ -1119,13 +922,9 @@ test.describe("Playback file browser", () => {
     const played = page.getByTestId("playback-elapsed");
     await playButton.click();
     await snap(page, testInfo, "play-started");
-    await expect
-      .poll(async () => parseTimeLabel(await played.textContent()) ?? 0)
-      .toBeGreaterThanOrEqual(1);
+    await expect.poll(async () => parseTimeLabel(await played.textContent()) ?? 0).toBeGreaterThanOrEqual(1);
     const firstValue = parseTimeLabel(await played.textContent()) ?? 0;
-    await expect
-      .poll(async () => parseTimeLabel(await played.textContent()) ?? 0)
-      .toBeGreaterThan(firstValue);
+    await expect.poll(async () => parseTimeLabel(await played.textContent()) ?? 0).toBeGreaterThan(firstValue);
     const secondValue = parseTimeLabel(await played.textContent()) ?? 0;
     expect(secondValue).toBeLessThanOrEqual(5);
   });
@@ -1138,9 +937,7 @@ test.describe("Playback file browser", () => {
     await openAddItemsDialog(page);
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
     const input = page.locator('input[type="file"][webkitdirectory]');
-    await input.setInputFiles([
-      path.resolve("playwright/fixtures/local-play-songlengths"),
-    ]);
+    await input.setInputFiles([path.resolve("playwright/fixtures/local-play-songlengths")]);
     await expect(page.getByRole("dialog")).toBeHidden();
     await snap(page, testInfo, "playlist-ready");
 
@@ -1207,9 +1004,7 @@ test.describe("Playback file browser", () => {
     await openAddItemsDialog(page);
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
     const input = page.locator('input[type="file"][webkitdirectory]');
-    await input.setInputFiles([
-      path.resolve("playwright/fixtures/local-play-songlengths"),
-    ]);
+    await input.setInputFiles([path.resolve("playwright/fixtures/local-play-songlengths")]);
     await expect(page.getByRole("dialog")).toBeHidden();
 
     const playButton = page.getByTestId("playlist-play");
@@ -1218,9 +1013,7 @@ test.describe("Playback file browser", () => {
     await snap(page, testInfo, "play-after-import");
   });
 
-  test("rapid play/stop/play sequences remain stable", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("rapid play/stop/play sequences remain stable", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     enableGoldenTrace(testInfo);
     await seedPlaylistStorage(page, [
       {
@@ -1246,9 +1039,7 @@ test.describe("Playback file browser", () => {
     await snap(page, testInfo, "rapid-play-stop-play");
   });
 
-  test("skipping tracks quickly updates current track", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("skipping tracks quickly updates current track", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await seedPlaylistStorage(page, [
       {
         source: "ultimate" as const,
@@ -1312,20 +1103,14 @@ test.describe("Playback file browser", () => {
     await page.goto("/play");
     await page.getByTestId("playlist-play").click();
     await expect.poll(() => server.sidplayRequests.length).toBe(1);
-    await expect(page.getByTestId("playback-current-track")).toContainText(
-      "track-1.sid",
-    );
+    await expect(page.getByTestId("playback-current-track")).toContainText("track-1.sid");
 
     await expect.poll(() => server.sidplayRequests.length).toBe(2);
-    await expect(page.getByTestId("playback-current-track")).toContainText(
-      "track-2.sid",
+    await expect(page.getByTestId("playback-current-track")).toContainText("track-2.sid");
+    await expect(page.getByTestId("playlist-item").filter({ hasText: "track-2.sid" }).first()).toHaveAttribute(
+      "data-playing",
+      "true",
     );
-    await expect(
-      page
-        .getByTestId("playlist-item")
-        .filter({ hasText: "track-2.sid" })
-        .first(),
-    ).toHaveAttribute("data-playing", "true");
 
     await page.waitForTimeout(2000);
     expect(server.sidplayRequests.length).toBe(2);
@@ -1362,9 +1147,7 @@ test.describe("Playback file browser", () => {
 
     await page.getByTestId("playlist-next").click();
     await expect.poll(() => server.sidplayRequests.length).toBe(2);
-    await expect(page.getByTestId("playback-current-track")).toContainText(
-      "track-2.sid",
-    );
+    await expect(page.getByTestId("playback-current-track")).toContainText("track-2.sid");
 
     await page.waitForTimeout(1800);
     expect(server.sidplayRequests.length).toBe(2);
@@ -1378,8 +1161,7 @@ test.describe("Playback file browser", () => {
       // Simulate background timer throttling by preventing interval-based reconciliation.
       // The test then relies on visibilitychange/focus/pageshow reconciliation.
       window.setInterval = (() => 0) as unknown as typeof window.setInterval;
-      window.clearInterval = (() =>
-        undefined) as unknown as typeof window.clearInterval;
+      window.clearInterval = (() => undefined) as unknown as typeof window.clearInterval;
     });
 
     await seedPlaylistStorage(page, [
@@ -1400,9 +1182,7 @@ test.describe("Playback file browser", () => {
     await page.goto("/play");
     await page.getByTestId("playlist-play").click();
     await expect.poll(() => server.sidplayRequests.length).toBe(1);
-    await expect(page.getByTestId("playback-current-track")).toContainText(
-      "track-1.sid",
-    );
+    await expect(page.getByTestId("playback-current-track")).toContainText("track-1.sid");
 
     await page.waitForTimeout(900);
     expect(server.sidplayRequests.length).toBe(1);
@@ -1412,19 +1192,14 @@ test.describe("Playback file browser", () => {
     });
 
     await expect.poll(() => server.sidplayRequests.length).toBe(2);
-    await expect(page.getByTestId("playback-current-track")).toContainText(
-      "track-2.sid",
-    );
+    await expect(page.getByTestId("playback-current-track")).toContainText("track-2.sid");
     await snap(page, testInfo, "visibilitychange-catchup");
   });
 
   test("playlist row highlight follows confirmed playback and clears on transition failure", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
-    allowWarnings(
-      testInfo,
-      "Expected error toast when forced next-track sidplay request fails.",
-    );
+    allowWarnings(testInfo, "Expected error toast when forced next-track sidplay request fails.");
     let sidplayCount = 0;
     await page.route("**/v1/runners:sidplay**", async (route) => {
       sidplayCount += 1;
@@ -1457,44 +1232,30 @@ test.describe("Playback file browser", () => {
     await page.goto("/play");
     await page.getByTestId("playlist-play").click();
     await expect.poll(() => server.sidplayRequests.length).toBe(1);
-    await expect(
-      page
-        .getByTestId("playlist-item")
-        .filter({ hasText: "track-1.sid" })
-        .first(),
-    ).toHaveAttribute("data-playing", "true");
-    await expect(
-      page
-        .getByTestId("playlist-item")
-        .filter({ hasText: "track-2.sid" })
-        .first(),
-    ).toHaveAttribute("data-playing", "false");
+    await expect(page.getByTestId("playlist-item").filter({ hasText: "track-1.sid" }).first()).toHaveAttribute(
+      "data-playing",
+      "true",
+    );
+    await expect(page.getByTestId("playlist-item").filter({ hasText: "track-2.sid" }).first()).toHaveAttribute(
+      "data-playing",
+      "false",
+    );
 
     await page.getByTestId("playlist-next").click();
-    await expect
-      .poll(() => page.getByTestId("playlist-play").getAttribute("aria-label"))
-      .toBe("Play");
-    await expect(
-      page.getByText("Playback next failed", { exact: true }),
-    ).toBeVisible();
-    await expect(
-      page
-        .getByTestId("playlist-item")
-        .filter({ hasText: "track-1.sid" })
-        .first(),
-    ).toHaveAttribute("data-playing", "false");
-    await expect(
-      page
-        .getByTestId("playlist-item")
-        .filter({ hasText: "track-2.sid" })
-        .first(),
-    ).toHaveAttribute("data-playing", "false");
+    await expect.poll(() => page.getByTestId("playlist-play").getAttribute("aria-label")).toBe("Play");
+    await expect(page.getByText("Playback next failed", { exact: true })).toBeVisible();
+    await expect(page.getByTestId("playlist-item").filter({ hasText: "track-1.sid" }).first()).toHaveAttribute(
+      "data-playing",
+      "false",
+    );
+    await expect(page.getByTestId("playlist-item").filter({ hasText: "track-2.sid" }).first()).toHaveAttribute(
+      "data-playing",
+      "false",
+    );
     await snap(page, testInfo, "playing-row-cleared-on-failure");
   });
 
-  test("playback persists across navigation while active", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("playback persists across navigation while active", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await seedPlaylistStorage(page, [
       {
         source: "ultimate" as const,
@@ -1512,13 +1273,9 @@ test.describe("Playback file browser", () => {
     await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(0);
 
     await page.getByRole("button", { name: "Disks", exact: true }).click();
-    await expect(
-      page.locator("header").getByRole("heading", { name: "Disks" }),
-    ).toBeVisible();
+    await expect(page.locator("header").getByRole("heading", { name: "Disks" })).toBeVisible();
     await page.getByRole("button", { name: "Play", exact: true }).click();
-    await expect(
-      page.getByRole("heading", { name: "Play Files" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Play Files" })).toBeVisible();
     const playlistListAfter = page.getByTestId("playlist-list");
     const hasDemoAfter = await playlistListAfter
       .getByText("demo.sid", { exact: false })
@@ -1537,10 +1294,7 @@ test.describe("Playback file browser", () => {
           ],
           currentIndex: -1,
         };
-        localStorage.setItem(
-          "c64u_playlist:v1:TEST-123",
-          JSON.stringify(payload),
-        );
+        localStorage.setItem("c64u_playlist:v1:TEST-123", JSON.stringify(payload));
       });
       await page.reload({ waitUntil: "domcontentloaded" });
       await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
@@ -1549,25 +1303,18 @@ test.describe("Playback file browser", () => {
     const playLabelAfter = await playButtonAfter.textContent();
     let playbackStarted = false;
     if (!playLabelAfter || !playLabelAfter.toLowerCase().includes("stop")) {
-      const demoRow = page
-        .getByTestId("playlist-item")
-        .filter({ hasText: "demo.sid" })
-        .first();
+      const demoRow = page.getByTestId("playlist-item").filter({ hasText: "demo.sid" }).first();
       if (await demoRow.isVisible().catch(() => false)) {
         await demoRow.click();
       }
       if (await playButtonAfter.isEnabled().catch(() => false)) {
         await playButtonAfter.click();
-        await expect
-          .poll(() => server.sidplayRequests.length)
-          .toBeGreaterThan(0);
+        await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(0);
         playbackStarted = true;
       }
     }
     if (playbackStarted) {
-      await expect(page.getByTestId("playback-current-track")).toContainText(
-        "demo.sid",
-      );
+      await expect(page.getByTestId("playback-current-track")).toContainText("demo.sid");
     } else {
       await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
     }
@@ -1594,23 +1341,17 @@ test.describe("Playback file browser", () => {
     await expect(playButton).toHaveAttribute("aria-label", "Stop");
     await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(0);
 
-    await expect
-      .poll(async () => parseTimeLabel(await played.textContent()) ?? 0)
-      .toBeGreaterThan(0);
+    await expect.poll(async () => parseTimeLabel(await played.textContent()) ?? 0).toBeGreaterThan(0);
     const firstPlayed = parseTimeLabel(await played.textContent()) ?? 0;
 
     await page.getByRole("button", { name: "Settings", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
-    const darkThemeButton = page
-      .getByRole("button", { name: /Dark|dark theme/i })
-      .first();
+    const darkThemeButton = page.getByRole("button", { name: /Dark|dark theme/i }).first();
     await expect(darkThemeButton).toBeVisible();
     await darkThemeButton.click();
 
     await page.getByRole("button", { name: "Play", exact: true }).click();
-    await expect(
-      page.getByRole("heading", { name: "Play Files" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Play Files" })).toBeVisible();
     const playlistListAfter = page.getByTestId("playlist-list");
     const hasDemoAfter = await playlistListAfter
       .getByText("demo.sid", { exact: false })
@@ -1629,10 +1370,7 @@ test.describe("Playback file browser", () => {
           ],
           currentIndex: -1,
         };
-        localStorage.setItem(
-          "c64u_playlist:v1:TEST-123",
-          JSON.stringify(payload),
-        );
+        localStorage.setItem("c64u_playlist:v1:TEST-123", JSON.stringify(payload));
       });
       await page.reload({ waitUntil: "domcontentloaded" });
       await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
@@ -1640,27 +1378,20 @@ test.describe("Playback file browser", () => {
     const playButtonAfter = page.getByTestId("playlist-play");
     const playLabelAfter = await playButtonAfter.textContent();
     if (!playLabelAfter || !playLabelAfter.toLowerCase().includes("stop")) {
-      const demoRow = page
-        .getByTestId("playlist-item")
-        .filter({ hasText: "demo.sid" })
-        .first();
+      const demoRow = page.getByTestId("playlist-item").filter({ hasText: "demo.sid" }).first();
       if (await demoRow.isVisible().catch(() => false)) {
         await demoRow.click();
       }
       if (await playButtonAfter.isEnabled().catch(() => false)) {
         await playButtonAfter.click();
-        await expect
-          .poll(() => server.sidplayRequests.length)
-          .toBeGreaterThan(0);
+        await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(0);
       }
     }
     await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
     await snap(page, testInfo, "playback-persists-after-settings");
   });
 
-  test("mute button toggles and slider does not unmute", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("mute button toggles and slider does not unmute", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/play");
     await expect(page.getByText("Connected")).toBeVisible();
 
@@ -1687,9 +1418,7 @@ test.describe("Playback file browser", () => {
     await snap(page, testInfo, "slider-unmuted");
   });
 
-  test("playlist text filter hides non-matching files", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  test("playlist text filter hides non-matching files", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await seedPlaylistStorage(page, [
       {
         source: "ultimate" as const,

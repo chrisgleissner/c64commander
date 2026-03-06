@@ -10,11 +10,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { AddItemsProgressOverlay } from "@/components/itemSelection/AddItemsProgressOverlay";
 
-const buildProgress = (
-  overrides?: Partial<
-    Parameters<typeof AddItemsProgressOverlay>[0]["progress"]
-  >,
-) => ({
+const buildProgress = (overrides?: Partial<Parameters<typeof AddItemsProgressOverlay>[0]["progress"]>) => ({
   status: "scanning" as const,
   count: 3,
   elapsedMs: 65000,
@@ -25,9 +21,7 @@ const buildProgress = (
 
 describe("AddItemsProgressOverlay", () => {
   it("renders nothing when visibility is disabled", () => {
-    const { container } = render(
-      <AddItemsProgressOverlay progress={buildProgress()} visible={false} />,
-    );
+    const { container } = render(<AddItemsProgressOverlay progress={buildProgress()} visible={false} />);
 
     expect(container.firstChild).toBeNull();
   });
@@ -35,13 +29,7 @@ describe("AddItemsProgressOverlay", () => {
   it("renders progress details and handles cancel", () => {
     const onCancel = vi.fn();
 
-    render(
-      <AddItemsProgressOverlay
-        progress={buildProgress()}
-        onCancel={onCancel}
-        testId="progress"
-      />,
-    );
+    render(<AddItemsProgressOverlay progress={buildProgress()} onCancel={onCancel} testId="progress" />);
 
     expect(screen.getByTestId("progress")).toBeInTheDocument();
     expect(screen.getByText(/Scanning now/)).toBeInTheDocument();
@@ -53,9 +41,7 @@ describe("AddItemsProgressOverlay", () => {
   });
 
   it("hides when not scanning and visibility is undefined", () => {
-    const { container } = render(
-      <AddItemsProgressOverlay progress={buildProgress({ status: "done" })} />,
-    );
+    const { container } = render(<AddItemsProgressOverlay progress={buildProgress({ status: "done" })} />);
 
     expect(container.firstChild).toBeNull();
   });

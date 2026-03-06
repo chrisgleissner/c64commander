@@ -22,10 +22,7 @@ type JsonResponse = {
   headers: Record<string, string | string[] | undefined>;
 };
 
-const requestJsonViaHttp = (
-  url: string,
-  options: RequestOptions = {},
-): Promise<JsonResponse> =>
+const requestJsonViaHttp = (url: string, options: RequestOptions = {}): Promise<JsonResponse> =>
   new Promise((resolve, reject) => {
     const parsed = new URL(url);
     const req = http.request(
@@ -65,10 +62,7 @@ const requestJsonViaHttp = (
     req.end();
   });
 
-const requestJson = async (
-  url: string,
-  options: RequestOptions = {},
-): Promise<JsonResponse> => {
+const requestJson = async (url: string, options: RequestOptions = {}): Promise<JsonResponse> => {
   if (typeof fetch === "function") {
     const response = await fetch(url, {
       method: options.method ?? "GET",
@@ -126,10 +120,7 @@ describe("createMockC64Server", () => {
     expect(category.json.Audio.items.Volume.selected).toBe("0 dB");
     expect(category.json.Audio.items.Volume.details.min).toBe(0);
 
-    const update = await requestJson(
-      `${server.baseUrl}/v1/configs/Audio/Volume?value=6`,
-      { method: "PUT" },
-    );
+    const update = await requestJson(`${server.baseUrl}/v1/configs/Audio/Volume?value=6`, { method: "PUT" });
     expect(update.status).toBe(200);
 
     const item = await requestJson(`${server.baseUrl}/v1/configs/Audio/Volume`);
@@ -142,17 +133,13 @@ describe("createMockC64Server", () => {
     });
     expect(post.status).toBe(200);
 
-    const updated = await requestJson(
-      `${server.baseUrl}/v1/configs/Audio/Volume`,
-    );
+    const updated = await requestJson(`${server.baseUrl}/v1/configs/Audio/Volume`);
     expect(updated.json.Audio.items.Volume.selected).toBe("3");
 
     await requestJson(`${server.baseUrl}/v1/configs:reset_to_default`, {
       method: "PUT",
     });
-    const reset = await requestJson(
-      `${server.baseUrl}/v1/configs/Audio/Volume`,
-    );
+    const reset = await requestJson(`${server.baseUrl}/v1/configs/Audio/Volume`);
     expect(reset.json.Audio.items.Volume.selected).toBe("0 dB");
   });
 
@@ -165,10 +152,7 @@ describe("createMockC64Server", () => {
     expect(off.json.drives[0].a.enabled).toBe(false);
 
     await requestJson(`${server.baseUrl}/v1/drives/a:on`, { method: "PUT" });
-    await requestJson(
-      `${server.baseUrl}/v1/drives/a:mount?image=disks/demo.d64`,
-      { method: "PUT" },
-    );
+    await requestJson(`${server.baseUrl}/v1/drives/a:mount?image=disks/demo.d64`, { method: "PUT" });
     const mounted = await requestJson(`${server.baseUrl}/v1/drives`);
     expect(mounted.json.drives[0].a.image_file).toBe("demo.d64");
     expect(mounted.json.drives[0].a.image_path).toBe("/disks");
@@ -197,9 +181,7 @@ describe("createMockC64Server", () => {
     expect(server.sidplayRequests).toHaveLength(1);
     expect(server.sidplayRequests[0].body.toString()).toBe("sid-data");
 
-    const mem = await requestJson(
-      `${server.baseUrl}/v1/machine:readmem?address=00C6&length=2`,
-    );
+    const mem = await requestJson(`${server.baseUrl}/v1/machine:readmem?address=00C6&length=2`);
     expect(mem.json.data).toHaveLength(2);
   });
 
@@ -228,9 +210,7 @@ describe("createMockC64Server", () => {
 
   it("supports refused connections", async () => {
     server.setFaultMode("refused");
-    await expect(
-      requestJsonViaHttp(`${server.baseUrl}/v1/info`),
-    ).rejects.toBeTruthy();
+    await expect(requestJsonViaHttp(`${server.baseUrl}/v1/info`)).rejects.toBeTruthy();
     server.setFaultMode("none");
   });
 
@@ -254,18 +234,14 @@ describe("createMockC64Server", () => {
 
   it("syncs drive state when configs update", async () => {
     // Drive A enabled check
-    await requestJson(
-      `${server.baseUrl}/v1/configs/Drive%20A%20Settings/Drive?value=Disabled`,
-      { method: "PUT" },
-    );
+    await requestJson(`${server.baseUrl}/v1/configs/Drive%20A%20Settings/Drive?value=Disabled`, { method: "PUT" });
     let drives = await requestJson(`${server.baseUrl}/v1/drives`);
     expect(drives.json.drives[0].a.enabled).toBe(false);
 
     // SoftIEC
-    await requestJson(
-      `${server.baseUrl}/v1/configs/SoftIEC%20Drive%20Settings/IEC%20Drive?value=Enabled`,
-      { method: "PUT" },
-    );
+    await requestJson(`${server.baseUrl}/v1/configs/SoftIEC%20Drive%20Settings/IEC%20Drive?value=Enabled`, {
+      method: "PUT",
+    });
     drives = await requestJson(`${server.baseUrl}/v1/drives`);
     expect(drives.json.drives[2]["IEC Drive"].enabled).toBe(true);
 

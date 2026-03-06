@@ -1,9 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import {
-  getMockConfigPayload,
-  setMockConfigLoader,
-  clearMockConfigLoader,
-} from "@/lib/mock/mockConfig";
+import { getMockConfigPayload, setMockConfigLoader, clearMockConfigLoader } from "@/lib/mock/mockConfig";
 
 describe("mockConfig", () => {
   beforeEach(() => {

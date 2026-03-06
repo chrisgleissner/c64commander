@@ -28,8 +28,7 @@ vi.mock("@/lib/tracing/traceSession", () => ({
 }));
 
 vi.mock("@/lib/tracing/traceIds", () => ({
-  nextCorrelationId: () =>
-    `COR-${String(correlationCounter++).padStart(4, "0")}`,
+  nextCorrelationId: () => `COR-${String(correlationCounter++).padStart(4, "0")}`,
 }));
 
 vi.mock("@/lib/tracing/traceContext", () => ({
@@ -40,12 +39,7 @@ vi.mock("@/lib/tracing/traceTargets", () => ({
   resolveBackendTarget: () => ({ target: "real-device", reason: "reachable" }),
 }));
 
-import {
-  createActionContext,
-  getActiveAction,
-  resetActionTrace,
-  runWithActionTrace,
-} from "@/lib/tracing/actionTrace";
+import { createActionContext, getActiveAction, resetActionTrace, runWithActionTrace } from "@/lib/tracing/actionTrace";
 import {
   installAsyncContextPropagation,
   uninstallAsyncContextPropagation,
@@ -69,11 +63,7 @@ describe("Effect Correlation", () => {
 
   describe("REST effects", () => {
     it("inherits correlation from active user action", async () => {
-      const userContext = createActionContext(
-        "click Open Folder",
-        "user",
-        "GlobalInteraction",
-      );
+      const userContext = createActionContext("click Open Folder", "user", "GlobalInteraction");
 
       await runWithActionTrace(userContext, async () => {
         // Verify the active action is set
@@ -103,11 +93,7 @@ describe("Effect Correlation", () => {
   describe("Action uniqueness", () => {
     it("single user interaction produces one action trace", async () => {
       // Simulate a single click that would previously create duplicates
-      const globalContext = createActionContext(
-        "click Open Folder",
-        "user",
-        "GlobalInteraction",
-      );
+      const globalContext = createActionContext("click Open Folder", "user", "GlobalInteraction");
 
       await runWithActionTrace(globalContext, async () => {
         // No second trace should be created for the same click
@@ -118,16 +104,8 @@ describe("Effect Correlation", () => {
     });
 
     it("sequential user interactions produce sequential correlations", async () => {
-      const firstClick = createActionContext(
-        "click Button A",
-        "user",
-        "GlobalInteraction",
-      );
-      const secondClick = createActionContext(
-        "click Button B",
-        "user",
-        "GlobalInteraction",
-      );
+      const firstClick = createActionContext("click Button A", "user", "GlobalInteraction");
+      const secondClick = createActionContext("click Button B", "user", "GlobalInteraction");
 
       await runWithActionTrace(firstClick, async () => {});
       await runWithActionTrace(secondClick, async () => {});
@@ -157,11 +135,7 @@ describe("Effect Correlation", () => {
 
   describe("Origin inheritance", () => {
     it("user actions retain user origin", async () => {
-      const userContext = createActionContext(
-        "click Item",
-        "user",
-        "GlobalInteraction",
-      );
+      const userContext = createActionContext("click Item", "user", "GlobalInteraction");
 
       await runWithActionTrace(userContext, async () => {
         const active = getActiveAction();
@@ -181,11 +155,7 @@ describe("Effect Correlation", () => {
 
   describe("Fire-and-forget async correlation (critical)", () => {
     it("maintains correlation through fire-and-forget REST calls", async () => {
-      const userContext = createActionContext(
-        "click Submit",
-        "user",
-        "GlobalInteraction",
-      );
+      const userContext = createActionContext("click Submit", "user", "GlobalInteraction");
       let capturedCorrelation: string | null = null;
       let fireAndForgetResolved = false;
 
@@ -208,11 +178,7 @@ describe("Effect Correlation", () => {
     });
 
     it("maintains user origin through fire-and-forget", async () => {
-      const userContext = createActionContext(
-        "click Load",
-        "user",
-        "GlobalInteraction",
-      );
+      const userContext = createActionContext("click Load", "user", "GlobalInteraction");
       let capturedOrigin: string | null = null;
 
       await runWithActionTrace(userContext, async () => {
@@ -227,11 +193,7 @@ describe("Effect Correlation", () => {
     });
 
     it("maintains correlation through setTimeout", async () => {
-      const userContext = createActionContext(
-        "click Delayed",
-        "user",
-        "GlobalInteraction",
-      );
+      const userContext = createActionContext("click Delayed", "user", "GlobalInteraction");
       let capturedCorrelation: string | null = null;
 
       await new Promise<void>((resolve) => {
@@ -248,19 +210,10 @@ describe("Effect Correlation", () => {
     });
 
     it("does NOT bleed correlation between overlapping actions", async () => {
-      const action1 = createActionContext(
-        "click Action1",
-        "user",
-        "GlobalInteraction",
-      );
-      const action2 = createActionContext(
-        "click Action2",
-        "user",
-        "GlobalInteraction",
-      );
+      const action1 = createActionContext("click Action1", "user", "GlobalInteraction");
+      const action2 = createActionContext("click Action2", "user", "GlobalInteraction");
 
-      const correlations: { action: string; correlationId: string | null }[] =
-        [];
+      const correlations: { action: string; correlationId: string | null }[] = [];
 
       // Start action 1 with fire-and-forget effect (longer delay)
       await runWithActionTrace(action1, async () => {
@@ -299,11 +252,7 @@ describe("Effect Correlation", () => {
     });
 
     it("maintains correlation through deeply nested async chains", async () => {
-      const userContext = createActionContext(
-        "click Deep",
-        "user",
-        "GlobalInteraction",
-      );
+      const userContext = createActionContext("click Deep", "user", "GlobalInteraction");
       let finalCorrelation: string | null = null;
 
       await runWithActionTrace(userContext, async () => {

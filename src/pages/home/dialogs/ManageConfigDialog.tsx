@@ -24,13 +24,7 @@ interface ManageConfigDialogProps {
   onDelete: (id: string) => void;
 }
 
-export function ManageConfigDialog({
-  open,
-  onOpenChange,
-  configs,
-  onRename,
-  onDelete,
-}: ManageConfigDialogProps) {
+export function ManageConfigDialog({ open, onOpenChange, configs, onRename, onDelete }: ManageConfigDialogProps) {
   const [renameValues, setRenameValues] = useState<Record<string, string>>({});
 
   return (
@@ -38,21 +32,14 @@ export function ManageConfigDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Manage App Configs</DialogTitle>
-          <DialogDescription>
-            Rename or delete saved configurations.
-          </DialogDescription>
+          <DialogDescription>Rename or delete saved configurations.</DialogDescription>
         </DialogHeader>
         <div className="space-y-3 max-h-[60vh] overflow-y-auto">
           {configs.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No saved configurations yet.
-            </p>
+            <p className="text-sm text-muted-foreground">No saved configurations yet.</p>
           ) : (
             configs.map((config) => (
-              <div
-                key={config.id}
-                className="flex flex-col gap-2 border border-border rounded-lg p-3"
-              >
+              <div key={config.id} className="flex flex-col gap-2 border border-border rounded-lg p-3">
                 <Input
                   value={renameValues[config.id] ?? config.name}
                   onChange={(e) =>
@@ -63,27 +50,16 @@ export function ManageConfigDialog({
                   }
                 />
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs text-muted-foreground">
-                    {new Date(config.savedAt).toLocaleString()}
-                  </span>
+                  <span className="text-xs text-muted-foreground">{new Date(config.savedAt).toLocaleString()}</span>
                   <div className="flex gap-2">
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() =>
-                        onRename(
-                          config.id,
-                          renameValues[config.id]?.trim() || config.name,
-                        )
-                      }
+                      onClick={() => onRename(config.id, renameValues[config.id]?.trim() || config.name)}
                     >
                       Rename
                     </Button>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => onDelete(config.id)}
-                    >
+                    <Button variant="destructive" size="sm" onClick={() => onDelete(config.id)}>
                       Delete
                     </Button>
                   </div>

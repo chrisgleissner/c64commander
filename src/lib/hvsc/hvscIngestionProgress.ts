@@ -36,9 +36,7 @@ export const createProgressEmitter = (ingestionId: string) => {
   };
 };
 
-export const addHvscProgressListener = async (
-  listener: (event: HvscProgressEvent) => void,
-) => {
+export const addHvscProgressListener = async (listener: (event: HvscProgressEvent) => void) => {
   listeners.add(listener);
   return {
     remove: async () => {

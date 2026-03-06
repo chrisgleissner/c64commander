@@ -45,9 +45,10 @@ const sectorsPerTrack1581 = () => 40;
 const layoutForType = (type: DiskImageType, fileSize: number): DiskLayout => {
   if (type === "d64") {
     for (const tracks of [35, 40]) {
-      const baseSectors = Array.from({ length: tracks }, (_, idx) =>
-        sectorsPerTrack1541(idx + 1),
-      ).reduce((sum, value) => sum + value, 0);
+      const baseSectors = Array.from({ length: tracks }, (_, idx) => sectorsPerTrack1541(idx + 1)).reduce(
+        (sum, value) => sum + value,
+        0,
+      );
       const baseSize = baseSectors * SECTOR_SIZE;
       const errorSize = baseSize + baseSectors;
       if (fileSize === baseSize) {
@@ -76,9 +77,10 @@ const layoutForType = (type: DiskImageType, fileSize: number): DiskLayout => {
 
   if (type === "d71") {
     const tracks = 70;
-    const baseSectors = Array.from({ length: tracks }, (_, idx) =>
-      sectorsPerTrack1571(idx + 1),
-    ).reduce((sum, value) => sum + value, 0);
+    const baseSectors = Array.from({ length: tracks }, (_, idx) => sectorsPerTrack1571(idx + 1)).reduce(
+      (sum, value) => sum + value,
+      0,
+    );
     const baseSize = baseSectors * SECTOR_SIZE;
     const errorSize = baseSize + baseSectors;
     if (fileSize === baseSize) {
@@ -149,12 +151,7 @@ const tsOffset = (layout: DiskLayout, track: number, sector: number) => {
   return (offsetSectors + sector) * SECTOR_SIZE;
 };
 
-const readSector = (
-  image: Uint8Array,
-  layout: DiskLayout,
-  track: number,
-  sector: number,
-) => {
+const readSector = (image: Uint8Array, layout: DiskLayout, track: number, sector: number) => {
   const offset = tsOffset(layout, track, sector);
   const slice = image.slice(offset, offset + SECTOR_SIZE);
   if (slice.length !== SECTOR_SIZE) {
@@ -205,12 +202,7 @@ const findFirstPrg = (image: Uint8Array, layout: DiskLayout) => {
   throw new Error("No PRG found in directory");
 };
 
-const readPrgChain = (
-  image: Uint8Array,
-  layout: DiskLayout,
-  startTrack: number,
-  startSector: number,
-) => {
+const readPrgChain = (image: Uint8Array, layout: DiskLayout, startTrack: number, startSector: number) => {
   const out: number[] = [];
   let track = startTrack;
   let sector = startSector;
@@ -218,8 +210,7 @@ const readPrgChain = (
 
   while (track !== 0) {
     const key = `${track}:${sector}`;
-    if (visited.has(key))
-      throw new Error("Loop detected while reading PRG sectors");
+    if (visited.has(key)) throw new Error("Loop detected while reading PRG sectors");
     visited.add(key);
 
     const sectorData = readSector(image, layout, track, sector);
@@ -242,9 +233,7 @@ const readPrgChain = (
 };
 
 const extractFirstPrg = (image: Uint8Array, layout: DiskLayout) => {
-  const trimmed = layout.hasErrorTable
-    ? image.slice(0, layout.totalSectors * SECTOR_SIZE)
-    : image;
+  const trimmed = layout.hasErrorTable ? image.slice(0, layout.totalSectors * SECTOR_SIZE) : image;
   const first = findFirstPrg(trimmed, layout);
   const prgData = readPrgChain(trimmed, layout, first.track, first.sector);
   if (prgData.length < 2) {
@@ -253,8 +242,7 @@ const extractFirstPrg = (image: Uint8Array, layout: DiskLayout) => {
   return { prgData, name: first.name };
 };
 
-const toHexAddress = (value: number) =>
-  value.toString(16).toUpperCase().padStart(4, "0");
+const toHexAddress = (value: number) => value.toString(16).toUpperCase().padStart(4, "0");
 
 const looksLikeTokenisedBasic = (prg: Uint8Array) => {
   if (prg.length < 8) return false;
@@ -285,16 +273,10 @@ const looksLikeTokenisedBasic = (prg: Uint8Array) => {
   }
 };
 
-const setBasicPointersAndClearVars = async (
-  api: C64API,
-  startAddress: number,
-  endAddressExclusive: number,
-) => {
+const setBasicPointersAndClearVars = async (api: C64API, startAddress: number, endAddressExclusive: number) => {
   if (startAddress !== 0x0801) return;
   if (endAddressExclusive < 0x0801 || endAddressExclusive > 0xfffe) {
-    throw new Error(
-      `Suspicious BASIC end address: $${endAddressExclusive.toString(16).toUpperCase()}`,
-    );
+    throw new Error(`Suspicious BASIC end address: $${endAddressExclusive.toString(16).toUpperCase()}`);
   }
 
   const zp = new Uint8Array([
@@ -309,27 +291,17 @@ const setBasicPointersAndClearVars = async (
   ]);
 
   await api.writeMemoryBlock(toHexAddress(TXTTAB), zp);
-  await api.writeMemoryBlock(
-    toHexAddress(endAddressExclusive),
-    new Uint8Array([0x00, 0x00]),
-  );
+  await api.writeMemoryBlock(toHexAddress(endAddressExclusive), new Uint8Array([0x00, 0x00]));
 };
 
 const petsciiCommand = (command: string) => {
-  const bytes = Array.from(command.toUpperCase()).map((char) =>
-    char.charCodeAt(0),
-  );
+  const bytes = Array.from(command.toUpperCase()).map((char) => char.charCodeAt(0));
   return new Uint8Array([...bytes, 0x0d]);
 };
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const dmaLoadPrg = async (
-  api: C64API,
-  prg: Uint8Array,
-  retries = 5,
-  backoffMs = 50,
-) => {
+const dmaLoadPrg = async (api: C64API, prg: Uint8Array, retries = 5, backoffMs = 50) => {
   if (prg.length < 3) throw new Error("PRG payload is too small");
   const loadAddress = prg[0] | (prg[1] << 8);
   const payload = prg.slice(2);
@@ -351,16 +323,10 @@ const dmaLoadPrg = async (
     }
   }
 
-  throw new Error(
-    `DMA load failed after retries: ${(lastError as Error)?.message ?? "Unknown error"}`,
-  );
+  throw new Error(`DMA load failed after retries: ${(lastError as Error)?.message ?? "Unknown error"}`);
 };
 
-export const loadFirstDiskPrgViaDma = async (
-  api: C64API,
-  diskImage: Uint8Array,
-  type: DiskImageType,
-) => {
+export const loadFirstDiskPrgViaDma = async (api: C64API, diskImage: Uint8Array, type: DiskImageType) => {
   const layout = layoutForType(type, diskImage.byteLength);
   const { prgData, name } = extractFirstPrg(diskImage, layout);
   const { loadAddress, endAddressExclusive } = await dmaLoadPrg(api, prgData);

@@ -16,10 +16,7 @@ export type ConnectionDiagnosticsSummary = {
   logIssues: { total: number; issues: number; severity: DiagnosticsSeverity };
 };
 
-const resolveSeverity = (
-  failed: number,
-  total: number,
-): DiagnosticsSeverity => {
+const resolveSeverity = (failed: number, total: number): DiagnosticsSeverity => {
   if (failed <= 0 || total <= 0) return "none";
   const ratio = failed / total;
   if (ratio >= 0.5) return "high";
@@ -33,11 +30,8 @@ const countRest = (traceEvents: TraceEvent[]) => {
   traceEvents.forEach((event) => {
     if (event.type !== "rest-response") return;
     total += 1;
-    const status =
-      typeof event.data.status === "number" ? event.data.status : null;
-    const hasError =
-      typeof event.data.error === "string" &&
-      event.data.error.trim().length > 0;
+    const status = typeof event.data.status === "number" ? event.data.status : null;
+    const hasError = typeof event.data.error === "string" && event.data.error.trim().length > 0;
     if ((status !== null && status >= 400) || hasError) {
       failed += 1;
     }
@@ -51,11 +45,8 @@ const countFtp = (traceEvents: TraceEvent[]) => {
   traceEvents.forEach((event) => {
     if (event.type !== "ftp-operation") return;
     total += 1;
-    const result =
-      typeof event.data.result === "string" ? event.data.result : null;
-    const hasError =
-      typeof event.data.error === "string" &&
-      event.data.error.trim().length > 0;
+    const result = typeof event.data.result === "string" ? event.data.result : null;
+    const hasError = typeof event.data.error === "string" && event.data.error.trim().length > 0;
     if (result === "failure" || hasError) {
       failed += 1;
     }

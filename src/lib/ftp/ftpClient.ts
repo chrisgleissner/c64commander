@@ -7,29 +7,12 @@
  */
 
 import { addErrorLog, buildErrorLogDetails } from "@/lib/logging";
-import {
-  decrementFtpInFlight,
-  incrementFtpInFlight,
-} from "@/lib/diagnostics/diagnosticsActivity";
-import {
-  FtpClient,
-  type FtpEntry,
-  type FtpListOptions,
-  type FtpReadOptions,
-} from "@/lib/native/ftpClient";
+import { decrementFtpInFlight, incrementFtpInFlight } from "@/lib/diagnostics/diagnosticsActivity";
+import { FtpClient, type FtpEntry, type FtpListOptions, type FtpReadOptions } from "@/lib/native/ftpClient";
 import { resolveNativeTraceContext } from "@/lib/native/nativeTraceContext";
-import {
-  getActiveAction,
-  runWithImplicitAction,
-} from "@/lib/tracing/actionTrace";
-import {
-  recordFtpOperation,
-  recordTraceError,
-} from "@/lib/tracing/traceSession";
-import {
-  withFtpInteraction,
-  type InteractionIntent,
-} from "@/lib/deviceInteraction/deviceInteractionManager";
+import { getActiveAction, runWithImplicitAction } from "@/lib/tracing/actionTrace";
+import { recordFtpOperation, recordTraceError } from "@/lib/tracing/traceSession";
+import { withFtpInteraction, type InteractionIntent } from "@/lib/deviceInteraction/deviceInteractionManager";
 import type { TraceActionContext } from "@/lib/tracing/types";
 
 export type FtpListResult = {
@@ -92,8 +75,7 @@ export const listFtpDirectory = async (
   options: FtpListOptions & { __c64uIntent?: InteractionIntent },
 ): Promise<FtpListResult> => {
   const { __c64uIntent, ...ftpOptions } = options;
-  const normalizedPath =
-    options.path && options.path !== "" ? options.path : "/";
+  const normalizedPath = options.path && options.path !== "" ? options.path : "/";
   const intent = __c64uIntent ?? "user";
 
   // If there's an active user action, record FTP within that context
@@ -103,12 +85,7 @@ export const listFtpDirectory = async (
       ...ftpOptions,
       traceContext: resolveNativeTraceContext(activeAction),
     };
-    return executeFtpList(
-      activeAction,
-      optionsWithTrace,
-      normalizedPath,
-      intent,
-    );
+    return executeFtpList(activeAction, optionsWithTrace, normalizedPath, intent);
   }
   // Otherwise create an implicit system action for the FTP call
   return runWithImplicitAction("ftp.list", async (action) => {

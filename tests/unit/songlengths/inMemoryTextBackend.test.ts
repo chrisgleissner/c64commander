@@ -34,11 +34,7 @@ describe("InMemoryTextBackend", () => {
 
     it("derives partialPath from virtualPath when partialPath is not provided", async () => {
       const backend = new InMemoryTextBackend();
-      await backend.load(
-        makeInput(
-          "; /DEMOS/A/Song.sid\naaa=1:00\n; /DEMOS/B/Song.sid\nbbb=2:00",
-        ),
-      );
+      await backend.load(makeInput("; /DEMOS/A/Song.sid\naaa=1:00\n; /DEMOS/B/Song.sid\nbbb=2:00"));
       const result = backend.resolve({ virtualPath: "/DEMOS/A/Song.sid" });
       expect(result.strategy).toBe("filename-partial-path");
       expect(result.durationSeconds).toBe(60);
@@ -46,11 +42,7 @@ describe("InMemoryTextBackend", () => {
 
     it("falls through to full-path when partial-path matches 0 candidates", async () => {
       const backend = new InMemoryTextBackend();
-      await backend.load(
-        makeInput(
-          "; /DEMOS/A/Song.sid\naaa=1:00\n; /DEMOS/B/Song.sid\nbbb=2:00",
-        ),
-      );
+      await backend.load(makeInput("; /DEMOS/A/Song.sid\naaa=1:00\n; /DEMOS/B/Song.sid\nbbb=2:00"));
       const result = backend.resolve({
         fileName: "song.sid",
         partialPath: "/NONEXIST",
@@ -69,11 +61,7 @@ describe("InMemoryTextBackend", () => {
     it("returns ambiguous when multiple partial-path matches exist", async () => {
       const onAmbiguous = vi.fn();
       const backend = new InMemoryTextBackend({ onAmbiguous });
-      await backend.load(
-        makeInput(
-          "; /DEMOS/A/X/Song.sid\naaa=1:00\n; /DEMOS/A/Y/Song.sid\nbbb=2:00",
-        ),
-      );
+      await backend.load(makeInput("; /DEMOS/A/X/Song.sid\naaa=1:00\n; /DEMOS/A/Y/Song.sid\nbbb=2:00"));
       const result = backend.resolve({
         fileName: "song.sid",
         partialPath: "/DEMOS/A",
@@ -115,45 +103,35 @@ describe("InMemoryTextBackend", () => {
       const onRejected = vi.fn();
       const backend = new InMemoryTextBackend({ onRejectedLine: onRejected });
       await backend.load(makeInput("garbage-no-space-or-eq"));
-      expect(onRejected).toHaveBeenCalledWith(
-        expect.objectContaining({ reason: "unsupported line format" }),
-      );
+      expect(onRejected).toHaveBeenCalledWith(expect.objectContaining({ reason: "unsupported line format" }));
     });
 
     it("rejects empty comment path markers", async () => {
       const onRejected = vi.fn();
       const backend = new InMemoryTextBackend({ onRejectedLine: onRejected });
       await backend.load(makeInput(";"));
-      expect(onRejected).toHaveBeenCalledWith(
-        expect.objectContaining({ reason: "empty comment path marker" }),
-      );
+      expect(onRejected).toHaveBeenCalledWith(expect.objectContaining({ reason: "empty comment path marker" }));
     });
 
     it("rejects invalid md5 key (eq at start)", async () => {
       const onRejected = vi.fn();
       const backend = new InMemoryTextBackend({ onRejectedLine: onRejected });
       await backend.load(makeInput("=1:00"));
-      expect(onRejected).toHaveBeenCalledWith(
-        expect.objectContaining({ reason: "unsupported line format" }),
-      );
+      expect(onRejected).toHaveBeenCalledWith(expect.objectContaining({ reason: "unsupported line format" }));
     });
 
     it("rejects invalid duration payload for md5 line", async () => {
       const onRejected = vi.fn();
       const backend = new InMemoryTextBackend({ onRejectedLine: onRejected });
       await backend.load(makeInput("abc=garbage"));
-      expect(onRejected).toHaveBeenCalledWith(
-        expect.objectContaining({ reason: "invalid duration payload" }),
-      );
+      expect(onRejected).toHaveBeenCalledWith(expect.objectContaining({ reason: "invalid duration payload" }));
     });
 
     it("rejects invalid duration payload for space-separated line", async () => {
       const onRejected = vi.fn();
       const backend = new InMemoryTextBackend({ onRejectedLine: onRejected });
       await backend.load(makeInput("/path/file.sid garbage"));
-      expect(onRejected).toHaveBeenCalledWith(
-        expect.objectContaining({ reason: "invalid duration payload" }),
-      );
+      expect(onRejected).toHaveBeenCalledWith(expect.objectContaining({ reason: "invalid duration payload" }));
     });
 
     it("handles space-separated path+duration format", async () => {
@@ -244,9 +222,7 @@ describe("InMemoryTextBackend", () => {
         virtualPath: "/DEMOS/abc.sid",
       });
       // Won't match by full path since no filename in path but checks it was stored with '/DEMOS' key
-      expect(["not-found", "full-path", "filename-unique"]).toContain(
-        result.strategy,
-      );
+      expect(["not-found", "full-path", "filename-unique"]).toContain(result.strategy);
     });
 
     it("normalizeMd5 returns null for whitespace-only md5", async () => {
@@ -260,21 +236,14 @@ describe("InMemoryTextBackend", () => {
 
     it("normalizePartialPath returns null for partialPath that reduces to root", async () => {
       const backend = new InMemoryTextBackend();
-      await backend.load(
-        makeInput("; /A/Song.sid\naaa=1:00\n; /B/Song.sid\nbbb=2:00"),
-      );
+      await backend.load(makeInput("; /A/Song.sid\naaa=1:00\n; /B/Song.sid\nbbb=2:00"));
       // partialPath '/' normalizes to '/' → normalizePartialPath returns null → no partial filtering
       const result = backend.resolve({
         fileName: "song.sid",
         partialPath: "/",
       });
       // With partialPath null, falls through to full-path lookup
-      expect([
-        "filename-unique",
-        "ambiguous",
-        "not-found",
-        "full-path",
-      ]).toContain(result.strategy);
+      expect(["filename-unique", "ambiguous", "not-found", "full-path"]).toContain(result.strategy);
     });
 
     it("resolve returns not-found when no fileName and no virtualPath and no md5", async () => {
@@ -306,11 +275,7 @@ describe("InMemoryTextBackend", () => {
     it("ambiguity with no partial path fires onAmbiguous", async () => {
       const onAmbiguous = vi.fn();
       const backend = new InMemoryTextBackend({ onAmbiguous });
-      await backend.load(
-        makeInput(
-          "; /DEMOS/A/Song.sid\naaa=1:00\n; /DEMOS/B/Song.sid\nbbb=2:00",
-        ),
-      );
+      await backend.load(makeInput("; /DEMOS/A/Song.sid\naaa=1:00\n; /DEMOS/B/Song.sid\nbbb=2:00"));
       // Both have same filename 'song.sid'; with no partialPath specified and no virtualPath
       const result = backend.resolve({ fileName: "song.sid" });
       // Without partialPath, can't narrow down → falls to full-path check → not found → ambiguous
@@ -319,9 +284,7 @@ describe("InMemoryTextBackend", () => {
 
     it("duplicated MD5 keys: first-seen wins", async () => {
       const backend = new InMemoryTextBackend();
-      await backend.load(
-        makeInput("; /A.sid\nsameMd5=1:00\n; /B.sid\nsameMd5=2:00"),
-      );
+      await backend.load(makeInput("; /A.sid\nsameMd5=1:00\n; /B.sid\nsameMd5=2:00"));
       const result = backend.resolve({ fileName: "a.sid", md5: "samemd5" });
       // First loaded entry wins
       expect(result.durationSeconds).toBe(60);
@@ -338,9 +301,7 @@ describe("InMemoryTextBackend", () => {
 
     it("stats reports duplicateEntries correctly", async () => {
       const backend = new InMemoryTextBackend();
-      await backend.load(
-        makeInput("; /A/Song.sid\naaa=1:00\n; /B/Song.sid\nbbb=2:00"),
-      );
+      await backend.load(makeInput("; /A/Song.sid\naaa=1:00\n; /B/Song.sid\nbbb=2:00"));
       const stats = backend.stats();
       expect(stats.duplicatedFileNames).toBe(1);
       expect(stats.duplicateEntries).toBe(2);
@@ -410,11 +371,7 @@ describe("InMemoryTextBackend", () => {
       // Set up two songs with the same filename in different directories
       const onAmbiguous = vi.fn();
       const backend = new InMemoryTextBackend({ onAmbiguous });
-      await backend.load(
-        makeInput(
-          "; /DEMOS/Dir1/Song.sid\naaa=1:00\n; /DEMOS/Dir2/Song.sid\nbbb=2:00",
-        ),
-      );
+      await backend.load(makeInput("; /DEMOS/Dir1/Song.sid\naaa=1:00\n; /DEMOS/Dir2/Song.sid\nbbb=2:00"));
       // Both songs have filename "song.sid" → duplicates
       // Providing a partialPath that matches both → candidates.length > 1 → pendingAmbiguity
       const result = backend.resolve({
@@ -441,11 +398,7 @@ describe("InMemoryTextBackend", () => {
     it("ambiguous resolution without onAmbiguous handler does not throw", async () => {
       // Covers the `onAmbiguous?.({})` optional chain — no handler, so the call is silently skipped.
       const backend = new InMemoryTextBackend(); // no onAmbiguous callback
-      await backend.load(
-        makeInput(
-          "; /demos/dir1/Song.sid\naaa=1:00\n; /demos/dir2/Song.sid\nbbb=2:00",
-        ),
-      );
+      await backend.load(makeInput("; /demos/dir1/Song.sid\naaa=1:00\n; /demos/dir2/Song.sid\nbbb=2:00"));
       // Both have filename 'song.sid'; partialPath '/demos' matches both → pendingAmbiguity
       // No virtualPath or md5 to resolve before pendingAmbiguity block
       const result = backend.resolve({

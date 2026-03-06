@@ -21,10 +21,7 @@ const normalizePath = (path: string) => {
   return normalized.startsWith("/") ? normalized : `/${normalized}`;
 };
 
-const resolveDuration = (
-  durations: number[] | undefined,
-  songNr?: number | null,
-) => {
+const resolveDuration = (durations: number[] | undefined, songNr?: number | null) => {
   if (!durations || durations.length === 0) return null;
   const index = songNr && songNr > 0 ? songNr - 1 : 0;
   if (index < 0 || index >= durations.length) return null;
@@ -40,23 +37,15 @@ export const resolveSonglengthsSeconds = (
   if (!data) return null;
 
   const normalizedPath = normalizePath(path || "/");
-  const pathMatch = resolveDuration(
-    data.pathToSeconds.get(normalizedPath),
-    songNr,
-  );
+  const pathMatch = resolveDuration(data.pathToSeconds.get(normalizedPath), songNr);
   if (pathMatch !== null) return pathMatch;
 
   if (!md5) return null;
-  const md5Match = resolveDuration(
-    data.md5ToSeconds.get(md5.trim().toLowerCase()),
-    songNr,
-  );
+  const md5Match = resolveDuration(data.md5ToSeconds.get(md5.trim().toLowerCase()), songNr);
   return md5Match !== null ? md5Match : null;
 };
 
-export const countSonglengthsEntries = (
-  data: SonglengthsData | null | undefined,
-) => {
+export const countSonglengthsEntries = (data: SonglengthsData | null | undefined) => {
   if (!data) return 0;
   return Math.max(data.pathToSeconds.size, data.md5ToSeconds.size);
 };

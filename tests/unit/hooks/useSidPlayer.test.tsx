@@ -39,9 +39,7 @@ describe("useSidPlayer", () => {
     vi.useFakeTimers();
     const setIntervalSpy = vi.spyOn(window, "setInterval");
 
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <SidPlayerProvider>{children}</SidPlayerProvider>
-    );
+    const wrapper = ({ children }: { children: React.ReactNode }) => <SidPlayerProvider>{children}</SidPlayerProvider>;
 
     const { result } = renderHook(() => useSidPlayer(), { wrapper });
 
@@ -60,9 +58,7 @@ describe("useSidPlayer", () => {
   });
 
   it("does not start background execution in deprecated provider path", async () => {
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <SidPlayerProvider>{children}</SidPlayerProvider>
-    );
+    const wrapper = ({ children }: { children: React.ReactNode }) => <SidPlayerProvider>{children}</SidPlayerProvider>;
 
     const { result, unmount } = renderHook(() => useSidPlayer(), { wrapper });
 
@@ -84,15 +80,11 @@ describe("useSidPlayer", () => {
   });
 
   it("throws when legacy hook is used outside provider", () => {
-    expect(() => renderHook(() => useSidPlayer())).toThrow(
-      "useSidPlayer must be used within SidPlayerProvider",
-    );
+    expect(() => renderHook(() => useSidPlayer())).toThrow("useSidPlayer must be used within SidPlayerProvider");
   });
 
   it("returns early for empty queue in playQueue", async () => {
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <SidPlayerProvider>{children}</SidPlayerProvider>
-    );
+    const wrapper = ({ children }: { children: React.ReactNode }) => <SidPlayerProvider>{children}</SidPlayerProvider>;
     const { result } = renderHook(() => useSidPlayer(), { wrapper });
 
     await act(async () => {
@@ -104,9 +96,7 @@ describe("useSidPlayer", () => {
   });
 
   it("throws when track is missing playable data", async () => {
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <SidPlayerProvider>{children}</SidPlayerProvider>
-    );
+    const wrapper = ({ children }: { children: React.ReactNode }) => <SidPlayerProvider>{children}</SidPlayerProvider>;
     const { result } = renderHook(() => useSidPlayer(), { wrapper });
 
     await expect(
@@ -119,9 +109,7 @@ describe("useSidPlayer", () => {
   });
 
   it("assigns an id when playTrack is called without one", async () => {
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <SidPlayerProvider>{children}</SidPlayerProvider>
-    );
+    const wrapper = ({ children }: { children: React.ReactNode }) => <SidPlayerProvider>{children}</SidPlayerProvider>;
     const { result } = renderHook(() => useSidPlayer(), { wrapper });
 
     const track = {
@@ -139,9 +127,7 @@ describe("useSidPlayer", () => {
   });
 
   it("wraps previous and next around queue boundaries", async () => {
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <SidPlayerProvider>{children}</SidPlayerProvider>
-    );
+    const wrapper = ({ children }: { children: React.ReactNode }) => <SidPlayerProvider>{children}</SidPlayerProvider>;
     const { result } = renderHook(() => useSidPlayer(), { wrapper });
     const tracks = [
       {
@@ -174,9 +160,7 @@ describe("useSidPlayer", () => {
   });
 
   it("uses shuffle branch when enabled", async () => {
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <SidPlayerProvider>{children}</SidPlayerProvider>
-    );
+    const wrapper = ({ children }: { children: React.ReactNode }) => <SidPlayerProvider>{children}</SidPlayerProvider>;
     const { result } = renderHook(() => useSidPlayer(), { wrapper });
     const tracks = [
       {
@@ -218,9 +202,7 @@ describe("useSidPlayer", () => {
 
   it("auto-advances when elapsed time reaches duration", async () => {
     vi.useFakeTimers();
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <SidPlayerProvider>{children}</SidPlayerProvider>
-    );
+    const wrapper = ({ children }: { children: React.ReactNode }) => <SidPlayerProvider>{children}</SidPlayerProvider>;
     const { result } = renderHook(() => useSidPlayer(), { wrapper });
     const tracks = [
       {

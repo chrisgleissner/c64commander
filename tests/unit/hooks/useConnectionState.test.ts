@@ -33,8 +33,7 @@ vi.mock("react", async () => {
   const actual = await vi.importActual<typeof import("react")>("react");
   return {
     ...actual,
-    useSyncExternalStore: (...args: unknown[]) =>
-      reactMocks.useSyncExternalStore(...args),
+    useSyncExternalStore: (...args: unknown[]) => reactMocks.useSyncExternalStore(...args),
   };
 });
 

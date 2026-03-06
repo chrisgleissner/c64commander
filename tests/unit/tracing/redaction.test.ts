@@ -7,12 +7,7 @@
  */
 
 import { describe, expect, it, vi } from "vitest";
-import {
-  redactErrorMessage,
-  redactHeaders,
-  redactPayload,
-  REDACTION,
-} from "@/lib/tracing/redaction";
+import { redactErrorMessage, redactHeaders, redactPayload, REDACTION } from "@/lib/tracing/redaction";
 import { redactTreeUri } from "@/lib/native/safUtils";
 
 vi.mock("@/lib/native/safUtils", () => ({
@@ -71,9 +66,7 @@ describe("redaction", () => {
 
   it("falls back to REDACTED when redactTreeUri returns null (line 26)", () => {
     vi.mocked(redactTreeUri).mockReturnValueOnce(null);
-    expect(redactErrorMessage("content://com.example/doc")).toBe(
-      REDACTION.REDACTED,
-    );
+    expect(redactErrorMessage("content://com.example/doc")).toBe(REDACTION.REDACTED);
   });
 
   it("skips undefined header values (line 48)", () => {
@@ -84,10 +77,7 @@ describe("redaction", () => {
   it("redacts array values for non-sensitive header keys (line 53)", () => {
     vi.mocked(redactTreeUri).mockImplementation((v: string) => `REDACTED:${v}`);
     const result = redactHeaders({ "X-Paths": ["file:///a", "file:///b"] });
-    expect(result["X-Paths"]).toEqual([
-      "REDACTED:file:///a",
-      "REDACTED:file:///b",
-    ]);
+    expect(result["X-Paths"]).toEqual(["REDACTED:file:///a", "REDACTED:file:///b"]);
     vi.mocked(redactTreeUri).mockImplementation(() => "REDACTED_URI");
   });
 });

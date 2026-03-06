@@ -17,15 +17,8 @@ export type AudioMixerItem = {
   options?: string[];
 };
 
-export const CATEGORY_OPTIONS: PlayFileCategory[] = [
-  "sid",
-  "mod",
-  "prg",
-  "crt",
-  "disk",
-];
-export const buildPlaylistStorageKey = (deviceId: string) =>
-  `c64u_playlist:v1:${deviceId}`;
+export const CATEGORY_OPTIONS: PlayFileCategory[] = ["sid", "mod", "prg", "crt", "disk"];
+export const buildPlaylistStorageKey = (deviceId: string) => `c64u_playlist:v1:${deviceId}`;
 export const LAST_DEVICE_ID_KEY = "c64u_last_device_id";
 export const PLAYLIST_STORAGE_PREFIX = "c64u_playlist:v1:";
 export const PLAYBACK_SESSION_KEY = "c64u_playback_session:v1";
@@ -65,17 +58,13 @@ export const formatDate = (value?: string | null) => {
   }).format(date);
 };
 
-export const isSongCategory = (category: PlayFileCategory) =>
-  category === "sid" || category === "mod";
+export const isSongCategory = (category: PlayFileCategory) => category === "sid" || category === "mod";
 
-export const normalizeLocalPath = (path: string) =>
-  path.startsWith("/") ? path : `/${path}`;
+export const normalizeLocalPath = (path: string) => (path.startsWith("/") ? path : `/${path}`);
 
 export const getLocalFilePath = (file: LocalPlayFile) => {
   const candidate =
-    (file as File).webkitRelativePath ||
-    (file as { webkitRelativePath?: string }).webkitRelativePath ||
-    file.name;
+    (file as File).webkitRelativePath || (file as { webkitRelativePath?: string }).webkitRelativePath || file.name;
   return normalizeLocalPath(candidate);
 };
 
@@ -98,29 +87,21 @@ export const parseDurationInput = (value: string) => {
 export const clampDurationSeconds = (value: number) =>
   Math.min(DURATION_MAX_SECONDS, Math.max(DURATION_MIN_SECONDS, value));
 
-export const formatDurationSeconds = (seconds: number) =>
-  formatTime(seconds * 1000);
+export const formatDurationSeconds = (seconds: number) => formatTime(seconds * 1000);
 
 export const durationSecondsToSlider = (seconds: number) => {
   const clamped = clampDurationSeconds(seconds);
-  const ratio =
-    Math.log(clamped / DURATION_MIN_SECONDS) /
-    Math.log(DURATION_MAX_SECONDS / DURATION_MIN_SECONDS);
+  const ratio = Math.log(clamped / DURATION_MIN_SECONDS) / Math.log(DURATION_MAX_SECONDS / DURATION_MIN_SECONDS);
   return Math.round(ratio * DURATION_SLIDER_STEPS);
 };
 
 export const sliderToDurationSeconds = (value: number) => {
   const ratio = Math.min(1, Math.max(0, value / DURATION_SLIDER_STEPS));
-  const seconds =
-    DURATION_MIN_SECONDS *
-    Math.pow(DURATION_MAX_SECONDS / DURATION_MIN_SECONDS, ratio);
+  const seconds = DURATION_MIN_SECONDS * Math.pow(DURATION_MAX_SECONDS / DURATION_MIN_SECONDS, ratio);
   return clampDurationSeconds(Math.round(seconds));
 };
 
-export const resolvePlayTargetIndex = (
-  playlistLength: number,
-  currentIndex: number,
-): number | null => {
+export const resolvePlayTargetIndex = (playlistLength: number, currentIndex: number): number | null => {
   if (playlistLength <= 0) return null;
   if (currentIndex < 0) return 0;
   return currentIndex < playlistLength ? currentIndex : 0;
@@ -149,14 +130,10 @@ export const parseModifiedAt = (value?: string | null) => {
   return Number.isNaN(parsed) ? undefined : parsed;
 };
 
-export const extractAudioMixerItems = (
-  payload: Record<string, unknown> | undefined,
-): AudioMixerItem[] => {
+export const extractAudioMixerItems = (payload: Record<string, unknown> | undefined): AudioMixerItem[] => {
   if (!payload) return [];
-  const categoryData =
-    (payload as Record<string, any>)["Audio Mixer"] ?? payload;
-  const itemsData =
-    (categoryData as Record<string, any>)?.items ?? categoryData;
+  const categoryData = (payload as Record<string, any>)["Audio Mixer"] ?? payload;
+  const itemsData = (categoryData as Record<string, any>)?.items ?? categoryData;
   if (!itemsData || typeof itemsData !== "object") return [];
   return Object.entries(itemsData)
     .filter(([key]) => key !== "errors")
@@ -165,10 +142,7 @@ export const extractAudioMixerItems = (
       return {
         name,
         value: normalized.value,
-        options: mergeAudioMixerOptions(
-          normalized.options,
-          normalized.details?.presets,
-        ),
+        options: mergeAudioMixerOptions(normalized.options, normalized.details?.presets),
       };
     });
 };

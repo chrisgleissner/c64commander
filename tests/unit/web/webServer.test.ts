@@ -3,10 +3,7 @@ import http from "node:http";
 import { mkdtemp, mkdir, writeFile, rm, chmod } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
-import {
-  createMockFtpServer,
-  type MockFtpServer,
-} from "../../contract/mockFtpServer.js";
+import { createMockFtpServer, type MockFtpServer } from "../../contract/mockFtpServer.js";
 
 const originalEnv = { ...process.env };
 
@@ -75,17 +72,9 @@ describe("web server platform runtime", () => {
   it("serves UI and health endpoint without login when password is unset", async () => {
     const distDir = await makeTempDir("c64-web-dist-");
     const configDir = await makeTempDir("c64-web-config-");
-    await writeFile(
-      path.join(distDir, "index.html"),
-      "<html><body>ok</body></html>",
-      "utf8",
-    );
+    await writeFile(path.join(distDir, "index.html"), "<html><body>ok</body></html>", "utf8");
     await mkdir(path.join(distDir, "assets"));
-    await writeFile(
-      path.join(distDir, "assets", "index-abcdef1234.js"),
-      'console.log("ok")',
-      "utf8",
-    );
+    await writeFile(path.join(distDir, "assets", "index-abcdef1234.js"), 'console.log("ok")', "utf8");
 
     const server = await startWebServer({
       HOST: "127.0.0.1",
@@ -102,17 +91,11 @@ describe("web server platform runtime", () => {
     expect(await root.text()).toContain("ok");
     expect(root.headers.get("x-frame-options")).toBe("DENY");
     expect(root.headers.get("x-content-type-options")).toBe("nosniff");
-    expect(root.headers.get("content-security-policy")).toContain(
-      "script-src 'self'",
-    );
+    expect(root.headers.get("content-security-policy")).toContain("script-src 'self'");
 
-    const hashedAsset = await fetch(
-      `${server.baseUrl}/assets/index-abcdef1234.js`,
-    );
+    const hashedAsset = await fetch(`${server.baseUrl}/assets/index-abcdef1234.js`);
     expect(hashedAsset.status).toBe(200);
-    expect(hashedAsset.headers.get("cache-control")).toBe(
-      "public, max-age=31536000, immutable",
-    );
+    expect(hashedAsset.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
 
     await server.close();
   });
@@ -120,11 +103,7 @@ describe("web server platform runtime", () => {
   it("enforces login when password is configured and rejects invalid password", async () => {
     const distDir = await makeTempDir("c64-web-dist-");
     const configDir = await makeTempDir("c64-web-config-");
-    await writeFile(
-      path.join(distDir, "index.html"),
-      "<html><body>private</body></html>",
-      "utf8",
-    );
+    await writeFile(path.join(distDir, "index.html"), "<html><body>private</body></html>", "utf8");
 
     const server = await startWebServer({
       HOST: "127.0.0.1",
@@ -156,11 +135,7 @@ describe("web server platform runtime", () => {
   it("blocks login after repeated failed attempts from same client", async () => {
     const distDir = await makeTempDir("c64-web-dist-");
     const configDir = await makeTempDir("c64-web-config-");
-    await writeFile(
-      path.join(distDir, "index.html"),
-      "<html><body>private</body></html>",
-      "utf8",
-    );
+    await writeFile(path.join(distDir, "index.html"), "<html><body>private</body></html>", "utf8");
 
     const server = await startWebServer({
       HOST: "127.0.0.1",
@@ -192,11 +167,7 @@ describe("web server platform runtime", () => {
   it("returns 405 for unsupported auth and secure storage methods", async () => {
     const distDir = await makeTempDir("c64-web-dist-");
     const configDir = await makeTempDir("c64-web-config-");
-    await writeFile(
-      path.join(distDir, "index.html"),
-      "<html><body>ok</body></html>",
-      "utf8",
-    );
+    await writeFile(path.join(distDir, "index.html"), "<html><body>ok</body></html>", "utf8");
 
     const server = await startWebServer({
       HOST: "127.0.0.1",
@@ -210,14 +181,11 @@ describe("web server platform runtime", () => {
     });
     expect(loginGet.status).toBe(405);
 
-    const securePatch = await fetch(
-      `${server.baseUrl}/api/secure-storage/password`,
-      {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ value: "secret" }),
-      },
-    );
+    const securePatch = await fetch(`${server.baseUrl}/api/secure-storage/password`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ value: "secret" }),
+    });
     expect(securePatch.status).toBe(405);
 
     await server.close();
@@ -226,11 +194,7 @@ describe("web server platform runtime", () => {
   it("issues a session cookie when setting a new password while unauthenticated", async () => {
     const distDir = await makeTempDir("c64-web-dist-");
     const configDir = await makeTempDir("c64-web-config-");
-    await writeFile(
-      path.join(distDir, "index.html"),
-      "<html><body>ok</body></html>",
-      "utf8",
-    );
+    await writeFile(path.join(distDir, "index.html"), "<html><body>ok</body></html>", "utf8");
 
     const server = await startWebServer({
       HOST: "127.0.0.1",
@@ -239,14 +203,11 @@ describe("web server platform runtime", () => {
       WEB_CONFIG_DIR: configDir,
     });
 
-    const setPassword = await fetch(
-      `${server.baseUrl}/api/secure-storage/password`,
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ value: "new-secret" }),
-      },
-    );
+    const setPassword = await fetch(`${server.baseUrl}/api/secure-storage/password`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ value: "new-secret" }),
+    });
     expect(setPassword.status).toBe(200);
     expect(setPassword.headers.get("set-cookie")).toContain("c64_session=");
 
@@ -259,11 +220,7 @@ describe("web server platform runtime", () => {
   it("rejects malformed static asset encodings", async () => {
     const distDir = await makeTempDir("c64-web-dist-");
     const configDir = await makeTempDir("c64-web-config-");
-    await writeFile(
-      path.join(distDir, "index.html"),
-      "<html><body>ok</body></html>",
-      "utf8",
-    );
+    await writeFile(path.join(distDir, "index.html"), "<html><body>ok</body></html>", "utf8");
 
     const server = await startWebServer({
       HOST: "127.0.0.1",
@@ -281,11 +238,7 @@ describe("web server platform runtime", () => {
   it("falls back to runtime defaults when config directory is not writable", async () => {
     const distDir = await makeTempDir("c64-web-dist-");
     const configDir = await makeTempDir("c64-web-config-readonly-");
-    await writeFile(
-      path.join(distDir, "index.html"),
-      "<html><body>ok</body></html>",
-      "utf8",
-    );
+    await writeFile(path.join(distDir, "index.html"), "<html><body>ok</body></html>", "utf8");
     await chmod(configDir, 0o555);
 
     const server = await startWebServer({
@@ -316,11 +269,7 @@ describe("web server platform runtime", () => {
   it("injects network password header in REST proxy requests", async () => {
     const distDir = await makeTempDir("c64-web-dist-");
     const configDir = await makeTempDir("c64-web-config-");
-    await writeFile(
-      path.join(distDir, "index.html"),
-      "<html><body>proxy</body></html>",
-      "utf8",
-    );
+    await writeFile(path.join(distDir, "index.html"), "<html><body>proxy</body></html>", "utf8");
 
     const seen: Array<string | undefined> = [];
     const upstream = http.createServer((req, res) => {
@@ -355,26 +304,16 @@ describe("web server platform runtime", () => {
     expect(seen[0]).toBe("secret");
 
     await server.close();
-    await new Promise<void>((resolve, reject) =>
-      upstream.close((error) => (error ? reject(error) : resolve())),
-    );
+    await new Promise<void>((resolve, reject) => upstream.close((error) => (error ? reject(error) : resolve())));
   });
 
   it("proxies FTP list/read responses", async () => {
     const distDir = await makeTempDir("c64-web-dist-");
     const configDir = await makeTempDir("c64-web-config-");
     const ftpRoot = await makeTempDir("c64-web-ftp-root-");
-    await writeFile(
-      path.join(distDir, "index.html"),
-      "<html><body>ftp</body></html>",
-      "utf8",
-    );
+    await writeFile(path.join(distDir, "index.html"), "<html><body>ftp</body></html>", "utf8");
     await mkdir(path.join(ftpRoot, "MUSIC"));
-    await writeFile(
-      path.join(ftpRoot, "MUSIC", "test.sid"),
-      "PSID_DATA",
-      "utf8",
-    );
+    await writeFile(path.join(ftpRoot, "MUSIC", "test.sid"), "PSID_DATA", "utf8");
 
     const ftpServer = await createMockFtpServer({
       rootDir: ftpRoot,
@@ -413,9 +352,7 @@ describe("web server platform runtime", () => {
     const listPayload = (await listRes.json()) as {
       entries: Array<{ name: string }>;
     };
-    expect(listPayload.entries.some((entry) => entry.name === "test.sid")).toBe(
-      true,
-    );
+    expect(listPayload.entries.some((entry) => entry.name === "test.sid")).toBe(true);
 
     const readRes = await fetch(`${server.baseUrl}/api/ftp/read`, {
       method: "POST",
@@ -432,9 +369,7 @@ describe("web server platform runtime", () => {
     });
     expect(readRes.status).toBe(200);
     const readPayload = (await readRes.json()) as { data: string };
-    expect(Buffer.from(readPayload.data, "base64").toString("utf8")).toBe(
-      "PSID_DATA",
-    );
+    expect(Buffer.from(readPayload.data, "base64").toString("utf8")).toBe("PSID_DATA");
 
     await server.close();
   });
@@ -442,11 +377,7 @@ describe("web server platform runtime", () => {
   it("returns 405 for unsupported FTP endpoint methods", async () => {
     const distDir = await makeTempDir("c64-web-dist-");
     const configDir = await makeTempDir("c64-web-config-");
-    await writeFile(
-      path.join(distDir, "index.html"),
-      "<html><body>ftp</body></html>",
-      "utf8",
-    );
+    await writeFile(path.join(distDir, "index.html"), "<html><body>ftp</body></html>", "utf8");
 
     const server = await startWebServer({
       HOST: "127.0.0.1",
@@ -471,11 +402,7 @@ describe("web server platform runtime", () => {
   it("supports logout and secure storage get/delete lifecycle", async () => {
     const distDir = await makeTempDir("c64-web-dist-");
     const configDir = await makeTempDir("c64-web-config-");
-    await writeFile(
-      path.join(distDir, "index.html"),
-      "<html><body>secure</body></html>",
-      "utf8",
-    );
+    await writeFile(path.join(distDir, "index.html"), "<html><body>secure</body></html>", "utf8");
 
     const server = await startWebServer({
       HOST: "127.0.0.1",
@@ -487,22 +414,16 @@ describe("web server platform runtime", () => {
 
     const cookie = await loginAndGetCookie(server.baseUrl, "secret");
 
-    const readPassword = await fetch(
-      `${server.baseUrl}/api/secure-storage/password`,
-      {
-        headers: { Cookie: cookie },
-      },
-    );
+    const readPassword = await fetch(`${server.baseUrl}/api/secure-storage/password`, {
+      headers: { Cookie: cookie },
+    });
     expect(readPassword.status).toBe(200);
     expect(await readPassword.json()).toEqual({ value: "secret" });
 
-    const deletePassword = await fetch(
-      `${server.baseUrl}/api/secure-storage/password`,
-      {
-        method: "DELETE",
-        headers: { Cookie: cookie },
-      },
-    );
+    const deletePassword = await fetch(`${server.baseUrl}/api/secure-storage/password`, {
+      method: "DELETE",
+      headers: { Cookie: cookie },
+    });
     expect(deletePassword.status).toBe(200);
 
     const statusAfterDelete = await fetch(`${server.baseUrl}/auth/status`);
@@ -527,16 +448,8 @@ describe("web server platform runtime", () => {
     const distDir = await makeTempDir("c64-web-dist-");
     const configDir = await makeTempDir("c64-web-config-");
     await mkdir(path.join(distDir, "docs"));
-    await writeFile(
-      path.join(distDir, "index.html"),
-      "<html><body>root</body></html>",
-      "utf8",
-    );
-    await writeFile(
-      path.join(distDir, "docs", "index.html"),
-      "<html><body>docs</body></html>",
-      "utf8",
-    );
+    await writeFile(path.join(distDir, "index.html"), "<html><body>root</body></html>", "utf8");
+    await writeFile(path.join(distDir, "docs", "index.html"), "<html><body>docs</body></html>", "utf8");
 
     const server = await startWebServer({
       HOST: "127.0.0.1",
@@ -545,15 +458,10 @@ describe("web server platform runtime", () => {
       WEB_CONFIG_DIR: configDir,
     });
 
-    const diagnosticsMethod = await fetch(
-      `${server.baseUrl}/api/diagnostics/server-logs`,
-      { method: "POST" },
-    );
+    const diagnosticsMethod = await fetch(`${server.baseUrl}/api/diagnostics/server-logs`, { method: "POST" });
     expect(diagnosticsMethod.status).toBe(405);
 
-    const diagnostics = await fetch(
-      `${server.baseUrl}/api/diagnostics/server-logs`,
-    );
+    const diagnostics = await fetch(`${server.baseUrl}/api/diagnostics/server-logs`);
     expect(diagnostics.status).toBe(200);
     const diagnosticsPayload = (await diagnostics.json()) as {
       logs: Array<{ message: string }>;
@@ -573,11 +481,7 @@ describe("web server platform runtime", () => {
   it("returns proxy and ftp host-override errors for denied targets", async () => {
     const distDir = await makeTempDir("c64-web-dist-");
     const configDir = await makeTempDir("c64-web-config-");
-    await writeFile(
-      path.join(distDir, "index.html"),
-      "<html><body>proxy</body></html>",
-      "utf8",
-    );
+    await writeFile(path.join(distDir, "index.html"), "<html><body>proxy</body></html>", "utf8");
 
     const server = await startWebServer({
       HOST: "127.0.0.1",

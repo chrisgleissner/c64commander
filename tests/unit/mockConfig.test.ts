@@ -7,11 +7,7 @@
  */
 
 import { describe, expect, it, beforeEach, vi } from "vitest";
-import {
-  clearMockConfigLoader,
-  getMockConfigPayload,
-  setMockConfigLoader,
-} from "@/lib/mock/mockConfig";
+import { clearMockConfigLoader, getMockConfigPayload, setMockConfigLoader } from "@/lib/mock/mockConfig";
 
 describe("mockConfig", () => {
   beforeEach(() => {
@@ -79,9 +75,7 @@ config:
 
   it("falls back to bundled yaml when asset fetch fails", async () => {
     clearMockConfigLoader();
-    const fetchSpy = vi
-      .spyOn(globalThis, "fetch")
-      .mockRejectedValue(new Error("nope"));
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("nope"));
 
     const payload = await getMockConfigPayload();
 

@@ -8,10 +8,7 @@
 
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import {
-  SelectableActionList,
-  type ActionListItem,
-} from "@/components/lists/SelectableActionList";
+import { SelectableActionList, type ActionListItem } from "@/components/lists/SelectableActionList";
 
 describe("SelectableActionList view-all wrapping", () => {
   it("keeps long subtitles wrapped in view-all dialog", () => {
@@ -19,8 +16,7 @@ describe("SelectableActionList view-all wrapping", () => {
       {
         id: "1",
         title: "Track One",
-        subtitle:
-          "/very/long/path/that/should/wrap/when/rendered/in/the/dialog/view/all/list/item.sid",
+        subtitle: "/very/long/path/that/should/wrap/when/rendered/in/the/dialog/view/all/list/item.sid",
         subtitleTestId: "subtitle-long",
         selected: false,
         actionLabel: "Play",
@@ -29,8 +25,7 @@ describe("SelectableActionList view-all wrapping", () => {
       {
         id: "2",
         title: "Track Two",
-        subtitle:
-          "/another/really/long/path/that/should/wrap/without/overflow.sid",
+        subtitle: "/another/really/long/path/that/should/wrap/without/overflow.sid",
         selected: false,
         actionLabel: "Play",
         onAction: vi.fn(),
@@ -113,8 +108,7 @@ describe("SelectableActionList view-all wrapping", () => {
     const items: ActionListItem[] = [
       {
         id: "track-1",
-        title:
-          "A/very/long/path/that/should/wrap/without/ellipsis/or/truncation.sid",
+        title: "A/very/long/path/that/should/wrap/without/ellipsis/or/truncation.sid",
         selected: false,
         actionLabel: "Play",
         onAction: vi.fn(),
@@ -269,9 +263,7 @@ describe("SelectableActionList view-all wrapping", () => {
     );
 
     expect(screen.queryByText("Actions")).toBeNull();
-    expect(
-      screen.getByRole("button", { name: "Play Track One" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Play Track One" })).toBeInTheDocument();
   });
 
   it("renders header item with icon", () => {
@@ -572,9 +564,7 @@ describe("SelectableActionList view-all wrapping", () => {
     );
     expect(screen.getByTestId("row-icon")).toBeInTheDocument();
     expect(screen.getByText("(v2)")).toBeInTheDocument();
-    expect(screen.getByTestId("item-subtitle")).toHaveTextContent(
-      "Artist Name",
-    );
+    expect(screen.getByTestId("item-subtitle")).toHaveTextContent("Artist Name");
     expect(screen.getByText("Extra info")).toBeInTheDocument();
   });
 
@@ -812,9 +802,7 @@ describe("SelectableActionList view-all wrapping", () => {
         onToggleSelectAll={vi.fn()}
         maxVisible={5}
         viewAllTitle="All Tracks"
-        filterHeader={
-          <div data-testid="dialog-filter-header">Filter Types</div>
-        }
+        filterHeader={<div data-testid="dialog-filter-header">Filter Types</div>}
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: /view all/i }));

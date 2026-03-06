@@ -19,17 +19,12 @@ vi.mock("react-router-dom", () => ({
 const requestDiagnosticsOpen = vi.fn();
 
 vi.mock("@/lib/diagnostics/diagnosticsOverlay", () => ({
-  requestDiagnosticsOpen: (...args: unknown[]) =>
-    requestDiagnosticsOpen(...args),
+  requestDiagnosticsOpen: (...args: unknown[]) => requestDiagnosticsOpen(...args),
 }));
 
 vi.mock("@/components/DiagnosticsActivityIndicator", () => ({
   DiagnosticsActivityIndicator: ({ onClick }: { onClick: () => void }) => (
-    <button
-      type="button"
-      data-testid="diagnostics-activity-indicator"
-      onClick={onClick}
-    />
+    <button type="button" data-testid="diagnostics-activity-indicator" onClick={onClick} />
   ),
 }));
 

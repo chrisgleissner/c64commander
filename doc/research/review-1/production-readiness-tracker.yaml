@@ -271,8 +271,7 @@ plan_steps:
     status: pending
     severity_focus: [high]
     depends_on: [step_1]
-    gates_required:
-      [gate_android_jvm, gate_android_emulator, gate_maestro_background]
+    gates_required: [gate_android_jvm, gate_android_emulator, gate_maestro_background]
     findings_covered: [P1]
     deliverables:
       - deterministic_service_lifecycle_contract
@@ -349,8 +348,7 @@ plan_steps:
     status: pending
     severity_focus: [medium]
     depends_on: [step_8]
-    gates_required:
-      [gate_android_jvm, gate_android_emulator, gate_maestro_background]
+    gates_required: [gate_android_jvm, gate_android_emulator, gate_maestro_background]
     findings_covered: [P1, P3, P9]
     deliverables:
       - android_native_lifecycle_matrix

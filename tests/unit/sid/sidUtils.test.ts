@@ -58,9 +58,7 @@ describe("sidUtils", () => {
   });
 
   it("logs when SID song count parsing fails", () => {
-    const warnSpy = vi
-      .spyOn(console, "warn")
-      .mockImplementation(() => undefined);
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     class ThrowingDataView {
       constructor() {
         throw new Error("boom");
@@ -82,9 +80,7 @@ describe("sidUtils", () => {
   });
 
   it("encodes maximum supported duration 99:59", () => {
-    expect(Array.from(createSslPayload(99 * 60 * 1000 + 59 * 1000))).toEqual([
-      0x99, 0x59,
-    ]);
+    expect(Array.from(createSslPayload(99 * 60 * 1000 + 59 * 1000))).toEqual([0x99, 0x59]);
   });
 
   it("throws for negative duration", () => {
@@ -167,17 +163,13 @@ describe("sidUtils", () => {
   });
 
   it("throws for header shorter than 124 bytes", () => {
-    expect(() => parseSidHeaderMetadata(new Uint8Array(100))).toThrow(
-      "124 bytes",
-    );
+    expect(() => parseSidHeaderMetadata(new Uint8Array(100))).toThrow("124 bytes");
   });
 
   it("throws for unsupported magic", () => {
     const bytes = new Uint8Array(124);
     bytes.set([0x4d, 0x41, 0x47, 0x49], 0); // 'MAGI'
-    expect(() => parseSidHeaderMetadata(bytes)).toThrow(
-      "Unsupported SID magic",
-    );
+    expect(() => parseSidHeaderMetadata(bytes)).toThrow("Unsupported SID magic");
   });
 
   it("defaults songs to 1 when songs field is 0", () => {
@@ -191,9 +183,7 @@ describe("sidUtils", () => {
   });
 
   it("clamps startSong when greater than songs", () => {
-    const metadata = parseSidHeaderMetadata(
-      createSidHeader({ songs: 2, startSong: 5 }),
-    );
+    const metadata = parseSidHeaderMetadata(createSidHeader({ songs: 2, startSong: 5 }));
     expect(metadata.startSong).toBe(2);
   });
 
@@ -209,9 +199,7 @@ describe("sidUtils", () => {
 
   it("decodes pal_ntsc clock when both PAL and NTSC bits are set (BRDA:99 block 19)", () => {
     // clockBits = (flags >> 2) & 0b11; flags=0b001111 → clockBits=0b11 → 'pal_ntsc'
-    const metadata = parseSidHeaderMetadata(
-      createSidHeader({ flags: 0b001111 }),
-    );
+    const metadata = parseSidHeaderMetadata(createSidHeader({ flags: 0b001111 }));
     expect(metadata.clock).toBe("pal_ntsc");
   });
 
