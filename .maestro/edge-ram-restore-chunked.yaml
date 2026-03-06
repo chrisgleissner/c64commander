@@ -44,14 +44,8 @@ env:
 - takeScreenshot: ram-restore-after-restore
 
 # Verify no error/disconnect banner is visible
-- assertNotVisible:
-    text: "Error"
-    timeout: ${SHORT_TIMEOUT}
-- assertNotVisible:
-    text: "Disconnected"
-    timeout: ${SHORT_TIMEOUT}
+- assertNotVisible: "Error"
+- assertNotVisible: "Disconnected"
 
 # Home tab still reachable — device stable
-- assertVisible:
-    text: "Home"
-    timeout: ${SHORT_TIMEOUT}
+- assertVisible: "Home"

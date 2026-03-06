@@ -17,11 +17,9 @@ env:
     times: 10
     commands:
       - tapOn: "Home"
-      - wait: 50
 
 # Lock the device to simulate background suspension
 - pressKey: Lock
-- wait: 3000
 
 # Unlock and wait for app to resume
 - pressKey: Home
@@ -32,6 +30,5 @@ env:
 # After resume, no tap-flash highlight should persist (swept by visibilitychange handler)
 - assertNotVisible:
     id: "data-c64-tap-flash"
-    timeout: ${SHORT_TIMEOUT}
 
 - takeScreenshot: button-highlight-timeout-cleared

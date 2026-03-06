@@ -10,7 +10,9 @@ test evidence, and the convergence verification for each issue.
 
 ---
 
-## Issue 1: Volume/mute UI–device state desynchronisation
+## Issue 1
+
+Volume/mute UI-device state desynchronisation
 
 Status: `DONE`
 
@@ -38,7 +40,9 @@ type: 'unmute' })` moved after `await applyAudioMixerUpdates`; failure exits
 
 ---
 
-## Issue 2: Auto-advance does not arm for prg/crt/disk
+## Issue 2
+
+Auto-advance does not arm for prg/crt/disk
 
 Status: `DONE`
 
@@ -56,7 +60,9 @@ covering sid/mod/prg/crt/disk arming and no-op cases.
 
 ---
 
-## Issue 3: Stuck button highlight on background/timer starvation
+## Issue 3
+
+Stuck button highlight on background/timer starvation
 
 Status: `DONE`
 
@@ -89,7 +95,9 @@ sweep mechanism existed to recover stale highlights on resume.
 
 ---
 
-## Issue 4: HVSC extraction memory peak (streaming fix)
+## Issue 4
+
+HVSC extraction memory peak (streaming fix)
 
 Status: `DONE`
 
@@ -106,7 +114,9 @@ including new streaming incremental-callback test.
 
 ---
 
-## Issue 5: Low-resource stability under HVSC ingest load
+## Issue 5
+
+Low-resource stability under HVSC ingest load
 
 Status: `DONE`
 
@@ -128,7 +138,9 @@ accumulation before callback processing).
 
 ---
 
-## Issue 6: RAM restore device instability (chunked writes)
+## Issue 6
+
+RAM restore device instability (chunked writes)
 
 Status: `DONE`
 
@@ -151,7 +163,10 @@ Stale assertions in `tests/unit/ramOperations.test.ts` updated (16-chunk).
 | Gate                    | Status                          |
 | ----------------------- | ------------------------------- |
 | `npm run lint`          | pass                            |
-| `npm run test`          | 259 files, 3191 tests, all pass |
-| `npm run build`         | pending (see final gate run)    |
-| `npm run test:coverage` | pending (see final gate run)    |
-| `npm run test:e2e`      | pending (see final gate run)    |
+| `npm run test`          | 260 files, 3214 tests, all pass |
+| `npm run build`         | pass                            |
+| `npm run test:coverage` | pass                            |
+| `node scripts/check-coverage-threshold.mjs` | pass (branch 90.85%) |
+| `npm run test:e2e`      | pass (355 passed, 4 skipped)    |
+| `npm run maestro:gating -- --device-id 9B081FFAZ001WX --skip-emulator-start` | pass |
+| `./build`               | pass                            |

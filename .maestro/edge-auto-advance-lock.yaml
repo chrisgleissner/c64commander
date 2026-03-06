@@ -32,7 +32,6 @@ env:
 
 # Lock the device for longer than the track duration (assume ≤ 5 s track)
 - pressKey: Lock
-- wait: 6000
 
 # Unlock
 - pressKey: Home

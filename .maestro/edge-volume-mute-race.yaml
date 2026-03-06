@@ -20,9 +20,7 @@ env:
     timeout: ${TIMEOUT}
 
 # Assert the volume slider is visible (connected + playing assumed in this flow)
-- assertVisible:
-    text: "Volume"
-    timeout: ${LONG_TIMEOUT}
+- assertVisible: "Volume"
 
 # Rapid slider sweeps: tap far left then far right 5 times
 - repeat:
@@ -47,10 +45,6 @@ env:
           timeout: ${TIMEOUT}
 
 # Final state: unmuted and volume label visible
-- assertNotVisible:
-    text: "Muted"
-    timeout: ${SHORT_TIMEOUT}
-- assertVisible:
-    text: "Volume"
-    timeout: ${SHORT_TIMEOUT}
+- assertNotVisible: "Muted"
+- assertVisible: "Volume"
 - takeScreenshot: volume-mute-race-final

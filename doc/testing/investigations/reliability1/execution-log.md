@@ -122,7 +122,7 @@ New test `highlight clears after app resume` fails: attribute persists after `vi
 `src/lib/ui/buttonInteraction.ts`:
 
 - Added `sweepStaleHighlights()` that sweeps all elements with `CTA_HIGHLIGHT_ATTR` in the document.
-- Added `CTA_HIGHLIGHT_MAX_AGE_MS = 5000` constant.
+- Added `CTA_HIGHLIGHT_MAX_AGE_MS = 2000` constant.
 - Timestamps are stored on the element when a highlight is set.
 - `sweepStaleHighlights` clears entries older than `CTA_HIGHLIGHT_MAX_AGE_MS` or all of them (on resume).
 - `registerGlobalButtonInteractionModel` now also registers `visibilitychange` and `focus` sweep handlers.
@@ -149,3 +149,32 @@ Commands run:
 4. `npm run test:coverage` → branch ≥ 90%
 5. `node scripts/check-coverage-threshold.mjs` → pass
 6. `npm run test:e2e` → pass
+
+---
+
+## 2026-03-06T14:57:00+00:00 — Final convergence rerun
+
+### Maestro gating corrections
+
+- Initial `npm run maestro:gating` run failed on reliability flow schema issues:
+	- invalid command `wait` in new edge flows
+	- unsupported `timeout` property under `assertVisible` / `assertNotVisible`
+- Fixed Maestro flow syntax in:
+	- `.maestro/edge-auto-advance-format-matrix.yaml`
+	- `.maestro/edge-auto-advance-lock.yaml`
+	- `.maestro/edge-button-highlight-timeout.yaml`
+	- `.maestro/edge-ram-restore-chunked.yaml`
+	- `.maestro/edge-volume-mute-race.yaml`
+- Re-ran Maestro gating successfully using Pixel 4 serial only:
+	- `npm run maestro:gating -- --device-id 9B081FFAZ001WX --skip-emulator-start`
+	- Result: pass (`smoke-file-picker-cancel` passed)
+
+### Final gate rerun results
+
+1. `npm run lint` → pass (after formatting generated Capacitor JSON)
+2. `npm run test` → pass (260 files, 3214 tests)
+3. `npm run build` → pass
+4. `npm run test:coverage` → pass
+5. `node scripts/check-coverage-threshold.mjs` → pass (branch 90.85%)
+6. `npm run test:e2e` → pass (355 passed, 4 skipped)
+7. `./build` → pass
