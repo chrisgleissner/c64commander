@@ -14,6 +14,8 @@ import {
   useC64AllConfig,
   useC64Categories,
   useC64ConfigItem,
+  useC64ConfigItems,
+  useC64Category,
   useC64Connection,
   useC64Drives,
   useC64MachineControl,
@@ -40,6 +42,7 @@ const mockApi = {
   getInfo: vi.fn(),
   getCategories: vi.fn(),
   getCategory: vi.fn(),
+  getConfigItems: vi.fn(),
   getConfigItem: vi.fn(),
   updateConfigBatch: vi.fn(),
   getDrives: vi.fn(),
@@ -57,6 +60,9 @@ const mockApi = {
 
 const updateC64APIConfigMock = vi.fn();
 const updateHasChangesMock = vi.fn();
+const loadInitialSnapshotMock = vi.fn();
+const hasStoredPasswordFlagMock = vi.fn(() => false);
+const loadStoredPasswordMock = vi.fn(async () => '');
 
 vi.mock('@/lib/c64api', () => ({
   getC64API: () => mockApi,
@@ -77,6 +83,12 @@ vi.mock('@/lib/c64api', () => ({
 vi.mock('@/lib/config/appConfigStore', () => ({
   getActiveBaseUrl: () => 'http://default',
   updateHasChanges: (...args: unknown[]) => updateHasChangesMock(...args),
+  loadInitialSnapshot: (...args: unknown[]) => loadInitialSnapshotMock(...args),
+}));
+
+vi.mock('@/lib/secureStorage', () => ({
+  hasStoredPasswordFlag: () => hasStoredPasswordFlagMock(),
+  getPassword: () => loadStoredPasswordMock(),
 }));
 
 const createWrapper = () => {
@@ -99,6 +111,7 @@ describe('useC64Connection', () => {
     mockApi.getCategories.mockResolvedValue({ categories: ['Audio'], errors: [] });
     mockApi.getCategory.mockResolvedValue({ Audio: { items: {} }, errors: [] });
     mockApi.getConfigItem.mockResolvedValue({ Audio: { items: { Volume: { selected: '0 dB' } } }, errors: [] });
+    mockApi.getConfigItems.mockResolvedValue({ Audio: { items: {} }, errors: [] });
     mockApi.updateConfigBatch.mockResolvedValue({ errors: [] });
     mockApi.getDrives.mockResolvedValue({ drives: [{ a: { enabled: true } }], errors: [] });
     mockApi.setConfigValue.mockResolvedValue({ errors: [] });
@@ -113,6 +126,12 @@ describe('useC64Connection', () => {
     mockApi.resetConfig.mockResolvedValue({ errors: [] });
     updateC64APIConfigMock.mockReset();
     updateHasChangesMock.mockReset();
+    loadInitialSnapshotMock.mockReset();
+    loadInitialSnapshotMock.mockReturnValue(undefined);
+    hasStoredPasswordFlagMock.mockReset();
+    hasStoredPasswordFlagMock.mockReturnValue(false);
+    loadStoredPasswordMock.mockReset();
+    loadStoredPasswordMock.mockResolvedValue('');
     localStorage.clear();
   });
 
@@ -121,6 +140,7 @@ describe('useC64Connection', () => {
     mockApi.getCategories.mockReset();
     mockApi.getCategory.mockReset();
     mockApi.getConfigItem.mockReset();
+    mockApi.getConfigItems.mockReset();
     mockApi.updateConfigBatch.mockReset();
     mockApi.getDrives.mockReset();
     mockApi.setConfigValue.mockReset();
@@ -418,5 +438,109 @@ describe('useC64Connection', () => {
 
     await waitFor(() => expect(result.current.status.isConnected).toBe(true));
     expect(result.current.runtimeBaseUrl).toBe('http://default');
+  });
+
+  it('loads stored password when secure storage indicates one exists', async () => {
+    hasStoredPasswordFlagMock.mockReturnValue(true);
+    loadStoredPasswordMock.mockResolvedValue('stored-secret');
+    const { wrapper } = createWrapper();
+    const { result } = renderHook(() => useC64Connection(), { wrapper });
+
+    await waitFor(() => expect(result.current.password).toBe('stored-secret'));
+  });
+
+  it('provides config-items placeholder data from snapshot and then queries API', async () => {
+    loadInitialSnapshotMock.mockReturnValue({
+      data: {
+        Audio: {
+          items: {
+            Volume: { selected: '0 dB' },
+            Balance: { selected: 'Center' },
+          },
+        },
+      },
+    });
+    mockApi.getConfigItems = vi.fn().mockResolvedValue({
+      Audio: {
+        items: {
+          Volume: { selected: '6 dB' },
+        },
+      },
+      errors: [],
+    });
+
+    const { wrapper } = createWrapper();
+    const { result } = renderHook(() => useC64ConfigItems('Audio', ['Volume']), { wrapper });
+
+    expect(result.current.data).toEqual({
+      Audio: {
+        items: {
+          Volume: { selected: '0 dB' },
+        },
+      },
+      errors: [],
+    });
+
+    await waitFor(() => expect(mockApi.getConfigItems).toHaveBeenCalledWith('Audio', ['Volume']));
+  });
+
+  it('supports nested snapshot category blocks for config-items placeholder data', async () => {
+    loadInitialSnapshotMock.mockReturnValue({
+      data: {
+        Audio: {
+          Audio: {
+            items: {
+              Volume: { selected: 'Nested' },
+            },
+          },
+        },
+      },
+    });
+    mockApi.getConfigItems = vi.fn().mockResolvedValue({ Audio: { items: {} }, errors: [] });
+
+    const { wrapper } = createWrapper();
+    const { result } = renderHook(() => useC64ConfigItems('Audio', ['Volume']), { wrapper });
+
+    expect(result.current.data).toEqual({
+      Audio: {
+        items: {
+          Volume: { selected: 'Nested' },
+        },
+      },
+      errors: [],
+    });
+  });
+
+  it('does not query config-items when disabled or no items are requested', async () => {
+    const { wrapper } = createWrapper();
+    renderHook(() => useC64ConfigItems('Audio', ['Volume'], false), { wrapper });
+    renderHook(() => useC64ConfigItems('Audio', [], true), { wrapper });
+
+    await waitFor(() => {
+      expect(mockApi.getConfigItems).not.toHaveBeenCalled();
+    });
+  });
+
+  it('does not query useC64Category when category is empty or disabled', async () => {
+    const { wrapper } = createWrapper();
+    renderHook(() => useC64Category('', true), { wrapper });
+    renderHook(() => useC64Category('Audio', false), { wrapper });
+
+    await waitFor(() => {
+      expect(mockApi.getCategory).not.toHaveBeenCalled();
+    });
+  });
+
+  it('throws when all categories fail in useC64AllConfig', async () => {
+    mockApi.getCategories.mockResolvedValue({ categories: ['Audio', 'Video'], errors: [] });
+    mockApi.getCategory.mockRejectedValue(new Error('all failed'));
+
+    const { wrapper } = createWrapper();
+    const { result } = renderHook(() => useC64AllConfig(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.error).toBeTruthy();
+      expect((result.current.error as Error).message).toContain('Failed to fetch configuration data for all categories');
+    });
   });
 });

@@ -30,7 +30,9 @@ __pycache__/
 .nyc_output/
 coverage/
 playwright-report/
+playwright-report-coverage/
 test-results/
+.cov-unit/
 
 # Local config
 *.local

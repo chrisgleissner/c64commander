@@ -4,7 +4,7 @@ config:
     rest_api_version: "0.1"
     device_type: "Ultimate 64 Elite"
     firmware_version: 3.14d
-    fetched_at: "2026-03-04T18:31:28.743780+00:00"
+    fetched_at: "2026-03-06T07:54:41.291867+00:00"
   categories:
     Audio Mixer:
       items:
@@ -849,7 +849,7 @@ config:
     U64 Specific Settings:
       items:
         System Mode:
-          selected: NTSC
+          selected: PAL
           options:
             - PAL
             - NTSC
@@ -1018,10 +1018,11 @@ config:
     C64 and Cartridge Settings:
       items:
         Cartridge:
-          selected: ""
+          selected: Final_Cartridge_3_1988-13.crt
           details:
             presets:
               - ""
+              - Final_Cartridge_3_1988-13.crt
         Cartridge Preference:
           selected: Auto
           options:
@@ -1131,13 +1132,13 @@ config:
     Clock Settings:
       items:
         Year:
-          selected: 2026
+          selected: 2015
           details:
             min: 1980
             max: 2079
             format: "%d"
         Month:
-          selected: March
+          selected: October
           options:
             - ""
             - January
@@ -1153,25 +1154,25 @@ config:
             - November
             - December
         Day:
-          selected: 4
+          selected: 13
           details:
             min: 1
             max: 31
             format: "%d"
         Hours:
-          selected: 19
+          selected: 16
           details:
             min: 0
             max: 23
             format: "%02d"
         Minutes:
-          selected: 26
+          selected: 52
           details:
             min: 0
             max: 59
             format: "%02d"
         Seconds:
-          selected: 27
+          selected: 55
           details:
             min: 0
             max: 59
@@ -1282,7 +1283,7 @@ config:
     Network Settings:
       items:
         Host Name:
-          selected: Ultimate-64-Elite-F83C87
+          selected: c64u
         Unique ID:
           selected: Default
           details:
