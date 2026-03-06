@@ -981,6 +981,52 @@ describe("hvscIngestionRuntime", () => {
     expect(vi.mocked(saveHvscStatusSummary as any)).toHaveBeenCalled();
   });
 
+  it("keeps installOrUpdateHvsc in cancelled idle state when cancellation wins", async () => {
+    vi.mocked(fetchLatestHvscVersions).mockResolvedValue({
+      baselineVersion: 5,
+      updateVersion: 5,
+      baseUrl: "https://example.com",
+    } as any);
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: "idle",
+      ingestionError: null,
+      installedVersion: 0,
+      installedBaselineVersion: null,
+    } as any);
+    vi.mocked(extractArchiveEntries).mockImplementation(async () => {
+      await cancelHvscInstall("token-cancel-install");
+      throw new Error("HVSC update cancelled");
+    });
+
+    await expect(installOrUpdateHvsc("token-cancel-install")).rejects.toThrow("HVSC update cancelled");
+
+    const statePatches = vi.mocked(updateHvscState).mock.calls.map(([patch]) => patch as Record<string, unknown>);
+    expect(statePatches.some((patch) => patch.ingestionState === "error" && patch.ingestionError === "HVSC update cancelled")).toBe(false);
+    expect(statePatches).toContainEqual(expect.objectContaining({ ingestionState: "idle", ingestionError: "Cancelled" }));
+  });
+
+  it("keeps ingestCachedHvsc in cancelled idle state when cancellation wins", async () => {
+    vi.mocked(Filesystem.readdir).mockResolvedValue({
+      files: ["hvsc-baseline-5.complete.json"],
+    } as any);
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: "idle",
+      ingestionError: null,
+      installedVersion: 0,
+      installedBaselineVersion: null,
+    } as any);
+    vi.mocked(extractArchiveEntries).mockImplementation(async () => {
+      await cancelHvscInstall("token-cancel-cached");
+      throw new Error("HVSC update cancelled");
+    });
+
+    await expect(ingestCachedHvsc("token-cancel-cached")).rejects.toThrow("HVSC update cancelled");
+
+    const statePatches = vi.mocked(updateHvscState).mock.calls.map(([patch]) => patch as Record<string, unknown>);
+    expect(statePatches.some((patch) => patch.ingestionState === "error" && patch.ingestionError === "HVSC update cancelled")).toBe(false);
+    expect(statePatches).toContainEqual(expect.objectContaining({ ingestionState: "idle", ingestionError: "Cancelled" }));
+  });
+
   // Coverage: checkForHvscUpdates returns [] when already up-to-date (BRDA:212 empty array branch)
   it("returns empty requiredUpdates when already at latest version", async () => {
     vi.mocked(fetchLatestHvscVersions).mockResolvedValue({

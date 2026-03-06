@@ -245,6 +245,125 @@ describe("usePlaybackPersistence", () => {
     });
   });
 
+  it("hydrates repository-backed local tracks with explicit sourceId", async () => {
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
+    localStorage.setItem(
+      "c64u_playlist_repo:v1",
+      JSON.stringify({
+        version: 1,
+        tracks: {
+          "local:local-source:/Music/repo-local.sid": {
+            trackId: "local:local-source:/Music/repo-local.sid",
+            sourceKind: "local",
+            sourceLocator: "/Music/repo-local.sid",
+            sourceId: "local-source",
+            category: "sid",
+            title: "repo-local.sid",
+            author: null,
+            released: null,
+            path: "/Music/repo-local.sid",
+            sizeBytes: null,
+            modifiedAt: null,
+            defaultDurationMs: 1000,
+            subsongCount: 1,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        },
+        playlistItemsByPlaylistId: {
+          [playlistStorageKey]: [
+            {
+              playlistItemId: "repo-item-local-1",
+              playlistId: playlistStorageKey,
+              trackId: "local:local-source:/Music/repo-local.sid",
+              songNr: 1,
+              sortKey: "00000001",
+              durationOverrideMs: null,
+              status: "ready",
+              unavailableReason: null,
+              addedAt: new Date().toISOString(),
+            },
+          ],
+        },
+        sessionsByPlaylistId: {},
+        randomSessionsByPlaylistId: {},
+      }),
+    );
+
+    const { result } = renderHook(() =>
+      usePlaybackPersistenceHarness({
+        playlistStorageKey,
+        localEntriesBySourceId: new Map([["local-source", new Map([["/Music/repo-local.sid", { name: "repo-local.sid" }]])]]),
+        localSourceTreeUris: new Map(),
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.playlist).toHaveLength(1);
+      expect(result.current.playlist[0].sourceId).toBe("local-source");
+      expect(result.current.playlist[0].request.source).toBe("local");
+    });
+  });
+
+  it("hydrates legacy repository local tracks by recovering sourceId from trackId", async () => {
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
+    localStorage.setItem(
+      "c64u_playlist_repo:v1",
+      JSON.stringify({
+        version: 1,
+        tracks: {
+          "local:legacy-source:/Music/repo-legacy.sid": {
+            trackId: "local:legacy-source:/Music/repo-legacy.sid",
+            sourceKind: "local",
+            sourceLocator: "/Music/repo-legacy.sid",
+            category: "sid",
+            title: "repo-legacy.sid",
+            author: null,
+            released: null,
+            path: "/Music/repo-legacy.sid",
+            sizeBytes: null,
+            modifiedAt: null,
+            defaultDurationMs: 1000,
+            subsongCount: 1,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        },
+        playlistItemsByPlaylistId: {
+          [playlistStorageKey]: [
+            {
+              playlistItemId: "repo-item-local-legacy-1",
+              playlistId: playlistStorageKey,
+              trackId: "local:legacy-source:/Music/repo-legacy.sid",
+              songNr: 1,
+              sortKey: "00000001",
+              durationOverrideMs: null,
+              status: "ready",
+              unavailableReason: null,
+              addedAt: new Date().toISOString(),
+            },
+          ],
+        },
+        sessionsByPlaylistId: {},
+        randomSessionsByPlaylistId: {},
+      }),
+    );
+
+    const { result } = renderHook(() =>
+      usePlaybackPersistenceHarness({
+        playlistStorageKey,
+        localEntriesBySourceId: new Map([["legacy-source", new Map([["/Music/repo-legacy.sid", { name: "repo-legacy.sid" }]])]]),
+        localSourceTreeUris: new Map(),
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.playlist).toHaveLength(1);
+      expect(result.current.playlist[0].sourceId).toBe("legacy-source");
+      expect(result.current.playlist[0].request.source).toBe("local");
+    });
+  });
+
   it("calls setAutoAdvanceDueAtMs with correct value on session restore with duration", async () => {
     const playlistStorageKey = buildPlaylistStorageKey("device-1");
     const durationMs = 60000;

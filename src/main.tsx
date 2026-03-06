@@ -14,8 +14,8 @@ import { registerUserInteractionCapture } from "./lib/tracing/userInteractionCap
 import { registerTraceBridge } from "./lib/tracing/traceBridge";
 import { markStartupBootstrapComplete } from "./lib/startup/startupMilestones";
 import { initializeRuntimeMotionMode } from "./lib/startup/runtimeMotionBudget";
-import { addErrorLog } from "./lib/logging";
 import { initializeSentry } from "./lib/observability/sentry";
+import { registerServiceWorker } from "./lib/startup/serviceWorkerRegistration";
 import "./index.css";
 
 const loadFonts = () => {
@@ -73,24 +73,6 @@ const startDeferredStartupBootstrap = () => {
         },
       });
     });
-};
-
-const registerServiceWorker = () => {
-  if (typeof window === "undefined") return;
-  if (!("serviceWorker" in navigator)) return;
-  if (import.meta.env.DEV) return;
-  window.addEventListener("load", () => {
-    void navigator.serviceWorker.register("/sw.js").catch((error) => {
-      const err = error as Error;
-      addErrorLog("Service worker registration failed", {
-        error: {
-          name: err.name,
-          message: err.message,
-          stack: err.stack,
-        },
-      });
-    });
-  });
 };
 
 initializeRuntimeMotionMode();

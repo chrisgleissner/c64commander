@@ -12,9 +12,12 @@ const config: CapacitorConfig = {
   appId: "uk.gleissner.c64commander",
   appName: "C64 Commander",
   webDir: "dist",
+  server: {
+    androidScheme: "http",
+  },
   plugins: {
     CapacitorHttp: {
-      enabled: false,
+      enabled: true,
     },
   },
 };

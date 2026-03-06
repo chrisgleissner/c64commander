@@ -19,14 +19,17 @@ import org.apache.commons.net.ftp.FTP
 import org.apache.commons.net.ftp.FTPClient
 import org.apache.commons.net.ftp.FTPFile
 import java.text.SimpleDateFormat
+import java.time.Duration
 import java.util.Locale
 import java.util.TimeZone
 import java.util.concurrent.Executors
+import java.net.SocketTimeoutException
 
 @CapacitorPlugin(name = "FtpClient")
 class FtpClientPlugin : Plugin() {
   private val executor = Executors.newSingleThreadExecutor()
   private val logTag = "FtpClientPlugin"
+  private val defaultTimeoutMs = 8_000
   internal var ftpClientFactory: () -> FTPClient = { FTPClient() }
   internal var runTask: (Runnable) -> Unit = { runnable -> executor.execute(runnable) }
 
@@ -50,6 +53,49 @@ class FtpClientPlugin : Plugin() {
     }
   }
 
+  private fun resolveTimeoutMs(call: PluginCall): Int {
+    val configured = call.getInt("timeoutMs") ?: defaultTimeoutMs
+    return configured.coerceIn(1_000, 60_000)
+  }
+
+  private fun applyTimeouts(client: FTPClient, timeoutMs: Int) {
+    client.connectTimeout = timeoutMs
+    client.defaultTimeout = timeoutMs
+    client.soTimeout = timeoutMs
+    try {
+      FTPClient::class.java.getMethod("setDataTimeout", Duration::class.java).invoke(client, Duration.ofMillis(timeoutMs.toLong()))
+    } catch (missingDuration: NoSuchMethodException) {
+      try {
+        FTPClient::class.java.getMethod("setDataTimeout", Int::class.javaPrimitiveType).invoke(client, timeoutMs)
+      } catch (error: Exception) {
+        AppLogger.warn(
+          pluginContextOrNull(),
+          logTag,
+          "Failed to configure FTP data timeout",
+          "FtpClientPlugin",
+          error,
+        )
+      }
+    } catch (error: Exception) {
+      AppLogger.warn(
+        pluginContextOrNull(),
+        logTag,
+        "Failed to configure FTP data timeout",
+        "FtpClientPlugin",
+        error,
+      )
+    }
+  }
+
+  private fun buildFailureMessage(operation: String, error: Exception, timeoutMs: Int): String {
+    val message = error.message ?: "FTP $operation failed"
+    return if (error is SocketTimeoutException || Regex("timed out|timeout", RegexOption.IGNORE_CASE).containsMatchIn(message)) {
+      "FTP $operation timed out after ${timeoutMs}ms"
+    } else {
+      message
+    }
+  }
+
   @PluginMethod
   fun listDirectory(call: PluginCall) {
     val host = call.getString("host")
@@ -61,10 +107,12 @@ class FtpClientPlugin : Plugin() {
     val username = call.getString("username") ?: "user"
     val password = call.getString("password") ?: ""
     val path = call.getString("path") ?: "/"
+    val timeoutMs = resolveTimeoutMs(call)
 
     runTask(Runnable {
       val client = ftpClientFactory()
       try {
+        applyTimeouts(client, timeoutMs)
         client.connect(host, port)
         val loggedIn = client.login(username, password)
         if (!loggedIn) {
@@ -97,6 +145,7 @@ class FtpClientPlugin : Plugin() {
         result.put("entries", entries)
         call.resolve(result)
       } catch (error: Exception) {
+        val message = buildFailureMessage("listDirectory", error, timeoutMs)
         AppLogger.error(
           pluginContextOrNull(),
           logTag,
@@ -105,7 +154,7 @@ class FtpClientPlugin : Plugin() {
           error,
           traceFields(call),
         )
-        call.reject(error.message, error)
+        call.reject(message, error)
       } finally {
         try {
           if (client.isConnected) client.disconnect()
@@ -131,10 +180,12 @@ class FtpClientPlugin : Plugin() {
     val port = call.getInt("port") ?: 21
     val username = call.getString("username") ?: "user"
     val password = call.getString("password") ?: ""
+    val timeoutMs = resolveTimeoutMs(call)
 
     runTask(Runnable {
       val client = ftpClientFactory()
       try {
+        applyTimeouts(client, timeoutMs)
         client.connect(host, port)
         val loggedIn = client.login(username, password)
         if (!loggedIn) {
@@ -157,6 +208,7 @@ class FtpClientPlugin : Plugin() {
         result.put("sizeBytes", bytes.size)
         call.resolve(result)
       } catch (error: Exception) {
+        val message = buildFailureMessage("readFile", error, timeoutMs)
         AppLogger.error(
           pluginContextOrNull(),
           logTag,
@@ -165,7 +217,7 @@ class FtpClientPlugin : Plugin() {
           error,
           traceFields(call),
         )
-        call.reject(error.message, error)
+        call.reject(message, error)
       } finally {
         try {
           if (client.isConnected) client.disconnect()

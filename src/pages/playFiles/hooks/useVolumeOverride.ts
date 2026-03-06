@@ -307,7 +307,10 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
         void ensureVolumeSessionSnapshot();
         try {
           await applyAudioMixerUpdates(updates, "Volume");
-        } catch {
+        } catch (error) {
+          addErrorLog("Volume update failed", {
+            error: (error as Error).message,
+          });
           // Write failed; skip UI state update to avoid desync.
           return;
         } finally {

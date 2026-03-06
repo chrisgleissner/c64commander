@@ -194,4 +194,63 @@ describe("useSourceNavigator", () => {
     expect(result.current.entries[0].name).toBe("current.sid");
     expect(result.current.path).toBe("/B");
   });
+
+  it("ignores stale failures while a newer request is still pending", async () => {
+    type Resolver = {
+      resolve: (entries: { type: string; name: string; path: string }[]) => void;
+      reject: (error: Error) => void;
+    };
+    const requests: Resolver[] = [];
+    const listEntries = vi.fn().mockImplementation(
+      () =>
+        new Promise<{ type: string; name: string; path: string }[]>((resolve, reject) => {
+          requests.push({ resolve, reject });
+        }),
+    );
+    const source: SourceLocation = {
+      id: "race-error-1",
+      type: "local",
+      name: "Local",
+      rootPath: "/",
+      isAvailable: true,
+      listEntries,
+      listFilesRecursive: vi.fn(),
+    };
+
+    const { result } = renderHook(() => useSourceNavigator(source));
+
+    await waitFor(() => expect(listEntries).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      requests[0].resolve([{ type: "dir", name: "A", path: "/A" }]);
+    });
+
+    act(() => {
+      result.current.navigateTo("/A");
+    });
+    await waitFor(() => expect(listEntries).toHaveBeenCalledTimes(2));
+
+    act(() => {
+      result.current.navigateTo("/B");
+    });
+    await waitFor(() => expect(listEntries).toHaveBeenCalledTimes(3));
+
+    await act(async () => {
+      requests[1].reject(new Error("stale failure"));
+    });
+
+    expect(result.current.error).toBeNull();
+    expect(result.current.isLoading).toBe(true);
+
+    await act(async () => {
+      requests[2].resolve([{ type: "file", name: "current.sid", path: "/B/current.sid" }]);
+    });
+
+    expect(result.current.error).toBeNull();
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.path).toBe("/B");
+    expect(vi.mocked(addErrorLog)).not.toHaveBeenCalledWith(
+      "Source browse failed",
+      expect.objectContaining({ path: "/A" }),
+    );
+  });
 });

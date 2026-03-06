@@ -155,12 +155,25 @@ export function usePlaybackPersistence({
   const buildTrackId = (source: string, sourceId: string | null | undefined, path: string) =>
     `${source}:${sourceId ?? ""}:${normalizeSourcePath(path)}`;
 
+  const resolveHydratedLocalSourceId = (track: TrackRecord) => {
+    if (track.sourceKind !== "local") return null;
+    if (track.sourceId) return track.sourceId;
+    if (!track.sourceLocator.startsWith("/")) return track.sourceLocator;
+    const legacyPrefix = "local:";
+    if (!track.trackId.startsWith(legacyPrefix)) return null;
+    const separatorIndex = track.trackId.indexOf(":", legacyPrefix.length);
+    if (separatorIndex < 0) return null;
+    const legacySourceId = track.trackId.slice(legacyPrefix.length, separatorIndex);
+    return legacySourceId || null;
+  };
+
   const serializePlaylistToRepository = (items: PlaylistItem[], playlistId: string) => {
     const nowIso = new Date().toISOString();
     const tracks: TrackRecord[] = items.map((item) => ({
       trackId: buildTrackId(item.request.source, item.sourceId ?? null, item.path),
       sourceKind: item.request.source,
       sourceLocator: normalizeSourcePath(item.path),
+      sourceId: item.sourceId ?? null,
       category: item.category,
       title: item.label,
       author: null,
@@ -214,8 +227,7 @@ export function usePlaybackPersistence({
             name: track.title,
             durationMs: track.defaultDurationMs ?? undefined,
             songNr: playlistItem.songNr,
-            sourceId:
-              track.sourceKind === "local" ? (track.sourceLocator.startsWith("/") ? null : track.sourceLocator) : null,
+            sourceId: resolveHydratedLocalSourceId(track),
             sizeBytes: track.sizeBytes ?? null,
             modifiedAt: track.modifiedAt ?? null,
             addedAt: playlistItem.addedAt,

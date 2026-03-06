@@ -196,6 +196,31 @@ describe("useDiskLibrary", () => {
     expect(result.current.disks).toHaveLength(0);
   });
 
+  it("resets in-memory state when uniqueId changes", () => {
+    const firstDisk = createDiskEntry({ path: "/device-a.d64", location: "local" });
+    const secondDisk = createDiskEntry({ path: "/device-b.d64", location: "local" });
+    vi.mocked(loadDiskLibrary)
+      .mockReturnValueOnce({ disks: [firstDisk] })
+      .mockReturnValueOnce({ disks: [secondDisk] });
+
+    const { result, rerender } = renderHook(({ uniqueId }) => useDiskLibrary(uniqueId), {
+      initialProps: { uniqueId: "device-a" },
+    });
+
+    expect(result.current.disks.map((disk) => disk.id)).toEqual([firstDisk.id]);
+
+    act(() => {
+      result.current.addDisks([createDiskEntry({ path: "/runtime-only.d64", location: "local" })], {
+        runtime: new File(["disk"], "runtime-only.d64"),
+      } as unknown as Record<string, File>);
+    });
+
+    rerender({ uniqueId: "device-b" });
+
+    expect(result.current.disks.map((disk) => disk.id)).toEqual([secondDisk.id]);
+    expect(result.current.runtimeFiles).toEqual({});
+  });
+
   it("removeDisk is a no-op on runtimeFiles when disk has no runtime file", () => {
     const { result } = renderHook(() => useDiskLibrary(mockUniqueId));
     const disk = createDiskEntry({ path: "/nodisk.d64", location: "local" });

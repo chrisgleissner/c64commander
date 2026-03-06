@@ -29,11 +29,11 @@ export const useDiskLibrary = (uniqueId: string | null): DiskLibrary => {
   const [disks, setDisks] = useState<DiskEntry[]>([]);
   const [runtimeFiles, setRuntimeFiles] = useState<Record<string, File>>({});
   const [filter, setFilter] = useState("");
-  const lastUniqueIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!uniqueId) {
-      lastUniqueIdRef.current = null;
+      setDisks([]);
+      setRuntimeFiles({});
       return;
     }
     const state = loadDiskLibrary(uniqueId);
@@ -42,16 +42,8 @@ export const useDiskLibrary = (uniqueId: string | null): DiskLibrary => {
       importedAt: disk.importedAt || new Date().toISOString(),
       importOrder: disk.importOrder ?? null,
     }));
-    setDisks((prev) => {
-      if (!prev.length) return normalized;
-      const existingIds = new Set(normalized.map((disk) => disk.id));
-      const merged = [...normalized];
-      prev.forEach((disk) => {
-        if (!existingIds.has(disk.id)) merged.push(disk);
-      });
-      return merged;
-    });
-    lastUniqueIdRef.current = uniqueId;
+    setDisks(normalized);
+    setRuntimeFiles({});
   }, [uniqueId]);
 
   useEffect(() => {

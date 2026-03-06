@@ -70,6 +70,7 @@ export const useSourceNavigator = (source: SourceLocation | null): SourceNavigat
         setEntries(result);
         setPath(safePath);
       } catch (err) {
+        if (loadingTokenRef.current !== token) return;
         const error = err as Error;
         setError(error.message);
         addErrorLog("Source browse failed", {
@@ -105,8 +106,8 @@ export const useSourceNavigator = (source: SourceLocation | null): SourceNavigat
           } else {
             setShowLoadingIndicator(false);
           }
+          setIsLoading(false);
         }
-        setIsLoading(false);
       }
     },
     [source],

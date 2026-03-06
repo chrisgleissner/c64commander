@@ -32,6 +32,7 @@ import org.mockito.ArgumentMatchers.eq
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.shadows.ShadowLog
 import java.io.File
+import java.net.SocketTimeoutException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import androidx.test.core.app.ApplicationProvider
@@ -446,6 +447,53 @@ class FtpClientPluginTest {
     plugin.readFile(call)
 
     verify(call).reject(any(String::class.java), any(Exception::class.java))
+  }
+
+  @Test
+  fun listDirectoryAppliesConfiguredTimeouts() {
+    val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+
+    `when`(ftpClient.login("user", "secret")).thenReturn(true)
+    `when`(ftpClient.mlistDir("/")).thenReturn(emptyArray())
+    `when`(ftpClient.listFiles("/")).thenReturn(emptyArray())
+
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getInt("port")).thenReturn(21)
+    `when`(call.getInt("timeoutMs")).thenReturn(4321)
+    `when`(call.getString("username")).thenReturn("user")
+    `when`(call.getString("password")).thenReturn("secret")
+    `when`(call.getString("path")).thenReturn("/")
+
+    plugin.listDirectory(call)
+
+    verify(ftpClient).setConnectTimeout(4321)
+    verify(ftpClient).setDefaultTimeout(4321)
+    verify(ftpClient).setSoTimeout(4321)
+  }
+
+  @Test
+  fun readFileRejectsWithNormalizedTimeoutMessage() {
+    val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+
+    doAnswer { throw SocketTimeoutException("connect timed out") }.`when`(ftpClient).connect("127.0.0.1", 21)
+
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getString("path")).thenReturn("/demo.sid")
+    `when`(call.getInt("timeoutMs")).thenReturn(2500)
+
+    plugin.readFile(call)
+
+    verify(call).reject(eq("FTP readFile timed out after 2500ms"), any(Exception::class.java))
   }
 
   @Test

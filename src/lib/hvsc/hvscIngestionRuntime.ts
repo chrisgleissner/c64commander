@@ -170,6 +170,46 @@ const formatPathListPreview = (paths: string[]) => {
   return paths.length > previewLimit ? `${preview} (+${paths.length - previewLimit} more)` : preview;
 };
 
+const applyCancelledIngestionState = (
+  message = "Cancelled",
+  emitProgress?: (event: Omit<HvscProgressEvent, "ingestionId" | "elapsedTimeMs">) => void,
+  archiveName?: string,
+) => {
+  updateHvscState({ ingestionState: "idle", ingestionError: message });
+  const summary = loadHvscStatusSummary();
+  const now = new Date().toISOString();
+  saveHvscStatusSummary({
+    ...summary,
+    download:
+      summary.download.status === "in-progress"
+        ? {
+            ...summary.download,
+            status: "idle",
+            finishedAt: now,
+            errorCategory: null,
+            errorMessage: message,
+          }
+        : summary.download,
+    extraction:
+      summary.extraction.status === "in-progress"
+        ? {
+            ...summary.extraction,
+            status: "idle",
+            finishedAt: now,
+            errorCategory: null,
+            errorMessage: message,
+          }
+        : summary.extraction,
+    lastUpdatedAt: now,
+  });
+  emitProgress?.({
+    stage: "cancelled",
+    message,
+    archiveName,
+    errorCause: message,
+  });
+};
+
 /** True while an ingestion task (install/update or cached ingest) is executing. */
 export const isIngestionRuntimeActive = () => runtimeState.activeIngestionRunning;
 
@@ -951,12 +991,23 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
     return loadHvscState();
   } catch (error) {
     const failure = classifyError(error);
-    if (currentArchiveType === "update" && currentArchiveVersion) {
-      markUpdateApplied(currentArchiveVersion, "failed", (error as Error).message);
-    }
     if (currentArchive && !currentArchiveComplete) {
       const { deleteCachedArchive } = await import("./hvscFilesystem");
       await deleteCachedArchive(currentArchive);
+    }
+    if (failure.category === "cancelled") {
+      addLog("info", "HVSC install/update cancelled", {
+        ingestionId,
+        archiveName: currentArchive ?? undefined,
+        archiveType: currentArchiveType,
+        archiveVersion: currentArchiveVersion,
+        pipelineState: currentPipelineState,
+      });
+      applyCancelledIngestionState("Cancelled", emitProgress, currentArchive ?? undefined);
+      throw error;
+    }
+    if (currentArchiveType === "update" && currentArchiveVersion) {
+      markUpdateApplied(currentArchiveVersion, "failed", (error as Error).message);
     }
     addErrorLog("HVSC install/update failed", {
       ingestionId,
@@ -1002,6 +1053,7 @@ export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus>
   const ingestionId = crypto.randomUUID();
   const emitProgress = createProgressEmitter(ingestionId);
   emitProgress({ stage: "start", message: "HVSC cached ingestion started" });
+  resetHvscProgressSummaryStage();
   await ensureHvscDirs();
   runtimeState.cancelTokens.set(cancelToken, { cancelled: false });
 
@@ -1150,6 +1202,17 @@ export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus>
     return loadHvscState();
   } catch (error) {
     const failure = classifyError(error);
+    if (failure.category === "cancelled") {
+      addLog("info", "HVSC cached ingest cancelled", {
+        ingestionId,
+        archiveName: currentArchive ?? undefined,
+        archiveType: currentArchiveType,
+        archiveVersion: currentArchiveVersion,
+        pipelineState: currentPipelineState,
+      });
+      applyCancelledIngestionState("Cancelled", emitProgress, currentArchive ?? undefined);
+      throw error;
+    }
     if (currentArchiveType === "update" && currentArchiveVersion) {
       markUpdateApplied(currentArchiveVersion, "failed", (error as Error).message);
     }
@@ -1204,7 +1267,7 @@ export const cancelHvscInstall = async (cancelToken: string): Promise<void> => {
       });
     }
   }
-  updateHvscState({ ingestionState: "idle", ingestionError: "Cancelled" });
+  applyCancelledIngestionState();
   addLog("info", "HVSC cancel requested", { token: cancelToken });
 };
 

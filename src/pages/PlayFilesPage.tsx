@@ -855,6 +855,7 @@ export default function PlayFilesPage() {
         trackId: buildTrackId(item.request.source, item.sourceId ?? null, item.path),
         sourceKind: item.request.source,
         sourceLocator: normalizeSourcePath(item.path),
+        sourceId: item.sourceId ?? null,
         category: item.category,
         title: item.label,
         author: null,
@@ -1019,7 +1020,19 @@ export default function PlayFilesPage() {
                 volumeMuted={volumeMuted}
                 canControlVolume={canControlVolume}
                 isPending={updateConfigBatch.isPending}
-                onToggleMute={() => void handleToggleMute()}
+                onToggleMute={() => {
+                  void handleToggleMute().catch((error) => {
+                    addErrorLog("Mute toggle failed", {
+                      error: (error as Error).message,
+                    });
+                    reportUserError({
+                      operation: "PLAYBACK_MUTE_TOGGLE",
+                      title: "Mute toggle failed",
+                      description: (error as Error).message,
+                      error,
+                    });
+                  });
+                }}
                 volumeStepsCount={volumeSteps.length}
                 volumeIndex={volumeIndex}
                 onVolumeChange={handleVolumeLocalChange}

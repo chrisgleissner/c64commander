@@ -377,13 +377,21 @@ const isLocalDeviceHost = (host: string) => {
 const resolvePreferredDeviceHost = (baseUrl: string, deviceHost?: string) => {
   const explicitHost = deviceHost ? normalizeDeviceHost(deviceHost) : null;
   const derivedHost = normalizeDeviceHost(explicitHost ?? getDeviceHostFromBaseUrl(baseUrl));
+  const storedHost = resolveDeviceHostFromStorage();
+  if (!explicitHost && derivedHost === DEFAULT_DEVICE_HOST && storedHost !== DEFAULT_DEVICE_HOST) {
+    addLog("info", "Using stored device host instead of default hostname", {
+      baseUrl,
+      derivedHost,
+      storedHost,
+    });
+    return storedHost;
+  }
   const isLikelyFallbackOrigin = (() => {
     if (typeof window === "undefined") return false;
     const origin = window.location?.origin;
     return Boolean(origin && (baseUrl === origin || baseUrl.startsWith(`${origin}/`)));
   })();
   if (!explicitHost && isLocalDeviceHost(derivedHost) && isLikelyFallbackOrigin) {
-    const storedHost = resolveDeviceHostFromStorage();
     if (!isLocalDeviceHost(storedHost)) {
       addLog("warn", "Ignoring localhost base URL in favor of stored host", {
         baseUrl,

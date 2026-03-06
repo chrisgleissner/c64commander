@@ -23,6 +23,7 @@ export type FtpListOptions = {
   username?: string;
   password?: string;
   path?: string;
+  timeoutMs?: number;
   traceContext?: NativeTraceContext;
 };
 
@@ -32,6 +33,7 @@ export type FtpReadOptions = {
   username?: string;
   password?: string;
   path: string;
+  timeoutMs?: number;
   traceContext?: NativeTraceContext;
 };
 

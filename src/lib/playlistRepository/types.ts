@@ -4,6 +4,7 @@ export type TrackRecord = {
   trackId: string;
   sourceKind: SourceKind;
   sourceLocator: string;
+  sourceId?: string | null;
   category?: string | null;
   title: string;
   author?: string | null;

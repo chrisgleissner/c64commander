@@ -278,7 +278,8 @@ export const useHvscLibrary = (): HvscLibraryState => {
   useEffect(() => {
     if (!isHvscBridgeAvailable()) return;
     let removeListener: (() => Promise<void>) | null = null;
-    addHvscProgressListener((event) => {
+    let disposed = false;
+    const registration = addHvscProgressListener((event) => {
       const now = new Date().toISOString();
       const lastStage = hvscLastStageRef.current;
       const applyExtractionCounts = (payload: { processedCount?: number; totalCount?: number }) => {
@@ -485,10 +486,22 @@ export const useHvscLibrary = (): HvscLibraryState => {
           archiveName: event.archiveName,
         });
       }
-    }).then((handler) => {
-      removeListener = handler.remove;
     });
+    void registration
+      .then(async (handler) => {
+        if (disposed) {
+          await handler.remove();
+          return;
+        }
+        removeListener = handler.remove;
+      })
+      .catch((error) => {
+        addErrorLog("HVSC progress listener registration failed", {
+          error: (error as Error).message,
+        });
+      });
     return () => {
+      disposed = true;
       if (hvscDownloadTimerRef.current !== null) {
         window.clearTimeout(hvscDownloadTimerRef.current);
         hvscDownloadTimerRef.current = null;
@@ -497,7 +510,9 @@ export const useHvscLibrary = (): HvscLibraryState => {
         window.clearTimeout(hvscExtractionTimerRef.current);
         hvscExtractionTimerRef.current = null;
       }
-      if (removeListener) void removeListener();
+      if (removeListener) {
+        void removeListener();
+      }
     };
   }, [resolveHvscFailureCategory, updateHvscSummary]);
 

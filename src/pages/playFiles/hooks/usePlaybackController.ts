@@ -345,9 +345,7 @@ export function usePlaybackController({
         const shouldReboot = options?.rebootBeforePlay ?? item.category === "disk";
         const executionOptions = shouldReboot ? { rebootBeforeMount: true } : undefined;
         const resolvedDurationBase = durationOverride ?? item.durationMs;
-        const resolvedDuration = isSongCategory(item.category)
-          ? (resolvedDurationBase ?? durationFallbackMs)
-          : resolvedDurationBase;
+        const resolvedDuration = resolvedDurationBase ?? durationFallbackMs;
         setElapsedMs(0);
         setDurationMs(resolvedDuration);
         if (typeof options?.playlistIndex === "number" && options.playlistIndex >= 0) {
@@ -792,10 +790,7 @@ export function usePlaybackController({
   const playlistItemDuration = useCallback(
     (item: PlaylistItem, index: number) => {
       const base = index === currentIndex ? (durationMs ?? item.durationMs) : item.durationMs;
-      if (isSongCategory(item.category)) {
-        return base ?? durationFallbackMs;
-      }
-      return base;
+      return base ?? durationFallbackMs;
     },
     [currentIndex, durationFallbackMs, durationMs],
   );

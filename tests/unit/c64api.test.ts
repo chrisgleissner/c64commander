@@ -494,6 +494,14 @@ describe("c64api", () => {
     expect(snapshot).toBe("real-device");
   });
 
+  it("uses stored device host when default hostname would otherwise be used", () => {
+    localStorage.setItem("c64u_device_host", "192.168.1.55");
+
+    applyC64APIRuntimeConfig("http://c64u");
+
+    expect(getC64API().getDeviceHost()).toBe("192.168.1.55");
+  });
+
   it("uploads cartridge files and handles upload failures", async () => {
     const fetchMock = getFetchMock();
     fetchMock.mockResolvedValueOnce(
