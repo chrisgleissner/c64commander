@@ -855,3 +855,9 @@ git push origin v0.2.0
 ```
 
 CI builds and uploads APK to the release.
+
+Android release checklist notes:
+
+- Keep `server.androidScheme = "http"` in `capacitor.config.ts`.
+- Keep `plugins.CapacitorHttp.enabled = true` in `capacitor.config.ts`.
+- Treat any rollback of either Android transport setting as a release blocker until real-device connectivity is revalidated against `/v1/info` and `/v1/configs`.

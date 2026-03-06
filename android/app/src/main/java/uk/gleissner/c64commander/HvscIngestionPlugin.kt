@@ -18,6 +18,16 @@ import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
+import java.io.BufferedInputStream
+import java.io.BufferedOutputStream
+import java.io.File
+import java.io.FileOutputStream
+import java.io.InputStream
+import java.util.Locale
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.regex.Pattern
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -30,15 +40,6 @@ import kotlinx.coroutines.withContext
 import org.apache.commons.compress.archivers.sevenz.SevenZArchiveEntry
 import org.apache.commons.compress.archivers.sevenz.SevenZFile
 import org.tukaani.xz.LZMA2Options
-import java.io.BufferedInputStream
-import java.io.BufferedOutputStream
-import java.io.File
-import java.io.FileOutputStream
-import java.io.InputStream
-import java.util.Locale
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.zip.ZipEntry
-import java.util.zip.ZipInputStream
 
 @CapacitorPlugin(name = "HvscIngestion")
 open class HvscIngestionPlugin : Plugin() {
@@ -50,6 +51,8 @@ open class HvscIngestionPlugin : Plugin() {
   private companion object {
     private const val MAX_DELETION_LIST_SIZE_BYTES = 10L * 1024 * 1024
     private val REQUIRED_XZ_CLASS: Class<*> = LZMA2Options::class.java
+    private val UNSUPPORTED_SEVEN_Z_METHOD_PATTERN =
+            Pattern.compile("Unsupported compression method \\[(.*?)\\]", Pattern.CASE_INSENSITIVE)
   }
 
   private fun ensureSevenZipRuntimeClasses() {
@@ -60,33 +63,45 @@ open class HvscIngestionPlugin : Plugin() {
     }
   }
 
-  private fun pluginContextOrNull() = try {
-    context
-  } catch (_: Throwable) {
-    null
+  private fun buildIngestionFailureMessage(error: Exception): String {
+    val message = error.message ?: "HVSC ingestion failed"
+    val matcher = UNSUPPORTED_SEVEN_Z_METHOD_PATTERN.matcher(message)
+    if (matcher.find()) {
+      val methodChain = matcher.group(1) ?: "unknown"
+      return "HVSC 7z method chain [$methodChain] is unsupported by Android native extraction; retry will use the non-native fallback extractor"
+    }
+    return message
   }
+
+  private fun pluginContextOrNull() =
+          try {
+            context
+          } catch (_: Throwable) {
+            null
+          }
 
   private fun traceFields(call: PluginCall): AppLogger.TraceFields {
     val trace = call.getObject("traceContext") ?: return AppLogger.TraceFields()
     return AppLogger.TraceFields(
-      correlationId = trace.getString("correlationId"),
-      trackInstanceId = trace.getInteger("trackInstanceId")?.toString(),
-      playlistItemId = trace.getString("playlistItemId"),
-      sourceKind = trace.getString("sourceKind"),
-      localAccessMode = trace.getString("localAccessMode"),
-      lifecycleState = trace.getString("lifecycleState"),
+            correlationId = trace.getString("correlationId"),
+            trackInstanceId = trace.getInteger("trackInstanceId")?.toString(),
+            playlistItemId = trace.getString("playlistItemId"),
+            sourceKind = trace.getString("sourceKind"),
+            localAccessMode = trace.getString("localAccessMode"),
+            lifecycleState = trace.getString("lifecycleState"),
     )
   }
 
-  private class HvscMetadataDbHelper(plugin: HvscIngestionPlugin) : SQLiteOpenHelper(
-    plugin.context,
-    "hvsc_metadata.db",
-    null,
-    1,
-  ) {
+  private class HvscMetadataDbHelper(plugin: HvscIngestionPlugin) :
+          SQLiteOpenHelper(
+                  plugin.context,
+                  "hvsc_metadata.db",
+                  null,
+                  1,
+          ) {
     override fun onCreate(db: SQLiteDatabase) {
       db.execSQL(
-        """
+              """
           CREATE TABLE IF NOT EXISTS hvsc_song_index (
             virtual_path TEXT PRIMARY KEY,
             file_name TEXT NOT NULL,
@@ -106,15 +121,15 @@ open class HvscIngestionPlugin : Plugin() {
   }
 
   private data class SongUpsertRow(
-    val virtualPath: String,
-    val fileName: String,
-    val songs: Int?,
-    val startSong: Int?,
+          val virtualPath: String,
+          val fileName: String,
+          val songs: Int?,
+          val startSong: Int?,
   )
 
   private data class SidHeader(
-    val songs: Int,
-    val startSong: Int,
+          val songs: Int,
+          val startSong: Int,
   )
 
   private fun parseSidHeader(headerBytes: ByteArray, headerLength: Int): SidHeader? {
@@ -122,7 +137,8 @@ open class HvscIngestionPlugin : Plugin() {
     val magic = String(headerBytes, 0, 4, Charsets.US_ASCII)
     if (magic != "PSID" && magic != "RSID") return null
     val songs = ((headerBytes[0x0E].toInt() and 0xFF) shl 8) or (headerBytes[0x0F].toInt() and 0xFF)
-    val startSong = ((headerBytes[0x10].toInt() and 0xFF) shl 8) or (headerBytes[0x11].toInt() and 0xFF)
+    val startSong =
+            ((headerBytes[0x10].toInt() and 0xFF) shl 8) or (headerBytes[0x11].toInt() and 0xFF)
     return SidHeader(songs = songs, startSong = startSong)
   }
 
@@ -133,13 +149,15 @@ open class HvscIngestionPlugin : Plugin() {
     try {
       val updatedAt = System.currentTimeMillis()
       batch.forEach { row ->
-        val values = ContentValues().apply {
-          put("virtual_path", row.virtualPath)
-          put("file_name", row.fileName)
-          if (row.songs != null) put("songs", row.songs) else putNull("songs")
-          if (row.startSong != null) put("start_song", row.startSong) else putNull("start_song")
-          put("updated_at_ms", updatedAt)
-        }
+        val values =
+                ContentValues().apply {
+                  put("virtual_path", row.virtualPath)
+                  put("file_name", row.fileName)
+                  if (row.songs != null) put("songs", row.songs) else putNull("songs")
+                  if (row.startSong != null) put("start_song", row.startSong)
+                  else putNull("start_song")
+                  put("updated_at_ms", updatedAt)
+                }
         db.insertWithOnConflict("hvsc_song_index", null, values, SQLiteDatabase.CONFLICT_REPLACE)
         applied += 1
       }
@@ -173,11 +191,12 @@ open class HvscIngestionPlugin : Plugin() {
 
   private fun normalizeEntryPath(raw: String): String {
     val normalized = raw.replace('\\', '/').trimStart('/')
-    val stripped = when {
-      normalized.startsWith("HVSC/", ignoreCase = true) -> normalized.substring(5)
-      normalized.startsWith("C64Music/", ignoreCase = true) -> normalized.substring(9)
-      else -> normalized
-    }
+    val stripped =
+            when {
+              normalized.startsWith("HVSC/", ignoreCase = true) -> normalized.substring(5)
+              normalized.startsWith("C64Music/", ignoreCase = true) -> normalized.substring(9)
+              else -> normalized
+            }
     return stripped
   }
 
@@ -198,11 +217,10 @@ open class HvscIngestionPlugin : Plugin() {
   }
 
   private fun parseDeletionList(content: String): List<String> {
-    return content
-      .split(Regex("\\r?\\n"))
-      .map { it.trim() }
-      .filter { it.isNotEmpty() && it.lowercase(Locale.US).endsWith(".sid") }
-      .map { if (it.startsWith("/")) it else "/$it" }
+    return content.split(Regex("\\r?\\n"))
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && it.lowercase(Locale.US).endsWith(".sid") }
+            .map { if (it.startsWith("/")) it else "/$it" }
   }
 
   private fun ensureWithinRoot(root: File, candidate: File): File {
@@ -215,13 +233,13 @@ open class HvscIngestionPlugin : Plugin() {
   }
 
   private fun emitProgress(
-    stage: String,
-    message: String,
-    processedCount: Int,
-    totalCount: Int?,
-    currentFile: String?,
-    songsIngested: Int,
-    songsDeleted: Int,
+          stage: String,
+          message: String,
+          processedCount: Int,
+          totalCount: Int?,
+          currentFile: String?,
+          songsIngested: Int,
+          songsDeleted: Int,
   ) {
     val payload = JSObject()
     payload.put("stage", stage)
@@ -237,7 +255,11 @@ open class HvscIngestionPlugin : Plugin() {
     notifyListeners("hvscProgress", payload)
   }
 
-  private fun readFully(entryName: String, stream: InputStream, maxBytes: Int = 2 * 1024 * 1024): ByteArray {
+  private fun readFully(
+          entryName: String,
+          stream: InputStream,
+          maxBytes: Int = 2 * 1024 * 1024
+  ): ByteArray {
     val chunks = ArrayList<ByteArray>()
     var total = 0
     val buffer = ByteArray(8 * 1024)
@@ -246,7 +268,9 @@ open class HvscIngestionPlugin : Plugin() {
       if (read <= 0) break
       total += read
       if (total > maxBytes) {
-        throw IllegalStateException("Entry $entryName exceeds allowed metadata read size ($maxBytes bytes)")
+        throw IllegalStateException(
+                "Entry $entryName exceeds allowed metadata read size ($maxBytes bytes)"
+        )
       }
       chunks.add(buffer.copyOf(read))
     }
@@ -260,25 +284,25 @@ open class HvscIngestionPlugin : Plugin() {
   }
 
   private data class IngestionResult(
-    val totalEntries: Int,
-    val songsIngested: Int,
-    val songsDeleted: Int,
-    val failedSongs: Int,
-    val failedPaths: List<String>,
-    val songlengthFilesWritten: Int,
-    val metadataRows: Long,
-    val metadataUpserts: Int,
-    val metadataDeletes: Int,
+          val totalEntries: Int,
+          val songsIngested: Int,
+          val songsDeleted: Int,
+          val failedSongs: Int,
+          val failedPaths: List<String>,
+          val songlengthFilesWritten: Int,
+          val metadataRows: Long,
+          val metadataUpserts: Int,
+          val metadataDeletes: Int,
   )
 
   private suspend fun ingestSevenZip(
-    archiveFile: File,
-    libraryRoot: File,
-    db: SQLiteDatabase,
-    mode: String,
-    progressEvery: Int,
-    dbBatchSize: Int,
-    debugHeapLogging: Boolean,
+          archiveFile: File,
+          libraryRoot: File,
+          db: SQLiteDatabase,
+          mode: String,
+          progressEvery: Int,
+          dbBatchSize: Int,
+          debugHeapLogging: Boolean,
   ): IngestionResult {
     var processedEntries = 0
     var songsIngested = 0
@@ -300,7 +324,9 @@ open class HvscIngestionPlugin : Plugin() {
         if (cancellationRequested.get()) throw CancellationException("HVSC ingestion cancelled")
         if (!currentEntry.isDirectory) {
           val rawPath = currentEntry.name ?: ""
-          val normalizedPath = if (mode == "update") normalizeUpdateEntryPath(rawPath) else normalizeEntryPath(rawPath)
+          val normalizedPath =
+                  if (mode == "update") normalizeUpdateEntryPath(rawPath)
+                  else normalizeEntryPath(rawPath)
           if (normalizedPath.isNotBlank()) {
             val lowered = normalizedPath.lowercase(Locale.US)
             val targetFile = ensureWithinRoot(libraryRoot, File(libraryRoot, normalizedPath))
@@ -320,10 +346,10 @@ open class HvscIngestionPlugin : Plugin() {
                 pendingDeletions.addAll(parseDeletionList(text))
               } else {
                 AppLogger.warn(
-                  pluginContextOrNull(),
-                  logTag,
-                  "Skipping deletion list due to unexpected size: path=$normalizedPath entrySize=$entrySize",
-                  "HvscIngestionPlugin",
+                        pluginContextOrNull(),
+                        logTag,
+                        "Skipping deletion list due to unexpected size: path=$normalizedPath entrySize=$entrySize",
+                        "HvscIngestionPlugin",
                 )
               }
             } else if (lowered.endsWith("songlengths.md5") || lowered.endsWith("songlengths.txt")) {
@@ -362,12 +388,12 @@ open class HvscIngestionPlugin : Plugin() {
                   output.flush()
                   val sidHeader = parseSidHeader(sidHeaderBuffer, sidHeaderLength)
                   pendingUpserts.add(
-                    SongUpsertRow(
-                      virtualPath = "/$normalizedPath",
-                      fileName = targetFile.name,
-                      songs = sidHeader?.songs,
-                      startSong = sidHeader?.startSong,
-                    ),
+                          SongUpsertRow(
+                                  virtualPath = "/$normalizedPath",
+                                  fileName = targetFile.name,
+                                  songs = sidHeader?.songs,
+                                  startSong = sidHeader?.startSong,
+                          ),
                   )
                   if (pendingUpserts.size >= dbBatchSize) {
                     metadataUpserts += flushSongBatch(db, pendingUpserts)
@@ -377,7 +403,13 @@ open class HvscIngestionPlugin : Plugin() {
               } catch (error: Exception) {
                 failedSongs += 1
                 failedPaths.add("/$normalizedPath")
-                AppLogger.error(pluginContextOrNull(), logTag, "Failed to ingest SID entry $normalizedPath", "HvscIngestionPlugin", error)
+                AppLogger.error(
+                        pluginContextOrNull(),
+                        logTag,
+                        "Failed to ingest SID entry $normalizedPath",
+                        "HvscIngestionPlugin",
+                        error
+                )
               }
             }
           }
@@ -386,18 +418,23 @@ open class HvscIngestionPlugin : Plugin() {
         processedEntries += 1
         if (processedEntries % progressEvery == 0) {
           emitProgress(
-            stage = "sid_metadata_parsing",
-            message = "Processing HVSC archive…",
-            processedCount = processedEntries,
-            totalCount = null,
-            currentFile = currentEntry.name,
-            songsIngested = songsIngested,
-            songsDeleted = songsDeleted,
+                  stage = "sid_metadata_parsing",
+                  message = "Processing HVSC archive…",
+                  processedCount = processedEntries,
+                  totalCount = null,
+                  currentFile = currentEntry.name,
+                  songsIngested = songsIngested,
+                  songsDeleted = songsDeleted,
           )
           if (debugHeapLogging) {
             val runtime = Runtime.getRuntime()
             val used = runtime.totalMemory() - runtime.freeMemory()
-            AppLogger.info(pluginContextOrNull(), logTag, "HVSC heap snapshot: used=$used", "HvscIngestionPlugin")
+            AppLogger.info(
+                    pluginContextOrNull(),
+                    logTag,
+                    "HVSC heap snapshot: used=$used",
+                    "HvscIngestionPlugin"
+            )
           }
           kotlinx.coroutines.yield()
         }
@@ -417,7 +454,12 @@ open class HvscIngestionPlugin : Plugin() {
           songsDeleted += 1
           deletedVirtualPaths.add("/$normalized")
         } else {
-          AppLogger.warn(pluginContextOrNull(), logTag, "Failed to delete update target $normalized", "HvscIngestionPlugin")
+          AppLogger.warn(
+                  pluginContextOrNull(),
+                  logTag,
+                  "Failed to delete update target $normalized",
+                  "HvscIngestionPlugin"
+          )
         }
       }
     }
@@ -425,26 +467,26 @@ open class HvscIngestionPlugin : Plugin() {
     val metadataRows = getSongIndexCount(db)
 
     return IngestionResult(
-      totalEntries = processedEntries,
-      songsIngested = songsIngested,
-      songsDeleted = songsDeleted,
-      failedSongs = failedSongs,
-      failedPaths = failedPaths,
-      songlengthFilesWritten = songlengthFilesWritten,
-      metadataRows = metadataRows,
-      metadataUpserts = metadataUpserts,
-      metadataDeletes = metadataDeletes,
+            totalEntries = processedEntries,
+            songsIngested = songsIngested,
+            songsDeleted = songsDeleted,
+            failedSongs = failedSongs,
+            failedPaths = failedPaths,
+            songlengthFilesWritten = songlengthFilesWritten,
+            metadataRows = metadataRows,
+            metadataUpserts = metadataUpserts,
+            metadataDeletes = metadataDeletes,
     )
   }
 
   private suspend fun ingestZip(
-    archiveFile: File,
-    libraryRoot: File,
-    db: SQLiteDatabase,
-    mode: String,
-    progressEvery: Int,
-    dbBatchSize: Int,
-    debugHeapLogging: Boolean,
+          archiveFile: File,
+          libraryRoot: File,
+          db: SQLiteDatabase,
+          mode: String,
+          progressEvery: Int,
+          dbBatchSize: Int,
+          debugHeapLogging: Boolean,
   ): IngestionResult {
     var processedEntries = 0
     var songsIngested = 0
@@ -463,7 +505,9 @@ open class HvscIngestionPlugin : Plugin() {
         if (cancellationRequested.get()) throw CancellationException("HVSC ingestion cancelled")
         if (!entry.isDirectory) {
           val rawPath = entry.name ?: ""
-          val normalizedPath = if (mode == "update") normalizeUpdateEntryPath(rawPath) else normalizeEntryPath(rawPath)
+          val normalizedPath =
+                  if (mode == "update") normalizeUpdateEntryPath(rawPath)
+                  else normalizeEntryPath(rawPath)
           if (normalizedPath.isNotBlank()) {
             val lowered = normalizedPath.lowercase(Locale.US)
             val targetFile = ensureWithinRoot(libraryRoot, File(libraryRoot, normalizedPath))
@@ -502,12 +546,12 @@ open class HvscIngestionPlugin : Plugin() {
                   output.flush()
                   val sidHeader = parseSidHeader(sidHeaderBuffer, sidHeaderLength)
                   pendingUpserts.add(
-                    SongUpsertRow(
-                      virtualPath = "/$normalizedPath",
-                      fileName = targetFile.name,
-                      songs = sidHeader?.songs,
-                      startSong = sidHeader?.startSong,
-                    ),
+                          SongUpsertRow(
+                                  virtualPath = "/$normalizedPath",
+                                  fileName = targetFile.name,
+                                  songs = sidHeader?.songs,
+                                  startSong = sidHeader?.startSong,
+                          ),
                   )
                   if (pendingUpserts.size >= dbBatchSize) {
                     metadataUpserts += flushSongBatch(db, pendingUpserts)
@@ -517,7 +561,13 @@ open class HvscIngestionPlugin : Plugin() {
               } catch (error: Exception) {
                 failedSongs += 1
                 failedPaths.add("/$normalizedPath")
-                AppLogger.error(pluginContextOrNull(), logTag, "Failed to ingest SID entry $normalizedPath", "HvscIngestionPlugin", error)
+                AppLogger.error(
+                        pluginContextOrNull(),
+                        logTag,
+                        "Failed to ingest SID entry $normalizedPath",
+                        "HvscIngestionPlugin",
+                        error
+                )
               }
             }
           }
@@ -526,18 +576,23 @@ open class HvscIngestionPlugin : Plugin() {
         processedEntries += 1
         if (processedEntries % progressEvery == 0) {
           emitProgress(
-            stage = "sid_metadata_parsing",
-            message = "Processing HVSC archive…",
-            processedCount = processedEntries,
-            totalCount = null,
-            currentFile = entry.name,
-            songsIngested = songsIngested,
-            songsDeleted = songsDeleted,
+                  stage = "sid_metadata_parsing",
+                  message = "Processing HVSC archive…",
+                  processedCount = processedEntries,
+                  totalCount = null,
+                  currentFile = entry.name,
+                  songsIngested = songsIngested,
+                  songsDeleted = songsDeleted,
           )
           if (debugHeapLogging) {
             val runtime = Runtime.getRuntime()
             val used = runtime.totalMemory() - runtime.freeMemory()
-            AppLogger.info(pluginContextOrNull(), logTag, "HVSC heap snapshot: used=$used", "HvscIngestionPlugin")
+            AppLogger.info(
+                    pluginContextOrNull(),
+                    logTag,
+                    "HVSC heap snapshot: used=$used",
+                    "HvscIngestionPlugin"
+            )
           }
           kotlinx.coroutines.yield()
         }
@@ -557,7 +612,12 @@ open class HvscIngestionPlugin : Plugin() {
           songsDeleted += 1
           deletedVirtualPaths.add("/$normalized")
         } else {
-          AppLogger.warn(pluginContextOrNull(), logTag, "Failed to delete update target $normalized", "HvscIngestionPlugin")
+          AppLogger.warn(
+                  pluginContextOrNull(),
+                  logTag,
+                  "Failed to delete update target $normalized",
+                  "HvscIngestionPlugin"
+          )
         }
       }
     }
@@ -565,15 +625,15 @@ open class HvscIngestionPlugin : Plugin() {
     val metadataRows = getSongIndexCount(db)
 
     return IngestionResult(
-      totalEntries = processedEntries,
-      songsIngested = songsIngested,
-      songsDeleted = songsDeleted,
-      failedSongs = failedSongs,
-      failedPaths = failedPaths,
-      songlengthFilesWritten = songlengthFilesWritten,
-      metadataRows = metadataRows,
-      metadataUpserts = metadataUpserts,
-      metadataDeletes = metadataDeletes,
+            totalEntries = processedEntries,
+            songsIngested = songsIngested,
+            songsDeleted = songsDeleted,
+            failedSongs = failedSongs,
+            failedPaths = failedPaths,
+            songlengthFilesWritten = songlengthFilesWritten,
+            metadataRows = metadataRows,
+            metadataUpserts = metadataUpserts,
+            metadataDeletes = metadataDeletes,
     )
   }
 
@@ -601,125 +661,158 @@ open class HvscIngestionPlugin : Plugin() {
     }
 
     cancellationRequested.set(false)
-    activeJob = scope.launch {
-      var dbHelper: HvscMetadataDbHelper? = null
-      var db: SQLiteDatabase? = null
-      try {
-        val filesDir = context.filesDir
-        val archiveFile = File(filesDir, relativeArchivePath)
-        if (!archiveFile.exists() || !archiveFile.isFile) {
-          throw IllegalStateException("HVSC archive not found: ${archiveFile.absolutePath}")
-        }
-        if (archiveFile.length() <= 0L) {
-          throw IllegalStateException("HVSC archive is empty: ${archiveFile.absolutePath}")
-        }
+    activeJob =
+            scope.launch {
+              var dbHelper: HvscMetadataDbHelper? = null
+              var db: SQLiteDatabase? = null
+              try {
+                val filesDir = context.filesDir
+                val archiveFile = File(filesDir, relativeArchivePath)
+                if (!archiveFile.exists() || !archiveFile.isFile) {
+                  throw IllegalStateException("HVSC archive not found: ${archiveFile.absolutePath}")
+                }
+                if (archiveFile.length() <= 0L) {
+                  throw IllegalStateException("HVSC archive is empty: ${archiveFile.absolutePath}")
+                }
 
-        val libraryRoot = File(filesDir, "hvsc/library")
-        dbHelper = HvscMetadataDbHelper(this@HvscIngestionPlugin)
-        db = dbHelper.writableDatabase
-        if (resetLibrary && libraryRoot.exists()) {
-          libraryRoot.deleteRecursively()
-        }
-        if (!libraryRoot.exists() && !libraryRoot.mkdirs()) {
-          throw IllegalStateException("Failed to create HVSC library directory: ${libraryRoot.absolutePath}")
-        }
-        if (resetLibrary) {
-          db.beginTransaction()
-          try {
-            db.delete("hvsc_song_index", null, null)
-            db.setTransactionSuccessful()
-          } finally {
-            db.endTransaction()
-          }
-        }
+                val libraryRoot = File(filesDir, "hvsc/library")
+                dbHelper = HvscMetadataDbHelper(this@HvscIngestionPlugin)
+                db = dbHelper.writableDatabase
+                if (resetLibrary && libraryRoot.exists()) {
+                  libraryRoot.deleteRecursively()
+                }
+                if (!libraryRoot.exists() && !libraryRoot.mkdirs()) {
+                  throw IllegalStateException(
+                          "Failed to create HVSC library directory: ${libraryRoot.absolutePath}"
+                  )
+                }
+                if (resetLibrary) {
+                  db.beginTransaction()
+                  try {
+                    db.delete("hvsc_song_index", null, null)
+                    db.setTransactionSuccessful()
+                  } finally {
+                    db.endTransaction()
+                  }
+                }
 
-        emitProgress(
-          stage = "archive_extraction",
-          message = "Streaming archive ingestion started",
-          processedCount = 0,
-          totalCount = null,
-          currentFile = null,
-          songsIngested = 0,
-          songsDeleted = 0,
-        )
+                emitProgress(
+                        stage = "archive_extraction",
+                        message = "Streaming archive ingestion started",
+                        processedCount = 0,
+                        totalCount = null,
+                        currentFile = null,
+                        songsIngested = 0,
+                        songsDeleted = 0,
+                )
 
-        val lowered = archiveFile.name.lowercase(Locale.US)
-        val result = when {
-          lowered.endsWith(".7z") -> ingestSevenZip(
-            archiveFile,
-            libraryRoot,
-            db,
-            mode,
-            progressEvery.coerceAtLeast(1),
-            dbBatchSize.coerceAtLeast(1),
-            debugHeapLogging,
-          )
-          lowered.endsWith(".zip") -> ingestZip(
-            archiveFile,
-            libraryRoot,
-            db,
-            mode,
-            progressEvery.coerceAtLeast(1),
-            dbBatchSize.coerceAtLeast(1),
-            debugHeapLogging,
-          )
-          else -> throw IllegalStateException("Unsupported archive format: ${archiveFile.name}")
-        }
+                val lowered = archiveFile.name.lowercase(Locale.US)
+                val result =
+                        when {
+                          lowered.endsWith(".7z") ->
+                                  ingestSevenZip(
+                                          archiveFile,
+                                          libraryRoot,
+                                          db,
+                                          mode,
+                                          progressEvery.coerceAtLeast(1),
+                                          dbBatchSize.coerceAtLeast(1),
+                                          debugHeapLogging,
+                                  )
+                          lowered.endsWith(".zip") ->
+                                  ingestZip(
+                                          archiveFile,
+                                          libraryRoot,
+                                          db,
+                                          mode,
+                                          progressEvery.coerceAtLeast(1),
+                                          dbBatchSize.coerceAtLeast(1),
+                                          debugHeapLogging,
+                                  )
+                          else ->
+                                  throw IllegalStateException(
+                                          "Unsupported archive format: ${archiveFile.name}"
+                                  )
+                        }
 
-        if (result.metadataRows < minExpectedRows.toLong()) {
-          throw IllegalStateException("HVSC metadata row count below threshold: ${result.metadataRows} < $minExpectedRows")
-        }
+                if (result.metadataRows < minExpectedRows.toLong()) {
+                  throw IllegalStateException(
+                          "HVSC metadata row count below threshold: ${result.metadataRows} < $minExpectedRows"
+                  )
+                }
 
-        val payload = JSObject()
-        payload.put("totalEntries", result.totalEntries)
-        payload.put("songsIngested", result.songsIngested)
-        payload.put("songsDeleted", result.songsDeleted)
-        payload.put("failedSongs", result.failedSongs)
-        payload.put("songlengthFilesWritten", result.songlengthFilesWritten)
-        payload.put("metadataRows", result.metadataRows)
-        payload.put("metadataUpserts", result.metadataUpserts)
-        payload.put("metadataDeletes", result.metadataDeletes)
-        payload.put("archiveBytes", archiveFile.length())
-        val failedPaths = JSArray()
-        result.failedPaths.forEach { failedPaths.put(it) }
-        payload.put("failedPaths", failedPaths)
+                val payload = JSObject()
+                payload.put("totalEntries", result.totalEntries)
+                payload.put("songsIngested", result.songsIngested)
+                payload.put("songsDeleted", result.songsDeleted)
+                payload.put("failedSongs", result.failedSongs)
+                payload.put("songlengthFilesWritten", result.songlengthFilesWritten)
+                payload.put("metadataRows", result.metadataRows)
+                payload.put("metadataUpserts", result.metadataUpserts)
+                payload.put("metadataDeletes", result.metadataDeletes)
+                payload.put("archiveBytes", archiveFile.length())
+                val failedPaths = JSArray()
+                result.failedPaths.forEach { failedPaths.put(it) }
+                payload.put("failedPaths", failedPaths)
 
-        emitProgress(
-          stage = "complete",
-          message = "Streaming archive ingestion completed",
-          processedCount = result.totalEntries,
-          totalCount = result.totalEntries,
-          currentFile = null,
-          songsIngested = result.songsIngested,
-          songsDeleted = result.songsDeleted,
-        )
+                emitProgress(
+                        stage = "complete",
+                        message = "Streaming archive ingestion completed",
+                        processedCount = result.totalEntries,
+                        totalCount = result.totalEntries,
+                        currentFile = null,
+                        songsIngested = result.songsIngested,
+                        songsDeleted = result.songsDeleted,
+                )
 
-        withContext(Dispatchers.Main) {
-          call.resolve(payload)
-        }
-      } catch (cancelled: CancellationException) {
-        AppLogger.warn(pluginContextOrNull(), logTag, "HVSC ingestion cancelled", "HvscIngestionPlugin", cancelled, traceFields(call))
-        withContext(Dispatchers.Main) {
-          call.reject("HVSC ingestion cancelled", cancelled)
-        }
-      } catch (error: Exception) {
-        AppLogger.error(pluginContextOrNull(), logTag, "HVSC ingestion failed", "HvscIngestionPlugin", error, traceFields(call))
-        withContext(Dispatchers.Main) {
-          call.reject(error.message, error)
-        }
-      } finally {
-        try {
-          db?.close()
-        } catch (error: Exception) {
-          AppLogger.warn(pluginContextOrNull(), logTag, "Failed to close HVSC metadata database", "HvscIngestionPlugin", error)
-        }
-        try {
-          dbHelper?.close()
-        } catch (error: Exception) {
-          AppLogger.warn(pluginContextOrNull(), logTag, "Failed to close HVSC metadata db helper", "HvscIngestionPlugin", error)
-        }
-      }
-    }
+                withContext(Dispatchers.Main) { call.resolve(payload) }
+              } catch (cancelled: CancellationException) {
+                AppLogger.warn(
+                        pluginContextOrNull(),
+                        logTag,
+                        "HVSC ingestion cancelled",
+                        "HvscIngestionPlugin",
+                        cancelled,
+                        traceFields(call)
+                )
+                withContext(Dispatchers.Main) { call.reject("HVSC ingestion cancelled", cancelled) }
+              } catch (error: Exception) {
+                AppLogger.error(
+                        pluginContextOrNull(),
+                        logTag,
+                        "HVSC ingestion failed",
+                        "HvscIngestionPlugin",
+                        error,
+                        traceFields(call)
+                )
+                withContext(Dispatchers.Main) {
+                  call.reject(buildIngestionFailureMessage(error), error)
+                }
+              } finally {
+                try {
+                  db?.close()
+                } catch (error: Exception) {
+                  AppLogger.warn(
+                          pluginContextOrNull(),
+                          logTag,
+                          "Failed to close HVSC metadata database",
+                          "HvscIngestionPlugin",
+                          error
+                  )
+                }
+                try {
+                  dbHelper?.close()
+                } catch (error: Exception) {
+                  AppLogger.warn(
+                          pluginContextOrNull(),
+                          logTag,
+                          "Failed to close HVSC metadata db helper",
+                          "HvscIngestionPlugin",
+                          error
+                  )
+                }
+              }
+            }
   }
 
   @PluginMethod
@@ -733,18 +826,37 @@ open class HvscIngestionPlugin : Plugin() {
       payload.put("metadataRows", getSongIndexCount(db))
       call.resolve(payload)
     } catch (error: Exception) {
-      AppLogger.error(pluginContextOrNull(), logTag, "Failed to read HVSC ingestion stats", "HvscIngestionPlugin", error, traceFields(call))
+      AppLogger.error(
+              pluginContextOrNull(),
+              logTag,
+              "Failed to read HVSC ingestion stats",
+              "HvscIngestionPlugin",
+              error,
+              traceFields(call)
+      )
       call.reject(error.message, error)
     } finally {
       try {
         db?.close()
       } catch (error: Exception) {
-        AppLogger.warn(pluginContextOrNull(), logTag, "Failed to close HVSC metadata database after stats", "HvscIngestionPlugin", error)
+        AppLogger.warn(
+                pluginContextOrNull(),
+                logTag,
+                "Failed to close HVSC metadata database after stats",
+                "HvscIngestionPlugin",
+                error
+        )
       }
       try {
         dbHelper?.close()
       } catch (error: Exception) {
-        AppLogger.warn(pluginContextOrNull(), logTag, "Failed to close HVSC metadata db helper after stats", "HvscIngestionPlugin", error)
+        AppLogger.warn(
+                pluginContextOrNull(),
+                logTag,
+                "Failed to close HVSC metadata db helper after stats",
+                "HvscIngestionPlugin",
+                error
+        )
       }
     }
   }

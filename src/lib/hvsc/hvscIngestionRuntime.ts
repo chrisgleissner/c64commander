@@ -305,6 +305,11 @@ const resolveHvscIngestionMode = () => {
   return "non-native" as const;
 };
 
+const isUnsupportedNativeSevenZipMethodError = (error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error);
+  return /7z method chain.*unsupported|unsupported.*7z method chain|unsupported compression method/i.test(message);
+};
+
 // ── Listener management ──────────────────────────────────────────
 
 export const addHvscProgressListener = async (listener: (event: HvscProgressEvent) => void) => {
@@ -432,6 +437,7 @@ export type IngestArchiveBufferOptions = {
   emitProgress: (event: Omit<HvscProgressEvent, "ingestionId" | "elapsedTimeMs">) => void;
   pipeline: PipelineStateMachine;
   baselineInstalled: number | null;
+  extractionStarted?: boolean;
 };
 
 export type IngestArchiveBufferResult = {
@@ -446,7 +452,8 @@ export type IngestArchiveBufferResult = {
  * EXTRACTING → EXTRACTED → INGESTING → READY.
  */
 export const ingestArchiveBuffer = async (options: IngestArchiveBufferOptions): Promise<IngestArchiveBufferResult> => {
-  const { plan, archiveName, archiveBuffer, cancelToken, cancelTokens, emitProgress, pipeline } = options;
+  const { plan, archiveName, archiveBuffer, cancelToken, cancelTokens, emitProgress, pipeline, extractionStarted } =
+    options;
   let { baselineInstalled } = options;
   const ingestionSummary = {
     totalSongs: 0,
@@ -471,12 +478,14 @@ export const ingestArchiveBuffer = async (options: IngestArchiveBufferOptions): 
   const browseIndex = await createHvscBrowseIndexMutable(plan.type);
 
   const deletions: string[] = [];
-  pipeline.transition("EXTRACTING");
-  emitProgress({
-    stage: "archive_extraction",
-    message: `Extracting ${archiveName}…`,
-    archiveName,
-  });
+  if (!extractionStarted) {
+    pipeline.transition("EXTRACTING");
+    emitProgress({
+      stage: "archive_extraction",
+      message: `Extracting ${archiveName}…`,
+      archiveName,
+    });
+  }
 
   await extractArchiveEntries({
     archiveName,
@@ -727,15 +736,45 @@ const ingestArchivePathNative = async (options: {
 
   try {
     ensureNotCancelled(cancelToken);
-    const result = await HvscIngestion.ingestHvsc({
-      relativeArchivePath,
-      mode: plan.type,
-      resetLibrary: plan.type === "baseline",
-      dbBatchSize: 500,
-      minExpectedRows: plan.type === "baseline" ? 1 : 0,
-      progressEvery: 250,
-      debugHeapLogging: import.meta.env.DEV,
-    });
+    let result;
+    try {
+      result = await HvscIngestion.ingestHvsc({
+        relativeArchivePath,
+        mode: plan.type,
+        resetLibrary: plan.type === "baseline",
+        dbBatchSize: 500,
+        minExpectedRows: plan.type === "baseline" ? 1 : 0,
+        progressEvery: 250,
+        debugHeapLogging: import.meta.env.DEV,
+      });
+    } catch (error) {
+      if (!isUnsupportedNativeSevenZipMethodError(error)) {
+        throw error;
+      }
+
+      addLog("warn", "HVSC native ingestion unsupported; falling back to non-native extractor", {
+        archiveName,
+        archivePath,
+        mode: plan.type,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      emitProgress({
+        stage: "archive_extraction",
+        message: `Native extraction unsupported for ${archiveName}; retrying with fallback extractor`,
+        archiveName,
+      });
+      return ingestArchiveBuffer({
+        plan,
+        archiveName,
+        archiveBuffer: await readArchiveBuffer(archivePath),
+        cancelToken,
+        cancelTokens: runtimeState.cancelTokens,
+        emitProgress,
+        pipeline,
+        baselineInstalled,
+        extractionStarted: true,
+      });
+    }
     ensureNotCancelled(cancelToken);
 
     pipeline.transition("EXTRACTED");

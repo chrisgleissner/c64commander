@@ -679,6 +679,41 @@ describe("hvscIngestionRuntime", () => {
     }
   });
 
+  it("falls back to non-native extraction when native 7z method is unsupported", async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
+    vi.mocked(fetchLatestHvscVersions).mockResolvedValue({
+      baselineVersion: 5,
+      updateVersion: 5,
+      baseUrl: "https://example.com",
+    } as any);
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: "idle",
+      ingestionError: null,
+      installedVersion: 0,
+      installedBaselineVersion: null,
+    } as any);
+    vi.mocked(Filesystem.stat).mockResolvedValue({ size: 123, type: "file" } as any);
+    nativeHvscPlugin.ingestHvsc.mockRejectedValueOnce(
+      new Error(
+        "HVSC 7z method chain [3, 4, 1] is unsupported by Android native extraction; retry will use the non-native fallback extractor",
+      ),
+    );
+    vi.mocked(extractArchiveEntries).mockImplementation(async ({ onEntry }) => {
+      await onEntry?.("HVSC/C64Music/Demo/demo.sid", new Uint8Array([1, 2, 3]));
+    });
+
+    await installOrUpdateHvsc("token-native-fallback");
+
+    expect(nativeHvscPlugin.ingestHvsc).toHaveBeenCalled();
+    expect(vi.mocked(extractArchiveEntries)).toHaveBeenCalled();
+    expect(vi.mocked(addLog)).toHaveBeenCalledWith(
+      "warn",
+      "HVSC native ingestion unsupported; falling back to non-native extractor",
+      expect.objectContaining({ archiveName: "hvsc-baseline-5.7z" }),
+    );
+  });
+
   it("rejects cached ingest when baseline is missing", async () => {
     vi.mocked(Filesystem.readdir).mockResolvedValue({ files: [] } as any);
     vi.mocked(loadHvscState).mockReturnValue({
@@ -1001,8 +1036,14 @@ describe("hvscIngestionRuntime", () => {
     await expect(installOrUpdateHvsc("token-cancel-install")).rejects.toThrow("HVSC update cancelled");
 
     const statePatches = vi.mocked(updateHvscState).mock.calls.map(([patch]) => patch as Record<string, unknown>);
-    expect(statePatches.some((patch) => patch.ingestionState === "error" && patch.ingestionError === "HVSC update cancelled")).toBe(false);
-    expect(statePatches).toContainEqual(expect.objectContaining({ ingestionState: "idle", ingestionError: "Cancelled" }));
+    expect(
+      statePatches.some(
+        (patch) => patch.ingestionState === "error" && patch.ingestionError === "HVSC update cancelled",
+      ),
+    ).toBe(false);
+    expect(statePatches).toContainEqual(
+      expect.objectContaining({ ingestionState: "idle", ingestionError: "Cancelled" }),
+    );
   });
 
   it("keeps ingestCachedHvsc in cancelled idle state when cancellation wins", async () => {
@@ -1023,8 +1064,14 @@ describe("hvscIngestionRuntime", () => {
     await expect(ingestCachedHvsc("token-cancel-cached")).rejects.toThrow("HVSC update cancelled");
 
     const statePatches = vi.mocked(updateHvscState).mock.calls.map(([patch]) => patch as Record<string, unknown>);
-    expect(statePatches.some((patch) => patch.ingestionState === "error" && patch.ingestionError === "HVSC update cancelled")).toBe(false);
-    expect(statePatches).toContainEqual(expect.objectContaining({ ingestionState: "idle", ingestionError: "Cancelled" }));
+    expect(
+      statePatches.some(
+        (patch) => patch.ingestionState === "error" && patch.ingestionError === "HVSC update cancelled",
+      ),
+    ).toBe(false);
+    expect(statePatches).toContainEqual(
+      expect.objectContaining({ ingestionState: "idle", ingestionError: "Cancelled" }),
+    );
   });
 
   // Coverage: checkForHvscUpdates returns [] when already up-to-date (BRDA:212 empty array branch)

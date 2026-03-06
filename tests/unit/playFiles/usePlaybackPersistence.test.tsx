@@ -293,7 +293,9 @@ describe("usePlaybackPersistence", () => {
     const { result } = renderHook(() =>
       usePlaybackPersistenceHarness({
         playlistStorageKey,
-        localEntriesBySourceId: new Map([["local-source", new Map([["/Music/repo-local.sid", { name: "repo-local.sid" }]])]]),
+        localEntriesBySourceId: new Map([
+          ["local-source", new Map([["/Music/repo-local.sid", { name: "repo-local.sid" }]])],
+        ]),
         localSourceTreeUris: new Map(),
       }),
     );
@@ -352,7 +354,9 @@ describe("usePlaybackPersistence", () => {
     const { result } = renderHook(() =>
       usePlaybackPersistenceHarness({
         playlistStorageKey,
-        localEntriesBySourceId: new Map([["legacy-source", new Map([["/Music/repo-legacy.sid", { name: "repo-legacy.sid" }]])]]),
+        localEntriesBySourceId: new Map([
+          ["legacy-source", new Map([["/Music/repo-legacy.sid", { name: "repo-legacy.sid" }]])],
+        ]),
         localSourceTreeUris: new Map(),
       }),
     );

@@ -105,23 +105,26 @@ describe("ramOperations", () => {
   });
 
   describe("loadFullRamImage", () => {
-    it("pauses, writes in multiple chunks, then resumes", async () => {
+    it("pauses, writes the full image in one request, then resumes", async () => {
       const image = new Uint8Array(FULL_RAM_SIZE_BYTES);
       await loadFullRamImage(api as any, image);
 
       expect(api.machinePause).toHaveBeenCalledTimes(1);
-      // Full 64 KiB image must produce multiple write calls (4 KiB chunks = 16 calls).
-      expect(api.writeMemoryBlock.mock.calls.length).toBeGreaterThan(1);
+      expect(api.writeMemoryBlock).toHaveBeenCalledTimes(1);
+      expect(api.writeMemoryBlock).toHaveBeenCalledWith("0000", image);
       expect(api.machineResume).toHaveBeenCalledTimes(1);
     });
 
-    it("writes exactly 16 chunks for a 64 KiB image (chunk-count assertion)", async () => {
+    it("matches the script protocol with pause, one full write, and resume", async () => {
       const image = new Uint8Array(FULL_RAM_SIZE_BYTES);
       await loadFullRamImage(api as any, image);
 
-      // WRITE_CHUNK_SIZE_BYTES = 0x1000 (4 KiB), FULL_RAM_SIZE_BYTES = 0x10000 (64 KiB)
-      // Expected chunk count = 64 KiB / 4 KiB = 16
-      expect(api.writeMemoryBlock).toHaveBeenCalledTimes(16);
+      expect(api.machinePause.mock.invocationCallOrder[0]).toBeLessThan(
+        api.writeMemoryBlock.mock.invocationCallOrder[0],
+      );
+      expect(api.writeMemoryBlock.mock.invocationCallOrder[0]).toBeLessThan(
+        api.machineResume.mock.invocationCallOrder[0],
+      );
     });
 
     it("rejects invalid image size", async () => {
@@ -137,36 +140,30 @@ describe("ramOperations", () => {
       expect(api.machineResume).toHaveBeenCalled();
     });
 
-    it("retries per-chunk on mid-transfer failure and resumes after all retries exhausted", async () => {
-      // Always fail - ensures all retries are exhausted for every chunk attempt
+    it("retries the single full-image write and resumes after all retries exhausted", async () => {
       api.writeMemoryBlock.mockRejectedValue(new Error("chunk write failed"));
       const image = new Uint8Array(FULL_RAM_SIZE_BYTES);
 
       await expect(loadFullRamImage(api as any, image)).rejects.toThrow("chunk write failed");
       expect(api.machineResume).toHaveBeenCalled();
-      // With DEFAULT_RETRY_ATTEMPTS=2 the chunk is retried once before final failure
-      expect(api.writeMemoryBlock.mock.calls.length).toBeGreaterThanOrEqual(1);
+      expect(api.writeMemoryBlock).toHaveBeenCalledTimes(2);
     });
 
-    it("roundtrip integrity: each chunk payload matches corresponding image slice", async () => {
+    it("writes the exact full-image payload", async () => {
       const image = new Uint8Array(FULL_RAM_SIZE_BYTES);
-      // Fill with non-trivial data
       for (let i = 0; i < image.length; i++) image[i] = i % 251;
 
-      const capturedChunks: Array<{ addr: string; data: Uint8Array }> = [];
+      let capturedWrite: { addr: string; data: Uint8Array } | null = null;
       api.writeMemoryBlock.mockImplementation(async (addr: string, data: Uint8Array) => {
-        capturedChunks.push({ addr, data: data.slice() });
+        capturedWrite = { addr, data: data.slice() };
       });
 
       await loadFullRamImage(api as any, image);
 
-      // Reconstruct from captured chunks and verify equality
-      const reconstructed = new Uint8Array(FULL_RAM_SIZE_BYTES);
-      for (const { addr, data } of capturedChunks) {
-        const offset = parseInt(addr, 16);
-        reconstructed.set(data, offset);
-      }
-      expect(reconstructed).toEqual(image);
+      expect(capturedWrite).toEqual({
+        addr: "0000",
+        data: image,
+      });
     });
   });
 

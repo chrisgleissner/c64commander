@@ -1,11 +1,11 @@
 # Reliability 2 Implementation Plan
 
-Date: 2026-03-06  
+Date: 2026-03-06
 Source: `doc/testing/investigations/reliability2/analysis.md`
 
 ## 1. Goal
 
-Close R2-1..R2-13 with deterministic behavior, explicit failure reporting, reproducible tests, and validated Android real-device connectivity.
+Close R2-1..R2-14 with deterministic behavior, explicit failure reporting, reproducible tests, and validated Android real-device connectivity.
 
 ## 2. Execution order
 
@@ -22,6 +22,7 @@ Close R2-1..R2-13 with deterministic behavior, explicit failure reporting, repro
 11. R2-4 disk-library device isolation.
 12. R2-8 HVSC listener lifecycle cleanup race.
 13. R2-13 Android service-worker startup noise cleanup.
+14. R2-14 RAM dump/restore parity with working shell scripts.
 
 ## 3. Issue plans
 
@@ -244,6 +245,27 @@ Tests:
 Acceptance:
 
 1. No repeated startup error logs for service-worker registration on Android Capacitor runtime.
+
+### R2-14 RAM dump/restore parity with working shell scripts
+
+Implementation:
+
+1. Audit the exact behavior of `scripts/ram_read.py` and `scripts/ram_write.py` and treat them as the reference protocol.
+2. Keep save-RAM behavior aligned with the script sequence: pause once, read 64 KiB sequentially in 16 x 4 KiB blocks, resume once.
+3. Change load-RAM behavior to match the script sequence exactly: pause once, send the full 64 KiB image in one `writemem` request to address `0000`, resume once.
+4. Remove conflicting chunked-write assumptions and comments from the TypeScript RAM restore path.
+5. Keep existing size validation and error reporting, but do not change the protocol ordering relative to the reference scripts.
+
+Tests:
+
+1. Update `tests/unit/machine/ramOperations.test.ts` to assert the exact save/load call sequence and payload sizes used by the scripts.
+2. Add a regression test that load-RAM performs exactly one `writeMemoryBlock("0000", fullImage)` call for a 64 KiB image.
+3. Keep the Home page RAM action tests green to ensure the buttons still call the same handler surface.
+
+Acceptance:
+
+1. The Save RAM and Load RAM buttons use the same device protocol as the working `scripts/ram_read.py` and `scripts/ram_write.py` flows.
+2. Restoring a valid 64 KiB RAM image performs exactly one full-image write request after pause and before resume.
 
 ## 4. Verification gates
 

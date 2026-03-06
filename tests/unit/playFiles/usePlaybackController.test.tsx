@@ -3,6 +3,29 @@ import { describe, expect, it, vi } from "vitest";
 import { usePlaybackController } from "@/pages/playFiles/hooks/usePlaybackController";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 
+vi.mock("@/lib/c64api", () => ({
+  getC64API: vi.fn(() => ({})),
+}));
+
+vi.mock("@/lib/playback/playbackRouter", () => ({
+  buildPlayPlan: vi.fn((request) => request),
+  executePlayPlan: vi.fn(async () => undefined),
+  tryFetchUltimateSidBlob: vi.fn(async () => null),
+}));
+
+vi.mock("@/lib/hvsc", () => ({
+  getHvscDurationByMd5Seconds: vi.fn(async () => null),
+}));
+
+vi.mock("@/lib/logging", () => ({
+  addErrorLog: vi.fn(),
+  addLog: vi.fn(),
+}));
+
+vi.mock("@/lib/uiErrors", () => ({
+  reportUserError: vi.fn(),
+}));
+
 const createPlaylistItem = (overrides: Partial<PlaylistItem> = {}): PlaylistItem => ({
   id: "item-1",
   request: {
@@ -22,12 +45,20 @@ const createPlaylistItem = (overrides: Partial<PlaylistItem> = {}): PlaylistItem
   ...overrides,
 });
 
-const renderPlaybackController = (playlist: PlaylistItem[], currentIndex = 0, durationMs?: number) =>
+const renderPlaybackController = (
+  playlist: PlaylistItem[],
+  options?: {
+    currentIndex?: number;
+    durationMs?: number;
+    setPlaylist?: ReturnType<typeof vi.fn>;
+    setDurationMs?: ReturnType<typeof vi.fn>;
+  },
+) =>
   renderHook(() =>
     usePlaybackController({
       playlist,
-      setPlaylist: vi.fn(),
-      currentIndex,
+      setPlaylist: options?.setPlaylist ?? vi.fn(),
+      currentIndex: options?.currentIndex ?? 0,
       setCurrentIndex: vi.fn(),
       isPlaying: false,
       setIsPlaying: vi.fn(),
@@ -38,8 +69,8 @@ const renderPlaybackController = (playlist: PlaylistItem[], currentIndex = 0, du
       setElapsedMs: vi.fn(),
       playedMs: 0,
       setPlayedMs: vi.fn(),
-      durationMs,
-      setDurationMs: vi.fn(),
+      durationMs: options?.durationMs,
+      setDurationMs: options?.setDurationMs ?? vi.fn(),
       setCurrentSubsongCount: vi.fn(),
       repeatEnabled: false,
       localEntriesBySourceId: new Map(),
@@ -80,11 +111,11 @@ const renderPlaybackController = (playlist: PlaylistItem[], currentIndex = 0, du
   );
 
 describe("usePlaybackController", () => {
-  it("applies fallback duration to non-song items without explicit duration", () => {
+  it("leaves non-song duration unset in playlist rows before playback starts", () => {
     const playlist = [createPlaylistItem()];
     const { result } = renderPlaybackController(playlist);
 
-    expect(result.current.playlistItemDuration(playlist[0], 0)).toBe(45_000);
+    expect(result.current.playlistItemDuration(playlist[0], 0)).toBeUndefined();
   });
 
   it("preserves explicit duration for non-song items", () => {
@@ -92,5 +123,22 @@ describe("usePlaybackController", () => {
     const { result } = renderPlaybackController(playlist);
 
     expect(result.current.playlistItemDuration(playlist[0], 0)).toBe(12_000);
+  });
+
+  it("applies fallback duration when non-song playback starts", async () => {
+    const playlist = [createPlaylistItem()];
+    const setPlaylist = vi.fn();
+    const setDurationMs = vi.fn();
+    const { result } = renderPlaybackController(playlist, { setPlaylist, setDurationMs });
+
+    await result.current.playItem(playlist[0], { playlistIndex: 0 });
+
+    expect(setDurationMs).toHaveBeenCalledWith(45_000);
+    const playlistUpdater = setPlaylist.mock.calls.find(([value]) => typeof value === "function")?.[0] as
+      | ((items: PlaylistItem[]) => PlaylistItem[])
+      | undefined;
+    expect(playlistUpdater).toBeDefined();
+    const nextPlaylist = playlistUpdater?.(playlist);
+    expect(nextPlaylist?.[0]?.durationMs).toBe(45_000);
   });
 });

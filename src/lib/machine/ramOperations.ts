@@ -16,8 +16,7 @@ export const FULL_RAM_SIZE_BYTES = 0x10000;
 const IO_REGION_START = 0xd000;
 const IO_REGION_END = 0xe000;
 const READ_CHUNK_SIZE_BYTES = 0x1000;
-// 4 KiB write chunks match the reference read chunk size and satisfy the
-// device-side chunked-transfer constraint (single 64 KiB write is unreliable).
+// 4 KiB write chunks are kept for selective memory clearing operations.
 const WRITE_CHUNK_SIZE_BYTES = 0x1000;
 const WAIT_BETWEEN_RETRIES_MS = 120;
 const DEFAULT_RETRY_ATTEMPTS = 2;
@@ -210,11 +209,14 @@ const writeFullImage = async (
     status: "start",
     address: toHexAddress(0),
     expectedLength: image.length,
-    chunkSizeBytes: WRITE_CHUNK_SIZE_BYTES,
+    chunkSizeBytes: image.length,
   });
-  // Chunked write: each WRITE_CHUNK_SIZE_BYTES block is retried independently,
-  // satisfying the device-side chunked-transfer constraint.
-  await writeRanges(api, image, FULL_RAM_RANGE, onRetry);
+  await withRetry(
+    `Write RAM image at $${toHexAddress(0)}`,
+    () => api.writeMemoryBlock(toHexAddress(0), image),
+    DEFAULT_RETRY_ATTEMPTS,
+    onRetry ?? (async () => recoverFromLivenessFailure(api, "Load RAM")),
+  );
   recordRamTrace({
     operation: "ram-write",
     status: "success",

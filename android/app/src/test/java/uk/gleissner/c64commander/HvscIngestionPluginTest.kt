@@ -6,6 +6,9 @@ import com.getcapacitor.Bridge
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
+import java.lang.reflect.Method
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -18,8 +21,6 @@ import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.robolectric.RobolectricTestRunner
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 
 private open class TestableHvscIngestionPlugin : HvscIngestionPlugin() {
   val progressEvents = mutableListOf<JSObject>()
@@ -91,10 +92,12 @@ class HvscIngestionPluginTest {
     val payloadHolder = arrayOfNulls<JSObject>(1)
 
     doAnswer { invocation ->
-      payloadHolder[0] = invocation.getArgument(0) as JSObject
-      resolveLatch.countDown()
-      null
-    }.`when`(call).resolve(any(JSObject::class.java))
+              payloadHolder[0] = invocation.getArgument(0) as JSObject
+              resolveLatch.countDown()
+              null
+            }
+            .`when`(call)
+            .resolve(any(JSObject::class.java))
 
     plugin.getIngestionStats(call)
 
@@ -104,27 +107,28 @@ class HvscIngestionPluginTest {
 
   @Test
   fun emitProgressPublishesExpectedPayloadShape() {
-    val method = HvscIngestionPlugin::class.java.getDeclaredMethod(
-      "emitProgress",
-      String::class.java,
-      String::class.java,
-      Int::class.javaPrimitiveType,
-      Int::class.javaObjectType,
-      String::class.java,
-      Int::class.javaPrimitiveType,
-      Int::class.javaPrimitiveType,
-    )
+    val method =
+            HvscIngestionPlugin::class.java.getDeclaredMethod(
+                    "emitProgress",
+                    String::class.java,
+                    String::class.java,
+                    Int::class.javaPrimitiveType,
+                    Int::class.javaObjectType,
+                    String::class.java,
+                    Int::class.javaPrimitiveType,
+                    Int::class.javaPrimitiveType,
+            )
     method.isAccessible = true
 
     method.invoke(
-      plugin,
-      "sid_metadata_parsing",
-      "Processing HVSC archive…",
-      12,
-      20,
-      "/MUSICIANS/A/Artist/Tiny.sid",
-      5,
-      1,
+            plugin,
+            "sid_metadata_parsing",
+            "Processing HVSC archive…",
+            12,
+            20,
+            "/MUSICIANS/A/Artist/Tiny.sid",
+            5,
+            1,
     )
 
     assertTrue(plugin.progressEvents.isNotEmpty())
@@ -135,5 +139,29 @@ class HvscIngestionPluginTest {
     assertEquals(60, event.getInt("percent"))
     assertEquals(5, event.getInt("songsUpserted"))
     assertEquals(1, event.getInt("songsDeleted"))
+  }
+
+  @Test
+  fun buildIngestionFailureMessageClassifiesUnsupportedSevenZipMethod() {
+    val method: Method =
+            HvscIngestionPlugin::class.java.getDeclaredMethod(
+                    "buildIngestionFailureMessage",
+                    Exception::class.java,
+            )
+    method.isAccessible = true
+
+    val result =
+            method.invoke(
+                    plugin,
+                    IllegalStateException(
+                            "Unsupported compression method [3, 4, 1] used in entry demo.7z"
+                    ),
+            ) as
+                    String
+
+    assertEquals(
+            "HVSC 7z method chain [3, 4, 1] is unsupported by Android native extraction; retry will use the non-native fallback extractor",
+            result,
+    )
   }
 }

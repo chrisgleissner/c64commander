@@ -790,9 +790,9 @@ export function usePlaybackController({
   const playlistItemDuration = useCallback(
     (item: PlaylistItem, index: number) => {
       const base = index === currentIndex ? (durationMs ?? item.durationMs) : item.durationMs;
-      return base ?? durationFallbackMs;
+      return base;
     },
-    [currentIndex, durationFallbackMs, durationMs],
+    [currentIndex, durationMs],
   );
 
   return {

@@ -1,6 +1,6 @@
 # C64 Commander Reliability Analysis 2
 
-Date: 2026-03-06  
+Date: 2026-03-06
 Scope: Follow-up reliability investigation after `reliability1`, including on-device Android validation and one production connectivity hotfix
 
 ## 1. Executive summary
@@ -22,6 +22,7 @@ New/remaining findings:
 11. HVSC ingestion fails natively on-device for baseline archive compression method `[3, 4, 1]`.
 12. HVSC status/progress state can become internally inconsistent after ingestion failure.
 13. Service worker registration fails on Android runtime (`http://localhost/sw.js`) and adds noisy startup errors.
+14. Save RAM / Load RAM behavior diverges from the known-good shell scripts, breaking full-RAM restore.
 
 ## 2. Findings
 
@@ -253,6 +254,22 @@ Test gap:
 
 - No Android runtime guard ensuring PWA-only paths are skipped or silenced under Capacitor host runtime.
 
+### R2-14: RAM dump/restore path diverges from working device scripts
+
+Evidence:
+
+- `scripts/ram_read.py` pauses once, reads RAM in 16 x 4 KiB blocks, then resumes.
+- `scripts/ram_write.py` validates a 65536-byte image, pauses once, writes the full image to `$0000` in one request, then resumes.
+- `src/lib/machine/ramOperations.ts` already mirrors the dump script for reads, but `loadFullRamImage(...)` currently routes through `writeRanges(...)` and issues 16 x 4 KiB writes instead of one full-image write.
+
+Risk:
+
+- The Home page Save RAM / Load RAM buttons can report success while restore semantics differ from the only known-good device workflow, leaving RAM restore unreliable on real hardware.
+
+Test gap:
+
+- `tests/unit/machine/ramOperations.test.ts` currently locks in the incorrect chunked restore behavior by asserting 16 write calls for a full image.
+
 ## 3. Priority and blast radius
 
 P0:
@@ -276,6 +293,7 @@ P2:
 1. R2-13 Service worker noise under Android runtime
 2. R2-4 Disk-library cross-device bleed
 3. R2-8 HVSC listener cleanup race
+4. R2-14 RAM dump/restore script parity
 
 ## 4. Cross-check against reliability1
 
