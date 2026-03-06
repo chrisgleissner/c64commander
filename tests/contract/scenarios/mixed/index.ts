@@ -152,20 +152,16 @@ export function buildMixedScenarios(): MixedScenario[] {
 
           // Concurrent LIST × LIST
           const [listA, listB] = await Promise.all([
-            clientA
-              .list('/')
-              .catch((e) => ({
-                result: { response: { code: 500 }, latencyMs: 0 },
-                data: '',
-                error: String(e),
-              })),
-            clientB
-              .list('/')
-              .catch((e) => ({
-                result: { response: { code: 500 }, latencyMs: 0 },
-                data: '',
-                error: String(e),
-              })),
+            clientA.list('/').catch((e) => ({
+              result: { response: { code: 500 }, latencyMs: 0 },
+              data: '',
+              error: String(e),
+            })),
+            clientB.list('/').catch((e) => ({
+              result: { response: { code: 500 }, latencyMs: 0 },
+              data: '',
+              error: String(e),
+            })),
           ]);
           log({
             kind: 'conflict',
@@ -186,20 +182,16 @@ export function buildMixedScenarios(): MixedScenario[] {
 
           // Concurrent LIST × MLSD
           const [listC, mlsdA] = await Promise.all([
-            clientA
-              .list('/')
-              .catch((e) => ({
-                result: { response: { code: 500 }, latencyMs: 0 },
-                data: '',
-                error: String(e),
-              })),
-            clientB
-              .mlsd()
-              .catch((e) => ({
-                result: { response: { code: 500 }, latencyMs: 0 },
-                data: '',
-                error: String(e),
-              })),
+            clientA.list('/').catch((e) => ({
+              result: { response: { code: 500 }, latencyMs: 0 },
+              data: '',
+              error: String(e),
+            })),
+            clientB.mlsd().catch((e) => ({
+              result: { response: { code: 500 }, latencyMs: 0 },
+              data: '',
+              error: String(e),
+            })),
           ]);
           log({
             kind: 'conflict',
@@ -222,20 +214,16 @@ export function buildMixedScenarios(): MixedScenario[] {
           const payload = Buffer.from('c64u-conflict-test', 'utf8');
           await clientA.cwd(config.scratch.ftpDir);
           const [storR, listD] = await Promise.all([
-            clientA
-              .stor('conflict-probe.txt', payload)
-              .catch((e) => ({
-                response: { code: 500 },
-                latencyMs: 0,
-                error: String(e),
-              })),
-            clientB
-              .list('/')
-              .catch((e) => ({
-                result: { response: { code: 500 }, latencyMs: 0 },
-                data: '',
-                error: String(e),
-              })),
+            clientA.stor('conflict-probe.txt', payload).catch((e) => ({
+              response: { code: 500 },
+              latencyMs: 0,
+              error: String(e),
+            })),
+            clientB.list('/').catch((e) => ({
+              result: { response: { code: 500 }, latencyMs: 0 },
+              data: '',
+              error: String(e),
+            })),
           ]);
           const storOk = 'response' in storR && storR.response.code < 400;
           const listDOk = 'result' in listD && listD.result.response.code < 400;
@@ -302,13 +290,11 @@ export function buildMixedScenarios(): MixedScenario[] {
               latencyMs: 0,
               error: String(e),
             })),
-            ftp
-              .list('/')
-              .catch((e) => ({
-                result: { response: { code: 500 }, latencyMs: 0 },
-                data: '',
-                error: String(e),
-              })),
+            ftp.list('/').catch((e) => ({
+              result: { response: { code: 500 }, latencyMs: 0 },
+              data: '',
+              error: String(e),
+            })),
           ]);
           log({
             kind: 'conflict',
@@ -334,13 +320,11 @@ export function buildMixedScenarios(): MixedScenario[] {
               latencyMs: 0,
               error: String(e),
             })),
-            ftp
-              .list('/')
-              .catch((e) => ({
-                result: { response: { code: 500 }, latencyMs: 0 },
-                data: '',
-                error: String(e),
-              })),
+            ftp.list('/').catch((e) => ({
+              result: { response: { code: 500 }, latencyMs: 0 },
+              data: '',
+              error: String(e),
+            })),
           ]);
           log({
             kind: 'conflict',
@@ -366,13 +350,11 @@ export function buildMixedScenarios(): MixedScenario[] {
               latencyMs: 0,
               error: String(e),
             })),
-            ftp
-              .mlsd()
-              .catch((e) => ({
-                result: { response: { code: 500 }, latencyMs: 0 },
-                data: '',
-                error: String(e),
-              })),
+            ftp.mlsd().catch((e) => ({
+              result: { response: { code: 500 }, latencyMs: 0 },
+              data: '',
+              error: String(e),
+            })),
           ]);
           log({
             kind: 'conflict',
@@ -399,13 +381,11 @@ export function buildMixedScenarios(): MixedScenario[] {
               latencyMs: 0,
               error: String(e),
             })),
-            ftp
-              .stor('conflict-rest-ftp.txt', payload)
-              .catch((e) => ({
-                response: { code: 500 },
-                latencyMs: 0,
-                error: String(e),
-              })),
+            ftp.stor('conflict-rest-ftp.txt', payload).catch((e) => ({
+              response: { code: 500 },
+              latencyMs: 0,
+              error: String(e),
+            })),
           ]);
           const storOk = 'response' in ftpStor && ftpStor.response.code < 400;
           log({

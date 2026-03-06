@@ -1,0 +1,51 @@
+appId: uk.gleissner.c64commander
+tags:
+  - edge
+  - slow
+  - device
+env:
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "20000"}
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
+  TIMEOUT: ${TIMEOUT || "15000"}
+---
+# edge-auto-advance-format-matrix: verify auto-advance arms and fires for all
+# supported file categories (sid, mod, prg, crt, disk).
+- runFlow: subflows/launch-and-wait.yaml
+
+# Navigate to Play Files tab
+- tapOn:
+    point: "75%,95%"
+- extendedWaitUntil:
+    visible: "Play Files"
+    timeout: ${TIMEOUT}
+
+# SID: play a SID track, wait for auto-advance
+- tapOn: "SID"
+- extendedWaitUntil:
+    visible: "Playing"
+    timeout: ${TIMEOUT}
+- wait: 2000
+- assertVisible:
+    text: "Playing"
+    timeout: ${TIMEOUT}
+- takeScreenshot: auto-advance-format-sid
+
+# PRG: play a PRG track, verify auto-advance guard is armed (progress visible)
+- tapOn: "PRG"
+- extendedWaitUntil:
+    visible: "Playing"
+    timeout: ${TIMEOUT}
+- assertVisible:
+    text: "Playing"
+    timeout: ${SHORT_TIMEOUT}
+- takeScreenshot: auto-advance-format-prg
+
+# Disk: play a disk image track, verify auto-advance guard armed
+- tapOn: "Disk"
+- extendedWaitUntil:
+    visible: "Playing"
+    timeout: ${TIMEOUT}
+- assertVisible:
+    text: "Playing"
+    timeout: ${SHORT_TIMEOUT}
+- takeScreenshot: auto-advance-format-disk

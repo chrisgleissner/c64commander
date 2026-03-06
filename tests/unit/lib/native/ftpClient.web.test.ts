@@ -208,13 +208,11 @@ describe('FtpClientWeb error handling', () => {
   });
 
   it('treats error response with only HTTP status as FTP bridge error', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(
-        new Response(JSON.stringify({ error: 'unauthorized' }), {
-          status: 401,
-        }),
-      );
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ error: 'unauthorized' }), {
+        status: 401,
+      }),
+    );
     vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
 
     const client = new FtpClientWeb();

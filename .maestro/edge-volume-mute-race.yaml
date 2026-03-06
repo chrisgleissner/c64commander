@@ -1,0 +1,56 @@
+appId: uk.gleissner.c64commander
+tags:
+  - edge
+  - slow
+  - device
+env:
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "20000"}
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
+  TIMEOUT: ${TIMEOUT || "15000"}
+---
+# edge-volume-mute-race: play a SID, sweep the volume slider rapidly, then
+# toggle mute/unmute several times, and verify the final state is consistent.
+- runFlow: subflows/launch-and-wait.yaml
+
+# Navigate to the Play Files tab
+- tapOn:
+    point: "75%,95%"
+- extendedWaitUntil:
+    visible: "Play Files"
+    timeout: ${TIMEOUT}
+
+# Assert the volume slider is visible (connected + playing assumed in this flow)
+- assertVisible:
+    text: "Volume"
+    timeout: ${LONG_TIMEOUT}
+
+# Rapid slider sweeps: tap far left then far right 5 times
+- repeat:
+    times: 5
+    commands:
+      - tapOn:
+          point: "10%,70%"
+      - tapOn:
+          point: "90%,70%"
+
+# Mute/unmute 5 times
+- repeat:
+    times: 5
+    commands:
+      - tapOn: "Mute"
+      - extendedWaitUntil:
+          visible: "Muted"
+          timeout: ${TIMEOUT}
+      - tapOn: "Mute"
+      - extendedWaitUntil:
+          notVisible: "Muted"
+          timeout: ${TIMEOUT}
+
+# Final state: unmuted and volume label visible
+- assertNotVisible:
+    text: "Muted"
+    timeout: ${SHORT_TIMEOUT}
+- assertVisible:
+    text: "Volume"
+    timeout: ${SHORT_TIMEOUT}
+- takeScreenshot: volume-mute-race-final

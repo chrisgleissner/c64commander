@@ -232,14 +232,12 @@ describe('hvscService', () => {
     });
 
     it('getHvscSong dispatches to mock bridge when present', async () => {
-      const mockGetSong = vi
-        .fn()
-        .mockResolvedValue({
-          id: 1,
-          virtualPath: '/mock.sid',
-          fileName: 'mock.sid',
-          durationSeconds: 10,
-        });
+      const mockGetSong = vi.fn().mockResolvedValue({
+        id: 1,
+        virtualPath: '/mock.sid',
+        fileName: 'mock.sid',
+        durationSeconds: 10,
+      });
       (window as any).__hvscMock__ = { getHvscSong: mockGetSong };
 
       const song = await getHvscSong({ virtualPath: '/mock.sid' });
@@ -355,13 +353,11 @@ describe('hvscService', () => {
     });
 
     it('dispatches to mock bridge when present', async () => {
-      const mockResolve = vi
-        .fn()
-        .mockResolvedValue({
-          durationSeconds: 99,
-          durations: [99],
-          subsongCount: 1,
-        });
+      const mockResolve = vi.fn().mockResolvedValue({
+        durationSeconds: 99,
+        durations: [99],
+        subsongCount: 1,
+      });
       (window as any).__hvscMock__ = {
         resolveHvscSonglengthDuration: mockResolve,
       };

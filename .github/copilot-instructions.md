@@ -49,8 +49,12 @@ React + Vite + Capacitor app for managing a C64 Ultimate device. Supports config
 
 ### Formatting
 
-- Use existing formatting and lint rules.
-- Do not reformat unrelated code.
+- All TS, TSX, and JSON files must be formatted with Prettier before committing.
+- Config: `.prettierrc.json` (`singleQuote: true`; Prettier v3 defaults otherwise).
+- Check: `npm run format:check:ts` (also runs as part of `npm run lint`).
+- Fix: `npm run format:ts` or `npx prettier --write .`.
+- Every code change must be Prettier-compliant when written — do not rely on a post-hoc format pass.
+- YAML files are checked via `npm run format:check:yaml`.
 
 ### Documentation
 

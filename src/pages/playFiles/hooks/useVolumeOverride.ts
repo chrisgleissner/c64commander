@@ -6,7 +6,6 @@ import {
 } from '@/hooks/useC64Connection';
 import { toast } from '@/hooks/use-toast';
 import { addErrorLog } from '@/lib/logging';
-import { reportUserError } from '@/lib/uiErrors';
 import { getC64API } from '@/lib/c64api';
 import {
   isSidVolumeName,
@@ -375,16 +374,23 @@ export function useVolumeOverride({
       const token = volumeUpdateSeqRef.current;
       reserveVolumeUiTarget(nextIndex);
 
-      const runUpdate = () => {
+      const runUpdate = async () => {
         if (token !== volumeUpdateSeqRef.current) return;
         void ensureVolumeSessionSnapshot();
-        void applyAudioMixerUpdates(updates, 'Volume').finally(() => {
+        try {
+          await applyAudioMixerUpdates(updates, 'Volume');
+        } catch {
+          // Write failed; skip UI state update to avoid desync.
+          return;
+        } finally {
           const pendingTarget = volumeUiTargetRef.current;
-          if (pendingTarget?.index !== nextIndex) return;
-          if (Date.now() - pendingTarget.setAtMs >= 2500) {
-            volumeUiTargetRef.current = null;
+          if (pendingTarget?.index === nextIndex) {
+            if (Date.now() - pendingTarget.setAtMs >= 2500) {
+              volumeUiTargetRef.current = null;
+            }
           }
-        });
+        }
+        if (token !== volumeUpdateSeqRef.current) return;
         dispatchVolume({ type: 'unmute', reason: 'manual' });
       };
 
@@ -394,11 +400,14 @@ export function useVolumeOverride({
       }
 
       if (immediate) {
-        runUpdate();
+        void runUpdate();
         return;
       }
 
-      volumeUpdateTimerRef.current = window.setTimeout(runUpdate, 200);
+      volumeUpdateTimerRef.current = window.setTimeout(
+        () => void runUpdate(),
+        200,
+      );
     },
     [
       applyAudioMixerUpdates,
@@ -473,12 +482,12 @@ export function useVolumeOverride({
         items,
         sidEnablement,
       );
-      dispatchVolume({ type: 'mute', reason: 'manual' });
       volumeUiTargetRef.current = null;
       await applyAudioMixerUpdates(
         buildEnabledSidMuteUpdates(items, sidEnablement),
         'Mute',
       );
+      dispatchVolume({ type: 'mute', reason: 'manual' });
       return;
     }
     const snapshot = manualMuteSnapshotRef.current;

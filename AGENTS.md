@@ -47,6 +47,16 @@ This repository is **C64 Commander**, a React + Vite + Capacitor app for managin
 - Tag builds attempt a release APK only when signing secrets are present.
 - TODO: set `ANDROID_KEYSTORE_BASE64`, `KEYSTORE_STORE_PASSWORD`, `KEYSTORE_KEY_PASSWORD`, and `KEYSTORE_KEY_ALIAS` before enabling signed release distribution.
 
+## MANDATORY: Prettier formatting
+
+All TypeScript, TSX, and JSON files must be formatted with Prettier before committing.
+
+- Config: `.prettierrc.json` (`singleQuote: true`; all other options are Prettier v3 defaults).
+- **Check**: `npm run format:check:ts` (also runs as part of `npm run lint`).
+- **Fix**: `npm run format:ts` (or `npx prettier --write .`).
+- Every code change you write must already be Prettier-compliant — do not rely on a post-hoc format pass.
+- YAML files are checked separately via `npm run format:check:yaml`.
+
 ## MANDATORY: Code Style
 
 - **DRY**: Avoid duplication. Extract shared logic into well-defined functions, modules, or utilities.

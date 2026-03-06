@@ -103,15 +103,13 @@ vi.mock('@/components/itemSelection/ItemSelectionDialog', () => ({
               id: 'mock-source-empty',
               rootPath: '/mock',
               type: 'local',
-              listFilesRecursive: vi
-                .fn()
-                .mockResolvedValue([
-                  {
-                    type: 'file',
-                    path: '/nested/readme.txt',
-                    name: 'readme.txt',
-                  },
-                ]),
+              listFilesRecursive: vi.fn().mockResolvedValue([
+                {
+                  type: 'file',
+                  path: '/nested/readme.txt',
+                  name: 'readme.txt',
+                },
+              ]),
               listEntries: vi.fn().mockResolvedValue([]),
             };
             onConfirm(mockSource, [

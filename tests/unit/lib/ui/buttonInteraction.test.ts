@@ -11,8 +11,11 @@ import {
   applyPointerButtonInteraction,
   CTA_HIGHLIGHT_ATTR,
   CTA_HIGHLIGHT_DURATION_MS,
+  CTA_HIGHLIGHT_MAX_AGE_MS,
+  CTA_HIGHLIGHT_SET_AT_ATTR,
   handlePointerButtonClick,
   registerGlobalButtonInteractionModel,
+  sweepStaleHighlights,
 } from '@/lib/ui/buttonInteraction';
 
 const makeButton = () => {
@@ -122,6 +125,110 @@ describe('buttonInteraction', () => {
         new PointerEvent('pointerup', { bubbles: true, pointerType: 'touch' }),
       );
       expect(el.hasAttribute(CTA_HIGHLIGHT_ATTR)).toBe(false);
+    });
+  });
+
+  describe('sweepStaleHighlights', () => {
+    it('removes highlight from elements whose set-at timestamp is older than max age', () => {
+      const el = makeButton();
+      applyPointerButtonInteraction(el);
+      expect(el.hasAttribute(CTA_HIGHLIGHT_ATTR)).toBe(true);
+
+      const staleNow = Date.now() + CTA_HIGHLIGHT_MAX_AGE_MS + 1;
+      sweepStaleHighlights(staleNow);
+
+      expect(el.hasAttribute(CTA_HIGHLIGHT_ATTR)).toBe(false);
+      expect(el.hasAttribute(CTA_HIGHLIGHT_SET_AT_ATTR)).toBe(false);
+    });
+
+    it('preserves highlights that are younger than max age', () => {
+      const el = makeButton();
+      applyPointerButtonInteraction(el);
+      expect(el.hasAttribute(CTA_HIGHLIGHT_ATTR)).toBe(true);
+
+      // Not yet stale
+      const recentNow = Date.now() + CTA_HIGHLIGHT_MAX_AGE_MS - 100;
+      sweepStaleHighlights(recentNow);
+
+      expect(el.hasAttribute(CTA_HIGHLIGHT_ATTR)).toBe(true);
+    });
+
+    it('sets CTA_HIGHLIGHT_SET_AT_ATTR when highlight is applied', () => {
+      const el = makeButton();
+      applyPointerButtonInteraction(el);
+      const setAt = el.getAttribute(CTA_HIGHLIGHT_SET_AT_ATTR);
+      expect(setAt).not.toBeNull();
+      expect(Number(setAt)).toBeGreaterThan(0);
+    });
+
+    it('sweeps multiple stale elements in a single call', () => {
+      const a = makeButton();
+      const b = makeButton();
+      applyPointerButtonInteraction(a);
+      applyPointerButtonInteraction(b);
+
+      const staleNow = Date.now() + CTA_HIGHLIGHT_MAX_AGE_MS + 1;
+      sweepStaleHighlights(staleNow);
+
+      expect(a.hasAttribute(CTA_HIGHLIGHT_ATTR)).toBe(false);
+      expect(b.hasAttribute(CTA_HIGHLIGHT_ATTR)).toBe(false);
+    });
+
+    it('does nothing when no highlighted elements exist', () => {
+      // Should not throw
+      expect(() => sweepStaleHighlights(Date.now())).not.toThrow();
+    });
+  });
+
+  describe('registerGlobalButtonInteractionModel: sweep listeners', () => {
+    let unregister: (() => void) | null = null;
+
+    afterEach(() => {
+      unregister?.();
+      unregister = null;
+    });
+
+    it('sweeps stale highlights on visibilitychange', () => {
+      const el = makeButton();
+      applyPointerButtonInteraction(el);
+      expect(el.hasAttribute(CTA_HIGHLIGHT_ATTR)).toBe(true);
+
+      unregister = registerGlobalButtonInteractionModel();
+
+      // Advance timers so the set-at timestamp looks stale
+      vi.setSystemTime(Date.now() + CTA_HIGHLIGHT_MAX_AGE_MS + 1);
+      document.dispatchEvent(new Event('visibilitychange'));
+
+      expect(el.hasAttribute(CTA_HIGHLIGHT_ATTR)).toBe(false);
+    });
+
+    it('sweeps stale highlights on window focus', () => {
+      const el = makeButton();
+      applyPointerButtonInteraction(el);
+      expect(el.hasAttribute(CTA_HIGHLIGHT_ATTR)).toBe(true);
+
+      unregister = registerGlobalButtonInteractionModel();
+
+      vi.setSystemTime(Date.now() + CTA_HIGHLIGHT_MAX_AGE_MS + 1);
+      window.dispatchEvent(new Event('focus'));
+
+      expect(el.hasAttribute(CTA_HIGHLIGHT_ATTR)).toBe(false);
+    });
+
+    it('sweep listeners are removed on cleanup', () => {
+      const el = makeButton();
+      applyPointerButtonInteraction(el);
+
+      unregister = registerGlobalButtonInteractionModel();
+      unregister();
+      unregister = null;
+
+      vi.setSystemTime(Date.now() + CTA_HIGHLIGHT_MAX_AGE_MS + 1);
+      document.dispatchEvent(new Event('visibilitychange'));
+      window.dispatchEvent(new Event('focus'));
+
+      // Highlight should still be present since sweep listeners were removed
+      expect(el.hasAttribute(CTA_HIGHLIGHT_ATTR)).toBe(true);
     });
   });
 });

@@ -11,7 +11,9 @@ type InteractiveElement = HTMLElement & {
 };
 
 export const CTA_HIGHLIGHT_ATTR = 'data-c64-tap-flash';
+export const CTA_HIGHLIGHT_SET_AT_ATTR = 'data-c64-tap-flash-set-at';
 export const CTA_HIGHLIGHT_DURATION_MS = 220;
+export const CTA_HIGHLIGHT_MAX_AGE_MS = 2000;
 const CTA_PERSISTENT_ACTIVE_ATTR = 'data-c64-persistent-active';
 const INTERACTIVE_SELECTOR = [
   'button',
@@ -37,11 +39,13 @@ const clearTapFlash = (element: InteractiveElement) => {
   }
   delete element.__c64TapFlashTimeoutId;
   element.removeAttribute(CTA_HIGHLIGHT_ATTR);
+  element.removeAttribute(CTA_HIGHLIGHT_SET_AT_ATTR);
 };
 
 const setTapFlash = (element: InteractiveElement) => {
   clearTapFlash(element);
   element.setAttribute(CTA_HIGHLIGHT_ATTR, 'true');
+  element.setAttribute(CTA_HIGHLIGHT_SET_AT_ATTR, String(Date.now()));
   element.__c64TapFlashTimeoutId = window.setTimeout(() => {
     clearTapFlash(element);
   }, CTA_HIGHLIGHT_DURATION_MS);
@@ -84,6 +88,18 @@ export const handlePointerButtonClick = (event: {
   applyPointerButtonInteraction(target);
 };
 
+export const sweepStaleHighlights = (nowMs = Date.now()) => {
+  const highlighted = document.querySelectorAll<HTMLElement>(
+    `[${CTA_HIGHLIGHT_ATTR}]`,
+  );
+  highlighted.forEach((el) => {
+    const setAt = Number(el.getAttribute(CTA_HIGHLIGHT_SET_AT_ATTR) ?? '0');
+    if (nowMs - setAt >= CTA_HIGHLIGHT_MAX_AGE_MS) {
+      clearTapFlash(el as InteractiveElement);
+    }
+  });
+};
+
 export const registerGlobalButtonInteractionModel = () => {
   const handler = (event: PointerEvent) => {
     if (event.pointerType === 'mouse' && event.button !== 0) return;
@@ -92,8 +108,14 @@ export const registerGlobalButtonInteractionModel = () => {
     applyPointerButtonInteraction(interactive);
   };
 
+  const sweep = () => sweepStaleHighlights();
+
   document.addEventListener('pointerup', handler, true);
+  document.addEventListener('visibilitychange', sweep);
+  window.addEventListener('focus', sweep);
   return () => {
     document.removeEventListener('pointerup', handler, true);
+    document.removeEventListener('visibilitychange', sweep);
+    window.removeEventListener('focus', sweep);
   };
 };

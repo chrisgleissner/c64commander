@@ -1,32 +1,71 @@
 {
   "issue1": {
-    "status": "NOT_STARTED",
-    "pre_fix_failure_evidence": [],
-    "post_fix_pass_evidence": []
+    "status": "FIXED",
+    "pre_fix_failure_evidence": [
+      "applyAudioMixerUpdates swallowed errors for non-Restore contexts (reportUserError called, no throw)",
+      "scheduleVolumeUpdate dispatched 'unmute' before write completed (fire-and-forget void call)",
+      "handleToggleMute dispatched 'mute' before write completed"
+    ],
+    "post_fix_pass_evidence": [
+      "tests/unit/playFiles/volumeMuteRace.test.ts: 15 tests pass",
+      "applyAudioMixerUpdates now rethrows for Volume/Mute/Unmute contexts",
+      "runUpdate only dispatches 'unmute' after confirmed write; skips on failure or stale token",
+      "handleToggleMute mute path dispatches 'mute' only after write succeeds"
+    ]
   },
   "issue2": {
-    "status": "NOT_STARTED",
-    "pre_fix_failure_evidence": [],
-    "post_fix_pass_evidence": []
+    "status": "FIXED",
+    "pre_fix_failure_evidence": [
+      "isSongCategory guard at usePlaybackController.ts:~310 blocked auto-advance arming for prg/crt/disk"
+    ],
+    "post_fix_pass_evidence": [
+      "tests/unit/playFiles/autoAdvanceGuard.test.ts: 16 tests pass",
+      "isSongCategory guard removed; resolvedDuration check now arms guard for all file types"
+    ]
   },
   "issue3": {
-    "status": "NOT_STARTED",
-    "pre_fix_failure_evidence": [],
-    "post_fix_pass_evidence": []
+    "status": "FIXED",
+    "pre_fix_failure_evidence": [
+      "No sweep mechanism existed; highlights stuck indefinitely when timer starved by main-thread stall or background suspension",
+      "No timestamp on highlight elements; impossible to detect stale highlights"
+    ],
+    "post_fix_pass_evidence": [
+      "tests/unit/lib/ui/buttonInteraction.test.ts: 17 tests pass (8 new sweep tests)",
+      "CTA_HIGHLIGHT_SET_AT_ATTR written on every setTapFlash call",
+      "sweepStaleHighlights() removes highlights older than CTA_HIGHLIGHT_MAX_AGE_MS (2000 ms)",
+      "registerGlobalButtonInteractionModel wires sweep to visibilitychange and window focus"
+    ]
   },
   "issue4": {
-    "status": "NOT_STARTED",
-    "pre_fix_failure_evidence": [],
-    "post_fix_pass_evidence": []
+    "status": "FIXED",
+    "pre_fix_failure_evidence": [
+      "hvscArchiveExtraction.ts accumulated all extracted entries before processing (peak memory proportional to archive size)",
+      "extracted[] array held all decompressed bytes in memory simultaneously"
+    ],
+    "post_fix_pass_evidence": [
+      "tests/unit/hvsc/hvscArchiveExtraction.test.ts: 11 tests pass",
+      "extractZip refactored to streaming entry-by-entry processing; no accumulated array"
+    ]
   },
   "issue5": {
-    "status": "NOT_STARTED",
-    "pre_fix_failure_evidence": [],
-    "post_fix_pass_evidence": []
+    "status": "FIXED",
+    "pre_fix_failure_evidence": [
+      "Same root cause as Issue 4: full in-memory extraction buffer"
+    ],
+    "post_fix_pass_evidence": ["Resolved by Issue 4 streaming fix"]
   },
   "issue6": {
-    "status": "NOT_STARTED",
-    "pre_fix_failure_evidence": [],
-    "post_fix_pass_evidence": []
+    "status": "FIXED",
+    "pre_fix_failure_evidence": [
+      "WRITE_CHUNK_SIZE_BYTES = 0x10000 (64 KiB): single oversized write caused device instability",
+      "writeFullImage wrote entire 64 KiB in one request; no chunking",
+      "Old tests/unit/ramOperations.test.ts asserted single-chunk write (stale)"
+    ],
+    "post_fix_pass_evidence": [
+      "tests/unit/machine/ramOperations.test.ts: 18 tests pass",
+      "tests/unit/ramOperations.test.ts: 12 tests pass (stale assertions updated to 16-chunk)",
+      "WRITE_CHUNK_SIZE_BYTES = 0x1000 (4 KiB)",
+      "writeFullImage delegates to writeRanges; writeRanges accepts optional onRetry callback"
+    ]
   }
 }

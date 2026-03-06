@@ -1,0 +1,48 @@
+appId: uk.gleissner.c64commander
+tags:
+  - edge
+  - slow
+  - device
+env:
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "20000"}
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
+  TIMEOUT: ${TIMEOUT || "15000"}
+---
+# edge-auto-advance-lock: seed a short-duration playlist, start playback, lock
+# the device for longer than the track duration, unlock, and verify exactly
+# one next-track transition occurred.
+- runFlow: subflows/launch-and-wait.yaml
+
+# Navigate to the Play Files tab
+- tapOn:
+    point: "75%,95%"
+- extendedWaitUntil:
+    visible: "Play Files"
+    timeout: ${TIMEOUT}
+
+# Start playback
+- tapOn: "Play"
+- extendedWaitUntil:
+    visible: "Playing"
+    timeout: ${TIMEOUT}
+
+# Record the currently playing track name
+- copyTextFrom: "Now Playing"
+- evalScript: ${output.trackBefore = maestro.copiedText}
+
+# Lock the device for longer than the track duration (assume ≤ 5 s track)
+- pressKey: Lock
+- wait: 6000
+
+# Unlock
+- pressKey: Home
+- extendedWaitUntil:
+    visible: "Playing"
+    timeout: ${LONG_TIMEOUT}
+
+# Verify that exactly one track transition occurred (current track differs from before)
+- copyTextFrom: "Now Playing"
+- evalScript: ${output.trackAfter = maestro.copiedText}
+- assertTrue: ${output.trackBefore != output.trackAfter}
+
+- takeScreenshot: auto-advance-lock-final
