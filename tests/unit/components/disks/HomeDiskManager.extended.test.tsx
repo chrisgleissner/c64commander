@@ -433,7 +433,6 @@ describe('HomeDiskManager Extended', () => {
         render(<HomeDiskManager />);
         fireEvent.click(screen.getByText(/Add.*disks/i));
 
-        // Trigger "Import Root"
         fireEvent.click(screen.getByText('Import Root'));
 
         await waitFor(() => {
@@ -464,31 +463,6 @@ describe('HomeDiskManager Extended', () => {
                 expect.anything()
             );
         });
-    });
-
-    it('handles import cancellation', async () => {
-        render(<HomeDiskManager />);
-        fireEvent.click(screen.getByText(/Add.*disks/i));
-
-        // We need a delayed action. "Import Directory" calls listFilesRecursive.
-        // Mock listFilesRecursive on 'mock-source-dir' to delay.
-        // But mock definitions are static in the file body.
-        // I can't easily change the behavior of the buttons in the mock component unless I pass a specific source I didn't mock yet?
-        // Or I can add a "Import Delayed" button in the ItemSelectionDialog mock.
-        // But updating the mock again is annoying.
-
-        // Alternative: The "Import Directory" button uses 'mock-source-dir'.
-        // Its logic is defined INSIDE the mock component body:
-        // listFilesRecursive: vi.fn().mockResolvedValue(...)
-
-        // I can't change it from outside.
-        // BUT I can click "Cancel Scan" button exposed in ItemSelectionDialog mock.
-        // But `handleAddDiskSelections` loop checks `abortSignal.aborted`.
-
-        // If I can't delay the operation, the operation finishes instantly.
-        // I need to intercept the execution flow.
-
-        // Let's test "Close Dialog" logic instead, ensuring state is cleared.
     });
 
     it('handles closing dialogs correctly', async () => {

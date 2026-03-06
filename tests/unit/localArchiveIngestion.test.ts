@@ -183,49 +183,54 @@ describe('localArchiveIngestion', () => {
     const originalRmdir = fs.rmdir;
     const originalUnlink = fs.unlink;
 
-    let rmdirCount = 0;
-    fs.rmdir = vi.fn((path: string) => {
-      rmdirCount += 1;
-      if (rmdirCount <= 2) {
-        throw new Error(`rmdir-failed:${path}`);
-      }
-      return originalRmdir(path);
-    });
-    fs.unlink = vi.fn((path: string) => {
-      if (String(path).includes('/work-')) {
-        throw new Error(`unlink-failed:${path}`);
-      }
-      return originalUnlink(path);
-    });
+    try {
+      let rmdirCount = 0;
+      fs.rmdir = vi.fn((path: string) => {
+        rmdirCount += 1;
+        if (rmdirCount <= 2) {
+          throw new Error(`rmdir-failed:${path}`);
+        }
+        return originalRmdir(path);
+      });
+      fs.unlink = vi.fn((path: string) => {
+        if (String(path).includes('/work-')) {
+          throw new Error(`unlink-failed:${path}`);
+        }
+        return originalUnlink(path);
+      });
 
-    const archiveFile: LocalSidFile = {
-      name: 'cleanup.7z',
-      lastModified: Date.now(),
-      arrayBuffer: async () => new Uint8Array(Buffer.from('SEVENZ')).buffer,
-    };
+      const archiveFile: LocalSidFile = {
+        name: 'cleanup.7z',
+        lastModified: Date.now(),
+        arrayBuffer: async () => new Uint8Array(Buffer.from('SEVENZ')).buffer,
+      };
 
-    const result = await ingestLocalArchives([archiveFile]);
-    expect(result.extractedCount).toBe(1);
-
-    fs.rmdir = originalRmdir;
-    fs.unlink = originalUnlink;
+      const result = await ingestLocalArchives([archiveFile]);
+      expect(result.extractedCount).toBe(1);
+    } finally {
+      fs.rmdir = originalRmdir;
+      fs.unlink = originalUnlink;
+    }
   });
 
   it('wraps Error thrown during 7z extraction with archive context', async () => {
     const fs = (globalThis as any).__sevenZipFs;
     const originalOpen = fs.open;
-    fs.open = vi.fn(() => {
-      throw new Error('open failed');
-    });
 
-    const archiveFile: LocalSidFile = {
-      name: 'error.7z',
-      lastModified: Date.now(),
-      arrayBuffer: async () => new Uint8Array(Buffer.from('SEVENZ')).buffer,
-    };
+    try {
+      fs.open = vi.fn(() => {
+        throw new Error('open failed');
+      });
 
-    await expect(ingestLocalArchives([archiveFile])).rejects.toThrow('Failed to extract error.7z: open failed');
+      const archiveFile: LocalSidFile = {
+        name: 'error.7z',
+        lastModified: Date.now(),
+        arrayBuffer: async () => new Uint8Array(Buffer.from('SEVENZ')).buffer,
+      };
 
-    fs.open = originalOpen;
+      await expect(ingestLocalArchives([archiveFile])).rejects.toThrow('Failed to extract error.7z: open failed');
+    } finally {
+      fs.open = originalOpen;
+    }
   });
 });

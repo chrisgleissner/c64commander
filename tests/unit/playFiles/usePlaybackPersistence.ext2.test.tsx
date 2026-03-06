@@ -26,18 +26,24 @@ const usePlaybackHarness = ({
     localEntriesBySourceId = new Map<string, Map<string, { uri?: string | null; name: string; modifiedAt?: string | null; sizeBytes?: number | null }>>(),
     localSourceTreeUris = new Map<string, string | null>(),
     initialPlaylist = [] as PlaylistItem[],
+    initialCurrentIndex = -1,
+    initialIsPlaying = false,
+    initialIsPaused = false,
     buildPlaylistItemOverride,
 }: {
     playlistStorageKey: string;
     localEntriesBySourceId?: Map<string, Map<string, { uri?: string | null; name: string; modifiedAt?: string | null; sizeBytes?: number | null }>>;
     localSourceTreeUris?: Map<string, string | null>;
     initialPlaylist?: PlaylistItem[];
+    initialCurrentIndex?: number;
+    initialIsPlaying?: boolean;
+    initialIsPaused?: boolean;
     buildPlaylistItemOverride?: (entry: PlayableEntry, songNrOverride?: number, addedAtOverride?: string | null) => PlaylistItem | null;
 }) => {
     const [playlist, setPlaylist] = useState<PlaylistItem[]>(initialPlaylist);
-    const [currentIndex, setCurrentIndex] = useState(-1);
-    const [isPlaying, setIsPlaying] = useState(false);
-    const [isPaused, setIsPaused] = useState(false);
+    const [currentIndex, setCurrentIndex] = useState(initialCurrentIndex);
+    const [isPlaying, setIsPlaying] = useState(initialIsPlaying);
+    const [isPaused, setIsPaused] = useState(initialIsPaused);
     const [elapsedMs, setElapsedMs] = useState(0);
     const [playedMs, setPlayedMs] = useState(0);
     const [durationMs, setDurationMs] = useState<number | undefined>(undefined);
@@ -252,11 +258,10 @@ describe('usePlaybackPersistence – edge cases', () => {
             initialPlaylist: [existingItem],
         }));
 
-        // Existing playlist should remain unchanged
         await waitFor(() => {
-            // hasHydratedPlaylistRef is set to true immediately in the effect,
-            // so the effect won't re-run. The playlist stays as initialPlaylist.
-            expect(result.current.playlist.length).toBeGreaterThanOrEqual(0);
+            expect(result.current.playlist).toHaveLength(1);
+            expect(result.current.playlist[0]).toEqual(existingItem);
+            expect(result.current.currentIndex).toBe(-1);
         });
     });
 
@@ -390,12 +395,7 @@ describe('usePlaybackPersistence – edge cases', () => {
     });
 
     it('persist session: out-of-range currentIndex produces null currentItemId', async () => {
-        // Renders hook with isPlaying=true and currentIndex=-1
-        // playlist[currentIndex]?.id ?? null → null (line 432 branch)
         const playlistStorageKey = buildPlaylistStorageKey('device-1');
-
-        // No localStorage data, so playlist stays empty
-        // But set up session to restore isPlaying=true with a valid index
         localStorage.setItem(playlistStorageKey, JSON.stringify({
             items: [
                 {
@@ -406,29 +406,26 @@ describe('usePlaybackPersistence – edge cases', () => {
                     addedAt: new Date().toISOString(),
                 },
             ],
-            currentIndex: 0,
-        }));
-        sessionStorage.setItem('c64u_playback_session:v1', JSON.stringify({
-            playlistKey: playlistStorageKey,
-            currentIndex: 0,
-            isPlaying: true,
-            isPaused: false,
-            elapsedMs: 0,
-            playedMs: 0,
-            durationMs: 0,
-            updatedAt: new Date().toISOString(),
+            currentIndex: -1,
         }));
 
-        const { result } = renderHook(() => usePlaybackHarness({ playlistStorageKey }));
+        const { result } = renderHook(() => usePlaybackHarness({
+            playlistStorageKey,
+            initialCurrentIndex: -1,
+            initialIsPlaying: true,
+            initialIsPaused: false,
+        }));
 
         await waitFor(() => {
             expect(result.current.playlist).toHaveLength(1);
         });
 
-        // Session should have been persisted with currentItemId from playlist item
         await waitFor(() => {
             const raw = sessionStorage.getItem('c64u_playback_session:v1');
             expect(raw).not.toBeNull();
+            const parsed = JSON.parse(raw as string) as { currentItemId: string | null; currentIndex: number };
+            expect(parsed.currentItemId).toBeNull();
+            expect(parsed.currentIndex).toBe(-1);
         });
     });
 });

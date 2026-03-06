@@ -9,7 +9,7 @@
 // @vitest-environment node
 // Targeted branch coverage for c64api.ts utility functions and request paths.
 
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   C64API,
   updateC64APIConfig,
@@ -192,6 +192,15 @@ describe('c64api utility functions - targeted branch coverage', () => {
   beforeAll(() => {
     if (typeof process !== 'undefined') {
       process.on('unhandledRejection', abortUnhandledRejectionHandler);
+    }
+  });
+
+  afterAll(async () => {
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    if (typeof process !== 'undefined') {
+      process.off('unhandledRejection', abortUnhandledRejectionHandler);
     }
   });
 
