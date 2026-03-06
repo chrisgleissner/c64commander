@@ -73,7 +73,10 @@ const readFileFromPickerResult = async (result: {
   const parentFolder = (() => {
     const treeUri = result.parentTreeUri?.trim() ?? '';
     if (!treeUri) return null;
-    const displayPath = deriveRamDumpFolderDisplayPath(treeUri, result.parentRootName);
+    const displayPath = deriveRamDumpFolderDisplayPath(
+      treeUri,
+      result.parentRootName,
+    );
     return {
       treeUri,
       rootName: result.parentRootName?.trim() ? result.parentRootName : null,
@@ -90,7 +93,10 @@ const readFileFromPickerResult = async (result: {
   };
 };
 
-export const buildRamDumpFileName = (date = new Date(), context?: string | null) => {
+export const buildRamDumpFileName = (
+  date = new Date(),
+  context?: string | null,
+) => {
   const timestamp = formatRamDumpTimestamp(date);
   const safeContext = sanitizeRamDumpContext(context);
   return `c64u-ram-${timestamp}${safeContext ? `-${safeContext}` : ''}.bin`;
@@ -98,7 +104,9 @@ export const buildRamDumpFileName = (date = new Date(), context?: string | null)
 
 export const selectRamDumpFolder = async (): Promise<RamDumpFolderConfig> => {
   if (!isAndroidNative()) {
-    throw new Error('RAM dump folders are only supported on Android native builds.');
+    throw new Error(
+      'RAM dump folders are only supported on Android native builds.',
+    );
   }
   const result = await FolderPicker.pickDirectory();
   if (!result?.treeUri || !result.permissionPersisted) {
@@ -108,7 +116,10 @@ export const selectRamDumpFolder = async (): Promise<RamDumpFolderConfig> => {
     treeUri: result.treeUri,
     rootName: result.rootName?.trim() ? result.rootName : null,
     selectedAt: new Date().toISOString(),
-    displayPath: deriveRamDumpFolderDisplayPath(result.treeUri, result.rootName),
+    displayPath: deriveRamDumpFolderDisplayPath(
+      result.treeUri,
+      result.rootName,
+    ),
   };
   saveRamDumpFolderConfig(config);
   return config;
@@ -126,7 +137,9 @@ export const writeRamDumpToFolder = async (
   bytes: Uint8Array,
 ) => {
   if (!isAndroidNative()) {
-    throw new Error('RAM dump writing is only supported on Android native builds.');
+    throw new Error(
+      'RAM dump writing is only supported on Android native builds.',
+    );
   }
   try {
     await FolderPicker.writeFileToTree({
@@ -168,9 +181,13 @@ export const pickRamDumpFile = async (
   input.accept = '.bin';
 
   const file = await new Promise<File | null>((resolve) => {
-    input.addEventListener('change', () => {
-      resolve(input.files?.[0] ?? null);
-    }, { once: true });
+    input.addEventListener(
+      'change',
+      () => {
+        resolve(input.files?.[0] ?? null);
+      },
+      { once: true },
+    );
     input.click();
   });
 
@@ -184,7 +201,9 @@ export const pickRamDumpFile = async (
   return {
     name: file.name,
     sizeBytes: file.size,
-    modifiedAt: file.lastModified ? new Date(file.lastModified).toISOString() : null,
+    modifiedAt: file.lastModified
+      ? new Date(file.lastModified).toISOString()
+      : null,
     bytes: new Uint8Array(buffer),
     parentFolder: null,
   };

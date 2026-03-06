@@ -9,9 +9,14 @@
 import { Unzip, UnzipInflate, unzipSync } from 'fflate';
 import { addErrorLog, addLog } from '@/lib/logging';
 
-type SevenZipFactory = (options: { locateFile: (url: string) => string }) => Promise<any> | any;
+type SevenZipFactory = (options: {
+  locateFile: (url: string) => string;
+}) => Promise<any> | any;
 
-type ArchiveEntryHandler = (path: string, data: Uint8Array) => Promise<void> | void;
+type ArchiveEntryHandler = (
+  path: string,
+  data: Uint8Array,
+) => Promise<void> | void;
 
 type ExtractArchiveOptions = {
   archiveName: string;
@@ -24,14 +29,20 @@ type ExtractArchiveOptions = {
 const SEVEN_Z_EXTENSION = '.7z';
 const ZIP_EXTENSION = '.zip';
 
-const normalizePath = (value: string) => value.replace(/\\/g, '/').replace(/^\/+/, '');
+const normalizePath = (value: string) =>
+  value.replace(/\\/g, '/').replace(/^\/+/, '');
 
 const readHeapUsageBytes = () => {
   if (typeof performance !== 'undefined' && 'memory' in performance) {
-    const perf = performance as Performance & { memory?: { usedJSHeapSize?: number } };
+    const perf = performance as Performance & {
+      memory?: { usedJSHeapSize?: number };
+    };
     return perf.memory?.usedJSHeapSize ?? null;
   }
-  if (typeof process !== 'undefined' && typeof process.memoryUsage === 'function') {
+  if (
+    typeof process !== 'undefined' &&
+    typeof process.memoryUsage === 'function'
+  ) {
     return process.memoryUsage().heapUsed;
   }
   return null;
@@ -65,10 +76,18 @@ const getSevenZipModule = async () => {
   return sevenZipModulePromise;
 };
 
-const extractZip = async ({ buffer, onEntry, onProgress, onEnumerate }: ExtractArchiveOptions) => {
+const extractZip = async ({
+  buffer,
+  onEntry,
+  onProgress,
+  onEnumerate,
+}: ExtractArchiveOptions) => {
   const heapBefore = readHeapUsageBytes();
-  const files = await new Promise<Array<{ path: string; data: Uint8Array }>>((resolve, reject) => {
-    const extracted: Array<{ path: string; data: Uint8Array }> = [];
+  let processed = 0;
+  // Incremental promise chain so onEntry calls are serialised and awaited.
+  let entryChain: Promise<void> = Promise.resolve();
+
+  await new Promise<void>((resolve, reject) => {
     const unzip = new Unzip((entry) => {
       const fileChunks: Uint8Array[] = [];
       entry.ondata = (error, chunk, final) => {
@@ -80,14 +99,29 @@ const extractZip = async ({ buffer, onEntry, onProgress, onEnumerate }: ExtractA
           fileChunks.push(chunk);
         }
         if (!final) return;
-        const totalLength = fileChunks.reduce((sum, current) => sum + current.length, 0);
+
+        // File is complete: merge chunks and invoke onEntry without accumulating
+        // the full extracted list, keeping peak memory proportional to one file.
+        const totalLength = fileChunks.reduce((sum, c) => sum + c.length, 0);
         const merged = new Uint8Array(totalLength);
         let offset = 0;
-        fileChunks.forEach((part) => {
+        for (const part of fileChunks) {
           merged.set(part, offset);
           offset += part.length;
-        });
-        extracted.push({ path: normalizePath(entry.name), data: merged });
+        }
+        const filePath = normalizePath(entry.name);
+
+        entryChain = entryChain
+          .then(async () => {
+            processed += 1;
+            await onEntry(filePath, merged);
+            onProgress?.(processed);
+            // Yield to the event loop periodically to avoid blocking.
+            if (processed % 50 === 0) {
+              await new Promise((res) => setTimeout(res, 0));
+            }
+          })
+          .catch(reject);
       };
       entry.start();
     });
@@ -98,34 +132,33 @@ const extractZip = async ({ buffer, onEntry, onProgress, onEnumerate }: ExtractA
     }
 
     const chunkSize = 256 * 1024;
-    for (let offset = 0; offset < buffer.length; offset += chunkSize) {
-      const chunk = buffer.subarray(offset, Math.min(buffer.length, offset + chunkSize));
-      unzip.push(chunk, offset + chunk.length >= buffer.length);
+    for (
+      let byteOffset = 0;
+      byteOffset < buffer.length;
+      byteOffset += chunkSize
+    ) {
+      const slice = buffer.subarray(
+        byteOffset,
+        Math.min(buffer.length, byteOffset + chunkSize),
+      );
+      unzip.push(slice, byteOffset + slice.length >= buffer.length);
     }
 
-    resolve(extracted);
+    // The streaming parse schedules all entry handlers; wait for them via the chain.
+    entryChain.then(resolve).catch(reject);
   });
 
-  const total = files.length;
-  onEnumerate?.(total);
-  let processed = 0;
-  for (const file of files) {
-    processed += 1;
-    await onEntry(file.path, file.data);
-    onProgress?.(processed, total);
-    if (processed % 50 === 0) {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    }
-  }
-  if (total === 0) {
+  if (processed === 0) {
     throw new Error('Zip archive contained no extractable entries');
   }
+  onEnumerate?.(processed);
   const heapAfter = readHeapUsageBytes();
   addLog('info', 'HVSC zip extraction memory profile', {
-    totalEntries: total,
+    totalEntries: processed,
     heapBefore,
     heapAfter,
-    heapDelta: (heapBefore !== null && heapAfter !== null) ? heapAfter - heapBefore : null,
+    heapDelta:
+      heapBefore !== null && heapAfter !== null ? heapAfter - heapBefore : null,
   });
 };
 
@@ -143,7 +176,13 @@ export const archiveNameHash = (name: string) => {
   return hash.toString(16).padStart(16, '0');
 };
 
-const extractSevenZ = async ({ archiveName, buffer, onEntry, onProgress, onEnumerate }: ExtractArchiveOptions) => {
+const extractSevenZ = async ({
+  archiveName,
+  buffer,
+  onEntry,
+  onProgress,
+  onEnumerate,
+}: ExtractArchiveOptions) => {
   const heapBefore = readHeapUsageBytes();
   const module = await getSevenZipModule();
   const workingDir = `/work-${archiveNameHash(archiveName)}`;
@@ -172,7 +211,12 @@ const extractSevenZ = async ({ archiveName, buffer, onEntry, onProgress, onEnume
     module.FS.write(stream, buffer, 0, buffer.length);
     module.FS.close(stream);
 
-    const exitCode = module.callMain(['x', archivePath, `-o${outputDir}`, '-y']);
+    const exitCode = module.callMain([
+      'x',
+      archivePath,
+      `-o${outputDir}`,
+      '-y',
+    ]);
     if (exitCode && exitCode !== 0) {
       throw new Error(`7zip exited with code ${exitCode}`);
     }
@@ -201,7 +245,9 @@ const extractSevenZ = async ({ archiveName, buffer, onEntry, onProgress, onEnume
       const batch = files.slice(index, index + batchSize);
       for (const file of batch) {
         processed += 1;
-        const data = module.FS.readFile(file.fullPath, { encoding: 'binary' }) as Uint8Array;
+        const data = module.FS.readFile(file.fullPath, {
+          encoding: 'binary',
+        }) as Uint8Array;
         await onEntry(normalizePath(file.path), data);
         try {
           module.FS.unlink(file.fullPath);
@@ -223,7 +269,10 @@ const extractSevenZ = async ({ archiveName, buffer, onEntry, onProgress, onEnume
       totalEntries: total,
       heapBefore,
       heapAfter,
-      heapDelta: (heapBefore !== null && heapAfter !== null) ? heapAfter - heapBefore : null,
+      heapDelta:
+        heapBefore !== null && heapAfter !== null
+          ? heapAfter - heapBefore
+          : null,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

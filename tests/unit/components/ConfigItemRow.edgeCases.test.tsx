@@ -14,10 +14,13 @@ import { useC64ConfigItem } from '@/hooks/useC64Connection';
 
 // Mock the C64 connection hook so we don't need a real server for edge case tests
 vi.mock('@/hooks/useC64Connection', async (importOriginal) => {
-  const orig = await importOriginal<typeof import('@/hooks/useC64Connection')>();
+  const orig =
+    await importOriginal<typeof import('@/hooks/useC64Connection')>();
   return {
     ...orig,
-    useC64ConfigItem: vi.fn().mockReturnValue({ data: undefined, isLoading: false }),
+    useC64ConfigItem: vi
+      .fn()
+      .mockReturnValue({ data: undefined, isLoading: false }),
   };
 });
 
@@ -27,8 +30,12 @@ vi.mock('@/lib/tracing/uiTrace', () => ({
 }));
 
 function renderWithQuery(ui: React.ReactElement) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={client}>{ui}</QueryClientProvider>,
+  );
 }
 
 const mockConfigItem = vi.mocked(useC64ConfigItem);
@@ -281,7 +288,9 @@ describe('ConfigItemRow — text input readOnly and key handling', () => {
         onValueChange={onValueChange}
       />,
     );
-    const input = screen.getByLabelText('Hostname text input') as HTMLInputElement;
+    const input = screen.getByLabelText(
+      'Hostname text input',
+    ) as HTMLInputElement;
     // Focus to start editing
     fireEvent.focus(input);
     // Change the value
@@ -302,7 +311,9 @@ describe('ConfigItemRow — text input readOnly and key handling', () => {
         onValueChange={onValueChange}
       />,
     );
-    const input = screen.getByLabelText('Hostname text input') as HTMLInputElement;
+    const input = screen.getByLabelText(
+      'Hostname text input',
+    ) as HTMLInputElement;
     fireEvent.focus(input);
     fireEvent.change(input, { target: { value: 'edited' } });
     fireEvent.blur(input);
@@ -318,7 +329,11 @@ describe('ConfigItemRow — fetched config shapes', () => {
   it('uses values field from fetched config when options is missing', async () => {
     // Return data with 'values' field (not 'options')
     mockConfigItem.mockReturnValue({
-      data: { 'Test Category': { items: { Mode: { values: ['NTSC', 'PAL'], selected: 'PAL' } } } },
+      data: {
+        'Test Category': {
+          items: { Mode: { values: ['NTSC', 'PAL'], selected: 'PAL' } },
+        },
+      },
       isLoading: false,
     });
 
@@ -339,7 +354,9 @@ describe('ConfigItemRow — fetched config shapes', () => {
 
   it('uses choices field from fetched config when values is also missing', async () => {
     mockConfigItem.mockReturnValue({
-      data: { 'Cat': { items: { Item: { choices: ['A', 'B', 'C'], current: 'A' } } } },
+      data: {
+        Cat: { items: { Item: { choices: ['A', 'B', 'C'], current: 'A' } } },
+      },
       isLoading: false,
     });
 
@@ -359,10 +376,14 @@ describe('ConfigItemRow — fetched config shapes', () => {
   it('uses presets from fetched config details', async () => {
     mockConfigItem.mockReturnValue({
       data: {
-        'Cat': {
+        Cat: {
           items: {
             Vol: {
-              details: { presets: ['0 dB', '-6 dB', '+6 dB'], min: 0, max: 100 },
+              details: {
+                presets: ['0 dB', '-6 dB', '+6 dB'],
+                min: 0,
+                max: 100,
+              },
               selected: '0 dB',
             },
           },
@@ -387,7 +408,9 @@ describe('ConfigItemRow — fetched config shapes', () => {
 
   it('uses currentValue field from fetched config when value prop is empty', async () => {
     mockConfigItem.mockReturnValue({
-      data: { 'Cat': { items: { Item: { currentValue: 'B', options: ['A', 'B'] } } } },
+      data: {
+        Cat: { items: { Item: { currentValue: 'B', options: ['A', 'B'] } } },
+      },
       isLoading: false,
     });
 
@@ -406,7 +429,11 @@ describe('ConfigItemRow — fetched config shapes', () => {
 
   it('uses current_value field from fetched config when value and currentValue are missing', async () => {
     mockConfigItem.mockReturnValue({
-      data: { 'Cat': { items: { Item: { current_value: 'C', options: ['A', 'B', 'C'] } } } },
+      data: {
+        Cat: {
+          items: { Item: { current_value: 'C', options: ['A', 'B', 'C'] } },
+        },
+      },
       isLoading: false,
     });
 
@@ -425,7 +452,7 @@ describe('ConfigItemRow — fetched config shapes', () => {
 
   it('uses default field from fetched config as fallback', async () => {
     mockConfigItem.mockReturnValue({
-      data: { 'Cat': { items: { Item: { default: 'A', options: ['A', 'B'] } } } },
+      data: { Cat: { items: { Item: { default: 'A', options: ['A', 'B'] } } } },
       isLoading: false,
     });
 
@@ -444,7 +471,9 @@ describe('ConfigItemRow — fetched config shapes', () => {
 
   it('uses default_value field from fetched config as final fallback', async () => {
     mockConfigItem.mockReturnValue({
-      data: { 'Cat': { items: { Item: { default_value: 'B', options: ['A', 'B'] } } } },
+      data: {
+        Cat: { items: { Item: { default_value: 'B', options: ['A', 'B'] } } },
+      },
       isLoading: false,
     });
 
@@ -464,7 +493,7 @@ describe('ConfigItemRow — fetched config shapes', () => {
   it('handles fetched config with min and max details', async () => {
     mockConfigItem.mockReturnValue({
       data: {
-        'Cat': {
+        Cat: {
           items: {
             Freq: {
               min: 0,
@@ -518,11 +547,7 @@ describe('ConfigItemRow — fetched config shapes', () => {
     });
 
     renderWithQuery(
-      <ConfigItemRow
-        name="Item"
-        value="A"
-        onValueChange={vi.fn()}
-      />,
+      <ConfigItemRow name="Item" value="A" onValueChange={vi.fn()} />,
     );
     await waitFor(() => {
       expect(screen.getByLabelText('Item select')).toBeTruthy();
@@ -536,11 +561,7 @@ describe('ConfigItemRow — fetched config shapes', () => {
     });
 
     renderWithQuery(
-      <ConfigItemRow
-        name="MyItem"
-        value="X"
-        onValueChange={vi.fn()}
-      />,
+      <ConfigItemRow name="MyItem" value="X" onValueChange={vi.fn()} />,
     );
     await waitFor(() => {
       expect(screen.getByLabelText('MyItem select')).toBeTruthy();
@@ -554,11 +575,7 @@ describe('ConfigItemRow — fetched config shapes', () => {
     });
 
     renderWithQuery(
-      <ConfigItemRow
-        name="PropItem"
-        value="P"
-        onValueChange={vi.fn()}
-      />,
+      <ConfigItemRow name="PropItem" value="P" onValueChange={vi.fn()} />,
     );
     await waitFor(() => {
       expect(screen.getByLabelText('PropItem select')).toBeTruthy();
@@ -572,11 +589,7 @@ describe('ConfigItemRow — fetched config shapes', () => {
     });
 
     renderWithQuery(
-      <ConfigItemRow
-        name="Item"
-        value="val"
-        onValueChange={vi.fn()}
-      />,
+      <ConfigItemRow name="Item" value="val" onValueChange={vi.fn()} />,
     );
     // No options from response → text input
     expect(screen.getByLabelText('Item text input')).toBeTruthy();
@@ -612,7 +625,9 @@ describe('ConfigItemRow — label prop', () => {
         onValueChange={vi.fn()}
       />,
     );
-    expect(screen.getByTestId('config-item-label')).toHaveTextContent('Human Label');
+    expect(screen.getByTestId('config-item-label')).toHaveTextContent(
+      'Human Label',
+    );
   });
 });
 

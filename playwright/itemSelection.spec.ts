@@ -13,8 +13,17 @@ import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import * as path from 'node:path';
 import { seedUiMocks, uiFixtures } from './uiMocks';
 import { seedFtpConfig, startFtpTestServers } from './ftpTestUtils';
-import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
-import { clearTraces, enableTraceAssertions, expectFtpTraceSequence } from './traceUtils';
+import {
+  assertNoUiIssues,
+  attachStepScreenshot,
+  finalizeEvidence,
+  startStrictUiMonitoring,
+} from './testArtifacts';
+import {
+  clearTraces,
+  enableTraceAssertions,
+  expectFtpTraceSequence,
+} from './traceUtils';
 import { enableGoldenTrace } from './goldenTraceRegistry';
 import { clickSourceSelectionButton } from './sourceSelection';
 
@@ -23,7 +32,9 @@ const snap = async (page: Page, testInfo: TestInfo, label: string) => {
 };
 
 const openAddItemsDialog = async (page: Page) => {
-  const addButton = page.getByRole('button', { name: /Add items|Add more items/i });
+  const addButton = page.getByRole('button', {
+    name: /Add items|Add more items/i,
+  });
   await expect(addButton).toBeVisible({ timeout: 30000 });
   await addButton.click();
   await expect(page.getByRole('dialog')).toBeVisible();
@@ -48,20 +59,35 @@ const ensureRemoteRoot = async (container: Page) => {
 
 const openRemoteFolder = async (container: Page, name: string) => {
   await waitForFtpIdle(container);
-  await expect(container.getByText(name, { exact: true })).toBeVisible({ timeout: 10000 });
-  const row = container.locator('[data-testid="source-entry-row"]', { hasText: name }).first();
+  await expect(container.getByText(name, { exact: true })).toBeVisible({
+    timeout: 10000,
+  });
+  const row = container
+    .locator('[data-testid="source-entry-row"]', { hasText: name })
+    .first();
   await row.click();
 };
 
 const selectEntryCheckbox = async (container: Page, name: string) => {
-  const row = container.locator('[data-testid="source-entry-row"]', { hasText: name }).first();
+  const row = container
+    .locator('[data-testid="source-entry-row"]', { hasText: name })
+    .first();
   await row.getByRole('checkbox').click();
 };
 
-const registerMockDirectoryPicker = async (page: Page, options: { folderName: string; fileName: string }) => {
+const registerMockDirectoryPicker = async (
+  page: Page,
+  options: { folderName: string; fileName: string },
+) => {
   await page.addInitScript(({ folderName, fileName }) => {
-    (window as Window & { showDirectoryPicker?: () => Promise<FileSystemDirectoryHandle> }).showDirectoryPicker = async () => {
-      const file = new File(['data'], fileName, { type: 'application/octet-stream' });
+    (
+      window as Window & {
+        showDirectoryPicker?: () => Promise<FileSystemDirectoryHandle>;
+      }
+    ).showDirectoryPicker = async () => {
+      const file = new File(['data'], fileName, {
+        type: 'application/octet-stream',
+      });
       const fileHandle = {
         kind: 'file',
         getFile: async () => file,
@@ -85,23 +111,26 @@ const registerMockDirectoryPicker = async (page: Page, options: { folderName: st
 
 const seedLocalSource = async (page: Page) => {
   await page.addInitScript(() => {
-    localStorage.setItem('c64u_local_sources:v1', JSON.stringify([
-      {
-        id: 'seed-local-source',
-        name: 'Seed Local',
-        rootName: 'Local',
-        rootPath: '/Local/',
-        createdAt: '2024-03-20T12:00:00.000Z',
-        entries: [
-          {
-            name: 'seed.sid',
-            relativePath: 'Local/seed.sid',
-            sizeBytes: 1024,
-            modifiedAt: '2024-03-20T12:00:00.000Z',
-          },
-        ],
-      },
-    ]));
+    localStorage.setItem(
+      'c64u_local_sources:v1',
+      JSON.stringify([
+        {
+          id: 'seed-local-source',
+          name: 'Seed Local',
+          rootName: 'Local',
+          rootPath: '/Local/',
+          createdAt: '2024-03-20T12:00:00.000Z',
+          entries: [
+            {
+              name: 'seed.sid',
+              relativePath: 'Local/seed.sid',
+              sizeBytes: 1024,
+              modifiedAt: '2024-03-20T12:00:00.000Z',
+            },
+          ],
+        },
+      ]),
+    );
   });
 };
 
@@ -139,7 +168,9 @@ test.describe('Item Selection Dialog UX', () => {
     }
   });
 
-  test('add items modal has single close button', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('add items modal has single close button', async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-page-loaded');
 
@@ -150,7 +181,11 @@ test.describe('Item Selection Dialog UX', () => {
     // Find all close buttons (X icons) in the dialog
     const dialog = page.locator('[role="dialog"]').first();
     // Count visible close buttons in top-right area
-    const headerCloseButtons = await dialog.locator('button[aria-label*="Close"], button[class*="absolute"][class*="right"]').count();
+    const headerCloseButtons = await dialog
+      .locator(
+        'button[aria-label*="Close"], button[class*="absolute"][class*="right"]',
+      )
+      .count();
 
     await snap(page, testInfo, 'close-buttons-check');
 
@@ -158,7 +193,9 @@ test.describe('Item Selection Dialog UX', () => {
     expect(headerCloseButtons).toBeLessThanOrEqual(1);
   });
 
-  test('add items modal does not occupy full viewport height', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('add items modal does not occupy full viewport height', async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-page-loaded');
 
@@ -176,7 +213,7 @@ test.describe('Item Selection Dialog UX', () => {
     if (dialogBox && viewport) {
       // Modal should leave at least 10% margin at top and bottom combined
       const heightRatio = dialogBox.height / viewport.height;
-      expect(heightRatio).toBeLessThan(0.90);
+      expect(heightRatio).toBeLessThan(0.9);
 
       // Modal should not start at viewport top
       expect(dialogBox.y).toBeGreaterThan(viewport.height * 0.05);
@@ -185,18 +222,24 @@ test.describe('Item Selection Dialog UX', () => {
     }
   });
 
-  test('import interstitial shows local and C64U options', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('import interstitial shows local and C64U options', async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await openAddItemsDialog(page);
 
     const dialog = page.getByRole('dialog');
-    await expect(dialog.getByTestId('import-selection-interstitial')).toBeVisible();
+    await expect(
+      dialog.getByTestId('import-selection-interstitial'),
+    ).toBeVisible();
     await expect(dialog.getByTestId('import-option-local')).toBeVisible();
     await expect(dialog.getByTestId('import-option-c64u')).toBeVisible();
     await snap(page, testInfo, 'import-interstitial');
   });
 
-  test('C64U file picker is reachable from interstitial', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('C64U file picker is reachable from interstitial', async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await openAddItemsDialog(page);
 
@@ -207,7 +250,9 @@ test.describe('Item Selection Dialog UX', () => {
     await snap(page, testInfo, 'c64u-file-picker');
   });
 
-  test('add items dialog resets to interstitial on reopen', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('add items dialog resets to interstitial on reopen', async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await openAddItemsDialog(page);
 
@@ -222,11 +267,15 @@ test.describe('Item Selection Dialog UX', () => {
 
     await openAddItemsDialog(page);
     const reopened = page.getByRole('dialog');
-    await expect(reopened.getByTestId('import-selection-interstitial')).toBeVisible();
+    await expect(
+      reopened.getByTestId('import-selection-interstitial'),
+    ).toBeVisible();
     await snap(page, testInfo, 'interstitial-reset');
   });
 
-  test('local file picker is reachable from playlist flow', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('local file picker is reachable from playlist flow', async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     await seedLocalSource(page);
     await page.goto('/play');
     await openAddItemsDialog(page);
@@ -237,7 +286,9 @@ test.describe('Item Selection Dialog UX', () => {
     await snap(page, testInfo, 'local-file-picker-interstitial');
   });
 
-  test('add items modal content is scrollable', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('add items modal content is scrollable', async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-page-loaded');
 
@@ -254,16 +305,24 @@ test.describe('Item Selection Dialog UX', () => {
 
     // Check if content area is scrollable
     const isScrollable = await scrollableContent.evaluate((el: HTMLElement) => {
-      return el.scrollHeight > el.clientHeight || el.classList.toString().includes('overflow');
+      return (
+        el.scrollHeight > el.clientHeight ||
+        el.classList.toString().includes('overflow')
+      );
     });
 
     await snap(page, testInfo, 'scrollable-check');
 
     // Content should either be scrollable or have overflow classes
-    expect(isScrollable || (await scrollableContent.getAttribute('class'))?.includes('overflow')).toBeTruthy();
+    expect(
+      isScrollable ||
+        (await scrollableContent.getAttribute('class'))?.includes('overflow'),
+    ).toBeTruthy();
   });
 
-  test('C64 Ultimate folder selection shows confirm button', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('C64 Ultimate folder selection shows confirm button', async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-page-loaded');
 
@@ -272,7 +331,9 @@ test.describe('Item Selection Dialog UX', () => {
     await clickSourceSelectionButton(dialog, 'C64 Ultimate');
     await waitForFtpIdle(dialog);
     await snap(page, testInfo, 'c64u-browser-opened');
-    await expect(dialog.getByRole('button', { name: /^Open$/i })).toHaveCount(0);
+    await expect(dialog.getByRole('button', { name: /^Open$/i })).toHaveCount(
+      0,
+    );
 
     // Find and select a folder checkbox row.
     const firstFolderRow = page
@@ -290,7 +351,9 @@ test.describe('Item Selection Dialog UX', () => {
     await snap(page, testInfo, 'confirm-button-visible');
   });
 
-  test('folder row tap navigates and checkbox selection does not navigate', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('folder row tap navigates and checkbox selection does not navigate', async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await openAddItemsDialog(page);
     const dialog = page.getByRole('dialog');
@@ -298,7 +361,9 @@ test.describe('Item Selection Dialog UX', () => {
     await waitForFtpIdle(dialog);
     await expect(dialog.getByText('Usb0', { exact: true })).toBeVisible();
 
-    const usbRow = dialog.locator('[data-testid="source-entry-row"]', { hasText: 'Usb0' }).first();
+    const usbRow = dialog
+      .locator('[data-testid="source-entry-row"]', { hasText: 'Usb0' })
+      .first();
     await usbRow.getByRole('checkbox').click();
     await waitForFtpIdle(dialog);
     await expect(dialog.getByText('Games', { exact: true })).toHaveCount(0);
@@ -310,7 +375,9 @@ test.describe('Item Selection Dialog UX', () => {
     await snap(page, testInfo, 'folder-row-navigation');
 
     await ensureRemoteRoot(dialog);
-    const usbRowKeyboard = dialog.locator('[data-testid="source-entry-row"]', { hasText: 'Usb0' }).first();
+    const usbRowKeyboard = dialog
+      .locator('[data-testid="source-entry-row"]', { hasText: 'Usb0' })
+      .first();
     await usbRowKeyboard.focus();
     await page.keyboard.press('Enter');
     await waitForFtpIdle(dialog);
@@ -318,7 +385,9 @@ test.describe('Item Selection Dialog UX', () => {
     await snap(page, testInfo, 'folder-row-keyboard-navigation');
   });
 
-  test('Play page: C64 Ultimate full flow adds items', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('Play page: C64 Ultimate full flow adds items', async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     enableTraceAssertions(testInfo);
     await page.goto('/play');
     await snap(page, testInfo, 'play-initial');
@@ -359,7 +428,10 @@ test.describe('Item Selection Dialog UX', () => {
     await snap(page, testInfo, 'items-adding');
 
     // Wait for dialog to close
-    await page.waitForSelector('[role="dialog"]', { state: 'hidden', timeout: 10000 });
+    await page.waitForSelector('[role="dialog"]', {
+      state: 'hidden',
+      timeout: 10000,
+    });
     await snap(page, testInfo, 'dialog-closed');
 
     // Verify we're back on Play page with items
@@ -367,7 +439,9 @@ test.describe('Item Selection Dialog UX', () => {
     await snap(page, testInfo, 'back-to-play-page');
   });
 
-  test('Play page: local folder picker returns to playlist', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('Play page: local folder picker returns to playlist', async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     await registerMockDirectoryPicker(page, {
       folderName: 'Local-Long-Folder-Name-For-Return-Flow',
       fileName: 'Super-Long-Local-Track-Name-For-Return-Flow.sid',
@@ -380,15 +454,22 @@ test.describe('Item Selection Dialog UX', () => {
     const dialog = page.getByRole('dialog');
     await clickSourceSelectionButton(dialog, 'This device');
 
-    await expect(page.locator('[role="dialog"]')).toHaveCount(0, { timeout: 10000 });
+    await expect(page.locator('[role="dialog"]')).toHaveCount(0, {
+      timeout: 10000,
+    });
     await expect(page.getByTestId('playlist-list')).toBeVisible();
     await expect(
-      page.getByTestId('playlist-item').filter({ hasText: 'Super-Long-Local-Track-Name-For-Return-Flow.sid' }).first(),
+      page
+        .getByTestId('playlist-item')
+        .filter({ hasText: 'Super-Long-Local-Track-Name-For-Return-Flow.sid' })
+        .first(),
     ).toBeVisible();
     await snap(page, testInfo, 'playlist-returned');
   });
 
-  test('Disks page: local folder picker returns to disk list', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('Disks page: local folder picker returns to disk list', async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     await registerMockDirectoryPicker(page, {
       folderName: 'Local-Long-Disk-Folder-Name-For-Return-Flow',
       fileName: 'Super-Long-Local-Disk-Name-For-Return-Flow.d64',
@@ -397,24 +478,35 @@ test.describe('Item Selection Dialog UX', () => {
     await page.goto('/disks');
     await snap(page, testInfo, 'disks-open');
 
-    await page.getByRole('button', { name: /Add disks|Add more disks/i }).click();
+    await page
+      .getByRole('button', { name: /Add disks|Add more disks/i })
+      .click();
     const dialog = page.getByRole('dialog');
     await clickSourceSelectionButton(dialog, 'This device');
 
-    await expect(page.locator('[role="dialog"]')).toHaveCount(0, { timeout: 10000 });
+    await expect(page.locator('[role="dialog"]')).toHaveCount(0, {
+      timeout: 10000,
+    });
     await expect(page.getByTestId('disk-list')).toBeVisible();
     await expect(
-      page.getByTestId('disk-row').filter({ hasText: 'Super-Long-Local-Disk-Name-For-Return-Flow.d64' }).first(),
+      page
+        .getByTestId('disk-row')
+        .filter({ hasText: 'Super-Long-Local-Disk-Name-For-Return-Flow.d64' })
+        .first(),
     ).toBeVisible();
     await snap(page, testInfo, 'disks-returned');
   });
 
-  test('Disks page: C64 Ultimate full flow adds disks', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('Disks page: C64 Ultimate full flow adds disks', async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/disks');
     await snap(page, testInfo, 'disks-initial');
 
     // Open add items dialog
-    await page.getByRole('button', { name: /Add disks|Add more disks/i }).click();
+    await page
+      .getByRole('button', { name: /Add disks|Add more disks/i })
+      .click();
     await snap(page, testInfo, 'add-items-opened');
 
     // Select C64 Ultimate source
@@ -425,7 +517,12 @@ test.describe('Item Selection Dialog UX', () => {
 
     // Navigate to Usb0 folder
     await ensureRemoteRoot(dialog);
-    if (await dialog.getByText('Usb0', { exact: true }).isVisible({ timeout: 2000 }).catch(() => false)) {
+    if (
+      await dialog
+        .getByText('Usb0', { exact: true })
+        .isVisible({ timeout: 2000 })
+        .catch(() => false)
+    ) {
       await openRemoteFolder(dialog, 'Usb0');
       await waitForFtpIdle(dialog);
       await snap(page, testInfo, 'usb2-opened');
@@ -445,15 +542,22 @@ test.describe('Item Selection Dialog UX', () => {
     await snap(page, testInfo, 'items-adding');
 
     // Wait for dialog to close
-    await page.waitForSelector('[role="dialog"]', { state: 'hidden', timeout: 10000 });
+    await page.waitForSelector('[role="dialog"]', {
+      state: 'hidden',
+      timeout: 10000,
+    });
     await snap(page, testInfo, 'dialog-closed');
 
     // Verify we're back on Disks page
-    await expect(page.locator('header').getByRole('heading', { name: 'Disks' })).toBeVisible();
+    await expect(
+      page.locator('header').getByRole('heading', { name: 'Disks' }),
+    ).toBeVisible();
     await snap(page, testInfo, 'back-to-disks-page');
   });
 
-  test('Play page: Add folder returns to Play and populates playlist', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('Play page: Add folder returns to Play and populates playlist', async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-initial');
 
@@ -470,17 +574,23 @@ test.describe('Item Selection Dialog UX', () => {
     await snap(page, testInfo, 'playlist-populated');
   });
 
-  test('Disks page: Add folder returns to Disks and populates library', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('Disks page: Add folder returns to Disks and populates library', async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     enableGoldenTrace(testInfo);
     await page.goto('/disks');
     await snap(page, testInfo, 'disks-initial');
 
-    await page.getByRole('button', { name: /Add disks|Add more disks/i }).click();
+    await page
+      .getByRole('button', { name: /Add disks|Add more disks/i })
+      .click();
     const dialog = page.getByRole('dialog');
     await clickSourceSelectionButton(dialog, 'This device');
     const input = page.locator('input[type="file"][webkitdirectory]');
     await expect(input).toHaveCount(1);
-    await input.setInputFiles([path.resolve('playwright/fixtures/disks-local')]);
+    await input.setInputFiles([
+      path.resolve('playwright/fixtures/disks-local'),
+    ]);
     await expect(page.getByRole('dialog')).toBeHidden();
     await snap(page, testInfo, 'disks-folder-added');
 
@@ -489,7 +599,9 @@ test.describe('Item Selection Dialog UX', () => {
     await snap(page, testInfo, 'disks-populated');
   });
 
-  test('Play page: repeated add items via folder picker remains stable', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('Play page: repeated add items via folder picker remains stable', async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-initial');
 
@@ -523,23 +635,33 @@ test.describe('Item Selection Dialog UX', () => {
     await snap(page, testInfo, 'play-repeated-add');
   });
 
-  test('Disks page: repeated add items via folder picker remains stable', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('Disks page: repeated add items via folder picker remains stable', async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/disks');
     await snap(page, testInfo, 'disks-initial');
 
-    await page.getByRole('button', { name: /Add disks|Add more disks/i }).click();
+    await page
+      .getByRole('button', { name: /Add disks|Add more disks/i })
+      .click();
     const dialog = page.getByRole('dialog');
     await clickSourceSelectionButton(dialog, 'This device');
     const input = page.locator('input[type="file"][webkitdirectory]');
-    await input.setInputFiles([path.resolve('playwright/fixtures/disks-local')]);
+    await input.setInputFiles([
+      path.resolve('playwright/fixtures/disks-local'),
+    ]);
     await expect(page.getByRole('dialog')).toBeHidden();
 
-    await expect.poll(async () => page.evaluate(() => {
-      const raw = localStorage.getItem('c64u_disk_library:TEST-123');
-      if (!raw) return 0;
-      const parsed = JSON.parse(raw) as { disks?: unknown[] };
-      return parsed.disks?.length ?? 0;
-    })).toBeGreaterThan(0);
+    await expect
+      .poll(async () =>
+        page.evaluate(() => {
+          const raw = localStorage.getItem('c64u_disk_library:TEST-123');
+          if (!raw) return 0;
+          const parsed = JSON.parse(raw) as { disks?: unknown[] };
+          return parsed.disks?.length ?? 0;
+        }),
+      )
+      .toBeGreaterThan(0);
 
     const firstCount = await page.evaluate(() => {
       const raw = localStorage.getItem('c64u_disk_library:TEST-123');
@@ -548,9 +670,13 @@ test.describe('Item Selection Dialog UX', () => {
       return parsed.disks?.length ?? 0;
     });
 
-    await page.getByRole('button', { name: /Add disks|Add more disks/i }).click();
+    await page
+      .getByRole('button', { name: /Add disks|Add more disks/i })
+      .click();
     await clickSourceSelectionButton(page.getByRole('dialog'), 'This device');
-    await input.setInputFiles([path.resolve('playwright/fixtures/disks-local')]);
+    await input.setInputFiles([
+      path.resolve('playwright/fixtures/disks-local'),
+    ]);
     await expect(page.getByRole('dialog')).toBeHidden();
 
     const secondCount = await page.evaluate(() => {
@@ -563,7 +689,9 @@ test.describe('Item Selection Dialog UX', () => {
     await snap(page, testInfo, 'disks-repeated-add');
   });
 
-  test('Play page: repeated add items via C64 Ultimate remains stable', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('Play page: repeated add items via C64 Ultimate remains stable', async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-initial');
 
@@ -584,7 +712,10 @@ test.describe('Item Selection Dialog UX', () => {
       await openRemoteFolder(dialog, 'Turrican II');
       await selectEntryCheckbox(dialog, diskName);
       await page.getByTestId('add-items-confirm').click();
-      await page.waitForSelector('[role="dialog"]', { state: 'hidden', timeout: 10000 });
+      await page.waitForSelector('[role="dialog"]', {
+        state: 'hidden',
+        timeout: 10000,
+      });
     };
 
     await addDisk('Disk 1.d64');
@@ -595,19 +726,25 @@ test.describe('Item Selection Dialog UX', () => {
     await snap(page, testInfo, 'play-c64u-repeated-add');
   });
 
-  test('Disks page: repeated add items via C64 Ultimate remains stable', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('Disks page: repeated add items via C64 Ultimate remains stable', async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/disks');
     await snap(page, testInfo, 'disks-initial');
 
     for (let i = 0; i < 2; i += 1) {
-      await page.getByRole('button', { name: /Add disks|Add more disks/i }).click();
+      await page
+        .getByRole('button', { name: /Add disks|Add more disks/i })
+        .click();
       await expect(page.getByRole('dialog')).toBeVisible();
       await page.getByRole('button', { name: 'Cancel' }).click();
       await expect(page.getByRole('dialog')).toBeHidden();
     }
 
     const addDisk = async (diskName: string) => {
-      await page.getByRole('button', { name: /Add disks|Add more disks/i }).click();
+      await page
+        .getByRole('button', { name: /Add disks|Add more disks/i })
+        .click();
       const dialog = page.getByRole('dialog');
       await clickSourceSelectionButton(dialog, 'C64 Ultimate');
       await ensureRemoteRoot(dialog);
@@ -616,7 +753,10 @@ test.describe('Item Selection Dialog UX', () => {
       await openRemoteFolder(dialog, 'Turrican II');
       await selectEntryCheckbox(dialog, diskName);
       await page.getByTestId('add-items-confirm').click();
-      await page.waitForSelector('[role="dialog"]', { state: 'hidden', timeout: 10000 });
+      await page.waitForSelector('[role="dialog"]', {
+        state: 'hidden',
+        timeout: 10000,
+      });
     };
 
     await addDisk('Disk 1.d64');

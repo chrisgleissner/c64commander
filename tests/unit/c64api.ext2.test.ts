@@ -9,7 +9,16 @@
 // @vitest-environment node
 // Targeted branch coverage for c64api.ts utility functions and request paths.
 
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import {
   C64API,
   updateC64APIConfig,
@@ -44,7 +53,10 @@ const ensureWindow = () => {
     value: windowMock,
     configurable: true,
   });
-  if (typeof (globalThis as { CustomEvent?: typeof CustomEvent }).CustomEvent === 'undefined') {
+  if (
+    typeof (globalThis as { CustomEvent?: typeof CustomEvent }).CustomEvent ===
+    'undefined'
+  ) {
     class CustomEventShim<T = unknown> extends Event {
       detail?: T;
       constructor(type: string, params?: CustomEventInit<T>) {
@@ -91,7 +103,10 @@ ensureLocalStorage();
 // promise chains inside c64api.ts.
 const abortUnhandledRejectionHandler = (reason: unknown) => {
   const error = reason as { name?: string; message?: string };
-  if (error?.name === 'AbortError' || error?.message === 'The operation was aborted') {
+  if (
+    error?.name === 'AbortError' ||
+    error?.message === 'The operation was aborted'
+  ) {
     // swallow — expected from abort test paths
   }
 };
@@ -108,10 +123,12 @@ const getFetchMock = () => fetchMock as unknown as ReturnType<typeof vi.fn>;
 vi.mock('@/lib/logging', () => ({
   addErrorLog: vi.fn(),
   addLog: vi.fn(),
-  buildErrorLogDetails: vi.fn((error: Error, details?: Record<string, unknown>) => ({
-    ...details,
-    error: (error as Error).message,
-  })),
+  buildErrorLogDetails: vi.fn(
+    (error: Error, details?: Record<string, unknown>) => ({
+      ...details,
+      error: (error as Error).message,
+    }),
+  ),
 }));
 
 vi.mock('@capacitor/core', () => ({
@@ -133,7 +150,9 @@ vi.mock('@/lib/smoke/smokeMode', () => ({
 }));
 
 vi.mock('@/lib/tracing/actionTrace', () => ({
-  runWithImplicitAction: vi.fn((_name: string, fn: (ctx: unknown) => unknown) => fn({})),
+  runWithImplicitAction: vi.fn((_name: string, fn: (ctx: unknown) => unknown) =>
+    fn({}),
+  ),
 }));
 
 vi.mock('@/lib/tracing/traceSession', () => ({
@@ -143,15 +162,23 @@ vi.mock('@/lib/tracing/traceSession', () => ({
 }));
 
 vi.mock('@/lib/tracing/failureTaxonomy', () => ({
-  classifyError: vi.fn(() => ({ failureClass: 'unknown', category: 'unknown' })),
+  classifyError: vi.fn(() => ({
+    failureClass: 'unknown',
+    category: 'unknown',
+  })),
 }));
 
 vi.mock('@/lib/deviceInteraction/deviceInteractionManager', () => ({
-  withRestInteraction: vi.fn((_meta: unknown, handler: () => unknown) => handler()),
+  withRestInteraction: vi.fn((_meta: unknown, handler: () => unknown) =>
+    handler(),
+  ),
 }));
 
 vi.mock('@/lib/deviceInteraction/deviceStateStore', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/deviceInteraction/deviceStateStore')>();
+  const actual =
+    await importOriginal<
+      typeof import('@/lib/deviceInteraction/deviceStateStore')
+    >();
   return {
     ...actual,
     getDeviceStateSnapshot: vi.fn(() => ({
@@ -271,7 +298,9 @@ describe('c64api utility functions - targeted branch coverage', () => {
     });
 
     it('handles IPv6 with port in WEB_PROXY_PATH baseUrl', () => {
-      expect(() => updateC64APIConfig('http://[::1]:8080/api/rest')).not.toThrow();
+      expect(() =>
+        updateC64APIConfig('http://[::1]:8080/api/rest'),
+      ).not.toThrow();
     });
   });
 
@@ -279,7 +308,9 @@ describe('c64api utility functions - targeted branch coverage', () => {
   describe('password header injection (lines 560-561)', () => {
     it('includes X-Password header when API is constructed with password', async () => {
       const fm = getFetchMock();
-      fm.mockResolvedValue(okJsonResponse({ version: '1.0', product: 'Ultimate' }));
+      fm.mockResolvedValue(
+        okJsonResponse({ version: '1.0', product: 'Ultimate' }),
+      );
 
       const api = new C64API('http://c64u', 'secret123');
       await api.getInfo();
@@ -291,7 +322,9 @@ describe('c64api utility functions - targeted branch coverage', () => {
 
     it('does NOT include X-Password header when no password set', async () => {
       const fm = getFetchMock();
-      fm.mockResolvedValue(okJsonResponse({ version: '1.0', product: 'Ultimate' }));
+      fm.mockResolvedValue(
+        okJsonResponse({ version: '1.0', product: 'Ultimate' }),
+      );
 
       const api = new C64API('http://c64u');
       await api.getInfo();
@@ -306,7 +339,9 @@ describe('c64api utility functions - targeted branch coverage', () => {
   describe('proxy host header injection (lines 564-565)', () => {
     it('includes X-C64U-Host header when baseUrl contains WEB_PROXY_PATH', async () => {
       const fm = getFetchMock();
-      fm.mockResolvedValue(okJsonResponse({ version: '1.0', product: 'Ultimate' }));
+      fm.mockResolvedValue(
+        okJsonResponse({ version: '1.0', product: 'Ultimate' }),
+      );
 
       // Use setBaseUrl so resolvePlatformApiBaseUrl picks up the path directly
       const api = new C64API('http://c64u', undefined, 'c64u');
@@ -320,7 +355,9 @@ describe('c64api utility functions - targeted branch coverage', () => {
 
     it('includes X-C64U-Host header when baseUrl is localhost (isLocalProxy)', async () => {
       const fm = getFetchMock();
-      fm.mockResolvedValue(okJsonResponse({ version: '1.0', product: 'Ultimate' }));
+      fm.mockResolvedValue(
+        okJsonResponse({ version: '1.0', product: 'Ultimate' }),
+      );
 
       const api = new C64API('http://c64u', undefined, 'c64u');
       api.setBaseUrl('http://localhost:8080');
@@ -402,7 +439,10 @@ describe('c64api utility functions - targeted branch coverage', () => {
       addErrorLogMock.mockClear();
       const api = new C64API('http://c64u');
       await expect(api.getInfo({ __c64uIntent: 'system' })).rejects.toThrow();
-      expect(addErrorLogMock).not.toHaveBeenCalledWith('C64 API request failed', expect.anything());
+      expect(addErrorLogMock).not.toHaveBeenCalledWith(
+        'C64 API request failed',
+        expect.anything(),
+      );
     });
 
     it('pre-aborted signal with timeoutMs triggers early abort check (line 819)', async () => {

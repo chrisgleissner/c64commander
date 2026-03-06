@@ -41,18 +41,25 @@ describe('traceTargets', () => {
     apiConfigSnapshotMock.mockReturnValue({ baseUrl: 'http://device' });
     activeMockBaseUrlMock.mockReturnValue(null);
 
-    expect(resolveBackendTarget()).toEqual({ target: 'internal-mock', reason: 'demo-mode' });
+    expect(resolveBackendTarget()).toEqual({
+      target: 'internal-mock',
+      reason: 'demo-mode',
+    });
   });
 
   it('uses external mock when test probes match base URL', () => {
     stickyLockMock.mockReturnValue(false);
     vi.stubEnv('VITE_ENABLE_TEST_PROBES', '1');
-    (window as { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl = 'http://mock';
+    (window as { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl =
+      'http://mock';
     connectionSnapshotMock.mockReturnValue({ state: 'REAL_CONNECTED' });
     apiConfigSnapshotMock.mockReturnValue({ baseUrl: 'http://mock/api' });
     activeMockBaseUrlMock.mockReturnValue(null);
 
-    expect(resolveBackendTarget()).toEqual({ target: 'external-mock', reason: 'test-mode' });
+    expect(resolveBackendTarget()).toEqual({
+      target: 'external-mock',
+      reason: 'test-mode',
+    });
   });
 
   it('falls back to real device when offline without demo', () => {
@@ -61,7 +68,10 @@ describe('traceTargets', () => {
     apiConfigSnapshotMock.mockReturnValue({ baseUrl: 'http://device' });
     activeMockBaseUrlMock.mockReturnValue(null);
 
-    expect(resolveBackendTarget()).toEqual({ target: 'real-device', reason: 'fallback' });
+    expect(resolveBackendTarget()).toEqual({
+      target: 'real-device',
+      reason: 'fallback',
+    });
   });
 
   it('forces real-device target when sticky lock is enabled', () => {
@@ -70,7 +80,10 @@ describe('traceTargets', () => {
     apiConfigSnapshotMock.mockReturnValue({ baseUrl: 'http://mock' });
     activeMockBaseUrlMock.mockReturnValue('http://mock');
 
-    expect(resolveBackendTarget()).toEqual({ target: 'real-device', reason: 'reachable' });
+    expect(resolveBackendTarget()).toEqual({
+      target: 'real-device',
+      reason: 'reachable',
+    });
   });
 
   it('uses fallback reason when sticky and offline', () => {
@@ -79,7 +92,10 @@ describe('traceTargets', () => {
     apiConfigSnapshotMock.mockReturnValue({ baseUrl: 'http://device' });
     activeMockBaseUrlMock.mockReturnValue(null);
 
-    expect(resolveBackendTarget()).toEqual({ target: 'real-device', reason: 'fallback' });
+    expect(resolveBackendTarget()).toEqual({
+      target: 'real-device',
+      reason: 'fallback',
+    });
   });
 
   it('uses internal mock when activeMockUrl matches runtimeBaseUrl (BRDA:51)', () => {
@@ -88,7 +104,10 @@ describe('traceTargets', () => {
     apiConfigSnapshotMock.mockReturnValue({ baseUrl: 'http://mockserver/api' });
     activeMockBaseUrlMock.mockReturnValue('http://mockserver/');
 
-    expect(resolveBackendTarget()).toEqual({ target: 'internal-mock', reason: 'demo-mode' });
+    expect(resolveBackendTarget()).toEqual({
+      target: 'internal-mock',
+      reason: 'demo-mode',
+    });
   });
 
   it('handles invalid URL in normalizeUrl gracefully (BRDA:29)', () => {
@@ -105,27 +124,32 @@ describe('traceTargets', () => {
     stickyLockMock.mockReturnValue(false);
     vi.stubEnv('VITE_ENABLE_TEST_PROBES', '1');
     delete (window as { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl;
-    (window as { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = 'http://mock/';
+    (window as { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl =
+      'http://mock/';
     connectionSnapshotMock.mockReturnValue({ state: 'REAL_CONNECTED' });
     apiConfigSnapshotMock.mockReturnValue({ baseUrl: 'http://mock/api' });
     activeMockBaseUrlMock.mockReturnValue(null);
 
     const result = resolveBackendTarget();
     expect(result.target).toBe('external-mock');
-    delete (window as { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl;
+    delete (window as { __c64uMockServerBaseUrl?: string })
+      .__c64uMockServerBaseUrl;
   });
 
   it('enables test probes via __c64uTestProbeEnabled flag (BRDA:19)', () => {
     stickyLockMock.mockReturnValue(false);
-    (window as { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled = true;
-    (window as { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl = 'http://probe/';
+    (window as { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled =
+      true;
+    (window as { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl =
+      'http://probe/';
     connectionSnapshotMock.mockReturnValue({ state: 'REAL_CONNECTED' });
     apiConfigSnapshotMock.mockReturnValue({ baseUrl: 'http://probe/api' });
     activeMockBaseUrlMock.mockReturnValue(null);
 
     const result = resolveBackendTarget();
     expect(result.target).toBe('external-mock');
-    delete (window as { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled;
+    delete (window as { __c64uTestProbeEnabled?: boolean })
+      .__c64uTestProbeEnabled;
   });
 
   it('resolves real-device when test probes enabled but no test URL globals set (BRDA:38,17)', () => {
@@ -133,7 +157,8 @@ describe('traceTargets', () => {
     vi.stubEnv('VITE_ENABLE_TEST_PROBES', '1');
     // Neither __c64uExpectedBaseUrl nor __c64uMockServerBaseUrl is set → ?? null evaluated
     delete (window as { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl;
-    delete (window as { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl;
+    delete (window as { __c64uMockServerBaseUrl?: string })
+      .__c64uMockServerBaseUrl;
     connectionSnapshotMock.mockReturnValue({ state: 'REAL_CONNECTED' });
     apiConfigSnapshotMock.mockReturnValue({ baseUrl: 'http://device' });
     activeMockBaseUrlMock.mockReturnValue(null);
@@ -151,7 +176,10 @@ describe('traceTargets', () => {
     activeMockBaseUrlMock.mockReturnValue(null);
 
     const original = Object.getOwnPropertyDescriptor(globalThis, 'window');
-    Object.defineProperty(globalThis, 'window', { value: undefined, configurable: true });
+    Object.defineProperty(globalThis, 'window', {
+      value: undefined,
+      configurable: true,
+    });
     try {
       const result = resolveBackendTarget();
       expect(result.target).toBe('real-device');

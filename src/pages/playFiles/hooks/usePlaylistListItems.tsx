@@ -9,7 +9,10 @@
 import { useMemo } from 'react';
 import { Folder } from 'lucide-react';
 import { FileOriginIcon } from '@/components/FileOriginIcon';
-import type { ActionListItem, ActionListMenuItem } from '@/components/lists/SelectableActionList';
+import type {
+  ActionListItem,
+  ActionListMenuItem,
+} from '@/components/lists/SelectableActionList';
 import type { PlayFileCategory } from '@/lib/playback/fileTypes';
 import type { PlaylistItem } from '@/pages/playFiles/types';
 
@@ -19,8 +22,14 @@ export type PlaylistListItemsOptions = {
   selectedPlaylistIds: Set<string>;
   isPlaylistLoading: boolean;
   handlePlaylistSelect: (item: PlaylistItem, selected: boolean) => void;
-  startPlaylist: (items: PlaylistItem[], startIndex?: number) => Promise<void> | void;
-  playlistItemDuration: (item: PlaylistItem, index: number) => number | undefined;
+  startPlaylist: (
+    items: PlaylistItem[],
+    startIndex?: number,
+  ) => Promise<void> | void;
+  playlistItemDuration: (
+    item: PlaylistItem,
+    index: number,
+  ) => number | undefined;
   formatTime: (ms?: number) => string;
   formatPlayCategory: (category: PlayFileCategory) => string;
   formatBytes: (value?: number | null) => string;
@@ -64,11 +73,17 @@ export const usePlaylistListItems = ({
         lastFolder = folderPath;
       }
       const playlistIndex = playlist.findIndex((entry) => entry.id === item.id);
-      const durationLabel = formatTime(playlistItemDuration(item, Math.max(0, playlistIndex)));
+      const durationLabel = formatTime(
+        playlistItemDuration(item, Math.max(0, playlistIndex)),
+      );
       const detailsDate = item.modifiedAt ?? item.addedAt ?? null;
       const menuItems: ActionListMenuItem[] = [
         { type: 'label', label: 'Details' },
-        { type: 'info', label: 'Type', value: formatPlayCategory(item.category) },
+        {
+          type: 'info',
+          label: 'Type',
+          value: formatPlayCategory(item.category),
+        },
         { type: 'info', label: 'Duration', value: durationLabel },
         {
           type: 'info',
@@ -87,7 +102,13 @@ export const usePlaylistListItems = ({
         meta: (
           <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
             <FileOriginIcon
-              origin={item.request.source === 'ultimate' ? 'ultimate' : item.request.source === 'hvsc' ? 'hvsc' : 'local'}
+              origin={
+                item.request.source === 'ultimate'
+                  ? 'ultimate'
+                  : item.request.source === 'hvsc'
+                    ? 'hvsc'
+                    : 'local'
+              }
               className="h-3.5 w-3.5 shrink-0 opacity-60"
             />
             <span>{formatPlayCategory(item.category)}</span>
@@ -106,9 +127,12 @@ export const usePlaylistListItems = ({
         onSelectToggle: (selected) => handlePlaylistSelect(item, selected),
         menuItems,
         actionLabel: 'Play',
-        onAction: () => void startPlaylist(playlist, Math.max(0, playlistIndex)),
-        onTitleClick: () => void startPlaylist(playlist, Math.max(0, playlistIndex)),
-        onRowClick: () => void startPlaylist(playlist, Math.max(0, playlistIndex)),
+        onAction: () =>
+          void startPlaylist(playlist, Math.max(0, playlistIndex)),
+        onTitleClick: () =>
+          void startPlaylist(playlist, Math.max(0, playlistIndex)),
+        onRowClick: () =>
+          void startPlaylist(playlist, Math.max(0, playlistIndex)),
         disableActions: isPlaylistLoading,
       } as ActionListItem);
     });

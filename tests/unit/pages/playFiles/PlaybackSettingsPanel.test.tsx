@@ -74,7 +74,9 @@ describe('PlaybackSettingsPanel', () => {
       />,
     );
 
-    expect(screen.getByRole('button', { name: 'Subsong 2/5' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Subsong 2/5' }),
+    ).toBeInTheDocument();
     expect(screen.getByText('Available subsongs: 1–5')).toBeInTheDocument();
   });
 });

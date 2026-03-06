@@ -17,7 +17,11 @@ import {
   loadStartupDiscoveryWindowMs,
 } from '@/lib/config/appSettings';
 import { loadDeviceSafetyConfig } from '@/lib/config/deviceSafetySettings';
-import { exportSettingsSnapshot, importSettingsJson, SETTINGS_EXPORT_VERSION } from '@/lib/config/settingsTransfer';
+import {
+  exportSettingsSnapshot,
+  importSettingsJson,
+  SETTINGS_EXPORT_VERSION,
+} from '@/lib/config/settingsTransfer';
 
 describe('settingsTransfer', () => {
   beforeEach(() => {

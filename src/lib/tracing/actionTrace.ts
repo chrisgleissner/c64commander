@@ -6,7 +6,11 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { TraceActionContext, TraceOrigin, ActionTrigger } from '@/lib/tracing/types';
+import type {
+  TraceActionContext,
+  TraceOrigin,
+  ActionTrigger,
+} from '@/lib/tracing/types';
 import {
   recordActionEnd,
   recordActionScopeEnd,
@@ -49,7 +53,10 @@ export const resetActionTrace = () => {
  * @param fn - The function to execute within the action trace
  * @returns The result of fn
  */
-export const runWithActionTrace = async <T>(context: TraceActionContext, fn: () => Promise<T> | T): Promise<T> => {
+export const runWithActionTrace = async <T>(
+  context: TraceActionContext,
+  fn: () => Promise<T> | T,
+): Promise<T> => {
   const suppress = shouldSuppressDiagnosticsSideEffects();
   return runWithActionContext(context, async () => {
     if (!suppress) {
@@ -91,7 +98,10 @@ export const runWithActionTrace = async <T>(context: TraceActionContext, fn: () 
  * @param fn - The function to execute
  * @returns The result of fn
  */
-const runWithDetachedActionTrace = async <T>(context: TraceActionContext, fn: () => Promise<T> | T): Promise<T> => {
+const runWithDetachedActionTrace = async <T>(
+  context: TraceActionContext,
+  fn: () => Promise<T> | T,
+): Promise<T> => {
   const suppress = shouldSuppressDiagnosticsSideEffects();
   return runWithActionContext(context, async () => {
     if (!suppress) {
@@ -173,7 +183,10 @@ export const createActionContext = (
  * @param fn - The function to execute within the scope
  * @returns The result of fn
  */
-export const runActionScope = async <T>(name: string, fn: () => Promise<T> | T): Promise<T> => {
+export const runActionScope = async <T>(
+  name: string,
+  fn: () => Promise<T> | T,
+): Promise<T> => {
   const activeAction = getActiveAction();
   if (!activeAction) {
     return await fn();

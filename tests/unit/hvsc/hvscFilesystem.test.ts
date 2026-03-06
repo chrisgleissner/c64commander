@@ -28,7 +28,8 @@ type Entry = { type: 'file' | 'directory'; data?: string };
 
 const files = new Map<string, Entry>();
 
-const normalizePath = (path: string) => path.replace(/\\/g, '/').replace(/^\//, '');
+const normalizePath = (path: string) =>
+  path.replace(/\\/g, '/').replace(/^\//, '');
 
 const ensureDir = (path: string) => {
   const parts = normalizePath(path).split('/').filter(Boolean);
@@ -60,7 +61,10 @@ const listDir = (path: string) => {
     const entryPath = normalized ? `${normalized}/${next}` : next;
     entries.set(next, files.get(entryPath) ?? { type: 'directory' });
   }
-  return Array.from(entries.entries()).map(([name, entry]) => ({ name, type: entry.type }));
+  return Array.from(entries.entries()).map(([name, entry]) => ({
+    name,
+    type: entry.type,
+  }));
 };
 
 vi.mock('@capacitor/filesystem', () => ({
@@ -69,15 +73,22 @@ vi.mock('@capacitor/filesystem', () => ({
     mkdir: vi.fn(async ({ path }: { path: string }) => {
       ensureDir(path);
     }),
-    readdir: vi.fn(async ({ path }: { path: string }) => ({ files: listDir(path) })),
-    stat: vi.fn(async ({ path }: { path: string }): Promise<FilesystemStatResult> => {
-      const normalized = normalizePath(path);
-      const entry = files.get(normalized);
-      if (!entry) {
-        throw new Error(`Missing path: ${normalized}`);
-      }
-      return { type: entry.type, size: entry.data?.length ?? 0 } as FilesystemStatResult;
-    }),
+    readdir: vi.fn(async ({ path }: { path: string }) => ({
+      files: listDir(path),
+    })),
+    stat: vi.fn(
+      async ({ path }: { path: string }): Promise<FilesystemStatResult> => {
+        const normalized = normalizePath(path);
+        const entry = files.get(normalized);
+        if (!entry) {
+          throw new Error(`Missing path: ${normalized}`);
+        }
+        return {
+          type: entry.type,
+          size: entry.data?.length ?? 0,
+        } as FilesystemStatResult;
+      },
+    ),
     readFile: vi.fn(async ({ path }: { path: string }) => {
       const normalized = normalizePath(path);
       const entry = files.get(normalized);
@@ -123,7 +134,10 @@ describe('hvscFilesystem', () => {
 
   it('lists folders and songs with durations', async () => {
     ensureDir('hvsc/library/DEMOS/0-9');
-    setFile('hvsc/library/DEMOS/0-9/Test.sid', toBase64Bytes(new Uint8Array([1, 2, 3])));
+    setFile(
+      'hvsc/library/DEMOS/0-9/Test.sid',
+      toBase64Bytes(new Uint8Array([1, 2, 3])),
+    );
     writeSonglengthsTxt();
 
     const listing = await listHvscFolder('/DEMOS/0-9');
@@ -137,7 +151,10 @@ describe('hvscFilesystem', () => {
   it('returns song data by virtual path and uses md5 duration', async () => {
     const md5 = 'abcdef1234567890';
     ensureDir('hvsc/library/DEMOS/0-9');
-    setFile('hvsc/library/DEMOS/0-9/Test.sid', toBase64Bytes(new Uint8Array([4, 5, 6])));
+    setFile(
+      'hvsc/library/DEMOS/0-9/Test.sid',
+      toBase64Bytes(new Uint8Array([4, 5, 6])),
+    );
     writeSonglengthsMd5(md5);
 
     const song = await getHvscSongByVirtualPath('/DEMOS/0-9/Test.sid');
@@ -159,7 +176,10 @@ describe('hvscFilesystem', () => {
 
   it('resets the library root', async () => {
     ensureDir('hvsc/library/DEMOS/0-9');
-    setFile('hvsc/library/DEMOS/0-9/Test.sid', toBase64Bytes(new Uint8Array([9])));
+    setFile(
+      'hvsc/library/DEMOS/0-9/Test.sid',
+      toBase64Bytes(new Uint8Array([9])),
+    );
 
     await resetLibraryRoot();
 
@@ -210,12 +230,17 @@ describe('hvscFilesystem', () => {
   });
 
   it('short-circuits writes when file already exists', async () => {
-    setFile('hvsc/library/DEMOS/0-9/Existing.sid', toBase64Bytes(new Uint8Array([1])));
+    setFile(
+      'hvsc/library/DEMOS/0-9/Existing.sid',
+      toBase64Bytes(new Uint8Array([1])),
+    );
     vi.mocked(Filesystem.writeFile).mockImplementationOnce(async () => {
       throw new Error('already exists');
     });
 
-    await expect(writeLibraryFile('/DEMOS/0-9/Existing.sid', new Uint8Array([2]))).resolves.toBeUndefined();
+    await expect(
+      writeLibraryFile('/DEMOS/0-9/Existing.sid', new Uint8Array([2])),
+    ).resolves.toBeUndefined();
 
     const stored = files.get('hvsc/library/DEMOS/0-9/Existing.sid');
     expect(stored?.type).toBe('file');
@@ -224,26 +249,39 @@ describe('hvscFilesystem', () => {
   it('getErrorMessage extracts string error (line 55)', async () => {
     // Throw a raw string error so getErrorMessage takes the typeof=string branch
     vi.mocked(Filesystem.writeFile).mockRejectedValueOnce('already exists');
-    await expect(writeLibraryFile('/ERR/line55.sid', new Uint8Array([1]))).resolves.toBeUndefined();
+    await expect(
+      writeLibraryFile('/ERR/line55.sid', new Uint8Array([1])),
+    ).resolves.toBeUndefined();
   });
 
   it('getErrorMessage extracts .error string property (line 58)', async () => {
-    vi.mocked(Filesystem.writeFile).mockRejectedValueOnce({ error: 'already exists' });
-    await expect(writeLibraryFile('/ERR/line58.sid', new Uint8Array([1]))).resolves.toBeUndefined();
+    vi.mocked(Filesystem.writeFile).mockRejectedValueOnce({
+      error: 'already exists',
+    });
+    await expect(
+      writeLibraryFile('/ERR/line58.sid', new Uint8Array([1])),
+    ).resolves.toBeUndefined();
   });
 
   it('getErrorMessage falls back to String() for unrecognised error shapes (line 65)', async () => {
     // Throw a number; isExistsError returns false so writeLibraryFile re-throws
     vi.mocked(Filesystem.writeFile).mockRejectedValueOnce(42);
-    await expect(writeLibraryFile('/ERR/line65.sid', new Uint8Array([1]))).rejects.toBeDefined();
+    await expect(
+      writeLibraryFile('/ERR/line65.sid', new Uint8Array([1])),
+    ).rejects.toBeDefined();
   });
 
   it('readFileWithSizeGuard throws for files exceeding MAX_BRIDGE_READ_BYTES (line 99)', async () => {
     ensureDir('hvsc/library/LARGE');
     setFile('hvsc/library/LARGE/Big.sid', toBase64Bytes(new Uint8Array([1])));
     // Override stat to report an oversized file
-    vi.mocked(Filesystem.stat).mockResolvedValueOnce({ type: 'file', size: MAX_BRIDGE_READ_BYTES + 1 } as FilesystemStatResult);
-    await expect(getHvscSongByVirtualPath('/LARGE/Big.sid')).resolves.toBeNull();
+    vi.mocked(Filesystem.stat).mockResolvedValueOnce({
+      type: 'file',
+      size: MAX_BRIDGE_READ_BYTES + 1,
+    } as FilesystemStatResult);
+    await expect(
+      getHvscSongByVirtualPath('/LARGE/Big.sid'),
+    ).resolves.toBeNull();
   });
 
   it('writeFileWithRetry short-circuits on second exists error when file present (line 138)', async () => {
@@ -254,7 +292,9 @@ describe('hvscFilesystem', () => {
     vi.mocked(Filesystem.stat)
       .mockRejectedValueOnce(new Error('not found'))
       .mockResolvedValueOnce({ type: 'file', size: 5 } as FilesystemStatResult);
-    await expect(writeLibraryFile('/RETRY/Test.sid', new Uint8Array([1]))).resolves.toBeUndefined();
+    await expect(
+      writeLibraryFile('/RETRY/Test.sid', new Uint8Array([1])),
+    ).resolves.toBeUndefined();
   });
 
   it('resolveLibraryPath returns base dir for root virtual path (line 187)', () => {
@@ -278,7 +318,10 @@ describe('hvscFilesystem', () => {
 
   it('getHvscSongByVirtualPath returns null duration when no songlength exists (lines 276, 284)', async () => {
     ensureDir('hvsc/library/NODUR');
-    setFile('hvsc/library/NODUR/NoLen.sid', toBase64Bytes(new Uint8Array([1, 2])));
+    setFile(
+      'hvsc/library/NODUR/NoLen.sid',
+      toBase64Bytes(new Uint8Array([1, 2])),
+    );
     // No songlengths files → duration strategy is not-found, durations/durationSeconds are null
     const song = await getHvscSongByVirtualPath('/NODUR/NoLen.sid');
     expect(song?.fileName).toBe('NoLen.sid');

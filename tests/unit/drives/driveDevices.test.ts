@@ -82,7 +82,9 @@ describe('drive device normalization', () => {
 
   it('keeps current values in dropdown option builders', () => {
     expect(buildBusIdOptions([8, 9, 10, 11], 15)).toContain('15');
-    expect(buildTypeOptions(['1541', '1571', '1581'], 'custom')).toContain('custom');
+    expect(buildTypeOptions(['1541', '1571', '1581'], 'custom')).toContain(
+      'custom',
+    );
   });
 
   it('handles null payload gracefully (BRDA:119)', () => {

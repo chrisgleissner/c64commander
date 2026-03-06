@@ -1,14 +1,14 @@
 # Final Risk Status
 
-| Rank | Risk (Review 3) | Baseline | Post-fix status | Evidence |
-| ---: | --- | --- | --- | --- |
-| 1 | Android JVM test instability | Critical | Resolved | `doc/research/review-3/post-fix/logs/phase-1-android-jvm.log` |
-| 2 | Web payload pressure | High | Downgraded (main chunk reduced; runtime constrained checks stable) | `doc/research/review-3/post-fix/tables/bundle-delta.md`, `doc/research/review-3/post-fix/metrics/docker-constrained-delta.md` |
-| 3 | Deterministic Playwright viewport failure | High | Resolved | `playwright/viewportValidation.ts`, `doc/research/review-3/post-fix/logs/phase-2-playwright.log` |
-| 4 | iOS background parity gap | High | Mitigated/documented (explicit parity matrix + build evidence) | `doc/research/review-3/post-fix/tables/platform-parity-matrix.md` |
-| 5 | HVSC non-native JS heap pressure | High | Downgraded (lazy SID hash split + constrained runtime evidence) | `src/lib/sid/sidHash.ts`, `src/lib/sid/sidUtils.ts`, `doc/research/review-3/post-fix/metrics/endurance-web.md` |
-| 6 | web/server/src/index.ts branch coverage | High | Resolved | `doc/research/review-3/post-fix/tables/web-server-coverage-delta.md` |
-| 7 | Route/visibility churn risk | Medium | Monitored stable in endurance runs | `doc/research/review-3/post-fix/metrics/endurance-web.md` |
-| 8 | Large UI file consistency risk | Medium | Mitigated by targeted layout gates | `doc/research/review-3/post-fix/logs/phase-6-ui.log` |
-| 9 | Small-screen touch/readability | Medium | Verified by targeted layout suites | `doc/research/review-3/post-fix/logs/phase-6-ui.log` |
-| 10 | Missing endurance validation | Medium | Resolved (web + Android endurance artifacts) | `doc/research/review-3/post-fix/metrics/endurance-web.md`, `doc/research/review-3/post-fix/metrics/endurance-android.md` |
+| Rank | Risk (Review 3)                           | Baseline | Post-fix status                                                    | Evidence                                                                                                                      |
+| ---: | ----------------------------------------- | -------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+|    1 | Android JVM test instability              | Critical | Resolved                                                           | `doc/research/review-3/post-fix/logs/phase-1-android-jvm.log`                                                                 |
+|    2 | Web payload pressure                      | High     | Downgraded (main chunk reduced; runtime constrained checks stable) | `doc/research/review-3/post-fix/tables/bundle-delta.md`, `doc/research/review-3/post-fix/metrics/docker-constrained-delta.md` |
+|    3 | Deterministic Playwright viewport failure | High     | Resolved                                                           | `playwright/viewportValidation.ts`, `doc/research/review-3/post-fix/logs/phase-2-playwright.log`                              |
+|    4 | iOS background parity gap                 | High     | Mitigated/documented (explicit parity matrix + build evidence)     | `doc/research/review-3/post-fix/tables/platform-parity-matrix.md`                                                             |
+|    5 | HVSC non-native JS heap pressure          | High     | Downgraded (lazy SID hash split + constrained runtime evidence)    | `src/lib/sid/sidHash.ts`, `src/lib/sid/sidUtils.ts`, `doc/research/review-3/post-fix/metrics/endurance-web.md`                |
+|    6 | web/server/src/index.ts branch coverage   | High     | Resolved                                                           | `doc/research/review-3/post-fix/tables/web-server-coverage-delta.md`                                                          |
+|    7 | Route/visibility churn risk               | Medium   | Monitored stable in endurance runs                                 | `doc/research/review-3/post-fix/metrics/endurance-web.md`                                                                     |
+|    8 | Large UI file consistency risk            | Medium   | Mitigated by targeted layout gates                                 | `doc/research/review-3/post-fix/logs/phase-6-ui.log`                                                                          |
+|    9 | Small-screen touch/readability            | Medium   | Verified by targeted layout suites                                 | `doc/research/review-3/post-fix/logs/phase-6-ui.log`                                                                          |
+|   10 | Missing endurance validation              | Medium   | Resolved (web + Android endurance artifacts)                       | `doc/research/review-3/post-fix/metrics/endurance-web.md`, `doc/research/review-3/post-fix/metrics/endurance-android.md`      |

@@ -13,15 +13,9 @@ export const AUDIO_MIXER_VOLUME_ITEMS = [
   'Vol Socket 2',
 ];
 
-export const SID_SOCKETS_ITEMS = [
-  'SID Socket 1',
-  'SID Socket 2',
-];
+export const SID_SOCKETS_ITEMS = ['SID Socket 1', 'SID Socket 2'];
 
-export const SID_ADDRESSING_ITEMS = [
-  'UltiSID 1 Address',
-  'UltiSID 2 Address',
-];
+export const SID_ADDRESSING_ITEMS = ['UltiSID 1 Address', 'UltiSID 2 Address'];
 
 export const STREAM_ITEMS = [
   'Stream VIC to',

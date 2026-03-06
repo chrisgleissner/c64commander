@@ -21,7 +21,9 @@ const SID_STATUS_ORDER: Array<Omit<SidStatusEntry, 'enabled'>> = [
   { key: 'ultiSid2', label: 'UltiSID 2' },
 ];
 
-export const buildSidStatusEntries = (enablement: SidEnablement): SidStatusEntry[] =>
+export const buildSidStatusEntries = (
+  enablement: SidEnablement,
+): SidStatusEntry[] =>
   SID_STATUS_ORDER.map((entry) => ({
     ...entry,
     enabled: enablement[entry.key],

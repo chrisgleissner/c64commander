@@ -14,7 +14,11 @@ export type DriveDeviceClass =
   | 'SOFT_IEC_DRIVE'
   | 'PRINTER';
 
-export type DriveDeviceLabel = 'Drive A' | 'Drive B' | 'Soft IEC Drive' | 'Printer';
+export type DriveDeviceLabel =
+  | 'Drive A'
+  | 'Drive B'
+  | 'Soft IEC Drive'
+  | 'Printer';
 
 export type KnownDriveDevice = {
   class: DriveDeviceClass;
@@ -63,7 +67,11 @@ const resolveKnownClass = (key: string): DriveDeviceClass | null => {
   const normalized = normalizeDeviceKey(key);
   if (normalized === 'a') return 'PHYSICAL_DRIVE_A';
   if (normalized === 'b') return 'PHYSICAL_DRIVE_B';
-  if (normalized === 'iec drive' || normalized === 'softiec' || normalized === 'soft iec drive') {
+  if (
+    normalized === 'iec drive' ||
+    normalized === 'softiec' ||
+    normalized === 'soft iec drive'
+  ) {
     return 'SOFT_IEC_DRIVE';
   }
   if (normalized === 'printer emulation' || normalized === 'printer') {
@@ -85,15 +93,21 @@ const resolveEndpointKey = (deviceClass: DriveDeviceClass, apiKey: string) => {
 const normalizePartitions = (value: DriveInfo['partitions']) => {
   if (!Array.isArray(value)) return [];
   return value
-    .filter((entry): entry is { id: number; path: string } =>
-      entry !== null
-      && typeof entry === 'object'
-      && typeof entry.id === 'number'
-      && typeof entry.path === 'string')
+    .filter(
+      (entry): entry is { id: number; path: string } =>
+        entry !== null &&
+        typeof entry === 'object' &&
+        typeof entry.id === 'number' &&
+        typeof entry.path === 'string',
+    )
     .map((entry) => ({ id: entry.id, path: entry.path }));
 };
 
-const normalizeKnownDevice = (deviceClass: DriveDeviceClass, apiKey: string, raw: DriveInfo): KnownDriveDevice => ({
+const normalizeKnownDevice = (
+  deviceClass: DriveDeviceClass,
+  apiKey: string,
+  raw: DriveInfo,
+): KnownDriveDevice => ({
   class: deviceClass,
   label: DEVICE_CLASS_LABEL[deviceClass],
   apiKey,
@@ -103,9 +117,18 @@ const normalizeKnownDevice = (deviceClass: DriveDeviceClass, apiKey: string, raw
   busId: typeof raw.bus_id === 'number' ? raw.bus_id : null,
   type: typeof raw.type === 'string' && raw.type.trim() ? raw.type : null,
   rom: typeof raw.rom === 'string' && raw.rom.trim() ? raw.rom : null,
-  imageFile: typeof raw.image_file === 'string' && raw.image_file.trim() ? raw.image_file : null,
-  imagePath: typeof raw.image_path === 'string' && raw.image_path.trim() ? raw.image_path : null,
-  lastError: typeof raw.last_error === 'string' && raw.last_error.trim() ? raw.last_error : null,
+  imageFile:
+    typeof raw.image_file === 'string' && raw.image_file.trim()
+      ? raw.image_file
+      : null,
+  imagePath:
+    typeof raw.image_path === 'string' && raw.image_path.trim()
+      ? raw.image_path
+      : null,
+  lastError:
+    typeof raw.last_error === 'string' && raw.last_error.trim()
+      ? raw.last_error
+      : null,
   partitions: normalizePartitions(raw.partitions),
   raw,
 });
@@ -130,11 +153,16 @@ export const normalizeDriveDevices = (
         return;
       }
       if (knownByClass.has(deviceClass)) return;
-      knownByClass.set(deviceClass, normalizeKnownDevice(deviceClass, apiKey, raw));
+      knownByClass.set(
+        deviceClass,
+        normalizeKnownDevice(deviceClass, apiKey, raw),
+      );
     });
   });
 
-  const devices = Array.from(knownByClass.values()).sort((left, right) => left.order - right.order);
+  const devices = Array.from(knownByClass.values()).sort(
+    (left, right) => left.order - right.order,
+  );
 
   return {
     devices,
@@ -147,7 +175,9 @@ export const getKnownDevice = (
   deviceClass: DriveDeviceClass,
 ): KnownDriveDevice | null => {
   const normalized = normalizeDriveDevices(payload);
-  return normalized.devices.find((entry) => entry.class === deviceClass) ?? null;
+  return (
+    normalized.devices.find((entry) => entry.class === deviceClass) ?? null
+  );
 };
 
 const dedupeStringValues = (values: Array<number | string>) => {
@@ -162,7 +192,10 @@ const dedupeStringValues = (values: Array<number | string>) => {
   return result;
 };
 
-export const buildBusIdOptions = (defaults: number[], current: number | null) => {
+export const buildBusIdOptions = (
+  defaults: number[],
+  current: number | null,
+) => {
   const values: Array<number | string> = [...defaults];
   if (current !== null) {
     values.unshift(current);
@@ -170,7 +203,10 @@ export const buildBusIdOptions = (defaults: number[], current: number | null) =>
   return dedupeStringValues(values);
 };
 
-export const buildTypeOptions = (defaults: string[], current: string | null) => {
+export const buildTypeOptions = (
+  defaults: string[],
+  current: string | null,
+) => {
   const values: Array<number | string> = [...defaults];
   if (current && current.trim()) {
     values.unshift(current.trim());

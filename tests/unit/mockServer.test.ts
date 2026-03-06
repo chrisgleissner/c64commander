@@ -7,7 +7,12 @@
  */
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { getActiveMockBaseUrl, getActiveMockFtpPort, startMockServer, stopMockServer } from '@/lib/mock/mockServer';
+import {
+  getActiveMockBaseUrl,
+  getActiveMockFtpPort,
+  startMockServer,
+  stopMockServer,
+} from '@/lib/mock/mockServer';
 import { addErrorLog } from '@/lib/logging';
 import { MockC64U } from '@/lib/native/mockC64u';
 import { getMockConfigPayload } from '@/lib/mock/mockConfig';
@@ -38,7 +43,10 @@ describe('mockServer', () => {
   });
 
   it('starts once and caches the active base URL', async () => {
-    vi.mocked(MockC64U.startServer).mockResolvedValue({ baseUrl: 'http://localhost:1234', ftpPort: 2121 });
+    vi.mocked(MockC64U.startServer).mockResolvedValue({
+      baseUrl: 'http://localhost:1234',
+      ftpPort: 2121,
+    });
 
     const first = await startMockServer();
     const second = await startMockServer();
@@ -60,19 +68,27 @@ describe('mockServer', () => {
     vi.mocked(MockC64U.startServer).mockRejectedValue(error);
 
     await expect(startMockServer()).rejects.toThrow('Start failed');
-    expect(vi.mocked(addErrorLog)).toHaveBeenCalledWith('Mock C64U server failed to start', {
-      error: 'Start failed',
-    });
+    expect(vi.mocked(addErrorLog)).toHaveBeenCalledWith(
+      'Mock C64U server failed to start',
+      {
+        error: 'Start failed',
+      },
+    );
   });
 
   it('logs and rethrows stop failures', async () => {
-    vi.mocked(MockC64U.startServer).mockResolvedValue({ baseUrl: 'http://localhost:1234' });
+    vi.mocked(MockC64U.startServer).mockResolvedValue({
+      baseUrl: 'http://localhost:1234',
+    });
     vi.mocked(MockC64U.stopServer).mockRejectedValue(new Error('Stop failed'));
 
     await startMockServer();
     await expect(stopMockServer()).rejects.toThrow('Stop failed');
-    expect(vi.mocked(addErrorLog)).toHaveBeenCalledWith('Mock C64U server failed to stop', {
-      error: 'Stop failed',
-    });
+    expect(vi.mocked(addErrorLog)).toHaveBeenCalledWith(
+      'Mock C64U server failed to stop',
+      {
+        error: 'Stop failed',
+      },
+    );
   });
 });

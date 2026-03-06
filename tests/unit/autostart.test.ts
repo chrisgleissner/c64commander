@@ -28,12 +28,17 @@ describe('autostart', () => {
     api.readMemory.mockResolvedValue(new Uint8Array([0]));
     api.writeMemory.mockResolvedValue({ errors: [] });
 
-    const task = injectAutostart(api as any, AUTOSTART_SEQUENCE, { pollIntervalMs: 50 });
+    const task = injectAutostart(api as any, AUTOSTART_SEQUENCE, {
+      pollIntervalMs: 50,
+    });
     await vi.runAllTimersAsync();
     await task;
 
     expect(api.writeMemory).toHaveBeenCalledWith('0277', AUTOSTART_SEQUENCE);
-    expect(api.writeMemory).toHaveBeenCalledWith('00C6', new Uint8Array([AUTOSTART_SEQUENCE.length]));
+    expect(api.writeMemory).toHaveBeenCalledWith(
+      '00C6',
+      new Uint8Array([AUTOSTART_SEQUENCE.length]),
+    );
   });
 
   it('throws when keyboard buffer stays busy', async () => {
@@ -41,8 +46,13 @@ describe('autostart', () => {
     api.readMemory.mockResolvedValue(new Uint8Array([2]));
     api.writeMemory.mockResolvedValue({ errors: [] });
 
-    const task = injectAutostart(api as any, AUTOSTART_SEQUENCE, { pollIntervalMs: 10, maxAttempts: 3 });
-    const assertion = expect(task).rejects.toThrow('Keyboard buffer remained busy');
+    const task = injectAutostart(api as any, AUTOSTART_SEQUENCE, {
+      pollIntervalMs: 10,
+      maxAttempts: 3,
+    });
+    const assertion = expect(task).rejects.toThrow(
+      'Keyboard buffer remained busy',
+    );
     await vi.runAllTimersAsync();
     await assertion;
   });
@@ -68,7 +78,10 @@ describe('autostart', () => {
     api.readMemory.mockResolvedValue(new Uint8Array(0));
     api.writeMemory.mockResolvedValue({ errors: [] });
 
-    const task = injectAutostart(api as any, AUTOSTART_SEQUENCE, { pollIntervalMs: 10, maxAttempts: 3 });
+    const task = injectAutostart(api as any, AUTOSTART_SEQUENCE, {
+      pollIntervalMs: 10,
+      maxAttempts: 3,
+    });
     await vi.runAllTimersAsync();
     await task;
 

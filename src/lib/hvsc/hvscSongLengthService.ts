@@ -41,7 +41,9 @@ const backend = new InMemoryTextBackend({
     });
   },
 });
-const facade = new SongLengthServiceFacade(backend, { serviceId: 'hvsc-songlengths' });
+const facade = new SongLengthServiceFacade(backend, {
+  serviceId: 'hvsc-songlengths',
+});
 
 let hasAttemptedColdStartLoad = false;
 let activeLoad: Promise<void> | null = null;
@@ -66,13 +68,21 @@ const decodeBase64Text = (raw: string) => {
 const getErrorMessage = (error: unknown) => {
   if (typeof error === 'string') return error;
   if (error && typeof error === 'object') {
-    if ('message' in error && typeof (error as { message?: unknown }).message === 'string') {
+    if (
+      'message' in error &&
+      typeof (error as { message?: unknown }).message === 'string'
+    ) {
       return (error as { message: string }).message;
     }
     if ('error' in error) {
       const nested = (error as { error?: unknown }).error;
       if (typeof nested === 'string') return nested;
-      if (nested && typeof nested === 'object' && 'message' in nested && typeof (nested as { message?: unknown }).message === 'string') {
+      if (
+        nested &&
+        typeof nested === 'object' &&
+        'message' in nested &&
+        typeof (nested as { message?: unknown }).message === 'string'
+      ) {
         return (nested as { message: string }).message;
       }
     }
@@ -81,11 +91,17 @@ const getErrorMessage = (error: unknown) => {
 };
 
 const isMissingPathError = (error: unknown) =>
-  /does not exist|not exist|no such file|not found/i.test(getErrorMessage(error));
+  /does not exist|not exist|no such file|not found/i.test(
+    getErrorMessage(error),
+  );
 
 const ensureSonglengthDirectory = async (path: string) => {
   try {
-    await Filesystem.mkdir({ directory: Directory.Data, path, recursive: true });
+    await Filesystem.mkdir({
+      directory: Directory.Data,
+      path,
+      recursive: true,
+    });
   } catch (error) {
     if (isMissingPathError(error)) {
       addLog('debug', 'HVSC songlengths directory missing during bootstrap', {
@@ -129,13 +145,18 @@ const isReadableFile = async (path: string) => {
 const discoverSonglengthFiles = async (): Promise<SongLengthSourceFile[]> => {
   const roots = [HVSC_LIBRARY_DIR, `${HVSC_LIBRARY_DIR}/DOCUMENTS`];
   const discovered: string[] = [];
-  await Promise.all(roots.map((rootPath) => ensureSonglengthDirectory(rootPath)));
+  await Promise.all(
+    roots.map((rootPath) => ensureSonglengthDirectory(rootPath)),
+  );
   await Promise.all(
     roots.map(async (rootPath) => {
       try {
-        const listing = await Filesystem.readdir({ directory: Directory.Data, path: rootPath });
+        const listing = await Filesystem.readdir({
+          directory: Directory.Data,
+          path: rootPath,
+        });
         (listing.files ?? []).forEach((entry) => {
-          const name = typeof entry === 'string' ? entry : entry.name ?? '';
+          const name = typeof entry === 'string' ? entry : (entry.name ?? '');
           if (!name || !SONG_LENGTH_FILE_PATTERN.test(name)) return;
           discovered.push(`${rootPath}/${name}`);
         });
@@ -168,7 +189,10 @@ const discoverSonglengthFiles = async (): Promise<SongLengthSourceFile[]> => {
       continue;
     }
     try {
-      const file = await Filesystem.readFile({ directory: Directory.Data, path });
+      const file = await Filesystem.readFile({
+        directory: Directory.Data,
+        path,
+      });
       files.push({
         path,
         content: decodeBase64Text(file.data),
@@ -196,7 +220,8 @@ const discoverSonglengthFiles = async (): Promise<SongLengthSourceFile[]> => {
 
   const hasMd5 = files.some((file) => file.path.toLowerCase().endsWith('.md5'));
   const hasTxt = files.some((file) => file.path.toLowerCase().endsWith('.txt'));
-  const detectedSource = hasMd5 && hasTxt ? 'merged' : hasMd5 ? 'md5' : hasTxt ? 'txt' : 'none';
+  const detectedSource =
+    hasMd5 && hasTxt ? 'merged' : hasMd5 ? 'md5' : hasTxt ? 'txt' : 'none';
   addLog('info', 'HVSC songlengths source detected', {
     service: 'hvsc-songlengths',
     detectedSource,
@@ -207,9 +232,17 @@ const discoverSonglengthFiles = async (): Promise<SongLengthSourceFile[]> => {
 
 const loadInternal = async (trigger: 'cold-start' | 'config-change') => {
   if (trigger === 'cold-start') {
-    await facade.loadOnColdStart(HVSC_LIBRARY_DIR, discoverSonglengthFiles, 'hvsc-library');
+    await facade.loadOnColdStart(
+      HVSC_LIBRARY_DIR,
+      discoverSonglengthFiles,
+      'hvsc-library',
+    );
   } else {
-    await facade.reloadOnConfigChange(HVSC_LIBRARY_DIR, discoverSonglengthFiles, 'hvsc-library');
+    await facade.reloadOnConfigChange(
+      HVSC_LIBRARY_DIR,
+      discoverSonglengthFiles,
+      'hvsc-library',
+    );
   }
 };
 
@@ -234,7 +267,9 @@ export const reloadHvscSonglengthsOnConfigChange = async () => {
   await runLoad('config-change');
 };
 
-export const resolveHvscSonglengthDuration = async (query: SongLengthResolveQuery): Promise<SongLengthResolution> => {
+export const resolveHvscSonglengthDuration = async (
+  query: SongLengthResolveQuery,
+): Promise<SongLengthResolution> => {
   await ensureHvscSonglengthsReadyOnColdStart();
   return facade.resolveDurationSeconds(query);
 };

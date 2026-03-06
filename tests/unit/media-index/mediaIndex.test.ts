@@ -10,7 +10,9 @@ import { describe, expect, it } from 'vitest';
 import type { MediaIndexSnapshot, MediaIndexStorage } from '@/lib/media-index';
 import { JsonMediaIndex } from '@/lib/media-index';
 
-const createMemoryStorage = (snapshot?: MediaIndexSnapshot | null): MediaIndexStorage => {
+const createMemoryStorage = (
+  snapshot?: MediaIndexSnapshot | null,
+): MediaIndexStorage => {
   let current = snapshot ?? null;
   return {
     read: async () => current,
@@ -26,7 +28,12 @@ describe('JsonMediaIndex', () => {
       version: 1,
       updatedAt: '2024-01-01T00:00:00.000Z',
       entries: [
-        { path: '/HVSC/Demos/demo.sid', name: 'demo.sid', type: 'sid', durationSeconds: 30 },
+        {
+          path: '/HVSC/Demos/demo.sid',
+          name: 'demo.sid',
+          type: 'sid',
+          durationSeconds: 30,
+        },
         { path: '/HVSC/Disks/demo.d64', name: 'demo.d64', type: 'disk' },
       ],
     };
@@ -45,7 +52,12 @@ describe('JsonMediaIndex', () => {
     const index = new JsonMediaIndex(storage);
 
     index.setEntries([
-      { path: '/HVSC/Mods/demo.mod', name: 'demo.mod', type: 'mod', sizeBytes: 123 },
+      {
+        path: '/HVSC/Mods/demo.mod',
+        name: 'demo.mod',
+        type: 'mod',
+        sizeBytes: 123,
+      },
     ]);
     await index.save();
 

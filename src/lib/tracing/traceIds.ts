@@ -9,7 +9,8 @@
 let eventCounter = -1;
 let correlationCounter = -1;
 
-const formatTraceId = (prefix: 'EVT' | 'COR', value: number) => `${prefix}-${String(value).padStart(4, '0')}`;
+const formatTraceId = (prefix: 'EVT' | 'COR', value: number) =>
+  `${prefix}-${String(value).padStart(4, '0')}`;
 
 export const nextTraceEventId = () => {
   eventCounter += 1;

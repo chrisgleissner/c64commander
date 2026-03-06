@@ -38,10 +38,17 @@ export const resolveLocalDiskBlob = async (
   disk: DiskEntry,
   runtimeFile?: File,
 ): Promise<Blob> => {
-  const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, context: string) => {
+  const withTimeout = async <T>(
+    promise: Promise<T>,
+    timeoutMs: number,
+    context: string,
+  ) => {
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
     const timeoutPromise = new Promise<never>((_, reject) => {
-      timeoutId = setTimeout(() => reject(new Error(`${context} timed out`)), timeoutMs);
+      timeoutId = setTimeout(
+        () => reject(new Error(`${context} timed out`)),
+        timeoutMs,
+      );
     });
     try {
       return await Promise.race([promise, timeoutPromise]);
@@ -57,30 +64,44 @@ export const resolveLocalDiskBlob = async (
       2000,
       'Local disk file read',
     );
-    return new Blob([base64ToUint8(data.data)], { type: 'application/octet-stream' });
+    return new Blob([base64ToUint8(data.data)], {
+      type: 'application/octet-stream',
+    });
   }
   if (disk.localTreeUri) {
     const data = await withTimeout(
-      FolderPicker.readFileFromTree({ treeUri: disk.localTreeUri, path: disk.path }),
+      FolderPicker.readFileFromTree({
+        treeUri: disk.localTreeUri,
+        path: disk.path,
+      }),
       2000,
       'Local disk tree read',
     );
-    return new Blob([base64ToUint8(data.data)], { type: 'application/octet-stream' });
+    return new Blob([base64ToUint8(data.data)], {
+      type: 'application/octet-stream',
+    });
   }
   const normalizedPath = normalizeSourcePath(disk.path);
   const sources = loadLocalSources();
 
-  const resolveFromSource = async (source: LocalSourceRecord): Promise<Blob | null> => {
+  const resolveFromSource = async (
+    source: LocalSourceRecord,
+  ): Promise<Blob | null> => {
     const runtime = getLocalSourceRuntimeFile(source.id, normalizedPath);
     if (runtime) return runtime;
     if (source.android?.treeUri) {
       try {
         const data = await withTimeout(
-          FolderPicker.readFileFromTree({ treeUri: source.android.treeUri, path: normalizedPath }),
+          FolderPicker.readFileFromTree({
+            treeUri: source.android.treeUri,
+            path: normalizedPath,
+          }),
           2000,
           'Local disk tree read',
         );
-        return new Blob([base64ToUint8(data.data)], { type: 'application/octet-stream' });
+        return new Blob([base64ToUint8(data.data)], {
+          type: 'application/octet-stream',
+        });
       } catch (error) {
         addErrorLog('Local disk tree read failed', {
           sourceId: source.id,
@@ -92,15 +113,22 @@ export const resolveLocalDiskBlob = async (
     }
     if (getLocalSourceListingMode(source) === 'entries') {
       try {
-        const entries = requireLocalSourceEntries(source, 'diskMount.resolveLocalDiskBlob');
-        const match = entries.find((entry) => normalizeSourcePath(entry.relativePath) === normalizedPath);
+        const entries = requireLocalSourceEntries(
+          source,
+          'diskMount.resolveLocalDiskBlob',
+        );
+        const match = entries.find(
+          (entry) => normalizeSourcePath(entry.relativePath) === normalizedPath,
+        );
         if (match?.uri) {
           const data = await withTimeout(
             FolderPicker.readFile({ uri: match.uri }),
             2000,
             'Local disk file read',
           );
-          return new Blob([base64ToUint8(data.data)], { type: 'application/octet-stream' });
+          return new Blob([base64ToUint8(data.data)], {
+            type: 'application/octet-stream',
+          });
         }
       } catch (error) {
         addErrorLog('Local source entries resolve failed', {
@@ -131,7 +159,9 @@ export const resolveLocalDiskBlob = async (
     if (blob) return blob;
   }
 
-  throw new Error('Local disk access is missing. Re-add the folder or file to refresh permissions.');
+  throw new Error(
+    'Local disk access is missing. Re-add the folder or file to refresh permissions.',
+  );
 };
 
 export const mountDiskToDrive = async (

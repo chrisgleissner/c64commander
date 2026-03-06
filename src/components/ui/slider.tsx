@@ -6,11 +6,11 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import * as React from "react";
-import * as SliderPrimitive from "@radix-ui/react-slider";
+import * as React from 'react';
+import * as SliderPrimitive from '@radix-ui/react-slider';
 
-import { cn } from "@/lib/utils";
-import { emitUiTraceMarker, wrapValueChange } from "@/lib/tracing/userTrace";
+import { cn } from '@/lib/utils';
+import { emitUiTraceMarker, wrapValueChange } from '@/lib/tracing/userTrace';
 import {
   clampSliderValue,
   createSliderAsyncQueue,
@@ -18,16 +18,18 @@ import {
   resolveMidpointSnap,
   shouldTriggerMidpointHaptic,
   type SliderAsyncQueue,
-} from "@/lib/ui/sliderBehavior";
+} from '@/lib/ui/sliderBehavior';
 import {
   reduceSliderPopupState,
   resolveSliderPopupCloseDelayMs,
   type SliderPopupEvent,
   type SliderPopupState,
-} from "@/lib/ui/sliderPopupStateMachine";
-import { triggerSliderHaptic } from "@/lib/ui/sliderHaptics";
+} from '@/lib/ui/sliderPopupStateMachine';
+import { triggerSliderHaptic } from '@/lib/ui/sliderHaptics';
 
-type SliderProps = React.ComponentPropsWithoutRef<typeof SliderPrimitive.Root> & {
+type SliderProps = React.ComponentPropsWithoutRef<
+  typeof SliderPrimitive.Root
+> & {
   thumbClassName?: string;
   trackClassName?: string;
   rangeClassName?: string;
@@ -80,7 +82,8 @@ const Slider = React.forwardRef<
     const max = props.max ?? 100;
     const step = props.step;
     const [dragValue, setDragValue] = React.useState<number | null>(null);
-    const [popupState, setPopupState] = React.useState<SliderPopupState>('Hidden');
+    const [popupState, setPopupState] =
+      React.useState<SliderPopupState>('Hidden');
     const popupStateRef = React.useRef<SliderPopupState>('Hidden');
     const popupOpenAtRef = React.useRef<number | null>(null);
     const popupLastInteractionAtRef = React.useRef<number | null>(null);
@@ -115,7 +118,11 @@ const Slider = React.forwardRef<
       if (nextState === previousState) return;
       popupStateRef.current = nextState;
       setPopupState(nextState);
-      if (previousState === 'Hidden' && nextState !== 'Hidden' && !popupSessionOpenRef.current) {
+      if (
+        previousState === 'Hidden' &&
+        nextState !== 'Hidden' &&
+        !popupSessionOpenRef.current
+      ) {
         popupSessionOpenRef.current = true;
         emitUiTraceMarker('SliderPopupOpened');
       }
@@ -123,7 +130,11 @@ const Slider = React.forwardRef<
 
     const schedulePopupClose = React.useCallback(() => {
       if (!showValueOnDrag) return;
-      if (popupOpenAtRef.current === null || popupLastInteractionAtRef.current === null) return;
+      if (
+        popupOpenAtRef.current === null ||
+        popupLastInteractionAtRef.current === null
+      )
+        return;
       clearPopupCloseTimer();
       const delay = resolveSliderPopupCloseDelayMs(
         popupOpenAtRef.current,
@@ -134,18 +145,26 @@ const Slider = React.forwardRef<
         applyPopupEvent('idle-timeout');
         setPopupHidden();
       }, delay);
-    }, [applyPopupEvent, clearPopupCloseTimer, setPopupHidden, showValueOnDrag]);
+    }, [
+      applyPopupEvent,
+      clearPopupCloseTimer,
+      setPopupHidden,
+      showValueOnDrag,
+    ]);
 
-    const registerPopupInteraction = React.useCallback((event: SliderPopupEvent) => {
-      if (!showValueOnDrag) return;
-      const now = Date.now();
-      if (popupOpenAtRef.current === null) {
-        popupOpenAtRef.current = now;
-      }
-      popupLastInteractionAtRef.current = now;
-      applyPopupEvent(event);
-      schedulePopupClose();
-    }, [applyPopupEvent, schedulePopupClose, showValueOnDrag]);
+    const registerPopupInteraction = React.useCallback(
+      (event: SliderPopupEvent) => {
+        if (!showValueOnDrag) return;
+        const now = Date.now();
+        if (popupOpenAtRef.current === null) {
+          popupOpenAtRef.current = now;
+        }
+        popupLastInteractionAtRef.current = now;
+        applyPopupEvent(event);
+        schedulePopupClose();
+      },
+      [applyPopupEvent, schedulePopupClose, showValueOnDrag],
+    );
 
     React.useEffect(() => {
       if (showValueOnDrag) return;
@@ -179,81 +198,108 @@ const Slider = React.forwardRef<
       };
     }, [asyncThrottleMs, onValueChangeAsync, onValueCommitAsync]);
 
-    const resolveValue = React.useCallback((rawValue: number) => {
-      const clamped = clampSliderValue(rawValue, min, max);
-      if (!midpoint || midpoint.cling === false) return clamped;
-      return resolveMidpointSnap({
-        value: clamped,
-        min,
-        max,
-        midpoint: midpoint.value,
-        snapRange: midpoint.snapRange,
-        step,
-      });
-    }, [max, min, midpoint, step]);
-
-    const handlePointerDown = React.useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-      registerPopupInteraction('interaction-start');
-      onPointerDown?.(event);
-    }, [onPointerDown, registerPopupInteraction]);
-
-    const handlePointerUp = React.useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-      registerPopupInteraction('interaction-end');
-      onPointerUp?.(event);
-    }, [onPointerUp, registerPopupInteraction]);
-
-    const handlePointerCancel = React.useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-      registerPopupInteraction('interaction-end');
-      onPointerCancel?.(event);
-    }, [onPointerCancel, registerPopupInteraction]);
-
-    const handleValueChange = React.useCallback((values: number[]) => {
-      const rawValue = values[0] ?? min;
-      const nextValue = resolveValue(rawValue);
-      setDragValue(nextValue);
-      registerPopupInteraction('interaction-update');
-      if (midpoint?.haptics !== false && midpoint) {
-        const now = Date.now();
-        if (shouldTriggerMidpointHaptic({
-          previous: lastValueRef.current,
-          next: nextValue,
+    const resolveValue = React.useCallback(
+      (rawValue: number) => {
+        const clamped = clampSliderValue(rawValue, min, max);
+        if (!midpoint || midpoint.cling === false) return clamped;
+        return resolveMidpointSnap({
+          value: clamped,
+          min,
+          max,
           midpoint: midpoint.value,
-          nowMs: now,
-          lastTriggerMs: lastHapticAtRef.current,
-        })) {
-          lastHapticAtRef.current = now;
-          void triggerSliderHaptic();
-        }
-      }
-      lastValueRef.current = nextValue;
-      onValueChange?.([nextValue]);
-      asyncQueueRef.current?.schedule(nextValue);
-    }, [midpoint, min, onValueChange, registerPopupInteraction, resolveValue]);
+          snapRange: midpoint.snapRange,
+          step,
+        });
+      },
+      [max, min, midpoint, step],
+    );
 
-    const handleValueCommit = React.useCallback((values: number[]) => {
-      const rawValue = values[0] ?? min;
-      const nextValue = resolveValue(rawValue);
-      setDragValue(null);
-      registerPopupInteraction('interaction-end');
-      lastValueRef.current = nextValue;
-      onValueCommit?.([nextValue]);
-      asyncQueueRef.current?.commit(nextValue);
-    }, [min, onValueCommit, registerPopupInteraction, resolveValue]);
+    const handlePointerDown = React.useCallback(
+      (event: React.PointerEvent<HTMLDivElement>) => {
+        registerPopupInteraction('interaction-start');
+        onPointerDown?.(event);
+      },
+      [onPointerDown, registerPopupInteraction],
+    );
+
+    const handlePointerUp = React.useCallback(
+      (event: React.PointerEvent<HTMLDivElement>) => {
+        registerPopupInteraction('interaction-end');
+        onPointerUp?.(event);
+      },
+      [onPointerUp, registerPopupInteraction],
+    );
+
+    const handlePointerCancel = React.useCallback(
+      (event: React.PointerEvent<HTMLDivElement>) => {
+        registerPopupInteraction('interaction-end');
+        onPointerCancel?.(event);
+      },
+      [onPointerCancel, registerPopupInteraction],
+    );
+
+    const handleValueChange = React.useCallback(
+      (values: number[]) => {
+        const rawValue = values[0] ?? min;
+        const nextValue = resolveValue(rawValue);
+        setDragValue(nextValue);
+        registerPopupInteraction('interaction-update');
+        if (midpoint?.haptics !== false && midpoint) {
+          const now = Date.now();
+          if (
+            shouldTriggerMidpointHaptic({
+              previous: lastValueRef.current,
+              next: nextValue,
+              midpoint: midpoint.value,
+              nowMs: now,
+              lastTriggerMs: lastHapticAtRef.current,
+            })
+          ) {
+            lastHapticAtRef.current = now;
+            void triggerSliderHaptic();
+          }
+        }
+        lastValueRef.current = nextValue;
+        onValueChange?.([nextValue]);
+        asyncQueueRef.current?.schedule(nextValue);
+      },
+      [midpoint, min, onValueChange, registerPopupInteraction, resolveValue],
+    );
+
+    const handleValueCommit = React.useCallback(
+      (values: number[]) => {
+        const rawValue = values[0] ?? min;
+        const nextValue = resolveValue(rawValue);
+        setDragValue(null);
+        registerPopupInteraction('interaction-end');
+        lastValueRef.current = nextValue;
+        onValueCommit?.([nextValue]);
+        asyncQueueRef.current?.commit(nextValue);
+      },
+      [min, onValueCommit, registerPopupInteraction, resolveValue],
+    );
 
     const tracedChange = React.useMemo(
-      () => wrapValueChange(handleValueChange, 'slide', 'Slider', props, 'Slider'),
+      () =>
+        wrapValueChange(handleValueChange, 'slide', 'Slider', props, 'Slider'),
       [handleValueChange, props],
     );
     const tracedCommit = React.useMemo(
-      () => wrapValueChange(handleValueCommit, 'slide', 'Slider', props, 'Slider'),
+      () =>
+        wrapValueChange(handleValueCommit, 'slide', 'Slider', props, 'Slider'),
       [handleValueCommit, props],
     );
 
-    const currentValue = (props.value?.[0] ?? dragValue ?? props.defaultValue?.[0] ?? min);
+    const currentValue =
+      props.value?.[0] ?? dragValue ?? props.defaultValue?.[0] ?? min;
     const displayValue = dragValue ?? currentValue;
-    const formattedValue = valueFormatter ? valueFormatter(displayValue) : `${displayValue}`;
+    const formattedValue = valueFormatter
+      ? valueFormatter(displayValue)
+      : `${displayValue}`;
     const showValue = showValueOnDrag && popupState !== 'Hidden';
-    const midpointPercent = midpoint ? resolveMidpointPercent(midpoint.value, min, max) : null;
+    const midpointPercent = midpoint
+      ? resolveMidpointPercent(midpoint.value, min, max)
+      : null;
 
     return (
       <SliderPrimitive.Root
@@ -263,15 +309,21 @@ const Slider = React.forwardRef<
         onPointerDown={handlePointerDown}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
-        className={cn("relative flex w-full touch-none select-none items-center", className)}
+        className={cn(
+          'relative flex w-full touch-none select-none items-center',
+          className,
+        )}
         {...props}
       >
         <SliderPrimitive.Track
-          className={cn("relative h-2 w-full grow overflow-hidden rounded-full bg-secondary", trackClassName)}
+          className={cn(
+            'relative h-2 w-full grow overflow-hidden rounded-full bg-secondary',
+            trackClassName,
+          )}
           style={trackStyle}
         >
           <SliderPrimitive.Range
-            className={cn("absolute h-full bg-primary", rangeClassName)}
+            className={cn('absolute h-full bg-primary', rangeClassName)}
             style={rangeStyle}
           />
           {midpoint && midpoint.notch !== false && midpointPercent !== null ? (
@@ -286,17 +338,20 @@ const Slider = React.forwardRef<
           <div
             data-testid="slider-value-display"
             className={cn(
-              "pointer-events-none absolute -top-7 text-[11px] font-semibold text-foreground transition-opacity duration-150 opacity-100",
+              'pointer-events-none absolute -top-7 text-[11px] font-semibold text-foreground transition-opacity duration-150 opacity-100',
               valueLabelClassName,
             )}
-            style={{ left: `${resolveMidpointPercent(displayValue, min, max)}%`, transform: 'translateX(-50%)' }}
+            style={{
+              left: `${resolveMidpointPercent(displayValue, min, max)}%`,
+              transform: 'translateX(-50%)',
+            }}
           >
             {formattedValue}
           </div>
         ) : null}
         <SliderPrimitive.Thumb
           className={cn(
-            "block h-5 w-5 rounded-full border-2 border-primary bg-background ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+            'block h-5 w-5 rounded-full border-2 border-primary bg-background ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
             thumbClassName,
           )}
         />

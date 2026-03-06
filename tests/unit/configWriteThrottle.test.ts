@@ -7,7 +7,10 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { scheduleConfigWrite, resetConfigWriteThrottle } from '@/lib/config/configWriteThrottle';
+import {
+  scheduleConfigWrite,
+  resetConfigWriteThrottle,
+} from '@/lib/config/configWriteThrottle';
 import { saveConfigWriteIntervalMs } from '@/lib/config/appSettings';
 import { addErrorLog } from '@/lib/logging';
 
@@ -49,7 +52,9 @@ describe('configWriteThrottle', () => {
   });
 
   it('logs failed tasks and continues the queue', async () => {
-    const failingTask = async () => { throw new Error('write failed'); };
+    const failingTask = async () => {
+      throw new Error('write failed');
+    };
     const successTask = async () => 'ok';
 
     const first = scheduleConfigWrite(failingTask);

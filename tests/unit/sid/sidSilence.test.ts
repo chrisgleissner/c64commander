@@ -66,17 +66,28 @@ describe('sidSilence', () => {
       { key: 'socket2', label: 'SID Socket 2', baseAddress: 0xd420 },
     ] as const;
 
-    await expect(silenceSidTargets({ writeMemory }, [...targets])).resolves.toEqual({
+    await expect(
+      silenceSidTargets({ writeMemory }, [...targets]),
+    ).resolves.toEqual({
       silenced: ['SID Socket 1', 'SID Socket 2'],
     });
 
     expect(writeMemory).toHaveBeenCalledTimes(20);
-    expect(writeMemory).toHaveBeenNthCalledWith(1, 'D404', new Uint8Array([0x00]));
-    expect(writeMemory).toHaveBeenNthCalledWith(11, 'D424', new Uint8Array([0x00]));
+    expect(writeMemory).toHaveBeenNthCalledWith(
+      1,
+      'D404',
+      new Uint8Array([0x00]),
+    );
+    expect(writeMemory).toHaveBeenNthCalledWith(
+      11,
+      'D424',
+      new Uint8Array([0x00]),
+    );
   });
 
   it('continues with remaining SID targets when one fails', async () => {
-    const writeMemory = vi.fn()
+    const writeMemory = vi
+      .fn()
       .mockRejectedValueOnce(new Error('first failure'))
       .mockResolvedValue(undefined);
 
@@ -85,13 +96,16 @@ describe('sidSilence', () => {
       { key: 'socket2', label: 'SID Socket 2', baseAddress: 0xd420 },
     ];
 
-    await expect(silenceSidTargets({ writeMemory }, targets)).rejects.toThrow('SID Socket 1: first failure');
+    await expect(silenceSidTargets({ writeMemory }, targets)).rejects.toThrow(
+      'SID Socket 1: first failure',
+    );
     expect(writeMemory).toHaveBeenCalledTimes(20);
   });
 
   it('throws when targets array is empty', async () => {
     const writeMemory = vi.fn();
-    await expect(silenceSidTargets({ writeMemory }, [])).rejects.toThrow('No configured SID chips found');
+    await expect(silenceSidTargets({ writeMemory }, [])).rejects.toThrow(
+      'No configured SID chips found',
+    );
   });
 });
-

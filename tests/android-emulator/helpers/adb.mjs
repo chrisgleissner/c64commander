@@ -13,7 +13,10 @@ export const adbExec = async (deviceId, args, options = {}) => {
 
 export const adbExecRaw = async (deviceId, args, options = {}) => {
   const finalArgs = deviceId ? ['-s', deviceId, ...args] : args;
-  const { stdout, stderr } = await execFileAsync('adb', finalArgs, { ...options, encoding: 'buffer' });
+  const { stdout, stderr } = await execFileAsync('adb', finalArgs, {
+    ...options,
+    encoding: 'buffer',
+  });
   return { stdout, stderr: stderr?.toString() ?? '' };
 };
 
@@ -23,7 +26,9 @@ export const adbShell = async (deviceId, command, options = {}) => {
 
 export const adbShellInput = async (deviceId, command, input) =>
   new Promise((resolve, reject) => {
-    const args = deviceId ? ['-s', deviceId, 'shell', command] : ['shell', command];
+    const args = deviceId
+      ? ['-s', deviceId, 'shell', command]
+      : ['shell', command];
     const proc = spawn('adb', args, { stdio: ['pipe', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
@@ -77,10 +82,17 @@ export const adbRemove = async (deviceId, remotePath) => {
 };
 
 export const adbScreenRecord = async (deviceId, remotePath, seconds = 45) => {
-  return adbShell(deviceId, `screenrecord --time-limit ${seconds} ${remotePath}`);
+  return adbShell(
+    deviceId,
+    `screenrecord --time-limit ${seconds} ${remotePath}`,
+  );
 };
 
 export const adbScreenCap = async (deviceId, localPath) => {
-  const { stdout } = await adbExecRaw(deviceId, ['exec-out', 'screencap', '-p']);
+  const { stdout } = await adbExecRaw(deviceId, [
+    'exec-out',
+    'screencap',
+    '-p',
+  ]);
   await fs.promises.writeFile(localPath, stdout);
 };

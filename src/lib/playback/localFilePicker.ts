@@ -28,7 +28,9 @@ type FileSystemDirectoryHandleLike = FileSystemHandleLike & {
   entries: () => AsyncIterableIterator<[string, FileSystemHandleLike]>;
 };
 
-const isDirectoryHandle = (handle: FileSystemHandleLike): handle is FileSystemDirectoryHandleLike =>
+const isDirectoryHandle = (
+  handle: FileSystemHandleLike,
+): handle is FileSystemDirectoryHandleLike =>
   handle.kind === 'directory' && 'entries' in handle;
 
 export const prepareDirectoryInput = (input: HTMLInputElement | null) => {
@@ -37,9 +39,12 @@ export const prepareDirectoryInput = (input: HTMLInputElement | null) => {
   input.setAttribute('directory', '');
 };
 
-const isSupportedPlayFile = (name: string) => SUPPORTED_PLAY_EXTENSIONS.has(getFileExtension(name));
+const isSupportedPlayFile = (name: string) =>
+  SUPPORTED_PLAY_EXTENSIONS.has(getFileExtension(name));
 
-const listSafFiles = async (treeUri: string): Promise<{ name: string; path: string }[]> => {
+const listSafFiles = async (
+  treeUri: string,
+): Promise<{ name: string; path: string }[]> => {
   const queue = ['/'];
   const files: { name: string; path: string }[] = [];
   while (queue.length) {
@@ -57,7 +62,9 @@ const listSafFiles = async (treeUri: string): Promise<{ name: string; path: stri
   return files;
 };
 
-export const browseLocalPlayFiles = async (input: HTMLInputElement | null): Promise<LocalPlayFile[] | null> => {
+export const browseLocalPlayFiles = async (
+  input: HTMLInputElement | null,
+): Promise<LocalPlayFile[] | null> => {
   if (getPlatform() === 'android' || getPlatform() === 'ios') {
     const result = await FolderPicker.pickDirectory();
     const treeUri = result?.treeUri;
@@ -67,12 +74,16 @@ export const browseLocalPlayFiles = async (input: HTMLInputElement | null): Prom
     const files = await listSafFiles(treeUri);
     return files
       .filter((entry) => isSupportedPlayFile(entry.name))
-      .map((entry) => buildLocalPlayFileFromTree(entry.name, entry.path, treeUri));
+      .map((entry) =>
+        buildLocalPlayFileFromTree(entry.name, entry.path, treeUri),
+      );
   }
 
-  const picker = (window as Window & {
-    showDirectoryPicker?: () => Promise<FileSystemDirectoryHandleLike>;
-  }).showDirectoryPicker;
+  const picker = (
+    window as Window & {
+      showDirectoryPicker?: () => Promise<FileSystemDirectoryHandleLike>;
+    }
+  ).showDirectoryPicker;
 
   if (!picker) {
     input?.click();
@@ -82,7 +93,10 @@ export const browseLocalPlayFiles = async (input: HTMLInputElement | null): Prom
   const directoryHandle = await picker();
   const files: File[] = [];
 
-  const walkDirectory = async (dirHandle: FileSystemDirectoryHandleLike, prefix: string) => {
+  const walkDirectory = async (
+    dirHandle: FileSystemDirectoryHandleLike,
+    prefix: string,
+  ) => {
     for await (const [name, handle] of dirHandle.entries()) {
       if (handle.kind === 'file') {
         const file = await (handle as FileSystemFileHandleLike).getFile();
@@ -101,7 +115,9 @@ export const browseLocalPlayFiles = async (input: HTMLInputElement | null): Prom
   return files;
 };
 
-export const filterPlayInputFiles = (files: FileList | null): LocalPlayFile[] => {
+export const filterPlayInputFiles = (
+  files: FileList | null,
+): LocalPlayFile[] => {
   if (!files || files.length === 0) return [];
   return Array.from(files).filter((file) => isSupportedPlayFile(file.name));
 };

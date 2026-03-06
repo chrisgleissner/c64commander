@@ -42,12 +42,14 @@ vi.mock('@/hooks/useConnectionDiagnosticsSummary', () => ({
 }));
 
 vi.mock('@/lib/diagnostics/diagnosticsOverlay', () => ({
-  requestDiagnosticsOpen: (...args: unknown[]) => requestDiagnosticsOpen(...args),
+  requestDiagnosticsOpen: (...args: unknown[]) =>
+    requestDiagnosticsOpen(...args),
 }));
 
 vi.mock('@/lib/connection/hostEdit', () => ({
   getConfiguredHost: () => configuredHost,
-  saveConfiguredHostAndRetry: (...args: unknown[]) => saveConfiguredHostAndRetry(...args),
+  saveConfiguredHostAndRetry: (...args: unknown[]) =>
+    saveConfiguredHostAndRetry(...args),
 }));
 
 import { ConnectivityIndicator } from '@/components/ConnectivityIndicator';
@@ -80,12 +82,16 @@ describe('ConnectivityIndicator', () => {
 
     expect(button).toHaveAttribute('data-connection-state', 'REAL_CONNECTED');
     expect(button).toHaveAttribute('aria-label', 'C64U');
-    expect(getByTestId('connection-status-label').className).toContain('indicator-real');
+    expect(getByTestId('connection-status-label').className).toContain(
+      'indicator-real',
+    );
     expect(queryByText('Demo')).toBeNull();
 
     fireEvent.click(button);
     expect(getByTestId('connection-status-popover')).toBeTruthy();
-    expect(getByTestId('connection-status-popover').textContent).toMatch(/Last request:\s+(\d+s ago|\d+m \d+s ago|none yet|unknown)/);
+    expect(getByTestId('connection-status-popover').textContent).toMatch(
+      /Last request:\s+(\d+s ago|\d+m \d+s ago|none yet|unknown)/,
+    );
     expect(discoverConnection).not.toHaveBeenCalled();
   });
 
@@ -101,7 +107,9 @@ describe('ConnectivityIndicator', () => {
     expect(button).toHaveAttribute('aria-label', 'C64U Demo');
     expect(button.textContent).toContain('C64U');
     expect(button.textContent).toContain('Demo');
-    expect(getByTestId('connection-status-label').className).toContain('indicator-demo');
+    expect(getByTestId('connection-status-label').className).toContain(
+      'indicator-demo',
+    );
   });
 
   it('shows Retry Now only when offline or not yet connected', () => {
@@ -110,7 +118,9 @@ describe('ConnectivityIndicator', () => {
     lastProbeSucceededAtMs = Date.now() - 20_000;
     lastProbeFailedAtMs = Date.now() - 5_000;
 
-    const { getByTestId, getByRole, queryByRole, rerender } = render(<ConnectivityIndicator />);
+    const { getByTestId, getByRole, queryByRole, rerender } = render(
+      <ConnectivityIndicator />,
+    );
     const button = getByTestId('connectivity-indicator');
     fireEvent.click(button);
     expect(getByRole('button', { name: 'Retry Now' })).toBeTruthy();
@@ -131,26 +141,40 @@ describe('ConnectivityIndicator', () => {
     lastProbeFailedAtMs = Date.now() - 5_000;
     configuredHost = '192.168.0.10';
 
-    const { getByTestId, getByRole, getByLabelText, queryByTestId } = render(<ConnectivityIndicator />);
+    const { getByTestId, getByRole, getByLabelText, queryByTestId } = render(
+      <ConnectivityIndicator />,
+    );
     fireEvent.click(getByTestId('connectivity-indicator'));
     fireEvent.click(getByRole('button', { name: 'Change' }));
-    fireEvent.change(getByLabelText('C64U Hostname / IP'), { target: { value: '192.168.0.20' } });
+    fireEvent.change(getByLabelText('C64U Hostname / IP'), {
+      target: { value: '192.168.0.20' },
+    });
     fireEvent.click(getByRole('button', { name: 'Save' }));
 
-    expect(saveConfiguredHostAndRetry).toHaveBeenCalledWith('192.168.0.20', '192.168.0.10', { trigger: 'settings' });
+    expect(saveConfiguredHostAndRetry).toHaveBeenCalledWith(
+      '192.168.0.20',
+      '192.168.0.10',
+      { trigger: 'settings' },
+    );
     expect(queryByTestId('connection-status-popover')).toBeNull();
   });
 
   it('saves host when Enter is pressed', () => {
     connectionState = 'OFFLINE_NO_DEMO';
     configuredHost = '192.168.0.11';
-    const { getByTestId, getByRole, getByLabelText } = render(<ConnectivityIndicator />);
+    const { getByTestId, getByRole, getByLabelText } = render(
+      <ConnectivityIndicator />,
+    );
     fireEvent.click(getByTestId('connectivity-indicator'));
     fireEvent.click(getByRole('button', { name: 'Change' }));
     const input = getByLabelText('C64U Hostname / IP');
     fireEvent.change(input, { target: { value: '192.168.0.12' } });
     fireEvent.keyDown(input, { key: 'Enter' });
-    expect(saveConfiguredHostAndRetry).toHaveBeenCalledWith('192.168.0.12', '192.168.0.11', { trigger: 'settings' });
+    expect(saveConfiguredHostAndRetry).toHaveBeenCalledWith(
+      '192.168.0.12',
+      '192.168.0.11',
+      { trigger: 'settings' },
+    );
   });
 
   it('renders diagnostics rows with deterministic grammar and opens diagnostics tabs', () => {
@@ -186,7 +210,9 @@ describe('ConnectivityIndicator', () => {
     const popover = getByTestId('connection-status-popover');
     expect(popover.className).toContain('space-y-4');
     expect(popover.querySelector('.space-y-1')).toBeTruthy();
-    expect(getByTestId('connection-diagnostics-section').className).toContain('space-y-1');
+    expect(getByTestId('connection-diagnostics-section').className).toContain(
+      'space-y-1',
+    );
     expect(popover.textContent).toContain('Last request:');
     expect(popover.textContent).not.toContain('Communication:');
   });
@@ -202,7 +228,9 @@ describe('ConnectivityIndicator', () => {
 
       const { getByTestId } = render(<ConnectivityIndicator />);
       fireEvent.click(getByTestId('connectivity-indicator'));
-      expect(getByTestId('connection-status-popover').textContent).toMatch(/Last request:\s+3s ago/);
+      expect(getByTestId('connection-status-popover').textContent).toMatch(
+        /Last request:\s+3s ago/,
+      );
     } finally {
       vi.useRealTimers();
     }
@@ -219,7 +247,9 @@ describe('ConnectivityIndicator', () => {
 
       const { getByTestId } = render(<ConnectivityIndicator />);
       fireEvent.click(getByTestId('connectivity-indicator'));
-      expect(getByTestId('connection-status-popover').textContent).toMatch(/Last request:\s+2m 3s ago/);
+      expect(getByTestId('connection-status-popover').textContent).toMatch(
+        /Last request:\s+2m 3s ago/,
+      );
     } finally {
       vi.useRealTimers();
     }
@@ -236,8 +266,12 @@ describe('ConnectivityIndicator', () => {
 
       const { getByTestId } = render(<ConnectivityIndicator />);
       fireEvent.click(getByTestId('connectivity-indicator'));
-      expect(getByTestId('connection-status-popover').textContent).not.toContain('just now');
-      expect(getByTestId('connection-status-popover').textContent).toMatch(/Last request:\s+0s ago/);
+      expect(
+        getByTestId('connection-status-popover').textContent,
+      ).not.toContain('just now');
+      expect(getByTestId('connection-status-popover').textContent).toMatch(
+        /Last request:\s+0s ago/,
+      );
     } finally {
       vi.useRealTimers();
     }
@@ -252,8 +286,14 @@ describe('ConnectivityIndicator', () => {
   it('provides data-testid on status, host, and last-request rows', () => {
     const { getByTestId } = render(<ConnectivityIndicator />);
     fireEvent.click(getByTestId('connectivity-indicator'));
-    expect(getByTestId('connection-status-row-status').textContent).toContain('Status:');
-    expect(getByTestId('connection-status-row-host').textContent).toContain('Host:');
-    expect(getByTestId('connection-status-row-last-request').textContent).toContain('Last request:');
+    expect(getByTestId('connection-status-row-status').textContent).toContain(
+      'Status:',
+    );
+    expect(getByTestId('connection-status-row-host').textContent).toContain(
+      'Host:',
+    );
+    expect(
+      getByTestId('connection-status-row-last-request').textContent,
+    ).toContain('Last request:');
   });
 });

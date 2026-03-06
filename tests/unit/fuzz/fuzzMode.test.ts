@@ -17,7 +17,8 @@ import {
   resetFuzzStorage,
 } from '@/lib/fuzz/fuzzMode';
 
-const { FUZZ_MODE_KEY, FUZZ_MOCK_BASE_URL_KEY, FUZZ_STORAGE_SEEDED_KEY } = fuzzModeKeys;
+const { FUZZ_MODE_KEY, FUZZ_MOCK_BASE_URL_KEY, FUZZ_STORAGE_SEEDED_KEY } =
+  fuzzModeKeys;
 
 describe('fuzzMode', () => {
   beforeEach(() => {
@@ -76,8 +77,12 @@ describe('fuzzMode', () => {
     expect(localStorage.getItem(FUZZ_STORAGE_SEEDED_KEY)).toBe('1');
     expect(localStorage.getItem('c64u_debug_logging_enabled')).toBe('1');
     expect(localStorage.getItem('c64u_automatic_demo_mode_enabled')).toBe('1');
-    expect(localStorage.getItem('c64u_startup_discovery_window_ms')).toBe('500');
-    expect(localStorage.getItem('c64u_background_rediscovery_interval_ms')).toBe('1500');
+    expect(localStorage.getItem('c64u_startup_discovery_window_ms')).toBe(
+      '500',
+    );
+    expect(
+      localStorage.getItem('c64u_background_rediscovery_interval_ms'),
+    ).toBe('1500');
   });
 
   it('validates safe base URLs for fuzz mode', () => {

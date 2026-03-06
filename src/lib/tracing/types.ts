@@ -8,7 +8,11 @@
 
 export type TraceOrigin = 'user' | 'automatic' | 'system';
 
-export type TraceLifecycleState = 'foreground' | 'background' | 'locked' | 'unknown';
+export type TraceLifecycleState =
+  | 'foreground'
+  | 'background'
+  | 'locked'
+  | 'unknown';
 
 export type TraceSourceKind = 'local' | 'ultimate' | 'hvsc';
 
@@ -46,7 +50,13 @@ export type TraceEvent<T = Record<string, unknown>> = {
 
 export type BackendTarget = 'internal-mock' | 'external-mock' | 'real-device';
 
-export type BackendDecisionReason = 'reachable' | 'fallback' | 'demo-mode' | 'test-mode' | 'probe' | 'auto-reconnect';
+export type BackendDecisionReason =
+  | 'reachable'
+  | 'fallback'
+  | 'demo-mode'
+  | 'test-mode'
+  | 'probe'
+  | 'auto-reconnect';
 
 export type ActionTriggerKind =
   | 'user'

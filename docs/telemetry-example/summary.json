@@ -1,56 +1,56 @@
 {
-    "run_metadata": {
-        "commit_sha": "example-sha",
-        "run_id": "example-run",
-        "job_name": "example-job",
-        "sampling_interval_sec": 3,
-        "start_timestamp": 1739788800,
-        "end_timestamp": 1739788806
-    },
-    "sample_count": 6,
-    "per_process": [
-        {
-            "platform": "android",
-            "device": "c64-ci-constrained-3gb",
-            "process_name": "uk.gleissner.c64commander",
-            "samples": 2,
-            "metrics": {
-                "cpu_percent": {
-                    "min": 12.4,
-                    "median": 13.2,
-                    "max": 14.1
-                },
-                "rss_kb": {
-                    "min": 210432,
-                    "median": 212266,
-                    "max": 214100
-                },
-                "total_pss_kb": {
-                    "min": 240120,
-                    "median": 241765,
-                    "max": 243410
-                }
-            }
+  "run_metadata": {
+    "commit_sha": "example-sha",
+    "run_id": "example-run",
+    "job_name": "example-job",
+    "sampling_interval_sec": 3,
+    "start_timestamp": 1739788800,
+    "end_timestamp": 1739788806
+  },
+  "sample_count": 6,
+  "per_process": [
+    {
+      "platform": "android",
+      "device": "c64-ci-constrained-3gb",
+      "process_name": "uk.gleissner.c64commander",
+      "samples": 2,
+      "metrics": {
+        "cpu_percent": {
+          "min": 12.4,
+          "median": 13.2,
+          "max": 14.1
+        },
+        "rss_kb": {
+          "min": 210432,
+          "median": 212266,
+          "max": 214100
+        },
+        "total_pss_kb": {
+          "min": 240120,
+          "median": 241765,
+          "max": 243410
         }
-    ],
-    "aggregate": [
-        {
-            "platform": "all",
-            "device": "all",
-            "process_name": "__aggregate__",
-            "samples": 3,
-            "metrics": {
-                "cpu_percent": {
-                    "min": 17.6,
-                    "median": 36.2,
-                    "max": 48.3
-                },
-                "rss_kb": {
-                    "min": 165220,
-                    "median": 330330,
-                    "max": 398752
-                }
-            }
+      }
+    }
+  ],
+  "aggregate": [
+    {
+      "platform": "all",
+      "device": "all",
+      "process_name": "__aggregate__",
+      "samples": 3,
+      "metrics": {
+        "cpu_percent": {
+          "min": 17.6,
+          "median": 36.2,
+          "max": 48.3
+        },
+        "rss_kb": {
+          "min": 165220,
+          "median": 330330,
+          "max": 398752
         }
-    ]
+      }
+    }
+  ]
 }

@@ -7,7 +7,13 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { formatPlayCategory, getFileExtension, getMountTypeForExtension, getPlayCategory, isSupportedPlayFile } from '@/lib/playback/fileTypes';
+import {
+  formatPlayCategory,
+  getFileExtension,
+  getMountTypeForExtension,
+  getPlayCategory,
+  isSupportedPlayFile,
+} from '@/lib/playback/fileTypes';
 
 describe('fileTypes', () => {
   it('detects file categories case-insensitively', () => {
@@ -45,6 +51,8 @@ describe('fileTypes', () => {
   });
 
   it('returns File for unknown play category', () => {
-    expect(formatPlayCategory('unknown' as Parameters<typeof formatPlayCategory>[0])).toBe('File');
+    expect(
+      formatPlayCategory('unknown' as Parameters<typeof formatPlayCategory>[0]),
+    ).toBe('File');
   });
 });

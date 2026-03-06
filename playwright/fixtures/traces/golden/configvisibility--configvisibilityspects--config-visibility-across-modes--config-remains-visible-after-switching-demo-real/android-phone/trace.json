@@ -219,9 +219,7 @@
     "data": {
       "status": 503,
       "body": {
-        "errors": [
-          "Device unreachable"
-        ]
+        "errors": ["Device unreachable"]
       },
       "durationMs": 39,
       "error": "HTTP 503: Service Unavailable",
@@ -276,9 +274,7 @@
     "data": {
       "status": 503,
       "body": {
-        "errors": [
-          "Device unreachable"
-        ]
+        "errors": ["Device unreachable"]
       },
       "durationMs": 26,
       "error": "HTTP 503: Service Unavailable",
@@ -333,9 +329,7 @@
     "data": {
       "status": 503,
       "body": {
-        "errors": [
-          "Device unreachable"
-        ]
+        "errors": ["Device unreachable"]
       },
       "durationMs": 21,
       "error": "HTTP 503: Service Unavailable",
@@ -507,9 +501,7 @@
     "data": {
       "status": 503,
       "body": {
-        "errors": [
-          "Device unreachable"
-        ]
+        "errors": ["Device unreachable"]
       },
       "durationMs": 12,
       "error": "HTTP 503: Service Unavailable",

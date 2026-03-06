@@ -24,11 +24,14 @@ describe('useSourceNavigator', () => {
 
   it('loads stored path and toggles the loading indicator for ultimate sources', async () => {
     vi.useFakeTimers();
-    let resolveEntries: ((value: { type: 'file'; name: string; path: string }[]) => void) | null = null;
+    let resolveEntries:
+      | ((value: { type: 'file'; name: string; path: string }[]) => void)
+      | null = null;
     const listEntries = vi.fn().mockImplementation(
-      () => new Promise((resolve) => {
-        resolveEntries = resolve;
-      }),
+      () =>
+        new Promise((resolve) => {
+          resolveEntries = resolve;
+        }),
     );
     const source: SourceLocation = {
       id: 'ultimate-1',
@@ -51,7 +54,9 @@ describe('useSourceNavigator', () => {
     expect(result.current.showLoadingIndicator).toBe(true);
 
     await act(async () => {
-      resolveEntries?.([{ type: 'file', name: 'song.sid', path: '/root/song.sid' }]);
+      resolveEntries?.([
+        { type: 'file', name: 'song.sid', path: '/root/song.sid' },
+      ]);
     });
 
     expect(result.current.entries).toHaveLength(1);
@@ -67,9 +72,12 @@ describe('useSourceNavigator', () => {
   });
 
   it('navigates up and refresh clears cache', async () => {
-    const listEntries = vi.fn()
+    const listEntries = vi
+      .fn()
       .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([{ type: 'dir', name: 'Child', path: '/root/child' }])
+      .mockResolvedValueOnce([
+        { type: 'dir', name: 'Child', path: '/root/child' },
+      ])
       .mockResolvedValueOnce([]);
     const clearCacheForPath = vi.fn();
     const source: SourceLocation = {
@@ -103,7 +111,9 @@ describe('useSourceNavigator', () => {
       result.current.refresh();
     });
 
-    await waitFor(() => expect(clearCacheForPath).toHaveBeenCalledWith(result.current.path));
+    await waitFor(() =>
+      expect(clearCacheForPath).toHaveBeenCalledWith(result.current.path),
+    );
   });
 
   it('captures list errors and reports them', async () => {
@@ -132,12 +142,17 @@ describe('useSourceNavigator', () => {
   });
 
   it('discards stale responses when a newer navigation fires', async () => {
-    type Resolver = (entries: { type: string; name: string; path: string }[]) => void;
+    type Resolver = (
+      entries: { type: string; name: string; path: string }[],
+    ) => void;
     const resolvers: Resolver[] = [];
     const listEntries = vi.fn().mockImplementation(
-      () => new Promise<{ type: string; name: string; path: string }[]>((resolve) => {
-        resolvers.push(resolve);
-      }),
+      () =>
+        new Promise<{ type: string; name: string; path: string }[]>(
+          (resolve) => {
+            resolvers.push(resolve);
+          },
+        ),
     );
     const source: SourceLocation = {
       id: 'race-1',
@@ -183,7 +198,9 @@ describe('useSourceNavigator', () => {
 
     // Now resolve the SECOND navigation (current — /B)
     await act(async () => {
-      resolvers[2]([{ type: 'file', name: 'current.sid', path: '/B/current.sid' }]);
+      resolvers[2]([
+        { type: 'file', name: 'current.sid', path: '/B/current.sid' },
+      ]);
     });
 
     // Current result should appear

@@ -7,21 +7,32 @@ import {
   resolveGoldenRoot,
 } from '../playwright/traceComparison.js';
 
-const evidenceRoot = path.resolve(process.cwd(), 'test-results', 'evidence', 'playwright');
+const evidenceRoot = path.resolve(
+  process.cwd(),
+  'test-results',
+  'evidence',
+  'playwright',
+);
 const goldenRoot = resolveGoldenRoot();
 const requireGoldens = process.env.TRACE_GOLDEN_REQUIRED === '1';
 const errors = [];
 
 const listDirs = async (root) => {
-  const entries = await fs.readdir(root, { withFileTypes: true }).catch(() => []);
-  return entries.filter((entry) => entry.isDirectory()).map((entry) => path.join(root, entry.name));
+  const entries = await fs
+    .readdir(root, { withFileTypes: true })
+    .catch(() => []);
+  return entries
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => path.join(root, entry.name));
 };
 
 const main = async () => {
   const goldenStat = await fs.stat(goldenRoot).catch(() => null);
   if (!goldenStat || !goldenStat.isDirectory()) {
     if (!requireGoldens) {
-      console.log(`Trace comparison skipped: golden directory missing (${goldenRoot}).`);
+      console.log(
+        `Trace comparison skipped: golden directory missing (${goldenRoot}).`,
+      );
       return;
     }
     errors.push(`Golden trace directory missing: ${goldenRoot}`);
@@ -30,7 +41,9 @@ const main = async () => {
   const goldenSuites = await listDirs(goldenRoot);
   if (goldenSuites.length === 0) {
     if (!requireGoldens) {
-      console.log(`Trace comparison skipped: golden directory empty (${goldenRoot}).`);
+      console.log(
+        `Trace comparison skipped: golden directory empty (${goldenRoot}).`,
+      );
       return;
     }
     errors.push(`Golden trace directory empty: ${goldenRoot}`);

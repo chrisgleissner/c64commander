@@ -3,7 +3,11 @@ import os from 'node:os';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { sortIssueGroups, renderReadme, renderSummary } from './fuzzReportUtils.mjs';
+import {
+  sortIssueGroups,
+  renderReadme,
+  renderSummary,
+} from './fuzzReportUtils.mjs';
 import { classifyAllIssues, SELFTEST_TAG } from './fuzzClassifier.mjs';
 
 const args = process.argv.slice(2);
@@ -23,7 +27,8 @@ const parseDurationMs = (value) => {
   if (trimmed.endsWith('ms')) return Number(trimmed.replace('ms', ''));
   if (trimmed.endsWith('s')) return Number(trimmed.replace('s', '')) * 1000;
   if (trimmed.endsWith('m')) return Number(trimmed.replace('m', '')) * 60_000;
-  if (trimmed.endsWith('h')) return Number(trimmed.replace('h', '')) * 3_600_000;
+  if (trimmed.endsWith('h'))
+    return Number(trimmed.replace('h', '')) * 3_600_000;
   return undefined;
 };
 
@@ -96,7 +101,9 @@ if (budgetMs <= 120_000) {
     env.FUZZ_ACTION_TIMEOUT_MS = '5000';
   }
   if (!env.FUZZ_SESSION_TIMEOUT_MS) {
-    env.FUZZ_SESSION_TIMEOUT_MS = String(Math.max(60_000, Math.floor(budgetMs * 0.9)));
+    env.FUZZ_SESSION_TIMEOUT_MS = String(
+      Math.max(60_000, Math.floor(budgetMs * 0.9)),
+    );
   }
   if (!env.FUZZ_NO_PROGRESS_STEPS) {
     env.FUZZ_NO_PROGRESS_STEPS = '6';
@@ -114,7 +121,9 @@ if (isCiRun && isFiveMinuteOrLessBudget) {
     env.FUZZ_PROGRESS_TIMEOUT_MS = '4000';
   }
   if (!env.FUZZ_SESSION_TIMEOUT_MS) {
-    env.FUZZ_SESSION_TIMEOUT_MS = String(Math.max(60_000, Math.floor(budgetMs * 0.9)));
+    env.FUZZ_SESSION_TIMEOUT_MS = String(
+      Math.max(60_000, Math.floor(budgetMs * 0.9)),
+    );
   }
   if (!env.FUZZ_NO_PROGRESS_STEPS) {
     env.FUZZ_NO_PROGRESS_STEPS = '8';
@@ -123,7 +132,9 @@ if (isCiRun && isFiveMinuteOrLessBudget) {
 
 if (isCiRun && !isFiveMinuteOrLessBudget) {
   if (!env.FUZZ_SESSION_TIMEOUT_MS) {
-    env.FUZZ_SESSION_TIMEOUT_MS = String(Math.min(300_000, Math.max(60_000, Math.floor(budgetMs * 0.9))));
+    env.FUZZ_SESSION_TIMEOUT_MS = String(
+      Math.min(300_000, Math.max(60_000, Math.floor(budgetMs * 0.9))),
+    );
   }
 }
 
@@ -168,24 +179,41 @@ const getPhysicalCoreCount = async () => {
     }
     return null;
   } catch (error) {
-    console.warn('Failed to detect physical core count from /proc/cpuinfo:', error);
+    console.warn(
+      'Failed to detect physical core count from /proc/cpuinfo:',
+      error,
+    );
     return null;
   }
 };
 
 const baseSeed = toPositiveInt(seed, Date.now());
 const defaultConcurrency = (await getPhysicalCoreCount()) || os.cpus().length;
-const concurrency = toPositiveInt(concurrencyArg || env.FUZZ_CONCURRENCY || defaultConcurrency, 1);
+const concurrency = toPositiveInt(
+  concurrencyArg || env.FUZZ_CONCURRENCY || defaultConcurrency,
+  1,
+);
 const runId = env.FUZZ_RUN_ID || `${baseSeed}`;
 if (!env.FUZZ_SEED) env.FUZZ_SEED = String(baseSeed);
 
 const buildOutputRoot = () => {
   const resolvedRunMode = env.FUZZ_RUN_MODE || 'local';
   const resolvedPlatform = platform || env.FUZZ_PLATFORM || 'android-phone';
-  return path.resolve(process.cwd(), 'test-results', 'fuzz', `run-${resolvedRunMode}-${resolvedPlatform}-${baseSeed}-${runId}`);
+  return path.resolve(
+    process.cwd(),
+    'test-results',
+    'fuzz',
+    `run-${resolvedRunMode}-${resolvedPlatform}-${baseSeed}-${runId}`,
+  );
 };
 
-const isMissingFileError = (error) => Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT');
+const isMissingFileError = (error) =>
+  Boolean(
+    error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    error.code === 'ENOENT',
+  );
 
 const hashBuffer = (buffer) => createHash('sha1').update(buffer).digest('hex');
 
@@ -198,12 +226,18 @@ const runCommandCapture = (command, commandArgs) => {
     throw new Error(`Failed to execute ${command}: ${result.error.message}`);
   }
   if (result.status !== 0) {
-    throw new Error(`${command} ${commandArgs.join(' ')} failed: ${(result.stderr || '').trim() || 'unknown error'}`);
+    throw new Error(
+      `${command} ${commandArgs.join(' ')} failed: ${(result.stderr || '').trim() || 'unknown error'}`,
+    );
   }
   return (result.stdout || '').trim();
 };
 
-const runCommandCaptureBuffer = (command, commandArgs, maxBuffer = 64 * 1024 * 1024) => {
+const runCommandCaptureBuffer = (
+  command,
+  commandArgs,
+  maxBuffer = 64 * 1024 * 1024,
+) => {
   const result = spawnSync(command, commandArgs, {
     encoding: null,
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -213,7 +247,9 @@ const runCommandCaptureBuffer = (command, commandArgs, maxBuffer = 64 * 1024 * 1
     throw new Error(`Failed to execute ${command}: ${result.error.message}`);
   }
   if (result.status !== 0) {
-    throw new Error(`${command} ${commandArgs.join(' ')} failed: ${(result.stderr || Buffer.from('')).toString('utf8').trim() || 'unknown error'}`);
+    throw new Error(
+      `${command} ${commandArgs.join(' ')} failed: ${(result.stderr || Buffer.from('')).toString('utf8').trim() || 'unknown error'}`,
+    );
   }
   return result.stdout || Buffer.from('');
 };
@@ -224,7 +260,9 @@ const ensureBinaryAvailable = (command, displayName) => {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   if (probe.error || probe.status !== 0) {
-    throw new Error(`${displayName} is required for deterministic fuzz artifact validation but is unavailable.`);
+    throw new Error(
+      `${displayName} is required for deterministic fuzz artifact validation but is unavailable.`,
+    );
   }
 };
 
@@ -260,7 +298,12 @@ const probeImageDimensions = (imagePath) => {
   const [widthRaw, heightRaw] = raw.split('x');
   const width = Number(widthRaw);
   const height = Number(heightRaw);
-  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+  if (
+    !Number.isFinite(width) ||
+    !Number.isFinite(height) ||
+    width <= 0 ||
+    height <= 0
+  ) {
     throw new Error(`Unable to determine image dimensions for ${imagePath}`);
   }
   return { width, height };
@@ -284,7 +327,9 @@ const analyzeImageQuality = (imagePath) => {
   ]);
   const expectedBytes = pixelCount * 3;
   if (rgb.length < expectedBytes) {
-    throw new Error(`Decoded image buffer too small for ${imagePath}: expected ${expectedBytes}, got ${rgb.length}`);
+    throw new Error(
+      `Decoded image buffer too small for ${imagePath}: expected ${expectedBytes}, got ${rgb.length}`,
+    );
   }
 
   const maxSamples = 50_000;
@@ -367,10 +412,16 @@ const PLACEHOLDER_PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMBAAZf6z8AAAAASUVORK5CYII=';
 
 const ensureScreenshotPlaceholder = async (screenshotAbsolutePath) => {
-  const exists = await fs.stat(screenshotAbsolutePath).then((stat) => stat.isFile() && stat.size > 0).catch(() => false);
+  const exists = await fs
+    .stat(screenshotAbsolutePath)
+    .then((stat) => stat.isFile() && stat.size > 0)
+    .catch(() => false);
   if (exists) return;
   await fs.mkdir(path.dirname(screenshotAbsolutePath), { recursive: true });
-  await fs.writeFile(screenshotAbsolutePath, Buffer.from(PLACEHOLDER_PNG_BASE64, 'base64'));
+  await fs.writeFile(
+    screenshotAbsolutePath,
+    Buffer.from(PLACEHOLDER_PNG_BASE64, 'base64'),
+  );
 };
 
 const regenerateScreenshotFromVideo = async (videoPath, screenshotPath) => {
@@ -383,10 +434,16 @@ const regenerateScreenshotFromVideo = async (videoPath, screenshotPath) => {
   try {
     durationMs = probeVideoDurationMs(videoPath);
     if (durationMs > 2000) {
-      attempts.push(['-ss', String(Math.max(0, Math.floor(durationMs / 2000)))]);
+      attempts.push([
+        '-ss',
+        String(Math.max(0, Math.floor(durationMs / 2000))),
+      ]);
     }
   } catch (probeError) {
-    console.warn('[fuzz] Could not probe video duration for screenshot regeneration:', probeError);
+    console.warn(
+      '[fuzz] Could not probe video duration for screenshot regeneration:',
+      probeError,
+    );
     durationMs = null;
   }
 
@@ -408,7 +465,10 @@ const regenerateScreenshotFromVideo = async (videoPath, screenshotPath) => {
         return quality;
       }
     } catch (extractError) {
-      console.warn('[fuzz] Screenshot extraction attempt failed (will try next seek position):', extractError);
+      console.warn(
+        '[fuzz] Screenshot extraction attempt failed (will try next seek position):',
+        extractError,
+      );
       continue;
     }
   }
@@ -467,10 +527,14 @@ const mergeReports = async () => {
 
   let parseErrors = 0;
   for (let shard = 0; shard < concurrency; shard += 1) {
-    const shardRoot = concurrency === 1 ? outputRoot : path.join(outputRoot, `shard-${shard}`);
+    const shardRoot =
+      concurrency === 1 ? outputRoot : path.join(outputRoot, `shard-${shard}`);
     const reportPath = path.join(shardRoot, 'fuzz-issue-report.json');
     const metricsPath = path.join(shardRoot, 'fuzz-run-metrics.json');
-    const stagnationPath = path.join(shardRoot, 'visual-stagnation-report.json');
+    const stagnationPath = path.join(
+      shardRoot,
+      'visual-stagnation-report.json',
+    );
     const shardSessionsDir = path.join(shardRoot, 'sessions');
     const shardVideosDir = path.join(shardRoot, 'videos');
 
@@ -489,14 +553,19 @@ const mergeReports = async () => {
       const groups = parsed?.issueGroups || [];
       for (const group of groups) {
         const existing = issueGroups.get(group.issue_group_id);
-        const remappedExamples = concurrency === 1
-          ? [...(group.examples || [])]
-          : (group.examples || []).map((example) => ({
-            ...example,
-            shardIndex: shard,
-            video: example.video ? `shard-${shard}/${example.video}` : example.video,
-            screenshot: example.screenshot ? `shard-${shard}/${example.screenshot}` : example.screenshot,
-          }));
+        const remappedExamples =
+          concurrency === 1
+            ? [...(group.examples || [])]
+            : (group.examples || []).map((example) => ({
+                ...example,
+                shardIndex: shard,
+                video: example.video
+                  ? `shard-${shard}/${example.video}`
+                  : example.video,
+                screenshot: example.screenshot
+                  ? `shard-${shard}/${example.screenshot}`
+                  : example.screenshot,
+              }));
         if (!existing) {
           issueGroups.set(group.issue_group_id, {
             ...group,
@@ -507,11 +576,16 @@ const mergeReports = async () => {
           continue;
         }
         for (const [key, value] of Object.entries(group.severityCounts || {})) {
-          existing.severityCounts[key] = (existing.severityCounts[key] || 0) + (value || 0);
+          existing.severityCounts[key] =
+            (existing.severityCounts[key] || 0) + (value || 0);
         }
-        existing.platforms = Array.from(new Set([...(existing.platforms || []), ...(group.platforms || [])]));
+        existing.platforms = Array.from(
+          new Set([...(existing.platforms || []), ...(group.platforms || [])]),
+        );
         if (existing.examples.length < 3) {
-          existing.examples.push(...remappedExamples.slice(0, 3 - existing.examples.length));
+          existing.examples.push(
+            ...remappedExamples.slice(0, 3 - existing.examples.length),
+          );
         }
       }
     } catch (error) {
@@ -528,16 +602,25 @@ const mergeReports = async () => {
       const sessionsStarted = Number(metrics?.sessionsStarted || 0);
       const avgDuration = Number(metrics?.averageSessionDurationMs || 0);
       durationTotalMs += sessionsStarted * avgDuration;
-      for (const [reason, count] of Object.entries(metrics?.sessionsTerminatedByReason || {})) {
-        terminatedByReason[reason] = (terminatedByReason[reason] || 0) + Number(count || 0);
+      for (const [reason, count] of Object.entries(
+        metrics?.sessionsTerminatedByReason || {},
+      )) {
+        terminatedByReason[reason] =
+          (terminatedByReason[reason] || 0) + Number(count || 0);
       }
       for (const item of metrics?.stepsPerSession || []) {
         stepsPerSession.push({
-          sessionId: concurrency === 1 ? item.sessionId : `shard-${shard}-${item.sessionId}`,
+          sessionId:
+            concurrency === 1
+              ? item.sessionId
+              : `shard-${shard}-${item.sessionId}`,
           steps: Number(item.steps || 0),
         });
       }
-      maxVisualStagnationMs = Math.max(maxVisualStagnationMs, Number(metrics?.maxVisualStagnationMs || 0));
+      maxVisualStagnationMs = Math.max(
+        maxVisualStagnationMs,
+        Number(metrics?.maxVisualStagnationMs || 0),
+      );
     } catch (error) {
       if (!isMissingFileError(error)) {
         console.error(`Failed to read fuzz metrics for shard ${shard}:`, error);
@@ -550,32 +633,55 @@ const mergeReports = async () => {
       const stagnation = JSON.parse(stagnationRaw);
       for (const entry of stagnation?.sessions || []) {
         stagnationSessions.push({
-          sessionId: concurrency === 1 ? entry.sessionId : `shard-${shard}-${entry.sessionId}`,
+          sessionId:
+            concurrency === 1
+              ? entry.sessionId
+              : `shard-${shard}-${entry.sessionId}`,
           maxVisualStagnationMs: Number(entry.maxVisualStagnationMs || 0),
           terminationReason: entry.terminationReason || 'unknown',
         });
       }
       for (const violation of stagnation?.violations || []) {
         stagnationViolations.push({
-          sessionId: concurrency === 1 ? violation.sessionId : `shard-${shard}-${violation.sessionId}`,
+          sessionId:
+            concurrency === 1
+              ? violation.sessionId
+              : `shard-${shard}-${violation.sessionId}`,
           maxVisualStagnationMs: Number(violation.maxVisualStagnationMs || 0),
           terminationReason: violation.terminationReason || 'unknown',
         });
       }
-      maxVisualStagnationMs = Math.max(maxVisualStagnationMs, Number(stagnation?.maxVisualStagnationMs || 0));
+      maxVisualStagnationMs = Math.max(
+        maxVisualStagnationMs,
+        Number(stagnation?.maxVisualStagnationMs || 0),
+      );
     } catch (error) {
       if (!isMissingFileError(error)) {
-        console.error(`Failed to read visual stagnation report for shard ${shard}:`, error);
+        console.error(
+          `Failed to read visual stagnation report for shard ${shard}:`,
+          error,
+        );
       }
       parseErrors += 1;
     }
 
     if (concurrency > 1) {
       try {
-        await copyDirContents(shardSessionsDir, mergedSessionsDir, `shard-${shard}-`);
-        await copyDirContents(shardVideosDir, mergedVideosDir, `shard-${shard}-`);
+        await copyDirContents(
+          shardSessionsDir,
+          mergedSessionsDir,
+          `shard-${shard}-`,
+        );
+        await copyDirContents(
+          shardVideosDir,
+          mergedVideosDir,
+          `shard-${shard}-`,
+        );
       } catch (error) {
-        console.error(`Failed to copy session/video artifacts for shard ${shard}:`, error);
+        console.error(
+          `Failed to copy session/video artifacts for shard ${shard}:`,
+          error,
+        );
         parseErrors += 1;
       }
     }
@@ -636,7 +742,11 @@ const mergeReports = async () => {
     }
   }
 
-  await fs.writeFile(path.join(outputRoot, 'fuzz-issue-report.json'), JSON.stringify(merged, null, 2), 'utf8');
+  await fs.writeFile(
+    path.join(outputRoot, 'fuzz-issue-report.json'),
+    JSON.stringify(merged, null, 2),
+    'utf8',
+  );
 
   const reportMeta = {
     platform: platform || env.FUZZ_PLATFORM || 'android-phone',
@@ -647,12 +757,24 @@ const mergeReports = async () => {
   };
 
   // Write human-readable README with header, classification summary, and three sections.
-  const readmeContent = renderReadme(reportMeta, sortedGroups, classificationMap);
+  const readmeContent = renderReadme(
+    reportMeta,
+    sortedGroups,
+    classificationMap,
+  );
   await fs.writeFile(path.join(outputRoot, 'README.md'), readmeContent, 'utf8');
 
   // Write compact fuzz-issue-summary.md for quick review and LLM consumption.
-  const summaryContent = renderSummary(reportMeta, sortedGroups, classificationMap);
-  await fs.writeFile(path.join(outputRoot, 'fuzz-issue-summary.md'), summaryContent, 'utf8');
+  const summaryContent = renderSummary(
+    reportMeta,
+    sortedGroups,
+    classificationMap,
+  );
+  await fs.writeFile(
+    path.join(outputRoot, 'fuzz-issue-summary.md'),
+    summaryContent,
+    'utf8',
+  );
 
   const runMetrics = {
     meta: {
@@ -666,8 +788,12 @@ const mergeReports = async () => {
     sessionsStarted: sessions,
     sessionsTerminatedByReason: terminatedByReason,
     maxVisualStagnationMs,
-    averageSessionDurationMs: sessions ? Math.round(durationTotalMs / sessions) : 0,
-    averageStepsPerSession: sessions ? Number((totalSteps / sessions).toFixed(2)) : 0,
+    averageSessionDurationMs: sessions
+      ? Math.round(durationTotalMs / sessions)
+      : 0,
+    averageStepsPerSession: sessions
+      ? Number((totalSteps / sessions).toFixed(2))
+      : 0,
     totalSteps,
     stepsPerSession,
   };
@@ -683,8 +809,16 @@ const mergeReports = async () => {
     sessions: stagnationSessions,
   };
 
-  await fs.writeFile(path.join(outputRoot, 'fuzz-run-metrics.json'), JSON.stringify(runMetrics, null, 2), 'utf8');
-  await fs.writeFile(path.join(outputRoot, 'visual-stagnation-report.json'), JSON.stringify(visualStagnationReport, null, 2), 'utf8');
+  await fs.writeFile(
+    path.join(outputRoot, 'fuzz-run-metrics.json'),
+    JSON.stringify(runMetrics, null, 2),
+    'utf8',
+  );
+  await fs.writeFile(
+    path.join(outputRoot, 'visual-stagnation-report.json'),
+    JSON.stringify(visualStagnationReport, null, 2),
+    'utf8',
+  );
 
   const requiredTopLevel = [
     'sessions',
@@ -699,7 +833,10 @@ const mergeReports = async () => {
   for (const item of requiredTopLevel) {
     const fullPath = path.join(outputRoot, item);
     const stat = await fs.stat(fullPath).catch((error) => {
-      missingArtifacts.push({ path: item, reason: (error && error.message) || 'missing' });
+      missingArtifacts.push({
+        path: item,
+        reason: (error && error.message) || 'missing',
+      });
       return null;
     });
     if (!stat) continue;
@@ -709,14 +846,24 @@ const mergeReports = async () => {
   }
 
   try {
-    const sessionArtifacts = await fs.readdir(mergedSessionsDir, { withFileTypes: true });
-    const videoArtifacts = await fs.readdir(mergedVideosDir, { withFileTypes: true });
-    const hasSessionJson = sessionArtifacts.some((entry) => entry.isFile() && entry.name.endsWith('.json'));
+    const sessionArtifacts = await fs.readdir(mergedSessionsDir, {
+      withFileTypes: true,
+    });
+    const videoArtifacts = await fs.readdir(mergedVideosDir, {
+      withFileTypes: true,
+    });
+    const hasSessionJson = sessionArtifacts.some(
+      (entry) => entry.isFile() && entry.name.endsWith('.json'),
+    );
     if (!hasSessionJson) {
       missingArtifacts.push({ path: 'sessions/*.json', reason: 'none-found' });
     }
 
-    if (!videoArtifacts.some((entry) => entry.isFile() && entry.name.endsWith('.webm'))) {
+    if (
+      !videoArtifacts.some(
+        (entry) => entry.isFile() && entry.name.endsWith('.webm'),
+      )
+    ) {
       missingArtifacts.push({ path: 'videos/*.webm', reason: 'none-found' });
     }
 
@@ -726,27 +873,47 @@ const mergeReports = async () => {
     for (const sessionJsonPath of sessionJsonFiles) {
       const raw = await fs.readFile(sessionJsonPath, 'utf8');
       const parsed = JSON.parse(raw);
-      const sessionId = parsed?.sessionId || path.basename(sessionJsonPath, '.json');
+      const sessionId =
+        parsed?.sessionId || path.basename(sessionJsonPath, '.json');
 
       if (concurrency > 1) {
         if (parsed?.interactionLog) {
-          parsed.interactionLog = resolveMergedArtifactPath(parsed.interactionLog, sessionJsonPath);
+          parsed.interactionLog = resolveMergedArtifactPath(
+            parsed.interactionLog,
+            sessionJsonPath,
+          );
         }
         if (parsed?.finalScreenshot) {
-          parsed.finalScreenshot = resolveMergedArtifactPath(parsed.finalScreenshot, sessionJsonPath);
+          parsed.finalScreenshot = resolveMergedArtifactPath(
+            parsed.finalScreenshot,
+            sessionJsonPath,
+          );
         }
         if (parsed?.video) {
-          parsed.video = resolveMergedArtifactPath(parsed.video, sessionJsonPath);
+          parsed.video = resolveMergedArtifactPath(
+            parsed.video,
+            sessionJsonPath,
+          );
         }
-        await fs.writeFile(sessionJsonPath, JSON.stringify(parsed, null, 2), 'utf8');
+        await fs.writeFile(
+          sessionJsonPath,
+          JSON.stringify(parsed, null, 2),
+          'utf8',
+        );
       }
 
       const interactionLogPath = parsed?.interactionLog;
       const finalScreenshotPath = parsed?.finalScreenshot;
       const videoPathValue = parsed?.video;
-      const mergedLogPath = interactionLogPath ? resolveMergedArtifactPath(interactionLogPath, sessionJsonPath) : '';
-      const mergedScreenshotPath = finalScreenshotPath ? resolveMergedArtifactPath(finalScreenshotPath, sessionJsonPath) : '';
-      const mergedVideoRelativePath = videoPathValue ? resolveMergedArtifactPath(videoPathValue, sessionJsonPath) : '';
+      const mergedLogPath = interactionLogPath
+        ? resolveMergedArtifactPath(interactionLogPath, sessionJsonPath)
+        : '';
+      const mergedScreenshotPath = finalScreenshotPath
+        ? resolveMergedArtifactPath(finalScreenshotPath, sessionJsonPath)
+        : '';
+      const mergedVideoRelativePath = videoPathValue
+        ? resolveMergedArtifactPath(videoPathValue, sessionJsonPath)
+        : '';
       let activityCount = 0;
 
       if (interactionLogPath) {
@@ -757,23 +924,36 @@ const mergeReports = async () => {
             reason: error.message,
           });
         });
-        const logLines = await fs.readFile(interactionLogAbsolutePath, 'utf8').then((raw) => raw
-          .split(/\r?\n/g)
-          .map((line) => line.trim())
-          .filter(Boolean)).catch((readError) => {
-            console.warn('[fuzz] Interaction log read failed — activity count will be 0, session may be dropped:', interactionLogAbsolutePath, readError);
+        const logLines = await fs
+          .readFile(interactionLogAbsolutePath, 'utf8')
+          .then((raw) =>
+            raw
+              .split(/\r?\n/g)
+              .map((line) => line.trim())
+              .filter(Boolean),
+          )
+          .catch((readError) => {
+            console.warn(
+              '[fuzz] Interaction log read failed — activity count will be 0, session may be dropped:',
+              interactionLogAbsolutePath,
+              readError,
+            );
             return [];
           });
-        activityCount = logLines.filter((line) => /\bs=\d+\s+a=/.test(line) && !line.includes('a=heartbeat')).length;
+        activityCount = logLines.filter(
+          (line) => /\bs=\d+\s+a=/.test(line) && !line.includes('a=heartbeat'),
+        ).length;
       }
 
       if (videoPathValue) {
-        await ensureFile(path.join(outputRoot, mergedVideoRelativePath)).catch((error) => {
-          missingArtifacts.push({
-            path: `${path.relative(outputRoot, sessionJsonPath)} -> ${mergedVideoRelativePath}`,
-            reason: error.message,
-          });
-        });
+        await ensureFile(path.join(outputRoot, mergedVideoRelativePath)).catch(
+          (error) => {
+            missingArtifacts.push({
+              path: `${path.relative(outputRoot, sessionJsonPath)} -> ${mergedVideoRelativePath}`,
+              reason: error.message,
+            });
+          },
+        );
       }
 
       // Calculate minimum activities based on session duration, not total budget.
@@ -788,8 +968,12 @@ const mergeReports = async () => {
       // IMPORTANT: Sessions that terminate due to "issue" (crashes) are always qualified
       // because they represent real bugs that need investigation, regardless of activity count.
       const parsedSessionDurationMs = Number(parsed?.durationMs || 0);
-      const effectiveSessionDurationMs = parsedSessionDurationMs > 0 ? parsedSessionDurationMs : 60_000;
-      const minActivitiesPerSession = Math.max(2, Math.floor(effectiveSessionDurationMs / 35000));
+      const effectiveSessionDurationMs =
+        parsedSessionDurationMs > 0 ? parsedSessionDurationMs : 60_000;
+      const minActivitiesPerSession = Math.max(
+        2,
+        Math.floor(effectiveSessionDurationMs / 35000),
+      );
       const terminatedDueToIssue = parsed?.terminationReason === 'issue';
       if (activityCount < minActivitiesPerSession && !terminatedDueToIssue) {
         activityViolations.push({
@@ -797,10 +981,17 @@ const mergeReports = async () => {
           reason: 'insufficient-activities',
           details: `expected>=${minActivitiesPerSession} actual=${activityCount}`,
         });
-        await fs.unlink(sessionJsonPath).catch(() => { });
-        if (mergedLogPath) await fs.unlink(path.join(outputRoot, mergedLogPath)).catch(() => { });
-        if (mergedScreenshotPath) await fs.unlink(path.join(outputRoot, mergedScreenshotPath)).catch(() => { });
-        if (mergedVideoRelativePath) await fs.unlink(path.join(outputRoot, mergedVideoRelativePath)).catch(() => { });
+        await fs.unlink(sessionJsonPath).catch(() => {});
+        if (mergedLogPath)
+          await fs.unlink(path.join(outputRoot, mergedLogPath)).catch(() => {});
+        if (mergedScreenshotPath)
+          await fs
+            .unlink(path.join(outputRoot, mergedScreenshotPath))
+            .catch(() => {});
+        if (mergedVideoRelativePath)
+          await fs
+            .unlink(path.join(outputRoot, mergedVideoRelativePath))
+            .catch(() => {});
         continue;
       }
 
@@ -814,11 +1005,19 @@ const mergeReports = async () => {
       });
 
       if (finalScreenshotPath) {
-        const screenshotAbsolutePath = path.join(outputRoot, mergedScreenshotPath);
-        const screenshotExists = await fs.stat(screenshotAbsolutePath).then((stat) => stat.isFile() && stat.size > 0).catch(() => false);
+        const screenshotAbsolutePath = path.join(
+          outputRoot,
+          mergedScreenshotPath,
+        );
+        const screenshotExists = await fs
+          .stat(screenshotAbsolutePath)
+          .then((stat) => stat.isFile() && stat.size > 0)
+          .catch(() => false);
         if (!screenshotExists && mergedVideoRelativePath) {
           try {
-            await fs.mkdir(path.dirname(screenshotAbsolutePath), { recursive: true });
+            await fs.mkdir(path.dirname(screenshotAbsolutePath), {
+              recursive: true,
+            });
             runCommandCapture('ffmpeg', [
               '-v',
               'error',
@@ -832,7 +1031,10 @@ const mergeReports = async () => {
               screenshotAbsolutePath,
             ]);
           } catch (error) {
-            console.warn('Merged screenshot extraction failed, using placeholder:', error);
+            console.warn(
+              'Merged screenshot extraction failed, using placeholder:',
+              error,
+            );
           }
         }
         await ensureScreenshotPlaceholder(screenshotAbsolutePath);
@@ -844,8 +1046,11 @@ const mergeReports = async () => {
         });
         try {
           let screenshotQuality = analyzeImageQuality(screenshotAbsolutePath);
-          if ((screenshotQuality.isSingleColor || screenshotQuality.isMostlyBlack)
-            && mergedVideoRelativePath) {
+          if (
+            (screenshotQuality.isSingleColor ||
+              screenshotQuality.isMostlyBlack) &&
+            mergedVideoRelativePath
+          ) {
             const regeneratedQuality = await regenerateScreenshotFromVideo(
               path.join(outputRoot, mergedVideoRelativePath),
               screenshotAbsolutePath,
@@ -886,7 +1091,11 @@ const mergeReports = async () => {
 
       const sessionDurationMs = Number(parsed?.durationMs || 0);
       const videoRelativePath = parsed?.video;
-      if (!videoRelativePath || !Number.isFinite(sessionDurationMs) || sessionDurationMs <= 0) {
+      if (
+        !videoRelativePath ||
+        !Number.isFinite(sessionDurationMs) ||
+        sessionDurationMs <= 0
+      ) {
         frameValidationViolations.push({
           sessionId,
           reason: 'missing-session-metadata',
@@ -903,11 +1112,15 @@ const mergeReports = async () => {
         frameValidationViolations.push({
           sessionId,
           reason: 'video-unreadable',
-          details: (error && error.message) || 'unable to determine video duration',
+          details:
+            (error && error.message) || 'unable to determine video duration',
         });
         continue;
       }
-      const minExpectedDurationMs = Math.max(1000, sessionDurationMs - shortVideoToleranceMs);
+      const minExpectedDurationMs = Math.max(
+        1000,
+        sessionDurationMs - shortVideoToleranceMs,
+      );
       if (videoDurationMs < minExpectedDurationMs) {
         frameValidationViolations.push({
           sessionId,
@@ -939,7 +1152,10 @@ const mergeReports = async () => {
         continue;
       }
 
-      const minExpectedFrames = Math.max(1, Math.floor((videoDurationMs - 1000) / 1000));
+      const minExpectedFrames = Math.max(
+        1,
+        Math.floor((videoDurationMs - 1000) / 1000),
+      );
       if (frameEntries.length < minExpectedFrames) {
         frameValidationViolations.push({
           sessionId,
@@ -974,11 +1190,13 @@ const mergeReports = async () => {
         });
       }
 
-      const sampleIndices = Array.from(new Set([
-        0,
-        Math.floor((frameEntries.length - 1) / 2),
-        frameEntries.length - 1,
-      ])).filter((index) => index >= 0 && index < frameEntries.length);
+      const sampleIndices = Array.from(
+        new Set([
+          0,
+          Math.floor((frameEntries.length - 1) / 2),
+          frameEntries.length - 1,
+        ]),
+      ).filter((index) => index >= 0 && index < frameEntries.length);
       let hasNonBlackDiverseFrame = false;
       for (const frameIndex of sampleIndices) {
         const framePath = path.join(frameDir, frameEntries[frameIndex]);
@@ -1013,48 +1231,71 @@ const mergeReports = async () => {
       await fs.rm(frameDir, { recursive: true, force: true });
     }
   } catch (error) {
-    missingArtifacts.push({ path: 'sessions/videos', reason: (error && error.message) || 'unreadable' });
+    missingArtifacts.push({
+      path: 'sessions/videos',
+      reason: (error && error.message) || 'unreadable',
+    });
   }
 
   if (missingArtifacts.length > 0) {
-    throw new Error(`Required fuzz artifacts missing or invalid: ${JSON.stringify(missingArtifacts, null, 2)}`);
+    throw new Error(
+      `Required fuzz artifacts missing or invalid: ${JSON.stringify(missingArtifacts, null, 2)}`,
+    );
   }
   if (frameValidationViolations.length > 0) {
     // Degrade gracefully: exclude sessions with video issues rather than aborting the entire run.
     // A transient system event (recorder freeze, high load) should not discard all other sessions' work.
-    const frameViolatedSessionIds = new Set(frameValidationViolations.map((v) => v.sessionId));
+    const frameViolatedSessionIds = new Set(
+      frameValidationViolations.map((v) => v.sessionId),
+    );
     for (let i = qualifiedSessions.length - 1; i >= 0; i -= 1) {
       if (frameViolatedSessionIds.has(qualifiedSessions[i].sessionId)) {
         qualifiedSessions.splice(i, 1);
       }
     }
     console.warn(
-      `[fuzz] Video validation: excluded ${frameViolatedSessionIds.size} session(s) with frame violations.`
-      + ` Continuing with ${qualifiedSessions.length} session(s) remaining.`
-      + ` Violations: ${JSON.stringify(frameValidationViolations, null, 2)}`,
+      `[fuzz] Video validation: excluded ${frameViolatedSessionIds.size} session(s) with frame violations.` +
+        ` Continuing with ${qualifiedSessions.length} session(s) remaining.` +
+        ` Violations: ${JSON.stringify(frameValidationViolations, null, 2)}`,
     );
   }
   if (screenshotQualityViolations.length > 0) {
     // Screenshot issues are noted but non-fatal: they do not affect issue detection.
-    const screenshotViolatedIds = new Set(screenshotQualityViolations.map((v) => v.sessionId));
+    const screenshotViolatedIds = new Set(
+      screenshotQualityViolations.map((v) => v.sessionId),
+    );
     console.warn(
-      `[fuzz] Screenshot validation: ${screenshotViolatedIds.size} session(s) had quality issues (non-fatal).`
-      + ` Violations: ${JSON.stringify(screenshotQualityViolations, null, 2)}`,
+      `[fuzz] Screenshot validation: ${screenshotViolatedIds.size} session(s) had quality issues (non-fatal).` +
+        ` Violations: ${JSON.stringify(screenshotQualityViolations, null, 2)}`,
     );
   }
   if (qualifiedSessions.length === 0) {
-    const frameViolationsNote = frameValidationViolations.length > 0
-      ? ` (${frameValidationViolations.length} violation(s) also excluded sessions for video issues)`
-      : '';
-    throw new Error(`No qualified sessions with sufficient activities were produced${frameViolationsNote}. Sample: ${JSON.stringify(activityViolations.slice(0, 5), null, 2)}`);
+    const frameViolationsNote =
+      frameValidationViolations.length > 0
+        ? ` (${frameValidationViolations.length} violation(s) also excluded sessions for video issues)`
+        : '';
+    throw new Error(
+      `No qualified sessions with sufficient activities were produced${frameViolationsNote}. Sample: ${JSON.stringify(activityViolations.slice(0, 5), null, 2)}`,
+    );
   }
   if (visualStagnationReport.violations.length > 0) {
-    throw new Error(`Visual stagnation threshold exceeded: ${JSON.stringify(visualStagnationReport.violations, null, 2)}`);
+    throw new Error(
+      `Visual stagnation threshold exceeded: ${JSON.stringify(visualStagnationReport.violations, null, 2)}`,
+    );
   }
 
-  const qualifiedTotalSteps = qualifiedSessions.reduce((sum, item) => sum + item.activityCount, 0);
-  const qualifiedDurationMs = qualifiedSessions.reduce((sum, item) => sum + Math.max(0, item.durationMs || 0), 0);
-  const qualifiedMaxVisualStagnationMs = qualifiedSessions.reduce((max, item) => Math.max(max, item.maxVisualStagnationMs || 0), 0);
+  const qualifiedTotalSteps = qualifiedSessions.reduce(
+    (sum, item) => sum + item.activityCount,
+    0,
+  );
+  const qualifiedDurationMs = qualifiedSessions.reduce(
+    (sum, item) => sum + Math.max(0, item.durationMs || 0),
+    0,
+  );
+  const qualifiedMaxVisualStagnationMs = qualifiedSessions.reduce(
+    (max, item) => Math.max(max, item.maxVisualStagnationMs || 0),
+    0,
+  );
   const qualifiedTerminationCounts = qualifiedSessions.reduce((acc, item) => {
     const reason = item.terminationReason || 'unknown';
     acc[reason] = (acc[reason] || 0) + 1;
@@ -1073,10 +1314,17 @@ const mergeReports = async () => {
     sessionsStarted: qualifiedSessions.length,
     sessionsTerminatedByReason: qualifiedTerminationCounts,
     maxVisualStagnationMs: qualifiedMaxVisualStagnationMs,
-    averageSessionDurationMs: qualifiedSessions.length ? Math.round(qualifiedDurationMs / qualifiedSessions.length) : 0,
-    averageStepsPerSession: Number((qualifiedTotalSteps / qualifiedSessions.length).toFixed(2)),
+    averageSessionDurationMs: qualifiedSessions.length
+      ? Math.round(qualifiedDurationMs / qualifiedSessions.length)
+      : 0,
+    averageStepsPerSession: Number(
+      (qualifiedTotalSteps / qualifiedSessions.length).toFixed(2),
+    ),
     totalSteps: qualifiedTotalSteps,
-    stepsPerSession: qualifiedSessions.map((item) => ({ sessionId: item.sessionId, steps: item.activityCount })),
+    stepsPerSession: qualifiedSessions.map((item) => ({
+      sessionId: item.sessionId,
+      steps: item.activityCount,
+    })),
   };
 
   const qualifiedVisualStagnationReport = {
@@ -1088,7 +1336,10 @@ const mergeReports = async () => {
     },
     maxVisualStagnationMs: qualifiedMaxVisualStagnationMs,
     violations: qualifiedSessions
-      .filter((item) => (item.maxVisualStagnationMs || 0) > visualStagnationThresholdMs)
+      .filter(
+        (item) =>
+          (item.maxVisualStagnationMs || 0) > visualStagnationThresholdMs,
+      )
       .map((item) => ({
         sessionId: item.sessionId,
         maxVisualStagnationMs: item.maxVisualStagnationMs,
@@ -1101,12 +1352,24 @@ const mergeReports = async () => {
     })),
   };
 
-  await fs.writeFile(path.join(outputRoot, 'fuzz-run-metrics.json'), JSON.stringify(qualifiedRunMetrics, null, 2), 'utf8');
-  await fs.writeFile(path.join(outputRoot, 'visual-stagnation-report.json'), JSON.stringify(qualifiedVisualStagnationReport, null, 2), 'utf8');
+  await fs.writeFile(
+    path.join(outputRoot, 'fuzz-run-metrics.json'),
+    JSON.stringify(qualifiedRunMetrics, null, 2),
+    'utf8',
+  );
+  await fs.writeFile(
+    path.join(outputRoot, 'visual-stagnation-report.json'),
+    JSON.stringify(qualifiedVisualStagnationReport, null, 2),
+    'utf8',
+  );
 
   merged.meta.sessions = qualifiedSessions.length;
   merged.meta.totalSteps = qualifiedTotalSteps;
-  await fs.writeFile(path.join(outputRoot, 'fuzz-issue-report.json'), JSON.stringify(merged, null, 2), 'utf8');
+  await fs.writeFile(
+    path.join(outputRoot, 'fuzz-issue-report.json'),
+    JSON.stringify(merged, null, 2),
+    'utf8',
+  );
 
   return { parseErrors };
 };
@@ -1118,11 +1381,19 @@ const basePort = Number(process.env.PLAYWRIGHT_PORT || String(defaultBasePort));
 
 const runCommand = (command, argsList, commandEnv) =>
   new Promise((resolve, reject) => {
-    const child = spawn(command, argsList, { stdio: 'inherit', env: commandEnv });
+    const child = spawn(command, argsList, {
+      stdio: 'inherit',
+      env: commandEnv,
+    });
     child.on('error', reject);
     child.on('exit', (code) => {
       if (code === 0) resolve();
-      else reject(new Error(`${command} ${argsList.join(' ')} failed with code ${code ?? 1}`));
+      else
+        reject(
+          new Error(
+            `${command} ${argsList.join(' ')} failed with code ${code ?? 1}`,
+          ),
+        );
     });
   });
 
@@ -1145,16 +1416,32 @@ const runShard = (index) =>
       FUZZ_SEED: String(baseSeed + index),
       PLAYWRIGHT_SKIP_BUILD: env.PLAYWRIGHT_SKIP_BUILD,
       PLAYWRIGHT_PORT: String(basePort + index),
-      PLAYWRIGHT_OUTPUT_DIR: path.join('test-results', 'playwright-fuzz', `shard-${index}`),
-      PLAYWRIGHT_REPORT_DIR: path.join('playwright-report', 'fuzz', `shard-${index}`),
+      PLAYWRIGHT_OUTPUT_DIR: path.join(
+        'test-results',
+        'playwright-fuzz',
+        `shard-${index}`,
+      ),
+      PLAYWRIGHT_REPORT_DIR: path.join(
+        'playwright-report',
+        'fuzz',
+        `shard-${index}`,
+      ),
     };
 
-    const playwrightArgs = ['playwright', 'test', 'playwright/fuzz/chaosRunner.fuzz.ts', '--workers=1'];
+    const playwrightArgs = [
+      'playwright',
+      'test',
+      'playwright/fuzz/chaosRunner.fuzz.ts',
+      '--workers=1',
+    ];
     if (platform) {
       playwrightArgs.push('--project', platform);
     }
 
-    const child = spawn(cmd, playwrightArgs, { stdio: 'inherit', env: shardEnv });
+    const child = spawn(cmd, playwrightArgs, {
+      stdio: 'inherit',
+      env: shardEnv,
+    });
     let settled = false;
     const finish = (code) => {
       if (settled) return;
@@ -1168,7 +1455,9 @@ const runShard = (index) =>
     child.on('exit', (code) => finish(code));
   });
 
-const exitCodes = await Promise.all(Array.from({ length: concurrency }, (_, index) => runShard(index)));
+const exitCodes = await Promise.all(
+  Array.from({ length: concurrency }, (_, index) => runShard(index)),
+);
 const { parseErrors } = await mergeReports();
 const failed = exitCodes.find((code) => code !== 0);
 process.exit(failed ?? (parseErrors > 0 ? 1 : 0));

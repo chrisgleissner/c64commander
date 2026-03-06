@@ -15,7 +15,9 @@ let restoreWindow: (() => void) | null = null;
 
 const ensureWindow = () => {
   if (typeof window !== 'undefined') return () => undefined;
-  const globalWithWindow = globalThis as typeof globalThis & { window?: Window };
+  const globalWithWindow = globalThis as typeof globalThis & {
+    window?: Window;
+  };
   const previous = globalWithWindow.window;
   globalWithWindow.window = {} as Window;
   return () => {
@@ -32,7 +34,8 @@ const envRestores: Array<() => void> = [];
 const setEnv = (key: string, value: string) => {
   const previous = process.env[key];
   process.env[key] = value;
-  const metaEnv = (import.meta as ImportMeta & { env?: Record<string, string> }).env;
+  const metaEnv = (import.meta as ImportMeta & { env?: Record<string, string> })
+    .env;
   if (metaEnv) metaEnv[key] = value;
   envRestores.push(() => {
     if (previous === undefined) {
@@ -68,7 +71,8 @@ describe('platform', () => {
     getPlatformMock.mockReset();
     isNativePlatformMock.mockReset();
     if (typeof window !== 'undefined') {
-      delete (window as { __c64uPlatformOverride?: string }).__c64uPlatformOverride;
+      delete (window as { __c64uPlatformOverride?: string })
+        .__c64uPlatformOverride;
     }
     restoreEnvs();
     restoreWindow?.();
@@ -76,7 +80,8 @@ describe('platform', () => {
 
   it('returns override when test probes are enabled', () => {
     setEnv('VITE_ENABLE_TEST_PROBES', '1');
-    (window as { __c64uPlatformOverride?: string }).__c64uPlatformOverride = 'android';
+    (window as { __c64uPlatformOverride?: string }).__c64uPlatformOverride =
+      'android';
 
     expect(getPlatform()).toBe('android');
     expect(isNativePlatform()).toBe(true);
@@ -104,7 +109,8 @@ describe('platform', () => {
 
   it('treats web override as non-native', async () => {
     setEnv('VITE_ENABLE_TEST_PROBES', '1');
-    (window as { __c64uPlatformOverride?: string }).__c64uPlatformOverride = 'web';
+    (window as { __c64uPlatformOverride?: string }).__c64uPlatformOverride =
+      'web';
     expect(isNativePlatform()).toBe(false);
   });
 });

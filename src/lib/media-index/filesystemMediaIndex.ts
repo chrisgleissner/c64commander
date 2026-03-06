@@ -63,7 +63,11 @@ export class FilesystemMediaIndexStorage implements MediaIndexStorage {
   }
 
   async write(snapshot: MediaIndexSnapshot): Promise<void> {
-    await Filesystem.mkdir({ directory: Directory.Data, path: 'hvsc/index', recursive: true });
+    await Filesystem.mkdir({
+      directory: Directory.Data,
+      path: 'hvsc/index',
+      recursive: true,
+    });
     await Filesystem.writeFile({
       directory: Directory.Data,
       path: STORAGE_PATH,

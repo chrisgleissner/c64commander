@@ -10,7 +10,8 @@ const DEBUG_LOGGING_KEY = 'c64u_debug_logging_enabled';
 const CONFIG_WRITE_INTERVAL_KEY = 'c64u_config_write_min_interval_ms';
 const AUTO_DEMO_MODE_KEY = 'c64u_automatic_demo_mode_enabled';
 const STARTUP_DISCOVERY_WINDOW_MS_KEY = 'c64u_startup_discovery_window_ms';
-const BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY = 'c64u_background_rediscovery_interval_ms';
+const BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY =
+  'c64u_background_rediscovery_interval_ms';
 const DISCOVERY_PROBE_TIMEOUT_MS_KEY = 'c64u_discovery_probe_timeout_ms';
 const DISK_AUTOSTART_MODE_KEY = 'c64u_disk_autostart_mode';
 
@@ -64,10 +65,13 @@ const normalizeDiskAutostartMode = (value: unknown): DiskAutostartMode =>
   value === 'dma' ? 'dma' : 'kernal';
 
 const broadcast = (key: string, value: unknown) => {
-  window.dispatchEvent(new CustomEvent('c64u-app-settings-updated', { detail: { key, value } }));
+  window.dispatchEvent(
+    new CustomEvent('c64u-app-settings-updated', { detail: { key, value } }),
+  );
 };
 
-export const loadDebugLoggingEnabled = () => readBoolean(DEBUG_LOGGING_KEY, false);
+export const loadDebugLoggingEnabled = () =>
+  readBoolean(DEBUG_LOGGING_KEY, false);
 
 export const saveDebugLoggingEnabled = (enabled: boolean) => {
   if (typeof localStorage === 'undefined') return;
@@ -76,7 +80,9 @@ export const saveDebugLoggingEnabled = (enabled: boolean) => {
 };
 
 export const loadConfigWriteIntervalMs = () =>
-  clampInterval(readNumber(CONFIG_WRITE_INTERVAL_KEY, DEFAULT_CONFIG_WRITE_INTERVAL_MS));
+  clampInterval(
+    readNumber(CONFIG_WRITE_INTERVAL_KEY, DEFAULT_CONFIG_WRITE_INTERVAL_MS),
+  );
 
 export const saveConfigWriteIntervalMs = (value: number) => {
   if (typeof localStorage === 'undefined') return;
@@ -85,7 +91,8 @@ export const saveConfigWriteIntervalMs = (value: number) => {
   broadcast(CONFIG_WRITE_INTERVAL_KEY, clamped);
 };
 
-export const clampConfigWriteIntervalMs = (value: number) => clampInterval(value);
+export const clampConfigWriteIntervalMs = (value: number) =>
+  clampInterval(value);
 
 export const loadAutomaticDemoModeEnabled = () =>
   readBoolean(AUTO_DEMO_MODE_KEY, DEFAULT_AUTO_DEMO_MODE_ENABLED);
@@ -97,7 +104,12 @@ export const saveAutomaticDemoModeEnabled = (enabled: boolean) => {
 };
 
 export const loadStartupDiscoveryWindowMs = () =>
-  clampDiscoveryWindowMs(readNumber(STARTUP_DISCOVERY_WINDOW_MS_KEY, DEFAULT_STARTUP_DISCOVERY_WINDOW_MS));
+  clampDiscoveryWindowMs(
+    readNumber(
+      STARTUP_DISCOVERY_WINDOW_MS_KEY,
+      DEFAULT_STARTUP_DISCOVERY_WINDOW_MS,
+    ),
+  );
 
 export const saveStartupDiscoveryWindowMs = (value: number) => {
   if (typeof localStorage === 'undefined') return;
@@ -106,11 +118,15 @@ export const saveStartupDiscoveryWindowMs = (value: number) => {
   broadcast(STARTUP_DISCOVERY_WINDOW_MS_KEY, clamped);
 };
 
-export const clampStartupDiscoveryWindowMs = (value: number) => clampDiscoveryWindowMs(value);
+export const clampStartupDiscoveryWindowMs = (value: number) =>
+  clampDiscoveryWindowMs(value);
 
 export const loadBackgroundRediscoveryIntervalMs = () =>
   clampBackgroundRediscoveryIntervalMsInternal(
-    readNumber(BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY, DEFAULT_BACKGROUND_REDISCOVERY_INTERVAL_MS),
+    readNumber(
+      BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY,
+      DEFAULT_BACKGROUND_REDISCOVERY_INTERVAL_MS,
+    ),
   );
 
 export const saveBackgroundRediscoveryIntervalMs = (value: number) => {
@@ -125,7 +141,10 @@ export const clampBackgroundRediscoveryIntervalMs = (value: number) =>
 
 export const loadDiscoveryProbeTimeoutMs = () =>
   clampDiscoveryProbeTimeoutMsInternal(
-    readNumber(DISCOVERY_PROBE_TIMEOUT_MS_KEY, DEFAULT_DISCOVERY_PROBE_TIMEOUT_MS),
+    readNumber(
+      DISCOVERY_PROBE_TIMEOUT_MS_KEY,
+      DEFAULT_DISCOVERY_PROBE_TIMEOUT_MS,
+    ),
   );
 
 export const saveDiscoveryProbeTimeoutMs = (value: number) => {

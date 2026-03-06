@@ -18,28 +18,43 @@ describe('failureTaxonomy', () => {
   });
 
   it('classifies network timeouts as network-transient', () => {
-    expect(classifyError(new Error('Request timed out')).failureClass).toBe('network-transient');
+    expect(classifyError(new Error('Request timed out')).failureClass).toBe(
+      'network-transient',
+    );
   });
 
   it('classifies unreachable network as network-unreachable', () => {
-    expect(classifyError(new Error('getaddrinfo ENOTFOUND c64u')).failureClass).toBe('network-unreachable');
+    expect(
+      classifyError(new Error('getaddrinfo ENOTFOUND c64u')).failureClass,
+    ).toBe('network-unreachable');
   });
 
   it('classifies permission errors', () => {
-    expect(classifyError(new Error('Permission denied: content://demo')).failureClass).toBe('permission-denied');
+    expect(
+      classifyError(new Error('Permission denied: content://demo'))
+        .failureClass,
+    ).toBe('permission-denied');
   });
 
   it('classifies parse errors', () => {
-    expect(classifyError(new SyntaxError('Unexpected token')).failureClass).toBe('parse-failure');
+    expect(
+      classifyError(new SyntaxError('Unexpected token')).failureClass,
+    ).toBe('parse-failure');
   });
 
   it('classifies plugin failures', () => {
-    expect(classifyError(new Error('Capacitor plugin call failed')).failureClass).toBe('plugin-failure');
+    expect(
+      classifyError(new Error('Capacitor plugin call failed')).failureClass,
+    ).toBe('plugin-failure');
   });
 
   it('classifies storage read/write failures', () => {
-    expect(classifyError(new Error('No such file or directory')).failureClass).toBe('io-read-failure');
-    expect(classifyError(new Error('Failed to write file')).failureClass).toBe('io-write-failure');
+    expect(
+      classifyError(new Error('No such file or directory')).failureClass,
+    ).toBe('io-read-failure');
+    expect(classifyError(new Error('Failed to write file')).failureClass).toBe(
+      'io-write-failure',
+    );
   });
 
   it('classifies resource exhaustion', () => {
@@ -49,7 +64,9 @@ describe('failureTaxonomy', () => {
   });
 
   it('classifies metadata absent', () => {
-    expect(classifyError(new Error('No songlength entry found')).failureClass).toBe('metadata-absent');
+    expect(
+      classifyError(new Error('No songlength entry found')).failureClass,
+    ).toBe('metadata-absent');
   });
 
   it('classifyError with null input wraps in Error (lines 42, 93)', () => {
@@ -75,14 +92,20 @@ describe('failureTaxonomy', () => {
   });
 
   it('classifies LocalSourceListingError with saf- code as permission-denied (lines 85, 135)', () => {
-    const err = new LocalSourceListingError('Cannot list', 'saf-listing-unavailable');
+    const err = new LocalSourceListingError(
+      'Cannot list',
+      'saf-listing-unavailable',
+    );
     const result = classifyError(err);
     expect(result.failureClass).toBe('permission-denied');
     expect(result.errorType).toContain('LocalSourceListingError');
   });
 
   it('classifies LocalSourceListingError with non-saf code as io-read-failure (line 136 FALSE)', () => {
-    const err = new LocalSourceListingError('Cannot list', 'local-entries-missing');
+    const err = new LocalSourceListingError(
+      'Cannot list',
+      'local-entries-missing',
+    );
     const result = classifyError(err);
     expect(result.failureClass).toBe('io-read-failure');
   });
@@ -90,7 +113,9 @@ describe('failureTaxonomy', () => {
   it('classifies metadata-absent error by message (line 139)', () => {
     // Covers: isMetadataAbsentError branch — message matches /no duration/i
     // Does not match storage (no "not found"/"filesystem"), write, parse, or integration patterns.
-    const result = classifyError(new Error('no duration available for this track'));
+    const result = classifyError(
+      new Error('no duration available for this track'),
+    );
     expect(result.failureClass).toBe('metadata-absent');
   });
 

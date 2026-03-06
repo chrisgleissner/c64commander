@@ -11,7 +11,13 @@ import { saveCoverageFromPage } from './withCoverage';
 import type { Page, TestInfo } from '@playwright/test';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks, uiFixtures } from './uiMocks';
-import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
+import {
+  allowWarnings,
+  assertNoUiIssues,
+  attachStepScreenshot,
+  finalizeEvidence,
+  startStrictUiMonitoring,
+} from './testArtifacts';
 import { enableTraceAssertions } from './traceUtils';
 
 test.describe('Feature flags', () => {
@@ -42,7 +48,9 @@ test.describe('Feature flags', () => {
     await attachStepScreenshot(page, testInfo, label);
   };
 
-  test('hvsc toggle is visible by default', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('hvsc toggle is visible by default', async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/settings');
     const toggle = page.getByLabel('Enable HVSC downloads');
     await expect(toggle).toBeVisible();
@@ -50,23 +58,31 @@ test.describe('Feature flags', () => {
     await snap(page, testInfo, 'toggle-visible');
   });
 
-  test('hvsc toggle controls play page visibility', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('hvsc toggle controls play page visibility', async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/settings');
     const toggle = page.getByLabel('Enable HVSC downloads');
     await expect(toggle).toBeChecked();
     await page.goto('/play');
-    await expect(page.getByRole('button', { name: 'Download HVSC' })).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Download HVSC' }),
+    ).toBeVisible();
     await snap(page, testInfo, 'hvsc-visible');
 
     await page.goto('/settings');
     await toggle.click();
     await expect(toggle).not.toBeChecked();
     await page.goto('/play');
-    await expect(page.getByRole('button', { name: 'Download HVSC' })).toHaveCount(0);
+    await expect(
+      page.getByRole('button', { name: 'Download HVSC' }),
+    ).toHaveCount(0);
     await snap(page, testInfo, 'hvsc-hidden');
   });
 
-  test('legacy /music route shows 404 page', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('legacy /music route shows 404 page', async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     allowWarnings(testInfo, 'Expected 404 route log output.');
     await page.goto('/music');
     await expect(page.getByRole('heading', { name: '404' })).toBeVisible();

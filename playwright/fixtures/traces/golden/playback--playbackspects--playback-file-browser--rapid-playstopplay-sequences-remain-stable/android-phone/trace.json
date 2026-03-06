@@ -3005,10 +3005,7 @@
           "items": {
             "SID Socket 1": {
               "selected": "Enabled",
-              "options": [
-                "Enabled",
-                "Disabled"
-              ]
+              "options": ["Enabled", "Disabled"]
             }
           }
         },
@@ -3052,10 +3049,7 @@
           "items": {
             "SID Socket 2": {
               "selected": "Enabled",
-              "options": [
-                "Enabled",
-                "Disabled"
-              ]
+              "options": ["Enabled", "Disabled"]
             }
           }
         },
@@ -3099,10 +3093,7 @@
           "items": {
             "UltiSID 1 Address": {
               "selected": "$D420",
-              "options": [
-                "$D420",
-                "Unmapped"
-              ]
+              "options": ["$D420", "Unmapped"]
             }
           }
         },
@@ -3146,10 +3137,7 @@
           "items": {
             "UltiSID 2 Address": {
               "selected": "$D440",
-              "options": [
-                "$D440",
-                "Unmapped"
-              ]
+              "options": ["$D440", "Unmapped"]
             }
           }
         },

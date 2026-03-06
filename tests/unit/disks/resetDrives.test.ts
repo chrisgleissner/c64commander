@@ -32,7 +32,9 @@ describe('resetDrives', () => {
   it('resets disk devices only (A, B, Soft IEC)', async () => {
     const resetDrive = vi.fn().mockResolvedValue(undefined);
 
-    await expect(resetDiskDevices({ resetDrive }, drivesPayload)).resolves.toMatchObject({
+    await expect(
+      resetDiskDevices({ resetDrive }, drivesPayload),
+    ).resolves.toMatchObject({
       endpointKeys: ['a', 'b', 'softiec'],
     });
 
@@ -45,13 +47,17 @@ describe('resetDrives', () => {
   it('keeps legacy wrapper behavior for physical drives', async () => {
     const resetDrive = vi.fn().mockResolvedValue(undefined);
 
-    await expect(resetConnectedDrives({ resetDrive }, drivesPayload)).resolves.toEqual({ drives: ['a', 'b'] });
+    await expect(
+      resetConnectedDrives({ resetDrive }, drivesPayload),
+    ).resolves.toEqual({ drives: ['a', 'b'] });
   });
 
   it('resets printer only', async () => {
     const resetDrive = vi.fn().mockResolvedValue(undefined);
 
-    await expect(resetPrinterDevice({ resetDrive }, drivesPayload)).resolves.toMatchObject({
+    await expect(
+      resetPrinterDevice({ resetDrive }, drivesPayload),
+    ).resolves.toMatchObject({
       endpointKey: 'printer',
     });
 
@@ -60,7 +66,8 @@ describe('resetDrives', () => {
   });
 
   it('continues after an individual disk reset failure and reports context', async () => {
-    const resetDrive = vi.fn()
+    const resetDrive = vi
+      .fn()
       .mockRejectedValueOnce(new Error('A failed'))
       .mockResolvedValueOnce(undefined)
       .mockResolvedValueOnce(undefined);
@@ -75,7 +82,10 @@ describe('resetDrives', () => {
   it('fails when no resettable disk devices are present', async () => {
     const resetDrive = vi.fn();
     await expect(
-      resetDiskDevices({ resetDrive }, { drives: [{ 'Printer Emulation': { enabled: true, bus_id: 4 } }] }),
+      resetDiskDevices(
+        { resetDrive },
+        { drives: [{ 'Printer Emulation': { enabled: true, bus_id: 4 } }] },
+      ),
     ).rejects.toThrow('No resettable disk devices found.');
     expect(resetDrive).not.toHaveBeenCalled();
   });
@@ -83,7 +93,10 @@ describe('resetDrives', () => {
   it('fails when printer device is not present', async () => {
     const resetDrive = vi.fn();
     await expect(
-      resetPrinterDevice({ resetDrive }, { drives: [{ a: { enabled: true, bus_id: 8, type: '1541' } }] }),
+      resetPrinterDevice(
+        { resetDrive },
+        { drives: [{ a: { enabled: true, bus_id: 8, type: '1541' } }] },
+      ),
     ).rejects.toThrow('No printer device found.');
     expect(resetDrive).not.toHaveBeenCalled();
   });

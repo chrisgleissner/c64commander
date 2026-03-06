@@ -107,16 +107,25 @@ const DEVICE_SAFETY_KEYS = [
   'allowUserOverrideCircuit',
 ] as const;
 
-const hasOnlyKeys = (value: Record<string, unknown>, keys: readonly string[]) => {
+const hasOnlyKeys = (
+  value: Record<string, unknown>,
+  keys: readonly string[],
+) => {
   const valueKeys = Object.keys(value);
-  return valueKeys.every((key) => keys.includes(key)) && keys.every((key) => key in value);
+  return (
+    valueKeys.every((key) => keys.includes(key)) &&
+    keys.every((key) => key in value)
+  );
 };
 
 const isDiskAutostartMode = (value: unknown): value is DiskAutostartMode =>
   value === 'kernal' || value === 'dma';
 
 const isDeviceSafetyMode = (value: unknown): value is DeviceSafetyMode =>
-  value === 'RELAXED' || value === 'BALANCED' || value === 'CONSERVATIVE' || value === 'TROUBLESHOOTING';
+  value === 'RELAXED' ||
+  value === 'BALANCED' ||
+  value === 'CONSERVATIVE' ||
+  value === 'TROUBLESHOOTING';
 
 export const exportSettingsSnapshot = (): SettingsExportPayload => {
   const safety = loadDeviceSafetyConfig();
@@ -151,49 +160,71 @@ export const exportSettingsSnapshot = (): SettingsExportPayload => {
   };
 };
 
-export const exportSettingsJson = () => JSON.stringify(exportSettingsSnapshot(), null, 2);
+export const exportSettingsJson = () =>
+  JSON.stringify(exportSettingsSnapshot(), null, 2);
 
 const validateAppSettings = (value: unknown) => {
-  if (!value || typeof value !== 'object') return 'appSettings must be an object.';
+  if (!value || typeof value !== 'object')
+    return 'appSettings must be an object.';
   const record = value as Record<string, unknown>;
-  if (!hasOnlyKeys(record, APP_SETTINGS_KEYS)) return 'appSettings contains unknown or missing keys.';
-  if (typeof record.debugLoggingEnabled !== 'boolean') return 'debugLoggingEnabled must be boolean.';
-  if (!Number.isFinite(record.configWriteIntervalMs)) return 'configWriteIntervalMs must be a number.';
-  if (typeof record.automaticDemoModeEnabled !== 'boolean') return 'automaticDemoModeEnabled must be boolean.';
-  if (!Number.isFinite(record.startupDiscoveryWindowMs)) return 'startupDiscoveryWindowMs must be a number.';
-  if (!Number.isFinite(record.backgroundRediscoveryIntervalMs)) return 'backgroundRediscoveryIntervalMs must be a number.';
-  if (!Number.isFinite(record.discoveryProbeTimeoutMs)) return 'discoveryProbeTimeoutMs must be a number.';
-  if (!isDiskAutostartMode(record.diskAutostartMode)) return 'diskAutostartMode must be kernal or dma.';
+  if (!hasOnlyKeys(record, APP_SETTINGS_KEYS))
+    return 'appSettings contains unknown or missing keys.';
+  if (typeof record.debugLoggingEnabled !== 'boolean')
+    return 'debugLoggingEnabled must be boolean.';
+  if (!Number.isFinite(record.configWriteIntervalMs))
+    return 'configWriteIntervalMs must be a number.';
+  if (typeof record.automaticDemoModeEnabled !== 'boolean')
+    return 'automaticDemoModeEnabled must be boolean.';
+  if (!Number.isFinite(record.startupDiscoveryWindowMs))
+    return 'startupDiscoveryWindowMs must be a number.';
+  if (!Number.isFinite(record.backgroundRediscoveryIntervalMs))
+    return 'backgroundRediscoveryIntervalMs must be a number.';
+  if (!Number.isFinite(record.discoveryProbeTimeoutMs))
+    return 'discoveryProbeTimeoutMs must be a number.';
+  if (!isDiskAutostartMode(record.diskAutostartMode))
+    return 'diskAutostartMode must be kernal or dma.';
   return null;
 };
 
 const validateDeviceSafety = (value: unknown) => {
-  if (!value || typeof value !== 'object') return 'deviceSafety must be an object.';
+  if (!value || typeof value !== 'object')
+    return 'deviceSafety must be an object.';
   const record = value as Record<string, unknown>;
-  if (!hasOnlyKeys(record, DEVICE_SAFETY_KEYS)) return 'deviceSafety contains unknown or missing keys.';
+  if (!hasOnlyKeys(record, DEVICE_SAFETY_KEYS))
+    return 'deviceSafety contains unknown or missing keys.';
   if (!isDeviceSafetyMode(record.mode)) return 'deviceSafety.mode is invalid.';
-  const numericKeys = DEVICE_SAFETY_KEYS.filter((key) => key !== 'mode' && key !== 'allowUserOverrideCircuit');
+  const numericKeys = DEVICE_SAFETY_KEYS.filter(
+    (key) => key !== 'mode' && key !== 'allowUserOverrideCircuit',
+  );
   if (numericKeys.some((key) => !Number.isFinite(record[key] as number))) {
     return 'deviceSafety numeric values must be numbers.';
   }
-  if (typeof record.allowUserOverrideCircuit !== 'boolean') return 'allowUserOverrideCircuit must be boolean.';
+  if (typeof record.allowUserOverrideCircuit !== 'boolean')
+    return 'allowUserOverrideCircuit must be boolean.';
   return null;
 };
 
-export const importSettingsJson = (raw: string): { ok: true } | { ok: false; error: string } => {
+export const importSettingsJson = (
+  raw: string,
+): { ok: true } | { ok: false; error: string } => {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch (error) {
     return { ok: false, error: (error as Error).message };
   }
-  if (!parsed || typeof parsed !== 'object') return { ok: false, error: 'Payload must be a JSON object.' };
+  if (!parsed || typeof parsed !== 'object')
+    return { ok: false, error: 'Payload must be a JSON object.' };
   const payload = parsed as Record<string, unknown>;
   if (!('version' in payload) || payload.version !== SETTINGS_EXPORT_VERSION) {
     return { ok: false, error: 'Unsupported settings export version.' };
   }
-  const appSettings = payload.appSettings as Record<string, unknown> | undefined;
-  const deviceSafety = payload.deviceSafety as Record<string, unknown> | undefined;
+  const appSettings = payload.appSettings as
+    | Record<string, unknown>
+    | undefined;
+  const deviceSafety = payload.deviceSafety as
+    | Record<string, unknown>
+    | undefined;
 
   const appError = validateAppSettings(appSettings);
   if (appError) return { ok: false, error: appError };
@@ -204,11 +235,21 @@ export const importSettingsJson = (raw: string): { ok: true } | { ok: false; err
   const safeSafety = deviceSafety as SettingsExportPayload['deviceSafety'];
 
   saveDebugLoggingEnabled(Boolean(safeApp.debugLoggingEnabled));
-  saveConfigWriteIntervalMs(clampConfigWriteIntervalMs(safeApp.configWriteIntervalMs));
+  saveConfigWriteIntervalMs(
+    clampConfigWriteIntervalMs(safeApp.configWriteIntervalMs),
+  );
   saveAutomaticDemoModeEnabled(Boolean(safeApp.automaticDemoModeEnabled));
-  saveStartupDiscoveryWindowMs(clampStartupDiscoveryWindowMs(safeApp.startupDiscoveryWindowMs));
-  saveBackgroundRediscoveryIntervalMs(clampBackgroundRediscoveryIntervalMs(safeApp.backgroundRediscoveryIntervalMs));
-  saveDiscoveryProbeTimeoutMs(clampDiscoveryProbeTimeoutMs(safeApp.discoveryProbeTimeoutMs));
+  saveStartupDiscoveryWindowMs(
+    clampStartupDiscoveryWindowMs(safeApp.startupDiscoveryWindowMs),
+  );
+  saveBackgroundRediscoveryIntervalMs(
+    clampBackgroundRediscoveryIntervalMs(
+      safeApp.backgroundRediscoveryIntervalMs,
+    ),
+  );
+  saveDiscoveryProbeTimeoutMs(
+    clampDiscoveryProbeTimeoutMs(safeApp.discoveryProbeTimeoutMs),
+  );
   saveDiskAutostartMode(safeApp.diskAutostartMode);
 
   saveDeviceSafetyMode(safeSafety.mode);

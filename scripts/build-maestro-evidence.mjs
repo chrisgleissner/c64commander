@@ -24,7 +24,7 @@ const walkFiles = async (dir) => {
   for (const entry of entries) {
     const entryPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      files.push(...await walkFiles(entryPath));
+      files.push(...(await walkFiles(entryPath)));
     } else if (entry.isFile()) {
       files.push(entryPath);
     }
@@ -36,7 +36,10 @@ const listFlowFiles = async () => {
   const entries = await fs.readdir(FLOWS_ROOT, { withFileTypes: true });
   return entries
     .filter((entry) => entry.isFile() && entry.name.endsWith('.yaml'))
-    .filter((entry) => entry.name !== 'config.yaml' && entry.name !== 'probe-health.yaml')
+    .filter(
+      (entry) =>
+        entry.name !== 'config.yaml' && entry.name !== 'probe-health.yaml',
+    )
     .map((entry) => path.join(FLOWS_ROOT, entry.name));
 };
 
@@ -52,7 +55,8 @@ const parseAttributes = (raw) => {
 
 const parseJUnit = (xmlText) => {
   const entries = [];
-  const testcaseRegex = /<testcase\b([^>]*)>([\s\S]*?)<\/testcase>|<testcase\b([^>]*)\/>/g;
+  const testcaseRegex =
+    /<testcase\b([^>]*)>([\s\S]*?)<\/testcase>|<testcase\b([^>]*)\/>/g;
   let match;
   while ((match = testcaseRegex.exec(xmlText))) {
     const attrsRaw = match[1] || match[3] || '';
@@ -60,7 +64,9 @@ const parseJUnit = (xmlText) => {
     const attrs = parseAttributes(attrsRaw);
     const name = attrs.name || attrs.classname || 'unknown';
     const timeSeconds = attrs.time ? Number(attrs.time) : 0;
-    const durationMs = Number.isNaN(timeSeconds) ? undefined : Math.round(timeSeconds * 1000);
+    const durationMs = Number.isNaN(timeSeconds)
+      ? undefined
+      : Math.round(timeSeconds * 1000);
     const hasFailure = /<failure\b|<error\b/.test(body);
     const hasSkipped = /<skipped\b/.test(body);
     const status = hasFailure ? 'failed' : hasSkipped ? 'skipped' : 'passed';
@@ -89,7 +95,8 @@ const extractJsonEntries = (payload) => {
         entries.push({
           name: String(name),
           status: String(status).toLowerCase(),
-          durationMs: typeof node.durationMs === 'number' ? node.durationMs : undefined,
+          durationMs:
+            typeof node.durationMs === 'number' ? node.durationMs : undefined,
           message: typeof node.message === 'string' ? node.message : undefined,
         });
       }
@@ -133,7 +140,9 @@ const loadReportEntries = async (rawFiles) => {
 
 const matchEntryForFlow = (entries, flowName) => {
   const lower = flowName.toLowerCase();
-  return entries.find((entry) => String(entry.name).toLowerCase().includes(lower));
+  return entries.find((entry) =>
+    String(entry.name).toLowerCase().includes(lower),
+  );
 };
 
 const copyFile = async (src, dest) => {
@@ -162,24 +171,33 @@ const buildEvidenceForFlow = async ({ flowName }) => {
   await fs.mkdir(flowDir, { recursive: true });
 
   const flowMatches = flowRawFiles;
-  const screenshots = flowMatches.filter((file) => file.toLowerCase().endsWith('.png'));
+  const screenshots = flowMatches.filter((file) =>
+    file.toLowerCase().endsWith('.png'),
+  );
 
   const screenshotsDir = path.join(flowDir, 'screenshots');
   await fs.mkdir(screenshotsDir, { recursive: true });
   const sortedScreenshots = [...screenshots].sort();
-  await Promise.all(sortedScreenshots.map((file, index) => {
-    const targetName = `${String(index + 1).padStart(2, '0')}-${path.basename(file)}`;
-    return copyFile(file, path.join(screenshotsDir, targetName));
-  }));
+  await Promise.all(
+    sortedScreenshots.map((file, index) => {
+      const targetName = `${String(index + 1).padStart(2, '0')}-${path.basename(file)}`;
+      return copyFile(file, path.join(screenshotsDir, targetName));
+    }),
+  );
 
-  const videos = flowMatches.filter((file) => ['.mp4', '.webm'].includes(path.extname(file).toLowerCase()));
+  const videos = flowMatches.filter((file) =>
+    ['.mp4', '.webm'].includes(path.extname(file).toLowerCase()),
+  );
   if (videos.length > 0) {
-    const selected = videos.find((file) => file.toLowerCase().endsWith('.mp4')) ?? videos[0];
+    const selected =
+      videos.find((file) => file.toLowerCase().endsWith('.mp4')) ?? videos[0];
     const ext = path.extname(selected).toLowerCase();
     await copyFile(selected, path.join(flowDir, `video${ext}`));
   }
 
-  const logs = flowMatches.filter((file) => ['.log', '.txt'].includes(path.extname(file).toLowerCase()));
+  const logs = flowMatches.filter((file) =>
+    ['.log', '.txt'].includes(path.extname(file).toLowerCase()),
+  );
   for (const log of logs) {
     await copyFile(log, path.join(flowDir, path.basename(log)));
   }
@@ -202,7 +220,9 @@ const buildEvidenceForFlow = async ({ flowName }) => {
   }
 
   const reportEntry = matchEntryForFlow(reportEntries, flowName);
-  const status = normalizeStatus(reportEntry?.status) ?? (MAESTRO_EXIT_CODE === 0 ? 'passed' : 'failed');
+  const status =
+    normalizeStatus(reportEntry?.status) ??
+    (MAESTRO_EXIT_CODE === 0 ? 'passed' : 'failed');
 
   const meta = {
     flow: flowName,
@@ -217,7 +237,10 @@ const buildEvidenceForFlow = async ({ flowName }) => {
     },
   };
 
-  await fs.writeFile(path.join(flowDir, 'meta.json'), JSON.stringify(meta, null, 2));
+  await fs.writeFile(
+    path.join(flowDir, 'meta.json'),
+    JSON.stringify(meta, null, 2),
+  );
 
   const errorContext = [
     `Project: maestro`,
@@ -228,7 +251,10 @@ const buildEvidenceForFlow = async ({ flowName }) => {
     errorContext.push('', 'Failure:', reportEntry.message);
   }
 
-  await fs.writeFile(path.join(flowDir, 'error-context.md'), errorContext.join('\n'));
+  await fs.writeFile(
+    path.join(flowDir, 'error-context.md'),
+    errorContext.join('\n'),
+  );
   return true;
 };
 

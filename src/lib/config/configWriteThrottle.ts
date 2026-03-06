@@ -31,14 +31,18 @@ const waitForInterval = async () => {
   lastWriteAt = Date.now();
 };
 
-export const scheduleConfigWrite = async <T,>(task: () => Promise<T>): Promise<T> => {
+export const scheduleConfigWrite = async <T>(
+  task: () => Promise<T>,
+): Promise<T> => {
   const run = async () => {
     await waitForInterval();
     return task();
   };
   const next = queue.then(run);
   queue = next.catch((error) => {
-    addErrorLog('Config write queue: preceding task failed', { error: (error as Error).message });
+    addErrorLog('Config write queue: preceding task failed', {
+      error: (error as Error).message,
+    });
   });
   return next;
 };

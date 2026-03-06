@@ -38,7 +38,9 @@ describe('secureStorage', () => {
 
     expect(localStorage.getItem('c64u_password')).toBeNull();
     expect(localStorage.getItem('c64u_has_password')).toBe('1');
-    expect(SecureStorage.setPassword).toHaveBeenCalledWith({ value: 'super-secret' });
+    expect(SecureStorage.setPassword).toHaveBeenCalledWith({
+      value: 'super-secret',
+    });
   });
 
   it('does not touch secure storage when flag is false', async () => {
@@ -55,7 +57,9 @@ describe('secureStorage', () => {
     localStorage.setItem('c64u_password', 'legacy-secret');
     localStorage.setItem('c64u_has_password', '1');
 
-    vi.mocked(SecureStorage.getPassword).mockResolvedValueOnce({ value: 'secure-secret' });
+    vi.mocked(SecureStorage.getPassword).mockResolvedValueOnce({
+      value: 'secure-secret',
+    });
 
     const value = await getPassword();
 
@@ -81,7 +85,9 @@ describe('secureStorage', () => {
   it('returns cached password on second call without re-fetching from native storage', async () => {
     // Covers the if (passwordLoaded) return cachedPassword branch (line 45)
     localStorage.setItem('c64u_has_password', '1');
-    vi.mocked(SecureStorage.getPassword).mockResolvedValueOnce({ value: 'cached-pw' });
+    vi.mocked(SecureStorage.getPassword).mockResolvedValueOnce({
+      value: 'cached-pw',
+    });
 
     const first = await getPassword();
     const second = await getPassword();

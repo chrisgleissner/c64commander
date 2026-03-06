@@ -90,7 +90,9 @@ export const loadLocalSources = (): LocalSourceRecord[] => {
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw) as LocalSourceRecord[];
-    return Array.isArray(parsed) ? parsed.map((source) => normalizeLocalSource(source)) : [];
+    return Array.isArray(parsed)
+      ? parsed.map((source) => normalizeLocalSource(source))
+      : [];
   } catch (error) {
     console.warn('Failed to load local sources from storage', { error });
     return [];
@@ -102,7 +104,10 @@ export const saveLocalSources = (sources: LocalSourceRecord[]) => {
   localStorage.setItem(STORE_KEY, JSON.stringify(sources));
 };
 
-export const setLocalSourceRuntimeFiles = (sourceId: string, files: Record<string, File>) => {
+export const setLocalSourceRuntimeFiles = (
+  sourceId: string,
+  files: Record<string, File>,
+) => {
   runtimeFilesBySource.set(sourceId, files);
 };
 
@@ -111,17 +116,24 @@ export const getLocalSourceRuntimeFile = (sourceId: string, path: string) => {
   return runtimeFilesBySource.get(sourceId)?.[normalized];
 };
 
-export const createLocalSourceFromFileList = (files: FileList | File[], label?: string): LocalSourceBuildResult => {
+export const createLocalSourceFromFileList = (
+  files: FileList | File[],
+  label?: string,
+): LocalSourceBuildResult => {
   const list = Array.from(files);
   const first = list[0] as File & { webkitRelativePath?: string };
-  const rootName = first?.webkitRelativePath?.split('/')?.[0] || label || 'Folder';
+  const rootName =
+    first?.webkitRelativePath?.split('/')?.[0] || label || 'Folder';
   const rootPath = buildRootPath(rootName);
   const sourceId = safeRandomId();
   const createdAt = new Date().toISOString();
   const runtimeFiles: Record<string, File> = {};
   const entries: LocalSourceEntry[] = list.map((file) => {
-    const relative = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
-    const withLabel = label && !relative.includes('/') ? `${label}/${relative}` : relative;
+    const relative =
+      (file as File & { webkitRelativePath?: string }).webkitRelativePath ||
+      file.name;
+    const withLabel =
+      label && !relative.includes('/') ? `${label}/${relative}` : relative;
     const relativePath = withLabel.replace(/^\/+/, '');
     const normalizedPath = normalizeSourcePath(relativePath);
     runtimeFiles[normalizedPath] = file;
@@ -149,7 +161,9 @@ export const prepareDirectoryInput = (input: HTMLInputElement | null) => {
   input.setAttribute('directory', '');
 };
 
-export const createLocalSourceFromPicker = async (input: HTMLInputElement | null): Promise<LocalSourceBuildResult | null> => {
+export const createLocalSourceFromPicker = async (
+  input: HTMLInputElement | null,
+): Promise<LocalSourceBuildResult | null> => {
   const platform = getPlatform();
   if ((platform === 'android' || platform === 'ios') && isNativePlatform()) {
     addLog('debug', 'Native folder picker invoked', { platform });
@@ -157,7 +171,10 @@ export const createLocalSourceFromPicker = async (input: HTMLInputElement | null
     try {
       result = await FolderPicker.pickDirectory();
     } catch (error) {
-      addLog('debug', 'Native folder picker failed', { platform, error: (error as Error).message });
+      addLog('debug', 'Native folder picker failed', {
+        platform,
+        error: (error as Error).message,
+      });
       throw error;
     }
     const treeUri = result?.treeUri;
@@ -179,10 +196,16 @@ export const createLocalSourceFromPicker = async (input: HTMLInputElement | null
       permissionPersisted: result?.permissionPersisted === true,
     });
     if (!result?.permissionPersisted) {
-      addLog('debug', 'Native persistable permission missing', { platform, treeUri: redactTreeUri(treeUri) });
+      addLog('debug', 'Native persistable permission missing', {
+        platform,
+        treeUri: redactTreeUri(treeUri),
+      });
       throw new Error('Folder access permission could not be persisted.');
     }
-    addLog('debug', 'Native persistable permission granted', { platform, treeUri: redactTreeUri(treeUri) });
+    addLog('debug', 'Native persistable permission granted', {
+      platform,
+      treeUri: redactTreeUri(treeUri),
+    });
     const source: LocalSourceRecord = {
       id: sourceId,
       name: rootName || SOURCE_LABELS.local,
@@ -199,7 +222,11 @@ export const createLocalSourceFromPicker = async (input: HTMLInputElement | null
     return { source, runtimeFiles: {} };
   }
 
-  const picker = (window as Window & { showDirectoryPicker?: () => Promise<FileSystemDirectoryHandle> }).showDirectoryPicker;
+  const picker = (
+    window as Window & {
+      showDirectoryPicker?: () => Promise<FileSystemDirectoryHandle>;
+    }
+  ).showDirectoryPicker;
   if (!picker) {
     input?.click();
     return null;
@@ -207,7 +234,10 @@ export const createLocalSourceFromPicker = async (input: HTMLInputElement | null
 
   const directoryHandle = await picker();
   const files: File[] = [];
-  const walkDirectory = async (dirHandle: FileSystemDirectoryHandle, prefix: string) => {
+  const walkDirectory = async (
+    dirHandle: FileSystemDirectoryHandle,
+    prefix: string,
+  ) => {
     for await (const [name, handle] of (dirHandle as any).entries()) {
       if ((handle as FileSystemHandle).kind === 'file') {
         const file = await (handle as FileSystemFileHandle).getFile();
@@ -216,7 +246,10 @@ export const createLocalSourceFromPicker = async (input: HTMLInputElement | null
         });
         files.push(file);
       } else if ((handle as FileSystemHandle).kind === 'directory') {
-        await walkDirectory(handle as FileSystemDirectoryHandle, `${prefix}${name}/`);
+        await walkDirectory(
+          handle as FileSystemDirectoryHandle,
+          `${prefix}${name}/`,
+        );
       }
     }
   };
@@ -225,21 +258,33 @@ export const createLocalSourceFromPicker = async (input: HTMLInputElement | null
   return createLocalSourceFromFileList(files, directoryHandle.name);
 };
 
-export const getLocalSourceListingMode = (source: LocalSourceRecord): LocalSourceListingMode =>
-  source.android?.treeUri ? 'saf' : 'entries';
+export const getLocalSourceListingMode = (
+  source: LocalSourceRecord,
+): LocalSourceListingMode => (source.android?.treeUri ? 'saf' : 'entries');
 
-export const requireLocalSourceEntries = (source: LocalSourceRecord, context: string): LocalSourceEntry[] => {
+export const requireLocalSourceEntries = (
+  source: LocalSourceRecord,
+  context: string,
+): LocalSourceEntry[] => {
   if (getLocalSourceListingMode(source) === 'saf') {
-    throw new LocalSourceListingError('SAF sources do not expose entry listings.', 'saf-listing-unavailable', {
-      sourceId: source.id,
-      context,
-    });
+    throw new LocalSourceListingError(
+      'SAF sources do not expose entry listings.',
+      'saf-listing-unavailable',
+      {
+        sourceId: source.id,
+        context,
+      },
+    );
   }
   if (!Array.isArray(source.entries)) {
-    throw new LocalSourceListingError('Local source entries are missing or invalid.', 'local-entries-missing', {
-      sourceId: source.id,
-      context,
-    });
+    throw new LocalSourceListingError(
+      'Local source entries are missing or invalid.',
+      'local-entries-missing',
+      {
+        sourceId: source.id,
+        context,
+      },
+    );
   }
   return source.entries;
 };
@@ -247,13 +292,18 @@ export const requireLocalSourceEntries = (source: LocalSourceRecord, context: st
 export const validateSource = async (sourceId: string): Promise<boolean> => {
   const source = loadLocalSources().find((entry) => entry.id === sourceId);
   if (!source) {
-    addLog('warn', 'Local source validation failed: source missing', { sourceId });
+    addLog('warn', 'Local source validation failed: source missing', {
+      sourceId,
+    });
     return false;
   }
 
   if (source.android?.treeUri) {
     try {
-      await FolderPicker.listChildren({ treeUri: source.android.treeUri, path: '' });
+      await FolderPicker.listChildren({
+        treeUri: source.android.treeUri,
+        path: '',
+      });
       return true;
     } catch (error) {
       addLog('warn', 'SAF source validation failed', {
@@ -266,7 +316,9 @@ export const validateSource = async (sourceId: string): Promise<boolean> => {
   }
 
   if (!Array.isArray(source.entries)) {
-    addLog('warn', 'Local source validation failed: entries missing', { sourceId });
+    addLog('warn', 'Local source validation failed: entries missing', {
+      sourceId,
+    });
     return false;
   }
 

@@ -2,15 +2,28 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { ensureDeviceReadyForAutomation, installApk, waitForBoot, getDeviceModel } from './helpers/device.mjs';
-import { writeSmokeConfig, waitForSmokeState, readSmokeStatus } from './helpers/smokeConfig.mjs';
+import {
+  ensureDeviceReadyForAutomation,
+  installApk,
+  waitForBoot,
+  getDeviceModel,
+} from './helpers/device.mjs';
+import {
+  writeSmokeConfig,
+  waitForSmokeState,
+  readSmokeStatus,
+} from './helpers/smokeConfig.mjs';
 import { createEvidenceManager } from './helpers/evidence.mjs';
 import { startExternalMockServer } from './helpers/mockC64Server.mjs';
 import { tapTab, tapConnectivityIndicator } from './helpers/ui.mjs';
 import { sleep, sanitizeSegment } from './helpers/utils.mjs';
 import { adbForceStop, adbClearApp } from './helpers/adb.mjs';
 
-const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const ROOT_DIR = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..',
+  '..',
+);
 
 const parseArgs = () => {
   const args = process.argv.slice(2);
@@ -22,7 +35,12 @@ const parseArgs = () => {
     deviceType: undefined,
     appId: 'uk.gleissner.c64commander',
     mainActivity: 'uk.gleissner.c64commander/.MainActivity',
-    evidenceRoot: path.join(ROOT_DIR, 'test-results', 'evidence', 'android-emulator'),
+    evidenceRoot: path.join(
+      ROOT_DIR,
+      'test-results',
+      'evidence',
+      'android-emulator',
+    ),
     spec: undefined,
     grep: undefined,
   };
@@ -53,7 +71,9 @@ const listSpecs = async (specDir) => {
 
 const loadSpecs = async (specDir, filter) => {
   const files = await listSpecs(specDir);
-  const selected = filter ? files.filter((file) => file.includes(filter)) : files;
+  const selected = filter
+    ? files.filter((file) => file.includes(filter))
+    : files;
   const specs = [];
   for (const file of selected) {
     const mod = await import(pathToFileURL(file).href);
@@ -67,7 +87,16 @@ const loadSpecs = async (specDir, filter) => {
 
 const ensureApkPath = (apkPath) => {
   if (apkPath && fs.existsSync(apkPath)) return apkPath;
-  const candidate = path.join(ROOT_DIR, 'android', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
+  const candidate = path.join(
+    ROOT_DIR,
+    'android',
+    'app',
+    'build',
+    'outputs',
+    'apk',
+    'debug',
+    'app-debug.apk',
+  );
   if (fs.existsSync(candidate)) return candidate;
   return null;
 };
@@ -94,10 +123,14 @@ const run = async () => {
   }
 
   if (!options.emulatorId) {
-    throw new Error('Missing --emulator-id. Provide emulator ID from adb devices.');
+    throw new Error(
+      'Missing --emulator-id. Provide emulator ID from adb devices.',
+    );
   }
 
-  console.log(`Android emulator smoke: target=${options.target} host=${options.host ?? 'auto'} emulator=${options.emulatorId}`);
+  console.log(
+    `Android emulator smoke: target=${options.target} host=${options.host ?? 'auto'} emulator=${options.emulatorId}`,
+  );
   await waitForBoot(options.emulatorId);
   console.log('Emulator booted. Installing APK...');
   await installApk(options.emulatorId, apkPath);
@@ -105,14 +138,23 @@ const run = async () => {
 
   let mockServer = null;
   let effectiveHost = options.host;
-  if (options.target === 'real' && (!effectiveHost || effectiveHost === 'auto')) {
+  if (
+    options.target === 'real' &&
+    (!effectiveHost || effectiveHost === 'auto')
+  ) {
     mockServer = await startExternalMockServer();
     effectiveHost = mockServer.hostForEmulator;
-    console.log(`External mock server started: ${mockServer.baseUrl} (emulator host ${effectiveHost})`);
+    console.log(
+      `External mock server started: ${mockServer.baseUrl} (emulator host ${effectiveHost})`,
+    );
   }
 
-  const deviceType = options.deviceType ?? await getDeviceModel(options.emulatorId);
-  const specs = await loadSpecs(path.join(ROOT_DIR, 'tests', 'android-emulator', 'specs'), options.spec);
+  const deviceType =
+    options.deviceType ?? (await getDeviceModel(options.emulatorId));
+  const specs = await loadSpecs(
+    path.join(ROOT_DIR, 'tests', 'android-emulator', 'specs'),
+    options.spec,
+  );
   const failures = [];
 
   for (const spec of specs) {
@@ -125,10 +167,15 @@ const run = async () => {
     }
 
     for (const test of spec.tests) {
-      if (Array.isArray(test.targets) && !test.targets.includes(options.target)) {
+      if (
+        Array.isArray(test.targets) &&
+        !test.targets.includes(options.target)
+      ) {
         continue;
       }
-      const testId = sanitizeSegment(`${spec.id}--${test.id}--${options.target}`);
+      const testId = sanitizeSegment(
+        `${spec.id}--${test.id}--${options.target}`,
+      );
       if (!shouldIncludeTest(testId, options.grep)) {
         continue;
       }
@@ -162,11 +209,12 @@ const run = async () => {
         host: effectiveHost ?? 'C64U',
         evidence,
         tapTab: (label) => tapTab(options.emulatorId, label),
-        tapConnectivityIndicator: () => tapConnectivityIndicator(options.emulatorId),
+        tapConnectivityIndicator: () =>
+          tapConnectivityIndicator(options.emulatorId),
         sleep,
         capture: (label) => evidence.captureScreenshot(label),
         startFreshApp: async () => {
-          await adbForceStop(options.emulatorId, options.appId).catch(() => { });
+          await adbForceStop(options.emulatorId, options.appId).catch(() => {});
           await adbClearApp(options.emulatorId, options.appId);
           await writeSmokeConfig(options.emulatorId, options.appId, {
             target: options.target,
@@ -182,11 +230,17 @@ const run = async () => {
           await sleep(1200);
         },
         waitForSmokeState: async (state, timeoutSeconds) => {
-          const payload = await waitForSmokeState(options.emulatorId, options.appId, state, timeoutSeconds);
+          const payload = await waitForSmokeState(
+            options.emulatorId,
+            options.appId,
+            state,
+            timeoutSeconds,
+          );
           smokeStatus = payload;
           return payload;
         },
-        readSmokeStatus: async () => readSmokeStatus(options.emulatorId, options.appId),
+        readSmokeStatus: async () =>
+          readSmokeStatus(options.emulatorId, options.appId),
       };
 
       await evidence.start();
@@ -199,7 +253,9 @@ const run = async () => {
       } catch (err) {
         status = 'failed';
         error = err;
-        console.error(`==> Failed ${testId}: ${error?.message ?? 'unknown error'}`);
+        console.error(
+          `==> Failed ${testId}: ${error?.message ?? 'unknown error'}`,
+        );
       } finally {
         try {
           await evidence.captureScreenshot('final');
@@ -213,7 +269,9 @@ const run = async () => {
         const mutating = events.filter((event) => {
           if (event.event === 'mutation-blocked') return true;
           if (event.event !== 'request') return false;
-          return ['POST', 'PUT', 'PATCH', 'DELETE'].includes(String(event.method).toUpperCase());
+          return ['POST', 'PUT', 'PATCH', 'DELETE'].includes(
+            String(event.method).toUpperCase(),
+          );
         });
         if (mutating.length) {
           status = 'failed';
@@ -223,7 +281,10 @@ const run = async () => {
         }
 
         if (!smokeStatus) {
-          smokeStatus = await readSmokeStatus(options.emulatorId, options.appId).catch(() => '');
+          smokeStatus = await readSmokeStatus(
+            options.emulatorId,
+            options.appId,
+          ).catch(() => '');
         }
 
         await evidence.writeErrorContext({
@@ -256,10 +317,12 @@ const run = async () => {
     }
   }
 
-  await mockServer?.close?.().catch(() => { });
+  await mockServer?.close?.().catch(() => {});
 
   if (failures.length) {
-    throw new Error(`Android emulator smoke tests failed:\n${failures.join('\n')}`);
+    throw new Error(
+      `Android emulator smoke tests failed:\n${failures.join('\n')}`,
+    );
   }
 };
 

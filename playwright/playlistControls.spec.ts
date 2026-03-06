@@ -12,8 +12,17 @@ import type { Page, TestInfo } from '@playwright/test';
 import * as path from 'node:path';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks } from './uiMocks';
-import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
-import { clearTraces, enableTraceAssertions, expectRestTraceSequence } from './traceUtils';
+import {
+  assertNoUiIssues,
+  attachStepScreenshot,
+  finalizeEvidence,
+  startStrictUiMonitoring,
+} from './testArtifacts';
+import {
+  clearTraces,
+  enableTraceAssertions,
+  expectRestTraceSequence,
+} from './traceUtils';
 import { clickSourceSelectionButton } from './sourceSelection';
 import { layoutTest, enforceDeviceTestMapping } from './layoutTest';
 
@@ -62,27 +71,37 @@ test.describe('Playlist controls and advanced features', () => {
     }
   });
 
-  layoutTest('playlist filter not yet implemented @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
-    // Verify that playlist filter is not yet available (only HVSC folder filter exists)
-    await page.goto('/play');
-    await snap(page, testInfo, 'play-open');
+  layoutTest(
+    'playlist filter not yet implemented @layout',
+    async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      // Verify that playlist filter is not yet available (only HVSC folder filter exists)
+      await page.goto('/play');
+      await snap(page, testInfo, 'play-open');
 
-    await addLocalFolder(page, path.resolve('playwright/fixtures/local-play'));
-    await snap(page, testInfo, 'playlist-ready');
+      await addLocalFolder(
+        page,
+        path.resolve('playwright/fixtures/local-play'),
+      );
+      await snap(page, testInfo, 'playlist-ready');
 
-    await expect(page.getByTestId('playlist-item')).toHaveCount(2);
+      await expect(page.getByTestId('playlist-item')).toHaveCount(2);
 
-    // The playlist shows items without a general filter input
-    // (HVSC has folder filter, but general playlist filtering not implemented)
-    const playlistItems = page.locator('[data-playlist-item], [data-testid="playlist-item"]');
-    const itemCount = await playlistItems.count().catch(() => 0);
+      // The playlist shows items without a general filter input
+      // (HVSC has folder filter, but general playlist filtering not implemented)
+      const playlistItems = page.locator(
+        '[data-playlist-item], [data-testid="playlist-item"]',
+      );
+      const itemCount = await playlistItems.count().catch(() => 0);
 
-    // Should have items from local folder
-    expect(itemCount).toBeGreaterThan(0);
-    await snap(page, testInfo, 'items-shown-unfiltered');
-  });
+      // Should have items from local folder
+      expect(itemCount).toBeGreaterThan(0);
+      await snap(page, testInfo, 'items-shown-unfiltered');
+    },
+  );
 
-  test('shuffle mode checkbox toggles state @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('shuffle mode checkbox toggles state @layout', async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
 
@@ -110,7 +129,9 @@ test.describe('Playlist controls and advanced features', () => {
     await snap(page, testInfo, 'shuffle-disabled');
   });
 
-  test('reshuffle changes playlist order @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('reshuffle changes playlist order @layout', async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
 
@@ -128,14 +149,18 @@ test.describe('Playlist controls and advanced features', () => {
     expect(initialOrder.length).toBeGreaterThan(1);
 
     await page.getByRole('button', { name: 'Reshuffle' }).click();
-    await expect.poll(async () => {
-      const nextOrder = await getPlaylistOrder(page);
-      return nextOrder.join('|');
-    }).not.toBe(initialOrder.join('|'));
+    await expect
+      .poll(async () => {
+        const nextOrder = await getPlaylistOrder(page);
+        return nextOrder.join('|');
+      })
+      .not.toBe(initialOrder.join('|'));
     await snap(page, testInfo, 'reshuffle-changed');
   });
 
-  test('playlist type filters hide non-matching files @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('playlist type filters hide non-matching files @layout', async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
 
@@ -152,10 +177,14 @@ test.describe('Playlist controls and advanced features', () => {
 
     await expect(page.getByTestId('playlist-item')).toHaveCount(1);
     await expect(page.getByTestId('playlist-list')).toContainText('demo.d64');
-    await expect(page.getByTestId('playlist-list')).not.toContainText('demo.sid');
+    await expect(page.getByTestId('playlist-list')).not.toContainText(
+      'demo.sid',
+    );
   });
 
-  test('repeat mode checkbox toggles state @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('repeat mode checkbox toggles state @layout', async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
 
@@ -174,7 +203,9 @@ test.describe('Playlist controls and advanced features', () => {
     await snap(page, testInfo, 'repeat-enabled');
   });
 
-  test('duration control syncs slider and input @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('duration control syncs slider and input @layout', async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
 
@@ -198,11 +229,16 @@ test.describe('Playlist controls and advanced features', () => {
     await snap(page, testInfo, 'duration-input-updated');
   });
 
-  test('duration control updates playlist totals @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('duration control updates playlist totals @layout', async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
 
-    await addLocalFolder(page, path.resolve('playwright/fixtures/local-play-sids'));
+    await addLocalFolder(
+      page,
+      path.resolve('playwright/fixtures/local-play-sids'),
+    );
     await snap(page, testInfo, 'playlist-ready');
 
     const counters = page.getByTestId('playback-counters');
@@ -216,12 +252,17 @@ test.describe('Playlist controls and advanced features', () => {
     await snap(page, testInfo, 'duration-total-updated');
   });
 
-  test('song selector appears for multi-song SID and triggers playback @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('song selector appears for multi-song SID and triggers playback @layout', async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     enableTraceAssertions(testInfo);
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
 
-    await addLocalFolder(page, path.resolve('playwright/fixtures/local-play-multi-song'));
+    await addLocalFolder(
+      page,
+      path.resolve('playwright/fixtures/local-play-multi-song'),
+    );
     await snap(page, testInfo, 'playlist-ready');
 
     const playCountBefore = server.sidplayRequests.length;
@@ -231,7 +272,9 @@ test.describe('Playlist controls and advanced features', () => {
       .filter({ hasText: 'multi.sid' })
       .getByRole('button', { name: 'Play' })
       .click();
-    await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(playCountBefore);
+    await expect
+      .poll(() => server.sidplayRequests.length)
+      .toBeGreaterThan(playCountBefore);
     await snap(page, testInfo, 'multi-song-playing');
 
     await expectRestTraceSequence(page, testInfo, /\/v1\/runners:sidplay/);
@@ -252,43 +295,71 @@ test.describe('Playlist controls and advanced features', () => {
     await dialog.getByRole('button', { name: /Subsong 2/ }).click();
 
     await expect(dialog).toBeHidden();
-    await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(playCountBefore + 1);
+    await expect
+      .poll(() => server.sidplayRequests.length)
+      .toBeGreaterThan(playCountBefore + 1);
     expect(server.sidplayRequests.at(-1)?.url).toContain('songnr=2');
     await snap(page, testInfo, 'song-selector-updated');
   });
 
-  test('prev at first track stays at first @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('prev at first track stays at first @layout', async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
 
     await addLocalFolder(page, path.resolve('playwright/fixtures/local-play'));
     await snap(page, testInfo, 'playlist-ready');
 
-    await page.getByTestId('playlist-item').first().getByRole('button', { name: 'Play' }).click();
-    await expect(page.getByTestId('playlist-play')).toHaveAttribute('aria-label', 'Stop');
+    await page
+      .getByTestId('playlist-item')
+      .first()
+      .getByRole('button', { name: 'Play' })
+      .click();
+    await expect(page.getByTestId('playlist-play')).toHaveAttribute(
+      'aria-label',
+      'Stop',
+    );
     await expect
-      .poll(() => page.getByTestId('playlist-item').first().getAttribute('data-playing'))
+      .poll(() =>
+        page.getByTestId('playlist-item').first().getAttribute('data-playing'),
+      )
       .toBe('true');
-    await expect(page.getByTestId('playlist-item').nth(1)).toHaveAttribute('data-playing', 'false');
+    await expect(page.getByTestId('playlist-item').nth(1)).toHaveAttribute(
+      'data-playing',
+      'false',
+    );
     await snap(page, testInfo, 'first-track-playing');
 
     const prevButton = page.getByTestId('playlist-prev');
     await expect(prevButton).toBeVisible();
     await expect(prevButton).toBeDisabled();
     await snap(page, testInfo, 'prev-disabled');
-    await expect(page.getByTestId('playlist-item').first()).toHaveAttribute('data-playing', 'true');
-    await expect(page.getByTestId('playlist-item').nth(1)).toHaveAttribute('data-playing', 'false');
+    await expect(page.getByTestId('playlist-item').first()).toHaveAttribute(
+      'data-playing',
+      'true',
+    );
+    await expect(page.getByTestId('playlist-item').nth(1)).toHaveAttribute(
+      'data-playing',
+      'false',
+    );
     await snap(page, testInfo, 'still-at-first');
   });
 
-  test('next at last track stops playback @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('next at last track stops playback @layout', async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
 
     await addLocalFolder(page, path.resolve('playwright/fixtures/local-play'));
     await snap(page, testInfo, 'playlist-ready');
 
-    await page.getByTestId('playlist-item').last().getByRole('button', { name: 'Play' }).click();
+    await page
+      .getByTestId('playlist-item')
+      .last()
+      .getByRole('button', { name: 'Play' })
+      .click();
     await snap(page, testInfo, 'last-track-playing');
 
     const playButton = page.getByTestId('playlist-play');

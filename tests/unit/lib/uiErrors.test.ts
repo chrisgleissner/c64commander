@@ -54,10 +54,13 @@ describe('uiErrors', () => {
       context: { userId: 123, action: 'save' },
     });
 
-    expect(addErrorLog).toHaveBeenCalledWith(expect.stringContaining('TEST_OP'), expect.objectContaining({
-      userId: 123,
-      action: 'save',
-    }));
+    expect(addErrorLog).toHaveBeenCalledWith(
+      expect.stringContaining('TEST_OP'),
+      expect.objectContaining({
+        userId: 123,
+        action: 'save',
+      }),
+    );
   });
 
   describe('error object processing', () => {
@@ -72,13 +75,16 @@ describe('uiErrors', () => {
         error,
       });
 
-      expect(addErrorLog).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
-        error: {
-          name: 'Error',
-          message: 'System crash',
-          stack: 'Error: System crash\n    at test.ts:1:1',
-        },
-      }));
+      expect(addErrorLog).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          error: {
+            name: 'Error',
+            message: 'System crash',
+            stack: 'Error: System crash\n    at test.ts:1:1',
+          },
+        }),
+      );
     });
 
     it('handles string errors', () => {
@@ -89,9 +95,12 @@ describe('uiErrors', () => {
         error: 'Network timeout',
       });
 
-      expect(addErrorLog).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
-        error: { message: 'Network timeout' },
-      }));
+      expect(addErrorLog).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          error: { message: 'Network timeout' },
+        }),
+      );
     });
 
     it('handles object errors', () => {
@@ -103,9 +112,12 @@ describe('uiErrors', () => {
         error: customErr,
       });
 
-      expect(addErrorLog).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
-        error: { code: 500, detail: 'Server error' },
-      }));
+      expect(addErrorLog).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          error: { code: 500, detail: 'Server error' },
+        }),
+      );
     });
 
     it('handles unknown primitives', () => {
@@ -116,9 +128,12 @@ describe('uiErrors', () => {
         error: 42,
       });
 
-      expect(addErrorLog).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
-        error: { message: '42' },
-      }));
+      expect(addErrorLog).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          error: { message: '42' },
+        }),
+      );
     });
   });
 
@@ -134,6 +149,10 @@ describe('uiErrors', () => {
       'HOME_CPU_SPEED: Update failed',
       expect.objectContaining({ recoverableConnectivityIssue: true }),
     );
-    expect(addLog).not.toHaveBeenCalledWith('warn', expect.anything(), expect.anything());
+    expect(addLog).not.toHaveBeenCalledWith(
+      'warn',
+      expect.anything(),
+      expect.anything(),
+    );
   });
 });

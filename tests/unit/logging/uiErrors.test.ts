@@ -36,17 +36,22 @@ describe('reportUserError', () => {
       context: { extra: 'context' },
     });
 
-    expect(addErrorLog).toHaveBeenCalledWith('TEST_OP: Failure', expect.objectContaining({
-      operation: 'TEST_OP',
-      description: 'Something went wrong',
-      extra: 'context',
-    }));
+    expect(addErrorLog).toHaveBeenCalledWith(
+      'TEST_OP: Failure',
+      expect.objectContaining({
+        operation: 'TEST_OP',
+        description: 'Something went wrong',
+        extra: 'context',
+      }),
+    );
 
-    expect(toast).toHaveBeenCalledWith(expect.objectContaining({
-      title: 'Failure',
-      description: 'Something went wrong',
-      variant: 'destructive',
-    }));
+    expect(toast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Failure',
+        description: 'Something went wrong',
+        variant: 'destructive',
+      }),
+    );
   });
 
   it('uses error log with recoverableConnectivityIssue flag for connectivity errors', () => {
@@ -61,6 +66,10 @@ describe('reportUserError', () => {
       'HOME_ACTION: Error',
       expect.objectContaining({ recoverableConnectivityIssue: true }),
     );
-    expect(addLog).not.toHaveBeenCalledWith('warn', expect.anything(), expect.anything());
+    expect(addLog).not.toHaveBeenCalledWith(
+      'warn',
+      expect.anything(),
+      expect.anything(),
+    );
   });
 });

@@ -29,12 +29,36 @@ The implementation session must create and maintain:
 
 ```json
 {
-  "issue1": { "status": "NOT_STARTED|IN_PROGRESS|DONE", "pre_fix_failure_evidence": [], "post_fix_pass_evidence": [] },
-  "issue2": { "status": "NOT_STARTED|IN_PROGRESS|DONE", "pre_fix_failure_evidence": [], "post_fix_pass_evidence": [] },
-  "issue3": { "status": "NOT_STARTED|IN_PROGRESS|DONE", "pre_fix_failure_evidence": [], "post_fix_pass_evidence": [] },
-  "issue4": { "status": "NOT_STARTED|IN_PROGRESS|DONE", "pre_fix_failure_evidence": [], "post_fix_pass_evidence": [] },
-  "issue5": { "status": "NOT_STARTED|IN_PROGRESS|DONE", "pre_fix_failure_evidence": [], "post_fix_pass_evidence": [] },
-  "issue6": { "status": "NOT_STARTED|IN_PROGRESS|DONE", "pre_fix_failure_evidence": [], "post_fix_pass_evidence": [] }
+  "issue1": {
+    "status": "NOT_STARTED|IN_PROGRESS|DONE",
+    "pre_fix_failure_evidence": [],
+    "post_fix_pass_evidence": []
+  },
+  "issue2": {
+    "status": "NOT_STARTED|IN_PROGRESS|DONE",
+    "pre_fix_failure_evidence": [],
+    "post_fix_pass_evidence": []
+  },
+  "issue3": {
+    "status": "NOT_STARTED|IN_PROGRESS|DONE",
+    "pre_fix_failure_evidence": [],
+    "post_fix_pass_evidence": []
+  },
+  "issue4": {
+    "status": "NOT_STARTED|IN_PROGRESS|DONE",
+    "pre_fix_failure_evidence": [],
+    "post_fix_pass_evidence": []
+  },
+  "issue5": {
+    "status": "NOT_STARTED|IN_PROGRESS|DONE",
+    "pre_fix_failure_evidence": [],
+    "post_fix_pass_evidence": []
+  },
+  "issue6": {
+    "status": "NOT_STARTED|IN_PROGRESS|DONE",
+    "pre_fix_failure_evidence": [],
+    "post_fix_pass_evidence": []
+  }
 }
 ```
 

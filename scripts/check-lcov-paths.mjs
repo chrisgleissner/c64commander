@@ -86,12 +86,16 @@ const summary = `LCOV src entries: ${srcFileCount} files, ${srcLineCount} lines`
 console.log(summary);
 
 if (process.env.GITHUB_STEP_SUMMARY) {
-  await fs.appendFile(process.env.GITHUB_STEP_SUMMARY, `- ${summary}\n`, 'utf8');
+  await fs.appendFile(
+    process.env.GITHUB_STEP_SUMMARY,
+    `- ${summary}\n`,
+    'utf8',
+  );
 }
 
 if (srcFileCount < minSrcFiles || srcLineCount < minSrcLines) {
   console.error(
-    `LCOV source coverage too small: ${srcFileCount} files (min ${minSrcFiles}), ${srcLineCount} lines (min ${minSrcLines}).`
+    `LCOV source coverage too small: ${srcFileCount} files (min ${minSrcFiles}), ${srcLineCount} lines (min ${minSrcLines}).`,
   );
   process.exit(1);
 }

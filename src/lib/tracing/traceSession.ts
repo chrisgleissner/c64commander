@@ -9,7 +9,11 @@
 import { zipSync, strToU8 } from 'fflate';
 import { getTraceContextSnapshot } from '@/lib/tracing/traceContext';
 import { getLifecycleState } from '@/lib/appLifecycle';
-import { redactHeaders, redactPayload, redactErrorMessage } from '@/lib/tracing/redaction';
+import {
+  redactHeaders,
+  redactPayload,
+  redactErrorMessage,
+} from '@/lib/tracing/redaction';
 import type {
   TraceEvent,
   TraceEventType,
@@ -19,10 +23,18 @@ import type {
   BackendDecisionReason,
   TraceEventContextFields,
 } from '@/lib/tracing/types';
-import { classifyError, type FailureClassification } from '@/lib/tracing/failureTaxonomy';
+import {
+  classifyError,
+  type FailureClassification,
+} from '@/lib/tracing/failureTaxonomy';
 import { resolveBackendTarget } from '@/lib/tracing/traceTargets';
 import { getPlatform } from '@/lib/native/platform';
-import { getCurrentTraceIdCounters, nextTraceEventId, resetTraceIds, setTraceIdCounters } from '@/lib/tracing/traceIds';
+import {
+  getCurrentTraceIdCounters,
+  nextTraceEventId,
+  resetTraceIds,
+  setTraceIdCounters,
+} from '@/lib/tracing/traceIds';
 import { shouldSuppressDiagnosticsSideEffects } from '@/lib/diagnostics/diagnosticsOverlayState';
 
 const RETENTION_WINDOW_MS = 30 * 60 * 1000;
@@ -35,7 +47,8 @@ let eventSizes: number[] = [];
 let totalBytes = 0;
 const decisionByCorrelation = new Set<string>();
 let errorOnce = new WeakSet<Error>();
-let lastExport: { reason: string; timestamp: string; data: Uint8Array } | null = null;
+let lastExport: { reason: string; timestamp: string; data: Uint8Array } | null =
+  null;
 
 const estimateEventSize = (event: TraceEvent) => {
   try {
@@ -123,7 +136,12 @@ const appendEvent = <T extends Record<string, unknown>>(
   }
 };
 
-const emitBackendDecision = (origin: TraceOrigin, correlationId: string, target: BackendTarget, reason: BackendDecisionReason) => {
+const emitBackendDecision = (
+  origin: TraceOrigin,
+  correlationId: string,
+  target: BackendTarget,
+  reason: BackendDecisionReason,
+) => {
   if (decisionByCorrelation.has(correlationId)) return;
   decisionByCorrelation.add(correlationId);
   appendEvent('backend-decision', origin, correlationId, {
@@ -255,18 +273,30 @@ export const recordActionStart = (action: TraceActionContext) => {
   });
 };
 
-export const recordActionEnd = (action: TraceActionContext, error?: Error | null) => {
+export const recordActionEnd = (
+  action: TraceActionContext,
+  error?: Error | null,
+) => {
   appendEvent('action-end', action.origin, action.correlationId, {
     status: error ? 'error' : 'success',
     error: error ? redactErrorMessage(error.message) : null,
   });
 };
 
-export const recordActionScopeStart = (action: TraceActionContext, name: string) => {
-  appendEvent('action-scope-start', action.origin, action.correlationId, { name });
+export const recordActionScopeStart = (
+  action: TraceActionContext,
+  name: string,
+) => {
+  appendEvent('action-scope-start', action.origin, action.correlationId, {
+    name,
+  });
 };
 
-export const recordActionScopeEnd = (action: TraceActionContext, name: string, error?: Error | null) => {
+export const recordActionScopeEnd = (
+  action: TraceActionContext,
+  name: string,
+  error?: Error | null,
+) => {
   appendEvent('action-scope-end', action.origin, action.correlationId, {
     name,
     status: error ? 'error' : 'success',
@@ -274,13 +304,16 @@ export const recordActionScopeEnd = (action: TraceActionContext, name: string, e
   });
 };
 
-export const recordRestRequest = (action: TraceActionContext, payload: {
-  method: string;
-  url: string;
-  normalizedUrl: string;
-  headers: Record<string, string | string[] | undefined>;
-  body: unknown;
-}) => {
+export const recordRestRequest = (
+  action: TraceActionContext,
+  payload: {
+    method: string;
+    url: string;
+    normalizedUrl: string;
+    headers: Record<string, string | string[] | undefined>;
+    body: unknown;
+  },
+) => {
   const { target, reason } = resolveBackendTarget(payload.url);
   emitBackendDecision(action.origin, action.correlationId, target, reason);
   appendEvent('rest-request', action.origin, action.correlationId, {
@@ -293,18 +326,25 @@ export const recordRestRequest = (action: TraceActionContext, payload: {
   });
 };
 
-export const recordDeviceGuard = (action: TraceActionContext, payload: Record<string, unknown>) => {
+export const recordDeviceGuard = (
+  action: TraceActionContext,
+  payload: Record<string, unknown>,
+) => {
   appendEvent('device-guard', action.origin, action.correlationId, payload);
 };
 
-export const recordRestResponse = (action: TraceActionContext, payload: {
-  status: number | null;
-  body: unknown;
-  durationMs: number;
-  error: Error | null;
-  errorMessage?: string | null;
-}) => {
-  const errorMessage = payload.errorMessage ?? (payload.error ? payload.error.message : null);
+export const recordRestResponse = (
+  action: TraceActionContext,
+  payload: {
+    status: number | null;
+    body: unknown;
+    durationMs: number;
+    error: Error | null;
+    errorMessage?: string | null;
+  },
+) => {
+  const errorMessage =
+    payload.errorMessage ?? (payload.error ? payload.error.message : null);
   appendEvent('rest-response', action.origin, action.correlationId, {
     status: payload.status,
     body: redactPayload(payload.body ?? null),
@@ -313,12 +353,15 @@ export const recordRestResponse = (action: TraceActionContext, payload: {
   });
 };
 
-export const recordFtpOperation = (action: TraceActionContext, payload: {
-  operation: string;
-  path: string;
-  result: 'success' | 'failure';
-  error: Error | null;
-}) => {
+export const recordFtpOperation = (
+  action: TraceActionContext,
+  payload: {
+    operation: string;
+    path: string;
+    result: 'success' | 'failure';
+    error: Error | null;
+  },
+) => {
   const { target, reason } = resolveBackendTarget(null);
   emitBackendDecision(action.origin, action.correlationId, target, reason);
   appendEvent('ftp-operation', action.origin, action.correlationId, {
@@ -330,7 +373,11 @@ export const recordFtpOperation = (action: TraceActionContext, payload: {
   });
 };
 
-export const recordTraceError = (action: TraceActionContext, error: Error, classification?: FailureClassification) => {
+export const recordTraceError = (
+  action: TraceActionContext,
+  error: Error,
+  classification?: FailureClassification,
+) => {
   if (errorOnce.has(error)) return;
   errorOnce.add(error);
   const resolved = classification ?? classifyError(error);
@@ -346,8 +393,16 @@ export const recordTraceError = (action: TraceActionContext, error: Error, class
     window.setTimeout(() => {
       try {
         const data = exportTraceZip();
-        lastExport = { reason: 'error', timestamp: new Date().toISOString(), data };
-        window.dispatchEvent(new CustomEvent('c64u-trace-exported', { detail: { reason: 'error' } }));
+        lastExport = {
+          reason: 'error',
+          timestamp: new Date().toISOString(),
+          data,
+        };
+        window.dispatchEvent(
+          new CustomEvent('c64u-trace-exported', {
+            detail: { reason: 'error' },
+          }),
+        );
       } catch (errorExport) {
         console.warn('Failed to export error trace:', errorExport);
       }

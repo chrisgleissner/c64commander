@@ -6,6 +6,15 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-export type { MediaEntry, MediaIndex, MediaIndexSnapshot, MediaIndexStorage, MediaType } from './mediaIndex';
-export { JsonMediaIndex, LocalStorageMediaIndexStorage } from './localStorageMediaIndex';
+export type {
+  MediaEntry,
+  MediaIndex,
+  MediaIndexSnapshot,
+  MediaIndexStorage,
+  MediaType,
+} from './mediaIndex';
+export {
+  JsonMediaIndex,
+  LocalStorageMediaIndexStorage,
+} from './localStorageMediaIndex';
 export { FilesystemMediaIndexStorage } from './filesystemMediaIndex';

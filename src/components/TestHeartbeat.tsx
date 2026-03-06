@@ -15,27 +15,36 @@ import { useEffect, useRef, useState } from 'react';
  * continues while the screen is locked.
  */
 export function TestHeartbeat() {
-    const [count, setCount] = useState(0);
-    const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [count, setCount] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-    useEffect(() => {
-        timerRef.current = setInterval(() => {
-            setCount((c) => c + 1);
-        }, 1000);
-        return () => {
-            if (timerRef.current) clearInterval(timerRef.current);
-        };
-    }, []);
+  useEffect(() => {
+    timerRef.current = setInterval(() => {
+      setCount((c) => c + 1);
+    }, 1000);
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, []);
 
-    return (
-        <span
-            id="test-heartbeat"
-            data-testid="test-heartbeat"
-            aria-label="test-heartbeat"
-            role="status"
-            style={{ position: 'fixed', bottom: 0, right: 0, fontSize: 8, lineHeight: 1, opacity: 0.01, pointerEvents: 'none', zIndex: 2147483647 }}
-        >
-            {String(count)}
-        </span>
-    );
+  return (
+    <span
+      id="test-heartbeat"
+      data-testid="test-heartbeat"
+      aria-label="test-heartbeat"
+      role="status"
+      style={{
+        position: 'fixed',
+        bottom: 0,
+        right: 0,
+        fontSize: 8,
+        lineHeight: 1,
+        opacity: 0.01,
+        pointerEvents: 'none',
+        zIndex: 2147483647,
+      }}
+    >
+      {String(count)}
+    </span>
+  );
 }

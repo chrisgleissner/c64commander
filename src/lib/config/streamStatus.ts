@@ -23,8 +23,18 @@ const STREAM_ORDER: Array<{
   defaultPort: string;
 }> = [
   { key: 'vic', label: 'VIC', itemName: 'Stream VIC to', defaultPort: '11000' },
-  { key: 'audio', label: 'Audio', itemName: 'Stream Audio to', defaultPort: '11001' },
-  { key: 'debug', label: 'Debug', itemName: 'Stream Debug to', defaultPort: '11002' },
+  {
+    key: 'audio',
+    label: 'Audio',
+    itemName: 'Stream Audio to',
+    defaultPort: '11001',
+  },
+  {
+    key: 'debug',
+    label: 'Debug',
+    itemName: 'Stream Debug to',
+    defaultPort: '11002',
+  },
 ];
 
 const OFF_TOKENS = new Set([
@@ -73,11 +83,19 @@ const parseStreamTarget = (value: unknown, defaultPort: string) => {
   };
 };
 
-const getStreamItemValue = (payload: Record<string, unknown> | undefined, itemName: string) => {
+const getStreamItemValue = (
+  payload: Record<string, unknown> | undefined,
+  itemName: string,
+) => {
   if (!payload) return undefined;
-  const category = (payload['Data Streams'] ?? payload) as Record<string, unknown> | undefined;
-  const items = (category?.items ?? category) as Record<string, unknown> | undefined;
-  if (!items || !Object.prototype.hasOwnProperty.call(items, itemName)) return undefined;
+  const category = (payload['Data Streams'] ?? payload) as
+    | Record<string, unknown>
+    | undefined;
+  const items = (category?.items ?? category) as
+    | Record<string, unknown>
+    | undefined;
+  if (!items || !Object.prototype.hasOwnProperty.call(items, itemName))
+    return undefined;
   return normalizeConfigItem(items[itemName]).value;
 };
 

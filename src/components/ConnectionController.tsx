@@ -9,17 +9,33 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useConnectionState } from '@/hooks/useConnectionState';
-import { discoverConnection, getConnectionSnapshot, initializeConnectionManager } from '@/lib/connection/connectionManager';
-import { buildBaseUrlFromDeviceHost, resolveDeviceHostFromStorage } from '@/lib/c64api';
+import {
+  discoverConnection,
+  getConnectionSnapshot,
+  initializeConnectionManager,
+} from '@/lib/connection/connectionManager';
+import {
+  buildBaseUrlFromDeviceHost,
+  resolveDeviceHostFromStorage,
+} from '@/lib/c64api';
 import { loadBackgroundRediscoveryIntervalMs } from '@/lib/config/appSettings';
-import { getPassword as loadStoredPassword, hasStoredPasswordFlag } from '@/lib/secureStorage';
+import {
+  getPassword as loadStoredPassword,
+  hasStoredPasswordFlag,
+} from '@/lib/secureStorage';
 import { invalidateForConnectionStateTransition } from '@/lib/query/c64QueryInvalidation';
-import { getBackgroundRediscoveryDelayMs, getNextBackgroundFailureCount } from '@/lib/query/c64PollingGovernance';
+import {
+  getBackgroundRediscoveryDelayMs,
+  getNextBackgroundFailureCount,
+} from '@/lib/query/c64PollingGovernance';
 
 const allowBackgroundRediscovery = () => {
   if (import.meta.env.VITE_ENABLE_TEST_PROBES !== '1') return true;
   if (typeof window === 'undefined') return false;
-  return (window as Window & { __c64uAllowBackgroundRediscovery?: boolean }).__c64uAllowBackgroundRediscovery === true;
+  return (
+    (window as Window & { __c64uAllowBackgroundRediscovery?: boolean })
+      .__c64uAllowBackgroundRediscovery === true
+  );
 };
 
 export function ConnectionController() {
@@ -28,7 +44,11 @@ export function ConnectionController() {
   const backgroundTimerRef = useRef<number | null>(null);
   const backgroundScheduleTokenRef = useRef(0);
   const backgroundFailureCountRef = useRef(0);
-  const lastSettingsRef = useRef<{ baseUrl: string; password: string; deviceHost: string } | null>(null);
+  const lastSettingsRef = useRef<{
+    baseUrl: string;
+    password: string;
+    deviceHost: string;
+  } | null>(null);
   const previousStateRef = useRef(state);
   const [backgroundScheduleVersion, setBackgroundScheduleVersion] = useState(0);
 
@@ -39,7 +59,11 @@ export function ConnectionController() {
   }, []);
 
   useEffect(() => {
-    invalidateForConnectionStateTransition(queryClient, previousStateRef.current, state);
+    invalidateForConnectionStateTransition(
+      queryClient,
+      previousStateRef.current,
+      state,
+    );
     previousStateRef.current = state;
   }, [queryClient, state]);
 
@@ -79,16 +103,22 @@ export function ConnectionController() {
         }
         void discoverConnection('background').finally(() => {
           const snapshot = getConnectionSnapshot();
-          const nextFailureCount = getNextBackgroundFailureCount(backgroundFailureCountRef.current, {
-            lastProbeSucceededAtMs: snapshot.lastProbeSucceededAtMs,
-            lastProbeFailedAtMs: snapshot.lastProbeFailedAtMs,
-          });
+          const nextFailureCount = getNextBackgroundFailureCount(
+            backgroundFailureCountRef.current,
+            {
+              lastProbeSucceededAtMs: snapshot.lastProbeSucceededAtMs,
+              lastProbeFailedAtMs: snapshot.lastProbeFailedAtMs,
+            },
+          );
           backgroundFailureCountRef.current = nextFailureCount;
           if (backgroundScheduleTokenRef.current !== scheduleToken) {
             clearTimer();
             return;
           }
-          if (snapshot.state === 'DEMO_ACTIVE' || snapshot.state === 'OFFLINE_NO_DEMO') {
+          if (
+            snapshot.state === 'DEMO_ACTIVE' ||
+            snapshot.state === 'OFFLINE_NO_DEMO'
+          ) {
             scheduleNextProbe(nextFailureCount);
           }
         });
@@ -111,7 +141,8 @@ export function ConnectionController() {
       const next = {
         baseUrl: typeof detail.baseUrl === 'string' ? detail.baseUrl : '',
         password: typeof detail.password === 'string' ? detail.password : '',
-        deviceHost: typeof detail.deviceHost === 'string' ? detail.deviceHost : '',
+        deviceHost:
+          typeof detail.deviceHost === 'string' ? detail.deviceHost : '',
       };
       const prev = lastSettingsRef.current;
       lastSettingsRef.current = next;
@@ -141,20 +172,32 @@ export function ConnectionController() {
     }
 
     window.addEventListener('c64u-connection-change', handler as EventListener);
-    return () => window.removeEventListener('c64u-connection-change', handler as EventListener);
+    return () =>
+      window.removeEventListener(
+        'c64u-connection-change',
+        handler as EventListener,
+      );
   }, []);
 
   useEffect(() => {
     const handler = (event: Event) => {
-      const detail = (event as CustomEvent).detail as { key?: string } | undefined;
+      const detail = (event as CustomEvent).detail as
+        | { key?: string }
+        | undefined;
       if (detail?.key !== 'c64u_background_rediscovery_interval_ms') return;
       setBackgroundScheduleVersion((previous) => previous + 1);
     };
 
-    window.addEventListener('c64u-app-settings-updated', handler as EventListener);
-    return () => window.removeEventListener('c64u-app-settings-updated', handler as EventListener);
+    window.addEventListener(
+      'c64u-app-settings-updated',
+      handler as EventListener,
+    );
+    return () =>
+      window.removeEventListener(
+        'c64u-app-settings-updated',
+        handler as EventListener,
+      );
   }, []);
 
   return null;
 }
-

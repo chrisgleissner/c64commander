@@ -34,9 +34,14 @@ export const normalizeConfigItem = (config: unknown): NormalizedConfigItem => {
     '';
 
   const optionsCandidate = cfg.options ?? cfg.values ?? cfg.choices;
-  const presetsCandidate = cfg.details?.presets ?? cfg.presets ?? cfg.values ?? cfg.choices;
-  const options = Array.isArray(optionsCandidate) ? optionsCandidate : undefined;
-  const presets = Array.isArray(presetsCandidate) ? presetsCandidate : undefined;
+  const presetsCandidate =
+    cfg.details?.presets ?? cfg.presets ?? cfg.values ?? cfg.choices;
+  const options = Array.isArray(optionsCandidate)
+    ? optionsCandidate
+    : undefined;
+  const presets = Array.isArray(presetsCandidate)
+    ? presetsCandidate
+    : undefined;
 
   const min = cfg.details?.min ?? cfg.min ?? cfg.minimum;
   const max = cfg.details?.max ?? cfg.max ?? cfg.maximum;

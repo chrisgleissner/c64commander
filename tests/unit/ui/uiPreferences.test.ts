@@ -30,8 +30,14 @@ describe('uiPreferences', () => {
   });
 
   it('returns defaults when localStorage is unavailable', () => {
-    const original = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
-    Object.defineProperty(globalThis, 'localStorage', { value: undefined, configurable: true });
+    const original = Object.getOwnPropertyDescriptor(
+      globalThis,
+      'localStorage',
+    );
+    Object.defineProperty(globalThis, 'localStorage', {
+      value: undefined,
+      configurable: true,
+    });
 
     expect(getListPreviewLimit()).toBe(DEFAULT_LIST_PREVIEW_LIMIT);
 
@@ -55,8 +61,14 @@ describe('uiPreferences', () => {
 
   it('setListPreviewLimit is a no-op when localStorage is unavailable', () => {
     // Covers: if (typeof localStorage === 'undefined') return in setListPreviewLimit (line 28)
-    const original = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
-    Object.defineProperty(globalThis, 'localStorage', { value: undefined, configurable: true });
+    const original = Object.getOwnPropertyDescriptor(
+      globalThis,
+      'localStorage',
+    );
+    Object.defineProperty(globalThis, 'localStorage', {
+      value: undefined,
+      configurable: true,
+    });
 
     expect(() => setListPreviewLimit(100)).not.toThrow();
 

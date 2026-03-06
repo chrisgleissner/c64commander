@@ -2,26 +2,26 @@
 
 ## Plugin Parity
 
-| Feature | Android | iOS | Status |
-|---------|---------|-----|--------|
-| FolderPickerPlugin | SAF-based | UIDocumentPicker + security-scoped bookmarks | **Parity** |
-| FtpClientPlugin | Apache FTPClient | CFStream/socket FTP | **Parity** |
-| SecureStoragePlugin | EncryptedSharedPreferences | Keychain | **Parity** |
-| FeatureFlagsPlugin | SharedPreferences | UserDefaults | **Parity** |
-| BackgroundExecutionPlugin | Full foreground service + WakeLock + auto-skip alarm | `AVAudioSession` category set + `beginBackgroundTask` + main-queue due timer (fires `onBackgroundAutoSkipDue` when elapsed) — partial implementation: timer may expire before song end under iOS background-task limits | **Partial** |
-| DiagnosticsBridgePlugin | BroadcastReceiver → JS | NotificationCenter → JS + debug HTTP server | **Parity** |
-| MockC64UPlugin | Mock HTTP + FTP servers | NWListener + Darwin sockets | **Parity** |
-| AppLogger | Broadcast-based structured logger | IOSDiagnostics with os_log + NotificationCenter | **Functional parity** |
+| Feature                   | Android                                              | iOS                                                                                                                                                                                                                     | Status                |
+| ------------------------- | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| FolderPickerPlugin        | SAF-based                                            | UIDocumentPicker + security-scoped bookmarks                                                                                                                                                                            | **Parity**            |
+| FtpClientPlugin           | Apache FTPClient                                     | CFStream/socket FTP                                                                                                                                                                                                     | **Parity**            |
+| SecureStoragePlugin       | EncryptedSharedPreferences                           | Keychain                                                                                                                                                                                                                | **Parity**            |
+| FeatureFlagsPlugin        | SharedPreferences                                    | UserDefaults                                                                                                                                                                                                            | **Parity**            |
+| BackgroundExecutionPlugin | Full foreground service + WakeLock + auto-skip alarm | `AVAudioSession` category set + `beginBackgroundTask` + main-queue due timer (fires `onBackgroundAutoSkipDue` when elapsed) — partial implementation: timer may expire before song end under iOS background-task limits | **Partial**           |
+| DiagnosticsBridgePlugin   | BroadcastReceiver → JS                               | NotificationCenter → JS + debug HTTP server                                                                                                                                                                             | **Parity**            |
+| MockC64UPlugin            | Mock HTTP + FTP servers                              | NWListener + Darwin sockets                                                                                                                                                                                             | **Parity**            |
+| AppLogger                 | Broadcast-based structured logger                    | IOSDiagnostics with os_log + NotificationCenter                                                                                                                                                                         | **Functional parity** |
 
 ## Infrastructure Parity
 
-| Area | Android | iOS | Status |
-|------|---------|-----|--------|
-| Native unit tests | 13 JVM test classes (82 tests) | 0 XCTest classes | **Gap** |
-| CI gating | Required check (android.yaml) | Stage A / informative (ios.yaml) | **Gap** |
-| Signed distribution | Debug APK + conditional release APK | Unsigned AltStore IPA only | **Gap** |
-| Maestro E2E flows | 6 ci-critical flows | 6 ci-critical-ios flows | **Parity** |
-| HVSC module | Shared TypeScript (no native code) | Same shared TypeScript | **Parity** |
+| Area                | Android                             | iOS                              | Status     |
+| ------------------- | ----------------------------------- | -------------------------------- | ---------- |
+| Native unit tests   | 13 JVM test classes (82 tests)      | 0 XCTest classes                 | **Gap**    |
+| CI gating           | Required check (android.yaml)       | Stage A / informative (ios.yaml) | **Gap**    |
+| Signed distribution | Debug APK + conditional release APK | Unsigned AltStore IPA only       | **Gap**    |
+| Maestro E2E flows   | 6 ci-critical flows                 | 6 ci-critical-ios flows          | **Parity** |
+| HVSC module         | Shared TypeScript (no native code)  | Same shared TypeScript           | **Parity** |
 
 ## Accepted Gaps
 

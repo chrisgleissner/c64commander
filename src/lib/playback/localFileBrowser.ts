@@ -8,9 +8,14 @@
 
 import type { LocalPlayFile } from './playbackRouter';
 
-const normalizePath = (path: string) => (path.startsWith('/') ? path : `/${path}`);
+const normalizePath = (path: string) =>
+  path.startsWith('/') ? path : `/${path}`;
 const getLocalPath = (file: LocalPlayFile) =>
-  normalizePath((file as File).webkitRelativePath || (file as any).webkitRelativePath || (file as any).name);
+  normalizePath(
+    (file as File).webkitRelativePath ||
+      (file as any).webkitRelativePath ||
+      (file as any).name,
+  );
 
 export const listLocalFolders = (files: LocalPlayFile[], path: string) => {
   const normalized = normalizePath(path || '/');
@@ -41,7 +46,9 @@ export const listLocalFiles = (files: LocalPlayFile[], path: string) => {
       path: getLocalPath(file),
       name: getLocalPath(file).split('/').pop() || (file as any).name,
       sizeBytes: (file as File).size ?? null,
-      modifiedAt: (file as File).lastModified ? new Date((file as File).lastModified).toISOString() : null,
+      modifiedAt: (file as File).lastModified
+        ? new Date((file as File).lastModified).toISOString()
+        : null,
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
 };

@@ -46,11 +46,20 @@ export const VolumeControls = ({
       disabled={!canControlVolume}
       data-testid="volume-mute"
     >
-      {volumeMuted ? <Volume2 className="h-4 w-4 mr-1" /> : <VolumeX className="h-4 w-4 mr-1" />}
+      {volumeMuted ? (
+        <Volume2 className="h-4 w-4 mr-1" />
+      ) : (
+        <VolumeX className="h-4 w-4 mr-1" />
+      )}
       {volumeMuted ? 'Unmute' : 'Mute'}
     </Button>
     <div className="flex flex-1 min-w-[160px] sm:min-w-[200px] flex-col gap-1">
-      <span className="text-[11px] text-muted-foreground" data-testid="volume-caption">Playback volume</span>
+      <span
+        className="text-[11px] text-muted-foreground"
+        data-testid="volume-caption"
+      >
+        Playback volume
+      </span>
       <div className="flex items-center gap-3">
         <Slider
           min={0}
@@ -64,7 +73,12 @@ export const VolumeControls = ({
           disabled={!canControlVolume}
           data-testid="volume-slider"
         />
-        <span className="text-xs text-muted-foreground w-[52px] text-right" data-testid="volume-label">{volumeLabel}</span>
+        <span
+          className="text-xs text-muted-foreground w-[52px] text-right"
+          data-testid="volume-label"
+        >
+          {volumeLabel}
+        </span>
       </div>
     </div>
   </div>

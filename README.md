@@ -87,9 +87,9 @@ SideStore refreshes apps every 7 days to renew the signature automatically.
 
 The Web version is self-hosted and intended for LAN use. The browser connects to a local C64 Commander server, which communicates with your C64U via REST/FTP.
 
--   Runs on Windows, macOS, or Linux.
--   Raspberry Pi Zero 2W, 4B, or similar with ≥ 512 MiB RAM recommended.
--   If a C64U network password is configured in Settings, it also protects the web interface.
+- Runs on Windows, macOS, or Linux.
+- Raspberry Pi Zero 2W, 4B, or similar with ≥ 512 MiB RAM recommended.
+- If a C64U network password is configured in Settings, it also protects the web interface.
 
 > [!NOTE]
 > Intended for trusted LAN use only. Do not expose directly to the public internet.
@@ -105,14 +105,14 @@ The Docker image supports both `linux/amd64` and `linux/arm64` architectures. Wi
 
 Create a writable config directory:
 
-``` bash
+```bash
 mkdir -p ./c64commander-config
 chmod 0777 ./c64commander-config
 ```
 
 Start the container:
 
-``` bash
+```bash
 docker run -d --name c64commander -p 8064:8064 \
   -v ./c64commander-config:/config --restart unless-stopped \
   ghcr.io/chrisgleissner/c64commander:<version>

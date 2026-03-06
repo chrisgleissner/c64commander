@@ -6,7 +6,14 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import { RouterProvider, createMemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import SettingsPage from '@/pages/SettingsPage';
@@ -24,7 +31,10 @@ import {
   saveStartupDiscoveryWindowMs,
 } from '@/lib/config/appSettings';
 import * as deviceSafetySettings from '@/lib/config/deviceSafetySettings';
-import { exportSettingsJson, importSettingsJson } from '@/lib/config/settingsTransfer';
+import {
+  exportSettingsJson,
+  importSettingsJson,
+} from '@/lib/config/settingsTransfer';
 import { setHvscBaseUrlOverride } from '@/lib/hvsc/hvscReleaseService';
 import {
   loadConfigWriteIntervalMs,
@@ -39,7 +49,9 @@ vi.mock('framer-motion', () => ({
   motion: {
     div: ({ children, ...props }: any) => <div {...props}>{children}</div>,
     span: ({ children, ...props }: any) => <span {...props}>{children}</span>,
-    section: ({ children, ...props }: any) => <section {...props}>{children}</section>,
+    section: ({ children, ...props }: any) => (
+      <section {...props}>{children}</section>
+    ),
     li: ({ children, ...props }: any) => <li {...props}>{children}</li>,
   },
   AnimatePresence: ({ children }: any) => <>{children}</>,
@@ -47,12 +59,17 @@ vi.mock('framer-motion', () => ({
 
 vi.mock('@/components/ui/select', () => ({
   Select: ({ value, onValueChange, children }: any) => (
-    <select value={value} onChange={(event) => onValueChange?.(event.target.value)}>
+    <select
+      value={value}
+      onChange={(event) => onValueChange?.(event.target.value)}
+    >
       {children}
     </select>
   ),
   SelectContent: ({ children }: any) => <>{children}</>,
-  SelectItem: ({ value, children }: any) => <option value={value}>{children}</option>,
+  SelectItem: ({ value, children }: any) => (
+    <option value={value}>{children}</option>
+  ),
   SelectTrigger: () => null,
   SelectValue: () => null,
 }));
@@ -78,7 +95,13 @@ const {
   featureFlagValueRef: { current: false as boolean },
   connectionPayloadRef: {
     current: {
-      status: { state: 'OFFLINE_NO_DEMO', isConnected: false, isConnecting: false, error: null, deviceInfo: null },
+      status: {
+        state: 'OFFLINE_NO_DEMO',
+        isConnected: false,
+        isConnecting: false,
+        error: null,
+        deviceInfo: null,
+      },
       baseUrl: 'http://c64u',
       runtimeBaseUrl: 'http://c64u',
       password: '',
@@ -115,7 +138,11 @@ vi.mock('@/components/ThemeProvider', () => ({
 
 vi.mock('@/components/DiagnosticsActivityIndicator', () => ({
   DiagnosticsActivityIndicator: ({ onClick }: { onClick: () => void }) => (
-    <button type="button" onClick={onClick} data-testid="diagnostics-activity-indicator" />
+    <button
+      type="button"
+      onClick={onClick}
+      data-testid="diagnostics-activity-indicator"
+    />
   ),
 }));
 
@@ -145,26 +172,25 @@ vi.mock('@/hooks/use-toast', () => ({
   useToast: () => ({ toasts: [], dismiss: vi.fn() }),
 }));
 
-const buildRouter = (ui: JSX.Element) => createMemoryRouter(
-  [{ path: '*', element: ui }],
-  {
+const buildRouter = (ui: JSX.Element) =>
+  createMemoryRouter([{ path: '*', element: ui }], {
     initialEntries: ['/'],
     future: {
       v7_startTransition: true,
       v7_relativeSplatPath: true,
     },
-  },
-);
+  });
 
-const renderSettingsPage = () => render(
-  <RouterProvider
-    router={buildRouter(<SettingsPage />)}
-    future={{
-      v7_startTransition: true,
-      v7_relativeSplatPath: true,
-    }}
-  />,
-);
+const renderSettingsPage = () =>
+  render(
+    <RouterProvider
+      router={buildRouter(<SettingsPage />)}
+      future={{
+        v7_startTransition: true,
+        v7_relativeSplatPath: true,
+      }}
+    />,
+  );
 
 vi.mock('@/lib/uiErrors', () => ({
   reportUserError: vi.fn(),
@@ -215,7 +241,10 @@ vi.mock('@/lib/tracing/traceSession', () => ({
 }));
 
 vi.mock('@/hooks/useActionTrace', () => ({
-  useActionTrace: () => Object.assign(<T extends (...args: any[]) => any>(fn: T) => fn, { scope: async () => undefined }),
+  useActionTrace: () =>
+    Object.assign(<T extends (...args: any[]) => any>(fn: T) => fn, {
+      scope: async () => undefined,
+    }),
 }));
 
 vi.mock('@/lib/tracing/traceExport', () => ({}));
@@ -258,7 +287,13 @@ afterEach(() => {
 
 beforeEach(() => {
   connectionPayloadRef.current = {
-    status: { state: 'OFFLINE_NO_DEMO', isConnected: false, isConnecting: false, error: null, deviceInfo: null },
+    status: {
+      state: 'OFFLINE_NO_DEMO',
+      isConnected: false,
+      isConnecting: false,
+      error: null,
+      deviceInfo: null,
+    },
     baseUrl: 'http://c64u',
     runtimeBaseUrl: 'http://c64u',
     password: '',
@@ -301,14 +336,18 @@ describe('SettingsPage', () => {
     await waitFor(() => {
       expect(mockUpdateConfig).toHaveBeenCalledWith('c64u', undefined);
       expect(discoverConnection).toHaveBeenCalledWith('settings');
-      expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Connection settings saved' }));
+      expect(toast).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Connection settings saved' }),
+      );
     });
   }, 15000);
 
   it('orders core sections and places network timing under Device Safety', () => {
     renderSettingsPage();
 
-    const headings = screen.getAllByRole('heading', { level: 2 }).map((node) => node.textContent ?? '');
+    const headings = screen
+      .getAllByRole('heading', { level: 2 })
+      .map((node) => node.textContent ?? '');
     const appearanceIndex = headings.indexOf('Appearance');
     const connectionIndex = headings.indexOf('Connection');
     const diagnosticsIndex = headings.indexOf('Diagnostics');
@@ -322,22 +361,50 @@ describe('SettingsPage', () => {
     expect(aboutIndex).toBeGreaterThan(deviceSafetyIndex);
     expect(aboutIndex).toBe(headings.length - 1);
 
-    const connectionSection = screen.getByRole('heading', { name: 'Connection' }).closest('.bg-card');
-    const deviceSafetySection = screen.getByRole('heading', { name: 'Device Safety' }).closest('.bg-card');
+    const connectionSection = screen
+      .getByRole('heading', { name: 'Connection' })
+      .closest('.bg-card');
+    const deviceSafetySection = screen
+      .getByRole('heading', { name: 'Device Safety' })
+      .closest('.bg-card');
 
     expect(connectionSection).toBeTruthy();
     expect(deviceSafetySection).toBeTruthy();
 
     if (connectionSection) {
-      expect(within(connectionSection).queryByText('Startup Discovery Window (seconds)')).toBeNull();
-      expect(within(connectionSection).queryByText('Background Rediscovery Interval (seconds)')).toBeNull();
-      expect(within(connectionSection).queryByText('Discovery Probe Timeout (seconds)')).toBeNull();
+      expect(
+        within(connectionSection).queryByText(
+          'Startup Discovery Window (seconds)',
+        ),
+      ).toBeNull();
+      expect(
+        within(connectionSection).queryByText(
+          'Background Rediscovery Interval (seconds)',
+        ),
+      ).toBeNull();
+      expect(
+        within(connectionSection).queryByText(
+          'Discovery Probe Timeout (seconds)',
+        ),
+      ).toBeNull();
     }
 
     if (deviceSafetySection) {
-      expect(within(deviceSafetySection).getByText('Startup Discovery Window (seconds)')).toBeInTheDocument();
-      expect(within(deviceSafetySection).getByText('Background Rediscovery Interval (seconds)')).toBeInTheDocument();
-      expect(within(deviceSafetySection).getByText('Discovery Probe Timeout (seconds)')).toBeInTheDocument();
+      expect(
+        within(deviceSafetySection).getByText(
+          'Startup Discovery Window (seconds)',
+        ),
+      ).toBeInTheDocument();
+      expect(
+        within(deviceSafetySection).getByText(
+          'Background Rediscovery Interval (seconds)',
+        ),
+      ).toBeInTheDocument();
+      expect(
+        within(deviceSafetySection).getByText(
+          'Discovery Probe Timeout (seconds)',
+        ),
+      ).toBeInTheDocument();
     }
   });
 
@@ -349,9 +416,11 @@ describe('SettingsPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /save & connect/i }));
 
     await waitFor(() => {
-      expect(reportUserError).toHaveBeenCalledWith(expect.objectContaining({
-        operation: 'CONNECTION_SAVE',
-      }));
+      expect(reportUserError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: 'CONNECTION_SAVE',
+        }),
+      );
     });
   });
 
@@ -363,14 +432,21 @@ describe('SettingsPage', () => {
     fireEvent.click(screen.getByTestId('hvsc-toggle'));
 
     expect(mockSetFeatureFlag).toHaveBeenCalledWith(true);
-    expect(localStorageSpy).toHaveBeenCalledWith('c64u_feature_flag:hvsc_enabled', '1');
+    expect(localStorageSpy).toHaveBeenCalledWith(
+      'c64u_feature_flag:hvsc_enabled',
+      '1',
+    );
   });
 
   it('persists demo mode and debug logging toggles', () => {
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole('checkbox', { name: /automatic demo mode/i }));
-    fireEvent.click(screen.getByRole('checkbox', { name: /enable debug logging/i }));
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: /automatic demo mode/i }),
+    );
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: /enable debug logging/i }),
+    );
 
     expect(saveAutomaticDemoModeEnabled).toHaveBeenCalledWith(false);
     expect(saveDebugLoggingEnabled).toHaveBeenCalledWith(false);
@@ -380,7 +456,9 @@ describe('SettingsPage', () => {
     renderSettingsPage();
 
     const startupInput = screen.getByLabelText(/startup discovery window/i);
-    const backgroundInput = screen.getByLabelText(/background rediscovery interval/i);
+    const backgroundInput = screen.getByLabelText(
+      /background rediscovery interval/i,
+    );
 
     fireEvent.change(startupInput, { target: { value: '4' } });
     fireEvent.blur(startupInput);
@@ -419,19 +497,25 @@ describe('SettingsPage', () => {
 
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole('button', { name: /list persisted uris/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /list persisted uris/i }),
+    );
 
     await waitFor(() => {
       expect(FolderPicker.getPersistedUris).toHaveBeenCalled();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /enumerate first root/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /enumerate first root/i }),
+    );
 
     await waitFor(() => {
       expect(FolderPicker.listChildren).toHaveBeenCalled();
     });
 
-    expect(screen.getByText(/persisted:/i)).toHaveTextContent('content://example');
+    expect(screen.getByText(/persisted:/i)).toHaveTextContent(
+      'content://example',
+    );
     expect(screen.getByText(/dir: \//i)).toBeInTheDocument();
   }, 15000);
 
@@ -453,25 +537,37 @@ describe('SettingsPage', () => {
 
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole('button', { name: /list persisted uris/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /list persisted uris/i }),
+    );
 
     await waitFor(() => {
       expect(FolderPicker.getPersistedUris).toHaveBeenCalled();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /enumerate first root/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /enumerate first root/i }),
+    );
 
     await waitFor(() => {
-      expect(reportUserError).toHaveBeenCalledWith(expect.objectContaining({
-        operation: 'SAF_DIAGNOSTICS',
-      }));
+      expect(reportUserError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: 'SAF_DIAGNOSTICS',
+        }),
+      );
     });
   }, 15000);
 
   it('shows demo probe messaging when demo is active', () => {
     connectionPayloadRef.current = {
       ...connectionPayloadRef.current,
-      status: { state: 'DEMO_ACTIVE', isConnected: true, isConnecting: false, error: null, deviceInfo: null },
+      status: {
+        state: 'DEMO_ACTIVE',
+        isConnected: true,
+        isConnecting: false,
+        error: null,
+        deviceInfo: null,
+      },
     };
     connectionStateRef.current = {
       lastProbeSucceededAtMs: Date.now(),
@@ -480,7 +576,9 @@ describe('SettingsPage', () => {
 
     renderSettingsPage();
 
-    expect(screen.getByText(/real device detected during probe/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/real device detected during probe/i),
+    ).toBeInTheDocument();
   });
 
   it('shows diagnostics tabs in required order', async () => {
@@ -488,7 +586,9 @@ describe('SettingsPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Diagnostics' }));
     const dialog = await screen.findByRole('dialog');
-    const tabLabels = within(dialog).getAllByRole('tab').map((tab) => tab.textContent);
+    const tabLabels = within(dialog)
+      .getAllByRole('tab')
+      .map((tab) => tab.textContent);
 
     expect(tabLabels).toEqual(['Errors', 'Logs', 'Traces', 'Actions']);
   });
@@ -497,12 +597,18 @@ describe('SettingsPage', () => {
     renderSettingsPage();
 
     await act(async () => {
-      window.dispatchEvent(new CustomEvent('c64u-diagnostics-open-request', { detail: { tab: 'actions' } }));
+      window.dispatchEvent(
+        new CustomEvent('c64u-diagnostics-open-request', {
+          detail: { tab: 'actions' },
+        }),
+      );
     });
 
     const dialog = await screen.findByRole('dialog');
     const actionsTab = within(dialog).getByRole('tab', { name: /actions/i });
-    await waitFor(() => expect(actionsTab).toHaveAttribute('aria-selected', 'true'));
+    await waitFor(() =>
+      expect(actionsTab).toHaveAttribute('aria-selected', 'true'),
+    );
   });
 
   it('renders a single diagnostics action bar', async () => {
@@ -511,21 +617,50 @@ describe('SettingsPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Diagnostics' }));
     const dialog = await screen.findByRole('dialog');
 
-    expect(within(dialog).getByRole('button', { name: /clear all/i })).toBeInTheDocument();
-    expect(within(dialog).queryByRole('button', { name: /share\s*\/\s*export/i })).not.toBeInTheDocument();
-    expect(within(dialog).queryByRole('button', { name: /clear logs/i })).not.toBeInTheDocument();
-    expect(within(dialog).queryByRole('button', { name: /clear traces/i })).not.toBeInTheDocument();
-    expect(within(dialog).queryByRole('button', { name: /share redacted/i })).not.toBeInTheDocument();
-    expect(within(dialog).queryByRole('button', { name: /email/i })).not.toBeInTheDocument();
+    expect(
+      within(dialog).getByRole('button', { name: /clear all/i }),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).queryByRole('button', { name: /share\s*\/\s*export/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(dialog).queryByRole('button', { name: /clear logs/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(dialog).queryByRole('button', { name: /clear traces/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(dialog).queryByRole('button', { name: /share redacted/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(dialog).queryByRole('button', { name: /email/i }),
+    ).not.toBeInTheDocument();
   });
 
   it('filters diagnostics entries per tab and restores on clear', async () => {
     vi.mocked(getErrorLogs).mockReturnValue([
-      { id: 'err-1', level: 'error', message: 'Disk error', timestamp: '2024-01-01T00:00:00.000Z', details: { code: 'E-1' } },
-      { id: 'err-2', level: 'error', message: 'Network failure', timestamp: '2024-01-01T00:00:01.000Z', details: { code: 'E-2' } },
+      {
+        id: 'err-1',
+        level: 'error',
+        message: 'Disk error',
+        timestamp: '2024-01-01T00:00:00.000Z',
+        details: { code: 'E-1' },
+      },
+      {
+        id: 'err-2',
+        level: 'error',
+        message: 'Network failure',
+        timestamp: '2024-01-01T00:00:01.000Z',
+        details: { code: 'E-2' },
+      },
     ] as any);
     vi.mocked(getLogs).mockReturnValue([
-      { id: 'log-1', level: 'info', message: 'Connection ready', timestamp: '2024-01-01T00:00:02.000Z' },
+      {
+        id: 'log-1',
+        level: 'info',
+        message: 'Connection ready',
+        timestamp: '2024-01-01T00:00:02.000Z',
+      },
     ] as any);
 
     renderSettingsPage();
@@ -536,22 +671,36 @@ describe('SettingsPage', () => {
     const errorsTab = within(dialog).getByRole('tab', { name: /^Errors$/i });
     fireEvent.mouseDown(errorsTab);
     fireEvent.click(errorsTab);
-    await waitFor(() => expect(errorsTab).toHaveAttribute('aria-selected', 'true'));
+    await waitFor(() =>
+      expect(errorsTab).toHaveAttribute('aria-selected', 'true'),
+    );
 
     const filterInput = within(dialog).getByTestId('diagnostics-filter-input');
     fireEvent.change(filterInput, { target: { value: 'network' } });
-    expect((await within(dialog).findAllByText('Network failure')).length).toBeGreaterThan(0);
+    expect(
+      (await within(dialog).findAllByText('Network failure')).length,
+    ).toBeGreaterThan(0);
     expect(within(dialog).queryByText('Disk error')).not.toBeInTheDocument();
 
-    fireEvent.click(within(dialog).getByRole('button', { name: /clear filter/i }));
-    expect((await within(dialog).findAllByText('Disk error')).length).toBeGreaterThan(0);
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: /clear filter/i }),
+    );
+    expect(
+      (await within(dialog).findAllByText('Disk error')).length,
+    ).toBeGreaterThan(0);
 
     const logsTab = within(dialog).getByRole('tab', { name: /^Logs$/i });
     fireEvent.mouseDown(logsTab);
     fireEvent.click(logsTab);
-    await waitFor(() => expect(logsTab).toHaveAttribute('aria-selected', 'true'));
-    expect(within(dialog).getByTestId('diagnostics-filter-input')).toHaveValue('');
-    expect((await within(dialog).findAllByText('Connection ready')).length).toBeGreaterThan(0);
+    await waitFor(() =>
+      expect(logsTab).toHaveAttribute('aria-selected', 'true'),
+    );
+    expect(within(dialog).getByTestId('diagnostics-filter-input')).toHaveValue(
+      '',
+    );
+    expect(
+      (await within(dialog).findAllByText('Connection ready')).length,
+    ).toBeGreaterThan(0);
   });
 
   it('filters diagnostics entries case-insensitively across timestamps and details', async () => {
@@ -572,14 +721,20 @@ describe('SettingsPage', () => {
     const logsTab = within(dialog).getByRole('tab', { name: /^Logs$/i });
     fireEvent.mouseDown(logsTab);
     fireEvent.click(logsTab);
-    await waitFor(() => expect(logsTab).toHaveAttribute('aria-selected', 'true'));
+    await waitFor(() =>
+      expect(logsTab).toHaveAttribute('aria-selected', 'true'),
+    );
 
     const filterInput = within(dialog).getByTestId('diagnostics-filter-input');
     fireEvent.change(filterInput, { target: { value: 'mixedcase' } });
-    expect((await within(dialog).findAllByText('System boot')).length).toBeGreaterThan(0);
+    expect(
+      (await within(dialog).findAllByText('System boot')).length,
+    ).toBeGreaterThan(0);
 
     fireEvent.change(filterInput, { target: { value: '01:02:03.004' } });
-    expect((await within(dialog).findAllByText('System boot')).length).toBeGreaterThan(0);
+    expect(
+      (await within(dialog).findAllByText('System boot')).length,
+    ).toBeGreaterThan(0);
 
     fireEvent.change(filterInput, { target: { value: 'missing' } });
     expect(within(dialog).queryByText('System boot')).not.toBeInTheDocument();
@@ -587,7 +742,13 @@ describe('SettingsPage', () => {
 
   it('clears diagnostics after confirmation', async () => {
     vi.mocked(getErrorLogs).mockReturnValue([
-      { id: 'err-1', level: 'error', message: 'Error entry', timestamp: Date.now(), details: { boom: true } },
+      {
+        id: 'err-1',
+        level: 'error',
+        message: 'Error entry',
+        timestamp: Date.now(),
+        details: { boom: true },
+      },
     ] as any);
 
     renderSettingsPage();
@@ -597,25 +758,41 @@ describe('SettingsPage', () => {
     const errorsTab = within(dialog).getByRole('tab', { name: /^Errors$/i });
     fireEvent.mouseDown(errorsTab);
     fireEvent.click(errorsTab);
-    await waitFor(() => expect(errorsTab).toHaveAttribute('aria-selected', 'true'));
-    expect((await within(dialog).findAllByText('Error entry')).length).toBeGreaterThan(0);
+    await waitFor(() =>
+      expect(errorsTab).toHaveAttribute('aria-selected', 'true'),
+    );
+    expect(
+      (await within(dialog).findAllByText('Error entry')).length,
+    ).toBeGreaterThan(0);
 
     const logsTab = within(dialog).getByRole('tab', { name: /^Logs$/i });
     fireEvent.mouseDown(logsTab);
     fireEvent.click(logsTab);
-    await waitFor(() => expect(logsTab).toHaveAttribute('aria-selected', 'true'));
+    await waitFor(() =>
+      expect(logsTab).toHaveAttribute('aria-selected', 'true'),
+    );
     vi.mocked(getLogs).mockReturnValue([
-      { id: 'log-1', level: 'info', message: 'Log entry', timestamp: Date.now(), details: { ok: true } },
+      {
+        id: 'log-1',
+        level: 'info',
+        message: 'Log entry',
+        timestamp: Date.now(),
+        details: { ok: true },
+      },
     ] as any);
     await act(async () => {
       window.dispatchEvent(new Event('c64u-logs-updated'));
     });
-    expect((await within(dialog).findAllByText('Log entry')).length).toBeGreaterThan(0);
+    expect(
+      (await within(dialog).findAllByText('Log entry')).length,
+    ).toBeGreaterThan(0);
 
     const tracesTab = within(dialog).getByRole('tab', { name: /traces/i });
     fireEvent.mouseDown(tracesTab);
     fireEvent.click(tracesTab);
-    await waitFor(() => expect(tracesTab).toHaveAttribute('aria-selected', 'true'));
+    await waitFor(() =>
+      expect(tracesTab).toHaveAttribute('aria-selected', 'true'),
+    );
     vi.mocked(getTraceEvents).mockReturnValue([
       {
         id: 'trace-1',
@@ -633,7 +810,9 @@ describe('SettingsPage', () => {
     expect(await within(dialog).findByText(/REST GET/i)).toBeInTheDocument();
 
     fireEvent.click(within(dialog).getByRole('button', { name: /clear all/i }));
-    const confirm = await screen.findByRole('alertdialog', { name: /clear diagnostics/i });
+    const confirm = await screen.findByRole('alertdialog', {
+      name: /clear diagnostics/i,
+    });
     expect(confirm).toHaveTextContent(
       'This will permanently clear all warning/error logs, logs, traces, and actions. This cannot be undone.',
     );
@@ -651,7 +830,9 @@ describe('SettingsPage', () => {
     const dialog = await screen.findByRole('dialog');
 
     fireEvent.click(within(dialog).getByRole('button', { name: /clear all/i }));
-    const confirm = await screen.findByRole('alertdialog', { name: /clear diagnostics/i });
+    const confirm = await screen.findByRole('alertdialog', {
+      name: /clear diagnostics/i,
+    });
     fireEvent.click(within(confirm).getByRole('button', { name: /cancel/i }));
 
     expect(clearTraceEvents).not.toHaveBeenCalled();
@@ -677,7 +858,14 @@ describe('SettingsPage', () => {
         type: 'rest-request',
         origin: 'user',
         correlationId: 'COR-0001',
-        data: { method: 'GET', url: '/v1/info', normalizedUrl: '/v1/info', headers: {}, body: null, target: 'real-device' },
+        data: {
+          method: 'GET',
+          url: '/v1/info',
+          normalizedUrl: '/v1/info',
+          headers: {},
+          body: null,
+          target: 'real-device',
+        },
       },
       {
         id: 'evt-3',
@@ -686,7 +874,12 @@ describe('SettingsPage', () => {
         type: 'rest-response',
         origin: 'user',
         correlationId: 'COR-0001',
-        data: { status: 200, durationMs: 15, error: null, body: { product: 'c64u' } },
+        data: {
+          status: 200,
+          durationMs: 15,
+          error: null,
+          body: { product: 'c64u' },
+        },
       },
       {
         id: 'evt-4',
@@ -695,7 +888,12 @@ describe('SettingsPage', () => {
         type: 'ftp-operation',
         origin: 'user',
         correlationId: 'COR-0001',
-        data: { operation: 'list', path: '/', result: 'success', target: 'real-device' },
+        data: {
+          operation: 'list',
+          path: '/',
+          result: 'success',
+          target: 'real-device',
+        },
       },
       {
         id: 'evt-5',
@@ -724,18 +922,32 @@ describe('SettingsPage', () => {
     const actionsTab = within(dialog).getByRole('tab', { name: /actions/i });
     fireEvent.mouseDown(actionsTab);
     fireEvent.click(actionsTab);
-    await waitFor(() => expect(actionsTab).toHaveAttribute('aria-selected', 'true'));
+    await waitFor(() =>
+      expect(actionsTab).toHaveAttribute('aria-selected', 'true'),
+    );
 
     await act(async () => {
       window.dispatchEvent(new Event('c64u-traces-updated'));
     });
 
-    const summary = await within(dialog).findByTestId('action-summary-COR-0001');
-    expect(within(summary).getByLabelText('origin: user')).toHaveClass('bg-diagnostics-user');
-    expect(within(summary).getByTestId('action-rest-count-COR-0001')).toHaveClass('text-diagnostics-rest');
-    expect(within(summary).getByTestId('action-ftp-count-COR-0001')).toHaveClass('text-diagnostics-ftp');
-    expect(within(summary).getByTestId('action-error-count-COR-0001')).toHaveClass('text-diagnostics-error');
-    expect(within(summary).getByText(/\d+ms/, { selector: 'div' })).toBeInTheDocument();
+    const summary = await within(dialog).findByTestId(
+      'action-summary-COR-0001',
+    );
+    expect(within(summary).getByLabelText('origin: user')).toHaveClass(
+      'bg-diagnostics-user',
+    );
+    expect(
+      within(summary).getByTestId('action-rest-count-COR-0001'),
+    ).toHaveClass('text-diagnostics-rest');
+    expect(
+      within(summary).getByTestId('action-ftp-count-COR-0001'),
+    ).toHaveClass('text-diagnostics-ftp');
+    expect(
+      within(summary).getByTestId('action-error-count-COR-0001'),
+    ).toHaveClass('text-diagnostics-error');
+    expect(
+      within(summary).getByText(/\d+ms/, { selector: 'div' }),
+    ).toBeInTheDocument();
     expect(within(summary).getAllByText(/target:\s*c64u/i)).toHaveLength(2);
   });
 
@@ -762,7 +974,12 @@ describe('SettingsPage', () => {
           name: 'Inspect',
           component: 'Test',
           context: {},
-          trigger: { kind: 'timer', name: 'connectivity.probe', intervalMs: 5000, details: null },
+          trigger: {
+            kind: 'timer',
+            name: 'connectivity.probe',
+            intervalMs: 5000,
+            details: null,
+          },
         },
       },
       {
@@ -788,19 +1005,31 @@ describe('SettingsPage', () => {
     const tracesTab = within(dialog).getByRole('tab', { name: /traces/i });
     fireEvent.mouseDown(tracesTab);
     fireEvent.click(tracesTab);
-    await waitFor(() => expect(tracesTab).toHaveAttribute('aria-selected', 'true'));
+    await waitFor(() =>
+      expect(tracesTab).toHaveAttribute('aria-selected', 'true'),
+    );
 
     const traceItem = await within(dialog).findByTestId('trace-item-trace-1');
-    expect(traceItem.querySelector('[data-testid="diagnostics-summary-grid"]')).toBeTruthy();
+    expect(
+      traceItem.querySelector('[data-testid="diagnostics-summary-grid"]'),
+    ).toBeTruthy();
 
     const actionsTab = within(dialog).getByRole('tab', { name: /actions/i });
     fireEvent.mouseDown(actionsTab);
     fireEvent.click(actionsTab);
-    await waitFor(() => expect(actionsTab).toHaveAttribute('aria-selected', 'true'));
+    await waitFor(() =>
+      expect(actionsTab).toHaveAttribute('aria-selected', 'true'),
+    );
 
-    const actionItem = await within(dialog).findByTestId('action-summary-COR-0100');
-    expect(actionItem.querySelector('[data-testid="diagnostics-summary-grid"]')).toBeTruthy();
-    expect(within(actionItem).getByTestId('action-trigger-COR-0100')).toHaveTextContent('trigger: timer (connectivity.probe) · 5000ms');
+    const actionItem = await within(dialog).findByTestId(
+      'action-summary-COR-0100',
+    );
+    expect(
+      actionItem.querySelector('[data-testid="diagnostics-summary-grid"]'),
+    ).toBeTruthy();
+    expect(
+      within(actionItem).getByTestId('action-trigger-COR-0100'),
+    ).toHaveTextContent('trigger: timer (connectivity.probe) · 5000ms');
   });
 
   it('exports active diagnostics tab and reports failures', async () => {
@@ -813,7 +1042,9 @@ describe('SettingsPage', () => {
     const tracesTab = within(dialog).getByRole('tab', { name: /traces/i });
     fireEvent.mouseDown(tracesTab);
     fireEvent.click(tracesTab);
-    await waitFor(() => expect(tracesTab).toHaveAttribute('aria-selected', 'true'));
+    await waitFor(() =>
+      expect(tracesTab).toHaveAttribute('aria-selected', 'true'),
+    );
     vi.mocked(getTraceEvents).mockReturnValue([
       {
         id: 'trace-1',
@@ -828,20 +1059,29 @@ describe('SettingsPage', () => {
     await act(async () => {
       window.dispatchEvent(new Event('c64u-traces-updated'));
     });
-    fireEvent.click(await within(dialog).findByTestId('diagnostics-share-traces'));
+    fireEvent.click(
+      await within(dialog).findByTestId('diagnostics-share-traces'),
+    );
 
-    expect(shareDiagnosticsZip).toHaveBeenCalledWith('traces', expect.any(Array));
+    expect(shareDiagnosticsZip).toHaveBeenCalledWith(
+      'traces',
+      expect.any(Array),
+    );
 
     vi.mocked(shareDiagnosticsZip).mockImplementation(() => {
       throw new Error('export failed');
     });
 
-    fireEvent.click(await within(dialog).findByTestId('diagnostics-share-traces'));
+    fireEvent.click(
+      await within(dialog).findByTestId('diagnostics-share-traces'),
+    );
 
     await waitFor(() => {
-      expect(reportUserError).toHaveBeenCalledWith(expect.objectContaining({
-        operation: 'DIAGNOSTICS_EXPORT',
-      }));
+      expect(reportUserError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: 'DIAGNOSTICS_EXPORT',
+        }),
+      );
     });
   });
 
@@ -853,11 +1093,15 @@ describe('SettingsPage', () => {
     const trigger = screen.getAllByRole('combobox')[1];
     fireEvent.change(trigger, { target: { value: 'RELAXED' } });
 
-    const warningDialog = await screen.findByRole('dialog', { name: /enable relaxed safety mode/i });
+    const warningDialog = await screen.findByRole('dialog', {
+      name: /enable relaxed safety mode/i,
+    });
     expect(warningDialog).toBeInTheDocument();
     expect(saveSpy).not.toHaveBeenCalled();
 
-    fireEvent.click(within(warningDialog).getByRole('button', { name: /enable relaxed/i }));
+    fireEvent.click(
+      within(warningDialog).getByRole('button', { name: /enable relaxed/i }),
+    );
     expect(saveSpy).toHaveBeenCalledWith('RELAXED');
   });
 
@@ -865,15 +1109,23 @@ describe('SettingsPage', () => {
     const createObjectURL = vi.fn(() => 'blob:settings');
     const revokeObjectURL = vi.fn();
     const originalCreateElement = document.createElement.bind(document);
-    const createElementSpy = vi.spyOn(document, 'createElement').mockImplementation((tagName: string) => {
-      const element = originalCreateElement(tagName);
-      if (tagName.toLowerCase() === 'a') {
-        (element as HTMLAnchorElement).click = vi.fn();
-      }
-      return element;
+    const createElementSpy = vi
+      .spyOn(document, 'createElement')
+      .mockImplementation((tagName: string) => {
+        const element = originalCreateElement(tagName);
+        if (tagName.toLowerCase() === 'a') {
+          (element as HTMLAnchorElement).click = vi.fn();
+        }
+        return element;
+      });
+    Object.defineProperty(URL, 'createObjectURL', {
+      value: createObjectURL,
+      configurable: true,
     });
-    Object.defineProperty(URL, 'createObjectURL', { value: createObjectURL, configurable: true });
-    Object.defineProperty(URL, 'revokeObjectURL', { value: revokeObjectURL, configurable: true });
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      value: revokeObjectURL,
+      configurable: true,
+    });
 
     renderSettingsPage();
 
@@ -887,14 +1139,18 @@ describe('SettingsPage', () => {
 
   it('imports settings and refreshes local state', async () => {
     vi.mocked(importSettingsJson).mockReturnValue({ ok: true });
-    const file = new File(['{"version":1}'], 'settings.json', { type: 'application/json' });
+    const file = new File(['{"version":1}'], 'settings.json', {
+      type: 'application/json',
+    });
     Object.defineProperty(file, 'text', {
       value: vi.fn(async () => '{"version":1}'),
     });
 
     renderSettingsPage();
 
-    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const fileInput = document.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
     fireEvent.change(fileInput, { target: { files: buildFileList(file) } });
 
     await waitFor(() => {
@@ -904,21 +1160,30 @@ describe('SettingsPage', () => {
   });
 
   it('reports import validation errors', async () => {
-    vi.mocked(importSettingsJson).mockReturnValue({ ok: false, error: 'Invalid payload' });
-    const file = new File(['{"version":1}'], 'settings.json', { type: 'application/json' });
+    vi.mocked(importSettingsJson).mockReturnValue({
+      ok: false,
+      error: 'Invalid payload',
+    });
+    const file = new File(['{"version":1}'], 'settings.json', {
+      type: 'application/json',
+    });
     Object.defineProperty(file, 'text', {
       value: vi.fn(async () => '{"version":1}'),
     });
 
     renderSettingsPage();
 
-    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const fileInput = document.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
     fireEvent.change(fileInput, { target: { files: buildFileList(file) } });
 
     await waitFor(() => {
-      expect(reportUserError).toHaveBeenCalledWith(expect.objectContaining({
-        operation: 'SETTINGS_IMPORT',
-      }));
+      expect(reportUserError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: 'SETTINGS_IMPORT',
+        }),
+      );
     });
   });
 
@@ -955,14 +1220,20 @@ describe('SettingsPage', () => {
 
     for (const key of keys) {
       await act(async () => {
-        window.dispatchEvent(new CustomEvent('c64u-app-settings-updated', { detail: { key, value: true } }));
+        window.dispatchEvent(
+          new CustomEvent('c64u-app-settings-updated', {
+            detail: { key, value: true },
+          }),
+        );
       });
     }
 
     expect(vi.mocked(loadConfigWriteIntervalMs)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(loadAutomaticDemoModeEnabled)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(loadStartupDiscoveryWindowMs)).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(loadBackgroundRediscoveryIntervalMs)).toHaveBeenCalledTimes(1);
+    expect(
+      vi.mocked(loadBackgroundRediscoveryIntervalMs),
+    ).toHaveBeenCalledTimes(1);
     expect(vi.mocked(loadDiscoveryProbeTimeoutMs)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(loadDiskAutostartMode)).toHaveBeenCalledTimes(1);
   });
@@ -973,10 +1244,14 @@ describe('SettingsPage', () => {
     const callsBefore = vi.mocked(loadConfigWriteIntervalMs).mock.calls.length;
 
     await act(async () => {
-      window.dispatchEvent(new CustomEvent('c64u-app-settings-updated', { detail: {} }));
+      window.dispatchEvent(
+        new CustomEvent('c64u-app-settings-updated', { detail: {} }),
+      );
     });
 
-    expect(vi.mocked(loadConfigWriteIntervalMs).mock.calls.length).toBe(callsBefore);
+    expect(vi.mocked(loadConfigWriteIntervalMs).mock.calls.length).toBe(
+      callsBefore,
+    );
   });
 
   it('handles HVSC base URL commit on blur', () => {
@@ -985,10 +1260,14 @@ describe('SettingsPage', () => {
     renderSettingsPage();
 
     const input = screen.getByTestId('hvsc-base-url');
-    fireEvent.change(input, { target: { value: 'https://custom.hvsc.example.com' } });
+    fireEvent.change(input, {
+      target: { value: 'https://custom.hvsc.example.com' },
+    });
     fireEvent.blur(input);
 
-    expect(setHvscBaseUrlOverride).toHaveBeenCalledWith('https://custom.hvsc.example.com');
+    expect(setHvscBaseUrlOverride).toHaveBeenCalledWith(
+      'https://custom.hvsc.example.com',
+    );
   });
 
   it('handles HVSC base URL commit with empty value', () => {
@@ -1021,28 +1300,38 @@ describe('SettingsPage', () => {
     renderSettingsPage();
 
     await act(async () => {
-      window.dispatchEvent(new CustomEvent('c64u-diagnostics-open-request', { detail: { tab: 'traces' } }));
+      window.dispatchEvent(
+        new CustomEvent('c64u-diagnostics-open-request', {
+          detail: { tab: 'traces' },
+        }),
+      );
     });
 
     const dialog = await screen.findByRole('dialog');
     const tracesTab = within(dialog).getByRole('tab', { name: /traces/i });
-    await waitFor(() => expect(tracesTab).toHaveAttribute('aria-selected', 'true'));
+    await waitFor(() =>
+      expect(tracesTab).toHaveAttribute('aria-selected', 'true'),
+    );
   });
 
   it('ignores diagnostics open request event without tab', async () => {
     renderSettingsPage();
 
     await act(async () => {
-      window.dispatchEvent(new CustomEvent('c64u-diagnostics-open-request', { detail: {} }));
+      window.dispatchEvent(
+        new CustomEvent('c64u-diagnostics-open-request', { detail: {} }),
+      );
     });
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('handles HVSC feature flag toggle storage error', () => {
-    const setItemSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
-      throw new DOMException('Storage quota exceeded', 'QuotaExceededError');
-    });
+    const setItemSpy = vi
+      .spyOn(Storage.prototype, 'setItem')
+      .mockImplementation(() => {
+        throw new DOMException('Storage quota exceeded', 'QuotaExceededError');
+      });
 
     renderSettingsPage();
 
@@ -1057,16 +1346,23 @@ describe('SettingsPage', () => {
   });
 
   it('handles SAF getPersistedUris error path', async () => {
-    vi.mocked(FolderPicker.getPersistedUris).mockRejectedValue(new Error('Permission denied'));
+    vi.mocked(FolderPicker.getPersistedUris).mockRejectedValue(
+      new Error('Permission denied'),
+    );
 
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole('button', { name: /list persisted uris/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /list persisted uris/i }),
+    );
 
     await waitFor(() => {
-      expect(addErrorLog).toHaveBeenCalledWith('SAF persisted URI lookup failed', {
-        error: 'Permission denied',
-      });
+      expect(addErrorLog).toHaveBeenCalledWith(
+        'SAF persisted URI lookup failed',
+        {
+          error: 'Permission denied',
+        },
+      );
     });
   }, 15000);
 
@@ -1074,17 +1370,23 @@ describe('SettingsPage', () => {
     vi.mocked(FolderPicker.getPersistedUris).mockResolvedValue({
       uris: [{ uri: 'content://example' }],
     });
-    vi.mocked(FolderPicker.listChildren).mockRejectedValue(new Error('IO error'));
+    vi.mocked(FolderPicker.listChildren).mockRejectedValue(
+      new Error('IO error'),
+    );
 
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole('button', { name: /list persisted uris/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /list persisted uris/i }),
+    );
 
     await waitFor(() => {
       expect(FolderPicker.getPersistedUris).toHaveBeenCalled();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /enumerate first root/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /enumerate first root/i }),
+    );
 
     await waitFor(() => {
       expect(addErrorLog).toHaveBeenCalledWith('SAF enumeration failed', {
@@ -1106,7 +1408,10 @@ describe('SettingsPage', () => {
     // Should have been called with false (disabling)
     expect(mockSetFeatureFlag).toHaveBeenCalledWith(false);
     // localStorage should have been written with '0'
-    expect(localStorageSpy).toHaveBeenCalledWith('c64u_feature_flag:hvsc_enabled', '0');
+    expect(localStorageSpy).toHaveBeenCalledWith(
+      'c64u_feature_flag:hvsc_enabled',
+      '0',
+    );
     localStorageSpy.mockRestore();
   });
 
@@ -1139,7 +1444,9 @@ describe('SettingsPage', () => {
     const tracesTab = within(dialog).getByRole('tab', { name: /traces/i });
     fireEvent.mouseDown(tracesTab);
     fireEvent.click(tracesTab);
-    await waitFor(() => expect(tracesTab).toHaveAttribute('aria-selected', 'true'));
+    await waitFor(() =>
+      expect(tracesTab).toHaveAttribute('aria-selected', 'true'),
+    );
 
     const filterInput = within(dialog).getByTestId('diagnostics-filter-input');
     fireEvent.change(filterInput, { target: { value: 'COR-0001' } });
@@ -1158,7 +1465,9 @@ describe('SettingsPage', () => {
     const actionsTab = within(dialog).getByRole('tab', { name: /^Actions$/i });
     fireEvent.mouseDown(actionsTab);
     fireEvent.click(actionsTab);
-    await waitFor(() => expect(actionsTab).toHaveAttribute('aria-selected', 'true'));
+    await waitFor(() =>
+      expect(actionsTab).toHaveAttribute('aria-selected', 'true'),
+    );
 
     // Type a filter — covers the actions filter useMemo non-empty filterText branch
     const filterInput = within(dialog).getByTestId('diagnostics-filter-input');
@@ -1178,13 +1487,18 @@ describe('SettingsPage', () => {
     const actionsTab = within(dialog).getByRole('tab', { name: /^Actions$/i });
     fireEvent.mouseDown(actionsTab);
     fireEvent.click(actionsTab);
-    await waitFor(() => expect(actionsTab).toHaveAttribute('aria-selected', 'true'));
+    await waitFor(() =>
+      expect(actionsTab).toHaveAttribute('aria-selected', 'true'),
+    );
 
     // Share button covers the 'actions' branch in handleShareDiagnostics (line 470)
     const shareBtn = within(dialog).queryByTestId('diagnostics-share-actions');
     if (shareBtn) {
       fireEvent.click(shareBtn);
-      expect(shareDiagnosticsZip).toHaveBeenCalledWith('actions', expect.any(Array));
+      expect(shareDiagnosticsZip).toHaveBeenCalledWith(
+        'actions',
+        expect.any(Array),
+      );
     }
   }, 15000);
 
@@ -1192,8 +1506,9 @@ describe('SettingsPage', () => {
     renderSettingsPage();
 
     // Find startup discovery window input and set to non-numeric
-    const startupInput = screen.queryByLabelText(/startup discovery window/i)
-      ?? screen.queryByTestId('startup-discovery-window-input');
+    const startupInput =
+      screen.queryByLabelText(/startup discovery window/i) ??
+      screen.queryByTestId('startup-discovery-window-input');
     if (startupInput) {
       fireEvent.change(startupInput, { target: { value: 'abc' } });
       fireEvent.blur(startupInput);
@@ -1201,8 +1516,9 @@ describe('SettingsPage', () => {
     }
 
     // Background rediscovery interval
-    const bgInput = screen.queryByLabelText(/background rediscovery interval/i)
-      ?? screen.queryByTestId('background-rediscovery-input');
+    const bgInput =
+      screen.queryByLabelText(/background rediscovery interval/i) ??
+      screen.queryByTestId('background-rediscovery-input');
     if (bgInput) {
       fireEvent.change(bgInput, { target: { value: '---' } });
       fireEvent.blur(bgInput);

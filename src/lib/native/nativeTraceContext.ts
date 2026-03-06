@@ -15,7 +15,9 @@ export type NativeTraceContext = {
   playlistItemId: string | null;
 };
 
-export const resolveNativeTraceContext = (action?: TraceActionContext | null): NativeTraceContext => {
+export const resolveNativeTraceContext = (
+  action?: TraceActionContext | null,
+): NativeTraceContext => {
   const playback = getTraceContextSnapshot().playback;
   return {
     correlationId: action?.correlationId ?? null,

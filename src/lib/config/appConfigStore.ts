@@ -6,7 +6,11 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { ConfigResponse, buildBaseUrlFromDeviceHost, resolveDeviceHostFromStorage } from '@/lib/c64api';
+import {
+  ConfigResponse,
+  buildBaseUrlFromDeviceHost,
+  resolveDeviceHostFromStorage,
+} from '@/lib/c64api';
 
 export type ConfigSnapshot = {
   savedAt: string;
@@ -25,8 +29,10 @@ const APP_CONFIGS_KEY = 'c64u_app_configs';
 const INITIAL_SNAPSHOT_PREFIX = 'c64u_initial_snapshot:';
 const HAS_CHANGES_PREFIX = 'c64u_has_changes:';
 
-const buildInitialSnapshotKey = (baseUrl: string) => `${INITIAL_SNAPSHOT_PREFIX}${baseUrl}`;
-const buildHasChangesKey = (baseUrl: string) => `${HAS_CHANGES_PREFIX}${baseUrl}`;
+const buildInitialSnapshotKey = (baseUrl: string) =>
+  `${INITIAL_SNAPSHOT_PREFIX}${baseUrl}`;
+const buildHasChangesKey = (baseUrl: string) =>
+  `${HAS_CHANGES_PREFIX}${baseUrl}`;
 
 const safeParse = <T>(raw: string | null, fallback: T): T => {
   if (!raw) return fallback;
@@ -48,8 +54,14 @@ export const loadInitialSnapshot = (baseUrl: string): ConfigSnapshot | null => {
   return safeParse<ConfigSnapshot | null>(raw, null);
 };
 
-export const saveInitialSnapshot = (baseUrl: string, snapshot: ConfigSnapshot) => {
-  localStorage.setItem(buildInitialSnapshotKey(baseUrl), JSON.stringify(snapshot));
+export const saveInitialSnapshot = (
+  baseUrl: string,
+  snapshot: ConfigSnapshot,
+) => {
+  localStorage.setItem(
+    buildInitialSnapshotKey(baseUrl),
+    JSON.stringify(snapshot),
+  );
 };
 
 export const loadHasChanges = (baseUrl: string): boolean =>
@@ -80,7 +92,9 @@ export const createAppConfigEntry = (
   data: Record<string, ConfigResponse>,
 ): AppConfigEntry => {
   const id =
-    (typeof crypto !== 'undefined' && 'randomUUID' in crypto && crypto.randomUUID()) ||
+    (typeof crypto !== 'undefined' &&
+      'randomUUID' in crypto &&
+      crypto.randomUUID()) ||
     `${Date.now()}-${Math.round(Math.random() * 1e6)}`;
 
   return {

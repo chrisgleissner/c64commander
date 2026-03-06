@@ -29,19 +29,22 @@ type EvidenceMetadata = {
  */
 const generateTestId = (testInfo: TestInfo): string => {
   const fileName = path.basename(testInfo.file, '.ts').replace(/\.spec$/, '');
-  const titlePath = typeof (testInfo as any).titlePath === 'function'
-    ? (testInfo as any).titlePath()
-    : (testInfo as any).titlePath ?? [testInfo.title];
-  
-  const parts = [fileName, ...titlePath].map((part) =>
-    part
-      .toLowerCase()
-      .replace(/\s+/g, '-')
-      .replace(/[^a-z0-9-]+/g, '')
-      .replace(/-+/g, '-')
-      .replace(/^-|-$/g, '')
-  ).filter(Boolean);
-  
+  const titlePath =
+    typeof (testInfo as any).titlePath === 'function'
+      ? (testInfo as any).titlePath()
+      : ((testInfo as any).titlePath ?? [testInfo.title]);
+
+  const parts = [fileName, ...titlePath]
+    .map((part) =>
+      part
+        .toLowerCase()
+        .replace(/\s+/g, '-')
+        .replace(/[^a-z0-9-]+/g, '')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, ''),
+    )
+    .filter(Boolean);
+
   return parts.join('--');
 };
 
@@ -51,13 +54,23 @@ const generateTestId = (testInfo: TestInfo): string => {
 export const getCanonicalEvidencePath = (testInfo: TestInfo): string => {
   const testId = generateTestId(testInfo);
   const deviceId = testInfo.project.name;
-  return path.resolve(process.cwd(), 'test-results', 'evidence', 'playwright', testId, deviceId);
+  return path.resolve(
+    process.cwd(),
+    'test-results',
+    'evidence',
+    'playwright',
+    testId,
+    deviceId,
+  );
 };
 
 /**
  * Create meta.json for the test evidence directly in canonical structure.
  */
-export const createEvidenceMetadata = async (testInfo: TestInfo, viewport: { width: number; height: number } | null): Promise<void> => {
+export const createEvidenceMetadata = async (
+  testInfo: TestInfo,
+  viewport: { width: number; height: number } | null,
+): Promise<void> => {
   const evidencePath = getCanonicalEvidencePath(testInfo);
   await fs.mkdir(evidencePath, { recursive: true });
 
@@ -90,7 +103,9 @@ const getDeviceScaleFactor = async (testInfo: TestInfo): Promise<number> => {
  * Validate that evidence structure is correct.
  * Returns list of validation errors.
  */
-export const validateEvidenceStructure = async (testInfo: TestInfo): Promise<string[]> => {
+export const validateEvidenceStructure = async (
+  testInfo: TestInfo,
+): Promise<string[]> => {
   const errors: string[] = [];
   const canonicalPath = getCanonicalEvidencePath(testInfo);
 
@@ -104,9 +119,11 @@ export const validateEvidenceStructure = async (testInfo: TestInfo): Promise<str
     if (!meta.testId) errors.push('meta.json missing testId');
     if (!meta.deviceId) errors.push('meta.json missing deviceId');
     if (!meta.viewport) errors.push('meta.json missing viewport');
-    if (!meta.deviceScaleFactor) errors.push('meta.json missing deviceScaleFactor');
+    if (!meta.deviceScaleFactor)
+      errors.push('meta.json missing deviceScaleFactor');
     if (meta.isMobile === undefined) errors.push('meta.json missing isMobile');
-    if (!meta.playwrightProject) errors.push('meta.json missing playwrightProject');
+    if (!meta.playwrightProject)
+      errors.push('meta.json missing playwrightProject');
     if (!meta.timestamp) errors.push('meta.json missing timestamp');
   } catch (error) {
     errors.push(`meta.json missing or invalid: ${error}`);

@@ -13,8 +13,18 @@ import * as path from 'node:path';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks, uiFixtures } from './uiMocks';
 import { seedFtpConfig, startFtpTestServers } from './ftpTestUtils';
-import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
-import { clearTraces, enableTraceAssertions, expectRestTraceSequence } from './traceUtils';
+import {
+  allowWarnings,
+  assertNoUiIssues,
+  attachStepScreenshot,
+  finalizeEvidence,
+  startStrictUiMonitoring,
+} from './testArtifacts';
+import {
+  clearTraces,
+  enableTraceAssertions,
+  expectRestTraceSequence,
+} from './traceUtils';
 import { enableGoldenTrace } from './goldenTraceRegistry';
 import { clickSourceSelectionButton } from './sourceSelection';
 
@@ -32,7 +42,9 @@ const ensureRemoteRoot = async (page: Page) => {
 };
 
 const openRemoteFolder = async (page: Page, name: string) => {
-  const row = page.locator('[data-testid="source-entry-row"]', { hasText: name }).first();
+  const row = page
+    .locator('[data-testid="source-entry-row"]', { hasText: name })
+    .first();
   await row.click();
 };
 
@@ -70,11 +82,15 @@ test.describe('Navigation boundaries and edge cases', () => {
     }
   });
 
-  test('navigate parent from subfolder shows parent', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('navigate parent from subfolder shows parent', async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
 
-    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+    await page
+      .getByRole('button', { name: /Add items|Add more items/i })
+      .click();
     const dialog = page.getByRole('dialog');
     await clickSourceSelectionButton(dialog, 'C64 Ultimate');
     await ensureRemoteRoot(page);
@@ -89,16 +105,19 @@ test.describe('Navigation boundaries and edge cases', () => {
     await expect(page.getByText(/Path:\s*\/Usb0\/Games\/?/i)).toBeVisible();
     await snap(page, testInfo, 'deep-path-shown');
 
-    const parentButton = page.getByTestId('navigate-parent').or(
-      page.getByRole('button', { name: /up|parent|back/i }).first()
-    );
+    const parentButton = page
+      .getByTestId('navigate-parent')
+      .or(page.getByRole('button', { name: /up|parent|back/i }).first());
 
     if (await parentButton.isVisible({ timeout: 2000 }).catch(() => false)) {
       await parentButton.click();
       await snap(page, testInfo, 'parent-clicked');
-      
+
       // Check if we navigated to parent (may not be implemented yet)
-      const parentVisible = await page.getByText('Usb0', { exact: true }).isVisible({ timeout: 5000 }).catch(() => false);
+      const parentVisible = await page
+        .getByText('Usb0', { exact: true })
+        .isVisible({ timeout: 5000 })
+        .catch(() => false);
       if (parentVisible) {
         await expect(page.getByText(/Path:\s*\/Usb0\/?$/i)).toBeVisible();
         await snap(page, testInfo, 'parent-folder-shown');
@@ -110,19 +129,23 @@ test.describe('Navigation boundaries and edge cases', () => {
     }
   });
 
-  test('navigate parent from root disables or hides button', async ({ page }: { page: Path }, testInfo: TestInfo) => {
+  test('navigate parent from root disables or hides button', async ({
+    page,
+  }: { page: Path }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
 
-    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+    await page
+      .getByRole('button', { name: /Add items|Add more items/i })
+      .click();
     const dialog = page.getByRole('dialog');
     await clickSourceSelectionButton(dialog, 'C64 Ultimate');
     await ensureRemoteRoot(page);
     await snap(page, testInfo, 'root-folder');
 
-    const parentButton = page.getByTestId('navigate-parent').or(
-      page.getByRole('button', { name: /up|parent|back/i }).first()
-    );
+    const parentButton = page
+      .getByTestId('navigate-parent')
+      .or(page.getByRole('button', { name: /up|parent|back/i }).first());
 
     if (await parentButton.isVisible({ timeout: 2000 }).catch(() => false)) {
       await expect(parentButton).toBeDisabled();
@@ -132,11 +155,15 @@ test.describe('Navigation boundaries and edge cases', () => {
     }
   });
 
-  test('breadcrumb click jumps to ancestor folder', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('breadcrumb click jumps to ancestor folder', async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
 
-    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+    await page
+      .getByRole('button', { name: /Add items|Add more items/i })
+      .click();
     const dialog = page.getByRole('dialog');
     await clickSourceSelectionButton(dialog, 'C64 Ultimate');
     await ensureRemoteRoot(page);
@@ -147,14 +174,14 @@ test.describe('Navigation boundaries and edge cases', () => {
     await openRemoteFolder(page, 'Turrican II');
     await snap(page, testInfo, 'deep-folder');
 
-    const breadcrumbs = page.locator('[data-testid="breadcrumb"]').or(
-      page.getByRole('navigation', { name: /breadcrumb/i })
-    );
+    const breadcrumbs = page
+      .locator('[data-testid="breadcrumb"]')
+      .or(page.getByRole('navigation', { name: /breadcrumb/i }));
 
     if (await breadcrumbs.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const usb0Link = breadcrumbs.getByRole('button', { name: /Usb0/i }).or(
-        breadcrumbs.getByText('Usb0', { exact: true })
-      );
+      const usb0Link = breadcrumbs
+        .getByRole('button', { name: /Usb0/i })
+        .or(breadcrumbs.getByText('Usb0', { exact: true }));
 
       if (await usb0Link.isVisible({ timeout: 1000 }).catch(() => false)) {
         await usb0Link.click();
@@ -171,33 +198,40 @@ test.describe('Navigation boundaries and edge cases', () => {
     }
   });
 
-  test('add items with no selection shows validation', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('add items with no selection shows validation', async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     allowWarnings(testInfo, 'Expected validation message for empty selection.');
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
 
-    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+    await page
+      .getByRole('button', { name: /Add items|Add more items/i })
+      .click();
     const dialog = page.getByRole('dialog');
     await clickSourceSelectionButton(dialog, 'C64 Ultimate');
     await ensureRemoteRoot(page);
     await snap(page, testInfo, 'root-folder');
 
-    const confirmButton = page.getByTestId('add-items-confirm').or(
-      page.getByRole('button', { name: /Add to|Confirm|Add selected/i })
-    );
+    const confirmButton = page
+      .getByTestId('add-items-confirm')
+      .or(page.getByRole('button', { name: /Add to|Confirm|Add selected/i }));
 
     await expect(confirmButton).toBeVisible();
     const isDisabled = await confirmButton.isDisabled();
-    
+
     if (isDisabled) {
       await snap(page, testInfo, 'confirm-button-disabled');
     } else {
       await confirmButton.click();
       await snap(page, testInfo, 'confirm-clicked');
 
-      const hasWarning = await page.getByText(/no items|select at least|nothing selected/i).first()
-        .isVisible({ timeout: 2000 }).catch(() => false);
-      
+      const hasWarning = await page
+        .getByText(/no items|select at least|nothing selected/i)
+        .first()
+        .isVisible({ timeout: 2000 })
+        .catch(() => false);
+
       if (hasWarning) {
         await snap(page, testInfo, 'validation-shown');
       } else {
@@ -206,59 +240,83 @@ test.describe('Navigation boundaries and edge cases', () => {
     }
   });
 
-  test('disk rotate previous mounts previous disk in group', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('disk rotate previous mounts previous disk in group', async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     enableTraceAssertions(testInfo);
     await page.addInitScript(() => {
-      localStorage.setItem('c64u_disk_library:TEST-123', JSON.stringify({
-        disks: [
-          {
-            id: 'ultimate:/Usb0/Games/Turrican II/Disk 1.d64',
-            name: 'Disk 1.d64',
-            path: '/Usb0/Games/Turrican II/Disk 1.d64',
-            location: 'ultimate',
-            group: 'Turrican II',
-            importOrder: 1,
-            importedAt: new Date().toISOString(),
-          },
-          {
-            id: 'ultimate:/Usb0/Games/Turrican II/Disk 2.d64',
-            name: 'Disk 2.d64',
-            path: '/Usb0/Games/Turrican II/Disk 2.d64',
-            location: 'ultimate',
-            group: 'Turrican II',
-            importOrder: 2,
-            importedAt: new Date().toISOString(),
-          },
-        ],
-      }));
+      localStorage.setItem(
+        'c64u_disk_library:TEST-123',
+        JSON.stringify({
+          disks: [
+            {
+              id: 'ultimate:/Usb0/Games/Turrican II/Disk 1.d64',
+              name: 'Disk 1.d64',
+              path: '/Usb0/Games/Turrican II/Disk 1.d64',
+              location: 'ultimate',
+              group: 'Turrican II',
+              importOrder: 1,
+              importedAt: new Date().toISOString(),
+            },
+            {
+              id: 'ultimate:/Usb0/Games/Turrican II/Disk 2.d64',
+              name: 'Disk 2.d64',
+              path: '/Usb0/Games/Turrican II/Disk 2.d64',
+              location: 'ultimate',
+              group: 'Turrican II',
+              importOrder: 2,
+              importedAt: new Date().toISOString(),
+            },
+          ],
+        }),
+      );
     });
 
     await page.goto('/disks');
     await snap(page, testInfo, 'disks-open');
 
-    const disk2Row = page.getByTestId('disk-row').filter({ hasText: 'Disk 2.d64' });
+    const disk2Row = page
+      .getByTestId('disk-row')
+      .filter({ hasText: 'Disk 2.d64' });
     await disk2Row.getByRole('button', { name: /Mount/i }).click();
     await snap(page, testInfo, 'mount-dialog-open');
 
     await clearTraces(page);
-    await page.getByRole('dialog').getByRole('button', { name: /Drive A/i }).click();
+    await page
+      .getByRole('dialog')
+      .getByRole('button', { name: /Drive A/i })
+      .click();
     await snap(page, testInfo, 'disk2-mounted');
 
-    await expect.poll(() =>
-      server.requests.some(req => req.url.includes('Disk%202.d64') && req.url.includes('/v1/drives/a:mount'))
-    ).toBe(true);
+    await expect
+      .poll(() =>
+        server.requests.some(
+          (req) =>
+            req.url.includes('Disk%202.d64') &&
+            req.url.includes('/v1/drives/a:mount'),
+        ),
+      )
+      .toBe(true);
 
     await expectRestTraceSequence(page, testInfo, '/v1/drives/a:mount');
 
-    const prevButton = page.getByRole('button', { name: /Prev|Previous/i }).first();
-    
+    const prevButton = page
+      .getByRole('button', { name: /Prev|Previous/i })
+      .first();
+
     if (await prevButton.isVisible({ timeout: 2000 }).catch(() => false)) {
       await prevButton.click();
       await snap(page, testInfo, 'prev-clicked');
 
-      await expect.poll(() =>
-        server.requests.some(req => req.url.includes('Disk%201.d64') && req.url.includes('/v1/drives/a:mount'))
-      ).toBe(true);
+      await expect
+        .poll(() =>
+          server.requests.some(
+            (req) =>
+              req.url.includes('Disk%201.d64') &&
+              req.url.includes('/v1/drives/a:mount'),
+          ),
+        )
+        .toBe(true);
 
       await snap(page, testInfo, 'disk1-mounted');
     } else {
@@ -266,7 +324,9 @@ test.describe('Navigation boundaries and edge cases', () => {
     }
   });
 
-  test('config reset category applies defaults', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('config reset category applies defaults', async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     enableGoldenTrace(testInfo);
     await page.goto('/config');
     await snap(page, testInfo, 'config-open');
@@ -279,24 +339,38 @@ test.describe('Navigation boundaries and edge cases', () => {
     await page.getByRole('option', { name: 'NTSC', exact: true }).click();
     await snap(page, testInfo, 'value-changed');
 
-    await expect.poll(() => server.getState()['U64 Specific Settings']['System Mode'].value).toBe('NTSC');
+    await expect
+      .poll(
+        () => server.getState()['U64 Specific Settings']['System Mode'].value,
+      )
+      .toBe('NTSC');
 
-    const resetButton = page.getByRole('button', { name: /Reset|Reset category|Restore defaults/i }).first();
+    const resetButton = page
+      .getByRole('button', { name: /Reset|Reset category|Restore defaults/i })
+      .first();
 
     if (await resetButton.isVisible({ timeout: 2000 }).catch(() => false)) {
       await resetButton.click();
       await snap(page, testInfo, 'reset-clicked');
 
-      await expect.poll(() =>
-        server.requests.some(req => req.url.includes('/v1/configs') && req.method === 'POST')
-      ).toBe(true);
+      await expect
+        .poll(() =>
+          server.requests.some(
+            (req) => req.url.includes('/v1/configs') && req.method === 'POST',
+          ),
+        )
+        .toBe(true);
 
       await snap(page, testInfo, 'reset-requested');
 
-      await expect.poll(() => {
-        const state = server.getState();
-        return state['U64 Specific Settings']?.['System Mode']?.value !== 'NTSC';
-      }).toBe(true);
+      await expect
+        .poll(() => {
+          const state = server.getState();
+          return (
+            state['U64 Specific Settings']?.['System Mode']?.value !== 'NTSC'
+          );
+        })
+        .toBe(true);
 
       await snap(page, testInfo, 'defaults-applied');
     } else {

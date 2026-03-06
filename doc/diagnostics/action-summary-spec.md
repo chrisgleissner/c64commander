@@ -254,8 +254,10 @@ Derive as follows:
 
 1. `startTimestamp`: timestamp of `action-start`.
 2. `completionTimestamp`: the latest timestamp among effect completion events within the same `correlationId`:
-  - REST: `rest-response.timestamp`
-  - FTP: `ftp-operation.timestamp`
+
+- REST: `rest-response.timestamp`
+- FTP: `ftp-operation.timestamp`
+
 3. If no effect completion exists, fall back to `action-end.timestamp`.
 
 If a valid wall-clock duration cannot be calculated (missing timestamps or invalid ordering), then:
@@ -289,15 +291,15 @@ Error Logs | Logs | Traces | Actions
 
 #### Row-level (by Origin)
 
-| Origin | Visual Style       |
-| ------ | ------------------ |
-| user   | Muted green        |
-| system | Muted blue         |
+| Origin | Visual Style |
+| ------ | ------------ |
+| user   | Muted green  |
+| system | Muted blue   |
 
 #### Effect-level Indicators
 
-| Effect Type | Color  |
-| ----------- | ------ |
+| Effect Type | Color        |
+| ----------- | ------------ |
 | rest        | Muted purple |
 | ftp         | Muted amber  |
 

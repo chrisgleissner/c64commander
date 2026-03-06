@@ -45,10 +45,13 @@ const extractValue = (config: unknown) => {
 };
 
 const extractItems = (categoryName: string, response: ConfigResponse) => {
-  const categoryBlock = (response as Record<string, any>)[categoryName] ?? response;
-  const itemsBlock = (categoryBlock as Record<string, any>)?.items ?? categoryBlock;
+  const categoryBlock =
+    (response as Record<string, any>)[categoryName] ?? response;
+  const itemsBlock =
+    (categoryBlock as Record<string, any>)?.items ?? categoryBlock;
 
-  if (!itemsBlock || typeof itemsBlock !== 'object') return [] as Array<{ name: string; value: string | number }>;
+  if (!itemsBlock || typeof itemsBlock !== 'object')
+    return [] as Array<{ name: string; value: string | number }>;
 
   return Object.entries(itemsBlock)
     .filter(([key]) => key !== 'errors')
@@ -65,7 +68,10 @@ const fetchAllConfig = async () => {
     try {
       configs[category] = await api.getCategory(category);
     } catch (catError) {
-      addLog('debug', 'Config category fetch failed; will retry individually', { category, error: (catError as Error).message });
+      addLog('debug', 'Config category fetch failed; will retry individually', {
+        category,
+        error: (catError as Error).message,
+      });
       failedCategories.push(category);
     }
   }
@@ -76,9 +82,15 @@ const fetchAllConfig = async () => {
   if (hasFailures && hasSuccesses) {
     // Partial failure: some categories loaded — log a summary so operators
     // can diagnose incomplete config snapshots without noisy per-category spam.
-    addLog('debug', `Config fetch partially failed: ${failedCategories.join(', ')} unavailable (using partial snapshot)`, { failedCategories });
+    addLog(
+      'debug',
+      `Config fetch partially failed: ${failedCategories.join(', ')} unavailable (using partial snapshot)`,
+      { failedCategories },
+    );
   } else if (hasFailures && !hasSuccesses) {
-    throw new Error(`Failed to fetch configuration categories: ${failedCategories.join(', ')}`);
+    throw new Error(
+      `Failed to fetch configuration categories: ${failedCategories.join(', ')}`,
+    );
   }
 
   return configs;
@@ -89,11 +101,15 @@ export function useAppConfigState() {
   const queryClient = useQueryClient();
   const resolvedBaseUrl = baseUrl || getDefaultBaseUrl();
 
-  const [initialSnapshot, setInitialSnapshot] = useState<ConfigSnapshot | null>(() =>
-    loadInitialSnapshot(resolvedBaseUrl),
+  const [initialSnapshot, setInitialSnapshot] = useState<ConfigSnapshot | null>(
+    () => loadInitialSnapshot(resolvedBaseUrl),
   );
-  const [hasChanges, setHasChanges] = useState(() => loadHasChanges(resolvedBaseUrl));
-  const [appConfigs, setAppConfigs] = useState<AppConfigEntry[]>(() => listAppConfigs(resolvedBaseUrl));
+  const [hasChanges, setHasChanges] = useState(() =>
+    loadHasChanges(resolvedBaseUrl),
+  );
+  const [appConfigs, setAppConfigs] = useState<AppConfigEntry[]>(() =>
+    listAppConfigs(resolvedBaseUrl),
+  );
   const [isSnapshotLoading, setSnapshotLoading] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -108,7 +124,9 @@ export function useAppConfigState() {
 
   useEffect(() => {
     const handler = (event: Event) => {
-      const detail = (event as CustomEvent).detail as { baseUrl?: string; value?: boolean } | undefined;
+      const detail = (event as CustomEvent).detail as
+        | { baseUrl?: string; value?: boolean }
+        | undefined;
       if (!detail || detail.baseUrl !== resolvedBaseUrl) return;
       if (typeof detail.value === 'boolean') {
         setHasChanges(detail.value);
@@ -116,7 +134,8 @@ export function useAppConfigState() {
     };
 
     window.addEventListener('c64u-has-changes', handler as EventListener);
-    return () => window.removeEventListener('c64u-has-changes', handler as EventListener);
+    return () =>
+      window.removeEventListener('c64u-has-changes', handler as EventListener);
   }, [resolvedBaseUrl]);
 
   useEffect(() => {
@@ -154,7 +173,12 @@ export function useAppConfigState() {
     return () => {
       isMounted = false;
     };
-  }, [status.isConnected, isSnapshotLoading, resolvedBaseUrl, sessionSnapshotKey]);
+  }, [
+    status.isConnected,
+    isSnapshotLoading,
+    resolvedBaseUrl,
+    sessionSnapshotKey,
+  ]);
 
   const applyConfigData = useCallback(
     async (data: Record<string, ConfigResponse>) => {
@@ -201,7 +225,10 @@ export function useAppConfigState() {
       try {
         const data = await fetchAllConfig();
         const entry = createAppConfigEntry(resolvedBaseUrl, name, data);
-        const next = [entry, ...loadAppConfigs().filter((cfg) => cfg.id !== entry.id)];
+        const next = [
+          entry,
+          ...loadAppConfigs().filter((cfg) => cfg.id !== entry.id),
+        ];
         saveAppConfigs(next);
         setAppConfigs(listAppConfigs(resolvedBaseUrl));
         return entry;
@@ -247,8 +274,14 @@ export function useAppConfigState() {
     [resolvedBaseUrl],
   );
 
-  const markChanged = useCallback(() => updateHasChanges(resolvedBaseUrl, true), [resolvedBaseUrl]);
-  const clearChanges = useCallback(() => updateHasChanges(resolvedBaseUrl, false), [resolvedBaseUrl]);
+  const markChanged = useCallback(
+    () => updateHasChanges(resolvedBaseUrl, true),
+    [resolvedBaseUrl],
+  );
+  const clearChanges = useCallback(
+    () => updateHasChanges(resolvedBaseUrl, false),
+    [resolvedBaseUrl],
+  );
 
   return {
     initialSnapshot,

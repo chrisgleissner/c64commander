@@ -79,6 +79,7 @@ Whenever an exception is caught, you must do **one** of the following:
    - Context explaining what failed and why
 
 Unacceptable patterns include:
+
 - `catch (e) {}`
 - `catch (e) { /* ignore */ }`
 - `catch (e) { return null; }` without logging or rethrowing

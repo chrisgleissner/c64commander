@@ -7,7 +7,10 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createLocalFsSongSource, type LocalSidFile } from '@/lib/sources/LocalFsSongSource';
+import {
+  createLocalFsSongSource,
+  type LocalSidFile,
+} from '@/lib/sources/LocalFsSongSource';
 
 const sidUtilsMocks = vi.hoisted(() => ({
   computeSidMd5: vi.fn(async () => 'sid-md5'),
@@ -19,7 +22,8 @@ vi.mock('@/lib/sid/sidUtils', () => ({
   getSidSongCount: sidUtilsMocks.getSidSongCount,
 }));
 
-const toBuffer = (bytes: Uint8Array) => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+const toBuffer = (bytes: Uint8Array) =>
+  bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
 
 const createPsidPayload = (songCount: number, totalBytes = 0x80) => {
   const bytes = new Uint8Array(totalBytes);
@@ -29,17 +33,25 @@ const createPsidPayload = (songCount: number, totalBytes = 0x80) => {
   return bytes;
 };
 
-const createLocalFile = (path: string, name: string, payload: Uint8Array): LocalSidFile => ({
-  name,
-  webkitRelativePath: path.replace(/^\//, ''),
-  lastModified: 1,
-  arrayBuffer: vi.fn(async () => toBuffer(payload)),
-  slice: vi.fn((start: number, end: number) => ({
-    arrayBuffer: vi.fn(async () => toBuffer(payload.slice(start, end))),
-  })),
-} as unknown as LocalSidFile);
+const createLocalFile = (
+  path: string,
+  name: string,
+  payload: Uint8Array,
+): LocalSidFile =>
+  ({
+    name,
+    webkitRelativePath: path.replace(/^\//, ''),
+    lastModified: 1,
+    arrayBuffer: vi.fn(async () => toBuffer(payload)),
+    slice: vi.fn((start: number, end: number) => ({
+      arrayBuffer: vi.fn(async () => toBuffer(payload.slice(start, end))),
+    })),
+  }) as unknown as LocalSidFile;
 
-const waitForCondition = async (predicate: () => boolean, timeoutMs = 2_000) => {
+const waitForCondition = async (
+  predicate: () => boolean,
+  timeoutMs = 2_000,
+) => {
   const startedAt = Date.now();
   while (!predicate()) {
     if (Date.now() - startedAt > timeoutMs) {
@@ -59,7 +71,11 @@ describe('createLocalFsSongSource', () => {
 
   it('returns quickly, then enriches songs in the background and notifies UI', async () => {
     sidUtilsMocks.getSidSongCount.mockReturnValue(3);
-    const file = createLocalFile('/MUSIC/TUNE.sid', 'TUNE.sid', createPsidPayload(3));
+    const file = createLocalFile(
+      '/MUSIC/TUNE.sid',
+      'TUNE.sid',
+      createPsidPayload(3),
+    );
     const onSongMetadataResolved = vi.fn();
     const resolveSonglength = vi.fn(async () => ({
       strategy: 'filename-unique' as const,
@@ -77,7 +93,9 @@ describe('createLocalFsSongSource', () => {
     expect(firstPass[0].durationMs).toBeUndefined();
 
     await waitForCondition(() => onSongMetadataResolved.mock.calls.length > 0);
-    const update = onSongMetadataResolved.mock.calls[0][0] as { entries: Array<{ subsongCount?: number; durationMs?: number }> };
+    const update = onSongMetadataResolved.mock.calls[0][0] as {
+      entries: Array<{ subsongCount?: number; durationMs?: number }>;
+    };
     expect(update.entries).toHaveLength(3);
     expect(update.entries[0].durationMs).toBe(120_000);
     expect(update.entries[1].durationMs).toBe(240_000);
@@ -92,9 +110,14 @@ describe('createLocalFsSongSource', () => {
   });
 
   it('falls back to md5 lookup only when filename/path lookup is unresolved', async () => {
-    const file = createLocalFile('/A/TUNE.sid', 'TUNE.sid', createPsidPayload(1));
+    const file = createLocalFile(
+      '/A/TUNE.sid',
+      'TUNE.sid',
+      createPsidPayload(1),
+    );
     const onSongMetadataResolved = vi.fn();
-    const resolveSonglength = vi.fn()
+    const resolveSonglength = vi
+      .fn()
       .mockResolvedValueOnce({
         strategy: 'not-found' as const,
         durationSeconds: null,
@@ -146,7 +169,7 @@ describe('createLocalFsSongSource', () => {
     expect(list).toHaveLength(1);
 
     // Trigger enrichment check
-    await new Promise(r => setTimeout(r, 10));
+    await new Promise((r) => setTimeout(r, 10));
     expect(sidUtilsMocks.getSidSongCount).toHaveBeenCalled();
   });
 
@@ -155,13 +178,18 @@ describe('createLocalFsSongSource', () => {
     const file = createLocalFile('/demo.sid', 'demo.sid', createPsidPayload(2));
     const onResolved = vi.fn();
 
-    const resolveSonglength = vi.fn(async () => Promise.resolve({
-      strategy: 'default' as const,
-      durationSeconds: null,
-      durations: null, // No durations
-    }));
+    const resolveSonglength = vi.fn(async () =>
+      Promise.resolve({
+        strategy: 'default' as const,
+        durationSeconds: null,
+        durations: null, // No durations
+      }),
+    );
 
-    const source = createLocalFsSongSource([file], { onSongMetadataResolved: onResolved, resolveSonglength });
+    const source = createLocalFsSongSource([file], {
+      onSongMetadataResolved: onResolved,
+      resolveSonglength,
+    });
     await source.listSongs('/');
 
     await waitForCondition(() => onResolved.mock.calls.length > 0);
@@ -172,31 +200,45 @@ describe('createLocalFsSongSource', () => {
   });
 
   it('handling of files at root path vs nested', async () => {
-    const rootFile = createLocalFile('/root.sid', 'root.sid', createPsidPayload(1));
-    const nestedFile = createLocalFile('/folder/nested.sid', 'nested.sid', createPsidPayload(1));
+    const rootFile = createLocalFile(
+      '/root.sid',
+      'root.sid',
+      createPsidPayload(1),
+    );
+    const nestedFile = createLocalFile(
+      '/folder/nested.sid',
+      'nested.sid',
+      createPsidPayload(1),
+    );
 
     const source = createLocalFsSongSource([rootFile, nestedFile], {});
 
     const rootList = await source.listSongs('/');
-    expect(rootList.some(e => e.title === 'root.sid')).toBe(true);
+    expect(rootList.some((e) => e.title === 'root.sid')).toBe(true);
 
     const folderList = await source.listSongs('/folder');
-    expect(folderList.some(e => e.title === 'nested.sid')).toBe(true);
+    expect(folderList.some((e) => e.title === 'nested.sid')).toBe(true);
   });
 
   it('handles durations array mismatch and single duration fallback', async () => {
     sidUtilsMocks.getSidSongCount.mockReturnValue(2);
-    const file = createLocalFile('/short.sid', 'short.sid', createPsidPayload(2));
+    const file = createLocalFile(
+      '/short.sid',
+      'short.sid',
+      createPsidPayload(2),
+    );
     const onResolved = vi.fn();
 
     // Case 1: durations array shorter than song count
-    const resolveSonglength = vi.fn()
-      .mockResolvedValueOnce({
-        strategy: 'default' as const,
-        durations: [10], // Only 1 duration for 2 songs
-      });
+    const resolveSonglength = vi.fn().mockResolvedValueOnce({
+      strategy: 'default' as const,
+      durations: [10], // Only 1 duration for 2 songs
+    });
 
-    const source = createLocalFsSongSource([file], { onSongMetadataResolved: onResolved, resolveSonglength });
+    const source = createLocalFsSongSource([file], {
+      onSongMetadataResolved: onResolved,
+      resolveSonglength,
+    });
     await source.listSongs('/');
     await waitForCondition(() => onResolved.mock.calls.length > 0);
 
@@ -207,7 +249,11 @@ describe('createLocalFsSongSource', () => {
 
   it('uses durationSeconds if durations array is missing', async () => {
     sidUtilsMocks.getSidSongCount.mockReturnValue(1);
-    const file = createLocalFile('/single.sid', 'single.sid', createPsidPayload(1));
+    const file = createLocalFile(
+      '/single.sid',
+      'single.sid',
+      createPsidPayload(1),
+    );
     const onResolved = vi.fn();
 
     const resolveSonglength = vi.fn().mockResolvedValueOnce({
@@ -216,7 +262,10 @@ describe('createLocalFsSongSource', () => {
       durations: [], // Empty
     });
 
-    const source = createLocalFsSongSource([file], { onSongMetadataResolved: onResolved, resolveSonglength });
+    const source = createLocalFsSongSource([file], {
+      onSongMetadataResolved: onResolved,
+      resolveSonglength,
+    });
     await source.listSongs('/');
     await waitForCondition(() => onResolved.mock.calls.length > 0);
 
@@ -225,7 +274,11 @@ describe('createLocalFsSongSource', () => {
   });
 
   it('does not re-compute MD5 if strategy is unavailable', async () => {
-    const file = createLocalFile('/ignore.sid', 'ignore.sid', createPsidPayload(1));
+    const file = createLocalFile(
+      '/ignore.sid',
+      'ignore.sid',
+      createPsidPayload(1),
+    );
     const onResolved = vi.fn();
 
     const resolveSonglength = vi.fn().mockResolvedValue({
@@ -233,7 +286,10 @@ describe('createLocalFsSongSource', () => {
       durationSeconds: null,
     });
 
-    const source = createLocalFsSongSource([file], { onSongMetadataResolved: onResolved, resolveSonglength });
+    const source = createLocalFsSongSource([file], {
+      onSongMetadataResolved: onResolved,
+      resolveSonglength,
+    });
     await source.listSongs('/');
     await waitForCondition(() => onResolved.mock.calls.length > 0);
 
@@ -241,12 +297,19 @@ describe('createLocalFsSongSource', () => {
   });
 
   it('uses lookupDurationsByMd5Seconds option for duration resolution', async () => {
-    const file = createLocalFile('/md5multi.sid', 'md5multi.sid', createPsidPayload(2));
+    const file = createLocalFile(
+      '/md5multi.sid',
+      'md5multi.sid',
+      createPsidPayload(2),
+    );
     sidUtilsMocks.getSidSongCount.mockReturnValue(2);
     const onResolved = vi.fn();
 
     const lookupDurationsByMd5Seconds = vi.fn().mockResolvedValue([30, 45]);
-    const source = createLocalFsSongSource([file], { onSongMetadataResolved: onResolved, lookupDurationsByMd5Seconds });
+    const source = createLocalFsSongSource([file], {
+      onSongMetadataResolved: onResolved,
+      lookupDurationsByMd5Seconds,
+    });
     await source.listSongs('/');
     await waitForCondition(() => onResolved.mock.calls.length > 0);
 
@@ -256,11 +319,18 @@ describe('createLocalFsSongSource', () => {
   });
 
   it('uses lookupDurationSeconds option for single-duration resolution', async () => {
-    const file = createLocalFile('/single-md5.sid', 'single-md5.sid', createPsidPayload(1));
+    const file = createLocalFile(
+      '/single-md5.sid',
+      'single-md5.sid',
+      createPsidPayload(1),
+    );
     const onResolved = vi.fn();
 
     const lookupDurationSeconds = vi.fn().mockResolvedValue(25);
-    const source = createLocalFsSongSource([file], { onSongMetadataResolved: onResolved, lookupDurationSeconds });
+    const source = createLocalFsSongSource([file], {
+      onSongMetadataResolved: onResolved,
+      lookupDurationSeconds,
+    });
     await source.listSongs('/');
     await waitForCondition(() => onResolved.mock.calls.length > 0);
 
@@ -269,11 +339,18 @@ describe('createLocalFsSongSource', () => {
   });
 
   it('handles null lookupDurationSeconds result', async () => {
-    const file = createLocalFile('/null-dur.sid', 'null-dur.sid', createPsidPayload(1));
+    const file = createLocalFile(
+      '/null-dur.sid',
+      'null-dur.sid',
+      createPsidPayload(1),
+    );
     const onResolved = vi.fn();
 
     const lookupDurationSeconds = vi.fn().mockResolvedValue(null);
-    const source = createLocalFsSongSource([file], { onSongMetadataResolved: onResolved, lookupDurationSeconds });
+    const source = createLocalFsSongSource([file], {
+      onSongMetadataResolved: onResolved,
+      lookupDurationSeconds,
+    });
     await source.listSongs('/');
     await waitForCondition(() => onResolved.mock.calls.length > 0);
 
@@ -282,11 +359,20 @@ describe('createLocalFsSongSource', () => {
   });
 
   it('handles duration lookup throwing (catch branch)', async () => {
-    const file = createLocalFile('/error-dur.sid', 'error-dur.sid', createPsidPayload(1));
+    const file = createLocalFile(
+      '/error-dur.sid',
+      'error-dur.sid',
+      createPsidPayload(1),
+    );
     const onResolved = vi.fn();
 
-    const resolveSonglength = vi.fn().mockRejectedValue(new Error('lookup error'));
-    const source = createLocalFsSongSource([file], { onSongMetadataResolved: onResolved, resolveSonglength });
+    const resolveSonglength = vi
+      .fn()
+      .mockRejectedValue(new Error('lookup error'));
+    const source = createLocalFsSongSource([file], {
+      onSongMetadataResolved: onResolved,
+      resolveSonglength,
+    });
     await source.listSongs('/');
     await waitForCondition(() => onResolved.mock.calls.length > 0);
 
@@ -304,13 +390,15 @@ describe('createLocalFsSongSource', () => {
     } as unknown as LocalSidFile;
 
     const onResolved = vi.fn();
-    const source = createLocalFsSongSource([file], { onSongMetadataResolved: onResolved });
+    const source = createLocalFsSongSource([file], {
+      onSongMetadataResolved: onResolved,
+    });
 
     // Even though background scan fails, listSongs should still work
     const list = await source.listSongs('/');
     expect(list).toHaveLength(1);
     // Wait a bit for the error to be processed
-    await new Promise(r => setTimeout(r, 50));
+    await new Promise((r) => setTimeout(r, 50));
     // onResolved is not called because the scan failed, but no crash
     expect(list[0].title).toBe('broken.sid');
   });
@@ -325,14 +413,20 @@ describe('createLocalFsSongSource', () => {
     } as unknown as LocalSidFile;
 
     const onResolved = vi.fn();
-    const source = createLocalFsSongSource([file], { onSongMetadataResolved: onResolved });
+    const source = createLocalFsSongSource([file], {
+      onSongMetadataResolved: onResolved,
+    });
     await source.listSongs('/');
-    await new Promise(r => setTimeout(r, 20));
+    await new Promise((r) => setTimeout(r, 20));
     expect(sidUtilsMocks.getSidSongCount).toHaveBeenCalled();
   });
 
   it('lists songs with empty path (normalizes to root)', async () => {
-    const file = createLocalFile('/music/demo.sid', 'demo.sid', createPsidPayload(1));
+    const file = createLocalFile(
+      '/music/demo.sid',
+      'demo.sid',
+      createPsidPayload(1),
+    );
     const source = createLocalFsSongSource([file], {});
     const result = await source.listSongs('');
     expect(result.length).toBeGreaterThan(0);
@@ -363,14 +457,33 @@ describe('createLocalFsSongSource', () => {
   });
 
   it('lists unique, sorted folders and supports folder-path filtering', async () => {
-    const fileA = createLocalFile('/music/demo/a.sid', 'a.sid', createPsidPayload(1));
-    const fileB = createLocalFile('/music/demo/b.sid', 'b.sid', createPsidPayload(1));
-    const fileC = createLocalFile('/music/other/c.sid', 'c.sid', createPsidPayload(1));
-    const fileRoot = createLocalFile('/root.sid', 'root.sid', createPsidPayload(1));
+    const fileA = createLocalFile(
+      '/music/demo/a.sid',
+      'a.sid',
+      createPsidPayload(1),
+    );
+    const fileB = createLocalFile(
+      '/music/demo/b.sid',
+      'b.sid',
+      createPsidPayload(1),
+    );
+    const fileC = createLocalFile(
+      '/music/other/c.sid',
+      'c.sid',
+      createPsidPayload(1),
+    );
+    const fileRoot = createLocalFile(
+      '/root.sid',
+      'root.sid',
+      createPsidPayload(1),
+    );
     const source = createLocalFsSongSource([fileA, fileB, fileC, fileRoot], {});
 
     const allFolders = await source.listFolders('/');
-    expect(allFolders.map((entry) => entry.path)).toEqual(['/music/demo', '/music/other']);
+    expect(allFolders.map((entry) => entry.path)).toEqual([
+      '/music/demo',
+      '/music/other',
+    ]);
 
     const filtered = await source.listFolders('/music/demo');
     expect(filtered.map((entry) => entry.path)).toEqual(['/music/demo']);
@@ -380,12 +493,14 @@ describe('createLocalFsSongSource', () => {
     const file = createLocalFile('/a.sid', 'a.sid', createPsidPayload(1));
     const source = createLocalFsSongSource([file], {});
 
-    await expect(source.getSong({
-      id: 'x',
-      path: '/a.sid',
-      title: 'a.sid',
-      source: 'local',
-    })).rejects.toThrow('Missing local file data.');
+    await expect(
+      source.getSong({
+        id: 'x',
+        path: '/a.sid',
+        title: 'a.sid',
+        source: 'local',
+      }),
+    ).rejects.toThrow('Missing local file data.');
   });
 
   it('resolves getSong duration by songNr from md5 lookup when entry has no duration', async () => {

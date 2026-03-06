@@ -21,10 +21,34 @@ export type StreamControlEntry = {
   rawValue: string;
 };
 
-export const STREAM_LAYOUT: Array<{ key: StreamKey; label: string; itemName: string; defaultPort: string; restName: string }> = [
-  { key: 'vic', label: 'VIC', itemName: 'Stream VIC to', defaultPort: '11000', restName: 'video' },
-  { key: 'audio', label: 'Audio', itemName: 'Stream Audio to', defaultPort: '11001', restName: 'audio' },
-  { key: 'debug', label: 'Debug', itemName: 'Stream Debug to', defaultPort: '11002', restName: 'debug' },
+export const STREAM_LAYOUT: Array<{
+  key: StreamKey;
+  label: string;
+  itemName: string;
+  defaultPort: string;
+  restName: string;
+}> = [
+  {
+    key: 'vic',
+    label: 'VIC',
+    itemName: 'Stream VIC to',
+    defaultPort: '11000',
+    restName: 'video',
+  },
+  {
+    key: 'audio',
+    label: 'Audio',
+    itemName: 'Stream Audio to',
+    defaultPort: '11001',
+    restName: 'audio',
+  },
+  {
+    key: 'debug',
+    label: 'Debug',
+    itemName: 'Stream Debug to',
+    defaultPort: '11002',
+    restName: 'debug',
+  },
 ];
 
 export const STREAM_ITEMS = STREAM_LAYOUT.map((item) => item.itemName);
@@ -39,13 +63,19 @@ const OFF_TOKENS = new Set([
   'false',
 ]);
 
-const IPV4_PATTERN = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
+const IPV4_PATTERN =
+  /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
 
 const getItemValue = (payload: unknown, itemName: string) => {
   const record = payload as Record<string, unknown> | undefined;
-  const categoryBlock = (record?.['Data Streams'] ?? record) as Record<string, unknown> | undefined;
-  const items = (categoryBlock?.items ?? categoryBlock) as Record<string, unknown> | undefined;
-  if (!items || !Object.prototype.hasOwnProperty.call(items, itemName)) return undefined;
+  const categoryBlock = (record?.['Data Streams'] ?? record) as
+    | Record<string, unknown>
+    | undefined;
+  const items = (categoryBlock?.items ?? categoryBlock) as
+    | Record<string, unknown>
+    | undefined;
+  if (!items || !Object.prototype.hasOwnProperty.call(items, itemName))
+    return undefined;
   return normalizeConfigItem(items[itemName]).value;
 };
 
@@ -81,7 +111,9 @@ const parseStreamTarget = (value: unknown, defaultPort: string) => {
   };
 };
 
-export const buildStreamControlEntries = (dataStreamsCategory?: Record<string, unknown>): StreamControlEntry[] =>
+export const buildStreamControlEntries = (
+  dataStreamsCategory?: Record<string, unknown>,
+): StreamControlEntry[] =>
   STREAM_LAYOUT.map((entry) => {
     const value = getItemValue(dataStreamsCategory, entry.itemName);
     const parsed = parseStreamTarget(value, entry.defaultPort);
@@ -117,7 +149,11 @@ export const validateStreamPort = (value: string) => {
   return null;
 };
 
-export const buildStreamConfigValue = (enabled: boolean, ip: string, port: string) => {
+export const buildStreamConfigValue = (
+  enabled: boolean,
+  ip: string,
+  port: string,
+) => {
   if (!enabled) return 'off';
   return `${ip.trim()}:${port.trim()}`;
 };

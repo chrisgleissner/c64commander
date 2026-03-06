@@ -37,9 +37,12 @@ export type FtpReadOptions = {
 
 export type FtpClientPlugin = {
   listDirectory: (options: FtpListOptions) => Promise<{ entries: FtpEntry[] }>;
-  readFile: (options: FtpReadOptions) => Promise<{ data: string; sizeBytes?: number }>;
+  readFile: (
+    options: FtpReadOptions,
+  ) => Promise<{ data: string; sizeBytes?: number }>;
 };
 
 export const FtpClient = registerPlugin<FtpClientPlugin>('FtpClient', {
-  web: () => import('./ftpClient.web').then((module) => new module.FtpClientWeb()),
+  web: () =>
+    import('./ftpClient.web').then((module) => new module.FtpClientWeb()),
 });

@@ -28,11 +28,17 @@ describe('usePlaybackResumeTriggers', () => {
     const onResume = vi.fn();
     renderHook(() => usePlaybackResumeTriggers(onResume));
 
-    Object.defineProperty(document, 'hidden', { value: true, configurable: true });
+    Object.defineProperty(document, 'hidden', {
+      value: true,
+      configurable: true,
+    });
     document.dispatchEvent(new Event('visibilitychange'));
     expect(onResume).not.toHaveBeenCalled();
 
-    Object.defineProperty(document, 'hidden', { value: false, configurable: true });
+    Object.defineProperty(document, 'hidden', {
+      value: false,
+      configurable: true,
+    });
     document.dispatchEvent(new Event('visibilitychange'));
     expect(onResume).toHaveBeenCalledTimes(1);
   });

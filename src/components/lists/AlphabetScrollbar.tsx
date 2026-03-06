@@ -18,7 +18,12 @@ type Props = {
 
 const LETTERS = '#ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 
-export function AlphabetScrollbar({ items, scrollContainerRef, onLetterSelect, onScrollToIndex }: Props) {
+export function AlphabetScrollbar({
+  items,
+  scrollContainerRef,
+  onLetterSelect,
+  onScrollToIndex,
+}: Props) {
   const [visible, setVisible] = useState(false);
   const [activeLetter, setActiveLetter] = useState<string | null>(null);
   const [isEligible, setIsEligible] = useState(false);
@@ -64,10 +69,13 @@ export function AlphabetScrollbar({ items, scrollContainerRef, onLetterSelect, o
         const container = scrollContainerRef.current;
         const targetItem = items[index];
         if (!targetItem) return;
-        const safeId = typeof CSS !== 'undefined' && 'escape' in CSS
-          ? CSS.escape(targetItem.id)
-          : targetItem.id.replace(/"/g, '\\"');
-        const targetRow = container.querySelector(`[data-row-id="${safeId}"]`) as HTMLElement | null;
+        const safeId =
+          typeof CSS !== 'undefined' && 'escape' in CSS
+            ? CSS.escape(targetItem.id)
+            : targetItem.id.replace(/"/g, '\\"');
+        const targetRow = container.querySelector(
+          `[data-row-id="${safeId}"]`,
+        ) as HTMLElement | null;
 
         if (targetRow) {
           targetRow.scrollIntoView({ block: 'start', behavior: 'smooth' });
@@ -80,7 +88,7 @@ export function AlphabetScrollbar({ items, scrollContainerRef, onLetterSelect, o
       onLetterSelect?.(letter);
       scheduleHide();
     },
-    [computeLetterIndices, scrollContainerRef, onLetterSelect, onScrollToIndex]
+    [computeLetterIndices, scrollContainerRef, onLetterSelect, onScrollToIndex],
   );
 
   const handleTouch = useCallback(
@@ -95,7 +103,7 @@ export function AlphabetScrollbar({ items, scrollContainerRef, onLetterSelect, o
         scrollToLetter(letter);
       }
     },
-    [isEligible, scrollToLetter]
+    [isEligible, scrollToLetter],
   );
 
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -151,7 +159,9 @@ export function AlphabetScrollbar({ items, scrollContainerRef, onLetterSelect, o
 
     const updateEligibility = () => {
       if (!container) return;
-      const eligible = items.length >= LETTERS.length || container.scrollHeight > container.clientHeight * 1.1;
+      const eligible =
+        items.length >= LETTERS.length ||
+        container.scrollHeight > container.clientHeight * 1.1;
       setIsEligible(eligible);
       if (!eligible) {
         setVisible(false);
@@ -167,9 +177,10 @@ export function AlphabetScrollbar({ items, scrollContainerRef, onLetterSelect, o
         return;
       }
       updateEligibility();
-      resizeObserver = typeof ResizeObserver !== 'undefined'
-        ? new ResizeObserver(updateEligibility)
-        : null;
+      resizeObserver =
+        typeof ResizeObserver !== 'undefined'
+          ? new ResizeObserver(updateEligibility)
+          : null;
       resizeObserver?.observe(container);
       window.addEventListener('resize', updateEligibility);
     };
@@ -207,7 +218,7 @@ export function AlphabetScrollbar({ items, scrollContainerRef, onLetterSelect, o
           <div
             className={cn(
               'fixed left-2 top-1/2 -translate-y-1/2 flex flex-col items-center gap-0.5 py-2 px-1.5 rounded-lg bg-background/90 backdrop-blur-sm border border-border shadow-lg z-50 transition-opacity duration-200 pointer-events-none',
-              visible ? 'opacity-100' : 'opacity-0'
+              visible ? 'opacity-100' : 'opacity-0',
             )}
             data-testid="alphabet-overlay"
           >
@@ -218,7 +229,7 @@ export function AlphabetScrollbar({ items, scrollContainerRef, onLetterSelect, o
                   'text-xs font-semibold leading-none py-0.5 px-1 rounded transition-colors',
                   activeLetter === letter
                     ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground'
+                    : 'text-muted-foreground',
                 )}
               >
                 {letter}

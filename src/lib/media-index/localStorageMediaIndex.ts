@@ -6,7 +6,13 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { MediaEntry, MediaIndex, MediaIndexSnapshot, MediaIndexStorage, MediaType } from './mediaIndex';
+import type {
+  MediaEntry,
+  MediaIndex,
+  MediaIndexSnapshot,
+  MediaIndexStorage,
+  MediaType,
+} from './mediaIndex';
 
 const STORAGE_KEY = 'c64u_media_index:v1';
 
@@ -66,7 +72,9 @@ export class JsonMediaIndex implements MediaIndex {
   }
 
   queryByType(type: MediaType): MediaEntry[] {
-    return Array.from(this.entries.values()).filter((entry) => entry.type === type);
+    return Array.from(this.entries.values()).filter(
+      (entry) => entry.type === type,
+    );
   }
 
   queryByPath(path: string): MediaEntry | null {

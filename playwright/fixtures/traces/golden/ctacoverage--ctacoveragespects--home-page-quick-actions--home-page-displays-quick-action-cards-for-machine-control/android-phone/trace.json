@@ -1737,10 +1737,7 @@
           "items": {
             "Drive": {
               "selected": "Enabled",
-              "options": [
-                "Disabled",
-                "Enabled"
-              ]
+              "options": ["Disabled", "Enabled"]
             }
           }
         },
@@ -8495,11 +8492,7 @@
           "items": {
             "Drive Type": {
               "selected": "1541",
-              "options": [
-                "1541",
-                "1571",
-                "1581"
-              ]
+              "options": ["1541", "1571", "1581"]
             }
           }
         },
@@ -8543,10 +8536,7 @@
           "items": {
             "Drive": {
               "selected": "Disabled",
-              "options": [
-                "Disabled",
-                "Enabled"
-              ]
+              "options": ["Disabled", "Enabled"]
             }
           }
         },
@@ -8639,11 +8629,7 @@
           "items": {
             "Drive Type": {
               "selected": "1541",
-              "options": [
-                "1541",
-                "1571",
-                "1581"
-              ]
+              "options": ["1541", "1571", "1581"]
             }
           }
         },
@@ -8687,10 +8673,7 @@
           "items": {
             "IEC Drive": {
               "selected": "Disabled",
-              "options": [
-                "Disabled",
-                "Enabled"
-              ]
+              "options": ["Disabled", "Enabled"]
             }
           }
         },
@@ -8988,10 +8971,7 @@
           "items": {
             "Analog Video Mode": {
               "selected": "CVBS + SVideo",
-              "options": [
-                "CVBS + SVideo",
-                "RGB"
-              ]
+              "options": ["CVBS + SVideo", "RGB"]
             }
           }
         },
@@ -9035,11 +9015,7 @@
           "items": {
             "Digital Video Mode": {
               "selected": "Auto",
-              "options": [
-                "Auto",
-                "HDMI",
-                "DVI"
-              ]
+              "options": ["Auto", "HDMI", "DVI"]
             }
           }
         },
@@ -9083,10 +9059,7 @@
           "items": {
             "HDMI Scan lines": {
               "selected": "Enabled",
-              "options": [
-                "Disabled",
-                "Enabled"
-              ]
+              "options": ["Disabled", "Enabled"]
             }
           }
         },
@@ -9130,12 +9103,7 @@
           "items": {
             "LedStrip Mode": {
               "selected": "Fixed Color",
-              "options": [
-                "Off",
-                "Fixed Color",
-                "SID Music",
-                "Rainbow"
-              ]
+              "options": ["Off", "Fixed Color", "SID Music", "Rainbow"]
             }
           }
         },
@@ -9351,12 +9319,7 @@
           "items": {
             "Color tint": {
               "selected": "Pure",
-              "options": [
-                "Pure",
-                "Bright",
-                "Pastel",
-                "Whisper"
-              ]
+              "options": ["Pure", "Bright", "Pastel", "Whisper"]
             }
           }
         },
@@ -9472,10 +9435,7 @@
           "items": {
             "IEC printer": {
               "selected": "Disabled",
-              "options": [
-                "Disabled",
-                "Enabled"
-              ]
+              "options": ["Disabled", "Enabled"]
             }
           }
         },
@@ -9612,12 +9572,7 @@
           "items": {
             "Output type": {
               "selected": "PNG B&W",
-              "options": [
-                "RAW",
-                "ASCII",
-                "PNG B&W",
-                "PNG COLOR"
-              ]
+              "options": ["RAW", "ASCII", "PNG B&W", "PNG COLOR"]
             }
           }
         },
@@ -9661,12 +9616,7 @@
           "items": {
             "Ink density": {
               "selected": "Medium",
-              "options": [
-                "Low",
-                "Medium",
-                "High",
-                "Squares"
-              ]
+              "options": ["Low", "Medium", "High", "Squares"]
             }
           }
         },
@@ -10017,10 +9967,7 @@
           "items": {
             "SID Socket 1": {
               "selected": "Enabled",
-              "options": [
-                "Disabled",
-                "Enabled"
-              ]
+              "options": ["Disabled", "Enabled"]
             }
           }
         },
@@ -10118,10 +10065,7 @@
           "items": {
             "SID Socket 2": {
               "selected": "Disabled",
-              "options": [
-                "Disabled",
-                "Enabled"
-              ]
+              "options": ["Disabled", "Enabled"]
             }
           }
         },
@@ -10219,10 +10163,7 @@
           "items": {
             "SID Socket 1 1K Ohm Resistor": {
               "selected": "On",
-              "options": [
-                "Off",
-                "On"
-              ]
+              "options": ["Off", "On"]
             }
           }
         },
@@ -10266,10 +10207,7 @@
           "items": {
             "SID Socket 2 1K Ohm Resistor": {
               "selected": "Off",
-              "options": [
-                "Off",
-                "On"
-              ]
+              "options": ["Off", "On"]
             }
           }
         },
@@ -10385,10 +10323,7 @@
           "items": {
             "SID Socket 1 Capacitors": {
               "selected": "470 pF",
-              "options": [
-                "470 pF",
-                "22 nF"
-              ]
+              "options": ["470 pF", "22 nF"]
             }
           }
         },
@@ -10432,10 +10367,7 @@
           "items": {
             "SID Socket 2 Capacitors": {
               "selected": "470 pF",
-              "options": [
-                "470 pF",
-                "22 nF"
-              ]
+              "options": ["470 pF", "22 nF"]
             }
           }
         },
@@ -10583,10 +10515,7 @@
           "items": {
             "UltiSID 1 Filter Resonance": {
               "selected": "Low",
-              "options": [
-                "Low",
-                "High"
-              ]
+              "options": ["Low", "High"]
             }
           }
         },
@@ -10630,10 +10559,7 @@
           "items": {
             "UltiSID 2 Filter Resonance": {
               "selected": "Low",
-              "options": [
-                "Low",
-                "High"
-              ]
+              "options": ["Low", "High"]
             }
           }
         },
@@ -10677,10 +10603,7 @@
           "items": {
             "UltiSID 1 Combined Waveforms": {
               "selected": "6581",
-              "options": [
-                "6581",
-                "8580"
-              ]
+              "options": ["6581", "8580"]
             }
           }
         },
@@ -10724,10 +10647,7 @@
           "items": {
             "UltiSID 2 Combined Waveforms": {
               "selected": "6581",
-              "options": [
-                "6581",
-                "8580"
-              ]
+              "options": ["6581", "8580"]
             }
           }
         },
@@ -10771,12 +10691,7 @@
           "items": {
             "UltiSID 1 Digis Level": {
               "selected": "Medium",
-              "options": [
-                "Off",
-                "Low",
-                "Medium",
-                "High"
-              ]
+              "options": ["Off", "Low", "Medium", "High"]
             }
           }
         },
@@ -10820,12 +10735,7 @@
           "items": {
             "UltiSID 2 Digis Level": {
               "selected": "Medium",
-              "options": [
-                "Off",
-                "Low",
-                "Medium",
-                "High"
-              ]
+              "options": ["Off", "Low", "Medium", "High"]
             }
           }
         },

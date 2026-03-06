@@ -42,7 +42,9 @@ const readJsonBody = async (req: http.IncomingMessage) => {
 const buildPath = (base: string, name: string) => {
   const normalized = base && base !== '' ? base : '/';
   if (normalized === '/') return `/${name}`;
-  return normalized.endsWith('/') ? `${normalized}${name}` : `${normalized}/${name}`;
+  return normalized.endsWith('/')
+    ? `${normalized}${name}`
+    : `${normalized}/${name}`;
 };
 
 const createBufferSink = () => {
@@ -102,18 +104,26 @@ export async function createMockFtpBridgeServer(): Promise<MockFtpBridgeServer> 
         });
 
         if (isList) {
-          const listPath = payload.path && payload.path !== '' ? payload.path : '/';
+          const listPath =
+            payload.path && payload.path !== '' ? payload.path : '/';
           const items = await client.list(listPath);
           const entries = items
-            .filter((entry) => entry.name && entry.name !== '.' && entry.name !== '..')
+            .filter(
+              (entry) =>
+                entry.name && entry.name !== '.' && entry.name !== '..',
+            )
             .map((entry) => {
-              const isDir = (entry as { isDirectory?: boolean }).isDirectory === true || entry.type === 2;
+              const isDir =
+                (entry as { isDirectory?: boolean }).isDirectory === true ||
+                entry.type === 2;
               return {
                 name: entry.name,
                 path: buildPath(listPath, entry.name),
                 type: isDir ? 'dir' : 'file',
                 size: entry.size || undefined,
-                modifiedAt: entry.modifiedAt ? entry.modifiedAt.toISOString() : undefined,
+                modifiedAt: entry.modifiedAt
+                  ? entry.modifiedAt.toISOString()
+                  : undefined,
               };
             });
 
@@ -124,17 +134,30 @@ export async function createMockFtpBridgeServer(): Promise<MockFtpBridgeServer> 
           await client.downloadTo(stream, payload.path ?? '/');
           const buffer = getBuffer();
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ data: buffer.toString('base64'), sizeBytes: buffer.length }));
+          res.end(
+            JSON.stringify({
+              data: buffer.toString('base64'),
+              sizeBytes: buffer.length,
+            }),
+          );
         }
       } catch (error) {
         res.writeHead(502, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: (error as Error).message || 'FTP bridge error' }));
+        res.end(
+          JSON.stringify({
+            error: (error as Error).message || 'FTP bridge error',
+          }),
+        );
       } finally {
         client.close();
       }
     } catch (error) {
       res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: (error as Error).message || 'FTP bridge failure' }));
+      res.end(
+        JSON.stringify({
+          error: (error as Error).message || 'FTP bridge failure',
+        }),
+      );
     }
   });
 

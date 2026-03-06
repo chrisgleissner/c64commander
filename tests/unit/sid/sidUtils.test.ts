@@ -7,7 +7,13 @@
  */
 
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { base64ToUint8, buildSidTrackSubsongs, createSslPayload, getSidSongCount, parseSidHeaderMetadata } from '@/lib/sid/sidUtils';
+import {
+  base64ToUint8,
+  buildSidTrackSubsongs,
+  createSslPayload,
+  getSidSongCount,
+  parseSidHeaderMetadata,
+} from '@/lib/sid/sidUtils';
 
 const createSidHeader = (options?: {
   magic?: 'PSID' | 'RSID';
@@ -23,7 +29,10 @@ const createSidHeader = (options?: {
   const bytes = new Uint8Array(124);
   const view = new DataView(bytes.buffer);
   const magic = options?.magic ?? 'PSID';
-  bytes.set(Array.from(magic).map((char) => char.charCodeAt(0)), 0);
+  bytes.set(
+    Array.from(magic).map((char) => char.charCodeAt(0)),
+    0,
+  );
   view.setUint16(4, options?.version ?? 4, false);
   view.setUint16(6, 0x007c, false);
   view.setUint16(8, options?.loadAddress ?? 0x1000, false);
@@ -35,9 +44,9 @@ const createSidHeader = (options?: {
   view.setUint16(118, options?.flags ?? 0b0101010101, false);
   view.setUint8(122, 0x42);
   view.setUint8(123, 0x44);
-  const nameBytes = options?.nameBytes ?? [0x48, 0x65, 0x6C, 0x6C, 0x6F, 0x00];
+  const nameBytes = options?.nameBytes ?? [0x48, 0x65, 0x6c, 0x6c, 0x6f, 0x00];
   bytes.set(nameBytes, 22);
-  bytes.set([0x41, 0x75, 0x74, 0x68, 0x6F, 0x72, 0x00], 54);
+  bytes.set([0x41, 0x75, 0x74, 0x68, 0x6f, 0x72, 0x00], 54);
   bytes.set([0x31, 0x39, 0x38, 0x36, 0x00], 86);
   return bytes;
 };
@@ -49,7 +58,9 @@ describe('sidUtils', () => {
   });
 
   it('logs when SID song count parsing fails', () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const warnSpy = vi
+      .spyOn(console, 'warn')
+      .mockImplementation(() => undefined);
     class ThrowingDataView {
       constructor() {
         throw new Error('boom');
@@ -71,7 +82,9 @@ describe('sidUtils', () => {
   });
 
   it('encodes maximum supported duration 99:59', () => {
-    expect(Array.from(createSslPayload((99 * 60 * 1000) + (59 * 1000)))).toEqual([0x99, 0x59]);
+    expect(Array.from(createSslPayload(99 * 60 * 1000 + 59 * 1000))).toEqual([
+      0x99, 0x59,
+    ]);
   });
 
   it('throws for negative duration', () => {
@@ -84,7 +97,7 @@ describe('sidUtils', () => {
   });
 
   it('throws for values exceeding 99:59', () => {
-    expect(() => createSslPayload((100 * 60 * 1000))).toThrow('99:59');
+    expect(() => createSslPayload(100 * 60 * 1000)).toThrow('99:59');
   });
 
   it('parses PSID metadata fields', () => {
@@ -97,24 +110,28 @@ describe('sidUtils', () => {
     expect(metadata.author).toBe('Author');
     expect(metadata.released).toBe('1986');
     expect(metadata.sid2Adress).toBe(0x42);
-    expect(metadata.sid2Address).toBe(0xD420);
+    expect(metadata.sid2Address).toBe(0xd420);
     expect(metadata.sidChipCount).toBe(3);
   });
 
   it('decodes Windows-1252 metadata strings', () => {
-    const metadata = parseSidHeaderMetadata(createSidHeader({
-      nameBytes: [0x50, 0x72, 0x69, 0x63, 0x65, 0x20, 0x80, 0x00],
-    }));
+    const metadata = parseSidHeaderMetadata(
+      createSidHeader({
+        nameBytes: [0x50, 0x72, 0x69, 0x63, 0x65, 0x20, 0x80, 0x00],
+      }),
+    );
     expect(metadata.name).toBe('Price €');
   });
 
   it('flags invalid RSID constraints without throwing', () => {
-    const metadata = parseSidHeaderMetadata(createSidHeader({
-      magic: 'RSID',
-      loadAddress: 0x1000,
-      playAddress: 0x1006,
-      speedBits: 1,
-    }));
+    const metadata = parseSidHeaderMetadata(
+      createSidHeader({
+        magic: 'RSID',
+        loadAddress: 0x1000,
+        playAddress: 0x1006,
+        speedBits: 1,
+      }),
+    );
     expect(metadata.magicId).toBe('RSID');
     expect(metadata.rsidValid).toBe(false);
     expect(metadata.parserWarnings.length).toBeGreaterThan(0);
@@ -150,13 +167,17 @@ describe('sidUtils', () => {
   });
 
   it('throws for header shorter than 124 bytes', () => {
-    expect(() => parseSidHeaderMetadata(new Uint8Array(100))).toThrow('124 bytes');
+    expect(() => parseSidHeaderMetadata(new Uint8Array(100))).toThrow(
+      '124 bytes',
+    );
   });
 
   it('throws for unsupported magic', () => {
     const bytes = new Uint8Array(124);
-    bytes.set([0x4D, 0x41, 0x47, 0x49], 0); // 'MAGI'
-    expect(() => parseSidHeaderMetadata(bytes)).toThrow('Unsupported SID magic');
+    bytes.set([0x4d, 0x41, 0x47, 0x49], 0); // 'MAGI'
+    expect(() => parseSidHeaderMetadata(bytes)).toThrow(
+      'Unsupported SID magic',
+    );
   });
 
   it('defaults songs to 1 when songs field is 0', () => {
@@ -170,7 +191,9 @@ describe('sidUtils', () => {
   });
 
   it('clamps startSong when greater than songs', () => {
-    const metadata = parseSidHeaderMetadata(createSidHeader({ songs: 2, startSong: 5 }));
+    const metadata = parseSidHeaderMetadata(
+      createSidHeader({ songs: 2, startSong: 5 }),
+    );
     expect(metadata.startSong).toBe(2);
   });
 
@@ -186,7 +209,9 @@ describe('sidUtils', () => {
 
   it('decodes pal_ntsc clock when both PAL and NTSC bits are set (BRDA:99 block 19)', () => {
     // clockBits = (flags >> 2) & 0b11; flags=0b001111 → clockBits=0b11 → 'pal_ntsc'
-    const metadata = parseSidHeaderMetadata(createSidHeader({ flags: 0b001111 }));
+    const metadata = parseSidHeaderMetadata(
+      createSidHeader({ flags: 0b001111 }),
+    );
     expect(metadata.clock).toBe('pal_ntsc');
   });
 
@@ -206,12 +231,14 @@ describe('sidUtils', () => {
   });
 
   it('validates valid RSID with all zero constraints', () => {
-    const metadata = parseSidHeaderMetadata(createSidHeader({
-      magic: 'RSID',
-      loadAddress: 0,
-      playAddress: 0,
-      speedBits: 0,
-    }));
+    const metadata = parseSidHeaderMetadata(
+      createSidHeader({
+        magic: 'RSID',
+        loadAddress: 0,
+        playAddress: 0,
+        speedBits: 0,
+      }),
+    );
     expect(metadata.rsidValid).toBe(true);
     expect(metadata.parserWarnings).toHaveLength(0);
   });
@@ -224,9 +251,11 @@ describe('sidUtils', () => {
 
   it('decodes unmapped Windows-1252 byte as replacement character', () => {
     // 0x81 is NOT in the WINDOWS_1252_EXTENDED map
-    const metadata = parseSidHeaderMetadata(createSidHeader({
-      nameBytes: [0x41, 0x81, 0x42, 0x00],
-    }));
+    const metadata = parseSidHeaderMetadata(
+      createSidHeader({
+        nameBytes: [0x41, 0x81, 0x42, 0x00],
+      }),
+    );
     expect(metadata.name).toContain('\uFFFD');
   });
 
@@ -237,7 +266,7 @@ describe('sidUtils', () => {
   it('returns 1 for buffer with bad magic', () => {
     const buf = new ArrayBuffer(20);
     const view = new DataView(buf);
-    view.setUint8(0, 0x4D); // M
+    view.setUint8(0, 0x4d); // M
     view.setUint8(1, 0x41); // A
     view.setUint8(2, 0x47); // G
     view.setUint8(3, 0x49); // I

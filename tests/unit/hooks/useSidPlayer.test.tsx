@@ -84,7 +84,9 @@ describe('useSidPlayer', () => {
   });
 
   it('throws when legacy hook is used outside provider', () => {
-    expect(() => renderHook(() => useSidPlayer())).toThrow('useSidPlayer must be used within SidPlayerProvider');
+    expect(() => renderHook(() => useSidPlayer())).toThrow(
+      'useSidPlayer must be used within SidPlayerProvider',
+    );
   });
 
   it('returns early for empty queue in playQueue', async () => {
@@ -107,11 +109,13 @@ describe('useSidPlayer', () => {
     );
     const { result } = renderHook(() => useSidPlayer(), { wrapper });
 
-    await expect(result.current.playTrack({
-      id: 'missing-data',
-      title: 'Missing',
-      source: 'local',
-    })).rejects.toThrow('Missing SID data.');
+    await expect(
+      result.current.playTrack({
+        id: 'missing-data',
+        title: 'Missing',
+        source: 'local',
+      }),
+    ).rejects.toThrow('Missing SID data.');
   });
 
   it('assigns an id when playTrack is called without one', async () => {
@@ -140,8 +144,18 @@ describe('useSidPlayer', () => {
     );
     const { result } = renderHook(() => useSidPlayer(), { wrapper });
     const tracks = [
-      { id: 'a', title: 'A', source: 'local' as const, data: new Uint8Array([1]) },
-      { id: 'b', title: 'B', source: 'local' as const, data: new Uint8Array([2]) },
+      {
+        id: 'a',
+        title: 'A',
+        source: 'local' as const,
+        data: new Uint8Array([1]),
+      },
+      {
+        id: 'b',
+        title: 'B',
+        source: 'local' as const,
+        data: new Uint8Array([2]),
+      },
     ];
 
     await act(async () => {
@@ -165,9 +179,24 @@ describe('useSidPlayer', () => {
     );
     const { result } = renderHook(() => useSidPlayer(), { wrapper });
     const tracks = [
-      { id: 'a', title: 'A', source: 'local' as const, data: new Uint8Array([1]) },
-      { id: 'b', title: 'B', source: 'local' as const, data: new Uint8Array([2]) },
-      { id: 'c', title: 'C', source: 'local' as const, data: new Uint8Array([3]) },
+      {
+        id: 'a',
+        title: 'A',
+        source: 'local' as const,
+        data: new Uint8Array([1]),
+      },
+      {
+        id: 'b',
+        title: 'B',
+        source: 'local' as const,
+        data: new Uint8Array([2]),
+      },
+      {
+        id: 'c',
+        title: 'C',
+        source: 'local' as const,
+        data: new Uint8Array([3]),
+      },
     ];
 
     const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.8);
@@ -194,8 +223,20 @@ describe('useSidPlayer', () => {
     );
     const { result } = renderHook(() => useSidPlayer(), { wrapper });
     const tracks = [
-      { id: 'a', title: 'A', source: 'local' as const, data: new Uint8Array([1]), durationMs: 100 },
-      { id: 'b', title: 'B', source: 'local' as const, data: new Uint8Array([2]), durationMs: 100 },
+      {
+        id: 'a',
+        title: 'A',
+        source: 'local' as const,
+        data: new Uint8Array([1]),
+        durationMs: 100,
+      },
+      {
+        id: 'b',
+        title: 'B',
+        source: 'local' as const,
+        data: new Uint8Array([2]),
+        durationMs: 100,
+      },
     ];
 
     await act(async () => {

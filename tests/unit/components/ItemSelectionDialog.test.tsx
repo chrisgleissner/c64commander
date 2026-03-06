@@ -8,7 +8,10 @@
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ItemSelectionDialog, type SourceGroup } from '@/components/itemSelection/ItemSelectionDialog';
+import {
+  ItemSelectionDialog,
+  type SourceGroup,
+} from '@/components/itemSelection/ItemSelectionDialog';
 import { useSourceNavigator } from '@/lib/sourceNavigation/useSourceNavigator';
 import type { SourceEntry } from '@/lib/sourceNavigation/types';
 import { reportUserError } from '@/lib/uiErrors';
@@ -48,8 +51,14 @@ describe('ItemSelectionDialog source picker', () => {
       refresh: vi.fn(),
     });
     const sourceGroups: SourceGroup[] = [
-      { label: 'C64 Ultimate', sources: [buildSource('ultimate', 'C64 Ultimate', 'ultimate')] },
-      { label: 'This device', sources: [buildSource('local-1', 'My Folder', 'local')] },
+      {
+        label: 'C64 Ultimate',
+        sources: [buildSource('ultimate', 'C64 Ultimate', 'ultimate')],
+      },
+      {
+        label: 'This device',
+        sources: [buildSource('local-1', 'My Folder', 'local')],
+      },
     ];
 
     render(
@@ -64,9 +73,13 @@ describe('ItemSelectionDialog source picker', () => {
       />,
     );
 
-    const addButtons = screen.getAllByRole('button', { name: /add file \/ folder/i });
+    const addButtons = screen.getAllByRole('button', {
+      name: /add file \/ folder/i,
+    });
     expect(addButtons).toHaveLength(2);
-    expect(screen.getByTestId('import-selection-interstitial')).toBeInTheDocument();
+    expect(
+      screen.getByTestId('import-selection-interstitial'),
+    ).toBeInTheDocument();
     expect(screen.getByTestId('import-option-c64u')).toBeInTheDocument();
     expect(screen.getByTestId('import-option-local')).toBeInTheDocument();
   });
@@ -93,7 +106,10 @@ describe('ItemSelectionDialog source picker', () => {
     });
 
     const sourceGroups: SourceGroup[] = [
-      { label: 'C64 Ultimate', sources: [buildSource('ultimate', 'C64 Ultimate', 'ultimate')] },
+      {
+        label: 'C64 Ultimate',
+        sources: [buildSource('ultimate', 'C64 Ultimate', 'ultimate')],
+      },
     ];
 
     render(
@@ -118,14 +134,22 @@ describe('ItemSelectionDialog source picker', () => {
 
     const checkbox = screen.getAllByRole('checkbox')[0];
     fireEvent.click(checkbox);
-    expect(screen.getByTestId('add-items-selection-count')).toHaveTextContent('1 selected');
+    expect(screen.getByTestId('add-items-selection-count')).toHaveTextContent(
+      '1 selected',
+    );
 
     fireEvent.click(screen.getByTestId('add-items-confirm'));
     await vi.runAllTimersAsync();
 
     expect(onConfirm).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'ultimate' }),
-      [expect.objectContaining({ type: 'file', name: 'song.sid', path: '/song.sid' })],
+      [
+        expect.objectContaining({
+          type: 'file',
+          name: 'song.sid',
+          path: '/song.sid',
+        }),
+      ],
     );
     expect(onOpenChange).toHaveBeenCalledWith(false);
     vi.useRealTimers();
@@ -148,7 +172,10 @@ describe('ItemSelectionDialog source picker', () => {
     });
 
     const sourceGroups: SourceGroup[] = [
-      { label: 'C64 Ultimate', sources: [buildSource('ultimate', 'C64 Ultimate', 'ultimate')] },
+      {
+        label: 'C64 Ultimate',
+        sources: [buildSource('ultimate', 'C64 Ultimate', 'ultimate')],
+      },
     ];
 
     render(
@@ -168,10 +195,12 @@ describe('ItemSelectionDialog source picker', () => {
     fireEvent.click(screen.getByTestId('add-items-confirm'));
 
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(reportUserError).toHaveBeenCalledWith(expect.objectContaining({
-      operation: 'ITEM_SELECTION',
-      title: 'Add items failed',
-    }));
+    expect(reportUserError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operation: 'ITEM_SELECTION',
+        title: 'Add items failed',
+      }),
+    );
   });
 
   it('reports add local source failures', async () => {
@@ -188,7 +217,10 @@ describe('ItemSelectionDialog source picker', () => {
     });
 
     const sourceGroups: SourceGroup[] = [
-      { label: 'This device', sources: [buildSource('local-1', 'My Folder', 'local')] },
+      {
+        label: 'This device',
+        sources: [buildSource('local-1', 'My Folder', 'local')],
+      },
     ];
 
     render(
@@ -206,10 +238,12 @@ describe('ItemSelectionDialog source picker', () => {
     fireEvent.click(screen.getByTestId('import-option-local'));
 
     await waitFor(() => {
-      expect(reportUserError).toHaveBeenCalledWith(expect.objectContaining({
-        operation: 'LOCAL_FOLDER_PICK',
-        title: 'Unable to add folder',
-      }));
+      expect(reportUserError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: 'LOCAL_FOLDER_PICK',
+          title: 'Unable to add folder',
+        }),
+      );
     });
   });
 
@@ -232,7 +266,12 @@ describe('ItemSelectionDialog source picker', () => {
         onOpenChange={vi.fn()}
         title="Add items"
         confirmLabel="Add"
-        sourceGroups={[{ label: 'C64 Ultimate', sources: [buildSource('ultimate', 'C64 Ultimate', 'ultimate')] }]}
+        sourceGroups={[
+          {
+            label: 'C64 Ultimate',
+            sources: [buildSource('ultimate', 'C64 Ultimate', 'ultimate')],
+          },
+        ]}
         onAddLocalSource={vi.fn().mockResolvedValue(null)}
         onConfirm={vi.fn().mockResolvedValue(true)}
       />,
@@ -241,10 +280,12 @@ describe('ItemSelectionDialog source picker', () => {
     fireEvent.click(screen.getByTestId('import-option-c64u'));
 
     await waitFor(() => {
-      expect(reportUserError).toHaveBeenCalledWith(expect.objectContaining({
-        operation: 'BROWSE',
-        title: 'Browse failed',
-      }));
+      expect(reportUserError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: 'BROWSE',
+          title: 'Browse failed',
+        }),
+      );
     });
   });
 
@@ -267,7 +308,12 @@ describe('ItemSelectionDialog source picker', () => {
         onOpenChange={vi.fn()}
         title="Add items"
         confirmLabel="Add"
-        sourceGroups={[{ label: 'C64 Ultimate', sources: [buildSource('ultimate', 'C64 Ultimate', 'ultimate')] }]}
+        sourceGroups={[
+          {
+            label: 'C64 Ultimate',
+            sources: [buildSource('ultimate', 'C64 Ultimate', 'ultimate')],
+          },
+        ]}
         onAddLocalSource={vi.fn().mockResolvedValue(null)}
         onConfirm={vi.fn().mockResolvedValue(true)}
       />,
@@ -301,7 +347,12 @@ describe('ItemSelectionDialog source picker', () => {
         onOpenChange={onOpenChange}
         title="Add items"
         confirmLabel="Add"
-        sourceGroups={[{ label: 'This device', sources: [buildSource('local-1', 'My Folder', 'local')] }]}
+        sourceGroups={[
+          {
+            label: 'This device',
+            sources: [buildSource('local-1', 'My Folder', 'local')],
+          },
+        ]}
         onAddLocalSource={vi.fn().mockResolvedValue('local-1')}
         onConfirm={onConfirm}
         autoConfirmLocalSource
@@ -334,7 +385,10 @@ describe('ItemSelectionDialog source picker', () => {
     const onConfirm = vi.fn().mockResolvedValue(true);
     const onAutoConfirmStart = vi.fn();
     const sourceGroups: SourceGroup[] = [
-      { label: 'This device', sources: [buildSource('local-1', 'My Folder', 'local')] },
+      {
+        label: 'This device',
+        sources: [buildSource('local-1', 'My Folder', 'local')],
+      },
     ];
 
     render(
@@ -376,9 +430,14 @@ describe('ItemSelectionDialog source picker', () => {
       refresh: vi.fn(),
     });
 
-    const throwingConfirm = vi.fn().mockRejectedValue(new Error('confirm failed'));
+    const throwingConfirm = vi
+      .fn()
+      .mockRejectedValue(new Error('confirm failed'));
     const sourceGroups: SourceGroup[] = [
-      { label: 'This device', sources: [buildSource('local-1', 'My Folder', 'local')] },
+      {
+        label: 'This device',
+        sources: [buildSource('local-1', 'My Folder', 'local')],
+      },
     ];
 
     render(
@@ -419,15 +478,17 @@ describe('ItemSelectionDialog source picker', () => {
     const sourceGroups: SourceGroup[] = [
       {
         label: 'HVSC',
-        sources: [{
-          id: 'hvsc-1',
-          name: 'HVSC Collection',
-          type: 'hvsc' as 'ultimate',  // cast to satisfy buildSource type constraint
-          rootPath: '/',
-          isAvailable: true,
-          listEntries: async () => [],
-          listFilesRecursive: async () => [],
-        }],
+        sources: [
+          {
+            id: 'hvsc-1',
+            name: 'HVSC Collection',
+            type: 'hvsc' as 'ultimate', // cast to satisfy buildSource type constraint
+            rootPath: '/',
+            isAvailable: true,
+            listEntries: async () => [],
+            listFilesRecursive: async () => [],
+          },
+        ],
       },
     ];
 
@@ -461,7 +522,10 @@ describe('ItemSelectionDialog source picker', () => {
 
     // Render with only local source (no c64u source)
     const sourceGroups: SourceGroup[] = [
-      { label: 'This device', sources: [buildSource('local-1', 'My Folder', 'local')] },
+      {
+        label: 'This device',
+        sources: [buildSource('local-1', 'My Folder', 'local')],
+      },
     ];
 
     render(
@@ -480,7 +544,9 @@ describe('ItemSelectionDialog source picker', () => {
     const c64uButton = screen.getByTestId('import-option-c64u');
     fireEvent.click(c64uButton);
     // No crash, no source selected
-    expect(screen.queryByTestId('import-selection-interstitial')).toBeInTheDocument();
+    expect(
+      screen.queryByTestId('import-selection-interstitial'),
+    ).toBeInTheDocument();
   });
 
   it('shows progress footer with cancel scan button when scanning', async () => {
@@ -508,7 +574,13 @@ describe('ItemSelectionDialog source picker', () => {
         onAddLocalSource={vi.fn().mockResolvedValue(null)}
         onConfirm={vi.fn().mockResolvedValue(true)}
         showProgressFooter
-        progress={{ status: 'scanning', message: 'Loading…', count: 42, elapsedMs: 5000, total: 100 }}
+        progress={{
+          status: 'scanning',
+          message: 'Loading…',
+          count: 42,
+          elapsedMs: 5000,
+          total: 100,
+        }}
         onCancelScan={onCancelScan}
       />,
     );

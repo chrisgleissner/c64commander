@@ -35,7 +35,10 @@ const GOLDEN_TRACE_TEST_IDS = new Set<string>([
 ]);
 
 const hasGoldenTraceAnnotation = (testInfo: TestInfo) =>
-  testInfo.annotations.some((annotation: TestInfo['annotations'][number]) => annotation.type === GOLDEN_TRACE_ANNOTATION);
+  testInfo.annotations.some(
+    (annotation: TestInfo['annotations'][number]) =>
+      annotation.type === GOLDEN_TRACE_ANNOTATION,
+  );
 
 export const enableGoldenTrace = (testInfo: TestInfo, reason?: string) => {
   testInfo.annotations.push({
@@ -56,20 +59,21 @@ export const assertGoldenTraceEligibility = (testInfo: TestInfo) => {
   const status = getGoldenTraceStatus(testInfo);
   if (status.annotated && !status.allowed) {
     throw new Error(
-      `Golden trace annotation set for non-registered test "${testInfo.title}". `
-        + `Remove enableGoldenTrace() or add "${status.testId}" to goldenTraceRegistry.ts.`,
+      `Golden trace annotation set for non-registered test "${testInfo.title}". ` +
+        `Remove enableGoldenTrace() or add "${status.testId}" to goldenTraceRegistry.ts.`,
     );
   }
   if (status.allowed && !status.annotated) {
     throw new Error(
-      `Golden trace test "${status.testId}" is listed in goldenTraceRegistry.ts but not annotated. `
-        + 'Call enableGoldenTrace(testInfo) in the test.',
+      `Golden trace test "${status.testId}" is listed in goldenTraceRegistry.ts but not annotated. ` +
+        'Call enableGoldenTrace(testInfo) in the test.',
     );
   }
   return status;
 };
 
-export const shouldCompareGoldenTrace = (testInfo: TestInfo) => getGoldenTraceStatus(testInfo).shouldCompare;
+export const shouldCompareGoldenTrace = (testInfo: TestInfo) =>
+  getGoldenTraceStatus(testInfo).shouldCompare;
 
 export const shouldRecordGoldenTrace = (testInfo: TestInfo) => {
   if (process.env.RECORD_TRACES !== '1') return false;

@@ -36,8 +36,14 @@ const buildRoot = (): DiskTreeNode => ({
   children: [],
 });
 
-const ensureFolder = (parent: DiskTreeNode, segment: string, currentPath: string) => {
-  const existing = parent.children?.find((child) => child.type === 'folder' && child.name === segment);
+const ensureFolder = (
+  parent: DiskTreeNode,
+  segment: string,
+  currentPath: string,
+) => {
+  const existing = parent.children?.find(
+    (child) => child.type === 'folder' && child.name === segment,
+  );
   if (existing) return existing;
   const node: DiskTreeNode = {
     id: `folder:${currentPath}${segment}/`,
@@ -83,7 +89,10 @@ const buildTree = (disks: DiskEntry[]): DiskTreeNode => {
   return root;
 };
 
-export const buildDiskMatches = (disks: DiskEntry[], query: string): Record<string, DiskMatchInfo> => {
+export const buildDiskMatches = (
+  disks: DiskEntry[],
+  query: string,
+): Record<string, DiskMatchInfo> => {
   const normalized = query.trim().toLowerCase();
   const matches: Record<string, DiskMatchInfo> = {};
   disks.forEach((disk) => {
@@ -94,13 +103,22 @@ export const buildDiskMatches = (disks: DiskEntry[], query: string): Record<stri
     const nameMatch = disk.name.toLowerCase().includes(normalized);
     const pathMatch = disk.path.toLowerCase().includes(normalized);
     const groupMatch = (disk.group || '').toLowerCase().includes(normalized);
-    const matchedField = nameMatch ? 'name' : pathMatch ? 'path' : groupMatch ? 'group' : null;
+    const matchedField = nameMatch
+      ? 'name'
+      : pathMatch
+        ? 'path'
+        : groupMatch
+          ? 'group'
+          : null;
     matches[disk.id] = { matches: Boolean(matchedField), matchedField };
   });
   return matches;
 };
 
-export const buildDiskTreeState = (disks: DiskEntry[], query: string): DiskTreeState => {
+export const buildDiskTreeState = (
+  disks: DiskEntry[],
+  query: string,
+): DiskTreeState => {
   const root = buildTree(disks);
   const matches = buildDiskMatches(disks, query);
 
@@ -119,7 +137,9 @@ export const buildDiskTreeState = (disks: DiskEntry[], query: string): DiskTreeS
     return { ...node, children };
   };
 
-  const filteredRoot = query.trim() ? filterTree(root) ?? { ...root, children: [] } : root;
+  const filteredRoot = query.trim()
+    ? (filterTree(root) ?? { ...root, children: [] })
+    : root;
 
   const hasMatch = (node: DiskTreeNode): boolean => {
     if (node.type === 'disk' && node.diskId) {

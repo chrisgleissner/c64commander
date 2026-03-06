@@ -48,7 +48,8 @@ const setTapFlash = (element: InteractiveElement) => {
 };
 
 const clearPointerFocus = (element: HTMLElement) => {
-  if (document.activeElement !== element || typeof element.blur !== 'function') return;
+  if (document.activeElement !== element || typeof element.blur !== 'function')
+    return;
   window.setTimeout(() => element.blur(), 0);
 };
 
@@ -68,10 +69,14 @@ export const applyPointerButtonInteraction = (element: HTMLElement) => {
   setTapFlash(element as InteractiveElement);
 };
 
-export const handlePointerButtonClick = (event: { detail: number; currentTarget: EventTarget | null }) => {
+export const handlePointerButtonClick = (event: {
+  detail: number;
+  currentTarget: EventTarget | null;
+}) => {
   if (event.detail === 0) return;
-  const target = resolveInteractiveElement(event.currentTarget)
-    ?? (event.currentTarget instanceof HTMLElement ? event.currentTarget : null);
+  const target =
+    resolveInteractiveElement(event.currentTarget) ??
+    (event.currentTarget instanceof HTMLElement ? event.currentTarget : null);
   if (!target) return;
   // Skip when the global pointerup handler already applied the flash for this interaction
   // (pointerup fires before click, so the attribute is already set if global handler ran).

@@ -42,9 +42,18 @@ import { DiagnosticsListItem } from '@/components/diagnostics/DiagnosticsListIte
 import { ActionSummaryListItem } from '@/components/diagnostics/ActionSummaryListItem';
 import { shareDiagnosticsZip } from '@/lib/diagnostics/diagnosticsExport';
 import { resetDiagnosticsActivity } from '@/lib/diagnostics/diagnosticsActivity';
-import { consumeDiagnosticsOpenRequest, type DiagnosticsTabKey } from '@/lib/diagnostics/diagnosticsOverlay';
-import { setDiagnosticsOverlayActive, withDiagnosticsTraceOverride } from '@/lib/diagnostics/diagnosticsOverlayState';
-import { resolveLogSeverity, resolveTraceSeverity } from '@/lib/diagnostics/diagnosticsSeverity';
+import {
+  consumeDiagnosticsOpenRequest,
+  type DiagnosticsTabKey,
+} from '@/lib/diagnostics/diagnosticsOverlay';
+import {
+  setDiagnosticsOverlayActive,
+  withDiagnosticsTraceOverride,
+} from '@/lib/diagnostics/diagnosticsOverlayState';
+import {
+  resolveLogSeverity,
+  resolveTraceSeverity,
+} from '@/lib/diagnostics/diagnosticsSeverity';
 
 const diagnosticsTabTriggerClass =
   'border border-transparent data-[state=active]:border-border data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm';
@@ -55,8 +64,11 @@ export const GlobalDiagnosticsOverlay = () => {
   const isSettingsRoute = location.pathname === '/settings';
   const scrollRestoreRef = useRef<number | null>(null);
   const [logsDialogOpen, setLogsDialogOpen] = useState(false);
-  const [diagnosticsTab, setDiagnosticsTab] = useState<DiagnosticsTabKey>('actions');
-  const [diagnosticsFilters, setDiagnosticsFilters] = useState<Record<DiagnosticsTabKey, string>>({
+  const [diagnosticsTab, setDiagnosticsTab] =
+    useState<DiagnosticsTabKey>('actions');
+  const [diagnosticsFilters, setDiagnosticsFilters] = useState<
+    Record<DiagnosticsTabKey, string>
+  >({
     'error-logs': '',
     logs: '',
     traces: '',
@@ -65,7 +77,10 @@ export const GlobalDiagnosticsOverlay = () => {
   const [logs, setLogs] = useState(getLogs());
   const [errorLogs, setErrorLogs] = useState(getErrorLogs());
   const [traceEvents, setTraceEvents] = useState(getTraceEvents());
-  const actionSummaries = useMemo(() => buildActionSummaries(traceEvents), [traceEvents]);
+  const actionSummaries = useMemo(
+    () => buildActionSummaries(traceEvents),
+    [traceEvents],
+  );
   const activeDiagnosticsFilter = diagnosticsFilters[diagnosticsTab] ?? '';
 
   const setDiagnosticsDialogOpen = useCallback((open: boolean) => {
@@ -93,7 +108,9 @@ export const GlobalDiagnosticsOverlay = () => {
   useEffect(() => {
     if (isSettingsRoute) return;
     const handleDiagnosticsRequest = (event: Event) => {
-      const detail = (event as CustomEvent).detail as { tab?: DiagnosticsTabKey } | undefined;
+      const detail = (event as CustomEvent).detail as
+        | { tab?: DiagnosticsTabKey }
+        | undefined;
       if (!detail?.tab) return;
       setDiagnosticsTab(detail.tab);
       setDiagnosticsDialogOpen(true);
@@ -103,8 +120,15 @@ export const GlobalDiagnosticsOverlay = () => {
       setDiagnosticsTab(pending);
       setDiagnosticsDialogOpen(true);
     }
-    window.addEventListener('c64u-diagnostics-open-request', handleDiagnosticsRequest);
-    return () => window.removeEventListener('c64u-diagnostics-open-request', handleDiagnosticsRequest);
+    window.addEventListener(
+      'c64u-diagnostics-open-request',
+      handleDiagnosticsRequest,
+    );
+    return () =>
+      window.removeEventListener(
+        'c64u-diagnostics-open-request',
+        handleDiagnosticsRequest,
+      );
   }, [isSettingsRoute, setDiagnosticsDialogOpen]);
 
   useEffect(() => {
@@ -129,9 +153,13 @@ export const GlobalDiagnosticsOverlay = () => {
     return () => setDiagnosticsOverlayActive(false);
   }, []);
 
-  const normalizeDiagnosticsFilter = (value: string) => value.trim().toLowerCase();
+  const normalizeDiagnosticsFilter = (value: string) =>
+    value.trim().toLowerCase();
 
-  const matchesDiagnosticsFilter = (filterText: string, fields: Array<string | null | undefined>) => {
+  const matchesDiagnosticsFilter = (
+    filterText: string,
+    fields: Array<string | null | undefined>,
+  ) => {
     const normalized = normalizeDiagnosticsFilter(filterText);
     if (!normalized) return true;
     const haystack = fields.filter(Boolean).join(' ').toLowerCase();
@@ -183,7 +211,8 @@ export const GlobalDiagnosticsOverlay = () => {
     if (!normalizeDiagnosticsFilter(filterText)) return actionSummaries;
     return actionSummaries.filter((summary) => {
       const summaryTime = formatDiagnosticsTimestamp(summary.startTimestamp);
-      const durationLabel = summary.durationMs !== null ? `${summary.durationMs} ms` : 'Unknown';
+      const durationLabel =
+        summary.durationMs !== null ? `${summary.durationMs} ms` : 'Unknown';
       return matchesDiagnosticsFilter(filterText, [
         summary.actionName,
         summary.correlationId,
@@ -235,23 +264,31 @@ export const GlobalDiagnosticsOverlay = () => {
       <DialogContent className="max-h-[calc(100dvh-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-hidden">
         <DialogHeader>
           <DialogTitle>Diagnostics</DialogTitle>
-          <DialogDescription>Review warnings/errors, logs, traces, and action summaries.</DialogDescription>
+          <DialogDescription>
+            Review warnings/errors, logs, traces, and action summaries.
+          </DialogDescription>
         </DialogHeader>
         <div className="flex flex-wrap gap-2">
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button variant="destructive" size="sm">Clear All</Button>
+              <Button variant="destructive" size="sm">
+                Clear All
+              </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
                 <AlertDialogTitle>Clear diagnostics</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This will permanently clear all warning/error logs, logs, traces, and actions. This cannot be undone.
+                  This will permanently clear all warning/error logs, logs,
+                  traces, and actions. This cannot be undone.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleClearAllDiagnostics} className="bg-destructive text-destructive-foreground">
+                <AlertDialogAction
+                  onClick={handleClearAllDiagnostics}
+                  className="bg-destructive text-destructive-foreground"
+                >
                   Clear
                 </AlertDialogAction>
               </AlertDialogFooter>
@@ -292,29 +329,51 @@ export const GlobalDiagnosticsOverlay = () => {
         </div>
         <Tabs
           value={diagnosticsTab}
-          onValueChange={(value) => setDiagnosticsTab(value as DiagnosticsTabKey)}
+          onValueChange={(value) =>
+            setDiagnosticsTab(value as DiagnosticsTabKey)
+          }
           className="space-y-3"
         >
           <TabsList className="grid grid-cols-4 w-full">
-            <TabsTrigger value="error-logs" className={diagnosticsTabTriggerClass}>Errors</TabsTrigger>
-            <TabsTrigger value="logs" className={diagnosticsTabTriggerClass}>Logs</TabsTrigger>
-            <TabsTrigger value="traces" className={diagnosticsTabTriggerClass}>Traces</TabsTrigger>
-            <TabsTrigger value="actions" className={diagnosticsTabTriggerClass}>Actions</TabsTrigger>
+            <TabsTrigger
+              value="error-logs"
+              className={diagnosticsTabTriggerClass}
+            >
+              Errors
+            </TabsTrigger>
+            <TabsTrigger value="logs" className={diagnosticsTabTriggerClass}>
+              Logs
+            </TabsTrigger>
+            <TabsTrigger value="traces" className={diagnosticsTabTriggerClass}>
+              Traces
+            </TabsTrigger>
+            <TabsTrigger value="actions" className={diagnosticsTabTriggerClass}>
+              Actions
+            </TabsTrigger>
           </TabsList>
-          <TabsContent value="error-logs" className="space-y-3 max-h-[calc(100dvh-23rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-auto pr-2">
+          <TabsContent
+            value="error-logs"
+            className="space-y-3 max-h-[calc(100dvh-23rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-auto pr-2"
+          >
             <div className="flex items-center justify-between gap-2">
-              <p className="text-xs text-muted-foreground">Total warnings/errors: {errorLogs.length}</p>
+              <p className="text-xs text-muted-foreground">
+                Total warnings/errors: {errorLogs.length}
+              </p>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => void withDiagnosticsTraceOverride(handleShareDiagnostics)}
+                onClick={() =>
+                  void withDiagnosticsTraceOverride(handleShareDiagnostics)
+                }
                 data-testid="diagnostics-share-errors"
               >
                 Share
               </Button>
             </div>
             {filteredErrorLogs.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No warning or error logs recorded.</p>
+              <p className="text-sm text-muted-foreground">
+                No warning or error logs recorded.
+              </p>
             ) : (
               filteredErrorLogs.map((entry) => (
                 <DiagnosticsListItem
@@ -339,13 +398,20 @@ export const GlobalDiagnosticsOverlay = () => {
               ))
             )}
           </TabsContent>
-          <TabsContent value="logs" className="space-y-3 max-h-[calc(100dvh-23rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-auto pr-2">
+          <TabsContent
+            value="logs"
+            className="space-y-3 max-h-[calc(100dvh-23rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-auto pr-2"
+          >
             <div className="flex items-center justify-between gap-2">
-              <p className="text-xs text-muted-foreground">Total logs: {logs.length}</p>
+              <p className="text-xs text-muted-foreground">
+                Total logs: {logs.length}
+              </p>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => void withDiagnosticsTraceOverride(handleShareDiagnostics)}
+                onClick={() =>
+                  void withDiagnosticsTraceOverride(handleShareDiagnostics)
+                }
                 data-testid="diagnostics-share-logs"
               >
                 Share
@@ -377,20 +443,29 @@ export const GlobalDiagnosticsOverlay = () => {
               ))
             )}
           </TabsContent>
-          <TabsContent value="traces" className="space-y-3 max-h-[calc(100dvh-23rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-auto pr-2">
+          <TabsContent
+            value="traces"
+            className="space-y-3 max-h-[calc(100dvh-23rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-auto pr-2"
+          >
             <div className="flex items-center justify-between gap-2">
-              <p className="text-xs text-muted-foreground">Total traces: {traceEvents.length}</p>
+              <p className="text-xs text-muted-foreground">
+                Total traces: {traceEvents.length}
+              </p>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => void withDiagnosticsTraceOverride(handleShareDiagnostics)}
+                onClick={() =>
+                  void withDiagnosticsTraceOverride(handleShareDiagnostics)
+                }
                 data-testid="diagnostics-share-traces"
               >
                 Share
               </Button>
             </div>
             {filteredTraces.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No traces recorded.</p>
+              <p className="text-sm text-muted-foreground">
+                No traces recorded.
+              </p>
             ) : (
               <>
                 {filteredTraces.length > 100 && (
@@ -418,26 +493,38 @@ export const GlobalDiagnosticsOverlay = () => {
               </>
             )}
           </TabsContent>
-          <TabsContent value="actions" className="space-y-3 max-h-[calc(100dvh-23rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-auto pr-2">
+          <TabsContent
+            value="actions"
+            className="space-y-3 max-h-[calc(100dvh-23rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-auto pr-2"
+          >
             <div className="flex items-center justify-between gap-2">
-              <p className="text-xs text-muted-foreground">Total action summaries: {actionSummaries.length}</p>
+              <p className="text-xs text-muted-foreground">
+                Total action summaries: {actionSummaries.length}
+              </p>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => void withDiagnosticsTraceOverride(handleShareDiagnostics)}
+                onClick={() =>
+                  void withDiagnosticsTraceOverride(handleShareDiagnostics)
+                }
                 data-testid="diagnostics-share-actions"
               >
                 Share
               </Button>
             </div>
             {filteredActions.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No actions recorded.</p>
+              <p className="text-sm text-muted-foreground">
+                No actions recorded.
+              </p>
             ) : (
               filteredActions
                 .slice(-100)
                 .reverse()
                 .map((summary) => (
-                  <ActionSummaryListItem key={summary.correlationId} summary={summary} />
+                  <ActionSummaryListItem
+                    key={summary.correlationId}
+                    summary={summary}
+                  />
                 ))
             )}
           </TabsContent>

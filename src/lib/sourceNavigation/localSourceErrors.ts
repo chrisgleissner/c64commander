@@ -17,7 +17,11 @@ export class LocalSourceListingError extends Error {
   readonly code: LocalSourceListingErrorCode;
   readonly details?: LocalSourceListingErrorDetails;
 
-  constructor(message: string, code: LocalSourceListingErrorCode, details?: LocalSourceListingErrorDetails) {
+  constructor(
+    message: string,
+    code: LocalSourceListingErrorCode,
+    details?: LocalSourceListingErrorDetails,
+  ) {
     super(message);
     this.name = 'LocalSourceListingError';
     this.code = code;

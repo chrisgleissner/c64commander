@@ -23,7 +23,9 @@ describe('ItemSelectionView', () => {
     const onNavigateUp = vi.fn();
     const onNavigateRoot = vi.fn();
     const onRefresh = vi.fn();
-    const selection = new Map<string, SourceEntry>([[entries[0].path, entries[0]]]);
+    const selection = new Map<string, SourceEntry>([
+      [entries[0].path, entries[0]],
+    ]);
 
     render(
       <ItemSelectionView
@@ -61,7 +63,9 @@ describe('ItemSelectionView', () => {
     expect(onToggleSelect).toHaveBeenCalledWith(entries[0]);
     expect(onOpen).toHaveBeenNthCalledWith(1, entries[1].path);
     expect(onOpen).toHaveBeenNthCalledWith(2, entries[1].path);
-    expect(screen.queryByRole('button', { name: /^open$/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /^open$/i }),
+    ).not.toBeInTheDocument();
   });
 
   it('disables selection and navigation at root when loading', () => {

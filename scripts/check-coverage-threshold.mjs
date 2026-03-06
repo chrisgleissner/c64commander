@@ -14,14 +14,17 @@ let content = '';
 try {
   content = await fs.readFile(filePath, 'utf8');
 } catch (error) {
-  const isDefault = coverageFile === defaultCoverageFile && !process.env.COVERAGE_FILE;
+  const isDefault =
+    coverageFile === defaultCoverageFile && !process.env.COVERAGE_FILE;
   if (!isDefault || error?.code !== 'ENOENT') {
     throw error;
   }
 
   const fallbackPath = path.resolve(process.cwd(), fallbackCoverageFile);
   content = await fs.readFile(fallbackPath, 'utf8');
-  console.warn(`Coverage file ${coverageFile} missing; using ${fallbackCoverageFile} instead.`);
+  console.warn(
+    `Coverage file ${coverageFile} missing; using ${fallbackCoverageFile} instead.`,
+  );
 }
 
 let summaryTotalLines = 0;
@@ -69,8 +72,12 @@ const totalLines = useLineDetail ? detailTotalLines : summaryTotalLines;
 const coveredLines = useLineDetail ? detailCoveredLines : summaryCoveredLines;
 
 const useBranchDetail = detailTotalBranches > 0;
-const totalBranches = useBranchDetail ? detailTotalBranches : summaryTotalBranches;
-const coveredBranches = useBranchDetail ? detailCoveredBranches : summaryCoveredBranches;
+const totalBranches = useBranchDetail
+  ? detailTotalBranches
+  : summaryTotalBranches;
+const coveredBranches = useBranchDetail
+  ? detailCoveredBranches
+  : summaryCoveredBranches;
 
 if (totalLines === 0) {
   console.error(`No coverage entries found in ${coverageFile}`);
@@ -83,7 +90,8 @@ if (totalBranches === 0) {
 }
 
 const linePercent = totalLines === 0 ? 0 : (coveredLines / totalLines) * 100;
-const branchPercent = totalBranches === 0 ? 0 : (coveredBranches / totalBranches) * 100;
+const branchPercent =
+  totalBranches === 0 ? 0 : (coveredBranches / totalBranches) * 100;
 const lineSummary = `Line coverage: ${linePercent.toFixed(2)}% (covered ${coveredLines} / ${totalLines})`;
 const branchSummary = `Branch coverage: ${branchPercent.toFixed(2)}% (covered ${coveredBranches} / ${totalBranches})`;
 
@@ -91,15 +99,23 @@ console.log(lineSummary);
 console.log(branchSummary);
 
 if (process.env.GITHUB_STEP_SUMMARY) {
-  await fs.appendFile(process.env.GITHUB_STEP_SUMMARY, `- ${lineSummary}\n- ${branchSummary}\n`, 'utf8');
+  await fs.appendFile(
+    process.env.GITHUB_STEP_SUMMARY,
+    `- ${lineSummary}\n- ${branchSummary}\n`,
+    'utf8',
+  );
 }
 
 if (linePercent + 1e-6 < minLineCoverage) {
-  console.error(`Line coverage below minimum threshold: ${linePercent.toFixed(2)}% < ${minLineCoverage}%`);
+  console.error(
+    `Line coverage below minimum threshold: ${linePercent.toFixed(2)}% < ${minLineCoverage}%`,
+  );
   process.exit(1);
 }
 
 if (branchPercent + 1e-6 < minBranchCoverage) {
-  console.error(`Branch coverage below minimum threshold: ${branchPercent.toFixed(2)}% < ${minBranchCoverage}%`);
+  console.error(
+    `Branch coverage below minimum threshold: ${branchPercent.toFixed(2)}% < ${minBranchCoverage}%`,
+  );
   process.exit(1);
 }

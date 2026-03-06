@@ -6,7 +6,10 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useResponsivePathLabel, type PathDisplayMode } from '@/lib/ui/pathDisplay';
+import {
+  useResponsivePathLabel,
+  type PathDisplayMode,
+} from '@/lib/ui/pathDisplay';
 import { cn } from '@/lib/utils';
 
 type ResponsivePathTextProps = {

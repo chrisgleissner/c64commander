@@ -20,7 +20,7 @@ export function useTheme() {
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    
+
     const updateResolvedTheme = () => {
       let resolved: 'light' | 'dark';
       if (theme === 'system') {
@@ -29,7 +29,7 @@ export function useTheme() {
         resolved = theme;
       }
       setResolvedTheme(resolved);
-      
+
       document.documentElement.classList.remove('light', 'dark');
       document.documentElement.classList.add(resolved);
     };

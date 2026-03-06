@@ -38,7 +38,9 @@ type HookResult<T> = { current: T | null };
 const activeUnmounts = new Set<() => void>();
 
 const renderUseSonglengths = (playlist: PlaylistItem[]) => {
-  const resultRef: HookResult<ReturnType<typeof useSonglengths>> = { current: null };
+  const resultRef: HookResult<ReturnType<typeof useSonglengths>> = {
+    current: null,
+  };
   const Component = ({ items }: { items: PlaylistItem[] }) => {
     resultRef.current = useSonglengths({ playlist: items });
     return null;
@@ -85,12 +87,12 @@ const ensureStorage = () => {
   });
 };
 
-
-const toFileList = (file: File): FileList => ({
-  0: file,
-  length: 1,
-  item: (index: number) => (index === 0 ? file : null),
-} as unknown as FileList);
+const toFileList = (file: File): FileList =>
+  ({
+    0: file,
+    length: 1,
+    item: (index: number) => (index === 0 ? file : null),
+  }) as unknown as FileList;
 
 const makeTextFile = (path: string, content: string, lastModified = 123) => {
   const file = {
@@ -112,10 +114,16 @@ beforeEach(() => {
   vi.restoreAllMocks();
   ensureStorage();
   toastMock = vi.spyOn(toastModule, 'toast').mockImplementation(() => {});
-  addErrorLogMock = vi.spyOn(loggingModule, 'addErrorLog').mockImplementation(() => {});
+  addErrorLogMock = vi
+    .spyOn(loggingModule, 'addErrorLog')
+    .mockImplementation(() => {});
   buildLocalPlayFileFromUriMock = vi.mocked(buildLocalPlayFileFromUri);
-  vi.spyOn(platformModule, 'getPlatform').mockImplementation(() => platformState.platform);
-  vi.spyOn(platformModule, 'isNativePlatform').mockImplementation(() => platformState.native);
+  vi.spyOn(platformModule, 'getPlatform').mockImplementation(
+    () => platformState.platform,
+  );
+  vi.spyOn(platformModule, 'isNativePlatform').mockImplementation(
+    () => platformState.native,
+  );
   platformState.platform = 'web';
   platformState.native = false;
   localStorage.clear();
@@ -135,19 +143,27 @@ describe('useSonglengths', () => {
     const { result } = renderUseSonglengths([]);
     const unsupported = makeTextFile('/DOCUMENTS/nope.bin', 'x');
     act(() => {
-      result.current?.handleSonglengthsInput(toFileList(unsupported as unknown as File));
+      result.current?.handleSonglengthsInput(
+        toFileList(unsupported as unknown as File),
+      );
     });
     expect(toastMock).toHaveBeenCalled();
     expect(result.current?.songlengthsFiles).toHaveLength(0);
   });
 
   it('accepts supported songlengths input and summarizes it', async () => {
-    localStorage.setItem('c64u_songlengths_file:v1', JSON.stringify({
-      path: '/DOCUMENTS/Songlengths.md5',
-      uri: 'content://demo',
-      name: 'Songlengths.md5',
-    }));
-    const file = makeTextFile('DOCUMENTS/Songlengths.md5', '; /MUSICIANS/demo.sid\nabcdef=0:10\n');
+    localStorage.setItem(
+      'c64u_songlengths_file:v1',
+      JSON.stringify({
+        path: '/DOCUMENTS/Songlengths.md5',
+        uri: 'content://demo',
+        name: 'Songlengths.md5',
+      }),
+    );
+    const file = makeTextFile(
+      'DOCUMENTS/Songlengths.md5',
+      '; /MUSICIANS/demo.sid\nabcdef=0:10\n',
+    );
 
     const { result } = renderUseSonglengths([]);
     act(() => {
@@ -158,7 +174,9 @@ describe('useSonglengths', () => {
       await flushPromises();
     });
     expect(result.current?.songlengthsSummary.entryCount).toBe(1);
-    expect(result.current?.activeSonglengthsPath).toBe('/DOCUMENTS/Songlengths.md5');
+    expect(result.current?.activeSonglengthsPath).toBe(
+      '/DOCUMENTS/Songlengths.md5',
+    );
     expect(localStorage.getItem('c64u_songlengths_file:v1')).toBeNull();
   });
 
@@ -184,26 +202,43 @@ describe('useSonglengths', () => {
       lastModified: 456,
       arrayBuffer: async () => {
         reads.count += 1;
-        return new TextEncoder().encode('; /MUSICIANS/demo.sid\nabc=0:30 0:45\n').buffer;
+        return new TextEncoder().encode(
+          '; /MUSICIANS/demo.sid\nabc=0:30 0:45\n',
+        ).buffer;
       },
     };
-    const extraFiles: SonglengthsFileEntry[] = [{ path: '/DOCUMENTS/Songlengths.md5', file: songlengthsFile }];
+    const extraFiles: SonglengthsFileEntry[] = [
+      { path: '/DOCUMENTS/Songlengths.md5', file: songlengthsFile },
+    ];
     const { result } = renderUseSonglengths([]);
 
-    const data1 = await result.current?.loadSonglengthsForPath('/MUSICIANS/demo.sid', extraFiles);
+    const data1 = await result.current?.loadSonglengthsForPath(
+      '/MUSICIANS/demo.sid',
+      extraFiles,
+    );
     expect(data1?.pathToSeconds.get('/MUSICIANS/demo.sid')).toEqual([30, 45]);
     expect(reads.count).toBe(1);
 
-    const data2 = await result.current?.loadSonglengthsForPath('/MUSICIANS/demo.sid', extraFiles);
+    const data2 = await result.current?.loadSonglengthsForPath(
+      '/MUSICIANS/demo.sid',
+      extraFiles,
+    );
     expect(data2?.pathToSeconds.get('/MUSICIANS/demo.sid')).toEqual([30, 45]);
     expect(reads.count).toBe(1);
 
-    const data3 = await result.current?.loadSonglengthsForPath('/DEMOS/demo.sid', extraFiles);
+    const data3 = await result.current?.loadSonglengthsForPath(
+      '/DEMOS/demo.sid',
+      extraFiles,
+    );
     expect(data3?.pathToSeconds.get('/MUSICIANS/demo.sid')).toEqual([30, 45]);
     expect(reads.count).toBe(1);
 
-    const candidates = result.current?.collectSonglengthsCandidates(['/MUSICIANS/demo.sid']) ?? [];
-    expect(candidates.some((path) => path.toLowerCase().includes('songlengths'))).toBe(true);
+    const candidates =
+      result.current?.collectSonglengthsCandidates(['/MUSICIANS/demo.sid']) ??
+      [];
+    expect(
+      candidates.some((path) => path.toLowerCase().includes('songlengths')),
+    ).toBe(true);
   });
 
   it('logs songlengths read/parse failures and returns null when no candidates exist', async () => {
@@ -215,26 +250,38 @@ describe('useSonglengths', () => {
         throw new Error('boom');
       },
     };
-    const extraFiles: SonglengthsFileEntry[] = [{ path: '/DOCUMENTS/Songlengths.md5', file: failingFile }];
+    const extraFiles: SonglengthsFileEntry[] = [
+      { path: '/DOCUMENTS/Songlengths.md5', file: failingFile },
+    ];
     const { result } = renderUseSonglengths([]);
 
-    const loaded = await result.current?.loadSonglengthsForPath('/MUSICIANS/demo.sid', extraFiles);
+    const loaded = await result.current?.loadSonglengthsForPath(
+      '/MUSICIANS/demo.sid',
+      extraFiles,
+    );
     expect(loaded?.pathToSeconds.size).toBe(0);
     expect(addErrorLogMock).toHaveBeenCalled();
 
-    const empty = await result.current?.loadSonglengthsForPath('/MUSICIANS/demo.sid', []);
+    const empty = await result.current?.loadSonglengthsForPath(
+      '/MUSICIANS/demo.sid',
+      [],
+    );
     expect(empty).toBeNull();
   });
 
   it('applies a manually selected songlengths file globally across folders', async () => {
-    const file = makeTextFile('DOCUMENTS/Songlengths.txt', '/MUSICIANS/demo.sid 0:25\n');
+    const file = makeTextFile(
+      'DOCUMENTS/Songlengths.txt',
+      '/MUSICIANS/demo.sid 0:25\n',
+    );
     const { result } = renderUseSonglengths([]);
 
     act(() => {
       result.current?.handleSonglengthsInput(toFileList(file));
     });
 
-    const loaded = await result.current?.loadSonglengthsForPath('/OTHER/demo.sid');
+    const loaded =
+      await result.current?.loadSonglengthsForPath('/OTHER/demo.sid');
     expect(loaded?.pathToSeconds.get('/MUSICIANS/demo.sid')).toEqual([25]);
 
     const playlistItem: PlaylistItem = {
@@ -244,13 +291,21 @@ describe('useSonglengths', () => {
       path: '/MUSICIANS/demo.sid',
       request: { source: 'local', path: '/MUSICIANS/demo.sid', songNr: 1 },
     };
-    const updated = await result.current?.applySonglengthsToItems([playlistItem]);
+    const updated = await result.current?.applySonglengthsToItems([
+      playlistItem,
+    ]);
     expect(updated[0]?.durationMs).toBe(25_000);
   });
 
   it('reprocesses playlist durations after selecting a new songlengths file', async () => {
-    const first = makeTextFile('DOCUMENTS/Songlengths.txt', '/MUSICIANS/demo.sid 0:25\n');
-    const second = makeTextFile('DOCUMENTS/Songlengths.md5', '; /MUSICIANS/demo.sid\nabcd=0:45\n');
+    const first = makeTextFile(
+      'DOCUMENTS/Songlengths.txt',
+      '/MUSICIANS/demo.sid 0:25\n',
+    );
+    const second = makeTextFile(
+      'DOCUMENTS/Songlengths.md5',
+      '; /MUSICIANS/demo.sid\nabcd=0:45\n',
+    );
     const playlistItem: PlaylistItem = {
       id: 'song',
       category: 'sid',
@@ -264,20 +319,30 @@ describe('useSonglengths', () => {
       result.current?.handleSonglengthsInput(toFileList(first));
     });
 
-    const firstPass = await result.current?.applySonglengthsToItems([playlistItem]);
+    const firstPass = await result.current?.applySonglengthsToItems([
+      playlistItem,
+    ]);
     expect(firstPass?.[0]?.durationMs).toBe(25_000);
 
     act(() => {
       result.current?.handleSonglengthsInput(toFileList(second));
     });
 
-    const secondPass = await result.current?.applySonglengthsToItems([playlistItem]);
+    const secondPass = await result.current?.applySonglengthsToItems([
+      playlistItem,
+    ]);
     expect(secondPass?.[0]?.durationMs).toBe(45_000);
   });
 
   it('prefers Songlengths.md5 over Songlengths.txt when both exist in the same folder', async () => {
-    const txt = makeTextFile('DOCUMENTS/Songlengths.txt', '/MUSICIANS/demo.sid 0:10\n');
-    const md5 = makeTextFile('DOCUMENTS/Songlengths.md5', '; /MUSICIANS/demo.sid\nabc=0:20\n');
+    const txt = makeTextFile(
+      'DOCUMENTS/Songlengths.txt',
+      '/MUSICIANS/demo.sid 0:10\n',
+    );
+    const md5 = makeTextFile(
+      'DOCUMENTS/Songlengths.md5',
+      '; /MUSICIANS/demo.sid\nabc=0:20\n',
+    );
 
     const playlist: PlaylistItem[] = [
       {
@@ -285,14 +350,22 @@ describe('useSonglengths', () => {
         category: 'sid',
         label: 'Songlengths.txt',
         path: '/DOCUMENTS/Songlengths.txt',
-        request: { source: 'local', path: '/DOCUMENTS/Songlengths.txt', file: txt },
+        request: {
+          source: 'local',
+          path: '/DOCUMENTS/Songlengths.txt',
+          file: txt,
+        },
       },
       {
         id: 'md5',
         category: 'sid',
         label: 'Songlengths.md5',
         path: '/DOCUMENTS/Songlengths.md5',
-        request: { source: 'local', path: '/DOCUMENTS/Songlengths.md5', file: md5 },
+        request: {
+          source: 'local',
+          path: '/DOCUMENTS/Songlengths.md5',
+          file: md5,
+        },
       },
       {
         id: 'song',
@@ -304,13 +377,21 @@ describe('useSonglengths', () => {
     ];
 
     const { result } = renderUseSonglengths(playlist);
-    const updated = await result.current?.applySonglengthsToItems([playlist[2]]);
+    const updated = await result.current?.applySonglengthsToItems([
+      playlist[2],
+    ]);
     expect(updated[0]?.durationMs).toBe(20_000);
 
     // Ensure the opposite insertion order doesn't replace an existing .md5 with .txt.
-    const playlistReversed: PlaylistItem[] = [playlist[1], playlist[0], playlist[2]];
+    const playlistReversed: PlaylistItem[] = [
+      playlist[1],
+      playlist[0],
+      playlist[2],
+    ];
     const { result: result2 } = renderUseSonglengths(playlistReversed);
-    const updated2 = await result2.current?.applySonglengthsToItems([playlistReversed[2]]);
+    const updated2 = await result2.current?.applySonglengthsToItems([
+      playlistReversed[2],
+    ]);
     expect(updated2[0]?.durationMs).toBe(20_000);
   });
 
@@ -318,19 +399,24 @@ describe('useSonglengths', () => {
     platformState.platform = 'android';
     platformState.native = true;
 
-    buildLocalPlayFileFromUriMock.mockReturnValue(makeTextFile(
-      '/DOCUMENTS/Songlengths.md5',
-      '; /MUSICIANS/demo.sid\nabc=0:11\n',
-      999,
-    ));
+    buildLocalPlayFileFromUriMock.mockReturnValue(
+      makeTextFile(
+        '/DOCUMENTS/Songlengths.md5',
+        '; /MUSICIANS/demo.sid\nabc=0:11\n',
+        999,
+      ),
+    );
 
-    localStorage.setItem('c64u_songlengths_file:v1', JSON.stringify({
-      path: '/DOCUMENTS/Songlengths.md5',
-      uri: 'content://demo',
-      name: 'Songlengths.md5',
-      sizeBytes: 42,
-      modifiedAt: '2025-01-01T00:00:00.000Z',
-    }));
+    localStorage.setItem(
+      'c64u_songlengths_file:v1',
+      JSON.stringify({
+        path: '/DOCUMENTS/Songlengths.md5',
+        uri: 'content://demo',
+        name: 'Songlengths.md5',
+        sizeBytes: 42,
+        modifiedAt: '2025-01-01T00:00:00.000Z',
+      }),
+    );
 
     const { result, rerender } = renderUseSonglengths([]);
 
@@ -353,16 +439,20 @@ describe('useSonglengths', () => {
       await flushPromises();
     });
     expect(result.current?.songlengthsFiles[0]?.uri).toBe('content://picked');
-    expect(localStorage.getItem('c64u_songlengths_file:v1')).toMatch(/content:\/\/picked/);
+    expect(localStorage.getItem('c64u_songlengths_file:v1')).toMatch(
+      /content:\/\/picked/,
+    );
 
     // Coverage for cache invalidation effect.
-    rerender([{
-      id: 'song',
-      category: 'sid',
-      label: 'demo.sid',
-      path: '/MUSICIANS/demo.sid',
-      request: { source: 'local', path: '/MUSICIANS/demo.sid', songNr: 1 },
-    }]);
+    rerender([
+      {
+        id: 'song',
+        category: 'sid',
+        label: 'demo.sid',
+        path: '/MUSICIANS/demo.sid',
+        request: { source: 'local', path: '/MUSICIANS/demo.sid', songNr: 1 },
+      },
+    ]);
   });
 
   it('reports songlengths summary read failures', async () => {
@@ -408,18 +498,30 @@ describe('useSonglengths', () => {
     const { result } = renderUseSonglengths([]);
 
     act(() => {
-      result.current?.handleSonglengthsPicked({ path: '/x', uri: 'content://x', name: 'nope.bin' });
+      result.current?.handleSonglengthsPicked({
+        path: '/x',
+        uri: 'content://x',
+        name: 'nope.bin',
+      });
     });
     expect(toastMock).toHaveBeenCalled();
 
     act(() => {
       // Early return branch coverage.
-      result.current?.handleSonglengthsPicked({ path: '/x', uri: '', name: 'Songlengths.md5' } as any);
+      result.current?.handleSonglengthsPicked({
+        path: '/x',
+        uri: '',
+        name: 'Songlengths.md5',
+      } as any);
     });
 
     const entry: SonglengthsFileEntry = {
       path: '/DOCUMENTS/Songlengths.md5',
-      file: makeTextFile('/DOCUMENTS/Songlengths.md5', '; /demo.sid\nabc=0:01\n', 1),
+      file: makeTextFile(
+        '/DOCUMENTS/Songlengths.md5',
+        '; /demo.sid\nabc=0:01\n',
+        1,
+      ),
     };
     act(() => {
       result.current?.mergeSonglengthsFiles([entry, entry]);

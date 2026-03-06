@@ -9,22 +9,40 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FolderPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { ModalCloseButton } from '@/components/ui/modal-close-button';
 import { Input } from '@/components/ui/input';
 import { FileOriginIcon } from '@/components/FileOriginIcon';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { reportUserError } from '@/lib/uiErrors';
-import type { SourceEntry, SelectedItem, SourceLocation } from '@/lib/sourceNavigation/types';
-import { SOURCE_EXPLANATIONS, SOURCE_LABELS } from '@/lib/sourceNavigation/sourceTerms';
+import type {
+  SourceEntry,
+  SelectedItem,
+  SourceLocation,
+} from '@/lib/sourceNavigation/types';
+import {
+  SOURCE_EXPLANATIONS,
+  SOURCE_LABELS,
+} from '@/lib/sourceNavigation/sourceTerms';
 import type { AddItemsProgressState } from './AddItemsProgressOverlay';
 import { useSourceNavigator } from '@/lib/sourceNavigation/useSourceNavigator';
 import { ItemSelectionView } from './ItemSelectionView';
 
 const isLocalAutoConfirmDisabled = () =>
-  typeof window !== 'undefined'
-  && Boolean((window as Window & { __c64uDisableLocalAutoConfirm?: boolean }).__c64uDisableLocalAutoConfirm);
+  typeof window !== 'undefined' &&
+  Boolean(
+    (window as Window & { __c64uDisableLocalAutoConfirm?: boolean })
+      .__c64uDisableLocalAutoConfirm,
+  );
 
 export type SourceGroup = {
   label: string;
@@ -38,7 +56,10 @@ export type ItemSelectionDialogProps = {
   confirmLabel: string;
   sourceGroups: SourceGroup[];
   onAddLocalSource: () => Promise<string | null>;
-  onConfirm: (source: SourceLocation, selections: SelectedItem[]) => Promise<boolean>;
+  onConfirm: (
+    source: SourceLocation,
+    selections: SelectedItem[],
+  ) => Promise<boolean>;
   filterEntry?: (entry: SourceEntry) => boolean;
   allowFolderSelection?: boolean;
   isConfirming?: boolean;
@@ -69,15 +90,22 @@ export const ItemSelectionDialog = ({
   onCancelScan,
 }: ItemSelectionDialogProps) => {
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
-  const [selection, setSelection] = useState<Map<string, SourceEntry>>(new Map());
+  const [selection, setSelection] = useState<Map<string, SourceEntry>>(
+    new Map(),
+  );
   const [filterText, setFilterText] = useState('');
   const [pendingLocalSource, setPendingLocalSource] = useState(false);
   const [pendingLocalSourceCount, setPendingLocalSourceCount] = useState(0);
-  const [pendingLocalSourceId, setPendingLocalSourceId] = useState<string | null>(null);
+  const [pendingLocalSourceId, setPendingLocalSourceId] = useState<
+    string | null
+  >(null);
   const [autoConfirming, setAutoConfirming] = useState(false);
 
   const localSources = useMemo(
-    () => sourceGroups.flatMap((group) => group.sources).filter((item) => item.type === 'local'),
+    () =>
+      sourceGroups
+        .flatMap((group) => group.sources)
+        .filter((item) => item.type === 'local'),
     [sourceGroups],
   );
   const localSourceCount = localSources.length;
@@ -91,12 +119,18 @@ export const ItemSelectionDialog = ({
   }, [sourceGroups, selectedSourceId]);
 
   const c64UltimateSource = useMemo(
-    () => sourceGroups.flatMap((group) => group.sources).find((item) => item.type === 'ultimate') ?? null,
+    () =>
+      sourceGroups
+        .flatMap((group) => group.sources)
+        .find((item) => item.type === 'ultimate') ?? null,
     [sourceGroups],
   );
 
   const hvscSource = useMemo(
-    () => sourceGroups.flatMap((group) => group.sources).find((item) => item.type === 'hvsc') ?? null,
+    () =>
+      sourceGroups
+        .flatMap((group) => group.sources)
+        .find((item) => item.type === 'hvsc') ?? null,
     [sourceGroups],
   );
 
@@ -123,37 +157,48 @@ export const ItemSelectionDialog = ({
     setAutoConfirming(false);
   }, [open]);
 
-  const confirmLocalSource = useCallback(async (target: SourceLocation) => {
-    if (autoConfirming || isConfirming) return;
-    setAutoConfirming(true);
-    const selections: SelectedItem[] = [
-      {
-        type: 'dir',
-        name: target.name,
-        path: target.rootPath,
-      },
-    ];
-    try {
-      onAutoConfirmStart?.(target);
-      if (autoConfirmCloseBefore) {
-        onOpenChange(false);
-      }
-      const success = await onConfirm(target, selections);
-      if (success) {
-        if (!autoConfirmCloseBefore) {
+  const confirmLocalSource = useCallback(
+    async (target: SourceLocation) => {
+      if (autoConfirming || isConfirming) return;
+      setAutoConfirming(true);
+      const selections: SelectedItem[] = [
+        {
+          type: 'dir',
+          name: target.name,
+          path: target.rootPath,
+        },
+      ];
+      try {
+        onAutoConfirmStart?.(target);
+        if (autoConfirmCloseBefore) {
           onOpenChange(false);
         }
+        const success = await onConfirm(target, selections);
+        if (success) {
+          if (!autoConfirmCloseBefore) {
+            onOpenChange(false);
+          }
+        }
+      } catch (error) {
+        reportUserError({
+          operation: 'ITEM_SELECTION',
+          title: 'Add items failed',
+          description: (error as Error).message,
+          error,
+        });
       }
-    } catch (error) {
-      reportUserError({
-        operation: 'ITEM_SELECTION',
-        title: 'Add items failed',
-        description: (error as Error).message,
-        error,
-      });
-    }
-    setAutoConfirming(false);
-  }, [autoConfirmCloseBefore, autoConfirming, isConfirming, onAutoConfirmStart, onConfirm, onOpenChange, reportUserError]);
+      setAutoConfirming(false);
+    },
+    [
+      autoConfirmCloseBefore,
+      autoConfirming,
+      isConfirming,
+      onAutoConfirmStart,
+      onConfirm,
+      onOpenChange,
+      reportUserError,
+    ],
+  );
 
   useEffect(() => {
     if (!open || !pendingLocalSource || selectedSourceId) return;
@@ -169,15 +214,31 @@ export const ItemSelectionDialog = ({
     if (autoConfirmLocalSource && !isLocalAutoConfirmDisabled()) {
       void confirmLocalSource(targetSource);
     }
-  }, [autoConfirmLocalSource, confirmLocalSource, localSourceCount, localSources, open, pendingLocalSource, pendingLocalSourceCount, pendingLocalSourceId, selectedSourceId]);
+  }, [
+    autoConfirmLocalSource,
+    confirmLocalSource,
+    localSourceCount,
+    localSources,
+    open,
+    pendingLocalSource,
+    pendingLocalSourceCount,
+    pendingLocalSourceId,
+    selectedSourceId,
+  ]);
 
   const visibleEntries = useMemo(() => {
     const filesFiltered = filterEntry
-      ? browser.entries.filter((entry) => entry.type === 'dir' || filterEntry(entry))
+      ? browser.entries.filter(
+          (entry) => entry.type === 'dir' || filterEntry(entry),
+        )
       : browser.entries;
     if (!filterText) return filesFiltered;
     const lower = filterText.toLowerCase();
-    return filesFiltered.filter((entry) => entry.name.toLowerCase().includes(lower) || entry.path.toLowerCase().includes(lower));
+    return filesFiltered.filter(
+      (entry) =>
+        entry.name.toLowerCase().includes(lower) ||
+        entry.path.toLowerCase().includes(lower),
+    );
   }, [browser.entries, filterEntry, filterText]);
 
   const toggleSelection = (entry: SourceEntry) => {
@@ -203,11 +264,13 @@ export const ItemSelectionDialog = ({
       });
       return;
     }
-    const selections: SelectedItem[] = Array.from(selection.values()).map((entry) => ({
-      type: entry.type,
-      name: entry.name,
-      path: entry.path,
-    }));
+    const selections: SelectedItem[] = Array.from(selection.values()).map(
+      (entry) => ({
+        type: entry.type,
+        name: entry.name,
+        path: entry.path,
+      }),
+    );
     try {
       const success = await onConfirm(source, selections);
       if (success) {
@@ -257,13 +320,17 @@ export const ItemSelectionDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent showClose={false} onOpenAutoFocus={(e) => e.preventDefault()} className={cn(
-        "w-[calc(100%-2rem)] p-0 overflow-hidden shadow-2xl sm:rounded-2xl",
-        source
-          ? "max-w-3xl h-[min(80vh,calc(100dvh-6rem))] max-h-[calc(100dvh-6rem)]"
-          : "max-w-md"
-      )}>
-        <div className={cn("flex min-h-0 flex-col", source && "h-full")}>
+      <DialogContent
+        showClose={false}
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        className={cn(
+          'w-[calc(100%-2rem)] p-0 overflow-hidden shadow-2xl sm:rounded-2xl',
+          source
+            ? 'max-w-3xl h-[min(80vh,calc(100dvh-6rem))] max-h-[calc(100dvh-6rem)]'
+            : 'max-w-md',
+        )}
+      >
+        <div className={cn('flex min-h-0 flex-col', source && 'h-full')}>
           <DialogHeader className="border-b border-border px-6 pb-3 pt-6">
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -275,16 +342,27 @@ export const ItemSelectionDialog = ({
               <DialogClose asChild>
                 {/* `static` overrides ModalCloseButton's default absolute positioning because this
                     close button sits inside a flex header row (in-flow layout), not over the content. */}
-                <ModalCloseButton className="static h-8 w-8 shrink-0" aria-label="Close" />
+                <ModalCloseButton
+                  className="static h-8 w-8 shrink-0"
+                  aria-label="Close"
+                />
               </DialogClose>
             </div>
           </DialogHeader>
 
-          <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4" data-testid="add-items-scroll">
+          <div
+            className="flex-1 min-h-0 overflow-y-auto px-6 py-4"
+            data-testid="add-items-scroll"
+          >
             {!source && (
               <div className="space-y-5">
-                <p className="text-lg font-semibold text-foreground">Choose source</p>
-                <div className="grid gap-2 sm:grid-cols-2" data-testid="import-selection-interstitial">
+                <p className="text-lg font-semibold text-foreground">
+                  Choose source
+                </p>
+                <div
+                  className="grid gap-2 sm:grid-cols-2"
+                  data-testid="import-selection-interstitial"
+                >
                   <Button
                     variant="outline"
                     className="justify-start min-w-0"
@@ -297,11 +375,18 @@ export const ItemSelectionDialog = ({
                   >
                     {/* aria-hidden ensures WKWebView treats the button as a leaf accessible element
                         so Maestro matches the button's aria-label instead of child text nodes */}
-                    <span className="inline-flex items-center justify-start min-w-0" aria-hidden="true">
+                    <span
+                      className="inline-flex items-center justify-start min-w-0"
+                      aria-hidden="true"
+                    >
                       <FileOriginIcon origin="local" className="h-4 w-4 mr-1" />
                       <span className="flex flex-col items-start truncate">
-                        <span className="truncate font-medium">{SOURCE_LABELS.local}</span>
-                        <span className="text-[11px] text-muted-foreground">{SOURCE_EXPLANATIONS.local}</span>
+                        <span className="truncate font-medium">
+                          {SOURCE_LABELS.local}
+                        </span>
+                        <span className="text-[11px] text-muted-foreground">
+                          {SOURCE_EXPLANATIONS.local}
+                        </span>
                       </span>
                     </span>
                   </Button>
@@ -318,11 +403,21 @@ export const ItemSelectionDialog = ({
                     data-testid="import-option-c64u"
                     aria-label="Add file / folder from C64U"
                   >
-                    <span className="inline-flex items-center justify-start min-w-0" aria-hidden="true">
-                      <FileOriginIcon origin="ultimate" className="h-4 w-4 mr-1" />
+                    <span
+                      className="inline-flex items-center justify-start min-w-0"
+                      aria-hidden="true"
+                    >
+                      <FileOriginIcon
+                        origin="ultimate"
+                        className="h-4 w-4 mr-1"
+                      />
                       <span className="flex flex-col items-start truncate">
-                        <span className="truncate font-medium">{SOURCE_LABELS.c64u}</span>
-                        <span className="text-[11px] text-muted-foreground">{SOURCE_EXPLANATIONS.c64u}</span>
+                        <span className="truncate font-medium">
+                          {SOURCE_LABELS.c64u}
+                        </span>
+                        <span className="text-[11px] text-muted-foreground">
+                          {SOURCE_EXPLANATIONS.c64u}
+                        </span>
                       </span>
                     </span>
                   </Button>
@@ -340,11 +435,21 @@ export const ItemSelectionDialog = ({
                       data-testid="import-option-hvsc"
                       aria-label="Add file / folder from HVSC"
                     >
-                      <span className="inline-flex items-center justify-start min-w-0" aria-hidden="true">
-                        <FileOriginIcon origin="hvsc" className="h-4 w-4 mr-1" />
+                      <span
+                        className="inline-flex items-center justify-start min-w-0"
+                        aria-hidden="true"
+                      >
+                        <FileOriginIcon
+                          origin="hvsc"
+                          className="h-4 w-4 mr-1"
+                        />
                         <span className="flex flex-col items-start truncate">
-                          <span className="truncate font-medium">{SOURCE_LABELS.hvsc}</span>
-                          <span className="text-[11px] text-muted-foreground">{SOURCE_EXPLANATIONS.hvsc}</span>
+                          <span className="truncate font-medium">
+                            {SOURCE_LABELS.hvsc}
+                          </span>
+                          <span className="text-[11px] text-muted-foreground">
+                            {SOURCE_EXPLANATIONS.hvsc}
+                          </span>
                         </span>
                       </span>
                     </Button>
@@ -356,11 +461,20 @@ export const ItemSelectionDialog = ({
             {source && (
               <div
                 className="space-y-3"
-                data-testid={source.type === 'ultimate' ? 'c64u-file-picker' : source.type === 'local' ? 'local-file-picker' : 'source-file-picker'}
+                data-testid={
+                  source.type === 'ultimate'
+                    ? 'c64u-file-picker'
+                    : source.type === 'local'
+                      ? 'local-file-picker'
+                      : 'source-file-picker'
+                }
               >
                 <div>
                   <p className="text-base font-semibold">Select items</p>
-                  <p className="text-xs text-muted-foreground" data-testid="add-items-selection-count">
+                  <p
+                    className="text-xs text-muted-foreground"
+                    data-testid="add-items-selection-count"
+                  >
                     {selection.size} selected
                   </p>
                 </div>
@@ -393,9 +507,13 @@ export const ItemSelectionDialog = ({
 
           <DialogFooter className="flex flex-col gap-2 border-t border-border px-6 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:flex-row sm:items-center sm:justify-between">
             {showProgressFooter && progress && progress.status !== 'idle' && (
-              <div className="text-xs text-muted-foreground" data-testid="add-items-progress">
+              <div
+                className="text-xs text-muted-foreground"
+                data-testid="add-items-progress"
+              >
                 <span>
-                  {progress.message || 'Scanning…'} {progress.count} items, {formatElapsed(progress.elapsedMs)}
+                  {progress.message || 'Scanning…'} {progress.count} items,{' '}
+                  {formatElapsed(progress.elapsedMs)}
                 </span>
                 {progress.total ? <span> / {progress.total}</span> : null}
               </div>
@@ -411,13 +529,17 @@ export const ItemSelectionDialog = ({
                   onOpenChange(false);
                 }}
               >
-                {progress?.status === 'scanning' && onCancelScan ? 'Cancel scan' : 'Cancel'}
+                {progress?.status === 'scanning' && onCancelScan
+                  ? 'Cancel scan'
+                  : 'Cancel'}
               </Button>
               {source && (
                 <Button
                   variant="default"
                   onClick={handleConfirm}
-                  disabled={isConfirming || autoConfirming || selection.size === 0}
+                  disabled={
+                    isConfirming || autoConfirming || selection.size === 0
+                  }
                   data-testid="add-items-confirm"
                 >
                   {confirmLabel}

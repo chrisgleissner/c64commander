@@ -16,7 +16,7 @@
 The UX is built around three distinct concepts that must never be conflated:
 
 1. **Sources**
-   - Define *where items come from*.
+   - Define _where items come from_.
    - Examples:
      - Local folders (multiple, user-defined)
      - C64U

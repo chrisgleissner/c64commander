@@ -20,7 +20,18 @@ const usePlaybackPersistenceHarness = ({
   localSourceTreeUris,
 }: {
   playlistStorageKey: string;
-  localEntriesBySourceId: Map<string, Map<string, { uri?: string | null; name: string; modifiedAt?: string | null; sizeBytes?: number | null }>>;
+  localEntriesBySourceId: Map<
+    string,
+    Map<
+      string,
+      {
+        uri?: string | null;
+        name: string;
+        modifiedAt?: string | null;
+        sizeBytes?: number | null;
+      }
+    >
+  >;
   localSourceTreeUris: Map<string, string | null>;
 }) => {
   const [playlist, setPlaylist] = useState<PlaylistItem[]>([]);
@@ -66,7 +77,11 @@ const usePlaybackPersistenceHarness = ({
       lastModified: Date.now(),
       arrayBuffer: async () => new ArrayBuffer(4),
     }),
-    buildPlaylistItem: (entry: PlayableEntry, songNrOverride?: number, addedAtOverride?: string | null) => ({
+    buildPlaylistItem: (
+      entry: PlayableEntry,
+      songNrOverride?: number,
+      addedAtOverride?: string | null,
+    ) => ({
       id: `${entry.source}:${entry.sourceId ?? ''}:${entry.path}`,
       request: {
         source: entry.source,
@@ -108,29 +123,34 @@ describe('usePlaybackPersistence', () => {
 
   it('restores persisted local playlist items', async () => {
     const playlistStorageKey = buildPlaylistStorageKey('device-1');
-    localStorage.setItem(playlistStorageKey, JSON.stringify({
-      items: [
-        {
-          source: 'local',
-          path: '/Music/demo.sid',
-          name: 'demo.sid',
-          sourceId: 'local-source',
-          addedAt: new Date().toISOString(),
-        },
-      ],
-      currentIndex: 0,
-    }));
+    localStorage.setItem(
+      playlistStorageKey,
+      JSON.stringify({
+        items: [
+          {
+            source: 'local',
+            path: '/Music/demo.sid',
+            name: 'demo.sid',
+            sourceId: 'local-source',
+            addedAt: new Date().toISOString(),
+          },
+        ],
+        currentIndex: 0,
+      }),
+    );
 
     const localEntriesBySourceId = new Map([
       ['local-source', new Map([['/Music/demo.sid', { name: 'demo.sid' }]])],
     ]);
     const localSourceTreeUris = new Map<string, string | null>();
 
-    const { result } = renderHook(() => usePlaybackPersistenceHarness({
-      playlistStorageKey,
-      localEntriesBySourceId,
-      localSourceTreeUris,
-    }));
+    const { result } = renderHook(() =>
+      usePlaybackPersistenceHarness({
+        playlistStorageKey,
+        localEntriesBySourceId,
+        localSourceTreeUris,
+      }),
+    );
 
     await waitFor(() => {
       expect(result.current.playlist).toHaveLength(1);
@@ -141,24 +161,29 @@ describe('usePlaybackPersistence', () => {
 
   it('restores persisted HVSC playlist items', async () => {
     const playlistStorageKey = buildPlaylistStorageKey('device-1');
-    localStorage.setItem(playlistStorageKey, JSON.stringify({
-      items: [
-        {
-          source: 'hvsc',
-          path: '/MUSICIANS/Test/demo.sid',
-          name: 'demo.sid',
-          sourceId: 'hvsc-library',
-          addedAt: new Date().toISOString(),
-        },
-      ],
-      currentIndex: 0,
-    }));
-
-    const { result } = renderHook(() => usePlaybackPersistenceHarness({
+    localStorage.setItem(
       playlistStorageKey,
-      localEntriesBySourceId: new Map(),
-      localSourceTreeUris: new Map(),
-    }));
+      JSON.stringify({
+        items: [
+          {
+            source: 'hvsc',
+            path: '/MUSICIANS/Test/demo.sid',
+            name: 'demo.sid',
+            sourceId: 'hvsc-library',
+            addedAt: new Date().toISOString(),
+          },
+        ],
+        currentIndex: 0,
+      }),
+    );
+
+    const { result } = renderHook(() =>
+      usePlaybackPersistenceHarness({
+        playlistStorageKey,
+        localEntriesBySourceId: new Map(),
+        localSourceTreeUris: new Map(),
+      }),
+    );
 
     await waitFor(() => {
       expect(result.current.playlist).toHaveLength(1);
@@ -169,50 +194,55 @@ describe('usePlaybackPersistence', () => {
 
   it('hydrates from repository data when legacy playlist payload is absent', async () => {
     const playlistStorageKey = buildPlaylistStorageKey('device-1');
-    localStorage.setItem('c64u_playlist_repo:v1', JSON.stringify({
-      version: 1,
-      tracks: {
-        'hvsc::/MUSICIANS/Test/repo.sid': {
-          trackId: 'hvsc::/MUSICIANS/Test/repo.sid',
-          sourceKind: 'hvsc',
-          sourceLocator: '/MUSICIANS/Test/repo.sid',
-          category: 'sid',
-          title: 'repo.sid',
-          author: null,
-          released: null,
-          path: '/MUSICIANS/Test/repo.sid',
-          sizeBytes: null,
-          modifiedAt: null,
-          defaultDurationMs: 1000,
-          subsongCount: 1,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-      },
-      playlistItemsByPlaylistId: {
-        [playlistStorageKey]: [
-          {
-            playlistItemId: 'repo-item-1',
-            playlistId: playlistStorageKey,
+    localStorage.setItem(
+      'c64u_playlist_repo:v1',
+      JSON.stringify({
+        version: 1,
+        tracks: {
+          'hvsc::/MUSICIANS/Test/repo.sid': {
             trackId: 'hvsc::/MUSICIANS/Test/repo.sid',
-            songNr: 1,
-            sortKey: '00000001',
-            durationOverrideMs: null,
-            status: 'ready',
-            unavailableReason: null,
-            addedAt: new Date().toISOString(),
+            sourceKind: 'hvsc',
+            sourceLocator: '/MUSICIANS/Test/repo.sid',
+            category: 'sid',
+            title: 'repo.sid',
+            author: null,
+            released: null,
+            path: '/MUSICIANS/Test/repo.sid',
+            sizeBytes: null,
+            modifiedAt: null,
+            defaultDurationMs: 1000,
+            subsongCount: 1,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
           },
-        ],
-      },
-      sessionsByPlaylistId: {},
-      randomSessionsByPlaylistId: {},
-    }));
+        },
+        playlistItemsByPlaylistId: {
+          [playlistStorageKey]: [
+            {
+              playlistItemId: 'repo-item-1',
+              playlistId: playlistStorageKey,
+              trackId: 'hvsc::/MUSICIANS/Test/repo.sid',
+              songNr: 1,
+              sortKey: '00000001',
+              durationOverrideMs: null,
+              status: 'ready',
+              unavailableReason: null,
+              addedAt: new Date().toISOString(),
+            },
+          ],
+        },
+        sessionsByPlaylistId: {},
+        randomSessionsByPlaylistId: {},
+      }),
+    );
 
-    const { result } = renderHook(() => usePlaybackPersistenceHarness({
-      playlistStorageKey,
-      localEntriesBySourceId: new Map(),
-      localSourceTreeUris: new Map(),
-    }));
+    const { result } = renderHook(() =>
+      usePlaybackPersistenceHarness({
+        playlistStorageKey,
+        localEntriesBySourceId: new Map(),
+        localSourceTreeUris: new Map(),
+      }),
+    );
 
     await waitFor(() => {
       expect(result.current.playlist).toHaveLength(1);
@@ -227,38 +257,46 @@ describe('usePlaybackPersistence', () => {
     const elapsedMs = 10000;
 
     // Seed playlist in localStorage
-    localStorage.setItem(playlistStorageKey, JSON.stringify({
-      items: [
-        {
-          source: 'hvsc',
-          path: '/MUSICIANS/Test/restore.sid',
-          name: 'restore.sid',
-          sourceId: 'hvsc-library',
-          addedAt: new Date().toISOString(),
-          durationMs,
-        },
-      ],
-      currentIndex: 0,
-    }));
+    localStorage.setItem(
+      playlistStorageKey,
+      JSON.stringify({
+        items: [
+          {
+            source: 'hvsc',
+            path: '/MUSICIANS/Test/restore.sid',
+            name: 'restore.sid',
+            sourceId: 'hvsc-library',
+            addedAt: new Date().toISOString(),
+            durationMs,
+          },
+        ],
+        currentIndex: 0,
+      }),
+    );
 
     // Seed session in sessionStorage — playing, not paused, with known duration
-    sessionStorage.setItem('c64u_playback_session:v1', JSON.stringify({
-      playlistKey: playlistStorageKey,
-      currentItemId: 'hvsc:hvsc-library:/MUSICIANS/Test/restore.sid',
-      currentIndex: 0,
-      isPlaying: true,
-      isPaused: false,
-      elapsedMs,
-      playedMs: elapsedMs,
-      durationMs,
-      updatedAt: new Date().toISOString(),
-    }));
+    sessionStorage.setItem(
+      'c64u_playback_session:v1',
+      JSON.stringify({
+        playlistKey: playlistStorageKey,
+        currentItemId: 'hvsc:hvsc-library:/MUSICIANS/Test/restore.sid',
+        currentIndex: 0,
+        isPlaying: true,
+        isPaused: false,
+        elapsedMs,
+        playedMs: elapsedMs,
+        durationMs,
+        updatedAt: new Date().toISOString(),
+      }),
+    );
 
-    const { result } = renderHook(() => usePlaybackPersistenceHarness({
-      playlistStorageKey,
-      localEntriesBySourceId: new Map(),
-      localSourceTreeUris: new Map(),
-    }));
+    const { result } = renderHook(() =>
+      usePlaybackPersistenceHarness({
+        playlistStorageKey,
+        localEntriesBySourceId: new Map(),
+        localSourceTreeUris: new Map(),
+      }),
+    );
 
     await waitFor(() => {
       expect(result.current.playlist).toHaveLength(1);
@@ -267,7 +305,9 @@ describe('usePlaybackPersistence', () => {
     // The guard should have been set and setAutoAdvanceDueAtMs called with a numeric value
     await waitFor(() => {
       const calls = result.current.setAutoAdvanceDueAtMs.mock.calls;
-      const numericCalls = calls.filter(([v]: [unknown]) => typeof v === 'number');
+      const numericCalls = calls.filter(
+        ([v]: [unknown]) => typeof v === 'number',
+      );
       expect(numericCalls.length).toBeGreaterThanOrEqual(1);
       // The dueAtMs should be approximately trackStartedAt + durationMs
       const dueAt = numericCalls[numericCalls.length - 1][0] as number;
@@ -280,37 +320,45 @@ describe('usePlaybackPersistence', () => {
     const playlistStorageKey = buildPlaylistStorageKey('device-1');
 
     // Seed playlist in localStorage — item has NO duration
-    localStorage.setItem(playlistStorageKey, JSON.stringify({
-      items: [
-        {
-          source: 'hvsc',
-          path: '/MUSICIANS/Test/nodur.sid',
-          name: 'nodur.sid',
-          sourceId: 'hvsc-library',
-          addedAt: new Date().toISOString(),
-        },
-      ],
-      currentIndex: 0,
-    }));
+    localStorage.setItem(
+      playlistStorageKey,
+      JSON.stringify({
+        items: [
+          {
+            source: 'hvsc',
+            path: '/MUSICIANS/Test/nodur.sid',
+            name: 'nodur.sid',
+            sourceId: 'hvsc-library',
+            addedAt: new Date().toISOString(),
+          },
+        ],
+        currentIndex: 0,
+      }),
+    );
 
     // Seed session in sessionStorage — playing, no duration
-    sessionStorage.setItem('c64u_playback_session:v1', JSON.stringify({
-      playlistKey: playlistStorageKey,
-      currentItemId: 'hvsc:hvsc-library:/MUSICIANS/Test/nodur.sid',
-      currentIndex: 0,
-      isPlaying: true,
-      isPaused: false,
-      elapsedMs: 5000,
-      playedMs: 5000,
-      durationMs: undefined,
-      updatedAt: new Date().toISOString(),
-    }));
+    sessionStorage.setItem(
+      'c64u_playback_session:v1',
+      JSON.stringify({
+        playlistKey: playlistStorageKey,
+        currentItemId: 'hvsc:hvsc-library:/MUSICIANS/Test/nodur.sid',
+        currentIndex: 0,
+        isPlaying: true,
+        isPaused: false,
+        elapsedMs: 5000,
+        playedMs: 5000,
+        durationMs: undefined,
+        updatedAt: new Date().toISOString(),
+      }),
+    );
 
-    const { result } = renderHook(() => usePlaybackPersistenceHarness({
-      playlistStorageKey,
-      localEntriesBySourceId: new Map(),
-      localSourceTreeUris: new Map(),
-    }));
+    const { result } = renderHook(() =>
+      usePlaybackPersistenceHarness({
+        playlistStorageKey,
+        localEntriesBySourceId: new Map(),
+        localSourceTreeUris: new Map(),
+      }),
+    );
 
     await waitFor(() => {
       expect(result.current.playlist).toHaveLength(1);
@@ -327,37 +375,45 @@ describe('usePlaybackPersistence', () => {
   it('skips session restore when playlistKey does not match', async () => {
     const playlistStorageKey = buildPlaylistStorageKey('device-1');
 
-    localStorage.setItem(playlistStorageKey, JSON.stringify({
-      items: [
-        {
-          source: 'hvsc',
-          path: '/MUSICIANS/Test/demo.sid',
-          name: 'demo.sid',
-          sourceId: 'hvsc-library',
-          addedAt: new Date().toISOString(),
-        },
-      ],
-      currentIndex: 0,
-    }));
+    localStorage.setItem(
+      playlistStorageKey,
+      JSON.stringify({
+        items: [
+          {
+            source: 'hvsc',
+            path: '/MUSICIANS/Test/demo.sid',
+            name: 'demo.sid',
+            sourceId: 'hvsc-library',
+            addedAt: new Date().toISOString(),
+          },
+        ],
+        currentIndex: 0,
+      }),
+    );
 
     // Session stored with a DIFFERENT playlist key
-    sessionStorage.setItem('c64u_playback_session:v1', JSON.stringify({
-      playlistKey: 'c64u_playlist:other-device',
-      currentItemId: 'hvsc:hvsc-library:/MUSICIANS/Test/demo.sid',
-      currentIndex: 0,
-      isPlaying: true,
-      isPaused: false,
-      elapsedMs: 5000,
-      playedMs: 5000,
-      durationMs: 60000,
-      updatedAt: new Date().toISOString(),
-    }));
+    sessionStorage.setItem(
+      'c64u_playback_session:v1',
+      JSON.stringify({
+        playlistKey: 'c64u_playlist:other-device',
+        currentItemId: 'hvsc:hvsc-library:/MUSICIANS/Test/demo.sid',
+        currentIndex: 0,
+        isPlaying: true,
+        isPaused: false,
+        elapsedMs: 5000,
+        playedMs: 5000,
+        durationMs: 60000,
+        updatedAt: new Date().toISOString(),
+      }),
+    );
 
-    const { result } = renderHook(() => usePlaybackPersistenceHarness({
-      playlistStorageKey,
-      localEntriesBySourceId: new Map(),
-      localSourceTreeUris: new Map(),
-    }));
+    const { result } = renderHook(() =>
+      usePlaybackPersistenceHarness({
+        playlistStorageKey,
+        localEntriesBySourceId: new Map(),
+        localSourceTreeUris: new Map(),
+      }),
+    );
 
     await waitFor(() => {
       expect(result.current.playlist).toHaveLength(1);
@@ -366,7 +422,9 @@ describe('usePlaybackPersistence', () => {
     // Session restore should be skipped due to key mismatch, so no setAutoAdvanceDueAtMs with numeric value
     await waitFor(() => {
       const calls = result.current.setAutoAdvanceDueAtMs.mock.calls;
-      const numericCalls = calls.filter(([v]: [unknown]) => typeof v === 'number');
+      const numericCalls = calls.filter(
+        ([v]: [unknown]) => typeof v === 'number',
+      );
       expect(numericCalls.length).toBe(0);
     });
   });
@@ -374,37 +432,45 @@ describe('usePlaybackPersistence', () => {
   it('skips session restore when item index is out of range', async () => {
     const playlistStorageKey = buildPlaylistStorageKey('device-1');
 
-    localStorage.setItem(playlistStorageKey, JSON.stringify({
-      items: [
-        {
-          source: 'hvsc',
-          path: '/MUSICIANS/Test/demo.sid',
-          name: 'demo.sid',
-          sourceId: 'hvsc-library',
-          addedAt: new Date().toISOString(),
-        },
-      ],
-      currentIndex: 0,
-    }));
+    localStorage.setItem(
+      playlistStorageKey,
+      JSON.stringify({
+        items: [
+          {
+            source: 'hvsc',
+            path: '/MUSICIANS/Test/demo.sid',
+            name: 'demo.sid',
+            sourceId: 'hvsc-library',
+            addedAt: new Date().toISOString(),
+          },
+        ],
+        currentIndex: 0,
+      }),
+    );
 
     // Session refers to an item ID that doesn't exist in the restored playlist
-    sessionStorage.setItem('c64u_playback_session:v1', JSON.stringify({
-      playlistKey: playlistStorageKey,
-      currentItemId: 'hvsc:hvsc-library:/MUSICIANS/Test/nonexistent.sid',
-      currentIndex: 99,
-      isPlaying: true,
-      isPaused: false,
-      elapsedMs: 5000,
-      playedMs: 5000,
-      durationMs: 60000,
-      updatedAt: new Date().toISOString(),
-    }));
+    sessionStorage.setItem(
+      'c64u_playback_session:v1',
+      JSON.stringify({
+        playlistKey: playlistStorageKey,
+        currentItemId: 'hvsc:hvsc-library:/MUSICIANS/Test/nonexistent.sid',
+        currentIndex: 99,
+        isPlaying: true,
+        isPaused: false,
+        elapsedMs: 5000,
+        playedMs: 5000,
+        durationMs: 60000,
+        updatedAt: new Date().toISOString(),
+      }),
+    );
 
-    const { result } = renderHook(() => usePlaybackPersistenceHarness({
-      playlistStorageKey,
-      localEntriesBySourceId: new Map(),
-      localSourceTreeUris: new Map(),
-    }));
+    const { result } = renderHook(() =>
+      usePlaybackPersistenceHarness({
+        playlistStorageKey,
+        localEntriesBySourceId: new Map(),
+        localSourceTreeUris: new Map(),
+      }),
+    );
 
     await waitFor(() => {
       expect(result.current.playlist).toHaveLength(1);
@@ -413,7 +479,9 @@ describe('usePlaybackPersistence', () => {
     // Session restore should be skipped due to out-of-range index
     await waitFor(() => {
       const calls = result.current.setAutoAdvanceDueAtMs.mock.calls;
-      const numericCalls = calls.filter(([v]: [unknown]) => typeof v === 'number');
+      const numericCalls = calls.filter(
+        ([v]: [unknown]) => typeof v === 'number',
+      );
       expect(numericCalls.length).toBe(0);
     });
   });
@@ -423,24 +491,29 @@ describe('usePlaybackPersistence', () => {
     const defaultKey = buildPlaylistStorageKey('default');
 
     // Only the default key has data
-    localStorage.setItem(defaultKey, JSON.stringify({
-      items: [
-        {
-          source: 'hvsc',
-          path: '/MUSICIANS/Test/fallback.sid',
-          name: 'fallback.sid',
-          sourceId: 'hvsc-library',
-          addedAt: new Date().toISOString(),
-        },
-      ],
-      currentIndex: 0,
-    }));
+    localStorage.setItem(
+      defaultKey,
+      JSON.stringify({
+        items: [
+          {
+            source: 'hvsc',
+            path: '/MUSICIANS/Test/fallback.sid',
+            name: 'fallback.sid',
+            sourceId: 'hvsc-library',
+            addedAt: new Date().toISOString(),
+          },
+        ],
+        currentIndex: 0,
+      }),
+    );
 
-    const { result } = renderHook(() => usePlaybackPersistenceHarness({
-      playlistStorageKey,
-      localEntriesBySourceId: new Map(),
-      localSourceTreeUris: new Map(),
-    }));
+    const { result } = renderHook(() =>
+      usePlaybackPersistenceHarness({
+        playlistStorageKey,
+        localEntriesBySourceId: new Map(),
+        localSourceTreeUris: new Map(),
+      }),
+    );
 
     await waitFor(() => {
       expect(result.current.playlist).toHaveLength(1);
@@ -451,38 +524,46 @@ describe('usePlaybackPersistence', () => {
   it('restores paused session without starting auto-advance timer', async () => {
     const playlistStorageKey = buildPlaylistStorageKey('device-1');
 
-    localStorage.setItem(playlistStorageKey, JSON.stringify({
-      items: [
-        {
-          source: 'hvsc',
-          path: '/MUSICIANS/Test/paused.sid',
-          name: 'paused.sid',
-          sourceId: 'hvsc-library',
-          addedAt: new Date().toISOString(),
-          durationMs: 60000,
-        },
-      ],
-      currentIndex: 0,
-    }));
+    localStorage.setItem(
+      playlistStorageKey,
+      JSON.stringify({
+        items: [
+          {
+            source: 'hvsc',
+            path: '/MUSICIANS/Test/paused.sid',
+            name: 'paused.sid',
+            sourceId: 'hvsc-library',
+            addedAt: new Date().toISOString(),
+            durationMs: 60000,
+          },
+        ],
+        currentIndex: 0,
+      }),
+    );
 
     // Session stored with isPaused = true
-    sessionStorage.setItem('c64u_playback_session:v1', JSON.stringify({
-      playlistKey: playlistStorageKey,
-      currentItemId: 'hvsc:hvsc-library:/MUSICIANS/Test/paused.sid',
-      currentIndex: 0,
-      isPlaying: false,
-      isPaused: true,
-      elapsedMs: 10000,
-      playedMs: 10000,
-      durationMs: 60000,
-      updatedAt: new Date().toISOString(),
-    }));
+    sessionStorage.setItem(
+      'c64u_playback_session:v1',
+      JSON.stringify({
+        playlistKey: playlistStorageKey,
+        currentItemId: 'hvsc:hvsc-library:/MUSICIANS/Test/paused.sid',
+        currentIndex: 0,
+        isPlaying: false,
+        isPaused: true,
+        elapsedMs: 10000,
+        playedMs: 10000,
+        durationMs: 60000,
+        updatedAt: new Date().toISOString(),
+      }),
+    );
 
-    const { result } = renderHook(() => usePlaybackPersistenceHarness({
-      playlistStorageKey,
-      localEntriesBySourceId: new Map(),
-      localSourceTreeUris: new Map(),
-    }));
+    const { result } = renderHook(() =>
+      usePlaybackPersistenceHarness({
+        playlistStorageKey,
+        localEntriesBySourceId: new Map(),
+        localSourceTreeUris: new Map(),
+      }),
+    );
 
     await waitFor(() => {
       expect(result.current.playlist).toHaveLength(1);
@@ -499,29 +580,34 @@ describe('usePlaybackPersistence', () => {
   it('restores playlist from local source with tree URI fallback', async () => {
     const playlistStorageKey = buildPlaylistStorageKey('device-1');
 
-    localStorage.setItem(playlistStorageKey, JSON.stringify({
-      items: [
-        {
-          source: 'local',
-          path: '/Music/tree-demo.sid',
-          name: 'tree-demo.sid',
-          sourceId: 'tree-source',
-          addedAt: new Date().toISOString(),
-        },
-      ],
-      currentIndex: 0,
-    }));
+    localStorage.setItem(
+      playlistStorageKey,
+      JSON.stringify({
+        items: [
+          {
+            source: 'local',
+            path: '/Music/tree-demo.sid',
+            name: 'tree-demo.sid',
+            sourceId: 'tree-source',
+            addedAt: new Date().toISOString(),
+          },
+        ],
+        currentIndex: 0,
+      }),
+    );
 
     // No entry in localEntriesBySourceId, but provide a tree URI
     const localSourceTreeUris = new Map<string, string | null>([
       ['tree-source', 'content://tree-uri'],
     ]);
 
-    const { result } = renderHook(() => usePlaybackPersistenceHarness({
-      playlistStorageKey,
-      localEntriesBySourceId: new Map(),
-      localSourceTreeUris,
-    }));
+    const { result } = renderHook(() =>
+      usePlaybackPersistenceHarness({
+        playlistStorageKey,
+        localEntriesBySourceId: new Map(),
+        localSourceTreeUris,
+      }),
+    );
 
     await waitFor(() => {
       expect(result.current.playlist).toHaveLength(1);
@@ -535,24 +621,29 @@ describe('usePlaybackPersistence', () => {
     // Corrupt session data
     sessionStorage.setItem('c64u_playback_session:v1', 'NOT_VALID_JSON');
 
-    localStorage.setItem(playlistStorageKey, JSON.stringify({
-      items: [
-        {
-          source: 'hvsc',
-          path: '/MUSICIANS/Test/demo.sid',
-          name: 'demo.sid',
-          sourceId: 'hvsc-library',
-          addedAt: new Date().toISOString(),
-        },
-      ],
-      currentIndex: 0,
-    }));
-
-    const { result } = renderHook(() => usePlaybackPersistenceHarness({
+    localStorage.setItem(
       playlistStorageKey,
-      localEntriesBySourceId: new Map(),
-      localSourceTreeUris: new Map(),
-    }));
+      JSON.stringify({
+        items: [
+          {
+            source: 'hvsc',
+            path: '/MUSICIANS/Test/demo.sid',
+            name: 'demo.sid',
+            sourceId: 'hvsc-library',
+            addedAt: new Date().toISOString(),
+          },
+        ],
+        currentIndex: 0,
+      }),
+    );
+
+    const { result } = renderHook(() =>
+      usePlaybackPersistenceHarness({
+        playlistStorageKey,
+        localEntriesBySourceId: new Map(),
+        localSourceTreeUris: new Map(),
+      }),
+    );
 
     // Should still load the playlist despite corrupt session
     await waitFor(() => {

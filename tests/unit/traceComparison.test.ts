@@ -19,7 +19,9 @@ type TraceEvent = {
   data: Record<string, unknown>;
 };
 
-const makeEvent = (overrides: Partial<TraceEvent> & { type: string }): TraceEvent => ({
+const makeEvent = (
+  overrides: Partial<TraceEvent> & { type: string },
+): TraceEvent => ({
   id: overrides.id ?? 'EVT-0000',
   timestamp: overrides.timestamp ?? new Date(0).toISOString(),
   relativeMs: overrides.relativeMs ?? 0,
@@ -350,18 +352,59 @@ describe('compareTracesEssential', () => {
 
   it('reports ordering violations when action end occurs before downstream system events', () => {
     const expected = [
-      makeEvent({ id: 'EVT-0500', type: 'action-start', correlationId: 'COR-0500', relativeMs: 0, data: { name: 'rest.post' } }),
-      makeEvent({ id: 'EVT-0501', type: 'rest-request', correlationId: 'COR-0500', relativeMs: 1, data: { method: 'POST', url: '/v1/custom' } }),
-      makeEvent({ id: 'EVT-0502', type: 'action-end', correlationId: 'COR-0500', relativeMs: 2, data: { status: 'success' } }),
+      makeEvent({
+        id: 'EVT-0500',
+        type: 'action-start',
+        correlationId: 'COR-0500',
+        relativeMs: 0,
+        data: { name: 'rest.post' },
+      }),
+      makeEvent({
+        id: 'EVT-0501',
+        type: 'rest-request',
+        correlationId: 'COR-0500',
+        relativeMs: 1,
+        data: { method: 'POST', url: '/v1/custom' },
+      }),
+      makeEvent({
+        id: 'EVT-0502',
+        type: 'action-end',
+        correlationId: 'COR-0500',
+        relativeMs: 2,
+        data: { status: 'success' },
+      }),
     ];
     const actual = [
-      makeEvent({ id: 'EVT-0503', type: 'action-start', correlationId: 'COR-0500', relativeMs: 0, data: { name: 'rest.post' }, origin: 'system' }),
-      makeEvent({ id: 'EVT-0504', type: 'action-end', correlationId: 'COR-0500', relativeMs: 1, data: { status: 'success' }, origin: 'system' }),
-      makeEvent({ id: 'EVT-0505', type: 'rest-request', correlationId: 'COR-0500', relativeMs: 2, data: { method: 'POST', url: '/v1/custom' }, origin: 'system' }),
+      makeEvent({
+        id: 'EVT-0503',
+        type: 'action-start',
+        correlationId: 'COR-0500',
+        relativeMs: 0,
+        data: { name: 'rest.post' },
+        origin: 'system',
+      }),
+      makeEvent({
+        id: 'EVT-0504',
+        type: 'action-end',
+        correlationId: 'COR-0500',
+        relativeMs: 1,
+        data: { status: 'success' },
+        origin: 'system',
+      }),
+      makeEvent({
+        id: 'EVT-0505',
+        type: 'rest-request',
+        correlationId: 'COR-0500',
+        relativeMs: 2,
+        data: { method: 'POST', url: '/v1/custom' },
+        origin: 'system',
+      }),
     ];
 
     const result = compareTracesEssential(expected, actual);
-    expect(result.errors.some((error) => error.includes('Ordering violation'))).toBe(true);
+    expect(
+      result.errors.some((error) => error.includes('Ordering violation')),
+    ).toBe(true);
     expect(result.diff.orderingViolations.length).toBeGreaterThan(0);
   });
 

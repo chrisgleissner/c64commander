@@ -19,31 +19,45 @@ type DiagnosticsSeverityMeta = {
   colorClass: string;
 };
 
-export const DIAGNOSTICS_SEVERITY_META: Record<DiagnosticsSeverity, DiagnosticsSeverityMeta> = {
+export const DIAGNOSTICS_SEVERITY_META: Record<
+  DiagnosticsSeverity,
+  DiagnosticsSeverityMeta
+> = {
   error: { glyph: 'E', label: 'ERROR', colorClass: 'text-destructive' },
   warn: { glyph: 'W', label: 'WARN', colorClass: 'text-amber-600' },
   info: { glyph: 'I', label: 'INFO', colorClass: 'text-muted-foreground' },
   debug: { glyph: 'D', label: 'DEBUG', colorClass: 'text-c64-blue' },
 };
 
-export const getDiagnosticsSeverityMeta = (severity: DiagnosticsSeverity): DiagnosticsSeverityMeta =>
-  DIAGNOSTICS_SEVERITY_META[severity];
+export const getDiagnosticsSeverityMeta = (
+  severity: DiagnosticsSeverity,
+): DiagnosticsSeverityMeta => DIAGNOSTICS_SEVERITY_META[severity];
 
-const DISPLAY_TO_DIAGNOSTICS_SEVERITY: Record<DiagnosticsDisplaySeverity, DiagnosticsSeverity> = {
+const DISPLAY_TO_DIAGNOSTICS_SEVERITY: Record<
+  DiagnosticsDisplaySeverity,
+  DiagnosticsSeverity
+> = {
   ERROR: 'error',
   WARN: 'warn',
   INFO: 'info',
 };
 
-export const getDiagnosticsColorClassForDisplaySeverity = (severity: DiagnosticsDisplaySeverity): string =>
-  getDiagnosticsSeverityMeta(DISPLAY_TO_DIAGNOSTICS_SEVERITY[severity]).colorClass;
+export const getDiagnosticsColorClassForDisplaySeverity = (
+  severity: DiagnosticsDisplaySeverity,
+): string =>
+  getDiagnosticsSeverityMeta(DISPLAY_TO_DIAGNOSTICS_SEVERITY[severity])
+    .colorClass;
 
-export const resolveLogSeverity = (level: LogLevel): DiagnosticsSeverity => level;
+export const resolveLogSeverity = (level: LogLevel): DiagnosticsSeverity =>
+  level;
 
-export const resolveTraceSeverity = (event: Pick<TraceEvent, 'type'>): DiagnosticsSeverity =>
-  event.type === 'error' ? 'error' : 'info';
+export const resolveTraceSeverity = (
+  event: Pick<TraceEvent, 'type'>,
+): DiagnosticsSeverity => (event.type === 'error' ? 'error' : 'info');
 
-export const resolveActionSeverity = (outcome: ActionSummaryOutcome): DiagnosticsSeverity => {
+export const resolveActionSeverity = (
+  outcome: ActionSummaryOutcome,
+): DiagnosticsSeverity => {
   switch (outcome) {
     case 'error':
       return 'error';

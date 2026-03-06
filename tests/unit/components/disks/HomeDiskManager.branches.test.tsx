@@ -36,7 +36,9 @@ vi.mock('@/components/lists/SelectableActionList', () => ({
           {item.onAction && <button onClick={item.onAction}>Mount</button>}
           {item.menuItems?.map((menu: any, idx: number) =>
             menu.type === 'action' ? (
-              <button key={idx} onClick={menu.onSelect}>{menu.label}</button>
+              <button key={idx} onClick={menu.onSelect}>
+                {menu.label}
+              </button>
             ) : null,
           )}
         </div>
@@ -47,7 +49,11 @@ vi.mock('@/components/lists/SelectableActionList', () => ({
 
 vi.mock('@/components/itemSelection/ItemSelectionDialog', () => ({
   ItemSelectionDialog: ({ open, onClose }: any) =>
-    open ? <div data-testid="item-selection-dialog"><button onClick={onClose}>Close</button></div> : null,
+    open ? (
+      <div data-testid="item-selection-dialog">
+        <button onClick={onClose}>Close</button>
+      </div>
+    ) : null,
 }));
 
 vi.mock('@/components/itemSelection/AddItemsProgressOverlay', () => ({
@@ -101,7 +107,11 @@ vi.mock('@/hooks/useC64Connection', () => ({
 }));
 
 vi.mock('@/hooks/useLocalSources', () => ({
-  useLocalSources: () => ({ sources: [], addSourceFromPicker: vi.fn(), addSourceFromFiles: vi.fn() }),
+  useLocalSources: () => ({
+    sources: [],
+    addSourceFromPicker: vi.fn(),
+    addSourceFromFiles: vi.fn(),
+  }),
 }));
 vi.mock('@/hooks/useListPreviewLimit', () => ({
   useListPreviewLimit: () => ({ limit: 100 }),
@@ -124,7 +134,12 @@ vi.mock('@/lib/c64api', () => ({
 
 vi.mock('@/components/ui/dialog', () => ({
   Dialog: ({ children, open, onOpenChange }: any) =>
-    open ? <div role="dialog">{children}<button onClick={() => onOpenChange(false)}>Close</button></div> : null,
+    open ? (
+      <div role="dialog">
+        {children}
+        <button onClick={() => onOpenChange(false)}>Close</button>
+      </div>
+    ) : null,
   DialogContent: ({ children }: any) => <div>{children}</div>,
   DialogHeader: ({ children }: any) => <div>{children}</div>,
   DialogTitle: ({ children }: any) => <div>{children}</div>,
@@ -200,7 +215,13 @@ describe('HomeDiskManager targeted branch coverage', () => {
   it('renders drive status with warning color for WRITE PROTECT status', () => {
     drivesMock.data = {
       drives: [
-        { a: { bus_id: 8, enabled: true, last_error: '26,WRITE PROTECT ON,00,00' } },
+        {
+          a: {
+            bus_id: 8,
+            enabled: true,
+            last_error: '26,WRITE PROTECT ON,00,00',
+          },
+        },
         { b: { bus_id: 9, enabled: true } },
       ],
     };
@@ -255,7 +276,14 @@ describe('HomeDiskManager targeted branch coverage', () => {
     drivesMock.data = {
       drives: [
         // path is null → path || '/' = '/' → base.endsWith('/') is TRUE
-        { a: { bus_id: 8, enabled: true, image_file: 'demo.d64', image_path: null } },
+        {
+          a: {
+            bus_id: 8,
+            enabled: true,
+            image_file: 'demo.d64',
+            image_path: null,
+          },
+        },
         { b: { bus_id: 9, enabled: true } },
       ],
     };
@@ -268,7 +296,14 @@ describe('HomeDiskManager targeted branch coverage', () => {
   it('builds drive path without trailing slash when image_path is /D64', () => {
     drivesMock.data = {
       drives: [
-        { a: { bus_id: 8, enabled: true, image_file: 'test.d64', image_path: '/D64' } },
+        {
+          a: {
+            bus_id: 8,
+            enabled: true,
+            image_file: 'test.d64',
+            image_path: '/D64',
+          },
+        },
         { b: { bus_id: 9, enabled: true } },
       ],
     };
@@ -414,7 +449,13 @@ describe('HomeDiskManager targeted branch coverage', () => {
       drives: [
         { a: { bus_id: 8, enabled: true } },
         { b: { bus_id: 9, enabled: true } },
-        { softiec: { enabled: true, last_error: 'service error reported', bus_id: 11 } },
+        {
+          softiec: {
+            enabled: true,
+            last_error: 'service error reported',
+            bus_id: 11,
+          },
+        },
       ],
     };
     renderComponent();
@@ -429,7 +470,13 @@ describe('HomeDiskManager targeted branch coverage', () => {
       drives: [
         { a: { bus_id: 8, enabled: true } },
         { b: { bus_id: 9, enabled: true } },
-        { softiec: { enabled: true, last_error: '74,DRIVE NOT READY,00,00', bus_id: 11 } },
+        {
+          softiec: {
+            enabled: true,
+            last_error: '74,DRIVE NOT READY,00,00',
+            bus_id: 11,
+          },
+        },
       ],
     };
     renderComponent();
@@ -460,8 +507,20 @@ describe('HomeDiskManager targeted branch coverage', () => {
   // ── disk groups: canRotate=true (lines 1188-1191) ─────────────────────────
   it('shows rotate controls when disk group has multiple disks', () => {
     useDiskLibraryMock.disks = [
-      { id: 'local/disk1.d64', name: 'disk1.d64', path: '/disk1.d64', location: 'local', group: 'Series A' },
-      { id: 'local/disk2.d64', name: 'disk2.d64', path: '/disk2.d64', location: 'local', group: 'Series A' },
+      {
+        id: 'local/disk1.d64',
+        name: 'disk1.d64',
+        path: '/disk1.d64',
+        location: 'local',
+        group: 'Series A',
+      },
+      {
+        id: 'local/disk2.d64',
+        name: 'disk2.d64',
+        path: '/disk2.d64',
+        location: 'local',
+        group: 'Series A',
+      },
     ] as any;
     renderComponent();
     expect(screen.getByText('disk1.d64')).toBeInTheDocument();
@@ -483,7 +542,13 @@ describe('HomeDiskManager targeted branch coverage', () => {
   it('renders drive with driveErrors set (primary error message)', async () => {
     drivesMock.data = {
       drives: [
-        { a: { bus_id: 8, enabled: true, last_error: '20,READ ERROR (Block Header Not Found),01,01' } },
+        {
+          a: {
+            bus_id: 8,
+            enabled: true,
+            last_error: '20,READ ERROR (Block Header Not Found),01,01',
+          },
+        },
         { b: { bus_id: 9, enabled: true } },
       ],
     };
@@ -611,7 +676,14 @@ describe('HomeDiskManager targeted branch coverage', () => {
   it('correctly handles drive image_path ending with slash', () => {
     drivesMock.data = {
       drives: [
-        { a: { bus_id: 8, enabled: true, image_file: 'test.d64', image_path: '/D64/' } },
+        {
+          a: {
+            bus_id: 8,
+            enabled: true,
+            image_file: 'test.d64',
+            image_path: '/D64/',
+          },
+        },
         { b: { bus_id: 9, enabled: true } },
       ],
     };

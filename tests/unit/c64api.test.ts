@@ -25,17 +25,26 @@ import { addErrorLog, addLog } from '@/lib/logging';
 import { resetConfigWriteThrottle } from '@/lib/config/configWriteThrottle';
 import { saveConfigWriteIntervalMs } from '@/lib/config/appSettings';
 import { isFuzzModeEnabled, isFuzzSafeBaseUrl } from '@/lib/fuzz/fuzzMode';
-import { isSmokeModeEnabled, isSmokeReadOnlyEnabled } from '@/lib/smoke/smokeMode';
+import {
+  isSmokeModeEnabled,
+  isSmokeReadOnlyEnabled,
+} from '@/lib/smoke/smokeMode';
 import { getDeviceStateSnapshot } from '@/lib/deviceInteraction/deviceStateStore';
 
 const ensureWindow = () => {
   if (typeof window !== 'undefined') return;
   const target = new EventTarget();
   const windowMock = {
-    addEventListener: (type: string, listener: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions) =>
-      target.addEventListener(type, listener, options),
-    removeEventListener: (type: string, listener: EventListenerOrEventListenerObject, options?: boolean | EventListenerOptions) =>
-      target.removeEventListener(type, listener, options),
+    addEventListener: (
+      type: string,
+      listener: EventListenerOrEventListenerObject,
+      options?: boolean | AddEventListenerOptions,
+    ) => target.addEventListener(type, listener, options),
+    removeEventListener: (
+      type: string,
+      listener: EventListenerOrEventListenerObject,
+      options?: boolean | EventListenerOptions,
+    ) => target.removeEventListener(type, listener, options),
     dispatchEvent: (event: Event) => target.dispatchEvent(event),
     location: { origin: 'http://localhost' },
     setTimeout: globalThis.setTimeout.bind(globalThis),
@@ -45,7 +54,10 @@ const ensureWindow = () => {
     value: windowMock,
     configurable: true,
   });
-  if (typeof (globalThis as { CustomEvent?: typeof CustomEvent }).CustomEvent === 'undefined') {
+  if (
+    typeof (globalThis as { CustomEvent?: typeof CustomEvent }).CustomEvent ===
+    'undefined'
+  ) {
     class CustomEventShim<T = any> extends Event {
       detail?: T;
       constructor(type: string, params?: CustomEventInit<T>) {
@@ -99,10 +111,12 @@ const getFetchMock = () => fetchMock as unknown as ReturnType<typeof vi.fn>;
 vi.mock('@/lib/logging', () => ({
   addErrorLog: vi.fn(),
   addLog: vi.fn(),
-  buildErrorLogDetails: vi.fn((error: Error, details?: Record<string, unknown>) => ({
-    ...details,
-    error: error.message,
-  })),
+  buildErrorLogDetails: vi.fn(
+    (error: Error, details?: Record<string, unknown>) => ({
+      ...details,
+      error: error.message,
+    }),
+  ),
 }));
 
 vi.mock('@capacitor/core', () => ({
@@ -127,7 +141,10 @@ vi.mock('@/lib/smoke/smokeMode', () => ({
 }));
 
 vi.mock('@/lib/deviceInteraction/deviceStateStore', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/deviceInteraction/deviceStateStore')>();
+  const actual =
+    await importOriginal<
+      typeof import('@/lib/deviceInteraction/deviceStateStore')
+    >();
   return {
     ...actual,
     getDeviceStateSnapshot: vi.fn(() => ({
@@ -156,14 +173,26 @@ vi.mock('@/lib/secureStorage', () => ({
 
 const addErrorLogMock = addErrorLog as unknown as ReturnType<typeof vi.fn>;
 const addLogMock = addLog as unknown as ReturnType<typeof vi.fn>;
-const fuzzEnabledMock = isFuzzModeEnabled as unknown as ReturnType<typeof vi.fn>;
+const fuzzEnabledMock = isFuzzModeEnabled as unknown as ReturnType<
+  typeof vi.fn
+>;
 const fuzzSafeMock = isFuzzSafeBaseUrl as unknown as ReturnType<typeof vi.fn>;
-const smokeEnabledMock = isSmokeModeEnabled as unknown as ReturnType<typeof vi.fn>;
-const smokeReadOnlyMock = isSmokeReadOnlyEnabled as unknown as ReturnType<typeof vi.fn>;
-const deviceStateSnapshotMock = getDeviceStateSnapshot as unknown as ReturnType<typeof vi.fn>;
+const smokeEnabledMock = isSmokeModeEnabled as unknown as ReturnType<
+  typeof vi.fn
+>;
+const smokeReadOnlyMock = isSmokeReadOnlyEnabled as unknown as ReturnType<
+  typeof vi.fn
+>;
+const deviceStateSnapshotMock = getDeviceStateSnapshot as unknown as ReturnType<
+  typeof vi.fn
+>;
 const storePasswordMock = storePassword as unknown as ReturnType<typeof vi.fn>;
-const clearPasswordMock = clearStoredPassword as unknown as ReturnType<typeof vi.fn>;
-const capacitorHttpMock = CapacitorHttp.request as unknown as ReturnType<typeof vi.fn>;
+const clearPasswordMock = clearStoredPassword as unknown as ReturnType<
+  typeof vi.fn
+>;
+const capacitorHttpMock = CapacitorHttp.request as unknown as ReturnType<
+  typeof vi.fn
+>;
 
 describe('c64api', () => {
   beforeEach(() => {
@@ -189,31 +218,44 @@ describe('c64api', () => {
       lastSuccessAtMs: null,
       circuitOpenUntilMs: null,
     });
-    (globalThis as { __c64uAllowNativePlatform?: boolean }).__c64uAllowNativePlatform = false;
-    (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor = undefined;
+    (
+      globalThis as { __c64uAllowNativePlatform?: boolean }
+    ).__c64uAllowNativePlatform = false;
+    (
+      window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }
+    ).Capacitor = undefined;
     resetConfigWriteThrottle();
     saveConfigWriteIntervalMs(0);
-    (globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = false;
+    (
+      globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }
+    ).__C64U_NATIVE_OVERRIDE__ = false;
     storePasswordMock.mockReset();
     clearPasswordMock.mockReset();
   });
 
   afterAll(() => {
-    const handles = (process as { _getActiveHandles?: () => any[] })._getActiveHandles?.() ?? [];
+    const handles =
+      (process as { _getActiveHandles?: () => any[] })._getActiveHandles?.() ??
+      [];
     if (process.env.C64U_DEBUG_HANDLES === '1') {
       const summary = handles.map((handle) => {
         const type = handle?.constructor?.name ?? 'unknown';
-        const hasRef = typeof handle?.hasRef === 'function' ? handle.hasRef() : undefined;
-        const idleTimeout = typeof handle?._idleTimeout === 'number' ? handle._idleTimeout : undefined;
+        const hasRef =
+          typeof handle?.hasRef === 'function' ? handle.hasRef() : undefined;
+        const idleTimeout =
+          typeof handle?._idleTimeout === 'number'
+            ? handle._idleTimeout
+            : undefined;
         const fd = typeof handle?.fd === 'number' ? handle.fd : undefined;
-        const socketInfo = type === 'Socket'
-          ? {
-            localAddress: handle.localAddress,
-            localPort: handle.localPort,
-            remoteAddress: handle.remoteAddress,
-            remotePort: handle.remotePort,
-          }
-          : undefined;
+        const socketInfo =
+          type === 'Socket'
+            ? {
+                localAddress: handle.localAddress,
+                localPort: handle.localPort,
+                remoteAddress: handle.remoteAddress,
+                remotePort: handle.remotePort,
+              }
+            : undefined;
         return { type, hasRef, idleTimeout, fd, socketInfo };
       });
       console.log('c64api.test active handles:', summary);
@@ -242,7 +284,10 @@ describe('c64api', () => {
     const api = new C64API('http://c64u-device', 'secret', 'c64u-device');
     await api.getInfo();
 
-    const headers = fetchMock.mock.calls[0][1]?.headers as Record<string, string>;
+    const headers = fetchMock.mock.calls[0][1]?.headers as Record<
+      string,
+      string
+    >;
     expect(headers['X-Password']).toBe('secret');
     expect(headers['X-C64U-Host']).toBeUndefined();
     expect(fetchMock.mock.calls[0][1]?.credentials).toBe('omit');
@@ -260,28 +305,43 @@ describe('c64api', () => {
     const api = new C64API('http://example.com', 'secret', 'example.com');
     await api.getInfo();
 
-    const headers = fetchMock.mock.calls[0][1]?.headers as Record<string, string>;
+    const headers = fetchMock.mock.calls[0][1]?.headers as Record<
+      string,
+      string
+    >;
     expect(headers['X-Password']).toBe('secret');
   });
 
   it('fails on non-json 200 responses', async () => {
     const fetchMock = getFetchMock();
     fetchMock.mockResolvedValue(
-      new Response('not-json', { status: 200, headers: { 'content-type': 'text/plain' } }),
+      new Response('not-json', {
+        status: 200,
+        headers: { 'content-type': 'text/plain' },
+      }),
     );
 
     const api = new C64API('http://c64u');
-    await expect(api.getVersion()).rejects.toThrow('Malformed JSON response for /v1/version');
-    expect(addErrorLogMock).toHaveBeenCalledWith('C64 API parse failed', expect.objectContaining({
-      status: 200,
-      reason: 'non-json-content-type',
-      contentType: 'text/plain',
-    }));
-    expect(addLogMock).toHaveBeenCalledWith('debug', 'C64 API request', expect.objectContaining({
-      method: 'GET',
-      path: '/v1/version',
-      status: 200,
-    }));
+    await expect(api.getVersion()).rejects.toThrow(
+      'Malformed JSON response for /v1/version',
+    );
+    expect(addErrorLogMock).toHaveBeenCalledWith(
+      'C64 API parse failed',
+      expect.objectContaining({
+        status: 200,
+        reason: 'non-json-content-type',
+        contentType: 'text/plain',
+      }),
+    );
+    expect(addLogMock).toHaveBeenCalledWith(
+      'debug',
+      'C64 API request',
+      expect.objectContaining({
+        method: 'GET',
+        path: '/v1/version',
+        status: 200,
+      }),
+    );
   });
 
   it('logs and throws on http errors', async () => {
@@ -293,11 +353,15 @@ describe('c64api', () => {
     const api = new C64API('http://c64u');
     await expect(api.getInfo()).rejects.toThrow('HTTP 500');
     expect(addErrorLogMock).toHaveBeenCalled();
-    expect(addLogMock).toHaveBeenCalledWith('debug', 'C64 API request', expect.objectContaining({
-      method: 'GET',
-      path: '/v1/info',
-      status: 500,
-    }));
+    expect(addLogMock).toHaveBeenCalledWith(
+      'debug',
+      'C64 API request',
+      expect.objectContaining({
+        method: 'GET',
+        path: '/v1/info',
+        status: 500,
+      }),
+    );
   });
 
   it('blocks requests in fuzz mode for non-local base urls', async () => {
@@ -308,7 +372,10 @@ describe('c64api', () => {
     const api = new C64API('http://example.com');
     await expect(api.getInfo()).rejects.toThrow('Fuzz mode blocked request');
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(addErrorLogMock).toHaveBeenCalledWith('Fuzz mode blocked real device request', expect.any(Object));
+    expect(addErrorLogMock).toHaveBeenCalledWith(
+      'Fuzz mode blocked real device request',
+      expect.any(Object),
+    );
     expect(addErrorLogMock).toHaveBeenCalledTimes(1);
   });
 
@@ -334,15 +401,26 @@ describe('c64api', () => {
     smokeReadOnlyMock.mockReturnValue(true);
 
     const api = new C64API('http://c64u');
-    await expect(api.saveConfig()).rejects.toThrow('Smoke mode blocked mutating request');
+    await expect(api.saveConfig()).rejects.toThrow(
+      'Smoke mode blocked mutating request',
+    );
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(addErrorLogMock).toHaveBeenCalledWith('Smoke mode blocked mutating request', expect.any(Object));
+    expect(addErrorLogMock).toHaveBeenCalledWith(
+      'Smoke mode blocked mutating request',
+      expect.any(Object),
+    );
   });
 
   it('uses patched fetch on native platforms', async () => {
-    (globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = true;
-    (window as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = true;
-    (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor = {
+    (
+      globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }
+    ).__C64U_NATIVE_OVERRIDE__ = true;
+    (
+      window as { __C64U_NATIVE_OVERRIDE__?: boolean }
+    ).__C64U_NATIVE_OVERRIDE__ = true;
+    (
+      window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }
+    ).Capacitor = {
       isNativePlatform: () => true,
     };
     const fetchMock = getFetchMock();
@@ -383,9 +461,15 @@ describe('c64api', () => {
   });
 
   it('handles non-string payloads on native platforms', async () => {
-    (globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = true;
-    (window as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = true;
-    (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor = {
+    (
+      globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }
+    ).__C64U_NATIVE_OVERRIDE__ = true;
+    (
+      window as { __C64U_NATIVE_OVERRIDE__?: boolean }
+    ).__C64U_NATIVE_OVERRIDE__ = true;
+    (
+      window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }
+    ).Capacitor = {
       isNativePlatform: () => true,
     };
     const fetchMock = getFetchMock();
@@ -405,22 +489,36 @@ describe('c64api', () => {
   it('logs parse failures for invalid json responses', async () => {
     const fetchMock = getFetchMock();
     fetchMock.mockResolvedValue(
-      new Response('bad-json', { status: 200, headers: { 'content-type': 'application/json' } }),
+      new Response('bad-json', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
     );
 
     const api = new C64API('http://c64u');
-    await expect(api.getInfo()).rejects.toThrow('Malformed JSON response for /v1/info');
-    expect(addErrorLogMock).toHaveBeenCalledWith('C64 API parse failed', expect.objectContaining({
-      status: 200,
-      reason: 'invalid-json',
-      parseError: expect.any(String),
-    }));
+    await expect(api.getInfo()).rejects.toThrow(
+      'Malformed JSON response for /v1/info',
+    );
+    expect(addErrorLogMock).toHaveBeenCalledWith(
+      'C64 API parse failed',
+      expect.objectContaining({
+        status: 200,
+        reason: 'invalid-json',
+        parseError: expect.any(String),
+      }),
+    );
   });
 
   it('throws for native http errors', async () => {
-    (globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = true;
-    (window as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = true;
-    (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor = {
+    (
+      globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }
+    ).__C64U_NATIVE_OVERRIDE__ = true;
+    (
+      window as { __C64U_NATIVE_OVERRIDE__?: boolean }
+    ).__C64U_NATIVE_OVERRIDE__ = true;
+    (
+      window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }
+    ).Capacitor = {
       isNativePlatform: () => true,
     };
     const fetchMock = getFetchMock();
@@ -449,7 +547,10 @@ describe('c64api', () => {
     expect(storePasswordMock).toHaveBeenCalledWith('pw');
     expect(handler).toHaveBeenCalled();
 
-    window.removeEventListener('c64u-connection-change', handler as EventListener);
+    window.removeEventListener(
+      'c64u-connection-change',
+      handler as EventListener,
+    );
   });
 
   it('clears stored password when omitted and derives device host', () => {
@@ -486,9 +587,14 @@ describe('c64api', () => {
     const result = await api.runCartridgeUpload(payload);
     expect(result.errors).toEqual([]);
 
-    fetchMock.mockResolvedValueOnce(new Response('fail', { status: 500, statusText: 'Server Error' }));
+    fetchMock.mockResolvedValueOnce(
+      new Response('fail', { status: 500, statusText: 'Server Error' }),
+    );
     await expect(api.runCartridgeUpload(payload)).rejects.toThrow('HTTP 500');
-    expect(addErrorLogMock).toHaveBeenCalledWith('CRT upload failed', expect.any(Object));
+    expect(addErrorLogMock).toHaveBeenCalledWith(
+      'CRT upload failed',
+      expect.any(Object),
+    );
   });
 
   it('maps failed fetch in SID uploads to host unreachable', async () => {
@@ -498,7 +604,9 @@ describe('c64api', () => {
     const api = new C64API('http://c64u');
     const payload = new Blob(['SID'], { type: 'application/octet-stream' });
 
-    await expect(api.playSidUpload(payload)).rejects.toThrow('Host unreachable');
+    await expect(api.playSidUpload(payload)).rejects.toThrow(
+      'Host unreachable',
+    );
   });
 
   it('maps unknown host errors in SID uploads to DNS unreachable', async () => {
@@ -508,7 +616,9 @@ describe('c64api', () => {
     const api = new C64API('http://c64u');
     const payload = new Blob(['SID'], { type: 'application/octet-stream' });
 
-    await expect(api.playSidUpload(payload)).rejects.toThrow('Host unreachable (DNS)');
+    await expect(api.playSidUpload(payload)).rejects.toThrow(
+      'Host unreachable (DNS)',
+    );
   });
 
   it('maps timed out control requests to host unreachable', async () => {
@@ -544,7 +654,9 @@ describe('c64api', () => {
       const api = new C64API('http://c64u');
       const pending = api.getInfo();
       await vi.advanceTimersByTimeAsync(200);
-      await expect(pending).resolves.toEqual(expect.objectContaining({ errors: [] }));
+      await expect(pending).resolves.toEqual(
+        expect.objectContaining({ errors: [] }),
+      );
       expect(fetchMock).toHaveBeenCalledTimes(2);
       expect(addLogMock).toHaveBeenCalledWith(
         'warn',
@@ -581,7 +693,7 @@ describe('c64api', () => {
       const api = new C64API('http://c64u');
       const controller = new AbortController();
       const pending = api.getInfo({ signal: controller.signal });
-      void pending.catch(() => { });
+      void pending.catch(() => {});
 
       await Promise.resolve();
       controller.abort();
@@ -617,8 +729,12 @@ describe('c64api', () => {
       }),
     );
 
-    await expect(first).resolves.toEqual(expect.objectContaining({ errors: [] }));
-    await expect(second).resolves.toEqual(expect.objectContaining({ errors: [] }));
+    await expect(first).resolves.toEqual(
+      expect.objectContaining({ errors: [] }),
+    );
+    await expect(second).resolves.toEqual(
+      expect.objectContaining({ errors: [] }),
+    );
     expect(addLogMock).toHaveBeenCalledWith(
       'debug',
       'C64 API in-flight dedupe hit',
@@ -638,8 +754,12 @@ describe('c64api', () => {
       );
 
       const api = new C64API('http://c64u');
-      await expect(api.getInfo()).resolves.toEqual(expect.objectContaining({ errors: [] }));
-      await expect(api.getInfo()).resolves.toEqual(expect.objectContaining({ errors: [] }));
+      await expect(api.getInfo()).resolves.toEqual(
+        expect.objectContaining({ errors: [] }),
+      );
+      await expect(api.getInfo()).resolves.toEqual(
+        expect.objectContaining({ errors: [] }),
+      );
       expect(fetchMock).toHaveBeenCalledTimes(1);
       expect(addLogMock).toHaveBeenCalledWith(
         'debug',
@@ -648,7 +768,9 @@ describe('c64api', () => {
       );
 
       await vi.advanceTimersByTimeAsync(501);
-      await expect(api.getInfo()).resolves.toEqual(expect.objectContaining({ errors: [] }));
+      await expect(api.getInfo()).resolves.toEqual(
+        expect.objectContaining({ errors: [] }),
+      );
       expect(fetchMock).toHaveBeenCalledTimes(2);
     } finally {
       vi.useRealTimers();
@@ -660,18 +782,25 @@ describe('c64api', () => {
     try {
       const fetchMock = getFetchMock();
       fetchMock.mockResolvedValue(
-        new Response(JSON.stringify({
-          errors: [],
-          payload: 'x'.repeat(70 * 1024),
-        }), {
-          status: 200,
-          headers: { 'content-type': 'application/json' },
-        }),
+        new Response(
+          JSON.stringify({
+            errors: [],
+            payload: 'x'.repeat(70 * 1024),
+          }),
+          {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          },
+        ),
       );
 
       const api = new C64API('http://c64u');
-      await expect(api.getInfo()).resolves.toEqual(expect.objectContaining({ errors: [] }));
-      await expect(api.getInfo()).resolves.toEqual(expect.objectContaining({ errors: [] }));
+      await expect(api.getInfo()).resolves.toEqual(
+        expect.objectContaining({ errors: [] }),
+      );
+      await expect(api.getInfo()).resolves.toEqual(
+        expect.objectContaining({ errors: [] }),
+      );
 
       expect(fetchMock).toHaveBeenCalledTimes(2);
       expect(addLogMock).toHaveBeenCalledWith(
@@ -696,8 +825,12 @@ describe('c64api', () => {
     );
 
     const api = new C64API('http://c64u');
-    await expect(api.getInfo()).resolves.toEqual(expect.objectContaining({ errors: [] }));
-    await expect(api.getInfo({ __c64uBypassCache: true })).resolves.toEqual(expect.objectContaining({ errors: [] }));
+    await expect(api.getInfo()).resolves.toEqual(
+      expect.objectContaining({ errors: [] }),
+    );
+    await expect(api.getInfo({ __c64uBypassCache: true })).resolves.toEqual(
+      expect.objectContaining({ errors: [] }),
+    );
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
@@ -726,9 +859,15 @@ describe('c64api', () => {
         );
 
       const api = new C64API('http://c64u');
-      await expect(api.getInfo()).resolves.toEqual(expect.objectContaining({ errors: [] }));
-      await expect(api.setConfigValue('Audio Mixer', 'Vol UltiSid 1', '+6 dB')).resolves.toEqual(expect.objectContaining({ errors: [] }));
-      await expect(api.getInfo()).resolves.toEqual(expect.objectContaining({ errors: [] }));
+      await expect(api.getInfo()).resolves.toEqual(
+        expect.objectContaining({ errors: [] }),
+      );
+      await expect(
+        api.setConfigValue('Audio Mixer', 'Vol UltiSid 1', '+6 dB'),
+      ).resolves.toEqual(expect.objectContaining({ errors: [] }));
+      await expect(api.getInfo()).resolves.toEqual(
+        expect.objectContaining({ errors: [] }),
+      );
 
       expect(fetchMock).toHaveBeenCalledTimes(3);
     } finally {
@@ -782,7 +921,9 @@ describe('c64api', () => {
     await api.machineMenuButton();
 
     const calls = fetchMock.mock.calls.map((call) => call[0]);
-    expect(calls).toContain('http://c64u/v1/configs/Audio%20Mixer/Vol%20UltiSid%201?value=%2B6%20dB');
+    expect(calls).toContain(
+      'http://c64u/v1/configs/Audio%20Mixer/Vol%20UltiSid%201?value=%2B6%20dB',
+    );
     expect(calls).toContain('http://c64u/v1/configs:save_to_flash');
     expect(calls).toContain('http://c64u/v1/machine:resume');
   });
@@ -797,7 +938,11 @@ describe('c64api', () => {
     );
 
     const api = new C64API('http://c64u');
-    await api.setConfigValue('U64 Specific Settings', 'Joystick Swapper', 'Swapped');
+    await api.setConfigValue(
+      'U64 Specific Settings',
+      'Joystick Swapper',
+      'Swapped',
+    );
 
     expect(fetchMock).toHaveBeenCalledWith(
       'http://c64u/v1/configs/U64%20Specific%20Settings/Joystick%20Swapper?value=Swapped',
@@ -843,10 +988,18 @@ describe('c64api', () => {
     await api.setDriveMode('a', '1581');
 
     const urls = fetchMock.mock.calls.map((call) => call[0]);
-    expect(urls).toContain('http://c64u/v1/machine:writemem?address=0400&data=000fff');
-    expect(urls).toContain('http://c64u/v1/drives/a:mount?image=%2Fpath%2Fmy%20disk.d64&type=1541&mode=readonly');
-    const writeBlockCall = fetchMock.mock.calls.find((call) => call[0] === 'http://c64u/v1/machine:writemem?address=1000');
-    expect(writeBlockCall?.[1]).toEqual(expect.objectContaining({ method: 'POST' }));
+    expect(urls).toContain(
+      'http://c64u/v1/machine:writemem?address=0400&data=000fff',
+    );
+    expect(urls).toContain(
+      'http://c64u/v1/drives/a:mount?image=%2Fpath%2Fmy%20disk.d64&type=1541&mode=readonly',
+    );
+    const writeBlockCall = fetchMock.mock.calls.find(
+      (call) => call[0] === 'http://c64u/v1/machine:writemem?address=1000',
+    );
+    expect(writeBlockCall?.[1]).toEqual(
+      expect.objectContaining({ method: 'POST' }),
+    );
   });
 
   it('uploads drives and runner files with auth headers', async () => {
@@ -858,12 +1011,18 @@ describe('c64api', () => {
       });
     fetchMock
       .mockImplementationOnce(() => Promise.resolve(okResponse()))
-      .mockImplementationOnce(() => Promise.resolve(new Response('fail', { status: 500, statusText: 'Server Error' })))
+      .mockImplementationOnce(() =>
+        Promise.resolve(
+          new Response('fail', { status: 500, statusText: 'Server Error' }),
+        ),
+      )
       .mockImplementation(() => Promise.resolve(okResponse()));
 
     const api = new C64API('http://127.0.0.1:8787', 'pw', 'device-host');
     await api.mountDriveUpload('a', new Blob(['disk']), '1541', 'readwrite');
-    await expect(api.mountDriveUpload('a', new Blob(['disk']))).rejects.toThrow('HTTP 500');
+    await expect(api.mountDriveUpload('a', new Blob(['disk']))).rejects.toThrow(
+      'HTTP 500',
+    );
 
     const sidFile = new Blob(['PSID'], { type: 'application/octet-stream' });
     const sslFile = new Blob(['SSL'], { type: 'application/octet-stream' });
@@ -872,16 +1031,28 @@ describe('c64api', () => {
     await api.runPrgUpload(new Blob(['PRG']));
     await api.loadPrgUpload(new Blob(['PRG']));
 
-    const headers = fetchMock.mock.calls[0][1]?.headers as Record<string, string>;
+    const headers = fetchMock.mock.calls[0][1]?.headers as Record<
+      string,
+      string
+    >;
     expect(headers['X-Password']).toBe('pw');
     expect(headers['X-C64U-Host']).toBeUndefined();
-    expect(addErrorLogMock).toHaveBeenCalledWith('Drive mount upload failed', expect.any(Object));
+    expect(addErrorLogMock).toHaveBeenCalledWith(
+      'Drive mount upload failed',
+      expect.any(Object),
+    );
   });
 
   it('uses fetch for binary uploads on native platforms', async () => {
-    (globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = true;
-    (window as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = true;
-    (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor = {
+    (
+      globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }
+    ).__C64U_NATIVE_OVERRIDE__ = true;
+    (
+      window as { __C64U_NATIVE_OVERRIDE__?: boolean }
+    ).__C64U_NATIVE_OVERRIDE__ = true;
+    (
+      window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }
+    ).Capacitor = {
       isNativePlatform: () => true,
     };
     const fetchMock = getFetchMock();
@@ -893,7 +1064,10 @@ describe('c64api', () => {
     );
 
     const api = new C64API('http://c64u');
-    await api.mountDriveUpload('a', new Blob(['disk'], { type: 'application/octet-stream' }));
+    await api.mountDriveUpload(
+      'a',
+      new Blob(['disk'], { type: 'application/octet-stream' }),
+    );
 
     expect(fetchMock).toHaveBeenCalledWith(
       'http://c64u/v1/drives/a:mount',
@@ -933,12 +1107,17 @@ describe('c64api', () => {
     });
 
     const api = new C64API('http://c64u');
-    const response = await api.getConfigItems('Audio Mixer', ['Vol UltiSid 1', 'Vol Socket 1']);
+    const response = await api.getConfigItems('Audio Mixer', [
+      'Vol UltiSid 1',
+      'Vol Socket 1',
+    ]);
 
     expect(response['Audio Mixer']?.items?.['Vol UltiSid 1']).toBeDefined();
     expect(response['Audio Mixer']?.items?.['Vol Socket 1']).toBeDefined();
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock.mock.calls[0][0]).toBe('http://c64u/v1/configs/Audio%20Mixer');
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      'http://c64u/v1/configs/Audio%20Mixer',
+    );
   });
 
   it('falls back to item endpoint when category payload misses requested keys', async () => {
@@ -990,7 +1169,10 @@ describe('c64api', () => {
     });
 
     const api = new C64API('http://c64u');
-    const response = await api.getConfigItems('Audio Mixer', ['Vol UltiSid 1', 'Vol Socket 1']);
+    const response = await api.getConfigItems('Audio Mixer', [
+      'Vol UltiSid 1',
+      'Vol Socket 1',
+    ]);
 
     expect(response['Audio Mixer']?.items?.['Vol UltiSid 1']).toBeDefined();
     expect(response['Audio Mixer']?.items?.['Vol Socket 1']).toBeDefined();
@@ -1021,23 +1203,49 @@ describe('c64api', () => {
     await api.runCartridge('/cartridges/test.crt');
 
     const urls = fetchMock.mock.calls.map((call) => call[0]);
-    expect(urls).toContain('http://c64u/v1/runners:sidplay?file=%2Fmusic%2Ftest.sid&songnr=7');
-    expect(urls).toContain('http://c64u/v1/runners:run_crt?file=%2Fcartridges%2Ftest.crt');
+    expect(urls).toContain(
+      'http://c64u/v1/runners:sidplay?file=%2Fmusic%2Ftest.sid&songnr=7',
+    );
+    expect(urls).toContain(
+      'http://c64u/v1/runners:run_crt?file=%2Fcartridges%2Ftest.crt',
+    );
   });
 
   it('logs and throws for upload failures across mod/prg/crt helpers', async () => {
     const fetchMock = getFetchMock();
     fetchMock
-      .mockResolvedValueOnce(new Response('mod fail', { status: 500, statusText: 'Server Error' }))
-      .mockResolvedValueOnce(new Response('run prg fail', { status: 500, statusText: 'Server Error' }))
-      .mockResolvedValueOnce(new Response('load prg fail', { status: 500, statusText: 'Server Error' }))
-      .mockResolvedValueOnce(new Response('crt fail', { status: 500, statusText: 'Server Error' }));
+      .mockResolvedValueOnce(
+        new Response('mod fail', { status: 500, statusText: 'Server Error' }),
+      )
+      .mockResolvedValueOnce(
+        new Response('run prg fail', {
+          status: 500,
+          statusText: 'Server Error',
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response('load prg fail', {
+          status: 500,
+          statusText: 'Server Error',
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response('crt fail', { status: 500, statusText: 'Server Error' }),
+      );
 
     const api = new C64API('http://c64u');
-    await expect(api.playModUpload(new Blob(['MOD']))).rejects.toThrow('HTTP 500');
-    await expect(api.runPrgUpload(new Blob(['PRG']))).rejects.toThrow('HTTP 500');
-    await expect(api.loadPrgUpload(new Blob(['PRG']))).rejects.toThrow('HTTP 500');
-    await expect(api.runCartridgeUpload(new Blob(['CRT']))).rejects.toThrow('HTTP 500');
+    await expect(api.playModUpload(new Blob(['MOD']))).rejects.toThrow(
+      'HTTP 500',
+    );
+    await expect(api.runPrgUpload(new Blob(['PRG']))).rejects.toThrow(
+      'HTTP 500',
+    );
+    await expect(api.loadPrgUpload(new Blob(['PRG']))).rejects.toThrow(
+      'HTTP 500',
+    );
+    await expect(api.runCartridgeUpload(new Blob(['CRT']))).rejects.toThrow(
+      'HTTP 500',
+    );
 
     expect(addErrorLogMock.mock.calls.map(([message]) => message)).toEqual([
       'MOD upload failed',

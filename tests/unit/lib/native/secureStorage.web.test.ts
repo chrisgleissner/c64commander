@@ -13,13 +13,21 @@ describe('SecureStorageWeb', () => {
   beforeEach(() => {
     vi.unstubAllEnvs();
     vi.restoreAllMocks();
-    delete (window as Window & { __c64uSecureStorageOverride?: { password?: string | null } }).__c64uSecureStorageOverride;
+    delete (
+      window as Window & {
+        __c64uSecureStorageOverride?: { password?: string | null };
+      }
+    ).__c64uSecureStorageOverride;
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
     vi.restoreAllMocks();
-    delete (window as Window & { __c64uSecureStorageOverride?: { password?: string | null } }).__c64uSecureStorageOverride;
+    delete (
+      window as Window & {
+        __c64uSecureStorageOverride?: { password?: string | null };
+      }
+    ).__c64uSecureStorageOverride;
   });
 
   it('stores and clears passwords in memory', async () => {
@@ -37,14 +45,19 @@ describe('SecureStorageWeb', () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ value: 'server-secret' }) })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ value: 'server-secret' }),
+      })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) });
     vi.stubGlobal('fetch', fetchMock);
 
     const storage = new SecureStorageWeb();
 
     await storage.setPassword({ value: 'server-secret' });
-    await expect(storage.getPassword()).resolves.toEqual({ value: 'server-secret' });
+    await expect(storage.getPassword()).resolves.toEqual({
+      value: 'server-secret',
+    });
     await storage.clearPassword();
 
     expect(fetchMock).toHaveBeenCalledTimes(3);
@@ -73,13 +86,19 @@ describe('SecureStorageWeb', () => {
     vi.stubEnv('VITE_WEB_PLATFORM', '1');
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
-    (window as Window & { __c64uSecureStorageOverride?: { password?: string | null } }).__c64uSecureStorageOverride = {
+    (
+      window as Window & {
+        __c64uSecureStorageOverride?: { password?: string | null };
+      }
+    ).__c64uSecureStorageOverride = {
       password: 'override-secret',
     };
 
     const storage = new SecureStorageWeb();
 
-    await expect(storage.getPassword()).resolves.toEqual({ value: 'override-secret' });
+    await expect(storage.getPassword()).resolves.toEqual({
+      value: 'override-secret',
+    });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -88,7 +107,11 @@ describe('SecureStorageWeb', () => {
     vi.stubEnv('VITE_WEB_PLATFORM', '1');
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
-    (window as Window & { __c64uSecureStorageOverride?: { password?: string | null } }).__c64uSecureStorageOverride = {
+    (
+      window as Window & {
+        __c64uSecureStorageOverride?: { password?: string | null };
+      }
+    ).__c64uSecureStorageOverride = {
       password: undefined,
     };
 
@@ -111,7 +134,9 @@ describe('SecureStorageWeb', () => {
 
     const storage = new SecureStorageWeb();
 
-    await expect(storage.setPassword({ value: 'x' })).rejects.toThrow('backend failed');
+    await expect(storage.setPassword({ value: 'x' })).rejects.toThrow(
+      'backend failed',
+    );
   });
 
   it('falls back to HTTP status message when backend error payload is not JSON', async () => {
@@ -129,6 +154,8 @@ describe('SecureStorageWeb', () => {
 
     const storage = new SecureStorageWeb();
 
-    await expect(storage.clearPassword()).rejects.toThrow('Secure storage request failed: HTTP 503');
+    await expect(storage.clearPassword()).rejects.toThrow(
+      'Secure storage request failed: HTTP 503',
+    );
   });
 });

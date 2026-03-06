@@ -9,7 +9,11 @@
 import { test, expect } from '@playwright/test';
 import { createMockC64Server } from '../../tests/mocks/mockC64Server';
 import { seedUiMocks } from '../uiMocks';
-import { createBackendFailureTracker, shouldIgnoreBackendFailure, type AppLogEntry } from './fuzzBackend';
+import {
+  createBackendFailureTracker,
+  shouldIgnoreBackendFailure,
+  type AppLogEntry,
+} from './fuzzBackend';
 
 const waitForLogEntry = async (
   page: import('@playwright/test').Page,
@@ -36,11 +40,14 @@ test.describe('Fuzz backend resilience', () => {
     server = await createMockC64Server();
     server.setReachable(false);
     await seedUiMocks(page, server.baseUrl);
-    await page.addInitScript(({ baseUrl }: { baseUrl: string }) => {
-      localStorage.setItem('c64u_fuzz_mode_enabled', '1');
-      localStorage.setItem('c64u_fuzz_mock_base_url', baseUrl);
-      localStorage.setItem('c64u_fuzz_storage_seeded', '1');
-    }, { baseUrl: server.baseUrl });
+    await page.addInitScript(
+      ({ baseUrl }: { baseUrl: string }) => {
+        localStorage.setItem('c64u_fuzz_mode_enabled', '1');
+        localStorage.setItem('c64u_fuzz_mock_base_url', baseUrl);
+        localStorage.setItem('c64u_fuzz_storage_seeded', '1');
+      },
+      { baseUrl: server.baseUrl },
+    );
   });
 
   test.afterEach(async () => {
@@ -52,7 +59,9 @@ test.describe('Fuzz backend resilience', () => {
 
     const entry = await waitForLogEntry(
       page,
-      (log) => log.message === 'C64 API request failed' || /Service Unavailable|HTTP 503/i.test(log.message),
+      (log) =>
+        log.message === 'C64 API request failed' ||
+        /Service Unavailable|HTTP 503/i.test(log.message),
     );
 
     const shouldIgnore = shouldIgnoreBackendFailure(entry, {
@@ -65,7 +74,11 @@ test.describe('Fuzz backend resilience', () => {
 
     expect(shouldIgnore).toBe(true);
 
-    const tracker = createBackendFailureTracker({ baseDelayMs: 200, maxDelayMs: 2000, factor: 1.8 });
+    const tracker = createBackendFailureTracker({
+      baseDelayMs: 200,
+      maxDelayMs: 2000,
+      factor: 1.8,
+    });
     const first = tracker.recordFailure();
     const second = tracker.recordFailure();
     expect(second).toBeGreaterThanOrEqual(first);

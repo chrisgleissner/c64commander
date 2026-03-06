@@ -10,10 +10,17 @@ import type { TestInfo } from '@playwright/test';
 import path from 'node:path';
 
 export const getTitlePath = (testInfo: TestInfo) => {
-  if (typeof (testInfo as TestInfo & { titlePath?: () => string[] }).titlePath === 'function') {
+  if (
+    typeof (testInfo as TestInfo & { titlePath?: () => string[] }).titlePath ===
+    'function'
+  ) {
     return (testInfo as TestInfo & { titlePath: () => string[] }).titlePath();
   }
-  return (testInfo as TestInfo & { titlePath?: string[] }).titlePath ?? [testInfo.title];
+  return (
+    (testInfo as TestInfo & { titlePath?: string[] }).titlePath ?? [
+      testInfo.title,
+    ]
+  );
 };
 
 export const generateTestId = (testInfo: TestInfo): string => {
@@ -27,7 +34,7 @@ export const generateTestId = (testInfo: TestInfo): string => {
         .replace(/\s+/g, '-')
         .replace(/[^a-z0-9-]+/g, '')
         .replace(/-+/g, '-')
-        .replace(/^-|-$/g, '')
+        .replace(/^-|-$/g, ''),
     )
     .filter(Boolean);
 

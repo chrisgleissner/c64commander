@@ -12,7 +12,11 @@ import { usePlaylistListItems } from '@/pages/playFiles/hooks/usePlaylistListIte
 import type { PlaylistItem } from '@/pages/playFiles/types';
 import { FileOriginIcon } from '@/components/FileOriginIcon';
 
-const buildItem = (source: 'local' | 'ultimate' | 'hvsc', path: string, status: PlaylistItem['status'] = 'ready'): PlaylistItem => ({
+const buildItem = (
+  source: 'local' | 'ultimate' | 'hvsc',
+  path: string,
+  status: PlaylistItem['status'] = 'ready',
+): PlaylistItem => ({
   id: `${source}:${path}`,
   request: { source, path },
   category: 'sid',
@@ -31,27 +35,34 @@ describe('usePlaylistListItems', () => {
       buildItem('hvsc', '/MUSICIANS/Hubbard_Rob/Commando.sid'),
     ];
 
-    const { result } = renderHook(() => usePlaylistListItems({
-      filteredPlaylist: playlist,
-      playlist,
-      selectedPlaylistIds: new Set<string>(),
-      isPlaylistLoading: false,
-      handlePlaylistSelect: vi.fn(),
-      startPlaylist: vi.fn(),
-      playlistItemDuration: () => undefined,
-      formatTime: () => '—:—',
-      formatPlayCategory: () => 'SID',
-      formatBytes: () => '—',
-      formatDate: () => '—',
-      getParentPath: (value: string) => value.slice(0, value.lastIndexOf('/')) || '/',
-      currentPlayingItemId: null,
-    }));
+    const { result } = renderHook(() =>
+      usePlaylistListItems({
+        filteredPlaylist: playlist,
+        playlist,
+        selectedPlaylistIds: new Set<string>(),
+        isPlaylistLoading: false,
+        handlePlaylistSelect: vi.fn(),
+        startPlaylist: vi.fn(),
+        playlistItemDuration: () => undefined,
+        formatTime: () => '—:—',
+        formatPlayCategory: () => 'SID',
+        formatBytes: () => '—',
+        formatDate: () => '—',
+        getParentPath: (value: string) =>
+          value.slice(0, value.lastIndexOf('/')) || '/',
+        currentPlayingItemId: null,
+      }),
+    );
 
-    const listItems = result.current.filter((entry) => entry.variant !== 'header');
+    const listItems = result.current.filter(
+      (entry) => entry.variant !== 'header',
+    );
     expect(listItems).toHaveLength(3);
 
     listItems.forEach((entry) => {
-      const sourceInfo = entry.menuItems?.find((menu) => menu.type === 'info' && menu.label === 'Source');
+      const sourceInfo = entry.menuItems?.find(
+        (menu) => menu.type === 'info' && menu.label === 'Source',
+      );
       expect(sourceInfo).toBeUndefined();
       expect(entry.subtitle).toBeTruthy();
       expect(entry.subtitle).not.toContain('This device');
@@ -60,33 +71,46 @@ describe('usePlaylistListItems', () => {
       const metaChildren = Array.isArray((entry.meta as any)?.props?.children)
         ? (entry.meta as any).props.children
         : [(entry.meta as any)?.props?.children];
-      expect(metaChildren.some((child: any) => child?.type === FileOriginIcon)).toBe(true);
+      expect(
+        metaChildren.some((child: any) => child?.type === FileOriginIcon),
+      ).toBe(true);
     });
 
     expect(listItems[2]?.subtitle).toBe('/MUSICIANS/Hubbard_Rob/Commando.sid');
   });
 
   it('uses generic unavailable status metadata', () => {
-    const playlist = [buildItem('hvsc', '/MUSICIANS/Hubbard_Rob/Commando.sid', 'unavailable')];
+    const playlist = [
+      buildItem('hvsc', '/MUSICIANS/Hubbard_Rob/Commando.sid', 'unavailable'),
+    ];
 
-    const { result } = renderHook(() => usePlaylistListItems({
-      filteredPlaylist: playlist,
-      playlist,
-      selectedPlaylistIds: new Set<string>(),
-      isPlaylistLoading: false,
-      handlePlaylistSelect: vi.fn(),
-      startPlaylist: vi.fn(),
-      playlistItemDuration: () => undefined,
-      formatTime: () => '—:—',
-      formatPlayCategory: () => 'SID',
-      formatBytes: () => '—',
-      formatDate: () => '—',
-      getParentPath: (value: string) => value.slice(0, value.lastIndexOf('/')) || '/',
-      currentPlayingItemId: null,
-    }));
+    const { result } = renderHook(() =>
+      usePlaylistListItems({
+        filteredPlaylist: playlist,
+        playlist,
+        selectedPlaylistIds: new Set<string>(),
+        isPlaylistLoading: false,
+        handlePlaylistSelect: vi.fn(),
+        startPlaylist: vi.fn(),
+        playlistItemDuration: () => undefined,
+        formatTime: () => '—:—',
+        formatPlayCategory: () => 'SID',
+        formatBytes: () => '—',
+        formatDate: () => '—',
+        getParentPath: (value: string) =>
+          value.slice(0, value.lastIndexOf('/')) || '/',
+        currentPlayingItemId: null,
+      }),
+    );
 
     const row = result.current.find((entry) => entry.variant !== 'header');
-    const statusEntry = row?.menuItems?.find((menu) => menu.type === 'info' && menu.label === 'Status');
-    expect(statusEntry).toEqual({ type: 'info', label: 'Status', value: 'Unavailable' });
+    const statusEntry = row?.menuItems?.find(
+      (menu) => menu.type === 'info' && menu.label === 'Status',
+    );
+    expect(statusEntry).toEqual({
+      type: 'info',
+      label: 'Status',
+      value: 'Unavailable',
+    });
   });
 });

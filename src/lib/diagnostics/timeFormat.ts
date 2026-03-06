@@ -19,12 +19,16 @@ export const formatLocalTime = (value?: string | number | Date | null) => {
   return `${hours}:${minutes}:${seconds}.${millis}`;
 };
 
-export const formatDiagnosticsTimestamp = (value?: string | number | Date | null) => {
+export const formatDiagnosticsTimestamp = (
+  value?: string | number | Date | null,
+) => {
   const formatted = formatLocalTime(value);
   return formatted === '—' ? DIAGNOSTICS_TIMESTAMP_PLACEHOLDER : formatted;
 };
 
-export const splitDiagnosticsTimestamp = (value?: string | number | Date | null) => {
+export const splitDiagnosticsTimestamp = (
+  value?: string | number | Date | null,
+) => {
   const formatted = formatDiagnosticsTimestamp(value);
   const [time, millis = '---'] = formatted.split('.');
   return { formatted, time, millis };

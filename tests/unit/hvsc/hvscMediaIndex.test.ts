@@ -30,14 +30,22 @@ describe('HvscMediaIndexAdapter', () => {
         path: '/Demos',
         folders: [],
         songs: [
-          { id: 1, virtualPath: '/Demos/demo.sid', fileName: 'demo.sid', durationSeconds: 45 },
+          {
+            id: 1,
+            virtualPath: '/Demos/demo.sid',
+            fileName: 'demo.sid',
+            durationSeconds: 45,
+          },
         ],
       },
     };
 
     const listFolder = async (path: string) => listings[path];
     const storage = createMemoryStorage();
-    const adapter = new HvscMediaIndexAdapter(new JsonMediaIndex(storage), listFolder);
+    const adapter = new HvscMediaIndexAdapter(
+      new JsonMediaIndex(storage),
+      listFolder,
+    );
 
     await adapter.scan(['/']);
 
@@ -58,14 +66,22 @@ describe('HvscMediaIndexAdapter', () => {
         path: '/DEMOS/Nested',
         folders: [],
         songs: [
-          { id: 2, virtualPath: '/DEMOS/Nested/track.sid', fileName: 'track.sid', durationSeconds: null },
+          {
+            id: 2,
+            virtualPath: '/DEMOS/Nested/track.sid',
+            fileName: 'track.sid',
+            durationSeconds: null,
+          },
         ],
       },
     };
 
     const listFolder = async (path: string) => listings[path];
     const storage = createMemoryStorage();
-    const adapter = new HvscMediaIndexAdapter(new JsonMediaIndex(storage), listFolder);
+    const adapter = new HvscMediaIndexAdapter(
+      new JsonMediaIndex(storage),
+      listFolder,
+    );
 
     await adapter.scan(['DEMOS']);
     await adapter.save();
@@ -86,23 +102,46 @@ describe('HvscMediaIndexAdapter', () => {
         path: '/DEMOS',
         folders: ['/DEMOS/A'],
         songs: [
-          { id: 1, virtualPath: '/DEMOS/Alpha.sid', fileName: 'Alpha.sid', durationSeconds: 100 },
-          { id: 2, virtualPath: '/DEMOS/Beta.sid', fileName: 'Beta.sid', durationSeconds: 120 },
+          {
+            id: 1,
+            virtualPath: '/DEMOS/Alpha.sid',
+            fileName: 'Alpha.sid',
+            durationSeconds: 100,
+          },
+          {
+            id: 2,
+            virtualPath: '/DEMOS/Beta.sid',
+            fileName: 'Beta.sid',
+            durationSeconds: 120,
+          },
         ],
       },
       '/DEMOS/A': {
         path: '/DEMOS/A',
         folders: [],
         songs: [
-          { id: 3, virtualPath: '/DEMOS/A/Gamma.sid', fileName: 'Gamma.sid', durationSeconds: 140 },
+          {
+            id: 3,
+            virtualPath: '/DEMOS/A/Gamma.sid',
+            fileName: 'Gamma.sid',
+            durationSeconds: 140,
+          },
         ],
       },
     };
 
-    const adapter = new HvscMediaIndexAdapter(new JsonMediaIndex(createMemoryStorage()), async (path) => listings[path]);
+    const adapter = new HvscMediaIndexAdapter(
+      new JsonMediaIndex(createMemoryStorage()),
+      async (path) => listings[path],
+    );
     await adapter.scan(['/']);
 
-    const page = adapter.queryFolderPage({ path: '/DEMOS', query: 'a', offset: 0, limit: 1 });
+    const page = adapter.queryFolderPage({
+      path: '/DEMOS',
+      query: 'a',
+      offset: 0,
+      limit: 1,
+    });
 
     expect(page.totalSongs).toBe(2);
     expect(page.songs).toHaveLength(1);
@@ -116,19 +155,30 @@ describe('HvscMediaIndexAdapter', () => {
         path: '/DEMOS',
         folders: [],
         songs: [
-          { id: 1, virtualPath: '/DEMOS/demo.sid', fileName: 'demo.sid', durationSeconds: 45 },
+          {
+            id: 1,
+            virtualPath: '/DEMOS/demo.sid',
+            fileName: 'demo.sid',
+            durationSeconds: 45,
+          },
         ],
       },
     };
 
     const listFolder = async (path: string) => listings[path];
     const storage = createMemoryStorage();
-    const adapter1 = new HvscMediaIndexAdapter(new JsonMediaIndex(storage), listFolder);
+    const adapter1 = new HvscMediaIndexAdapter(
+      new JsonMediaIndex(storage),
+      listFolder,
+    );
     await adapter1.scan(['/']);
     await adapter1.save();
 
     // Create a new adapter with the same storage
-    const adapter2 = new HvscMediaIndexAdapter(new JsonMediaIndex(storage), listFolder);
+    const adapter2 = new HvscMediaIndexAdapter(
+      new JsonMediaIndex(storage),
+      listFolder,
+    );
     await adapter2.load();
     const all = adapter2.getAll();
     expect(all.length).toBeGreaterThanOrEqual(1);
@@ -163,7 +213,11 @@ describe('HvscMediaIndexAdapter', () => {
     // Clear internal browse snapshot to trigger fallback path
     (adapter as any).browseSnapshot = null;
 
-    const page = adapter.queryFolderPage({ path: '/DEMOS', offset: 0, limit: 50 });
+    const page = adapter.queryFolderPage({
+      path: '/DEMOS',
+      offset: 0,
+      limit: 50,
+    });
     expect(page.totalSongs).toBe(1);
     expect(page.songs[0]?.fileName).toBe('a.sid');
   });
@@ -171,9 +225,16 @@ describe('HvscMediaIndexAdapter', () => {
   it('queryFolderPage clamps negative offset and limit', async () => {
     const listings: Record<string, HvscFolderListing> = {
       '/': {
-        path: '/', folders: [], songs: [
-          { id: 1, virtualPath: '/test.sid', fileName: 'test.sid', durationSeconds: 10 },
-        ]
+        path: '/',
+        folders: [],
+        songs: [
+          {
+            id: 1,
+            virtualPath: '/test.sid',
+            fileName: 'test.sid',
+            durationSeconds: 10,
+          },
+        ],
       },
     };
 
@@ -195,18 +256,35 @@ describe('HvscMediaIndexAdapter', () => {
       '/A': {
         path: '/A',
         folders: ['/A/B'],
-        songs: [{ id: 1, virtualPath: '/A/x.sid', fileName: 'x.sid', durationSeconds: 5 }],
+        songs: [
+          {
+            id: 1,
+            virtualPath: '/A/x.sid',
+            fileName: 'x.sid',
+            durationSeconds: 5,
+          },
+        ],
       },
       '/A/B': {
         path: '/A/B',
         folders: [],
-        songs: [{ id: 2, virtualPath: '/A/B/y.sid', fileName: 'y.sid', durationSeconds: 10 }],
+        songs: [
+          {
+            id: 2,
+            virtualPath: '/A/B/y.sid',
+            fileName: 'y.sid',
+            durationSeconds: 10,
+          },
+        ],
       },
     };
 
     const adapter = new HvscMediaIndexAdapter(
       new JsonMediaIndex(createMemoryStorage()),
-      async (path) => { callCount++; return listings[path]; },
+      async (path) => {
+        callCount++;
+        return listings[path];
+      },
     );
 
     await adapter.scan(['/']);
@@ -223,8 +301,18 @@ describe('HvscMediaIndexAdapter', () => {
 
     adapter.setEntries([
       { path: '/DEMOS/a.sid', name: 'a.sid', type: 'sid', durationSeconds: 10 },
-      { path: '/DEMOS/sub/b.sid', name: 'b.sid', type: 'sid', durationSeconds: null },
-      { path: '/UTILS/c.sid', name: 'c.sid', type: 'sid', durationSeconds: undefined as unknown as null },
+      {
+        path: '/DEMOS/sub/b.sid',
+        name: 'b.sid',
+        type: 'sid',
+        durationSeconds: null,
+      },
+      {
+        path: '/UTILS/c.sid',
+        name: 'c.sid',
+        type: 'sid',
+        durationSeconds: undefined as unknown as null,
+      },
     ]);
 
     (adapter as any).browseSnapshot = null;
@@ -242,8 +330,18 @@ describe('HvscMediaIndexAdapter', () => {
     );
 
     adapter.setEntries([
-      { path: '/DEMOS/alpha.sid', name: 'alpha.sid', type: 'sid', durationSeconds: 10 },
-      { path: '/DEMOS/beta.sid', name: 'beta.sid', type: 'sid', durationSeconds: 20 },
+      {
+        path: '/DEMOS/alpha.sid',
+        name: 'alpha.sid',
+        type: 'sid',
+        durationSeconds: 10,
+      },
+      {
+        path: '/DEMOS/beta.sid',
+        name: 'beta.sid',
+        type: 'sid',
+        durationSeconds: 20,
+      },
     ]);
     (adapter as any).browseSnapshot = null;
 
@@ -263,7 +361,12 @@ describe('HvscMediaIndexAdapter', () => {
 
     adapter.setEntries([
       { path: '/DEMOS/a.sid', name: 'a.sid', type: 'sid', durationSeconds: 5 },
-      { path: '/DEMOS/sub/b.sid', name: 'b.sid', type: 'sid', durationSeconds: 10 },
+      {
+        path: '/DEMOS/sub/b.sid',
+        name: 'b.sid',
+        type: 'sid',
+        durationSeconds: 10,
+      },
     ]);
     (adapter as any).browseSnapshot = null;
 
@@ -322,21 +425,29 @@ describe('HvscMediaIndexAdapter', () => {
   it('getAll falls back to index.getAll when entriesSnapshot is empty', async () => {
     // Use a custom MediaIndex mock whose getAll() always returns entries
     // even without explicit load() call on the adapter
-    const mockEntries = [{ path: '/a.sid', name: 'a.sid', type: 'sid' as const, durationSeconds: 5 }];
+    const mockEntries = [
+      {
+        path: '/a.sid',
+        name: 'a.sid',
+        type: 'sid' as const,
+        durationSeconds: 5,
+      },
+    ];
     const mockIndex = {
-      load: async () => { },
-      save: async () => { },
-      scan: async () => { },
+      load: async () => {},
+      save: async () => {},
+      scan: async () => {},
       getAll: () => mockEntries,
-      setEntries: () => { },
+      setEntries: () => {},
       queryByType: () => mockEntries,
       queryByPath: (p: string) => mockEntries.find((e) => e.path === p) ?? null,
     };
 
-    const adapter = new HvscMediaIndexAdapter(
-      mockIndex as any,
-      async () => ({ path: '/', folders: [], songs: [] }),
-    );
+    const adapter = new HvscMediaIndexAdapter(mockIndex as any, async () => ({
+      path: '/',
+      folders: [],
+      songs: [],
+    }));
 
     // entriesSnapshot is empty (never called setEntries/scan/load)
     expect((adapter as any).entriesSnapshot).toHaveLength(0);
@@ -352,9 +463,16 @@ describe('HvscMediaIndexAdapter', () => {
       async (path) => {
         scannedPaths.push(path);
         return {
-          path, folders: [], songs: [
-            { id: 1, virtualPath: `${path}/a.sid`, fileName: 'a.sid', durationSeconds: 5 },
-          ]
+          path,
+          folders: [],
+          songs: [
+            {
+              id: 1,
+              virtualPath: `${path}/a.sid`,
+              fileName: 'a.sid',
+              durationSeconds: 5,
+            },
+          ],
         };
       },
     );

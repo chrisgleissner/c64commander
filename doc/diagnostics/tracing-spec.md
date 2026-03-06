@@ -189,13 +189,13 @@ The following are explicitly forbidden:
 All trace events share a common envelope:
 
 {
-  "id": "EVT-00042",
-  "timestamp": "ISO-8601",
-  "relativeMs": 123,
-  "type": "event-type",
-  "origin": "user | automatic | system",
-  "correlationId": "COR-00007",
-  "data": {}
+"id": "EVT-00042",
+"timestamp": "ISO-8601",
+"relativeMs": 123,
+"type": "event-type",
+"origin": "user | automatic | system",
+"correlationId": "COR-00007",
+"data": {}
 }
 
 - timestamp is absolute and diagnostic
@@ -594,7 +594,7 @@ Tests assert:
 
 ID-related notes:
 
-- Tests MUST assert exact EVT-* and COR-* identifiers
+- Tests MUST assert exact EVT-_ and COR-_ identifiers
 - ID reset MUST occur before each test via test-only API
 - Golden trace normalization MUST NOT ignore IDs
 
@@ -787,11 +787,11 @@ Each `test-results/evidence/playwright/<testId>/<deviceId>` folder contains:
 
 `app-metadata.json` is not part of Playwright evidence. If present in exported archives, it is ignored for golden trace comparison.
 
-| Concept            | Scope        | Ownership   | Included in Golden Comparison | Purpose |
-|--------------------|--------------|-------------|-------------------------------|---------|
-| trace.json         | Per test     | Tracing     | Yes                           | Semantic, causal record of app behavior |
-| meta.json          | Per test     | Playwright  | No                            | Test identity, project, device, and outcome |
-| app-metadata.json  | Per export   | Tracing     | No                            | App, build, platform, and device context |
+| Concept           | Scope      | Ownership  | Included in Golden Comparison | Purpose                                     |
+| ----------------- | ---------- | ---------- | ----------------------------- | ------------------------------------------- |
+| trace.json        | Per test   | Tracing    | Yes                           | Semantic, causal record of app behavior     |
+| meta.json         | Per test   | Playwright | No                            | Test identity, project, device, and outcome |
+| app-metadata.json | Per export | Tracing    | No                            | App, build, platform, and device context    |
 
 ### 19.4 Fault-Tolerant Trace Comparison (Essentials Only)
 
@@ -804,7 +804,7 @@ Core rules:
   `action-start` name. Comparison is done per action group, not by global event order.
 - **Order-insensitive**: non-essential events can reorder freely. Only the existence of required REST/FTP
   interactions matters.
-- **Partial response matching**: response bodies are compared as *subsets*. Expected keys/values must exist,
+- **Partial response matching**: response bodies are compared as _subsets_. Expected keys/values must exist,
   but extra keys in actual responses are allowed.
 
 Normalization rules (applied before comparison):
@@ -829,15 +829,15 @@ Meta normalization for `meta.json` is not used in golden trace comparison.
 
 1. **Record golden traces locally**
 
-  ```bash
-  ./build --test-e2e --record-traces --trace-suite tracing
-  ```
+```bash
+./build --test-e2e --record-traces --trace-suite tracing
+```
 
-  Or use direct env variables:
+Or use direct env variables:
 
-  ```bash
-  RECORD_TRACES=1 TRACE_SUITE=tracing npm run test:e2e
-  ```
+```bash
+RECORD_TRACES=1 TRACE_SUITE=tracing npm run test:e2e
+```
 
 1. **Review generated files**
 
@@ -849,15 +849,15 @@ Meta normalization for `meta.json` is not used in golden trace comparison.
 
 1. **Validate against goldens**
 
-  ```bash
-  npm run validate:traces
-  ```
+```bash
+npm run validate:traces
+```
 
-  You can override the golden directory:
+You can override the golden directory:
 
-  ```bash
-  TRACE_GOLDEN_DIR=/path/to/golden npm run validate:traces
-  ```
+```bash
+TRACE_GOLDEN_DIR=/path/to/golden npm run validate:traces
+```
 
 1. **Update goldens when behavior changes intentionally**
 

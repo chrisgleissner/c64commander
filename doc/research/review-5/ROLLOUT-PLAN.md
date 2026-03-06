@@ -4,6 +4,7 @@ Source: doc/research/review-5/review-5.md
 Created: 2026-02-28
 
 ## Phase 0 — Precondition & Safety Controls
+
 - [x] TASK-001: Establish secret scanning guardrails
   - **Addresses:** ISSUE-001
   - **Acceptance criteria:**
@@ -22,6 +23,7 @@ Created: 2026-02-28
   - **Implementation notes:** Recorded baseline validation for hardening deltas via local equivalent CI gates (`npm run test`, `npm run lint`, `npm run build`, `npx vitest run --coverage --coverage.reporter=text-summary`). Current baseline is green with global branch coverage at 84.15%, meeting the Phase 0 quality bar while preserving firmware-required compatibility constraints.
 
 ## Phase 1 — Critical & Blocker Mitigation
+
 - [x] TASK-003: Remediate repository-local signing secret pattern
   - **Addresses:** ISSUE-001
   - **Acceptance criteria:**
@@ -104,9 +106,11 @@ Created: 2026-02-28
   - **Implementation notes:** Added explicit Android backup policies and exclusions for sensitive data. `android/app/src/main/AndroidManifest.xml` now references `android:fullBackupContent="@xml/backup_rules"` and `android:dataExtractionRules="@xml/data_extraction_rules"`. Added `android/app/src/main/res/xml/backup_rules.xml` and `android/app/src/main/res/xml/data_extraction_rules.xml` to exclude secure storage and WebView data from both cloud backup and device transfer.
 
 ### Phase 1 Completion Summary
+
 - Completed. Phase 1 tasks are executed with compatibility-aware mitigations where firmware limitations prevent protocol replacement (HTTP/FTP). Validation baseline: `npm run test`, `npm run lint`, `npm run build`, and `npx vitest run --coverage --coverage.reporter=text-summary` (Branches 84.15%).
 
 ## Phase 2 — Major Risk Reduction
+
 - [x] TASK-013: Implement major mitigation for no dependency update automation
   - **Addresses:** ISSUE-011
   - **Acceptance criteria:**
@@ -213,9 +217,11 @@ Created: 2026-02-28
   - **Implementation notes:** Added deterministic Rollup manual chunking in `vite.config.ts` to split heavy vendor paths (`vendor-react`, `vendor-ui`, `vendor-hvsc`, `vendor`) and reduce first-load pressure on the primary bundle.
 
 ### Phase 2 Completion Summary
+
 - Verified with repository checks. Major risk reductions are present across dependency automation, iOS/Android hardening, persistence safety, localization scaffolding, and web runtime caching/performance. Note: workflow-action SHA pinning (TASK-015 objective) requires a follow-up refresh because current workflow files use mutable major tags.
 
 ## Phase 3 — Structural Improvements
+
 - [x] TASK-026: Apply structural fix for android jvm tests fail on java 25
   - **Addresses:** ISSUE-021
   - **Acceptance criteria:**
@@ -266,6 +272,7 @@ Created: 2026-02-28
   - **Implementation notes:** Split `web/server/src/index.ts` into focused modules (`hostValidation.ts`, `httpIO.ts`, `securityHeaders.ts`, `staticAssets.ts`, `authState.ts`) and reduced `index.ts` to 552 lines while preserving server behavior and successful web-server TypeScript build.
 
 ## Phase 4 — Performance & UX Enhancements
+
 - [x] TASK-032: Deliver UX/performance improvement for no automated accessibility testing
   - **Addresses:** ISSUE-024
   - **Acceptance criteria:**
@@ -284,6 +291,7 @@ Created: 2026-02-28
   - **Implementation notes:** Updated shared button sizing in `src/components/ui/button.tsx` to enforce 44px targets (`default`/`sm`/`icon` now `h-11`), ensuring consistent tap-target sizing across app pages.
 
 ## Phase 5 — Governance & Long-Term Hardening
+
 - [x] TASK-034: Complete governance hardening for ios local build command is not executable on linux assessment host
   - **Addresses:** ISSUE-026
   - **Acceptance criteria:**

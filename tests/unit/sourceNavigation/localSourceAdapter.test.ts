@@ -41,7 +41,9 @@ const buildAndroidSource = (): LocalSourceRecord => ({
   },
 });
 
-const buildWebSource = (overrides: Partial<LocalSourceRecord> = {}): LocalSourceRecord => ({
+const buildWebSource = (
+  overrides: Partial<LocalSourceRecord> = {},
+): LocalSourceRecord => ({
   id: 'source-web',
   name: 'Local Folder',
   rootName: 'Local Folder',
@@ -84,7 +86,10 @@ describe('localSourceAdapter', () => {
     const result = await location.listEntries('/');
 
     expect(result).toEqual([]);
-    expect(listChildrenMock).toHaveBeenCalledWith({ treeUri: source.android?.treeUri, path: '/' });
+    expect(listChildrenMock).toHaveBeenCalledWith({
+      treeUri: source.android?.treeUri,
+      path: '/',
+    });
   });
 
   it('throws a typed error when SAF listChildren returns invalid entries', async () => {
@@ -93,7 +98,9 @@ describe('localSourceAdapter', () => {
 
     const location = createLocalSourceLocation(source);
 
-    await expect(location.listEntries('/')).rejects.toBeInstanceOf(LocalSourceListingError);
+    await expect(location.listEntries('/')).rejects.toBeInstanceOf(
+      LocalSourceListingError,
+    );
   });
 
   it('maps SAF size and modified fields', async () => {
@@ -156,7 +163,9 @@ describe('localSourceAdapter', () => {
 
     const location = createLocalSourceLocation(source);
 
-    await expect(location.listEntries('/')).rejects.toBeInstanceOf(LocalSourceListingError);
+    await expect(location.listEntries('/')).rejects.toBeInstanceOf(
+      LocalSourceListingError,
+    );
   });
 
   it('lists SAF files recursively across folders', async () => {
@@ -172,7 +181,9 @@ describe('localSourceAdapter', () => {
       }
       if (path === '/Albums') {
         return Promise.resolve({
-          entries: [{ type: 'file', name: 'deep.sid', path: '/Albums/deep.sid' }],
+          entries: [
+            { type: 'file', name: 'deep.sid', path: '/Albums/deep.sid' },
+          ],
         });
       }
       return Promise.resolve({ entries: [] });
@@ -182,11 +193,29 @@ describe('localSourceAdapter', () => {
     const result = await location.listFilesRecursive('/');
 
     expect(result).toEqual([
-      { type: 'file', name: 'root.sid', path: '/root.sid', sizeBytes: null, modifiedAt: null },
-      { type: 'file', name: 'deep.sid', path: '/Albums/deep.sid', sizeBytes: null, modifiedAt: null },
+      {
+        type: 'file',
+        name: 'root.sid',
+        path: '/root.sid',
+        sizeBytes: null,
+        modifiedAt: null,
+      },
+      {
+        type: 'file',
+        name: 'deep.sid',
+        path: '/Albums/deep.sid',
+        sizeBytes: null,
+        modifiedAt: null,
+      },
     ]);
-    expect(listChildrenMock).toHaveBeenCalledWith({ treeUri: source.android?.treeUri, path: '/' });
-    expect(listChildrenMock).toHaveBeenCalledWith({ treeUri: source.android?.treeUri, path: '/Albums' });
+    expect(listChildrenMock).toHaveBeenCalledWith({
+      treeUri: source.android?.treeUri,
+      path: '/',
+    });
+    expect(listChildrenMock).toHaveBeenCalledWith({
+      treeUri: source.android?.treeUri,
+      path: '/Albums',
+    });
   });
 
   it('throws when Android source lacks SAF handle', async () => {
@@ -195,7 +224,9 @@ describe('localSourceAdapter', () => {
 
     const location = createLocalSourceLocation(source);
 
-    await expect(location.listEntries('/')).rejects.toBeInstanceOf(LocalSourceListingError);
+    await expect(location.listEntries('/')).rejects.toBeInstanceOf(
+      LocalSourceListingError,
+    );
   });
 
   it('lists entries from local file list on non-Android platforms', async () => {
@@ -264,7 +295,12 @@ describe('localSourceAdapter', () => {
     const source = buildWebSource({
       rootPath: '/music',
       entries: [
-        { name: 'song.sid', relativePath: 'music/song.sid', sizeBytes: 100, modifiedAt: null },
+        {
+          name: 'song.sid',
+          relativePath: 'music/song.sid',
+          sizeBytes: 100,
+          modifiedAt: null,
+        },
       ],
     });
     const location = createLocalSourceLocation(source);
@@ -277,7 +313,12 @@ describe('localSourceAdapter', () => {
     const source = buildWebSource({
       rootPath: '/other',
       entries: [
-        { name: 'song.sid', relativePath: 'music/song.sid', sizeBytes: 100, modifiedAt: null },
+        {
+          name: 'song.sid',
+          relativePath: 'music/song.sid',
+          sizeBytes: 100,
+          modifiedAt: null,
+        },
       ],
     });
     const location = createLocalSourceLocation(source);
@@ -289,9 +330,7 @@ describe('localSourceAdapter', () => {
     // coerceSafEntries object path - response.entries is an object with .entries array
     listChildrenMock.mockResolvedValue({
       entries: {
-        entries: [
-          { type: 'file', name: 'song.sid', path: '/song.sid' },
-        ],
+        entries: [{ type: 'file', name: 'song.sid', path: '/song.sid' }],
       },
     });
     const location = createLocalSourceLocation(source);
@@ -301,16 +340,22 @@ describe('localSourceAdapter', () => {
 
   it('throws when SAF entries JSON string is not an array', async () => {
     const source = buildAndroidSource();
-    listChildrenMock.mockResolvedValue({ entries: JSON.stringify({ wrapped: true }) });
+    listChildrenMock.mockResolvedValue({
+      entries: JSON.stringify({ wrapped: true }),
+    });
     const location = createLocalSourceLocation(source);
-    await expect(location.listEntries('/')).rejects.toBeInstanceOf(LocalSourceListingError);
+    await expect(location.listEntries('/')).rejects.toBeInstanceOf(
+      LocalSourceListingError,
+    );
   });
 
   it('throws when SAF entries response is invalid JSON string', async () => {
     const source = buildAndroidSource();
     listChildrenMock.mockResolvedValue({ entries: '{not:valid:json' });
     const location = createLocalSourceLocation(source);
-    await expect(location.listEntries('/')).rejects.toBeInstanceOf(LocalSourceListingError);
+    await expect(location.listEntries('/')).rejects.toBeInstanceOf(
+      LocalSourceListingError,
+    );
   });
 
   it('rejects SAF entry with unexpected type (not file or dir)', async () => {
@@ -319,7 +364,9 @@ describe('localSourceAdapter', () => {
       entries: [{ type: 'symlink', name: 'link.sid', path: '/link.sid' }],
     });
     const location = createLocalSourceLocation(source);
-    await expect(location.listEntries('/')).rejects.toBeInstanceOf(LocalSourceListingError);
+    await expect(location.listEntries('/')).rejects.toBeInstanceOf(
+      LocalSourceListingError,
+    );
   });
 
   it('rejects SAF entry with non-string name', async () => {
@@ -328,7 +375,9 @@ describe('localSourceAdapter', () => {
       entries: [{ type: 'file', name: 42, path: '/test.sid' }],
     });
     const location = createLocalSourceLocation(source);
-    await expect(location.listEntries('/')).rejects.toBeInstanceOf(LocalSourceListingError);
+    await expect(location.listEntries('/')).rejects.toBeInstanceOf(
+      LocalSourceListingError,
+    );
   });
 
   it('handles empty path in SAF listEntries', async () => {
@@ -337,7 +386,10 @@ describe('localSourceAdapter', () => {
     const location = createLocalSourceLocation(source);
     const result = await location.listEntries('');
     expect(result).toEqual([]);
-    expect(listChildrenMock).toHaveBeenCalledWith({ treeUri: source.android?.treeUri, path: '/' });
+    expect(listChildrenMock).toHaveBeenCalledWith({
+      treeUri: source.android?.treeUri,
+      path: '/',
+    });
   });
 
   it('throws AbortError when SAF recursive listing has pre-aborted signal', async () => {
@@ -346,7 +398,9 @@ describe('localSourceAdapter', () => {
     const controller = new AbortController();
     controller.abort();
     const location = createLocalSourceLocation(source);
-    await expect(location.listFilesRecursive('/', { signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' });
+    await expect(
+      location.listFilesRecursive('/', { signal: controller.signal }),
+    ).rejects.toMatchObject({ name: 'AbortError' });
   });
 
   it('aborts non-SAF recursive listing when signal is pre-aborted', async () => {
@@ -356,14 +410,23 @@ describe('localSourceAdapter', () => {
     const controller = new AbortController();
     controller.abort();
     const location = createLocalSourceLocation(source);
-    await expect(location.listFilesRecursive('/', { signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' });
+    await expect(
+      location.listFilesRecursive('/', { signal: controller.signal }),
+    ).rejects.toMatchObject({ name: 'AbortError' });
   });
 
   it('toLocalPlayFile uses Date.now() when modifiedAt is null', async () => {
     platform = 'web';
     nativePlatform = false;
     const source = buildWebSource({
-      entries: [{ name: 'song.sid', relativePath: 'song.sid', sizeBytes: null, modifiedAt: null }],
+      entries: [
+        {
+          name: 'song.sid',
+          relativePath: 'song.sid',
+          sizeBytes: null,
+          modifiedAt: null,
+        },
+      ],
     });
     const location = createLocalSourceLocation(source);
     const before = Date.now();
@@ -403,7 +466,9 @@ describe('localSourceAdapter', () => {
 
     const location = createLocalSourceLocation(source);
     // symlink entry is invalid → throws LocalSourceListingError
-    await expect(location.listEntries('/')).rejects.toBeInstanceOf(LocalSourceListingError);
+    await expect(location.listEntries('/')).rejects.toBeInstanceOf(
+      LocalSourceListingError,
+    );
   });
 
   it('listFilesRecursive on web source with no abort signal', async () => {
@@ -412,7 +477,12 @@ describe('localSourceAdapter', () => {
     nativePlatform = false;
     const source = buildWebSource({
       entries: [
-        { name: 'song.sid', relativePath: 'music/song.sid', sizeBytes: 100, modifiedAt: null },
+        {
+          name: 'song.sid',
+          relativePath: 'music/song.sid',
+          sizeBytes: 100,
+          modifiedAt: null,
+        },
       ],
     });
     const location = createLocalSourceLocation(source);

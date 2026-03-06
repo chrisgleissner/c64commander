@@ -21,7 +21,8 @@ import {
 
 vi.mock('@/lib/c64api', () => ({
   buildBaseUrlFromDeviceHost: (host?: string) => `http://${host ?? 'c64u'}`,
-  resolveDeviceHostFromStorage: () => localStorage.getItem('c64u_device_host') || 'c64u',
+  resolveDeviceHostFromStorage: () =>
+    localStorage.getItem('c64u_device_host') || 'c64u',
 }));
 
 describe('appConfigStore', () => {
@@ -36,7 +37,10 @@ describe('appConfigStore', () => {
   });
 
   it('stores and loads initial snapshots', () => {
-    const snapshot = { savedAt: 'now', data: { Audio: { errors: [] as string[] } } };
+    const snapshot = {
+      savedAt: 'now',
+      data: { Audio: { errors: [] as string[] } },
+    };
     expect(loadInitialSnapshot('http://device')).toBeNull();
     saveInitialSnapshot('http://device', snapshot);
     expect(loadInitialSnapshot('http://device')).toEqual(snapshot);
@@ -58,9 +62,15 @@ describe('appConfigStore', () => {
   });
 
   it('creates, saves, and lists app configs sorted by saved time', () => {
-    const entryA = createAppConfigEntry('http://device', 'Config A', { Audio: { errors: [] } });
-    const entryB = createAppConfigEntry('http://device', 'Config B', { Audio: { errors: [] } });
-    const entryOther = createAppConfigEntry('http://other', 'Other', { Audio: { errors: [] } });
+    const entryA = createAppConfigEntry('http://device', 'Config A', {
+      Audio: { errors: [] },
+    });
+    const entryB = createAppConfigEntry('http://device', 'Config B', {
+      Audio: { errors: [] },
+    });
+    const entryOther = createAppConfigEntry('http://other', 'Other', {
+      Audio: { errors: [] },
+    });
 
     saveAppConfigs([entryA, entryOther, entryB]);
     const listed = listAppConfigs('http://device');
@@ -78,7 +88,9 @@ describe('appConfigStore', () => {
     // Covers: left side of || in createAppConfigEntry is falsy → fallback `${Date.now()}-...`
     vi.stubGlobal('crypto', undefined);
     try {
-      const entry = createAppConfigEntry('http://device', 'FallbackTest', { Audio: { errors: [] } });
+      const entry = createAppConfigEntry('http://device', 'FallbackTest', {
+        Audio: { errors: [] },
+      });
       // ID must be the Date.now-based fallback format, not a UUID
       expect(entry.id).toMatch(/^\d+-\d+$/);
     } finally {

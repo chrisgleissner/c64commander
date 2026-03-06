@@ -10,15 +10,27 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { AlphabetScrollbar } from '@/components/lists/AlphabetScrollbar';
 
-const setScrollMetrics = (element: HTMLElement, scrollHeight: number, clientHeight: number) => {
-  Object.defineProperty(element, 'scrollHeight', { value: scrollHeight, configurable: true });
-  Object.defineProperty(element, 'clientHeight', { value: clientHeight, configurable: true });
+const setScrollMetrics = (
+  element: HTMLElement,
+  scrollHeight: number,
+  clientHeight: number,
+) => {
+  Object.defineProperty(element, 'scrollHeight', {
+    value: scrollHeight,
+    configurable: true,
+  });
+  Object.defineProperty(element, 'clientHeight', {
+    value: clientHeight,
+    configurable: true,
+  });
 };
 
 const createScrollContainer = () => {
   const container = document.createElement('div');
-  container.innerHTML = '<div data-row-id="alpha"></div><div data-row-id="beta"></div>';
-  container.querySelectorAll('[data-row-id]')
+  container.innerHTML =
+    '<div data-row-id="alpha"></div><div data-row-id="beta"></div>';
+  container
+    .querySelectorAll('[data-row-id]')
     .forEach((node) => Object.assign(node, { scrollIntoView: vi.fn() }));
   return container;
 };
@@ -122,7 +134,17 @@ describe('AlphabetScrollbar', () => {
 
     const touchArea = await screen.findByTestId('alphabet-touch-area');
     Object.defineProperty(touchArea, 'getBoundingClientRect', {
-      value: () => ({ top: 0, left: 0, right: 0, bottom: 260, width: 20, height: 260, x: 0, y: 0, toJSON: () => '' }),
+      value: () => ({
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 260,
+        width: 20,
+        height: 260,
+        x: 0,
+        y: 0,
+        toJSON: () => '',
+      }),
     });
 
     // Touch at position that maps to '#' (first letter at top ~0 index)
@@ -134,9 +156,7 @@ describe('AlphabetScrollbar', () => {
     const container = createScrollContainer();
     setScrollMetrics(container, 1000, 100);
     const onLetterSelect = vi.fn();
-    const items = [
-      { id: 'alpha', title: 'Alpha' },
-    ];
+    const items = [{ id: 'alpha', title: 'Alpha' }];
 
     render(
       <AlphabetScrollbar
@@ -149,7 +169,17 @@ describe('AlphabetScrollbar', () => {
 
     const touchArea = await screen.findByTestId('alphabet-touch-area');
     Object.defineProperty(touchArea, 'getBoundingClientRect', {
-      value: () => ({ top: 0, left: 0, right: 0, bottom: 260, width: 20, height: 260, x: 0, y: 0, toJSON: () => '' }),
+      value: () => ({
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 260,
+        width: 20,
+        height: 260,
+        x: 0,
+        y: 0,
+        toJSON: () => '',
+      }),
     });
 
     // Touch at position that maps to 'Z' (last letter, near bottom)
@@ -168,7 +198,10 @@ describe('AlphabetScrollbar', () => {
 
     render(
       <AlphabetScrollbar
-        items={[{ id: 'a', title: 'Alpha' }, { id: 'b', title: 'Beta' }]}
+        items={[
+          { id: 'a', title: 'Alpha' },
+          { id: 'b', title: 'Beta' },
+        ]}
         scrollContainerRef={{ current: container }}
       />,
     );
@@ -177,7 +210,9 @@ describe('AlphabetScrollbar', () => {
       await Promise.resolve();
     });
 
-    act(() => { container.dispatchEvent(new Event('scroll')); });
+    act(() => {
+      container.dispatchEvent(new Event('scroll'));
+    });
 
     const overlay = screen.getByTestId('alphabet-overlay');
     expect(overlay.className).toContain('opacity-100');
@@ -204,7 +239,17 @@ describe('AlphabetScrollbar', () => {
 
     const touchArea = await screen.findByTestId('alphabet-touch-area');
     Object.defineProperty(touchArea, 'getBoundingClientRect', {
-      value: () => ({ top: 0, left: 0, right: 0, bottom: 260, width: 20, height: 260, x: 0, y: 0, toJSON: () => '' }),
+      value: () => ({
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 260,
+        width: 20,
+        height: 260,
+        x: 0,
+        y: 0,
+        toJSON: () => '',
+      }),
     });
 
     // Touch at position that maps to 'A'
@@ -216,9 +261,7 @@ describe('AlphabetScrollbar', () => {
     const container = createScrollContainer();
     setScrollMetrics(container, 1000, 100);
     const onLetterSelect = vi.fn();
-    const items = [
-      { id: 'alpha', title: 'Alpha' },
-    ];
+    const items = [{ id: 'alpha', title: 'Alpha' }];
 
     render(
       <AlphabetScrollbar
@@ -230,7 +273,17 @@ describe('AlphabetScrollbar', () => {
 
     const touchArea = await screen.findByTestId('alphabet-touch-area');
     Object.defineProperty(touchArea, 'getBoundingClientRect', {
-      value: () => ({ top: 0, left: 0, right: 0, bottom: 260, width: 20, height: 260, x: 0, y: 0, toJSON: () => '' }),
+      value: () => ({
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 260,
+        width: 20,
+        height: 260,
+        x: 0,
+        y: 0,
+        toJSON: () => '',
+      }),
     });
 
     // Touch 'A' zone
@@ -247,7 +300,10 @@ describe('AlphabetScrollbar', () => {
 
     render(
       <AlphabetScrollbar
-        items={[{ id: 'a', title: 'Alpha' }, { id: 'b', title: 'Beta' }]}
+        items={[
+          { id: 'a', title: 'Alpha' },
+          { id: 'b', title: 'Beta' },
+        ]}
         scrollContainerRef={{ current: container }}
       />,
     );
@@ -269,7 +325,10 @@ describe('AlphabetScrollbar', () => {
 
     render(
       <AlphabetScrollbar
-        items={[{ id: 'alpha', title: 'Alpha' }, { id: 'beta', title: 'Beta' }]}
+        items={[
+          { id: 'alpha', title: 'Alpha' },
+          { id: 'beta', title: 'Beta' },
+        ]}
         scrollContainerRef={{ current: container }}
         onLetterSelect={onLetterSelect}
         onScrollToIndex={vi.fn()}
@@ -278,7 +337,17 @@ describe('AlphabetScrollbar', () => {
 
     const touchArea = await screen.findByTestId('alphabet-touch-area');
     Object.defineProperty(touchArea, 'getBoundingClientRect', {
-      value: () => ({ top: 0, left: 0, right: 0, bottom: 260, width: 20, height: 260, x: 0, y: 0, toJSON: () => '' }),
+      value: () => ({
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 260,
+        width: 20,
+        height: 260,
+        x: 0,
+        y: 0,
+        toJSON: () => '',
+      }),
     });
 
     fireEvent.touchStart(touchArea, { touches: [{ clientY: 10 }] });
@@ -316,7 +385,10 @@ describe('AlphabetScrollbar', () => {
   it('renders without crashing when ResizeObserver is unavailable', async () => {
     const originalResizeObserver = window.ResizeObserver;
     // Remove ResizeObserver to simulate unavailable environment (line 171 fallback)
-    Object.defineProperty(window, 'ResizeObserver', { value: undefined, configurable: true });
+    Object.defineProperty(window, 'ResizeObserver', {
+      value: undefined,
+      configurable: true,
+    });
 
     const container = createScrollContainer();
     setScrollMetrics(container, 1000, 100);
@@ -337,7 +409,10 @@ describe('AlphabetScrollbar', () => {
     expect(overlay).toBeInTheDocument();
 
     // Restore
-    Object.defineProperty(window, 'ResizeObserver', { value: originalResizeObserver, configurable: true });
+    Object.defineProperty(window, 'ResizeObserver', {
+      value: originalResizeObserver,
+      configurable: true,
+    });
   });
 
   it('handles null scrollContainerRef gracefully', async () => {

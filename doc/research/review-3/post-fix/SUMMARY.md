@@ -3,6 +3,7 @@
 All implementation phases from `doc/research/review-3/IMPLEMENTATION-PLAN.md` were executed in sequence with evidence captured under `doc/research/review-3/post-fix/`.
 
 ## High/Critical Risk Closure
+
 - Risk #1 (Android JVM toolchain): resolved with green `./gradlew test` in phase 1 and final gate.
 - Risk #2 (web payload pressure): reduced main startup chunk; constrained runtime measured and stable.
 - Risk #3 (Playwright viewport determinism): resolved by project-aware viewport validation in `playwright/viewportValidation.ts` with rerun proof.
@@ -11,6 +12,7 @@ All implementation phases from `doc/research/review-3/IMPLEMENTATION-PLAN.md` we
 - Risk #6 (web server branch coverage): improved from baseline, with delta table evidence.
 
 ## Mandatory Gates Executed
+
 - `npm run lint`
 - `npm run test`
 - `npm run test:coverage`

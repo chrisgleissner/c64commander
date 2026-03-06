@@ -7,7 +7,10 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { JsonMediaIndex, LocalStorageMediaIndexStorage } from '@/lib/media-index/localStorageMediaIndex';
+import {
+  JsonMediaIndex,
+  LocalStorageMediaIndexStorage,
+} from '@/lib/media-index/localStorageMediaIndex';
 import type { MediaIndexSnapshot } from '@/lib/media-index/mediaIndex';
 
 const STORAGE_KEY = 'c64u_media_index:v1';
@@ -16,7 +19,12 @@ const buildSnapshot = (): MediaIndexSnapshot => ({
   version: 1,
   updatedAt: '2026-01-01T00:00:00.000Z',
   entries: [
-    { path: '/music/song.sid', name: 'song.sid', type: 'sid', durationSeconds: 120 },
+    {
+      path: '/music/song.sid',
+      name: 'song.sid',
+      type: 'sid',
+      durationSeconds: 120,
+    },
     { path: '/music/demo.prg', name: 'demo.prg', type: 'prg', sizeBytes: 2048 },
   ],
 });
@@ -27,8 +35,14 @@ describe('localStorageMediaIndex', () => {
   });
 
   it('returns null when localStorage is unavailable', async () => {
-    const original = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
-    Object.defineProperty(globalThis, 'localStorage', { value: undefined, configurable: true });
+    const original = Object.getOwnPropertyDescriptor(
+      globalThis,
+      'localStorage',
+    );
+    Object.defineProperty(globalThis, 'localStorage', {
+      value: undefined,
+      configurable: true,
+    });
 
     const storage = new LocalStorageMediaIndexStorage();
     await expect(storage.read()).resolves.toBeNull();

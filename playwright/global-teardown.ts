@@ -37,24 +37,32 @@ const parseTestId = (videoFile: string) => {
 };
 
 export default async function globalTeardown() {
-  const playwrightDir = path.resolve(process.cwd(), 'test-results', 'playwright');
+  const playwrightDir = path.resolve(
+    process.cwd(),
+    'test-results',
+    'playwright',
+  );
   const evidenceRoot = path.resolve(process.cwd(), 'test-results', 'evidence');
 
   try {
     const entries = await fs.readdir(playwrightDir, { withFileTypes: true });
-    const videoFiles = entries.filter((entry) => entry.isFile() && entry.name.endsWith('.webm'));
+    const videoFiles = entries.filter(
+      (entry) => entry.isFile() && entry.name.endsWith('.webm'),
+    );
 
     for (const videoFile of videoFiles) {
       const parsed = parseTestId(videoFile.name);
       if (!parsed) continue;
 
-      const evidenceFolders = await fs.readdir(evidenceRoot, { withFileTypes: true });
+      const evidenceFolders = await fs.readdir(evidenceRoot, {
+        withFileTypes: true,
+      });
       for (const folder of evidenceFolders) {
         if (!folder.isDirectory()) continue;
         const evidenceDir = path.join(evidenceRoot, folder.name);
         const videoTarget = path.join(evidenceDir, 'video.webm');
         const videoSource = path.join(playwrightDir, videoFile.name);
-        
+
         try {
           await fs.stat(videoTarget);
         } catch {

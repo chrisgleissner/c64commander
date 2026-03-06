@@ -66,7 +66,7 @@ export const startExternalMockServer = async () => {
         const config = configs[category] ?? {};
         if (parts.length >= 4) {
           const item = decodeURIComponent(parts[3]);
-          const entry = (config && config[item]) ? { [item]: config[item] } : {};
+          const entry = config && config[item] ? { [item]: config[item] } : {};
           return json(res, 200, { [category]: entry, errors: [] });
         }
         return json(res, 200, { [category]: config, errors: [] });
@@ -85,7 +85,7 @@ export const startExternalMockServer = async () => {
 
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const address = server.address();
-  const port = typeof address === 'string' ? 0 : address?.port ?? 0;
+  const port = typeof address === 'string' ? 0 : (address?.port ?? 0);
   const baseUrl = `http://127.0.0.1:${port}`;
   const hostForEmulator = `10.0.2.2:${port}`;
 

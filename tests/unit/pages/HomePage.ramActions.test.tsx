@@ -59,15 +59,42 @@ vi.mock('@/hooks/useC64Connection', () => ({
   useC64ConfigItem: () => ({ data: undefined, isLoading: false }),
   useC64ConfigItems: () => ({ data: undefined }),
   useC64MachineControl: () => ({
-    reset: { mutateAsync: vi.fn().mockResolvedValue(undefined), isPending: false },
-    reboot: { mutateAsync: vi.fn().mockResolvedValue(undefined), isPending: false },
-    pause: { mutateAsync: vi.fn().mockResolvedValue(undefined), isPending: false },
-    resume: { mutateAsync: vi.fn().mockResolvedValue(undefined), isPending: false },
-    powerOff: { mutateAsync: vi.fn().mockResolvedValue(undefined), isPending: false },
-    menuButton: { mutateAsync: vi.fn().mockResolvedValue(undefined), isPending: false },
-    saveConfig: { mutateAsync: vi.fn().mockResolvedValue(undefined), isPending: false },
-    loadConfig: { mutateAsync: vi.fn().mockResolvedValue(undefined), isPending: false },
-    resetConfig: { mutateAsync: vi.fn().mockResolvedValue(undefined), isPending: false },
+    reset: {
+      mutateAsync: vi.fn().mockResolvedValue(undefined),
+      isPending: false,
+    },
+    reboot: {
+      mutateAsync: vi.fn().mockResolvedValue(undefined),
+      isPending: false,
+    },
+    pause: {
+      mutateAsync: vi.fn().mockResolvedValue(undefined),
+      isPending: false,
+    },
+    resume: {
+      mutateAsync: vi.fn().mockResolvedValue(undefined),
+      isPending: false,
+    },
+    powerOff: {
+      mutateAsync: vi.fn().mockResolvedValue(undefined),
+      isPending: false,
+    },
+    menuButton: {
+      mutateAsync: vi.fn().mockResolvedValue(undefined),
+      isPending: false,
+    },
+    saveConfig: {
+      mutateAsync: vi.fn().mockResolvedValue(undefined),
+      isPending: false,
+    },
+    loadConfig: {
+      mutateAsync: vi.fn().mockResolvedValue(undefined),
+      isPending: false,
+    },
+    resetConfig: {
+      mutateAsync: vi.fn().mockResolvedValue(undefined),
+      isPending: false,
+    },
   }),
 }));
 
@@ -86,7 +113,8 @@ vi.mock('@/hooks/useAppConfigState', () => ({
 }));
 
 vi.mock('@/hooks/useActionTrace', () => ({
-  useActionTrace: () => Object.assign((fn: (...args: any[]) => any) => fn, { scope: vi.fn() }),
+  useActionTrace: () =>
+    Object.assign((fn: (...args: any[]) => any) => fn, { scope: vi.fn() }),
 }));
 
 vi.mock('@/components/ThemeProvider', () => ({
@@ -98,30 +126,33 @@ vi.mock('@/components/ThemeProvider', () => ({
 
 vi.mock('@/components/DiagnosticsActivityIndicator', () => ({
   DiagnosticsActivityIndicator: ({ onClick }: { onClick: () => void }) => (
-    <button type="button" onClick={onClick} data-testid="diagnostics-activity-indicator" />
+    <button
+      type="button"
+      onClick={onClick}
+      data-testid="diagnostics-activity-indicator"
+    />
   ),
 }));
 
-const buildRouter = (ui: JSX.Element) => createMemoryRouter(
-  [{ path: '*', element: ui }],
-  {
+const buildRouter = (ui: JSX.Element) =>
+  createMemoryRouter([{ path: '*', element: ui }], {
     initialEntries: ['/'],
     future: {
       v7_startTransition: true,
       v7_relativeSplatPath: true,
     },
-  },
-);
+  });
 
-const renderWithRouter = (ui: JSX.Element) => render(
-  <RouterProvider
-    router={buildRouter(ui)}
-    future={{
-      v7_startTransition: true,
-      v7_relativeSplatPath: true,
-    }}
-  />,
-);
+const renderWithRouter = (ui: JSX.Element) =>
+  render(
+    <RouterProvider
+      router={buildRouter(ui)}
+      future={{
+        v7_startTransition: true,
+        v7_relativeSplatPath: true,
+      }}
+    />,
+  );
 
 const renderHomePage = () => renderWithRouter(<HomePage />);
 
@@ -204,7 +235,9 @@ describe('HomePage RAM actions', () => {
   it('runs reboot clear memory action', async () => {
     renderHomePage();
 
-    fireEvent.click(screen.getByRole('button', { name: /reboot \(Clear RAM\)/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /reboot \(Clear RAM\)/i }),
+    );
 
     await waitFor(() => expect(clearRamAndRebootSpy).toHaveBeenCalledTimes(1));
     expect(toastSpy).toHaveBeenCalledWith({
@@ -238,7 +271,9 @@ describe('HomePage RAM actions', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /save ram/i }));
 
-    await waitFor(() => expect(selectRamDumpFolderSpy).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(selectRamDumpFolderSpy).toHaveBeenCalledTimes(1),
+    );
     expect(writeRamDumpToFolderSpy).toHaveBeenCalledWith(
       expect.objectContaining({ treeUri: 'content://ram-folder' }),
       'c64u-ram-01-02-03.bin',
@@ -259,10 +294,15 @@ describe('HomePage RAM actions', () => {
 
     await waitFor(() => expect(pickRamDumpFileSpy).toHaveBeenCalledTimes(1));
     expect(pickRamDumpFileSpy).toHaveBeenCalledWith({
-      preferredFolder: expect.objectContaining({ treeUri: 'content://existing-folder' }),
+      preferredFolder: expect.objectContaining({
+        treeUri: 'content://existing-folder',
+      }),
     });
     expect(saveRamDumpFolderConfigSpy).not.toHaveBeenCalled();
-    expect(loadFullRamImageSpy).toHaveBeenCalledWith({}, expect.any(Uint8Array));
+    expect(loadFullRamImageSpy).toHaveBeenCalledWith(
+      {},
+      expect.any(Uint8Array),
+    );
   }, 15000);
 
   it('bootstraps RAM dump folder from selected .bin parent when folder is not configured', async () => {
@@ -283,10 +323,15 @@ describe('HomePage RAM actions', () => {
     fireEvent.click(screen.getByRole('button', { name: /load ram/i }));
 
     await waitFor(() => expect(pickRamDumpFileSpy).toHaveBeenCalledTimes(1));
-    expect(pickRamDumpFileSpy).toHaveBeenCalledWith({ preferredFolder: undefined });
+    expect(pickRamDumpFileSpy).toHaveBeenCalledWith({
+      preferredFolder: undefined,
+    });
     expect(saveRamDumpFolderConfigSpy).toHaveBeenCalledWith(
       expect.objectContaining({ treeUri: 'content://picked-parent' }),
     );
-    expect(loadFullRamImageSpy).toHaveBeenCalledWith({}, expect.any(Uint8Array));
+    expect(loadFullRamImageSpy).toHaveBeenCalledWith(
+      {},
+      expect.any(Uint8Array),
+    );
   }, 15000);
 });

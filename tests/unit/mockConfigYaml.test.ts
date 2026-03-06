@@ -7,7 +7,11 @@
  */
 
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import { clearMockConfigLoader, getMockConfigPayload, setMockConfigLoader } from '@/lib/mock/mockConfig';
+import {
+  clearMockConfigLoader,
+  getMockConfigPayload,
+  setMockConfigLoader,
+} from '@/lib/mock/mockConfig';
 import { loadConfigYaml } from '@/lib/mock/mockConfigLoader.node';
 
 describe('mockConfig YAML payload', () => {
@@ -22,13 +26,21 @@ describe('mockConfig YAML payload', () => {
     expect(payload.categories['Audio Mixer']).toBeTruthy();
     expect(payload.categories['Network Settings']).toBeTruthy();
     expect(payload.categories['U64 Specific Settings']).toBeTruthy();
-    expect(payload.categories['U64 Specific Settings']['System Mode'].options?.length).toBeGreaterThan(1);
+    expect(
+      payload.categories['U64 Specific Settings']['System Mode'].options
+        ?.length,
+    ).toBeGreaterThan(1);
   });
 
   it('builds payload with numeric selected value', async () => {
     setMockConfigLoader(() => ({
       config: {
-        general: { base_url: 'http://test', rest_api_version: '1.0', device_type: 'U64', firmware_version: '4.0' },
+        general: {
+          base_url: 'http://test',
+          rest_api_version: '1.0',
+          device_type: 'U64',
+          firmware_version: '4.0',
+        },
         categories: {
           TestCat: {
             items: {
@@ -75,7 +87,12 @@ config:
               Slider: {
                 selected: '5',
                 options: ['1', '10'],
-                details: { min: 1, max: '10', format: '%d dB', presets: [3, 'five'] },
+                details: {
+                  min: 1,
+                  max: '10',
+                  format: '%d dB',
+                  presets: [3, 'five'],
+                },
               },
             },
           },

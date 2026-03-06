@@ -5,57 +5,61 @@ Commit: cf7d0826a429802524b6ee86beb73e81449f4e04
 Sources: review-5a.md, review-5b.md
 
 ## Consolidation Method
+
 All PRA issues from both source reviews were extracted end-to-end and reconciled by root cause and scope overlap. Exact duplicates were merged. Partial overlaps were merged where one scope was a subset, otherwise linked through reconciliation notes. Severity/effort/likelihood conflicts were normalized using conservative (higher) values unless explicitly narrowed by source evidence. No source code was modified in this phase.
 
 ## Executive Summary
+
 Unified recommendation: do not ship broadly until consolidated Blocker/Critical issues are remediated or explicitly risk-accepted with compensating controls. Controlled internal or trusted-LAN release is conditionally acceptable if transport and CI supply-chain risks are documented and bounded.
 
 ## Priority Table
-| Rank | ISSUE-ID | Title | Category | Severity | Impact | Likelihood | Effort | Priority Score | Source |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | ISSUE-001 | Repository-local signing secret pattern | Security | Blocker | High | High | S | 7.50 | review-5a |
-| 2 | ISSUE-002 | Critical runtime dependency vulnerability in basic-ftp | Supply Chain | Critical | High | High | S | 6.00 | both |
-| 3 | ISSUE-003 | No web server security headers | Security | Critical | High | Medium | S | 6.00 | review-5b |
-| 4 | ISSUE-004 | iOS workflow installs Maestro via unpinned remote script | Supply Chain | Critical | High | Medium | S | 6.00 | both |
-| 5 | ISSUE-005 | Browser zoom is disabled, reducing accessibility | UX & Accessibility | Major | High | High | S | 4.50 | review-5a |
-| 6 | ISSUE-006 | CI token permissions are broader than necessary | CI/CD | Major | High | Medium | S | 4.50 | both |
-| 7 | ISSUE-007 | Android cleartext traffic globally enabled without domain restriction | Security | Critical | High | High | M | 4.00 | both |
-| 8 | ISSUE-008 | Password propagation over HTTP via X-Password header | Security | Critical | High | High | M | 4.00 | review-5a |
-| 9 | ISSUE-009 | Plain FTP transport across all platform backends | Security | Critical | High | High | L | 3.00 | review-5a |
-| 10 | ISSUE-010 | Android backups enabled without explicit backup exclusion rules | Android | Major | Medium | Medium | S | 3.00 | both |
-| 11 | ISSUE-011 | No dependency update automation | Supply Chain | Major | Medium | High | S | 3.00 | both |
-| 12 | ISSUE-012 | README license badge says GPL v2, LICENSE file is GPL v3 | Legal & Licensing | Major | Medium | High | S | 3.00 | both |
-| 13 | ISSUE-013 | GitHub Actions are pinned to mutable tags, not immutable SHAs | Supply Chain | Major | High | Medium | M | 3.00 | both |
-| 14 | ISSUE-014 | No iOS audio background mode | iOS | Major | High | High | M | 3.00 | review-5b |
-| 15 | ISSUE-015 | iOS deployment and version metadata are inconsistent | iOS | Major | High | High | M | 3.00 | both |
-| 16 | ISSUE-016 | Current persistence adapters can silently reset state on parse/version mismatch | Data Integrity | Major | High | Medium | L | 2.25 | both |
-| 17 | ISSUE-017 | Android ABI policy includes emulator ABIs in default packaging path | Android | Major | Medium | Medium | M | 2.00 | review-5a |
-| 18 | ISSUE-018 | Android diagnostics broadcast is globally observable | Security | Major | Medium | Medium | M | 2.00 | review-5a |
-| 19 | ISSUE-019 | Android release build keeps minification disabled | Android | Major | Medium | High | M | 2.00 | both |
-| 20 | ISSUE-020 | Web runtime disables asset caching and has no service worker fallback | Web | Major | Medium | High | M | 2.00 | both |
-| 21 | ISSUE-021 | Android JVM tests fail on Java 25 | Testing | Minor | Medium | Medium | S | 2.00 | review-5b |
-| 22 | ISSUE-022 | Android build verification could not complete in this assessment environment | Testing | Minor | Medium | Medium | S | 2.00 | review-5a |
-| 23 | ISSUE-023 | Coverage quality bar mismatch between CI gate and repository guidance | Testing | Minor | Medium | High | S | 2.00 | review-5a |
-| 24 | ISSUE-024 | No automated accessibility testing | UX & Accessibility | Minor | Medium | Medium | S | 2.00 | review-5b |
-| 25 | ISSUE-025 | Touch targets below 44px on default buttons | UX & Accessibility | Minor | Medium | Medium | S | 2.00 | review-5b |
-| 26 | ISSUE-026 | iOS local build command is not executable on Linux assessment host | iOS | Minor | Medium | High | S | 2.00 | review-5a |
-| 27 | ISSUE-027 | No iOS native unit tests | Testing | Major | Medium | Medium | L | 1.50 | review-5b |
-| 28 | ISSUE-028 | No localization infrastructure | UX & Accessibility | Major | Medium | High | L | 1.50 | both |
-| 29 | ISSUE-029 | Web bundle size profile is high for first load | Performance | Major | Medium | High | L | 1.50 | review-5a |
-| 30 | ISSUE-030 | Gradle and AGP significantly outdated | Android | Minor | Medium | Medium | M | 1.33 | review-5b |
-| 31 | ISSUE-031 | No remote crash reporting | Observability | Minor | Medium | High | M | 1.33 | review-5b |
-| 32 | ISSUE-032 | No CODEOWNERS file | CI/CD | Minor | Low | Medium | S | 1.00 | review-5b |
-| 33 | ISSUE-033 | Rollup path traversal vulnerability (dev dependency) | Supply Chain | Minor | Low | Low | S | 1.00 | review-5b |
-| 34 | ISSUE-034 | E2E tests run against Vite preview, not native runtime | Testing | Minor | Medium | Medium | L | 1.00 | review-5b |
-| 35 | ISSUE-035 | Deprecated MediaSession APIs in BackgroundExecutionService | Android | Trivial | Low | Low | S | 0.50 | review-5b |
-| 36 | ISSUE-036 | Incomplete PWA manifest | Web | Trivial | Low | High | S | 0.50 | review-5b |
-| 37 | ISSUE-037 | NativePlugins.swift exceeds file size guidelines | Architecture & Maintainability | Trivial | Low | High | S | 0.50 | review-5b |
-| 38 | ISSUE-038 | No Commodore trademark disclaimer | Legal & Licensing | Trivial | Low | Low | S | 0.50 | review-5b |
-| 39 | ISSUE-039 | No SPDX license identifier in package.json | Legal & Licensing | Trivial | Low | Medium | S | 0.50 | review-5b |
-| 40 | ISSUE-040 | No iOS entitlements file | iOS | Trivial | Low | Low | S | 0.50 | review-5b |
-| 41 | ISSUE-041 | Web server is a single 843-line file | Architecture & Maintainability | Trivial | Low | High | S | 0.50 | review-5b |
+
+| Rank | ISSUE-ID  | Title                                                                           | Category                       | Severity | Impact | Likelihood | Effort | Priority Score | Source    |
+| ---- | --------- | ------------------------------------------------------------------------------- | ------------------------------ | -------- | ------ | ---------- | ------ | -------------- | --------- |
+| 1    | ISSUE-001 | Repository-local signing secret pattern                                         | Security                       | Blocker  | High   | High       | S      | 7.50           | review-5a |
+| 2    | ISSUE-002 | Critical runtime dependency vulnerability in basic-ftp                          | Supply Chain                   | Critical | High   | High       | S      | 6.00           | both      |
+| 3    | ISSUE-003 | No web server security headers                                                  | Security                       | Critical | High   | Medium     | S      | 6.00           | review-5b |
+| 4    | ISSUE-004 | iOS workflow installs Maestro via unpinned remote script                        | Supply Chain                   | Critical | High   | Medium     | S      | 6.00           | both      |
+| 5    | ISSUE-005 | Browser zoom is disabled, reducing accessibility                                | UX & Accessibility             | Major    | High   | High       | S      | 4.50           | review-5a |
+| 6    | ISSUE-006 | CI token permissions are broader than necessary                                 | CI/CD                          | Major    | High   | Medium     | S      | 4.50           | both      |
+| 7    | ISSUE-007 | Android cleartext traffic globally enabled without domain restriction           | Security                       | Critical | High   | High       | M      | 4.00           | both      |
+| 8    | ISSUE-008 | Password propagation over HTTP via X-Password header                            | Security                       | Critical | High   | High       | M      | 4.00           | review-5a |
+| 9    | ISSUE-009 | Plain FTP transport across all platform backends                                | Security                       | Critical | High   | High       | L      | 3.00           | review-5a |
+| 10   | ISSUE-010 | Android backups enabled without explicit backup exclusion rules                 | Android                        | Major    | Medium | Medium     | S      | 3.00           | both      |
+| 11   | ISSUE-011 | No dependency update automation                                                 | Supply Chain                   | Major    | Medium | High       | S      | 3.00           | both      |
+| 12   | ISSUE-012 | README license badge says GPL v2, LICENSE file is GPL v3                        | Legal & Licensing              | Major    | Medium | High       | S      | 3.00           | both      |
+| 13   | ISSUE-013 | GitHub Actions are pinned to mutable tags, not immutable SHAs                   | Supply Chain                   | Major    | High   | Medium     | M      | 3.00           | both      |
+| 14   | ISSUE-014 | No iOS audio background mode                                                    | iOS                            | Major    | High   | High       | M      | 3.00           | review-5b |
+| 15   | ISSUE-015 | iOS deployment and version metadata are inconsistent                            | iOS                            | Major    | High   | High       | M      | 3.00           | both      |
+| 16   | ISSUE-016 | Current persistence adapters can silently reset state on parse/version mismatch | Data Integrity                 | Major    | High   | Medium     | L      | 2.25           | both      |
+| 17   | ISSUE-017 | Android ABI policy includes emulator ABIs in default packaging path             | Android                        | Major    | Medium | Medium     | M      | 2.00           | review-5a |
+| 18   | ISSUE-018 | Android diagnostics broadcast is globally observable                            | Security                       | Major    | Medium | Medium     | M      | 2.00           | review-5a |
+| 19   | ISSUE-019 | Android release build keeps minification disabled                               | Android                        | Major    | Medium | High       | M      | 2.00           | both      |
+| 20   | ISSUE-020 | Web runtime disables asset caching and has no service worker fallback           | Web                            | Major    | Medium | High       | M      | 2.00           | both      |
+| 21   | ISSUE-021 | Android JVM tests fail on Java 25                                               | Testing                        | Minor    | Medium | Medium     | S      | 2.00           | review-5b |
+| 22   | ISSUE-022 | Android build verification could not complete in this assessment environment    | Testing                        | Minor    | Medium | Medium     | S      | 2.00           | review-5a |
+| 23   | ISSUE-023 | Coverage quality bar mismatch between CI gate and repository guidance           | Testing                        | Minor    | Medium | High       | S      | 2.00           | review-5a |
+| 24   | ISSUE-024 | No automated accessibility testing                                              | UX & Accessibility             | Minor    | Medium | Medium     | S      | 2.00           | review-5b |
+| 25   | ISSUE-025 | Touch targets below 44px on default buttons                                     | UX & Accessibility             | Minor    | Medium | Medium     | S      | 2.00           | review-5b |
+| 26   | ISSUE-026 | iOS local build command is not executable on Linux assessment host              | iOS                            | Minor    | Medium | High       | S      | 2.00           | review-5a |
+| 27   | ISSUE-027 | No iOS native unit tests                                                        | Testing                        | Major    | Medium | Medium     | L      | 1.50           | review-5b |
+| 28   | ISSUE-028 | No localization infrastructure                                                  | UX & Accessibility             | Major    | Medium | High       | L      | 1.50           | both      |
+| 29   | ISSUE-029 | Web bundle size profile is high for first load                                  | Performance                    | Major    | Medium | High       | L      | 1.50           | review-5a |
+| 30   | ISSUE-030 | Gradle and AGP significantly outdated                                           | Android                        | Minor    | Medium | Medium     | M      | 1.33           | review-5b |
+| 31   | ISSUE-031 | No remote crash reporting                                                       | Observability                  | Minor    | Medium | High       | M      | 1.33           | review-5b |
+| 32   | ISSUE-032 | No CODEOWNERS file                                                              | CI/CD                          | Minor    | Low    | Medium     | S      | 1.00           | review-5b |
+| 33   | ISSUE-033 | Rollup path traversal vulnerability (dev dependency)                            | Supply Chain                   | Minor    | Low    | Low        | S      | 1.00           | review-5b |
+| 34   | ISSUE-034 | E2E tests run against Vite preview, not native runtime                          | Testing                        | Minor    | Medium | Medium     | L      | 1.00           | review-5b |
+| 35   | ISSUE-035 | Deprecated MediaSession APIs in BackgroundExecutionService                      | Android                        | Trivial  | Low    | Low        | S      | 0.50           | review-5b |
+| 36   | ISSUE-036 | Incomplete PWA manifest                                                         | Web                            | Trivial  | Low    | High       | S      | 0.50           | review-5b |
+| 37   | ISSUE-037 | NativePlugins.swift exceeds file size guidelines                                | Architecture & Maintainability | Trivial  | Low    | High       | S      | 0.50           | review-5b |
+| 38   | ISSUE-038 | No Commodore trademark disclaimer                                               | Legal & Licensing              | Trivial  | Low    | Low        | S      | 0.50           | review-5b |
+| 39   | ISSUE-039 | No SPDX license identifier in package.json                                      | Legal & Licensing              | Trivial  | Low    | Medium     | S      | 0.50           | review-5b |
+| 40   | ISSUE-040 | No iOS entitlements file                                                        | iOS                            | Trivial  | Low    | Low        | S      | 0.50           | review-5b |
+| 41   | ISSUE-041 | Web server is a single 843-line file                                            | Architecture & Maintainability | Trivial  | Low    | High       | S      | 0.50           | review-5b |
 
 ## Top 10 Highest Priority Issues
+
 - **ISSUE-001** (Repository-local signing secret pattern) ranks in the top set due to Blocker severity, High impact, and S effort, yielding a priority score of 7.50.
 - **ISSUE-002** (Critical runtime dependency vulnerability in basic-ftp) ranks in the top set due to Critical severity, High impact, and S effort, yielding a priority score of 6.00.
 - **ISSUE-003** (No web server security headers) ranks in the top set due to Critical severity, High impact, and S effort, yielding a priority score of 6.00.
@@ -68,14 +72,15 @@ Unified recommendation: do not ship broadly until consolidated Blocker/Critical 
 - **ISSUE-010** (Android backups enabled without explicit backup exclusion rules) ranks in the top set due to Major severity, Medium impact, and S effort, yielding a priority score of 3.00.
 
 ## Low-Effort / High-Impact Subset
-| ISSUE-ID | Title | Severity | Impact | Likelihood | Effort | Priority Score |
-| --- | --- | --- | --- | --- | --- | --- |
-| ISSUE-001 | Repository-local signing secret pattern | Blocker | High | High | S | 7.50 |
-| ISSUE-002 | Critical runtime dependency vulnerability in basic-ftp | Critical | High | High | S | 6.00 |
-| ISSUE-003 | No web server security headers | Critical | High | Medium | S | 6.00 |
-| ISSUE-004 | iOS workflow installs Maestro via unpinned remote script | Critical | High | Medium | S | 6.00 |
-| ISSUE-005 | Browser zoom is disabled, reducing accessibility | Major | High | High | S | 4.50 |
-| ISSUE-006 | CI token permissions are broader than necessary | Major | High | Medium | S | 4.50 |
+
+| ISSUE-ID  | Title                                                    | Severity | Impact | Likelihood | Effort | Priority Score |
+| --------- | -------------------------------------------------------- | -------- | ------ | ---------- | ------ | -------------- |
+| ISSUE-001 | Repository-local signing secret pattern                  | Blocker  | High   | High       | S      | 7.50           |
+| ISSUE-002 | Critical runtime dependency vulnerability in basic-ftp   | Critical | High   | High       | S      | 6.00           |
+| ISSUE-003 | No web server security headers                           | Critical | High   | Medium     | S      | 6.00           |
+| ISSUE-004 | iOS workflow installs Maestro via unpinned remote script | Critical | High   | Medium     | S      | 6.00           |
+| ISSUE-005 | Browser zoom is disabled, reducing accessibility         | Major    | High   | High       | S      | 4.50           |
+| ISSUE-006 | CI token permissions are broader than necessary          | Major    | High   | Medium     | S      | 4.50           |
 
 ## Issue Register
 
@@ -885,71 +890,84 @@ Unified recommendation: do not ship broadly until consolidated Blocker/Critical 
 - **Notes on Reconciliation:** No conflicts
 
 ## Reconciliation Log
-| ISSUE-ID | Conflict Type | Review A Position | Review B Position | Resolution | Rationale |
-| --- | --- | --- | --- | --- | --- |
-| ISSUE-001 | Severity | Critical | Minor | Critical | Higher severity rule |
-| ISSUE-002 | Effort | M | S | M | Higher effort rule |
-| ISSUE-003 | Likelihood | High | Low | High | Higher likelihood rule |
-| ISSUE-004 | Severity | Major | Minor | Major | Higher severity rule |
-| ISSUE-005 | Severity | Major | Minor | Major | Higher severity rule |
-| ISSUE-006 | Likelihood | Medium | Low | Medium | Higher likelihood rule |
-| ISSUE-007 | Effort | M | S | M | Higher effort rule |
-| ISSUE-008 | Likelihood | Medium | Low | Medium | Higher likelihood rule |
-| ISSUE-009 | Severity | Critical | Major | Critical | Higher severity rule |
-| ISSUE-010 | Likelihood | Medium | Low | Medium | Higher likelihood rule |
-| ISSUE-011 | Likelihood | High | Low | High | Higher likelihood rule |
-| ISSUE-012 | Severity | Major | Minor | Major | Higher severity rule |
-| ISSUE-013 | Effort | M | S | M | Higher effort rule |
-| ISSUE-014 | Likelihood | Medium | High,Low | High | Higher likelihood rule |
-| ISSUE-015 | Effort | M | S | M | Higher effort rule |
-| ISSUE-016 | Severity | Major | Minor | Major | Higher severity rule |
-| ISSUE-017 | Effort | M | M,S | M | Higher effort rule |
-| ISSUE-018 | Severity | Major | Minor | Major | Higher severity rule |
-| ISSUE-019 | Likelihood | High | Medium | High | Higher likelihood rule |
-| ISSUE-020 | Effort | L | M | L | Higher effort rule |
-| ISSUE-021 | Severity | Minor | Major | Major | Higher severity rule |
+
+| ISSUE-ID  | Conflict Type | Review A Position | Review B Position | Resolution | Rationale              |
+| --------- | ------------- | ----------------- | ----------------- | ---------- | ---------------------- |
+| ISSUE-001 | Severity      | Critical          | Minor             | Critical   | Higher severity rule   |
+| ISSUE-002 | Effort        | M                 | S                 | M          | Higher effort rule     |
+| ISSUE-003 | Likelihood    | High              | Low               | High       | Higher likelihood rule |
+| ISSUE-004 | Severity      | Major             | Minor             | Major      | Higher severity rule   |
+| ISSUE-005 | Severity      | Major             | Minor             | Major      | Higher severity rule   |
+| ISSUE-006 | Likelihood    | Medium            | Low               | Medium     | Higher likelihood rule |
+| ISSUE-007 | Effort        | M                 | S                 | M          | Higher effort rule     |
+| ISSUE-008 | Likelihood    | Medium            | Low               | Medium     | Higher likelihood rule |
+| ISSUE-009 | Severity      | Critical          | Major             | Critical   | Higher severity rule   |
+| ISSUE-010 | Likelihood    | Medium            | Low               | Medium     | Higher likelihood rule |
+| ISSUE-011 | Likelihood    | High              | Low               | High       | Higher likelihood rule |
+| ISSUE-012 | Severity      | Major             | Minor             | Major      | Higher severity rule   |
+| ISSUE-013 | Effort        | M                 | S                 | M          | Higher effort rule     |
+| ISSUE-014 | Likelihood    | Medium            | High,Low          | High       | Higher likelihood rule |
+| ISSUE-015 | Effort        | M                 | S                 | M          | Higher effort rule     |
+| ISSUE-016 | Severity      | Major             | Minor             | Major      | Higher severity rule   |
+| ISSUE-017 | Effort        | M                 | M,S               | M          | Higher effort rule     |
+| ISSUE-018 | Severity      | Major             | Minor             | Major      | Higher severity rule   |
+| ISSUE-019 | Likelihood    | High              | Medium            | High       | Higher likelihood rule |
+| ISSUE-020 | Effort        | L                 | M                 | L          | Higher effort rule     |
+| ISSUE-021 | Severity      | Minor             | Major             | Major      | Higher severity rule   |
 
 ## Effort-Impact Matrix
-| Quadrant | ISSUE-IDs |
-| --- | --- |
-| Low Effort / High Impact | ISSUE-001, ISSUE-002, ISSUE-003, ISSUE-004, ISSUE-005, ISSUE-006 |
-| High Effort / High Impact | ISSUE-007, ISSUE-008, ISSUE-009, ISSUE-013, ISSUE-014, ISSUE-015, ISSUE-016 |
-| Low Effort / Low Impact | ISSUE-010, ISSUE-011, ISSUE-012, ISSUE-021, ISSUE-022, ISSUE-023, ISSUE-024, ISSUE-025, ISSUE-026, ISSUE-032, ISSUE-033, ISSUE-035, ISSUE-036, ISSUE-037, ISSUE-038, ISSUE-039, ISSUE-040, ISSUE-041 |
-| High Effort / Low Impact | ISSUE-017, ISSUE-018, ISSUE-019, ISSUE-020, ISSUE-027, ISSUE-028, ISSUE-029, ISSUE-030, ISSUE-031, ISSUE-034 |
+
+| Quadrant                  | ISSUE-IDs                                                                                                                                                                                            |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Low Effort / High Impact  | ISSUE-001, ISSUE-002, ISSUE-003, ISSUE-004, ISSUE-005, ISSUE-006                                                                                                                                     |
+| High Effort / High Impact | ISSUE-007, ISSUE-008, ISSUE-009, ISSUE-013, ISSUE-014, ISSUE-015, ISSUE-016                                                                                                                          |
+| Low Effort / Low Impact   | ISSUE-010, ISSUE-011, ISSUE-012, ISSUE-021, ISSUE-022, ISSUE-023, ISSUE-024, ISSUE-025, ISSUE-026, ISSUE-032, ISSUE-033, ISSUE-035, ISSUE-036, ISSUE-037, ISSUE-038, ISSUE-039, ISSUE-040, ISSUE-041 |
+| High Effort / Low Impact  | ISSUE-017, ISSUE-018, ISSUE-019, ISSUE-020, ISSUE-027, ISSUE-028, ISSUE-029, ISSUE-030, ISSUE-031, ISSUE-034                                                                                         |
 
 ## Coverage Checklist
 
 A. Repository and architecture: Covered.
+
 - Evidence: `README.md`, `doc/architecture.md`, `doc/diagnostics/*.md`, module inspections.
 
 B. CI/CD and release readiness: Covered.
+
 - Evidence: `.github/workflows/*.yaml`, command failures/successes.
 
 C. Security and privacy: Covered.
+
 - Evidence: network/storage/logging/native/plugin/workflow inspections and audits.
 
 D. Data integrity and lifecycle: Covered.
+
 - Evidence: config and playlist repository adapters + `doc/db.md` target state.
 
 E. Stability and error handling: Covered.
+
 - Evidence: global error handlers, boundary, native logging and retries.
 
 F. Performance and resource usage: Covered.
+
 - Evidence: web build artifact sizes, caching policy, background service behavior.
 
 G. Observability: Covered.
+
 - Evidence: tracing/action summary specs and runtime logging code.
 
 H. UX/accessibility/localization: Covered.
+
 - Evidence: `index.html` viewport and Settings string surfaces.
 
 I. Platform specifics: Covered.
+
 - Android covered.
 - iOS covered.
 - Web covered.
 
 J. Testing and quality gates: Covered.
+
 - Evidence: test/lint runs + CI thresholds and testing docs.
 
 K. Legal/licensing/attribution: Covered.
+
 - Evidence: `LICENSE`, `README.md`, `THIRD_PARTY_NOTICES.md`, privacy docs.

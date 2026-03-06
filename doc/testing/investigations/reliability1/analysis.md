@@ -409,30 +409,37 @@ loadFullRamImage:
 ### New flow set (Maestro-first)
 
 1. `edge-volume-mute-race.yaml`
+
 - Play known SID, loop slider + mute/unmute, assert final unmute state and volume label consistency.
 - Tags: `edge`, `slow`, `device`.
 
 2. `edge-auto-advance-lock.yaml`
+
 - Seed short-duration playlist, start track, lock/unlock, assert exactly one next-track transition.
 - Tags: `edge`, `device`, `slow`.
 
 3. `edge-auto-advance-format-matrix.yaml`
+
 - Repeat auto-advance checks for `sid`, `mod`, `prg`, `crt` playlists with configured durations.
 - Tags: `edge`, `slow`.
 
 4. `edge-button-highlight-timeout.yaml`
+
 - Tap target controls around heavy action and lock/unlock, assert highlight clears.
 - Tags: `edge`, `slow`, `device`.
 
 5. `edge-hvsc-ingest-lifecycle.yaml`
+
 - Start HVSC ingest, navigate away/back, lock/unlock, assert progress resumes and terminal state reached.
 - Tags: `hvsc`, `edge`, `slow`, `device`.
 
 6. `edge-hvsc-repeat-cancel-resume.yaml`
+
 - Repeated install/ingest cycles with deterministic cancel points and post-cancel status assertions.
 - Tags: `hvsc`, `edge`, `slow`.
 
 7. `edge-ram-restore-chunked.yaml`
+
 - Drive RAM dump/restore sequence, verify UI success and no crash/disconnect.
 - Tags: `edge`, `device`, `slow`.
 
@@ -451,6 +458,7 @@ loadFullRamImage:
 - Issue 3 risk: Medium. UX degradation, but lower direct data/device risk.
 
 Risk of remediation:
+
 - Volume/auto-advance changes affect central playback state machine; require strict regression tests and trace assertions.
 - HVSC memory/path changes affect both native and web behavior; require parity validation.
 - RAM restore chunking impacts protocol timing; must validate against real C64U hardware and mock server.
@@ -464,6 +472,7 @@ Risk of remediation:
 - full-image RAM writes in one request increase timeout pressure and retry blast radius (`src/lib/machine/ramOperations.ts:174-194`, `src/lib/c64api.ts:36`, `1299-1335`).
 
 Recommendations for low-resource profiles:
+
 - Use smaller bounded chunks for network and file writes.
 - Prefer streaming parsers and incremental index updates.
 - Avoid repeated full snapshot serialization during active ingestion.

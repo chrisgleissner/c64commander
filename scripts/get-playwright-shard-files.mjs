@@ -9,15 +9,26 @@ const totalArg = args.find((arg) => arg.startsWith('--total='));
 const shardIndex = shardArg ? Number(shardArg.split('=')[1]) : NaN;
 const shardTotal = totalArg ? Number(totalArg.split('=')[1]) : NaN;
 
-if (!Number.isFinite(shardIndex) || !Number.isFinite(shardTotal) || shardIndex < 1 || shardIndex > shardTotal) {
-  console.error('Usage: node scripts/get-playwright-shard-files.mjs --shard=<index> --total=<count>');
+if (
+  !Number.isFinite(shardIndex) ||
+  !Number.isFinite(shardTotal) ||
+  shardIndex < 1 ||
+  shardIndex > shardTotal
+) {
+  console.error(
+    'Usage: node scripts/get-playwright-shard-files.mjs --shard=<index> --total=<count>',
+  );
   process.exit(1);
 }
 
-const listCommand = 'PLAYWRIGHT_SKIP_BUILD=1 npx playwright test --list --project=android-phone';
+const listCommand =
+  'PLAYWRIGHT_SKIP_BUILD=1 npx playwright test --list --project=android-phone';
 let output = '';
 try {
-  output = execSync(listCommand, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+  output = execSync(listCommand, {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
 } catch (error) {
   console.error('Failed to list Playwright tests:', error?.message ?? error);
   process.exit(1);
@@ -31,13 +42,18 @@ for (const line of output.split('\n')) {
   if (!match) continue;
   const rawFile = match[1].trim();
   if (!rawFile) continue;
-  const normalized = rawFile.includes('/') ? rawFile : path.join('playwright', rawFile);
+  const normalized = rawFile.includes('/')
+    ? rawFile
+    : path.join('playwright', rawFile);
   if (normalized.endsWith('playwright/webPlatformAuth.spec.ts')) continue;
   fileCounts.set(normalized, (fileCounts.get(normalized) ?? 0) + 1);
 }
 
 const entries = Array.from(fileCounts.entries()).sort((a, b) => b[1] - a[1]);
-const shards = Array.from({ length: shardTotal }, () => ({ files: [], count: 0 }));
+const shards = Array.from({ length: shardTotal }, () => ({
+  files: [],
+  count: 0,
+}));
 
 for (const [file, count] of entries) {
   let targetIndex = 0;

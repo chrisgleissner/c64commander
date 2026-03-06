@@ -19,7 +19,9 @@ describe('hvscStateStore', () => {
   beforeEach(() => {
     if (typeof globalThis.localStorage === 'undefined') {
       const store = new Map<string, string>();
-      (globalThis as typeof globalThis & { localStorage?: Storage }).localStorage = {
+      (
+        globalThis as typeof globalThis & { localStorage?: Storage }
+      ).localStorage = {
         getItem: (key: string) => store.get(key) ?? null,
         setItem: (key: string, value: string) => {
           store.set(key, value);
@@ -42,9 +44,13 @@ describe('hvscStateStore', () => {
     const state = loadHvscState();
 
     expect(state.ingestionState).toBe('idle');
-    expect(addLog).toHaveBeenCalledWith('warn', 'Failed to load HVSC state from storage', expect.objectContaining({
-      storageKey: 'c64u_hvsc_state:v1',
-      error: expect.any(String),
-    }));
+    expect(addLog).toHaveBeenCalledWith(
+      'warn',
+      'Failed to load HVSC state from storage',
+      expect.objectContaining({
+        storageKey: 'c64u_hvsc_state:v1',
+        error: expect.any(String),
+      }),
+    );
   });
 });

@@ -40,7 +40,13 @@ const getSectorOffset = (sectorsPerTrack, track, sector) => {
   return (sectorsBeforeTrack + sector) * 256;
 };
 
-const writeDirectoryEntry = (buffer, offset, fileName, startTrack, startSector) => {
+const writeDirectoryEntry = (
+  buffer,
+  offset,
+  fileName,
+  startTrack,
+  startSector,
+) => {
   buffer[offset] = 0x82;
   buffer[offset + 1] = startTrack;
   buffer[offset + 2] = startSector;
@@ -58,20 +64,8 @@ const writeSingleBlockPrgData = (buffer, sectorsPerTrack, track, sector) => {
 
 const createPrg = () => {
   return Buffer.from([
-    0x01,
-    0x08,
-    0x0b,
-    0x08,
-    0x0a,
-    0x00,
-    0x9e,
-    0x32,
-    0x30,
-    0x36,
-    0x31,
-    0x00,
-    0x00,
-    0x00,
+    0x01, 0x08, 0x0b, 0x08, 0x0a, 0x00, 0x9e, 0x32, 0x30, 0x36, 0x31, 0x00,
+    0x00, 0x00,
   ]);
 };
 
@@ -132,7 +126,15 @@ const createCrt = () => {
   return Buffer.concat([header, chipPacket]);
 };
 
-const initializeCbmDirectory = (buffer, sectorsPerTrack, bamTrack, bamSector, directorySector, diskLabel, dosType) => {
+const initializeCbmDirectory = (
+  buffer,
+  sectorsPerTrack,
+  bamTrack,
+  bamSector,
+  directorySector,
+  diskLabel,
+  dosType,
+) => {
   const bamOffset = getSectorOffset(sectorsPerTrack, bamTrack, bamSector);
   buffer[bamOffset] = bamTrack;
   buffer[bamOffset + 1] = directorySector;
@@ -141,7 +143,11 @@ const initializeCbmDirectory = (buffer, sectorsPerTrack, bamTrack, bamSector, di
   toPetsciiPadded('64', 2).copy(buffer, bamOffset + 0xa2);
   toPetsciiPadded(dosType, 2).copy(buffer, bamOffset + 0xa5);
 
-  const directoryOffset = getSectorOffset(sectorsPerTrack, bamTrack, directorySector);
+  const directoryOffset = getSectorOffset(
+    sectorsPerTrack,
+    bamTrack,
+    directorySector,
+  );
   buffer[directoryOffset] = 0x00;
   buffer[directoryOffset + 1] = 0xff;
   writeDirectoryEntry(buffer, directoryOffset + 2, 'DEMO', 1, 0);
@@ -150,7 +156,15 @@ const initializeCbmDirectory = (buffer, sectorsPerTrack, bamTrack, bamSector, di
 const createD64 = () => {
   const sectorCount = D64_TRACKS.reduce((sum, value) => sum + value, 0);
   const buffer = Buffer.alloc(sectorCount * 256, 0x00);
-  initializeCbmDirectory(buffer, D64_TRACKS, 18, 0, 1, 'C64COMMANDER D64', '2A');
+  initializeCbmDirectory(
+    buffer,
+    D64_TRACKS,
+    18,
+    0,
+    1,
+    'C64COMMANDER D64',
+    '2A',
+  );
   writeSingleBlockPrgData(buffer, D64_TRACKS, 1, 0);
   return buffer;
 };
@@ -158,7 +172,15 @@ const createD64 = () => {
 const createD71 = () => {
   const sectorCount = D71_TRACKS.reduce((sum, value) => sum + value, 0);
   const buffer = Buffer.alloc(sectorCount * 256, 0x00);
-  initializeCbmDirectory(buffer, D71_TRACKS, 18, 0, 1, 'C64COMMANDER D71', '2A');
+  initializeCbmDirectory(
+    buffer,
+    D71_TRACKS,
+    18,
+    0,
+    1,
+    'C64COMMANDER D71',
+    '2A',
+  );
 
   const bamSecondSideOffset = getSectorOffset(D71_TRACKS, 53, 0);
   buffer[bamSecondSideOffset] = 53;

@@ -9,9 +9,10 @@
 import { addLog } from '@/lib/logging';
 import { runWithImplicitAction } from '@/lib/tracing/actionTrace';
 
-const startupStartMs = typeof performance !== 'undefined' && Number.isFinite(performance.now())
-  ? performance.now()
-  : Date.now();
+const startupStartMs =
+  typeof performance !== 'undefined' && Number.isFinite(performance.now())
+    ? performance.now()
+    : Date.now();
 
 let startupBootstrapMarked = false;
 let firstMeaningfulInteractionMarked = false;
@@ -19,24 +20,31 @@ let firstMeaningfulInteractionMarked = false;
 const shouldSkipMeaningfulInteraction = (label: string) => {
   const normalized = label.trim().toLowerCase();
   if (!normalized) return false;
-  return normalized === 'diagnostics' || normalized === 'open diagnostics' || normalized.includes('diagnostics');
+  return (
+    normalized === 'diagnostics' ||
+    normalized === 'open diagnostics' ||
+    normalized.includes('diagnostics')
+  );
 };
 
 const elapsedSinceStartupMs = () => {
-  const nowMs = typeof performance !== 'undefined' && Number.isFinite(performance.now())
-    ? performance.now()
-    : Date.now();
+  const nowMs =
+    typeof performance !== 'undefined' && Number.isFinite(performance.now())
+      ? performance.now()
+      : Date.now();
   return Math.max(0, Math.round(nowMs - startupStartMs));
 };
 
 const emitMilestone = (name: string, detail: Record<string, unknown>) => {
   if (typeof window === 'undefined') return;
-  window.dispatchEvent(new CustomEvent('c64u-startup-milestone', {
-    detail: {
-      name,
-      ...detail,
-    },
-  }));
+  window.dispatchEvent(
+    new CustomEvent('c64u-startup-milestone', {
+      detail: {
+        name,
+        ...detail,
+      },
+    }),
+  );
 };
 
 export const markStartupBootstrapComplete = () => {
@@ -45,10 +53,16 @@ export const markStartupBootstrapComplete = () => {
   const elapsedMs = elapsedSinceStartupMs();
   addLog('info', 'Startup bootstrap complete', { elapsedMs });
   emitMilestone('bootstrap-complete', { elapsedMs });
-  void runWithImplicitAction('startup.bootstrap_complete', async () => undefined);
+  void runWithImplicitAction(
+    'startup.bootstrap_complete',
+    async () => undefined,
+  );
 };
 
-export const markFirstMeaningfulInteraction = (action: string, label: string) => {
+export const markFirstMeaningfulInteraction = (
+  action: string,
+  label: string,
+) => {
   if (shouldSkipMeaningfulInteraction(label)) return;
   if (firstMeaningfulInteractionMarked) return;
   firstMeaningfulInteractionMarked = true;
@@ -63,5 +77,8 @@ export const markFirstMeaningfulInteraction = (action: string, label: string) =>
     label,
     elapsedMs,
   });
-  void runWithImplicitAction('startup.first_meaningful_interaction', async () => undefined);
+  void runWithImplicitAction(
+    'startup.first_meaningful_interaction',
+    async () => undefined,
+  );
 };

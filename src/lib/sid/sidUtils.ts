@@ -43,42 +43,42 @@ export type SidTrackSubsong = {
 };
 
 const WINDOWS_1252_EXTENDED: Record<number, number> = {
-  0x80: 0x20AC,
-  0x82: 0x201A,
+  0x80: 0x20ac,
+  0x82: 0x201a,
   0x83: 0x0192,
-  0x84: 0x201E,
+  0x84: 0x201e,
   0x85: 0x2026,
   0x86: 0x2020,
   0x87: 0x2021,
-  0x88: 0x02C6,
+  0x88: 0x02c6,
   0x89: 0x2030,
-  0x8A: 0x0160,
-  0x8B: 0x2039,
-  0x8C: 0x0152,
-  0x8E: 0x017D,
+  0x8a: 0x0160,
+  0x8b: 0x2039,
+  0x8c: 0x0152,
+  0x8e: 0x017d,
   0x91: 0x2018,
   0x92: 0x2019,
-  0x93: 0x201C,
-  0x94: 0x201D,
+  0x93: 0x201c,
+  0x94: 0x201d,
   0x95: 0x2022,
   0x96: 0x2013,
   0x97: 0x2014,
-  0x98: 0x02DC,
+  0x98: 0x02dc,
   0x99: 0x2122,
-  0x9A: 0x0161,
-  0x9B: 0x203A,
-  0x9C: 0x0153,
-  0x9E: 0x017E,
-  0x9F: 0x0178,
+  0x9a: 0x0161,
+  0x9b: 0x203a,
+  0x9c: 0x0153,
+  0x9e: 0x017e,
+  0x9f: 0x0178,
 };
 
 const decodeWindows1252 = (bytes: Uint8Array) => {
   const chars: string[] = [];
   for (const byte of bytes) {
     if (byte === 0x00) break;
-    if (byte >= 0x80 && byte <= 0x9F) {
+    if (byte >= 0x80 && byte <= 0x9f) {
       const mapped = WINDOWS_1252_EXTENDED[byte];
-      chars.push(String.fromCodePoint(mapped ?? 0xFFFD));
+      chars.push(String.fromCodePoint(mapped ?? 0xfffd));
       continue;
     }
     chars.push(String.fromCodePoint(byte));
@@ -102,19 +102,23 @@ const decodeClock = (value: number): SidClock => {
 
 const decodeSidAddressByte = (byte: number): number | null => {
   if (!byte) return null;
-  const address = 0xD000 + (byte << 4);
-  if (address < 0xD420 || address > 0xDFF0) return null;
+  const address = 0xd000 + (byte << 4);
+  if (address < 0xd420 || address > 0xdff0) return null;
   return address;
 };
 
 const getBytes = (buffer: Uint8Array | ArrayBuffer) =>
   buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
 
-export const parseSidHeaderMetadata = (buffer: Uint8Array | ArrayBuffer): SidHeaderMetadata => {
+export const parseSidHeaderMetadata = (
+  buffer: Uint8Array | ArrayBuffer,
+): SidHeaderMetadata => {
   const bytes = getBytes(buffer);
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   if (view.byteLength < 124) {
-    throw new Error(`Invalid SID header: expected at least 124 bytes, got ${view.byteLength}`);
+    throw new Error(
+      `Invalid SID header: expected at least 124 bytes, got ${view.byteLength}`,
+    );
   }
   const magic = String.fromCharCode(
     view.getUint8(0),
@@ -141,20 +145,26 @@ export const parseSidHeaderMetadata = (buffer: Uint8Array | ArrayBuffer): SidHea
   const author = decodeWindows1252(bytes.subarray(54, 86));
   const released = decodeWindows1252(bytes.subarray(86, 118));
 
-  const flags = version >= 2 && view.byteLength >= 120 ? view.getUint16(118, false) : null;
-  const clockBits = flags !== null ? ((flags >> 2) & 0b11) : 0;
-  const sid1ModelBits = flags !== null ? ((flags >> 4) & 0b11) : 0;
-  const sid2ModelBits = flags !== null ? ((flags >> 6) & 0b11) : 0;
-  const sid3ModelBits = flags !== null ? ((flags >> 8) & 0b11) : 0;
-  const sid2Adress = version >= 3 && view.byteLength >= 123 ? view.getUint8(122) : null;
-  const sid3Adress = version >= 4 && view.byteLength >= 124 ? view.getUint8(123) : null;
+  const flags =
+    version >= 2 && view.byteLength >= 120 ? view.getUint16(118, false) : null;
+  const clockBits = flags !== null ? (flags >> 2) & 0b11 : 0;
+  const sid1ModelBits = flags !== null ? (flags >> 4) & 0b11 : 0;
+  const sid2ModelBits = flags !== null ? (flags >> 6) & 0b11 : 0;
+  const sid3ModelBits = flags !== null ? (flags >> 8) & 0b11 : 0;
+  const sid2Adress =
+    version >= 3 && view.byteLength >= 123 ? view.getUint8(122) : null;
+  const sid3Adress =
+    version >= 4 && view.byteLength >= 124 ? view.getUint8(123) : null;
 
-  const sid2Address = sid2Adress !== null ? decodeSidAddressByte(sid2Adress) : null;
-  const sid3Address = sid3Adress !== null ? decodeSidAddressByte(sid3Adress) : null;
+  const sid2Address =
+    sid2Adress !== null ? decodeSidAddressByte(sid2Adress) : null;
+  const sid3Address =
+    sid3Adress !== null ? decodeSidAddressByte(sid3Adress) : null;
 
   const sid2Model = sid2Adress ? decodeSidModel(sid2ModelBits) : null;
   const sid3Model = sid3Adress ? decodeSidModel(sid3ModelBits) : null;
-  const sidChipCount = 1 + Number(Boolean(sid2Adress)) + Number(Boolean(sid3Adress));
+  const sidChipCount =
+    1 + Number(Boolean(sid2Adress)) + Number(Boolean(sid3Adress));
 
   const parserWarnings: string[] = [];
   let rsidValid: boolean | null = null;
@@ -196,9 +206,15 @@ export const parseSidHeaderMetadata = (buffer: Uint8Array | ArrayBuffer): SidHea
   };
 };
 
-export const buildSidTrackSubsongs = (songs: number, startSong: number): SidTrackSubsong[] => {
+export const buildSidTrackSubsongs = (
+  songs: number,
+  startSong: number,
+): SidTrackSubsong[] => {
   const totalSongs = Math.max(1, Math.floor(songs || 1));
-  const defaultSong = Math.min(totalSongs, Math.max(1, Math.floor(startSong || 1)));
+  const defaultSong = Math.min(
+    totalSongs,
+    Math.max(1, Math.floor(startSong || 1)),
+  );
   return Array.from({ length: totalSongs }, (_, index) => {
     const songNr = index + 1;
     return {
@@ -218,16 +234,19 @@ export const createSslPayload = (durationMs: number) => {
     throw new Error('Invalid SID duration: value must be finite milliseconds');
   }
   if (durationMs < 0) {
-    throw new Error('Invalid SID duration: value must be non-negative milliseconds');
+    throw new Error(
+      'Invalid SID duration: value must be non-negative milliseconds',
+    );
   }
   const totalSeconds = Math.floor(durationMs / 1000);
-  const maxSeconds = (99 * 60) + 59;
+  const maxSeconds = 99 * 60 + 59;
   if (totalSeconds > maxSeconds) {
     throw new Error('Invalid SID duration: maximum supported value is 99:59');
   }
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
-  const bcd = (value: number) => ((Math.floor(value / 10) & 0xf) << 4) | (value % 10);
+  const bcd = (value: number) =>
+    ((Math.floor(value / 10) & 0xf) << 4) | (value % 10);
   return new Uint8Array([bcd(minutes), bcd(seconds)]);
 };
 

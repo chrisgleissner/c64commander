@@ -18,14 +18,18 @@ describe('resolveToggleOption', () => {
 
   it('resolves joystick swap options to swapped/normal values', () => {
     const options = ['Normal', 'Swapped'];
-    expect(resolveToggleOption(options, true, {
-      enabled: ['Swapped', 'Swap'],
-      disabled: ['Normal'],
-    })).toBe('Swapped');
-    expect(resolveToggleOption(options, false, {
-      enabled: ['Swapped', 'Swap'],
-      disabled: ['Normal'],
-    })).toBe('Normal');
+    expect(
+      resolveToggleOption(options, true, {
+        enabled: ['Swapped', 'Swap'],
+        disabled: ['Normal'],
+      }),
+    ).toBe('Swapped');
+    expect(
+      resolveToggleOption(options, false, {
+        enabled: ['Swapped', 'Swap'],
+        disabled: ['Normal'],
+      }),
+    ).toBe('Normal');
   });
 
   it('falls back to first/last provided option when no token matches', () => {

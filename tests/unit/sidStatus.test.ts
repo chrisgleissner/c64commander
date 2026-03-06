@@ -25,6 +25,11 @@ describe('sid status mapping', () => {
       'UltiSID 1',
       'UltiSID 2',
     ]);
-    expect(entries.map((entry) => entry.enabled)).toEqual([true, false, undefined, true]);
+    expect(entries.map((entry) => entry.enabled)).toEqual([
+      true,
+      false,
+      undefined,
+      true,
+    ]);
   });
 });

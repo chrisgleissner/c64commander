@@ -14,10 +14,10 @@ No deviation from this sequence. No shortcuts.
 
 ## INPUTS
 
-| Input | Path | PRA-ID range | Severity terms used | Effort terms used | Issue count |
-|-------|------|-------------|---------------------|-------------------|-------------|
-| Review A | `doc/research/review-5/review-5a.md` | PRA-001 – PRA-023 | Blocker, Critical, Major, Minor | S, M, L | 23 |
-| Review B | `doc/research/review-5/review-5b.md` | PRA-001 – PRA-033 | Critical, Major, Minor, Trivial | S, M, L | 33 |
+| Input    | Path                                 | PRA-ID range      | Severity terms used             | Effort terms used | Issue count |
+| -------- | ------------------------------------ | ----------------- | ------------------------------- | ----------------- | ----------- |
+| Review A | `doc/research/review-5/review-5a.md` | PRA-001 – PRA-023 | Blocker, Critical, Major, Minor | S, M, L           | 23          |
+| Review B | `doc/research/review-5/review-5b.md` | PRA-001 – PRA-033 | Critical, Major, Minor, Trivial | S, M, L           | 33          |
 
 Both reviews target the same commit (`cf7d0826`), same date (2026-02-28), same repository.
 
@@ -39,7 +39,7 @@ Do not modify any source code, test, CI config, manifest, lockfile, or build scr
 
 ### Step 1: Build a cross-reference matrix
 
-Read both documents end-to-end. For every PRA-* entry in each document, extract:
+Read both documents end-to-end. For every PRA-\* entry in each document, extract:
 
 - Source (A or B)
 - PRA-ID
@@ -58,59 +58,59 @@ Produce a working cross-reference table (not included in the final output file�
 
 Compare every pair (one from A, one from B) by root cause. Classify each pair as:
 
-| Classification | Definition | Action |
-|----------------|------------|--------|
-| **Exact duplicate** | Same root cause, same evidence paths, same scope | Merge into one ISSUE. Retain both PRA-IDs as metadata. Use the more detailed description. |
-| **Partial overlap** | Same theme or root cause but different scope or different evidence | Merge into one ISSUE if the scopes are subsets of one another. Otherwise, keep as separate ISSUEs with a `Dependencies` or `Notes on Reconciliation` cross-reference. |
-| **Unique** | Appears in only one document | Carry forward as-is into a new ISSUE. |
+| Classification                 | Definition                                                                              | Action                                                                                                                                                                                                                           |
+| ------------------------------ | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Exact duplicate**            | Same root cause, same evidence paths, same scope                                        | Merge into one ISSUE. Retain both PRA-IDs as metadata. Use the more detailed description.                                                                                                                                        |
+| **Partial overlap**            | Same theme or root cause but different scope or different evidence                      | Merge into one ISSUE if the scopes are subsets of one another. Otherwise, keep as separate ISSUEs with a `Dependencies` or `Notes on Reconciliation` cross-reference.                                                            |
+| **Unique**                     | Appears in only one document                                                            | Carry forward as-is into a new ISSUE.                                                                                                                                                                                            |
 | **Conflicting recommendation** | Same root problem but different fix strategies or contradictory severity/effort ratings | Merge into one ISSUE. Document the conflict in `Notes on Reconciliation`. Choose the more conservative (higher) severity. For effort, choose the higher estimate unless evidence justifies the lower one—document the rationale. |
 
 Known ID collisions to resolve (non-exhaustive—verify all 56 entries):
 
-| Review A PRA-ID | Review A Title | Review B PRA-ID | Review B Title | Expected classification |
-|-----------------|---------------|-----------------|---------------|------------------------|
-| PRA-001 (A) | Repository-local signing secret pattern | — | No direct equivalent in B | Unique to A |
-| PRA-002 (A) | Android cleartext globally enabled | PRA-007 (B) | Android cleartext globally enabled | Exact or partial overlap—verify scope and severity |
-| PRA-003 (A) | Plain FTP transport | — | No direct equivalent in B (FTP covered tangentially in PRA-009 B as basic-ftp CVE) | Likely unique to A—transport-layer concern vs dependency CVE |
-| PRA-004 (A) | HTTP X-Password credential path | — | No direct equivalent in B (mentioned in narrative but no distinct PRA) | Unique to A |
-| PRA-005 (A) | Android backup policy gap | PRA-018 (B) | No Android backup rules | Exact or partial overlap |
-| PRA-006 (A) | Android diagnostics broadcast leakage | — | No direct equivalent in B | Unique to A |
-| PRA-007 (A) | CI token permissions too broad | PRA-003 (B) | Workflow permissions too broad on PRs | Exact or partial overlap—verify severity conflict (A: Major, B: Minor) |
-| PRA-008 (A) | Actions pinned by mutable tags | PRA-001 (B) | Google Play upload not SHA-pinned | Partial overlap—A is general, B is specific to one action |
-| PRA-009 (A) | curl\|bash Maestro install in CI | PRA-002 (B) | Maestro CLI curl pipe install | Exact duplicate |
-| PRA-010 (A) | Dependabot not configured | PRA-004 (B) | No dependency update automation | Exact duplicate |
-| PRA-011 (A) | Critical basic-ftp CVE | PRA-009 (B) | Critical basic-ftp CVE | Exact duplicate |
-| PRA-012 (A) | iOS deployment/version mismatch | PRA-021 (B) | iOS deployment target mismatch; PRA-023 (B) | iOS version not CI-managed | Partial overlap—A combines two concerns that B splits |
-| PRA-013 (A) | Android release minification disabled | PRA-017 (B) | Android release minification off | Exact duplicate—verify severity conflict (A: Major, B: Major) and effort conflict (A: M, B: S) |
-| PRA-014 (A) | Android ABI packaging includes emulator ABIs | — | No equivalent in B | Unique to A |
-| PRA-015 (A) | Web no-store caching everywhere | PRA-008 (B) | Web Cache-Control no-store on all | Exact duplicate—verify severity conflict (A: Major, B: Minor) |
-| PRA-016 (A) | Large first-load web bundle | — | No equivalent in B (mentioned in narrative) | Unique to A |
-| PRA-017 (A) | Browser zoom disabled | — | No equivalent in B (mentioned in narrative, touch targets PRA-016 B is related but distinct) | Unique to A |
-| PRA-018 (A) | Localization readiness gap | PRA-015 (B) | No localization infrastructure | Exact duplicate—verify severity conflict (A: Major, B: Minor) |
-| PRA-019 (A) | Data reset fallback without migration | PRA-012 (B) | No incremental data migration | Exact duplicate |
-| PRA-020 (A) | Coverage policy mismatch | — | No equivalent in B | Unique to A |
-| PRA-021 (A) | License metadata mismatch | PRA-029 (B) | README license badge mismatch | Exact duplicate—verify severity conflict (A: Minor, B: Major) |
-| PRA-022 (A) | Android build verification limitation | — | No equivalent in B (B succeeded at building Android) | Unique to A—may be N/A given B's evidence |
-| PRA-023 (A) | iOS local build limitation on Linux | — | No equivalent in B | Unique to A |
-| — | — | PRA-005 (B) | No CODEOWNERS file | Unique to B |
-| — | — | PRA-006 (B) | No web server security headers | Unique to B |
-| — | — | PRA-010 (B) | Rollup path traversal (dev dep) | Unique to B |
-| — | — | PRA-011 (B) | Gradle and AGP significantly outdated | Unique to B |
-| — | — | PRA-013 (B) | No remote crash reporting | Unique to B |
-| — | — | PRA-014 (B) | No automated a11y testing | Unique to B |
-| — | — | PRA-016 (B) | Touch targets below 44px | Unique to B |
-| — | — | PRA-019 (B) | Android JVM tests fail on Java 25 | Unique to B |
-| — | — | PRA-020 (B) | Deprecated MediaSession APIs | Unique to B |
-| — | — | PRA-022 (B) | No iOS audio background mode | Unique to B |
-| — | — | PRA-024 (B) | NativePlugins.swift >1000 lines | Unique to B |
-| — | — | PRA-025 (B) | No iOS entitlements file | Unique to B |
-| — | — | PRA-026 (B) | No service worker for PWA | Unique to B |
-| — | — | PRA-027 (B) | Incomplete PWA manifest | Unique to B |
-| — | — | PRA-028 (B) | Web server single 843-line file | Unique to B |
-| — | — | PRA-030 (B) | No SPDX license identifier | Unique to B |
-| — | — | PRA-031 (B) | No Commodore trademark disclaimer | Unique to B |
-| — | — | PRA-032 (B) | No iOS native unit tests | Unique to B |
-| — | — | PRA-033 (B) | E2E tests skip native runtime | Unique to B |
+| Review A PRA-ID | Review A Title                               | Review B PRA-ID | Review B Title                                                                               | Expected classification                                                                        |
+| --------------- | -------------------------------------------- | --------------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| PRA-001 (A)     | Repository-local signing secret pattern      | —               | No direct equivalent in B                                                                    | Unique to A                                                                                    |
+| PRA-002 (A)     | Android cleartext globally enabled           | PRA-007 (B)     | Android cleartext globally enabled                                                           | Exact or partial overlap—verify scope and severity                                             |
+| PRA-003 (A)     | Plain FTP transport                          | —               | No direct equivalent in B (FTP covered tangentially in PRA-009 B as basic-ftp CVE)           | Likely unique to A—transport-layer concern vs dependency CVE                                   |
+| PRA-004 (A)     | HTTP X-Password credential path              | —               | No direct equivalent in B (mentioned in narrative but no distinct PRA)                       | Unique to A                                                                                    |
+| PRA-005 (A)     | Android backup policy gap                    | PRA-018 (B)     | No Android backup rules                                                                      | Exact or partial overlap                                                                       |
+| PRA-006 (A)     | Android diagnostics broadcast leakage        | —               | No direct equivalent in B                                                                    | Unique to A                                                                                    |
+| PRA-007 (A)     | CI token permissions too broad               | PRA-003 (B)     | Workflow permissions too broad on PRs                                                        | Exact or partial overlap—verify severity conflict (A: Major, B: Minor)                         |
+| PRA-008 (A)     | Actions pinned by mutable tags               | PRA-001 (B)     | Google Play upload not SHA-pinned                                                            | Partial overlap—A is general, B is specific to one action                                      |
+| PRA-009 (A)     | curl\|bash Maestro install in CI             | PRA-002 (B)     | Maestro CLI curl pipe install                                                                | Exact duplicate                                                                                |
+| PRA-010 (A)     | Dependabot not configured                    | PRA-004 (B)     | No dependency update automation                                                              | Exact duplicate                                                                                |
+| PRA-011 (A)     | Critical basic-ftp CVE                       | PRA-009 (B)     | Critical basic-ftp CVE                                                                       | Exact duplicate                                                                                |
+| PRA-012 (A)     | iOS deployment/version mismatch              | PRA-021 (B)     | iOS deployment target mismatch; PRA-023 (B)                                                  | iOS version not CI-managed                                                                     | Partial overlap—A combines two concerns that B splits |
+| PRA-013 (A)     | Android release minification disabled        | PRA-017 (B)     | Android release minification off                                                             | Exact duplicate—verify severity conflict (A: Major, B: Major) and effort conflict (A: M, B: S) |
+| PRA-014 (A)     | Android ABI packaging includes emulator ABIs | —               | No equivalent in B                                                                           | Unique to A                                                                                    |
+| PRA-015 (A)     | Web no-store caching everywhere              | PRA-008 (B)     | Web Cache-Control no-store on all                                                            | Exact duplicate—verify severity conflict (A: Major, B: Minor)                                  |
+| PRA-016 (A)     | Large first-load web bundle                  | —               | No equivalent in B (mentioned in narrative)                                                  | Unique to A                                                                                    |
+| PRA-017 (A)     | Browser zoom disabled                        | —               | No equivalent in B (mentioned in narrative, touch targets PRA-016 B is related but distinct) | Unique to A                                                                                    |
+| PRA-018 (A)     | Localization readiness gap                   | PRA-015 (B)     | No localization infrastructure                                                               | Exact duplicate—verify severity conflict (A: Major, B: Minor)                                  |
+| PRA-019 (A)     | Data reset fallback without migration        | PRA-012 (B)     | No incremental data migration                                                                | Exact duplicate                                                                                |
+| PRA-020 (A)     | Coverage policy mismatch                     | —               | No equivalent in B                                                                           | Unique to A                                                                                    |
+| PRA-021 (A)     | License metadata mismatch                    | PRA-029 (B)     | README license badge mismatch                                                                | Exact duplicate—verify severity conflict (A: Minor, B: Major)                                  |
+| PRA-022 (A)     | Android build verification limitation        | —               | No equivalent in B (B succeeded at building Android)                                         | Unique to A—may be N/A given B's evidence                                                      |
+| PRA-023 (A)     | iOS local build limitation on Linux          | —               | No equivalent in B                                                                           | Unique to A                                                                                    |
+| —               | —                                            | PRA-005 (B)     | No CODEOWNERS file                                                                           | Unique to B                                                                                    |
+| —               | —                                            | PRA-006 (B)     | No web server security headers                                                               | Unique to B                                                                                    |
+| —               | —                                            | PRA-010 (B)     | Rollup path traversal (dev dep)                                                              | Unique to B                                                                                    |
+| —               | —                                            | PRA-011 (B)     | Gradle and AGP significantly outdated                                                        | Unique to B                                                                                    |
+| —               | —                                            | PRA-013 (B)     | No remote crash reporting                                                                    | Unique to B                                                                                    |
+| —               | —                                            | PRA-014 (B)     | No automated a11y testing                                                                    | Unique to B                                                                                    |
+| —               | —                                            | PRA-016 (B)     | Touch targets below 44px                                                                     | Unique to B                                                                                    |
+| —               | —                                            | PRA-019 (B)     | Android JVM tests fail on Java 25                                                            | Unique to B                                                                                    |
+| —               | —                                            | PRA-020 (B)     | Deprecated MediaSession APIs                                                                 | Unique to B                                                                                    |
+| —               | —                                            | PRA-022 (B)     | No iOS audio background mode                                                                 | Unique to B                                                                                    |
+| —               | —                                            | PRA-024 (B)     | NativePlugins.swift >1000 lines                                                              | Unique to B                                                                                    |
+| —               | —                                            | PRA-025 (B)     | No iOS entitlements file                                                                     | Unique to B                                                                                    |
+| —               | —                                            | PRA-026 (B)     | No service worker for PWA                                                                    | Unique to B                                                                                    |
+| —               | —                                            | PRA-027 (B)     | Incomplete PWA manifest                                                                      | Unique to B                                                                                    |
+| —               | —                                            | PRA-028 (B)     | Web server single 843-line file                                                              | Unique to B                                                                                    |
+| —               | —                                            | PRA-030 (B)     | No SPDX license identifier                                                                   | Unique to B                                                                                    |
+| —               | —                                            | PRA-031 (B)     | No Commodore trademark disclaimer                                                            | Unique to B                                                                                    |
+| —               | —                                            | PRA-032 (B)     | No iOS native unit tests                                                                     | Unique to B                                                                                    |
+| —               | —                                            | PRA-033 (B)     | E2E tests skip native runtime                                                                | Unique to B                                                                                    |
 
 This table is a starting point. You must verify every row by reading the full issue entry in both documents. If your analysis disagrees with the "Expected classification" column, document why and use your determination.
 
@@ -118,13 +118,13 @@ This table is a starting point. You must verify every row by reading the full is
 
 Map every issue to exactly one severity level using this unified taxonomy:
 
-| Unified Severity | Weight | Mapping from Review A | Mapping from Review B |
-|------------------|--------|-----------------------|-----------------------|
-| Blocker | 5 | Blocker | — (not used in B; if a B issue warrants Blocker based on evidence, promote and document) |
-| Critical | 4 | Critical | Critical |
-| Major | 3 | Major | Major |
-| Minor | 2 | Minor | Minor |
-| Trivial | 1 | — (not used in A; if an A issue warrants Trivial based on evidence, demote and document) | Trivial |
+| Unified Severity | Weight | Mapping from Review A                                                                    | Mapping from Review B                                                                    |
+| ---------------- | ------ | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Blocker          | 5      | Blocker                                                                                  | — (not used in B; if a B issue warrants Blocker based on evidence, promote and document) |
+| Critical         | 4      | Critical                                                                                 | Critical                                                                                 |
+| Major            | 3      | Major                                                                                    | Major                                                                                    |
+| Minor            | 2      | Minor                                                                                    | Minor                                                                                    |
+| Trivial          | 1      | — (not used in A; if an A issue warrants Trivial based on evidence, demote and document) | Trivial                                                                                  |
 
 When two sources assign **different severities** to the same root problem:
 
@@ -135,13 +135,13 @@ When two sources assign **different severities** to the same root problem:
 
 Map every issue to exactly one effort level:
 
-| Unified Effort | Weight | Definition |
-|----------------|--------|------------|
-| XS | 1 | < 1 hour, config-only or one-line change |
-| S | 2 | ≤ 0.5 day |
-| M | 3 | 0.5–2 days |
-| L | 4 | 2–5 days |
-| XL | 5 | > 5 days |
+| Unified Effort | Weight | Definition                               |
+| -------------- | ------ | ---------------------------------------- |
+| XS             | 1      | < 1 hour, config-only or one-line change |
+| S              | 2      | ≤ 0.5 day                                |
+| M              | 3      | 0.5–2 days                               |
+| L              | 4      | 2–5 days                                 |
+| XL             | 5      | > 5 days                                 |
 
 When two sources assign different efforts to the same issue, choose the higher unless the lower-effort source provides a specific implementation path that credibly achieves the fix in less time. Document the decision.
 
@@ -157,6 +157,7 @@ When two sources assign different efforts to the same issue, choose the higher u
 Assign new sequential identifiers: `ISSUE-001`, `ISSUE-002`, …, `ISSUE-NNN`.
 
 Rules:
+
 - IDs are assigned in descending priority score order (computed in Step 7).
 - Original PRA-IDs are preserved **only** as metadata (`Original IDs` field).
 - No ISSUE-ID may be reused or skipped.
@@ -170,6 +171,7 @@ Priority Score = (Severity Weight × Impact Weight) ÷ Effort Weight
 ```
 
 Where:
+
 - Severity Weight: Blocker=5, Critical=4, Major=3, Minor=2, Trivial=1
 - Impact Weight: High=3, Medium=2, Low=1
 - Effort Weight: XS=1, S=2, M=3, L=4, XL=5
@@ -208,34 +210,51 @@ Commit: cf7d0826a429802524b6ee86beb73e81449f4e04
 Sources: review-5a.md, review-5b.md
 
 ## Consolidation Method
+
 <Describe the merge process, conflict resolution principles, and any deviations from this prompt.>
 
 ## Executive Summary
+
 <Unified shipping recommendation. If A says "Do not ship" and B says "Ship with mitigations", resolve the conflict by evaluating the consolidated Blocker/Critical issue set. State the recommendation with explicit conditions.>
 
 ## Priority Table
+
 <All issues sorted by Priority Score descending. Columns: Rank, ISSUE-ID, Title, Category, Severity, Impact, Likelihood, Effort, Priority Score, Source.>
 
 ## Top 10 Highest Priority Issues
+
 <Subset of priority table with one paragraph per issue explaining why it ranks highest.>
 
 ## Low-Effort / High-Impact Subset
+
 <All issues where Effort ∈ {XS, S} AND (Severity ∈ {Blocker, Critical} OR Impact = High). Table format.>
 
 ## Issue Register
 
 ### 1. Security
+
 ### 2. Supply Chain
+
 ### 3. CI/CD
+
 ### 4. Android
+
 ### 5. iOS
+
 ### 6. Web
+
 ### 7. Data Integrity
+
 ### 8. Performance
+
 ### 9. Observability
+
 ### 10. UX & Accessibility
+
 ### 11. Testing
+
 ### 12. Legal & Licensing
+
 ### 13. Architecture & Maintainability
 
 <Within each category, issues sorted by Priority Score descending. Each issue uses this exact format:>
@@ -260,12 +279,15 @@ Sources: review-5a.md, review-5b.md
 - **Notes on Reconciliation:** <conflicts between A and B for this issue, decisions made, rationale—or "No conflicts" if clean merge>
 
 ## Reconciliation Log
+
 <A complete table of every conflict encountered and how it was resolved. Columns: ISSUE-ID, Conflict Type, Review A Position, Review B Position, Resolution, Rationale.>
 
 ## Effort-Impact Matrix
+
 <2×2 matrix (Low Effort / High Effort vs High Impact / Low Impact) listing ISSUE-IDs in each quadrant.>
 
 ## Coverage Checklist
+
 <Same structure as review-5a section 18, confirming all inspection areas are covered.>
 ```
 
@@ -273,8 +295,8 @@ Sources: review-5a.md, review-5b.md
 
 Before moving to Phase 1, verify:
 
-1. Every PRA-* from Review A appears in exactly one ISSUE entry's `Original IDs`.
-2. Every PRA-* from Review B appears in exactly one ISSUE entry's `Original IDs`.
+1. Every PRA-\* from Review A appears in exactly one ISSUE entry's `Original IDs`.
+2. Every PRA-\* from Review B appears in exactly one ISSUE entry's `Original IDs`.
 3. No ISSUE-ID is duplicated.
 4. ISSUE-IDs are sequential with no gaps.
 5. Every issue has exactly one category.
@@ -307,23 +329,29 @@ Source: doc/research/review-5/review-5.md
 Created: <date>
 
 ## Phase 0 — Precondition & Safety Controls
+
 <Tasks that establish the safety net before any production changes.
 Examples: secret scanning, backup verification, CI dry-run.>
 
 ## Phase 1 — Critical & Blocker Mitigation
+
 <All issues with Severity ∈ {Blocker, Critical}.
 Plus any issue with Priority Score in the top 10 that has Effort ∈ {XS, S}.>
 
 ## Phase 2 — Major Risk Reduction
+
 <All remaining Major-severity issues, sorted by Priority Score.>
 
 ## Phase 3 — Structural Improvements
+
 <Architecture, maintainability, and testing infrastructure issues.>
 
 ## Phase 4 — Performance & UX Enhancements
+
 <Performance, UX, accessibility, and localization issues.>
 
 ## Phase 5 — Governance & Long-Term Hardening
+
 <Legal, observability, and forward-looking items.>
 ```
 
@@ -354,14 +382,14 @@ Every task must use this exact format:
 
 ### Phase assignment rules
 
-| Phase | Inclusion criteria |
-|-------|-------------------|
-| 0 | Safety controls and preconditions that must exist before any production change. |
-| 1 | Severity ∈ {Blocker, Critical} OR (Priority Score in top 10 AND Effort ∈ {XS, S}). |
-| 2 | Severity = Major AND not already in Phase 1. |
-| 3 | Category ∈ {Architecture & Maintainability, Testing} AND Severity ∈ {Minor, Trivial}. |
-| 4 | Category ∈ {Performance, UX & Accessibility} AND Severity ∈ {Minor, Trivial}. |
-| 5 | Everything else not assigned to Phases 0–4. |
+| Phase | Inclusion criteria                                                                    |
+| ----- | ------------------------------------------------------------------------------------- |
+| 0     | Safety controls and preconditions that must exist before any production change.       |
+| 1     | Severity ∈ {Blocker, Critical} OR (Priority Score in top 10 AND Effort ∈ {XS, S}).    |
+| 2     | Severity = Major AND not already in Phase 1.                                          |
+| 3     | Category ∈ {Architecture & Maintainability, Testing} AND Severity ∈ {Minor, Trivial}. |
+| 4     | Category ∈ {Performance, UX & Accessibility} AND Severity ∈ {Minor, Trivial}.         |
+| 5     | Everything else not assigned to Phases 0–4.                                           |
 
 If an issue's phase assignment is ambiguous, assign it to the earlier phase.
 
@@ -403,6 +431,7 @@ After both `review-5.md` and `ROLLOUT-PLAN.md` are created and self-checked:
 ### Blocker handling
 
 If a task requires:
+
 - Network access not available in the sandbox → Document as blocked, propose offline mitigation.
 - macOS/Xcode → Document as blocked, confirm CI handles it.
 - Secret material → Document as blocked, describe what the secret holder must do.

@@ -6,7 +6,11 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { TraceContextSnapshot, TraceDeviceContext, TracePlaybackContext } from '@/lib/tracing/types';
+import type {
+  TraceContextSnapshot,
+  TraceDeviceContext,
+  TracePlaybackContext,
+} from '@/lib/tracing/types';
 import { getPlatform } from '@/lib/native/platform';
 
 const defaultSnapshot: TraceContextSnapshot = {
@@ -41,7 +45,9 @@ export const setTraceFeatureFlags = (flags: Record<string, boolean>) => {
   emit();
 };
 
-export const setTracePlaybackContext = (playback: TracePlaybackContext | null) => {
+export const setTracePlaybackContext = (
+  playback: TracePlaybackContext | null,
+) => {
   snapshot = { ...snapshot, playback };
   emit();
 };
@@ -51,7 +57,9 @@ export const setTraceDeviceContext = (device: TraceDeviceContext | null) => {
   emit();
 };
 
-export const subscribeTraceContext = (listener: (next: TraceContextSnapshot) => void) => {
+export const subscribeTraceContext = (
+  listener: (next: TraceContextSnapshot) => void,
+) => {
   listeners.add(listener);
   listener(snapshot);
   return () => listeners.delete(listener);

@@ -14,12 +14,13 @@ const probeEnv = 'VITE_ENABLE_TEST_PROBES=1 ';
 const skipBuild = process.env.PLAYWRIGHT_SKIP_BUILD === '1';
 const explicitWorkers = process.env.PLAYWRIGHT_WORKERS?.trim();
 const parsedWorkers =
-  explicitWorkers && /^[0-9]+$/.test(explicitWorkers) ? Number(explicitWorkers) : undefined;
+  explicitWorkers && /^[0-9]+$/.test(explicitWorkers)
+    ? Number(explicitWorkers)
+    : undefined;
 const serverPort = Number(process.env.PLAYWRIGHT_PORT ?? '4173');
 const cpuCount = os.cpus().length;
-const defaultWorkers = process.env.CI === 'true'
-  ? Math.min(4, Math.max(1, cpuCount))
-  : 1;
+const defaultWorkers =
+  process.env.CI === 'true' ? Math.min(4, Math.max(1, cpuCount)) : 1;
 const resolvedWorkers = parsedWorkers ?? defaultWorkers;
 const previewCommand = `${coverageEnv}${probeEnv}npm run preview -- --host 127.0.0.1 --port ${serverPort}`;
 const buildAndPreviewCommand = `${coverageEnv}${probeEnv}npm run build && ${previewCommand}`;
@@ -66,7 +67,8 @@ const getActiveProjects = () => {
   return projects.length > 0 ? projects : [phoneProject];
 };
 
-const outputDir = process.env.PLAYWRIGHT_OUTPUT_DIR || 'test-results/playwright';
+const outputDir =
+  process.env.PLAYWRIGHT_OUTPUT_DIR || 'test-results/playwright';
 const reportDir = process.env.PLAYWRIGHT_REPORT_DIR || 'playwright-report';
 
 export default defineConfig({
@@ -79,10 +81,7 @@ export default defineConfig({
   timeout: 90000,
   expect: { timeout: 10000 },
   globalTeardown: './playwright/global-teardown-coverage.ts',
-  reporter: [
-    ['list'],
-    ['html', { outputFolder: reportDir, open: 'never' }],
-  ],
+  reporter: [['list'], ['html', { outputFolder: reportDir, open: 'never' }]],
   projects: getActiveProjects(),
   use: {
     baseURL: `http://127.0.0.1:${serverPort}`,
@@ -95,7 +94,8 @@ export default defineConfig({
   webServer: {
     command: webServerCommand,
     url: `http://127.0.0.1:${serverPort}`,
-    reuseExistingServer: process.env.PLAYWRIGHT_REUSE_SERVER === '1' && process.env.CI === 'true',
+    reuseExistingServer:
+      process.env.PLAYWRIGHT_REUSE_SERVER === '1' && process.env.CI === 'true',
     timeout: 120000,
   },
 });

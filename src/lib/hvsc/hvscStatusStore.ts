@@ -64,7 +64,8 @@ export const loadHvscStatusSummary = (): HvscStatusSummary => {
   if (!raw) return getDefaultHvscStatusSummary();
   try {
     const parsed = JSON.parse(raw) as HvscStatusSummary;
-    if (!parsed?.download || !parsed?.extraction) return getDefaultHvscStatusSummary();
+    if (!parsed?.download || !parsed?.extraction)
+      return getDefaultHvscStatusSummary();
     return parsed;
   } catch (error) {
     addLog('warn', 'Failed to load HVSC status summary', {
@@ -93,10 +94,22 @@ const extractionStages = new Set([
   'sid_metadata_parsing',
 ]);
 
-const resolveFailureCategory = (event: HvscProgressEvent, lastStage?: string | null): HvscFailureCategory => {
-  const details = `${event.errorType ?? ''} ${event.errorCause ?? ''}`.toLowerCase();
-  if (/timeout|network|socket|host|dns|connection|ssl|refused|reset/.test(details)) return 'network';
-  if (/disk|space|permission|storage|file|io|not found|readonly|denied|enospc|eacces/.test(details)) return 'storage';
+const resolveFailureCategory = (
+  event: HvscProgressEvent,
+  lastStage?: string | null,
+): HvscFailureCategory => {
+  const details =
+    `${event.errorType ?? ''} ${event.errorCause ?? ''}`.toLowerCase();
+  if (
+    /timeout|network|socket|host|dns|connection|ssl|refused|reset/.test(details)
+  )
+    return 'network';
+  if (
+    /disk|space|permission|storage|file|io|not found|readonly|denied|enospc|eacces/.test(
+      details,
+    )
+  )
+    return 'storage';
   if (lastStage === 'download') return 'download';
   if (lastStage && extractionStages.has(lastStage)) return 'extraction';
   return 'unknown';
@@ -109,16 +122,16 @@ export const applyHvscProgressEventToSummary = (
 ) => {
   const now = new Date().toISOString();
   const isDownloadComplete =
-    event.stage === 'download'
-    && (
-      (typeof event.percent === 'number' && event.percent >= 100)
-      || (typeof event.downloadedBytes === 'number'
-        && typeof event.totalBytes === 'number'
-        && event.totalBytes > 0
-        && event.downloadedBytes >= event.totalBytes)
-    );
+    event.stage === 'download' &&
+    ((typeof event.percent === 'number' && event.percent >= 100) ||
+      (typeof event.downloadedBytes === 'number' &&
+        typeof event.totalBytes === 'number' &&
+        event.totalBytes > 0 &&
+        event.downloadedBytes >= event.totalBytes));
   if (event.stage === 'download') {
-    const finishedAt = isDownloadComplete ? (summary.download.finishedAt ?? now) : summary.download.finishedAt ?? null;
+    const finishedAt = isDownloadComplete
+      ? (summary.download.finishedAt ?? now)
+      : (summary.download.finishedAt ?? null);
     return {
       ...summary,
       download: {
@@ -127,10 +140,14 @@ export const applyHvscProgressEventToSummary = (
         startedAt: summary.download.startedAt ?? now,
         finishedAt,
         durationMs: event.elapsedTimeMs ?? summary.download.durationMs ?? null,
-        sizeBytes: event.totalBytes
-          ?? (isDownloadComplete ? event.downloadedBytes : summary.download.sizeBytes)
-          ?? null,
-        downloadedBytes: event.downloadedBytes ?? summary.download.downloadedBytes ?? null,
+        sizeBytes:
+          event.totalBytes ??
+          (isDownloadComplete
+            ? event.downloadedBytes
+            : summary.download.sizeBytes) ??
+          null,
+        downloadedBytes:
+          event.downloadedBytes ?? summary.download.downloadedBytes ?? null,
         totalBytes: event.totalBytes ?? summary.download.totalBytes ?? null,
         errorCategory: null,
         errorMessage: null,
@@ -142,19 +159,22 @@ export const applyHvscProgressEventToSummary = (
   if (extractionStages.has(event.stage)) {
     return {
       ...summary,
-      download: summary.download.status === 'in-progress'
-        ? {
-          ...summary.download,
-          status: 'success',
-          finishedAt: summary.download.finishedAt ?? now,
-        }
-        : summary.download,
+      download:
+        summary.download.status === 'in-progress'
+          ? {
+              ...summary.download,
+              status: 'success',
+              finishedAt: summary.download.finishedAt ?? now,
+            }
+          : summary.download,
       extraction: {
         ...summary.extraction,
         status: 'in-progress',
         startedAt: summary.extraction.startedAt ?? now,
-        durationMs: event.elapsedTimeMs ?? summary.extraction.durationMs ?? null,
-        filesExtracted: event.processedCount ?? summary.extraction.filesExtracted ?? null,
+        durationMs:
+          event.elapsedTimeMs ?? summary.extraction.durationMs ?? null,
+        filesExtracted:
+          event.processedCount ?? summary.extraction.filesExtracted ?? null,
         totalFiles: event.totalCount ?? summary.extraction.totalFiles ?? null,
         errorCategory: null,
         errorMessage: null,
@@ -167,12 +187,18 @@ export const applyHvscProgressEventToSummary = (
       ...summary,
       download: {
         ...summary.download,
-        status: summary.download.status === 'success' ? summary.download.status : 'success',
+        status:
+          summary.download.status === 'success'
+            ? summary.download.status
+            : 'success',
         finishedAt: summary.download.finishedAt ?? now,
       },
       extraction: {
         ...summary.extraction,
-        status: summary.extraction.status === 'success' ? summary.extraction.status : 'success',
+        status:
+          summary.extraction.status === 'success'
+            ? summary.extraction.status
+            : 'success',
         finishedAt: summary.extraction.finishedAt ?? now,
       },
       lastUpdatedAt: now,

@@ -7,7 +7,10 @@
  */
 
 import { loadDebugLoggingEnabled } from '@/lib/config/appSettings';
-import { redactExportValue, redactExportText } from '@/lib/diagnostics/exportRedaction';
+import {
+  redactExportValue,
+  redactExportText,
+} from '@/lib/diagnostics/exportRedaction';
 import { formatLocalTime } from '@/lib/diagnostics/timeFormat';
 import { shouldSuppressDiagnosticsSideEffects } from '@/lib/diagnostics/diagnosticsOverlayState';
 
@@ -29,7 +32,9 @@ const MAX_LOGS = 500;
 let externalLogs: LogEntry[] = [];
 
 const buildId = () =>
-  (typeof crypto !== 'undefined' && 'randomUUID' in crypto && crypto.randomUUID()) ||
+  (typeof crypto !== 'undefined' &&
+    'randomUUID' in crypto &&
+    crypto.randomUUID()) ||
   `${Date.now()}-${Math.round(Math.random() * 1e6)}`;
 
 const readLogs = (): LogEntry[] => {
@@ -50,7 +55,8 @@ const writeLogs = (logs: LogEntry[]) => {
 };
 
 export const addLog = (level: LogLevel, message: string, details?: unknown) => {
-  if (typeof window === 'undefined' || typeof localStorage === 'undefined') return;
+  if (typeof window === 'undefined' || typeof localStorage === 'undefined')
+    return;
   if (shouldSuppressDiagnosticsSideEffects() && level !== 'error') return;
   if (level === 'debug' && !loadDebugLoggingEnabled()) return;
   const entry: LogEntry = {
@@ -82,7 +88,10 @@ const trimStack = (stack?: string | null) => {
   return result;
 };
 
-export const buildErrorLogDetails = (error: Error, details: Record<string, unknown> = {}) => ({
+export const buildErrorLogDetails = (
+  error: Error,
+  details: Record<string, unknown> = {},
+) => ({
   ...details,
   error: {
     name: error.name,
@@ -115,12 +124,15 @@ const mergeLogs = () => {
 export const getLogs = (): LogEntry[] => mergeLogs();
 
 export const getProblemLogs = (): LogEntry[] =>
-  getLogs().filter((entry) => entry.level === 'warn' || entry.level === 'error');
+  getLogs().filter(
+    (entry) => entry.level === 'warn' || entry.level === 'error',
+  );
 
 export const getErrorLogs = (): LogEntry[] => getProblemLogs();
 
 export const clearLogs = () => {
-  if (typeof window === 'undefined' || typeof localStorage === 'undefined') return;
+  if (typeof window === 'undefined' || typeof localStorage === 'undefined')
+    return;
   writeLogs([]);
   window.dispatchEvent(new CustomEvent('c64u-logs-updated'));
 };
@@ -131,9 +143,15 @@ export const formatLogsForShare = (
 ) =>
   entries
     .map((entry) => {
-      const message = options.redacted ? redactExportText(entry.message) : entry.message;
-      const detailsValue = options.redacted ? redactExportValue(entry.details) : entry.details;
-      const details = detailsValue ? `\n${JSON.stringify(detailsValue, null, 2)}` : '';
+      const message = options.redacted
+        ? redactExportText(entry.message)
+        : entry.message;
+      const detailsValue = options.redacted
+        ? redactExportValue(entry.details)
+        : entry.details;
+      const details = detailsValue
+        ? `\n${JSON.stringify(detailsValue, null, 2)}`
+        : '';
       return `[${formatLocalTime(entry.timestamp)}] ${entry.level.toUpperCase()} - ${message}${details}`;
     })
     .join('\n\n');

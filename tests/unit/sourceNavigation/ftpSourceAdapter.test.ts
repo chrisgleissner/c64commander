@@ -25,7 +25,10 @@ vi.mock('@/lib/secureStorage', () => ({
 }));
 
 import { listFtpDirectory } from '@/lib/ftp/ftpClient';
-import { createUltimateSourceLocation, normalizeFtpHost } from '@/lib/sourceNavigation/ftpSourceAdapter';
+import {
+  createUltimateSourceLocation,
+  normalizeFtpHost,
+} from '@/lib/sourceNavigation/ftpSourceAdapter';
 
 const listFtpDirectoryMock = vi.mocked(listFtpDirectory);
 
@@ -40,7 +43,13 @@ describe('ftpSourceAdapter', () => {
   it('caches directory listings and reuses cache', async () => {
     listFtpDirectoryMock.mockResolvedValue({
       entries: [
-        { type: 'file', name: 'track.sid', path: '/track.sid', size: 123, modifiedAt: 'now' },
+        {
+          type: 'file',
+          name: 'track.sid',
+          path: '/track.sid',
+          size: 123,
+          modifiedAt: 'now',
+        },
       ],
     });
 
@@ -55,7 +64,13 @@ describe('ftpSourceAdapter', () => {
   it('clears cache for path and refetches', async () => {
     listFtpDirectoryMock.mockResolvedValue({
       entries: [
-        { type: 'file', name: 'track.sid', path: '/track.sid', size: 123, modifiedAt: 'now' },
+        {
+          type: 'file',
+          name: 'track.sid',
+          path: '/track.sid',
+          size: 123,
+          modifiedAt: 'now',
+        },
       ],
     });
 
@@ -73,14 +88,26 @@ describe('ftpSourceAdapter', () => {
         return {
           entries: [
             { type: 'dir', name: 'music', path: '/music' },
-            { type: 'file', name: 'root.sid', path: '/root.sid', size: 5, modifiedAt: 'now' },
+            {
+              type: 'file',
+              name: 'root.sid',
+              path: '/root.sid',
+              size: 5,
+              modifiedAt: 'now',
+            },
           ],
         };
       }
       if (path === '/music') {
         return {
           entries: [
-            { type: 'file', name: 'song.sid', path: '/music/song.sid', size: 10, modifiedAt: 'now' },
+            {
+              type: 'file',
+              name: 'song.sid',
+              path: '/music/song.sid',
+              size: 10,
+              modifiedAt: 'now',
+            },
           ],
         };
       }
@@ -90,7 +117,10 @@ describe('ftpSourceAdapter', () => {
     const source = createUltimateSourceLocation();
     const results = await source.listFilesRecursive('/');
 
-    expect(results.map((entry) => entry.path).sort()).toEqual(['/music/song.sid', '/root.sid']);
+    expect(results.map((entry) => entry.path).sort()).toEqual([
+      '/music/song.sid',
+      '/root.sid',
+    ]);
   });
 
   it('cancels recursive listing and stops further FTP calls', async () => {
@@ -101,31 +131,50 @@ describe('ftpSourceAdapter', () => {
         return {
           entries: [
             { type: 'dir', name: 'music', path: '/music' },
-            { type: 'file', name: 'root.sid', path: '/root.sid', size: 5, modifiedAt: 'now' },
+            {
+              type: 'file',
+              name: 'root.sid',
+              path: '/root.sid',
+              size: 5,
+              modifiedAt: 'now',
+            },
           ],
         };
       }
       return {
         entries: [
-          { type: 'file', name: 'song.sid', path: '/music/song.sid', size: 10, modifiedAt: 'now' },
+          {
+            type: 'file',
+            name: 'song.sid',
+            path: '/music/song.sid',
+            size: 10,
+            modifiedAt: 'now',
+          },
         ],
       };
     });
 
     const source = createUltimateSourceLocation();
-    await expect(source.listFilesRecursive('/', { signal: controller.signal })).rejects.toThrow(/Aborted/);
+    await expect(
+      source.listFilesRecursive('/', { signal: controller.signal }),
+    ).rejects.toThrow(/Aborted/);
     expect(listFtpDirectoryMock).toHaveBeenCalledTimes(1);
   });
 
   it('logs when cached FTP listing is corrupted', async () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const warnSpy = vi
+      .spyOn(console, 'warn')
+      .mockImplementation(() => undefined);
     localStorage.setItem('c64u_ftp_cache:v1', '{bad-json');
     listFtpDirectoryMock.mockResolvedValue({ entries: [] });
 
     const source = createUltimateSourceLocation();
     await source.listEntries('/');
 
-    expect(warnSpy).toHaveBeenCalledWith('Failed to load FTP cache', expect.any(Object));
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Failed to load FTP cache',
+      expect.any(Object),
+    );
     warnSpy.mockRestore();
   });
 
@@ -148,9 +197,7 @@ describe('ftpSourceAdapter', () => {
 
   it('normalizes empty path to / in listEntries', async () => {
     listFtpDirectoryMock.mockResolvedValue({
-      entries: [
-        { type: 'file', name: 'a.sid', path: '/a.sid' },
-      ],
+      entries: [{ type: 'file', name: 'a.sid', path: '/a.sid' }],
     });
     const source = createUltimateSourceLocation();
     const result = await source.listEntries('');
@@ -161,7 +208,15 @@ describe('ftpSourceAdapter', () => {
 
   it('clearCacheForPath normalizes empty path', async () => {
     listFtpDirectoryMock.mockResolvedValue({
-      entries: [{ type: 'file', name: 'a.sid', path: '/a.sid', size: 1, modifiedAt: 'x' }],
+      entries: [
+        {
+          type: 'file',
+          name: 'a.sid',
+          path: '/a.sid',
+          size: 1,
+          modifiedAt: 'x',
+        },
+      ],
     });
     const source = createUltimateSourceLocation();
     await source.listEntries('/');
@@ -179,10 +234,21 @@ describe('ftpSourceAdapter', () => {
       cache[key] = { entries: [], updatedAt: Date.now() };
       order.push(key);
     }
-    localStorage.setItem('c64u_ftp_cache:v1', JSON.stringify({ entries: cache, order }));
+    localStorage.setItem(
+      'c64u_ftp_cache:v1',
+      JSON.stringify({ entries: cache, order }),
+    );
 
     listFtpDirectoryMock.mockResolvedValue({
-      entries: [{ type: 'file', name: 'z.sid', path: '/new/z.sid', size: 1, modifiedAt: 'x' }],
+      entries: [
+        {
+          type: 'file',
+          name: 'z.sid',
+          path: '/new/z.sid',
+          size: 1,
+          modifiedAt: 'x',
+        },
+      ],
     });
     const source = createUltimateSourceLocation();
     await source.listEntries('/new');
@@ -193,23 +259,40 @@ describe('ftpSourceAdapter', () => {
   });
 
   it('handles localStorage.setItem quota exceeded gracefully', async () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const warnSpy = vi
+      .spyOn(console, 'warn')
+      .mockImplementation(() => undefined);
     // Pre-populate cache so the loadCache read succeeds, then make setItem throw
-    localStorage.setItem('c64u_ftp_cache:v1', JSON.stringify({ entries: {}, order: [] }));
+    localStorage.setItem(
+      'c64u_ftp_cache:v1',
+      JSON.stringify({ entries: {}, order: [] }),
+    );
     const originalSetItem = Storage.prototype.setItem;
     Storage.prototype.setItem = function (key: string, value: string) {
-      if (key === 'c64u_ftp_cache:v1') throw new DOMException('QuotaExceededError');
+      if (key === 'c64u_ftp_cache:v1')
+        throw new DOMException('QuotaExceededError');
       originalSetItem.call(this, key, value);
     };
 
     listFtpDirectoryMock.mockResolvedValue({
-      entries: [{ type: 'file', name: 'a.sid', path: '/a.sid', size: 1, modifiedAt: 'x' }],
+      entries: [
+        {
+          type: 'file',
+          name: 'a.sid',
+          path: '/a.sid',
+          size: 1,
+          modifiedAt: 'x',
+        },
+      ],
     });
     const source = createUltimateSourceLocation();
     await source.listEntries('/');
 
     Storage.prototype.setItem = originalSetItem;
-    expect(warnSpy).toHaveBeenCalledWith('Failed to persist FTP cache', expect.any(Object));
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Failed to persist FTP cache',
+      expect.any(Object),
+    );
     warnSpy.mockRestore();
   });
 
@@ -223,7 +306,10 @@ describe('ftpSourceAdapter', () => {
   });
 
   it('handles parsed.order not being an array', async () => {
-    localStorage.setItem('c64u_ftp_cache:v1', JSON.stringify({ entries: {}, order: 'not-array' }));
+    localStorage.setItem(
+      'c64u_ftp_cache:v1',
+      JSON.stringify({ entries: {}, order: 'not-array' }),
+    );
     listFtpDirectoryMock.mockResolvedValue({ entries: [] });
 
     const source = createUltimateSourceLocation();
@@ -242,7 +328,17 @@ describe('ftpSourceAdapter', () => {
         };
       }
       if (path === '/a') {
-        return { entries: [{ type: 'file', name: 'x.sid', path: '/a/x.sid', size: 1, modifiedAt: 'x' }] };
+        return {
+          entries: [
+            {
+              type: 'file',
+              name: 'x.sid',
+              path: '/a/x.sid',
+              size: 1,
+              modifiedAt: 'x',
+            },
+          ],
+        };
       }
       return { entries: [] };
     });
@@ -272,7 +368,15 @@ describe('ftpSourceAdapter', () => {
     // Covers path && path !== '' ? path : '/' (line 101 FALSE → '/')
     // and also: path || '/' in listFilesRecursive (line 124)
     listFtpDirectoryMock.mockResolvedValue({
-      entries: [{ type: 'file', name: 'a.sid', path: '/a.sid', size: 10, modifiedAt: 'x' }],
+      entries: [
+        {
+          type: 'file',
+          name: 'a.sid',
+          path: '/a.sid',
+          size: 10,
+          modifiedAt: 'x',
+        },
+      ],
     });
     const source = createUltimateSourceLocation();
     const result = await source.listEntries('');
@@ -296,13 +400,27 @@ describe('ftpSourceAdapter', () => {
 
   it('treats expired cache entry as miss and re-fetches', async () => {
     // Covers Date.now() - record.updatedAt > CACHE_TTL_MS (line 74: TTL expired branch)
-    const expiredEntry = { entries: [], updatedAt: Date.now() - 20 * 60 * 1000 };
-    localStorage.setItem('c64u_ftp_cache:v1', JSON.stringify({
-      entries: { 'c64u:21:/': expiredEntry },
-      order: ['c64u:21:/'],
-    }));
+    const expiredEntry = {
+      entries: [],
+      updatedAt: Date.now() - 20 * 60 * 1000,
+    };
+    localStorage.setItem(
+      'c64u_ftp_cache:v1',
+      JSON.stringify({
+        entries: { 'c64u:21:/': expiredEntry },
+        order: ['c64u:21:/'],
+      }),
+    );
     listFtpDirectoryMock.mockResolvedValue({
-      entries: [{ type: 'file', name: 'fresh.sid', path: '/fresh.sid', size: 5, modifiedAt: 'now' }],
+      entries: [
+        {
+          type: 'file',
+          name: 'fresh.sid',
+          path: '/fresh.sid',
+          size: 5,
+          modifiedAt: 'now',
+        },
+      ],
     });
     const source = createUltimateSourceLocation();
     const result = await source.listEntries('/');

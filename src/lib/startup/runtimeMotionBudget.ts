@@ -13,11 +13,17 @@ const LOW_END_DEVICE_MAX_CORES = 4;
 const LOW_END_DEVICE_MAX_MEMORY_GB = 4;
 
 export type RuntimeMotionMode = 'standard' | 'reduced';
-export type RuntimeMotionReason = 'user-override' | 'system-preference' | 'low-end-device' | 'default';
+export type RuntimeMotionReason =
+  | 'user-override'
+  | 'system-preference'
+  | 'low-end-device'
+  | 'default';
 
 export type MotionRuntimeEnvironment = {
   localStorage?: Pick<Storage, 'getItem'>;
-  navigator?: Pick<Navigator, 'hardwareConcurrency' | 'userAgent'> & { deviceMemory?: number };
+  navigator?: Pick<Navigator, 'hardwareConcurrency' | 'userAgent'> & {
+    deviceMemory?: number;
+  };
   matchMedia?: (query: string) => { matches: boolean };
   document?: Pick<Document, 'documentElement'>;
 };
@@ -29,15 +35,24 @@ export type RuntimeMotionResolution = {
   deviceMemoryGb: number | null;
 };
 
-const toFiniteNumber = (value: unknown) => (
-  typeof value === 'number' && Number.isFinite(value) ? value : null
-);
+const toFiniteNumber = (value: unknown) =>
+  typeof value === 'number' && Number.isFinite(value) ? value : null;
 
 const parseOverride = (value: string | null): RuntimeMotionMode | null => {
   if (!value) return null;
   const normalized = value.trim().toLowerCase();
-  if (normalized === 'reduced' || normalized === 'low' || normalized === 'minimal') return 'reduced';
-  if (normalized === 'standard' || normalized === 'full' || normalized === 'high') return 'standard';
+  if (
+    normalized === 'reduced' ||
+    normalized === 'low' ||
+    normalized === 'minimal'
+  )
+    return 'reduced';
+  if (
+    normalized === 'standard' ||
+    normalized === 'full' ||
+    normalized === 'high'
+  )
+    return 'standard';
   return null;
 };
 
@@ -51,7 +66,9 @@ const defaultEnvironment = (): MotionRuntimeEnvironment => {
   };
 };
 
-const readMotionOverride = (environment: MotionRuntimeEnvironment): RuntimeMotionMode | null => {
+const readMotionOverride = (
+  environment: MotionRuntimeEnvironment,
+): RuntimeMotionMode | null => {
   const storage = environment.localStorage;
   if (!storage) return null;
   try {
@@ -64,7 +81,9 @@ const readMotionOverride = (environment: MotionRuntimeEnvironment): RuntimeMotio
   }
 };
 
-const prefersReducedMotion = (environment: MotionRuntimeEnvironment): boolean => {
+const prefersReducedMotion = (
+  environment: MotionRuntimeEnvironment,
+): boolean => {
   if (!environment.matchMedia) return false;
   try {
     return environment.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -77,11 +96,16 @@ const prefersReducedMotion = (environment: MotionRuntimeEnvironment): boolean =>
 };
 
 const isLowEndDevice = (environment: MotionRuntimeEnvironment): boolean => {
-  const hardwareConcurrency = toFiniteNumber(environment.navigator?.hardwareConcurrency);
+  const hardwareConcurrency = toFiniteNumber(
+    environment.navigator?.hardwareConcurrency,
+  );
   const deviceMemoryGb = toFiniteNumber(environment.navigator?.deviceMemory);
   const userAgent = environment.navigator?.userAgent?.toLowerCase() ?? '';
-  const cpuBound = hardwareConcurrency !== null && hardwareConcurrency <= LOW_END_DEVICE_MAX_CORES;
-  const memoryBound = deviceMemoryGb !== null && deviceMemoryGb <= LOW_END_DEVICE_MAX_MEMORY_GB;
+  const cpuBound =
+    hardwareConcurrency !== null &&
+    hardwareConcurrency <= LOW_END_DEVICE_MAX_CORES;
+  const memoryBound =
+    deviceMemoryGb !== null && deviceMemoryGb <= LOW_END_DEVICE_MAX_MEMORY_GB;
   const legacyAndroid = /sm-n900|android [4-8]\./.test(userAgent);
   return cpuBound || memoryBound || legacyAndroid;
 };
@@ -89,7 +113,9 @@ const isLowEndDevice = (environment: MotionRuntimeEnvironment): boolean => {
 export const resolveRuntimeMotionMode = (
   environment: MotionRuntimeEnvironment = defaultEnvironment(),
 ): RuntimeMotionResolution => {
-  const hardwareConcurrency = toFiniteNumber(environment.navigator?.hardwareConcurrency);
+  const hardwareConcurrency = toFiniteNumber(
+    environment.navigator?.hardwareConcurrency,
+  );
   const deviceMemoryGb = toFiniteNumber(environment.navigator?.deviceMemory);
   const override = readMotionOverride(environment);
   if (override) {
@@ -142,4 +168,3 @@ export const initializeRuntimeMotionMode = (
   addLog('info', 'Runtime motion mode selected', resolution);
   return resolution;
 };
-

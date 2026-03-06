@@ -21,8 +21,12 @@ const loadMockConfigPayload = async () => {
 export const getActiveMockBaseUrl = () => activeMockBaseUrl;
 export const getActiveMockFtpPort = () => activeFtpPort;
 
-export const startMockServer = async (): Promise<{ baseUrl: string; ftpPort?: number }> => {
-  if (activeMockBaseUrl) return { baseUrl: activeMockBaseUrl, ftpPort: activeFtpPort || undefined };
+export const startMockServer = async (): Promise<{
+  baseUrl: string;
+  ftpPort?: number;
+}> => {
+  if (activeMockBaseUrl)
+    return { baseUrl: activeMockBaseUrl, ftpPort: activeFtpPort || undefined };
   if (startPromise) return startPromise;
 
   startPromise = (async () => {

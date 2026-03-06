@@ -22,7 +22,9 @@ const loadNoticeText = async (): Promise<string> => {
   const markdownUrl = `${baseUrl}THIRD_PARTY_NOTICES.md`;
   const markdownResponse = await fetch(markdownUrl, { cache: 'no-store' });
   if (!markdownResponse.ok) {
-    throw new Error(`Failed to load third-party notices (${markdownResponse.status})`);
+    throw new Error(
+      `Failed to load third-party notices (${markdownResponse.status})`,
+    );
   }
   return markdownResponse.text();
 };
@@ -32,12 +34,13 @@ const parseMarkdownBlocks = (source: string): MarkdownBlock[] => {
   const blocks: MarkdownBlock[] = [];
   let index = 0;
 
-  const splitTableRow = (line: string) => line
-    .trim()
-    .replace(/^\|\s*/, '')
-    .replace(/\s*\|$/, '')
-    .split('|')
-    .map((cell) => cell.trim());
+  const splitTableRow = (line: string) =>
+    line
+      .trim()
+      .replace(/^\|\s*/, '')
+      .replace(/\s*\|$/, '')
+      .split('|')
+      .map((cell) => cell.trim());
 
   const isTableSeparator = (line: string) => {
     const cells = splitTableRow(line);
@@ -64,8 +67,14 @@ const parseMarkdownBlocks = (source: string): MarkdownBlock[] => {
       continue;
     }
 
-    if (line.startsWith('|') && index + 1 < lines.length && isTableSeparator(lines[index + 1])) {
-      const headerCells = splitTableRow(lines[index]).map((cell) => cell.toLowerCase());
+    if (
+      line.startsWith('|') &&
+      index + 1 < lines.length &&
+      isTableSeparator(lines[index + 1])
+    ) {
+      const headerCells = splitTableRow(lines[index]).map((cell) =>
+        cell.toLowerCase(),
+      );
       index += 2;
 
       const items: string[] = [];
@@ -87,7 +96,8 @@ const parseMarkdownBlocks = (source: string): MarkdownBlock[] => {
         const packageName = rowByHeader.get('package') ?? '-';
         const version = rowByHeader.get('version') ?? '-';
         const license = rowByHeader.get('license') ?? '-';
-        const source = rowByHeader.get('source') ?? rowByHeader.get('source url') ?? '-';
+        const source =
+          rowByHeader.get('source') ?? rowByHeader.get('source url') ?? '-';
 
         const firstLine = [ecosystem, packageName, version, license]
           .filter((part) => part && part !== '-')
@@ -150,7 +160,10 @@ const parseMarkdownBlocks = (source: string): MarkdownBlock[] => {
 const renderTextWithBreaks = (text: string, keyPrefix: string) => {
   const lines = text.split('\n');
   return lines.flatMap((line, lineIndex) => {
-    if (lineIndex === 0) return [<Fragment key={`${keyPrefix}-line-${lineIndex}`}>{line}</Fragment>];
+    if (lineIndex === 0)
+      return [
+        <Fragment key={`${keyPrefix}-line-${lineIndex}`}>{line}</Fragment>,
+      ];
     return [
       <br key={`${keyPrefix}-br-${lineIndex}`} />,
       <Fragment key={`${keyPrefix}-line-${lineIndex}`}>{line}</Fragment>,
@@ -181,7 +194,10 @@ const renderInlineText = (value: string) => {
     const codeMatch = token.match(/^`([^`]+)`$/);
     if (codeMatch) {
       nodes.push(
-        <code key={`code-${keyIndex}`} className="rounded bg-muted px-1 py-0.5 text-[0.85em]">
+        <code
+          key={`code-${keyIndex}`}
+          className="rounded bg-muted px-1 py-0.5 text-[0.85em]"
+        >
           {codeMatch[1]}
         </code>,
       );
@@ -230,7 +246,9 @@ const renderInlineText = (value: string) => {
 
 export default function OpenSourceLicensesPage() {
   const navigate = useNavigate();
-  const [noticeText, setNoticeText] = useState<string>('Loading open source licenses...');
+  const [noticeText, setNoticeText] = useState<string>(
+    'Loading open source licenses...',
+  );
   const [hasError, setHasError] = useState(false);
 
   const blocks = useMemo(() => parseMarkdownBlocks(noticeText), [noticeText]);
@@ -268,39 +286,78 @@ export default function OpenSourceLicensesPage() {
         <div className="mb-3 flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3">
           <div>
             <h1 className="text-lg font-semibold">Open Source Licenses</h1>
-            <p className="text-sm text-muted-foreground">Rendered from bundled `THIRD_PARTY_NOTICES.md`.</p>
+            <p className="text-sm text-muted-foreground">
+              Rendered from bundled `THIRD_PARTY_NOTICES.md`.
+            </p>
           </div>
-          <Button variant="ghost" size="icon" onClick={() => navigate('/settings')} aria-label="Close licenses overlay">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate('/settings')}
+            aria-label="Close licenses overlay"
+          >
             <span className="text-lg leading-none">×</span>
           </Button>
         </div>
 
         <div className="min-h-0 flex-1 overflow-hidden rounded-xl border border-border bg-card">
           <ScrollArea className="h-full">
-            <div className={`space-y-4 p-4 sm:p-6 ${hasError ? 'text-destructive' : 'text-foreground'}`}>
+            <div
+              className={`space-y-4 p-4 sm:p-6 ${hasError ? 'text-destructive' : 'text-foreground'}`}
+            >
               {hasError ? (
                 <p className="text-sm">{noticeText}</p>
               ) : (
                 blocks.map((block, blockIndex) => {
                   if (block.type === 'heading') {
                     if (block.level === 1) {
-                      return <h2 key={`h-${blockIndex}`} className="text-2xl font-semibold tracking-tight">{block.text}</h2>;
+                      return (
+                        <h2
+                          key={`h-${blockIndex}`}
+                          className="text-2xl font-semibold tracking-tight"
+                        >
+                          {block.text}
+                        </h2>
+                      );
                     }
                     if (block.level === 2) {
-                      return <h3 key={`h-${blockIndex}`} className="pt-2 text-xl font-semibold">{block.text}</h3>;
+                      return (
+                        <h3
+                          key={`h-${blockIndex}`}
+                          className="pt-2 text-xl font-semibold"
+                        >
+                          {block.text}
+                        </h3>
+                      );
                     }
-                    return <h4 key={`h-${blockIndex}`} className="text-lg font-medium">{block.text}</h4>;
+                    return (
+                      <h4
+                        key={`h-${blockIndex}`}
+                        className="text-lg font-medium"
+                      >
+                        {block.text}
+                      </h4>
+                    );
                   }
 
                   if (block.type === 'paragraph') {
-                    return <p key={`p-${blockIndex}`} className="text-sm leading-6">{renderInlineText(block.text)}</p>;
+                    return (
+                      <p key={`p-${blockIndex}`} className="text-sm leading-6">
+                        {renderInlineText(block.text)}
+                      </p>
+                    );
                   }
 
                   if (block.type === 'list') {
                     return (
-                      <ul key={`l-${blockIndex}`} className="list-disc space-y-2 pl-5 text-sm leading-6">
+                      <ul
+                        key={`l-${blockIndex}`}
+                        className="list-disc space-y-2 pl-5 text-sm leading-6"
+                      >
                         {block.items.map((item, itemIndex) => (
-                          <li key={`li-${itemIndex}`} className="break-words">{renderInlineText(item)}</li>
+                          <li key={`li-${itemIndex}`} className="break-words">
+                            {renderInlineText(item)}
+                          </li>
                         ))}
                       </ul>
                     );

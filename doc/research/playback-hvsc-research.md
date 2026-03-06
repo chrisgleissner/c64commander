@@ -105,34 +105,34 @@ Legend: **F** Fully covered, **P** Partially covered, **N** Not covered.
 
 ### 3.1 Source x Lifecycle x Playback transition matrix
 
-| Source type | Foreground play/pause/resume | Backgrounded | Locked device | Process recreation | Auto-skip completion | Notes |
-|---|---|---|---|---|---|---|
-| Local app storage (web file/directory) | F | P | N | N | P | Strong Playwright foreground coverage in `playwright/playback.spec.ts` and `playwright/playback.part2.spec.ts`; no explicit lock-state completion scenario. |
-| Android device sources (SAF/content URI) | P | N | N | N | N | SAF browse/scan flows covered (`playwright/playback.part2.spec.ts:354`, `:421`, `:461`; `tests/unit/sourceNavigation/localSourceAdapter.test.ts:74`), but playback/lifecycle parity under lock/restart is untested. |
-| C64U-hosted source (ultimate FTP path + REST) | P | P | N | N | P | Unit verifies FTP->upload fallback logic (`tests/unit/playbackRouter.test.ts:112`, `:123`), but no lock-state completion or full e2e retry/idempotency path. |
-| HVSC source | P | P | N | N | N | HVSC install/ingest/play tested (`playwright/hvsc.spec.ts:552`, `:574`, `:620`), but pause/resume parity and locked auto-skip are not explicitly asserted. |
+| Source type                                   | Foreground play/pause/resume | Backgrounded | Locked device | Process recreation | Auto-skip completion | Notes                                                                                                                                                                                                               |
+| --------------------------------------------- | ---------------------------- | ------------ | ------------- | ------------------ | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Local app storage (web file/directory)        | F                            | P            | N             | N                  | P                    | Strong Playwright foreground coverage in `playwright/playback.spec.ts` and `playwright/playback.part2.spec.ts`; no explicit lock-state completion scenario.                                                         |
+| Android device sources (SAF/content URI)      | P                            | N            | N             | N                  | N                    | SAF browse/scan flows covered (`playwright/playback.part2.spec.ts:354`, `:421`, `:461`; `tests/unit/sourceNavigation/localSourceAdapter.test.ts:74`), but playback/lifecycle parity under lock/restart is untested. |
+| C64U-hosted source (ultimate FTP path + REST) | P                            | P            | N             | N                  | P                    | Unit verifies FTP->upload fallback logic (`tests/unit/playbackRouter.test.ts:112`, `:123`), but no lock-state completion or full e2e retry/idempotency path.                                                        |
+| HVSC source                                   | P                            | P            | N             | N                  | N                    | HVSC install/ingest/play tested (`playwright/hvsc.spec.ts:552`, `:574`, `:620`), but pause/resume parity and locked auto-skip are not explicitly asserted.                                                          |
 
 ### 3.2 Source x Network/failure matrix
 
-| Scenario | Local | SAF/content URI | C64U source | HVSC | Coverage status | Evidence |
-|---|---|---|---|---|---|---|
-| Offline/connection lost at play start | P | P | P | P | Partial | Error surfaces in Playwright for playback failures (`playwright/playback.spec.ts:340`), but no full matrix per source/lifecycle. |
-| Mid-transition failure (next/auto-next) | P | N | P | N | Partial | Next failure handling covered (`playwright/playback.spec.ts:834`); not source- and lifecycle-complete. |
-| FTP read failure | N/A | N/A | P | N/A | Partial | Unit fallback covered (`tests/unit/playbackRouter.test.ts:123`). |
-| REST upload failure (`playSidUpload`) | P (local upload path) | P | N | P | Partial | API upload error covered (`tests/unit/c64api.test.ts:669`), but duration-propagation-specific ultimate path failure taxonomy not covered end-to-end. |
-| HVSC download interruption/cancel | N/A | N/A | N/A | P | Partial | HVSC cancel/fail flows in Playwright (`playwright/hvsc.spec.ts:608`, `:799`, `:809`) and runtime unit tests. |
-| HVSC extract/index memory stress | N/A | N/A | N/A | N | None | No stress-scale tests for large archives or low-memory constraints. |
+| Scenario                                | Local                 | SAF/content URI | C64U source | HVSC | Coverage status | Evidence                                                                                                                                             |
+| --------------------------------------- | --------------------- | --------------- | ----------- | ---- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Offline/connection lost at play start   | P                     | P               | P           | P    | Partial         | Error surfaces in Playwright for playback failures (`playwright/playback.spec.ts:340`), but no full matrix per source/lifecycle.                     |
+| Mid-transition failure (next/auto-next) | P                     | N               | P           | N    | Partial         | Next failure handling covered (`playwright/playback.spec.ts:834`); not source- and lifecycle-complete.                                               |
+| FTP read failure                        | N/A                   | N/A             | P           | N/A  | Partial         | Unit fallback covered (`tests/unit/playbackRouter.test.ts:123`).                                                                                     |
+| REST upload failure (`playSidUpload`)   | P (local upload path) | P               | N           | P    | Partial         | API upload error covered (`tests/unit/c64api.test.ts:669`), but duration-propagation-specific ultimate path failure taxonomy not covered end-to-end. |
+| HVSC download interruption/cancel       | N/A                   | N/A             | N/A         | P    | Partial         | HVSC cancel/fail flows in Playwright (`playwright/hvsc.spec.ts:608`, `:799`, `:809`) and runtime unit tests.                                         |
+| HVSC extract/index memory stress        | N/A                   | N/A             | N/A         | N    | None            | No stress-scale tests for large archives or low-memory constraints.                                                                                  |
 
 ### 3.3 Playback state-transition matrix
 
-| Transition | Local | SAF/content URI | C64U source | HVSC | Coverage |
-|---|---|---|---|---|---|
-| Play | F | P | F | P | Partial by source depth |
-| Pause | F | N | P | N | Incomplete parity |
-| Resume | F | N | P | N | Incomplete parity |
-| Stop | F | N | F | P | Incomplete parity |
-| Next/Previous (user) | F | N | F | P | Incomplete parity |
-| Complete -> auto-next | P | N | P | N | Major gap |
+| Transition            | Local | SAF/content URI | C64U source | HVSC | Coverage                |
+| --------------------- | ----- | --------------- | ----------- | ---- | ----------------------- |
+| Play                  | F     | P               | F           | P    | Partial by source depth |
+| Pause                 | F     | N               | P           | N    | Incomplete parity       |
+| Resume                | F     | N               | P           | N    | Incomplete parity       |
+| Stop                  | F     | N               | F           | P    | Incomplete parity       |
+| Next/Previous (user)  | F     | N               | F           | P    | Incomplete parity       |
+| Complete -> auto-next | P     | N               | P           | N    | Major gap               |
 
 ### 3.4 Existing test asset mapping highlights
 

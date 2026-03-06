@@ -53,8 +53,12 @@ describe('hvscReleaseService', () => {
       updateVersion: 85,
       baseUrl: 'https://example.com/hvsc/',
     });
-    expect(buildHvscBaselineUrl(84, result.baseUrl)).toBe('https://example.com/hvsc/HVSC_84-all-of-them.7z');
-    expect(buildHvscUpdateUrl(85, result.baseUrl)).toBe('https://example.com/hvsc/HVSC_Update_85.7z');
+    expect(buildHvscBaselineUrl(84, result.baseUrl)).toBe(
+      'https://example.com/hvsc/HVSC_84-all-of-them.7z',
+    );
+    expect(buildHvscUpdateUrl(85, result.baseUrl)).toBe(
+      'https://example.com/hvsc/HVSC_Update_85.7z',
+    );
   });
 
   it('defaults update version to baseline when none found', async () => {
@@ -74,11 +78,13 @@ describe('hvscReleaseService', () => {
 
   it('throws on non-ok response', async () => {
     const fetchMock = vi.mocked(fetch);
-    fetchMock.mockResolvedValue(new Response('nope', { status: 500, statusText: 'Server Error' }));
-
-    await expect(fetchLatestHvscVersions('https://example.com/hvsc/')).rejects.toThrow(
-      'HVSC release fetch failed: 500 Server Error',
+    fetchMock.mockResolvedValue(
+      new Response('nope', { status: 500, statusText: 'Server Error' }),
     );
+
+    await expect(
+      fetchLatestHvscVersions('https://example.com/hvsc/'),
+    ).rejects.toThrow('HVSC release fetch failed: 500 Server Error');
   });
 
   it('uses CapacitorHttp for native HVSC index fetches', async () => {
@@ -94,10 +100,12 @@ describe('hvscReleaseService', () => {
     const result = await fetchLatestHvscVersions('https://example.com/hvsc/');
     expect(result.baselineVersion).toBe(90);
     expect(vi.mocked(fetch)).not.toHaveBeenCalled();
-    expect(vi.mocked(CapacitorHttp.request)).toHaveBeenCalledWith(expect.objectContaining({
-      url: 'https://example.com/hvsc/',
-      method: 'GET',
-    }));
+    expect(vi.mocked(CapacitorHttp.request)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: 'https://example.com/hvsc/',
+        method: 'GET',
+      }),
+    );
   });
 
   it('handles native platform check exception', async () => {
@@ -125,7 +133,10 @@ describe('hvscReleaseService', () => {
     const result = await fetchLatestHvscVersions();
 
     expect(result.baseUrl).toBe('https://stored.com/hvsc/');
-    expect(fetchMock).toHaveBeenCalledWith('https://stored.com/hvsc/', expect.anything());
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://stored.com/hvsc/',
+      expect.anything(),
+    );
   });
 
   it('throws on native HTTP error', async () => {
@@ -134,10 +145,12 @@ describe('hvscReleaseService', () => {
       status: 404,
       data: 'Not Found',
       headers: {},
-      url: ''
+      url: '',
     });
 
-    await expect(fetchLatestHvscVersions('http://foo.com')).rejects.toThrow('HVSC release fetch failed: 404');
+    await expect(fetchLatestHvscVersions('http://foo.com')).rejects.toThrow(
+      'HVSC release fetch failed: 404',
+    );
   });
 
   it('falls back to default URL when localStorage has no stored value', async () => {

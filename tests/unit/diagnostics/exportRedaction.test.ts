@@ -7,11 +7,15 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { redactExportText, redactExportValue } from '@/lib/diagnostics/exportRedaction';
+import {
+  redactExportText,
+  redactExportValue,
+} from '@/lib/diagnostics/exportRedaction';
 
 describe('exportRedaction', () => {
   it('redacts IPs, hosts, paths, and credentials in text', () => {
-    const input = 'Host c64u.local 192.168.0.10 path /mnt/usb/secret password=supersecret token: abc123';
+    const input =
+      'Host c64u.local 192.168.0.10 path /mnt/usb/secret password=supersecret token: abc123';
     const output = redactExportText(input);
     expect(output).not.toContain('192.168.0.10');
     expect(output).not.toContain('c64u.local');

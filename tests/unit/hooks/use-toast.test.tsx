@@ -51,7 +51,12 @@ describe('useToast', () => {
 
     act(() => {
       const handle = result.current.toast({ title: 'Hello' });
-      handle.update({ title: 'Updated', description: 'Changed', id: handle.id, open: true });
+      handle.update({
+        title: 'Updated',
+        description: 'Changed',
+        id: handle.id,
+        open: true,
+      });
     });
 
     expect(result.current.toasts).toHaveLength(1);

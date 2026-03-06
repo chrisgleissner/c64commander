@@ -1,90 +1,106 @@
 # PLANS.md - Reliability Architecture Investigation (C64 Commander)
 
 ## Metadata
+
 - Date: 2026-03-06
 - Investigator: Codex (GPT-5)
 - Scope: Reliability analysis, code-path mapping, test-infrastructure analysis, deterministic reproduction planning
 - Primary research artifact: `doc/testing/investigations/reliability-analysis.md`
 
 ## Status Markers
+
 - `TODO` = not started
 - `IN_PROGRESS` = active
 - `DONE` = completion criteria met
 
 ## Numbered Task Plan
+
 1. Repository reconnaissance and instruction alignment
+
 - Status: `DONE`
 - Deterministic completion criteria:
   - Reviewed repository agent/testing instructions and Maestro strategy docs.
   - Captured candidate module list for all six reliability issues.
 
 2. Build issue-to-module inventory (static mapping)
+
 - Status: `DONE`
 - Deterministic completion criteria:
   - Issues 1-6 mapped to concrete files/functions.
   - Unknowns either resolved or explicitly documented in research hypotheses.
 
 3. Deep dive Issue 1 (volume slider + mute state)
+
 - Status: `DONE`
 - Deterministic completion criteria:
   - UI controls, reducer, async queue, config-write path traced end-to-end.
   - Desync/race windows documented in research artifact.
 
 4. Deep dive Issue 2 (auto-advance under lock/idle)
+
 - Status: `DONE`
 - Deterministic completion criteria:
   - Timeline guard, due scheduling, resume triggers, native background plugins traced.
   - Songlength and fallback-duration behavior verified.
 
 5. Deep dive Issue 3 (button highlight persistence)
+
 - Status: `DONE`
 - Deterministic completion criteria:
   - Highlight attribute + timeout model traced.
   - Conditions for delayed/stuck visual state documented.
 
 6. Deep dive Issue 4 (HVSC download + ingestion)
+
 - Status: `DONE`
 - Deterministic completion criteria:
   - Download buffering model, extraction model, ingestion orchestration traced.
   - Native vs non-native lifecycle and cancellation boundaries documented.
 
 7. Deep dive Issue 5 (low-resource stability)
+
 - Status: `DONE`
 - Deterministic completion criteria:
   - Heavy allocation and synchronous processing hotspots cataloged.
   - Cross-issue low-RAM/low-CPU risk profile documented.
 
 8. Deep dive Issue 6 (RAM dump/restore vs scripts)
+
 - Status: `DONE`
 - Deterministic completion criteria:
   - App restore request size/order/timeout/retry behavior compared against scripts.
   - Constraint gap (chunked transfer requirement) documented.
 
 9. Test infrastructure and Maestro coverage analysis
+
 - Status: `DONE`
 - Deterministic completion criteria:
   - Unit, Playwright, Android JVM, and Maestro coverage mapped per issue.
   - CI gating behavior and default Maestro tag filtering analyzed.
 
 10. Deterministic reproduction strategy design (Maestro-first)
+
 - Status: `DONE`
 - Deterministic completion criteria:
   - Reproduction designs prepared for issues 1-6 with preconditions/actions/assertions.
   - Device/emulator constraints included.
 
 11. Write research document
+
 - Status: `DONE`
 - Deterministic completion criteria:
   - `doc/testing/investigations/reliability-analysis.md` created.
   - Contains all required sections (1-11) from task request.
 
 12. Generate remediation execution roadmap
+
 - Status: `DONE`
 - Deterministic completion criteria:
   - Prioritized remediation proposals and Maestro flow additions documented.
   - Risk and performance considerations documented.
 
 13. Verify artifact completeness
+
 - Status: `DONE`
 - Deterministic completion criteria:
   - Research artifact exists at required path.
@@ -92,6 +108,7 @@
   - Work log references research artifact updates.
 
 ## Future remediation backlog (planned, not executed in this investigation)
+
 - Implement strict volume-write state convergence in `useVolumeOverride` (operation token + readback confirmation).
 - Extend auto-advance duration guard to non-song categories using configured duration.
 - Add stale-highlight sweeper on lifecycle resume and route transitions.
@@ -101,6 +118,7 @@
 - Add Maestro edge flows for volume/mute race, lock/idle auto-advance, HVSC lifecycle stress, RAM restore verification.
 
 ## Work Log
+
 - 2026-03-06T08:25:43+00:00
   - Initialized investigation plan in `PLANS.md`.
   - Confirmed investigation scope and required final artifact path.

@@ -9,13 +9,25 @@
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { useConnectionDiagnosticsSummary } from '@/hooks/useConnectionDiagnosticsSummary';
 import { useConnectionState } from '@/hooks/useConnectionState';
 import { discoverConnection } from '@/lib/connection/connectionManager';
-import { requestDiagnosticsOpen, type DiagnosticsTabKey } from '@/lib/diagnostics/diagnosticsOverlay';
+import {
+  requestDiagnosticsOpen,
+  type DiagnosticsTabKey,
+} from '@/lib/diagnostics/diagnosticsOverlay';
 import type { DiagnosticsSeverity } from '@/lib/diagnostics/connectionStatusDiagnostics';
-import { getConfiguredHost, saveConfiguredHostAndRetry } from '@/lib/connection/hostEdit';
+import {
+  getConfiguredHost,
+  saveConfiguredHostAndRetry,
+} from '@/lib/connection/hostEdit';
 import { cn } from '@/lib/utils';
 import { wrapUserEvent } from '@/lib/tracing/userTrace';
 
@@ -43,7 +55,12 @@ export function ConnectivityIndicator({ className }: Props) {
   const lastSuccessAt = snapshot.lastProbeSucceededAtMs;
   const attemptInFlight = snapshot.state === 'DISCOVERING';
   const lastAttemptSucceeded = useMemo(
-    () => deriveLastAttemptSucceeded(lastAttemptAt, lastSuccessAt, snapshot.lastProbeFailedAtMs),
+    () =>
+      deriveLastAttemptSucceeded(
+        lastAttemptAt,
+        lastSuccessAt,
+        snapshot.lastProbeFailedAtMs,
+      ),
     [lastAttemptAt, lastSuccessAt, snapshot.lastProbeFailedAtMs],
   );
   const isDemoMode = lastAttemptSucceeded === false;
@@ -54,13 +71,16 @@ export function ConnectivityIndicator({ className }: Props) {
       : lastAttemptSucceeded === false && lastSuccessAt !== null
         ? 'Offline'
         : 'Not yet connected';
-  const lastRequest = lastAttemptAt !== null ? formatRelative(lastAttemptAt) : 'none yet';
+  const lastRequest =
+    lastAttemptAt !== null ? formatRelative(lastAttemptAt) : 'none yet';
 
   const label = isDemoMode ? 'C64U Demo' : 'C64U';
   const showRetryNow = status === 'Offline' || status === 'Not yet connected';
   const saveHostAndRetry = () => {
     try {
-      saveConfiguredHostAndRetry(hostInput, configuredHost, { trigger: 'settings' });
+      saveConfiguredHostAndRetry(hostInput, configuredHost, {
+        trigger: 'settings',
+      });
       setHostError(null);
       setOpen(false);
     } catch (error) {
@@ -76,7 +96,13 @@ export function ConnectivityIndicator({ className }: Props) {
     <Dialog open={open} onOpenChange={setOpen}>
       <button
         type="button"
-        onClick={wrapUserEvent(handleClick, 'click', 'ConnectivityIndicator', { title: label }, 'ConnectivityIndicator')}
+        onClick={wrapUserEvent(
+          handleClick,
+          'click',
+          'ConnectivityIndicator',
+          { title: label },
+          'ConnectivityIndicator',
+        )}
         className={cn(
           'rounded-lg border border-border px-3 py-2 touch-none text-right',
           'hover:border-primary/60 transition-colors',
@@ -89,14 +115,18 @@ export function ConnectivityIndicator({ className }: Props) {
         <span
           className={cn(
             'block text-xs font-semibold uppercase tracking-wide',
-            isDemoMode ? 'text-amber-500 indicator-demo' : 'text-success indicator-real',
+            isDemoMode
+              ? 'text-amber-500 indicator-demo'
+              : 'text-success indicator-real',
           )}
           data-testid="connection-status-label"
         >
           C64U
         </span>
         {isDemoMode ? (
-          <span className="block text-xs font-semibold tracking-wide text-amber-500 indicator-demo">Demo</span>
+          <span className="block text-xs font-semibold tracking-wide text-amber-500 indicator-demo">
+            Demo
+          </span>
         ) : null}
       </button>
       <DialogContent
@@ -105,7 +135,9 @@ export function ConnectivityIndicator({ className }: Props) {
         onOpenAutoFocus={(event) => {
           event.preventDefault();
           const content = event.currentTarget as HTMLElement;
-          const closeButton = content.querySelector<HTMLElement>('[data-testid="connection-status-close"]');
+          const closeButton = content.querySelector<HTMLElement>(
+            '[data-testid="connection-status-close"]',
+          );
           closeButton?.focus();
         }}
       >
@@ -113,13 +145,19 @@ export function ConnectivityIndicator({ className }: Props) {
           <DialogHeader>
             <DialogTitle>Connection Status</DialogTitle>
             <DialogDescription
-              className={cn(isDemoMode ? 'text-amber-500 indicator-demo' : 'text-success indicator-real')}
+              className={cn(
+                isDemoMode
+                  ? 'text-amber-500 indicator-demo'
+                  : 'text-success indicator-real',
+              )}
             >
               {isDemoMode ? 'C64U Demo (simulated device)' : 'C64U'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-1 text-sm">
-            <p data-testid="connection-status-row-status" className="min-h-5"><span className="font-medium">Status:</span> {status}</p>
+            <p data-testid="connection-status-row-status" className="min-h-5">
+              <span className="font-medium">Status:</span> {status}
+            </p>
             {editingHost ? (
               <div className="flex items-center gap-2">
                 <Input
@@ -136,30 +174,62 @@ export function ConnectivityIndicator({ className }: Props) {
                   aria-label="C64U Hostname / IP"
                   className="h-8 text-xs"
                 />
-                <Button size="sm" onClick={saveHostAndRetry}>Save</Button>
+                <Button size="sm" onClick={saveHostAndRetry}>
+                  Save
+                </Button>
               </div>
             ) : (
-              <div data-testid="connection-status-row-host" className="flex min-h-5 items-center justify-between gap-2">
-                <span className="break-all"><span className="font-medium">Host:</span> {configuredHost}</span>
-                <Button variant="ghost" className="h-auto shrink-0 py-0 px-2 text-xs leading-5 ring-1 ring-border" onClick={() => setEditingHost(true)}>
+              <div
+                data-testid="connection-status-row-host"
+                className="flex min-h-5 items-center justify-between gap-2"
+              >
+                <span className="break-all">
+                  <span className="font-medium">Host:</span> {configuredHost}
+                </span>
+                <Button
+                  variant="ghost"
+                  className="h-auto shrink-0 py-0 px-2 text-xs leading-5 ring-1 ring-border"
+                  onClick={() => setEditingHost(true)}
+                >
                   Change
                 </Button>
               </div>
             )}
             {hostError ? (
-              <p className="text-xs text-destructive" data-testid="connection-status-host-error">{hostError}</p>
+              <p
+                className="text-xs text-destructive"
+                data-testid="connection-status-host-error"
+              >
+                {hostError}
+              </p>
             ) : null}
-            <p data-testid="connection-status-row-last-request" className="min-h-5"><span className="font-medium">Last request:</span> {lastRequest}</p>
+            <p
+              data-testid="connection-status-row-last-request"
+              className="min-h-5"
+            >
+              <span className="font-medium">Last request:</span> {lastRequest}
+            </p>
           </div>
-          <div className="space-y-1 text-sm" data-testid="connection-diagnostics-section">
+          <div
+            className="space-y-1 text-sm"
+            data-testid="connection-diagnostics-section"
+          >
             <p className="font-medium">Diagnostics</p>
             <DiagnosticsRow
               testId="connection-diagnostics-row-rest"
               label="REST"
               total={diagnosticsSummary.rest.total}
               issueCount={diagnosticsSummary.rest.failed}
-              totalLabel={pluralize(diagnosticsSummary.rest.total, 'request', 'requests')}
-              issueLabel={pluralize(diagnosticsSummary.rest.failed, 'failed', 'failed')}
+              totalLabel={pluralize(
+                diagnosticsSummary.rest.total,
+                'request',
+                'requests',
+              )}
+              issueLabel={pluralize(
+                diagnosticsSummary.rest.failed,
+                'failed',
+                'failed',
+              )}
               relationLabel="of"
               severity={diagnosticsSummary.rest.severity}
               onClick={() => openDiagnosticsTab('actions')}
@@ -169,8 +239,16 @@ export function ConnectivityIndicator({ className }: Props) {
               label="FTP"
               total={diagnosticsSummary.ftp.total}
               issueCount={diagnosticsSummary.ftp.failed}
-              totalLabel={pluralize(diagnosticsSummary.ftp.total, 'operation', 'operations')}
-              issueLabel={pluralize(diagnosticsSummary.ftp.failed, 'failed', 'failed')}
+              totalLabel={pluralize(
+                diagnosticsSummary.ftp.total,
+                'operation',
+                'operations',
+              )}
+              issueLabel={pluralize(
+                diagnosticsSummary.ftp.failed,
+                'failed',
+                'failed',
+              )}
               relationLabel="of"
               severity={diagnosticsSummary.ftp.severity}
               onClick={() => openDiagnosticsTab('actions')}
@@ -180,8 +258,16 @@ export function ConnectivityIndicator({ className }: Props) {
               label="Logs"
               total={diagnosticsSummary.logIssues.total}
               issueCount={diagnosticsSummary.logIssues.issues}
-              totalLabel={pluralize(diagnosticsSummary.logIssues.total, 'log', 'logs')}
-              issueLabel={pluralize(diagnosticsSummary.logIssues.issues, 'issue', 'issues')}
+              totalLabel={pluralize(
+                diagnosticsSummary.logIssues.total,
+                'log',
+                'logs',
+              )}
+              issueLabel={pluralize(
+                diagnosticsSummary.logIssues.issues,
+                'issue',
+                'issues',
+              )}
               relationLabel="in"
               severity={diagnosticsSummary.logIssues.severity}
               onClick={() => openDiagnosticsTab('error-logs')}
@@ -206,7 +292,10 @@ export function ConnectivityIndicator({ className }: Props) {
 }
 
 const formatRelative = (timestampMs: number) => {
-  const elapsedSeconds = Math.max(0, Math.floor((Date.now() - timestampMs) / 1000));
+  const elapsedSeconds = Math.max(
+    0,
+    Math.floor((Date.now() - timestampMs) / 1000),
+  );
   if (elapsedSeconds < 60) return `${elapsedSeconds}s ago`;
   const m = Math.floor(elapsedSeconds / 60);
   const s = elapsedSeconds % 60;
@@ -219,8 +308,16 @@ const deriveLastAttemptSucceeded = (
   lastFailureAt: number | null,
 ) => {
   if (lastAttemptAt === null) return null;
-  if (lastSuccessAt !== null && (lastFailureAt === null || lastSuccessAt >= lastFailureAt)) return true;
-  if (lastFailureAt !== null && (lastSuccessAt === null || lastFailureAt > lastSuccessAt)) return false;
+  if (
+    lastSuccessAt !== null &&
+    (lastFailureAt === null || lastSuccessAt >= lastFailureAt)
+  )
+    return true;
+  if (
+    lastFailureAt !== null &&
+    (lastSuccessAt === null || lastFailureAt > lastSuccessAt)
+  )
+    return false;
   return null;
 };
 
@@ -275,7 +372,8 @@ const formatDiagnosticsDetail = (
   return `of ${total} ${totalLabel} ${issueLabel}`;
 };
 
-const pluralize = (count: number, singular: string, plural: string) => (count === 1 ? singular : plural);
+const pluralize = (count: number, singular: string, plural: string) =>
+  count === 1 ? singular : plural;
 
 const resolveSeverityCountClass = (severity: DiagnosticsSeverity) => {
   if (severity === 'high') return 'text-diagnostics-error font-semibold';

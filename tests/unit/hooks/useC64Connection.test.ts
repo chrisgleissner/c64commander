@@ -70,7 +70,8 @@ vi.mock('@/lib/c64api', () => ({
   C64_DEFAULTS: { DEFAULT_DEVICE_HOST: 'c64u' },
   getDefaultBaseUrl: () => 'http://default',
   buildBaseUrlFromDeviceHost: (host?: string) => `http://${host ?? 'c64u'}`,
-  getDeviceHostFromBaseUrl: (baseUrl?: string) => baseUrl?.replace(/^https?:\/\//, '') ?? 'c64u',
+  getDeviceHostFromBaseUrl: (baseUrl?: string) =>
+    baseUrl?.replace(/^https?:\/\//, '') ?? 'c64u',
   normalizeDeviceHost: (host?: string) => host?.trim() || 'c64u',
   resolveDeviceHostFromStorage: () => 'c64u',
   getC64APIConfigSnapshot: () => ({
@@ -108,12 +109,24 @@ const createWrapper = () => {
 describe('useC64Connection', () => {
   beforeEach(() => {
     mockApi.getInfo.mockResolvedValue({ errors: [] });
-    mockApi.getCategories.mockResolvedValue({ categories: ['Audio'], errors: [] });
+    mockApi.getCategories.mockResolvedValue({
+      categories: ['Audio'],
+      errors: [],
+    });
     mockApi.getCategory.mockResolvedValue({ Audio: { items: {} }, errors: [] });
-    mockApi.getConfigItem.mockResolvedValue({ Audio: { items: { Volume: { selected: '0 dB' } } }, errors: [] });
-    mockApi.getConfigItems.mockResolvedValue({ Audio: { items: {} }, errors: [] });
+    mockApi.getConfigItem.mockResolvedValue({
+      Audio: { items: { Volume: { selected: '0 dB' } } },
+      errors: [],
+    });
+    mockApi.getConfigItems.mockResolvedValue({
+      Audio: { items: {} },
+      errors: [],
+    });
     mockApi.updateConfigBatch.mockResolvedValue({ errors: [] });
-    mockApi.getDrives.mockResolvedValue({ drives: [{ a: { enabled: true } }], errors: [] });
+    mockApi.getDrives.mockResolvedValue({
+      drives: [{ a: { enabled: true } }],
+      errors: [],
+    });
     mockApi.setConfigValue.mockResolvedValue({ errors: [] });
     mockApi.machineReset.mockResolvedValue({ errors: [] });
     mockApi.machineReboot.mockResolvedValue({ errors: [] });
@@ -164,8 +177,14 @@ describe('useC64Connection', () => {
     act(() => {
       result.current.updateConfig('host.local', 'pw');
     });
-    expect(updateC64APIConfigMock).toHaveBeenCalledWith('http://host.local', 'pw', 'host.local');
-    await waitFor(() => expect(result.current.baseUrl).toBe('http://host.local'));
+    expect(updateC64APIConfigMock).toHaveBeenCalledWith(
+      'http://host.local',
+      'pw',
+      'host.local',
+    );
+    await waitFor(() =>
+      expect(result.current.baseUrl).toBe('http://host.local'),
+    );
     expect(result.current.password).toBe('pw');
     expect(result.current.deviceHost).toBe('host.local');
   });
@@ -180,7 +199,11 @@ describe('useC64Connection', () => {
     act(() => {
       window.dispatchEvent(
         new CustomEvent('c64u-connection-change', {
-          detail: { baseUrl: 'http://event', password: 'evt', deviceHost: 'host' },
+          detail: {
+            baseUrl: 'http://event',
+            password: 'evt',
+            deviceHost: 'host',
+          },
         }),
       );
     });
@@ -188,12 +211,22 @@ describe('useC64Connection', () => {
     await waitFor(() => expect(result.current.baseUrl).toBe('http://event'));
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['c64-info'] });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['c64-drives'] });
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['c64-categories'] });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['c64-categories'],
+    });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['c64-category'] });
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['c64-config-item'] });
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['c64-config-items'] });
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['c64-all-config'] });
-    expect(invalidateSpy.mock.calls.some(([arg]) => 'predicate' in arg)).toBe(false);
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['c64-config-item'],
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['c64-config-items'],
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['c64-all-config'],
+    });
+    expect(invalidateSpy.mock.calls.some(([arg]) => 'predicate' in arg)).toBe(
+      false,
+    );
   });
 
   it('ignores connection change events without effective settings delta', async () => {
@@ -218,7 +251,9 @@ describe('useC64Connection', () => {
     const { wrapper } = createWrapper();
     const { result } = renderHook(() => useC64Categories(), { wrapper });
 
-    await waitFor(() => expect(result.current.data?.categories).toEqual(['Audio']));
+    await waitFor(() =>
+      expect(result.current.data?.categories).toEqual(['Audio']),
+    );
   });
 
   it('marks config changes on mutation success', async () => {
@@ -231,14 +266,17 @@ describe('useC64Connection', () => {
 
   it('fetches all config and tolerates failures', async () => {
     const { wrapper } = createWrapper();
-    mockApi.getCategories.mockResolvedValue({ categories: ['Audio', 'Video'], errors: [] });
+    mockApi.getCategories.mockResolvedValue({
+      categories: ['Audio', 'Video'],
+      errors: [],
+    });
     mockApi.getCategory.mockImplementation(async (category: string) => {
       if (category === 'Video') {
         throw new Error('fail');
       }
       return { [category]: { items: {} }, errors: [] };
     });
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => { });
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     const { result } = renderHook(() => useC64AllConfig(), { wrapper });
     await waitFor(() => expect(result.current.data?.Audio).toBeDefined());
@@ -257,7 +295,9 @@ describe('useC64Connection', () => {
 
   it('fetches a config item when enabled', async () => {
     const { wrapper } = createWrapper();
-    const { result } = renderHook(() => useC64ConfigItem('Audio', 'Volume'), { wrapper });
+    const { result } = renderHook(() => useC64ConfigItem('Audio', 'Volume'), {
+      wrapper,
+    });
 
     await waitFor(() => expect(result.current.data).toBeDefined());
     expect(mockApi.getConfigItem).toHaveBeenCalledWith('Audio', 'Volume');
@@ -284,7 +324,9 @@ describe('useC64Connection', () => {
 
     expect(updateHasChangesMock).toHaveBeenCalled();
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['c64-category'] });
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['c64-all-config'] });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['c64-all-config'],
+    });
   });
 
   it('invalidates queries after reboot delay', async () => {
@@ -470,7 +512,10 @@ describe('useC64Connection', () => {
     });
 
     const { wrapper } = createWrapper();
-    const { result } = renderHook(() => useC64ConfigItems('Audio', ['Volume']), { wrapper });
+    const { result } = renderHook(
+      () => useC64ConfigItems('Audio', ['Volume']),
+      { wrapper },
+    );
 
     expect(result.current.data).toEqual({
       Audio: {
@@ -481,7 +526,9 @@ describe('useC64Connection', () => {
       errors: [],
     });
 
-    await waitFor(() => expect(mockApi.getConfigItems).toHaveBeenCalledWith('Audio', ['Volume']));
+    await waitFor(() =>
+      expect(mockApi.getConfigItems).toHaveBeenCalledWith('Audio', ['Volume']),
+    );
   });
 
   it('supports nested snapshot category blocks for config-items placeholder data', async () => {
@@ -496,10 +543,15 @@ describe('useC64Connection', () => {
         },
       },
     });
-    mockApi.getConfigItems = vi.fn().mockResolvedValue({ Audio: { items: {} }, errors: [] });
+    mockApi.getConfigItems = vi
+      .fn()
+      .mockResolvedValue({ Audio: { items: {} }, errors: [] });
 
     const { wrapper } = createWrapper();
-    const { result } = renderHook(() => useC64ConfigItems('Audio', ['Volume']), { wrapper });
+    const { result } = renderHook(
+      () => useC64ConfigItems('Audio', ['Volume']),
+      { wrapper },
+    );
 
     expect(result.current.data).toEqual({
       Audio: {
@@ -513,7 +565,9 @@ describe('useC64Connection', () => {
 
   it('does not query config-items when disabled or no items are requested', async () => {
     const { wrapper } = createWrapper();
-    renderHook(() => useC64ConfigItems('Audio', ['Volume'], false), { wrapper });
+    renderHook(() => useC64ConfigItems('Audio', ['Volume'], false), {
+      wrapper,
+    });
     renderHook(() => useC64ConfigItems('Audio', [], true), { wrapper });
 
     await waitFor(() => {
@@ -532,7 +586,10 @@ describe('useC64Connection', () => {
   });
 
   it('throws when all categories fail in useC64AllConfig', async () => {
-    mockApi.getCategories.mockResolvedValue({ categories: ['Audio', 'Video'], errors: [] });
+    mockApi.getCategories.mockResolvedValue({
+      categories: ['Audio', 'Video'],
+      errors: [],
+    });
     mockApi.getCategory.mockRejectedValue(new Error('all failed'));
 
     const { wrapper } = createWrapper();
@@ -540,7 +597,9 @@ describe('useC64Connection', () => {
 
     await waitFor(() => {
       expect(result.current.error).toBeTruthy();
-      expect((result.current.error as Error).message).toContain('Failed to fetch configuration data for all categories');
+      expect((result.current.error as Error).message).toContain(
+        'Failed to fetch configuration data for all categories',
+      );
     });
   });
 });

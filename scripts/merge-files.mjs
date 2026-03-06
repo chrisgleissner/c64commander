@@ -21,7 +21,8 @@ Examples:
   process.stdout.write(message);
 };
 
-const normalizeDisplayPath = (filePath) => path.relative(process.cwd(), filePath).split(path.sep).join('/');
+const normalizeDisplayPath = (filePath) =>
+  path.relative(process.cwd(), filePath).split(path.sep).join('/');
 
 const collectFilesFromDir = async (dirPath, recursive) => {
   const entries = await fs.readdir(dirPath, { withFileTypes: true });
@@ -30,7 +31,7 @@ const collectFilesFromDir = async (dirPath, recursive) => {
     const fullPath = path.join(dirPath, entry.name);
     if (entry.isDirectory()) {
       if (recursive) {
-        files.push(...await collectFilesFromDir(fullPath, true));
+        files.push(...(await collectFilesFromDir(fullPath, true)));
       }
       continue;
     }
@@ -121,7 +122,9 @@ const main = async () => {
     fileSet.delete(outputPath);
   }
 
-  const files = Array.from(fileSet).sort((a, b) => normalizeDisplayPath(a).localeCompare(normalizeDisplayPath(b)));
+  const files = Array.from(fileSet).sort((a, b) =>
+    normalizeDisplayPath(a).localeCompare(normalizeDisplayPath(b)),
+  );
   if (!files.length) {
     throw new Error('No files found to merge.');
   }
@@ -147,6 +150,8 @@ const main = async () => {
 };
 
 main().catch((error) => {
-  process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+  process.stderr.write(
+    `${error instanceof Error ? error.message : String(error)}\n`,
+  );
   process.exitCode = 1;
 });

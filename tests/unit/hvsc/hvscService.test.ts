@@ -9,446 +9,526 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@capacitor/core', () => ({
-    Capacitor: {
-        isNativePlatform: vi.fn(() => false),
-        isPluginAvailable: vi.fn(() => false),
-    },
+  Capacitor: {
+    isNativePlatform: vi.fn(() => false),
+    isPluginAvailable: vi.fn(() => false),
+  },
 }));
 
 vi.mock('@/lib/hvsc/hvscIngestionRuntime', () => ({
-    addHvscProgressListener: vi.fn(async (listener: any) => ({ remove: async () => { } })),
-    cancelHvscInstall: vi.fn(async () => undefined),
-    checkForHvscUpdates: vi.fn(async () => ({ latestVersion: 84, installedVersion: 83, baselineVersion: 83, requiredUpdates: [84] })),
-    getHvscCacheStatus: vi.fn(async () => ({ baselineVersion: 83, updateVersions: [84] })),
-    getHvscDurationByMd5Seconds: vi.fn(async () => 42),
-    getHvscFolderListing: vi.fn(async () => ({ path: '/', folders: [], songs: [] })),
-    getHvscSong: vi.fn(async () => ({ id: 1, virtualPath: '/test.sid', fileName: 'test.sid', durationSeconds: 42, durationsSeconds: null, subsongCount: null, md5: null, dataBase64: 'AA==' })),
-    getHvscStatus: vi.fn(async () => ({ ingestionState: 'idle', ingestionError: null, installedVersion: 83 })),
-    ingestCachedHvsc: vi.fn(async () => ({ ingestionState: 'ready', ingestionError: null, installedVersion: 83 })),
-    installOrUpdateHvsc: vi.fn(async () => ({ ingestionState: 'ready', ingestionError: null, installedVersion: 84 })),
+  addHvscProgressListener: vi.fn(async (listener: any) => ({
+    remove: async () => {},
+  })),
+  cancelHvscInstall: vi.fn(async () => undefined),
+  checkForHvscUpdates: vi.fn(async () => ({
+    latestVersion: 84,
+    installedVersion: 83,
+    baselineVersion: 83,
+    requiredUpdates: [84],
+  })),
+  getHvscCacheStatus: vi.fn(async () => ({
+    baselineVersion: 83,
+    updateVersions: [84],
+  })),
+  getHvscDurationByMd5Seconds: vi.fn(async () => 42),
+  getHvscFolderListing: vi.fn(async () => ({
+    path: '/',
+    folders: [],
+    songs: [],
+  })),
+  getHvscSong: vi.fn(async () => ({
+    id: 1,
+    virtualPath: '/test.sid',
+    fileName: 'test.sid',
+    durationSeconds: 42,
+    durationsSeconds: null,
+    subsongCount: null,
+    md5: null,
+    dataBase64: 'AA==',
+  })),
+  getHvscStatus: vi.fn(async () => ({
+    ingestionState: 'idle',
+    ingestionError: null,
+    installedVersion: 83,
+  })),
+  ingestCachedHvsc: vi.fn(async () => ({
+    ingestionState: 'ready',
+    ingestionError: null,
+    installedVersion: 83,
+  })),
+  installOrUpdateHvsc: vi.fn(async () => ({
+    ingestionState: 'ready',
+    ingestionError: null,
+    installedVersion: 84,
+  })),
 }));
 
 vi.mock('@/lib/hvsc/hvscMediaIndex', () => ({
-    createHvscMediaIndex: vi.fn(() => ({
-        load: vi.fn(async () => undefined),
-        getAll: vi.fn(() => []),
-        scan: vi.fn(async () => undefined),
-        queryFolderPage: vi.fn(() => ({
-            path: '/',
-            folders: [],
-            songs: [],
-            totalFolders: 0,
-            totalSongs: 0,
-            offset: 0,
-            limit: 200,
-            query: '',
-        })),
+  createHvscMediaIndex: vi.fn(() => ({
+    load: vi.fn(async () => undefined),
+    getAll: vi.fn(() => []),
+    scan: vi.fn(async () => undefined),
+    queryFolderPage: vi.fn(() => ({
+      path: '/',
+      folders: [],
+      songs: [],
+      totalFolders: 0,
+      totalSongs: 0,
+      offset: 0,
+      limit: 200,
+      query: '',
     })),
+  })),
 }));
 
 vi.mock('@/lib/hvsc/hvscRootLocator', () => ({
-    loadHvscRoot: vi.fn(() => ({ path: '/', label: 'HVSC Library' })),
+  loadHvscRoot: vi.fn(() => ({ path: '/', label: 'HVSC Library' })),
 }));
 
 vi.mock('@/lib/hvsc/hvscSongLengthService', () => ({
-    ensureHvscSonglengthsReadyOnColdStart: vi.fn(async () => undefined),
-    resolveHvscSonglengthDuration: vi.fn(async () => ({ durationSeconds: 42, durations: null, subsongCount: null })),
+  ensureHvscSonglengthsReadyOnColdStart: vi.fn(async () => undefined),
+  resolveHvscSonglengthDuration: vi.fn(async () => ({
+    durationSeconds: 42,
+    durations: null,
+    subsongCount: null,
+  })),
 }));
 
 vi.mock('@/lib/sourceNavigation/paths', () => ({
-    normalizeSourcePath: vi.fn((p: string) => p || '/'),
+  normalizeSourcePath: vi.fn((p: string) => p || '/'),
 }));
 
 vi.mock('@/lib/hvsc/hvscBrowseIndexStore', () => ({
-    loadHvscBrowseIndexSnapshot: vi.fn(async () => ({
-        schemaVersion: 1,
-        updatedAt: new Date().toISOString(),
-        songs: {},
-        folders: { '/': { path: '/', folders: [], songs: [] } },
-    })),
-    verifyHvscBrowseIndexIntegrity: vi.fn(async () => ({
-        isValid: true,
-        sampled: 0,
-        missingPaths: [],
-    })),
+  loadHvscBrowseIndexSnapshot: vi.fn(async () => ({
+    schemaVersion: 1,
+    updatedAt: new Date().toISOString(),
+    songs: {},
+    folders: { '/': { path: '/', folders: [], songs: [] } },
+  })),
+  verifyHvscBrowseIndexIntegrity: vi.fn(async () => ({
+    isValid: true,
+    sampled: 0,
+    missingPaths: [],
+  })),
 }));
 
 vi.mock('@/lib/logging', () => ({
-    addErrorLog: vi.fn(),
-    addLog: vi.fn(),
+  addErrorLog: vi.fn(),
+  addLog: vi.fn(),
 }));
 
 import { Capacitor } from '@capacitor/core';
 import {
-    isHvscBridgeAvailable,
-    getHvscStatus,
-    getHvscCacheStatus,
-    checkForHvscUpdates,
-    installOrUpdateHvsc,
-    ingestCachedHvsc,
-    cancelHvscInstall,
-    addHvscProgressListener,
-    getHvscFolderListing,
-    getHvscFolderListingPaged,
-    getHvscSong,
-    getHvscDurationByMd5Seconds,
-    getHvscDurationsByMd5Seconds,
-    resolveHvscSonglength,
-    __test__,
+  isHvscBridgeAvailable,
+  getHvscStatus,
+  getHvscCacheStatus,
+  checkForHvscUpdates,
+  installOrUpdateHvsc,
+  ingestCachedHvsc,
+  cancelHvscInstall,
+  addHvscProgressListener,
+  getHvscFolderListing,
+  getHvscFolderListingPaged,
+  getHvscSong,
+  getHvscDurationByMd5Seconds,
+  getHvscDurationsByMd5Seconds,
+  resolveHvscSonglength,
+  __test__,
 } from '@/lib/hvsc/hvscService';
 import {
-    getHvscStatus as getRuntimeStatus,
-    getHvscFolderListing as getRuntimeFolderListing,
+  getHvscStatus as getRuntimeStatus,
+  getHvscFolderListing as getRuntimeFolderListing,
 } from '@/lib/hvsc/hvscIngestionRuntime';
 import { resolveHvscSonglengthDuration } from '@/lib/hvsc/hvscSongLengthService';
 import {
-    loadHvscBrowseIndexSnapshot,
-    verifyHvscBrowseIndexIntegrity,
+  loadHvscBrowseIndexSnapshot,
+  verifyHvscBrowseIndexIntegrity,
 } from '@/lib/hvsc/hvscBrowseIndexStore';
 
 describe('hvscService', () => {
-    beforeEach(() => {
-        vi.clearAllMocks();
-        // Remove mock bridge if present
-        delete (window as any).__hvscMock__;
-        vi.mocked(Capacitor.isNativePlatform).mockReturnValue(false);
-        vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(false);
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // Remove mock bridge if present
+    delete (window as any).__hvscMock__;
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(false);
+    vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(false);
+  });
+
+  describe('isHvscBridgeAvailable', () => {
+    it('returns true when mock bridge is present', () => {
+      (window as any).__hvscMock__ = { getHvscStatus: vi.fn() };
+      expect(isHvscBridgeAvailable()).toBe(true);
     });
 
-    describe('isHvscBridgeAvailable', () => {
-        it('returns true when mock bridge is present', () => {
-            (window as any).__hvscMock__ = { getHvscStatus: vi.fn() };
-            expect(isHvscBridgeAvailable()).toBe(true);
-        });
-
-        it('returns true when Capacitor Filesystem is available', () => {
-            vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
-            expect(isHvscBridgeAvailable()).toBe(true);
-        });
-
-        it('returns false when neither bridge is available', () => {
-            expect(isHvscBridgeAvailable()).toBe(false);
-        });
+    it('returns true when Capacitor Filesystem is available', () => {
+      vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
+      expect(isHvscBridgeAvailable()).toBe(true);
     });
 
-    describe('runtime dispatch', () => {
-        it('getHvscStatus delegates to runtime', async () => {
-            const status = await getHvscStatus();
-            expect(status.ingestionState).toBe('idle');
-            expect(getRuntimeStatus).toHaveBeenCalled();
-        });
+    it('returns false when neither bridge is available', () => {
+      expect(isHvscBridgeAvailable()).toBe(false);
+    });
+  });
 
-        it('getHvscCacheStatus delegates to runtime', async () => {
-            const cache = await getHvscCacheStatus();
-            expect(cache.baselineVersion).toBe(83);
-        });
-
-        it('checkForHvscUpdates delegates to runtime', async () => {
-            const updates = await checkForHvscUpdates();
-            expect(updates.latestVersion).toBe(84);
-        });
-
-        it('installOrUpdateHvsc delegates to runtime', async () => {
-            const status = await installOrUpdateHvsc('token-1');
-            expect(status.installedVersion).toBe(84);
-        });
-
-        it('ingestCachedHvsc delegates to runtime', async () => {
-            const status = await ingestCachedHvsc('token-2');
-            expect(status.installedVersion).toBe(83);
-        });
-
-        it('cancelHvscInstall delegates to runtime', async () => {
-            await cancelHvscInstall('token-3');
-        });
-
-        it('addHvscProgressListener delegates to runtime', async () => {
-            const listener = vi.fn();
-            const sub = await addHvscProgressListener(listener);
-            expect(sub.remove).toBeDefined();
-        });
-
-        it('getHvscSong delegates to runtime', async () => {
-            const song = await getHvscSong({ virtualPath: '/test.sid' });
-            expect(song.fileName).toBe('test.sid');
-        });
-
-        it('getHvscDurationByMd5Seconds delegates to runtime', async () => {
-            const duration = await getHvscDurationByMd5Seconds('abc123');
-            expect(duration).toBe(42);
-        });
+  describe('runtime dispatch', () => {
+    it('getHvscStatus delegates to runtime', async () => {
+      const status = await getHvscStatus();
+      expect(status.ingestionState).toBe('idle');
+      expect(getRuntimeStatus).toHaveBeenCalled();
     });
 
-    describe('mock bridge dispatch', () => {
-        it('getHvscStatus dispatches to mock bridge when present', async () => {
-            const mockGetStatus = vi.fn().mockResolvedValue({ ingestionState: 'ready', installedVersion: 99 });
-            (window as any).__hvscMock__ = { getHvscStatus: mockGetStatus };
-
-            const status = await getHvscStatus();
-            expect(status.installedVersion).toBe(99);
-            expect(mockGetStatus).toHaveBeenCalled();
-            expect(getRuntimeStatus).not.toHaveBeenCalled();
-        });
-
-        it('getHvscSong dispatches to mock bridge when present', async () => {
-            const mockGetSong = vi.fn().mockResolvedValue({ id: 1, virtualPath: '/mock.sid', fileName: 'mock.sid', durationSeconds: 10 });
-            (window as any).__hvscMock__ = { getHvscSong: mockGetSong };
-
-            const song = await getHvscSong({ virtualPath: '/mock.sid' });
-            expect(song.fileName).toBe('mock.sid');
-        });
+    it('getHvscCacheStatus delegates to runtime', async () => {
+      const cache = await getHvscCacheStatus();
+      expect(cache.baselineVersion).toBe(83);
     });
 
-    describe('getHvscFolderListing', () => {
-        it('falls back to runtime when index is empty and bridge is available', async () => {
-            vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
-            const result = await getHvscFolderListing('/');
-            expect(getRuntimeFolderListing).toHaveBeenCalledWith('/');
-        });
-
-        it('returns empty listing from index when bridge is unavailable', async () => {
-            const result = await getHvscFolderListing('/');
-            expect(getRuntimeFolderListing).not.toHaveBeenCalled();
-            expect(result).toEqual({ path: '/', folders: [], songs: [] });
-        });
+    it('checkForHvscUpdates delegates to runtime', async () => {
+      const updates = await checkForHvscUpdates();
+      expect(updates.latestVersion).toBe(84);
     });
 
-    describe('paged listing', () => {
-        it('returns paged runtime listing metadata', async () => {
-            const page = await getHvscFolderListingPaged({ path: '/', limit: 10, offset: 0 });
-            expect(page.limit).toBeGreaterThanOrEqual(10);
-            expect(page.offset).toBe(0);
-            expect(page.totalSongs).toBe(0);
-        });
-
-        it('maps paged results into compatibility listing', async () => {
-            const listing = await getHvscFolderListing('/');
-            expect(listing).toEqual({ path: '/', folders: [], songs: [] });
-        });
-
-        it('filters runtime listing in page helper', () => {
-            const page = __test__.pageRuntimeListing({
-                path: '/DEMOS',
-                folders: ['/DEMOS/A', '/DEMOS/B'],
-                songs: [
-                    { id: 1, virtualPath: '/DEMOS/A/One.sid', fileName: 'One.sid' },
-                    { id: 2, virtualPath: '/DEMOS/B/Two.sid', fileName: 'Two.sid' },
-                ],
-            }, 'Two', 0, 50);
-            expect(page.totalSongs).toBe(1);
-            expect(page.songs[0]?.fileName).toBe('Two.sid');
-        });
+    it('installOrUpdateHvsc delegates to runtime', async () => {
+      const status = await installOrUpdateHvsc('token-1');
+      expect(status.installedVersion).toBe(84);
     });
 
-    describe('getHvscDurationsByMd5Seconds', () => {
-        it('delegates to songlength resolution when no mock bridge', async () => {
-            vi.mocked(resolveHvscSonglengthDuration).mockResolvedValue({
-                durationSeconds: 42,
-                durations: [42, 55],
-                subsongCount: 2,
-            });
-
-            const result = await getHvscDurationsByMd5Seconds('abc123');
-            expect(result).toEqual([42, 55]);
-        });
-
-        it('returns single-element array when only durationSeconds available', async () => {
-            vi.mocked(resolveHvscSonglengthDuration).mockResolvedValue({
-                durationSeconds: 42,
-                durations: null,
-                subsongCount: null,
-            });
-
-            const result = await getHvscDurationsByMd5Seconds('abc123');
-            expect(result).toEqual([42]);
-        });
-
-        it('returns null when no duration available', async () => {
-            vi.mocked(resolveHvscSonglengthDuration).mockResolvedValue({
-                durationSeconds: null,
-                durations: null,
-                subsongCount: null,
-            });
-
-            const result = await getHvscDurationsByMd5Seconds('abc123');
-            expect(result).toBeNull();
-        });
-
-        it('uses mock bridge when present', async () => {
-            const mockDurations = vi.fn().mockResolvedValue({ durationsSeconds: [10, 20, 30] });
-            (window as any).__hvscMock__ = { getHvscDurationsByMd5: mockDurations };
-
-            const result = await getHvscDurationsByMd5Seconds('abc123');
-            expect(result).toEqual([10, 20, 30]);
-        });
+    it('ingestCachedHvsc delegates to runtime', async () => {
+      const status = await ingestCachedHvsc('token-2');
+      expect(status.installedVersion).toBe(83);
     });
 
-    describe('resolveHvscSonglength', () => {
-        it('delegates to songlength resolution when no mock bridge', async () => {
-            vi.mocked(resolveHvscSonglengthDuration).mockResolvedValue({
-                durationSeconds: 42,
-                durations: null,
-                subsongCount: null,
-            });
-
-            const result = await resolveHvscSonglength({ virtualPath: '/test.sid' });
-            expect(result.durationSeconds).toBe(42);
-        });
-
-        it('dispatches to mock bridge when present', async () => {
-            const mockResolve = vi.fn().mockResolvedValue({ durationSeconds: 99, durations: [99], subsongCount: 1 });
-            (window as any).__hvscMock__ = { resolveHvscSonglengthDuration: mockResolve };
-
-            const result = await resolveHvscSonglength({ virtualPath: '/test.sid' });
-            expect(result.durationSeconds).toBe(99);
-        });
+    it('cancelHvscInstall delegates to runtime', async () => {
+      await cancelHvscInstall('token-3');
     });
 
-    describe('mock bridge: getHvscDurationByMd5Seconds', () => {
-        it('uses mock bridge when present', async () => {
-            const mockDuration = vi.fn().mockResolvedValue({ durationSeconds: 77 });
-            (window as any).__hvscMock__ = { getHvscDurationByMd5: mockDuration };
-
-            const result = await getHvscDurationByMd5Seconds('md5hash');
-            expect(result).toBe(77);
-        });
-
-        it('returns null when mock bridge returns null durationSeconds', async () => {
-            const mockDuration = vi.fn().mockResolvedValue({ durationSeconds: null });
-            (window as any).__hvscMock__ = { getHvscDurationByMd5: mockDuration };
-
-            const result = await getHvscDurationByMd5Seconds('md5hash');
-            expect(result).toBeNull();
-        });
+    it('addHvscProgressListener delegates to runtime', async () => {
+      const listener = vi.fn();
+      const sub = await addHvscProgressListener(listener);
+      expect(sub.remove).toBeDefined();
     });
 
-    describe('mock bridge: getHvscCacheStatus', () => {
-        it('dispatches to mock bridge when present', async () => {
-            const mockStatus = vi.fn().mockResolvedValue({ baselineVersion: 99 });
-            (window as any).__hvscMock__ = { getHvscCacheStatus: mockStatus };
-
-            const status = await getHvscCacheStatus();
-            expect(status.baselineVersion).toBe(99);
-        });
+    it('getHvscSong delegates to runtime', async () => {
+      const song = await getHvscSong({ virtualPath: '/test.sid' });
+      expect(song.fileName).toBe('test.sid');
     });
 
-    describe('mock bridge: checkForHvscUpdates', () => {
-        it('dispatches to mock bridge when present', async () => {
-            const mockUpdates = vi.fn().mockResolvedValue({ latestVersion: 100 });
-            (window as any).__hvscMock__ = { checkForHvscUpdates: mockUpdates };
+    it('getHvscDurationByMd5Seconds delegates to runtime', async () => {
+      const duration = await getHvscDurationByMd5Seconds('abc123');
+      expect(duration).toBe(42);
+    });
+  });
 
-            const updates = await checkForHvscUpdates();
-            expect(updates.latestVersion).toBe(100);
-        });
+  describe('mock bridge dispatch', () => {
+    it('getHvscStatus dispatches to mock bridge when present', async () => {
+      const mockGetStatus = vi
+        .fn()
+        .mockResolvedValue({ ingestionState: 'ready', installedVersion: 99 });
+      (window as any).__hvscMock__ = { getHvscStatus: mockGetStatus };
+
+      const status = await getHvscStatus();
+      expect(status.installedVersion).toBe(99);
+      expect(mockGetStatus).toHaveBeenCalled();
+      expect(getRuntimeStatus).not.toHaveBeenCalled();
     });
 
-    describe('mock bridge: installOrUpdateHvsc', () => {
-        it('dispatches to mock bridge when present', async () => {
-            const mockInstall = vi.fn().mockResolvedValue({ installedVersion: 100 });
-            (window as any).__hvscMock__ = { installOrUpdateHvsc: mockInstall };
-
-            const status = await installOrUpdateHvsc('t1');
-            expect(status.installedVersion).toBe(100);
+    it('getHvscSong dispatches to mock bridge when present', async () => {
+      const mockGetSong = vi
+        .fn()
+        .mockResolvedValue({
+          id: 1,
+          virtualPath: '/mock.sid',
+          fileName: 'mock.sid',
+          durationSeconds: 10,
         });
+      (window as any).__hvscMock__ = { getHvscSong: mockGetSong };
+
+      const song = await getHvscSong({ virtualPath: '/mock.sid' });
+      expect(song.fileName).toBe('mock.sid');
+    });
+  });
+
+  describe('getHvscFolderListing', () => {
+    it('falls back to runtime when index is empty and bridge is available', async () => {
+      vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
+      const result = await getHvscFolderListing('/');
+      expect(getRuntimeFolderListing).toHaveBeenCalledWith('/');
     });
 
-    describe('mock bridge: ingestCachedHvsc', () => {
-        it('dispatches to mock bridge when present', async () => {
-            const mockIngest = vi.fn().mockResolvedValue({ installedVersion: 100 });
-            (window as any).__hvscMock__ = { ingestCachedHvsc: mockIngest };
+    it('returns empty listing from index when bridge is unavailable', async () => {
+      const result = await getHvscFolderListing('/');
+      expect(getRuntimeFolderListing).not.toHaveBeenCalled();
+      expect(result).toEqual({ path: '/', folders: [], songs: [] });
+    });
+  });
 
-            const status = await ingestCachedHvsc('t1');
-            expect(status.installedVersion).toBe(100);
-        });
+  describe('paged listing', () => {
+    it('returns paged runtime listing metadata', async () => {
+      const page = await getHvscFolderListingPaged({
+        path: '/',
+        limit: 10,
+        offset: 0,
+      });
+      expect(page.limit).toBeGreaterThanOrEqual(10);
+      expect(page.offset).toBe(0);
+      expect(page.totalSongs).toBe(0);
     });
 
-    describe('mock bridge: cancelHvscInstall', () => {
-        it('dispatches to mock bridge when present', async () => {
-            const mockCancel = vi.fn().mockResolvedValue(undefined);
-            (window as any).__hvscMock__ = { cancelHvscInstall: mockCancel };
-
-            await cancelHvscInstall('t1');
-            expect(mockCancel).toHaveBeenCalledWith({ cancelToken: 't1' });
-        });
+    it('maps paged results into compatibility listing', async () => {
+      const listing = await getHvscFolderListing('/');
+      expect(listing).toEqual({ path: '/', folders: [], songs: [] });
     });
 
-    describe('mock bridge: addHvscProgressListener', () => {
-        it('dispatches to mock bridge when present', async () => {
-            const mockListen = vi.fn().mockResolvedValue({ remove: vi.fn() });
-            (window as any).__hvscMock__ = { addListener: mockListen };
+    it('filters runtime listing in page helper', () => {
+      const page = __test__.pageRuntimeListing(
+        {
+          path: '/DEMOS',
+          folders: ['/DEMOS/A', '/DEMOS/B'],
+          songs: [
+            { id: 1, virtualPath: '/DEMOS/A/One.sid', fileName: 'One.sid' },
+            { id: 2, virtualPath: '/DEMOS/B/Two.sid', fileName: 'Two.sid' },
+          ],
+        },
+        'Two',
+        0,
+        50,
+      );
+      expect(page.totalSongs).toBe(1);
+      expect(page.songs[0]?.fileName).toBe('Two.sid');
+    });
+  });
 
-            const listener = vi.fn();
-            await addHvscProgressListener(listener);
-            expect(mockListen).toHaveBeenCalledWith('progress', listener);
-        });
+  describe('getHvscDurationsByMd5Seconds', () => {
+    it('delegates to songlength resolution when no mock bridge', async () => {
+      vi.mocked(resolveHvscSonglengthDuration).mockResolvedValue({
+        durationSeconds: 42,
+        durations: [42, 55],
+        subsongCount: 2,
+      });
+
+      const result = await getHvscDurationsByMd5Seconds('abc123');
+      expect(result).toEqual([42, 55]);
     });
 
-    describe('hasRuntimeBridge', () => {
-        it('returns true on native platform', () => {
-            vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
-            expect(isHvscBridgeAvailable()).toBe(true);
-        });
+    it('returns single-element array when only durationSeconds available', async () => {
+      vi.mocked(resolveHvscSonglengthDuration).mockResolvedValue({
+        durationSeconds: 42,
+        durations: null,
+        subsongCount: null,
+      });
 
-        it('handles runtime bridge probe error gracefully', () => {
-            vi.mocked(Capacitor.isNativePlatform).mockImplementation(() => {
-                throw new Error('plugin error');
-            });
-            vi.mocked(Capacitor.isPluginAvailable).mockImplementation(() => {
-                throw new Error('plugin error');
-            });
-            expect(isHvscBridgeAvailable()).toBe(false);
-        });
-
-        it('returns false when window is undefined (covers typeof window branches)', () => {
-            vi.stubGlobal('window', undefined);
-            try {
-                expect(isHvscBridgeAvailable()).toBe(false);
-            } finally {
-                vi.unstubAllGlobals();
-            }
-        });
+      const result = await getHvscDurationsByMd5Seconds('abc123');
+      expect(result).toEqual([42]);
     });
 
-    describe('ensureHvscIndexReady', () => {
-        it('scans index when browse snapshot is null (line 153)', async () => {
-            vi.mocked(loadHvscBrowseIndexSnapshot).mockResolvedValueOnce(null);
-            const page = await getHvscFolderListingPaged({ path: '/' });
-            expect(page.totalSongs).toBe(0);
-        });
+    it('returns null when no duration available', async () => {
+      vi.mocked(resolveHvscSonglengthDuration).mockResolvedValue({
+        durationSeconds: null,
+        durations: null,
+        subsongCount: null,
+      });
 
-        it('rescans when index integrity is invalid (line 160)', async () => {
-            vi.mocked(verifyHvscBrowseIndexIntegrity).mockResolvedValueOnce({ isValid: false, sampled: 0, missingPaths: [] });
-            const page = await getHvscFolderListingPaged({ path: '/' });
-            expect(page.totalSongs).toBe(0);
-        });
+      const result = await getHvscDurationsByMd5Seconds('abc123');
+      expect(result).toBeNull();
     });
 
-    describe('getHvscFolderListingPaged option fallbacks', () => {
-        it('uses defaults when called with empty options (lines 203-206)', async () => {
-            const page = await getHvscFolderListingPaged({} as any);
-            expect(page.offset).toBe(0);
-        });
+    it('uses mock bridge when present', async () => {
+      const mockDurations = vi
+        .fn()
+        .mockResolvedValue({ durationsSeconds: [10, 20, 30] });
+      (window as any).__hvscMock__ = { getHvscDurationsByMd5: mockDurations };
 
-        it('accepts explicit query and offset (lines 205-206)', async () => {
-            const page = await getHvscFolderListingPaged({ path: '/', query: 'Test', offset: 5, limit: 20 });
-            expect(page.limit).toBeGreaterThanOrEqual(1);
-        });
+      const result = await getHvscDurationsByMd5Seconds('abc123');
+      expect(result).toEqual([10, 20, 30]);
+    });
+  });
 
-        it('delegates to mock bridge getHvscFolderListing when present (line 220)', async () => {
-            const mockListing = vi.fn().mockResolvedValue({ path: '/', folders: [], songs: [] });
-            (window as any).__hvscMock__ = { getHvscFolderListing: mockListing };
-            const page = await getHvscFolderListingPaged({ path: '/' });
-            expect(mockListing).toHaveBeenCalled();
-            expect(page.totalSongs).toBe(0);
-        });
+  describe('resolveHvscSonglength', () => {
+    it('delegates to songlength resolution when no mock bridge', async () => {
+      vi.mocked(resolveHvscSonglengthDuration).mockResolvedValue({
+        durationSeconds: 42,
+        durations: null,
+        subsongCount: null,
+      });
+
+      const result = await resolveHvscSonglength({ virtualPath: '/test.sid' });
+      expect(result.durationSeconds).toBe(42);
     });
 
-    describe('getHvscDurationsByMd5Seconds null durationsSeconds', () => {
-        it('returns null when mock bridge durationsSeconds is undefined (line 281)', async () => {
-            const mockDurations = vi.fn().mockResolvedValue({ durationsSeconds: undefined });
-            (window as any).__hvscMock__ = { getHvscDurationsByMd5: mockDurations };
-            const result = await getHvscDurationsByMd5Seconds('abc');
-            expect(result).toBeNull();
+    it('dispatches to mock bridge when present', async () => {
+      const mockResolve = vi
+        .fn()
+        .mockResolvedValue({
+          durationSeconds: 99,
+          durations: [99],
+          subsongCount: 1,
         });
+      (window as any).__hvscMock__ = {
+        resolveHvscSonglengthDuration: mockResolve,
+      };
+
+      const result = await resolveHvscSonglength({ virtualPath: '/test.sid' });
+      expect(result.durationSeconds).toBe(99);
     });
+  });
+
+  describe('mock bridge: getHvscDurationByMd5Seconds', () => {
+    it('uses mock bridge when present', async () => {
+      const mockDuration = vi.fn().mockResolvedValue({ durationSeconds: 77 });
+      (window as any).__hvscMock__ = { getHvscDurationByMd5: mockDuration };
+
+      const result = await getHvscDurationByMd5Seconds('md5hash');
+      expect(result).toBe(77);
+    });
+
+    it('returns null when mock bridge returns null durationSeconds', async () => {
+      const mockDuration = vi.fn().mockResolvedValue({ durationSeconds: null });
+      (window as any).__hvscMock__ = { getHvscDurationByMd5: mockDuration };
+
+      const result = await getHvscDurationByMd5Seconds('md5hash');
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('mock bridge: getHvscCacheStatus', () => {
+    it('dispatches to mock bridge when present', async () => {
+      const mockStatus = vi.fn().mockResolvedValue({ baselineVersion: 99 });
+      (window as any).__hvscMock__ = { getHvscCacheStatus: mockStatus };
+
+      const status = await getHvscCacheStatus();
+      expect(status.baselineVersion).toBe(99);
+    });
+  });
+
+  describe('mock bridge: checkForHvscUpdates', () => {
+    it('dispatches to mock bridge when present', async () => {
+      const mockUpdates = vi.fn().mockResolvedValue({ latestVersion: 100 });
+      (window as any).__hvscMock__ = { checkForHvscUpdates: mockUpdates };
+
+      const updates = await checkForHvscUpdates();
+      expect(updates.latestVersion).toBe(100);
+    });
+  });
+
+  describe('mock bridge: installOrUpdateHvsc', () => {
+    it('dispatches to mock bridge when present', async () => {
+      const mockInstall = vi.fn().mockResolvedValue({ installedVersion: 100 });
+      (window as any).__hvscMock__ = { installOrUpdateHvsc: mockInstall };
+
+      const status = await installOrUpdateHvsc('t1');
+      expect(status.installedVersion).toBe(100);
+    });
+  });
+
+  describe('mock bridge: ingestCachedHvsc', () => {
+    it('dispatches to mock bridge when present', async () => {
+      const mockIngest = vi.fn().mockResolvedValue({ installedVersion: 100 });
+      (window as any).__hvscMock__ = { ingestCachedHvsc: mockIngest };
+
+      const status = await ingestCachedHvsc('t1');
+      expect(status.installedVersion).toBe(100);
+    });
+  });
+
+  describe('mock bridge: cancelHvscInstall', () => {
+    it('dispatches to mock bridge when present', async () => {
+      const mockCancel = vi.fn().mockResolvedValue(undefined);
+      (window as any).__hvscMock__ = { cancelHvscInstall: mockCancel };
+
+      await cancelHvscInstall('t1');
+      expect(mockCancel).toHaveBeenCalledWith({ cancelToken: 't1' });
+    });
+  });
+
+  describe('mock bridge: addHvscProgressListener', () => {
+    it('dispatches to mock bridge when present', async () => {
+      const mockListen = vi.fn().mockResolvedValue({ remove: vi.fn() });
+      (window as any).__hvscMock__ = { addListener: mockListen };
+
+      const listener = vi.fn();
+      await addHvscProgressListener(listener);
+      expect(mockListen).toHaveBeenCalledWith('progress', listener);
+    });
+  });
+
+  describe('hasRuntimeBridge', () => {
+    it('returns true on native platform', () => {
+      vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+      expect(isHvscBridgeAvailable()).toBe(true);
+    });
+
+    it('handles runtime bridge probe error gracefully', () => {
+      vi.mocked(Capacitor.isNativePlatform).mockImplementation(() => {
+        throw new Error('plugin error');
+      });
+      vi.mocked(Capacitor.isPluginAvailable).mockImplementation(() => {
+        throw new Error('plugin error');
+      });
+      expect(isHvscBridgeAvailable()).toBe(false);
+    });
+
+    it('returns false when window is undefined (covers typeof window branches)', () => {
+      vi.stubGlobal('window', undefined);
+      try {
+        expect(isHvscBridgeAvailable()).toBe(false);
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+  });
+
+  describe('ensureHvscIndexReady', () => {
+    it('scans index when browse snapshot is null (line 153)', async () => {
+      vi.mocked(loadHvscBrowseIndexSnapshot).mockResolvedValueOnce(null);
+      const page = await getHvscFolderListingPaged({ path: '/' });
+      expect(page.totalSongs).toBe(0);
+    });
+
+    it('rescans when index integrity is invalid (line 160)', async () => {
+      vi.mocked(verifyHvscBrowseIndexIntegrity).mockResolvedValueOnce({
+        isValid: false,
+        sampled: 0,
+        missingPaths: [],
+      });
+      const page = await getHvscFolderListingPaged({ path: '/' });
+      expect(page.totalSongs).toBe(0);
+    });
+  });
+
+  describe('getHvscFolderListingPaged option fallbacks', () => {
+    it('uses defaults when called with empty options (lines 203-206)', async () => {
+      const page = await getHvscFolderListingPaged({} as any);
+      expect(page.offset).toBe(0);
+    });
+
+    it('accepts explicit query and offset (lines 205-206)', async () => {
+      const page = await getHvscFolderListingPaged({
+        path: '/',
+        query: 'Test',
+        offset: 5,
+        limit: 20,
+      });
+      expect(page.limit).toBeGreaterThanOrEqual(1);
+    });
+
+    it('delegates to mock bridge getHvscFolderListing when present (line 220)', async () => {
+      const mockListing = vi
+        .fn()
+        .mockResolvedValue({ path: '/', folders: [], songs: [] });
+      (window as any).__hvscMock__ = { getHvscFolderListing: mockListing };
+      const page = await getHvscFolderListingPaged({ path: '/' });
+      expect(mockListing).toHaveBeenCalled();
+      expect(page.totalSongs).toBe(0);
+    });
+  });
+
+  describe('getHvscDurationsByMd5Seconds null durationsSeconds', () => {
+    it('returns null when mock bridge durationsSeconds is undefined (line 281)', async () => {
+      const mockDurations = vi
+        .fn()
+        .mockResolvedValue({ durationsSeconds: undefined });
+      (window as any).__hvscMock__ = { getHvscDurationsByMd5: mockDurations };
+      const result = await getHvscDurationsByMd5Seconds('abc');
+      expect(result).toBeNull();
+    });
+  });
 });

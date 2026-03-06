@@ -8,7 +8,10 @@
 
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { SelectableActionList, type ActionListItem } from '@/components/lists/SelectableActionList';
+import {
+  SelectableActionList,
+  type ActionListItem,
+} from '@/components/lists/SelectableActionList';
 import type { PlayFileCategory } from '@/lib/playback/fileTypes';
 
 export type PlaylistPanelProps = {
@@ -59,10 +62,13 @@ export const PlaylistPanel = ({
       viewAllTitle="Playlist"
       listTestId="playlist-list"
       rowTestId="playlist-item"
-      filterHeader={(
+      filterHeader={
         <div className="flex flex-wrap gap-2">
           {categoryOptions.map((category) => (
-            <label key={category} className="flex items-center gap-1 text-[11px] text-muted-foreground">
+            <label
+              key={category}
+              className="flex items-center gap-1 text-[11px] text-muted-foreground"
+            >
               <Checkbox
                 checked={playlistTypeFilters.includes(category)}
                 onCheckedChange={() => onToggleFilter(category)}
@@ -73,7 +79,7 @@ export const PlaylistPanel = ({
             </label>
           ))}
         </div>
-      )}
+      }
       headerActions={
         <div className="flex flex-wrap items-center gap-2">
           <Button

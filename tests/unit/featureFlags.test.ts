@@ -22,7 +22,10 @@ vi.mock('@/lib/logging', () => ({
 
 const buildDefaults = () =>
   Object.fromEntries(
-    Object.entries(FEATURE_FLAG_DEFINITIONS).map(([key, def]) => [key, def.defaultValue]),
+    Object.entries(FEATURE_FLAG_DEFINITIONS).map(([key, def]) => [
+      key,
+      def.defaultValue,
+    ]),
   ) as Record<keyof typeof FEATURE_FLAG_DEFINITIONS, boolean>;
 
 describe('featureFlags', () => {
@@ -63,7 +66,10 @@ describe('featureFlags', () => {
 
     expect(manager.getSnapshot().isLoaded).toBe(true);
     expect(manager.getSnapshot().flags.hvsc_enabled).toBe(true);
-    expect(addErrorLog).toHaveBeenCalledWith('Feature flag load failed', expect.any(Object));
+    expect(addErrorLog).toHaveBeenCalledWith(
+      'Feature flag load failed',
+      expect.any(Object),
+    );
   });
 
   it('surfaces repository failures when setting flags', async () => {
@@ -75,8 +81,13 @@ describe('featureFlags', () => {
     const manager = new FeatureFlagManager(repository, buildDefaults());
 
     await manager.load();
-    await expect(manager.setFlag('hvsc_enabled', false)).rejects.toThrow('fail');
-    expect(addErrorLog).toHaveBeenCalledWith('Feature flag update failed', expect.any(Object));
+    await expect(manager.setFlag('hvsc_enabled', false)).rejects.toThrow(
+      'fail',
+    );
+    expect(addErrorLog).toHaveBeenCalledWith(
+      'Feature flag update failed',
+      expect.any(Object),
+    );
   });
 
   it('returns null when in-memory repository has no value', async () => {

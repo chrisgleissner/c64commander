@@ -45,7 +45,9 @@ describe('diskTypes helpers', () => {
   });
 
   it('creates disk entries with defaults', () => {
-    const nowSpy = vi.spyOn(Date.prototype, 'toISOString').mockReturnValue('2024-01-01T00:00:00Z');
+    const nowSpy = vi
+      .spyOn(Date.prototype, 'toISOString')
+      .mockReturnValue('2024-01-01T00:00:00Z');
     const entry = createDiskEntry({
       path: 'Usb0/Games/Disk 1.d64',
       location: 'local',

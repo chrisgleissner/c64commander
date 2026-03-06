@@ -22,9 +22,27 @@ describe('streamStatus', () => {
     });
 
     expect(result).toEqual([
-      { key: 'vic', label: 'VIC', state: 'ON', ip: '192.168.1.20', port: '11000' },
-      { key: 'audio', label: 'Audio', state: 'ON', ip: '192.168.1.21', port: '11001' },
-      { key: 'debug', label: 'Debug', state: 'ON', ip: '192.168.1.22', port: '11002' },
+      {
+        key: 'vic',
+        label: 'VIC',
+        state: 'ON',
+        ip: '192.168.1.20',
+        port: '11000',
+      },
+      {
+        key: 'audio',
+        label: 'Audio',
+        state: 'ON',
+        ip: '192.168.1.21',
+        port: '11001',
+      },
+      {
+        key: 'debug',
+        label: 'Debug',
+        state: 'ON',
+        ip: '192.168.1.22',
+        port: '11002',
+      },
     ]);
   });
 
@@ -38,9 +56,27 @@ describe('streamStatus', () => {
       },
     });
 
-    expect(result[0]).toEqual({ key: 'vic', label: 'VIC', state: 'OFF', ip: '—', port: '—' });
-    expect(result[1]).toEqual({ key: 'audio', label: 'Audio', state: 'OFF', ip: '—', port: '—' });
-    expect(result[2]).toEqual({ key: 'debug', label: 'Debug', state: 'OFF', ip: '—', port: '—' });
+    expect(result[0]).toEqual({
+      key: 'vic',
+      label: 'VIC',
+      state: 'OFF',
+      ip: '—',
+      port: '—',
+    });
+    expect(result[1]).toEqual({
+      key: 'audio',
+      label: 'Audio',
+      state: 'OFF',
+      ip: '—',
+      port: '—',
+    });
+    expect(result[2]).toEqual({
+      key: 'debug',
+      label: 'Debug',
+      state: 'OFF',
+      ip: '—',
+      port: '—',
+    });
   });
 
   it('applies default port when target omits one', () => {
@@ -77,7 +113,13 @@ describe('streamStatus', () => {
       'Stream Debug to': { selected: '0.0.0.0:0' },
     });
 
-    expect(result[0]).toEqual({ key: 'vic', label: 'VIC', state: 'ON', ip: '10.0.0.1', port: '11000' });
+    expect(result[0]).toEqual({
+      key: 'vic',
+      label: 'VIC',
+      state: 'ON',
+      ip: '10.0.0.1',
+      port: '11000',
+    });
     expect(result[1].state).toBe('OFF');
     expect(result[2].state).toBe('OFF');
   });
@@ -92,7 +134,13 @@ describe('streamStatus', () => {
       },
     });
 
-    expect(result[0]).toEqual({ key: 'vic', label: 'VIC', state: 'ON', ip: '192.168.0.5', port: '11000' });
+    expect(result[0]).toEqual({
+      key: 'vic',
+      label: 'VIC',
+      state: 'ON',
+      ip: '192.168.0.5',
+      port: '11000',
+    });
     expect(result[1].state).toBe('OFF');
     expect(result[2].state).toBe('OFF');
   });

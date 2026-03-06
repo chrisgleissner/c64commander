@@ -6,7 +6,14 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -63,10 +70,17 @@ const useAdaptiveLabelLayout = (label: string, widgetMinWidth: number) => {
     if (!containerWidth) return;
     const labelWidth = labelEl.scrollWidth;
     const labelRect = labelEl.getBoundingClientRect();
-    const labelIsVertical = labelRect.width > 0 && labelRect.height > labelRect.width * 1.2;
-    const requiredWidth = labelWidth + widgetMinWidth + HORIZONTAL_GAP_PX + HORIZONTAL_LABEL_PADDING_PX;
+    const labelIsVertical =
+      labelRect.width > 0 && labelRect.height > labelRect.width * 1.2;
+    const requiredWidth =
+      labelWidth +
+      widgetMinWidth +
+      HORIZONTAL_GAP_PX +
+      HORIZONTAL_LABEL_PADDING_PX;
     const nextLayout: ConfigItemLayoutMode =
-      labelIsVertical || containerWidth < requiredWidth ? 'vertical' : 'horizontal';
+      labelIsVertical || containerWidth < requiredWidth
+        ? 'vertical'
+        : 'horizontal';
     setLayout((prev) => (prev === nextLayout ? prev : nextLayout));
   }, [widgetMinWidth]);
 
@@ -75,11 +89,12 @@ const useAdaptiveLabelLayout = (label: string, widgetMinWidth: number) => {
   }, [measureLayout, label]);
 
   useEffect(() => {
-    const observer = typeof ResizeObserver !== 'undefined'
-      ? new ResizeObserver(() => {
-        measureLayout();
-      })
-      : null;
+    const observer =
+      typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(() => {
+            measureLayout();
+          })
+        : null;
     if (observer) {
       if (containerRef.current) observer.observe(containerRef.current);
       if (labelRef.current) observer.observe(labelRef.current);
@@ -129,25 +144,32 @@ export function ConfigItemRow({
   };
 
   const isConfigSurfaceActive =
-    typeof window !== 'undefined'
-    && /\/(config|settings)(\/|$)/.test(window.location.pathname || '');
-  const needsDetailFetch = (import.meta.env.MODE === 'test' || isConfigSurfaceActive)
-    && (!options || options.length === 0)
-    && !details?.presets;
+    typeof window !== 'undefined' &&
+    /\/(config|settings)(\/|$)/.test(window.location.pathname || '');
+  const needsDetailFetch =
+    (import.meta.env.MODE === 'test' || isConfigSurfaceActive) &&
+    (!options || options.length === 0) &&
+    !details?.presets;
   const { data: itemData, isLoading: isItemLoading } = useC64ConfigItem(
     category,
     name,
     needsDetailFetch,
   );
 
-  const fetchedConfig = useMemo(() => extractConfigFromResponse(itemData), [itemData]);
+  const fetchedConfig = useMemo(
+    () => extractConfigFromResponse(itemData),
+    [itemData],
+  );
 
   const fetchedOptions = useMemo(() => {
     if (!fetchedConfig) return [] as string[];
-    const optionsCandidate = fetchedConfig.options ?? fetchedConfig.values ?? fetchedConfig.choices;
-    const presetsCandidate = fetchedConfig.details?.presets ?? fetchedConfig.presets;
-    const list = [...(optionsCandidate ?? []), ...(presetsCandidate ?? [])]
-      .map((opt: string) => String(opt));
+    const optionsCandidate =
+      fetchedConfig.options ?? fetchedConfig.values ?? fetchedConfig.choices;
+    const presetsCandidate =
+      fetchedConfig.details?.presets ?? fetchedConfig.presets;
+    const list = [...(optionsCandidate ?? []), ...(presetsCandidate ?? [])].map(
+      (opt: string) => String(opt),
+    );
     return Array.isArray(list) ? list : [];
   }, [fetchedConfig]);
 
@@ -155,8 +177,12 @@ export function ConfigItemRow({
     if (!fetchedConfig) return details;
     const min = fetchedConfig.details?.min ?? fetchedConfig.min ?? details?.min;
     const max = fetchedConfig.details?.max ?? fetchedConfig.max ?? details?.max;
-    const format = fetchedConfig.details?.format ?? fetchedConfig.format ?? details?.format;
-    const presets = fetchedConfig.details?.presets ?? fetchedConfig.presets ?? details?.presets;
+    const format =
+      fetchedConfig.details?.format ?? fetchedConfig.format ?? details?.format;
+    const presets =
+      fetchedConfig.details?.presets ??
+      fetchedConfig.presets ??
+      details?.presets;
     if (min !== undefined || max !== undefined || format || presets) {
       return { min, max, format, presets };
     }
@@ -199,7 +225,10 @@ export function ConfigItemRow({
     });
   }, [options, details?.presets, fetchedOptions]);
 
-  const checkboxMapping = useMemo(() => getCheckboxMapping(optionList), [optionList]);
+  const checkboxMapping = useMemo(
+    () => getCheckboxMapping(optionList),
+    [optionList],
+  );
   const controlKind = useMemo(
     () =>
       inferControlKind({
@@ -225,9 +254,13 @@ export function ConfigItemRow({
   }, [controlKind, rightAccessory]);
 
   const displayLabel = label ?? name;
-  const formatOption = (option: string) => (formatOptionLabel ? formatOptionLabel(option) : option);
+  const formatOption = (option: string) =>
+    formatOptionLabel ? formatOptionLabel(option) : option;
 
-  const { layout, containerRef, labelRef } = useAdaptiveLabelLayout(displayLabel, widgetMinWidth);
+  const { layout, containerRef, labelRef } = useAdaptiveLabelLayout(
+    displayLabel,
+    widgetMinWidth,
+  );
 
   const rowClassName = cn(
     'settings-row w-full',
@@ -249,14 +282,17 @@ export function ConfigItemRow({
 
   const displayValue = inputValue;
   const isReadOnly = readOnly || name.startsWith('SID Detected Socket');
-  const normalizeOption = (option: string) => option.trim().replace(/\s+/g, ' ').toLowerCase();
+  const normalizeOption = (option: string) =>
+    option.trim().replace(/\s+/g, ' ').toLowerCase();
   const parseNumeric = (option: string) => {
     const match = option.trim().match(/[+-]?\d+(?:\.\d+)?/);
     return match ? Number(match[0]) : undefined;
   };
   const isLeftRightCenter = (options: string[]) => {
     const normalized = options.map(normalizeOption);
-    const hasCenter = normalized.some((value) => value === 'center' || value === 'centre');
+    const hasCenter = normalized.some(
+      (value) => value === 'center' || value === 'centre',
+    );
     const hasLeft = normalized.some((value) => value.startsWith('left'));
     const hasRight = normalized.some((value) => value.startsWith('right'));
     return hasCenter && hasLeft && hasRight;
@@ -292,18 +328,31 @@ export function ConfigItemRow({
         .filter((option): option is string => Boolean(option));
     }
 
-    const entries = options.map((option) => ({ option, numeric: parseNumeric(option) }));
-    const numericEntries = entries.filter((entry) => entry.numeric !== undefined) as Array<{
+    const entries = options.map((option) => ({
+      option,
+      numeric: parseNumeric(option),
+    }));
+    const numericEntries = entries.filter(
+      (entry) => entry.numeric !== undefined,
+    ) as Array<{
       option: string;
       numeric: number;
     }>;
     const nonNumeric = entries.filter((entry) => entry.numeric === undefined);
-    const nonNumericNormalized = nonNumeric.map((entry) => normalizeOption(entry.option));
-    const hasOnlyOff = nonNumeric.length > 0 && nonNumericNormalized.every((value) => value === 'off');
+    const nonNumericNormalized = nonNumeric.map((entry) =>
+      normalizeOption(entry.option),
+    );
+    const hasOnlyOff =
+      nonNumeric.length > 0 &&
+      nonNumericNormalized.every((value) => value === 'off');
 
     if (numericEntries.length >= 2 && (nonNumeric.length === 0 || hasOnlyOff)) {
-      const sortedNumeric = [...numericEntries].sort((a, b) => a.numeric - b.numeric);
-      const offEntry = nonNumeric.find((entry) => normalizeOption(entry.option) === 'off');
+      const sortedNumeric = [...numericEntries].sort(
+        (a, b) => a.numeric - b.numeric,
+      );
+      const offEntry = nonNumeric.find(
+        (entry) => normalizeOption(entry.option) === 'off',
+      );
       return [
         ...(offEntry ? [offEntry.option] : []),
         ...sortedNumeric.map((entry) => entry.option),
@@ -331,13 +380,15 @@ export function ConfigItemRow({
     return options;
   };
   const sliderOptions = useMemo(
-    () => (controlKind === 'slider' ? getSliderOptions(optionList) : optionList),
+    () =>
+      controlKind === 'slider' ? getSliderOptions(optionList) : optionList,
     [controlKind, optionList],
   );
 
   if (controlKind === 'checkbox' && checkboxMapping) {
     const checked =
-      String(displayValue).trim().toLowerCase() === checkboxMapping.checkedValue.trim().toLowerCase();
+      String(displayValue).trim().toLowerCase() ===
+      checkboxMapping.checkedValue.trim().toLowerCase();
 
     return (
       <div
@@ -347,11 +398,17 @@ export function ConfigItemRow({
         data-layout={layout}
       >
         <div className={labelBlockClassName}>
-          <span ref={labelRef} className={labelClassName} data-testid="config-item-label">
+          <span
+            ref={labelRef}
+            className={labelClassName}
+            data-testid="config-item-label"
+          >
             {displayLabel}
           </span>
           <span className="text-xs text-muted-foreground">
-            {checked ? checkboxMapping.checkedValue : checkboxMapping.uncheckedValue}
+            {checked
+              ? checkboxMapping.checkedValue
+              : checkboxMapping.uncheckedValue}
           </span>
         </div>
         <div className={layout === 'horizontal' ? undefined : 'self-start'}>
@@ -360,7 +417,10 @@ export function ConfigItemRow({
             disabled={isLoading || isItemLoading || isReadOnly}
             onCheckedChange={(next) => {
               if (isReadOnly) return;
-              const nextValue = next === true ? checkboxMapping.checkedValue : checkboxMapping.uncheckedValue;
+              const nextValue =
+                next === true
+                  ? checkboxMapping.checkedValue
+                  : checkboxMapping.uncheckedValue;
               setInputValue(String(nextValue));
               lastCommittedRef.current = String(nextValue);
               onValueChange(nextValue);
@@ -374,16 +434,18 @@ export function ConfigItemRow({
 
   if (controlKind === 'select') {
     const emptySentinel = '__empty__';
-    const normalizedOptions = optionList.includes(displayValue) || displayValue === ''
-      ? optionList
-      : [...optionList, displayValue];
+    const normalizedOptions =
+      optionList.includes(displayValue) || displayValue === ''
+        ? optionList
+        : [...optionList, displayValue];
     const selectOptions = normalizedOptions.map((option) => ({
       raw: option,
       value: option === '' ? emptySentinel : option,
       label: option === '' ? '(empty)' : formatOption(option),
     }));
     const selectedValue = displayValue === '' ? emptySentinel : displayValue;
-    const displayValueLabel = displayValue === '' ? '(empty)' : formatOption(String(displayValue));
+    const displayValueLabel =
+      displayValue === '' ? '(empty)' : formatOption(String(displayValue));
 
     return (
       <div
@@ -393,11 +455,19 @@ export function ConfigItemRow({
         data-layout={layout}
       >
         <div className={labelBlockClassName}>
-          <span ref={labelRef} className={labelClassName} data-testid="config-item-label">
+          <span
+            ref={labelRef}
+            className={labelClassName}
+            data-testid="config-item-label"
+          >
             {displayLabel}
           </span>
         </div>
-        <div className={layout === 'horizontal' ? 'min-w-[160px] max-w-[220px]' : 'w-full'}>
+        <div
+          className={
+            layout === 'horizontal' ? 'min-w-[160px] max-w-[220px]' : 'w-full'
+          }
+        >
           <Select
             value={selectedValue}
             onValueChange={(newValue) => {
@@ -410,7 +480,11 @@ export function ConfigItemRow({
             disabled={isLoading || isItemLoading || isReadOnly}
           >
             <SelectTrigger aria-label={`${displayLabel} select`}>
-              <SelectValue placeholder={isItemLoading ? 'Loading…' : displayValueLabel || 'Select'} />
+              <SelectValue
+                placeholder={
+                  isItemLoading ? 'Loading…' : displayValueLabel || 'Select'
+                }
+              />
             </SelectTrigger>
             <SelectContent>
               {selectOptions.map((option) => (
@@ -433,7 +507,9 @@ export function ConfigItemRow({
     if (selectedIndex < 0) {
       const displayNumber = parseNumeric(displayValue);
       if (displayNumber !== undefined) {
-        const numericIndex = sliderOptions.findIndex((opt) => parseNumeric(opt) === displayNumber);
+        const numericIndex = sliderOptions.findIndex(
+          (opt) => parseNumeric(opt) === displayNumber,
+        );
         if (numericIndex >= 0) selectedIndex = numericIndex;
       }
     }
@@ -444,7 +520,8 @@ export function ConfigItemRow({
     const currentLabel = formatOption(String(currentLabelRaw));
     const resolveSliderOption = (index: number) =>
       sliderOptions[Math.round(index)] ?? sliderOptions[0] ?? '';
-    const formatSliderLabel = (index: number) => formatOption(String(resolveSliderOption(index)));
+    const formatSliderLabel = (index: number) =>
+      formatOption(String(resolveSliderOption(index)));
 
     return (
       <div
@@ -454,10 +531,17 @@ export function ConfigItemRow({
         data-layout={layout}
       >
         <div className={labelBlockClassName}>
-          <span ref={labelRef} className={labelClassName} data-testid="config-item-label">
+          <span
+            ref={labelRef}
+            className={labelClassName}
+            data-testid="config-item-label"
+          >
             {displayLabel}
           </span>
-          <span className="text-xs text-muted-foreground font-semibold" data-testid={valueTestId}>
+          <span
+            className="text-xs text-muted-foreground font-semibold"
+            data-testid={valueTestId}
+          >
             {currentLabel}
           </span>
         </div>
@@ -468,7 +552,13 @@ export function ConfigItemRow({
               : 'flex flex-wrap items-center gap-3 w-full'
           }
         >
-          <div className={layout === 'horizontal' ? 'min-w-[180px] max-w-[260px] w-full' : 'w-full'}>
+          <div
+            className={
+              layout === 'horizontal'
+                ? 'min-w-[180px] max-w-[260px] w-full'
+                : 'w-full'
+            }
+          >
             <Slider
               value={[selectedIndex]}
               min={0}
@@ -500,7 +590,9 @@ export function ConfigItemRow({
               data-testid={sliderTestId}
             />
           </div>
-          {rightAccessory ? <div className="flex items-center gap-2">{rightAccessory}</div> : null}
+          {rightAccessory ? (
+            <div className="flex items-center gap-2">{rightAccessory}</div>
+          ) : null}
         </div>
       </div>
     );
@@ -527,16 +619,28 @@ export function ConfigItemRow({
       data-layout={layout}
     >
       <div className={labelBlockClassName}>
-        <span ref={labelRef} className={labelClassName} data-testid="config-item-label">
+        <span
+          ref={labelRef}
+          className={labelClassName}
+          data-testid="config-item-label"
+        >
           {displayLabel}
         </span>
       </div>
-      <div className={layout === 'horizontal' ? 'min-w-[160px] max-w-[220px] flex items-center gap-2' : 'w-full flex items-center gap-2'}>
+      <div
+        className={
+          layout === 'horizontal'
+            ? 'min-w-[160px] max-w-[220px] flex items-center gap-2'
+            : 'w-full flex items-center gap-2'
+        }
+      >
         <Input
           type={inputType}
           value={inputValue}
           aria-label={`${displayLabel} ${controlKind === 'password' ? 'password' : 'text'} input`}
-          disabled={((isLoading || isItemLoading) && !isTextEditing) || isReadOnly}
+          disabled={
+            ((isLoading || isItemLoading) && !isTextEditing) || isReadOnly
+          }
           onFocus={() => {
             if (isReadOnly || isTextEditing) return;
             setIsTextEditing(true);
@@ -562,7 +666,9 @@ export function ConfigItemRow({
           }}
           className="font-sans"
         />
-        {(isLoading || isItemLoading) && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+        {(isLoading || isItemLoading) && (
+          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+        )}
       </div>
     </div>
   );

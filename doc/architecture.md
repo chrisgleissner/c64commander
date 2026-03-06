@@ -156,14 +156,14 @@ Performance rules:
 
 ### 5. Layered architecture (UX -> DB)
 
-| Layer | Responsibility |
-| --- | --- |
-| UX (`PlayFilesPage`, list components) | Input, selection, playback controls, virtualized result window |
-| Application hooks (`useSourceNavigator`, playlist hooks) | Orchestrate browse, ingest, and query states |
-| Domain services (`sourceNavigation`, playback, hvsc service, SID parser) | Source adapters, metadata normalization, ingest semantics |
-| Repository interfaces (TypeScript) | Source-agnostic data access contracts for tracks/playlists/search |
-| Storage engine | Persistent metadata/index/query execution |
-| Native bridges | Filesystem/FTP/SAF and platform services |
+| Layer                                                                    | Responsibility                                                    |
+| ------------------------------------------------------------------------ | ----------------------------------------------------------------- |
+| UX (`PlayFilesPage`, list components)                                    | Input, selection, playback controls, virtualized result window    |
+| Application hooks (`useSourceNavigator`, playlist hooks)                 | Orchestrate browse, ingest, and query states                      |
+| Domain services (`sourceNavigation`, playback, hvsc service, SID parser) | Source adapters, metadata normalization, ingest semantics         |
+| Repository interfaces (TypeScript)                                       | Source-agnostic data access contracts for tracks/playlists/search |
+| Storage engine                                                           | Persistent metadata/index/query execution                         |
+| Native bridges                                                           | Filesystem/FTP/SAF and platform services                          |
 
 ### 6. Storage and indexing strategy
 

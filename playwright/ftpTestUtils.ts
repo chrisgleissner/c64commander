@@ -10,8 +10,14 @@ import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import * as path from 'node:path';
 import type { Page } from '@playwright/test';
-import { createMockFtpServer, type MockFtpServer } from '../tests/mocks/mockFtpServer';
-import { createMockFtpBridgeServer, type MockFtpBridgeServer } from '../tests/mocks/mockFtpBridgeServer';
+import {
+  createMockFtpServer,
+  type MockFtpServer,
+} from '../tests/mocks/mockFtpServer';
+import {
+  createMockFtpBridgeServer,
+  type MockFtpBridgeServer,
+} from '../tests/mocks/mockFtpBridgeServer';
 
 export type FtpTestServers = {
   ftpServer: MockFtpServer;
@@ -32,25 +38,40 @@ const ensureLargeFtpFixture = async (rootDir: string) => {
   const subFolders = ['Arcade Classics', 'Action Heroes', 'Strategy Vault'];
   await fs.mkdir(megaRoot, { recursive: true });
 
-  const topLevelFiles = Array.from({ length: 40 }, (_, idx) => `Mega Disk ${String(idx + 1).padStart(2, '0')}.d64`);
+  const topLevelFiles = Array.from(
+    { length: 40 },
+    (_, idx) => `Mega Disk ${String(idx + 1).padStart(2, '0')}.d64`,
+  );
   await Promise.all(
-    topLevelFiles.map((name) => fs.writeFile(path.join(megaRoot, name), 'x', 'utf8')),
+    topLevelFiles.map((name) =>
+      fs.writeFile(path.join(megaRoot, name), 'x', 'utf8'),
+    ),
   );
 
   for (const folder of subFolders) {
     const folderPath = path.join(megaRoot, folder);
     await fs.mkdir(folderPath, { recursive: true });
-    const files = Array.from({ length: 30 }, (_, idx) => `${folder.replace(/\s+/g, ' ')} ${idx + 1}.d64`);
+    const files = Array.from(
+      { length: 30 },
+      (_, idx) => `${folder.replace(/\s+/g, ' ')} ${idx + 1}.d64`,
+    );
     await Promise.all(
-      files.map((name) => fs.writeFile(path.join(folderPath, name), 'x', 'utf8')),
+      files.map((name) =>
+        fs.writeFile(path.join(folderPath, name), 'x', 'utf8'),
+      ),
     );
   }
 
   const demosRoot = path.join(rootDir, 'Usb0', 'Demos', 'Scroller Showcase');
   await fs.mkdir(demosRoot, { recursive: true });
-  const demoFiles = Array.from({ length: 24 }, (_, idx) => `Demo ${idx + 1}.prg`);
+  const demoFiles = Array.from(
+    { length: 24 },
+    (_, idx) => `Demo ${idx + 1}.prg`,
+  );
   await Promise.all(
-    demoFiles.map((name) => fs.writeFile(path.join(demosRoot, name), 'x', 'utf8')),
+    demoFiles.map((name) =>
+      fs.writeFile(path.join(demosRoot, name), 'x', 'utf8'),
+    ),
   );
 
   await fs.writeFile(marker, new Date().toISOString(), 'utf8');
@@ -87,32 +108,36 @@ export const seedFtpConfig = async (
   page: Page,
   options: { host: string; port: number; bridgeUrl: string; password?: string },
 ) => {
-  await page.addInitScript(
-    ({ host, port, bridgeUrl, password }) => {
-      localStorage.setItem('c64u_ftp_port', String(port));
-      localStorage.setItem('c64u_ftp_bridge_url', bridgeUrl);
-      localStorage.removeItem('c64u_password');
-      if (password) {
-        localStorage.setItem('c64u_has_password', '1');
-        (window as Window & { __c64uSecureStorageOverride?: { password?: string | null } }).__c64uSecureStorageOverride = {
-          password,
-        };
-      } else {
-        localStorage.removeItem('c64u_has_password');
-        delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
-      }
-      const routingWindow = window as Window & { __c64uAllowedBaseUrls?: string[] };
-      const allowed = new Set<string>();
-      if (Array.isArray(routingWindow.__c64uAllowedBaseUrls)) {
-        routingWindow.__c64uAllowedBaseUrls.forEach((url) => {
-          if (url) allowed.add(url);
-        });
-      }
-      if (bridgeUrl) {
-        allowed.add(bridgeUrl);
-      }
-      routingWindow.__c64uAllowedBaseUrls = Array.from(allowed);
-    },
-    options,
-  );
+  await page.addInitScript(({ host, port, bridgeUrl, password }) => {
+    localStorage.setItem('c64u_ftp_port', String(port));
+    localStorage.setItem('c64u_ftp_bridge_url', bridgeUrl);
+    localStorage.removeItem('c64u_password');
+    if (password) {
+      localStorage.setItem('c64u_has_password', '1');
+      (
+        window as Window & {
+          __c64uSecureStorageOverride?: { password?: string | null };
+        }
+      ).__c64uSecureStorageOverride = {
+        password,
+      };
+    } else {
+      localStorage.removeItem('c64u_has_password');
+      delete (window as Window & { __c64uSecureStorageOverride?: unknown })
+        .__c64uSecureStorageOverride;
+    }
+    const routingWindow = window as Window & {
+      __c64uAllowedBaseUrls?: string[];
+    };
+    const allowed = new Set<string>();
+    if (Array.isArray(routingWindow.__c64uAllowedBaseUrls)) {
+      routingWindow.__c64uAllowedBaseUrls.forEach((url) => {
+        if (url) allowed.add(url);
+      });
+    }
+    if (bridgeUrl) {
+      allowed.add(bridgeUrl);
+    }
+    routingWindow.__c64uAllowedBaseUrls = Array.from(allowed);
+  }, options);
 };

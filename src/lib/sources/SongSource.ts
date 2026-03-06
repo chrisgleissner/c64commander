@@ -28,5 +28,12 @@ export type SongSource = {
   id: SongSourceId;
   listFolders: (path: string) => Promise<SongFolder[]>;
   listSongs: (path: string) => Promise<SongEntry[]>;
-  getSong: (entry: SongEntry) => Promise<{ data: Uint8Array; durationMs?: number; title: string; path?: string }>;
+  getSong: (
+    entry: SongEntry,
+  ) => Promise<{
+    data: Uint8Array;
+    durationMs?: number;
+    title: string;
+    path?: string;
+  }>;
 };

@@ -56,6 +56,7 @@ scripts/manual-play-sid.sh /path/to/song.sid --song 1 --duration-ms 180000
 ```
 
 Notes:
+
 - `C64U_HOST`, `C64U_DEVICE_HOST`, or `C64U_BASE_URL` control the target device.
 - `C64U_PASSWORD` is optional.
 - `--song` and `--duration-ms` (or `C64U_SONGNR` / `C64U_DURATION_MS`) are optional.
@@ -104,12 +105,14 @@ python3 scripts/hvsc_filename_frequency.py /path/to/HVSC/DOCUMENTS/Songlengths.m
 Primary signal: **duration-based due time** computed in JS (from Songlengths / HVSC metadata / fallback duration).
 
 Why:
-- The published C64U REST API spec in `doc/c64/c64u-openapi.yaml` documents runner *start* endpoints (e.g. `/v1/runners:sidplay`) but does not expose a reliable runner/player state endpoint that can be polled for an authoritative "finished" signal.
+
+- The published C64U REST API spec in `doc/c64/c64u-openapi.yaml` documents runner _start_ endpoints (e.g. `/v1/runners:sidplay`) but does not expose a reliable runner/player state endpoint that can be polled for an authoritative "finished" signal.
 - WebView timers are the only cross-platform completion mechanism available in the browser layer.
 
 Secondary watchdog (Android only): **foreground service dueAtMs watchdog**.
 
 Why:
+
 - On some devices and power modes, WebView JS timers may be throttled while backgrounded or locked.
 - A foreground service + partial wakelock reduces throttling and provides a secondary wake-up path.
 
@@ -129,6 +132,7 @@ Why:
 Even foreground services can be constrained by OEM power management (Doze, App Standby buckets, aggressive battery savers).
 
 Expected behavior:
+
 - If `BackgroundExecution.start()` fails or the service is killed, playback continues using JS-only reconciliation.
 - Failures are logged with lifecycle state and failure classification to aid triage.
 
@@ -231,6 +235,7 @@ Screenshot runs now prune pixel-identical PNG changes automatically (metadata-on
 ```
 
 Notes:
+
 - `./build --test-maestro-*` auto-starts the Android emulator if none is running and uses it unless `--test-device-id` is provided.
 
 Read `doc/testing/maestro.md` before writing or editing Maestro flows.
@@ -261,6 +266,7 @@ test-results/maestro/
 ```
 
 Notes:
+
 - `--screenshots` keeps the default full pipeline and then captures screenshots.
 - `--screenshots-only` skips unit tests, E2E tests, and Android builds.
 - `--test-e2e` runs Playwright without screenshots.
@@ -274,6 +280,7 @@ Notes:
 ```
 
 Notes:
+
 - Video output is written to `test-results/evidence/playwright/<testId>/<deviceId>/video.webm`.
 - The walkthrough is driven by `playwright/video.spec.ts` and tagged with `@video`.
 
@@ -762,7 +769,12 @@ Example:
 
 ```typescript
 import { test, expect, type Page, type TestInfo } from '@playwright/test';
-import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
+import {
+  assertNoUiIssues,
+  attachStepScreenshot,
+  finalizeEvidence,
+  startStrictUiMonitoring,
+} from './testArtifacts';
 
 test.describe('My feature', () => {
   test.beforeEach(async ({ page }: { page: Page }, testInfo) => {

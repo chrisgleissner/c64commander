@@ -5,16 +5,19 @@ This directory contains low-overhead CI telemetry for Android emulator, iOS simu
 ## Outputs
 
 Each monitor writes:
+
 - `metrics.csv`
 - `events.log`
 - `metadata.json`
 - `monitor.log`
 
 Summary generation writes:
+
 - `ci-artifacts/telemetry/summary.json`
 - `ci-artifacts/telemetry/summary.md`
 
 Chart rendering writes:
+
 - `ci-artifacts/telemetry/charts/*.svg`
 - `ci-artifacts/telemetry/charts/*.png`
 - `ci-artifacts/telemetry/charts/index.md`
@@ -94,6 +97,7 @@ Capacitor app memory is not bounded by Java/Kotlin VM heap settings alone.
 ## CI artifact expectations
 
 Telemetry artifacts are uploaded with `if: always()` so failed test runs still preserve:
+
 - raw CSV
 - events
 - metadata

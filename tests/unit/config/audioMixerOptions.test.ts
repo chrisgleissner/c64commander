@@ -30,7 +30,11 @@ describe('mergeAudioMixerOptions', () => {
     const options = [' 0 dB', 'OFF'];
     const presets = ['+6 dB', 'off', ' 0 dB'];
 
-    expect(mergeAudioMixerOptions(options, presets)).toEqual([' 0 dB', 'OFF', '+6 dB']);
+    expect(mergeAudioMixerOptions(options, presets)).toEqual([
+      ' 0 dB',
+      'OFF',
+      '+6 dB',
+    ]);
   });
 
   it('ignores empty values', () => {
@@ -55,9 +59,22 @@ describe('mergeAudioMixerOptions', () => {
   });
 
   it('resolves reset values using provided options', async () => {
-    await expect(resolveAudioMixerResetValue('Audio Mixer', 'Vol UltiSid 1', ['-6 dB', '0 dB'])).resolves.toBe('0 dB');
-    await expect(resolveAudioMixerResetValue('Audio Mixer', 'Pan 1', ['Left', 'Center', 'Right'])).resolves.toBe('Center');
-    await expect(resolveAudioMixerResetValue('Audio Mixer', 'Other', ['A', 'B'])).resolves.toBeUndefined();
+    await expect(
+      resolveAudioMixerResetValue('Audio Mixer', 'Vol UltiSid 1', [
+        '-6 dB',
+        '0 dB',
+      ]),
+    ).resolves.toBe('0 dB');
+    await expect(
+      resolveAudioMixerResetValue('Audio Mixer', 'Pan 1', [
+        'Left',
+        'Center',
+        'Right',
+      ]),
+    ).resolves.toBe('Center');
+    await expect(
+      resolveAudioMixerResetValue('Audio Mixer', 'Other', ['A', 'B']),
+    ).resolves.toBeUndefined();
   });
 
   it('resolves reset values from API when options are missing', async () => {
@@ -74,27 +91,42 @@ describe('mergeAudioMixerOptions', () => {
       },
     });
 
-    await expect(resolveAudioMixerResetValue('Audio Mixer', 'Vol UltiSid 1')).resolves.toBe('0 dB');
-    await expect(resolveAudioMixerResetValue('Audio Mixer', 'Pan 1')).resolves.toBe('Center');
+    await expect(
+      resolveAudioMixerResetValue('Audio Mixer', 'Vol UltiSid 1'),
+    ).resolves.toBe('0 dB');
+    await expect(
+      resolveAudioMixerResetValue('Audio Mixer', 'Pan 1'),
+    ).resolves.toBe('Center');
   });
 
   it('falls back to defaults when API lookup fails', async () => {
     mockApi.getConfigItem.mockRejectedValue(new Error('boom'));
 
-    await expect(resolveAudioMixerResetValue('Audio Mixer', 'Vol UltiSid 1')).resolves.toBe(0);
-    await expect(resolveAudioMixerResetValue('Audio Mixer', 'Pan 1')).resolves.toBe('Center');
+    await expect(
+      resolveAudioMixerResetValue('Audio Mixer', 'Vol UltiSid 1'),
+    ).resolves.toBe(0);
+    await expect(
+      resolveAudioMixerResetValue('Audio Mixer', 'Pan 1'),
+    ).resolves.toBe('Center');
   });
 
   it('merges when options or presets is undefined', () => {
-    expect(mergeAudioMixerOptions(undefined, ['0 dB', '+6 dB'])).toEqual(['0 dB', '+6 dB']);
+    expect(mergeAudioMixerOptions(undefined, ['0 dB', '+6 dB'])).toEqual([
+      '0 dB',
+      '+6 dB',
+    ]);
     expect(mergeAudioMixerOptions(['0 dB'], undefined)).toEqual(['0 dB']);
     expect(mergeAudioMixerOptions()).toEqual([]);
   });
 
   it('resolves reset value when item block is not an object (null itemRecord)', async () => {
     // Response where item is a string → itemRecord is null → extractOptions returns []
-    mockApi.getConfigItem.mockResolvedValue({ 'Vol UltiSid 1': 'not-an-object' });
-    await expect(resolveAudioMixerResetValue('Audio Mixer', 'Vol UltiSid 1')).resolves.toBe(0);
+    mockApi.getConfigItem.mockResolvedValue({
+      'Vol UltiSid 1': 'not-an-object',
+    });
+    await expect(
+      resolveAudioMixerResetValue('Audio Mixer', 'Vol UltiSid 1'),
+    ).resolves.toBe(0);
   });
 
   it('extracts options from values field instead of options field', async () => {
@@ -105,7 +137,9 @@ describe('mergeAudioMixerOptions', () => {
         },
       },
     });
-    await expect(resolveAudioMixerResetValue('Audio Mixer', 'Vol UltiSid 1')).resolves.toBe('0 dB');
+    await expect(
+      resolveAudioMixerResetValue('Audio Mixer', 'Vol UltiSid 1'),
+    ).resolves.toBe('0 dB');
   });
 
   it('extracts options from choices field', async () => {
@@ -116,7 +150,9 @@ describe('mergeAudioMixerOptions', () => {
         },
       },
     });
-    await expect(resolveAudioMixerResetValue('Audio Mixer', 'Vol UltiSid 1')).resolves.toBe('0 dB');
+    await expect(
+      resolveAudioMixerResetValue('Audio Mixer', 'Vol UltiSid 1'),
+    ).resolves.toBe('0 dB');
   });
 
   it('handles non-array optionsCandidate', async () => {
@@ -128,7 +164,9 @@ describe('mergeAudioMixerOptions', () => {
         },
       },
     });
-    await expect(resolveAudioMixerResetValue('Audio Mixer', 'Vol UltiSid 1')).resolves.toBe(0);
+    await expect(
+      resolveAudioMixerResetValue('Audio Mixer', 'Vol UltiSid 1'),
+    ).resolves.toBe(0);
   });
 
   it('extracts presets from itemRecord.presets when no details block', async () => {
@@ -139,7 +177,9 @@ describe('mergeAudioMixerOptions', () => {
         },
       },
     });
-    await expect(resolveAudioMixerResetValue('Audio Mixer', 'Pan 1')).resolves.toBe('Center');
+    await expect(
+      resolveAudioMixerResetValue('Audio Mixer', 'Pan 1'),
+    ).resolves.toBe('Center');
   });
 
   it('uses top-level payload item as fallback', async () => {
@@ -148,7 +188,9 @@ describe('mergeAudioMixerOptions', () => {
         options: ['-6 dB', '0 dB'],
       },
     });
-    await expect(resolveAudioMixerResetValue('Audio Mixer', 'Vol UltiSid 1')).resolves.toBe('0 dB');
+    await expect(
+      resolveAudioMixerResetValue('Audio Mixer', 'Vol UltiSid 1'),
+    ).resolves.toBe('0 dB');
   });
 
   it('uses payload value key as fallback', async () => {
@@ -157,6 +199,8 @@ describe('mergeAudioMixerOptions', () => {
         options: ['Left', 'Center', 'Right'],
       },
     });
-    await expect(resolveAudioMixerResetValue('Audio Mixer', 'Pan 1')).resolves.toBe('Center');
+    await expect(
+      resolveAudioMixerResetValue('Audio Mixer', 'Pan 1'),
+    ).resolves.toBe('Center');
   });
 });

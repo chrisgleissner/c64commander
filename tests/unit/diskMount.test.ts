@@ -10,7 +10,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { C64API } from '@/lib/c64api';
 import { mountDiskToDrive, resolveLocalDiskBlob } from '@/lib/disks/diskMount';
 import { createDiskEntry } from '@/lib/disks/diskTypes';
-import { saveLocalSources, setLocalSourceRuntimeFiles } from '@/lib/sourceNavigation/localSourcesStore';
+import {
+  saveLocalSources,
+  setLocalSourceRuntimeFiles,
+} from '@/lib/sourceNavigation/localSourcesStore';
 
 vi.mock('@/lib/native/folderPicker', () => ({
   FolderPicker: {
@@ -21,18 +24,23 @@ vi.mock('@/lib/native/folderPicker', () => ({
 
 const mockFolderPicker = async (data: string) => {
   const { FolderPicker } = await import('@/lib/native/folderPicker');
-  (FolderPicker.readFile as ReturnType<typeof vi.fn>).mockResolvedValue({ data });
+  (FolderPicker.readFile as ReturnType<typeof vi.fn>).mockResolvedValue({
+    data,
+  });
 };
 
 const mockFolderPickerFromTree = async (data: string) => {
   const { FolderPicker } = await import('@/lib/native/folderPicker');
-  (FolderPicker.readFileFromTree as ReturnType<typeof vi.fn>).mockResolvedValue({ data });
+  (FolderPicker.readFileFromTree as ReturnType<typeof vi.fn>).mockResolvedValue(
+    { data },
+  );
 };
 
 const readBlobText = (blob: Blob) =>
   new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
-    reader.onerror = () => reject(reader.error ?? new Error('Failed to read blob.'));
+    reader.onerror = () =>
+      reject(reader.error ?? new Error('Failed to read blob.'));
     reader.onload = () => resolve(String(reader.result ?? ''));
     reader.readAsText(blob);
   });
@@ -57,7 +65,12 @@ describe('mountDiskToDrive', () => {
 
     await mountDiskToDrive(api, 'a', disk);
 
-    expect(api.mountDrive).toHaveBeenCalledWith('a', disk.path, 'd64', 'readwrite');
+    expect(api.mountDrive).toHaveBeenCalledWith(
+      'a',
+      disk.path,
+      'd64',
+      'readwrite',
+    );
     expect(api.mountDriveUpload).not.toHaveBeenCalled();
   });
 
@@ -81,7 +94,9 @@ describe('mountDiskToDrive', () => {
     await mountDiskToDrive(api, 'b', disk, runtimeFile);
 
     expect(api.mountDriveUpload).toHaveBeenCalled();
-    const [drive, blob, mountType, access] = (api.mountDriveUpload as ReturnType<typeof vi.fn>).mock.calls[0];
+    const [drive, blob, mountType, access] = (
+      api.mountDriveUpload as ReturnType<typeof vi.fn>
+    ).mock.calls[0];
     expect(drive).toBe('b');
     expect(blob).toBeInstanceOf(Blob);
     expect(mountType).toBe('d64');
@@ -100,7 +115,8 @@ describe('mountDiskToDrive', () => {
     const blob = await resolveLocalDiskBlob(disk);
     const text = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
-      reader.onerror = () => reject(reader.error ?? new Error('Failed to read blob.'));
+      reader.onerror = () =>
+        reject(reader.error ?? new Error('Failed to read blob.'));
       reader.onload = () => resolve(String(reader.result ?? ''));
       reader.readAsText(blob);
     });
@@ -119,7 +135,8 @@ describe('mountDiskToDrive', () => {
     const blob = await resolveLocalDiskBlob(disk);
     const text = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
-      reader.onerror = () => reject(reader.error ?? new Error('Failed to read blob.'));
+      reader.onerror = () =>
+        reject(reader.error ?? new Error('Failed to read blob.'));
       reader.onload = () => resolve(String(reader.result ?? ''));
       reader.readAsText(blob);
     });
@@ -133,7 +150,9 @@ describe('mountDiskToDrive', () => {
       path: '/Local/Disk 3.d64',
     });
 
-    await expect(resolveLocalDiskBlob(disk)).rejects.toThrow('Local disk access is missing.');
+    await expect(resolveLocalDiskBlob(disk)).rejects.toThrow(
+      'Local disk access is missing.',
+    );
   });
 
   it('resolves local disk blobs via source runtime files', async () => {
@@ -149,9 +168,13 @@ describe('mountDiskToDrive', () => {
       },
     ]);
 
-    const runtimeFile = new File([new Uint8Array([100, 101, 102])], 'Disk 4.d64', {
-      type: 'application/octet-stream',
-    });
+    const runtimeFile = new File(
+      [new Uint8Array([100, 101, 102])],
+      'Disk 4.d64',
+      {
+        type: 'application/octet-stream',
+      },
+    );
     setLocalSourceRuntimeFiles(sourceId, {
       '/Local/Disk 4.d64': runtimeFile,
     });

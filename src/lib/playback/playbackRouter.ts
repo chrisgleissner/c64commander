@@ -13,7 +13,10 @@ import { readFtpFile } from '@/lib/ftp/ftpClient';
 import { getStoredFtpPort } from '@/lib/ftp/ftpConfig';
 import { normalizeFtpHost } from '@/lib/sourceNavigation/ftpSourceAdapter';
 import { getActiveAction } from '@/lib/tracing/actionTrace';
-import { recordDeviceGuard, recordTraceError } from '@/lib/tracing/traceSession';
+import {
+  recordDeviceGuard,
+  recordTraceError,
+} from '@/lib/tracing/traceSession';
 import { classifyError } from '@/lib/tracing/failureTaxonomy';
 import { AUTOSTART_SEQUENCE, injectAutostart } from './autostart';
 import {
@@ -26,17 +29,22 @@ import {
 import { mountDiskToDrive, resolveLocalDiskBlob } from '@/lib/disks/diskMount';
 import { createDiskEntry } from '@/lib/disks/diskTypes';
 import { base64ToUint8, createSslPayload } from '@/lib/sid/sidUtils';
-import { loadDiskAutostartMode, type DiskAutostartMode } from '@/lib/config/appSettings';
+import {
+  loadDiskAutostartMode,
+  type DiskAutostartMode,
+} from '@/lib/config/appSettings';
 import { loadFirstDiskPrgViaDma, type DiskImageType } from './diskFirstPrg';
 
 export type PlaySource = 'local' | 'ultimate' | 'hvsc';
 
-export type LocalPlayFile = File | {
-  name: string;
-  webkitRelativePath?: string;
-  lastModified: number;
-  arrayBuffer: () => Promise<ArrayBuffer>;
-};
+export type LocalPlayFile =
+  | File
+  | {
+      name: string;
+      webkitRelativePath?: string;
+      lastModified: number;
+      arrayBuffer: () => Promise<ArrayBuffer>;
+    };
 
 export type PlayRequest = {
   source: PlaySource;
@@ -74,7 +82,8 @@ export const buildPlayPlan = (request: PlayRequest): PlayPlan => {
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const normalizeUltimatePath = (path: string) => (path.startsWith('/') ? path : `/${path}`);
+const normalizeUltimatePath = (path: string) =>
+  path.startsWith('/') ? path : `/${path}`;
 
 const emitDurationPropagationEvent = (payload: {
   type: 'ssl-propagation-failure' | 'playback-no-duration';
@@ -118,7 +127,10 @@ export const tryFetchUltimateSidBlob = async (path: string) => {
       path: normalizedPath,
     });
     const bytes = base64ToUint8(response.data);
-    if (typeof response.sizeBytes === 'number' && response.sizeBytes !== bytes.length) {
+    if (
+      typeof response.sizeBytes === 'number' &&
+      response.sizeBytes !== bytes.length
+    ) {
       addLog('warn', 'FTP SID payload size mismatch', {
         path: normalizedPath,
         expectedBytes: response.sizeBytes,
@@ -147,16 +159,26 @@ const injectDiskAutostart = async (api: C64API, payload: Uint8Array) => {
       await delay(baseDelayMs);
     }
     try {
-      await injectAutostart(api, payload, { pollIntervalMs: 140, maxAttempts: 20 });
+      await injectAutostart(api, payload, {
+        pollIntervalMs: 140,
+        maxAttempts: 20,
+      });
       addLog('info', 'Disk autostart injected', { attempt: attempt + 1 });
       return;
     } catch (error) {
       lastError = error as Error;
-      addLog('debug', 'Disk autostart retry', { attempt: attempt + 1, error: lastError.message });
+      addLog('debug', 'Disk autostart retry', {
+        attempt: attempt + 1,
+        error: lastError.message,
+      });
     }
   }
-  addErrorLog('Disk autostart failed', { error: lastError?.message ?? 'Unknown error' });
-  throw new Error('Disk autostart failed. Try again after the disk finishes mounting.');
+  addErrorLog('Disk autostart failed', {
+    error: lastError?.message ?? 'Unknown error',
+  });
+  throw new Error(
+    'Disk autostart failed. Try again after the disk finishes mounting.',
+  );
 };
 
 const toBlob = async (file?: LocalPlayFile) => {
@@ -167,7 +189,8 @@ const toBlob = async (file?: LocalPlayFile) => {
     return new Blob([buffer], { type: 'application/octet-stream' });
   } catch (error) {
     const message = (error as Error).message || 'Local file unavailable.';
-    const isNetworkFailure = /failed to fetch|networkerror|network request failed/i.test(message);
+    const isNetworkFailure =
+      /failed to fetch|networkerror|network request failed/i.test(message);
     if (isNetworkFailure) {
       throw new Error('Local file unavailable. Re-add it to the playlist.');
     }
@@ -193,13 +216,15 @@ export const executePlayPlan = async (
   const rebootBeforeMount = options.rebootBeforeMount ?? false;
   const resetBeforeMount = options.resetBeforeMount ?? true;
   const resetDelayMs = 500;
-  const diskAutostartMode = options.diskAutostartMode ?? loadDiskAutostartMode();
+  const diskAutostartMode =
+    options.diskAutostartMode ?? loadDiskAutostartMode();
 
   try {
     switch (plan.category) {
       case 'sid': {
         if (plan.source === 'ultimate') {
-          const hasSonglengthData = typeof plan.durationMs === 'number' && plan.durationMs > 0;
+          const hasSonglengthData =
+            typeof plan.durationMs === 'number' && plan.durationMs > 0;
           if (!hasSonglengthData) {
             emitDurationPropagationEvent({
               type: 'playback-no-duration',
@@ -218,7 +243,9 @@ export const executePlayPlan = async (
               throw new Error('SID FTP fetch failed for SSL propagation');
             }
             const sslPayload = createSslPayload(plan.durationMs);
-            const sslBlob = new Blob([sslPayload], { type: 'application/octet-stream' });
+            const sslBlob = new Blob([sslPayload], {
+              type: 'application/octet-stream',
+            });
             await api.playSidUpload(ftpBlob, plan.songNr, sslBlob);
             return;
           } catch (error) {
@@ -237,11 +264,15 @@ export const executePlayPlan = async (
               songlengthEntryMs: plan.durationMs,
               errorMessage: message,
             });
-            addLog('warn', 'Ultimate SID falling back to direct playback without SSL upload', {
-              path: plan.path,
-              reason,
-              error: message,
-            });
+            addLog(
+              'warn',
+              'Ultimate SID falling back to direct playback without SSL upload',
+              {
+                path: plan.path,
+                reason,
+                error: message,
+              },
+            );
           }
 
           try {
@@ -262,9 +293,12 @@ export const executePlayPlan = async (
         }
         const blob = await toBlob(plan.file);
         if (!blob) throw new Error('Missing local SID data.');
-        const sslBlob = plan.durationMs && plan.durationMs > 0
-          ? new Blob([createSslPayload(plan.durationMs)], { type: 'application/octet-stream' })
-          : undefined;
+        const sslBlob =
+          plan.durationMs && plan.durationMs > 0
+            ? new Blob([createSslPayload(plan.durationMs)], {
+                type: 'application/octet-stream',
+              })
+            : undefined;
         await api.playSidUpload(blob, plan.songNr, sslBlob);
         return;
       }
@@ -326,7 +360,12 @@ export const executePlayPlan = async (
         } else if (plan.file) {
           localBlob = await toBlob(plan.file);
           if (!localBlob) throw new Error('Missing local disk data.');
-          await api.mountDriveUpload(drive, localBlob, plan.mountType, 'readwrite');
+          await api.mountDriveUpload(
+            drive,
+            localBlob,
+            plan.mountType,
+            'readwrite',
+          );
         } else {
           const diskEntry = createDiskEntry({
             path: plan.path,
@@ -337,19 +376,19 @@ export const executePlayPlan = async (
 
         const diskType = getFileExtension(plan.path);
         const dmaEligible =
-          diskAutostartMode === 'dma'
-          && plan.source === 'local'
-          && (diskType === 'd64' || diskType === 'd71' || diskType === 'd81')
-          && localBlob;
+          diskAutostartMode === 'dma' &&
+          plan.source === 'local' &&
+          (diskType === 'd64' || diskType === 'd71' || diskType === 'd81') &&
+          localBlob;
 
         if (dmaEligible) {
           const image = new Uint8Array(await localBlob.arrayBuffer());
           await loadFirstDiskPrgViaDma(api, image, diskType as DiskImageType);
         } else if (
-          diskAutostartMode === 'dma'
-          && plan.source === 'local'
-          && !localBlob
-          && (diskType === 'd64' || diskType === 'd71' || diskType === 'd81')
+          diskAutostartMode === 'dma' &&
+          plan.source === 'local' &&
+          !localBlob &&
+          (diskType === 'd64' || diskType === 'd71' || diskType === 'd81')
         ) {
           const diskEntry = createDiskEntry({
             path: plan.path,

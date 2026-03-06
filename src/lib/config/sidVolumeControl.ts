@@ -7,7 +7,10 @@
  */
 
 import { normalizeConfigItem } from '@/lib/config/normalizeConfigItem';
-import { isSidVolumeName, resolveAudioMixerMuteValue } from '@/lib/config/audioMixerSolo';
+import {
+  isSidVolumeName,
+  resolveAudioMixerMuteValue,
+} from '@/lib/config/audioMixerSolo';
 
 export type SidVolumeItem = {
   name: string;
@@ -29,10 +32,13 @@ export type SidVolumeOption = {
   isOff: boolean;
 };
 
-const normalizeToken = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase();
+const normalizeToken = (value: string) =>
+  value.trim().replace(/\s+/g, ' ').toLowerCase();
 const isOffOption = (value: string) => {
   const normalized = normalizeToken(value);
-  return normalized === 'off' || normalized === 'mute' || normalized === 'muted';
+  return (
+    normalized === 'off' || normalized === 'mute' || normalized === 'muted'
+  );
 };
 
 const parseNumericOption = (option: string) => {
@@ -40,7 +46,10 @@ const parseNumericOption = (option: string) => {
   return match ? Number(match[0]) : null;
 };
 
-const resolveEnabledValue = (value: string | number | undefined, disabledTokens: string[]) => {
+const resolveEnabledValue = (
+  value: string | number | undefined,
+  disabledTokens: string[],
+) => {
   if (value === undefined || value === null) return undefined;
   if (typeof value === 'number') return true;
   const trimmed = value.trim();
@@ -56,8 +65,10 @@ const getCategoryItemValue = (
   itemName: string,
 ) => {
   if (!payload) return undefined;
-  const categoryData = (payload as Record<string, any>)[categoryName] ?? payload;
-  const itemsData = (categoryData as Record<string, any>)?.items ?? categoryData;
+  const categoryData =
+    (payload as Record<string, any>)[categoryName] ?? payload;
+  const itemsData =
+    (categoryData as Record<string, any>)?.items ?? categoryData;
   if (!itemsData || typeof itemsData !== 'object') return undefined;
   const itemConfig = (itemsData as Record<string, any>)[itemName];
   if (itemConfig === undefined) return undefined;
@@ -68,16 +79,40 @@ export const buildSidEnablement = (
   sidSocketsCategory?: Record<string, unknown>,
   sidAddressingCategory?: Record<string, unknown>,
 ): SidEnablement => {
-  const socket1Value = getCategoryItemValue(sidSocketsCategory, 'SID Sockets Configuration', 'SID Socket 1');
-  const socket2Value = getCategoryItemValue(sidSocketsCategory, 'SID Sockets Configuration', 'SID Socket 2');
-  const ultiSid1Value = getCategoryItemValue(sidAddressingCategory, 'SID Addressing', 'UltiSID 1 Address');
-  const ultiSid2Value = getCategoryItemValue(sidAddressingCategory, 'SID Addressing', 'UltiSID 2 Address');
+  const socket1Value = getCategoryItemValue(
+    sidSocketsCategory,
+    'SID Sockets Configuration',
+    'SID Socket 1',
+  );
+  const socket2Value = getCategoryItemValue(
+    sidSocketsCategory,
+    'SID Sockets Configuration',
+    'SID Socket 2',
+  );
+  const ultiSid1Value = getCategoryItemValue(
+    sidAddressingCategory,
+    'SID Addressing',
+    'UltiSID 1 Address',
+  );
+  const ultiSid2Value = getCategoryItemValue(
+    sidAddressingCategory,
+    'SID Addressing',
+    'UltiSID 2 Address',
+  );
 
   return {
     socket1: resolveEnabledValue(socket1Value, ['disabled', 'off', 'false']),
     socket2: resolveEnabledValue(socket2Value, ['disabled', 'off', 'false']),
-    ultiSid1: resolveEnabledValue(ultiSid1Value, ['unmapped', 'disabled', 'off']),
-    ultiSid2: resolveEnabledValue(ultiSid2Value, ['unmapped', 'disabled', 'off']),
+    ultiSid1: resolveEnabledValue(ultiSid1Value, [
+      'unmapped',
+      'disabled',
+      'off',
+    ]),
+    ultiSid2: resolveEnabledValue(ultiSid2Value, [
+      'unmapped',
+      'disabled',
+      'off',
+    ]),
   };
 };
 
@@ -91,7 +126,10 @@ export const buildSidVolumeSteps = (options: string[]): SidVolumeOption[] => {
       numeric: parseNumericOption(option),
       isOff: isOffOption(option),
     }))
-    .filter((entry): entry is SidVolumeOption => entry.numeric !== null && !entry.isOff)
+    .filter(
+      (entry): entry is SidVolumeOption =>
+        entry.numeric !== null && !entry.isOff,
+    )
     .sort((a, b) => (a.numeric ?? 0) - (b.numeric ?? 0));
 
   const steps: SidVolumeOption[] = [];
@@ -107,9 +145,14 @@ export const buildSidVolumeSteps = (options: string[]): SidVolumeOption[] => {
   return steps;
 };
 
-export const isSidEnabledForName = (name: string, enablement: SidEnablement) => {
+export const isSidEnabledForName = (
+  name: string,
+  enablement: SidEnablement,
+) => {
   if (!isSidVolumeName(name)) return true;
-  const match = normalizeToken(name).match(/^vol\s+(ultisid|socket)\s+([12])$/i);
+  const match = normalizeToken(name).match(
+    /^vol\s+(ultisid|socket)\s+([12])$/i,
+  );
   if (!match) return true;
   const type = match[1];
   const index = Number(match[2]);
@@ -125,10 +168,15 @@ export const isSidEnabledForName = (name: string, enablement: SidEnablement) => 
   return enabled !== false;
 };
 
-export const filterEnabledSidVolumeItems = (items: SidVolumeItem[], enablement: SidEnablement) =>
-  items.filter((item) => isSidEnabledForName(item.name, enablement));
+export const filterEnabledSidVolumeItems = (
+  items: SidVolumeItem[],
+  enablement: SidEnablement,
+) => items.filter((item) => isSidEnabledForName(item.name, enablement));
 
-export const buildEnabledSidVolumeSnapshot = (items: SidVolumeItem[], enablement: SidEnablement) => {
+export const buildEnabledSidVolumeSnapshot = (
+  items: SidVolumeItem[],
+  enablement: SidEnablement,
+) => {
   const snapshot: Record<string, string | number> = {};
   filterEnabledSidVolumeItems(items, enablement).forEach((item) => {
     snapshot[item.name] = item.value;
@@ -136,7 +184,10 @@ export const buildEnabledSidVolumeSnapshot = (items: SidVolumeItem[], enablement
   return snapshot;
 };
 
-export const buildEnabledSidMuteUpdates = (items: SidVolumeItem[], enablement: SidEnablement) => {
+export const buildEnabledSidMuteUpdates = (
+  items: SidVolumeItem[],
+  enablement: SidEnablement,
+) => {
   const updates: Record<string, string | number> = {};
   filterEnabledSidVolumeItems(items, enablement).forEach((item) => {
     updates[item.name] = resolveAudioMixerMuteValue(item.options);

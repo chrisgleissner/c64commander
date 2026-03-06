@@ -8,9 +8,20 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as logging from '../../../src/lib/logging';
-import { getFuzzMockBaseUrl, isFuzzModeEnabled } from '../../../src/lib/fuzz/fuzzMode';
-import { loadAutomaticDemoModeEnabled, loadDiscoveryProbeTimeoutMs, loadStartupDiscoveryWindowMs } from '../../../src/lib/config/appSettings';
-import { getSmokeConfig, isSmokeModeEnabled, recordSmokeStatus } from '../../../src/lib/smoke/smokeMode';
+import {
+  getFuzzMockBaseUrl,
+  isFuzzModeEnabled,
+} from '../../../src/lib/fuzz/fuzzMode';
+import {
+  loadAutomaticDemoModeEnabled,
+  loadDiscoveryProbeTimeoutMs,
+  loadStartupDiscoveryWindowMs,
+} from '../../../src/lib/config/appSettings';
+import {
+  getSmokeConfig,
+  isSmokeModeEnabled,
+  recordSmokeStatus,
+} from '../../../src/lib/smoke/smokeMode';
 
 vi.mock('../../../src/lib/config/appSettings', () => ({
   loadAutomaticDemoModeEnabled: vi.fn(() => true),
@@ -34,7 +45,9 @@ vi.mock('../../../src/lib/smoke/smokeMode', () => ({
 }));
 
 vi.mock('../../../src/lib/c64api', async () => {
-  const actual = await vi.importActual<typeof import('../../../src/lib/c64api')>('../../../src/lib/c64api');
+  const actual = await vi.importActual<
+    typeof import('../../../src/lib/c64api')
+  >('../../../src/lib/c64api');
   return {
     ...actual,
     applyC64APIRuntimeConfig: vi.fn(),
@@ -67,7 +80,8 @@ const ensureStorage = () => {
   const createMemoryStorage = () => {
     let store = new Map<string, string>();
     return {
-      getItem: (key: string) => (store.has(key) ? store.get(key) ?? null : null),
+      getItem: (key: string) =>
+        store.has(key) ? (store.get(key) ?? null) : null,
       setItem: (key: string, value: string) => {
         store.set(key, String(value));
       },
@@ -103,7 +117,10 @@ describe('connectionManager', () => {
     localStorage.clear();
     sessionStorage.clear();
     vi.useFakeTimers();
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockRejectedValue(new TypeError('Failed to fetch')),
+    );
     vi.mocked(isFuzzModeEnabled).mockReturnValue(false);
     vi.mocked(getFuzzMockBaseUrl).mockReturnValue(null);
     vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(true);
@@ -112,7 +129,11 @@ describe('connectionManager', () => {
     vi.mocked(isSmokeModeEnabled).mockReturnValue(false);
     vi.mocked(recordSmokeStatus).mockResolvedValue(undefined);
     vi.mocked(getSmokeConfig as any).mockReturnValue(null);
-    startMockServer.mockImplementation(async () => { throw new Error('Mock C64U server is only available on native platforms.'); });
+    startMockServer.mockImplementation(async () => {
+      throw new Error(
+        'Mock C64U server is only available on native platforms.',
+      );
+    });
     startMockServer.mockClear();
     stopMockServer.mockClear();
     getActiveMockBaseUrl.mockClear();
@@ -140,7 +161,8 @@ describe('connectionManager', () => {
     expect(getConnectionSnapshot().demoInterstitialVisible).toBe(true);
 
     // Dismiss, then manual discovery should not show again in same session.
-    const { dismissDemoInterstitial } = await import('../../../src/lib/connection/connectionManager');
+    const { dismissDemoInterstitial } =
+      await import('../../../src/lib/connection/connectionManager');
     dismissDemoInterstitial();
     expect(getConnectionSnapshot().demoInterstitialVisible).toBe(false);
 
@@ -156,13 +178,18 @@ describe('connectionManager', () => {
   });
 
   it('forces demo mode in fuzz mode and applies forced mock base URL', async () => {
-    const { isFuzzModeEnabled, getFuzzMockBaseUrl } = await import('../../../src/lib/fuzz/fuzzMode');
+    const { isFuzzModeEnabled, getFuzzMockBaseUrl } =
+      await import('../../../src/lib/fuzz/fuzzMode');
     vi.mocked(isFuzzModeEnabled).mockReturnValue(true);
     vi.mocked(getFuzzMockBaseUrl).mockReturnValue('http://127.0.0.1:9999');
 
-    const { applyC64APIRuntimeConfig, getDeviceHostFromBaseUrl } = await import('../../../src/lib/c64api');
-    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
-      await import('../../../src/lib/connection/connectionManager');
+    const { applyC64APIRuntimeConfig, getDeviceHostFromBaseUrl } =
+      await import('../../../src/lib/c64api');
+    const {
+      discoverConnection,
+      getConnectionSnapshot,
+      initializeConnectionManager,
+    } = await import('../../../src/lib/connection/connectionManager');
 
     await initializeConnectionManager();
     await discoverConnection('startup');
@@ -176,8 +203,11 @@ describe('connectionManager', () => {
   });
 
   it('manual discovery transitions from demo to real when probe succeeds', async () => {
-    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
-      await import('../../../src/lib/connection/connectionManager');
+    const {
+      discoverConnection,
+      getConnectionSnapshot,
+      initializeConnectionManager,
+    } = await import('../../../src/lib/connection/connectionManager');
 
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
     localStorage.removeItem('c64u_has_password');
@@ -202,8 +232,11 @@ describe('connectionManager', () => {
   });
 
   it('connects to real device when legacy base url is reachable', async () => {
-    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
-      await import('../../../src/lib/connection/connectionManager');
+    const {
+      discoverConnection,
+      getConnectionSnapshot,
+      initializeConnectionManager,
+    } = await import('../../../src/lib/connection/connectionManager');
 
     localStorage.setItem('c64u_base_url', 'http://127.0.0.1:9999');
     localStorage.removeItem('c64u_device_host');
@@ -227,8 +260,10 @@ describe('connectionManager', () => {
   });
 
   it('records smoke status transitions when enabled', async () => {
-    const { discoverConnection, initializeConnectionManager } = await import('../../../src/lib/connection/connectionManager');
-    const { isSmokeModeEnabled, recordSmokeStatus } = await import('../../../src/lib/smoke/smokeMode');
+    const { discoverConnection, initializeConnectionManager } =
+      await import('../../../src/lib/connection/connectionManager');
+    const { isSmokeModeEnabled, recordSmokeStatus } =
+      await import('../../../src/lib/smoke/smokeMode');
 
     vi.mocked(isSmokeModeEnabled).mockReturnValue(true);
 
@@ -247,15 +282,18 @@ describe('connectionManager', () => {
     void discoverConnection('startup');
     await vi.advanceTimersByTimeAsync(50);
 
-    expect(recordSmokeStatus).toHaveBeenCalledWith(expect.objectContaining({
-      state: 'REAL_CONNECTED',
-      mode: 'real',
-    }));
+    expect(recordSmokeStatus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        state: 'REAL_CONNECTED',
+        mode: 'real',
+      }),
+    );
   });
 
   it('logs when discovery probe JSON parsing fails', async () => {
     const addLogSpy = vi.spyOn(logging, 'addLog');
-    const { probeOnce } = await import('../../../src/lib/connection/connectionManager');
+    const { probeOnce } =
+      await import('../../../src/lib/connection/connectionManager');
 
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
     vi.mocked(fetch).mockResolvedValue(
@@ -279,8 +317,12 @@ describe('connectionManager', () => {
   });
 
   it('does not fall back to demo mode after real connection is sticky', async () => {
-    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager, isRealDeviceStickyLockEnabled } =
-      await import('../../../src/lib/connection/connectionManager');
+    const {
+      discoverConnection,
+      getConnectionSnapshot,
+      initializeConnectionManager,
+      isRealDeviceStickyLockEnabled,
+    } = await import('../../../src/lib/connection/connectionManager');
 
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
     localStorage.removeItem('c64u_has_password');
@@ -309,7 +351,8 @@ describe('connectionManager', () => {
   });
 
   it('accepts healthy probe payload without product field', async () => {
-    const { probeOnce } = await import('../../../src/lib/connection/connectionManager');
+    const { probeOnce } =
+      await import('../../../src/lib/connection/connectionManager');
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
     localStorage.removeItem('c64u_has_password');
 
@@ -325,7 +368,8 @@ describe('connectionManager', () => {
   });
 
   it('returns false when probe exceeds timeout', async () => {
-    const { probeOnce } = await import('../../../src/lib/connection/connectionManager');
+    const { probeOnce } =
+      await import('../../../src/lib/connection/connectionManager');
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
     localStorage.removeItem('c64u_has_password');
 
@@ -337,12 +381,16 @@ describe('connectionManager', () => {
           reject(new DOMException('Aborted', 'AbortError'));
           return;
         }
-        signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+        signal?.addEventListener('abort', () =>
+          reject(new DOMException('Aborted', 'AbortError')),
+        );
         setTimeout(() => {
-          resolve(new Response(JSON.stringify({ errors: [] }), {
-            status: 200,
-            headers: { 'content-type': 'application/json' },
-          }));
+          resolve(
+            new Response(JSON.stringify({ errors: [] }), {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            }),
+          );
         }, 200);
       });
     });
@@ -353,7 +401,8 @@ describe('connectionManager', () => {
   });
 
   it('uses configured probe timeout when not provided', async () => {
-    const { probeOnce } = await import('../../../src/lib/connection/connectionManager');
+    const { probeOnce } =
+      await import('../../../src/lib/connection/connectionManager');
     vi.mocked(loadDiscoveryProbeTimeoutMs).mockReturnValue(40);
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
     localStorage.removeItem('c64u_has_password');
@@ -366,12 +415,16 @@ describe('connectionManager', () => {
           reject(new DOMException('Aborted', 'AbortError'));
           return;
         }
-        signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+        signal?.addEventListener('abort', () =>
+          reject(new DOMException('Aborted', 'AbortError')),
+        );
         setTimeout(() => {
-          resolve(new Response(JSON.stringify({ errors: [] }), {
-            status: 200,
-            headers: { 'content-type': 'application/json' },
-          }));
+          resolve(
+            new Response(JSON.stringify({ errors: [] }), {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            }),
+          );
         }, 200);
       });
     });
@@ -382,8 +435,11 @@ describe('connectionManager', () => {
   });
 
   it('connects to real device before discovery window expires', async () => {
-    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
-      await import('../../../src/lib/connection/connectionManager');
+    const {
+      discoverConnection,
+      getConnectionSnapshot,
+      initializeConnectionManager,
+    } = await import('../../../src/lib/connection/connectionManager');
 
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
     localStorage.removeItem('c64u_has_password');
@@ -405,8 +461,11 @@ describe('connectionManager', () => {
   });
 
   it('discovery timeout falls back to demo even if a probe is still in flight', async () => {
-    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
-      await import('../../../src/lib/connection/connectionManager');
+    const {
+      discoverConnection,
+      getConnectionSnapshot,
+      initializeConnectionManager,
+    } = await import('../../../src/lib/connection/connectionManager');
 
     vi.mocked(loadStartupDiscoveryWindowMs).mockReturnValue(200);
 
@@ -414,15 +473,21 @@ describe('connectionManager', () => {
     localStorage.removeItem('c64u_has_password');
 
     const fetchMock = vi.mocked(fetch);
-    fetchMock.mockImplementation(() =>
-      new Promise<Response>((resolve) => {
-        setTimeout(() => {
-          resolve(new Response(JSON.stringify({ product: 'C64 Ultimate', errors: [] }), {
-            status: 200,
-            headers: { 'content-type': 'application/json' },
-          }));
-        }, 500);
-      }),
+    fetchMock.mockImplementation(
+      () =>
+        new Promise<Response>((resolve) => {
+          setTimeout(() => {
+            resolve(
+              new Response(
+                JSON.stringify({ product: 'C64 Ultimate', errors: [] }),
+                {
+                  status: 200,
+                  headers: { 'content-type': 'application/json' },
+                },
+              ),
+            );
+          }, 500);
+        }),
     );
 
     await initializeConnectionManager();
@@ -436,8 +501,11 @@ describe('connectionManager', () => {
   });
 
   it('switches from demo to real device on background probe success', async () => {
-    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
-      await import('../../../src/lib/connection/connectionManager');
+    const {
+      discoverConnection,
+      getConnectionSnapshot,
+      initializeConnectionManager,
+    } = await import('../../../src/lib/connection/connectionManager');
 
     vi.mocked(loadStartupDiscoveryWindowMs).mockReturnValue(200);
 
@@ -446,14 +514,18 @@ describe('connectionManager', () => {
 
     const fetchStub = vi.mocked(fetch);
     fetchStub
-      .mockResolvedValueOnce(new Response(JSON.stringify({ errors: ['offline'] }), {
-        status: 500,
-        headers: { 'content-type': 'application/json' },
-      }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ product: 'C64 Ultimate', errors: [] }), {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      }));
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ errors: ['offline'] }), {
+          status: 500,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ product: 'C64 Ultimate', errors: [] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      );
 
     await initializeConnectionManager();
     void discoverConnection('startup');
@@ -468,8 +540,11 @@ describe('connectionManager', () => {
   });
 
   it('prevents overlapping background probes and preserves in-flight success', async () => {
-    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
-      await import('../../../src/lib/connection/connectionManager');
+    const {
+      discoverConnection,
+      getConnectionSnapshot,
+      initializeConnectionManager,
+    } = await import('../../../src/lib/connection/connectionManager');
 
     vi.mocked(loadStartupDiscoveryWindowMs).mockReturnValue(200);
 
@@ -497,10 +572,15 @@ describe('connectionManager', () => {
 
         setTimeout(() => {
           signal?.removeEventListener('abort', onAbort);
-          resolve(new Response(JSON.stringify({ product: 'C64 Ultimate', errors: [] }), {
-            status: 200,
-            headers: { 'content-type': 'application/json' },
-          }));
+          resolve(
+            new Response(
+              JSON.stringify({ product: 'C64 Ultimate', errors: [] }),
+              {
+                status: 200,
+                headers: { 'content-type': 'application/json' },
+              },
+            ),
+          );
         }, 150);
       });
     });
@@ -521,27 +601,42 @@ describe('connectionManager', () => {
   });
 
   it('ignores stale manual discovery outcomes when a newer manual run finishes first', async () => {
-    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
-      await import('../../../src/lib/connection/connectionManager');
+    const {
+      discoverConnection,
+      getConnectionSnapshot,
+      initializeConnectionManager,
+    } = await import('../../../src/lib/connection/connectionManager');
 
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
     localStorage.removeItem('c64u_has_password');
 
     const fetchStub = vi.mocked(fetch);
     fetchStub
-      .mockImplementationOnce(() =>
-        new Promise<Response>((_, reject) => {
-          setTimeout(() => reject(new TypeError('first manual probe failed')), 150);
-        }))
-      .mockImplementationOnce(() =>
-        new Promise<Response>((resolve) => {
-          setTimeout(() => {
-            resolve(new Response(JSON.stringify({ product: 'C64 Ultimate', errors: [] }), {
-              status: 200,
-              headers: { 'content-type': 'application/json' },
-            }));
-          }, 20);
-        }));
+      .mockImplementationOnce(
+        () =>
+          new Promise<Response>((_, reject) => {
+            setTimeout(
+              () => reject(new TypeError('first manual probe failed')),
+              150,
+            );
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<Response>((resolve) => {
+            setTimeout(() => {
+              resolve(
+                new Response(
+                  JSON.stringify({ product: 'C64 Ultimate', errors: [] }),
+                  {
+                    status: 200,
+                    headers: { 'content-type': 'application/json' },
+                  },
+                ),
+              );
+            }, 20);
+          }),
+      );
 
     await initializeConnectionManager();
 
@@ -573,12 +668,17 @@ describe('connectionManager', () => {
       probeCount += 1;
       const shouldSucceed = probeCount % 3 === 0;
       return Promise.resolve(
-        new Response(JSON.stringify(shouldSucceed
-          ? { product: 'C64 Ultimate', errors: [] }
-          : { errors: ['offline'] }), {
-          status: shouldSucceed ? 200 : 503,
-          headers: { 'content-type': 'application/json' },
-        }),
+        new Response(
+          JSON.stringify(
+            shouldSucceed
+              ? { product: 'C64 Ultimate', errors: [] }
+              : { errors: ['offline'] },
+          ),
+          {
+            status: shouldSucceed ? 200 : 503,
+            headers: { 'content-type': 'application/json' },
+          },
+        ),
       );
     });
 
@@ -617,8 +717,11 @@ describe('connectionManager', () => {
   });
 
   it('does not auto-enable demo when automatic demo mode is disabled', async () => {
-    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
-      await import('../../../src/lib/connection/connectionManager');
+    const {
+      discoverConnection,
+      getConnectionSnapshot,
+      initializeConnectionManager,
+    } = await import('../../../src/lib/connection/connectionManager');
 
     vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(false);
     vi.mocked(loadStartupDiscoveryWindowMs).mockReturnValue(200);
@@ -643,22 +746,30 @@ describe('connectionManager', () => {
   });
 
   it('rejects payload with non-empty errors array', async () => {
-    const { probeOnce } = await import('../../../src/lib/connection/connectionManager');
+    const { probeOnce } =
+      await import('../../../src/lib/connection/connectionManager');
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
     localStorage.removeItem('c64u_has_password');
 
     vi.mocked(fetch).mockResolvedValue(
-      new Response(JSON.stringify({ product: 'C64 Ultimate', errors: ['something wrong'] }), {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      }),
+      new Response(
+        JSON.stringify({
+          product: 'C64 Ultimate',
+          errors: ['something wrong'],
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        },
+      ),
     );
 
     await expect(probeOnce()).resolves.toBe(false);
   });
 
   it('rejects payload with empty product string', async () => {
-    const { probeOnce } = await import('../../../src/lib/connection/connectionManager');
+    const { probeOnce } =
+      await import('../../../src/lib/connection/connectionManager');
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
     localStorage.removeItem('c64u_has_password');
 
@@ -673,7 +784,8 @@ describe('connectionManager', () => {
   });
 
   it('accepts payload with no product field and no errors', async () => {
-    const { probeOnce } = await import('../../../src/lib/connection/connectionManager');
+    const { probeOnce } =
+      await import('../../../src/lib/connection/connectionManager');
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
     localStorage.removeItem('c64u_has_password');
 
@@ -688,7 +800,8 @@ describe('connectionManager', () => {
   });
 
   it('rejects probe when HTTP status is not ok', async () => {
-    const { probeOnce } = await import('../../../src/lib/connection/connectionManager');
+    const { probeOnce } =
+      await import('../../../src/lib/connection/connectionManager');
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
     localStorage.removeItem('c64u_has_password');
 
@@ -703,7 +816,8 @@ describe('connectionManager', () => {
   });
 
   it('handles non-JSON content type by returning null payload (healthy if response ok)', async () => {
-    const { probeOnce } = await import('../../../src/lib/connection/connectionManager');
+    const { probeOnce } =
+      await import('../../../src/lib/connection/connectionManager');
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
     localStorage.removeItem('c64u_has_password');
 
@@ -719,8 +833,11 @@ describe('connectionManager', () => {
   });
 
   it('manual probe without auto-demo transitions to OFFLINE_NO_DEMO', async () => {
-    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
-      await import('../../../src/lib/connection/connectionManager');
+    const {
+      discoverConnection,
+      getConnectionSnapshot,
+      initializeConnectionManager,
+    } = await import('../../../src/lib/connection/connectionManager');
 
     vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(false);
 
@@ -737,8 +854,11 @@ describe('connectionManager', () => {
   });
 
   it('background probe on READY state does nothing', async () => {
-    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
-      await import('../../../src/lib/connection/connectionManager');
+    const {
+      discoverConnection,
+      getConnectionSnapshot,
+      initializeConnectionManager,
+    } = await import('../../../src/lib/connection/connectionManager');
 
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
     localStorage.removeItem('c64u_has_password');
@@ -763,9 +883,13 @@ describe('connectionManager', () => {
   it('demo fallback applies mock routing details when available', async () => {
     const { discoverConnection, initializeConnectionManager } =
       await import('../../../src/lib/connection/connectionManager');
-    const { applyC64APIRuntimeConfig, getDeviceHostFromBaseUrl } = await import('../../../src/lib/c64api');
+    const { applyC64APIRuntimeConfig, getDeviceHostFromBaseUrl } =
+      await import('../../../src/lib/c64api');
 
-    startMockServer.mockResolvedValue({ baseUrl: 'http://127.0.0.1:7777', ftpPort: 21 });
+    startMockServer.mockResolvedValue({
+      baseUrl: 'http://127.0.0.1:7777',
+      ftpPort: 21,
+    });
     getActiveMockBaseUrl.mockReturnValue('http://127.0.0.1:7777');
 
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
@@ -791,9 +915,13 @@ describe('connectionManager', () => {
   });
 
   it('interstitial carries attempted hostname from persisted storage', async () => {
-    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
-      await import('../../../src/lib/connection/connectionManager');
-    const { resolveDeviceHostFromStorage } = await import('../../../src/lib/c64api');
+    const {
+      discoverConnection,
+      getConnectionSnapshot,
+      initializeConnectionManager,
+    } = await import('../../../src/lib/connection/connectionManager');
+    const { resolveDeviceHostFromStorage } =
+      await import('../../../src/lib/c64api');
 
     localStorage.setItem('c64u_device_host', '192.168.1.42');
     localStorage.removeItem('c64u_has_password');
@@ -811,8 +939,11 @@ describe('connectionManager', () => {
   });
 
   it('reconnection controller invariant: background discovery inactive in REAL_CONNECTED state', async () => {
-    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
-      await import('../../../src/lib/connection/connectionManager');
+    const {
+      discoverConnection,
+      getConnectionSnapshot,
+      initializeConnectionManager,
+    } = await import('../../../src/lib/connection/connectionManager');
 
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
     localStorage.removeItem('c64u_has_password');
@@ -836,8 +967,11 @@ describe('connectionManager', () => {
   });
 
   it('demo mode entered only when automatic demo is enabled; retry exhaustion falls to offline otherwise', async () => {
-    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
-      await import('../../../src/lib/connection/connectionManager');
+    const {
+      discoverConnection,
+      getConnectionSnapshot,
+      initializeConnectionManager,
+    } = await import('../../../src/lib/connection/connectionManager');
 
     vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(false);
     vi.mocked(loadStartupDiscoveryWindowMs).mockReturnValue(300);
@@ -856,8 +990,11 @@ describe('connectionManager', () => {
   });
 
   it('automatic switch from demo to real when device becomes reachable during background rediscovery', async () => {
-    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
-      await import('../../../src/lib/connection/connectionManager');
+    const {
+      discoverConnection,
+      getConnectionSnapshot,
+      initializeConnectionManager,
+    } = await import('../../../src/lib/connection/connectionManager');
 
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
     localStorage.removeItem('c64u_has_password');
@@ -889,7 +1026,8 @@ describe('connectionManager', () => {
 
   it('normalizeUrl returns original value when given an invalid URL', async () => {
     const addLogSpy = vi.spyOn(logging, 'addLog');
-    const { probeOnce } = await import('../../../src/lib/connection/connectionManager');
+    const { probeOnce } =
+      await import('../../../src/lib/connection/connectionManager');
     // Set an invalid device host that can't be parsed as a URL
     localStorage.setItem('c64u_device_host', ':::invalid');
     localStorage.removeItem('c64u_has_password');
@@ -902,8 +1040,11 @@ describe('connectionManager', () => {
   });
 
   it('settings trigger performs startup-style discovery with polling', async () => {
-    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
-      await import('../../../src/lib/connection/connectionManager');
+    const {
+      discoverConnection,
+      getConnectionSnapshot,
+      initializeConnectionManager,
+    } = await import('../../../src/lib/connection/connectionManager');
 
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
     localStorage.removeItem('c64u_has_password');
@@ -923,8 +1064,11 @@ describe('connectionManager', () => {
   });
 
   it('settings trigger falls back to demo when probes fail', async () => {
-    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
-      await import('../../../src/lib/connection/connectionManager');
+    const {
+      discoverConnection,
+      getConnectionSnapshot,
+      initializeConnectionManager,
+    } = await import('../../../src/lib/connection/connectionManager');
 
     vi.mocked(loadStartupDiscoveryWindowMs).mockReturnValue(200);
     localStorage.setItem('c64u_device_host', '127.0.0.1:1');
@@ -940,23 +1084,30 @@ describe('connectionManager', () => {
   });
 
   it('probeOnce respects pre-aborted outer signal', async () => {
-    const { probeOnce } = await import('../../../src/lib/connection/connectionManager');
+    const { probeOnce } =
+      await import('../../../src/lib/connection/connectionManager');
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
     localStorage.removeItem('c64u_has_password');
 
     const abort = new AbortController();
     abort.abort();
 
-    vi.mocked(fetch).mockRejectedValue(new DOMException('Aborted', 'AbortError'));
+    vi.mocked(fetch).mockRejectedValue(
+      new DOMException('Aborted', 'AbortError'),
+    );
 
     const result = await probeOnce({ signal: abort.signal });
     expect(result).toBe(false);
   });
 
   it('demo fallback uses stored device host when no mock server is active', async () => {
-    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
-      await import('../../../src/lib/connection/connectionManager');
-    const { applyC64APIRuntimeConfig } = await import('../../../src/lib/c64api');
+    const {
+      discoverConnection,
+      getConnectionSnapshot,
+      initializeConnectionManager,
+    } = await import('../../../src/lib/connection/connectionManager');
+    const { applyC64APIRuntimeConfig } =
+      await import('../../../src/lib/c64api');
 
     // Mock server throws but getActiveMockBaseUrl returns null
     startMockServer.mockRejectedValue(new Error('not available'));
@@ -984,7 +1135,10 @@ describe('connectionManager', () => {
     const { discoverConnection, initializeConnectionManager } =
       await import('../../../src/lib/connection/connectionManager');
 
-    startMockServer.mockResolvedValue({ baseUrl: 'http://127.0.0.1:7777', ftpPort: 2121 });
+    startMockServer.mockResolvedValue({
+      baseUrl: 'http://127.0.0.1:7777',
+      ftpPort: 2121,
+    });
     getActiveMockBaseUrl.mockReturnValue('http://127.0.0.1:7777');
     getActiveMockFtpPort.mockReturnValue(2121);
 
@@ -1001,8 +1155,11 @@ describe('connectionManager', () => {
   });
 
   it('background probe failed outcome does not change state', async () => {
-    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
-      await import('../../../src/lib/connection/connectionManager');
+    const {
+      discoverConnection,
+      getConnectionSnapshot,
+      initializeConnectionManager,
+    } = await import('../../../src/lib/connection/connectionManager');
 
     vi.mocked(loadStartupDiscoveryWindowMs).mockReturnValue(200);
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
@@ -1022,7 +1179,8 @@ describe('connectionManager', () => {
   });
 
   it('probeOnce returns false for non-object payload', async () => {
-    const { probeOnce } = await import('../../../src/lib/connection/connectionManager');
+    const { probeOnce } =
+      await import('../../../src/lib/connection/connectionManager');
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
 
     vi.mocked(fetch).mockResolvedValue(
@@ -1036,7 +1194,8 @@ describe('connectionManager', () => {
   });
 
   it('probeOnce returns false for primitive payload', async () => {
-    const { probeOnce } = await import('../../../src/lib/connection/connectionManager');
+    const { probeOnce } =
+      await import('../../../src/lib/connection/connectionManager');
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
 
     vi.mocked(fetch).mockResolvedValue(
@@ -1050,15 +1209,25 @@ describe('connectionManager', () => {
   });
 
   it('smoke mock target bypasses normal discovery and uses mock server', async () => {
-    const { getSmokeConfig, isSmokeModeEnabled } = await import('../../../src/lib/smoke/smokeMode');
-    vi.mocked(getSmokeConfig as any).mockReturnValue({ target: 'mock', host: 'localhost' });
+    const { getSmokeConfig, isSmokeModeEnabled } =
+      await import('../../../src/lib/smoke/smokeMode');
+    vi.mocked(getSmokeConfig as any).mockReturnValue({
+      target: 'mock',
+      host: 'localhost',
+    });
     vi.mocked(isSmokeModeEnabled).mockReturnValue(true);
 
-    startMockServer.mockResolvedValue({ baseUrl: 'http://127.0.0.1:8888', ftpPort: null });
+    startMockServer.mockResolvedValue({
+      baseUrl: 'http://127.0.0.1:8888',
+      ftpPort: null,
+    });
     getActiveMockBaseUrl.mockReturnValue('http://127.0.0.1:8888');
 
-    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
-      await import('../../../src/lib/connection/connectionManager');
+    const {
+      discoverConnection,
+      getConnectionSnapshot,
+      initializeConnectionManager,
+    } = await import('../../../src/lib/connection/connectionManager');
 
     await initializeConnectionManager();
     await discoverConnection('startup');
@@ -1068,13 +1237,15 @@ describe('connectionManager', () => {
   });
 
   it('exports CONNECTION_CONSTANTS with expected values', async () => {
-    const { CONNECTION_CONSTANTS } = await import('../../../src/lib/connection/connectionManager');
+    const { CONNECTION_CONSTANTS } =
+      await import('../../../src/lib/connection/connectionManager');
     expect(CONNECTION_CONSTANTS.STARTUP_PROBE_INTERVAL_MS).toBe(700);
     expect(CONNECTION_CONSTANTS.PROBE_REQUEST_TIMEOUT_MS).toBe(2500);
   });
 
   it('subscribe and unsubscribe connection listeners', async () => {
-    const { subscribeConnection, getConnectionSnapshot } = await import('../../../src/lib/connection/connectionManager');
+    const { subscribeConnection, getConnectionSnapshot } =
+      await import('../../../src/lib/connection/connectionManager');
     const listener = vi.fn();
     const unsubscribe = subscribeConnection(listener);
     expect(typeof unsubscribe).toBe('function');
@@ -1084,13 +1255,18 @@ describe('connectionManager', () => {
   });
 
   it('dismissDemoInterstitial handles sessionStorage.setItem throwing', async () => {
-    const { dismissDemoInterstitial, getConnectionSnapshot, initializeConnectionManager } =
-      await import('../../../src/lib/connection/connectionManager');
+    const {
+      dismissDemoInterstitial,
+      getConnectionSnapshot,
+      initializeConnectionManager,
+    } = await import('../../../src/lib/connection/connectionManager');
     localStorage.setItem('c64u_device_host', '127.0.0.1:1');
     await initializeConnectionManager();
     const throwing = {
       getItem: () => null,
-      setItem: () => { throw new DOMException('QuotaExceededError'); },
+      setItem: () => {
+        throw new DOMException('QuotaExceededError');
+      },
       removeItem: () => undefined,
       clear: () => undefined,
       key: () => null,
@@ -1103,7 +1279,8 @@ describe('connectionManager', () => {
   });
 
   it('probeOnce returns false when response has no content-type header', async () => {
-    const { probeOnce } = await import('../../../src/lib/connection/connectionManager');
+    const { probeOnce } =
+      await import('../../../src/lib/connection/connectionManager');
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
     // null body → no content-type header → parseProbePayload returns null → isProbePayloadHealthy(null) = false
     vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 200 }));
@@ -1112,7 +1289,8 @@ describe('connectionManager', () => {
 
   it('initializeConnectionManager logs warning when stopDemoServer throws', async () => {
     stopMockServer.mockRejectedValueOnce(new Error('stop failed'));
-    const { initializeConnectionManager } = await import('../../../src/lib/connection/connectionManager');
+    const { initializeConnectionManager } =
+      await import('../../../src/lib/connection/connectionManager');
     localStorage.setItem('c64u_device_host', '127.0.0.1:1');
     await expect(initializeConnectionManager()).resolves.toBeUndefined();
   });
@@ -1122,8 +1300,11 @@ describe('connectionManager', () => {
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
     vi.mocked(fetch).mockRejectedValue(new TypeError('Failed to fetch'));
 
-    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
-      await import('../../../src/lib/connection/connectionManager');
+    const {
+      discoverConnection,
+      getConnectionSnapshot,
+      initializeConnectionManager,
+    } = await import('../../../src/lib/connection/connectionManager');
 
     // Reach DEMO_ACTIVE with smoke off (autoDemoEnabled = true)
     await initializeConnectionManager();
@@ -1132,7 +1313,8 @@ describe('connectionManager', () => {
     expect(getConnectionSnapshot().state).toBe('DEMO_ACTIVE');
 
     // Enable smoke mode before the background probe succeeds
-    const { isSmokeModeEnabled } = await import('../../../src/lib/smoke/smokeMode');
+    const { isSmokeModeEnabled } =
+      await import('../../../src/lib/smoke/smokeMode');
     vi.mocked(isSmokeModeEnabled).mockReturnValue(true);
     vi.mocked(fetch).mockResolvedValue(
       new Response(JSON.stringify({ product: 'U64' }), {
@@ -1150,8 +1332,11 @@ describe('connectionManager', () => {
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
     vi.mocked(fetch).mockRejectedValue(new TypeError('Failed to fetch'));
 
-    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
-      await import('../../../src/lib/connection/connectionManager');
+    const {
+      discoverConnection,
+      getConnectionSnapshot,
+      initializeConnectionManager,
+    } = await import('../../../src/lib/connection/connectionManager');
 
     // Reach DEMO_ACTIVE with smoke off
     await initializeConnectionManager();
@@ -1160,7 +1345,8 @@ describe('connectionManager', () => {
     expect(getConnectionSnapshot().state).toBe('DEMO_ACTIVE');
 
     // Enable smoke mode before the background probe (which also fails)
-    const { isSmokeModeEnabled } = await import('../../../src/lib/smoke/smokeMode');
+    const { isSmokeModeEnabled } =
+      await import('../../../src/lib/smoke/smokeMode');
     vi.mocked(isSmokeModeEnabled).mockReturnValue(true);
     await discoverConnection('background');
     await vi.advanceTimersByTimeAsync(50);
@@ -1168,7 +1354,8 @@ describe('connectionManager', () => {
   });
 
   it('startup discovery logs smoke info when probe succeeds in smoke mode', async () => {
-    const { isSmokeModeEnabled } = await import('../../../src/lib/smoke/smokeMode');
+    const { isSmokeModeEnabled } =
+      await import('../../../src/lib/smoke/smokeMode');
     vi.mocked(isSmokeModeEnabled).mockReturnValue(true);
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
 
@@ -1178,8 +1365,11 @@ describe('connectionManager', () => {
         headers: { 'content-type': 'application/json' },
       }),
     );
-    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
-      await import('../../../src/lib/connection/connectionManager');
+    const {
+      discoverConnection,
+      getConnectionSnapshot,
+      initializeConnectionManager,
+    } = await import('../../../src/lib/connection/connectionManager');
 
     await initializeConnectionManager();
     void discoverConnection('startup');
@@ -1188,15 +1378,19 @@ describe('connectionManager', () => {
   });
 
   it('startup discovery logs smoke warn when probe fails in smoke mode', async () => {
-    const { isSmokeModeEnabled } = await import('../../../src/lib/smoke/smokeMode');
+    const { isSmokeModeEnabled } =
+      await import('../../../src/lib/smoke/smokeMode');
     vi.mocked(isSmokeModeEnabled).mockReturnValue(true);
     vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(false);
     vi.mocked(loadStartupDiscoveryWindowMs).mockReturnValue(300);
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
 
     vi.mocked(fetch).mockRejectedValue(new TypeError('Failed to fetch'));
-    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
-      await import('../../../src/lib/connection/connectionManager');
+    const {
+      discoverConnection,
+      getConnectionSnapshot,
+      initializeConnectionManager,
+    } = await import('../../../src/lib/connection/connectionManager');
 
     await initializeConnectionManager();
     void discoverConnection('startup');
@@ -1205,15 +1399,21 @@ describe('connectionManager', () => {
   });
 
   it('transitionToDemoActive: shouldStartDemoServer false when demoServerStartedThisSession', async () => {
-    startMockServer.mockResolvedValue({ baseUrl: 'http://127.0.0.1:7777', ftpPort: 2121 });
+    startMockServer.mockResolvedValue({
+      baseUrl: 'http://127.0.0.1:7777',
+      ftpPort: 2121,
+    });
     getActiveMockBaseUrl.mockReturnValue('http://127.0.0.1:7777');
     getActiveMockFtpPort.mockReturnValue(2121);
 
     localStorage.setItem('c64u_device_host', '127.0.0.1:1');
     vi.mocked(fetch).mockRejectedValue(new TypeError('Failed to fetch'));
 
-    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
-      await import('../../../src/lib/connection/connectionManager');
+    const {
+      discoverConnection,
+      getConnectionSnapshot,
+      initializeConnectionManager,
+    } = await import('../../../src/lib/connection/connectionManager');
 
     await initializeConnectionManager();
     void discoverConnection('startup');
@@ -1227,7 +1427,8 @@ describe('connectionManager', () => {
   });
 
   it('probeOnce with timeoutMs:0 skips AbortController and timeout (controller=null paths)', async () => {
-    const { probeOnce } = await import('../../../src/lib/connection/connectionManager');
+    const { probeOnce } =
+      await import('../../../src/lib/connection/connectionManager');
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
     localStorage.removeItem('c64u_has_password');
 
@@ -1246,7 +1447,8 @@ describe('connectionManager', () => {
   });
 
   it('probeOnce with timeoutMs:0 and outerSignal covers outerSignal branch when controller is null', async () => {
-    const { probeOnce } = await import('../../../src/lib/connection/connectionManager');
+    const { probeOnce } =
+      await import('../../../src/lib/connection/connectionManager');
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
     localStorage.removeItem('c64u_has_password');
 
@@ -1260,7 +1462,8 @@ describe('connectionManager', () => {
     const outerAbort = new AbortController();
     // controller=null (timeoutMs=0), outerSignal is set → covers
     // `controller ? {...} : outerSignal ? { signal: outerSignal } : {}` TRUE for outerSignal (line 133)
-    await expect(probeOnce({ timeoutMs: 0, signal: outerAbort.signal })).resolves.toBe(true);
+    await expect(
+      probeOnce({ timeoutMs: 0, signal: outerAbort.signal }),
+    ).resolves.toBe(true);
   });
 });
-

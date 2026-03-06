@@ -35,7 +35,12 @@ export {
 } from './hvscService';
 export { recoverStaleIngestionState } from './hvscIngestionRuntime';
 export { createHvscMediaIndex, HvscMediaIndexAdapter } from './hvscMediaIndex';
-export { clearHvscRoot, getDefaultHvscRoot, loadHvscRoot, saveHvscRoot } from './hvscRootLocator';
+export {
+  clearHvscRoot,
+  getDefaultHvscRoot,
+  loadHvscRoot,
+  saveHvscRoot,
+} from './hvscRootLocator';
 export {
   clearHvscStatusSummary,
   getDefaultHvscStatusSummary,

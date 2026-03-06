@@ -12,27 +12,28 @@ import type { ConnectionDiagnosticsSummary } from '@/lib/diagnostics/connectionS
 import { getErrorLogs, getLogs } from '@/lib/logging';
 import { getTraceEvents } from '@/lib/tracing/traceSession';
 
-export const useConnectionDiagnosticsSummary = (): ConnectionDiagnosticsSummary => {
-  const [traceEvents, setTraceEvents] = useState(getTraceEvents);
-  const [logs, setLogs] = useState(getLogs);
-  const [errorLogs, setErrorLogs] = useState(getErrorLogs);
+export const useConnectionDiagnosticsSummary =
+  (): ConnectionDiagnosticsSummary => {
+    const [traceEvents, setTraceEvents] = useState(getTraceEvents);
+    const [logs, setLogs] = useState(getLogs);
+    const [errorLogs, setErrorLogs] = useState(getErrorLogs);
 
-  useEffect(() => {
-    const handleTracesUpdated = () => setTraceEvents(getTraceEvents());
-    const handleLogsUpdated = () => {
-      setLogs(getLogs());
-      setErrorLogs(getErrorLogs());
-    };
-    window.addEventListener('c64u-traces-updated', handleTracesUpdated);
-    window.addEventListener('c64u-logs-updated', handleLogsUpdated);
-    return () => {
-      window.removeEventListener('c64u-traces-updated', handleTracesUpdated);
-      window.removeEventListener('c64u-logs-updated', handleLogsUpdated);
-    };
-  }, []);
+    useEffect(() => {
+      const handleTracesUpdated = () => setTraceEvents(getTraceEvents());
+      const handleLogsUpdated = () => {
+        setLogs(getLogs());
+        setErrorLogs(getErrorLogs());
+      };
+      window.addEventListener('c64u-traces-updated', handleTracesUpdated);
+      window.addEventListener('c64u-logs-updated', handleLogsUpdated);
+      return () => {
+        window.removeEventListener('c64u-traces-updated', handleTracesUpdated);
+        window.removeEventListener('c64u-logs-updated', handleLogsUpdated);
+      };
+    }, []);
 
-  return useMemo(
-    () => buildConnectionDiagnosticsSummary(traceEvents, logs, errorLogs),
-    [errorLogs, logs, traceEvents],
-  );
-};
+    return useMemo(
+      () => buildConnectionDiagnosticsSummary(traceEvents, logs, errorLogs),
+      [errorLogs, logs, traceEvents],
+    );
+  };

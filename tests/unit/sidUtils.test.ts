@@ -7,9 +7,17 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { base64ToUint8, computeSidMd5, createSslPayload, getSidSongCount } from '@/lib/sid/sidUtils';
+import {
+  base64ToUint8,
+  computeSidMd5,
+  createSslPayload,
+  getSidSongCount,
+} from '@/lib/sid/sidUtils';
 
-const toHex = (value: Uint8Array) => Array.from(value).map((b) => b.toString(16).padStart(2, '0')).join('');
+const toHex = (value: Uint8Array) =>
+  Array.from(value)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
 
 describe('sidUtils', () => {
   it('computes md5 for SID data', async () => {
@@ -66,6 +74,6 @@ describe('sidUtils', () => {
   });
 
   it('falls back to one song when parsing fails', () => {
-    expect(getSidSongCount((null as unknown) as ArrayBuffer)).toBe(1);
+    expect(getSidSongCount(null as unknown as ArrayBuffer)).toBe(1);
   });
 });

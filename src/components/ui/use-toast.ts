@@ -6,6 +6,6 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useToast, toast } from "@/hooks/use-toast";
+import { useToast, toast } from '@/hooks/use-toast';
 
 export { useToast, toast };

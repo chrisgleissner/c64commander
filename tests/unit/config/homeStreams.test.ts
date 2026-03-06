@@ -28,10 +28,22 @@ describe('homeStreams', () => {
       },
     });
 
-    expect(entries.map((entry) => entry.label)).toEqual(['VIC', 'Audio', 'Debug']);
-    expect(entries[0]).toMatchObject({ enabled: true, ip: '239.0.1.64', port: '11000' });
+    expect(entries.map((entry) => entry.label)).toEqual([
+      'VIC',
+      'Audio',
+      'Debug',
+    ]);
+    expect(entries[0]).toMatchObject({
+      enabled: true,
+      ip: '239.0.1.64',
+      port: '11000',
+    });
     expect(entries[1]).toMatchObject({ enabled: false, ip: '', port: '11001' });
-    expect(entries[2]).toMatchObject({ enabled: true, ip: '239.0.1.66', port: '11002' });
+    expect(entries[2]).toMatchObject({
+      enabled: true,
+      ip: '239.0.1.66',
+      port: '11002',
+    });
   });
 
   it('validates stream hosts and ports', () => {
@@ -47,13 +59,23 @@ describe('homeStreams', () => {
 
   it('builds stream config values', () => {
     expect(buildStreamConfigValue(false, '239.0.1.64', '11000')).toBe('off');
-    expect(buildStreamConfigValue(true, '239.0.1.64', '11000')).toBe('239.0.1.64:11000');
+    expect(buildStreamConfigValue(true, '239.0.1.64', '11000')).toBe(
+      '239.0.1.64:11000',
+    );
   });
 
   it('formats and parses stream endpoint labels', () => {
-    expect(buildStreamEndpointLabel('239.0.1.64', '11000')).toBe('239.0.1.64:11000');
-    expect(parseStreamEndpoint('239.0.1.64:11000')).toEqual({ ip: '239.0.1.64', port: '11000', error: null });
-    expect(parseStreamEndpoint('239.0.1.64')).toMatchObject({ error: 'Enter endpoint as IPv4:port.' });
+    expect(buildStreamEndpointLabel('239.0.1.64', '11000')).toBe(
+      '239.0.1.64:11000',
+    );
+    expect(parseStreamEndpoint('239.0.1.64:11000')).toEqual({
+      ip: '239.0.1.64',
+      port: '11000',
+      error: null,
+    });
+    expect(parseStreamEndpoint('239.0.1.64')).toMatchObject({
+      error: 'Enter endpoint as IPv4:port.',
+    });
   });
 
   it('buildStreamEndpointLabel handles missing host or port (BRDA:128,129,130)', () => {

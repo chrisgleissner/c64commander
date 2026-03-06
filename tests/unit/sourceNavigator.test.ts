@@ -8,7 +8,11 @@
 
 import { describe, expect, it } from 'vitest';
 import { createLocalSourceLocation } from '@/lib/sourceNavigation/localSourceAdapter';
-import { ensureWithinRoot, getParentPathWithinRoot, isPathWithinRoot } from '@/lib/sourceNavigation/paths';
+import {
+  ensureWithinRoot,
+  getParentPathWithinRoot,
+  isPathWithinRoot,
+} from '@/lib/sourceNavigation/paths';
 import type { LocalSourceRecord } from '@/lib/sourceNavigation/localSourcesStore';
 
 describe('scoped browser paths', () => {
@@ -19,7 +23,9 @@ describe('scoped browser paths', () => {
   });
 
   it('stops upward navigation at root', () => {
-    expect(getParentPathWithinRoot('/Root/Sub/Folder/', '/Root/')).toBe('/Root/Sub/');
+    expect(getParentPathWithinRoot('/Root/Sub/Folder/', '/Root/')).toBe(
+      '/Root/Sub/',
+    );
     expect(getParentPathWithinRoot('/Root/', '/Root/')).toBe('/Root/');
   });
 });

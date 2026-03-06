@@ -21,8 +21,12 @@ describe('pathDisplay', () => {
 
   it('uses filename fallback when full path does not fit', () => {
     const path = '/C64Music/DEMOS/Very/Long/Folder/file.sid';
-    expect(fitPathToWidth(path, path.length, monoMeasure, 'filename-fallback')).toBe(path);
-    expect(fitPathToWidth(path, 20, monoMeasure, 'filename-fallback')).toBe('file.sid');
+    expect(
+      fitPathToWidth(path, path.length, monoMeasure, 'filename-fallback'),
+    ).toBe(path);
+    expect(fitPathToWidth(path, 20, monoMeasure, 'filename-fallback')).toBe(
+      'file.sid',
+    );
   });
 
   it('preserves start and filename with middle ellipsis', () => {
@@ -32,7 +36,12 @@ describe('pathDisplay', () => {
   });
 
   it('does not prepend ellipsis for plain filenames', () => {
-    const display = fitPathToWidth('Disk 1.d64', 20, monoMeasure, 'start-and-filename');
+    const display = fitPathToWidth(
+      'Disk 1.d64',
+      20,
+      monoMeasure,
+      'start-and-filename',
+    );
     expect(display).toBe('Disk 1.d64');
   });
 
@@ -44,8 +53,12 @@ describe('pathDisplay', () => {
 
   it('returns original path when path is empty or max width is non-positive', () => {
     expect(fitPathToWidth('', 10, monoMeasure, 'filename-fallback')).toBe('');
-    expect(fitPathToWidth('/a/b/file.sid', 0, monoMeasure, 'filename-fallback')).toBe('/a/b/file.sid');
-    expect(fitPathToWidth('/a/b/file.sid', -5, monoMeasure, 'start-and-filename')).toBe('/a/b/file.sid');
+    expect(
+      fitPathToWidth('/a/b/file.sid', 0, monoMeasure, 'filename-fallback'),
+    ).toBe('/a/b/file.sid');
+    expect(
+      fitPathToWidth('/a/b/file.sid', -5, monoMeasure, 'start-and-filename'),
+    ).toBe('/a/b/file.sid');
   });
 
   it('falls back to empty label when ellipsis cannot fit', () => {

@@ -30,8 +30,12 @@ describe('parseSonglengths', () => {
     const data = parseSonglengths(fixture);
     expect(data.pathToSeconds.get('/HVSC/Demos/demo.sid')).toEqual([30, 40]);
     expect(data.pathToSeconds.get('/HVSC/Demos/demo2.sid')).toEqual([75]);
-    expect(data.md5ToSeconds.get('c0ffeec0ffeec0ffeec0ffeec0ffee00')).toEqual([30, 40]);
-    expect(data.md5ToSeconds.get('c0c0anutc0c0anutc0c0anutc0c0anut')).toEqual([75]);
+    expect(data.md5ToSeconds.get('c0ffeec0ffeec0ffeec0ffeec0ffee00')).toEqual([
+      30, 40,
+    ]);
+    expect(data.md5ToSeconds.get('c0c0anutc0c0anutc0c0anutc0c0anut')).toEqual([
+      75,
+    ]);
   });
 
   it('parses legacy songlengths.txt path entries', () => {
@@ -52,11 +56,26 @@ describe('parseSonglengths', () => {
 
   it('resolves seconds by path or md5 and songNr', () => {
     const data = parseSonglengths(fixture);
-    expect(resolveSonglengthsSeconds(data, '/HVSC/Demos/demo.sid', null, 1)).toBe(30);
-    expect(resolveSonglengthsSeconds(data, '/HVSC/Demos/demo.sid', null, 2)).toBe(40);
-    expect(resolveSonglengthsSeconds(data, '/HVSC/Demos/demo.sid', null, 3)).toBeNull();
-    expect(resolveSonglengthsSeconds(data, '/missing.sid', 'c0c0anutc0c0anutc0c0anutc0c0anut', 1)).toBe(75);
-    expect(resolveSonglengthsSeconds(data, '/missing.sid', 'missing', 1)).toBeNull();
+    expect(
+      resolveSonglengthsSeconds(data, '/HVSC/Demos/demo.sid', null, 1),
+    ).toBe(30);
+    expect(
+      resolveSonglengthsSeconds(data, '/HVSC/Demos/demo.sid', null, 2),
+    ).toBe(40);
+    expect(
+      resolveSonglengthsSeconds(data, '/HVSC/Demos/demo.sid', null, 3),
+    ).toBeNull();
+    expect(
+      resolveSonglengthsSeconds(
+        data,
+        '/missing.sid',
+        'c0c0anutc0c0anutc0c0anutc0c0anut',
+        1,
+      ),
+    ).toBe(75);
+    expect(
+      resolveSonglengthsSeconds(data, '/missing.sid', 'missing', 1),
+    ).toBeNull();
   });
 
   it('counts songlengths entries', () => {
@@ -74,19 +93,39 @@ describe('parseSonglengths', () => {
       arrayBuffer: async () => buffer,
     };
 
-    const pathDuration = await resolveSonglengthsDurationMs(parseSonglengths(fixture), '/HVSC/Demos/demo.sid', file, 1);
+    const pathDuration = await resolveSonglengthsDurationMs(
+      parseSonglengths(fixture),
+      '/HVSC/Demos/demo.sid',
+      file,
+      1,
+    );
     expect(pathDuration).toBe(30 * 1000);
 
-    const pathDurationSong2 = await resolveSonglengthsDurationMs(parseSonglengths(fixture), '/HVSC/Demos/demo.sid', file, 2);
+    const pathDurationSong2 = await resolveSonglengthsDurationMs(
+      parseSonglengths(fixture),
+      '/HVSC/Demos/demo.sid',
+      file,
+      2,
+    );
     expect(pathDurationSong2).toBe(40 * 1000);
 
-    const md5Duration = await resolveSonglengthsDurationMs(data, '/missing.sid', file, 2);
+    const md5Duration = await resolveSonglengthsDurationMs(
+      data,
+      '/missing.sid',
+      file,
+      2,
+    );
     expect(md5Duration).toBe(55 * 1000);
   });
 
   it('resolves duration by path without file data', async () => {
     const data = parseSonglengths('/songs/demo.sid 0:25');
-    const duration = await resolveSonglengthsDurationMs(data, '/songs/demo.sid', null, 1);
+    const duration = await resolveSonglengthsDurationMs(
+      data,
+      '/songs/demo.sid',
+      null,
+      1,
+    );
     expect(duration).toBe(25 * 1000);
   });
 
@@ -95,7 +134,9 @@ describe('parseSonglengths', () => {
   });
 
   it('returns null duration when data is undefined', async () => {
-    expect(await resolveSonglengthsDurationMs(undefined, '/any.sid')).toBeNull();
+    expect(
+      await resolveSonglengthsDurationMs(undefined, '/any.sid'),
+    ).toBeNull();
   });
 
   it('returns 0 count for null or undefined data', () => {
@@ -119,12 +160,16 @@ describe('parseSonglengths', () => {
 
   it('handles backslash path normalization', () => {
     const data = parseSonglengths('; /HVSC\\Demos\\demo.sid\nabc=0:30');
-    expect(resolveSonglengthsSeconds(data, '/HVSC/Demos/demo.sid', null, 1)).toBe(30);
+    expect(
+      resolveSonglengthsSeconds(data, '/HVSC/Demos/demo.sid', null, 1),
+    ).toBe(30);
   });
 
   it('handles paths without leading slash', () => {
     const data = parseSonglengths('; HVSC/Demos/demo.sid\nabc=0:30');
-    expect(resolveSonglengthsSeconds(data, 'HVSC/Demos/demo.sid', null, 1)).toBe(30);
+    expect(
+      resolveSonglengthsSeconds(data, 'HVSC/Demos/demo.sid', null, 1),
+    ).toBe(30);
   });
 
   it('skips bracket lines in HVSC format', () => {
@@ -157,7 +202,9 @@ describe('parseSonglengths', () => {
 
   it('returns null when md5 fallback also misses', () => {
     const data = parseSonglengths('; /demo.sid\nabc=0:30');
-    expect(resolveSonglengthsSeconds(data, '/nope.sid', 'missing_md5', 1)).toBeNull();
+    expect(
+      resolveSonglengthsSeconds(data, '/nope.sid', 'missing_md5', 1),
+    ).toBeNull();
   });
 
   it('returns null when md5 is falsy', () => {
@@ -174,7 +221,12 @@ describe('parseSonglengths', () => {
       lastModified: Date.now(),
       arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
     };
-    const duration = await resolveSonglengthsDurationMs(data, '/unknown.sid', file, 1);
+    const duration = await resolveSonglengthsDurationMs(
+      data,
+      '/unknown.sid',
+      file,
+      1,
+    );
     expect(duration).toBe(42 * 1000);
   });
 
@@ -185,7 +237,12 @@ describe('parseSonglengths', () => {
       lastModified: Date.now(),
       arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
     };
-    const duration = await resolveSonglengthsDurationMs(data, '/unknown.sid', file, 1);
+    const duration = await resolveSonglengthsDurationMs(
+      data,
+      '/unknown.sid',
+      file,
+      1,
+    );
     expect(duration).toBeNull();
   });
 
@@ -227,13 +284,23 @@ describe('parseSonglengths', () => {
         throw new Error('read error');
       },
     };
-    const duration = await resolveSonglengthsDurationMs(data, '/missing.sid', file, 1);
+    const duration = await resolveSonglengthsDurationMs(
+      data,
+      '/missing.sid',
+      file,
+      1,
+    );
     expect(duration).toBeNull();
   });
 
   it('returns null when path not found and file is null', async () => {
     const data = parseSonglengths('; /demo.sid\nabc=0:30');
-    const result = await resolveSonglengthsDurationMs(data, '/missing.sid', null, 1);
+    const result = await resolveSonglengthsDurationMs(
+      data,
+      '/missing.sid',
+      null,
+      1,
+    );
     expect(result).toBeNull();
   });
 
@@ -252,7 +319,12 @@ describe('parseSonglengths', () => {
         throw new Error('read error');
       },
     };
-    const result = await resolveSonglengthsDurationMs(data, '/missing.sid', file, undefined);
+    const result = await resolveSonglengthsDurationMs(
+      data,
+      '/missing.sid',
+      file,
+      undefined,
+    );
     expect(result).toBeNull();
   });
 

@@ -15,11 +15,14 @@ export const DOCUMENTS_FOLDER = 'DOCUMENTS';
 export const isSonglengthsFileName = (name: string) =>
   SONGLENGTHS_FILE_NAMES.includes(name.trim().toLowerCase());
 
-const normalizeLocalPath = (path: string) => (path.startsWith('/') ? path : `/${path}`);
+const normalizeLocalPath = (path: string) =>
+  path.startsWith('/') ? path : `/${path}`;
 
 export const buildSonglengthsSearchPaths = (path: string) => {
   const normalized = normalizeLocalPath(path || '/');
-  const folder = normalized.endsWith('/') ? normalized : normalized.slice(0, normalized.lastIndexOf('/') + 1);
+  const folder = normalized.endsWith('/')
+    ? normalized
+    : normalized.slice(0, normalized.lastIndexOf('/') + 1);
   const paths: string[] = [];
   let current = folder || '/';
   while (current) {

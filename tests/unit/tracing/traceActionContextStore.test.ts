@@ -20,7 +20,10 @@ import {
 } from '@/lib/tracing/traceActionContextStore';
 import type { TraceActionContext } from '@/lib/tracing/types';
 
-const createTestContext = (correlationId: string, origin: 'user' | 'automatic' | 'system' = 'user'): TraceActionContext => ({
+const createTestContext = (
+  correlationId: string,
+  origin: 'user' | 'automatic' | 'system' = 'user',
+): TraceActionContext => ({
   correlationId,
   origin,
   name: `test-action-${correlationId}`,
@@ -82,10 +85,9 @@ describe('traceActionContextStore', () => {
       let capturedCtx: TraceActionContext | null = null;
 
       await runWithActionContext(ctx, () => {
-        return Promise.resolve()
-          .then(() => {
-            capturedCtx = getCurrentActionContext();
-          });
+        return Promise.resolve().then(() => {
+          capturedCtx = getCurrentActionContext();
+        });
       });
 
       expect(capturedCtx).toBe(ctx);
@@ -111,7 +113,7 @@ describe('traceActionContextStore', () => {
       });
 
       expect(capturedContexts).toHaveLength(3);
-      expect(capturedContexts.every(c => c === ctx)).toBe(true);
+      expect(capturedContexts.every((c) => c === ctx)).toBe(true);
     });
 
     it('propagates context through .catch()', async () => {
@@ -119,10 +121,9 @@ describe('traceActionContextStore', () => {
       let capturedCtx: TraceActionContext | null = null;
 
       await runWithActionContext(ctx, () => {
-        return Promise.reject(new Error('test'))
-          .catch(() => {
-            capturedCtx = getCurrentActionContext();
-          });
+        return Promise.reject(new Error('test')).catch(() => {
+          capturedCtx = getCurrentActionContext();
+        });
       });
 
       expect(capturedCtx).toBe(ctx);
@@ -133,10 +134,9 @@ describe('traceActionContextStore', () => {
       let capturedCtx: TraceActionContext | null = null;
 
       await runWithActionContext(ctx, () => {
-        return Promise.resolve()
-          .finally(() => {
-            capturedCtx = getCurrentActionContext();
-          });
+        return Promise.resolve().finally(() => {
+          capturedCtx = getCurrentActionContext();
+        });
       });
 
       expect(capturedCtx).toBe(ctx);
@@ -157,7 +157,7 @@ describe('traceActionContextStore', () => {
       });
 
       // Wait for the fire-and-forget promise to complete
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       expect(resolved).toBe(true);
       expect(capturedCtx).toBe(ctx);
@@ -222,30 +222,41 @@ describe('traceActionContextStore', () => {
     it('maintains correct correlation when fire-and-forget effects overlap', async () => {
       const ctx1 = createTestContext('COR-0001');
       const ctx2 = createTestContext('COR-0002');
-      const capturedContexts: { id: string; ctx: TraceActionContext | null }[] = [];
+      const capturedContexts: { id: string; ctx: TraceActionContext | null }[] =
+        [];
 
       // Start action 1 with fire-and-forget effect
       await runWithActionContext(ctx1, async () => {
-        void Promise.resolve().then(() => new Promise(r => setTimeout(r, 20))).then(() => {
-          capturedContexts.push({ id: 'effect1', ctx: getCurrentActionContext() });
-        });
+        void Promise.resolve()
+          .then(() => new Promise((r) => setTimeout(r, 20)))
+          .then(() => {
+            capturedContexts.push({
+              id: 'effect1',
+              ctx: getCurrentActionContext(),
+            });
+          });
       });
       exitCurrentActionContext();
 
       // Start action 2 with fire-and-forget effect (while effect1 is still pending)
       await runWithActionContext(ctx2, async () => {
-        void Promise.resolve().then(() => new Promise(r => setTimeout(r, 10))).then(() => {
-          capturedContexts.push({ id: 'effect2', ctx: getCurrentActionContext() });
-        });
+        void Promise.resolve()
+          .then(() => new Promise((r) => setTimeout(r, 10)))
+          .then(() => {
+            capturedContexts.push({
+              id: 'effect2',
+              ctx: getCurrentActionContext(),
+            });
+          });
       });
       exitCurrentActionContext();
 
       // Wait for all effects to complete
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise((resolve) => setTimeout(resolve, 50));
 
       // Each effect should have captured its originating context
-      const effect1 = capturedContexts.find(c => c.id === 'effect1');
-      const effect2 = capturedContexts.find(c => c.id === 'effect2');
+      const effect1 = capturedContexts.find((c) => c.id === 'effect1');
+      const effect2 = capturedContexts.find((c) => c.id === 'effect2');
 
       expect(effect1?.ctx).toBe(ctx1);
       expect(effect2?.ctx).toBe(ctx2);
@@ -325,7 +336,7 @@ describe('traceActionContextStore', () => {
         expect(() =>
           runWithActionContext(inner, () => {
             throw new Error('sync boom');
-          })
+          }),
         ).toThrow('sync boom');
         // After the sync throw the outer context must be restored
         expect(getCurrentActionContext()).toBe(outer);
@@ -346,7 +357,9 @@ describe('traceActionContextStore', () => {
 
     it('handles .finally(null) without throwing', async () => {
       // Exercises the onfinally-falsy branch (line 154)
-      const result = await Promise.resolve(42).finally(null as unknown as () => void);
+      const result = await Promise.resolve(42).finally(
+        null as unknown as () => void,
+      );
       expect(result).toBe(42);
     });
   });

@@ -17,15 +17,23 @@ test.describe('Fuzz structured recovery', () => {
   test.beforeEach(async ({ page }) => {
     server = await createMockC64Server();
     await seedUiMocks(page, server.baseUrl);
-    await page.addInitScript(({ baseUrl }: { baseUrl: string }) => {
-      localStorage.setItem('c64u_app_configs', JSON.stringify([{
-        id: 'existing',
-        name: 'confirm',
-        baseUrl,
-        savedAt: new Date().toISOString(),
-        data: {},
-      }]));
-    }, { baseUrl: server.baseUrl });
+    await page.addInitScript(
+      ({ baseUrl }: { baseUrl: string }) => {
+        localStorage.setItem(
+          'c64u_app_configs',
+          JSON.stringify([
+            {
+              id: 'existing',
+              name: 'confirm',
+              baseUrl,
+              savedAt: new Date().toISOString(),
+              data: {},
+            },
+          ]),
+        );
+      },
+      { baseUrl: server.baseUrl },
+    );
   });
 
   test.afterEach(async () => {
@@ -63,6 +71,8 @@ test.describe('Fuzz structured recovery', () => {
     });
 
     expect(stored).toHaveLength(2);
-    expect(stored.some((entry: { name: string }) => entry.name !== 'confirm')).toBe(true);
+    expect(
+      stored.some((entry: { name: string }) => entry.name !== 'confirm'),
+    ).toBe(true);
   });
 });

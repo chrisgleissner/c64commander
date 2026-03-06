@@ -21,7 +21,11 @@ type SongLengthServiceOptions = {
   serviceId: string;
 };
 
-const safeAddLog = (level: 'debug' | 'info' | 'warn' | 'error', message: string, details?: unknown) => {
+const safeAddLog = (
+  level: 'debug' | 'info' | 'warn' | 'error',
+  message: string,
+  details?: unknown,
+) => {
   try {
     addLog(level, message, details);
   } catch (error) {
@@ -159,7 +163,12 @@ export class SongLengthServiceFacade {
     loadSources: SongLengthSourceLoader,
     sourceLabel: string,
   ): Promise<SongLengthServiceStats> {
-    return this.loadInternal('cold-start', configuredPathOrDefault, loadSources, sourceLabel);
+    return this.loadInternal(
+      'cold-start',
+      configuredPathOrDefault,
+      loadSources,
+      sourceLabel,
+    );
   }
 
   async reloadOnConfigChange(
@@ -167,7 +176,12 @@ export class SongLengthServiceFacade {
     loadSources: SongLengthSourceLoader,
     sourceLabel: string,
   ): Promise<SongLengthServiceStats> {
-    return this.loadInternal('config-change', configuredPathOrDefault, loadSources, sourceLabel);
+    return this.loadInternal(
+      'config-change',
+      configuredPathOrDefault,
+      loadSources,
+      sourceLabel,
+    );
   }
 
   resolveDurationSeconds(query: SongLengthResolveQuery): SongLengthResolution {

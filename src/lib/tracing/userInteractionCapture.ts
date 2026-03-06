@@ -6,19 +6,28 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { createActionContext, runWithActionTrace } from '@/lib/tracing/actionTrace';
+import {
+  createActionContext,
+  runWithActionTrace,
+} from '@/lib/tracing/actionTrace';
 import { markFirstMeaningfulInteraction } from '@/lib/startup/startupMilestones';
 
 const INSTALL_FLAG = '__c64uUserInteractionCaptureInstalled';
 const COMPONENT_NAME = 'GlobalInteraction';
 
 const isElement = (value: unknown): value is Element =>
-  typeof value === 'object' && value !== null && 'nodeType' in (value as any) && (value as any).nodeType === 1;
+  typeof value === 'object' &&
+  value !== null &&
+  'nodeType' in (value as any) &&
+  (value as any).nodeType === 1;
 
 const getAriaLabelledByText = (element: Element) => {
   const labelledBy = element.getAttribute('aria-labelledby');
   if (!labelledBy) return null;
-  const ids = labelledBy.split(/\s+/).map((id) => id.trim()).filter(Boolean);
+  const ids = labelledBy
+    .split(/\s+/)
+    .map((id) => id.trim())
+    .filter(Boolean);
   for (const id of ids) {
     const labelEl = document.getElementById(id);
     const text = labelEl?.textContent?.trim();
@@ -55,7 +64,8 @@ const getMeaningfulLabel = (element: Element) => {
 
 const isPrimaryInteractive = (element: Element) => {
   const tag = element.tagName.toLowerCase();
-  if (tag === 'button' || tag === 'a' || tag === 'select' || tag === 'textarea') return true;
+  if (tag === 'button' || tag === 'a' || tag === 'select' || tag === 'textarea')
+    return true;
   if (tag === 'input') return true;
 
   const role = element.getAttribute('role');
@@ -88,22 +98,30 @@ const isFallbackInteractive = (element: Element) => {
 };
 
 const hasDiagnosticsOpenTrigger = (element: Element) =>
-  typeof element.closest === 'function' && element.closest('[data-diagnostics-open-trigger]');
+  typeof element.closest === 'function' &&
+  element.closest('[data-diagnostics-open-trigger]');
 
 const eventHasDiagnosticsOpenTrigger = (event: Event) => {
-  const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
-  return path.some((candidate) => isElement(candidate) && hasDiagnosticsOpenTrigger(candidate));
+  const path =
+    typeof event.composedPath === 'function' ? event.composedPath() : [];
+  return path.some(
+    (candidate) => isElement(candidate) && hasDiagnosticsOpenTrigger(candidate),
+  );
 };
 
 const isDiagnosticsOpenTrigger = (element: Element, event?: Event) => {
   if (hasDiagnosticsOpenTrigger(element)) return true;
   if (!event) return false;
-  const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
-  return path.some((candidate) => isElement(candidate) && hasDiagnosticsOpenTrigger(candidate));
+  const path =
+    typeof event.composedPath === 'function' ? event.composedPath() : [];
+  return path.some(
+    (candidate) => isElement(candidate) && hasDiagnosticsOpenTrigger(candidate),
+  );
 };
 
 const findInteractiveTarget = (event: Event) => {
-  const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
+  const path =
+    typeof event.composedPath === 'function' ? event.composedPath() : [];
   for (const candidate of path) {
     if (!isElement(candidate)) continue;
     if (candidate.tagName.toLowerCase() === 'body') break;
@@ -115,12 +133,20 @@ const findInteractiveTarget = (event: Event) => {
     if (isFallbackInteractive(candidate)) return candidate;
   }
   if (isElement(event.target)) {
-    if (isPrimaryInteractive(event.target) || isFallbackInteractive(event.target)) return event.target;
+    if (
+      isPrimaryInteractive(event.target) ||
+      isFallbackInteractive(event.target)
+    )
+      return event.target;
   }
   return null;
 };
 
-const traceInteraction = async (action: string, element: Element, event: Event) => {
+const traceInteraction = async (
+  action: string,
+  element: Element,
+  event: Event,
+) => {
   // Avoid double-tracing when a component wrapper already captured the interaction.
   if ((event as any).__c64uTraced) return;
   if (isDiagnosticsOpenTrigger(element, event)) return;
@@ -140,7 +166,7 @@ const traceInteraction = async (action: string, element: Element, event: Event) 
     // Wait for all synchronous work from the event handler to complete.
     // The setTimeout(0) defers until after the current event loop tick,
     // allowing the handler to execute with the context still active.
-    await new Promise<void>(resolve => setTimeout(resolve, 0));
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
   });
 };
 
@@ -171,7 +197,9 @@ export const registerUserInteractionCapture = () => {
     if (!element) return;
     const role = element.getAttribute('role');
     const tag = element.tagName.toLowerCase();
-    const isRange = tag === 'input' && (element as HTMLInputElement).type?.toLowerCase?.() === 'range';
+    const isRange =
+      tag === 'input' &&
+      (element as HTMLInputElement).type?.toLowerCase?.() === 'range';
     if (role !== 'slider' && !isRange) return;
     void traceInteraction('slide', element, event);
   };

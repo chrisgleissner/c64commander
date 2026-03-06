@@ -8,7 +8,10 @@
 
 import { describe, expect, it } from 'vitest';
 import type { FileLibraryEntry } from '@/lib/playback/fileLibraryTypes';
-import { buildFileLibraryId, resolvePlayRequestFromLibrary } from '@/lib/playback/fileLibraryUtils';
+import {
+  buildFileLibraryId,
+  resolvePlayRequestFromLibrary,
+} from '@/lib/playback/fileLibraryUtils';
 
 describe('file library utilities', () => {
   it('builds stable library ids', () => {

@@ -2,9 +2,16 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 
-const evidenceRoot = path.resolve(process.cwd(), 'test-results', 'evidence', 'maestro');
+const evidenceRoot = path.resolve(
+  process.cwd(),
+  'test-results',
+  'evidence',
+  'maestro',
+);
 
-const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+const pngSignature = Buffer.from([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+]);
 const webmSignature = Buffer.from([0x1a, 0x45, 0xdf, 0xa3]);
 const errors = [];
 
@@ -62,7 +69,9 @@ const validateFile = async (filePath) => {
 
 const listDirs = async (dirPath) => {
   const entries = await fs.readdir(dirPath, { withFileTypes: true });
-  return entries.filter((entry) => entry.isDirectory()).map((entry) => path.join(dirPath, entry.name));
+  return entries
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => path.join(dirPath, entry.name));
 };
 
 const listFiles = async (dirPath) => {
@@ -72,14 +81,20 @@ const listFiles = async (dirPath) => {
 
 const getEvidenceLeafFolders = async (rootPath) => {
   const entries = await fs.readdir(rootPath, { withFileTypes: true });
-  const hasScreenshotsDir = entries.some((entry) => entry.isDirectory() && entry.name === 'screenshots');
-  const hasVideo = entries.some((entry) => entry.isFile() && entry.name.toLowerCase().startsWith('video.'));
+  const hasScreenshotsDir = entries.some(
+    (entry) => entry.isDirectory() && entry.name === 'screenshots',
+  );
+  const hasVideo = entries.some(
+    (entry) => entry.isFile() && entry.name.toLowerCase().startsWith('video.'),
+  );
 
   if (hasScreenshotsDir || hasVideo) {
     return [rootPath];
   }
 
-  const subdirs = entries.filter((entry) => entry.isDirectory()).map((entry) => path.join(rootPath, entry.name));
+  const subdirs = entries
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => path.join(rootPath, entry.name));
   if (subdirs.length === 0) {
     return [rootPath];
   }
@@ -94,7 +109,8 @@ const validateEvidenceFolder = async (folderPath) => {
   let pngs = [];
   if (screenshotsStat?.isDirectory()) {
     const screenshotFiles = await listFiles(screenshotsDir);
-    pngs = screenshotFiles.filter((file) => file.toLowerCase().endsWith('.png'))
+    pngs = screenshotFiles
+      .filter((file) => file.toLowerCase().endsWith('.png'))
       .map((file) => path.join(screenshotsDir, file));
   }
 
@@ -109,7 +125,9 @@ const validateEvidenceFolder = async (folderPath) => {
     errors.push(`Missing video.mp4 in ${folderPath}`);
   }
   if (videos.length > 1) {
-    errors.push(`Expected exactly one video.mp4 in ${folderPath}, found ${videos.length}`);
+    errors.push(
+      `Expected exactly one video.mp4 in ${folderPath}, found ${videos.length}`,
+    );
   }
 
   const required = ['error-context.md', 'meta.json'];
@@ -119,11 +137,15 @@ const validateEvidenceFolder = async (folderPath) => {
     }
   }
 
-  await Promise.all([
-    ...pngs,
-    ...videos,
-    ...required.filter((file) => files.includes(file)).map((file) => path.join(folderPath, file)),
-  ].map((filePath) => validateFile(filePath)));
+  await Promise.all(
+    [
+      ...pngs,
+      ...videos,
+      ...required
+        .filter((file) => files.includes(file))
+        .map((file) => path.join(folderPath, file)),
+    ].map((filePath) => validateFile(filePath)),
+  );
 };
 
 const main = async () => {
@@ -144,7 +166,9 @@ const main = async () => {
   }
 
   if (errors.length) {
-    console.error('Android emulator evidence validation failed:\n' + errors.join('\n'));
+    console.error(
+      'Android emulator evidence validation failed:\n' + errors.join('\n'),
+    );
     process.exit(1);
   }
   console.log('Android emulator evidence validation passed.');

@@ -7,7 +7,10 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { buildSidDetailEntries, parseSidBaseAddress } from '@/lib/config/sidDetails';
+import {
+  buildSidDetailEntries,
+  parseSidBaseAddress,
+} from '@/lib/config/sidDetails';
 
 describe('sidDetails', () => {
   it('builds ordered SID detail entries with formatted values', () => {
@@ -69,4 +72,3 @@ describe('sidDetails', () => {
     expect(parseSidBaseAddress('invalid')).toBeNull();
   });
 });
-

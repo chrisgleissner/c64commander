@@ -24,12 +24,12 @@ export const validateViewport = async (page: Page, testInfo: TestInfo) => {
   if (!isDesktopWebProject && viewport && viewport.width > 1000) {
     throw new Error(
       `Invalid viewport configuration detected!\n` +
-      `  Viewport: ${viewport.width}×${viewport.height}\n` +
-      `  Device Pixel Ratio: ${devicePixelRatio}\n` +
-      `  Project: ${testInfo.project.name}\n` +
-      `\n` +
-      `This indicates mixing device presets with physical-pixel viewports.\n` +
-      `Screenshot dimensions would be ${viewport.width * devicePixelRatio}×${viewport.height * devicePixelRatio}\n`
+        `  Viewport: ${viewport.width}×${viewport.height}\n` +
+        `  Device Pixel Ratio: ${devicePixelRatio}\n` +
+        `  Project: ${testInfo.project.name}\n` +
+        `\n` +
+        `This indicates mixing device presets with physical-pixel viewports.\n` +
+        `Screenshot dimensions would be ${viewport.width * devicePixelRatio}×${viewport.height * devicePixelRatio}\n`,
     );
   }
 
@@ -50,7 +50,10 @@ export const validateViewport = async (page: Page, testInfo: TestInfo) => {
  *
  * This runs BEFORE screenshot capture to fail fast.
  */
-export const enforceVisualBoundaries = async (page: Page, testInfo: TestInfo) => {
+export const enforceVisualBoundaries = async (
+  page: Page,
+  testInfo: TestInfo,
+) => {
   const viewport = page.viewportSize();
   if (!viewport) {
     throw new Error('No viewport configured');
@@ -58,12 +61,17 @@ export const enforceVisualBoundaries = async (page: Page, testInfo: TestInfo) =>
 
   // DOM-level boundary check
   const violations = await page.evaluate((maxWidth: number) => {
-    const results: Array<{ selector: string; width: number; right: number; reason: string }> = [];
+    const results: Array<{
+      selector: string;
+      width: number;
+      right: number;
+      reason: string;
+    }> = [];
     const isToastElement = (element: Element) =>
       Boolean(
         element.closest(
-          '[data-sonner-toast], [data-sonner-toaster], .toaster, .toast, [role="status"], [data-state="open"].destructive'
-        )
+          '[data-sonner-toast], [data-sonner-toaster], .toaster, .toast, [role="status"], [data-state="open"].destructive',
+        ),
       );
 
     // Check all visible elements
@@ -82,9 +90,10 @@ export const enforceVisualBoundaries = async (page: Page, testInfo: TestInfo) =>
       if (rect.width > maxWidth + SUBPIXEL_TOLERANCE) {
         const tag = element.tagName.toLowerCase();
         const id = element.id ? `#${element.id}` : '';
-        const classes = element.className && typeof element.className === 'string'
-          ? `.${element.className.split(/\s+/).filter(Boolean).join('.')}`
-          : '';
+        const classes =
+          element.className && typeof element.className === 'string'
+            ? `.${element.className.split(/\s+/).filter(Boolean).join('.')}`
+            : '';
         const selector = `${tag}${id}${classes}`.slice(0, 150);
 
         results.push({
@@ -97,9 +106,10 @@ export const enforceVisualBoundaries = async (page: Page, testInfo: TestInfo) =>
         // Allow tolerance for rounding and subpixel rendering
         const tag = element.tagName.toLowerCase();
         const id = element.id ? `#${element.id}` : '';
-        const classes = element.className && typeof element.className === 'string'
-          ? `.${element.className.split(/\s+/).filter(Boolean).join('.')}`
-          : '';
+        const classes =
+          element.className && typeof element.className === 'string'
+            ? `.${element.className.split(/\s+/).filter(Boolean).join('.')}`
+            : '';
         const selector = `${tag}${id}${classes}`.slice(0, 150);
 
         results.push({
@@ -117,38 +127,46 @@ export const enforceVisualBoundaries = async (page: Page, testInfo: TestInfo) =>
   if (violations.length > 0) {
     const details = violations
       .slice(0, 5) // Show first 5 violations
-      .map((v: { selector: string; width: number; right: number; reason: string }, i: number) =>
-        `  ${i + 1}. ${v.selector}\n     ${v.reason}`
+      .map(
+        (
+          v: { selector: string; width: number; right: number; reason: string },
+          i: number,
+        ) => `  ${i + 1}. ${v.selector}\n     ${v.reason}`,
       )
       .join('\n');
 
     throw new Error(
       `Visual boundary violations detected (${violations.length} total):\n\n${details}\n\n` +
-      `Device: ${testInfo.project.name}\n` +
-      `Viewport: ${viewport.width}×${viewport.height}`
+        `Device: ${testInfo.project.name}\n` +
+        `Viewport: ${viewport.width}×${viewport.height}`,
     );
   }
 
   // Check for horizontal scroll
   const hasHorizontalScroll = await page.evaluate(() => {
-    return document.documentElement.scrollWidth > document.documentElement.clientWidth;
+    return (
+      document.documentElement.scrollWidth >
+      document.documentElement.clientWidth
+    );
   });
 
   if (hasHorizontalScroll) {
     const scrollInfo = await page.evaluate(() => ({
       scrollWidth: document.documentElement.scrollWidth,
       clientWidth: document.documentElement.clientWidth,
-      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      overflow:
+        document.documentElement.scrollWidth -
+        document.documentElement.clientWidth,
     }));
 
     throw new Error(
       `Horizontal scroll detected:\n` +
-      `  Scroll width: ${scrollInfo.scrollWidth}px\n` +
-      `  Client width: ${scrollInfo.clientWidth}px\n` +
-      `  Overflow: ${scrollInfo.overflow}px\n` +
-      `\n` +
-      `Device: ${testInfo.project.name}\n` +
-      `This indicates content extends beyond viewport boundaries.`
+        `  Scroll width: ${scrollInfo.scrollWidth}px\n` +
+        `  Client width: ${scrollInfo.clientWidth}px\n` +
+        `  Overflow: ${scrollInfo.overflow}px\n` +
+        `\n` +
+        `Device: ${testInfo.project.name}\n` +
+        `This indicates content extends beyond viewport boundaries.`,
     );
   }
 };
@@ -157,7 +175,10 @@ export const enforceVisualBoundaries = async (page: Page, testInfo: TestInfo) =>
  * Combined viewport validation and boundary enforcement.
  * Call this after page load and after major UI changes.
  */
-export const validateVisualConstraints = async (page: Page, testInfo: TestInfo) => {
+export const validateVisualConstraints = async (
+  page: Page,
+  testInfo: TestInfo,
+) => {
   await validateViewport(page, testInfo);
   await enforceVisualBoundaries(page, testInfo);
 };

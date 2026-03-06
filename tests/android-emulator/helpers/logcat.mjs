@@ -5,7 +5,9 @@ const FILTER_REGEX = /(C64U_|Capacitor\/Console)/;
 
 export const startLogcatCapture = (deviceId, outputPath) => {
   const stream = fs.createWriteStream(outputPath, { flags: 'w' });
-  const proc = spawn('adb', ['-s', deviceId, 'logcat', '-v', 'time'], { stdio: ['ignore', 'pipe', 'pipe'] });
+  const proc = spawn('adb', ['-s', deviceId, 'logcat', '-v', 'time'], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
 
   const writeLine = (line) => {
     if (FILTER_REGEX.test(line)) {
@@ -39,6 +41,8 @@ export const startLogcatCapture = (deviceId, outputPath) => {
 export const clearLogcat = async (deviceId) => {
   await new Promise((resolve, reject) => {
     const proc = spawn('adb', ['-s', deviceId, 'logcat', '-c']);
-    proc.on('close', (code) => (code === 0 ? resolve() : reject(new Error('Failed to clear logcat'))));
+    proc.on('close', (code) =>
+      code === 0 ? resolve() : reject(new Error('Failed to clear logcat')),
+    );
   });
 };

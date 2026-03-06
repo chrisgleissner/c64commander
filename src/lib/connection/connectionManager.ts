@@ -16,21 +16,43 @@ import {
   resolveDeviceHostFromStorage,
 } from '@/lib/c64api';
 import { getPassword as loadStoredPassword } from '@/lib/secureStorage';
-import { clearRuntimeFtpPortOverride, setRuntimeFtpPortOverride } from '@/lib/ftp/ftpConfig';
-import { getActiveMockBaseUrl, getActiveMockFtpPort, startMockServer, stopMockServer } from '@/lib/mock/mockServer';
+import {
+  clearRuntimeFtpPortOverride,
+  setRuntimeFtpPortOverride,
+} from '@/lib/ftp/ftpConfig';
+import {
+  getActiveMockBaseUrl,
+  getActiveMockFtpPort,
+  startMockServer,
+  stopMockServer,
+} from '@/lib/mock/mockServer';
 import {
   loadAutomaticDemoModeEnabled,
   loadDiscoveryProbeTimeoutMs,
   loadStartupDiscoveryWindowMs,
 } from '@/lib/config/appSettings';
 import { loadDeviceSafetyConfig } from '@/lib/config/deviceSafetySettings';
-import { applyFuzzModeDefaults, getFuzzMockBaseUrl, isFuzzModeEnabled } from '@/lib/fuzz/fuzzMode';
+import {
+  applyFuzzModeDefaults,
+  getFuzzMockBaseUrl,
+  isFuzzModeEnabled,
+} from '@/lib/fuzz/fuzzMode';
 import { addLog } from '@/lib/logging';
-import { getSmokeConfig, initializeSmokeMode, isSmokeModeEnabled, recordSmokeStatus } from '@/lib/smoke/smokeMode';
+import {
+  getSmokeConfig,
+  initializeSmokeMode,
+  isSmokeModeEnabled,
+  recordSmokeStatus,
+} from '@/lib/smoke/smokeMode';
 import { resetInteractionState } from '@/lib/deviceInteraction/deviceInteractionManager';
 import { updateDeviceConnectionState } from '@/lib/deviceInteraction/deviceStateStore';
 
-export type ConnectionState = 'UNKNOWN' | 'DISCOVERING' | 'REAL_CONNECTED' | 'DEMO_ACTIVE' | 'OFFLINE_NO_DEMO';
+export type ConnectionState =
+  | 'UNKNOWN'
+  | 'DISCOVERING'
+  | 'REAL_CONNECTED'
+  | 'DEMO_ACTIVE'
+  | 'OFFLINE_NO_DEMO';
 export type DiscoveryTrigger = 'startup' | 'manual' | 'settings' | 'background';
 
 export type ConnectionSnapshot = Readonly<{
@@ -71,8 +93,15 @@ const normalizeUrl = (value?: string | null) => {
 
 const resolveTestBaseUrl = () => {
   if (typeof window === 'undefined' || !isTestProbeEnabled()) return null;
-  const win = window as Window & { __c64uExpectedBaseUrl?: string; __c64uMockServerBaseUrl?: string };
-  return normalizeUrl(win.__c64uExpectedBaseUrl ?? win.__c64uMockServerBaseUrl ?? null) || null;
+  const win = window as Window & {
+    __c64uExpectedBaseUrl?: string;
+    __c64uMockServerBaseUrl?: string;
+  };
+  return (
+    normalizeUrl(
+      win.__c64uExpectedBaseUrl ?? win.__c64uMockServerBaseUrl ?? null,
+    ) || null
+  );
 };
 
 const isRuntimeUsingTestTarget = (runtimeBaseUrl: string) => {
@@ -86,7 +115,6 @@ const loadPersistedConnectionConfig = async () => {
   const baseUrl = buildBaseUrlFromDeviceHost(deviceHost);
   return { baseUrl, password: password ?? undefined, deviceHost };
 };
-
 
 const isProbePayloadHealthy = (payload: unknown) => {
   if (!payload || typeof payload !== 'object') return false;
@@ -127,10 +155,16 @@ const probeWithFetch = async (
       outerSignal.addEventListener('abort', abortFromOuter, { once: true });
     }
   }
-  const timeoutId = timeoutMs ? setTimeout(() => controller?.abort(), timeoutMs) : null;
+  const timeoutId = timeoutMs
+    ? setTimeout(() => controller?.abort(), timeoutMs)
+    : null;
   try {
     const response = await fetch(`${baseUrl}/v1/info`, {
-      ...(controller ? { signal: controller.signal } : outerSignal ? { signal: outerSignal } : {}),
+      ...(controller
+        ? { signal: controller.signal }
+        : outerSignal
+          ? { signal: outerSignal }
+          : {}),
     });
     const payload = await parseProbePayload(response);
     if (!response.ok) return false;
@@ -149,12 +183,15 @@ const probeWithFetch = async (
   }
 };
 
-export async function probeOnce(options: { signal?: AbortSignal; timeoutMs?: number } = {}): Promise<boolean> {
+export async function probeOnce(
+  options: { signal?: AbortSignal; timeoutMs?: number } = {},
+): Promise<boolean> {
   const config = await loadPersistedConnectionConfig();
   const timeoutMs = options.timeoutMs ?? loadDiscoveryProbeTimeoutMs();
   const outerSignal = options.signal;
-  const isTestEnv = typeof process !== 'undefined'
-    && (process.env.VITEST === 'true' || process.env.NODE_ENV === 'test');
+  const isTestEnv =
+    typeof process !== 'undefined' &&
+    (process.env.VITEST === 'true' || process.env.NODE_ENV === 'test');
 
   if (isTestEnv) {
     return probeWithFetch(config.baseUrl, { signal: outerSignal, timeoutMs });
@@ -178,7 +215,10 @@ export async function probeOnce(options: { signal?: AbortSignal; timeoutMs?: num
       return false;
     }
     try {
-      return await probeWithFetch(config.baseUrl, { signal: outerSignal, timeoutMs });
+      return await probeWithFetch(config.baseUrl, {
+        signal: outerSignal,
+        timeoutMs,
+      });
     } catch (fallbackError) {
       addLog('debug', 'Discovery probe fallback failed', {
         baseUrl: config.baseUrl,
@@ -201,7 +241,8 @@ let snapshot: ConnectionSnapshot = {
 };
 
 const listeners = new Set<() => void>();
-let activeDiscovery: { abort: AbortController; cancel: () => void } | null = null;
+let activeDiscovery: { abort: AbortController; cancel: () => void } | null =
+  null;
 let demoInterstitialShownThisSession = false;
 let demoServerStartedThisSession = false;
 const DEMO_INTERSTITIAL_SESSION_KEY = 'c64u_demo_interstitial_shown';
@@ -218,7 +259,8 @@ const setSnapshot = (patch: Partial<ConnectionSnapshot>) => {
 };
 
 const beginDiscoveryRun = (trigger: DiscoveryTrigger) => {
-  const token = trigger === 'background' ? discoveryRunToken : ++discoveryRunToken;
+  const token =
+    trigger === 'background' ? discoveryRunToken : ++discoveryRunToken;
   return {
     isCurrent: () => token === discoveryRunToken,
   };
@@ -272,7 +314,10 @@ const stopDemoServer = async () => {
   }
 };
 
-const transitionTo = (state: ConnectionState, trigger: DiscoveryTrigger | null) => {
+const transitionTo = (
+  state: ConnectionState,
+  trigger: DiscoveryTrigger | null,
+) => {
   setSnapshot({
     state,
     lastDiscoveryTrigger: trigger,
@@ -281,14 +326,22 @@ const transitionTo = (state: ConnectionState, trigger: DiscoveryTrigger | null) 
   updateDeviceConnectionState(state);
 };
 
-const logDiscoveryDecision = (state: ConnectionState, trigger: DiscoveryTrigger | null, details?: Record<string, unknown>) => {
+const logDiscoveryDecision = (
+  state: ConnectionState,
+  trigger: DiscoveryTrigger | null,
+  details?: Record<string, unknown>,
+) => {
   addLog('info', 'Discovery decision', { state, trigger, ...details });
   if (isSmokeModeEnabled()) {
-    console.info('C64U_DISCOVERY_DECISION', JSON.stringify({ state, trigger, ...details }));
+    console.info(
+      'C64U_DISCOVERY_DECISION',
+      JSON.stringify({ state, trigger, ...details }),
+    );
     void recordSmokeStatus({
       state,
       mode: typeof details?.mode === 'string' ? details.mode : undefined,
-      baseUrl: typeof details?.baseUrl === 'string' ? details.baseUrl : undefined,
+      baseUrl:
+        typeof details?.baseUrl === 'string' ? details.baseUrl : undefined,
     });
   }
 };
@@ -303,7 +356,11 @@ const transitionToRealConnected = async (trigger: DiscoveryTrigger) => {
   await applyC64APIConfigFromStorage();
   const runtimeBaseUrl = normalizeUrl(getC64APIConfigSnapshot().baseUrl);
   const activeMockUrl = normalizeUrl(getActiveMockBaseUrl());
-  if (!activeMockUrl && runtimeBaseUrl && !isRuntimeUsingTestTarget(runtimeBaseUrl)) {
+  if (
+    !activeMockUrl &&
+    runtimeBaseUrl &&
+    !isRuntimeUsingTestTarget(runtimeBaseUrl)
+  ) {
     stickyRealDeviceLock = true;
   }
   addLog('info', 'Connection switched to real device', { trigger });
@@ -325,7 +382,11 @@ const shouldShowDemoInterstitial = (trigger: DiscoveryTrigger) =>
 
 const transitionToDemoActive = async (trigger: DiscoveryTrigger) => {
   if (stickyRealDeviceLock) {
-    addLog('warn', 'Sticky real-device lock active; skipping demo mode transition', { trigger });
+    addLog(
+      'warn',
+      'Sticky real-device lock active; skipping demo mode transition',
+      { trigger },
+    );
     await transitionToOfflineNoDemo(trigger);
     return;
   }
@@ -350,16 +411,25 @@ const transitionToDemoActive = async (trigger: DiscoveryTrigger) => {
     if (fuzzBaseUrl) {
       const mockHost = getDeviceHostFromBaseUrl(fuzzBaseUrl);
       applyC64APIRuntimeConfig(fuzzBaseUrl, undefined, mockHost);
-      addLog('info', 'Fuzz mode using forced mock base URL', { trigger, baseUrl: fuzzBaseUrl });
+      addLog('info', 'Fuzz mode using forced mock base URL', {
+        trigger,
+        baseUrl: fuzzBaseUrl,
+      });
       transitionTo('DEMO_ACTIVE', trigger);
       logDiscoveryDecision('DEMO_ACTIVE', trigger, { mode: 'demo' });
       return;
     }
   }
 
-  const hasMockServerOverride = typeof window !== 'undefined'
-    && Boolean((window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl);
-  const shouldStartDemoServer = !demoServerStartedThisSession && (!isTestProbeEnabled() || hasMockServerOverride);
+  const hasMockServerOverride =
+    typeof window !== 'undefined' &&
+    Boolean(
+      (window as Window & { __c64uMockServerBaseUrl?: string })
+        .__c64uMockServerBaseUrl,
+    );
+  const shouldStartDemoServer =
+    !demoServerStartedThisSession &&
+    (!isTestProbeEnabled() || hasMockServerOverride);
 
   if (shouldStartDemoServer) {
     try {
@@ -384,12 +454,18 @@ const transitionToDemoActive = async (trigger: DiscoveryTrigger) => {
     applyC64APIRuntimeConfig(activeMockUrl, undefined, mockHost);
     const activeFtpPort = getActiveMockFtpPort();
     if (activeFtpPort) setRuntimeFtpPortOverride(activeFtpPort);
-    addLog('info', 'Demo mode using mock C64U', { trigger, baseUrl: activeMockUrl });
+    addLog('info', 'Demo mode using mock C64U', {
+      trigger,
+      baseUrl: activeMockUrl,
+    });
   } else {
     const fallbackHost = resolveDeviceHostFromStorage();
     const fallbackBaseUrl = buildBaseUrlFromDeviceHost(fallbackHost);
     applyC64APIRuntimeConfig(fallbackBaseUrl, undefined, fallbackHost);
-    addLog('info', 'Demo mode using stored device host', { trigger, baseUrl: fallbackBaseUrl });
+    addLog('info', 'Demo mode using stored device host', {
+      trigger,
+      baseUrl: fallbackBaseUrl,
+    });
   }
 
   // Transition state AFTER the URL is configured so that React queries
@@ -416,7 +492,10 @@ const transitionToSmokeMockConnected = async (trigger: DiscoveryTrigger) => {
   transitionTo('REAL_CONNECTED', trigger);
   logDiscoveryDecision('REAL_CONNECTED', trigger, { mode: 'mock', baseUrl });
   if (isSmokeModeEnabled()) {
-    console.info('C64U_SMOKE_MOCK_CONNECTED', JSON.stringify({ baseUrl, host: mockHost }));
+    console.info(
+      'C64U_SMOKE_MOCK_CONNECTED',
+      JSON.stringify({ baseUrl, host: mockHost }),
+    );
   }
 };
 
@@ -457,12 +536,17 @@ const handleProbeOutcome = async (
  * - Background rediscovery
  * - Settings-triggered rediscovery
  */
-export async function discoverConnection(trigger: DiscoveryTrigger): Promise<void> {
+export async function discoverConnection(
+  trigger: DiscoveryTrigger,
+): Promise<void> {
   const discoveryRun = beginDiscoveryRun(trigger);
 
   if (trigger === 'background') {
     if (activeDiscovery) {
-      addLog('debug', 'Background discovery skipped because a probe is already active');
+      addLog(
+        'debug',
+        'Background discovery skipped because a probe is already active',
+      );
       return;
     }
   } else {
@@ -471,9 +555,15 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
 
   const smokeConfig = getSmokeConfig();
   if (smokeConfig) {
-    addLog('info', 'Smoke discovery override active', { target: smokeConfig.target, host: smokeConfig.host });
+    addLog('info', 'Smoke discovery override active', {
+      target: smokeConfig.target,
+      host: smokeConfig.host,
+    });
     if (isSmokeModeEnabled()) {
-      console.info('C64U_SMOKE_DISCOVERY_OVERRIDE', JSON.stringify({ target: smokeConfig.target, host: smokeConfig.host }));
+      console.info(
+        'C64U_SMOKE_DISCOVERY_OVERRIDE',
+        JSON.stringify({ target: smokeConfig.target, host: smokeConfig.host }),
+      );
     }
   }
   if (smokeConfig?.target === 'mock') {
@@ -490,8 +580,10 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
 
   if (trigger === 'manual') {
     transitionTo('DISCOVERING', trigger);
-    const autoDemoEnabled = loadAutomaticDemoModeEnabled() && !isSmokeModeEnabled();
-    const manualProbeTimeoutMs = Math.max(1000, loadDiscoveryProbeTimeoutMs()) + 1000;
+    const autoDemoEnabled =
+      loadAutomaticDemoModeEnabled() && !isSmokeModeEnabled();
+    const manualProbeTimeoutMs =
+      Math.max(1000, loadDiscoveryProbeTimeoutMs()) + 1000;
     setSnapshot({ lastProbeAtMs: Date.now() });
     const ok = await Promise.race<boolean>([
       probeOnce({ timeoutMs: manualProbeTimeoutMs }),
@@ -499,12 +591,21 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
         setTimeout(() => resolve(false), manualProbeTimeoutMs);
       }),
     ]);
-    await handleProbeOutcome(trigger, ok, autoDemoEnabled, discoveryRun.isCurrent);
+    await handleProbeOutcome(
+      trigger,
+      ok,
+      autoDemoEnabled,
+      discoveryRun.isCurrent,
+    );
     return;
   }
 
   if (trigger === 'background') {
-    if (snapshot.state !== 'DEMO_ACTIVE' && snapshot.state !== 'OFFLINE_NO_DEMO') return;
+    if (
+      snapshot.state !== 'DEMO_ACTIVE' &&
+      snapshot.state !== 'OFFLINE_NO_DEMO'
+    )
+      return;
     const abort = new AbortController();
     activeDiscovery = { abort, cancel: () => abort.abort() };
     try {
@@ -513,7 +614,10 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
       setSnapshot({ lastProbeAtMs: Date.now() });
       if (ok) {
         if (!discoveryRun.isCurrent()) return;
-        setSnapshot({ lastProbeSucceededAtMs: Date.now(), lastProbeError: null });
+        setSnapshot({
+          lastProbeSucceededAtMs: Date.now(),
+          lastProbeError: null,
+        });
         addLog('info', 'Discovery probe succeeded', { trigger });
         if (isSmokeModeEnabled()) {
           console.info('C64U_PROBE_OK', JSON.stringify({ trigger }));
@@ -543,7 +647,8 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
   const abort = new AbortController();
   let cancelled = false;
   let probeInFlight = false;
-  const autoDemoEnabled = loadAutomaticDemoModeEnabled() && !isSmokeModeEnabled();
+  const autoDemoEnabled =
+    loadAutomaticDemoModeEnabled() && !isSmokeModeEnabled();
 
   const windowMs = loadStartupDiscoveryWindowMs();
   let windowExpired = false;
@@ -617,7 +722,8 @@ export async function initializeConnectionManager() {
   cancelActiveDiscovery();
   applyFuzzModeDefaults();
   await initializeSmokeMode();
-  demoInterstitialShownThisSession = sessionStorage.getItem(DEMO_INTERSTITIAL_SESSION_KEY) === '1';
+  demoInterstitialShownThisSession =
+    sessionStorage.getItem(DEMO_INTERSTITIAL_SESSION_KEY) === '1';
   stickyRealDeviceLock = false;
   setSnapshot({
     state: 'UNKNOWN',
@@ -646,4 +752,3 @@ export const CONNECTION_CONSTANTS = {
   STARTUP_PROBE_INTERVAL_MS,
   PROBE_REQUEST_TIMEOUT_MS,
 };
-

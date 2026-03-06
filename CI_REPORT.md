@@ -13,46 +13,49 @@ The regression was introduced in commit `fc6fac57` (Feb 16 2026) which replaced 
 
 ## Changed Files
 
-| File | Change |
-|---|---|
+| File                                       | Change                                                                                                                                                                                                                    |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `.maestro/subflows/common-navigation.yaml` | Replace `tapOn: text: "Play"` with `retry maxRetries:3` block using `id: "tab-play"` → text → coordinate fallbacks, with `waitForAnimationToEnd` and `extendedWaitUntil visible: "Playlist"` inside each retry iteration. |
-| `PLANS.md` | Added Hypotheses, Experiments, Prioritized Fix Plan, updated Root Cause Log, Fix Log, Risk Register, and Done Checklist. |
+| `PLANS.md`                                 | Added Hypotheses, Experiments, Prioritized Fix Plan, updated Root Cause Log, Fix Log, Risk Register, and Done Checklist.                                                                                                  |
 
 ## Before / After: common-navigation.yaml
 
 **Before** (brittle):
+
 ```yaml
 - tapOn:
-    text: "Play"
+    text: 'Play'
 - extendedWaitUntil:
-    visible: "Playlist"
+    visible: 'Playlist'
     timeout: ${TIMEOUT}
 ```
 
 **After** (robust):
+
 ```yaml
 - retry:
     maxRetries: 3
     commands:
       - tapOn:
-          id: "tab-play"
+          id: 'tab-play'
           optional: true
       - tapOn:
-          text: "Play"
+          text: 'Play'
           optional: true
       - tapOn:
-          point: "25%,95%"
+          point: '25%,95%'
           optional: true
       - waitForAnimationToEnd
       - extendedWaitUntil:
-          visible: "Playlist"
+          visible: 'Playlist'
           timeout: ${TIMEOUT}
 - extendedWaitUntil:
-    visible: "Playlist"
+    visible: 'Playlist'
     timeout: ${TIMEOUT}
 ```
 
 **Why this eliminates flakiness:**
+
 - `id: "tab-play"` resolves to the exact `<button id="tab-play">` in the TabBar — no ambiguity with the PlaybackControlsCard's play button.
 - Text and coordinate fallbacks ensure navigation succeeds even if the id lookup is unavailable (e.g., older WebView bridge versions).
 - `waitForAnimationToEnd` + `extendedWaitUntil visible: "Playlist"` inside the retry body confirm the navigation succeeded before each iteration completes; if Playlist is not shown the block retries up to 3 times.
@@ -75,35 +78,36 @@ npm run test:coverage      # branch coverage 90.15% (≥ 90% threshold)
 
 ## Evidence Paths
 
-| Artifact | Path |
-|---|---|
+| Artifact                            | Path                                      |
+| ----------------------------------- | ----------------------------------------- |
 | Existing local Maestro run evidence | `test-results/maestro/2026-02-19_013425/` |
-| Existing JUnit report | `test-results/maestro/maestro-report.xml` |
-| Coverage output | `coverage/lcov.info` |
+| Existing JUnit report               | `test-results/maestro/maestro-report.xml` |
+| Coverage output                     | `coverage/lcov.info`                      |
 
 ## Flakiness Analysis
 
-| Strategy | Mechanism |
-|---|---|
-| `id: "tab-play"` primary | Unique HTML element id — no ambiguity |
-| text fallback (optional) | Covers future renames; optional prevents hard fail |
-| coordinate fallback (optional) | Layout-stable backup; always hits bottom-left tab area |
-| internal `extendedWaitUntil` | Confirms navigation before the retry iteration completes |
-| outer `extendedWaitUntil` + `assertVisible` | Final stable gate; only reached after navigation is confirmed |
-| `maxRetries: 3` | Three attempts allow transient rendering delays on slow CI emulators |
+| Strategy                                    | Mechanism                                                            |
+| ------------------------------------------- | -------------------------------------------------------------------- |
+| `id: "tab-play"` primary                    | Unique HTML element id — no ambiguity                                |
+| text fallback (optional)                    | Covers future renames; optional prevents hard fail                   |
+| coordinate fallback (optional)              | Layout-stable backup; always hits bottom-left tab area               |
+| internal `extendedWaitUntil`                | Confirms navigation before the retry iteration completes             |
+| outer `extendedWaitUntil` + `assertVisible` | Final stable gate; only reached after navigation is confirmed        |
+| `maxRetries: 3`                             | Three attempts allow transient rendering delays on slow CI emulators |
 
 Three consecutive Maestro runs on the same commit are expected green because:
+
 - The retry block uses the element id as the primary strategy, which is deterministic.
 - Even if the id tap fails, coordinate fallback is layout-stable on the `pixel_6` profile.
 - The timeout inside the retry (`${TIMEOUT}` = 20 s in CI) gives the app sufficient time to render the Play page under load.
 
 ## Coverage
 
-| Metric | Value | Threshold | Status |
-|---|---|---|---|
-| Branch coverage (unit) | 90.15% | 90.0% | ✅ PASS |
-| Statement coverage | 94.35% | n/a | ✅ |
-| Function coverage | 95.6% | n/a | ✅ |
+| Metric                 | Value  | Threshold | Status  |
+| ---------------------- | ------ | --------- | ------- |
+| Branch coverage (unit) | 90.15% | 90.0%     | ✅ PASS |
+| Statement coverage     | 94.35% | n/a       | ✅      |
+| Function coverage      | 95.6%  | n/a       | ✅      |
 
 ## GitHub Actions Run Links
 

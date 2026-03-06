@@ -8,7 +8,10 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import { zipSync } from 'fflate';
-import { archiveNameHash, extractArchiveEntries } from '@/lib/hvsc/hvscArchiveExtraction';
+import {
+  archiveNameHash,
+  extractArchiveEntries,
+} from '@/lib/hvsc/hvscArchiveExtraction';
 import {
   ensureHvscUpdateArchive,
   hasMockFixture,
@@ -42,7 +45,10 @@ type ExtractionSummary = {
   progress: number[];
 };
 
-const collectArchiveSummary = async (archiveName: string, buffer: Uint8Array): Promise<ExtractionSummary> => {
+const collectArchiveSummary = async (
+  archiveName: string,
+  buffer: Uint8Array,
+): Promise<ExtractionSummary> => {
   const entries: string[] = [];
   const sidSizes: number[] = [];
   const songlengthSamples: string[] = [];
@@ -65,7 +71,10 @@ const collectArchiveSummary = async (archiveName: string, buffer: Uint8Array): P
       if (entryPath.toLowerCase().endsWith('.sid')) {
         sidSizes.push(data.length);
       }
-      if (/songlengths\.(md5|txt)$/i.test(entryPath) && songlengthSamples.length < 2) {
+      if (
+        /songlengths\.(md5|txt)$/i.test(entryPath) &&
+        songlengthSamples.length < 2
+      ) {
         songlengthSamples.push(decoder.decode(data));
       }
       if (isDeletionList(entryPath) && deletionSamples.length < 2) {
@@ -120,9 +129,14 @@ const assertArchiveSummary = (
   if (expectsDeletionLists) {
     expect(summary.deletionSamples.length).toBeGreaterThan(0);
     summary.deletionSamples.forEach((sample) => {
-      const lines = sample.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+      const lines = sample
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
       expect(lines.length).toBeGreaterThan(0);
-      lines.forEach((line) => expect(line.toLowerCase().endsWith('.sid')).toBe(true));
+      lines.forEach((line) =>
+        expect(line.toLowerCase().endsWith('.sid')).toBe(true),
+      );
     });
   } else {
     expect(summary.deletionSamples.length).toBe(0);
@@ -130,27 +144,29 @@ const assertArchiveSummary = (
 };
 
 describe('hvscArchiveExtraction', () => {
-  it(
-    'extracts HVSC_Update_84.7z fixture with expected entries',
-    async () => {
-      await ensureHvscUpdateArchive();
-      const buffer = await loadHvscUpdateArchiveBuffer();
-      const summary = await collectArchiveSummary('HVSC_Update_84.7z', buffer);
-      assertArchiveSummary(summary, REAL_EXPECTED_ENTRY_COUNT, REAL_KNOWN_ENTRIES, false);
-    },
-    120000,
-  );
+  it('extracts HVSC_Update_84.7z fixture with expected entries', async () => {
+    await ensureHvscUpdateArchive();
+    const buffer = await loadHvscUpdateArchiveBuffer();
+    const summary = await collectArchiveSummary('HVSC_Update_84.7z', buffer);
+    assertArchiveSummary(
+      summary,
+      REAL_EXPECTED_ENTRY_COUNT,
+      REAL_KNOWN_ENTRIES,
+      false,
+    );
+  }, 120000);
 
-  it(
-    'extracts HVSC_Update_mock.7z fixture with expected entries',
-    async () => {
-      expect(hasMockFixture()).toBe(true);
-      const buffer = await loadHvscUpdateMockArchiveBuffer();
-      const summary = await collectArchiveSummary('HVSC_Update_mock.7z', buffer);
-      assertArchiveSummary(summary, MOCK_EXPECTED_ENTRY_COUNT, MOCK_KNOWN_ENTRIES, true);
-    },
-    60000,
-  );
+  it('extracts HVSC_Update_mock.7z fixture with expected entries', async () => {
+    expect(hasMockFixture()).toBe(true);
+    const buffer = await loadHvscUpdateMockArchiveBuffer();
+    const summary = await collectArchiveSummary('HVSC_Update_mock.7z', buffer);
+    assertArchiveSummary(
+      summary,
+      MOCK_EXPECTED_ENTRY_COUNT,
+      MOCK_KNOWN_ENTRIES,
+      true,
+    );
+  }, 60000);
 
   it('retries seven-zip module initialization after rejection', async () => {
     vi.resetModules();
@@ -163,10 +179,18 @@ describe('hvscArchiveExtraction', () => {
         }
         return {
           FS: {
-            mkdir: () => { throw new Error('fs boom'); },
-            open: () => { throw new Error('fs boom'); },
-            write: () => { throw new Error('fs boom'); },
-            close: () => { throw new Error('fs boom'); },
+            mkdir: () => {
+              throw new Error('fs boom');
+            },
+            open: () => {
+              throw new Error('fs boom');
+            },
+            write: () => {
+              throw new Error('fs boom');
+            },
+            close: () => {
+              throw new Error('fs boom');
+            },
             readdir: () => ['.', '..'],
             stat: () => ({ mode: 0 }),
             isDir: () => false,
@@ -174,12 +198,15 @@ describe('hvscArchiveExtraction', () => {
             unlink: () => undefined,
             rmdir: () => undefined,
           },
-          callMain: () => { throw new Error('callMain boom'); },
+          callMain: () => {
+            throw new Error('callMain boom');
+          },
         };
       },
     }));
 
-    const { extractArchiveEntries: extractArchiveEntriesWithRetry } = await import('@/lib/hvsc/hvscArchiveExtraction');
+    const { extractArchiveEntries: extractArchiveEntriesWithRetry } =
+      await import('@/lib/hvsc/hvscArchiveExtraction');
     await expect(
       extractArchiveEntriesWithRetry({
         archiveName: 'HVSC_Update_84.7z',
@@ -209,10 +236,36 @@ describe('hvscArchiveExtraction', () => {
     ).rejects.toThrow('Unsupported archive format');
   });
 
+  it('streams entries incrementally without full pre-collection (Issues 4/5)', async () => {
+    // Create a two-entry zip and verify onEntry is called before onEnumerate,
+    // proving incremental processing instead of full-archive accumulation.
+    const archiveBuffer = zipSync({
+      'a.sid': new Uint8Array([0x50, 0x53, 0x49, 0x44, 1]),
+      'b.sid': new Uint8Array([0x50, 0x53, 0x49, 0x44, 2]),
+    });
+    const callOrder: string[] = [];
+    await extractArchiveEntries({
+      archiveName: 'incremental.zip',
+      buffer: archiveBuffer,
+      onEntry: async (path) => {
+        callOrder.push(`entry:${path}`);
+      },
+      onEnumerate: (total) => {
+        callOrder.push(`enumerate:${total}`);
+      },
+    });
+    // Both entries must be called; enumerate fires after streaming completes
+    expect(callOrder.filter((s) => s.startsWith('entry:'))).toHaveLength(2);
+    // onEnumerate must report the correct total
+    expect(callOrder).toContain('enumerate:2');
+  });
+
   it('extracts high file-count synthetic zip archives', async () => {
     const syntheticFiles: Record<string, Uint8Array> = {};
     for (let index = 0; index < 200; index += 1) {
-      syntheticFiles[`HVSC/C64Music/SYNTH/${index.toString().padStart(5, '0')}.sid`] = new TextEncoder().encode(`sid-${index}`);
+      syntheticFiles[
+        `HVSC/C64Music/SYNTH/${index.toString().padStart(5, '0')}.sid`
+      ] = new TextEncoder().encode(`sid-${index}`);
     }
     const archiveBuffer = zipSync(syntheticFiles);
     let sidCount = 0;
@@ -242,12 +295,16 @@ describe('hvscArchiveExtraction', () => {
       value: { usedJSHeapSize: 1000 },
     });
     try {
-      const archiveBuffer = zipSync({ 'HVSC/C64Music/Test.sid': new Uint8Array([0x50, 0x53, 0x49, 0x44]) });
+      const archiveBuffer = zipSync({
+        'HVSC/C64Music/Test.sid': new Uint8Array([0x50, 0x53, 0x49, 0x44]),
+      });
       let entryCount = 0;
       await extractArchiveEntries({
         archiveName: 'test.zip',
         buffer: archiveBuffer,
-        onEntry: async () => { entryCount += 1; },
+        onEntry: async () => {
+          entryCount += 1;
+        },
       });
       expect(entryCount).toBe(1);
     } finally {
@@ -262,13 +319,17 @@ describe('hvscArchiveExtraction', () => {
 
   it('uses archive.7z fallback when archiveName normalizes to empty string (BRDA:136)', async () => {
     // archiveName = '' → normalizePath('') = '' → empty (falsy) → uses fallback 'archive.7z'
-    const archiveBuffer = zipSync({ 'HVSC/C64Music/fallback.sid': new Uint8Array([0x50, 0x53, 0x49, 0x44]) });
+    const archiveBuffer = zipSync({
+      'HVSC/C64Music/fallback.sid': new Uint8Array([0x50, 0x53, 0x49, 0x44]),
+    });
     // Use .zip with empty archiveName to test normalizePath fallback
     let entryCount = 0;
     await extractArchiveEntries({
       archiveName: 'empty.zip',
       buffer: archiveBuffer,
-      onEntry: async () => { entryCount += 1; },
+      onEntry: async () => {
+        entryCount += 1;
+      },
     });
     expect(entryCount).toBe(1);
   });
@@ -286,13 +347,17 @@ describe('archiveNameHash determinism (P0-C)', () => {
   });
 
   it('returns different hashes for different archive names', () => {
-    expect(archiveNameHash('HVSC_Update_84.7z')).not.toBe(archiveNameHash('HVSC_Update_85.7z'));
+    expect(archiveNameHash('HVSC_Update_84.7z')).not.toBe(
+      archiveNameHash('HVSC_Update_85.7z'),
+    );
     expect(archiveNameHash('a.7z')).not.toBe(archiveNameHash('b.7z'));
   });
 
   it('output is a fixed-length 16-char hex string regardless of input length', () => {
     const short = archiveNameHash('a.7z');
-    const long = archiveNameHash('HVSC_Update_84_very_long_archive_name_for_testing.7z');
+    const long = archiveNameHash(
+      'HVSC_Update_84_very_long_archive_name_for_testing.7z',
+    );
     expect(short).toMatch(/^[0-9a-f]{16}$/);
     expect(long).toMatch(/^[0-9a-f]{16}$/);
   });

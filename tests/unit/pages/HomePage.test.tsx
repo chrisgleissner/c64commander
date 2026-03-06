@@ -6,7 +6,13 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RouterProvider, createMemoryRouter } from 'react-router-dom';
 import HomePage from '../../../src/pages/HomePage';
@@ -44,14 +50,30 @@ const {
       fetchQuery: vi.fn().mockResolvedValue(undefined),
     },
   },
-  sidSocketsPayloadRef: { current: undefined as Record<string, unknown> | undefined },
-  sidAddressingPayloadRef: { current: undefined as Record<string, unknown> | undefined },
-  audioMixerPayloadRef: { current: undefined as Record<string, unknown> | undefined },
-  streamPayloadRef: { current: undefined as Record<string, unknown> | undefined },
-  driveASettingsPayloadRef: { current: undefined as Record<string, unknown> | undefined },
-  driveBSettingsPayloadRef: { current: undefined as Record<string, unknown> | undefined },
-  u64SettingsPayloadRef: { current: undefined as Record<string, unknown> | undefined },
-  ledStripPayloadRef: { current: undefined as Record<string, unknown> | undefined },
+  sidSocketsPayloadRef: {
+    current: undefined as Record<string, unknown> | undefined,
+  },
+  sidAddressingPayloadRef: {
+    current: undefined as Record<string, unknown> | undefined,
+  },
+  audioMixerPayloadRef: {
+    current: undefined as Record<string, unknown> | undefined,
+  },
+  streamPayloadRef: {
+    current: undefined as Record<string, unknown> | undefined,
+  },
+  driveASettingsPayloadRef: {
+    current: undefined as Record<string, unknown> | undefined,
+  },
+  driveBSettingsPayloadRef: {
+    current: undefined as Record<string, unknown> | undefined,
+  },
+  u64SettingsPayloadRef: {
+    current: undefined as Record<string, unknown> | undefined,
+  },
+  ledStripPayloadRef: {
+    current: undefined as Record<string, unknown> | undefined,
+  },
   statusPayloadRef: {
     current: {
       isConnected: true,
@@ -68,7 +90,17 @@ const {
   },
   drivesPayloadRef: {
     current: {
-      drives: [] as Array<Record<string, { enabled?: boolean; image_file?: string; bus_id?: number; type?: string }>>,
+      drives: [] as Array<
+        Record<
+          string,
+          {
+            enabled?: boolean;
+            image_file?: string;
+            bus_id?: number;
+            type?: string;
+          }
+        >
+      >,
     },
   },
   machineControlPayloadRef: {
@@ -108,30 +140,33 @@ vi.mock('@/components/ThemeProvider', () => ({
 
 vi.mock('@/components/DiagnosticsActivityIndicator', () => ({
   DiagnosticsActivityIndicator: ({ onClick }: { onClick: () => void }) => (
-    <button type="button" onClick={onClick} data-testid="diagnostics-activity-indicator" />
+    <button
+      type="button"
+      onClick={onClick}
+      data-testid="diagnostics-activity-indicator"
+    />
   ),
 }));
 
-const buildRouter = (ui: JSX.Element) => createMemoryRouter(
-  [{ path: '*', element: ui }],
-  {
+const buildRouter = (ui: JSX.Element) =>
+  createMemoryRouter([{ path: '*', element: ui }], {
     initialEntries: ['/'],
     future: {
       v7_startTransition: true,
       v7_relativeSplatPath: true,
     },
-  },
-);
+  });
 
-const renderWithRouter = (ui: JSX.Element) => render(
-  <RouterProvider
-    router={buildRouter(ui)}
-    future={{
-      v7_startTransition: true,
-      v7_relativeSplatPath: true,
-    }}
-  />,
-);
+const renderWithRouter = (ui: JSX.Element) =>
+  render(
+    <RouterProvider
+      router={buildRouter(ui)}
+      future={{
+        v7_startTransition: true,
+        v7_relativeSplatPath: true,
+      }}
+    />,
+  );
 
 const renderHomePage = () => renderWithRouter(<HomePage />);
 
@@ -145,7 +180,9 @@ vi.mock('@/hooks/useC64Connection', () => ({
   }),
   useC64Drives: () => ({
     data: drivesPayloadRef.current,
-    refetch: vi.fn().mockImplementation(() => queryClientMockRef.current.fetchQuery()),
+    refetch: vi
+      .fn()
+      .mockImplementation(() => queryClientMockRef.current.fetchQuery()),
   }),
   useC64ConfigItem: () => ({ data: undefined, isLoading: false }),
   useC64ConfigItems: (category: string) => {
@@ -183,7 +220,8 @@ vi.mock('@/hooks/useAppConfigState', () => ({
 }));
 
 vi.mock('@/hooks/useActionTrace', () => ({
-  useActionTrace: () => Object.assign((fn: (...args: any[]) => any) => fn, { scope: vi.fn() }),
+  useActionTrace: () =>
+    Object.assign((fn: (...args: any[]) => any) => fn, { scope: vi.fn() }),
 }));
 
 vi.mock('@/hooks/use-toast', () => ({
@@ -195,15 +233,18 @@ vi.mock('framer-motion', () => ({
   motion: {
     div: ({ children, ...props }: any) => {
       // Filter out framer-motion props to avoid React warnings in tests and ensure clean DOM
-      const { initial, animate, exit, transition, variants, ...validProps } = props;
+      const { initial, animate, exit, transition, variants, ...validProps } =
+        props;
       return <div {...validProps}>{children}</div>;
     },
     button: ({ children, ...props }: any) => {
-      const { initial, animate, exit, transition, variants, ...validProps } = props;
+      const { initial, animate, exit, transition, variants, ...validProps } =
+        props;
       return <button {...validProps}>{children}</button>;
     },
     span: ({ children, ...props }: any) => {
-      const { initial, animate, exit, transition, variants, ...validProps } = props;
+      const { initial, animate, exit, transition, variants, ...validProps } =
+        props;
       return <span {...validProps}>{children}</span>;
     },
   },
@@ -216,7 +257,7 @@ vi.mock('@/hooks/useDiagnosticsActivity', () => ({
 
 vi.mock('@/lib/diagnostics/diagnosticsOverlayState', () => ({
   isDiagnosticsOverlayActive: () => false,
-  subscribeDiagnosticsOverlay: () => () => { },
+  subscribeDiagnosticsOverlay: () => () => {},
   shouldSuppressDiagnosticsSideEffects: () => false,
 }));
 
@@ -257,15 +298,42 @@ beforeEach(() => {
   };
   drivesPayloadRef.current = { drives: [] };
   machineControlPayloadRef.current = {
-    reset: { mutateAsync: vi.fn().mockResolvedValue(undefined), isPending: false },
-    reboot: { mutateAsync: vi.fn().mockResolvedValue(undefined), isPending: false },
-    pause: { mutateAsync: vi.fn().mockResolvedValue(undefined), isPending: false },
-    resume: { mutateAsync: vi.fn().mockResolvedValue(undefined), isPending: false },
-    powerOff: { mutateAsync: vi.fn().mockResolvedValue(undefined), isPending: false },
-    menuButton: { mutateAsync: vi.fn().mockResolvedValue(undefined), isPending: false },
-    saveConfig: { mutateAsync: vi.fn().mockResolvedValue(undefined), isPending: false },
-    loadConfig: { mutateAsync: vi.fn().mockResolvedValue(undefined), isPending: false },
-    resetConfig: { mutateAsync: vi.fn().mockResolvedValue(undefined), isPending: false },
+    reset: {
+      mutateAsync: vi.fn().mockResolvedValue(undefined),
+      isPending: false,
+    },
+    reboot: {
+      mutateAsync: vi.fn().mockResolvedValue(undefined),
+      isPending: false,
+    },
+    pause: {
+      mutateAsync: vi.fn().mockResolvedValue(undefined),
+      isPending: false,
+    },
+    resume: {
+      mutateAsync: vi.fn().mockResolvedValue(undefined),
+      isPending: false,
+    },
+    powerOff: {
+      mutateAsync: vi.fn().mockResolvedValue(undefined),
+      isPending: false,
+    },
+    menuButton: {
+      mutateAsync: vi.fn().mockResolvedValue(undefined),
+      isPending: false,
+    },
+    saveConfig: {
+      mutateAsync: vi.fn().mockResolvedValue(undefined),
+      isPending: false,
+    },
+    loadConfig: {
+      mutateAsync: vi.fn().mockResolvedValue(undefined),
+      isPending: false,
+    },
+    resetConfig: {
+      mutateAsync: vi.fn().mockResolvedValue(undefined),
+      isPending: false,
+    },
   };
   appConfigStatePayloadRef.current = {
     appConfigs: [],
@@ -288,7 +356,9 @@ describe('HomePage SID status', () => {
 
   it('renders the Home subtitle as C64 Commander', () => {
     renderHomePage();
-    expect(screen.getByTestId('home-header-subtitle').textContent).toBe('C64 Commander');
+    expect(screen.getByTestId('home-header-subtitle').textContent).toBe(
+      'C64 Commander',
+    );
   });
 
   it('renders SID layout and updates on config changes', () => {
@@ -312,7 +382,9 @@ describe('HomePage SID status', () => {
 
     const { rerender } = renderHomePage();
 
-    expect(within(screen.getByTestId('home-sid-status')).getAllByText('SID').length).toBeGreaterThan(0);
+    expect(
+      within(screen.getByTestId('home-sid-status')).getAllByText('SID').length,
+    ).toBeGreaterThan(0);
     const sidSocket1 = screen.getByText('SID Socket 1');
     const sidSocket2 = screen.getByText('SID Socket 2');
     const ultiSid1 = screen.getByText('UltiSID 1');
@@ -322,8 +394,12 @@ describe('HomePage SID status', () => {
     expect(ultiSid1).toBeTruthy();
     expect(ultiSid2).toBeTruthy();
 
-    expect(screen.getByTestId('home-sid-toggle-socket1').textContent).toBe('ON');
-    expect(screen.getByTestId('home-sid-toggle-socket2').textContent).toBe('OFF');
+    expect(screen.getByTestId('home-sid-toggle-socket1').textContent).toBe(
+      'ON',
+    );
+    expect(screen.getByTestId('home-sid-toggle-socket2').textContent).toBe(
+      'OFF',
+    );
 
     sidSocketsPayloadRef.current = {
       'SID Sockets Configuration': {
@@ -352,10 +428,18 @@ describe('HomePage SID status', () => {
       />,
     );
 
-    expect(screen.getByTestId('home-sid-toggle-socket1').textContent).toBe('OFF');
-    expect(screen.getByTestId('home-sid-toggle-socket2').textContent).toBe('ON');
-    expect(screen.getByTestId('home-sid-toggle-ultiSid1').textContent).toBe('ON');
-    expect(screen.getByTestId('home-sid-toggle-ultiSid2').textContent).toBe('OFF');
+    expect(screen.getByTestId('home-sid-toggle-socket1').textContent).toBe(
+      'OFF',
+    );
+    expect(screen.getByTestId('home-sid-toggle-socket2').textContent).toBe(
+      'ON',
+    );
+    expect(screen.getByTestId('home-sid-toggle-ultiSid1').textContent).toBe(
+      'ON',
+    );
+    expect(screen.getByTestId('home-sid-toggle-ultiSid2').textContent).toBe(
+      'OFF',
+    );
   });
 
   it('renders stream rows with full IP:PORT endpoint values from Data Streams config', () => {
@@ -373,15 +457,25 @@ describe('HomePage SID status', () => {
 
     const streamSection = screen.getByTestId('home-stream-status');
     expect(within(streamSection).getByText('Streams')).toBeTruthy();
-    expect(within(streamSection).getAllByTestId(/^home-stream-row-/)).toHaveLength(3);
+    expect(
+      within(streamSection).getAllByTestId(/^home-stream-row-/),
+    ).toHaveLength(3);
     expect(within(streamSection).getByText('VIC')).toBeTruthy();
     expect(within(streamSection).getByText('AUDIO')).toBeTruthy();
     expect(within(streamSection).getByText('DEBUG')).toBeTruthy();
     expect(within(streamSection).getAllByText('Start').length).toBe(3);
     expect(within(streamSection).getAllByText('Stop').length).toBe(3);
-    expect(within(streamSection).queryByTestId('home-stream-endpoint-vic')).toBeNull();
-    expect(within(streamSection).getByTestId('home-stream-endpoint-display-vic').textContent).toBe('239.0.1.64:11000');
-    expect(within(streamSection).getByTestId('home-stream-endpoint-display-debug').textContent).toBe('239.0.1.66:11002');
+    expect(
+      within(streamSection).queryByTestId('home-stream-endpoint-vic'),
+    ).toBeNull();
+    expect(
+      within(streamSection).getByTestId('home-stream-endpoint-display-vic')
+        .textContent,
+    ).toBe('239.0.1.64:11000');
+    expect(
+      within(streamSection).getByTestId('home-stream-endpoint-display-debug')
+        .textContent,
+    ).toBe('239.0.1.66:11002');
   });
 
   it('resets all connected drives from Home drives section', async () => {
@@ -397,7 +491,9 @@ describe('HomePage SID status', () => {
 
     fireEvent.click(screen.getByTestId('home-drives-reset'));
 
-    await waitFor(() => expect(c64ApiMockRef.current.resetDrive).toHaveBeenCalledTimes(3));
+    await waitFor(() =>
+      expect(c64ApiMockRef.current.resetDrive).toHaveBeenCalledTimes(3),
+    );
     expect(c64ApiMockRef.current.resetDrive).toHaveBeenCalledWith('a');
     expect(c64ApiMockRef.current.resetDrive).toHaveBeenCalledWith('b');
     expect(c64ApiMockRef.current.resetDrive).toHaveBeenCalledWith('softiec');
@@ -418,7 +514,9 @@ describe('HomePage SID status', () => {
 
     fireEvent.click(screen.getByTestId('home-printer-reset'));
 
-    await waitFor(() => expect(c64ApiMockRef.current.resetDrive).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(c64ApiMockRef.current.resetDrive).toHaveBeenCalledTimes(1),
+    );
     expect(c64ApiMockRef.current.resetDrive).toHaveBeenCalledWith('printer');
     expect(queryClientMockRef.current.fetchQuery).toHaveBeenCalled();
   });
@@ -440,9 +538,17 @@ describe('HomePage SID status', () => {
     const sidSection = screen.getByTestId('home-sid-status');
     fireEvent.click(screen.getByTestId('home-sid-reset'));
 
-    await waitFor(() => expect(c64ApiMockRef.current.writeMemory).toHaveBeenCalledTimes(20));
-    expect(c64ApiMockRef.current.writeMemory).toHaveBeenCalledWith('D404', new Uint8Array([0]));
-    expect(c64ApiMockRef.current.writeMemory).toHaveBeenCalledWith('D424', new Uint8Array([0]));
+    await waitFor(() =>
+      expect(c64ApiMockRef.current.writeMemory).toHaveBeenCalledTimes(20),
+    );
+    expect(c64ApiMockRef.current.writeMemory).toHaveBeenCalledWith(
+      'D404',
+      new Uint8Array([0]),
+    );
+    expect(c64ApiMockRef.current.writeMemory).toHaveBeenCalledWith(
+      'D424',
+      new Uint8Array([0]),
+    );
   });
 
   it('rejects invalid stream host input safely', async () => {
@@ -463,10 +569,16 @@ describe('HomePage SID status', () => {
     fireEvent.change(endpointInput, { target: { value: 'bad host!:11000' } });
     fireEvent.click(screen.getByTestId('home-stream-confirm-vic'));
 
-    await waitFor(() => expect(reportUserErrorSpy).toHaveBeenCalledWith(expect.objectContaining({
-      operation: 'STREAM_VALIDATE',
-    })));
-    expect(screen.getByTestId('home-stream-error-vic').textContent).toContain('Enter a valid IPv4 address');
+    await waitFor(() =>
+      expect(reportUserErrorSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: 'STREAM_VALIDATE',
+        }),
+      ),
+    );
+    expect(screen.getByTestId('home-stream-error-vic').textContent).toContain(
+      'Enter a valid IPv4 address',
+    );
     expect(c64ApiMockRef.current.setConfigValue).not.toHaveBeenCalled();
   });
 
@@ -484,14 +596,18 @@ describe('HomePage SID status', () => {
     renderHomePage();
 
     fireEvent.click(screen.getByTestId('home-stream-edit-toggle-vic'));
-    fireEvent.change(screen.getByTestId('home-stream-endpoint-vic'), { target: { value: '239.0.1.90:12000' } });
+    fireEvent.change(screen.getByTestId('home-stream-endpoint-vic'), {
+      target: { value: '239.0.1.90:12000' },
+    });
     fireEvent.click(screen.getByTestId('home-stream-confirm-vic'));
 
-    await waitFor(() => expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
-      'Data Streams',
-      'Stream VIC to',
-      '239.0.1.90:12000',
-    ));
+    await waitFor(() =>
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
+        'Data Streams',
+        'Stream VIC to',
+        '239.0.1.90:12000',
+      ),
+    );
     expect(screen.queryByTestId('home-stream-endpoint-vic')).toBeNull();
   });
 
@@ -527,38 +643,70 @@ describe('HomePage SID status', () => {
     const drivesGroup = screen.getByTestId('home-drives-group');
     expect(within(drivesGroup).getByTestId('home-drive-row-a')).toBeTruthy();
     expect(within(drivesGroup).getByTestId('home-drive-row-b')).toBeTruthy();
-    expect(within(drivesGroup).getByTestId('home-drive-row-soft-iec')).toBeTruthy();
+    expect(
+      within(drivesGroup).getByTestId('home-drive-row-soft-iec'),
+    ).toBeTruthy();
     expect(within(drivesGroup).getByText('Drive A')).toBeTruthy();
     expect(within(drivesGroup).getByText('Drive B')).toBeTruthy();
     expect(within(drivesGroup).getByText('Soft IEC Drive')).toBeTruthy();
-    expect(within(drivesGroup).getAllByText('Bus ID').length).toBeGreaterThanOrEqual(3);
-    expect(within(drivesGroup).getAllByText('Type').length).toBeGreaterThanOrEqual(2);
+    expect(
+      within(drivesGroup).getAllByText('Bus ID').length,
+    ).toBeGreaterThanOrEqual(3);
+    expect(
+      within(drivesGroup).getAllByText('Type').length,
+    ).toBeGreaterThanOrEqual(2);
     expect(within(drivesGroup).getByText('Path')).toBeTruthy();
 
     const driveBusSelect = screen.getByTestId('home-drive-bus-a');
     fireEvent.click(driveBusSelect);
-    await waitFor(() => expect(document.body.getAttribute('data-scroll-locked')).toBe('1'));
-    fireEvent.keyDown(document.activeElement ?? driveBusSelect, { key: 'Escape' });
+    await waitFor(() =>
+      expect(document.body.getAttribute('data-scroll-locked')).toBe('1'),
+    );
+    fireEvent.keyDown(document.activeElement ?? driveBusSelect, {
+      key: 'Escape',
+    });
 
     const driveTypeSelect = screen.getByTestId('home-drive-type-a');
     fireEvent.click(driveTypeSelect);
-    await waitFor(() => expect(document.body.getAttribute('data-scroll-locked')).toBe('1'));
-    fireEvent.keyDown(document.activeElement ?? driveTypeSelect, { key: 'Escape' });
+    await waitFor(() =>
+      expect(document.body.getAttribute('data-scroll-locked')).toBe('1'),
+    );
+    fireEvent.keyDown(document.activeElement ?? driveTypeSelect, {
+      key: 'Escape',
+    });
   });
 
   it('shows concise drive DOS status on Home for Drive A and Soft IEC', () => {
     drivesPayloadRef.current = {
       drives: [
-        { a: { enabled: true, bus_id: 8, type: '1541', last_error: '74,DRIVE NOT READY,00,00' } },
+        {
+          a: {
+            enabled: true,
+            bus_id: 8,
+            type: '1541',
+            last_error: '74,DRIVE NOT READY,00,00',
+          },
+        },
         { b: { enabled: true, bus_id: 9, type: '1541' } },
-        { 'IEC Drive': { enabled: true, bus_id: 11, type: 'DOS emulation', last_error: '73,U64IEC ULTIMATE DOS V1.1,00,00' } },
+        {
+          'IEC Drive': {
+            enabled: true,
+            bus_id: 11,
+            type: 'DOS emulation',
+            last_error: '73,U64IEC ULTIMATE DOS V1.1,00,00',
+          },
+        },
       ],
     };
 
     renderHomePage();
 
-    expect(screen.getByTestId('home-drive-status-a')).toHaveTextContent('DRIVE NOT READY');
-    expect(screen.getByTestId('home-drive-status-soft-iec').textContent).toMatch(/^(OK|DOS MISMATCH)$/);
+    expect(screen.getByTestId('home-drive-status-a')).toHaveTextContent(
+      'DRIVE NOT READY',
+    );
+    expect(
+      screen.getByTestId('home-drive-status-soft-iec').textContent,
+    ).toMatch(/^(OK|DOS MISMATCH)$/);
   });
 
   it('shows explicit disconnected build info values and offline message', () => {
@@ -576,11 +724,21 @@ describe('HomePage SID status', () => {
     const systemInfo = screen.getByTestId('home-system-info');
     fireEvent.click(systemInfo);
 
-    expect(screen.getByTestId('home-system-version').textContent).toContain('—');
-    expect(screen.getByTestId('home-system-device').textContent).toContain('Not connected');
-    expect(screen.getByTestId('home-system-firmware').textContent).toContain('Not connected');
-    expect(screen.getByTestId('home-system-git').textContent).toContain('Not available');
-    expect(screen.getByTestId('home-system-build-time').textContent).toContain('2026-01-01 12:00:00 UTC');
+    expect(screen.getByTestId('home-system-version').textContent).toContain(
+      '—',
+    );
+    expect(screen.getByTestId('home-system-device').textContent).toContain(
+      'Not connected',
+    );
+    expect(screen.getByTestId('home-system-firmware').textContent).toContain(
+      'Not connected',
+    );
+    expect(screen.getByTestId('home-system-git').textContent).toContain(
+      'Not available',
+    );
+    expect(screen.getByTestId('home-system-build-time').textContent).toContain(
+      '2026-01-01 12:00:00 UTC',
+    );
     expect(screen.getByText(/unable to connect to c64u/i)).toBeTruthy();
   });
 
@@ -598,7 +756,9 @@ describe('HomePage SID status', () => {
       },
     };
     drivesPayloadRef.current = {
-      drives: [{ a: { enabled: true, image_file: 'disk.d64' }, b: { enabled: false } }],
+      drives: [
+        { a: { enabled: true, image_file: 'disk.d64' }, b: { enabled: false } },
+      ],
     };
     (globalThis as any).__APP_VERSION__ = '1.2.3';
     (globalThis as any).__GIT_SHA__ = 'deadbeefcafefeed';
@@ -609,12 +769,24 @@ describe('HomePage SID status', () => {
     const systemInfo = screen.getByTestId('home-system-info');
     fireEvent.click(systemInfo);
 
-    expect(screen.getByTestId('home-system-version').textContent).toContain('1.2.3');
-    expect(screen.getByTestId('home-system-device').textContent).toContain('c64u.local');
-    expect(screen.getByTestId('home-system-firmware').textContent).toContain('1.0.0');
-    expect(screen.getByTestId('home-system-git').textContent).toContain('deadbeef');
-    expect(screen.getByTestId('home-system-build-time').textContent).toContain('2024-03-20 12:34:00 UTC');
-    expect(screen.getByTestId('home-drive-summary').textContent).toContain('disk.d64');
+    expect(screen.getByTestId('home-system-version').textContent).toContain(
+      '1.2.3',
+    );
+    expect(screen.getByTestId('home-system-device').textContent).toContain(
+      'c64u.local',
+    );
+    expect(screen.getByTestId('home-system-firmware').textContent).toContain(
+      '1.0.0',
+    );
+    expect(screen.getByTestId('home-system-git').textContent).toContain(
+      'deadbeef',
+    );
+    expect(screen.getByTestId('home-system-build-time').textContent).toContain(
+      '2024-03-20 12:34:00 UTC',
+    );
+    expect(screen.getByTestId('home-drive-summary').textContent).toContain(
+      'disk.d64',
+    );
   });
 
   it('shows "No disk" on Home when drive A has no mounted image', () => {
@@ -634,12 +806,18 @@ describe('HomePage SID status', () => {
 
   it('handles machine actions and reports errors', async () => {
     const menuError = new Error('menu failed');
-    machineControlPayloadRef.current.menuButton.mutateAsync = vi.fn().mockRejectedValue(menuError);
+    machineControlPayloadRef.current.menuButton.mutateAsync = vi
+      .fn()
+      .mockRejectedValue(menuError);
 
     renderHomePage();
 
     fireEvent.click(screen.getAllByRole('button', { name: /^Reset$/ })[0]);
-    await waitFor(() => expect(machineControlPayloadRef.current.reset.mutateAsync).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(
+        machineControlPayloadRef.current.reset.mutateAsync,
+      ).toHaveBeenCalled(),
+    );
     expect(toastSpy).toHaveBeenCalledWith({ title: 'Machine reset' });
 
     fireEvent.click(screen.getByRole('button', { name: /^Menu$/ }));
@@ -655,15 +833,29 @@ describe('HomePage SID status', () => {
     renderHomePage();
 
     fireEvent.click(screen.getByRole('button', { name: /^power off$/i }));
-    expect(machineControlPayloadRef.current.powerOff.mutateAsync).not.toHaveBeenCalled();
+    expect(
+      machineControlPayloadRef.current.powerOff.mutateAsync,
+    ).not.toHaveBeenCalled();
     const dialog = screen.getByRole('dialog');
-    expect(within(dialog).getByText(/cannot be powered on again via software/i)).toBeTruthy();
+    expect(
+      within(dialog).getByText(/cannot be powered on again via software/i),
+    ).toBeTruthy();
     fireEvent.click(within(dialog).getByRole('button', { name: /^cancel$/i }));
-    expect(machineControlPayloadRef.current.powerOff.mutateAsync).not.toHaveBeenCalled();
+    expect(
+      machineControlPayloadRef.current.powerOff.mutateAsync,
+    ).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: /^power off$/i }));
-    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^power off$/i }));
-    await waitFor(() => expect(machineControlPayloadRef.current.powerOff.mutateAsync).toHaveBeenCalled());
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: /^power off$/i,
+      }),
+    );
+    await waitFor(() =>
+      expect(
+        machineControlPayloadRef.current.powerOff.mutateAsync,
+      ).toHaveBeenCalled(),
+    );
   });
 
   it('renders exactly eight machine controls with one pause-resume control', async () => {
@@ -671,18 +863,40 @@ describe('HomePage SID status', () => {
 
     const machineControls = screen.getByTestId('home-machine-controls');
     expect(within(machineControls).getAllByRole('button')).toHaveLength(8);
-    expect(within(machineControls).getAllByRole('button', { name: /^pause$/i })).toHaveLength(1);
-    expect(within(machineControls).queryByRole('button', { name: /^resume$/i })).toBeNull();
+    expect(
+      within(machineControls).getAllByRole('button', { name: /^pause$/i }),
+    ).toHaveLength(1);
+    expect(
+      within(machineControls).queryByRole('button', { name: /^resume$/i }),
+    ).toBeNull();
 
-    fireEvent.click(within(machineControls).getByRole('button', { name: /^pause$/i }));
+    fireEvent.click(
+      within(machineControls).getByRole('button', { name: /^pause$/i }),
+    );
 
-    await waitFor(() => expect(machineControlPayloadRef.current.pause.mutateAsync).toHaveBeenCalledTimes(1));
-    expect(within(machineControls).queryByRole('button', { name: /^pause$/i })).toBeNull();
-    expect(within(machineControls).getAllByRole('button', { name: /^resume$/i })).toHaveLength(1);
+    await waitFor(() =>
+      expect(
+        machineControlPayloadRef.current.pause.mutateAsync,
+      ).toHaveBeenCalledTimes(1),
+    );
+    expect(
+      within(machineControls).queryByRole('button', { name: /^pause$/i }),
+    ).toBeNull();
+    expect(
+      within(machineControls).getAllByRole('button', { name: /^resume$/i }),
+    ).toHaveLength(1);
 
-    fireEvent.click(within(machineControls).getByRole('button', { name: /^resume$/i }));
-    await waitFor(() => expect(machineControlPayloadRef.current.resume.mutateAsync).toHaveBeenCalledTimes(1));
-    expect(within(machineControls).getAllByRole('button', { name: /^pause$/i })).toHaveLength(1);
+    fireEvent.click(
+      within(machineControls).getByRole('button', { name: /^resume$/i }),
+    );
+    await waitFor(() =>
+      expect(
+        machineControlPayloadRef.current.resume.mutateAsync,
+      ).toHaveBeenCalledTimes(1),
+    );
+    expect(
+      within(machineControls).getAllByRole('button', { name: /^pause$/i }),
+    ).toHaveLength(1);
   }, 20000);
 
   it('manages app configs via dialogs', async () => {
@@ -699,48 +913,87 @@ describe('HomePage SID status', () => {
     renderHomePage();
 
     fireEvent.click(screen.getByRole('button', { name: /revert changes/i }));
-    await waitFor(() => expect(appConfigStatePayloadRef.current.revertToInitial).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(
+        appConfigStatePayloadRef.current.revertToInitial,
+      ).toHaveBeenCalled(),
+    );
     expect(toastSpy).toHaveBeenCalledWith({ title: 'Config reverted' });
 
     fireEvent.click(screen.getByRole('button', { name: /save to app/i }));
     const saveDialog = screen.getByRole('dialog');
-    fireEvent.click(within(saveDialog).getByRole('button', { name: /^save$/i }));
+    fireEvent.click(
+      within(saveDialog).getByRole('button', { name: /^save$/i }),
+    );
     expect(toastSpy).toHaveBeenCalledWith({
       title: 'Name required',
       description: 'Enter a config name first.',
     });
 
-    fireEvent.change(within(saveDialog).getByPlaceholderText(/config name/i), { target: { value: 'Config A' } });
-    fireEvent.click(within(saveDialog).getByRole('button', { name: /^save$/i }));
+    fireEvent.change(within(saveDialog).getByPlaceholderText(/config name/i), {
+      target: { value: 'Config A' },
+    });
+    fireEvent.click(
+      within(saveDialog).getByRole('button', { name: /^save$/i }),
+    );
     expect(toastSpy).toHaveBeenCalledWith({
       title: 'Name already used',
       description: 'Choose a unique config name.',
     });
 
-    fireEvent.change(within(saveDialog).getByPlaceholderText(/config name/i), { target: { value: 'Config C' } });
-    fireEvent.click(within(saveDialog).getByRole('button', { name: /^save$/i }));
-    await waitFor(() => expect(appConfigStatePayloadRef.current.saveCurrentConfig).toHaveBeenCalledWith('Config C'));
-    expect(toastSpy).toHaveBeenCalledWith({ title: 'Saved to app', description: 'Config C' });
+    fireEvent.change(within(saveDialog).getByPlaceholderText(/config name/i), {
+      target: { value: 'Config C' },
+    });
+    fireEvent.click(
+      within(saveDialog).getByRole('button', { name: /^save$/i }),
+    );
+    await waitFor(() =>
+      expect(
+        appConfigStatePayloadRef.current.saveCurrentConfig,
+      ).toHaveBeenCalledWith('Config C'),
+    );
+    expect(toastSpy).toHaveBeenCalledWith({
+      title: 'Saved to app',
+      description: 'Config C',
+    });
 
     fireEvent.click(screen.getByRole('button', { name: /load from app/i }));
     const loadDialog = screen.getByRole('dialog');
-    fireEvent.click(within(loadDialog).getByRole('button', { name: /config a/i }));
-    await waitFor(() => expect(appConfigStatePayloadRef.current.loadAppConfig).toHaveBeenCalled());
-    expect(appConfigStatePayloadRef.current.loadAppConfig).toHaveBeenCalledWith({
-      id: 'config-a',
-      name: 'Config A',
-      savedAt,
-    });
+    fireEvent.click(
+      within(loadDialog).getByRole('button', { name: /config a/i }),
+    );
+    await waitFor(() =>
+      expect(appConfigStatePayloadRef.current.loadAppConfig).toHaveBeenCalled(),
+    );
+    expect(appConfigStatePayloadRef.current.loadAppConfig).toHaveBeenCalledWith(
+      {
+        id: 'config-a',
+        name: 'Config A',
+        savedAt,
+      },
+    );
 
-    fireEvent.click(screen.getByRole('button', { name: /manage app configs/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /manage app configs/i }),
+    );
     const manageDialog = screen.getByRole('dialog');
-    fireEvent.change(within(manageDialog).getByDisplayValue('Config A'), { target: { value: '  New Name  ' } });
-    const [renameButton] = within(manageDialog).getAllByRole('button', { name: /rename/i });
+    fireEvent.change(within(manageDialog).getByDisplayValue('Config A'), {
+      target: { value: '  New Name  ' },
+    });
+    const [renameButton] = within(manageDialog).getAllByRole('button', {
+      name: /rename/i,
+    });
     fireEvent.click(renameButton);
-    expect(appConfigStatePayloadRef.current.renameAppConfig).toHaveBeenCalledWith('config-a', 'New Name');
-    const [deleteButton] = within(manageDialog).getAllByRole('button', { name: /delete/i });
+    expect(
+      appConfigStatePayloadRef.current.renameAppConfig,
+    ).toHaveBeenCalledWith('config-a', 'New Name');
+    const [deleteButton] = within(manageDialog).getAllByRole('button', {
+      name: /delete/i,
+    });
     fireEvent.click(deleteButton);
-    expect(appConfigStatePayloadRef.current.deleteAppConfig).toHaveBeenCalledWith('config-a');
+    expect(
+      appConfigStatePayloadRef.current.deleteAppConfig,
+    ).toHaveBeenCalledWith('config-a');
   }, 30000);
 
   it('renders Quick Config section with config data and handles CPU speed change', async () => {
@@ -750,8 +1003,14 @@ describe('HomePage SID status', () => {
           'CPU Speed': { selected: '1', options: ['1', '2', '4'] },
           'System Mode': { selected: 'PAL', options: ['PAL', 'NTSC'] },
           'Turbo Control': { selected: 'Off', options: ['Off', 'Manual'] },
-          'HDMI Scan lines': { selected: 'Disabled', options: ['Disabled', 'Enabled'] },
-          'Joystick Swapper': { selected: 'Normal', options: ['Normal', 'Swapped'] },
+          'HDMI Scan lines': {
+            selected: 'Disabled',
+            options: ['Disabled', 'Enabled'],
+          },
+          'Joystick Swapper': {
+            selected: 'Normal',
+            options: ['Normal', 'Swapped'],
+          },
         },
       },
     };
@@ -759,28 +1018,38 @@ describe('HomePage SID status', () => {
     renderHomePage();
 
     const quickConfig = screen.getByTestId('home-quick-config');
-    expect(within(quickConfig).getByTestId('home-cpu-speed-value').textContent).toBe('1');
+    expect(
+      within(quickConfig).getByTestId('home-cpu-speed-value').textContent,
+    ).toBe('1');
 
     const slider = screen.getByTestId('home-cpu-speed-slider');
     const thumb = slider.querySelector('[role="slider"]');
     expect(thumb).toBeTruthy();
     fireEvent.keyDown(thumb!, { key: 'ArrowRight' });
 
-    await waitFor(() => expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
-      'U64 Specific Settings',
-      'CPU Speed',
-      '2',
-    ));
+    await waitFor(() =>
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
+        'U64 Specific Settings',
+        'CPU Speed',
+        '2',
+      ),
+    );
   });
 
   it('renders LED settings when LED config data is populated and handles mode change', async () => {
     ledStripPayloadRef.current = {
       'LED Strip Settings': {
         items: {
-          'LedStrip Mode': { selected: 'Fixed Color', options: ['Off', 'Fixed Color', 'Rainbow'] },
+          'LedStrip Mode': {
+            selected: 'Fixed Color',
+            options: ['Off', 'Fixed Color', 'Rainbow'],
+          },
           'Fixed Color': { selected: 'Red', options: ['Red', 'Green', 'Blue'] },
           'Strip Intensity': { selected: '15', min: 0, max: 31 },
-          'LedStrip SID Select': { selected: 'SID 1', options: ['SID 1', 'SID 2'] },
+          'LedStrip SID Select': {
+            selected: 'SID 1',
+            options: ['SID 1', 'SID 2'],
+          },
           'Color tint': { selected: 'Pure', options: ['Pure', 'Warm'] },
         },
       },
@@ -797,8 +1066,12 @@ describe('HomePage SID status', () => {
 
     const ledModeSelect = screen.getByTestId('home-led-mode');
     fireEvent.click(ledModeSelect);
-    await waitFor(() => expect(document.body.getAttribute('data-scroll-locked')).toBe('1'));
-    fireEvent.keyDown(document.activeElement ?? ledModeSelect, { key: 'Escape' });
+    await waitFor(() =>
+      expect(document.body.getAttribute('data-scroll-locked')).toBe('1'),
+    );
+    fireEvent.keyDown(document.activeElement ?? ledModeSelect, {
+      key: 'Escape',
+    });
   });
 
   it('updates quick-config and LED controls across select, checkbox, and slider interactions', async () => {
@@ -808,9 +1081,18 @@ describe('HomePage SID status', () => {
           'CPU Speed': { selected: '1', options: ['1', '2', '4'] },
           'System Mode': { selected: 'PAL', options: ['PAL', 'NTSC'] },
           'Analog Video Mode': { selected: 'PAL', options: ['PAL', 'NTSC'] },
-          'Digital Video Mode': { selected: '1080p', options: ['1080p', '720p'] },
-          'HDMI Scan lines': { selected: 'Disabled', options: ['Disabled', 'Enabled'] },
-          'Joystick Swapper': { selected: 'Normal', options: ['Normal', 'Swapped'] },
+          'Digital Video Mode': {
+            selected: '1080p',
+            options: ['1080p', '720p'],
+          },
+          'HDMI Scan lines': {
+            selected: 'Disabled',
+            options: ['Disabled', 'Enabled'],
+          },
+          'Joystick Swapper': {
+            selected: 'Normal',
+            options: ['Normal', 'Swapped'],
+          },
         },
       },
     };
@@ -818,10 +1100,16 @@ describe('HomePage SID status', () => {
     ledStripPayloadRef.current = {
       'LED Strip Settings': {
         items: {
-          'LedStrip Mode': { selected: 'Fixed Color', options: ['Off', 'Fixed Color', 'Rainbow'] },
+          'LedStrip Mode': {
+            selected: 'Fixed Color',
+            options: ['Off', 'Fixed Color', 'Rainbow'],
+          },
           'Fixed Color': { selected: 'Red', options: ['Red', 'Green', 'Blue'] },
           'Strip Intensity': { selected: '10', min: 0, max: 31 },
-          'LedStrip SID Select': { selected: 'SID 1', options: ['SID 1', 'SID 2'] },
+          'LedStrip SID Select': {
+            selected: 'SID 1',
+            options: ['SID 1', 'SID 2'],
+          },
           'Color tint': { selected: 'Pure', options: ['Pure', 'Warm'] },
         },
       },
@@ -853,23 +1141,63 @@ describe('HomePage SID status', () => {
     fireEvent.click(screen.getByTestId('home-led-tint'));
     fireEvent.click(await screen.findByRole('option', { name: /Warm/i }));
 
-    const colorSliderThumb = screen.getByTestId('home-led-color-slider').querySelector('[role="slider"]');
-    const intensitySliderThumb = screen.getByTestId('home-led-intensity-slider').querySelector('[role="slider"]');
+    const colorSliderThumb = screen
+      .getByTestId('home-led-color-slider')
+      .querySelector('[role="slider"]');
+    const intensitySliderThumb = screen
+      .getByTestId('home-led-intensity-slider')
+      .querySelector('[role="slider"]');
     expect(colorSliderThumb).toBeTruthy();
     expect(intensitySliderThumb).toBeTruthy();
     fireEvent.keyDown(colorSliderThumb!, { key: 'ArrowRight' });
     fireEvent.keyDown(intensitySliderThumb!, { key: 'ArrowRight' });
 
     await waitFor(() => {
-      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith('U64 Specific Settings', 'System Mode', 'NTSC');
-      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith('U64 Specific Settings', 'Analog Video Mode', 'NTSC');
-      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith('U64 Specific Settings', 'Digital Video Mode', '720p');
-      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith('U64 Specific Settings', 'HDMI Scan lines', 'Enabled');
-      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith('U64 Specific Settings', 'Joystick Swapper', 'Swapped');
-      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith('LED Strip Settings', 'LedStrip Mode', 'Rainbow');
-      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith('LED Strip Settings', 'Fixed Color', 'Green');
-      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith('LED Strip Settings', 'LedStrip SID Select', 'SID 2');
-      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith('LED Strip Settings', 'Color tint', 'Warm');
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
+        'U64 Specific Settings',
+        'System Mode',
+        'NTSC',
+      );
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
+        'U64 Specific Settings',
+        'Analog Video Mode',
+        'NTSC',
+      );
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
+        'U64 Specific Settings',
+        'Digital Video Mode',
+        '720p',
+      );
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
+        'U64 Specific Settings',
+        'HDMI Scan lines',
+        'Enabled',
+      );
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
+        'U64 Specific Settings',
+        'Joystick Swapper',
+        'Swapped',
+      );
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
+        'LED Strip Settings',
+        'LedStrip Mode',
+        'Rainbow',
+      );
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
+        'LED Strip Settings',
+        'Fixed Color',
+        'Green',
+      );
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
+        'LED Strip Settings',
+        'LedStrip SID Select',
+        'SID 2',
+      );
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
+        'LED Strip Settings',
+        'Color tint',
+        'Warm',
+      );
     });
   }, 30000);
 
@@ -877,9 +1205,7 @@ describe('HomePage SID status', () => {
     const savedAt = new Date('2024-01-01T00:00:00.000Z').toISOString();
     appConfigStatePayloadRef.current = {
       ...appConfigStatePayloadRef.current,
-      appConfigs: [
-        { id: 'config-a', name: 'Config A', savedAt },
-      ],
+      appConfigs: [{ id: 'config-a', name: 'Config A', savedAt }],
       hasChanges: true,
       saveCurrentConfig: vi.fn().mockRejectedValue(new Error('save boom')),
     };
@@ -888,12 +1214,20 @@ describe('HomePage SID status', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /save to app/i }));
     const saveDialog = screen.getByRole('dialog');
-    fireEvent.change(within(saveDialog).getByPlaceholderText(/config name/i), { target: { value: 'New Config' } });
-    fireEvent.click(within(saveDialog).getByRole('button', { name: /^save$/i }));
+    fireEvent.change(within(saveDialog).getByPlaceholderText(/config name/i), {
+      target: { value: 'New Config' },
+    });
+    fireEvent.click(
+      within(saveDialog).getByRole('button', { name: /^save$/i }),
+    );
 
-    await waitFor(() => expect(reportUserErrorSpy).toHaveBeenCalledWith(expect.objectContaining({
-      operation: 'APP_CONFIG_SAVE',
-    })));
+    await waitFor(() =>
+      expect(reportUserErrorSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: 'APP_CONFIG_SAVE',
+        }),
+      ),
+    );
   }, 30000);
 
   it('handles load-from-app error path', async () => {
@@ -911,10 +1245,16 @@ describe('HomePage SID status', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /load from app/i }));
     const loadDialog = screen.getByRole('dialog');
-    fireEvent.click(within(loadDialog).getByRole('button', { name: /config a/i }));
+    fireEvent.click(
+      within(loadDialog).getByRole('button', { name: /config a/i }),
+    );
 
-    await waitFor(() => expect(reportUserErrorSpy).toHaveBeenCalledWith(expect.objectContaining({
-      operation: 'APP_CONFIG_LOAD',
-    })));
+    await waitFor(() =>
+      expect(reportUserErrorSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: 'APP_CONFIG_LOAD',
+        }),
+      ),
+    );
   }, 30000);
 });

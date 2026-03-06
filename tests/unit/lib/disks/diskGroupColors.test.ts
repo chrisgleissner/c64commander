@@ -7,7 +7,10 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { diskGroupColors, pickDiskGroupColor } from '@/lib/disks/diskGroupColors';
+import {
+  diskGroupColors,
+  pickDiskGroupColor,
+} from '@/lib/disks/diskGroupColors';
 
 describe('diskGroupColors', () => {
   it('returns a stable color for the same value', () => {

@@ -19,14 +19,21 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { buildActionSummaries, type ActionSummary, type ActionSummaryEffect } from '@/lib/diagnostics/actionSummaries';
+import {
+  buildActionSummaries,
+  type ActionSummary,
+  type ActionSummaryEffect,
+} from '@/lib/diagnostics/actionSummaries';
 import type { TraceEvent } from '@/lib/tracing/types';
 
 const UPDATE_GOLDENS = process.env.UPDATE_GOLDENS === '1';
 
 // Use process.cwd() for workspace-relative paths since __dirname varies with test runner
 const WORKSPACE_ROOT = process.cwd();
-const FIXTURES_ROOT = path.join(WORKSPACE_ROOT, 'tests/fixtures/action-summaries');
+const FIXTURES_ROOT = path.join(
+  WORKSPACE_ROOT,
+  'tests/fixtures/action-summaries',
+);
 const ORGANIC_ROOT = path.join(FIXTURES_ROOT, 'organic');
 const SYNTHETIC_ROOT = path.join(FIXTURES_ROOT, 'synthetic');
 
@@ -43,8 +50,16 @@ const ORGANIC_ACTIONS_PATH = path.join(
   'actions.json',
 );
 
-const SYNTHETIC_TRACE_PATH = path.join(SYNTHETIC_ROOT, 'comprehensive', 'trace.json');
-const SYNTHETIC_ACTIONS_PATH = path.join(SYNTHETIC_ROOT, 'comprehensive', 'actions.json');
+const SYNTHETIC_TRACE_PATH = path.join(
+  SYNTHETIC_ROOT,
+  'comprehensive',
+  'trace.json',
+);
+const SYNTHETIC_ACTIONS_PATH = path.join(
+  SYNTHETIC_ROOT,
+  'comprehensive',
+  'actions.json',
+);
 
 /**
  * Normalize action summaries for deterministic comparison.
@@ -114,12 +129,16 @@ const normalizeEffect = (effect: ActionSummaryEffect): NormalizedEffect => {
   };
 };
 
-const normalizeActionSummaries = (summaries: ActionSummary[]): NormalizedActionSummary[] => {
+const normalizeActionSummaries = (
+  summaries: ActionSummary[],
+): NormalizedActionSummary[] => {
   return summaries.map((s) => ({
     correlationId: s.correlationId,
     actionName: s.actionName,
     origin: s.origin,
-    ...(s.originalOrigin !== undefined ? { originalOrigin: s.originalOrigin } : {}),
+    ...(s.originalOrigin !== undefined
+      ? { originalOrigin: s.originalOrigin }
+      : {}),
     durationMs: s.durationMs,
     ...(s.durationMsMissing ? { durationMsMissing: true } : {}),
     outcome: s.outcome,
@@ -127,7 +146,9 @@ const normalizeActionSummaries = (summaries: ActionSummary[]): NormalizedActionS
     ...(s.restCount !== undefined ? { restCount: s.restCount } : {}),
     ...(s.ftpCount !== undefined ? { ftpCount: s.ftpCount } : {}),
     ...(s.errorCount !== undefined ? { errorCount: s.errorCount } : {}),
-    ...(s.effects !== undefined ? { effects: s.effects.map(normalizeEffect) } : {}),
+    ...(s.effects !== undefined
+      ? { effects: s.effects.map(normalizeEffect) }
+      : {}),
   }));
 };
 
@@ -136,13 +157,18 @@ const loadTraceEvents = (tracePath: string): TraceEvent[] => {
   return JSON.parse(content) as TraceEvent[];
 };
 
-const loadGoldenActions = (actionsPath: string): NormalizedActionSummary[] | null => {
+const loadGoldenActions = (
+  actionsPath: string,
+): NormalizedActionSummary[] | null => {
   if (!fs.existsSync(actionsPath)) return null;
   const content = fs.readFileSync(actionsPath, 'utf-8');
   return JSON.parse(content) as NormalizedActionSummary[];
 };
 
-const writeGoldenActions = (actionsPath: string, actions: NormalizedActionSummary[]) => {
+const writeGoldenActions = (
+  actionsPath: string,
+  actions: NormalizedActionSummary[],
+) => {
   const dir = path.dirname(actionsPath);
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
@@ -299,15 +325,23 @@ describe('Golden Action Fixture Tests', () => {
   describe('Determinism', () => {
     it('produces identical output for the same input (organic)', () => {
       const traceEvents = loadTraceEvents(ORGANIC_TRACE_PATH);
-      const summaries1 = normalizeActionSummaries(buildActionSummaries(traceEvents));
-      const summaries2 = normalizeActionSummaries(buildActionSummaries(traceEvents));
+      const summaries1 = normalizeActionSummaries(
+        buildActionSummaries(traceEvents),
+      );
+      const summaries2 = normalizeActionSummaries(
+        buildActionSummaries(traceEvents),
+      );
       expect(summaries1).toEqual(summaries2);
     });
 
     it('produces identical output for the same input (synthetic)', () => {
       const traceEvents = loadTraceEvents(SYNTHETIC_TRACE_PATH);
-      const summaries1 = normalizeActionSummaries(buildActionSummaries(traceEvents));
-      const summaries2 = normalizeActionSummaries(buildActionSummaries(traceEvents));
+      const summaries1 = normalizeActionSummaries(
+        buildActionSummaries(traceEvents),
+      );
+      const summaries2 = normalizeActionSummaries(
+        buildActionSummaries(traceEvents),
+      );
       expect(summaries1).toEqual(summaries2);
     });
   });

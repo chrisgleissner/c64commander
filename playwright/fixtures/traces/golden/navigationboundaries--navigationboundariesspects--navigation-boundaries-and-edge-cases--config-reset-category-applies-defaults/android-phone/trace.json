@@ -3156,18 +3156,11 @@
             },
             "Digital Video Mode": {
               "selected": "Auto",
-              "options": [
-                "Auto",
-                "HDMI",
-                "DVI"
-              ]
+              "options": ["Auto", "HDMI", "DVI"]
             },
             "HDMI Scan lines": {
               "selected": "Enabled",
-              "options": [
-                "Disabled",
-                "Enabled"
-              ]
+              "options": ["Disabled", "Enabled"]
             }
           }
         },
@@ -3445,18 +3438,11 @@
             },
             "Digital Video Mode": {
               "selected": "Auto",
-              "options": [
-                "Auto",
-                "HDMI",
-                "DVI"
-              ]
+              "options": ["Auto", "HDMI", "DVI"]
             },
             "HDMI Scan lines": {
               "selected": "Enabled",
-              "options": [
-                "Disabled",
-                "Enabled"
-              ]
+              "options": ["Disabled", "Enabled"]
             }
           }
         },

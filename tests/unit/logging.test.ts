@@ -18,7 +18,10 @@ import {
   setExternalLogs,
 } from '@/lib/logging';
 import { shouldSuppressDiagnosticsSideEffects } from '@/lib/diagnostics/diagnosticsOverlayState';
-import { installConsoleDiagnosticsBridge, logger } from '@/lib/diagnostics/logger';
+import {
+  installConsoleDiagnosticsBridge,
+  logger,
+} from '@/lib/diagnostics/logger';
 
 vi.mock('@/lib/diagnostics/diagnosticsOverlayState', () => ({
   shouldSuppressDiagnosticsSideEffects: vi.fn().mockReturnValue(false),
@@ -28,10 +31,16 @@ const ensureWindow = () => {
   if (typeof window !== 'undefined') return;
   const target = new EventTarget();
   const windowMock = {
-    addEventListener: (type: string, listener: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions) =>
-      target.addEventListener(type, listener, options),
-    removeEventListener: (type: string, listener: EventListenerOrEventListenerObject, options?: boolean | EventListenerOptions) =>
-      target.removeEventListener(type, listener, options),
+    addEventListener: (
+      type: string,
+      listener: EventListenerOrEventListenerObject,
+      options?: boolean | AddEventListenerOptions,
+    ) => target.addEventListener(type, listener, options),
+    removeEventListener: (
+      type: string,
+      listener: EventListenerOrEventListenerObject,
+      options?: boolean | EventListenerOptions,
+    ) => target.removeEventListener(type, listener, options),
     dispatchEvent: (event: Event) => target.dispatchEvent(event),
     setTimeout: globalThis.setTimeout.bind(globalThis),
     clearTimeout: globalThis.clearTimeout.bind(globalThis),
@@ -41,7 +50,10 @@ const ensureWindow = () => {
     value: windowMock,
     configurable: true,
   });
-  if (typeof (globalThis as { CustomEvent?: typeof CustomEvent }).CustomEvent === 'undefined') {
+  if (
+    typeof (globalThis as { CustomEvent?: typeof CustomEvent }).CustomEvent ===
+    'undefined'
+  ) {
     class CustomEventShim<T = any> extends Event {
       detail?: T;
       constructor(type: string, params?: CustomEventInit<T>) {
@@ -124,11 +136,16 @@ describe('logging', () => {
 
   it('captures error stacks with trimming', () => {
     const error = new Error('boom');
-    error.stack = Array.from({ length: 120 }, (_, index) => `line-${index + 1}`).join('\n');
+    error.stack = Array.from(
+      { length: 120 },
+      (_, index) => `line-${index + 1}`,
+    ).join('\n');
 
     const details = buildErrorLogDetails(error, { context: 'rest' });
 
-    expect(details.error).toEqual(expect.objectContaining({ name: 'Error', message: 'boom' }));
+    expect(details.error).toEqual(
+      expect.objectContaining({ name: 'Error', message: 'boom' }),
+    );
     expect(details.errorName).toBe('Error');
     expect(details.errorStack).toContain('line-1');
     expect(details.errorStack).toContain('stack truncated');
@@ -163,13 +180,18 @@ describe('logging', () => {
   it('preserves existing error message in details', () => {
     const error = new Error('original');
     const details = buildErrorLogDetails(error, { error: 'override' });
-    expect(details.error).toEqual(expect.objectContaining({ message: 'override' }));
+    expect(details.error).toEqual(
+      expect.objectContaining({ message: 'override' }),
+    );
   });
 
   it('treats warnings as problem logs in Errors tab selector', () => {
     addLog('warn', 'slow response');
     addErrorLog('boom');
-    expect(getErrorLogs().map((entry) => entry.level)).toEqual(['error', 'warn']);
+    expect(getErrorLogs().map((entry) => entry.level)).toEqual([
+      'error',
+      'warn',
+    ]);
   });
 
   it('writes canonical error payloads through diagnostics logger wrapper', () => {
@@ -180,7 +202,9 @@ describe('logging', () => {
 
     const logs = getLogs();
     expect(logs).toHaveLength(1);
-    const details = logs[0].details as { error?: { name?: string; message?: string } };
+    const details = logs[0].details as {
+      error?: { name?: string; message?: string };
+    };
     expect(details.error?.name).toBe('Error');
     expect(details.error?.message).toBe('wrapped failure');
   });
@@ -203,7 +227,9 @@ describe('logging', () => {
   });
 
   it('handles disabled and duplicate console bridge installation', () => {
-    const disabledUninstall = installConsoleDiagnosticsBridge({ enabled: false });
+    const disabledUninstall = installConsoleDiagnosticsBridge({
+      enabled: false,
+    });
     console.warn('disabled bridge');
     expect(getLogs()).toHaveLength(0);
     disabledUninstall();
@@ -237,7 +263,9 @@ describe('logging', () => {
     console.warn();
     uninstallBridge();
 
-    const log = getLogs().find((entry) => entry.level === 'warn' && entry.message === '');
+    const log = getLogs().find(
+      (entry) => entry.level === 'warn' && entry.message === '',
+    );
     expect(log).toBeDefined();
   });
 

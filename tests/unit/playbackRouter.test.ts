@@ -7,7 +7,11 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { buildPlayPlan, executePlayPlan, tryFetchUltimateSidBlob } from '@/lib/playback/playbackRouter';
+import {
+  buildPlayPlan,
+  executePlayPlan,
+  tryFetchUltimateSidBlob,
+} from '@/lib/playback/playbackRouter';
 import { readFtpFile } from '@/lib/ftp/ftpClient';
 import { getC64APIConfigSnapshot } from '@/lib/c64api';
 import { addErrorLog } from '@/lib/logging';
@@ -24,7 +28,11 @@ vi.mock('@/lib/logging', () => ({
 }));
 
 vi.mock('@/lib/tracing/actionTrace', () => ({
-  getActiveAction: vi.fn(() => ({ correlationId: 'test-correlation', origin: 'ui', name: 'test-action' })),
+  getActiveAction: vi.fn(() => ({
+    correlationId: 'test-correlation',
+    origin: 'ui',
+    name: 'test-action',
+  })),
 }));
 
 vi.mock('@/lib/tracing/traceSession', () => ({
@@ -41,7 +49,9 @@ vi.mock('@/lib/ftp/ftpConfig', () => ({
 }));
 
 vi.mock('@/lib/sourceNavigation/ftpSourceAdapter', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/sourceNavigation/ftpSourceAdapter')>('@/lib/sourceNavigation/ftpSourceAdapter');
+  const actual = await vi.importActual<
+    typeof import('@/lib/sourceNavigation/ftpSourceAdapter')
+  >('@/lib/sourceNavigation/ftpSourceAdapter');
   return {
     ...actual,
     normalizeFtpHost: vi.fn((host: string) => host),
@@ -49,15 +59,21 @@ vi.mock('@/lib/sourceNavigation/ftpSourceAdapter', async () => {
 });
 
 vi.mock('@/lib/c64api', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/c64api')>('@/lib/c64api');
+  const actual =
+    await vi.importActual<typeof import('@/lib/c64api')>('@/lib/c64api');
   return {
     ...actual,
-    getC64APIConfigSnapshot: vi.fn(() => ({ deviceHost: 'c64u', password: '' })),
+    getC64APIConfigSnapshot: vi.fn(() => ({
+      deviceHost: 'c64u',
+      password: '',
+    })),
   };
 });
 
 vi.mock('@/lib/playback/autostart', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/playback/autostart')>('@/lib/playback/autostart');
+  const actual = await vi.importActual<
+    typeof import('@/lib/playback/autostart')
+  >('@/lib/playback/autostart');
   return {
     ...actual,
     injectAutostart: vi.fn(),
@@ -90,9 +106,16 @@ beforeEach(() => {
   vi.mocked(loadDiskAutostartMode).mockReset();
   vi.mocked(loadDiskAutostartMode).mockReturnValue('kernal');
   vi.mocked(readFtpFile).mockReset();
-  vi.mocked(getC64APIConfigSnapshot).mockReturnValue({ deviceHost: 'c64u', password: '' } as any);
+  vi.mocked(getC64APIConfigSnapshot).mockReturnValue({
+    deviceHost: 'c64u',
+    password: '',
+  } as any);
   vi.mocked(recordDeviceGuard).mockReset();
-  vi.mocked(getActiveAction).mockReturnValue({ correlationId: 'test-correlation', origin: 'ui', name: 'test-action' } as any);
+  vi.mocked(getActiveAction).mockReturnValue({
+    correlationId: 'test-correlation',
+    origin: 'ui',
+    name: 'test-action',
+  } as any);
 });
 
 const createApiMock = () => ({
@@ -126,8 +149,15 @@ describe('playbackRouter', () => {
     const api = createApiMock();
     const sidBytes = new Uint8Array([0x50, 0x53, 0x49, 0x44]);
     const encoded = Buffer.from(sidBytes).toString('base64');
-    vi.mocked(readFtpFile).mockResolvedValue({ data: encoded, sizeBytes: sidBytes.length });
-    const plan = buildPlayPlan({ source: 'ultimate', path: '/MUSIC/DEMO.SID', durationMs: 120000 });
+    vi.mocked(readFtpFile).mockResolvedValue({
+      data: encoded,
+      sizeBytes: sidBytes.length,
+    });
+    const plan = buildPlayPlan({
+      source: 'ultimate',
+      path: '/MUSIC/DEMO.SID',
+      durationMs: 120000,
+    });
     await executePlayPlan(api as any, plan);
     expect(api.playSidUpload).toHaveBeenCalledTimes(1);
     expect(api.playSid).not.toHaveBeenCalled();
@@ -136,7 +166,11 @@ describe('playbackRouter', () => {
   it('falls back to PUT when Ultimate SID FTP download fails', async () => {
     const api = createApiMock();
     vi.mocked(readFtpFile).mockRejectedValue(new Error('ftp failed'));
-    const plan = buildPlayPlan({ source: 'ultimate', path: '/MUSIC/DEMO.SID', durationMs: 120000 });
+    const plan = buildPlayPlan({
+      source: 'ultimate',
+      path: '/MUSIC/DEMO.SID',
+      durationMs: 120000,
+    });
     await executePlayPlan(api as any, plan);
     expect(api.playSid).toHaveBeenCalledWith('/MUSIC/DEMO.SID', undefined);
     expect(vi.mocked(recordDeviceGuard)).toHaveBeenCalledWith(
@@ -151,7 +185,10 @@ describe('playbackRouter', () => {
 
   it('records info-level no-duration signal when Ultimate SID has no songlength metadata', async () => {
     const api = createApiMock();
-    const plan = buildPlayPlan({ source: 'ultimate', path: '/MUSIC/NODUR.SID' });
+    const plan = buildPlayPlan({
+      source: 'ultimate',
+      path: '/MUSIC/NODUR.SID',
+    });
     await executePlayPlan(api as any, plan);
     expect(api.playSid).toHaveBeenCalledWith('/MUSIC/NODUR.SID', undefined);
     expect(api.playSidUpload).not.toHaveBeenCalled();
@@ -169,10 +206,17 @@ describe('playbackRouter', () => {
     const api = createApiMock();
     const sidBytes = new Uint8Array([0x50, 0x53, 0x49, 0x44]);
     const encoded = Buffer.from(sidBytes).toString('base64');
-    vi.mocked(readFtpFile).mockResolvedValue({ data: encoded, sizeBytes: sidBytes.length });
+    vi.mocked(readFtpFile).mockResolvedValue({
+      data: encoded,
+      sizeBytes: sidBytes.length,
+    });
     api.playSidUpload.mockRejectedValueOnce(new Error('HTTP 400: Bad Request'));
 
-    const plan = buildPlayPlan({ source: 'ultimate', path: '/MUSIC/DEMO.SID', durationMs: 120000 });
+    const plan = buildPlayPlan({
+      source: 'ultimate',
+      path: '/MUSIC/DEMO.SID',
+      durationMs: 120000,
+    });
     await executePlayPlan(api as any, plan);
 
     expect(api.playSidUpload).toHaveBeenCalledTimes(1);
@@ -191,24 +235,40 @@ describe('playbackRouter', () => {
     const api = createApiMock();
     const sidBytes = new Uint8Array([0x50, 0x53, 0x49, 0x44]);
     const encoded = Buffer.from(sidBytes).toString('base64');
-    vi.mocked(readFtpFile).mockResolvedValue({ data: encoded, sizeBytes: sidBytes.length });
-    api.playSidUpload.mockRejectedValueOnce(new Error('HTTP 500: Server Error'));
-    api.playSid.mockRejectedValueOnce(new Error('HTTP 503: Service Unavailable'));
+    vi.mocked(readFtpFile).mockResolvedValue({
+      data: encoded,
+      sizeBytes: sidBytes.length,
+    });
+    api.playSidUpload.mockRejectedValueOnce(
+      new Error('HTTP 500: Server Error'),
+    );
+    api.playSid.mockRejectedValueOnce(
+      new Error('HTTP 503: Service Unavailable'),
+    );
 
-    const plan = buildPlayPlan({ source: 'ultimate', path: '/MUSIC/FAIL.SID', durationMs: 120000 });
-    await expect(executePlayPlan(api as any, plan)).rejects.toThrow('fallback playback failed after SSL propagation failure');
+    const plan = buildPlayPlan({
+      source: 'ultimate',
+      path: '/MUSIC/FAIL.SID',
+      durationMs: 120000,
+    });
+    await expect(executePlayPlan(api as any, plan)).rejects.toThrow(
+      'fallback playback failed after SSL propagation failure',
+    );
   });
 
   it('handles invalid SSL payload duration by falling back to direct playback', async () => {
     const api = createApiMock();
     const sidBytes = new Uint8Array([0x50, 0x53, 0x49, 0x44]);
     const encoded = Buffer.from(sidBytes).toString('base64');
-    vi.mocked(readFtpFile).mockResolvedValue({ data: encoded, sizeBytes: sidBytes.length });
+    vi.mocked(readFtpFile).mockResolvedValue({
+      data: encoded,
+      sizeBytes: sidBytes.length,
+    });
 
     const plan = buildPlayPlan({
       source: 'ultimate',
       path: '/MUSIC/INVALID.SID',
-      durationMs: (100 * 60 * 1000),
+      durationMs: 100 * 60 * 1000,
     });
     await executePlayPlan(api as any, plan);
 
@@ -241,7 +301,9 @@ describe('playbackRouter', () => {
       },
     };
     const plan = buildPlayPlan({ source: 'local', path: '/demo.sid', file });
-    await expect(executePlayPlan(api as any, plan)).rejects.toThrow('Local file unavailable. Re-add it to the playlist.');
+    await expect(executePlayPlan(api as any, plan)).rejects.toThrow(
+      'Local file unavailable. Re-add it to the playlist.',
+    );
     expect(vi.mocked(addErrorLog)).toHaveBeenCalled();
   });
 
@@ -272,7 +334,10 @@ describe('playbackRouter', () => {
     const api = createApiMock();
     const file = new File(['disk'], 'demo.d64');
     const plan = buildPlayPlan({ source: 'local', path: '/demo.d64', file });
-    const task = executePlayPlan(api as any, plan, { drive: 'a', rebootBeforeMount: true });
+    const task = executePlayPlan(api as any, plan, {
+      drive: 'a',
+      rebootBeforeMount: true,
+    });
     await vi.runAllTimersAsync();
     await task;
     expect(api.machineReboot).toHaveBeenCalled();
@@ -304,7 +369,10 @@ describe('playbackRouter', () => {
       .mockResolvedValueOnce(undefined as any);
     const file = new File(['disk'], 'demo.d64');
     const plan = buildPlayPlan({ source: 'local', path: '/demo.d64', file });
-    const task = executePlayPlan(api as any, plan, { drive: 'a', rebootBeforeMount: true });
+    const task = executePlayPlan(api as any, plan, {
+      drive: 'a',
+      rebootBeforeMount: true,
+    });
     await vi.runAllTimersAsync();
     await task;
     expect(vi.mocked(injectAutostart)).toHaveBeenCalledTimes(2);
@@ -319,9 +387,15 @@ describe('playbackRouter', () => {
         return new ArrayBuffer(4);
       }
     }
-    const file = new TestBlob(['disk'], { type: 'application/octet-stream' }) as unknown as File;
+    const file = new TestBlob(['disk'], {
+      type: 'application/octet-stream',
+    }) as unknown as File;
     const plan = buildPlayPlan({ source: 'local', path: '/demo.d64', file });
-    const task = executePlayPlan(api as any, plan, { drive: 'a', rebootBeforeMount: true, diskAutostartMode: 'dma' });
+    const task = executePlayPlan(api as any, plan, {
+      drive: 'a',
+      rebootBeforeMount: true,
+      diskAutostartMode: 'dma',
+    });
     await vi.runAllTimersAsync();
     await task;
     expect(vi.mocked(loadFirstDiskPrgViaDma)).toHaveBeenCalled();
@@ -333,7 +407,9 @@ describe('playbackRouter', () => {
     vi.useFakeTimers();
     const api = createApiMock();
     vi.mocked(loadDiskAutostartMode).mockReturnValue('dma');
-    const resolvedBlob = { arrayBuffer: async () => new ArrayBuffer(4) } as Blob;
+    const resolvedBlob = {
+      arrayBuffer: async () => new ArrayBuffer(4),
+    } as Blob;
     vi.mocked(resolveLocalDiskBlob).mockResolvedValue(resolvedBlob);
     const plan = buildPlayPlan({ source: 'local', path: '/demo.d64' });
     const task = executePlayPlan(api as any, plan, { drive: 'a' });
@@ -369,12 +445,16 @@ describe('playbackRouter', () => {
   it('logs and throws when local SID data is missing', async () => {
     const api = createApiMock();
     const plan = buildPlayPlan({ source: 'local', path: '/demo.sid' });
-    await expect(executePlayPlan(api as any, plan)).rejects.toThrow('Missing local SID data');
+    await expect(executePlayPlan(api as any, plan)).rejects.toThrow(
+      'Missing local SID data',
+    );
     expect(vi.mocked(addErrorLog)).toHaveBeenCalled();
   });
 
   it('throws on unsupported formats', () => {
-    expect(() => buildPlayPlan({ source: 'local', path: 'demo.txt' })).toThrow('Unsupported');
+    expect(() => buildPlayPlan({ source: 'local', path: 'demo.txt' })).toThrow(
+      'Unsupported',
+    );
   });
 
   it('routes MOD upload from local file', async () => {
@@ -388,7 +468,9 @@ describe('playbackRouter', () => {
   it('throws when local MOD data is missing', async () => {
     const api = createApiMock();
     const plan = buildPlayPlan({ source: 'local', path: '/demo.mod' });
-    await expect(executePlayPlan(api as any, plan)).rejects.toThrow('Missing local MOD data');
+    await expect(executePlayPlan(api as any, plan)).rejects.toThrow(
+      'Missing local MOD data',
+    );
   });
 
   it('routes CRT playback for Ultimate', async () => {
@@ -401,7 +483,9 @@ describe('playbackRouter', () => {
   it('throws when local CRT data is missing', async () => {
     const api = createApiMock();
     const plan = buildPlayPlan({ source: 'local', path: '/demo.crt' });
-    await expect(executePlayPlan(api as any, plan)).rejects.toThrow('Missing local CRT data');
+    await expect(executePlayPlan(api as any, plan)).rejects.toThrow(
+      'Missing local CRT data',
+    );
   });
 
   it('routes PRG from Ultimate in load mode', async () => {
@@ -422,7 +506,9 @@ describe('playbackRouter', () => {
   it('throws when local PRG data is missing', async () => {
     const api = createApiMock();
     const plan = buildPlayPlan({ source: 'local', path: '/demo.prg' });
-    await expect(executePlayPlan(api as any, plan)).rejects.toThrow('Missing local PRG data');
+    await expect(executePlayPlan(api as any, plan)).rejects.toThrow(
+      'Missing local PRG data',
+    );
   });
 
   it('mounts local D64 without reset when resetBeforeMount is false', async () => {
@@ -445,7 +531,11 @@ describe('playbackRouter', () => {
 
   it('includes songNr in SID play call', async () => {
     const api = createApiMock();
-    const plan = buildPlayPlan({ source: 'ultimate', path: '/MUSIC/DEMO.SID', songNr: 3 });
+    const plan = buildPlayPlan({
+      source: 'ultimate',
+      path: '/MUSIC/DEMO.SID',
+      songNr: 3,
+    });
     await executePlayPlan(api as any, plan);
     expect(api.playSid).toHaveBeenCalledWith('/MUSIC/DEMO.SID', 3);
   });
@@ -453,7 +543,12 @@ describe('playbackRouter', () => {
   it('includes SSL blob for local SID when duration is provided', async () => {
     const api = createApiMock();
     const file = new File(['sid'], 'demo.sid');
-    const plan = buildPlayPlan({ source: 'local', path: '/demo.sid', file, durationMs: 60000 });
+    const plan = buildPlayPlan({
+      source: 'local',
+      path: '/demo.sid',
+      file,
+      durationMs: 60000,
+    });
     await executePlayPlan(api as any, plan);
     expect(api.playSidUpload).toHaveBeenCalledTimes(1);
     const sslBlobArg = api.playSidUpload.mock.calls[0][2];
@@ -465,7 +560,11 @@ describe('playbackRouter', () => {
     const sidBytes = new Uint8Array([0x50, 0x53]);
     const encoded = Buffer.from(sidBytes).toString('base64');
     vi.mocked(readFtpFile).mockResolvedValue({ data: encoded, sizeBytes: 999 });
-    const plan = buildPlayPlan({ source: 'ultimate', path: '/MUSIC/MISMATCH.SID', durationMs: 120000 });
+    const plan = buildPlayPlan({
+      source: 'ultimate',
+      path: '/MUSIC/MISMATCH.SID',
+      durationMs: 120000,
+    });
     await executePlayPlan(api as any, plan);
     // Should fall back to direct play since blob is null due to size mismatch
     expect(api.playSid).toHaveBeenCalled();
@@ -479,9 +578,14 @@ describe('playbackRouter', () => {
         return new ArrayBuffer(4);
       }
     }
-    const file = new TestBlob(['disk'], { type: 'application/octet-stream' }) as unknown as File;
+    const file = new TestBlob(['disk'], {
+      type: 'application/octet-stream',
+    }) as unknown as File;
     const plan = buildPlayPlan({ source: 'local', path: '/demo.d71', file });
-    const task = executePlayPlan(api as any, plan, { drive: 'a', diskAutostartMode: 'dma' });
+    const task = executePlayPlan(api as any, plan, {
+      drive: 'a',
+      diskAutostartMode: 'dma',
+    });
     await vi.runAllTimersAsync();
     await task;
     expect(vi.mocked(loadFirstDiskPrgViaDma)).toHaveBeenCalled();
@@ -508,7 +612,9 @@ describe('playbackRouter', () => {
     const api = createApiMock();
     const content = new Uint8Array(1024);
     content.fill(0x42);
-    const file = new File([content], 'large.sid', { type: 'application/octet-stream' });
+    const file = new File([content], 'large.sid', {
+      type: 'application/octet-stream',
+    });
     const plan = buildPlayPlan({ source: 'local', path: '/large.sid', file });
     await executePlayPlan(api as any, plan);
     const blob = api.playSidUpload.mock.calls[0][0] as Blob;
@@ -517,7 +623,10 @@ describe('playbackRouter', () => {
 
   it('tryFetchUltimateSidBlob normalizes path without leading slash', async () => {
     // Covers normalizeUltimatePath FALSE branch: path without leading '/' → prepend '/'
-    vi.mocked(readFtpFile).mockResolvedValue({ data: btoa('\x00'), sizeBytes: 1 } as any);
+    vi.mocked(readFtpFile).mockResolvedValue({
+      data: btoa('\x00'),
+      sizeBytes: 1,
+    } as any);
     const result = await tryFetchUltimateSidBlob('MUSIC/DEMO.SID');
     expect(result).toBeInstanceOf(Blob);
     expect(vi.mocked(readFtpFile)).toHaveBeenCalledWith(
@@ -533,7 +642,10 @@ describe('playbackRouter', () => {
 
   it('tryFetchUltimateSidBlob returns null and warns on size mismatch', async () => {
     // Mock readFtpFile to return base64 of 1 byte but claim sizeBytes=99
-    vi.mocked(readFtpFile).mockResolvedValue({ data: btoa('\x00'), sizeBytes: 99 } as any);
+    vi.mocked(readFtpFile).mockResolvedValue({
+      data: btoa('\x00'),
+      sizeBytes: 99,
+    } as any);
     const result = await tryFetchUltimateSidBlob('/MUSIC/DEMO.SID');
     expect(result).toBeNull();
   });
@@ -578,8 +690,14 @@ describe('playbackRouter', () => {
       name: 'demo.d64',
       arrayBuffer: () => Promise.reject(new Error('some custom error')),
     };
-    const plan = buildPlayPlan({ source: 'local', path: '/demo.d64', file: file as any });
-    await expect(executePlayPlan(api as any, plan)).rejects.toThrow('some custom error');
+    const plan = buildPlayPlan({
+      source: 'local',
+      path: '/demo.d64',
+      file: file as any,
+    });
+    await expect(executePlayPlan(api as any, plan)).rejects.toThrow(
+      'some custom error',
+    );
   });
 
   it('toBlob uses generic message for empty arrayBuffer error (BRDA:169)', async () => {
@@ -588,22 +706,37 @@ describe('playbackRouter', () => {
       name: 'demo.d64',
       arrayBuffer: () => Promise.reject(new Error('')),
     };
-    const plan = buildPlayPlan({ source: 'local', path: '/demo.d64', file: file as any });
+    const plan = buildPlayPlan({
+      source: 'local',
+      path: '/demo.d64',
+      file: file as any,
+    });
     // Error message is empty, falls back to 'Local file unavailable.' which is not a network error → rethrows original
-    await expect(executePlayPlan(api as any, plan)).rejects.toBeInstanceOf(Error);
+    await expect(executePlayPlan(api as any, plan)).rejects.toBeInstanceOf(
+      Error,
+    );
   });
 
   it('covers null propagationFailure in SID fallback (BRDA:257)', async () => {
     const api = createApiMock();
     const sidBytes = new Uint8Array([0x50, 0x53, 0x49, 0x44]);
     const encoded = Buffer.from(sidBytes).toString('base64');
-    vi.mocked(readFtpFile).mockResolvedValue({ data: encoded, sizeBytes: sidBytes.length });
+    vi.mocked(readFtpFile).mockResolvedValue({
+      data: encoded,
+      sizeBytes: sidBytes.length,
+    });
     // Throw a non-Error object so propagationFailure?.message is undefined → ?? null branch covered
     api.playSidUpload.mockRejectedValueOnce({});
     api.playSid.mockRejectedValueOnce(new Error('fallback also failed'));
 
-    const plan = buildPlayPlan({ source: 'ultimate', path: '/MUSIC/DEMO.SID', durationMs: 120000 });
-    await expect(executePlayPlan(api as any, plan)).rejects.toThrow('fallback playback failed');
+    const plan = buildPlayPlan({
+      source: 'ultimate',
+      path: '/MUSIC/DEMO.SID',
+      durationMs: 120000,
+    });
+    await expect(executePlayPlan(api as any, plan)).rejects.toThrow(
+      'fallback playback failed',
+    );
     expect(vi.mocked(addErrorLog)).toHaveBeenCalled();
   });
 
@@ -614,6 +747,8 @@ describe('playbackRouter', () => {
       ...buildPlayPlan({ source: 'local', path: '/demo.sid', file }),
       category: 'unknown-category' as any,
     };
-    await expect(executePlayPlan(api as any, plan)).rejects.toThrow('Unsupported playback type');
+    await expect(executePlayPlan(api as any, plan)).rejects.toThrow(
+      'Unsupported playback type',
+    );
   });
 });

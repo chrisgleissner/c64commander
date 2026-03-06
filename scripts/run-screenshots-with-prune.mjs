@@ -4,30 +4,36 @@ import { spawn } from 'node:child_process';
 let activeChild = null;
 let interruptedBySignal = null;
 
-const runCommand = (command, args) => new Promise((resolve) => {
-  const child = spawn(command, args, {
-    stdio: 'inherit',
-    shell: false,
-    env: process.env,
-  });
-  activeChild = child;
+const runCommand = (command, args) =>
+  new Promise((resolve) => {
+    const child = spawn(command, args, {
+      stdio: 'inherit',
+      shell: false,
+      env: process.env,
+    });
+    activeChild = child;
 
-  child.on('error', (error) => {
-    console.error(`[screenshots] Failed to start ${command} ${args.join(' ')}:`, error);
-    activeChild = null;
-    resolve(1);
-  });
-
-  child.on('close', (code, signal) => {
-    activeChild = null;
-    if (signal) {
-      console.error(`[screenshots] ${command} terminated by signal ${signal}.`);
+    child.on('error', (error) => {
+      console.error(
+        `[screenshots] Failed to start ${command} ${args.join(' ')}:`,
+        error,
+      );
+      activeChild = null;
       resolve(1);
-      return;
-    }
-    resolve(code ?? 1);
+    });
+
+    child.on('close', (code, signal) => {
+      activeChild = null;
+      if (signal) {
+        console.error(
+          `[screenshots] ${command} terminated by signal ${signal}.`,
+        );
+        resolve(1);
+        return;
+      }
+      resolve(code ?? 1);
+    });
   });
-});
 
 const forwardSignalAndMarkInterrupted = (signal) => {
   interruptedBySignal = interruptedBySignal ?? signal;
@@ -45,14 +51,20 @@ process.on('SIGTERM', () => {
 });
 
 const main = async () => {
-  const prePruneExitCode = await runCommand('npm', ['run', 'screenshots:prune-identical']);
+  const prePruneExitCode = await runCommand('npm', [
+    'run',
+    'screenshots:prune-identical',
+  ]);
   if (prePruneExitCode !== 0) {
     process.exitCode = prePruneExitCode;
     return;
   }
 
   const testExitCode = await runCommand('npm', ['run', 'screenshots:raw']);
-  const pruneExitCode = await runCommand('npm', ['run', 'screenshots:prune-identical']);
+  const pruneExitCode = await runCommand('npm', [
+    'run',
+    'screenshots:prune-identical',
+  ]);
 
   if (pruneExitCode !== 0) {
     process.exitCode = pruneExitCode;

@@ -138,4 +138,3 @@ describe('inferControlKind (strict rule ordering)', () => {
     ).toBe('text');
   });
 });
-

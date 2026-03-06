@@ -52,13 +52,15 @@ export class InMemoryFeatureFlagRepository implements FeatureFlagRepository {
   private store = new Map<FeatureFlagKey, boolean>();
 
   constructor(initial: Partial<FeatureFlags> = {}) {
-    (Object.entries(initial) as Array<[FeatureFlagKey, boolean]>).forEach(([key, value]) => {
-      this.store.set(key, value);
-    });
+    (Object.entries(initial) as Array<[FeatureFlagKey, boolean]>).forEach(
+      ([key, value]) => {
+        this.store.set(key, value);
+      },
+    );
   }
 
   async getFlag(key: FeatureFlagKey): Promise<boolean | null> {
-    return this.store.has(key) ? this.store.get(key) ?? null : null;
+    return this.store.has(key) ? (this.store.get(key) ?? null) : null;
   }
 
   async getAllFlags(keys: FeatureFlagKey[]): Promise<Partial<FeatureFlags>> {
@@ -89,7 +91,10 @@ export class FeatureFlagManager {
   private listeners = new Set<FeatureFlagListener>();
   private isLoading = false;
 
-  constructor(private repository: FeatureFlagRepository, private defaults: FeatureFlags) {
+  constructor(
+    private repository: FeatureFlagRepository,
+    private defaults: FeatureFlags,
+  ) {
     this.snapshot = { flags: { ...defaults }, isLoaded: false };
   }
 
@@ -115,7 +120,9 @@ export class FeatureFlagManager {
       };
       this.emit();
     } catch (error) {
-      addErrorLog('Feature flag load failed', { error: (error as Error).message });
+      addErrorLog('Feature flag load failed', {
+        error: (error as Error).message,
+      });
       this.snapshot = { flags: { ...this.defaults }, isLoaded: true };
       this.emit();
     } finally {
@@ -132,7 +139,10 @@ export class FeatureFlagManager {
       };
       this.emit();
     } catch (error) {
-      addErrorLog('Feature flag update failed', { key, error: (error as Error).message });
+      addErrorLog('Feature flag update failed', {
+        key,
+        error: (error as Error).message,
+      });
       throw error;
     }
   }
@@ -147,4 +157,5 @@ export const featureFlagManager = new FeatureFlagManager(
   buildDefaultFlags(),
 );
 
-export const isHvscEnabled = (flags: FeatureFlags) => Boolean(flags.hvsc_enabled);
+export const isHvscEnabled = (flags: FeatureFlags) =>
+  Boolean(flags.hvsc_enabled);

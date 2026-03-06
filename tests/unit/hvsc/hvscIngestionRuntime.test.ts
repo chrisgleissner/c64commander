@@ -24,15 +24,34 @@ import {
   installOrUpdateHvsc,
   ingestCachedHvsc,
 } from '@/lib/hvsc/hvscIngestionRuntime';
-import { isUpdateApplied, loadHvscState, updateHvscState } from '@/lib/hvsc/hvscStateStore';
+import {
+  isUpdateApplied,
+  loadHvscState,
+  updateHvscState,
+} from '@/lib/hvsc/hvscStateStore';
 import { fetchLatestHvscVersions } from '@/lib/hvsc/hvscReleaseService';
-import { getHvscDurationByMd5, getHvscSongByVirtualPath, listHvscFolder } from '@/lib/hvsc/hvscFilesystem';
-import { deleteLibraryFile, resetLibraryRoot, resetSonglengthsCache, writeLibraryFile, readCachedArchiveMarker } from '@/lib/hvsc/hvscFilesystem';
+import {
+  getHvscDurationByMd5,
+  getHvscSongByVirtualPath,
+  listHvscFolder,
+} from '@/lib/hvsc/hvscFilesystem';
+import {
+  deleteLibraryFile,
+  resetLibraryRoot,
+  resetSonglengthsCache,
+  writeLibraryFile,
+  readCachedArchiveMarker,
+} from '@/lib/hvsc/hvscFilesystem';
 import { extractArchiveEntries } from '@/lib/hvsc/hvscArchiveExtraction';
 import { addErrorLog, addLog } from '@/lib/logging';
-import { getHvscSonglengthsStats, reloadHvscSonglengthsOnConfigChange } from '@/lib/hvsc/hvscSongLengthService';
+import {
+  getHvscSonglengthsStats,
+  reloadHvscSonglengthsOnConfigChange,
+} from '@/lib/hvsc/hvscSongLengthService';
 
-const nativeProgressListenerRemove = vi.hoisted(() => vi.fn(async () => undefined));
+const nativeProgressListenerRemove = vi.hoisted(() =>
+  vi.fn(async () => undefined),
+);
 const nativeHvscPlugin = vi.hoisted(() => ({
   ingestHvsc: vi.fn(async () => ({
     totalEntries: 1,
@@ -91,7 +110,10 @@ vi.mock('@/lib/hvsc/hvscFilesystem', () => ({
   resetSonglengthsCache: vi.fn(),
   writeCachedArchive: vi.fn(),
   deleteCachedArchive: vi.fn(),
-  readCachedArchiveMarker: vi.fn(async () => ({ version: 5, type: 'baseline' })),
+  readCachedArchiveMarker: vi.fn(async () => ({
+    version: 5,
+    type: 'baseline',
+  })),
   writeCachedArchiveMarker: vi.fn(),
 }));
 
@@ -118,7 +140,9 @@ vi.mock('@/lib/hvsc/hvscArchiveExtraction', () => ({
 
 vi.mock('@/lib/hvsc/hvscSongLengthService', () => ({
   reloadHvscSonglengthsOnConfigChange: vi.fn(async () => undefined),
-  getHvscSonglengthsStats: vi.fn(() => ({ backendStats: { rejectedLines: 0 } })),
+  getHvscSonglengthsStats: vi.fn(() => ({
+    backendStats: { rejectedLines: 0 },
+  })),
 }));
 
 vi.mock('@/lib/hvsc/hvscReleaseService', () => ({
@@ -166,7 +190,10 @@ describe('hvscIngestionRuntime', () => {
       files: ['hvsc-baseline-5.complete.json'],
     });
     vi.mocked(Filesystem.readFile).mockResolvedValue({ data: 'AA==' } as any);
-    vi.mocked(Filesystem.stat).mockResolvedValue({ size: 123, type: 'file' } as any);
+    vi.mocked(Filesystem.stat).mockResolvedValue({
+      size: 123,
+      type: 'file',
+    } as any);
     vi.mocked(loadHvscState).mockReturnValue({
       ingestionState: 'idle',
       ingestionError: null,
@@ -179,7 +206,10 @@ describe('hvscIngestionRuntime', () => {
       installedVersion: 5,
       installedBaselineVersion: 5,
     } as any);
-    vi.mocked(readCachedArchiveMarker).mockResolvedValue({ version: 5, type: 'baseline' } as any);
+    vi.mocked(readCachedArchiveMarker).mockResolvedValue({
+      version: 5,
+      type: 'baseline',
+    } as any);
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(false);
     vi.mocked(deleteLibraryFile).mockResolvedValue(undefined as any);
     if (!globalThis.crypto) {
@@ -203,7 +233,11 @@ describe('hvscIngestionRuntime', () => {
     await listener.remove();
 
     expect(status.installedVersion).toBe(5);
-    expect(events.some((event) => event.message === 'No new HVSC archives to ingest')).toBe(true);
+    expect(
+      events.some(
+        (event) => event.message === 'No new HVSC archives to ingest',
+      ),
+    ).toBe(true);
   });
 
   it('summarizes cached archive versions', async () => {
@@ -230,7 +264,10 @@ describe('hvscIngestionRuntime', () => {
   });
 
   it('calculates required update versions', async () => {
-    vi.mocked(fetchLatestHvscVersions).mockResolvedValue({ baselineVersion: 84, updateVersion: 86 } as any);
+    vi.mocked(fetchLatestHvscVersions).mockResolvedValue({
+      baselineVersion: 84,
+      updateVersion: 86,
+    } as any);
     vi.mocked(updateHvscState).mockReturnValue({ installedVersion: 84 } as any);
 
     const result = await checkForHvscUpdates();
@@ -266,7 +303,9 @@ describe('hvscIngestionRuntime', () => {
   it('throws when HVSC song is missing', async () => {
     vi.mocked(getHvscSongByVirtualPath).mockResolvedValue(null as any);
 
-    await expect(getHvscSong({ virtualPath: '/missing.sid' })).rejects.toThrow('Song not found');
+    await expect(getHvscSong({ virtualPath: '/missing.sid' })).rejects.toThrow(
+      'Song not found',
+    );
     await expect(getHvscSong({})).rejects.toThrow('Song not found');
   });
 
@@ -299,13 +338,24 @@ describe('hvscIngestionRuntime', () => {
       installedVersion: 5,
       installedBaselineVersion: 5,
     } as any);
-    vi.mocked(extractArchiveEntries).mockImplementation(async ({ onEnumerate, onProgress, onEntry }) => {
-      onEnumerate?.(3);
-      onProgress?.(1, 3);
-      await onEntry?.('HVSC/DELETE.TXT', new TextEncoder().encode('demo.sid\n'));
-      await onEntry?.('HVSC/C64Music/songlengths.txt', new TextEncoder().encode('demo.sid=0:30'));
-      await onEntry?.('HVSC/C64Music/Demo/demo.sid', new Uint8Array([1, 2, 3]));
-    });
+    vi.mocked(extractArchiveEntries).mockImplementation(
+      async ({ onEnumerate, onProgress, onEntry }) => {
+        onEnumerate?.(3);
+        onProgress?.(1, 3);
+        await onEntry?.(
+          'HVSC/DELETE.TXT',
+          new TextEncoder().encode('demo.sid\n'),
+        );
+        await onEntry?.(
+          'HVSC/C64Music/songlengths.txt',
+          new TextEncoder().encode('demo.sid=0:30'),
+        );
+        await onEntry?.(
+          'HVSC/C64Music/Demo/demo.sid',
+          new Uint8Array([1, 2, 3]),
+        );
+      },
+    );
 
     await installOrUpdateHvsc('token-install');
 
@@ -313,8 +363,9 @@ describe('hvscIngestionRuntime', () => {
     expect(writeLibraryFile).toHaveBeenCalled();
     expect(deleteLibraryFile).toHaveBeenCalledWith('/demo.sid');
     expect(resetSonglengthsCache).toHaveBeenCalled();
-    const transitions = vi.mocked(addLog).mock.calls
-      .filter((call) => call[1] === 'HVSC pipeline transition')
+    const transitions = vi
+      .mocked(addLog)
+      .mock.calls.filter((call) => call[1] === 'HVSC pipeline transition')
       .map((call) => (call[2] as { toState?: string })?.toState);
     expect(transitions).toEqual([
       'DOWNLOADING',
@@ -324,7 +375,11 @@ describe('hvscIngestionRuntime', () => {
       'INGESTING',
       'READY',
     ]);
-    const summaryPatch = vi.mocked(updateHvscState).mock.calls.find((call) => (call[0] as any)?.ingestionSummary)?.[0] as any;
+    const summaryPatch = vi
+      .mocked(updateHvscState)
+      .mock.calls.find(
+        (call) => (call[0] as any)?.ingestionSummary,
+      )?.[0] as any;
     expect(summaryPatch?.ingestionSummary?.ingestedSongs).toBe(1);
     expect(summaryPatch?.ingestionSummary?.failedSongs).toBe(0);
     expect(browseIndexMutable.upsertSong).toHaveBeenCalled();
@@ -353,9 +408,12 @@ describe('hvscIngestionRuntime', () => {
       }
     });
 
-    await expect(installOrUpdateHvsc('token-fail-write')).rejects.toThrow(/could not be ingested/i);
-    const patchWithSummary = vi.mocked(updateHvscState).mock.calls
-      .map((call) => call[0] as any)
+    await expect(installOrUpdateHvsc('token-fail-write')).rejects.toThrow(
+      /could not be ingested/i,
+    );
+    const patchWithSummary = vi
+      .mocked(updateHvscState)
+      .mock.calls.map((call) => call[0] as any)
       .find((patch) => patch?.ingestionSummary?.failedSongs === 1);
     expect(patchWithSummary?.ingestionState).toBe('error');
     expect(patchWithSummary?.ingestionSummary?.ingestedSongs).toBe(1);
@@ -377,12 +435,15 @@ describe('hvscIngestionRuntime', () => {
     vi.mocked(extractArchiveEntries).mockImplementation(async ({ onEntry }) => {
       await onEntry?.('HVSC/C64Music/Demo/ok.sid', new Uint8Array([1, 2, 3]));
     });
-    vi.mocked(getHvscSonglengthsStats).mockReturnValue({ backendStats: { rejectedLines: 3 } } as any);
+    vi.mocked(getHvscSonglengthsStats).mockReturnValue({
+      backendStats: { rejectedLines: 3 },
+    } as any);
 
     await installOrUpdateHvsc('token-syntax');
 
-    const summaryPatch = vi.mocked(updateHvscState).mock.calls
-      .map((call) => call[0] as any)
+    const summaryPatch = vi
+      .mocked(updateHvscState)
+      .mock.calls.map((call) => call[0] as any)
       .find((patch) => patch?.ingestionSummary?.songlengthSyntaxErrors === 3);
     expect(summaryPatch?.ingestionState).toBe('ready');
     expect(summaryPatch?.ingestionSummary?.failedSongs).toBe(0);
@@ -403,9 +464,13 @@ describe('hvscIngestionRuntime', () => {
     vi.mocked(extractArchiveEntries).mockImplementation(async ({ onEntry }) => {
       await onEntry?.('HVSC/C64Music/Demo/ok.sid', new Uint8Array([1, 2, 3]));
     });
-    vi.mocked(reloadHvscSonglengthsOnConfigChange).mockRejectedValueOnce(new Error('reload failed'));
+    vi.mocked(reloadHvscSonglengthsOnConfigChange).mockRejectedValueOnce(
+      new Error('reload failed'),
+    );
 
-    await expect(installOrUpdateHvsc('token-reload-fail')).rejects.toThrow('reload failed');
+    await expect(installOrUpdateHvsc('token-reload-fail')).rejects.toThrow(
+      'reload failed',
+    );
   });
 
   it('records full deletion failure manifest and throws summarized error', async () => {
@@ -420,13 +485,21 @@ describe('hvscIngestionRuntime', () => {
       installedVersion: 0,
       installedBaselineVersion: null,
     } as any);
-    const deletionList = Array.from({ length: 11 }, (_, index) => `demo-${index + 1}.sid`).join('\n');
+    const deletionList = Array.from(
+      { length: 11 },
+      (_, index) => `demo-${index + 1}.sid`,
+    ).join('\n');
     vi.mocked(extractArchiveEntries).mockImplementation(async ({ onEntry }) => {
-      await onEntry?.('HVSC/DELETE.TXT', new TextEncoder().encode(deletionList));
+      await onEntry?.(
+        'HVSC/DELETE.TXT',
+        new TextEncoder().encode(deletionList),
+      );
     });
     vi.mocked(deleteLibraryFile).mockRejectedValue(new Error('cannot delete'));
 
-    await expect(installOrUpdateHvsc('token-deletion-fail')).rejects.toThrow(/cleanup failed/i);
+    await expect(installOrUpdateHvsc('token-deletion-fail')).rejects.toThrow(
+      /cleanup failed/i,
+    );
     expect(vi.mocked(addErrorLog)).toHaveBeenCalledWith(
       'HVSC deletion manifest',
       expect.objectContaining({
@@ -439,8 +512,13 @@ describe('hvscIngestionRuntime', () => {
   it('escalates repeated cached archive stat failures to diagnostics', async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
     vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
-    vi.mocked(Filesystem.readdir).mockResolvedValue({ files: ['hvsc-baseline-5.complete.json'] } as any);
-    vi.mocked(readCachedArchiveMarker).mockResolvedValue({ version: 5, type: 'baseline' } as any);
+    vi.mocked(Filesystem.readdir).mockResolvedValue({
+      files: ['hvsc-baseline-5.complete.json'],
+    } as any);
+    vi.mocked(readCachedArchiveMarker).mockResolvedValue({
+      version: 5,
+      type: 'baseline',
+    } as any);
     vi.mocked(loadHvscState).mockReturnValue({
       ingestionState: 'idle',
       ingestionError: null,
@@ -479,7 +557,8 @@ describe('hvscIngestionRuntime', () => {
         .mockResolvedValueOnce({ done: false, value: new Uint8Array([1, 2]) })
         .mockResolvedValueOnce({ done: true, value: undefined }),
     };
-    globalThis.fetch = vi.fn()
+    globalThis.fetch = vi
+      .fn()
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
@@ -539,7 +618,8 @@ describe('hvscIngestionRuntime', () => {
         .mockResolvedValueOnce({ done: false, value: new Uint8Array([3, 4]) })
         .mockResolvedValueOnce({ done: true, value: undefined }),
     };
-    globalThis.fetch = vi.fn()
+    globalThis.fetch = vi
+      .fn()
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
@@ -583,7 +663,9 @@ describe('hvscIngestionRuntime', () => {
     await listener.remove();
 
     expect(progressEvents.length).toBeGreaterThan(1);
-    expect(progressEvents[0]?.downloadedBytes ?? 0).toBeLessThan(progressEvents.at(-1)?.downloadedBytes ?? 0);
+    expect(progressEvents[0]?.downloadedBytes ?? 0).toBeLessThan(
+      progressEvents.at(-1)?.downloadedBytes ?? 0,
+    );
 
     if (originalFetch) {
       globalThis.fetch = originalFetch;
@@ -661,14 +743,19 @@ describe('hvscIngestionRuntime', () => {
       installedBaselineVersion: null,
     } as any);
 
-    await expect(ingestCachedHvsc('token-missing')).rejects.toThrow('No cached HVSC archives available');
+    await expect(ingestCachedHvsc('token-missing')).rejects.toThrow(
+      'No cached HVSC archives available',
+    );
   });
 
   it('ingests cached baseline and updates', async () => {
     vi.mocked(Filesystem.readdir).mockResolvedValue({
       files: ['hvsc-baseline-5.complete.json', 'hvsc-update-6.complete.json'],
     } as any);
-    vi.mocked(readCachedArchiveMarker).mockResolvedValue({ version: 5, type: 'baseline' } as any);
+    vi.mocked(readCachedArchiveMarker).mockResolvedValue({
+      version: 5,
+      type: 'baseline',
+    } as any);
     vi.mocked(loadHvscState).mockReturnValue({
       ingestionState: 'idle',
       ingestionError: null,
@@ -676,8 +763,14 @@ describe('hvscIngestionRuntime', () => {
       installedBaselineVersion: null,
     } as any);
     vi.mocked(extractArchiveEntries).mockImplementation(async ({ onEntry }) => {
-      await onEntry?.('HVSC/DELETE.TXT', new TextEncoder().encode('demo.sid\n'));
-      await onEntry?.('HVSC/C64Music/songlengths.txt', new TextEncoder().encode('demo.sid=0:30'));
+      await onEntry?.(
+        'HVSC/DELETE.TXT',
+        new TextEncoder().encode('demo.sid\n'),
+      );
+      await onEntry?.(
+        'HVSC/C64Music/songlengths.txt',
+        new TextEncoder().encode('demo.sid=0:30'),
+      );
       await onEntry?.('HVSC/C64Music/Demo/demo.sid', new Uint8Array([1, 2, 3]));
     });
 
@@ -705,7 +798,8 @@ describe('hvscIngestionRuntime', () => {
   });
 
   it('recovers stale ingestion state on cold start', async () => {
-    const { loadHvscStatusSummary, saveHvscStatusSummary } = await import('@/lib/hvsc/hvscStatusStore');
+    const { loadHvscStatusSummary, saveHvscStatusSummary } =
+      await import('@/lib/hvsc/hvscStatusStore');
     vi.mocked(loadHvscState).mockReturnValue({
       ingestionState: 'installing',
       ingestionError: null,
@@ -741,7 +835,9 @@ describe('hvscIngestionRuntime', () => {
   it('logs warning when native cancellation fails', async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
     vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
-    nativeHvscPlugin.cancelIngestion.mockRejectedValueOnce(new Error('cancel failed'));
+    nativeHvscPlugin.cancelIngestion.mockRejectedValueOnce(
+      new Error('cancel failed'),
+    );
 
     await cancelHvscInstall('token-cancel-fail');
 
@@ -753,7 +849,8 @@ describe('hvscIngestionRuntime', () => {
   });
 
   it('reports isIngestionRuntimeActive as false when idle', async () => {
-    const { isIngestionRuntimeActive } = await import('@/lib/hvsc/hvscIngestionRuntime');
+    const { isIngestionRuntimeActive } =
+      await import('@/lib/hvsc/hvscIngestionRuntime');
     expect(isIngestionRuntimeActive()).toBe(false);
   });
 
@@ -787,7 +884,9 @@ describe('hvscIngestionRuntime', () => {
     });
 
     const first = installOrUpdateHvsc('token-concurrent-1');
-    await expect(installOrUpdateHvsc('token-concurrent-2')).rejects.toThrow('already running');
+    await expect(installOrUpdateHvsc('token-concurrent-2')).rejects.toThrow(
+      'already running',
+    );
     await first;
   });
 
@@ -806,7 +905,9 @@ describe('hvscIngestionRuntime', () => {
     });
 
     const first = ingestCachedHvsc('token-cached-concurrent-1');
-    await expect(ingestCachedHvsc('token-cached-concurrent-2')).rejects.toThrow('already running');
+    await expect(ingestCachedHvsc('token-cached-concurrent-2')).rejects.toThrow(
+      'already running',
+    );
     await first;
   });
 
@@ -856,11 +957,22 @@ describe('hvscIngestionRuntime', () => {
       installedVersion: 5,
       installedBaselineVersion: 5,
     } as any);
-    vi.mocked(readCachedArchiveMarker).mockResolvedValue({ version: 6, type: 'update' } as any);
-    vi.mocked(extractArchiveEntries).mockRejectedValue(new Error('extraction exploded'));
+    vi.mocked(readCachedArchiveMarker).mockResolvedValue({
+      version: 6,
+      type: 'update',
+    } as any);
+    vi.mocked(extractArchiveEntries).mockRejectedValue(
+      new Error('extraction exploded'),
+    );
 
-    await expect(installOrUpdateHvsc('token-update-fail')).rejects.toThrow('extraction exploded');
-    expect(markUpdateApplied).toHaveBeenCalledWith(6, 'failed', 'extraction exploded');
+    await expect(installOrUpdateHvsc('token-update-fail')).rejects.toThrow(
+      'extraction exploded',
+    );
+    expect(markUpdateApplied).toHaveBeenCalledWith(
+      6,
+      'failed',
+      'extraction exploded',
+    );
   });
 
   it('resolves cached ingest when baseline newer than installed and updates available', async () => {
@@ -868,7 +980,10 @@ describe('hvscIngestionRuntime', () => {
     vi.mocked(Filesystem.readdir).mockResolvedValue({
       files: ['hvsc-baseline-84.complete.json', 'hvsc-update-85.complete.json'],
     } as any);
-    vi.mocked(readCachedArchiveMarker).mockResolvedValue({ version: 85, type: 'update' } as any);
+    vi.mocked(readCachedArchiveMarker).mockResolvedValue({
+      version: 85,
+      type: 'update',
+    } as any);
     vi.mocked(loadHvscState).mockReturnValue({
       ingestionState: 'idle',
       ingestionError: null,
@@ -927,7 +1042,8 @@ describe('hvscIngestionRuntime', () => {
   });
 
   it('recovers stale ingestion state with updating status', async () => {
-    const { loadHvscStatusSummary, saveHvscStatusSummary } = await import('@/lib/hvsc/hvscStatusStore');
+    const { loadHvscStatusSummary, saveHvscStatusSummary } =
+      await import('@/lib/hvsc/hvscStatusStore');
     vi.mocked(loadHvscState).mockReturnValue({
       ingestionState: 'updating',
       ingestionError: null,
@@ -979,11 +1095,16 @@ describe('hvscIngestionRuntime', () => {
     // Only 3 deletion failures — formatPathListPreview called with paths.length <= previewLimit (10)
     const deletionList = ['demo-1.sid', 'demo-2.sid', 'demo-3.sid'].join('\n');
     vi.mocked(extractArchiveEntries).mockImplementation(async ({ onEntry }) => {
-      await onEntry?.('HVSC/DELETE.TXT', new TextEncoder().encode(deletionList));
+      await onEntry?.(
+        'HVSC/DELETE.TXT',
+        new TextEncoder().encode(deletionList),
+      );
     });
     vi.mocked(deleteLibraryFile).mockRejectedValue(new Error('cannot delete'));
 
-    await expect(installOrUpdateHvsc('token-short-deletion')).rejects.toThrow(/cleanup failed/i);
+    await expect(installOrUpdateHvsc('token-short-deletion')).rejects.toThrow(
+      /cleanup failed/i,
+    );
     expect(vi.mocked(addErrorLog)).toHaveBeenCalledWith(
       'HVSC deletion manifest',
       expect.objectContaining({ failureCount: 3 }),
@@ -1036,7 +1157,11 @@ describe('ingestion shared helpers (P0-E)', () => {
   });
 
   it('buildIngestionFailureMessage formats message with count and path preview', () => {
-    const msg = buildIngestionFailureMessage(3, 100, ['a.sid', 'b.sid', 'c.sid']);
+    const msg = buildIngestionFailureMessage(3, 100, [
+      'a.sid',
+      'b.sid',
+      'c.sid',
+    ]);
     expect(msg).toMatch(/3 of 100/);
     expect(msg).toMatch(/a\.sid/);
     expect(msg).toMatch(/b\.sid/);

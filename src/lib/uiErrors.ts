@@ -39,10 +39,15 @@ const buildErrorDetails = (error?: unknown) => {
 // instead of duplicating transient-failure pattern strings.
 export const isTransientConnectivityFailure = (message: string): boolean => {
   const normalized = message.toLowerCase();
-  return /host unreachable|service unavailable|http 503|failed to fetch|net::err|request timed out|networkerror|dns/.test(normalized);
+  return /host unreachable|service unavailable|http 503|failed to fetch|net::err|request timed out|networkerror|dns/.test(
+    normalized,
+  );
 };
 
-const isRecoverableConnectivityError = (description: string, error?: unknown) => {
+const isRecoverableConnectivityError = (
+  description: string,
+  error?: unknown,
+) => {
   const details = buildErrorDetails(error) as { message?: string } | undefined;
   const message = `${description} ${details?.message ?? ''}`;
   return isTransientConnectivityFailure(message);
@@ -68,7 +73,9 @@ export const reportUserError = ({
   // from persistent defects so callers can filter or present them differently.
   addErrorLog(`${operation}: ${title}`, {
     ...logPayload,
-    ...(isRecoverableConnectivityError(description, error) ? { recoverableConnectivityIssue: true } : {}),
+    ...(isRecoverableConnectivityError(description, error)
+      ? { recoverableConnectivityIssue: true }
+      : {}),
   });
 
   toast({

@@ -17,7 +17,8 @@ const normalizePath = (value: string) => value.replace(/\\/g, '/');
 
 const parsePath = (value: string) => {
   const normalized = normalizePath(value).trim();
-  if (!normalized) return { root: '', directories: [] as string[], fileName: '' };
+  if (!normalized)
+    return { root: '', directories: [] as string[], fileName: '' };
   const hasLeadingSlash = normalized.startsWith('/');
   const parts = normalized.split('/').filter(Boolean);
   const fileName = parts.pop() ?? '';
@@ -30,7 +31,11 @@ export const getFileNameFromPath = (value: string) => {
   return fileName || value;
 };
 
-const trimFromStartToFit = (value: string, maxWidth: number, measure: TextMeasureFn) => {
+const trimFromStartToFit = (
+  value: string,
+  maxWidth: number,
+  measure: TextMeasureFn,
+) => {
   if (!value) return value;
   if (measure(value) <= maxWidth) return value;
   if (measure(ELLIPSIS) > maxWidth) return '';
@@ -43,7 +48,11 @@ const trimFromStartToFit = (value: string, maxWidth: number, measure: TextMeasur
   return '';
 };
 
-const fitFilenameFallback = (path: string, maxWidth: number, measure: TextMeasureFn) => {
+const fitFilenameFallback = (
+  path: string,
+  maxWidth: number,
+  measure: TextMeasureFn,
+) => {
   if (measure(path) <= maxWidth) return path;
   const fileName = getFileNameFromPath(path);
   if (measure(fileName) <= maxWidth) return fileName;
@@ -66,13 +75,22 @@ const buildStartAndFilenameCandidate = (
   return `${root}${ELLIPSIS}/${fileName}`;
 };
 
-const fitStartAndFilename = (path: string, maxWidth: number, measure: TextMeasureFn) => {
+const fitStartAndFilename = (
+  path: string,
+  maxWidth: number,
+  measure: TextMeasureFn,
+) => {
   if (measure(path) <= maxWidth) return path;
   const { root, directories, fileName } = parsePath(path);
   if (!fileName) return trimFromStartToFit(path, maxWidth, measure);
 
   for (let count = directories.length; count >= 0; count -= 1) {
-    const candidate = buildStartAndFilenameCandidate(root, directories, count, fileName);
+    const candidate = buildStartAndFilenameCandidate(
+      root,
+      directories,
+      count,
+      fileName,
+    );
     if (measure(candidate) <= maxWidth) {
       return candidate;
     }

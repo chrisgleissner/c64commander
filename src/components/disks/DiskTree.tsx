@@ -35,7 +35,9 @@ const highlightText = (text: string, query: string) => {
   return (
     <>
       {before}
-      <span className="bg-primary/10 text-foreground px-0.5 rounded">{match}</span>
+      <span className="bg-primary/10 text-foreground px-0.5 rounded">
+        {match}
+      </span>
       {after}
     </>
   );
@@ -61,7 +63,6 @@ export type DiskTreeProps = {
   onDiskSelect?: (disk: DiskEntry, selected: boolean) => void;
   disableActions?: boolean;
 };
-
 
 const formatBytes = (value?: number | null) => {
   if (!value || value <= 0) return '—';
@@ -143,13 +144,23 @@ const DiskRow = ({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
             <DropdownMenuLabel>Details</DropdownMenuLabel>
-            <DropdownMenuItem disabled>Size: {formatBytes(disk.sizeBytes)}</DropdownMenuItem>
-            <DropdownMenuItem disabled>Date: {formatDate(detailsDate)}</DropdownMenuItem>
+            <DropdownMenuItem disabled>
+              Size: {formatBytes(disk.sizeBytes)}
+            </DropdownMenuItem>
+            <DropdownMenuItem disabled>
+              Date: {formatDate(detailsDate)}
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => onGroup?.(disk)} disabled={disableActions}>
+            <DropdownMenuItem
+              onSelect={() => onGroup?.(disk)}
+              disabled={disableActions}
+            >
               Set group…
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => onRename?.(disk)} disabled={disableActions}>
+            <DropdownMenuItem
+              onSelect={() => onRename?.(disk)}
+              disabled={disableActions}
+            >
               Rename disk…
             </DropdownMenuItem>
             <DropdownMenuItem
@@ -167,7 +178,13 @@ const DiskRow = ({
           <button
             type="button"
             className="text-sm font-medium text-left hover:underline break-words whitespace-normal max-w-full"
-            onClick={wrapUserEvent(() => onMount?.(disk), 'click', 'Disk', { title: disk.name }, 'DiskRow')}
+            onClick={wrapUserEvent(
+              () => onMount?.(disk),
+              'click',
+              'Disk',
+              { title: disk.name },
+              'DiskRow',
+            )}
             disabled={isDimmed || disableActions}
           >
             {highlightText(disk.name, filter)}
@@ -181,7 +198,12 @@ const DiskRow = ({
                 className={cn('h-2 w-2 rounded-full border', groupColor?.chip)}
                 aria-hidden="true"
               />
-              <span className={cn(groupColor?.text, 'break-words whitespace-normal min-w-0')}>
+              <span
+                className={cn(
+                  groupColor?.text,
+                  'break-words whitespace-normal min-w-0',
+                )}
+              >
                 Group: {highlightText(disk.group, filter)}
               </span>
             </div>
@@ -234,7 +256,9 @@ const FolderNode = ({
   if (node.type === 'disk') {
     const disk = node.diskId ? disksById[node.diskId] : null;
     if (!disk) return null;
-    const matchInfo = node.diskId ? tree.matches[node.diskId]?.matches ?? false : false;
+    const matchInfo = node.diskId
+      ? (tree.matches[node.diskId]?.matches ?? false)
+      : false;
     const indent = Math.min(depth * 12, 48);
     return (
       <div style={{ paddingLeft: indent }} className="min-w-0">
@@ -260,23 +284,40 @@ const FolderNode = ({
   const indent = Math.min(depth * 12, 48);
   return (
     <div
-      className={cn('space-y-1 min-w-0', depth > 0 && 'border-l border-border/40 pl-3')}
+      className={cn(
+        'space-y-1 min-w-0',
+        depth > 0 && 'border-l border-border/40 pl-3',
+      )}
       style={{ paddingLeft: indent }}
     >
       {node.id !== 'root' && (
-        <div className={cn('text-xs font-semibold text-muted-foreground py-1 break-words min-w-0', isDimmed && 'opacity-40')}>
+        <div
+          className={cn(
+            'text-xs font-semibold text-muted-foreground py-1 break-words min-w-0',
+            isDimmed && 'opacity-40',
+          )}
+        >
           {highlightText(node.name, filter)}
         </div>
       )}
       {node.children?.map((child, index) => {
         const prev = node.children?.[index - 1];
-        const disk = child.type === 'disk' && child.diskId ? disksById[child.diskId] : null;
-        const prevDisk = prev?.type === 'disk' && prev.diskId ? disksById[prev.diskId] : null;
+        const disk =
+          child.type === 'disk' && child.diskId
+            ? disksById[child.diskId]
+            : null;
+        const prevDisk =
+          prev?.type === 'disk' && prev.diskId ? disksById[prev.diskId] : null;
         const showSeparator =
-          disk && prevDisk && disk.group !== prevDisk.group && (disk.group || prevDisk.group);
+          disk &&
+          prevDisk &&
+          disk.group !== prevDisk.group &&
+          (disk.group || prevDisk.group);
         return (
           <div key={child.id}>
-            {showSeparator ? <div className="my-2 border-t border-border/60" /> : null}
+            {showSeparator ? (
+              <div className="my-2 border-t border-border/60" />
+            ) : null}
             <FolderNode
               node={child}
               depth={node.id === 'root' ? depth : depth + 1}

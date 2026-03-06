@@ -35,7 +35,11 @@ const isTestProbeEnabled = () => {
     const win = window as Window & { __c64uTestProbeEnabled?: boolean };
     if (win.__c64uTestProbeEnabled) return true;
   }
-  if (typeof process !== 'undefined' && process.env?.VITE_ENABLE_TEST_PROBES === '1') return true;
+  if (
+    typeof process !== 'undefined' &&
+    process.env?.VITE_ENABLE_TEST_PROBES === '1'
+  )
+    return true;
   return false;
 };
 
@@ -73,7 +77,8 @@ export const registerTraceBridge = () => {
     },
     getTraces: () => getTraceEvents(),
     exportTraces: () => exportTraceZip(),
-    resetTraceIds: (eventStart = 0, correlationStart = 0) => resetTraceIds(eventStart, correlationStart),
+    resetTraceIds: (eventStart = 0, correlationStart = 0) =>
+      resetTraceIds(eventStart, correlationStart),
     resetTraceSession: (eventStart = 0, correlationStart = 0) => {
       resetActionTrace();
       resetTraceSession(eventStart, correlationStart);

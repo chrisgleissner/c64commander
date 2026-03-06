@@ -31,14 +31,21 @@ describe('compareOrPromoteTraceFiles', () => {
     const goldenDir = path.join(tmpRoot, 'golden');
     const evidenceDir = path.join(tmpRoot, 'evidence');
     await fs.mkdir(evidenceDir, { recursive: true });
-    await fs.writeFile(path.join(evidenceDir, 'trace.json'), JSON.stringify([{ id: 'EVT-0000' }]), 'utf8');
+    await fs.writeFile(
+      path.join(evidenceDir, 'trace.json'),
+      JSON.stringify([{ id: 'EVT-0000' }]),
+      'utf8',
+    );
 
     const result = await compareOrPromoteTraceFiles(goldenDir, evidenceDir);
     expect(result.promoted).toBe(true);
     expect(result.errors).toEqual([]);
     expect(result.diff).toBeNull();
 
-    const promoted = await fs.readFile(path.join(goldenDir, 'trace.json'), 'utf8');
+    const promoted = await fs.readFile(
+      path.join(goldenDir, 'trace.json'),
+      'utf8',
+    );
     expect(promoted).toContain('EVT-0000');
   });
 });

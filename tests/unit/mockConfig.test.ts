@@ -7,11 +7,16 @@
  */
 
 import { describe, expect, it, beforeEach, vi } from 'vitest';
-import { clearMockConfigLoader, getMockConfigPayload, setMockConfigLoader } from '@/lib/mock/mockConfig';
+import {
+  clearMockConfigLoader,
+  getMockConfigPayload,
+  setMockConfigLoader,
+} from '@/lib/mock/mockConfig';
 
 describe('mockConfig', () => {
   beforeEach(() => {
-    setMockConfigLoader(() => `
+    setMockConfigLoader(
+      () => `
 config:
   general:
     base_url: http://mock
@@ -30,7 +35,8 @@ config:
             max: 10
             format: db
             presets: ['0', '6']
-`);
+`,
+    );
   });
 
   it('builds and caches payload from yaml', async () => {
@@ -39,7 +45,12 @@ config:
     expect(payload.general.restApiVersion).toBe('1.0');
     expect(payload.categories.Audio.Volume.value).toBe('+6 dB');
     expect(payload.categories.Audio.Volume.options).toEqual(['+6 dB', '0 dB']);
-    expect(payload.categories.Audio.Volume.details).toEqual({ min: 0, max: 10, format: 'db', presets: ['0', '6'] });
+    expect(payload.categories.Audio.Volume.details).toEqual({
+      min: 0,
+      max: 10,
+      format: 'db',
+      presets: ['0', '6'],
+    });
 
     const cached = await getMockConfigPayload();
     expect(cached).toBe(payload);
@@ -47,7 +58,9 @@ config:
 
   it('resets cache when loader changes', async () => {
     const first = await getMockConfigPayload();
-    setMockConfigLoader(() => ({ config: { general: { base_url: 'http://other' } } }));
+    setMockConfigLoader(() => ({
+      config: { general: { base_url: 'http://other' } },
+    }));
     const second = await getMockConfigPayload();
     expect(second.general.baseUrl).toBe('http://other');
     expect(second).not.toBe(first);
@@ -66,7 +79,9 @@ config:
 
   it('falls back to bundled yaml when asset fetch fails', async () => {
     clearMockConfigLoader();
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('nope'));
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockRejectedValue(new Error('nope'));
 
     const payload = await getMockConfigPayload();
 

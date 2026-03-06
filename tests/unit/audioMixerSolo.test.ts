@@ -37,11 +37,20 @@ describe('audio mixer solo routing', () => {
 
   it('enforces single-solo toggling', () => {
     const initial: SoloState = { soloItem: null };
-    const afterFirst = soloReducer(initial, { type: 'toggle', item: 'Vol UltiSid 1' });
+    const afterFirst = soloReducer(initial, {
+      type: 'toggle',
+      item: 'Vol UltiSid 1',
+    });
     expect(afterFirst.soloItem).toBe('Vol UltiSid 1');
-    const switched = soloReducer(afterFirst, { type: 'toggle', item: 'Vol Socket 1' });
+    const switched = soloReducer(afterFirst, {
+      type: 'toggle',
+      item: 'Vol Socket 1',
+    });
     expect(switched.soloItem).toBe('Vol Socket 1');
-    const cleared = soloReducer(switched, { type: 'toggle', item: 'Vol Socket 1' });
+    const cleared = soloReducer(switched, {
+      type: 'toggle',
+      item: 'Vol Socket 1',
+    });
     expect(cleared.soloItem).toBeNull();
   });
 

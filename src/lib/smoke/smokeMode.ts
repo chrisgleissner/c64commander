@@ -36,24 +36,37 @@ const isObject = (value: unknown): value is Record<string, unknown> =>
 
 const parseSmokeConfig = (raw: unknown): SmokeConfig | null => {
   if (!isObject(raw)) return null;
-  const target = raw.target === 'real' ? 'real' : raw.target === 'mock' ? 'mock' : null;
+  const target =
+    raw.target === 'real' ? 'real' : raw.target === 'mock' ? 'mock' : null;
   if (!target) return null;
-  const host = typeof raw.host === 'string' && raw.host.trim().length > 0 ? normalizeDeviceHost(raw.host) : undefined;
+  const host =
+    typeof raw.host === 'string' && raw.host.trim().length > 0
+      ? normalizeDeviceHost(raw.host)
+      : undefined;
   const readOnly = typeof raw.readOnly === 'boolean' ? raw.readOnly : true;
-  const debugLogging = typeof raw.debugLogging === 'boolean' ? raw.debugLogging : true;
+  const debugLogging =
+    typeof raw.debugLogging === 'boolean' ? raw.debugLogging : true;
   return { target, host, readOnly, debugLogging };
 };
 
 const getErrorMessage = (error: unknown) => {
   if (typeof error === 'string') return error;
   if (error && typeof error === 'object') {
-    if ('message' in error && typeof (error as { message?: unknown }).message === 'string') {
+    if (
+      'message' in error &&
+      typeof (error as { message?: unknown }).message === 'string'
+    ) {
       return (error as { message: string }).message;
     }
     if ('error' in error) {
       const nested = (error as { error?: unknown }).error;
       if (typeof nested === 'string') return nested;
-      if (nested && typeof nested === 'object' && 'message' in nested && typeof (nested as { message?: unknown }).message === 'string') {
+      if (
+        nested &&
+        typeof nested === 'object' &&
+        'message' in nested &&
+        typeof (nested as { message?: unknown }).message === 'string'
+      ) {
         return (nested as { message: string }).message;
       }
     }
@@ -62,12 +75,18 @@ const getErrorMessage = (error: unknown) => {
 };
 
 const isMissingFileError = (error: unknown) =>
-  /does not exist|not exist|no such file|not found/i.test(getErrorMessage(error));
+  /does not exist|not exist|no such file|not found/i.test(
+    getErrorMessage(error),
+  );
 
 const shouldReadSmokeConfigFromFilesystem = () => {
   if (!Capacitor.isNativePlatform()) return false;
   if (import.meta.env.VITE_ENABLE_TEST_PROBES === '1') return true;
-  if (typeof window !== 'undefined' && (window as SmokeBootstrapWindow).__c64uReadSmokeConfigFromFilesystem === true) {
+  if (
+    typeof window !== 'undefined' &&
+    (window as SmokeBootstrapWindow).__c64uReadSmokeConfigFromFilesystem ===
+      true
+  ) {
     return true;
   }
   if (typeof localStorage === 'undefined') return false;
@@ -98,7 +117,8 @@ export const isSmokeModeEnabled = () => Boolean(cachedSmokeConfig);
 
 export const getSmokeConfig = () => cachedSmokeConfig;
 
-export const isSmokeReadOnlyEnabled = () => cachedSmokeConfig?.readOnly !== false;
+export const isSmokeReadOnlyEnabled = () =>
+  cachedSmokeConfig?.readOnly !== false;
 
 export const initializeSmokeMode = async (): Promise<SmokeConfig | null> => {
   cachedSmokeConfig = null;
@@ -115,9 +135,13 @@ export const initializeSmokeMode = async (): Promise<SmokeConfig | null> => {
       config = parseSmokeConfig(JSON.parse(result.data));
     } catch (error) {
       if (isMissingFileError(error)) {
-        addLog('debug', 'Smoke config file not found; skipping native bootstrap', {
-          path: SMOKE_CONFIG_FILENAME,
-        });
+        addLog(
+          'debug',
+          'Smoke config file not found; skipping native bootstrap',
+          {
+            path: SMOKE_CONFIG_FILENAME,
+          },
+        );
       } else {
         addLog('warn', 'Failed to read smoke config from filesystem', {
           error: (error as Error).message,
@@ -140,13 +164,28 @@ export const initializeSmokeMode = async (): Promise<SmokeConfig | null> => {
     localStorage.setItem('c64u_device_host', config.host);
   }
 
-  addLog('info', 'Smoke mode enabled', { target: config.target, host: config.host, readOnly: config.readOnly });
-  console.info('C64U_SMOKE_ENABLED', JSON.stringify({ target: config.target, host: config.host, readOnly: config.readOnly }));
+  addLog('info', 'Smoke mode enabled', {
+    target: config.target,
+    host: config.host,
+    readOnly: config.readOnly,
+  });
+  console.info(
+    'C64U_SMOKE_ENABLED',
+    JSON.stringify({
+      target: config.target,
+      host: config.host,
+      readOnly: config.readOnly,
+    }),
+  );
 
   return config;
 };
 
-export const recordSmokeStatus = async (status: { state: string; mode?: string; baseUrl?: string }) => {
+export const recordSmokeStatus = async (status: {
+  state: string;
+  mode?: string;
+  baseUrl?: string;
+}) => {
   if (!cachedSmokeConfig || !Capacitor.isNativePlatform()) return;
   try {
     await Filesystem.writeFile({

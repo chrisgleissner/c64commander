@@ -26,7 +26,9 @@ describe('useActionTrace', () => {
     createActionContext.mockReset();
     runWithActionTrace.mockReset();
     createActionContext.mockReturnValue({ correlationId: 'COR-1' });
-    runWithActionTrace.mockImplementation((_ctx: unknown, fn: () => unknown) => fn());
+    runWithActionTrace.mockImplementation((_ctx: unknown, fn: () => unknown) =>
+      fn(),
+    );
 
     const { result } = renderHook(() => useActionTrace('Widget'));
     const doThing = (value: number) => value + 1;
@@ -38,7 +40,11 @@ describe('useActionTrace', () => {
     });
 
     expect(output).toBe(3);
-    expect(createActionContext).toHaveBeenCalledWith('Widget.doThing', 'user', 'Widget');
+    expect(createActionContext).toHaveBeenCalledWith(
+      'Widget.doThing',
+      'user',
+      'Widget',
+    );
     expect(runWithActionTrace).toHaveBeenCalled();
   });
 
@@ -54,12 +60,15 @@ describe('useActionTrace', () => {
     createActionContext.mockReset();
     runWithActionTrace.mockReset();
     createActionContext.mockReturnValue({ correlationId: 'COR-2' });
-    runWithActionTrace.mockImplementation((_ctx: unknown, fn: () => unknown) => fn());
+    runWithActionTrace.mockImplementation((_ctx: unknown, fn: () => unknown) =>
+      fn(),
+    );
 
     class MockError extends Error {
       constructor() {
         super('stack');
-        this.stack = 'Error\n  at FakeComponent (fake.tsx:1:1)\n  at useActionTrace (hook.ts:1:1)';
+        this.stack =
+          'Error\n  at FakeComponent (fake.tsx:1:1)\n  at useActionTrace (hook.ts:1:1)';
       }
     }
 
@@ -76,7 +85,11 @@ describe('useActionTrace', () => {
     });
 
     expect(output).toBe(42);
-    expect(createActionContext).toHaveBeenCalledWith('Error.doThing', 'user', 'Error');
+    expect(createActionContext).toHaveBeenCalledWith(
+      'Error.doThing',
+      'user',
+      'Error',
+    );
 
     vi.unstubAllGlobals();
   });
@@ -85,7 +98,9 @@ describe('useActionTrace', () => {
     createActionContext.mockReset();
     runWithActionTrace.mockReset();
     createActionContext.mockReturnValue({ correlationId: 'COR-3' });
-    runWithActionTrace.mockImplementation((_ctx: unknown, fn: () => unknown) => fn());
+    runWithActionTrace.mockImplementation((_ctx: unknown, fn: () => unknown) =>
+      fn(),
+    );
 
     const { result } = renderHook(() => useActionTrace('Widget'));
     const fn = () => 7;
@@ -98,6 +113,10 @@ describe('useActionTrace', () => {
     });
 
     expect(output).toBe(7);
-    expect(createActionContext).toHaveBeenCalledWith('Widget.anonymousAction', 'user', 'Widget');
+    expect(createActionContext).toHaveBeenCalledWith(
+      'Widget.anonymousAction',
+      'user',
+      'Widget',
+    );
   });
 });

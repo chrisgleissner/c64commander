@@ -39,10 +39,12 @@ export type HvscBrowseIndexSnapshot = {
   folders: Record<string, HvscBrowseFolderRow>;
 };
 
-const normalizePath = (path: string) => (path.startsWith('/') ? path : `/${path}`);
+const normalizePath = (path: string) =>
+  path.startsWith('/') ? path : `/${path}`;
 const normalizeFolderPath = (path: string) => {
   const normalized = normalizePath(path || '/');
-  if (normalized.length > 1 && normalized.endsWith('/')) return normalized.slice(0, -1);
+  if (normalized.length > 1 && normalized.endsWith('/'))
+    return normalized.slice(0, -1);
   return normalized;
 };
 
@@ -74,9 +76,13 @@ const decodeUtf8Base64 = (value: string) => {
   }
 };
 
-const hashPath = (value: string) => Math.abs(
-  Array.from(value).reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) | 0, 0),
-);
+const hashPath = (value: string) =>
+  Math.abs(
+    Array.from(value).reduce(
+      (hash, char) => (hash * 31 + char.charCodeAt(0)) | 0,
+      0,
+    ),
+  );
 
 const getParentFolder = (virtualPath: string) => {
   const normalized = normalizePath(virtualPath);
@@ -99,8 +105,13 @@ const toIndexedSong = (entry: MediaEntry): HvscBrowseIndexedSong => ({
   trackSubsongs: null,
 });
 
-const buildFoldersFromSongs = (songs: Record<string, HvscBrowseIndexedSong>) => {
-  const folderMap = new Map<string, { folders: Set<string>; songs: Set<string> }>();
+const buildFoldersFromSongs = (
+  songs: Record<string, HvscBrowseIndexedSong>,
+) => {
+  const folderMap = new Map<
+    string,
+    { folders: Set<string>; songs: Set<string> }
+  >();
   const ensureFolder = (path: string) => {
     const normalized = normalizeFolderPath(path);
     const current = folderMap.get(normalized);
@@ -118,7 +129,9 @@ const buildFoldersFromSongs = (songs: Record<string, HvscBrowseIndexedSong>) => 
     for (let index = 0; index < segments.length - 1; index += 1) {
       const folderName = segments[index];
       const parent = ensureFolder(currentPath);
-      const nextPath = normalizeFolderPath(`${currentPath === '/' ? '' : currentPath}/${folderName}`);
+      const nextPath = normalizeFolderPath(
+        `${currentPath === '/' ? '' : currentPath}/${folderName}`,
+      );
       parent.folders.add(nextPath);
       ensureFolder(nextPath);
       currentPath = nextPath;
@@ -138,18 +151,19 @@ const buildFoldersFromSongs = (songs: Record<string, HvscBrowseIndexedSong>) => 
   return folders;
 };
 
-export const createEmptyHvscBrowseIndexSnapshot = (): HvscBrowseIndexSnapshot => ({
-  schemaVersion: SCHEMA_VERSION,
-  updatedAt: new Date().toISOString(),
-  songs: {},
-  folders: {
-    '/': {
-      path: '/',
-      folders: [],
-      songs: [],
+export const createEmptyHvscBrowseIndexSnapshot =
+  (): HvscBrowseIndexSnapshot => ({
+    schemaVersion: SCHEMA_VERSION,
+    updatedAt: new Date().toISOString(),
+    songs: {},
+    folders: {
+      '/': {
+        path: '/',
+        folders: [],
+        songs: [],
+      },
     },
-  },
-});
+  });
 
 const normalizeSnapshot = (snapshot: HvscBrowseIndexSnapshot | null) => {
   if (!snapshot) return createEmptyHvscBrowseIndexSnapshot();
@@ -184,7 +198,10 @@ const parseSnapshot = (raw: string | null) => {
 
 const readFilesystemSnapshot = async () => {
   try {
-    const result = await Filesystem.readFile({ directory: Directory.Data, path: STORAGE_PATH });
+    const result = await Filesystem.readFile({
+      directory: Directory.Data,
+      path: STORAGE_PATH,
+    });
     return parseSnapshot(decodeUtf8Base64(result.data));
   } catch {
     return null;
@@ -194,7 +211,10 @@ const readFilesystemSnapshot = async () => {
 export const clearHvscBrowseIndexSnapshot = async () => {
   if (typeof window !== 'undefined') {
     try {
-      await Filesystem.deleteFile({ directory: Directory.Data, path: STORAGE_PATH });
+      await Filesystem.deleteFile({
+        directory: Directory.Data,
+        path: STORAGE_PATH,
+      });
     } catch (error) {
       addLog('warn', 'Failed to delete HVSC browse snapshot', {
         path: STORAGE_PATH,
@@ -202,7 +222,10 @@ export const clearHvscBrowseIndexSnapshot = async () => {
       });
     }
     try {
-      await Filesystem.deleteFile({ directory: Directory.Data, path: MEDIA_INDEX_STORAGE_PATH });
+      await Filesystem.deleteFile({
+        directory: Directory.Data,
+        path: MEDIA_INDEX_STORAGE_PATH,
+      });
     } catch (error) {
       addLog('warn', 'Failed to delete HVSC media snapshot', {
         path: MEDIA_INDEX_STORAGE_PATH,
@@ -217,7 +240,11 @@ export const clearHvscBrowseIndexSnapshot = async () => {
 };
 
 const writeFilesystemSnapshot = async (snapshot: HvscBrowseIndexSnapshot) => {
-  await Filesystem.mkdir({ directory: Directory.Data, path: 'hvsc/index', recursive: true });
+  await Filesystem.mkdir({
+    directory: Directory.Data,
+    path: 'hvsc/index',
+    recursive: true,
+  });
   await Filesystem.writeFile({
     directory: Directory.Data,
     path: STORAGE_PATH,
@@ -226,22 +253,30 @@ const writeFilesystemSnapshot = async (snapshot: HvscBrowseIndexSnapshot) => {
   });
 };
 
-const writeFilesystemMediaIndexSnapshot = async (snapshot: HvscBrowseIndexSnapshot) => {
+const writeFilesystemMediaIndexSnapshot = async (
+  snapshot: HvscBrowseIndexSnapshot,
+) => {
   const entries = Object.values(snapshot.songs).map((song) => ({
     path: song.virtualPath,
     name: song.fileName,
     type: 'sid' as const,
     durationSeconds: song.durationSeconds ?? null,
   }));
-  await Filesystem.mkdir({ directory: Directory.Data, path: 'hvsc/index', recursive: true });
+  await Filesystem.mkdir({
+    directory: Directory.Data,
+    path: 'hvsc/index',
+    recursive: true,
+  });
   await Filesystem.writeFile({
     directory: Directory.Data,
     path: MEDIA_INDEX_STORAGE_PATH,
-    data: encodeUtf8Base64(JSON.stringify({
-      version: 1,
-      updatedAt: snapshot.updatedAt,
-      entries,
-    })),
+    data: encodeUtf8Base64(
+      JSON.stringify({
+        version: 1,
+        updatedAt: snapshot.updatedAt,
+        entries,
+      }),
+    ),
     recursive: true,
   });
 };
@@ -256,7 +291,9 @@ const writeLocalStorageSnapshot = (snapshot: HvscBrowseIndexSnapshot) => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
 };
 
-const writeLocalStorageMediaIndexSnapshot = (snapshot: HvscBrowseIndexSnapshot) => {
+const writeLocalStorageMediaIndexSnapshot = (
+  snapshot: HvscBrowseIndexSnapshot,
+) => {
   if (typeof localStorage === 'undefined') return;
   const entries = Object.values(snapshot.songs).map((song) => ({
     path: song.virtualPath,
@@ -264,11 +301,14 @@ const writeLocalStorageMediaIndexSnapshot = (snapshot: HvscBrowseIndexSnapshot) 
     type: 'sid' as const,
     durationSeconds: song.durationSeconds ?? null,
   }));
-  localStorage.setItem(MEDIA_INDEX_STORAGE_KEY, JSON.stringify({
-    version: 1,
-    updatedAt: snapshot.updatedAt,
-    entries,
-  }));
+  localStorage.setItem(
+    MEDIA_INDEX_STORAGE_KEY,
+    JSON.stringify({
+      version: 1,
+      updatedAt: snapshot.updatedAt,
+      entries,
+    }),
+  );
 };
 
 export const loadHvscBrowseIndexSnapshot = async () => {
@@ -280,7 +320,9 @@ export const loadHvscBrowseIndexSnapshot = async () => {
   return readLocalStorageSnapshot();
 };
 
-export const saveHvscBrowseIndexSnapshot = async (snapshot: HvscBrowseIndexSnapshot) => {
+export const saveHvscBrowseIndexSnapshot = async (
+  snapshot: HvscBrowseIndexSnapshot,
+) => {
   const normalized: HvscBrowseIndexSnapshot = {
     schemaVersion: SCHEMA_VERSION,
     updatedAt: new Date().toISOString(),
@@ -302,11 +344,15 @@ export const saveHvscBrowseIndexSnapshot = async (snapshot: HvscBrowseIndexSnaps
   writeLocalStorageMediaIndexSnapshot(normalized);
 };
 
-export const buildHvscBrowseIndexFromEntries = (entries: MediaEntry[]): HvscBrowseIndexSnapshot => {
-  const songs = Object.fromEntries(entries.map((entry) => {
-    const song = toIndexedSong(entry);
-    return [song.virtualPath, song];
-  }));
+export const buildHvscBrowseIndexFromEntries = (
+  entries: MediaEntry[],
+): HvscBrowseIndexSnapshot => {
+  const songs = Object.fromEntries(
+    entries.map((entry) => {
+      const song = toIndexedSong(entry);
+      return [song.virtualPath, song];
+    }),
+  );
   return {
     schemaVersion: SCHEMA_VERSION,
     updatedAt: new Date().toISOString(),
@@ -315,10 +361,14 @@ export const buildHvscBrowseIndexFromEntries = (entries: MediaEntry[]): HvscBrow
   };
 };
 
-export const createHvscBrowseIndexMutable = async (mode: 'baseline' | 'update') => {
-  const snapshot = mode === 'baseline'
-    ? createEmptyHvscBrowseIndexSnapshot()
-    : (await loadHvscBrowseIndexSnapshot()) ?? createEmptyHvscBrowseIndexSnapshot();
+export const createHvscBrowseIndexMutable = async (
+  mode: 'baseline' | 'update',
+) => {
+  const snapshot =
+    mode === 'baseline'
+      ? createEmptyHvscBrowseIndexSnapshot()
+      : ((await loadHvscBrowseIndexSnapshot()) ??
+        createEmptyHvscBrowseIndexSnapshot());
 
   return {
     upsertSong: (song: HvscBrowseIndexedSong) => {
@@ -351,10 +401,18 @@ export const listFolderFromBrowseIndex = (
 ) => {
   const normalizedPath = normalizeFolderPath(folderPath);
   const normalizedQuery = query.trim().toLowerCase();
-  const row = snapshot.folders[normalizedPath] ?? { path: normalizedPath, folders: [], songs: [] };
+  const row = snapshot.folders[normalizedPath] ?? {
+    path: normalizedPath,
+    folders: [],
+    songs: [],
+  };
 
   const folders = row.folders
-    .filter((folder) => normalizedQuery.length === 0 || folder.toLowerCase().includes(normalizedQuery))
+    .filter(
+      (folder) =>
+        normalizedQuery.length === 0 ||
+        folder.toLowerCase().includes(normalizedQuery),
+    )
     .sort((a, b) => a.localeCompare(b));
 
   const matchedSongs = row.songs
@@ -362,11 +420,19 @@ export const listFolderFromBrowseIndex = (
     .filter((song): song is HvscBrowseIndexedSong => Boolean(song))
     .filter((song) => {
       if (normalizedQuery.length === 0) return true;
-      return song.fileName.toLowerCase().includes(normalizedQuery)
-        || song.virtualPath.toLowerCase().includes(normalizedQuery)
-        || (song.sidMetadata?.name ?? '').toLowerCase().includes(normalizedQuery)
-        || (song.sidMetadata?.author ?? '').toLowerCase().includes(normalizedQuery)
-        || (song.sidMetadata?.released ?? '').toLowerCase().includes(normalizedQuery);
+      return (
+        song.fileName.toLowerCase().includes(normalizedQuery) ||
+        song.virtualPath.toLowerCase().includes(normalizedQuery) ||
+        (song.sidMetadata?.name ?? '')
+          .toLowerCase()
+          .includes(normalizedQuery) ||
+        (song.sidMetadata?.author ?? '')
+          .toLowerCase()
+          .includes(normalizedQuery) ||
+        (song.sidMetadata?.released ?? '')
+          .toLowerCase()
+          .includes(normalizedQuery)
+      );
     })
     .sort((a, b) => a.fileName.localeCompare(b.fileName));
 
@@ -389,7 +455,10 @@ export const listFolderFromBrowseIndex = (
   };
 };
 
-export const verifyHvscBrowseIndexIntegrity = async (snapshot: HvscBrowseIndexSnapshot, sampleSize = 12) => {
+export const verifyHvscBrowseIndexIntegrity = async (
+  snapshot: HvscBrowseIndexSnapshot,
+  sampleSize = 12,
+) => {
   const paths = Object.keys(snapshot.songs);
   if (!paths.length) {
     return {
@@ -428,11 +497,17 @@ export const verifyHvscBrowseIndexIntegrity = async (snapshot: HvscBrowseIndexSn
   };
 };
 
-export const getHvscSongFromBrowseIndex = (snapshot: HvscBrowseIndexSnapshot, virtualPath: string) => {
+export const getHvscSongFromBrowseIndex = (
+  snapshot: HvscBrowseIndexSnapshot,
+  virtualPath: string,
+) => {
   return snapshot.songs[normalizePath(virtualPath)] ?? null;
 };
 
-export const getHvscFoldersWithParent = (snapshot: HvscBrowseIndexSnapshot, parentPath: string) => {
+export const getHvscFoldersWithParent = (
+  snapshot: HvscBrowseIndexSnapshot,
+  parentPath: string,
+) => {
   const normalizedParent = normalizeFolderPath(parentPath);
   const row = snapshot.folders[normalizedParent];
   if (!row) return [] as Array<{ folderPath: string; folderName: string }>;
@@ -442,7 +517,10 @@ export const getHvscFoldersWithParent = (snapshot: HvscBrowseIndexSnapshot, pare
   }));
 };
 
-export const listHvscFolderTracks = (snapshot: HvscBrowseIndexSnapshot, folderPath: string) => {
+export const listHvscFolderTracks = (
+  snapshot: HvscBrowseIndexSnapshot,
+  folderPath: string,
+) => {
   const normalizedPath = normalizeFolderPath(folderPath);
   const row = snapshot.folders[normalizedPath];
   if (!row) return [] as Array<{ trackId: string; fileName: string }>;

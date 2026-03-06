@@ -42,7 +42,9 @@ const redactValue = (value: unknown, keyHint?: string): unknown => {
   return value;
 };
 
-export const redactHeaders = (headers: Record<string, string | string[] | undefined>) => {
+export const redactHeaders = (
+  headers: Record<string, string | string[] | undefined>,
+) => {
   const redacted: Record<string, string | string[] | undefined> = {};
   Object.entries(headers).forEach(([key, value]) => {
     if (value === undefined) return;
@@ -51,16 +53,20 @@ export const redactHeaders = (headers: Record<string, string | string[] | undefi
       return;
     }
     if (Array.isArray(value)) {
-      redacted[key] = value.map((entry) => (typeof entry === 'string' ? redactValue(entry, key) : entry)) as string[];
+      redacted[key] = value.map((entry) =>
+        typeof entry === 'string' ? redactValue(entry, key) : entry,
+      ) as string[];
       return;
     }
-    redacted[key] = typeof value === 'string' ? (redactValue(value, key) as string) : value;
+    redacted[key] =
+      typeof value === 'string' ? (redactValue(value, key) as string) : value;
   });
   return redacted;
 };
 
 export const redactPayload = <T>(payload: T): T => redactValue(payload) as T;
 
-export const redactErrorMessage = (message: string) => redactValue(message) as string;
+export const redactErrorMessage = (message: string) =>
+  redactValue(message) as string;
 
 export const REDACTION = { REDACTED } as const;

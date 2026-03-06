@@ -100,8 +100,8 @@ describe('ftpConfig', () => {
 
   it('setRuntimeFtpPortOverride sets and clears override (lines 16, 33)', () => {
     setRuntimeFtpPortOverride(2121);
-    expect(getStoredFtpPort()).toBe(2121);  // line 16 TRUE
-    setRuntimeFtpPortOverride(null);        // line 33 TRUE
+    expect(getStoredFtpPort()).toBe(2121); // line 16 TRUE
+    setRuntimeFtpPortOverride(null); // line 33 TRUE
     expect(getStoredFtpPort()).toBe(21);
   });
 

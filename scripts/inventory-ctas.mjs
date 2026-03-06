@@ -25,27 +25,27 @@ function extractLabel(line, fullContent, lineNumber) {
   // Try to extract button label
   const ariaLabelMatch = line.match(/aria-label=["']([^"']+)["']/);
   if (ariaLabelMatch) return ariaLabelMatch[1];
-  
+
   const dataTestIdMatch = line.match(/data-testid=["']([^"']+)["']/);
   if (dataTestIdMatch) return `[testid: ${dataTestIdMatch[1]}]`;
-  
+
   // Look for text content on next few lines
   const lines = fullContent.split('\n');
   for (let i = lineNumber; i < Math.min(lineNumber + 5, lines.length); i++) {
     const textMatch = lines[i].match(/>\s*([A-Z][^<>]{2,30})\s*</);
     if (textMatch) return textMatch[1].trim();
   }
-  
+
   return '[unlabeled]';
 }
 
 function extractOnClick(line, fullContent, lineNumber) {
   const onClickMatch = line.match(/onClick=\{([^}]+)\}/);
   if (onClickMatch) return onClickMatch[1].trim();
-  
+
   const onSelectMatch = line.match(/onSelect=\{([^}]+)\}/);
   if (onSelectMatch) return onSelectMatch[1].trim();
-  
+
   return null;
 }
 
@@ -61,10 +61,10 @@ function scanFile(filePath) {
       const matchIndex = match.index;
       const lineNumber = content.substring(0, matchIndex).split('\n').length;
       const line = lines[lineNumber - 1];
-      
+
       const label = extractLabel(line, content, lineNumber);
       const handler = extractOnClick(line, content, lineNumber);
-      
+
       ctas.push({
         file: relativePath,
         line: lineNumber,
@@ -81,20 +81,24 @@ function scanFile(filePath) {
 
 function scanDirectory(dir, ctas = []) {
   const entries = readdirSync(dir);
-  
+
   for (const entry of entries) {
     const fullPath = join(dir, entry);
     const stat = statSync(fullPath);
-    
+
     if (stat.isDirectory()) {
-      if (!entry.startsWith('.') && entry !== 'node_modules' && entry !== 'dist') {
+      if (
+        !entry.startsWith('.') &&
+        entry !== 'node_modules' &&
+        entry !== 'dist'
+      ) {
         scanDirectory(fullPath, ctas);
       }
     } else if (entry.endsWith('.tsx') || entry.endsWith('.ts')) {
       ctas.push(...scanFile(fullPath));
     }
   }
-  
+
   return ctas;
 }
 
@@ -131,7 +135,7 @@ for (const [page, ctas] of Object.entries(byPage)) {
 writeFileSync(
   join(rootDir, 'cta-inventory.json'),
   JSON.stringify(report, null, 2),
-  'utf-8'
+  'utf-8',
 );
 
 console.log('\nCTAs by type:');

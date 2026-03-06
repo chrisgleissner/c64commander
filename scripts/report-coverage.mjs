@@ -6,7 +6,10 @@ const coverageFile = process.env.COVERAGE_FILE ?? 'coverage/lcov-merged.info';
 const limit = Number(process.env.COVERAGE_LIMIT ?? '20');
 const minLines = Number(process.env.COVERAGE_MIN_LINES ?? '50');
 
-const content = await fs.readFile(path.resolve(process.cwd(), coverageFile), 'utf8');
+const content = await fs.readFile(
+  path.resolve(process.cwd(), coverageFile),
+  'utf8',
+);
 
 const files = [];
 let current = null;
@@ -36,7 +39,9 @@ for (const line of content.split('\n')) {
 pushCurrent();
 
 const candidates = files.filter((entry) => entry.total >= minLines);
-const sorted = candidates.sort((a, b) => (a.covered / a.total) - (b.covered / b.total));
+const sorted = candidates.sort(
+  (a, b) => a.covered / a.total - b.covered / b.total,
+);
 const worst = sorted.slice(0, limit);
 
 if (!worst.length) {
@@ -47,5 +52,7 @@ if (!worst.length) {
 console.log(`Lowest coverage files (min lines: ${minLines}):`);
 for (const entry of worst) {
   const percent = entry.total ? (entry.covered / entry.total) * 100 : 0;
-  console.log(`${percent.toFixed(2)}% ${entry.covered}/${entry.total} ${entry.file}`);
+  console.log(
+    `${percent.toFixed(2)}% ${entry.covered}/${entry.total} ${entry.file}`,
+  );
 }

@@ -60,13 +60,23 @@ export const isDeviceOperationFailure = (entry: AppLogEntry): boolean => {
   const msg = entry.message;
   if (/^HOME_[A-Z_]+: /.test(msg)) return true;
   if (/^AUDIO_ROUTING: /.test(msg)) return true;
-  if (/^(RESET_DRIVES|DRIVE_POWER|DRIVE_CONFIG_UPDATE|SOFT_IEC_CONFIG_UPDATE): /.test(msg)) return true;
+  if (
+    /^(RESET_DRIVES|DRIVE_POWER|DRIVE_CONFIG_UPDATE|SOFT_IEC_CONFIG_UPDATE): /.test(
+      msg,
+    )
+  )
+    return true;
   if (/^(RAM_DUMP_FOLDER_SELECT|BROWSE|CONFIG_UPDATE): /.test(msg)) return true;
   if (msg.includes('FTP listing failed')) return true;
   if (msg.includes('Source browse failed')) return true;
-  if (msg.includes('C64 API request failed') || msg.includes('C64 API upload failed')) return true;
+  if (
+    msg.includes('C64 API request failed') ||
+    msg.includes('C64 API upload failed')
+  )
+    return true;
   if (msg.includes('RAM operation retry')) return true;
-  if (msg.includes('Failed to resume machine after clear-memory error')) return true;
+  if (msg.includes('Failed to resume machine after clear-memory error'))
+    return true;
   if (msg.includes('HVSC paged folder listing failed')) return true;
   if (msg.includes('HVSC songlengths directory bootstrap failed')) return true;
   if (msg.includes('HVSC progress interrupted')) return true;
@@ -109,7 +119,10 @@ export const isAlwaysExpectedFuzzBehavior = (entry: AppLogEntry): boolean => {
   return false;
 };
 
-export const shouldIgnoreBackendFailure = (entry: AppLogEntry, _context: BackendFailureContext) => {
+export const shouldIgnoreBackendFailure = (
+  entry: AppLogEntry,
+  _context: BackendFailureContext,
+) => {
   return isAlwaysExpectedFuzzBehavior(entry);
 };
 
@@ -131,7 +144,9 @@ export const createBackendFailureTracker = (options: {
   const computeBackoff = (nextStreak: number) => {
     if (options.baseDelayMs <= 0 || options.maxDelayMs <= 0) return 0;
     const factor = Math.max(1, options.factor);
-    const delay = Math.round(options.baseDelayMs * Math.pow(factor, Math.max(0, nextStreak - 1)));
+    const delay = Math.round(
+      options.baseDelayMs * Math.pow(factor, Math.max(0, nextStreak - 1)),
+    );
     return Math.min(options.maxDelayMs, delay);
   };
 

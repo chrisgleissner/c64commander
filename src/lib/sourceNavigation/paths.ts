@@ -23,14 +23,21 @@ export const isPathWithinRoot = (path: string, root: string) => {
   const normalizedRoot = normalizeRoot(root);
   const normalizedPath = normalizeSourcePath(path);
   if (normalizedRoot === '/') return normalizedPath.startsWith('/');
-  return normalizedPath === normalizedRoot.slice(0, -1) || normalizedPath.startsWith(normalizedRoot);
+  return (
+    normalizedPath === normalizedRoot.slice(0, -1) ||
+    normalizedPath.startsWith(normalizedRoot)
+  );
 };
 
 export const getParentPathWithinRoot = (path: string, root: string) => {
   const normalizedRoot = normalizeRoot(root);
   const normalizedPath = normalizeSourcePath(path);
   if (!isPathWithinRoot(normalizedPath, normalizedRoot)) return normalizedRoot;
-  if (normalizedPath === normalizedRoot || normalizedPath === normalizedRoot.slice(0, -1)) return normalizedRoot;
+  if (
+    normalizedPath === normalizedRoot ||
+    normalizedPath === normalizedRoot.slice(0, -1)
+  )
+    return normalizedRoot;
   const trimmed = normalizedPath.replace(/\/$/, '');
   const idx = trimmed.lastIndexOf('/');
   if (idx <= 0) return '/';
@@ -40,4 +47,6 @@ export const getParentPathWithinRoot = (path: string, root: string) => {
 };
 
 export const ensureWithinRoot = (path: string, root: string) =>
-  (isPathWithinRoot(path, root) ? normalizeSourcePath(path) : normalizeRoot(root));
+  isPathWithinRoot(path, root)
+    ? normalizeSourcePath(path)
+    : normalizeRoot(root);

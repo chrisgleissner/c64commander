@@ -10,7 +10,11 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { AddItemsProgressOverlay } from '@/components/itemSelection/AddItemsProgressOverlay';
 
-const buildProgress = (overrides?: Partial<Parameters<typeof AddItemsProgressOverlay>[0]['progress']>) => ({
+const buildProgress = (
+  overrides?: Partial<
+    Parameters<typeof AddItemsProgressOverlay>[0]['progress']
+  >,
+) => ({
   status: 'scanning' as const,
   count: 3,
   elapsedMs: 65000,
@@ -32,7 +36,11 @@ describe('AddItemsProgressOverlay', () => {
     const onCancel = vi.fn();
 
     render(
-      <AddItemsProgressOverlay progress={buildProgress()} onCancel={onCancel} testId="progress" />,
+      <AddItemsProgressOverlay
+        progress={buildProgress()}
+        onCancel={onCancel}
+        testId="progress"
+      />,
     );
 
     expect(screen.getByTestId('progress')).toBeInTheDocument();

@@ -150,11 +150,11 @@ Issues are classified by `scripts/fuzzClassifier.mjs` during report generation.
 Application log severity (WARN / ERROR) is never modified.
 Issue grouping signatures are unchanged.
 
-| Class | Meaning |
-|-------|---------|
-| REAL | Confirmed application defect (crash, freeze, TypeError/logic error) |
-| UNCERTAIN | Cannot be confidently classified; requires developer review |
-| EXPECTED | Fuzz artifact: fuzz infrastructure noise, chaos-induced network failure, device-op failure on mock server |
+| Class     | Meaning                                                                                                   |
+| --------- | --------------------------------------------------------------------------------------------------------- |
+| REAL      | Confirmed application defect (crash, freeze, TypeError/logic error)                                       |
+| UNCERTAIN | Cannot be confidently classified; requires developer review                                               |
+| EXPECTED  | Fuzz artifact: fuzz infrastructure noise, chaos-induced network failure, device-op failure on mock server |
 
 Domains: `NETWORK`, `UI`, `DEVICE_ACTION`, `FILESYSTEM`, `FUZZ_INFRASTRUCTURE`, `BACKEND`, `UNKNOWN`
 

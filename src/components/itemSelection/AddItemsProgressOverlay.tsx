@@ -55,7 +55,9 @@ export const AddItemsProgressOverlay = ({
       >
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm font-semibold">{title}</p>
-          <span className="text-xs text-muted-foreground">{formatElapsed(progress.elapsedMs)}</span>
+          <span className="text-xs text-muted-foreground">
+            {formatElapsed(progress.elapsedMs)}
+          </span>
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
           {progress.message || 'Scanning files'} • {progress.count} found

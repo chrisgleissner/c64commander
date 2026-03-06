@@ -43,7 +43,7 @@ const stableHash = (value: string) => {
   return hash >>> 0;
 };
 
-const seededShuffle = <T,>(items: T[], seed: number) => {
+const seededShuffle = <T>(items: T[], seed: number) => {
   const next = [...items];
   let state = seed >>> 0;
   const random = () => {
@@ -81,19 +81,24 @@ const openDb = (): Promise<IDBDatabase> =>
       }
     };
     request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error ?? new Error('IndexedDB open failed'));
+    request.onerror = () =>
+      reject(request.error ?? new Error('IndexedDB open failed'));
   });
 
 const loadState = async (): Promise<PersistedState> => {
   const db = await openDb();
   try {
-    const state = await new Promise<PersistedState | null>((resolve, reject) => {
-      const tx = db.transaction(STORE, 'readonly');
-      const store = tx.objectStore(STORE);
-      const request = store.get(STATE_KEY);
-      request.onsuccess = () => resolve((request.result as PersistedState | undefined) ?? null);
-      request.onerror = () => reject(request.error ?? new Error('IndexedDB read failed'));
-    });
+    const state = await new Promise<PersistedState | null>(
+      (resolve, reject) => {
+        const tx = db.transaction(STORE, 'readonly');
+        const store = tx.objectStore(STORE);
+        const request = store.get(STATE_KEY);
+        request.onsuccess = () =>
+          resolve((request.result as PersistedState | undefined) ?? null);
+        request.onerror = () =>
+          reject(request.error ?? new Error('IndexedDB read failed'));
+      },
+    );
     if (!state) {
       return defaultState();
     }
@@ -101,10 +106,13 @@ const loadState = async (): Promise<PersistedState> => {
       return defaultState();
     }
     if (state.version !== 1) {
-      console.warn('Incompatible playlist repository schema in IndexedDB. Resetting repository state.', {
-        expectedVersion: 1,
-        foundVersion: state.version,
-      });
+      console.warn(
+        'Incompatible playlist repository schema in IndexedDB. Resetting repository state.',
+        {
+          expectedVersion: 1,
+          foundVersion: state.version,
+        },
+      );
       return defaultState();
     }
     return {
@@ -115,7 +123,9 @@ const loadState = async (): Promise<PersistedState> => {
       randomSessionsByPlaylistId: state.randomSessionsByPlaylistId ?? {},
     };
   } catch (error) {
-    console.warn('Failed to load playlist repository state from IndexedDB', { error });
+    console.warn('Failed to load playlist repository state from IndexedDB', {
+      error,
+    });
     return defaultState();
   } finally {
     db.close();
@@ -130,7 +140,8 @@ const writeState = async (state: PersistedState) => {
       const store = tx.objectStore(STORE);
       const request = store.put(state, STATE_KEY);
       request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error ?? new Error('IndexedDB write failed'));
+      request.onerror = () =>
+        reject(request.error ?? new Error('IndexedDB write failed'));
     });
   } finally {
     db.close();
@@ -142,12 +153,18 @@ class IndexedDbPlaylistDataRepository implements PlaylistDataRepository {
 
   constructor(private readonly options: Options) {
     this.statePromise = loadState();
-    if (this.options.preferDurableStorage && typeof navigator !== 'undefined' && navigator.storage?.persist) {
+    if (
+      this.options.preferDurableStorage &&
+      typeof navigator !== 'undefined' &&
+      navigator.storage?.persist
+    ) {
       void navigator.storage.persist();
     }
   }
 
-  private async withState<T>(operation: (state: PersistedState) => Promise<T> | T): Promise<T> {
+  private async withState<T>(
+    operation: (state: PersistedState) => Promise<T> | T,
+  ): Promise<T> {
     const state = await this.statePromise;
     const result = await operation(state);
     await writeState(state);
@@ -172,18 +189,21 @@ class IndexedDbPlaylistDataRepository implements PlaylistDataRepository {
     return map;
   }
 
-  async replacePlaylistItems(playlistId: string, items: PlaylistItemRecord[]): Promise<void> {
+  async replacePlaylistItems(
+    playlistId: string,
+    items: PlaylistItemRecord[],
+  ): Promise<void> {
     await this.withState(async (state) => {
-      state.playlistItemsByPlaylistId[playlistId] = [...items].sort((left, right) =>
-        left.sortKey.localeCompare(right.sortKey),
+      state.playlistItemsByPlaylistId[playlistId] = [...items].sort(
+        (left, right) => left.sortKey.localeCompare(right.sortKey),
       );
     });
   }
 
   async getPlaylistItems(playlistId: string): Promise<PlaylistItemRecord[]> {
     const state = await this.statePromise;
-    return [...(state.playlistItemsByPlaylistId[playlistId] ?? [])].sort((left, right) =>
-      left.sortKey.localeCompare(right.sortKey),
+    return [...(state.playlistItemsByPlaylistId[playlistId] ?? [])].sort(
+      (left, right) => left.sortKey.localeCompare(right.sortKey),
     );
   }
 
@@ -198,11 +218,13 @@ class IndexedDbPlaylistDataRepository implements PlaylistDataRepository {
     return state.sessionsByPlaylistId[playlistId] ?? null;
   }
 
-  async queryPlaylist(options: PlaylistQueryOptions): Promise<PlaylistQueryResult> {
+  async queryPlaylist(
+    options: PlaylistQueryOptions,
+  ): Promise<PlaylistQueryResult> {
     const state = await this.statePromise;
-    const playlistItems = [...(state.playlistItemsByPlaylistId[options.playlistId] ?? [])].sort((left, right) =>
-      left.sortKey.localeCompare(right.sortKey),
-    );
+    const playlistItems = [
+      ...(state.playlistItemsByPlaylistId[options.playlistId] ?? []),
+    ].sort((left, right) => left.sortKey.localeCompare(right.sortKey));
 
     const rows: PlaylistQueryRow[] = playlistItems
       .map((playlistItem) => {
@@ -236,7 +258,9 @@ class IndexedDbPlaylistDataRepository implements PlaylistDataRepository {
         const pathDiff = left.track.path.localeCompare(right.track.path);
         if (pathDiff !== 0) return pathDiff;
       }
-      return left.playlistItem.sortKey.localeCompare(right.playlistItem.sortKey);
+      return left.playlistItem.sortKey.localeCompare(
+        right.playlistItem.sortKey,
+      );
     });
 
     const offset = Math.max(0, options.offset);
@@ -247,11 +271,18 @@ class IndexedDbPlaylistDataRepository implements PlaylistDataRepository {
     };
   }
 
-  async createSession(playlistId: string, orderedPlaylistItemIds: string[], seed?: number): Promise<RandomPlaySession> {
+  async createSession(
+    playlistId: string,
+    orderedPlaylistItemIds: string[],
+    seed?: number,
+  ): Promise<RandomPlaySession> {
     return this.withState(async (state) => {
-      const resolvedSeed = typeof seed === 'number'
-        ? seed
-        : stableHash(`${playlistId}:${orderedPlaylistItemIds.join('|')}:${Date.now()}`);
+      const resolvedSeed =
+        typeof seed === 'number'
+          ? seed
+          : stableHash(
+              `${playlistId}:${orderedPlaylistItemIds.join('|')}:${Date.now()}`,
+            );
       const order = seededShuffle(orderedPlaylistItemIds, resolvedSeed);
       const session: RandomPlaySession = {
         playlistId,
@@ -277,7 +308,9 @@ class IndexedDbPlaylistDataRepository implements PlaylistDataRepository {
     });
   }
 
-  async getRandomSession(playlistId: string): Promise<RandomPlaySession | null> {
+  async getRandomSession(
+    playlistId: string,
+  ): Promise<RandomPlaySession | null> {
     const state = await this.statePromise;
     return state.randomSessionsByPlaylistId[playlistId] ?? null;
   }
@@ -291,7 +324,9 @@ class IndexedDbPlaylistDataRepository implements PlaylistDataRepository {
 
 let indexedDbRepository: PlaylistDataRepository | null = null;
 
-export const getIndexedDbPlaylistDataRepository = (options: Options): PlaylistDataRepository => {
+export const getIndexedDbPlaylistDataRepository = (
+  options: Options,
+): PlaylistDataRepository => {
   if (!indexedDbRepository) {
     indexedDbRepository = new IndexedDbPlaylistDataRepository(options);
   }

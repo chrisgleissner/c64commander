@@ -7,7 +7,13 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { initializeSmokeMode, getSmokeConfig, isSmokeModeEnabled, isSmokeReadOnlyEnabled, recordSmokeStatus } from '@/lib/smoke/smokeMode';
+import {
+  initializeSmokeMode,
+  getSmokeConfig,
+  isSmokeModeEnabled,
+  isSmokeReadOnlyEnabled,
+  recordSmokeStatus,
+} from '@/lib/smoke/smokeMode';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Capacitor } from '@capacitor/core';
 import { addLog } from '@/lib/logging';
@@ -41,7 +47,9 @@ vi.mock('@/lib/config/appSettings', () => ({
 describe('smokeMode', () => {
   beforeEach(() => {
     localStorage.clear();
-    (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = false;
+    (
+      window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }
+    ).__c64uReadSmokeConfigFromFilesystem = false;
     vi.mocked(addLog).mockClear();
     vi.mocked(saveDebugLoggingEnabled).mockClear();
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(false);
@@ -50,12 +58,15 @@ describe('smokeMode', () => {
   });
 
   it('initializes from storage and persists host + logging', async () => {
-    localStorage.setItem('c64u_smoke_config', JSON.stringify({
-      target: 'real',
-      host: 'http://Example.com',
-      readOnly: false,
-      debugLogging: true,
-    }));
+    localStorage.setItem(
+      'c64u_smoke_config',
+      JSON.stringify({
+        target: 'real',
+        host: 'http://Example.com',
+        readOnly: false,
+        debugLogging: true,
+      }),
+    );
 
     const config = await initializeSmokeMode();
 
@@ -71,12 +82,18 @@ describe('smokeMode', () => {
     expect(localStorage.getItem('c64u_device_host')).toBe('example.com');
     expect(localStorage.getItem('c64u_smoke_mode_enabled')).toBe('1');
     expect(saveDebugLoggingEnabled).toHaveBeenCalledWith(true);
-    expect(addLog).toHaveBeenCalledWith('info', 'Smoke mode enabled', expect.any(Object));
+    expect(addLog).toHaveBeenCalledWith(
+      'info',
+      'Smoke mode enabled',
+      expect.any(Object),
+    );
   });
 
   it('loads config from native storage when local storage is empty', async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
-    (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = true;
+    (
+      window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }
+    ).__c64uReadSmokeConfigFromFilesystem = true;
     vi.mocked(Filesystem.readFile).mockResolvedValue({
       data: JSON.stringify({
         target: 'mock',
@@ -98,11 +115,14 @@ describe('smokeMode', () => {
 
   it('records smoke status on native platforms', async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
-    localStorage.setItem('c64u_smoke_config', JSON.stringify({
-      target: 'real',
-      readOnly: true,
-      debugLogging: false,
-    }));
+    localStorage.setItem(
+      'c64u_smoke_config',
+      JSON.stringify({
+        target: 'real',
+        readOnly: true,
+        debugLogging: false,
+      }),
+    );
 
     await initializeSmokeMode();
     await recordSmokeStatus({ state: 'DEMO_ACTIVE', mode: 'demo' });
@@ -116,9 +136,12 @@ describe('smokeMode', () => {
   });
 
   it('returns null for invalid config target', async () => {
-    localStorage.setItem('c64u_smoke_config', JSON.stringify({
-      target: 'invalid-target',
-    }));
+    localStorage.setItem(
+      'c64u_smoke_config',
+      JSON.stringify({
+        target: 'invalid-target',
+      }),
+    );
 
     const config = await initializeSmokeMode();
     expect(config).toBeNull();
@@ -137,13 +160,20 @@ describe('smokeMode', () => {
 
     const config = await initializeSmokeMode();
     expect(config).toBeNull();
-    expect(addLog).toHaveBeenCalledWith('warn', expect.stringContaining('parse'), expect.any(Object));
+    expect(addLog).toHaveBeenCalledWith(
+      'warn',
+      expect.stringContaining('parse'),
+      expect.any(Object),
+    );
   });
 
   it('skips host persistence when host is absent', async () => {
-    localStorage.setItem('c64u_smoke_config', JSON.stringify({
-      target: 'mock',
-    }));
+    localStorage.setItem(
+      'c64u_smoke_config',
+      JSON.stringify({
+        target: 'mock',
+      }),
+    );
 
     const config = await initializeSmokeMode();
     expect(config?.host).toBeUndefined();
@@ -151,9 +181,12 @@ describe('smokeMode', () => {
   });
 
   it('defaults readOnly to true when not specified', async () => {
-    localStorage.setItem('c64u_smoke_config', JSON.stringify({
-      target: 'mock',
-    }));
+    localStorage.setItem(
+      'c64u_smoke_config',
+      JSON.stringify({
+        target: 'mock',
+      }),
+    );
 
     const config = await initializeSmokeMode();
     expect(config?.readOnly).toBe(true);
@@ -167,9 +200,12 @@ describe('smokeMode', () => {
 
   it('skips recordSmokeStatus on non-native platform', async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(false);
-    localStorage.setItem('c64u_smoke_config', JSON.stringify({
-      target: 'mock',
-    }));
+    localStorage.setItem(
+      'c64u_smoke_config',
+      JSON.stringify({
+        target: 'mock',
+      }),
+    );
     await initializeSmokeMode();
     await recordSmokeStatus({ state: 'DEMO_ACTIVE' });
     expect(Filesystem.writeFile).not.toHaveBeenCalled();
@@ -177,34 +213,53 @@ describe('smokeMode', () => {
 
   it('logs warning when recordSmokeStatus write fails', async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
-    localStorage.setItem('c64u_smoke_config', JSON.stringify({
-      target: 'mock',
-    }));
+    localStorage.setItem(
+      'c64u_smoke_config',
+      JSON.stringify({
+        target: 'mock',
+      }),
+    );
     vi.mocked(Filesystem.writeFile).mockRejectedValue(new Error('write error'));
 
     await initializeSmokeMode();
     await recordSmokeStatus({ state: 'DEMO_ACTIVE' });
-    expect(addLog).toHaveBeenCalledWith('warn', expect.stringContaining('smoke status'), expect.any(Object));
+    expect(addLog).toHaveBeenCalledWith(
+      'warn',
+      expect.stringContaining('smoke status'),
+      expect.any(Object),
+    );
   });
 
   it('handles filesystem read error for missing file', async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
     localStorage.setItem('c64u_smoke_mode_enabled', '1');
-    vi.mocked(Filesystem.readFile).mockRejectedValue(new Error('File does not exist'));
+    vi.mocked(Filesystem.readFile).mockRejectedValue(
+      new Error('File does not exist'),
+    );
 
     const config = await initializeSmokeMode();
     expect(config).toBeNull();
-    expect(addLog).toHaveBeenCalledWith('debug', expect.stringContaining('not found'), expect.any(Object));
+    expect(addLog).toHaveBeenCalledWith(
+      'debug',
+      expect.stringContaining('not found'),
+      expect.any(Object),
+    );
   });
 
   it('handles filesystem read error for generic error', async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
     localStorage.setItem('c64u_smoke_mode_enabled', '1');
-    vi.mocked(Filesystem.readFile).mockRejectedValue(new Error('Permission denied'));
+    vi.mocked(Filesystem.readFile).mockRejectedValue(
+      new Error('Permission denied'),
+    );
 
     const config = await initializeSmokeMode();
     expect(config).toBeNull();
-    expect(addLog).toHaveBeenCalledWith('warn', expect.stringContaining('read smoke'), expect.any(Object));
+    expect(addLog).toHaveBeenCalledWith(
+      'warn',
+      expect.stringContaining('read smoke'),
+      expect.any(Object),
+    );
   });
 
   it('reads from filesystem via VITE_ENABLE_TEST_PROBES', async () => {
@@ -222,10 +277,13 @@ describe('smokeMode', () => {
   });
 
   it('normalizes host with empty string to undefined', async () => {
-    localStorage.setItem('c64u_smoke_config', JSON.stringify({
-      target: 'real',
-      host: '  ',
-    }));
+    localStorage.setItem(
+      'c64u_smoke_config',
+      JSON.stringify({
+        target: 'real',
+        host: '  ',
+      }),
+    );
 
     const config = await initializeSmokeMode();
     expect(config?.host).toBeUndefined();
@@ -240,29 +298,45 @@ describe('smokeMode', () => {
     const config = await initializeSmokeMode();
     expect(config).toBeNull();
     // String 'File does not exist' matches isMissingFileError → debug log
-    expect(addLog).toHaveBeenCalledWith('debug', expect.stringContaining('not found'), expect.any(Object));
+    expect(addLog).toHaveBeenCalledWith(
+      'debug',
+      expect.stringContaining('not found'),
+      expect.any(Object),
+    );
   });
 
   it('handles filesystem read error as object with nested error string', async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
     localStorage.setItem('c64u_smoke_mode_enabled', '1');
     // Object without .message but with .error — exercises the 'error' in error branch
-    vi.mocked(Filesystem.readFile).mockRejectedValue({ error: 'File not found' });
+    vi.mocked(Filesystem.readFile).mockRejectedValue({
+      error: 'File not found',
+    });
 
     const config = await initializeSmokeMode();
     expect(config).toBeNull();
     // 'not found' matches isMissingFileError → debug log
-    expect(addLog).toHaveBeenCalledWith('debug', expect.stringContaining('not found'), expect.any(Object));
+    expect(addLog).toHaveBeenCalledWith(
+      'debug',
+      expect.stringContaining('not found'),
+      expect.any(Object),
+    );
   });
 
   it('handles filesystem read error as object with nested error.message', async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
     localStorage.setItem('c64u_smoke_mode_enabled', '1');
     // Object with nested {error: {message: '...'}} — exercises the innermost message extraction
-    vi.mocked(Filesystem.readFile).mockRejectedValue({ error: { message: 'no such file' } });
+    vi.mocked(Filesystem.readFile).mockRejectedValue({
+      error: { message: 'no such file' },
+    });
 
     const config = await initializeSmokeMode();
     expect(config).toBeNull();
-    expect(addLog).toHaveBeenCalledWith('debug', expect.stringContaining('not found'), expect.any(Object));
+    expect(addLog).toHaveBeenCalledWith(
+      'debug',
+      expect.stringContaining('not found'),
+      expect.any(Object),
+    );
   });
 });

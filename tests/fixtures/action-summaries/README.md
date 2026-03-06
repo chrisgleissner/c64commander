@@ -20,6 +20,7 @@ UPDATE_GOLDENS=1 npm run test -- tests/unit/diagnostics/actionSummariesGolden.te
 ```
 
 This will:
+
 1. Load each trace fixture
 2. Run the converter
 3. Normalize and write the result to `actions.json`
@@ -29,11 +30,13 @@ This will:
 ## Normalization
 
 The following fields are excluded from golden comparisons (non-semantic per tracing spec):
+
 - `startTimestamp`
 - `endTimestamp`
 - `startRelativeMs`
 
 The following are retained for determinism:
+
 - `correlationId`
 - `actionName`
 - `origin`
@@ -49,11 +52,13 @@ The following are retained for determinism:
 ## Adding New Fixtures
 
 ### Organic
+
 1. Identify a complex Playwright trace fixture under `playwright/fixtures/traces/golden/`
 2. Create a mirrored subdirectory path here (e.g., `organic/test-name/android-phone/`)
 3. Run with `UPDATE_GOLDENS=1` to generate the initial `actions.json`
 
 ### Synthetic
+
 1. Create a new directory under `synthetic/` with a descriptive name
 2. Author `trace.json` with representative events
 3. Run with `UPDATE_GOLDENS=1` to generate the initial `actions.json`
