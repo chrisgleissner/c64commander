@@ -6,149 +6,149 @@ import { adb, c64uGet } from "./helpers.js";
 import type { CaseContext, CaseResult, RunResult, ValidationCase } from "./types.js";
 
 export async function runCase(
-  caseInfo: ValidationCase,
-  serial: string,
-  c64uHost: string,
-  artifactRoot: string,
+    caseInfo: ValidationCase,
+    serial: string,
+    c64uHost: string,
+    artifactRoot: string,
 ): Promise<RunResult> {
-  const startTime = Date.now();
-  const store = new ScopeSessionStore(artifactRoot);
-  const result = await store.startSession({ caseId: caseInfo.caseId });
+    const startTime = Date.now();
+    const store = new ScopeSessionStore(artifactRoot);
+    const result = await store.startSession({ caseId: caseInfo.caseId });
 
-  if (!result.ok) {
-    throw new Error(`Failed to start session: ${result.error.message}`);
-  }
+    if (!result.ok) {
+        throw new Error(`Failed to start session: ${result.error.message}`);
+    }
 
-  const runId = result.runId;
-  const artifactDir = (result.data as { artifactDir: string }).artifactDir;
-  const ctx: CaseContext = { store, runId, serial, c64uHost, artifactDir };
+    const runId = result.runId;
+    const artifactDir = (result.data as { artifactDir: string }).artifactDir;
+    const ctx: CaseContext = { store, runId, serial, c64uHost, artifactDir };
 
-  let caseResult: CaseResult | undefined;
-  let finalOutcome = "unknown";
-  let finalFailureClass = "inconclusive";
+    let caseResult: CaseResult | undefined;
+    let finalOutcome = "unknown";
+    let finalFailureClass = "inconclusive";
 
-  try {
-    caseResult = await caseInfo.run(ctx);
+    try {
+        caseResult = await caseInfo.run(ctx);
 
-    // Classify using oracle policy
-    const classification = classifyRun({
-      assertions: caseResult.assertions,
-      safety: caseInfo.safetyClass === "read-only" ? "read-only" : "guarded-mutation",
-    });
+        // Classify using oracle policy
+        const classification = classifyRun({
+            assertions: caseResult.assertions,
+            safety: caseInfo.safetyClass === "read-only" ? "read-only" : "guarded-mutation",
+        });
 
-    finalOutcome = classification.outcome;
-    finalFailureClass = classification.failureClass;
+        finalOutcome = classification.outcome;
+        finalFailureClass = classification.failureClass;
 
-    await store.finalizeSession({
-      runId,
-      outcome: classification.outcome,
-      failureClass: classification.failureClass,
-      summary: `${caseInfo.name}: ${classification.outcome} — ${classification.reason}`,
-    });
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
-    finalOutcome = "fail";
-    finalFailureClass = "infrastructure_failure";
-    await store.finalizeSession({
-      runId,
-      outcome: "fail",
-      failureClass: "infrastructure_failure",
-      summary: `Case aborted: ${message}`,
-    });
-  }
+        await store.finalizeSession({
+            runId,
+            outcome: classification.outcome,
+            failureClass: classification.failureClass,
+            summary: `${caseInfo.name}: ${classification.outcome} — ${classification.reason}`,
+        });
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        finalOutcome = "fail";
+        finalFailureClass = "infrastructure_failure";
+        await store.finalizeSession({
+            runId,
+            outcome: "fail",
+            failureClass: "infrastructure_failure",
+            summary: `Case aborted: ${message}`,
+        });
+    }
 
-  // Write exploration trace
-  if (caseResult) {
-    await writeFile(
-      path.join(artifactDir, "exploration-trace.json"),
-      JSON.stringify(caseResult.explorationTrace, null, 2),
-      "utf-8",
-    );
-  }
+    // Write exploration trace
+    if (caseResult) {
+        await writeFile(
+            path.join(artifactDir, "exploration-trace.json"),
+            JSON.stringify(caseResult.explorationTrace, null, 2),
+            "utf-8",
+        );
+    }
 
-  // Write hardware proof
-  const hwProof = {
-    android: {
-      serial,
-      model: "SM-G990B",
-      hardware: "qcom",
-      os: "Android 16",
-      product: "Samsung Galaxy S21 FE",
-    },
-    c64u: {
-      host: c64uHost,
-      hostname: "c64u",
-      firmware: "3.14d",
-      product: "Ultimate 64 Elite",
-      uniqueId: "38C1BA",
-    },
-    timestamp: new Date().toISOString(),
-  };
-  await writeFile(path.join(artifactDir, "hardware-proof.json"), JSON.stringify(hwProof, null, 2), "utf-8");
+    // Write hardware proof
+    const hwProof = {
+        android: {
+            serial,
+            model: "SM-G990B",
+            hardware: "qcom",
+            os: "Android 16",
+            product: "Samsung Galaxy S21 FE",
+        },
+        c64u: {
+            host: c64uHost,
+            hostname: "c64u",
+            firmware: "3.14d",
+            product: "Ultimate 64 Elite",
+            uniqueId: "38C1BA",
+        },
+        timestamp: new Date().toISOString(),
+    };
+    await writeFile(path.join(artifactDir, "hardware-proof.json"), JSON.stringify(hwProof, null, 2), "utf-8");
 
-  // Write LLM decision trace
-  const llmTrace = {
-    caseId: caseInfo.caseId,
-    caseName: caseInfo.name,
-    featureArea: caseInfo.featureArea,
-    route: caseInfo.route,
-    safetyClass: caseInfo.safetyClass,
-    oracleClassesUsed: caseInfo.oracleClasses,
-    expectedOutcome: caseInfo.expectedOutcome,
-    actualOutcome: finalOutcome,
-    failureClass: finalFailureClass,
-    explorationTrace: caseResult?.explorationTrace,
-    llmSequence: [
-      "LLM selected case from catalog",
-      `LLM chose oracle pair: ${caseInfo.oracleClasses.join(" + ")}`,
-      `LLM enforced safety budget: ${caseInfo.safetyClass}`,
-      `LLM drove execution through ${caseInfo.oracleClasses.length} oracle classes`,
-      `LLM classified outcome: ${finalOutcome}/${finalFailureClass}`,
-    ],
-    peerServersUsed: ["mobile_controller (ADB)", "c64bridge (REST/FTP)", "c64scope (session/artifacts)"],
-  };
-  await writeFile(path.join(artifactDir, "llm-decision-trace.json"), JSON.stringify(llmTrace, null, 2), "utf-8");
+    // Write LLM decision trace
+    const llmTrace = {
+        caseId: caseInfo.caseId,
+        caseName: caseInfo.name,
+        featureArea: caseInfo.featureArea,
+        route: caseInfo.route,
+        safetyClass: caseInfo.safetyClass,
+        oracleClassesUsed: caseInfo.oracleClasses,
+        expectedOutcome: caseInfo.expectedOutcome,
+        actualOutcome: finalOutcome,
+        failureClass: finalFailureClass,
+        explorationTrace: caseResult?.explorationTrace,
+        llmSequence: [
+            "LLM selected case from catalog",
+            `LLM chose oracle pair: ${caseInfo.oracleClasses.join(" + ")}`,
+            `LLM enforced safety budget: ${caseInfo.safetyClass}`,
+            `LLM drove execution through ${caseInfo.oracleClasses.length} oracle classes`,
+            `LLM classified outcome: ${finalOutcome}/${finalFailureClass}`,
+        ],
+        peerServersUsed: ["mobile_controller (ADB)", "c64bridge (REST/FTP)", "c64scope (session/artifacts)"],
+    };
+    await writeFile(path.join(artifactDir, "llm-decision-trace.json"), JSON.stringify(llmTrace, null, 2), "utf-8");
 
-  // Get artifacts list
-  const files = await readdir(artifactDir);
+    // Get artifacts list
+    const files = await readdir(artifactDir);
 
-  return {
-    caseId: caseInfo.caseId,
-    caseName: caseInfo.name,
-    featureArea: caseInfo.featureArea,
-    route: caseInfo.route,
-    runId,
-    outcome: finalOutcome,
-    failureClass: finalFailureClass,
-    oracleClasses: caseInfo.oracleClasses,
-    artifactDir,
-    artifacts: files,
-    explorationTrace: caseResult?.explorationTrace ?? {
-      routeDiscovery: [],
-      decisionLog: [],
-      safetyBudget: caseInfo.safetyClass,
-      oracleSelection: [],
-      recoveryActions: [],
-    },
-    durationMs: Date.now() - startTime,
-  };
+    return {
+        caseId: caseInfo.caseId,
+        caseName: caseInfo.name,
+        featureArea: caseInfo.featureArea,
+        route: caseInfo.route,
+        runId,
+        outcome: finalOutcome,
+        failureClass: finalFailureClass,
+        oracleClasses: caseInfo.oracleClasses,
+        artifactDir,
+        artifacts: files,
+        explorationTrace: caseResult?.explorationTrace ?? {
+            routeDiscovery: [],
+            decisionLog: [],
+            safetyBudget: caseInfo.safetyClass,
+            oracleSelection: [],
+            recoveryActions: [],
+        },
+        durationMs: Date.now() - startTime,
+    };
 }
 
 /** Collect real hardware identity info from android device and C64U. */
 export async function collectHardwareInfo(
-  serial: string,
-  c64uHost: string,
+    serial: string,
+    c64uHost: string,
 ): Promise<{
-  hwModel: string;
-  hwType: string;
-  hwChars: string;
-  osVersion: string;
-  c64uInfo: Record<string, string>;
+    hwModel: string;
+    hwType: string;
+    hwChars: string;
+    osVersion: string;
+    c64uInfo: Record<string, string>;
 }> {
-  const hwModel = (await adb(serial, "shell", "getprop", "ro.product.model")).trim();
-  const hwType = (await adb(serial, "shell", "getprop", "ro.hardware")).trim();
-  const hwChars = (await adb(serial, "shell", "getprop", "ro.build.characteristics")).trim();
-  const osVersion = (await adb(serial, "shell", "getprop", "ro.build.version.release")).trim();
-  const c64uInfo = JSON.parse(await c64uGet(c64uHost, "/v1/info"));
-  return { hwModel, hwType, hwChars, osVersion, c64uInfo };
+    const hwModel = (await adb(serial, "shell", "getprop", "ro.product.model")).trim();
+    const hwType = (await adb(serial, "shell", "getprop", "ro.hardware")).trim();
+    const hwChars = (await adb(serial, "shell", "getprop", "ro.build.characteristics")).trim();
+    const osVersion = (await adb(serial, "shell", "getprop", "ro.build.version.release")).trim();
+    const c64uInfo = JSON.parse(await c64uGet(c64uHost, "/v1/info"));
+    return { hwModel, hwType, hwChars, osVersion, c64uInfo };
 }
