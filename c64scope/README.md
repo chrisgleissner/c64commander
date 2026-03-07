@@ -4,9 +4,10 @@ This folder is reserved for the standalone `c64scope` MCP server.
 
 Authoritative design documents:
 
-- `doc/testing/physical-tests/c64scope-spec.md`
-- `doc/testing/physical-tests/physical-test-architecture.md`
-- `doc/testing/physical-tests/physical-test-implementation-plan.md`
+- `doc/testing/agentic-tests/c64scope-spec.md`
+- `doc/testing/agentic-tests/agentic-test-architecture.md`
+- `doc/testing/agentic-tests/agentic-test-implementation-plan.md`
+- `doc/testing/agentic-tests/c64scope-delivery-prompt.md`
 
 Implementation rules:
 

@@ -5,12 +5,13 @@ Use this prompt for real-hardware autonomous testing of C64 Commander.
 ## Read First
 
 1. `doc/testing/agentic-tests/agentic-action-model.md`
-2. `doc/testing/agentic-tests/agentic-oracle-catalog.md`
-3. `doc/testing/agentic-tests/agentic-safety-policy.md`
-4. `doc/testing/agentic-tests/agentic-android-runtime-contract.md`
-5. `doc/testing/agentic-tests/agentic-observability-model.md`
-6. `doc/testing/agentic-tests/agentic-infrastructure-reuse.md`
-7. `doc/testing/agentic-tests/c64scope-spec.md`
+2. `doc/testing/agentic-tests/agentic-controller-contract.md`
+3. `doc/testing/agentic-tests/agentic-oracle-catalog.md`
+4. `doc/testing/agentic-tests/agentic-safety-policy.md`
+5. `doc/testing/agentic-tests/agentic-android-runtime-contract.md`
+6. `doc/testing/agentic-tests/agentic-observability-model.md`
+7. `doc/testing/agentic-tests/agentic-infrastructure-reuse.md`
+8. `doc/testing/agentic-tests/c64scope-spec.md`
 
 ## Rules
 

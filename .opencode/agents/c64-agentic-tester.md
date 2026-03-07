@@ -19,7 +19,7 @@ You operate across three peer servers only:
 </role>
 
 <rules>
-- Read the action model, oracle catalog, safety policy, Android runtime contract, observability model, reuse map, and `c64scope` spec before acting.
+- Read the action model, controller contract, oracle catalog, safety policy, Android runtime contract, observability model, reuse map, and `c64scope` spec before acting.
 - Treat C64 Commander as the primary control path under test.
 - Use `c64bridge` only for accepted gap-fill, recovery, or calibration.
 - Use `c64scope` for capture, session timeline, assertions, and artifact packaging only.
