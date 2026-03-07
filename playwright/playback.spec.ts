@@ -195,7 +195,7 @@ test.describe("Playback file browser", () => {
     await expect(playlistList).toContainText("/Music/local-demo.sid");
     await expect(playlistList).toContainText("Commando.sid");
     await expect(playlistList).toContainText("/MUSICIANS/Hubbard_Rob/Commando.sid");
-    await expect(playlistList).toContainText("—:—");
+    await expect(playlistList).toContainText("3:00");
     await expect(playlistList).not.toContainText("This device");
     await expect(playlistList).not.toContainText("C64 Ultimate");
     await expect(playlistList).not.toContainText("HVSC library file");

@@ -111,11 +111,11 @@ const renderPlaybackController = (
   );
 
 describe("usePlaybackController", () => {
-  it("leaves non-song duration unset in playlist rows before playback starts", () => {
+  it("applies fallback duration for non-song playlist rows before playback starts", () => {
     const playlist = [createPlaylistItem()];
     const { result } = renderPlaybackController(playlist);
 
-    expect(result.current.playlistItemDuration(playlist[0], 0)).toBeUndefined();
+    expect(result.current.playlistItemDuration(playlist[0], 0)).toBe(45_000);
   });
 
   it("preserves explicit duration for non-song items", () => {
