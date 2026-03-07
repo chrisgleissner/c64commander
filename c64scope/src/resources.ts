@@ -1,4 +1,4 @@
-import { assertionCatalog, caseCatalog, failureTaxonomy } from "./catalog.js";
+import { assertionCatalog, caseCatalog, failureTaxonomy } from "./catalog/index.js";
 
 export interface ResourceDefinition {
   uri: string;

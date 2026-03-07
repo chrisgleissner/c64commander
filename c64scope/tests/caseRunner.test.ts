@@ -7,7 +7,7 @@ import {
   resolveCase,
   selectNextCase,
 } from "../src/caseRunner.js";
-import { caseCatalog, testNamespaces, type CaseDefinition } from "../src/catalog.js";
+import { caseCatalog, testNamespaces, type CaseDefinition } from "../src/catalog/index.js";
 
 describe("case runner", () => {
   describe("resolveCase", () => {

@@ -385,9 +385,9 @@ async function runCase(
 }
 
 async function main(): Promise<void> {
-    const serialInput = process.env["ANDROID_SERIAL"] ?? defaultPhysicalTestDevice.serialPrefix;
-    const serial = await resolveAdbSerial(serialInput);
-    const c64uHost = process.env["C64U_HOST"] ?? "192.168.1.13";
+  const serialInput = process.env["ANDROID_SERIAL"] ?? defaultPhysicalTestDevice.serialPrefix;
+  const serial = await resolveAdbSerial(serialInput);
+  const c64uHost = process.env["C64U_HOST"] ?? "192.168.1.13";
 
   // Preflight
   console.log("=== Preflight ===");

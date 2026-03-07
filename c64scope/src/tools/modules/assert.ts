@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { assertionCatalog, evidenceTypeCatalog } from "../../catalog.js";
+import { assertionCatalog, evidenceTypeCatalog } from "../../catalog/index.js";
 import { defineToolModule, parseZodArgs } from "../types.js";
 import { jsonResult } from "../responses.js";
 

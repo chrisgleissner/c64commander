@@ -4,7 +4,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { LabStateStore } from "../src/labState.js";
 import { ScopeSessionStore } from "../src/sessionStore.js";
-import { evidenceTypeCatalog } from "../src/catalog.js";
+import { evidenceTypeCatalog } from "../src/catalog/index.js";
 
 describe("LabStateStore", () => {
   it("returns unknown for unreported peers", () => {

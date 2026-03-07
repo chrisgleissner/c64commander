@@ -1,4 +1,4 @@
-import { caseCatalog, type CaseDefinition, testNamespaces } from "./catalog.js";
+import { caseCatalog, type CaseDefinition, testNamespaces } from "./catalog/index.js";
 
 export type CaseStatus = "ready" | "blocked-dependency" | "blocked-testability" | "inconclusive";
 

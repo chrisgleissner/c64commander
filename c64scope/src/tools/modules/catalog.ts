@@ -1,4 +1,4 @@
-import { caseCatalog, testNamespaces } from "../../catalog.js";
+import { caseCatalog, testNamespaces } from "../../catalog/index.js";
 import { buildReadyCaseSet, evaluateCase, selectNextCase } from "../../caseRunner.js";
 import { defineToolModule, parseZodArgs } from "../types.js";
 import { jsonResult } from "../responses.js";
