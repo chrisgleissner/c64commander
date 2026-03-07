@@ -48,7 +48,7 @@ const latestRoot = path.join(process.cwd(), config.outputDir, "latest");
 fs.mkdirSync(runRoot, { recursive: true });
 fs.mkdirSync(latestRoot, { recursive: true });
 
-const logStream = fs.createWriteStream(path.join(runRoot, "logs.ndjson"), {
+const logStream = fs.createWriteStream(path.join(runRoot, "logs.jsonl"), {
   flags: "a",
 });
 const latencyMap = new Map<string, { kind: "REST" | "FTP"; tracker: LatencyTracker }>();
@@ -193,7 +193,7 @@ try {
     overlap: string;
     evidence: string;
   }> {
-    const logsPath = path.join(runRoot, "logs.ndjson");
+    const logsPath = path.join(runRoot, "logs.jsonl");
     if (!fs.existsSync(logsPath)) return [];
     const lines = fs.readFileSync(logsPath, "utf8").split("\n").filter(Boolean);
     const results: Array<{
@@ -244,7 +244,7 @@ try {
 
   copyLatest(runRoot, latestRoot, [
     "meta.json",
-    "logs.ndjson",
+    "logs.jsonl",
     "endpoints.json",
     "latency-stats.json",
     "rest-cooldowns.json",

@@ -127,7 +127,7 @@ trace_event() {
   local event_type="$2"
   local source="$3"
   local details_json="${4:-{}}"
-  local event_file="${flow_dir}/timing-events.ndjson"
+  local event_file="${flow_dir}/timing-events.jsonl"
 
   python3 - "$event_file" "$event_type" "$source" "$details_json" <<'PY'
 import json
@@ -159,7 +159,7 @@ trace_event_at() {
   local event_type="$3"
   local source="$4"
   local details_json="${5:-{}}"
-  local event_file="${flow_dir}/timing-events.ndjson"
+  local event_file="${flow_dir}/timing-events.jsonl"
 
   python3 - "$event_file" "$ts_ms" "$event_type" "$source" "$details_json" <<'PY'
 import json
@@ -192,7 +192,7 @@ PY
 emit_timing_trace() {
   local flow="$1"
   local flow_dir="$2"
-  local event_file="${flow_dir}/timing-events.ndjson"
+  local event_file="${flow_dir}/timing-events.jsonl"
   local trace_file="${flow_dir}/timing-trace.json"
 
   python3 - "$flow" "$GROUP" "$event_file" "$trace_file" <<'PY'
@@ -274,8 +274,8 @@ run_maestro_and_capture() {
   local flow_dir="$2"
   local attempt="$3"
   local junit_file="${flow_dir}/junit.xml"
-  local raw_log_file="${flow_dir}/maestro-raw-attempt-${attempt}.ndjson"
-  local raw_log_latest_file="${flow_dir}/maestro-raw.ndjson"
+  local raw_log_file="${flow_dir}/maestro-raw-attempt-${attempt}.jsonl"
+  local raw_log_latest_file="${flow_dir}/maestro-raw.jsonl"
   local flow_yaml=".maestro/${flow}.yaml"
 
   python3 - "$MAESTRO_BIN" "$flow_yaml" "$UDID" "$junit_file" "$raw_log_file" <<'PY'
@@ -313,7 +313,7 @@ PY
 
 is_driver_startup_timeout_failure() {
   local flow_dir="$1"
-  local raw_log_file="${flow_dir}/maestro-raw.ndjson"
+  local raw_log_file="${flow_dir}/maestro-raw.jsonl"
   if [[ ! -f "$raw_log_file" ]]; then
     return 1
   fi
@@ -364,13 +364,13 @@ preflight_maestro_driver_retry() {
 
 extract_maestro_markers() {
   local flow_dir="$1"
-  local raw_log_file="${flow_dir}/maestro-raw.ndjson"
+  local raw_log_file="${flow_dir}/maestro-raw.jsonl"
 
   if [[ ! -f "$raw_log_file" ]]; then
     return
   fi
 
-  python3 - "$raw_log_file" "${flow_dir}/timing-events.ndjson" <<'PY'
+  python3 - "$raw_log_file" "${flow_dir}/timing-events.jsonl" <<'PY'
 import json
 import re
 import sys
@@ -419,7 +419,7 @@ extract_unified_log_markers() {
     return
   fi
 
-  python3 - "$unified_log_file" "${flow_dir}/timing-events.ndjson" <<'PY'
+  python3 - "$unified_log_file" "${flow_dir}/timing-events.jsonl" <<'PY'
 import json
 import re
 import sys

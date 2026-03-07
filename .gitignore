@@ -84,5 +84,8 @@ doc/research/**/rollout-artifacts/**
 doc/research/**/screenshots/
 
 # Symlinked projects
+android-mcp-server
 c64bridge
 c64stream
+droidmind
+mobile-mcp
