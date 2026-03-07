@@ -82,3 +82,7 @@ doc/research/**/post-fix/screenshots/
 doc/research/**/rollout-artifacts/
 doc/research/**/rollout-artifacts/**
 doc/research/**/screenshots/
+
+# Symlinked projects
+c64bridge
+c64stream
