@@ -15,6 +15,21 @@ The biggest defects are:
 
 The current documents are usable as a starting point for one playback-focused physical proof. They are not sufficient as the handoff for a full-feature-surface autonomous exploratory system.
 
+## 1A. Remediation Landing Map
+
+The remediation docs that address these findings now live in:
+
+- `agentic-feature-surface.md` for the repository-derived scope inventory
+- `agentic-coverage-matrix.md` for coverage, safety class, oracle class, and blocker status
+- `agentic-action-model.md` for route discovery, preconditions, postconditions, recovery, and escape rules
+- `agentic-oracle-catalog.md` for non-A/V and mixed-oracle policy
+- `agentic-observability-model.md` for app diagnostics, log, trace, and `c64scope` correlation
+- `agentic-safety-policy.md` for bounded autonomy and destructive-action limits
+- `agentic-android-runtime-contract.md` for connection, demo-mode, and background-playback behavior
+- `agentic-infrastructure-reuse.md` for Playwright, Maestro, and Android JVM reuse
+- `agentic-open-questions.md` for the remaining explicit blockers
+- `agentic-test-architecture.md`, `c64scope-spec.md`, `agentic-test-implementation-plan.md`, and `c64scope-delivery-prompt.md` for the synchronized implementation-facing architecture and handoff
+
 ## 2. Scope and Review Method
 
 This review covered:
@@ -36,7 +51,6 @@ Method:
 Important repository-derived facts:
 
 - The app routes are Home, Play, Disks, Config, Settings, Docs, Licenses, plus a hidden test probe route.
-- The prompt examples mention a `dock` page, but the repository does not currently expose a `Dock` route or page.
 - The current agentic docs are centered on Android and `droidmind`; no equivalent iOS control owner is defined.
 
 ## 3. Repository-Derived Feature Surface
@@ -771,7 +785,6 @@ Several expected behaviors are not specified clearly enough to test autonomously
 - [ ] Add an explicit scope statement that either narrows the immediate effort to Android or defines the iOS control owner and execution model.
 - [ ] Create `doc/testing/agentic-tests/agentic-feature-surface.md` with a repository-derived inventory grouped by route, page area, and cross-cutting runtime behavior.
 - [ ] Create `doc/testing/agentic-tests/agentic-coverage-matrix.md` mapping every major feature area to documentation status, oracle type, automation path, and blocker state.
-- [ ] Add a note to the inventory that the repository does not currently expose a `Dock` page so follow-up work does not invent one.
 
 ### Phase 1. Action Model
 

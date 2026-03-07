@@ -1,41 +1,35 @@
 # Agentic Tests
 
-Use this prompt when running the agentic tests against real hardware.
+Use this prompt for real-hardware autonomous testing of C64 Commander.
+
+## Read First
+
+1. `doc/testing/agentic-tests/agentic-action-model.md`
+2. `doc/testing/agentic-tests/agentic-oracle-catalog.md`
+3. `doc/testing/agentic-tests/agentic-safety-policy.md`
+4. `doc/testing/agentic-tests/agentic-android-runtime-contract.md`
+5. `doc/testing/agentic-tests/agentic-observability-model.md`
+6. `doc/testing/agentic-tests/agentic-infrastructure-reuse.md`
+7. `doc/testing/agentic-tests/c64scope-spec.md`
 
 ## Rules
 
-- Use only `c64bridge`, `droidmind`, and `c64scope`.
-- Treat C64 Commander as the default C64 control path under test.
-- Do not invent wrapper tools that do work already owned by one of those servers.
-- Read the `c64scope` case metadata before taking action.
-- Start `c64scope` capture before enabling C64 streaming.
-- Use `c64bridge` only for fast stream start/stop, fast RAM assertions, or recovery.
-- Use `droidmind` to drive C64 Commander for media start/stop, queue construction, and normal C64 control.
-- Record every meaningful `c64bridge` or `droidmind` action with `scope_session.record_step`.
-- Use `c64scope` assertions to prove playback start, dwell, and progression.
-- Use `droidmind` for Android screenshots and logs when needed.
+- Use only the mobile controller, currently `droidmind`, plus `c64bridge`, plus `c64scope`.
+- Treat C64 Commander as the default control path under test.
+- Do not invent wrapper tools that duplicate peer-server ownership.
+- Read the case metadata before taking action.
+- Use `c64bridge` only for accepted gap-fill, recovery, or calibration.
+- Record every meaningful mobile-controller or `c64bridge` action with `scope_session.record_step`.
+- Use `c64scope` only when the case needs physical capture or shared run artifacts.
+- Use app logs, traces, REST/FTP state, filesystem artifacts, and runtime logs when they are the stronger oracle.
+- Current physical execution scope is Android only.
 
 ## Startup Sequence
 
-1. Read `c64scope://playbooks/agentic-testing`.
-2. Read `c64scope://playbooks/mixed-format-playback`.
-3. Call `scope_catalog.get_case` for the mixed-format playback case.
-4. Call `scope_session.start`.
-5. Call `scope_lab.inspect` and `scope_lab.calibrate`.
-6. Call `scope_capture.start`.
-7. Use `c64bridge` to start C64 video/audio streaming to the returned capture targets.
-8. Ensure media is available either on prepositioned C64U storage or via `adb` in app-visible Android storage.
-9. Use `droidmind` to launch C64 Commander and trigger the queue through the app UI.
-10. For each queue item, record steps and run `c64scope` assertions.
-11. Stop streams, stop capture, finalize artifacts, stop the session.
-
-## Required Outcome
-
-Prove all of the following:
-
-- each queue item started
-- expected video was emitted
-- expected audio was emitted, or expected silence was observed
-- playback progressed automatically to the next item
-- final order matched the case manifest
-- media start/stop happened through C64 Commander whenever the app supported it
+1. Read the case and playbooks.
+2. Start a `c64scope` session if the case uses it.
+3. Capture connection mode, route, and safety baseline.
+4. Start capture before C64 streaming only when the case needs signal evidence.
+5. Launch and drive C64 Commander through the mobile controller.
+6. Record steps and attach corroborating evidence as the case proceeds.
+7. Stop streams, stop capture if used, finalize artifacts, and return pass, fail, or inconclusive with evidence.
