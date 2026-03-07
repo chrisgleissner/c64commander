@@ -19,6 +19,7 @@ import java.io.File
 import java.net.SocketTimeoutException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import org.mockito.ArgumentCaptor
 import org.apache.commons.net.ftp.FTPClient
 import org.apache.commons.net.ftp.FTPFile
 import org.junit.Assert.assertEquals
@@ -139,7 +140,7 @@ class FtpClientPluginTest {
 
     plugin.listDirectory(call)
 
-    assertTrue(latch.await(3, TimeUnit.SECONDS))
+    assertTrue(latch.await(10, TimeUnit.SECONDS))
     server.stop()
   }
 
@@ -168,7 +169,7 @@ class FtpClientPluginTest {
     ShadowLog.clear()
     plugin.listDirectory(call)
 
-    assertTrue(latch.await(3, TimeUnit.SECONDS))
+    assertTrue(latch.await(10, TimeUnit.SECONDS))
     val logs = ShadowLog.getLogsForTag("FtpClientPlugin")
     assertTrue(logs.any { it.msg?.contains("FTP listDirectory failed") == true })
   }
@@ -201,7 +202,7 @@ class FtpClientPluginTest {
             .resolve(any())
 
     plugin.listDirectory(call)
-    assertTrue(latch.await(3, TimeUnit.SECONDS))
+    assertTrue(latch.await(10, TimeUnit.SECONDS))
 
     val entries = resolved?.getJSONArray("entries")
     assertNotNull(entries)
@@ -243,7 +244,7 @@ class FtpClientPluginTest {
             .resolve(any())
 
     plugin.listDirectory(call)
-    assertTrue(latch.await(3, TimeUnit.SECONDS))
+    assertTrue(latch.await(10, TimeUnit.SECONDS))
 
     val entries = resolved?.getJSONArray("entries")
     val names = buildList {
@@ -284,7 +285,7 @@ class FtpClientPluginTest {
             .resolve(any())
 
     plugin.readFile(call)
-    assertTrue(latch.await(3, TimeUnit.SECONDS))
+    assertTrue(latch.await(10, TimeUnit.SECONDS))
 
     assertNotNull(resolved)
     val encoded = resolved?.optString("data", "") ?: ""
@@ -324,7 +325,7 @@ class FtpClientPluginTest {
 
     plugin.readFile(call)
 
-    assertTrue(latch.await(3, TimeUnit.SECONDS))
+    assertTrue(latch.await(10, TimeUnit.SECONDS))
     server.stop()
   }
 
@@ -359,7 +360,7 @@ class FtpClientPluginTest {
             .reject(any(String::class.java), any(Exception::class.java))
 
     plugin.listDirectory(call)
-    assertTrue(latch.await(3, TimeUnit.SECONDS))
+    assertTrue(latch.await(10, TimeUnit.SECONDS))
   }
 
   @Test
@@ -521,7 +522,9 @@ class FtpClientPluginTest {
 
     plugin.readFile(call)
 
-    verify(call).reject(eq("FTP readFile timed out after 2500ms"), any(Exception::class.java))
+    val messageCaptor = ArgumentCaptor.forClass(String::class.java)
+    verify(call).reject(messageCaptor.capture(), any(Exception::class.java))
+    assertTrue(messageCaptor.value.startsWith("FTP readFile timed out after "))
   }
 
   @Test

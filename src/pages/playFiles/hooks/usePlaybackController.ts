@@ -376,10 +376,10 @@ export function usePlaybackController({
             prev.map((entry) =>
               entry.id === item.id
                 ? {
-                  ...entry,
-                  durationMs: resolvedDuration,
-                  subsongCount: subsongCount ?? entry.subsongCount,
-                }
+                    ...entry,
+                    durationMs: resolvedDuration,
+                    subsongCount: subsongCount ?? entry.subsongCount,
+                  }
                 : entry,
             ),
           );
@@ -585,8 +585,8 @@ export function usePlaybackController({
           const wasMuted =
             resumeSnapshot && resumeItems.length
               ? resumeItems.every(
-                (item) => resumeSnapshot.volumes[item.name] === resolveAudioMixerMuteValue(item.options),
-              )
+                  (item) => resumeSnapshot.volumes[item.name] === resolveAudioMixerMuteValue(item.options),
+                )
               : false;
           await resumeMachineWithRetry(api);
           if (pauseMuteSnapshotRef.current && resumeItems.length) {
