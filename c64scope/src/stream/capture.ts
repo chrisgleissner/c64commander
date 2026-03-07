@@ -7,7 +7,6 @@
  */
 
 import dgram from "node:dgram";
-import dns from "node:dns/promises";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { StreamCapturePacket, StreamCaptureResult, StreamType } from "./types.js";
@@ -16,6 +15,11 @@ import { analyzeAudioPackets, analyzeVideoPackets } from "./analysis.js";
 const DEFAULT_STREAM_PORT: Record<StreamType, number> = {
   video: 11000,
   audio: 11001,
+};
+
+const DEFAULT_STREAM_DESTINATION: Record<StreamType, string> = {
+  video: "239.0.1.64:11000",
+  audio: "239.0.1.65:11001",
 };
 
 export interface CaptureAndAnalyzeInput {
@@ -36,10 +40,9 @@ export interface CaptureAndAnalyzeResult {
 }
 
 export async function captureAndAnalyzeStream(input: CaptureAndAnalyzeInput): Promise<CaptureAndAnalyzeResult> {
+  const destination = resolveStreamDestination(input.streamType, input.destinationIp, input.bindPort);
   const bindAddress = input.bindAddress ?? "0.0.0.0";
-  const bindPort = input.bindPort ?? DEFAULT_STREAM_PORT[input.streamType];
-  const destinationIp = input.destinationIp ?? (await resolveLocalAddressForHost(input.c64uHost));
-  const destination = `${destinationIp}:${bindPort}`;
+  const bindPort = input.bindPort ?? destination.port;
 
   const packets = await captureUdpPackets({
     streamType: input.streamType,
@@ -55,7 +58,7 @@ export async function captureAndAnalyzeStream(input: CaptureAndAnalyzeInput): Pr
     durationMs: input.durationMs,
     bindAddress,
     bindPort,
-    destination,
+    destination: destination.endpoint,
     packets,
   };
 
@@ -78,7 +81,7 @@ export async function captureAndAnalyzeStream(input: CaptureAndAnalyzeInput): Pr
 async function captureUdpPackets(input: {
   streamType: StreamType;
   c64uHost: string;
-  destination: string;
+  destination: StreamDestination;
   bindAddress: string;
   bindPort: number;
   durationMs: number;
@@ -96,6 +99,13 @@ async function captureUdpPackets(input: {
     });
 
     socket.bind(input.bindPort, input.bindAddress, () => {
+      if (input.destination.isMulticast) {
+        if (input.bindAddress === "0.0.0.0") {
+          socket.addMembership(input.destination.host);
+        } else {
+          socket.addMembership(input.destination.host, input.bindAddress);
+        }
+      }
       resolve();
     });
 
@@ -109,7 +119,7 @@ async function captureUdpPackets(input: {
 
   try {
     await started;
-    await setC64uStream(input.c64uHost, input.streamType, "start", input.destination);
+    await setC64uStream(input.c64uHost, input.streamType, "start", input.destination.endpoint);
     startSucceeded = true;
     await sleep(input.durationMs);
   } catch (error: unknown) {
@@ -160,24 +170,47 @@ async function setC64uStream(
   }
 }
 
-async function resolveLocalAddressForHost(host: string): Promise<string> {
-  const resolved = await dns.lookup(host, { family: 4 });
-  const socket = dgram.createSocket("udp4");
+interface StreamDestination {
+  host: string;
+  port: number;
+  endpoint: string;
+  isMulticast: boolean;
+}
 
-  const address = await new Promise<string>((resolve, reject) => {
-    socket.once("error", reject);
-    socket.connect(80, resolved.address, () => {
-      const localAddress = socket.address();
-      if (typeof localAddress === "string") {
-        reject(new Error("Unexpected unix socket address while resolving local IP"));
-        return;
-      }
-      resolve(localAddress.address);
-    });
-  });
+function resolveStreamDestination(streamType: StreamType, destinationIp?: string, overridePort?: number): StreamDestination {
+  const raw = destinationIp?.trim() || DEFAULT_STREAM_DESTINATION[streamType];
+  const parsed = parseHostPort(raw, DEFAULT_STREAM_PORT[streamType]);
+  const port = overridePort ?? parsed.port;
+  const endpoint = `${parsed.host}:${port}`;
+  return {
+    host: parsed.host,
+    port,
+    endpoint,
+    isMulticast: isMulticastIpv4(parsed.host),
+  };
+}
 
-  socket.close();
-  return address;
+function parseHostPort(value: string, defaultPort: number): { host: string; port: number } {
+  const trimmed = value.trim();
+  const idx = trimmed.lastIndexOf(":");
+  if (idx <= 0 || idx === trimmed.length - 1) {
+    return { host: trimmed, port: defaultPort };
+  }
+  const host = trimmed.slice(0, idx);
+  const maybePort = Number.parseInt(trimmed.slice(idx + 1), 10);
+  if (!Number.isFinite(maybePort) || maybePort < 1 || maybePort > 65535) {
+    return { host: trimmed, port: defaultPort };
+  }
+  return { host, port: maybePort };
+}
+
+function isMulticastIpv4(host: string): boolean {
+  const parts = host.split(".");
+  if (parts.length !== 4) {
+    return false;
+  }
+  const first = Number.parseInt(parts[0] ?? "", 10);
+  return Number.isFinite(first) && first >= 224 && first <= 239;
 }
 
 function sleep(ms: number): Promise<void> {

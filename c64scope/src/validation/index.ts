@@ -15,6 +15,7 @@ export {
   isAppInForeground,
   launchApp,
   readC64Memory,
+  resetC64Machine,
   runPrgOnC64u,
   takeScreenshot,
   ts,

@@ -10,7 +10,7 @@ import { readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { classifyRun } from "../oraclePolicy.js";
 import { ScopeSessionStore } from "../sessionStore.js";
-import { adb, c64uGet } from "./helpers.js";
+import { adb, c64uGet, resetC64Machine } from "./helpers.js";
 import type { CaseContext, CaseResult, RunResult, ValidationCase } from "./types.js";
 
 export async function runCase(
@@ -34,6 +34,7 @@ export async function runCase(
   let caseResult: CaseResult | undefined;
   let finalOutcome = "unknown";
   let finalFailureClass = "inconclusive";
+  let resetFailure: string | null = null;
 
   try {
     caseResult = await caseInfo.run(ctx);
@@ -47,21 +48,42 @@ export async function runCase(
     finalOutcome = classification.outcome;
     finalFailureClass = classification.failureClass;
 
+    try {
+      await resetC64Machine(c64uHost);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      resetFailure = message;
+      finalOutcome = "fail";
+      finalFailureClass = "infrastructure_failure";
+    }
+
+    const summary = resetFailure
+      ? `${caseInfo.name}: fail — post-test reset failed (${resetFailure})`
+      : `${caseInfo.name}: ${classification.outcome} — ${classification.reason}`;
+
     await store.finalizeSession({
       runId,
-      outcome: classification.outcome,
-      failureClass: classification.failureClass,
-      summary: `${caseInfo.name}: ${classification.outcome} — ${classification.reason}`,
+      outcome: finalOutcome,
+      failureClass: finalFailureClass,
+      summary,
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     finalOutcome = "fail";
     finalFailureClass = "infrastructure_failure";
+
+    try {
+      await resetC64Machine(c64uHost);
+    } catch (resetError: unknown) {
+      const resetMessage = resetError instanceof Error ? resetError.message : String(resetError);
+      resetFailure = resetMessage;
+    }
+
     await store.finalizeSession({
       runId,
       outcome: "fail",
       failureClass: "infrastructure_failure",
-      summary: `Case aborted: ${message}`,
+      summary: resetFailure ? `Case aborted: ${message}; reset failed: ${resetFailure}` : `Case aborted: ${message}`,
     });
   }
 

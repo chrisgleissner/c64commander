@@ -93,3 +93,28 @@ export async function readC64Memory(host: string, address: number, length: numbe
   const buf = await resp.arrayBuffer();
   return new Uint8Array(buf);
 }
+
+/** Reset C64 machine state to stop any ongoing SID sound and restore baseline. */
+export async function resetC64Machine(host: string): Promise<void> {
+  const resp = await fetch(`http://${host}/v1/machine:reset`, {
+    method: "PUT",
+    headers: { Accept: "application/json" },
+  });
+  if (!resp.ok) {
+    const body = await resp.text();
+    throw new Error(`machine:reset failed: ${resp.status} ${resp.statusText} ${body.slice(0, 200)}`);
+  }
+}
+
+/**
+ * Trigger a soft machine reset on C64U to guarantee audio is stopped after a test.
+ */
+export async function resetC64Machine(host: string): Promise<void> {
+  const url = `http://${host}/v1/machine:reset`;
+  const resp = await fetch(url, { method: "PUT", headers: { Accept: "application/json" } });
+  if (!resp.ok) {
+    const body = await resp.text();
+    throw new Error(`machine reset failed: ${resp.status} ${resp.statusText} ${body.slice(0, 200)}`);
+  }
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+}
