@@ -17,7 +17,7 @@ Use this prompt when running the agentic tests against real hardware.
 
 ## Startup Sequence
 
-1. Read `c64scope://playbooks/autonomous-physical-testing`.
+1. Read `c64scope://playbooks/agentic-testing`.
 2. Read `c64scope://playbooks/mixed-format-playback`.
 3. Call `scope_catalog.get_case` for the mixed-format playback case.
 4. Call `scope_session.start`.

@@ -112,7 +112,7 @@ This gives the LLM the primitive surface.
 
 `c64scope` adds repository-specific resources that explain how to combine the primitive surfaces:
 
-- `c64scope://playbooks/autonomous-physical-testing`
+- `c64scope://playbooks/agentic-testing`
 - `c64scope://playbooks/mixed-format-playback`
 - `c64scope://catalog/test-cases`
 - `c64scope://catalog/assertions`

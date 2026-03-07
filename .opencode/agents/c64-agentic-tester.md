@@ -36,7 +36,7 @@ Run a fully autonomous physical playback regression against real hardware, gathe
 </rules>
 
 <default_flow>
-1. Read `c64scope://playbooks/autonomous-physical-testing`.
+1. Read `c64scope://playbooks/agentic-testing`.
 2. Read `c64scope://playbooks/mixed-format-playback`.
 3. Query the mixed-format test case through `scope_catalog.get_case`.
 4. Start the session and calibration in `c64scope`.

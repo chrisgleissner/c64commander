@@ -591,7 +591,7 @@ This is the primary discovery bridge for autonomous runs.
 
 `c64scope` should expose at least these MCP resources:
 
-- `c64scope://playbooks/autonomous-physical-testing`
+- `c64scope://playbooks/agentic-testing`
 - `c64scope://playbooks/mixed-format-playback`
 - `c64scope://catalog/assertions`
 - `c64scope://catalog/test-cases`
