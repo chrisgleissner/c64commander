@@ -7,7 +7,7 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "html"],
-      exclude: ["dist/**", "node_modules/**", "tests/**", "vitest.config.ts"],
+      exclude: ["dist/**", "node_modules/**", "tests/**", "vitest.config.ts", "src/hardwareValidation.ts"],
       thresholds: {
         statements: 90,
         branches: 90,

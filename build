@@ -186,7 +186,7 @@ Smoke test modifiers (require --test-smoke):
 Examples:
   ./build
   ./build --skip-tests
-  ./build --install-apk --device-id R5CRC3ZY9XH
+  ./build --install-apk --device-id <serial number>
   ./build --apk-path /path/to/app-debug.apk --install-apk
   ./build --emulator
   ./build --screenshots

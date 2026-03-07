@@ -54,7 +54,7 @@ describe("runtime primitives", () => {
 
     const resources = listResources();
     expect(resources).toHaveLength(5);
-    expect(readResource("c64scope://catalog/cases")?.readText()).toContain("mixed-format-playback");
+    expect(readResource("c64scope://catalog/cases")?.readText()).toContain("play-transport-playback");
     expect(readResource("c64scope://catalog/assertions")?.readText()).toContain("playback-start-visible");
     expect(readResource("c64scope://catalog/playbooks")?.readText()).toContain("Playbook References");
     expect(readResource("c64scope://schema/artifact-bundle")?.readText()).toContain("summary.md");

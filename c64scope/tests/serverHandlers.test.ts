@@ -92,7 +92,7 @@ describe("server MCP handlers", () => {
         },
         {},
       );
-      expect(JSON.stringify(validTool)).toContain("route-shell-readonly");
+      expect(JSON.stringify(validTool)).toContain("nav-route-shell");
     } finally {
       await rm(artifactRoot, { recursive: true, force: true });
     }

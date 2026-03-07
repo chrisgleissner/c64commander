@@ -74,7 +74,13 @@
     "ort:notices": "npm run ort:generate-notices && npm run ort:sync-notices",
     "ort:check-drift": "bash scripts/ort-generate-notices.sh --check && bash scripts/ort-sync-notices.sh --check",
     "notices:generate": "node scripts/generate-third-party-notices.mjs",
-    "notices:check": "node scripts/generate-third-party-notices.mjs --check"
+    "notices:check": "node scripts/generate-third-party-notices.mjs --check",
+    "scope:build": "cd c64scope && npm run build",
+    "scope:test": "cd c64scope && npm run test",
+    "scope:test:coverage": "cd c64scope && npm run test:coverage",
+    "scope:check": "cd c64scope && npm run check",
+    "scope:mcp": "cd c64scope && npm run mcp",
+    "scope:preflight": "node c64scope/dist/preflight.js"
   },
   "dependencies": {
     "@capacitor/filesystem": "^6.0.4",

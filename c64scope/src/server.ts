@@ -10,6 +10,7 @@ import {
   ListToolsRequestSchema,
   ReadResourceRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
+import { LabStateStore } from "./labState.js";
 import { createLogger } from "./logger.js";
 import { createPromptRegistry } from "./promptsRegistry.js";
 import { readResource, listResources } from "./resources.js";
@@ -41,7 +42,8 @@ export function createScopeServerRuntime(options: ScopeRuntimeOptions = {}) {
   const artifactRoot = options.artifactRoot ?? path.join(process.cwd(), "artifacts");
   const logger = createLogger("c64scope");
   const sessionStore = new ScopeSessionStore(artifactRoot);
-  const toolRegistry = createToolRegistry({ sessionStore, logger });
+  const labStateStore = new LabStateStore();
+  const toolRegistry = createToolRegistry({ sessionStore, labStateStore, logger });
   const promptRegistry = createPromptRegistry();
 
   const server = new Server(

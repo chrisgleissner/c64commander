@@ -270,6 +270,28 @@ export class ScopeSessionStore {
     });
   }
 
+  async degradeCapture(runId: string, reason: string): Promise<ScopeResult> {
+    const session = await this.requireOpenSession(runId);
+    if (!session.ok) {
+      return session;
+    }
+    const status = session.data.session.capture.status;
+    if (status !== "reserved" && status !== "capturing") {
+      return errorResult(runId, "capture_unavailable", "Capture must be reserved or active to degrade.", {
+        captureStatus: status,
+      });
+    }
+
+    session.data.session.capture.stoppedAt = new Date().toISOString();
+    session.data.session.capture.status = "stopped";
+    await this.persistSession(session.data.session);
+
+    return errorResult(runId, "capture_degraded", reason, {
+      captureStatus: "stopped",
+      endpoints: session.data.session.capture.endpoints,
+    });
+  }
+
   async recordAssertion(input: RecordAssertionInput): Promise<ScopeResult> {
     const session = await this.requireOpenSession(input.runId);
     if (!session.ok) {

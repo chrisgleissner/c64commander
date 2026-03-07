@@ -71,7 +71,7 @@ Read these documents before starting implementation. Treat this as a blocking pr
 
 - Local execution assumption: at least one physical Android device is connected for all local hardening work.
 - CI assumption: physical devices are not guaranteed and must not be relied on.
-- Device identity is dynamic: do not hardcode serial `2113b87f`; it is only an example of current `adb devices` output (`2113b87f        device`) and may change.
+- Device identity is dynamic: do not hardcode serial `211...`; it is only an example of current `adb devices` output (`211...        device`) and may change.
 - For this rollout, hardware-sensitive validation must run on the connected physical device(s), not only emulator/simulator.
 - Real device target for this rollout: physical C64U is available at host `c64u`; startup and key-action hardening must include runs against that host.
 - Steps that must use physical-device execution and artifacts: `S3` (HVSC memory/soak), `S4` (FTP resilience under real network), `S10` (mandatory physical-device matrix), `S11-S14` (startup and HVSC hardening), and `S15` (final evidence check).
@@ -85,7 +85,7 @@ Read these documents before starting implementation. Treat this as a blocking pr
   1. `adb push` (or equivalent) staging command(s),
   2. on-device existence verification,
   3. cleanup policy (remove or keep) documented in Evidence.
-- Device serial remains dynamic; ADB commands must resolve target serial at runtime and must not hardcode `2113b87f`.
+- Device serial remains dynamic; ADB commands must resolve target serial at runtime and must not hardcode `211...`.
 
 ## ADB/Logcat Profiling Requirements (Mandatory for Startup Work)
 

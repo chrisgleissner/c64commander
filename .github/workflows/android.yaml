@@ -103,6 +103,13 @@ jobs:
           end=$(date +%s)
           echo "- unit tests: $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
+      - name: Run c64scope tests with coverage
+        run: |
+          start=$(date +%s)
+          cd c64scope && npm install --ignore-scripts && npm run test:coverage
+          end=$(date +%s)
+          echo "- c64scope tests: $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
       - name: Upload unit coverage
         if: always()
         uses: actions/upload-artifact@v4

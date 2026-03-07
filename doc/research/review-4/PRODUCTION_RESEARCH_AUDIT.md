@@ -16,16 +16,16 @@
 
 - Repository: `/home/chris/dev/c64/c64commander`.
 - Branch and commit captured in `doc/research/review-4/metrics/environment.txt`.
-- Runtime target device (evidence source): Samsung Galaxy Note 3 (`SM-N9005`), Android 11 (SDK 30), serial `2113b87f`.
+- Runtime target device (evidence source): Samsung Galaxy Note 3 (`SM-N9005`), Android 11 (SDK 30), serial `211...`.
 - ADB inventory showed additional devices (S21 FE and emulator), but runtime evidence used only Note 3 outputs.
-- Important constraint: requested serial was `2113B87f`; adb in this environment resolves lowercase `2113b87f`.
+- Important constraint: requested serial was `211...`; adb in this environment resolves lowercase `211...`.
 
 ## 3. Measurement Methodology
 
 - Build and install validation:
   - `npm run cap:build`
   - `cd android && ./gradlew assembleDebug`
-  - `adb -s 2113b87f install -r <apk>`
+  - `adb -s 211... install -r <apk>`
 - Startup timing:
   - cold and warm launch loops with logcat timestamp correlation.
 - Runtime signals:

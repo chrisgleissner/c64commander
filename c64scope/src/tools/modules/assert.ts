@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { assertionCatalog } from "../../catalog.js";
+import { assertionCatalog, evidenceTypeCatalog } from "../../catalog.js";
 import { defineToolModule, parseZodArgs } from "../types.js";
 import { jsonResult } from "../responses.js";
 
@@ -54,6 +54,25 @@ export const assertModule = defineToolModule({
       async execute(args, ctx) {
         const parsed = parseZodArgs(recordAssertionSchema, args);
         return jsonResult(await ctx.sessionStore.recordAssertion(parsed));
+      },
+    },
+    {
+      name: "scope_assert.list_evidence_types",
+      description: "List the canonical evidence types accepted for observation-layer attachment.",
+      inputSchema: {
+        type: "object",
+        properties: {},
+        additionalProperties: false,
+      },
+      async execute() {
+        return jsonResult({
+          ok: true,
+          runId: "scope-assert",
+          timestamp: new Date().toISOString(),
+          data: {
+            evidenceTypes: evidenceTypeCatalog,
+          },
+        });
       },
     },
   ],

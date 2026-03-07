@@ -1,3 +1,4 @@
+import type { LabStateStore } from "../labState.js";
 import type { ScopeLogger } from "../logger.js";
 import type { ScopeSessionStore } from "../sessionStore.js";
 import type { ToolExecutionContext, ToolDescriptor, ToolModule, ToolRunResult } from "./types.js";
@@ -33,7 +34,11 @@ for (const module of modules) {
   }
 }
 
-export function createToolRegistry(deps: { sessionStore: ScopeSessionStore; logger: ScopeLogger }) {
+export function createToolRegistry(deps: {
+  sessionStore: ScopeSessionStore;
+  labStateStore: LabStateStore;
+  logger: ScopeLogger;
+}) {
   return {
     list(): readonly ToolDescriptor[] {
       return Array.from(toolMap.values(), (entry) => entry.descriptor);
@@ -47,6 +52,7 @@ export function createToolRegistry(deps: { sessionStore: ScopeSessionStore; logg
 
       const ctx: ToolExecutionContext = {
         sessionStore: deps.sessionStore,
+        labStateStore: deps.labStateStore,
         logger: deps.logger,
       };
 

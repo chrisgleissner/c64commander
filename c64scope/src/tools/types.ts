@@ -1,4 +1,5 @@
 import { ZodError } from "zod";
+import type { LabStateStore } from "../labState.js";
 import type { ScopeLogger } from "../logger.js";
 import type { ScopeSessionStore } from "../sessionStore.js";
 import { ToolValidationError } from "./errors.js";
@@ -15,6 +16,7 @@ export type JsonSchema = {
 
 export interface ToolExecutionContext {
   readonly sessionStore: ScopeSessionStore;
+  readonly labStateStore: LabStateStore;
   readonly logger: ScopeLogger;
 }
 

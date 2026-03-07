@@ -11,6 +11,11 @@ const runIdSchema = z.object({
   runId: z.string().min(1),
 });
 
+const degradeCaptureSchema = z.object({
+  runId: z.string().min(1),
+  reason: z.string().min(1),
+});
+
 export const captureModule = defineToolModule({
   domain: "scope_capture",
   summary: "Capture reservation and lifecycle management.",
@@ -62,6 +67,23 @@ export const captureModule = defineToolModule({
       async execute(args, ctx) {
         const parsed = parseZodArgs(runIdSchema, args);
         return jsonResult(await ctx.sessionStore.stopCapture(parsed.runId));
+      },
+    },
+    {
+      name: "scope_capture.degrade_capture",
+      description: "Mark an active or reserved capture as degraded due to endpoint failure or infrastructure issues.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          runId: { type: "string" },
+          reason: { type: "string" },
+        },
+        required: ["runId", "reason"],
+        additionalProperties: false,
+      },
+      async execute(args, ctx) {
+        const parsed = parseZodArgs(degradeCaptureSchema, args);
+        return jsonResult(await ctx.sessionStore.degradeCapture(parsed.runId, parsed.reason));
       },
     },
   ],
