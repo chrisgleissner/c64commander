@@ -111,10 +111,7 @@ describe("deviceRegistry", () => {
 
   it("falls back to s21 fe when primary is unavailable", async () => {
     mockAdbDevicesOutput(
-      [
-        "List of devices attached",
-        "R5C\tdevice product:r9qxeea model:SM_G990B device:r9q transport_id:2",
-      ].join("\n"),
+      ["List of devices attached", "R5C\tdevice product:r9qxeea model:SM_G990B device:r9q transport_id:2"].join("\n"),
     );
 
     await expect(resolvePreferredPhysicalTestDeviceSerial()).resolves.toBe("R5C");

@@ -61,7 +61,8 @@ export async function resolveAdbSerial(serialOrPrefix: string): Promise<string> 
 
   if (candidates.length === 0) {
     throw new Error(
-      `No connected Android device matched prefix "${serialOrPrefix}". Connected devices: ${connectedSerials.join(", ") || "(none)"
+      `No connected Android device matched prefix "${serialOrPrefix}". Connected devices: ${
+        connectedSerials.join(", ") || "(none)"
       }`,
     );
   }

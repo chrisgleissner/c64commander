@@ -1,6 +1,9 @@
 android/**/build/**
+android/**/assets/**
+c64scope/artifacts/**
 coverage/**
 dist/**
+ios/**/App/**
 node_modules/**
 playwright-report/**
 test-results/**

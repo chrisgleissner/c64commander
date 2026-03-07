@@ -153,12 +153,12 @@ async function captureUdpPackets(input: {
     if (startRecoverableError) {
       throw new Error(
         `No UDP packets captured after recoverable stream start response (${startRecoverableError.message}). ` +
-        `Destination was ${input.destination.endpoint} bound to ${input.bindAddress}:${input.bindPort}.`,
+          `Destination was ${input.destination.endpoint} bound to ${input.bindAddress}:${input.bindPort}.`,
       );
     }
     throw new Error(
       `No UDP packets captured for ${input.streamType} stream on ${input.bindAddress}:${input.bindPort} ` +
-      `(destination ${input.destination.endpoint}) during ${input.durationMs}ms.`,
+        `(destination ${input.destination.endpoint}) during ${input.durationMs}ms.`,
     );
   }
   if (stopError) {
