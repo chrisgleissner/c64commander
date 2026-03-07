@@ -10,6 +10,7 @@ import { readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { classifyRun } from "../oraclePolicy.js";
 import { ScopeSessionStore } from "../sessionStore.js";
+import type { FailureClass, RunOutcome } from "../types.js";
 import { adb, c64uGet, resetC64Machine } from "./helpers.js";
 import type { CaseContext, CaseResult, RunResult, ValidationCase } from "./types.js";
 
@@ -32,8 +33,8 @@ export async function runCase(
   const ctx: CaseContext = { store, runId, serial, c64uHost, artifactDir };
 
   let caseResult: CaseResult | undefined;
-  let finalOutcome = "unknown";
-  let finalFailureClass = "inconclusive";
+  let finalOutcome: RunOutcome = "inconclusive";
+  let finalFailureClass: FailureClass = "inconclusive";
   let resetFailure: string | null = null;
 
   try {
@@ -96,21 +97,27 @@ export async function runCase(
     );
   }
 
-  // Write hardware proof
+  // Write hardware proof from live device and C64U identity to avoid stale hardcoded metadata.
+  const hwModel = (await adb(serial, "shell", "getprop", "ro.product.model")).trim();
+  const hwType = (await adb(serial, "shell", "getprop", "ro.hardware")).trim();
+  const hwProduct = (await adb(serial, "shell", "getprop", "ro.product.name")).trim();
+  const osVersion = (await adb(serial, "shell", "getprop", "ro.build.version.release")).trim();
+  const c64uInfo = JSON.parse(await c64uGet(c64uHost, "/v1/info")) as Record<string, string | undefined>;
+
   const hwProof = {
     android: {
       serial,
-      model: "SM-G990B",
-      hardware: "qcom",
-      os: "Android 16",
-      product: "Samsung Galaxy S21 FE",
+      model: hwModel,
+      hardware: hwType,
+      os: osVersion,
+      product: hwProduct,
     },
     c64u: {
       host: c64uHost,
-      hostname: "c64u",
-      firmware: "3.14d",
-      product: "Ultimate 64 Elite",
-      uniqueId: "38C1BA",
+      hostname: c64uInfo.hostname ?? "unknown",
+      firmware: c64uInfo.firmware_version ?? "unknown",
+      product: c64uInfo.product ?? "unknown",
+      uniqueId: c64uInfo.unique_id ?? "unknown",
     },
     timestamp: new Date().toISOString(),
   };

@@ -8,7 +8,11 @@
 
 import { execFile } from "node:child_process";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { resolveAdbSerial } from "../src/deviceRegistry.js";
+import {
+  physicalTestDevices,
+  resolveAdbSerial,
+  resolvePreferredPhysicalTestDeviceSerial,
+} from "../src/deviceRegistry.js";
 
 vi.mock("node:child_process", () => ({
   execFile: vi.fn(),
@@ -80,5 +84,39 @@ describe("deviceRegistry", () => {
     );
 
     await expect(resolveAdbSerial("R5C")).resolves.toBe("R5C12345678");
+  });
+
+  it("defines note 3 as primary and s21 fe as fallback", () => {
+    expect(physicalTestDevices[0]).toMatchObject({
+      id: "samsung-galaxy-note-3",
+      serialOrPrefix: "211",
+    });
+    expect(physicalTestDevices[1]).toMatchObject({
+      id: "samsung-galaxy-s21-fe",
+      serialOrPrefix: "R5C",
+    });
+  });
+
+  it("resolves primary device when available", async () => {
+    mockAdbDevicesOutput(
+      [
+        "List of devices attached",
+        "211\tdevice product:hlte model:SM_N9005 device:hlte transport_id:1",
+        "R5C\tdevice product:r9qxeea model:SM_G990B device:r9q transport_id:2",
+      ].join("\n"),
+    );
+
+    await expect(resolvePreferredPhysicalTestDeviceSerial()).resolves.toBe("211");
+  });
+
+  it("falls back to s21 fe when primary is unavailable", async () => {
+    mockAdbDevicesOutput(
+      [
+        "List of devices attached",
+        "R5C\tdevice product:r9qxeea model:SM_G990B device:r9q transport_id:2",
+      ].join("\n"),
+    );
+
+    await expect(resolvePreferredPhysicalTestDeviceSerial()).resolves.toBe("R5C");
   });
 });

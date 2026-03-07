@@ -90,6 +90,7 @@ async function captureUdpPackets(input: {
   const packets: StreamCapturePacket[] = [];
   const startMs = Date.now();
   let startSucceeded = false;
+  let startRecoverableError: Error | undefined;
   let runError: Error | undefined;
   let stopError: Error | undefined;
 
@@ -119,13 +120,22 @@ async function captureUdpPackets(input: {
 
   try {
     await started;
-    await setC64uStream(input.c64uHost, input.streamType, "start", input.destination.endpoint);
-    startSucceeded = true;
+    try {
+      await setC64uStream(input.c64uHost, input.streamType, "start", input.destination.endpoint);
+      startSucceeded = true;
+    } catch (error: unknown) {
+      const normalized = error instanceof Error ? error : new Error(String(error));
+      if (isRecoverableStartError(normalized)) {
+        startRecoverableError = normalized;
+      } else {
+        throw normalized;
+      }
+    }
     await sleep(input.durationMs);
   } catch (error: unknown) {
     runError = error instanceof Error ? error : new Error(String(error));
   } finally {
-    if (startSucceeded) {
+    if (startSucceeded || startRecoverableError) {
       try {
         await setC64uStream(input.c64uHost, input.streamType, "stop");
       } catch (error: unknown) {
@@ -139,11 +149,30 @@ async function captureUdpPackets(input: {
   if (runError) {
     throw runError;
   }
+  if (packets.length === 0) {
+    if (startRecoverableError) {
+      throw new Error(
+        `No UDP packets captured after recoverable stream start response (${startRecoverableError.message}). ` +
+        `Destination was ${input.destination.endpoint} bound to ${input.bindAddress}:${input.bindPort}.`,
+      );
+    }
+    throw new Error(
+      `No UDP packets captured for ${input.streamType} stream on ${input.bindAddress}:${input.bindPort} ` +
+      `(destination ${input.destination.endpoint}) during ${input.durationMs}ms.`,
+    );
+  }
   if (stopError) {
     throw stopError;
   }
 
   return packets;
+}
+
+function isRecoverableStartError(error: Error): boolean {
+  return (
+    error.message.includes("C64U stream start failed (404)") &&
+    error.message.toLowerCase().includes("network host resolve error")
+  );
 }
 
 async function setC64uStream(
@@ -177,7 +206,11 @@ interface StreamDestination {
   isMulticast: boolean;
 }
 
-function resolveStreamDestination(streamType: StreamType, destinationIp?: string, overridePort?: number): StreamDestination {
+function resolveStreamDestination(
+  streamType: StreamType,
+  destinationIp?: string,
+  overridePort?: number,
+): StreamDestination {
   const raw = destinationIp?.trim() || DEFAULT_STREAM_DESTINATION[streamType];
   const parsed = parseHostPort(raw, DEFAULT_STREAM_PORT[streamType]);
   const port = overridePort ?? parsed.port;

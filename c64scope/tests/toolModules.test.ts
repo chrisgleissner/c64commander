@@ -37,7 +37,7 @@ describe("tool modules", () => {
       await toolRegistry.invoke("scope_lab.report_peer_health", {
         peer: "mobile_controller",
         level: "healthy",
-        detail: `Device ${defaultPhysicalTestDevice.serialPrefix}... online`,
+        detail: `Device ${defaultPhysicalTestDevice.serialOrPrefix}... online`,
       });
       await toolRegistry.invoke("scope_lab.report_peer_health", {
         peer: "c64bridge",

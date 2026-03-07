@@ -10,7 +10,8 @@
  * Autonomous agentic validation runner for C64 Commander.
  *
  * Executes 10+ independent test cases against real hardware:
- * - Samsung Galaxy S21 FE (prefix R5C...) via ADB
+ * - Samsung Galaxy Note 3 (serial prefix 211) as primary via ADB
+ * - Samsung Galaxy S21 FE (serial prefix R5C) as fallback via ADB
  * - C64 Ultimate 64 Elite (c64u / 192.168.1.13) via REST + FTP
  *
  * Each case:
@@ -22,11 +23,12 @@
  * Usage:
  *   ANDROID_SERIAL=R5C C64U_HOST=192.168.1.13 node dist/autonomousValidation.js
  *   REPEAT=3 ... node dist/autonomousValidation.js   # repeatability mode
+ *   C64U_HOST=192.168.1.13 node dist/autonomousValidation.js # auto-select preferred device
  */
 
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { defaultPhysicalTestDevice, resolveAdbSerial } from "./deviceRegistry.js";
+import { resolveAdbSerial, resolvePreferredPhysicalTestDeviceSerial } from "./deviceRegistry.js";
 import { runPreflight } from "./preflight.js";
 import { ALL_CASES } from "./validation/cases/index.js";
 import { generateReport } from "./validation/report.js";
@@ -38,8 +40,8 @@ import type { RunResult } from "./validation/types.js";
 // ---------------------------------------------------------------------------
 
 async function main(): Promise<void> {
-  const serialInput = process.env["ANDROID_SERIAL"] ?? defaultPhysicalTestDevice.serialPrefix;
-  const serial = await resolveAdbSerial(serialInput);
+  const serialInput = process.env["ANDROID_SERIAL"];
+  const serial = serialInput ? await resolveAdbSerial(serialInput) : await resolvePreferredPhysicalTestDeviceSerial();
   const c64uHost = process.env["C64U_HOST"] ?? "192.168.1.13";
   const repeatCount = parseInt(process.env["REPEAT"] ?? "1", 10);
 
