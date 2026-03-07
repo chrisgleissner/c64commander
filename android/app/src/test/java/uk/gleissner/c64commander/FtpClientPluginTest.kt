@@ -15,7 +15,6 @@ import com.getcapacitor.Bridge
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
-import java.io.File
 import java.net.SocketTimeoutException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -174,14 +173,16 @@ class FtpClientPluginTest {
     val ftpClient = mock(FTPClient::class.java)
     plugin.ftpClientFactory = { ftpClient }
 
-    val demo = FTPFile().apply {
-      name = "demo.sid"
-      size = 3
-    }
-    val docs = FTPFile().apply {
-      name = "docs"
-      type = FTPFile.DIRECTORY_TYPE
-    }
+    val demo =
+            FTPFile().apply {
+              name = "demo.sid"
+              size = 3
+            }
+    val docs =
+            FTPFile().apply {
+              name = "docs"
+              type = FTPFile.DIRECTORY_TYPE
+            }
     `when`(ftpClient.login("user", "secret")).thenReturn(true)
     `when`(ftpClient.mlistDir("/")).thenReturn(arrayOf(demo, docs))
     `when`(ftpClient.isConnected).thenReturn(true)
