@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - C64 Scope
+ * Autonomous testing MCP server for session capture and audio/video verification
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 import path from "node:path";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";

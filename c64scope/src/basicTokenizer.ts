@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - C64 Scope
+ * Autonomous testing MCP server for session capture and audio/video verification
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 /**
  * Minimal C64 BASIC V2 tokenizer for generating PRG binaries.
  *
@@ -212,6 +220,23 @@ export const COLOR_AND_SOUND_PROGRAM = [
   "140 FOR I=1 TO 3000:NEXT I",
   "150 POKE 54276,0",
   '160 PRINT "TEST COMPLETE"',
+].join("\n");
+
+/**
+ * Stream validation program with stable, long-lived signal:
+ * - Border red (2), background blue (6)
+ * - Continuous SID tone (approx. A4)
+ * - Infinite loop to keep deterministic A/V output during UDP capture
+ */
+export const STREAM_VALIDATION_PROGRAM = [
+  "10 POKE 53280,2:POKE 53281,6",
+  "20 PRINT CHR$(147)",
+  '30 PRINT "C64SCOPE STREAM VALIDATION"',
+  "40 POKE 54296,15",
+  "50 POKE 54277,17:POKE 54278,240",
+  "60 POKE 54272,72:POKE 54273,29",
+  "70 POKE 54276,17",
+  "80 GOTO 80",
 ].join("\n");
 
 /** Expected VIC-II register values after COLOR_AND_SOUND_PROGRAM runs line 10. */

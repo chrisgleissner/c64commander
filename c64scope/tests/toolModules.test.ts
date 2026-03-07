@@ -1,4 +1,12 @@
-import { mkdtemp, rm } from "node:fs/promises";
+/*
+ * C64 Commander - C64 Scope
+ * Autonomous testing MCP server for session capture and audio/video verification
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -62,6 +70,55 @@ describe("tool modules", () => {
       expect(assertions.data.assertions.length).toBeGreaterThanOrEqual(10);
       expect(evidenceTypes.data.evidenceTypes.length).toBeGreaterThanOrEqual(8);
       expect(missingArtifact.ok).toBe(false);
+
+      // Stream signature assertions from synthetic analysis artifacts
+      const started = await sessionStore.startSession({ caseId: "TEST-STREAM-VERIFY" });
+      expect(started.ok).toBe(true);
+      if (!started.ok) {
+        throw new Error("Failed to create test session");
+      }
+      const runId = started.runId;
+      const artifactDir = String(started.data.artifactDir);
+
+      await writeFile(
+        path.join(artifactDir, "audio-stream-analysis.json"),
+        JSON.stringify({ rms: 0.02, dominantFrequencyHz: 420, stats: { packetCount: 120 } }, null, 2),
+        "utf-8",
+      );
+      await writeFile(
+        path.join(artifactDir, "video-stream-analysis.json"),
+        JSON.stringify(
+          {
+            dominantBorderColor: 2,
+            dominantBackgroundColor: 6,
+            frameCompleteness: 0.9,
+            stats: { packetCount: 70 },
+          },
+          null,
+          2,
+        ),
+        "utf-8",
+      );
+
+      const audioVerify = parseJsonText(
+        await toolRegistry.invoke("scope_assert.verify_stream_signature", {
+          runId,
+          streamType: "audio",
+          minAudioRms: 0.01,
+        }),
+      );
+      const videoVerify = parseJsonText(
+        await toolRegistry.invoke("scope_assert.verify_stream_signature", {
+          runId,
+          streamType: "video",
+          expectedBorderColor: 2,
+          expectedBackgroundColor: 6,
+          minFrameCompleteness: 0.7,
+        }),
+      );
+
+      expect(audioVerify.data.passed).toBe(true);
+      expect(videoVerify.data.passed).toBe(true);
     } finally {
       await rm(artifactRoot, { recursive: true, force: true });
     }
