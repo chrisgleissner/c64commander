@@ -164,3 +164,11 @@ The controller should provide enough evidence to distinguish:
 
 - Android physical execution is possible from Linux when the controller can see the target device.
 - iOS physical execution is not currently available from this Linux host and must remain explicitly deferred.
+
+## Deferred iOS Physical-Execution Requirements
+
+- Do not claim iOS physical execution, install verification, or hardware-coupled verdicts from this Linux host.
+- Keep case metadata, safety semantics, oracle semantics, and session recording controller-neutral so an iOS controller can satisfy the same role later.
+- Any future iOS physical-execution lane must run from a macOS host or CI environment with Xcode-capable tooling and an iOS controller that can provide the same interface-level capabilities as the Android controller: device selection, app lifecycle, screenshots, logs, file handoff, and diagnostics access.
+- iOS evidence must include the selected device or simulator target, install/launch/terminate results, screenshots or UI snapshots, and any platform-specific diagnostics or artifact-export results needed by the case oracle.
+- Current iOS prior art comes from the repository's iOS Maestro flows and `ios.yaml`, but those are parity references and CI validation lanes, not proof of Linux-host physical execution.

@@ -10,8 +10,9 @@ Current verified constraints:
 - Current physical execution scope: Android only.
 - iOS must remain controller-neutral in architecture, but cannot be claimed as physically executed from this Linux host.
 - `c64scope/` is implemented as a standalone MCP package with local build, test, and coverage gates.
-- A controller-visible Android device is currently available as `R5CRC3ZY9XH` (`SM-G990B`), and `c64u` is reachable on the lab network.
-- The currently visible Android device is PIN-locked, so foreground app verification is blocked until the device is unlocked.
+- Controller lifecycle primitives have been verified on controller-visible target `R5CRC3ZY9XH` (`SM-G990B`), but that target is currently an emulator and is not sufficient for real-hardware completion.
+- The preferred physical Android device `9B081FFAZ001WX` is not currently visible to the controller from this Linux host.
+- The currently visible controller target launches C64 Commander into demo-mode fallback because no real C64U is reachable from that device context.
 
 ## Execution Rules
 
@@ -98,8 +99,8 @@ Tasks:
 - [x] DEV-001 Document the controller contract in executable terms: install, launch, stop, clear, screenshot, logs, file staging, and diagnostics access.
 - [x] DEV-002 Verify approved Android device visibility and selection in the lab, including the preferred physical device.
 - [ ] DEV-003 Verify app install/launch/terminate flows on the real Android device through the approved controller path.
-- [ ] DEV-004 Capture Android runtime evidence requirements for logcat, filesystem staging, and diagnostics export.
-- [ ] DEV-005 Record iOS constraints and deferred physical-execution requirements without claiming unsupported execution from Linux.
+- [x] DEV-004 Capture Android runtime evidence requirements for logcat, filesystem staging, and diagnostics export.
+- [x] DEV-005 Record iOS constraints and deferred physical-execution requirements without claiming unsupported execution from Linux.
 
 Completion criteria:
 
@@ -365,8 +366,8 @@ Verification steps:
 
 ## Blockers
 
-- B-001 The currently visible Android device is locked behind a PIN, so foreground app verification cannot complete until the device is unlocked.
-- B-002 iOS physical execution cannot be completed from this Linux host and remains explicitly out of scope for current physical runs.
+- B-001 No approved real Android device is currently visible to the controller from this Linux host; only emulator `R5CRC3ZY9XH` is visible, so DEV-003 cannot complete on real hardware.
+- B-002 iOS physical execution cannot be completed from this Linux host and remains explicitly deferred to macOS-hosted execution.
 - B-003 Several feature areas remain intentionally blocked by `doc/testing/agentic-tests/agentic-open-questions.md` and must not be guessed through.
 
 ## WORKLOG
@@ -588,3 +589,35 @@ Verification steps:
   - Verified device visibility through `adb`.
   - Verified C64U reachability through `ping`.
   - Verified app package presence through the mobile controller app listing.
+
+### 2026-03-07T13:20:49Z DEV-004
+
+- Summary: Recorded the Android runtime evidence requirements for agentic testing so logcat, filesystem staging, and diagnostics export are specified in executable terms.
+- Files created or modified:
+  - `doc/testing/agentic-tests/agentic-android-runtime-contract.md`
+  - `PLANS.md`
+- Commands executed:
+  - `date -u +%Y-%m-%dT%H:%M:%SZ`
+- Observations and results:
+  - The Android runtime contract now names the repository reference harness for launch/logcat evidence (`scripts/startup/collect-android-startup-baseline.mjs`).
+  - The deterministic staging path `/sdcard/Download/c64commander-assets` and required fixture counts are now documented from `scripts/startup/stage-local-assets-adb.sh`.
+  - Diagnostics ZIP and trace export semantics are now explicit: Android native writes to `Directory.Cache`, then invokes the Share API, and share-sheet visibility alone is not sufficient proof of export completion.
+- Verification performed:
+  - Re-read `doc/testing/agentic-tests/agentic-android-runtime-contract.md` after the update.
+  - Cross-checked the documented evidence paths against `scripts/startup/collect-android-startup-baseline.mjs`, `scripts/startup/stage-local-assets-adb.sh`, `src/lib/diagnostics/diagnosticsExport.ts`, and `src/lib/tracing/traceExport.ts`.
+
+### 2026-03-07T13:20:49Z DEV-005
+
+- Summary: Recorded the iOS deferral rules for the current Linux-hosted lab while preserving the controller-neutral architecture boundary.
+- Files created or modified:
+  - `doc/testing/agentic-tests/agentic-controller-contract.md`
+  - `PLANS.md`
+- Commands executed:
+  - `date -u +%Y-%m-%dT%H:%M:%SZ`
+- Observations and results:
+  - The controller contract now states that iOS physical execution, install verification, and hardware-coupled verdicts must not be claimed from this Linux host.
+  - The deferred iOS requirements are now explicit: macOS-hosted execution, an iOS controller matching the Android contract surface, and platform-specific evidence for lifecycle and export behavior.
+  - The plan now reflects that iOS remains deferred while DEV-003 is blocked by missing approved real Android hardware visibility rather than by missing controller semantics.
+- Verification performed:
+  - Re-read `doc/testing/agentic-tests/agentic-controller-contract.md` after the update.
+  - Cross-checked the deferral wording against `doc/testing/physical-device-matrix.md`, `doc/testing/maestro.md`, and `.github/workflows/ios.yaml`.

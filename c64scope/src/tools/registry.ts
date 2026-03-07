@@ -9,48 +9,48 @@ import { labModule } from "./modules/lab.js";
 import { sessionModule } from "./modules/session.js";
 
 interface RegisteredTool {
-    readonly module: ToolModule;
-    readonly descriptor: ToolDescriptor;
+  readonly module: ToolModule;
+  readonly descriptor: ToolDescriptor;
 }
 
 const modules: readonly ToolModule[] = [
-    sessionModule,
-    labModule,
-    captureModule,
-    assertModule,
-    artifactModule,
-    catalogModule,
+  sessionModule,
+  labModule,
+  captureModule,
+  assertModule,
+  artifactModule,
+  catalogModule,
 ];
 
 const toolMap = new Map<string, RegisteredTool>();
 
 for (const module of modules) {
-    for (const descriptor of module.describeTools()) {
-        if (toolMap.has(descriptor.name)) {
-            throw new Error(`Duplicate tool name detected while registering modules: ${descriptor.name}`);
-        }
-        toolMap.set(descriptor.name, { module, descriptor });
+  for (const descriptor of module.describeTools()) {
+    if (toolMap.has(descriptor.name)) {
+      throw new Error(`Duplicate tool name detected while registering modules: ${descriptor.name}`);
     }
+    toolMap.set(descriptor.name, { module, descriptor });
+  }
 }
 
 export function createToolRegistry(deps: { sessionStore: ScopeSessionStore; logger: ScopeLogger }) {
-    return {
-        list(): readonly ToolDescriptor[] {
-            return Array.from(toolMap.values(), (entry) => entry.descriptor);
-        },
+  return {
+    list(): readonly ToolDescriptor[] {
+      return Array.from(toolMap.values(), (entry) => entry.descriptor);
+    },
 
-        async invoke(name: string, args: unknown): Promise<ToolRunResult> {
-            const entry = toolMap.get(name);
-            if (!entry) {
-                throw new Error(`Unknown tool: ${name}`);
-            }
+    async invoke(name: string, args: unknown): Promise<ToolRunResult> {
+      const entry = toolMap.get(name);
+      if (!entry) {
+        throw new Error(`Unknown tool: ${name}`);
+      }
 
-            const ctx: ToolExecutionContext = {
-                sessionStore: deps.sessionStore,
-                logger: deps.logger,
-            };
+      const ctx: ToolExecutionContext = {
+        sessionStore: deps.sessionStore,
+        logger: deps.logger,
+      };
 
-            return entry.module.invoke(name, args, ctx);
-        },
-    };
+      return entry.module.invoke(name, args, ctx);
+    },
+  };
 }
