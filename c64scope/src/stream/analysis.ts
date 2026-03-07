@@ -6,13 +6,21 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { computePacketStats, parseAudioPacket, parseVideoPacket, reconstructBestVideoFrame } from "./parser.js";
+import {
+  AUDIO_HEADER_BYTES,
+  VIDEO_HEADER_BYTES,
+  computePacketStats,
+  parseAudioPacket,
+  parseVideoPacket,
+  reconstructBestVideoFrame,
+} from "./parser.js";
 import type { AudioFeatures, StreamCapturePacket, VideoFeatures } from "./types.js";
 
 const AUDIO_SAMPLE_RATE_PAL_HZ = 47982.8869;
 
 export function analyzeAudioPackets(packets: StreamCapturePacket[]): AudioFeatures {
-  const parsed = packets.map((packet) => parseAudioPacket(packet.payload));
+  const valid = packets.filter((p) => p.payload.length >= AUDIO_HEADER_BYTES);
+  const parsed = valid.map((packet) => parseAudioPacket(packet.payload));
   const sequences = parsed.map((packet) => packet.sequence);
   const stats = computePacketStats(sequences);
 
@@ -32,7 +40,8 @@ export function analyzeAudioPackets(packets: StreamCapturePacket[]): AudioFeatur
 }
 
 export function analyzeVideoPackets(packets: StreamCapturePacket[]): VideoFeatures {
-  const parsed = packets.map((packet) => parseVideoPacket(packet.payload));
+  const valid = packets.filter((p) => p.payload.length >= VIDEO_HEADER_BYTES);
+  const parsed = valid.map((packet) => parseVideoPacket(packet.payload));
   const sequences = parsed.map((packet) => packet.sequence);
   const stats = computePacketStats(sequences);
 

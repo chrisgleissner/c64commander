@@ -169,11 +169,16 @@ async function captureUdpPackets(input: {
 }
 
 function isRecoverableStartError(error: Error): boolean {
+  if (error.name === "TimeoutError") {
+    return true;
+  }
   return (
     error.message.includes("C64U stream start failed (404)") &&
     error.message.toLowerCase().includes("network host resolve error")
   );
 }
+
+const STREAM_REQUEST_TIMEOUT_MS = 5000;
 
 async function setC64uStream(
   c64uHost: string,
@@ -191,6 +196,7 @@ async function setC64uStream(
     headers: {
       Accept: "application/json",
     },
+    signal: AbortSignal.timeout(STREAM_REQUEST_TIMEOUT_MS),
   });
 
   if (!response.ok) {

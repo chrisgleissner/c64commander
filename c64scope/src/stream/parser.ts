@@ -8,8 +8,8 @@
 
 import type { AudioPacket, PacketStats, VideoFrame, VideoPacket } from "./types.js";
 
-const VIDEO_HEADER_BYTES = 12;
-const AUDIO_HEADER_BYTES = 2;
+export const VIDEO_HEADER_BYTES = 12;
+export const AUDIO_HEADER_BYTES = 2;
 
 export function parseAudioPacket(payload: Buffer): AudioPacket {
   if (payload.length < AUDIO_HEADER_BYTES) {
