@@ -6,20 +6,16 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { FolderPicker } from '@/lib/native/folderPicker';
-import { normalizeDiskPath } from '@/lib/disks/diskTypes';
-import type { PlayRequest, PlaySource, LocalPlayFile } from './playbackRouter';
-import type { FileLibraryEntry } from './fileLibraryTypes';
+import { FolderPicker } from "@/lib/native/folderPicker";
+import { normalizeDiskPath } from "@/lib/disks/diskTypes";
+import type { PlayRequest, PlaySource, LocalPlayFile } from "./playbackRouter";
+import type { FileLibraryEntry } from "./fileLibraryTypes";
 
 export const normalizeFilePath = (path: string) => normalizeDiskPath(path);
 
 export const buildFileLibraryId = (source: PlaySource, path: string, sourceId?: string | null) => {
   const normalized = normalizeFilePath(path);
-  const sourceKey = source === 'ultimate'
-    ? 'ultimate'
-    : source === 'hvsc'
-      ? sourceId || 'hvsc'
-      : sourceId || 'local';
+  const sourceKey = source === "ultimate" ? "ultimate" : source === "hvsc" ? sourceId || "hvsc" : sourceId || "local";
   return `${sourceKey}:${normalized}`;
 };
 
@@ -66,13 +62,14 @@ export const resolvePlayRequestFromLibrary = (
   entry: FileLibraryEntry,
   runtimeFiles: Record<string, LocalPlayFile>,
 ): PlayRequest => {
-  if (entry.source === 'ultimate') {
-    return { source: 'ultimate', path: entry.path };
+  if (entry.source === "ultimate") {
+    return { source: "ultimate", path: entry.path };
   }
   const runtime = runtimeFiles[entry.id];
-  const file = runtime || (entry.localUri ? buildLocalPlayFileFromUri(entry.name, entry.path, entry.localUri) : undefined);
-  if (entry.source === 'hvsc') {
-    return { source: 'hvsc', path: entry.path, file };
+  const file =
+    runtime || (entry.localUri ? buildLocalPlayFileFromUri(entry.name, entry.path, entry.localUri) : undefined);
+  if (entry.source === "hvsc") {
+    return { source: "hvsc", path: entry.path, file };
   }
-  return { source: 'local', path: entry.path, file };
+  return { source: "local", path: entry.path, file };
 };

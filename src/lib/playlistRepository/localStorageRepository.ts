@@ -6,9 +6,9 @@ import type {
   PlaylistSessionRecord,
   RandomPlaySession,
   TrackRecord,
-} from './types';
-import type { PlaylistDataRepository } from './repository';
-import { addLog } from '@/lib/logging';
+} from "./types";
+import type { PlaylistDataRepository } from "./repository";
+import { addLog } from "@/lib/logging";
 
 type PersistedState = {
   version: 1;
@@ -18,8 +18,8 @@ type PersistedState = {
   randomSessionsByPlaylistId: Record<string, RandomPlaySession>;
 };
 
-const STORAGE_KEY = 'c64u_playlist_repo:v1';
-const BACKUP_STORAGE_KEY = 'c64u_playlist_repo:v1:backup';
+const STORAGE_KEY = "c64u_playlist_repo:v1";
+const BACKUP_STORAGE_KEY = "c64u_playlist_repo:v1:backup";
 
 const defaultState = (): PersistedState => ({
   version: 1,
@@ -38,7 +38,7 @@ const stableHash = (value: string) => {
   return hash >>> 0;
 };
 
-const seededShuffle = <T,>(items: T[], seed: number) => {
+const seededShuffle = <T>(items: T[], seed: number) => {
   const next = [...items];
   let state = seed >>> 0;
   const random = () => {
@@ -52,33 +52,37 @@ const seededShuffle = <T,>(items: T[], seed: number) => {
   return next;
 };
 
-const normalizeQuery = (value?: string) => value?.trim().toLowerCase() ?? '';
+const normalizeQuery = (value?: string) => value?.trim().toLowerCase() ?? "";
 
 const rowSearchText = (row: PlaylistQueryRow) => {
   const parts = [
     row.track.title,
-    row.track.author ?? '',
-    row.track.released ?? '',
+    row.track.author ?? "",
+    row.track.released ?? "",
     row.track.path,
     row.track.sourceLocator,
-    row.track.category ?? '',
+    row.track.category ?? "",
   ];
-  return parts.join(' ').toLowerCase();
+  return parts.join(" ").toLowerCase();
 };
 
 const safeReadState = (): PersistedState => {
-  if (typeof localStorage === 'undefined') return defaultState();
+  if (typeof localStorage === "undefined") return defaultState();
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) return defaultState();
   try {
     const parsed = JSON.parse(raw) as PersistedState;
     if (!parsed || parsed.version !== 1) {
-      addLog('warn', 'Incompatible localStorage playlist repository schema. Preserving backup and resetting repository state.', {
-        storageKey: STORAGE_KEY,
-        backupStorageKey: BACKUP_STORAGE_KEY,
-        version: typeof parsed === 'object' && parsed ? (parsed as { version?: unknown }).version : null,
-      });
-      if (typeof localStorage !== 'undefined') {
+      addLog(
+        "warn",
+        "Incompatible localStorage playlist repository schema. Preserving backup and resetting repository state.",
+        {
+          storageKey: STORAGE_KEY,
+          backupStorageKey: BACKUP_STORAGE_KEY,
+          version: typeof parsed === "object" && parsed ? (parsed as { version?: unknown }).version : null,
+        },
+      );
+      if (typeof localStorage !== "undefined") {
         localStorage.setItem(BACKUP_STORAGE_KEY, raw);
       }
       return defaultState();
@@ -91,7 +95,7 @@ const safeReadState = (): PersistedState => {
       randomSessionsByPlaylistId: parsed.randomSessionsByPlaylistId ?? {},
     };
   } catch (error) {
-    addLog('warn', 'Failed to parse localStorage playlist repository state. Resetting repository state.', {
+    addLog("warn", "Failed to parse localStorage playlist repository state. Resetting repository state.", {
       storageKey: STORAGE_KEY,
       error: (error as Error).message,
     });
@@ -100,7 +104,7 @@ const safeReadState = (): PersistedState => {
 };
 
 const safeWriteState = (state: PersistedState) => {
-  if (typeof localStorage === 'undefined') return;
+  if (typeof localStorage === "undefined") return;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 };
 
@@ -160,9 +164,7 @@ class LocalStoragePlaylistDataRepository implements PlaylistDataRepository {
       .filter((row): row is PlaylistQueryRow => Boolean(row));
 
     const query = normalizeQuery(options.query);
-    const categoryFilter = options.categoryFilter?.length
-      ? new Set(options.categoryFilter)
-      : null;
+    const categoryFilter = options.categoryFilter?.length ? new Set(options.categoryFilter) : null;
 
     const withFilter = rows.filter((row) => {
       if (categoryFilter) {
@@ -174,12 +176,12 @@ class LocalStoragePlaylistDataRepository implements PlaylistDataRepository {
     });
 
     const withSort = [...withFilter].sort((left, right) => {
-      const sort = options.sort ?? 'playlist-position';
-      if (sort === 'title') {
+      const sort = options.sort ?? "playlist-position";
+      if (sort === "title") {
         const titleDiff = left.track.title.localeCompare(right.track.title);
         if (titleDiff !== 0) return titleDiff;
       }
-      if (sort === 'path') {
+      if (sort === "path") {
         const pathDiff = left.track.path.localeCompare(right.track.path);
         if (pathDiff !== 0) return pathDiff;
       }
@@ -195,9 +197,8 @@ class LocalStoragePlaylistDataRepository implements PlaylistDataRepository {
   }
 
   async createSession(playlistId: string, orderedPlaylistItemIds: string[], seed?: number) {
-    const resolvedSeed = typeof seed === 'number'
-      ? seed
-      : stableHash(`${playlistId}:${orderedPlaylistItemIds.join('|')}:${Date.now()}`);
+    const resolvedSeed =
+      typeof seed === "number" ? seed : stableHash(`${playlistId}:${orderedPlaylistItemIds.join("|")}:${Date.now()}`);
     const order = seededShuffle(orderedPlaylistItemIds, resolvedSeed);
     const session: RandomPlaySession = {
       playlistId,

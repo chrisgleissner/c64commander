@@ -6,12 +6,12 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { ActionSummary, ErrorEffect, FtpEffect, RestEffect } from '@/lib/diagnostics/actionSummaries';
+import type { ActionSummary, ErrorEffect, FtpEffect, RestEffect } from "@/lib/diagnostics/actionSummaries";
 import {
   formatActionEffectTarget,
   formatActionSummaryOrigin,
   formatTriggerDisplay,
-} from '@/lib/diagnostics/actionSummaryDisplay';
+} from "@/lib/diagnostics/actionSummaryDisplay";
 
 type Props = {
   summary: ActionSummary;
@@ -19,9 +19,9 @@ type Props = {
 
 export const ActionExpandedContent = ({ summary }: Props) => {
   const effects = summary.effects ?? [];
-  const restEffects = effects.filter((e): e is RestEffect => e.type === 'REST');
-  const ftpEffects = effects.filter((e): e is FtpEffect => e.type === 'FTP');
-  const errorEffects = effects.filter((e): e is ErrorEffect => e.type === 'ERROR');
+  const restEffects = effects.filter((e): e is RestEffect => e.type === "REST");
+  const ftpEffects = effects.filter((e): e is FtpEffect => e.type === "FTP");
+  const errorEffects = effects.filter((e): e is ErrorEffect => e.type === "ERROR");
   const inferredProduct = restEffects.find((effect) => effect.product)?.product ?? null;
 
   return (
@@ -49,14 +49,15 @@ export const ActionExpandedContent = ({ summary }: Props) => {
               data-testid={`action-rest-effect-${summary.correlationId}-${index}`}
               className="rounded-md border border-border/70 p-2"
             >
-              <p className="font-medium">{effect.method} {effect.path}</p>
-              <p className="text-muted-foreground">
-                target: {formatActionEffectTarget(effect.target, effect.product ?? inferredProduct)} · status: {effect.status !== null && effect.status !== undefined ? effect.status : 'unknown'}
-                {effect.durationMs !== null ? ` · ${effect.durationMs}ms` : ''}
+              <p className="font-medium">
+                {effect.method} {effect.path}
               </p>
-              {effect.error ? (
-                <p className="text-diagnostics-error">error: {effect.error}</p>
-              ) : null}
+              <p className="text-muted-foreground">
+                target: {formatActionEffectTarget(effect.target, effect.product ?? inferredProduct)} · status:{" "}
+                {effect.status !== null && effect.status !== undefined ? effect.status : "unknown"}
+                {effect.durationMs !== null ? ` · ${effect.durationMs}ms` : ""}
+              </p>
+              {effect.error ? <p className="text-diagnostics-error">error: {effect.error}</p> : null}
             </div>
           ))}
         </div>
@@ -71,13 +72,14 @@ export const ActionExpandedContent = ({ summary }: Props) => {
               data-testid={`action-ftp-effect-${summary.correlationId}-${index}`}
               className="rounded-md border border-border/70 p-2"
             >
-              <p className="font-medium">{effect.operation} {effect.path}</p>
-              <p className="text-muted-foreground">
-                target: {formatActionEffectTarget(effect.target, inferredProduct)} · result: {effect.result ?? 'unknown'}
+              <p className="font-medium">
+                {effect.operation} {effect.path}
               </p>
-              {effect.error ? (
-                <p className="text-diagnostics-error">error: {effect.error}</p>
-              ) : null}
+              <p className="text-muted-foreground">
+                target: {formatActionEffectTarget(effect.target, inferredProduct)} · result:{" "}
+                {effect.result ?? "unknown"}
+              </p>
+              {effect.error ? <p className="text-diagnostics-error">error: {effect.error}</p> : null}
             </div>
           ))}
         </div>

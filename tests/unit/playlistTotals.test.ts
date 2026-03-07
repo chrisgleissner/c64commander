@@ -6,41 +6,41 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { describe, expect, it } from 'vitest';
-import { calculatePlaylistTotals } from '@/lib/playback/playlistTotals';
+import { describe, expect, it } from "vitest";
+import { calculatePlaylistTotals } from "@/lib/playback/playlistTotals";
 
-describe('calculatePlaylistTotals', () => {
-  it('returns undefined for empty durations array', () => {
+describe("calculatePlaylistTotals", () => {
+  it("returns undefined for empty durations array", () => {
     const totals = calculatePlaylistTotals([], 0);
     expect(totals.total).toBeUndefined();
     expect(totals.remaining).toBeUndefined();
   });
 
-  it('returns dash when durations unknown', () => {
+  it("returns dash when durations unknown", () => {
     const totals = calculatePlaylistTotals([5000, undefined], 0);
     expect(totals.total).toBeUndefined();
     expect(totals.remaining).toBeUndefined();
   });
 
-  it('computes total and remaining based on played time', () => {
+  it("computes total and remaining based on played time", () => {
     const totals = calculatePlaylistTotals([5000, 7000, 4000], 3000);
     expect(totals.total).toBe(16000);
     expect(totals.remaining).toBe(13000);
   });
 
-  it('uses total as remaining when played is zero', () => {
+  it("uses total as remaining when played is zero", () => {
     const totals = calculatePlaylistTotals([1000, 2000], 0);
     expect(totals.total).toBe(3000);
     expect(totals.remaining).toBe(3000);
   });
 
-  it('clamps remaining at zero when played exceeds total', () => {
+  it("clamps remaining at zero when played exceeds total", () => {
     const totals = calculatePlaylistTotals([1000, 2000], 5000);
     expect(totals.total).toBe(3000);
     expect(totals.remaining).toBe(0);
   });
 
-  it('handles null value cast as undefined via nullish coalescing in reduce', () => {
+  it("handles null value cast as undefined via nullish coalescing in reduce", () => {
     // Covers the value ?? 0 branch: null passes the every(v !== undefined) check
     // but is treated as 0 in the reduce via ?? 0
     const totals = calculatePlaylistTotals([null as unknown as undefined], 0);

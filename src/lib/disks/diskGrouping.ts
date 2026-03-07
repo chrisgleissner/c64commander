@@ -6,10 +6,10 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { getDiskFolderPath, normalizeDiskPath } from './diskTypes';
+import { getDiskFolderPath, normalizeDiskPath } from "./diskTypes";
 
 const stripExtension = (name: string) => {
-  const idx = name.lastIndexOf('.');
+  const idx = name.lastIndexOf(".");
   if (idx <= 0) return name;
   return name.slice(0, idx);
 };
@@ -70,4 +70,3 @@ export const assignDiskGroupsByPrefix = (entries: Array<{ path: string; name: st
 
   return result;
 };
-

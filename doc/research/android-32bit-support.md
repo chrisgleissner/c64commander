@@ -17,6 +17,7 @@ ndk {
 ```
 
 This configuration enables:
+
 - **32-bit ARM**: `armeabi-v7a` (ARMv7-A, 32-bit)
 - **64-bit ARM**: `arm64-v8a` (AArch64, 64-bit)
 - **32-bit x86**: `x86` (Intel/AMD 32-bit, for emulators)
@@ -30,12 +31,12 @@ This configuration enables:
 
 **File**: [`android/app/build.gradle`](../../android/app/build.gradle)
 
-| Setting | Value | Notes |
-|---------|-------|-------|
-| `minSdkVersion` | 22 | Android 5.1 (Lollipop), supports 32-bit and 64-bit |
-| `targetSdkVersion` | 35 | Android 15 |
-| `compileSdkVersion` | 35 | Android 15 |
-| `abiFilters` | `armeabi-v7a`, `arm64-v8a`, `x86`, `x86_64` | All major ABIs |
+| Setting             | Value                                       | Notes                                              |
+| ------------------- | ------------------------------------------- | -------------------------------------------------- |
+| `minSdkVersion`     | 22                                          | Android 5.1 (Lollipop), supports 32-bit and 64-bit |
+| `targetSdkVersion`  | 35                                          | Android 15                                         |
+| `compileSdkVersion` | 35                                          | Android 15                                         |
+| `abiFilters`        | `armeabi-v7a`, `arm64-v8a`, `x86`, `x86_64` | All major ABIs                                     |
 
 **No changes required.**
 
@@ -45,14 +46,15 @@ The app has **one native library dependency**:
 
 #### AndroidX DataStore (`libdatastore_shared_counter.so`)
 
-| ABI | File Size | Architecture |
-|-----|-----------|--------------|
-| `arm64-v8a` | 7,112 bytes | 64-bit ARM (AArch64) |
+| ABI           | File Size   | Architecture         |
+| ------------- | ----------- | -------------------- |
+| `arm64-v8a`   | 7,112 bytes | 64-bit ARM (AArch64) |
 | `armeabi-v7a` | 4,416 bytes | 32-bit ARM (ARMv7-A) |
-| `x86` | 5,148 bytes | 32-bit Intel x86 |
-| `x86_64` | 6,224 bytes | 64-bit Intel x86_64 |
+| `x86`         | 5,148 bytes | 32-bit Intel x86     |
+| `x86_64`      | 6,224 bytes | 64-bit Intel x86_64  |
 
 **Verification** (from local build):
+
 ```
 $ unzip -l android/app/build/outputs/apk/debug/*.apk | grep "\.so$"
      7112  lib/arm64-v8a/libdatastore_shared_counter.so
@@ -67,13 +69,13 @@ The DataStore library provides native implementations for all four ABIs. **No ch
 
 **Finding**: The app has **no custom native code**.
 
-| Check | Result |
-|-------|--------|
-| `jniLibs/` directory | ❌ Not present |
-| `.so` files in source | ❌ None |
-| `.cpp` / `.c` files | ❌ None |
-| `CMakeLists.txt` | ❌ Not present |
-| `Android.mk` / `Application.mk` | ❌ Not present |
+| Check                           | Result            |
+| ------------------------------- | ----------------- |
+| `jniLibs/` directory            | ❌ Not present    |
+| `.so` files in source           | ❌ None           |
+| `.cpp` / `.c` files             | ❌ None           |
+| `CMakeLists.txt`                | ❌ Not present    |
+| `Android.mk` / `Application.mk` | ❌ Not present    |
 | `externalNativeBuild` in Gradle | ❌ Not configured |
 
 The app is a pure Kotlin/Java application with Capacitor framework. All native code comes from transitive dependencies (AndroidX DataStore).
@@ -84,16 +86,16 @@ The app is a pure Kotlin/Java application with Capacitor framework. All native c
 
 Checked for potential 32-bit compatibility issues:
 
-| Pattern | Found | Risk |
-|---------|-------|------|
-| `Long` type usage | ✅ Yes | None - Kotlin `Long` is always 64-bit regardless of platform |
-| `Int` type usage | ✅ Yes | None - Kotlin `Int` is always 32-bit regardless of platform |
-| Pointer arithmetic | ❌ No | N/A |
-| `Unsafe` class usage | ❌ No | N/A |
-| `ByteBuffer` direct allocation | ❌ No | N/A |
-| `FileChannel` / `MappedByteBuffer` | ❌ No | N/A |
-| Native memory operations | ❌ No | N/A |
-| `size_t` / `ptrdiff_t` interop | ❌ No | N/A |
+| Pattern                            | Found  | Risk                                                         |
+| ---------------------------------- | ------ | ------------------------------------------------------------ |
+| `Long` type usage                  | ✅ Yes | None - Kotlin `Long` is always 64-bit regardless of platform |
+| `Int` type usage                   | ✅ Yes | None - Kotlin `Int` is always 32-bit regardless of platform  |
+| Pointer arithmetic                 | ❌ No  | N/A                                                          |
+| `Unsafe` class usage               | ❌ No  | N/A                                                          |
+| `ByteBuffer` direct allocation     | ❌ No  | N/A                                                          |
+| `FileChannel` / `MappedByteBuffer` | ❌ No  | N/A                                                          |
+| Native memory operations           | ❌ No  | N/A                                                          |
+| `size_t` / `ptrdiff_t` interop     | ❌ No  | N/A                                                          |
 
 The Kotlin code uses standard types correctly. The `Long` type is used for timestamps, file sizes, and database operations - all of which work correctly on both 32-bit and 64-bit Android.
 
@@ -101,14 +103,14 @@ The Kotlin code uses standard types correctly. The `Long` type is used for times
 
 All dependencies are pure Java/Kotlin or provide native libraries for all ABIs:
 
-| Dependency | Type | Native Libs | 32-bit Support |
-|------------|------|-------------|----------------|
-| Capacitor Android | Java/Kotlin | No | ✅ N/A |
-| AndroidX DataStore | Java + Native | Yes | ✅ All ABIs |
-| AndroidX Security Crypto | Java | No | ✅ N/A |
-| Apache Commons Compress | Java | No | ✅ N/A |
-| XZ (org.tukaani:xz) | Java | No | ✅ N/A |
-| Commons Net (FTP) | Java | No | ✅ N/A |
+| Dependency               | Type          | Native Libs | 32-bit Support |
+| ------------------------ | ------------- | ----------- | -------------- |
+| Capacitor Android        | Java/Kotlin   | No          | ✅ N/A         |
+| AndroidX DataStore       | Java + Native | Yes         | ✅ All ABIs    |
+| AndroidX Security Crypto | Java          | No          | ✅ N/A         |
+| Apache Commons Compress  | Java          | No          | ✅ N/A         |
+| XZ (org.tukaani:xz)      | Java          | No          | ✅ N/A         |
+| Commons Net (FTP)        | Java          | No          | ✅ N/A         |
 
 **No dependency changes required.**
 
@@ -117,11 +119,13 @@ All dependencies are pure Java/Kotlin or provide native libraries for all ABIs:
 **Finding**: Capacitor 6.x fully supports 32-bit Android.
 
 The app uses Capacitor 6.2.1:
+
 - `@capacitor/android`: ^6.2.1
 - `@capacitor/core`: ^6.2.1
 - `@capacitor/cli`: ^6.2.1
 
 Capacitor plugins used:
+
 - `@capacitor/filesystem`: ^6.0.4
 - `@capacitor/share`: ^6.0.4
 
@@ -138,11 +142,13 @@ All Capacitor plugins are pure Java/Kotlin with no native code. **No changes req
 **Current behavior**: The build produces a single "fat APK" containing native libraries for all four ABIs.
 
 **Pros**:
+
 - Simple distribution (one file)
 - Works on all devices
 - Easy sideloading
 
 **Cons**:
+
 - Larger download size (~20-30KB overhead from native libs)
 - All users download code they don't need
 
@@ -151,6 +157,7 @@ All Capacitor plugins are pure Java/Kotlin with no native code. **No changes req
 #### Option 2: Multiple APKs (Split APKs)
 
 **Configuration**:
+
 ```gradle
 android {
     splits {
@@ -165,10 +172,12 @@ android {
 ```
 
 **Pros**:
+
 - Smaller download per device (~20-30KB savings)
 - Play Store automatically serves correct APK
 
 **Cons**:
+
 - More complex build pipeline
 - Multiple artifacts to manage
 - Not recommended by Google for modern apps
@@ -176,6 +185,7 @@ android {
 #### Option 3: Android App Bundle (AAB) - **Recommended**
 
 **Current CI behavior**: The workflow already builds AAB for Play Store:
+
 ```yaml
 # From .github/workflows/android.yaml:979-981
 - name: Build App Bundle (release)
@@ -184,6 +194,7 @@ android {
 ```
 
 **Pros**:
+
 - Google Play automatically generates optimized APKs per device
 - Smaller download for users
 - Single artifact to upload
@@ -191,6 +202,7 @@ android {
 - Play Store best practice
 
 **Cons**:
+
 - Requires Play Store (not for sideloading)
 - Need separate universal APK for GitHub releases
 
@@ -204,20 +216,20 @@ android {
 
 Google Play requires apps to support 64-bit architectures. The app **already complies**:
 
-| Requirement | Status |
-|-------------|--------|
-| Include 64-bit native code | ✅ `arm64-v8a` included |
-| 32-bit support optional | ✅ `armeabi-v7a` included |
-| No 32-bit-only apps | ✅ Not applicable |
+| Requirement                | Status                    |
+| -------------------------- | ------------------------- |
+| Include 64-bit native code | ✅ `arm64-v8a` included   |
+| 32-bit support optional    | ✅ `armeabi-v7a` included |
+| No 32-bit-only apps        | ✅ Not applicable         |
 
 ### App Bundle Requirement (Since August 2021)
 
 Google Play requires new apps to be published as AAB. The app **already complies**:
 
-| Requirement | Status |
-|-------------|--------|
+| Requirement    | Status                       |
+| -------------- | ---------------------------- |
 | Publish as AAB | ✅ CI builds `bundleRelease` |
-| Target API 33+ | ✅ Target API 35 |
+| Target API 33+ | ✅ Target API 35             |
 
 ---
 
@@ -225,21 +237,21 @@ Google Play requires new apps to be published as AAB. The app **already complies
 
 ### Native Library Sizes
 
-| ABI | Size | Percentage |
-|-----|------|------------|
-| arm64-v8a | 7,112 bytes | 33.5% |
-| armeabi-v7a | 4,416 bytes | 20.8% |
-| x86 | 5,148 bytes | 24.2% |
-| x86_64 | 6,224 bytes | 21.5% |
-| **Total** | **22,900 bytes** | **~22.4 KB** |
+| ABI         | Size             | Percentage   |
+| ----------- | ---------------- | ------------ |
+| arm64-v8a   | 7,112 bytes      | 33.5%        |
+| armeabi-v7a | 4,416 bytes      | 20.8%        |
+| x86         | 5,148 bytes      | 24.2%        |
+| x86_64      | 6,224 bytes      | 21.5%        |
+| **Total**   | **22,900 bytes** | **~22.4 KB** |
 
 ### Impact on Download Size
 
-| Distribution Method | Download Size Impact |
-|---------------------|---------------------|
-| Single APK (current) | ~22.4 KB native lib overhead |
-| AAB (Play Store) | ~4-7 KB per device (only one ABI) |
-| Split APKs | ~4-7 KB per device |
+| Distribution Method  | Download Size Impact              |
+| -------------------- | --------------------------------- |
+| Single APK (current) | ~22.4 KB native lib overhead      |
+| AAB (Play Store)     | ~4-7 KB per device (only one ABI) |
+| Split APKs           | ~4-7 KB per device                |
 
 **Conclusion**: The native library overhead is negligible (~22 KB). The app's main size comes from web assets (JavaScript bundle, images, etc.), not native code.
 
@@ -249,20 +261,20 @@ Google Play requires new apps to be published as AAB. The app **already complies
 
 ### 32-bit Support Risks
 
-| Risk | Severity | Likelihood | Mitigation |
-|------|----------|------------|------------|
-| Native library missing 32-bit | N/A | N/A | Already has 32-bit libs |
-| Kotlin code 64-bit assumptions | None | N/A | Code reviewed, no issues |
-| Third-party lib 32-bit incompatibility | None | N/A | All libs support 32-bit |
-| Performance on 32-bit devices | Low | Low | App is not CPU-intensive |
+| Risk                                   | Severity | Likelihood | Mitigation               |
+| -------------------------------------- | -------- | ---------- | ------------------------ |
+| Native library missing 32-bit          | N/A      | N/A        | Already has 32-bit libs  |
+| Kotlin code 64-bit assumptions         | None     | N/A        | Code reviewed, no issues |
+| Third-party lib 32-bit incompatibility | None     | N/A        | All libs support 32-bit  |
+| Performance on 32-bit devices          | Low      | Low        | App is not CPU-intensive |
 
 ### 64-bit Regression Risks
 
-| Risk | Severity | Mitigation |
-|------|----------|------------|
-| Removing 32-bit ABI filter | High | Don't modify `abiFilters` |
-| Adding 64-bit-only native lib | High | Verify all native deps support all ABIs |
-| Play Store rejection | N/A | Already compliant |
+| Risk                          | Severity | Mitigation                              |
+| ----------------------------- | -------- | --------------------------------------- |
+| Removing 32-bit ABI filter    | High     | Don't modify `abiFilters`               |
+| Adding 64-bit-only native lib | High     | Verify all native deps support all ABIs |
+| Play Store rejection          | N/A      | Already compliant                       |
 
 **Conclusion**: No risk to 64-bit support. Adding/maintaining 32-bit support has no impact on 64-bit devices.
 
@@ -285,6 +297,7 @@ For GitHub releases (sideloading), continue building a single APK with all ABIs.
 ### 4. Monitor Native Dependencies
 
 When adding new dependencies, verify they support all required ABIs. Check with:
+
 ```bash
 # After adding a dependency, rebuild and check APK contents
 ./gradlew assembleDebug
@@ -299,15 +312,15 @@ While not required, testing on a 32-bit Android device would provide additional 
 
 ## Summary Table
 
-| Aspect | Status | Action Required |
-|--------|--------|-----------------|
-| Build config (abiFilters) | ✅ Correct | None |
-| Native libraries | ✅ All ABIs present | None |
-| Kotlin/Java code | ✅ No 64-bit assumptions | None |
-| Third-party dependencies | ✅ All support 32-bit | None |
-| Play Store compliance | ✅ Compliant | None |
-| AAB generation | ✅ Already configured | None |
-| 64-bit regression risk | ✅ None | None |
+| Aspect                    | Status                   | Action Required |
+| ------------------------- | ------------------------ | --------------- |
+| Build config (abiFilters) | ✅ Correct               | None            |
+| Native libraries          | ✅ All ABIs present      | None            |
+| Kotlin/Java code          | ✅ No 64-bit assumptions | None            |
+| Third-party dependencies  | ✅ All support 32-bit    | None            |
+| Play Store compliance     | ✅ Compliant             | None            |
+| AAB generation            | ✅ Already configured    | None            |
+| 64-bit regression risk    | ✅ None                  | None            |
 
 ---
 
@@ -316,6 +329,7 @@ While not required, testing on a 32-bit Android device would provide additional 
 **The C64 Commander Android app already fully supports 32-bit devices.** No changes are required to add 32-bit support. The current build configuration, dependencies, and code are all compatible with both 32-bit and 64-bit Android devices.
 
 The app can be distributed as:
+
 1. **Single APK** for GitHub releases (current approach) - works on all devices
 2. **AAB** for Google Play Store (current CI approach) - Play Store serves optimized APKs
 
@@ -340,6 +354,7 @@ aapt dump badging android/app/build/outputs/apk/debug/*.apk | grep -E "native-co
 ```
 
 Expected output:
+
 ```
 native-code: 'armeabi-v7a' 'arm64-v8a' 'x86' 'x86_64'
 ```

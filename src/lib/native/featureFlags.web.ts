@@ -6,9 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { FeatureFlagsPlugin } from './featureFlags';
+import type { FeatureFlagsPlugin } from "./featureFlags";
 
-const FLAG_PREFIX = 'c64u_feature_flag:';
+const FLAG_PREFIX = "c64u_feature_flag:";
 
 const buildKey = (key: string) => `${FLAG_PREFIX}${key}`;
 
@@ -17,12 +17,12 @@ export class FeatureFlagsWeb implements FeatureFlagsPlugin {
     const key = buildKey(options.key);
     const stored = localStorage.getItem(key) ?? sessionStorage.getItem(key);
     if (stored === null) return {};
-    return { value: stored === '1' };
+    return { value: stored === "1" };
   }
 
   async setFlag(options: { key: string; value: boolean }): Promise<void> {
     const key = buildKey(options.key);
-    const value = options.value ? '1' : '0';
+    const value = options.value ? "1" : "0";
     localStorage.setItem(key, value);
     sessionStorage.setItem(key, value);
   }
@@ -33,7 +33,7 @@ export class FeatureFlagsWeb implements FeatureFlagsPlugin {
       const storageKey = buildKey(key);
       const stored = localStorage.getItem(storageKey) ?? sessionStorage.getItem(storageKey);
       if (stored !== null) {
-        flags[key] = stored === '1';
+        flags[key] = stored === "1";
       }
     });
     return { flags };

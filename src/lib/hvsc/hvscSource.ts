@@ -6,18 +6,18 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { SongEntry, SongFolder, SongSource } from '@/lib/sources/SongSource';
-import { base64ToUint8 } from '@/lib/sid/sidUtils';
-import { getHvscFolderListing, getHvscSong } from './hvscService';
-import { resolveHvscSonglengthDuration } from './hvscSongLengthService';
+import type { SongEntry, SongFolder, SongSource } from "@/lib/sources/SongSource";
+import { base64ToUint8 } from "@/lib/sid/sidUtils";
+import { getHvscFolderListing, getHvscSong } from "./hvscService";
+import { resolveHvscSonglengthDuration } from "./hvscSongLengthService";
 
 const mapFolder = (folder: string): SongFolder => ({
   path: folder,
-  name: folder.split('/').pop() || folder,
+  name: folder.split("/").pop() || folder,
 });
 
 export const HvscSongSource: SongSource = {
-  id: 'hvsc',
+  id: "hvsc",
   listFolders: async (path: string) => {
     const listing = await getHvscFolderListing(path);
     return listing.folders.map(mapFolder);
@@ -38,22 +38,23 @@ export const HvscSongSource: SongSource = {
           subsongCount = resolution.subsongCount ?? (durations?.length ? durations.length : null);
         }
 
-        const resolvedCount = subsongCount
-          ?? (durations?.length ? durations.length : (song.durationSeconds ? 1 : 1));
+        const resolvedCount = subsongCount ?? (durations?.length ? durations.length : song.durationSeconds ? 1 : 1);
         const makeTitle = (songNr: number, count: number) =>
           count > 1 ? `${song.fileName} (Song ${songNr}/${count})` : song.fileName;
 
         if (resolvedCount <= 1) {
-          return [{
-            id: String(song.id),
-            path: song.virtualPath,
-            title: makeTitle(1, resolvedCount),
-            durationMs: song.durationSeconds ? song.durationSeconds * 1000 : undefined,
-            songNr: 1,
-            subsongCount: resolvedCount,
-            source: 'hvsc',
-            payload: song,
-          }];
+          return [
+            {
+              id: String(song.id),
+              path: song.virtualPath,
+              title: makeTitle(1, resolvedCount),
+              durationMs: song.durationSeconds ? song.durationSeconds * 1000 : undefined,
+              songNr: 1,
+              subsongCount: resolvedCount,
+              source: "hvsc",
+              payload: song,
+            },
+          ];
         }
 
         return Array.from({ length: resolvedCount }, (_, index) => ({
@@ -63,7 +64,7 @@ export const HvscSongSource: SongSource = {
           durationMs: durations?.[index] ? durations[index] * 1000 : undefined,
           songNr: index + 1,
           subsongCount: resolvedCount,
-          source: 'hvsc',
+          source: "hvsc",
           payload: song,
         }));
       }),

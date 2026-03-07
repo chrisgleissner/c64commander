@@ -1,0 +1,51 @@
+appId: uk.gleissner.c64commander
+tags:
+  - edge
+  - device
+  - slow
+env:
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "20000"}
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
+  TIMEOUT: ${TIMEOUT || "15000"}
+---
+# edge-ram-restore-chunked: perform a full RAM dump then restore cycle and
+# verify the UI reports success without crash or device disconnect.
+- runFlow: subflows/launch-and-wait.yaml
+
+# Navigate to Home tab
+- tapOn:
+    point: "12%,95%"
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: ${TIMEOUT}
+
+- takeScreenshot: ram-restore-before-dump
+
+# Dump RAM (Save RAM)
+- tapOn: "Save RAM"
+- extendedWaitUntil:
+    notVisible: "Save RAM"
+    timeout: ${SHORT_TIMEOUT}
+- extendedWaitUntil:
+    visible: "Save RAM"
+    timeout: ${LONG_TIMEOUT}
+
+- takeScreenshot: ram-restore-after-dump
+
+# Restore RAM (Load RAM) — exercises the chunked write path
+- tapOn: "Load RAM"
+- extendedWaitUntil:
+    notVisible: "Load RAM"
+    timeout: ${SHORT_TIMEOUT}
+- extendedWaitUntil:
+    visible: "Load RAM"
+    timeout: ${LONG_TIMEOUT}
+
+- takeScreenshot: ram-restore-after-restore
+
+# Verify no error/disconnect banner is visible
+- assertNotVisible: "Error"
+- assertNotVisible: "Disconnected"
+
+# Home tab still reachable — device stable
+- assertVisible: "Home"

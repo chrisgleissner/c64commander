@@ -6,13 +6,13 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { ActionTrigger, BackendTarget, TraceEvent, TraceOrigin } from '@/lib/tracing/types';
+import type { ActionTrigger, BackendTarget, TraceEvent, TraceOrigin } from "@/lib/tracing/types";
 
-export type ActionSummaryOrigin = 'user' | 'system' | 'unknown';
-export type ActionSummaryOutcome = 'success' | 'error' | 'blocked' | 'timeout' | 'incomplete';
+export type ActionSummaryOrigin = "user" | "system" | "unknown";
+export type ActionSummaryOutcome = "success" | "error" | "blocked" | "timeout" | "incomplete";
 
 export type RestEffect = {
-  type: 'REST';
+  type: "REST";
   label: string;
   method: string;
   path: string;
@@ -24,7 +24,7 @@ export type RestEffect = {
 };
 
 export type FtpEffect = {
-  type: 'FTP';
+  type: "FTP";
   label: string;
   operation: string;
   path: string;
@@ -34,7 +34,7 @@ export type FtpEffect = {
 };
 
 export type ErrorEffect = {
-  type: 'ERROR';
+  type: "ERROR";
   label: string;
   message: string;
 };
@@ -60,29 +60,29 @@ export type ActionSummary = {
   startRelativeMs: number;
 };
 
-const readString = (value: unknown): string | null => (typeof value === 'string' ? value : null);
-const readNumber = (value: unknown): number | null => (typeof value === 'number' ? value : null);
+const readString = (value: unknown): string | null => (typeof value === "string" ? value : null);
+const readNumber = (value: unknown): number | null => (typeof value === "number" ? value : null);
 
 const resolveSummaryOrigin = (origin: TraceOrigin | null): ActionSummaryOrigin => {
-  if (origin === 'user') return 'user';
-  if (origin === 'automatic' || origin === 'system') return 'system';
+  if (origin === "user") return "user";
+  if (origin === "automatic" || origin === "system") return "system";
   // Fallback for malformed/legacy traces where origin is missing or unrecognized.
-  return 'unknown';
+  return "unknown";
 };
 
 const resolveOutcome = (status: string | null, isComplete: boolean): ActionSummaryOutcome => {
-  if (!isComplete) return 'incomplete';
+  if (!isComplete) return "incomplete";
   switch (status) {
-    case 'success':
-      return 'success';
-    case 'error':
-      return 'error';
-    case 'blocked':
-      return 'blocked';
-    case 'timeout':
-      return 'timeout';
+    case "success":
+      return "success";
+    case "error":
+      return "error";
+    case "blocked":
+      return "blocked";
+    case "timeout":
+      return "timeout";
     default:
-      return 'incomplete';
+      return "incomplete";
   }
 };
 
@@ -107,7 +107,7 @@ const resolveDurationMs = (
   const startMs = toTimestampMs(startTimestamp);
   const endMs = toTimestampMs(endTimestamp);
   const completionMs = orderedEvents.reduce<number | null>((latest, event) => {
-    if (event.type !== 'rest-response' && event.type !== 'ftp-operation') return latest;
+    if (event.type !== "rest-response" && event.type !== "ftp-operation") return latest;
     const candidate = toTimestampMs(event.timestamp);
     if (candidate === null) return latest;
     return latest === null || candidate > latest ? candidate : latest;
@@ -121,7 +121,10 @@ const resolveDurationMs = (
   }
 
   if (Number.isFinite(startRelativeMs) && Number.isFinite(endRelativeMs) && endRelativeMs >= startRelativeMs) {
-    return { durationMs: endRelativeMs - startRelativeMs, durationMsMissing: false };
+    return {
+      durationMs: endRelativeMs - startRelativeMs,
+      durationMsMissing: false,
+    };
   }
 
   return { durationMs: null, durationMsMissing: true };
@@ -139,11 +142,11 @@ const resolveErrorEffects = (errorEvents: TraceEvent[], actionEnd: TraceEvent | 
   const seenMessages = new Set<string>();
 
   errorEvents.forEach((event) => {
-    const message = readString(event.data?.message) ?? 'unknown error';
+    const message = readString(event.data?.message) ?? "unknown error";
     if (!seenMessages.has(message)) {
       effects.push({
-        type: 'ERROR',
-        label: 'error',
+        type: "ERROR",
+        label: "error",
         message,
       });
       seenMessages.add(message);
@@ -153,14 +156,22 @@ const resolveErrorEffects = (errorEvents: TraceEvent[], actionEnd: TraceEvent | 
   const endError = readString(actionEnd?.data?.error);
   if (endError) {
     if (!seenMessages.has(endError)) {
-      effects.push({ type: 'ERROR', label: 'action-end error', message: endError });
+      effects.push({
+        type: "ERROR",
+        label: "action-end error",
+        message: endError,
+      });
     }
     return effects;
   }
   if (effects.length === 0) {
     const status = readString(actionEnd?.data?.status);
-    if (status === 'error') {
-      effects.push({ type: 'ERROR', label: 'action-end error', message: 'action ended with error' });
+    if (status === "error") {
+      effects.push({
+        type: "ERROR",
+        label: "action-end error",
+        message: "action ended with error",
+      });
     }
   }
   return effects;
@@ -173,29 +184,31 @@ const resolveRestEffects = (events: TraceEvent[], actionEnd: TraceEvent | undefi
   const endError = readString(actionEnd?.data?.error);
 
   events.forEach((event) => {
-    if (event.type === 'rest-request') {
+    if (event.type === "rest-request") {
       pendingRequests.push(event);
       return;
     }
-    if (event.type === 'rest-response') {
+    if (event.type === "rest-response") {
       const request = pendingRequests.shift();
       if (!request) return;
       const requestData = request.data as Record<string, unknown>;
       const responseData = event.data as Record<string, unknown>;
       const error = readString(responseData.error) ?? (responseData.error ? String(responseData.error) : null);
-      const method = readString(requestData.method) ?? 'UNKNOWN';
-      const path = readString(requestData.normalizedUrl) ?? readString(requestData.url) ?? 'unknown';
+      const method = readString(requestData.method) ?? "UNKNOWN";
+      const path = readString(requestData.normalizedUrl) ?? readString(requestData.url) ?? "unknown";
       const responseBody =
-        (responseData.body && typeof responseData.body === 'object' && !Array.isArray(responseData.body))
+        responseData.body && typeof responseData.body === "object" && !Array.isArray(responseData.body)
           ? (responseData.body as Record<string, unknown>)
           : null;
       const product = readString(responseBody?.product);
-      const hasResponseStatus = 'status' in responseData;
+      const hasResponseStatus = "status" in responseData;
       const responseStatus = hasResponseStatus
-        ? (responseData.status === null ? null : (readNumber(responseData.status) ?? null))
+        ? responseData.status === null
+          ? null
+          : (readNumber(responseData.status) ?? null)
         : (endStatus ?? null);
       restEffects.push({
-        type: 'REST',
+        type: "REST",
         label: `${method} ${path}`,
         method,
         path,
@@ -210,10 +223,10 @@ const resolveRestEffects = (events: TraceEvent[], actionEnd: TraceEvent | undefi
 
   pendingRequests.forEach((request) => {
     const requestData = request.data as Record<string, unknown>;
-    const method = readString(requestData.method) ?? 'UNKNOWN';
-    const path = readString(requestData.normalizedUrl) ?? readString(requestData.url) ?? 'unknown';
+    const method = readString(requestData.method) ?? "UNKNOWN";
+    const path = readString(requestData.normalizedUrl) ?? readString(requestData.url) ?? "unknown";
     restEffects.push({
-      type: 'REST',
+      type: "REST",
       label: `${method} ${path}`,
       method,
       path,
@@ -229,14 +242,14 @@ const resolveRestEffects = (events: TraceEvent[], actionEnd: TraceEvent | undefi
 
 const resolveFtpEffects = (events: TraceEvent[]): FtpEffect[] => {
   return events
-    .filter((event) => event.type === 'ftp-operation')
+    .filter((event) => event.type === "ftp-operation")
     .map((event) => {
       const data = event.data as Record<string, unknown>;
       const error = readString(data.error);
-      const operation = readString(data.operation) ?? 'unknown';
-      const path = readString(data.path) ?? 'unknown';
+      const operation = readString(data.operation) ?? "unknown";
+      const path = readString(data.path) ?? "unknown";
       return {
-        type: 'FTP',
+        type: "FTP",
         label: `${operation} ${path}`,
         operation,
         path,
@@ -260,8 +273,8 @@ export const buildActionSummaries = (traceEvents: TraceEvent[]): ActionSummary[]
 
   grouped.forEach((events, correlationId) => {
     const ordered = [...events].sort((a, b) => a.relativeMs - b.relativeMs);
-    const actionStart = ordered.find((event) => event.type === 'action-start');
-    const actionEnd = ordered.find((event) => event.type === 'action-end');
+    const actionStart = ordered.find((event) => event.type === "action-start");
+    const actionEnd = ordered.find((event) => event.type === "action-end");
     const startRelativeBoundary = actionStart?.relativeMs ?? null;
     const endRelativeBoundary = actionEnd?.relativeMs ?? null;
     const scoped = ordered.filter((event) => {
@@ -269,7 +282,7 @@ export const buildActionSummaries = (traceEvents: TraceEvent[]): ActionSummary[]
       if (endRelativeBoundary !== null && event.relativeMs > endRelativeBoundary) return false;
       return true;
     });
-    const errorEvents = scoped.filter((event) => event.type === 'error');
+    const errorEvents = scoped.filter((event) => event.type === "error");
     const startRelativeMs = actionStart?.relativeMs ?? ordered[0]?.relativeMs ?? 0;
     const endRelativeMs = actionEnd?.relativeMs ?? ordered[ordered.length - 1]?.relativeMs ?? startRelativeMs;
     const isComplete = Boolean(actionStart && actionEnd);

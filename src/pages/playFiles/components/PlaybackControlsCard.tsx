@@ -6,11 +6,11 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { ReactNode } from 'react';
-import { Pause, Play, Repeat, Shuffle, SkipBack, SkipForward, Square } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Progress } from '@/components/ui/progress';
+import type { ReactNode } from "react";
+import { Pause, Play, Repeat, Shuffle, SkipBack, SkipForward, Square } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Progress } from "@/components/ui/progress";
 
 export type PlaybackControlsCardProps = {
   hasCurrentItem: boolean;
@@ -92,12 +92,10 @@ export const PlaybackControlsCard = ({
           {currentDurationLabel ? (
             <span className="text-xs text-muted-foreground">({currentDurationLabel})</span>
           ) : null}
-          {subsongLabel ? (
-            <span className="text-xs text-muted-foreground">{subsongLabel}</span>
-          ) : null}
+          {subsongLabel ? <span className="text-xs text-muted-foreground">{subsongLabel}</span> : null}
         </div>
       ) : (
-        'Select a playlist item to start'
+        "Select a playlist item to start"
       )}
     </div>
     <div className="flex flex-col gap-3 w-full sm:w-auto">
@@ -115,15 +113,15 @@ export const PlaybackControlsCard = ({
           <SkipBack className="h-4 w-4" />
         </Button>
         <Button
-          variant={isPlaying ? 'destructive' : 'default'}
+          variant={isPlaying ? "destructive" : "default"}
           size="icon"
           onClick={isPlaying ? onStop : onPlay}
           disabled={!hasPlaylist || isPlaylistLoading}
-          data-c64-persistent-active={isPlaying ? 'true' : undefined}
+          data-c64-persistent-active={isPlaying ? "true" : undefined}
           id="playlist-play"
           data-testid="playlist-play"
-          aria-label={isPlaying ? 'Stop' : 'Play'}
-          title={isPlaying ? 'Stop' : 'Play'}
+          aria-label={isPlaying ? "Stop" : "Play"}
+          title={isPlaying ? "Stop" : "Play"}
         >
           {isPlaying ? <Square className="h-4 w-4" /> : <Play className="h-4 w-4" />}
         </Button>
@@ -134,8 +132,8 @@ export const PlaybackControlsCard = ({
           disabled={!canPause || isPlaylistLoading}
           id="playlist-pause"
           data-testid="playlist-pause"
-          aria-label={isPaused ? 'Resume' : 'Pause'}
-          title={isPaused ? 'Resume' : 'Pause'}
+          aria-label={isPaused ? "Resume" : "Pause"}
+          title={isPaused ? "Resume" : "Pause"}
         >
           {isPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
         </Button>
@@ -154,11 +152,18 @@ export const PlaybackControlsCard = ({
       </div>
       <div className="space-y-2">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span className="shrink-0" data-testid="playback-elapsed">{elapsedLabel}</span>
+          <span className="shrink-0" data-testid="playback-elapsed">
+            {elapsedLabel}
+          </span>
           <Progress value={progressPercent} className="flex-1 min-w-0" />
-          <span className="shrink-0" data-testid="playback-remaining">{remainingLabel}</span>
+          <span className="shrink-0" data-testid="playback-remaining">
+            {remainingLabel}
+          </span>
         </div>
-        <div className="flex items-center justify-between text-xs text-muted-foreground" data-testid="playback-counters">
+        <div
+          className="flex items-center justify-between text-xs text-muted-foreground"
+          data-testid="playback-counters"
+        >
           <span>Total: {totalLabel}</span>
           <span>Remaining: {remainingTotalLabel}</span>
         </div>
@@ -181,7 +186,9 @@ export const PlaybackControlsCard = ({
             aria-label="Shuffle"
             data-testid="playback-shuffle"
           />
-          <span className="flex items-center gap-1"><Shuffle className="h-3.5 w-3.5" /> Shuffle</span>
+          <span className="flex items-center gap-1">
+            <Shuffle className="h-3.5 w-3.5" /> Shuffle
+          </span>
         </label>
         <label className="flex items-center gap-2 text-xs">
           <Checkbox
@@ -190,7 +197,9 @@ export const PlaybackControlsCard = ({
             aria-label="Repeat"
             data-testid="playback-repeat"
           />
-          <span className="flex items-center gap-1"><Repeat className="h-3.5 w-3.5" /> Repeat</span>
+          <span className="flex items-center gap-1">
+            <Repeat className="h-3.5 w-3.5" /> Repeat
+          </span>
         </label>
         <Button
           variant="outline"
@@ -199,8 +208,8 @@ export const PlaybackControlsCard = ({
           disabled={reshuffleDisabled}
           id="playlist-reshuffle"
           data-testid="playlist-reshuffle"
-          data-active={reshuffleActive ? 'true' : 'false'}
-          className={reshuffleActive ? 'bg-accent text-accent-foreground' : undefined}
+          data-active={reshuffleActive ? "true" : "false"}
+          className={reshuffleActive ? "bg-accent text-accent-foreground" : undefined}
         >
           <Shuffle className="h-4 w-4 mr-1" />
           Reshuffle

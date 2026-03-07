@@ -6,8 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { TraceActionContext } from '@/lib/tracing/types';
-import { getTraceContextSnapshot } from '@/lib/tracing/traceContext';
+import type { TraceActionContext } from "@/lib/tracing/types";
+import { getTraceContextSnapshot } from "@/lib/tracing/traceContext";
 
 export type NativeTraceContext = {
   correlationId: string | null;

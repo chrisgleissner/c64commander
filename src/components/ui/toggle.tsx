@@ -40,7 +40,7 @@ const Toggle = React.forwardRef<
 >(({ className, variant, size, onPressedChange, ...props }, ref) => (
   <TogglePrimitive.Root
     ref={ref}
-    onPressedChange={wrapValueChange(onPressedChange, 'toggle', 'Toggle', props, 'Toggle')}
+    onPressedChange={wrapValueChange(onPressedChange, "toggle", "Toggle", props, "Toggle")}
     className={cn(toggleVariants({ variant, size, className }))}
     {...props}
   />

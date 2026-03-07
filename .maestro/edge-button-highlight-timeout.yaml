@@ -1,0 +1,34 @@
+appId: uk.gleissner.c64commander
+tags:
+  - edge
+  - slow
+  - device
+env:
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "20000"}
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
+  TIMEOUT: ${TIMEOUT || "15000"}
+---
+# edge-button-highlight-timeout: tap a button repeatedly while a heavy action
+# is in progress, then lock/unlock and verify the highlight clears on resume.
+- runFlow: subflows/launch-and-wait.yaml
+
+# Tap a button rapidly 10 times to trigger tap-flash highlights
+- repeat:
+    times: 10
+    commands:
+      - tapOn: "Home"
+
+# Lock the device to simulate background suspension
+- pressKey: Lock
+
+# Unlock and wait for app to resume
+- pressKey: Home
+- extendedWaitUntil:
+    visible: "C64"
+    timeout: ${LONG_TIMEOUT}
+
+# After resume, no tap-flash highlight should persist (swept by visibilitychange handler)
+- assertNotVisible:
+    id: "data-c64-tap-flash"
+
+- takeScreenshot: button-highlight-timeout-cleared

@@ -6,13 +6,15 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useEffect, useState } from 'react';
-import { getDeveloperModeEnabled, setDeveloperModeEnabled, subscribeDeveloperMode } from '@/lib/config/developerModeStore';
+import { useEffect, useState } from "react";
+import {
+  getDeveloperModeEnabled,
+  setDeveloperModeEnabled,
+  subscribeDeveloperMode,
+} from "@/lib/config/developerModeStore";
 
 export const useDeveloperMode = () => {
-  const [isDeveloperModeEnabled, setIsDeveloperModeEnabled] = useState(() =>
-    getDeveloperModeEnabled(),
-  );
+  const [isDeveloperModeEnabled, setIsDeveloperModeEnabled] = useState(() => getDeveloperModeEnabled());
 
   useEffect(() => subscribeDeveloperMode(({ enabled }) => setIsDeveloperModeEnabled(enabled)), []);
 

@@ -6,8 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { FeatureFlags as FeatureFlagsPlugin } from '@/lib/native/featureFlags';
-import { addErrorLog } from '@/lib/logging';
+import { FeatureFlags as FeatureFlagsPlugin } from "@/lib/native/featureFlags";
+import { addErrorLog } from "@/lib/logging";
 
 export const FEATURE_FLAG_DEFINITIONS = {
   hvsc_enabled: {
@@ -34,7 +34,7 @@ export interface FeatureFlagRepository {
 export class PluginFeatureFlagRepository implements FeatureFlagRepository {
   async getFlag(key: FeatureFlagKey): Promise<boolean | null> {
     const result = await FeatureFlagsPlugin.getFlag({ key });
-    if (typeof result.value === 'boolean') return result.value;
+    if (typeof result.value === "boolean") return result.value;
     return null;
   }
 
@@ -58,7 +58,7 @@ export class InMemoryFeatureFlagRepository implements FeatureFlagRepository {
   }
 
   async getFlag(key: FeatureFlagKey): Promise<boolean | null> {
-    return this.store.has(key) ? this.store.get(key) ?? null : null;
+    return this.store.has(key) ? (this.store.get(key) ?? null) : null;
   }
 
   async getAllFlags(keys: FeatureFlagKey[]): Promise<Partial<FeatureFlags>> {
@@ -89,7 +89,10 @@ export class FeatureFlagManager {
   private listeners = new Set<FeatureFlagListener>();
   private isLoading = false;
 
-  constructor(private repository: FeatureFlagRepository, private defaults: FeatureFlags) {
+  constructor(
+    private repository: FeatureFlagRepository,
+    private defaults: FeatureFlags,
+  ) {
     this.snapshot = { flags: { ...defaults }, isLoaded: false };
   }
 
@@ -115,7 +118,9 @@ export class FeatureFlagManager {
       };
       this.emit();
     } catch (error) {
-      addErrorLog('Feature flag load failed', { error: (error as Error).message });
+      addErrorLog("Feature flag load failed", {
+        error: (error as Error).message,
+      });
       this.snapshot = { flags: { ...this.defaults }, isLoaded: true };
       this.emit();
     } finally {
@@ -132,7 +137,10 @@ export class FeatureFlagManager {
       };
       this.emit();
     } catch (error) {
-      addErrorLog('Feature flag update failed', { key, error: (error as Error).message });
+      addErrorLog("Feature flag update failed", {
+        key,
+        error: (error as Error).message,
+      });
       throw error;
     }
   }
@@ -142,9 +150,6 @@ export class FeatureFlagManager {
   }
 }
 
-export const featureFlagManager = new FeatureFlagManager(
-  new PluginFeatureFlagRepository(),
-  buildDefaultFlags(),
-);
+export const featureFlagManager = new FeatureFlagManager(new PluginFeatureFlagRepository(), buildDefaultFlags());
 
 export const isHvscEnabled = (flags: FeatureFlags) => Boolean(flags.hvsc_enabled);

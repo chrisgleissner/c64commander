@@ -92,7 +92,11 @@ export const createEvidenceManager = ({
     const safeLabel = sanitizeSegment(label);
     const fileName = `${step}-${safeLabel || 'step'}.png`;
     const filePath = path.join(screenshotsDir, fileName);
-    const { stdout } = await adbExecRaw(deviceId, ['exec-out', 'screencap', '-p']);
+    const { stdout } = await adbExecRaw(deviceId, [
+      'exec-out',
+      'screencap',
+      '-p',
+    ]);
     await fs.promises.writeFile(filePath, stdout);
     screenshotIndex += 1;
   };
@@ -113,7 +117,15 @@ export const createEvidenceManager = ({
   const startVideo = async () => {
     await ensureDirs();
     await adbShell(deviceId, `rm -f ${VIDEO_REMOTE_PATH}`).catch(() => {});
-    videoProc = spawn('adb', ['-s', deviceId, 'shell', 'screenrecord', '--time-limit', '90', VIDEO_REMOTE_PATH]);
+    videoProc = spawn('adb', [
+      '-s',
+      deviceId,
+      'shell',
+      'screenrecord',
+      '--time-limit',
+      '90',
+      VIDEO_REMOTE_PATH,
+    ]);
   };
 
   const stopVideo = async () => {
@@ -134,17 +146,27 @@ export const createEvidenceManager = ({
       content = '';
     }
     const events = parseRoutingEvents(content);
-    await fs.promises.writeFile(path.join(evidenceDir, 'request-routing.json'), JSON.stringify(events, null, 2), 'utf8');
+    await fs.promises.writeFile(
+      path.join(evidenceDir, 'request-routing.json'),
+      JSON.stringify(events, null, 2),
+      'utf8',
+    );
     return events;
   };
 
-  const writeErrorContext = async ({ status, expected, retryable, component, error }) => {
+  const writeErrorContext = async ({
+    status,
+    expected,
+    retryable,
+    component,
+    error,
+  }) => {
     await ensureDirs();
     const lines = [
       `Status: ${status}`,
       `Expected: ${expected || 'n/a'}`,
       `Retryable: ${retryable ? 'yes' : 'no'}`,
-      `Project: android-emulator` ,
+      `Project: android-emulator`,
       `Component: ${component || 'smoke-runner'}`,
     ];
 
@@ -152,7 +174,11 @@ export const createEvidenceManager = ({
       lines.push('', 'Error:', error.stack || error.message || String(error));
     }
 
-    await fs.promises.writeFile(path.join(evidenceDir, 'error-context.md'), lines.join('\n'), 'utf8');
+    await fs.promises.writeFile(
+      path.join(evidenceDir, 'error-context.md'),
+      lines.join('\n'),
+      'utf8',
+    );
   };
 
   const writeMeta = async ({ status, durationMs, smokeStatus }) => {
@@ -175,7 +201,11 @@ export const createEvidenceManager = ({
     };
 
     await ensureDirs();
-    await fs.promises.writeFile(path.join(evidenceDir, 'meta.json'), JSON.stringify(meta, null, 2), 'utf8');
+    await fs.promises.writeFile(
+      path.join(evidenceDir, 'meta.json'),
+      JSON.stringify(meta, null, 2),
+      'utf8',
+    );
   };
 
   return {

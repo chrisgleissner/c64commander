@@ -21,7 +21,7 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(({ classNa
         className,
       )}
       ref={ref}
-      onChange={wrapUserEvent(onChange, 'change', 'Textarea', props, 'Textarea')}
+      onChange={wrapUserEvent(onChange, "change", "Textarea", props, "Textarea")}
       {...props}
     />
   );

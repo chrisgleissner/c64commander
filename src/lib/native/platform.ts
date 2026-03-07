@@ -6,49 +6,49 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { Capacitor } from '@capacitor/core';
+import { Capacitor } from "@capacitor/core";
 
 type PlatformOverrideWindow = Window & { __c64uPlatformOverride?: string };
 
 const allowPlatformOverride = () => {
   const env = (import.meta as ImportMeta).env as { VITE_ENABLE_TEST_PROBES?: string } | undefined;
-  if (env?.VITE_ENABLE_TEST_PROBES === '1') return true;
-  if (typeof process !== 'undefined' && process.env?.VITE_ENABLE_TEST_PROBES === '1') return true;
-  if (typeof window !== 'undefined') {
+  if (env?.VITE_ENABLE_TEST_PROBES === "1") return true;
+  if (typeof process !== "undefined" && process.env?.VITE_ENABLE_TEST_PROBES === "1") return true;
+  if (typeof window !== "undefined") {
     return (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled === true;
   }
   return false;
 };
 
 export const getPlatform = () => {
-  if (typeof window !== 'undefined' && allowPlatformOverride()) {
+  if (typeof window !== "undefined" && allowPlatformOverride()) {
     const override = (window as PlatformOverrideWindow).__c64uPlatformOverride;
     if (override) return override;
-    return 'web';
+    return "web";
   }
-  if (typeof (Capacitor as { getPlatform?: () => string }).getPlatform === 'function') {
+  if (typeof (Capacitor as { getPlatform?: () => string }).getPlatform === "function") {
     return Capacitor.getPlatform();
   }
-  return 'web';
+  return "web";
 };
 
 export const isNativePlatform = () => {
-  if (typeof window === 'undefined') return false;
+  if (typeof window === "undefined") return false;
   try {
     if (allowPlatformOverride()) {
       const override = (window as PlatformOverrideWindow).__c64uPlatformOverride;
-      if (override) return override !== 'web';
+      if (override) return override !== "web";
       return false;
     }
-    if (typeof (Capacitor as { isNativePlatform?: () => boolean }).isNativePlatform === 'function') {
+    if (typeof (Capacitor as { isNativePlatform?: () => boolean }).isNativePlatform === "function") {
       return Capacitor.isNativePlatform();
     }
     const capacitor = (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
-    if (typeof capacitor?.isNativePlatform === 'function') {
+    if (typeof capacitor?.isNativePlatform === "function") {
       return capacitor.isNativePlatform();
     }
   } catch (error) {
-    console.warn('Failed to detect native platform', { error });
+    console.warn("Failed to detect native platform", { error });
     return false;
   }
   return false;

@@ -6,25 +6,25 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-declare module '@capacitor/filesystem' {
+declare module "@capacitor/filesystem" {
   export enum Directory {
-    Data = 'DATA',
-    Cache = 'CACHE',
-    Documents = 'DOCUMENTS',
-    External = 'EXTERNAL',
-    ExternalStorage = 'EXTERNAL_STORAGE',
+    Data = "DATA",
+    Cache = "CACHE",
+    Documents = "DOCUMENTS",
+    External = "EXTERNAL",
+    ExternalStorage = "EXTERNAL_STORAGE",
   }
 
   export type FileInfo = {
     name: string;
-    type?: 'file' | 'directory';
+    type?: "file" | "directory";
     size?: number;
     mtime?: number;
     uri?: string;
   };
 
   export type StatResult = {
-    type: 'file' | 'directory';
+    type: "file" | "directory";
     size?: number;
     mtime?: number;
     uri?: string;
@@ -34,7 +34,7 @@ declare module '@capacitor/filesystem' {
 
   export const Filesystem: {
     mkdir: (options: { directory: Directory; path: string; recursive?: boolean }) => Promise<void>;
-    readFile: (options: { directory: Directory; path: string }) => Promise<{ data: string }>; 
+    readFile: (options: { directory: Directory; path: string }) => Promise<{ data: string }>;
     writeFile: (options: { directory: Directory; path: string; data: string }) => Promise<void>;
     readdir: (options: { directory: Directory; path: string }) => Promise<{ files: Array<FileInfo | string> }>;
     stat: (options: { directory: Directory; path: string }) => Promise<StatResult>;

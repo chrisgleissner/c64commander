@@ -6,9 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { getC64API, ConfigResponse, getDefaultBaseUrl } from '@/lib/c64api';
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { getC64API, ConfigResponse, getDefaultBaseUrl } from "@/lib/c64api";
 import {
   AppConfigEntry,
   ConfigSnapshot,
@@ -20,14 +20,14 @@ import {
   saveInitialSnapshot,
   updateHasChanges,
   loadAppConfigs,
-} from '@/lib/config/appConfigStore';
-import { useC64Connection } from '@/hooks/useC64Connection';
-import { addLog } from '@/lib/logging';
+} from "@/lib/config/appConfigStore";
+import { useC64Connection } from "@/hooks/useC64Connection";
+import { addLog } from "@/lib/logging";
 
-const isReadOnlyItem = (name: string) => name.startsWith('SID Detected Socket');
+const isReadOnlyItem = (name: string) => name.startsWith("SID Detected Socket");
 
 const extractValue = (config: unknown) => {
-  if (typeof config !== 'object' || config === null || Array.isArray(config)) {
+  if (typeof config !== "object" || config === null || Array.isArray(config)) {
     return config as string | number;
   }
 
@@ -40,7 +40,7 @@ const extractValue = (config: unknown) => {
     cfg.currentValue ??
     cfg.default ??
     cfg.default_value ??
-    ''
+    ""
   );
 };
 
@@ -48,10 +48,10 @@ const extractItems = (categoryName: string, response: ConfigResponse) => {
   const categoryBlock = (response as Record<string, any>)[categoryName] ?? response;
   const itemsBlock = (categoryBlock as Record<string, any>)?.items ?? categoryBlock;
 
-  if (!itemsBlock || typeof itemsBlock !== 'object') return [] as Array<{ name: string; value: string | number }>;
+  if (!itemsBlock || typeof itemsBlock !== "object") return [] as Array<{ name: string; value: string | number }>;
 
   return Object.entries(itemsBlock)
-    .filter(([key]) => key !== 'errors')
+    .filter(([key]) => key !== "errors")
     .map(([name, config]) => ({ name, value: extractValue(config) }));
 };
 
@@ -65,7 +65,10 @@ const fetchAllConfig = async () => {
     try {
       configs[category] = await api.getCategory(category);
     } catch (catError) {
-      addLog('debug', 'Config category fetch failed; will retry individually', { category, error: (catError as Error).message });
+      addLog("debug", "Config category fetch failed; will retry individually", {
+        category,
+        error: (catError as Error).message,
+      });
       failedCategories.push(category);
     }
   }
@@ -76,9 +79,13 @@ const fetchAllConfig = async () => {
   if (hasFailures && hasSuccesses) {
     // Partial failure: some categories loaded — log a summary so operators
     // can diagnose incomplete config snapshots without noisy per-category spam.
-    addLog('debug', `Config fetch partially failed: ${failedCategories.join(', ')} unavailable (using partial snapshot)`, { failedCategories });
+    addLog(
+      "debug",
+      `Config fetch partially failed: ${failedCategories.join(", ")} unavailable (using partial snapshot)`,
+      { failedCategories },
+    );
   } else if (hasFailures && !hasSuccesses) {
-    throw new Error(`Failed to fetch configuration categories: ${failedCategories.join(', ')}`);
+    throw new Error(`Failed to fetch configuration categories: ${failedCategories.join(", ")}`);
   }
 
   return configs;
@@ -110,13 +117,13 @@ export function useAppConfigState() {
     const handler = (event: Event) => {
       const detail = (event as CustomEvent).detail as { baseUrl?: string; value?: boolean } | undefined;
       if (!detail || detail.baseUrl !== resolvedBaseUrl) return;
-      if (typeof detail.value === 'boolean') {
+      if (typeof detail.value === "boolean") {
         setHasChanges(detail.value);
       }
     };
 
-    window.addEventListener('c64u-has-changes', handler as EventListener);
-    return () => window.removeEventListener('c64u-has-changes', handler as EventListener);
+    window.addEventListener("c64u-has-changes", handler as EventListener);
+    return () => window.removeEventListener("c64u-has-changes", handler as EventListener);
   }, [resolvedBaseUrl]);
 
   useEffect(() => {
@@ -124,7 +131,7 @@ export function useAppConfigState() {
       hasCapturedRef.current = false;
       return;
     }
-    if (sessionStorage.getItem(sessionSnapshotKey) === '1') {
+    if (sessionStorage.getItem(sessionSnapshotKey) === "1") {
       hasCapturedRef.current = true;
     }
     if (hasCapturedRef.current || isSnapshotLoading) return;
@@ -140,10 +147,10 @@ export function useAppConfigState() {
         setInitialSnapshot(snapshot);
         updateHasChanges(resolvedBaseUrl, false);
         hasCapturedRef.current = true;
-        sessionStorage.setItem(sessionSnapshotKey, '1');
+        sessionStorage.setItem(sessionSnapshotKey, "1");
       })
       .catch((error) => {
-        addLog('debug', 'Initial config snapshot capture deferred', {
+        addLog("debug", "Initial config snapshot capture deferred", {
           error: (error as Error).message,
         });
       })
@@ -178,8 +185,8 @@ export function useAppConfigState() {
 
       await api.updateConfigBatch(payload);
 
-      queryClient.invalidateQueries({ queryKey: ['c64-category'] });
-      queryClient.invalidateQueries({ queryKey: ['c64-all-config'] });
+      queryClient.invalidateQueries({ queryKey: ["c64-category"] });
+      queryClient.invalidateQueries({ queryKey: ["c64-all-config"] });
     },
     [queryClient],
   );
@@ -228,9 +235,7 @@ export function useAppConfigState() {
   const renameAppConfig = useCallback(
     (entryId: string, name: string) => {
       const allConfigs = loadAppConfigs();
-      const next = allConfigs.map((entry) =>
-        entry.id === entryId ? { ...entry, name } : entry,
-      );
+      const next = allConfigs.map((entry) => (entry.id === entryId ? { ...entry, name } : entry));
       saveAppConfigs(next);
       setAppConfigs(listAppConfigs(resolvedBaseUrl));
     },

@@ -6,11 +6,11 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { addErrorLog } from '@/lib/logging';
-import { buildDiskId, createDiskEntry, getDiskName, normalizeDiskPath, type DiskEntry } from '@/lib/disks/diskTypes';
-import { loadDiskLibrary, saveDiskLibrary } from '@/lib/disks/diskStore';
-import { buildDiskTreeState } from '@/lib/disks/diskTree';
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { addErrorLog } from "@/lib/logging";
+import { buildDiskId, createDiskEntry, getDiskName, normalizeDiskPath, type DiskEntry } from "@/lib/disks/diskTypes";
+import { loadDiskLibrary, saveDiskLibrary } from "@/lib/disks/diskStore";
+import { buildDiskTreeState } from "@/lib/disks/diskTree";
 
 export type DiskLibrary = {
   disks: DiskEntry[];
@@ -28,12 +28,12 @@ export type DiskLibrary = {
 export const useDiskLibrary = (uniqueId: string | null): DiskLibrary => {
   const [disks, setDisks] = useState<DiskEntry[]>([]);
   const [runtimeFiles, setRuntimeFiles] = useState<Record<string, File>>({});
-  const [filter, setFilter] = useState('');
-  const lastUniqueIdRef = useRef<string | null>(null);
+  const [filter, setFilter] = useState("");
 
   useEffect(() => {
     if (!uniqueId) {
-      lastUniqueIdRef.current = null;
+      setDisks([]);
+      setRuntimeFiles({});
       return;
     }
     const state = loadDiskLibrary(uniqueId);
@@ -42,16 +42,8 @@ export const useDiskLibrary = (uniqueId: string | null): DiskLibrary => {
       importedAt: disk.importedAt || new Date().toISOString(),
       importOrder: disk.importOrder ?? null,
     }));
-    setDisks((prev) => {
-      if (!prev.length) return normalized;
-      const existingIds = new Set(normalized.map((disk) => disk.id));
-      const merged = [...normalized];
-      prev.forEach((disk) => {
-        if (!existingIds.has(disk.id)) merged.push(disk);
-      });
-      return merged;
-    });
-    lastUniqueIdRef.current = uniqueId;
+    setDisks(normalized);
+    setRuntimeFiles({});
   }, [uniqueId]);
 
   useEffect(() => {
@@ -82,15 +74,11 @@ export const useDiskLibrary = (uniqueId: string | null): DiskLibrary => {
   }, []);
 
   const updateDiskGroup = useCallback((diskId: string, group: string | null) => {
-    setDisks((prev) =>
-      prev.map((disk) => (disk.id === diskId ? { ...disk, group: group || null } : disk)),
-    );
+    setDisks((prev) => prev.map((disk) => (disk.id === diskId ? { ...disk, group: group || null } : disk)));
   }, []);
 
   const updateDiskName = useCallback((diskId: string, name: string) => {
-    setDisks((prev) =>
-      prev.map((disk) => (disk.id === diskId ? { ...disk, name: name.trim() || disk.name } : disk)),
-    );
+    setDisks((prev) => prev.map((disk) => (disk.id === diskId ? { ...disk, name: name.trim() || disk.name } : disk)));
   }, []);
 
   const getDiskById = useCallback((diskId: string) => disks.find((disk) => disk.id === diskId), [disks]);
@@ -111,7 +99,7 @@ export const useDiskLibrary = (uniqueId: string | null): DiskLibrary => {
   };
 };
 
-export const buildDiskEntryFromPath = (location: 'local' | 'ultimate', path: string, group?: string | null) => {
+export const buildDiskEntryFromPath = (location: "local" | "ultimate", path: string, group?: string | null) => {
   const normalized = normalizeDiskPath(path);
   return createDiskEntry({
     path: normalized,
@@ -120,13 +108,16 @@ export const buildDiskEntryFromPath = (location: 'local' | 'ultimate', path: str
   });
 };
 
-export const buildDiskEntryFromDrive = (location: 'local' | 'ultimate', path?: string | null) => {
+export const buildDiskEntryFromDrive = (location: "local" | "ultimate", path?: string | null) => {
   if (!path) return null;
   try {
     const normalized = normalizeDiskPath(path);
     return buildDiskId(location, normalized);
   } catch (error) {
-    addErrorLog('Disk id build failed', { path, error: (error as Error).message });
+    addErrorLog("Disk id build failed", {
+      path,
+      error: (error as Error).message,
+    });
     return null;
   }
 };

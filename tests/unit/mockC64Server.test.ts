@@ -6,9 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import http from 'node:http';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { createMockC64Server } from '../mocks/mockC64Server';
+import http from "node:http";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { createMockC64Server } from "../mocks/mockC64Server";
 
 type RequestOptions = {
   method?: string;
@@ -30,15 +30,15 @@ const requestJsonViaHttp = (url: string, options: RequestOptions = {}): Promise<
         hostname: parsed.hostname,
         port: parsed.port,
         path: `${parsed.pathname}${parsed.search}`,
-        method: options.method ?? 'GET',
+        method: options.method ?? "GET",
         headers: options.headers,
       },
       (res) => {
-        let body = '';
-        res.on('data', (chunk) => {
+        let body = "";
+        res.on("data", (chunk) => {
           body += chunk;
         });
-        res.on('end', () => {
+        res.on("end", () => {
           let json: any = null;
           if (body) {
             try {
@@ -55,7 +55,7 @@ const requestJsonViaHttp = (url: string, options: RequestOptions = {}): Promise<
         });
       },
     );
-    req.on('error', reject);
+    req.on("error", reject);
     if (options.body) {
       req.write(options.body);
     }
@@ -63,9 +63,9 @@ const requestJsonViaHttp = (url: string, options: RequestOptions = {}): Promise<
   });
 
 const requestJson = async (url: string, options: RequestOptions = {}): Promise<JsonResponse> => {
-  if (typeof fetch === 'function') {
+  if (typeof fetch === "function") {
     const response = await fetch(url, {
-      method: options.method ?? 'GET',
+      method: options.method ?? "GET",
       headers: options.headers,
       body: options.body,
     });
@@ -80,20 +80,20 @@ const requestJson = async (url: string, options: RequestOptions = {}): Promise<J
   return requestJsonViaHttp(url, options);
 };
 
-describe('createMockC64Server', () => {
+describe("createMockC64Server", () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
   beforeEach(async () => {
     server = await createMockC64Server(
       {
         Audio: {
-          Volume: '0 dB',
-          Mode: { value: 'Auto', options: ['Auto', 'Manual'] },
+          Volume: "0 dB",
+          Mode: { value: "Auto", options: ["Auto", "Manual"] },
         },
       },
       {
         Audio: {
-          Volume: { options: ['0 dB', '6 dB'], details: { min: 0, max: 10 } },
+          Volume: { options: ["0 dB", "6 dB"], details: { min: 0, max: 10 } },
         },
       },
     );
@@ -103,88 +103,96 @@ describe('createMockC64Server', () => {
     await server.close();
   });
 
-  it('responds to info and version endpoints', async () => {
+  it("responds to info and version endpoints", async () => {
     const info = await requestJson(`${server.baseUrl}/v1/info`);
     expect(info.status).toBe(200);
-    expect(info.json.product).toBe('C64 Ultimate');
+    expect(info.json.product).toBe("C64 Ultimate");
 
     const version = await requestJson(`${server.baseUrl}/v1/version`);
-    expect(version.json.version).toBe('3.12.0');
+    expect(version.json.version).toBe("3.12.0");
   });
 
-  it('handles config reads and writes', async () => {
+  it("handles config reads and writes", async () => {
     const list = await requestJson(`${server.baseUrl}/v1/configs`);
-    expect(list.json.categories).toContain('Audio');
+    expect(list.json.categories).toContain("Audio");
 
     const category = await requestJson(`${server.baseUrl}/v1/configs/Audio`);
-    expect(category.json.Audio.items.Volume.selected).toBe('0 dB');
+    expect(category.json.Audio.items.Volume.selected).toBe("0 dB");
     expect(category.json.Audio.items.Volume.details.min).toBe(0);
 
-    const update = await requestJson(`${server.baseUrl}/v1/configs/Audio/Volume?value=6`, { method: 'PUT' });
+    const update = await requestJson(`${server.baseUrl}/v1/configs/Audio/Volume?value=6`, { method: "PUT" });
     expect(update.status).toBe(200);
 
     const item = await requestJson(`${server.baseUrl}/v1/configs/Audio/Volume`);
-    expect(item.json.Audio.items.Volume.selected).toBe('6');
+    expect(item.json.Audio.items.Volume.selected).toBe("6");
 
     const post = await requestJson(`${server.baseUrl}/v1/configs`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ Audio: { Volume: '3' } }),
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ Audio: { Volume: "3" } }),
     });
     expect(post.status).toBe(200);
 
     const updated = await requestJson(`${server.baseUrl}/v1/configs/Audio/Volume`);
-    expect(updated.json.Audio.items.Volume.selected).toBe('3');
+    expect(updated.json.Audio.items.Volume.selected).toBe("3");
 
-    await requestJson(`${server.baseUrl}/v1/configs:reset_to_default`, { method: 'PUT' });
+    await requestJson(`${server.baseUrl}/v1/configs:reset_to_default`, {
+      method: "PUT",
+    });
     const reset = await requestJson(`${server.baseUrl}/v1/configs/Audio/Volume`);
-    expect(reset.json.Audio.items.Volume.selected).toBe('0 dB');
+    expect(reset.json.Audio.items.Volume.selected).toBe("0 dB");
   });
 
-  it('manages drives and mounts', async () => {
+  it("manages drives and mounts", async () => {
     const drives = await requestJson(`${server.baseUrl}/v1/drives`);
     expect(drives.json.drives[0].a.enabled).toBe(true);
 
-    await requestJson(`${server.baseUrl}/v1/drives/a:off`, { method: 'PUT' });
+    await requestJson(`${server.baseUrl}/v1/drives/a:off`, { method: "PUT" });
     const off = await requestJson(`${server.baseUrl}/v1/drives`);
     expect(off.json.drives[0].a.enabled).toBe(false);
 
-    await requestJson(`${server.baseUrl}/v1/drives/a:on`, { method: 'PUT' });
-    await requestJson(`${server.baseUrl}/v1/drives/a:mount?image=disks/demo.d64`, { method: 'PUT' });
+    await requestJson(`${server.baseUrl}/v1/drives/a:on`, { method: "PUT" });
+    await requestJson(`${server.baseUrl}/v1/drives/a:mount?image=disks/demo.d64`, { method: "PUT" });
     const mounted = await requestJson(`${server.baseUrl}/v1/drives`);
-    expect(mounted.json.drives[0].a.image_file).toBe('demo.d64');
-    expect(mounted.json.drives[0].a.image_path).toBe('/disks');
+    expect(mounted.json.drives[0].a.image_file).toBe("demo.d64");
+    expect(mounted.json.drives[0].a.image_path).toBe("/disks");
 
-    await requestJson(`${server.baseUrl}/v1/drives/a:remove`, { method: 'PUT' });
+    await requestJson(`${server.baseUrl}/v1/drives/a:remove`, {
+      method: "PUT",
+    });
     const removed = await requestJson(`${server.baseUrl}/v1/drives`);
     expect(removed.json.drives[0].a.image_file).toBeUndefined();
 
-    await requestJson(`${server.baseUrl}/v1/drives/b:mount`, { method: 'POST' });
+    await requestJson(`${server.baseUrl}/v1/drives/b:mount`, {
+      method: "POST",
+    });
     const upload = await requestJson(`${server.baseUrl}/v1/drives`);
-    expect(upload.json.drives[1].b.image_file).toBe('upload.d64');
+    expect(upload.json.drives[1].b.image_file).toBe("upload.d64");
   });
 
-  it('records sidplay requests and memory reads', async () => {
-    const body = Buffer.from('sid-data');
+  it("records sidplay requests and memory reads", async () => {
+    const body = Buffer.from("sid-data");
     const sidplay = await requestJson(`${server.baseUrl}/v1/runners:sidplay`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/octet-stream' },
+      method: "POST",
+      headers: { "Content-Type": "application/octet-stream" },
       body,
     });
     expect(sidplay.status).toBe(200);
     expect(server.sidplayRequests).toHaveLength(1);
-    expect(server.sidplayRequests[0].body.toString()).toBe('sid-data');
+    expect(server.sidplayRequests[0].body.toString()).toBe("sid-data");
 
     const mem = await requestJson(`${server.baseUrl}/v1/machine:readmem?address=00C6&length=2`);
     expect(mem.json.data).toHaveLength(2);
   });
 
-  it('supports preflight requests', async () => {
-    const options = await requestJson(`${server.baseUrl}/v1/info`, { method: 'OPTIONS' });
+  it("supports preflight requests", async () => {
+    const options = await requestJson(`${server.baseUrl}/v1/info`, {
+      method: "OPTIONS",
+    });
     expect(options.status).toBe(204);
   });
 
-  it('supports reachability toggles', async () => {
+  it("supports reachability toggles", async () => {
     server.setReachable(false);
     const unreachable = await requestJson(`${server.baseUrl}/v1/info`);
     expect(unreachable.status).toBe(503);
@@ -193,62 +201,64 @@ describe('createMockC64Server', () => {
     expect(reachable.status).toBe(200);
   });
 
-  it('supports authentication failure mode', async () => {
-    server.setFaultMode('auth');
+  it("supports authentication failure mode", async () => {
+    server.setFaultMode("auth");
     const response = await requestJson(`${server.baseUrl}/v1/info`);
     expect(response.status).toBe(401);
-    server.setFaultMode('none');
+    server.setFaultMode("none");
   });
 
-  it('supports refused connections', async () => {
-    server.setFaultMode('refused');
+  it("supports refused connections", async () => {
+    server.setFaultMode("refused");
     await expect(requestJsonViaHttp(`${server.baseUrl}/v1/info`)).rejects.toBeTruthy();
-    server.setFaultMode('none');
+    server.setFaultMode("none");
   });
 
-  it('supports slow and timeout response modes', async () => {
-    server.setFaultMode('slow');
+  it("supports slow and timeout response modes", async () => {
+    server.setFaultMode("slow");
     server.setLatencyMs(50);
     const slowStart = Date.now();
     await requestJson(`${server.baseUrl}/v1/info`);
     const slowElapsed = Date.now() - slowStart;
     expect(slowElapsed).toBeGreaterThanOrEqual(40);
 
-    server.setFaultMode('timeout');
+    server.setFaultMode("timeout");
     server.setLatencyMs(null);
     const timeoutStart = Date.now();
     await requestJson(`${server.baseUrl}/v1/info`);
     const timeoutElapsed = Date.now() - timeoutStart;
     expect(timeoutElapsed).toBeGreaterThanOrEqual(1400);
     expect(timeoutElapsed).toBeLessThan(5000);
-    server.setFaultMode('none');
+    server.setFaultMode("none");
   });
 
-  it('syncs drive state when configs update', async () => {
+  it("syncs drive state when configs update", async () => {
     // Drive A enabled check
-    await requestJson(`${server.baseUrl}/v1/configs/Drive%20A%20Settings/Drive?value=Disabled`, { method: 'PUT' });
+    await requestJson(`${server.baseUrl}/v1/configs/Drive%20A%20Settings/Drive?value=Disabled`, { method: "PUT" });
     let drives = await requestJson(`${server.baseUrl}/v1/drives`);
     expect(drives.json.drives[0].a.enabled).toBe(false);
 
     // SoftIEC
-    await requestJson(`${server.baseUrl}/v1/configs/SoftIEC%20Drive%20Settings/IEC%20Drive?value=Enabled`, { method: 'PUT' });
+    await requestJson(`${server.baseUrl}/v1/configs/SoftIEC%20Drive%20Settings/IEC%20Drive?value=Enabled`, {
+      method: "PUT",
+    });
     drives = await requestJson(`${server.baseUrl}/v1/drives`);
-    expect(drives.json.drives[2]['IEC Drive'].enabled).toBe(true);
+    expect(drives.json.drives[2]["IEC Drive"].enabled).toBe(true);
 
     // Batch update
     await requestJson(`${server.baseUrl}/v1/configs`, {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify({
-        'Drive B Settings': { 'Drive': 'Disabled' },
-        'Printer Settings': { 'IEC printer': 'Enabled' }
-      })
+        "Drive B Settings": { Drive: "Disabled" },
+        "Printer Settings": { "IEC printer": "Enabled" },
+      }),
     });
     drives = await requestJson(`${server.baseUrl}/v1/drives`);
     expect(drives.json.drives[1].b.enabled).toBe(false);
-    expect(drives.json.drives[3]['Printer Emulation'].enabled).toBe(true);
+    expect(drives.json.drives[3]["Printer Emulation"].enabled).toBe(true);
   });
 
-  it('handles server close redundantly', async () => {
+  it("handles server close redundantly", async () => {
     await server.close();
     await expect(server.close()).resolves.toBeUndefined();
   });

@@ -6,14 +6,14 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { getC64API } from '@/lib/c64api';
-import { createSslPayload } from '@/lib/sid/sidUtils';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { getC64API } from "@/lib/c64api";
+import { createSslPayload } from "@/lib/sid/sidUtils";
 
 export type SidTrack = {
   id: string;
   title: string;
-  source: 'hvsc' | 'local';
+  source: "hvsc" | "local";
   path?: string;
   file?: File;
   data?: Uint8Array;
@@ -42,13 +42,13 @@ type SidPlayerContextValue = {
 const SidPlayerContext = createContext<SidPlayerContextValue | null>(null);
 
 const buildId = () =>
-  (typeof crypto !== 'undefined' && 'randomUUID' in crypto && crypto.randomUUID()) ||
+  (typeof crypto !== "undefined" && "randomUUID" in crypto && crypto.randomUUID()) ||
   `${Date.now()}-${Math.round(Math.random() * 1e6)}`;
 
 const resolveBlob = (track: SidTrack) => {
   if (track.file) return track.file;
   if (track.data) {
-    return new Blob([track.data], { type: 'audio/sid' });
+    return new Blob([track.data], { type: "audio/sid" });
   }
   return null;
 };
@@ -74,7 +74,7 @@ export function SidPlayerProvider({ children }: { children: React.ReactNode }) {
     const api = getC64API();
     const blob = resolveBlob(track);
     if (!blob) {
-      throw new Error('Missing SID data.');
+      throw new Error("Missing SID data.");
     }
 
     setElapsedMs(0);
@@ -83,7 +83,7 @@ export function SidPlayerProvider({ children }: { children: React.ReactNode }) {
     let sslBlob: Blob | undefined;
     if (track.durationMs && track.durationMs > 0) {
       const payload = createSslPayload(track.durationMs);
-      sslBlob = new Blob([payload], { type: 'application/octet-stream' });
+      sslBlob = new Blob([payload], { type: "application/octet-stream" });
     }
 
     await api.playSidUpload(blob, track.songNr, sslBlob);
@@ -91,22 +91,31 @@ export function SidPlayerProvider({ children }: { children: React.ReactNode }) {
     setIsPlaying(true);
   }, []);
 
-  const playTrack = useCallback(async (track: SidTrack) => {
-    if (!track.id) {
-      track.id = buildId();
-    }
-    setQueue([track]);
-    setCurrentIndex(0);
-    await playTrackInternal(track);
-  }, [playTrackInternal]);
+  const playTrack = useCallback(
+    async (track: SidTrack) => {
+      if (!track.id) {
+        track.id = buildId();
+      }
+      setQueue([track]);
+      setCurrentIndex(0);
+      await playTrackInternal(track);
+    },
+    [playTrackInternal],
+  );
 
-  const playQueue = useCallback(async (tracks: SidQueue, startIndex = 0) => {
-    if (!tracks.length) return;
-    const nextQueue = tracks.map((track) => ({ ...track, id: track.id || buildId() }));
-    setQueue(nextQueue);
-    setCurrentIndex(startIndex);
-    await playTrackInternal(nextQueue[startIndex]);
-  }, [playTrackInternal]);
+  const playQueue = useCallback(
+    async (tracks: SidQueue, startIndex = 0) => {
+      if (!tracks.length) return;
+      const nextQueue = tracks.map((track) => ({
+        ...track,
+        id: track.id || buildId(),
+      }));
+      setQueue(nextQueue);
+      setCurrentIndex(startIndex);
+      await playTrackInternal(nextQueue[startIndex]);
+    },
+    [playTrackInternal],
+  );
 
   const next = useCallback(async () => {
     if (!queue.length) return;
@@ -173,7 +182,7 @@ export function SidPlayerProvider({ children }: { children: React.ReactNode }) {
 export const useSidPlayer = () => {
   const context = useContext(SidPlayerContext);
   if (!context) {
-    throw new Error('useSidPlayer must be used within SidPlayerProvider');
+    throw new Error("useSidPlayer must be used within SidPlayerProvider");
   }
   return context;
 };

@@ -177,10 +177,14 @@
 
 @keyframes focus-flash {
   0% {
-    box-shadow: 0 0 0 2px hsl(var(--ring)), 0 0 0 4px hsl(var(--background));
+    box-shadow:
+      0 0 0 2px hsl(var(--ring)),
+      0 0 0 4px hsl(var(--background));
   }
   100% {
-    box-shadow: 0 0 0 0 transparent, 0 0 0 0 transparent;
+    box-shadow:
+      0 0 0 0 transparent,
+      0 0 0 0 transparent;
   }
 }
 
@@ -196,7 +200,15 @@ button:focus-visible,
   box-shadow: none;
 }
 
-:where(button, a[href], [role='button'], [role='link'], [role='tab'], [role='menuitem'], [tabindex]:not([tabindex='-1'])) {
+:where(
+  button,
+  a[href],
+  [role='button'],
+  [role='link'],
+  [role='tab'],
+  [role='menuitem'],
+  [tabindex]:not([tabindex='-1'])
+) {
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -212,7 +224,8 @@ button:focus-visible,
 
   body {
     @apply bg-background text-foreground font-sans antialiased overflow-x-hidden;
-    padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom)
+      env(safe-area-inset-left);
   }
 
   :where(p, span, a, button, label, li, td, th) {
@@ -322,7 +335,13 @@ button:focus-visible,
   /* Scrollable area with fade */
   .scroll-fade {
     @apply relative;
-    mask-image: linear-gradient(to bottom, transparent, black 1rem, black calc(100% - 1rem), transparent);
+    mask-image: linear-gradient(
+      to bottom,
+      transparent,
+      black 1rem,
+      black calc(100% - 1rem),
+      transparent
+    );
   }
 }
 

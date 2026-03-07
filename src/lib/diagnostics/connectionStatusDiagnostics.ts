@@ -6,9 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { TraceEvent } from '@/lib/tracing/types';
+import type { TraceEvent } from "@/lib/tracing/types";
 
-export type DiagnosticsSeverity = 'none' | 'low' | 'medium' | 'high';
+export type DiagnosticsSeverity = "none" | "low" | "medium" | "high";
 
 export type ConnectionDiagnosticsSummary = {
   rest: { total: number; failed: number; severity: DiagnosticsSeverity };
@@ -17,21 +17,21 @@ export type ConnectionDiagnosticsSummary = {
 };
 
 const resolveSeverity = (failed: number, total: number): DiagnosticsSeverity => {
-  if (failed <= 0 || total <= 0) return 'none';
+  if (failed <= 0 || total <= 0) return "none";
   const ratio = failed / total;
-  if (ratio >= 0.5) return 'high';
-  if (ratio >= 0.2) return 'medium';
-  return 'low';
+  if (ratio >= 0.5) return "high";
+  if (ratio >= 0.2) return "medium";
+  return "low";
 };
 
 const countRest = (traceEvents: TraceEvent[]) => {
   let total = 0;
   let failed = 0;
   traceEvents.forEach((event) => {
-    if (event.type !== 'rest-response') return;
+    if (event.type !== "rest-response") return;
     total += 1;
-    const status = typeof event.data.status === 'number' ? event.data.status : null;
-    const hasError = typeof event.data.error === 'string' && event.data.error.trim().length > 0;
+    const status = typeof event.data.status === "number" ? event.data.status : null;
+    const hasError = typeof event.data.error === "string" && event.data.error.trim().length > 0;
     if ((status !== null && status >= 400) || hasError) {
       failed += 1;
     }
@@ -43,11 +43,11 @@ const countFtp = (traceEvents: TraceEvent[]) => {
   let total = 0;
   let failed = 0;
   traceEvents.forEach((event) => {
-    if (event.type !== 'ftp-operation') return;
+    if (event.type !== "ftp-operation") return;
     total += 1;
-    const result = typeof event.data.result === 'string' ? event.data.result : null;
-    const hasError = typeof event.data.error === 'string' && event.data.error.trim().length > 0;
-    if (result === 'failure' || hasError) {
+    const result = typeof event.data.result === "string" ? event.data.result : null;
+    const hasError = typeof event.data.error === "string" && event.data.error.trim().length > 0;
+    if (result === "failure" || hasError) {
       failed += 1;
     }
   });

@@ -6,45 +6,50 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { test, expect } from '@playwright/test';
-import { saveCoverageFromPage } from './withCoverage';
-import type { Page, TestInfo } from '@playwright/test';
-import type { Request } from 'playwright';
-import * as path from 'node:path';
-import { createMockC64Server } from '../tests/mocks/mockC64Server';
-import { seedUiMocks } from './uiMocks';
-import { seedFtpConfig, startFtpTestServers } from './ftpTestUtils';
-import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
-import { clickSourceSelectionButton } from './sourceSelection';
-import { layoutTest, enforceDeviceTestMapping } from './layoutTest';
-import { clearTraces, enableTraceAssertions, expectRestTraceSequence } from './traceUtils';
-import { enableGoldenTrace } from './goldenTraceRegistry';
+import { test, expect } from "@playwright/test";
+import { saveCoverageFromPage } from "./withCoverage";
+import type { Page, TestInfo } from "@playwright/test";
+import type { Request } from "playwright";
+import * as path from "node:path";
+import { createMockC64Server } from "../tests/mocks/mockC64Server";
+import { seedUiMocks } from "./uiMocks";
+import { seedFtpConfig, startFtpTestServers } from "./ftpTestUtils";
+import {
+  allowWarnings,
+  assertNoUiIssues,
+  attachStepScreenshot,
+  finalizeEvidence,
+  startStrictUiMonitoring,
+} from "./testArtifacts";
+import { clickSourceSelectionButton } from "./sourceSelection";
+import { layoutTest, enforceDeviceTestMapping } from "./layoutTest";
+import { clearTraces, enableTraceAssertions, expectRestTraceSequence } from "./traceUtils";
+import { enableGoldenTrace } from "./goldenTraceRegistry";
 
 const getLatestDriveRequest = (
   requests: Array<{ method: string; url: string }>,
   matcher: (req: { method: string; url: string }) => boolean,
 ) => [...requests].reverse().find(matcher);
 
-const mountDriveRequest = (requests: Array<{ method: string; url: string }>, drive: 'a' | 'b') =>
-  getLatestDriveRequest(
-    requests,
-    (req) => req.url.startsWith(`/v1/drives/${drive}:mount`) && req.method !== 'OPTIONS',
-  );
+const mountDriveRequest = (requests: Array<{ method: string; url: string }>, drive: "a" | "b") =>
+  getLatestDriveRequest(requests, (req) => req.url.startsWith(`/v1/drives/${drive}:mount`) && req.method !== "OPTIONS");
 
-const removeDriveRequest = (requests: Array<{ method: string; url: string }>, drive: 'a' | 'b') =>
+const removeDriveRequest = (requests: Array<{ method: string; url: string }>, drive: "a" | "b") =>
   getLatestDriveRequest(
     requests,
-    (req) => req.url.startsWith(`/v1/drives/${drive}:remove`) && req.method !== 'OPTIONS',
+    (req) => req.url.startsWith(`/v1/drives/${drive}:remove`) && req.method !== "OPTIONS",
   );
 
 const openAddItemsDialog = async (page: Page) => {
-  const addButton = page.getByRole('button', { name: /Add disks|Add more disks/i });
+  const addButton = page.getByRole("button", {
+    name: /Add disks|Add more disks/i,
+  });
   await expect(addButton).toBeVisible({ timeout: 30000 });
   await addButton.click();
-  await expect(page.getByRole('dialog')).toBeVisible();
+  await expect(page.getByRole("dialog")).toBeVisible();
 };
 
-const getDiskList = (page: Page) => page.getByTestId('disk-list');
+const getDiskList = (page: Page) => page.getByTestId("disk-list");
 
 const openRemoteFolder = async (page: Page, name: string) => {
   const row = page.locator('[data-testid="source-entry-row"]', { hasText: name }).first();
@@ -55,39 +60,39 @@ type SeedDisk = {
   id: string;
   name: string;
   path: string;
-  location: 'local' | 'ultimate';
+  location: "local" | "ultimate";
   group?: string | null;
   importOrder?: number | null;
 };
 
 const getDiskRow = (page: Page, name: string) =>
-  getDiskList(page).getByTestId('disk-row').filter({ hasText: name }).first();
+  getDiskList(page).getByTestId("disk-row").filter({ hasText: name }).first();
 
 const openDiskMenu = async (page: Page, name: string) => {
   const row = getDiskRow(page, name);
-  await row.getByRole('button', { name: 'Item actions' }).click();
+  await row.getByRole("button", { name: "Item actions" }).click();
 };
 
 const selectEntryCheckbox = async (page: Page, name: string) => {
-  const row = page.getByText(name, { exact: true }).locator('..').locator('..');
-  await row.getByRole('checkbox').click();
+  const row = page.getByText(name, { exact: true }).locator("..").locator("..");
+  await row.getByRole("checkbox").click();
 };
 
 const addLocalFolder = async (page: Page, folderPath: string, diskNames: string[], expectVisible = true) => {
   await openAddItemsDialog(page);
-  const dialog = page.getByRole('dialog');
-  await clickSourceSelectionButton(dialog, 'This device');
+  const dialog = page.getByRole("dialog");
+  await clickSourceSelectionButton(dialog, "This device");
   const input = page.locator('input[type="file"][webkitdirectory]');
   await expect(input).toHaveCount(1);
   await input.setInputFiles(folderPath);
-  await expect(page.getByRole('dialog')).toBeHidden();
+  await expect(page.getByRole("dialog")).toBeHidden();
   const overlay = page.locator('[data-testid="add-disks-overlay"]');
   try {
-    await overlay.waitFor({ state: 'visible', timeout: 1500 });
+    await overlay.waitFor({ state: "visible", timeout: 1500 });
   } catch {
     // Overlay may resolve quickly on small folders.
   }
-  await overlay.waitFor({ state: 'detached' }).catch((): null => null);
+  await overlay.waitFor({ state: "detached" }).catch((): null => null);
   if (expectVisible) {
     for (const diskName of diskNames) {
       await expect(getDiskList(page)).toContainText(diskName);
@@ -100,52 +105,55 @@ const snap = async (page: Page, testInfo: TestInfo, label: string) => {
 };
 
 const getDriveCard = (page: Page, label: string) =>
-  page.getByText(label, { exact: true }).locator('..').locator('..').locator('..');
+  page.getByText(label, { exact: true }).locator("..").locator("..").locator("..");
 
 const seedDiskLibrary = async (page: Page, disks: SeedDisk[]) => {
-  await page.addInitScript(({ disks: seedDisks }: { disks: SeedDisk[] }) => {
-    const payload = {
-      disks: seedDisks.map((disk: SeedDisk) => ({
-        ...disk,
-        group: disk.group ?? null,
-        importOrder: disk.importOrder ?? null,
-        importedAt: new Date().toISOString(),
-      })),
-    };
-    localStorage.setItem('c64u_disk_library:TEST-123', JSON.stringify(payload));
-  }, { disks });
+  await page.addInitScript(
+    ({ disks: seedDisks }: { disks: SeedDisk[] }) => {
+      const payload = {
+        disks: seedDisks.map((disk: SeedDisk) => ({
+          ...disk,
+          group: disk.group ?? null,
+          importOrder: disk.importOrder ?? null,
+          importedAt: new Date().toISOString(),
+        })),
+      };
+      localStorage.setItem("c64u_disk_library:TEST-123", JSON.stringify(payload));
+    },
+    { disks },
+  );
 };
 
 const seedUltimateTurricanDisks = async (page: Page) => {
   await seedDiskLibrary(page, [
     {
-      id: 'ultimate:/Usb0/Games/Turrican II/Disk 1.d64',
-      name: 'Disk 1.d64',
-      path: '/Usb0/Games/Turrican II/Disk 1.d64',
-      location: 'ultimate',
-      group: 'Turrican II',
+      id: "ultimate:/Usb0/Games/Turrican II/Disk 1.d64",
+      name: "Disk 1.d64",
+      path: "/Usb0/Games/Turrican II/Disk 1.d64",
+      location: "ultimate",
+      group: "Turrican II",
       importOrder: 1,
     },
     {
-      id: 'ultimate:/Usb0/Games/Turrican II/Disk 2.d64',
-      name: 'Disk 2.d64',
-      path: '/Usb0/Games/Turrican II/Disk 2.d64',
-      location: 'ultimate',
-      group: 'Turrican II',
+      id: "ultimate:/Usb0/Games/Turrican II/Disk 2.d64",
+      name: "Disk 2.d64",
+      path: "/Usb0/Games/Turrican II/Disk 2.d64",
+      location: "ultimate",
+      group: "Turrican II",
       importOrder: 2,
     },
     {
-      id: 'ultimate:/Usb0/Games/Turrican II/Disk 3.d64',
-      name: 'Disk 3.d64',
-      path: '/Usb0/Games/Turrican II/Disk 3.d64',
-      location: 'ultimate',
-      group: 'Turrican II',
+      id: "ultimate:/Usb0/Games/Turrican II/Disk 3.d64",
+      name: "Disk 3.d64",
+      path: "/Usb0/Games/Turrican II/Disk 3.d64",
+      location: "ultimate",
+      group: "Turrican II",
       importOrder: 3,
     },
   ]);
 };
 
-test.describe('Disk management', () => {
+test.describe("Disk management", () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
   let ftpServers: Awaited<ReturnType<typeof startFtpTestServers>>;
 
@@ -165,7 +173,7 @@ test.describe('Disk management', () => {
       host: ftpServers.ftpServer.host,
       port: ftpServers.ftpServer.port,
       bridgeUrl: ftpServers.bridgeServer.baseUrl,
-      password: '',
+      password: "",
     });
     await seedUiMocks(page, server.baseUrl);
   });
@@ -180,72 +188,86 @@ test.describe('Disk management', () => {
     }
   });
 
-  layoutTest('disks render with folder headers and no full paths @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
-    await page.goto('/disks', { waitUntil: 'domcontentloaded' });
-    await snap(page, testInfo, 'disks-open');
-    await addLocalFolder(page, path.resolve('playwright/fixtures/disks-local/Turrican II'), ['Disk 1.d64', 'Disk 2.d64']);
-    await snap(page, testInfo, 'disks-added');
+  layoutTest(
+    "disks render with folder headers and no full paths @layout",
+    async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      await page.goto("/disks", { waitUntil: "domcontentloaded" });
+      await snap(page, testInfo, "disks-open");
+      await addLocalFolder(page, path.resolve("playwright/fixtures/disks-local/Turrican II"), [
+        "Disk 1.d64",
+        "Disk 2.d64",
+      ]);
+      await snap(page, testInfo, "disks-added");
 
-    const diskList = getDiskList(page);
-    await expect(diskList.getByTestId('disk-row-header').filter({ hasText: '/Turrican II/' })).toBeVisible();
-    const diskRow = getDiskRow(page, 'Disk 1.d64');
-    await expect(diskRow).toBeVisible();
-    await expect(diskRow).not.toContainText('/Turrican II/');
-    await expect(getDiskRow(page, 'Disk 2.d64')).toBeVisible();
-    await snap(page, testInfo, 'disk-list-grouped');
-  });
+      const diskList = getDiskList(page);
+      await expect(diskList.getByTestId("disk-row-header").filter({ hasText: "/Turrican II/" })).toBeVisible();
+      const diskRow = getDiskRow(page, "Disk 1.d64");
+      await expect(diskRow).toBeVisible();
+      await expect(diskRow).not.toContainText("/Turrican II/");
+      await expect(getDiskRow(page, "Disk 2.d64")).toBeVisible();
+      await snap(page, testInfo, "disk-list-grouped");
+    },
+  );
 
-  test('disks header layout matches play list pattern @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
-    await page.goto('/play', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByRole('button', { name: 'Add items' })).toBeVisible();
-    const playAddButton = page.getByRole('button', { name: /Add items|Add more items/i });
+  test("disks header layout matches play list pattern @layout", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto("/play", { waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("button", { name: "Add items" })).toBeVisible();
+    const playAddButton = page.getByRole("button", {
+      name: /Add items|Add more items/i,
+    });
     await expect(playAddButton).toBeVisible();
 
-    const playFilter = page.getByTestId('list-filter-input');
+    const playFilter = page.getByTestId("list-filter-input");
     await expect(playFilter).toBeVisible();
 
-    await page.goto('/disks', { waitUntil: 'domcontentloaded' });
-    const disksAddButton = page.getByRole('button', { name: /Add disks|Add more disks/i });
+    await page.goto("/disks", { waitUntil: "domcontentloaded" });
+    const disksAddButton = page.getByRole("button", {
+      name: /Add disks|Add more disks/i,
+    });
     await expect(disksAddButton).toBeVisible();
-    await expect(disksAddButton).toHaveText('Add disks');
+    await expect(disksAddButton).toHaveText("Add disks");
 
-    const disksFilter = page.getByTestId('list-filter-input');
+    const disksFilter = page.getByTestId("list-filter-input");
     await expect(disksFilter).toBeVisible();
-    await expect(disksFilter).toHaveAttribute('placeholder', 'Filter disks...');
+    await expect(disksFilter).toHaveAttribute("placeholder", "Filter disks...");
 
-    const appBar = page.locator('header');
+    const appBar = page.locator("header");
     await expect(appBar.locator('input[placeholder="Filter disks..."]')).toHaveCount(0);
 
-    const listHeader = page.getByText('Disk list', { exact: true });
+    const listHeader = page.getByText("Disk list", { exact: true });
     const [headerBox, filterBox] = await Promise.all([listHeader.boundingBox(), disksFilter.boundingBox()]);
     if (headerBox && filterBox) {
       expect(filterBox.y).toBeGreaterThan(headerBox.y);
     }
-    await snap(page, testInfo, 'disks-header-layout');
+    await snap(page, testInfo, "disks-header-layout");
   });
 
-  test('FTP directory listing shows hierarchy @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test("FTP directory listing shows hierarchy @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     enableGoldenTrace(testInfo);
-    await page.goto('/disks', { waitUntil: 'domcontentloaded' });
-    await snap(page, testInfo, 'disks-open');
+    await page.goto("/disks", { waitUntil: "domcontentloaded" });
+    await snap(page, testInfo, "disks-open");
     await openAddItemsDialog(page);
-    const dialog = page.getByRole('dialog');
-    await clickSourceSelectionButton(dialog, 'C64 Ultimate');
-    await expect(page.getByText('Usb0', { exact: true })).toBeVisible();
-    await snap(page, testInfo, 'c64u-root');
-    await openRemoteFolder(page, 'Usb0');
-    await expect(page.getByText('Games', { exact: true })).toBeVisible();
-    await expect(page.getByText('Demos', { exact: true })).toBeVisible();
-    await snap(page, testInfo, 'c64u-folders');
+    const dialog = page.getByRole("dialog");
+    await clickSourceSelectionButton(dialog, "C64 Ultimate");
+    await expect(page.getByText("Usb0", { exact: true })).toBeVisible();
+    await snap(page, testInfo, "c64u-root");
+    await openRemoteFolder(page, "Usb0");
+    await expect(page.getByText("Games", { exact: true })).toBeVisible();
+    await expect(page.getByText("Demos", { exact: true })).toBeVisible();
+    await snap(page, testInfo, "c64u-folders");
   });
 
-  test('drive power toggle button updates state and issues request @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test("drive power toggle button updates state and issues request @layout", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     enableTraceAssertions(testInfo);
     const requests: Array<{ method: string; url: string }> = [];
-    page.on('request', (request: Request) => {
+    page.on("request", (request: Request) => {
       try {
         const url = new URL(request.url());
-        if (url.pathname.startsWith('/v1/drives/') && (url.pathname.endsWith(':on') || url.pathname.endsWith(':off'))) {
+        if (url.pathname.startsWith("/v1/drives/") && (url.pathname.endsWith(":on") || url.pathname.endsWith(":off"))) {
           requests.push({ method: request.method(), url: url.pathname });
         }
       } catch {
@@ -253,13 +275,13 @@ test.describe('Disk management', () => {
       }
     });
 
-    await page.goto('/disks', { waitUntil: 'domcontentloaded' });
-    const driveCard = getDriveCard(page, 'Drive A');
-    const mountButton = driveCard.getByTestId('drive-mount-toggle-a');
-    const powerButton = page.getByTestId('drive-power-toggle-a');
+    await page.goto("/disks", { waitUntil: "domcontentloaded" });
+    const driveCard = getDriveCard(page, "Drive A");
+    const mountButton = driveCard.getByTestId("drive-mount-toggle-a");
+    const powerButton = page.getByTestId("drive-power-toggle-a");
 
     await expect(powerButton).toBeVisible();
-    await expect(powerButton).toHaveText('Turn Off');
+    await expect(powerButton).toHaveText("Turn Off");
 
     const [mountBox, powerBox] = await Promise.all([mountButton.boundingBox(), powerButton.boundingBox()]);
     if (mountBox && powerBox) {
@@ -270,259 +292,289 @@ test.describe('Disk management', () => {
 
     await clearTraces(page);
     await powerButton.click();
-    await expect(powerButton).toHaveText('Turn On');
-    await expect(page.getByTestId('drive-status-toggle-a')).toHaveText('OFF');
-    await snap(page, testInfo, 'drive-power-off');
+    await expect(powerButton).toHaveText("Turn On");
+    await expect(page.getByTestId("drive-status-toggle-a")).toHaveText("OFF");
+    await snap(page, testInfo, "drive-power-off");
 
-    const lastRequest = getLatestDriveRequest(requests, (req) => req.url.endsWith('/v1/drives/a:off'));
+    const lastRequest = getLatestDriveRequest(requests, (req) => req.url.endsWith("/v1/drives/a:off"));
     expect(lastRequest).toBeTruthy();
 
-    const { requestEvent } = await expectRestTraceSequence(page, testInfo, '/v1/drives/a:off');
-    expect((requestEvent.data as { target?: string }).target).toBe('external-mock');
+    const { requestEvent } = await expectRestTraceSequence(page, testInfo, "/v1/drives/a:off");
+    expect((requestEvent.data as { target?: string }).target).toBe("external-mock");
   });
 
-  test('importing C64U folders preserves hierarchy and paths @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
-    await page.goto('/disks', { waitUntil: 'domcontentloaded' });
-    await snap(page, testInfo, 'disks-open');
+  test("importing C64U folders preserves hierarchy and paths @layout", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto("/disks", { waitUntil: "domcontentloaded" });
+    await snap(page, testInfo, "disks-open");
     await openAddItemsDialog(page);
-    const dialog = page.getByRole('dialog');
-    await clickSourceSelectionButton(dialog, 'C64 Ultimate');
-    await openRemoteFolder(page, 'Usb0');
-    await openRemoteFolder(page, 'Games');
-    await openRemoteFolder(page, 'Turrican II');
-    await snap(page, testInfo, 'c64u-folder');
-    await selectEntryCheckbox(page, 'Disk 1.d64');
-    await selectEntryCheckbox(page, 'Disk 2.d64');
-    await selectEntryCheckbox(page, 'Disk 3.d64');
-    await page.getByRole('button', { name: 'Add to library' }).click();
-    await snap(page, testInfo, 'disks-imported');
+    const dialog = page.getByRole("dialog");
+    await clickSourceSelectionButton(dialog, "C64 Ultimate");
+    await openRemoteFolder(page, "Usb0");
+    await openRemoteFolder(page, "Games");
+    await openRemoteFolder(page, "Turrican II");
+    await snap(page, testInfo, "c64u-folder");
+    await selectEntryCheckbox(page, "Disk 1.d64");
+    await selectEntryCheckbox(page, "Disk 2.d64");
+    await selectEntryCheckbox(page, "Disk 3.d64");
+    await page.getByRole("button", { name: "Add to library" }).click();
+    await snap(page, testInfo, "disks-imported");
 
     const diskList = getDiskList(page);
 
-    await expect(diskList.getByText('Disk 1.d64', { exact: true })).toBeVisible();
-    await expect(diskList.getByTestId('disk-row-header').filter({ hasText: '/Usb0/Games/Turrican II/' })).toBeVisible();
-    await expect(getDiskRow(page, 'Disk 1.d64')).not.toContainText('/Usb0/Games/Turrican II/');
-    await expect(diskList.getByLabel('C64U disk').first()).toBeVisible();
-    await snap(page, testInfo, 'disk-list');
+    await expect(diskList.getByText("Disk 1.d64", { exact: true })).toBeVisible();
+    await expect(diskList.getByTestId("disk-row-header").filter({ hasText: "/Usb0/Games/Turrican II/" })).toBeVisible();
+    await expect(getDiskRow(page, "Disk 1.d64")).not.toContainText("/Usb0/Games/Turrican II/");
+    await expect(diskList.getByLabel("C64U disk").first()).toBeVisible();
+    await snap(page, testInfo, "disk-list");
   });
 
-  test('disk filtering removes non-matching nodes and restores on clear @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
-    await page.goto('/disks', { waitUntil: 'domcontentloaded' });
-    await snap(page, testInfo, 'disks-open');
-    await addLocalFolder(page, path.resolve('playwright/fixtures/disks-local/Turrican II'), ['Disk 1.d64', 'Disk 2.d64']);
+  test("disk filtering removes non-matching nodes and restores on clear @layout", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto("/disks", { waitUntil: "domcontentloaded" });
+    await snap(page, testInfo, "disks-open");
+    await addLocalFolder(page, path.resolve("playwright/fixtures/disks-local/Turrican II"), [
+      "Disk 1.d64",
+      "Disk 2.d64",
+    ]);
 
-    const filter = page.getByTestId('list-filter-input');
-    await filter.fill('Disk 1');
+    const filter = page.getByTestId("list-filter-input");
+    await filter.fill("Disk 1");
 
-    const nonMatchRow = getDiskRow(page, 'Disk 2.d64');
+    const nonMatchRow = getDiskRow(page, "Disk 2.d64");
     await expect(nonMatchRow).toHaveCount(0);
-    await snap(page, testInfo, 'filter-applied');
+    await snap(page, testInfo, "filter-applied");
 
-    await page.getByRole('button', { name: 'Clear filter' }).click();
-    await expect(getDiskRow(page, 'Disk 2.d64')).toBeVisible();
-    await snap(page, testInfo, 'filter-cleared');
+    await page.getByRole("button", { name: "Clear filter" }).click();
+    await expect(getDiskRow(page, "Disk 2.d64")).toBeVisible();
+    await snap(page, testInfo, "filter-cleared");
   });
 
-  test('DOS status line renders message above raw line without labels @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
-    await page.goto('/disks', { waitUntil: 'domcontentloaded' });
+  test("DOS status line renders message above raw line without labels @layout", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto("/disks", { waitUntil: "domcontentloaded" });
 
-    await expect(page.getByTestId('drive-status-message-soft-iec')).toHaveText(/^(OK|DOS MISMATCH)$/);
-    await expect(page.getByTestId('drive-status-raw-soft-iec')).toContainText('73,U64IEC');
-    await expect(page.getByTestId('drive-status-raw-soft-iec')).toContainText('ULTIMATE DOS V1.1,00,00');
+    await expect(page.getByTestId("drive-status-message-soft-iec")).toHaveText(/^(OK|DOS MISMATCH)$/);
+    await expect(page.getByTestId("drive-status-raw-soft-iec")).toContainText("73,U64IEC");
+    await expect(page.getByTestId("drive-status-raw-soft-iec")).toContainText("ULTIMATE DOS V1.1,00,00");
 
-    await expect(page.getByTestId('drive-status-message-soft-iec')).toHaveClass(/text-success|text-amber-600/);
+    await expect(page.getByTestId("drive-status-message-soft-iec")).toHaveClass(/text-success|text-amber-600/);
 
-    const messageBox = await page.getByTestId('drive-status-message-soft-iec').boundingBox();
-    const rawBox = await page.getByTestId('drive-status-raw-soft-iec').boundingBox();
+    const messageBox = await page.getByTestId("drive-status-message-soft-iec").boundingBox();
+    const rawBox = await page.getByTestId("drive-status-raw-soft-iec").boundingBox();
     expect(messageBox).not.toBeNull();
     expect(rawBox).not.toBeNull();
     if (messageBox && rawBox) {
       expect(messageBox.y).toBeLessThan(rawBox.y);
     }
 
-    await expect(page.getByText('Message:', { exact: true })).toHaveCount(0);
-    await expect(page.getByText('Details:', { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Message:", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Details:", { exact: true })).toHaveCount(0);
 
-    await snap(page, testInfo, 'drive-dos-status-formatted');
+    await snap(page, testInfo, "drive-dos-status-formatted");
   });
 
-  test('disk groups display and can be reassigned inline @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
-    await page.goto('/disks', { waitUntil: 'domcontentloaded' });
-    await snap(page, testInfo, 'disks-open');
+  test("disk groups display and can be reassigned inline @layout", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto("/disks", { waitUntil: "domcontentloaded" });
+    await snap(page, testInfo, "disks-open");
 
-    await addLocalFolder(
-      page,
-      path.resolve('playwright/fixtures/disks-local/Groupings'),
-      ['foo1.d64', 'foo2.d64', 'DiskA.d64', 'DiskB.d64', 'Last Ninja 3-1.d64'],
-    );
-    await snap(page, testInfo, 'disks-grouped');
+    await addLocalFolder(page, path.resolve("playwright/fixtures/disks-local/Groupings"), [
+      "foo1.d64",
+      "foo2.d64",
+      "DiskA.d64",
+      "DiskB.d64",
+      "Last Ninja 3-1.d64",
+    ]);
+    await snap(page, testInfo, "disks-grouped");
 
-    const fooRow = getDiskRow(page, 'foo1.d64');
-    await expect(fooRow).toContainText('Group: foo');
+    const fooRow = getDiskRow(page, "foo1.d64");
+    await expect(fooRow).toContainText("Group: foo");
 
-    await openDiskMenu(page, 'foo1.d64');
-    await page.getByRole('menuitem', { name: 'Set group…' }).click();
-    const dialog = page.getByRole('dialog');
+    await openDiskMenu(page, "foo1.d64");
+    await page.getByRole("menuitem", { name: "Set group…" }).click();
+    const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
-    await dialog.getByRole('button', { name: /^Disk/ }).click();
-    await expect(fooRow).toContainText('Group: Disk');
+    await dialog.getByRole("button", { name: /^Disk/ }).click();
+    await expect(fooRow).toContainText("Group: Disk");
 
-    await openDiskMenu(page, 'DiskA.d64');
-    await page.getByRole('menuitem', { name: 'Set group…' }).click();
+    await openDiskMenu(page, "DiskA.d64");
+    await page.getByRole("menuitem", { name: "Set group…" }).click();
     await expect(dialog).toBeVisible();
-    await dialog.getByPlaceholder('Enter a group name').fill('My Group');
-    await dialog.getByRole('button', { name: 'Create & assign' }).click();
-    await expect(getDiskRow(page, 'DiskA.d64')).toContainText('Group: My Group');
-    await snap(page, testInfo, 'disk-group-reassigned');
+    await dialog.getByPlaceholder("Enter a group name").fill("My Group");
+    await dialog.getByRole("button", { name: "Create & assign" }).click();
+    await expect(getDiskRow(page, "DiskA.d64")).toContainText("Group: My Group");
+    await snap(page, testInfo, "disk-group-reassigned");
   });
 
-  test('mounting ultimate disks uses mount endpoint @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test("mounting ultimate disks uses mount endpoint @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await seedUltimateTurricanDisks(page);
-    await page.goto('/disks', { waitUntil: 'domcontentloaded' });
-    await snap(page, testInfo, 'disks-open');
+    await page.goto("/disks", { waitUntil: "domcontentloaded" });
+    await snap(page, testInfo, "disks-open");
 
-    const diskRow = getDiskRow(page, 'Disk 1.d64');
-    await diskRow.getByRole('button', { name: 'Mount Disk 1.d64' }).click();
-    await page.getByRole('button', { name: /Drive A/i }).click();
-    await snap(page, testInfo, 'mount-dialog');
+    const diskRow = getDiskRow(page, "Disk 1.d64");
+    await diskRow.getByRole("button", { name: "Mount Disk 1.d64" }).click();
+    await page.getByRole("button", { name: /Drive A/i }).click();
+    await snap(page, testInfo, "mount-dialog");
 
-    await expect.poll(() => Boolean(mountDriveRequest(server.requests, 'a'))).toBe(true);
-    const remoteMount = mountDriveRequest(server.requests, 'a');
-    expect(remoteMount?.method).toBe('PUT');
-    expect(remoteMount?.url).toContain('image=%2FUsb0%2FGames%2FTurrican%20II%2FDisk%201.d64');
-    await snap(page, testInfo, 'mount-requested');
+    await expect.poll(() => Boolean(mountDriveRequest(server.requests, "a"))).toBe(true);
+    const remoteMount = mountDriveRequest(server.requests, "a");
+    expect(remoteMount?.method).toBe("PUT");
+    expect(remoteMount?.url).toContain("image=%2FUsb0%2FGames%2FTurrican%20II%2FDisk%201.d64");
+    await snap(page, testInfo, "mount-requested");
   });
 
-  test('settings changes while disk mounted preserve mounted state @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test("settings changes while disk mounted preserve mounted state @layout", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     enableGoldenTrace(testInfo);
     await seedUltimateTurricanDisks(page);
-    await page.goto('/disks', { waitUntil: 'domcontentloaded' });
+    await page.goto("/disks", { waitUntil: "domcontentloaded" });
 
-    const diskRow = getDiskRow(page, 'Disk 1.d64');
-    await diskRow.getByRole('button', { name: 'Mount Disk 1.d64' }).click();
+    const diskRow = getDiskRow(page, "Disk 1.d64");
+    await diskRow.getByRole("button", { name: "Mount Disk 1.d64" }).click();
     await page
-      .getByRole('dialog', { name: /Mount Disk 1\.d64/i })
-      .getByRole('button', { name: /Drive A/i })
+      .getByRole("dialog", { name: /Mount Disk 1\.d64/i })
+      .getByRole("button", { name: /Drive A/i })
       .click();
-    await expect.poll(() => Boolean(mountDriveRequest(server.requests, 'a'))).toBe(true);
+    await expect.poll(() => Boolean(mountDriveRequest(server.requests, "a"))).toBe(true);
 
-    await page.goto('/settings', { waitUntil: 'domcontentloaded' });
-    const lightThemeButton = page.getByRole('button', { name: /Light|light theme/i }).first();
+    await page.goto("/settings", { waitUntil: "domcontentloaded" });
+    const lightThemeButton = page.getByRole("button", { name: /Light|light theme/i }).first();
     await expect(lightThemeButton).toBeVisible();
     await lightThemeButton.click();
 
-    await page.goto('/disks', { waitUntil: 'domcontentloaded' });
-    const driveCard = getDriveCard(page, 'Drive A');
-    await expect(driveCard).toContainText('Disk 1.d64');
-    await snap(page, testInfo, 'mounted-after-settings');
+    await page.goto("/disks", { waitUntil: "domcontentloaded" });
+    const driveCard = getDriveCard(page, "Drive A");
+    await expect(driveCard).toContainText("Disk 1.d64");
+    await snap(page, testInfo, "mounted-after-settings");
   });
 
-  test('mount failure surfaces error and does not mark drive mounted @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
-    allowWarnings(testInfo, 'Expected mount failure warnings for auth errors.');
+  test("mount failure surfaces error and does not mark drive mounted @layout", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
+    allowWarnings(testInfo, "Expected mount failure warnings for auth errors.");
     await seedUltimateTurricanDisks(page);
-    await page.goto('/disks', { waitUntil: 'domcontentloaded' });
+    await page.goto("/disks", { waitUntil: "domcontentloaded" });
 
-    await getDiskRow(page, 'Disk 1.d64').getByRole('button', { name: 'Mount Disk 1.d64' }).click();
-    const mountDialog = page.getByRole('dialog', { name: /Mount Disk 1\.d64/i });
-    server.setFaultMode('auth');
-    await mountDialog.getByRole('button', { name: /Drive A/i }).click();
+    await getDiskRow(page, "Disk 1.d64").getByRole("button", { name: "Mount Disk 1.d64" }).click();
+    const mountDialog = page.getByRole("dialog", {
+      name: /Mount Disk 1\.d64/i,
+    });
+    server.setFaultMode("auth");
+    await mountDialog.getByRole("button", { name: /Drive A/i }).click();
 
-    await expect(page.getByText('Mount failed', { exact: true })).toBeVisible();
-    const driveCard = getDriveCard(page, 'Drive A');
-    await expect(driveCard).not.toContainText('Disk 1.d64');
-    await snap(page, testInfo, 'mount-failed');
-    server.setFaultMode('none');
+    await expect(page.getByText("Mount failed", { exact: true })).toBeVisible();
+    const driveCard = getDriveCard(page, "Drive A");
+    await expect(driveCard).not.toContainText("Disk 1.d64");
+    await snap(page, testInfo, "mount-failed");
+    server.setFaultMode("none");
   });
 
-  test('mount failure when device unreachable shows error @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
-    allowWarnings(testInfo, 'Expected mount failure warnings for unreachable device.');
+  test("mount failure when device unreachable shows error @layout", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
+    allowWarnings(testInfo, "Expected mount failure warnings for unreachable device.");
     await seedUltimateTurricanDisks(page);
-    await page.goto('/disks', { waitUntil: 'domcontentloaded' });
+    await page.goto("/disks", { waitUntil: "domcontentloaded" });
 
-    await getDiskRow(page, 'Disk 1.d64').getByRole('button', { name: 'Mount Disk 1.d64' }).click();
-    const mountDialog = page.getByRole('dialog', { name: /Mount Disk 1\.d64/i });
+    await getDiskRow(page, "Disk 1.d64").getByRole("button", { name: "Mount Disk 1.d64" }).click();
+    const mountDialog = page.getByRole("dialog", {
+      name: /Mount Disk 1\.d64/i,
+    });
     server.setReachable(false);
-    await mountDialog.getByRole('button', { name: /Drive A/i }).click();
+    await mountDialog.getByRole("button", { name: /Drive A/i }).click();
 
-    await expect(page.getByText('Mount failed', { exact: true })).toBeVisible();
-    const driveCard = getDriveCard(page, 'Drive A');
-    await expect(driveCard).not.toContainText('Disk 1.d64');
-    await snap(page, testInfo, 'mount-unreachable');
+    await expect(page.getByText("Mount failed", { exact: true })).toBeVisible();
+    const driveCard = getDriveCard(page, "Drive A");
+    await expect(driveCard).not.toContainText("Disk 1.d64");
+    await snap(page, testInfo, "mount-unreachable");
     server.setReachable(true);
   });
 
-  test('multi-drive mounting and rotation within group @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test("multi-drive mounting and rotation within group @layout", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     await seedUltimateTurricanDisks(page);
-    await page.goto('/disks', { waitUntil: 'domcontentloaded' });
-    await snap(page, testInfo, 'disks-open');
+    await page.goto("/disks", { waitUntil: "domcontentloaded" });
+    await snap(page, testInfo, "disks-open");
 
-    await getDiskRow(page, 'Disk 1.d64').getByRole('button', { name: 'Mount Disk 1.d64' }).click();
+    await getDiskRow(page, "Disk 1.d64").getByRole("button", { name: "Mount Disk 1.d64" }).click();
     await page
-      .getByRole('dialog', { name: /Mount Disk 1\.d64/i })
-      .getByRole('button', { name: /Drive A/i })
+      .getByRole("dialog", { name: /Mount Disk 1\.d64/i })
+      .getByRole("button", { name: /Drive A/i })
       .click();
-    await expect.poll(() => Boolean(mountDriveRequest(server.requests, 'a'))).toBe(true);
-    await snap(page, testInfo, 'mounted-drive-a');
+    await expect.poll(() => Boolean(mountDriveRequest(server.requests, "a"))).toBe(true);
+    await snap(page, testInfo, "mounted-drive-a");
 
-    const nextButton = page.getByRole('button', { name: 'Next' }).first();
+    const nextButton = page.getByRole("button", { name: "Next" }).first();
     await nextButton.click();
-    await expect.poll(() =>
-      server.requests.some((req) => req.url.includes('Disk%202.d64')),
-    ).toBe(true);
-    await snap(page, testInfo, 'rotated-disk');
+    await expect.poll(() => server.requests.some((req) => req.url.includes("Disk%202.d64"))).toBe(true);
+    await snap(page, testInfo, "rotated-disk");
   });
 
-  test('mount dialog shows a single close button @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test("mount dialog shows a single close button @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await seedUltimateTurricanDisks(page);
-    await page.goto('/disks', { waitUntil: 'domcontentloaded' });
-    await snap(page, testInfo, 'disks-open');
+    await page.goto("/disks", { waitUntil: "domcontentloaded" });
+    await snap(page, testInfo, "disks-open");
 
-    await getDiskRow(page, 'Disk 1.d64').getByRole('button', { name: 'Mount Disk 1.d64' }).click();
-    const dialog = page.getByRole('dialog', { name: /Mount Disk 1\.d64/i });
-    await expect(dialog.getByRole('button', { name: 'Close' })).toHaveCount(1);
-    await snap(page, testInfo, 'single-close');
+    await getDiskRow(page, "Disk 1.d64").getByRole("button", { name: "Mount Disk 1.d64" }).click();
+    const dialog = page.getByRole("dialog", { name: /Mount Disk 1\.d64/i });
+    await expect(dialog.getByRole("button", { name: "Close" })).toHaveCount(1);
+    await snap(page, testInfo, "single-close");
   });
 
-  test('disk list view all shows full list @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test("disk list view all shows full list @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     enableGoldenTrace(testInfo);
     await page.addInitScript(() => {
-      localStorage.setItem('c64u_list_preview_limit', '1');
+      localStorage.setItem("c64u_list_preview_limit", "1");
     });
-    await page.goto('/disks', { waitUntil: 'domcontentloaded' });
-    await snap(page, testInfo, 'disks-open');
-    await addLocalFolder(page, path.resolve('playwright/fixtures/disks-local/Turrican II'), ['Disk 1.d64', 'Disk 2.d64'], false);
-    await snap(page, testInfo, 'disks-added');
+    await page.goto("/disks", { waitUntil: "domcontentloaded" });
+    await snap(page, testInfo, "disks-open");
+    await addLocalFolder(
+      page,
+      path.resolve("playwright/fixtures/disks-local/Turrican II"),
+      ["Disk 1.d64", "Disk 2.d64"],
+      false,
+    );
+    await snap(page, testInfo, "disks-added");
 
-    await page.getByRole('button', { name: 'View all' }).click();
-    const dialog = page.getByRole('dialog', { name: 'All disks' });
-    await expect(dialog.getByText('Disk 1.d64', { exact: true })).toBeVisible();
-    await expect(dialog.getByText('Disk 2.d64', { exact: true })).toBeVisible();
-    await snap(page, testInfo, 'view-all');
-    await snap(page, testInfo, 'disk-view-all');
+    await page.getByRole("button", { name: "View all" }).click();
+    const dialog = page.getByRole("dialog", { name: "All disks" });
+    await expect(dialog.getByText("Disk 1.d64", { exact: true })).toBeVisible();
+    await expect(dialog.getByText("Disk 2.d64", { exact: true })).toBeVisible();
+    await snap(page, testInfo, "view-all");
+    await snap(page, testInfo, "disk-view-all");
   });
 
-  test('disk view-all dialog is constrained and scrollable @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test("disk view-all dialog is constrained and scrollable @layout", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     await page.addInitScript(() => {
-      localStorage.setItem('c64u_list_preview_limit', '5');
+      localStorage.setItem("c64u_list_preview_limit", "5");
     });
     const manyDisks = Array.from({ length: 220 }, (_, index) => ({
-      id: `ultimate:/Usb0/Disks/Disk_${String(index + 1).padStart(3, '0')}.d64`,
-      name: `Disk_${String(index + 1).padStart(3, '0')}.d64`,
-      path: `/Usb0/Disks/Disk_${String(index + 1).padStart(3, '0')}.d64`,
-      location: 'ultimate' as const,
+      id: `ultimate:/Usb0/Disks/Disk_${String(index + 1).padStart(3, "0")}.d64`,
+      name: `Disk_${String(index + 1).padStart(3, "0")}.d64`,
+      path: `/Usb0/Disks/Disk_${String(index + 1).padStart(3, "0")}.d64`,
+      location: "ultimate" as const,
       group: null as string | null,
       importOrder: index + 1,
     }));
     await seedDiskLibrary(page, manyDisks);
 
     await page.setViewportSize({ width: 360, height: 740 });
-    await page.goto('/disks', { waitUntil: 'domcontentloaded' });
-    await snap(page, testInfo, 'disks-open');
+    await page.goto("/disks", { waitUntil: "domcontentloaded" });
+    await snap(page, testInfo, "disks-open");
 
-    await page.getByRole('button', { name: 'View all' }).click();
-    const dialog = page.getByRole('dialog');
+    await page.getByRole("button", { name: "View all" }).click();
+    const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
-    await snap(page, testInfo, 'disks-view-all-open');
+    await snap(page, testInfo, "disks-view-all-open");
 
     const dialogBox = await dialog.boundingBox();
     const viewport = page.viewportSize();
@@ -543,194 +595,203 @@ test.describe('Disk management', () => {
     await scrollArea.evaluate((node: HTMLElement) => {
       node.scrollTop = node.scrollHeight;
     });
-    await expect(scrollArea).toContainText('Disk_220.d64');
-    await snap(page, testInfo, 'disks-view-all-scrolled');
+    await expect(scrollArea).toContainText("Disk_220.d64");
+    await snap(page, testInfo, "disks-view-all-scrolled");
   });
 
-  test('disk presence indicator and deletion ejects mounted disks @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test("disk presence indicator and deletion ejects mounted disks @layout", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     await seedUltimateTurricanDisks(page);
-    const encodedPath = encodeURIComponent('/Usb0/Games/Turrican II/Disk 1.d64');
+    const encodedPath = encodeURIComponent("/Usb0/Games/Turrican II/Disk 1.d64");
     await page.request.put(`${server.baseUrl}/v1/drives/a:mount?image=${encodedPath}`);
-    await page.goto('/disks', { waitUntil: 'commit' });
-    await snap(page, testInfo, 'disks-open');
+    await page.goto("/disks", { waitUntil: "commit" });
+    await snap(page, testInfo, "disks-open");
 
     const diskList = getDiskList(page);
-    await getDiskRow(page, 'Disk 1.d64').getByRole('button', { name: 'Mount Disk 1.d64' }).click();
+    await getDiskRow(page, "Disk 1.d64").getByRole("button", { name: "Mount Disk 1.d64" }).click();
     await page
-      .getByRole('dialog', { name: /Mount Disk 1\.d64/i })
-      .getByRole('button', { name: /Drive A/i })
+      .getByRole("dialog", { name: /Mount Disk 1\.d64/i })
+      .getByRole("button", { name: /Drive A/i })
       .click();
-    await snap(page, testInfo, 'mounted-drive-a');
+    await snap(page, testInfo, "mounted-drive-a");
 
-    await expect.poll(() => Boolean(mountDriveRequest(server.requests, 'a'))).toBe(true);
+    await expect.poll(() => Boolean(mountDriveRequest(server.requests, "a"))).toBe(true);
 
-    await openDiskMenu(page, 'Disk 1.d64');
-    await page.getByRole('menuitem', { name: 'Remove from collection' }).click();
-    await page.getByRole('dialog', { name: 'Remove disk?' }).getByRole('button', { name: 'Remove' }).click();
-    await snap(page, testInfo, 'disk-removed');
+    await openDiskMenu(page, "Disk 1.d64");
+    await page.getByRole("menuitem", { name: "Remove from collection" }).click();
+    await page.getByRole("dialog", { name: "Remove disk?" }).getByRole("button", { name: "Remove" }).click();
+    await snap(page, testInfo, "disk-removed");
 
-    await expect.poll(() => Boolean(removeDriveRequest(server.requests, 'a'))).toBe(true);
-    await snap(page, testInfo, 'drive-removed');
+    await expect.poll(() => Boolean(removeDriveRequest(server.requests, "a"))).toBe(true);
+    await snap(page, testInfo, "drive-removed");
   });
 
-  test('disk menu shows size/date and rename works @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
-    await page.goto('/disks', { waitUntil: 'domcontentloaded' });
-    await snap(page, testInfo, 'disks-open');
-    await addLocalFolder(page, path.resolve('playwright/fixtures/disks-local/Turrican II'), ['Disk 1.d64']);
-    await snap(page, testInfo, 'disks-added');
+  test("disk menu shows size/date and rename works @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto("/disks", { waitUntil: "domcontentloaded" });
+    await snap(page, testInfo, "disks-open");
+    await addLocalFolder(page, path.resolve("playwright/fixtures/disks-local/Turrican II"), ["Disk 1.d64"]);
+    await snap(page, testInfo, "disks-added");
 
-    await openDiskMenu(page, 'Disk 1.d64');
-    await expect(page.getByText('Size:', { exact: false })).toBeVisible();
-    await expect(page.getByText('Date:', { exact: false })).toBeVisible();
-    await page.getByRole('menuitem', { name: 'Rename disk…' }).click();
-    const dialog = page.getByRole('dialog', { name: 'Rename disk' });
-    await dialog.getByRole('textbox').fill('Disk One');
-    await dialog.getByRole('button', { name: 'Save' }).click();
-    await expect(getDiskList(page).getByText('Disk One', { exact: true })).toBeVisible();
-    await snap(page, testInfo, 'disk-renamed');
+    await openDiskMenu(page, "Disk 1.d64");
+    await expect(page.getByText("Size:", { exact: false })).toBeVisible();
+    await expect(page.getByText("Date:", { exact: false })).toBeVisible();
+    await page.getByRole("menuitem", { name: "Rename disk…" }).click();
+    const dialog = page.getByRole("dialog", { name: "Rename disk" });
+    await dialog.getByRole("textbox").fill("Disk One");
+    await dialog.getByRole("button", { name: "Save" }).click();
+    await expect(getDiskList(page).getByText("Disk One", { exact: true })).toBeVisible();
+    await snap(page, testInfo, "disk-renamed");
   });
 
-  test('disk list select all removes selected items @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
-    await page.goto('/disks', { waitUntil: 'domcontentloaded' });
-    await snap(page, testInfo, 'disks-open');
-    await addLocalFolder(page, path.resolve('playwright/fixtures/disks-local/Turrican II'), ['Disk 1.d64', 'Disk 2.d64']);
-    await snap(page, testInfo, 'disks-added');
+  test("disk list select all removes selected items @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto("/disks", { waitUntil: "domcontentloaded" });
+    await snap(page, testInfo, "disks-open");
+    await addLocalFolder(page, path.resolve("playwright/fixtures/disks-local/Turrican II"), [
+      "Disk 1.d64",
+      "Disk 2.d64",
+    ]);
+    await snap(page, testInfo, "disks-added");
 
-    await page.getByRole('button', { name: 'Select all' }).click();
-    await page.getByRole('button', { name: 'Remove selected items' }).click();
-    const dialog = page.getByRole('dialog', { name: /Remove selected disks/i });
-    await dialog.getByRole('button', { name: 'Remove' }).click();
-    await expect(getDiskList(page)).toContainText('No disks in the collection yet.');
-    await snap(page, testInfo, 'disks-removed');
+    await page.getByRole("button", { name: "Select all" }).click();
+    await page.getByRole("button", { name: "Remove selected items" }).click();
+    const dialog = page.getByRole("dialog", { name: /Remove selected disks/i });
+    await dialog.getByRole("button", { name: "Remove" }).click();
+    await expect(getDiskList(page)).toContainText("No disks in the collection yet.");
+    await snap(page, testInfo, "disks-removed");
   });
 
-  test('disk view-all filter narrows list @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test("disk view-all filter narrows list @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.addInitScript(() => {
-      localStorage.setItem('c64u_list_preview_limit', '5');
+      localStorage.setItem("c64u_list_preview_limit", "5");
     });
     const manyDisks = Array.from({ length: 12 }, (_, index) => ({
-      id: `ultimate:/Usb0/Disks/Disk_${String(index + 1).padStart(3, '0')}.d64`,
-      name: `Disk_${String(index + 1).padStart(3, '0')}.d64`,
-      path: `/Usb0/Disks/Disk_${String(index + 1).padStart(3, '0')}.d64`,
-      location: 'ultimate' as const,
+      id: `ultimate:/Usb0/Disks/Disk_${String(index + 1).padStart(3, "0")}.d64`,
+      name: `Disk_${String(index + 1).padStart(3, "0")}.d64`,
+      path: `/Usb0/Disks/Disk_${String(index + 1).padStart(3, "0")}.d64`,
+      location: "ultimate" as const,
       group: null as string | null,
       importOrder: index + 1,
     }));
     await seedDiskLibrary(page, manyDisks);
 
-    await page.goto('/disks', { waitUntil: 'domcontentloaded' });
-    await page.getByRole('button', { name: 'View all' }).click();
-    const dialog = page.getByRole('dialog');
+    await page.goto("/disks", { waitUntil: "domcontentloaded" });
+    await page.getByRole("button", { name: "View all" }).click();
+    const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
 
-    const filter = page.getByTestId('view-all-filter-input');
-    await filter.fill('Disk_005');
-    await snap(page, testInfo, 'disk-view-all-filtered');
+    const filter = page.getByTestId("view-all-filter-input");
+    await filter.fill("Disk_005");
+    await snap(page, testInfo, "disk-view-all-filtered");
 
-    await expect(page.locator('[data-virtuoso-scroller="true"]')).toContainText('Disk_005.d64');
-    await expect(page.locator('[data-virtuoso-scroller="true"]')).not.toContainText('Disk_001.d64');
+    await expect(page.locator('[data-virtuoso-scroller="true"]')).toContainText("Disk_005.d64");
+    await expect(page.locator('[data-virtuoso-scroller="true"]')).not.toContainText("Disk_001.d64");
   });
 
-  test('disk removal wording is non-destructive @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
-    await page.goto('/disks', { waitUntil: 'domcontentloaded' });
-    await snap(page, testInfo, 'disks-open');
-    await addLocalFolder(page, path.resolve('playwright/fixtures/disks-local/Turrican II'), ['Disk 1.d64']);
+  test("disk removal wording is non-destructive @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto("/disks", { waitUntil: "domcontentloaded" });
+    await snap(page, testInfo, "disks-open");
+    await addLocalFolder(page, path.resolve("playwright/fixtures/disks-local/Turrican II"), ["Disk 1.d64"]);
 
-    await openDiskMenu(page, 'Disk 1.d64');
-    await expect(page.getByRole('menuitem', { name: /Remove from collection/i })).toBeVisible();
-    await expect(page.getByRole('menuitem', { name: /Delete disk/i })).toHaveCount(0);
-    await snap(page, testInfo, 'menu-verified');
+    await openDiskMenu(page, "Disk 1.d64");
+    await expect(page.getByRole("menuitem", { name: /Remove from collection/i })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: /Delete disk/i })).toHaveCount(0);
+    await snap(page, testInfo, "menu-verified");
   });
 
-  test('disk menu shows size and date for local imports @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
-    await page.goto('/disks', { waitUntil: 'domcontentloaded' });
-    await addLocalFolder(page, path.resolve('playwright/fixtures/disks-local/Turrican II'), ['Disk 1.d64']);
+  test("disk menu shows size and date for local imports @layout", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto("/disks", { waitUntil: "domcontentloaded" });
+    await addLocalFolder(page, path.resolve("playwright/fixtures/disks-local/Turrican II"), ["Disk 1.d64"]);
 
-    await openDiskMenu(page, 'Disk 1.d64');
-    const sizeItem = page.getByRole('menuitem', { name: /Size:/i });
-    const dateItem = page.getByRole('menuitem', { name: /Date:/i });
+    await openDiskMenu(page, "Disk 1.d64");
+    const sizeItem = page.getByRole("menuitem", { name: /Size:/i });
+    const dateItem = page.getByRole("menuitem", { name: /Date:/i });
     await expect(sizeItem).toBeVisible();
     await expect(dateItem).toBeVisible();
-    await expect(sizeItem).not.toContainText('—');
-    await expect(dateItem).not.toContainText('—');
-    await snap(page, testInfo, 'local-disk-size-date');
+    await expect(sizeItem).not.toContainText("—");
+    await expect(dateItem).not.toContainText("—");
+    await snap(page, testInfo, "local-disk-size-date");
   });
 
-  test('disk menu shows size and date for C64 Ultimate imports @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
-    await page.goto('/disks', { waitUntil: 'domcontentloaded' });
+  test("disk menu shows size and date for C64 Ultimate imports @layout", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto("/disks", { waitUntil: "domcontentloaded" });
     await openAddItemsDialog(page);
-    const dialog = page.getByRole('dialog');
-    await clickSourceSelectionButton(dialog, 'C64 Ultimate');
-    await openRemoteFolder(page, 'Usb0');
-    await openRemoteFolder(page, 'Games');
-    await openRemoteFolder(page, 'Turrican II');
-    await selectEntryCheckbox(page, 'Disk 1.d64');
-    await page.getByRole('button', { name: 'Add to library' }).click();
-    await expect(page.getByRole('dialog')).toBeHidden();
+    const dialog = page.getByRole("dialog");
+    await clickSourceSelectionButton(dialog, "C64 Ultimate");
+    await openRemoteFolder(page, "Usb0");
+    await openRemoteFolder(page, "Games");
+    await openRemoteFolder(page, "Turrican II");
+    await selectEntryCheckbox(page, "Disk 1.d64");
+    await page.getByRole("button", { name: "Add to library" }).click();
+    await expect(page.getByRole("dialog")).toBeHidden();
 
-    await openDiskMenu(page, 'Disk 1.d64');
-    const sizeItem = page.getByRole('menuitem', { name: /Size:/i });
-    const dateItem = page.getByRole('menuitem', { name: /Date:/i });
+    await openDiskMenu(page, "Disk 1.d64");
+    const sizeItem = page.getByRole("menuitem", { name: /Size:/i });
+    const dateItem = page.getByRole("menuitem", { name: /Date:/i });
     await expect(sizeItem).toBeVisible();
     await expect(dateItem).toBeVisible();
-    await expect(sizeItem).not.toContainText('—');
-    await expect(dateItem).not.toContainText('—');
-    await snap(page, testInfo, 'ftp-disk-size-date');
+    await expect(sizeItem).not.toContainText("—");
+    await expect(dateItem).not.toContainText("—");
+    await snap(page, testInfo, "ftp-disk-size-date");
   });
 
-  test('importing non-disk files shows warning @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
-    allowWarnings(testInfo, 'Expected warning for non-disk file imports.');
-    await page.goto('/disks', { waitUntil: 'domcontentloaded' });
-    await snap(page, testInfo, 'disks-open');
+  test("importing non-disk files shows warning @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    allowWarnings(testInfo, "Expected warning for non-disk file imports.");
+    await page.goto("/disks", { waitUntil: "domcontentloaded" });
+    await snap(page, testInfo, "disks-open");
     await openAddItemsDialog(page);
-    const dialog = page.getByRole('dialog');
-    await clickSourceSelectionButton(dialog, 'This device');
+    const dialog = page.getByRole("dialog");
+    await clickSourceSelectionButton(dialog, "This device");
     const input = page.locator('input[type="file"][webkitdirectory]');
     await expect(input).toHaveCount(1);
-    await input.setInputFiles(path.resolve('playwright/fixtures/disks-local/EmptyFolder'));
-    await expect(page.getByRole('dialog')).toBeVisible();
-    await expect(page.getByText('No matching items in this folder.', { exact: true })).toBeVisible();
-    await snap(page, testInfo, 'no-disks-warning');
+    await input.setInputFiles(path.resolve("playwright/fixtures/disks-local/EmptyFolder"));
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await expect(page.getByText("No matching items in this folder.", { exact: true })).toBeVisible();
+    await snap(page, testInfo, "no-disks-warning");
   });
 
-  test('FTP login failure surfaces error @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
-    allowWarnings(testInfo, 'Expected error toast for FTP login failure.');
-    const protectedServers = await startFtpTestServers({ password: 'secret' });
+  test("FTP login failure surfaces error @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    allowWarnings(testInfo, "Expected error toast for FTP login failure.");
+    const protectedServers = await startFtpTestServers({ password: "secret" });
     await seedFtpConfig(page, {
       host: protectedServers.ftpServer.host,
       port: protectedServers.ftpServer.port,
       bridgeUrl: protectedServers.bridgeServer.baseUrl,
-      password: 'wrong',
+      password: "wrong",
     });
     await seedUiMocks(page, server.baseUrl);
 
-    await page.goto('/disks', { waitUntil: 'domcontentloaded' });
-    await snap(page, testInfo, 'disks-open');
+    await page.goto("/disks", { waitUntil: "domcontentloaded" });
+    await snap(page, testInfo, "disks-open");
     await openAddItemsDialog(page);
-    const dialog = page.getByRole('dialog');
-    await clickSourceSelectionButton(dialog, 'C64 Ultimate');
-    await expect(page.getByText('Browse failed', { exact: true })).toBeVisible();
-    await snap(page, testInfo, 'browse-failed');
+    const dialog = page.getByRole("dialog");
+    await clickSourceSelectionButton(dialog, "C64 Ultimate");
+    await expect(page.getByText("Browse failed", { exact: true })).toBeVisible();
+    await snap(page, testInfo, "browse-failed");
 
     await protectedServers.close();
   });
 
-  test('FTP server unavailable surfaces error @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
-    allowWarnings(testInfo, 'Expected error toast for FTP server unavailable.');
+  test("FTP server unavailable surfaces error @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    allowWarnings(testInfo, "Expected error toast for FTP server unavailable.");
     await seedFtpConfig(page, {
       host: ftpServers.ftpServer.host,
       port: ftpServers.ftpServer.port + 50,
       bridgeUrl: ftpServers.bridgeServer.baseUrl,
-      password: '',
+      password: "",
     });
     await seedUiMocks(page, server.baseUrl);
 
-    await page.goto('/disks', { waitUntil: 'domcontentloaded' });
-    await snap(page, testInfo, 'disks-open');
+    await page.goto("/disks", { waitUntil: "domcontentloaded" });
+    await snap(page, testInfo, "disks-open");
     await openAddItemsDialog(page);
-    const dialog = page.getByRole('dialog');
-    await clickSourceSelectionButton(dialog, 'C64 Ultimate');
-    await expect(page.getByText('Browse failed', { exact: true })).toBeVisible();
-    await snap(page, testInfo, 'browse-failed');
+    const dialog = page.getByRole("dialog");
+    await clickSourceSelectionButton(dialog, "C64 Ultimate");
+    await expect(page.getByText("Browse failed", { exact: true })).toBeVisible();
+    await snap(page, testInfo, "browse-failed");
   });
 });

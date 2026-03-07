@@ -6,8 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 
 export type HvscControlsProps = {
   hvscInstalled: boolean;
@@ -16,8 +16,8 @@ export type HvscControlsProps = {
   hvscUpdating: boolean;
   hvscInProgress: boolean;
   hvscCanIngest: boolean;
-  hvscPhase: 'idle' | 'download' | 'extract' | 'index' | 'ready' | 'failed';
-  hvscSummaryState: 'idle' | 'success' | 'failure';
+  hvscPhase: "idle" | "download" | "extract" | "index" | "ready" | "failed";
+  hvscSummaryState: "idle" | "success" | "failure";
   hvscSummaryFilesExtracted?: number | null;
   hvscSummaryDurationMs?: number | null;
   hvscSummaryUpdatedAt?: string | null;
@@ -88,18 +88,18 @@ export const HvscControls = ({
 }: HvscControlsProps) => {
   const phaseLabel = (() => {
     switch (hvscPhase) {
-      case 'download':
-        return 'Downloading';
-      case 'extract':
-        return 'Extracting';
-      case 'index':
-        return 'Indexing';
-      case 'ready':
-        return 'Ready';
-      case 'failed':
-        return 'Failed';
+      case "download":
+        return "Downloading";
+      case "extract":
+        return "Extracting";
+      case "index":
+        return "Indexing";
+      case "ready":
+        return "Ready";
+      case "failed":
+        return "Failed";
       default:
-        return 'Idle';
+        return "Idle";
     }
   })();
 
@@ -110,8 +110,8 @@ export const HvscControls = ({
           <p className="text-sm font-medium">HVSC</p>
           <p className="text-xs text-muted-foreground">
             {hvscInstalled
-              ? `Installed version ${hvscInstalledVersion ?? '—'}`
-              : 'Download HVSC to browse the SID collection.'}
+              ? `Installed version ${hvscInstalledVersion ?? "—"}`
+              : "Download HVSC to browse the SID collection."}
           </p>
           <p className="text-[11px] text-muted-foreground">Status: {phaseLabel}</p>
         </div>
@@ -134,14 +134,8 @@ export const HvscControls = ({
           >
             Ingest HVSC
           </Button>
-          {(hvscSummaryState !== 'idle' || hvscInlineError) && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onReset}
-              disabled={hvscUpdating}
-              className="whitespace-normal"
-            >
+          {(hvscSummaryState !== "idle" || hvscInlineError) && (
+            <Button variant="ghost" size="sm" onClick={onReset} disabled={hvscUpdating} className="whitespace-normal">
               Reset status
             </Button>
           )}
@@ -159,18 +153,20 @@ export const HvscControls = ({
         </div>
       </div>
 
-      {hvscSummaryState !== 'idle' && (
+      {hvscSummaryState !== "idle" && (
         <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs" data-testid="hvsc-summary">
-          {hvscSummaryState === 'success' ? (
+          {hvscSummaryState === "success" ? (
             <div className="space-y-1">
               <p className="text-sm font-medium">HVSC downloaded successfully</p>
-              <p>Ingested {hvscIngestionIngestedSongs} of {hvscIngestionTotalSongs} songs.</p>
+              <p>
+                Ingested {hvscIngestionIngestedSongs} of {hvscIngestionTotalSongs} songs.
+              </p>
               {hvscSonglengthSyntaxErrors > 0 && (
                 <p className="text-amber-700 dark:text-amber-400">
                   {hvscSonglengthSyntaxErrors} songlength entries had syntax errors and were ignored.
                 </p>
               )}
-              <p>Files extracted: {hvscSummaryFilesExtracted ?? '—'}</p>
+              <p>Files extracted: {hvscSummaryFilesExtracted ?? "—"}</p>
               <p>Duration: {formatHvscDuration(hvscSummaryDurationMs)}</p>
               <p>Last updated: {formatHvscTimestamp(hvscSummaryUpdatedAt)}</p>
             </div>
@@ -192,28 +188,36 @@ export const HvscControls = ({
         </p>
       )}
       {hvscAvailable && !hvscInstalled && !hvscUpdating && !hvscCanIngest && (
-        <p className="text-xs text-muted-foreground">
-          Download HVSC to cache the archives before ingesting.
-        </p>
+        <p className="text-xs text-muted-foreground">Download HVSC to cache the archives before ingesting.</p>
       )}
 
-      {(hvscPhase === 'download' || hvscPhase === 'extract' || hvscPhase === 'index') && (
+      {(hvscPhase === "download" || hvscPhase === "extract" || hvscPhase === "index") && (
         <div className="space-y-2" data-testid="hvsc-progress">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>{hvscActionLabel || 'Processing HVSC…'}</span>
-            <span>{hvscStage ? hvscStage : '—'}</span>
+            <span>{hvscActionLabel || "Processing HVSC…"}</span>
+            <span>{hvscStage ? hvscStage : "—"}</span>
           </div>
           <div className="space-y-2">
             <div className="flex items-center justify-between text-[11px] text-muted-foreground">
               <span>Download</span>
-              <span>{hvscDownloadPercent !== null && hvscDownloadPercent !== undefined ? `${Math.round(hvscDownloadPercent)}%` : '—'}</span>
+              <span>
+                {hvscDownloadPercent !== null && hvscDownloadPercent !== undefined
+                  ? `${Math.round(hvscDownloadPercent)}%`
+                  : "—"}
+              </span>
             </div>
             <Progress value={hvscDownloadPercent ?? undefined} />
-            <div className="flex items-center justify-between text-[11px] text-muted-foreground" data-testid="hvsc-download-bytes">
+            <div
+              className="flex items-center justify-between text-[11px] text-muted-foreground"
+              data-testid="hvsc-download-bytes"
+            >
               <span>Downloaded: {formatBytes(hvscDownloadBytes)}</span>
               <span>Total: {formatBytes(hvscDownloadTotalBytes)}</span>
             </div>
-            <div className="flex items-center justify-between text-[11px] text-muted-foreground" data-testid="hvsc-download-elapsed">
+            <div
+              className="flex items-center justify-between text-[11px] text-muted-foreground"
+              data-testid="hvsc-download-elapsed"
+            >
               <span>Elapsed: {formatHvscDuration(hvscDownloadElapsedMs)}</span>
               <span>Status: {hvscDownloadStatus}</span>
             </div>
@@ -221,27 +225,37 @@ export const HvscControls = ({
           <div className="space-y-2">
             <div className="flex items-center justify-between text-[11px] text-muted-foreground">
               <span>Extraction + indexing</span>
-              <span>{hvscExtractionPercent !== null && hvscExtractionPercent !== undefined ? `${Math.round(hvscExtractionPercent)}%` : '—'}</span>
+              <span>
+                {hvscExtractionPercent !== null && hvscExtractionPercent !== undefined
+                  ? `${Math.round(hvscExtractionPercent)}%`
+                  : "—"}
+              </span>
             </div>
             <Progress value={hvscExtractionPercent ?? undefined} />
-            <div className="flex items-center justify-between text-[11px] text-muted-foreground" data-testid="hvsc-extraction-files">
-              <span>Files: {hvscSummaryFilesExtracted ?? '—'}</span>
-              <span>Total: {hvscExtractionTotalFiles ?? '—'}</span>
+            <div
+              className="flex items-center justify-between text-[11px] text-muted-foreground"
+              data-testid="hvsc-extraction-files"
+            >
+              <span>Files: {hvscSummaryFilesExtracted ?? "—"}</span>
+              <span>Total: {hvscExtractionTotalFiles ?? "—"}</span>
             </div>
-            <div className="flex items-center justify-between text-[11px] text-muted-foreground" data-testid="hvsc-extraction-elapsed">
+            <div
+              className="flex items-center justify-between text-[11px] text-muted-foreground"
+              data-testid="hvsc-extraction-elapsed"
+            >
               <span>Elapsed: {formatHvscDuration(hvscExtractionElapsedMs)}</span>
               <span>Status: {hvscExtractionStatus}</span>
             </div>
           </div>
           {hvscCurrentFile && (
-            <p className="text-[11px] text-muted-foreground break-words whitespace-normal">Current: {hvscCurrentFile}</p>
+            <p className="text-[11px] text-muted-foreground break-words whitespace-normal">
+              Current: {hvscCurrentFile}
+            </p>
           )}
         </div>
       )}
 
-      {hvscInlineError && (
-        <p className="text-xs text-destructive">{hvscInlineError}</p>
-      )}
+      {hvscInlineError && <p className="text-xs text-destructive">{hvscInlineError}</p>}
       {hvscInstalled && hvscAvailable ? (
         <div className="rounded-lg border border-border bg-muted/30 p-3">
           <p className="text-xs text-muted-foreground">

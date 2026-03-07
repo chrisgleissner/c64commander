@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-declare module 'spark-md5' {
+declare module "spark-md5" {
   const SparkMD5: {
     ArrayBuffer: {
       hash: (buffer: ArrayBuffer) => string;

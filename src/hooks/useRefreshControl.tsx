@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useMemo, useState } from "react";
 
 type RefreshControlContextValue = {
   configExpandedCount: number;
@@ -38,17 +38,13 @@ export function RefreshControlProvider({ children }: { children: React.ReactNode
     [configExpanded, setConfigExpanded],
   );
 
-  return (
-    <RefreshControlContext.Provider value={value}>
-      {children}
-    </RefreshControlContext.Provider>
-  );
+  return <RefreshControlContext.Provider value={value}>{children}</RefreshControlContext.Provider>;
 }
 
 export function useRefreshControl() {
   const ctx = useContext(RefreshControlContext);
   if (!ctx) {
-    throw new Error('useRefreshControl must be used within RefreshControlProvider');
+    throw new Error("useRefreshControl must be used within RefreshControlProvider");
   }
   return ctx;
 }

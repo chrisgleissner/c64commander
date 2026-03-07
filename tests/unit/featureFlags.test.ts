@@ -6,30 +6,31 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   FeatureFlagManager,
   InMemoryFeatureFlagRepository,
   FEATURE_FLAG_DEFINITIONS,
   isHvscEnabled,
-} from '@/lib/config/featureFlags';
+} from "@/lib/config/featureFlags";
 
 const addErrorLog = vi.fn();
 
-vi.mock('@/lib/logging', () => ({
+vi.mock("@/lib/logging", () => ({
   addErrorLog: (...args: unknown[]) => addErrorLog(...args),
 }));
 
 const buildDefaults = () =>
-  Object.fromEntries(
-    Object.entries(FEATURE_FLAG_DEFINITIONS).map(([key, def]) => [key, def.defaultValue]),
-  ) as Record<keyof typeof FEATURE_FLAG_DEFINITIONS, boolean>;
+  Object.fromEntries(Object.entries(FEATURE_FLAG_DEFINITIONS).map(([key, def]) => [key, def.defaultValue])) as Record<
+    keyof typeof FEATURE_FLAG_DEFINITIONS,
+    boolean
+  >;
 
-describe('featureFlags', () => {
+describe("featureFlags", () => {
   beforeEach(() => {
     addErrorLog.mockReset();
   });
-  it('uses default values when no flags are stored', async () => {
+  it("uses default values when no flags are stored", async () => {
     const repository = new InMemoryFeatureFlagRepository();
     const manager = new FeatureFlagManager(repository, buildDefaults());
 
@@ -39,22 +40,22 @@ describe('featureFlags', () => {
     expect(snapshot.flags.hvsc_enabled).toBe(true);
   });
 
-  it('persists flag updates in repository', async () => {
+  it("persists flag updates in repository", async () => {
     const repository = new InMemoryFeatureFlagRepository();
     const manager = new FeatureFlagManager(repository, buildDefaults());
 
     await manager.load();
-    await manager.setFlag('hvsc_enabled', true);
+    await manager.setFlag("hvsc_enabled", true);
 
     const freshManager = new FeatureFlagManager(repository, buildDefaults());
     await freshManager.load();
     expect(freshManager.getSnapshot().flags.hvsc_enabled).toBe(true);
   });
 
-  it('falls back to defaults when repository load fails', async () => {
+  it("falls back to defaults when repository load fails", async () => {
     const repository = {
       getFlag: vi.fn(),
-      getAllFlags: vi.fn().mockRejectedValue(new Error('boom')),
+      getAllFlags: vi.fn().mockRejectedValue(new Error("boom")),
       setFlag: vi.fn(),
     };
     const manager = new FeatureFlagManager(repository, buildDefaults());
@@ -63,29 +64,29 @@ describe('featureFlags', () => {
 
     expect(manager.getSnapshot().isLoaded).toBe(true);
     expect(manager.getSnapshot().flags.hvsc_enabled).toBe(true);
-    expect(addErrorLog).toHaveBeenCalledWith('Feature flag load failed', expect.any(Object));
+    expect(addErrorLog).toHaveBeenCalledWith("Feature flag load failed", expect.any(Object));
   });
 
-  it('surfaces repository failures when setting flags', async () => {
+  it("surfaces repository failures when setting flags", async () => {
     const repository = {
       getFlag: vi.fn(),
       getAllFlags: vi.fn().mockResolvedValue({}),
-      setFlag: vi.fn().mockRejectedValue(new Error('fail')),
+      setFlag: vi.fn().mockRejectedValue(new Error("fail")),
     };
     const manager = new FeatureFlagManager(repository, buildDefaults());
 
     await manager.load();
-    await expect(manager.setFlag('hvsc_enabled', false)).rejects.toThrow('fail');
-    expect(addErrorLog).toHaveBeenCalledWith('Feature flag update failed', expect.any(Object));
+    await expect(manager.setFlag("hvsc_enabled", false)).rejects.toThrow("fail");
+    expect(addErrorLog).toHaveBeenCalledWith("Feature flag update failed", expect.any(Object));
   });
 
-  it('returns null when in-memory repository has no value', async () => {
+  it("returns null when in-memory repository has no value", async () => {
     const repository = new InMemoryFeatureFlagRepository();
 
-    await expect(repository.getFlag('hvsc_enabled')).resolves.toBeNull();
+    await expect(repository.getFlag("hvsc_enabled")).resolves.toBeNull();
   });
 
-  it('reports gating logic for HVSC controls', () => {
+  it("reports gating logic for HVSC controls", () => {
     expect(isHvscEnabled({ hvsc_enabled: false })).toBe(false);
     expect(isHvscEnabled({ hvsc_enabled: true })).toBe(true);
   });

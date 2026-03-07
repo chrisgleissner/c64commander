@@ -9,11 +9,18 @@ export const writeSmokeConfig = async (deviceId, appId, config) => {
 
 export const readSmokeStatus = async (deviceId, appId) => {
   const cmd = `run-as ${appId} cat files/c64u-smoke-status.json`;
-  const { stdout } = await adbShell(deviceId, cmd).catch(() => ({ stdout: '' }));
+  const { stdout } = await adbShell(deviceId, cmd).catch(() => ({
+    stdout: '',
+  }));
   return stdout.trim();
 };
 
-export const waitForSmokeState = async (deviceId, appId, state, timeoutSeconds = 50) => {
+export const waitForSmokeState = async (
+  deviceId,
+  appId,
+  state,
+  timeoutSeconds = 50,
+) => {
   const start = Date.now();
   while (Date.now() - start < timeoutSeconds * 1000) {
     const payload = await readSmokeStatus(deviceId, appId);
@@ -22,5 +29,7 @@ export const waitForSmokeState = async (deviceId, appId, state, timeoutSeconds =
     }
     await sleep(1000);
   }
-  throw new Error(`Smoke status did not reach state ${state} within ${timeoutSeconds}s.`);
+  throw new Error(
+    `Smoke status did not reach state ${state} within ${timeoutSeconds}s.`,
+  );
 };

@@ -15,7 +15,7 @@ import { wrapValueChange } from "@/lib/tracing/userTrace";
 const Tabs = (props: React.ComponentPropsWithoutRef<typeof TabsPrimitive.Root>) => (
   <TabsPrimitive.Root
     {...props}
-    onValueChange={wrapValueChange(props.onValueChange, 'select', 'Tabs', props, 'Tabs')}
+    onValueChange={wrapValueChange(props.onValueChange, "select", "Tabs", props, "Tabs")}
   />
 );
 Tabs.displayName = TabsPrimitive.Root.displayName;

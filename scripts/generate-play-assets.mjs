@@ -29,7 +29,10 @@ const main = async () => {
 
   const iconSize = 512;
   await logo
-    .resize(iconSize, iconSize, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .resize(iconSize, iconSize, {
+      fit: 'contain',
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    })
     .png()
     .toFile(path.join(outDir, 'icon-512.png'));
 
@@ -39,7 +42,10 @@ const main = async () => {
 
   const logoScale = Math.round(Math.min(featureWidth, featureHeight) * 0.6);
   const resizedLogo = await logo
-    .resize(logoScale, logoScale, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .resize(logoScale, logoScale, {
+      fit: 'contain',
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    })
     .png()
     .toBuffer();
 

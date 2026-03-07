@@ -6,10 +6,10 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { PlayFileCategory } from '@/lib/playback/fileTypes';
-import type { PlayRequest } from '@/lib/playback/playbackRouter';
-import type { LocalPlayFile } from '@/lib/playback/playbackRouter';
-import type { PlaySource } from '@/lib/playback/playbackRouter';
+import type { PlayFileCategory } from "@/lib/playback/fileTypes";
+import type { PlayRequest } from "@/lib/playback/playbackRouter";
+import type { LocalPlayFile } from "@/lib/playback/playbackRouter";
+import type { PlaySource } from "@/lib/playback/playbackRouter";
 
 export type PlayableEntry = {
   source: PlaySource;
@@ -34,8 +34,8 @@ export type PlaylistItem = {
   sizeBytes?: number | null;
   modifiedAt?: string | null;
   addedAt?: string | null;
-  status?: 'ready' | 'unavailable';
-  unavailableReason?: 'source-revoked' | 'file-inaccessible' | 'hvsc-unavailable' | null;
+  status?: "ready" | "unavailable";
+  unavailableReason?: "source-revoked" | "file-inaccessible" | "hvsc-unavailable" | null;
 };
 
 export type StoredPlaylistState = {
@@ -49,8 +49,8 @@ export type StoredPlaylistState = {
     sizeBytes?: number | null;
     modifiedAt?: string | null;
     addedAt?: string | null;
-    status?: 'ready' | 'unavailable';
-    unavailableReason?: 'source-revoked' | 'file-inaccessible' | 'hvsc-unavailable' | null;
+    status?: "ready" | "unavailable";
+    unavailableReason?: "source-revoked" | "file-inaccessible" | "hvsc-unavailable" | null;
   }>;
   currentIndex?: number;
 };

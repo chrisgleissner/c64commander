@@ -6,13 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import {
-  FeatureFlagSnapshot,
-  FeatureFlagKey,
-  FeatureFlags,
-  featureFlagManager,
-} from '@/lib/config/featureFlags';
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { FeatureFlagSnapshot, FeatureFlagKey, FeatureFlags, featureFlagManager } from "@/lib/config/featureFlags";
 
 type FeatureFlagsContextValue = FeatureFlagSnapshot & {
   setFlag: (key: FeatureFlagKey, value: boolean) => Promise<void>;
@@ -42,7 +37,7 @@ export const FeatureFlagsProvider = ({ children }: { children: React.ReactNode }
 export const useFeatureFlags = () => {
   const context = useContext(FeatureFlagsContext);
   if (!context) {
-    throw new Error('useFeatureFlags must be used within FeatureFlagsProvider');
+    throw new Error("useFeatureFlags must be used within FeatureFlagsProvider");
   }
   return context;
 };

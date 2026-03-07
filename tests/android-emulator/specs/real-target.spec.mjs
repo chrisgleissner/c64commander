@@ -34,7 +34,10 @@ export const spec = {
         await ctx.capture('home-real');
         await ctx.tapTab('Config');
         await ctx.capture('config-tab');
-        await waitForLogPattern(ctx.evidence.logcatPath, /C64U_ROUTING_UPDATED/);
+        await waitForLogPattern(
+          ctx.evidence.logcatPath,
+          /C64U_ROUTING_UPDATED/,
+        );
       },
     },
   ],

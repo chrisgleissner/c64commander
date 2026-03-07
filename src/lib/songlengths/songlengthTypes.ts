@@ -26,13 +26,13 @@ export type SongLengthResolveQuery = {
 };
 
 export type SongLengthResolveStrategy =
-  | 'filename-unique'
-  | 'filename-partial-path'
-  | 'full-path'
-  | 'md5'
-  | 'unavailable'
-  | 'not-found'
-  | 'ambiguous';
+  | "filename-unique"
+  | "filename-partial-path"
+  | "full-path"
+  | "md5"
+  | "unavailable"
+  | "not-found"
+  | "ambiguous";
 
 export type SongLengthResolution = {
   durationSeconds: number | null;
@@ -62,7 +62,7 @@ export type SongLengthBackendStats = {
 };
 
 export type SongLengthServiceStats = {
-  status: 'ready' | 'loading' | 'unavailable';
+  status: "ready" | "loading" | "unavailable";
   unavailableReason: string | null;
   loadDurationMs: number | null;
   lastLoadedAtIso: string | null;

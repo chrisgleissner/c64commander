@@ -6,11 +6,11 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { listFtpDirectory } from '@/lib/ftp/ftpClient';
-import { getStoredFtpPort } from '@/lib/ftp/ftpConfig';
-import { getC64APIConfigSnapshot } from '@/lib/c64api';
-import type { SourceEntry, SourceLocation } from './types';
-import { SOURCE_LABELS } from './sourceTerms';
+import { listFtpDirectory } from "@/lib/ftp/ftpClient";
+import { getStoredFtpPort } from "@/lib/ftp/ftpConfig";
+import { getC64APIConfigSnapshot } from "@/lib/c64api";
+import type { SourceEntry, SourceLocation } from "./types";
+import { SOURCE_LABELS } from "./sourceTerms";
 
 type FtpCacheRecord = {
   entries: SourceEntry[];
@@ -22,49 +22,48 @@ type FtpCacheState = {
   order: string[];
 };
 
-const CACHE_KEY = 'c64u_ftp_cache:v1';
+const CACHE_KEY = "c64u_ftp_cache:v1";
 const CACHE_TTL_MS = 10 * 60 * 1000;
 const MAX_CACHE_ENTRIES = 200;
 
 const loadCache = (): FtpCacheState => {
-  if (typeof localStorage === 'undefined') return { entries: {}, order: [] };
+  if (typeof localStorage === "undefined") return { entries: {}, order: [] };
   try {
     const raw = localStorage.getItem(CACHE_KEY);
     if (!raw) return { entries: {}, order: [] };
     const parsed = JSON.parse(raw) as FtpCacheState;
-    if (!parsed || typeof parsed !== 'object') return { entries: {}, order: [] };
+    if (!parsed || typeof parsed !== "object") return { entries: {}, order: [] };
     return {
       entries: parsed.entries ?? {},
       order: Array.isArray(parsed.order) ? parsed.order : [],
     };
   } catch (error) {
-    console.warn('Failed to load FTP cache', { error });
+    console.warn("Failed to load FTP cache", { error });
     return { entries: {}, order: [] };
   }
 };
 
 const saveCache = (state: FtpCacheState) => {
-  if (typeof localStorage === 'undefined') return;
+  if (typeof localStorage === "undefined") return;
   try {
     localStorage.setItem(CACHE_KEY, JSON.stringify(state));
   } catch (error) {
-    console.warn('Failed to persist FTP cache', {
+    console.warn("Failed to persist FTP cache", {
       error,
       entryCount: Object.keys(state.entries).length,
     });
   }
 };
 
-const buildCacheKey = (host: string, port: number | undefined, path: string) =>
-  `${host}:${port ?? ''}:${path || '/'}`;
+const buildCacheKey = (host: string, port: number | undefined, path: string) => `${host}:${port ?? ""}:${path || "/"}`;
 
 export const normalizeFtpHost = (host: string) => {
   if (!host) return host;
-  if (host.startsWith('[')) {
-    const end = host.indexOf(']');
+  if (host.startsWith("[")) {
+    const end = host.indexOf("]");
     if (end !== -1) return host.slice(0, end + 1);
   }
-  return host.split(':')[0] ?? host;
+  return host.split(":")[0] ?? host;
 };
 
 const getCachedEntries = (key: string): SourceEntry[] | null => {
@@ -96,9 +95,9 @@ const clearCachedEntries = (key: string) => {
 };
 
 const listEntries = async (path: string): Promise<SourceEntry[]> => {
-  const { deviceHost: rawHost, password = '' } = getC64APIConfigSnapshot();
+  const { deviceHost: rawHost, password = "" } = getC64APIConfigSnapshot();
   const host = normalizeFtpHost(rawHost);
-  const normalizedPath = path && path !== '' ? path : '/';
+  const normalizedPath = path && path !== "" ? path : "/";
   const cacheKey = buildCacheKey(host, getStoredFtpPort(), normalizedPath);
   const cached = getCachedEntries(cacheKey);
   if (cached) return cached;
@@ -121,13 +120,13 @@ const listEntries = async (path: string): Promise<SourceEntry[]> => {
 };
 
 const listFilesRecursive = async (path: string, options?: { signal?: AbortSignal }): Promise<SourceEntry[]> => {
-  const queue = [path || '/'];
+  const queue = [path || "/"];
   const visited = new Set<string>();
   const results: SourceEntry[] = [];
   const maxConcurrent = 3;
   const pending = new Set<Promise<void>>();
   const signal = options?.signal;
-  const abortError = new DOMException('Aborted', 'AbortError');
+  const abortError = new DOMException("Aborted", "AbortError");
 
   const assertNotAborted = () => {
     if (signal?.aborted) {
@@ -142,7 +141,7 @@ const listFilesRecursive = async (path: string, options?: { signal?: AbortSignal
     const entries = await listEntries(current);
     assertNotAborted();
     entries.forEach((entry) => {
-      if (entry.type === 'dir') {
+      if (entry.type === "dir") {
         queue.push(entry.path);
       } else {
         results.push(entry);
@@ -176,17 +175,17 @@ const listFilesRecursive = async (path: string, options?: { signal?: AbortSignal
 };
 
 export const createUltimateSourceLocation = (): SourceLocation => ({
-  id: 'ultimate',
-  type: 'ultimate',
+  id: "ultimate",
+  type: "ultimate",
   name: SOURCE_LABELS.c64u,
-  rootPath: '/',
+  rootPath: "/",
   isAvailable: true,
   listEntries,
   listFilesRecursive,
   clearCacheForPath: (path) => {
     const { deviceHost: rawHost } = getC64APIConfigSnapshot();
     const host = normalizeFtpHost(rawHost);
-    const cacheKey = buildCacheKey(host, getStoredFtpPort(), path || '/');
+    const cacheKey = buildCacheKey(host, getStoredFtpPort(), path || "/");
     clearCachedEntries(cacheKey);
   },
 });

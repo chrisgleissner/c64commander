@@ -3145,29 +3145,15 @@
           "items": {
             "System Mode": {
               "selected": "PAL",
-              "options": [
-                "PAL",
-                "NTSC",
-                "PAL-60",
-                "NTSC-50",
-                "PAL-60/L",
-                "NTSC-50/L"
-              ]
+              "options": ["PAL", "NTSC", "PAL-60", "NTSC-50", "PAL-60/L", "NTSC-50/L"]
             },
             "Digital Video Mode": {
               "selected": "Auto",
-              "options": [
-                "Auto",
-                "HDMI",
-                "DVI"
-              ]
+              "options": ["Auto", "HDMI", "DVI"]
             },
             "HDMI Scan lines": {
               "selected": "Enabled",
-              "options": [
-                "Disabled",
-                "Enabled"
-              ]
+              "options": ["Disabled", "Enabled"]
             }
           }
         },
@@ -3434,29 +3420,15 @@
           "items": {
             "System Mode": {
               "selected": "NTSC",
-              "options": [
-                "PAL",
-                "NTSC",
-                "PAL-60",
-                "NTSC-50",
-                "PAL-60/L",
-                "NTSC-50/L"
-              ]
+              "options": ["PAL", "NTSC", "PAL-60", "NTSC-50", "PAL-60/L", "NTSC-50/L"]
             },
             "Digital Video Mode": {
               "selected": "Auto",
-              "options": [
-                "Auto",
-                "HDMI",
-                "DVI"
-              ]
+              "options": ["Auto", "HDMI", "DVI"]
             },
             "HDMI Scan lines": {
               "selected": "Enabled",
-              "options": [
-                "Disabled",
-                "Enabled"
-              ]
+              "options": ["Disabled", "Enabled"]
             }
           }
         },

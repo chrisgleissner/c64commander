@@ -6,25 +6,25 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-export type TraceOrigin = 'user' | 'automatic' | 'system';
+export type TraceOrigin = "user" | "automatic" | "system";
 
-export type TraceLifecycleState = 'foreground' | 'background' | 'locked' | 'unknown';
+export type TraceLifecycleState = "foreground" | "background" | "locked" | "unknown";
 
-export type TraceSourceKind = 'local' | 'ultimate' | 'hvsc';
+export type TraceSourceKind = "local" | "ultimate" | "hvsc";
 
-export type TraceLocalAccessMode = 'entries' | 'saf';
+export type TraceLocalAccessMode = "entries" | "saf";
 
 export type TraceEventType =
-  | 'action-start'
-  | 'action-end'
-  | 'action-scope-start'
-  | 'action-scope-end'
-  | 'backend-decision'
-  | 'device-guard'
-  | 'rest-request'
-  | 'rest-response'
-  | 'ftp-operation'
-  | 'error';
+  | "action-start"
+  | "action-end"
+  | "action-scope-start"
+  | "action-scope-end"
+  | "backend-decision"
+  | "device-guard"
+  | "rest-request"
+  | "rest-response"
+  | "ftp-operation"
+  | "error";
 
 export type TraceEventContextFields = {
   lifecycleState: TraceLifecycleState;
@@ -44,18 +44,18 @@ export type TraceEvent<T = Record<string, unknown>> = {
   data: T & TraceEventContextFields;
 };
 
-export type BackendTarget = 'internal-mock' | 'external-mock' | 'real-device';
+export type BackendTarget = "internal-mock" | "external-mock" | "real-device";
 
-export type BackendDecisionReason = 'reachable' | 'fallback' | 'demo-mode' | 'test-mode' | 'probe' | 'auto-reconnect';
+export type BackendDecisionReason = "reachable" | "fallback" | "demo-mode" | "test-mode" | "probe" | "auto-reconnect";
 
 export type ActionTriggerKind =
-  | 'user'
-  | 'timer'
-  | 'auto-reconnect'
-  | 'route-enter'
-  | 'lifecycle'
-  | 'network-change'
-  | 'unknown';
+  | "user"
+  | "timer"
+  | "auto-reconnect"
+  | "route-enter"
+  | "lifecycle"
+  | "network-change"
+  | "unknown";
 
 export type ActionTrigger = {
   kind: ActionTriggerKind;

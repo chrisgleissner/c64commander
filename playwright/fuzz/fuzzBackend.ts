@@ -17,19 +17,19 @@ export type BackendFailureContext = {
   now: number;
   serverReachable: boolean;
   networkOffline: boolean;
-  faultMode: 'none' | 'slow' | 'timeout' | 'refused' | 'auth';
+  faultMode: "none" | "slow" | "timeout" | "refused" | "auth";
   lastOutageAt: number;
 };
 
-const toText = (value: unknown) => (typeof value === 'string' ? value : '');
+const toText = (value: unknown) => (typeof value === "string" ? value : "");
 
 const extractText = (value: unknown): string => {
-  if (typeof value === 'string') return value;
-  if (value && typeof value === 'object') {
+  if (typeof value === "string") return value;
+  if (value && typeof value === "object") {
     const obj = value as Record<string, unknown>;
-    return [toText(obj.message), toText(obj.name)].filter(Boolean).join(' ');
+    return [toText(obj.message), toText(obj.name)].filter(Boolean).join(" ");
   }
-  return '';
+  return "";
 };
 
 const extractErrorText = (entry: AppLogEntry) => {
@@ -43,10 +43,10 @@ const extractErrorText = (entry: AppLogEntry) => {
 export const isBackendFailureLog = (entry: AppLogEntry) => {
   const text = extractErrorText(entry).toLowerCase();
   if (!text) return false;
-  if (text.includes('c64 api request failed')) return true;
-  if (text.includes('failed to load resource')) return true;
-  if (text.includes('service unavailable')) return true;
-  if (text.includes('http 503')) return true;
+  if (text.includes("c64 api request failed")) return true;
+  if (text.includes("failed to load resource")) return true;
+  if (text.includes("service unavailable")) return true;
+  if (text.includes("http 503")) return true;
   return false;
 };
 
@@ -62,14 +62,14 @@ export const isDeviceOperationFailure = (entry: AppLogEntry): boolean => {
   if (/^AUDIO_ROUTING: /.test(msg)) return true;
   if (/^(RESET_DRIVES|DRIVE_POWER|DRIVE_CONFIG_UPDATE|SOFT_IEC_CONFIG_UPDATE): /.test(msg)) return true;
   if (/^(RAM_DUMP_FOLDER_SELECT|BROWSE|CONFIG_UPDATE): /.test(msg)) return true;
-  if (msg.includes('FTP listing failed')) return true;
-  if (msg.includes('Source browse failed')) return true;
-  if (msg.includes('C64 API request failed') || msg.includes('C64 API upload failed')) return true;
-  if (msg.includes('RAM operation retry')) return true;
-  if (msg.includes('Failed to resume machine after clear-memory error')) return true;
-  if (msg.includes('HVSC paged folder listing failed')) return true;
-  if (msg.includes('HVSC songlengths directory bootstrap failed')) return true;
-  if (msg.includes('HVSC progress interrupted')) return true;
+  if (msg.includes("FTP listing failed")) return true;
+  if (msg.includes("Source browse failed")) return true;
+  if (msg.includes("C64 API request failed") || msg.includes("C64 API upload failed")) return true;
+  if (msg.includes("RAM operation retry")) return true;
+  if (msg.includes("Failed to resume machine after clear-memory error")) return true;
+  if (msg.includes("HVSC paged folder listing failed")) return true;
+  if (msg.includes("HVSC songlengths directory bootstrap failed")) return true;
+  if (msg.includes("HVSC progress interrupted")) return true;
   return false;
 };
 
@@ -88,19 +88,19 @@ export const isDeviceOperationFailure = (entry: AppLogEntry): boolean => {
  */
 export const isAlwaysExpectedFuzzBehavior = (entry: AppLogEntry): boolean => {
   const msg = entry.message;
-  if (msg.includes('DiagnosticsBridge unavailable')) return true;
-  if (msg.includes('Category config fetch failed')) return true;
-  if (msg.includes('API device host changed')) return true;
-  if (msg.includes('C64 API retry scheduled')) return true;
-  if (msg.includes('Songlengths unavailable')) return true;
-  if (msg.includes('HVSC filesystem:')) return true;
-  if (msg.includes('HVSC paged folder listing failed')) return true;
-  if (msg.includes('HVSC songlengths directory bootstrap failed')) return true;
-  if (msg.includes('HVSC progress interrupted')) return true;
-  if (msg.includes('Failed to capture initial config snapshot')) return true;
-  if (msg.startsWith('Failed to fetch category')) return true;
-  if (msg.includes('[fuzz] localStorage init failed')) return true;
-  if (msg.toLowerCase().includes('fuzz mode blocked')) return true;
+  if (msg.includes("DiagnosticsBridge unavailable")) return true;
+  if (msg.includes("Category config fetch failed")) return true;
+  if (msg.includes("API device host changed")) return true;
+  if (msg.includes("C64 API retry scheduled")) return true;
+  if (msg.includes("Songlengths unavailable")) return true;
+  if (msg.includes("HVSC filesystem:")) return true;
+  if (msg.includes("HVSC paged folder listing failed")) return true;
+  if (msg.includes("HVSC songlengths directory bootstrap failed")) return true;
+  if (msg.includes("HVSC progress interrupted")) return true;
+  if (msg.includes("Failed to capture initial config snapshot")) return true;
+  if (msg.startsWith("Failed to fetch category")) return true;
+  if (msg.includes("[fuzz] localStorage init failed")) return true;
+  if (msg.toLowerCase().includes("fuzz mode blocked")) return true;
   // Device-operation failures always occur in the fuzz environment: the mock
   // server implements config and basic machine endpoints but does not implement
   // hardware-level endpoints (memory read/write, RAM dump, FTP, drive power,

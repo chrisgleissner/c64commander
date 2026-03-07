@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from "vitest";
 import {
   loadAutomaticDemoModeEnabled,
   loadBackgroundRediscoveryIntervalMs,
@@ -15,24 +15,24 @@ import {
   loadDiscoveryProbeTimeoutMs,
   loadDiskAutostartMode,
   loadStartupDiscoveryWindowMs,
-} from '@/lib/config/appSettings';
-import { loadDeviceSafetyConfig } from '@/lib/config/deviceSafetySettings';
-import { exportSettingsSnapshot, importSettingsJson, SETTINGS_EXPORT_VERSION } from '@/lib/config/settingsTransfer';
+} from "@/lib/config/appSettings";
+import { loadDeviceSafetyConfig } from "@/lib/config/deviceSafetySettings";
+import { exportSettingsSnapshot, importSettingsJson, SETTINGS_EXPORT_VERSION } from "@/lib/config/settingsTransfer";
 
-describe('settingsTransfer', () => {
+describe("settingsTransfer", () => {
   beforeEach(() => {
     localStorage.clear();
   });
 
-  it('exports a versioned, whitelisted payload', () => {
+  it("exports a versioned, whitelisted payload", () => {
     const snapshot = exportSettingsSnapshot();
     expect(snapshot.version).toBe(SETTINGS_EXPORT_VERSION);
-    expect(snapshot.appSettings).toHaveProperty('debugLoggingEnabled');
-    expect(snapshot.deviceSafety).toHaveProperty('mode');
+    expect(snapshot.appSettings).toHaveProperty("debugLoggingEnabled");
+    expect(snapshot.deviceSafety).toHaveProperty("mode");
     expect(JSON.stringify(snapshot)).not.toMatch(/password/i);
   });
 
-  it('rejects unknown keys on import', () => {
+  it("rejects unknown keys on import", () => {
     const payload = {
       version: SETTINGS_EXPORT_VERSION,
       appSettings: {
@@ -42,11 +42,11 @@ describe('settingsTransfer', () => {
         startupDiscoveryWindowMs: 3000,
         backgroundRediscoveryIntervalMs: 5000,
         discoveryProbeTimeoutMs: 2500,
-        diskAutostartMode: 'kernal',
-        extra: 'nope',
+        diskAutostartMode: "kernal",
+        extra: "nope",
       },
       deviceSafety: {
-        mode: 'BALANCED',
+        mode: "BALANCED",
         restMaxConcurrency: 2,
         ftpMaxConcurrency: 1,
         infoCacheMs: 600,
@@ -68,7 +68,7 @@ describe('settingsTransfer', () => {
     expect(result.ok).toBe(false);
   });
 
-  it('imports settings and applies values', () => {
+  it("imports settings and applies values", () => {
     const payload = {
       version: SETTINGS_EXPORT_VERSION,
       appSettings: {
@@ -78,10 +78,10 @@ describe('settingsTransfer', () => {
         startupDiscoveryWindowMs: 4200,
         backgroundRediscoveryIntervalMs: 7000,
         discoveryProbeTimeoutMs: 3200,
-        diskAutostartMode: 'dma',
+        diskAutostartMode: "dma",
       },
       deviceSafety: {
-        mode: 'TROUBLESHOOTING',
+        mode: "TROUBLESHOOTING",
         restMaxConcurrency: 1,
         ftpMaxConcurrency: 1,
         infoCacheMs: 400,
@@ -107,19 +107,19 @@ describe('settingsTransfer', () => {
     expect(loadStartupDiscoveryWindowMs()).toBe(4200);
     expect(loadBackgroundRediscoveryIntervalMs()).toBe(7000);
     expect(loadDiscoveryProbeTimeoutMs()).toBe(3200);
-    expect(loadDiskAutostartMode()).toBe('dma');
+    expect(loadDiskAutostartMode()).toBe("dma");
 
     const safety = loadDeviceSafetyConfig();
-    expect(safety.mode).toBe('TROUBLESHOOTING');
+    expect(safety.mode).toBe("TROUBLESHOOTING");
     expect(safety.allowUserOverrideCircuit).toBe(false);
   });
 
-  it('rejects invalid JSON payloads', () => {
-    const result = importSettingsJson('{bad json');
+  it("rejects invalid JSON payloads", () => {
+    const result = importSettingsJson("{bad json");
     expect(result.ok).toBe(false);
   });
 
-  it('rejects unsupported versions', () => {
+  it("rejects unsupported versions", () => {
     const payload = {
       version: 999,
       appSettings: {},
@@ -130,7 +130,7 @@ describe('settingsTransfer', () => {
     expect(result.ok).toBe(false);
   });
 
-  it('rejects invalid disk autostart mode', () => {
+  it("rejects invalid disk autostart mode", () => {
     const payload = {
       version: SETTINGS_EXPORT_VERSION,
       appSettings: {
@@ -140,10 +140,10 @@ describe('settingsTransfer', () => {
         startupDiscoveryWindowMs: 3000,
         backgroundRediscoveryIntervalMs: 5000,
         discoveryProbeTimeoutMs: 2500,
-        diskAutostartMode: 'never',
+        diskAutostartMode: "never",
       },
       deviceSafety: {
-        mode: 'BALANCED',
+        mode: "BALANCED",
         restMaxConcurrency: 2,
         ftpMaxConcurrency: 1,
         infoCacheMs: 600,

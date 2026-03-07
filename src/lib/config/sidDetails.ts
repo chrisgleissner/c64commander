@@ -6,9 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { normalizeConfigItem } from '@/lib/config/normalizeConfigItem';
+import { normalizeConfigItem } from "@/lib/config/normalizeConfigItem";
 
-export type SidChipKey = 'socket1' | 'socket2' | 'ultiSid1' | 'ultiSid2';
+export type SidChipKey = "socket1" | "socket2" | "ultiSid1" | "ultiSid2";
 
 export type SidDetailEntry = {
   key: SidChipKey;
@@ -38,32 +38,32 @@ type SidConfigDescriptor = {
 
 const SID_LAYOUT: SidConfigDescriptor[] = [
   {
-    key: 'socket1',
-    label: 'SID Socket 1',
-    volumeItem: 'Vol Socket 1',
-    panItem: 'Pan Socket 1',
-    addressItem: 'SID Socket 1 Address',
+    key: "socket1",
+    label: "SID Socket 1",
+    volumeItem: "Vol Socket 1",
+    panItem: "Pan Socket 1",
+    addressItem: "SID Socket 1 Address",
   },
   {
-    key: 'socket2',
-    label: 'SID Socket 2',
-    volumeItem: 'Vol Socket 2',
-    panItem: 'Pan Socket 2',
-    addressItem: 'SID Socket 2 Address',
+    key: "socket2",
+    label: "SID Socket 2",
+    volumeItem: "Vol Socket 2",
+    panItem: "Pan Socket 2",
+    addressItem: "SID Socket 2 Address",
   },
   {
-    key: 'ultiSid1',
-    label: 'UltiSID 1',
-    volumeItem: 'Vol UltiSid 1',
-    panItem: 'Pan UltiSID 1',
-    addressItem: 'UltiSID 1 Address',
+    key: "ultiSid1",
+    label: "UltiSID 1",
+    volumeItem: "Vol UltiSid 1",
+    panItem: "Pan UltiSID 1",
+    addressItem: "UltiSID 1 Address",
   },
   {
-    key: 'ultiSid2',
-    label: 'UltiSID 2',
-    volumeItem: 'Vol UltiSid 2',
-    panItem: 'Pan UltiSID 2',
-    addressItem: 'UltiSID 2 Address',
+    key: "ultiSid2",
+    label: "UltiSID 2",
+    volumeItem: "Vol UltiSid 2",
+    panItem: "Pan UltiSID 2",
+    addressItem: "UltiSID 2 Address",
   },
 ];
 
@@ -86,24 +86,24 @@ const getItemOptions = (payload: unknown, categoryName: string, itemName: string
 };
 
 const formatTextValue = (value: unknown) => {
-  const trimmed = String(value ?? '').trim();
-  return trimmed || '—';
+  const trimmed = String(value ?? "").trim();
+  return trimmed || "—";
 };
 
 const formatAddressValue = (value: unknown) => {
-  const raw = String(value ?? '').trim();
-  if (!raw) return 'Unmapped';
-  if (/^unmapped$/i.test(raw)) return 'Unmapped';
+  const raw = String(value ?? "").trim();
+  if (!raw) return "Unmapped";
+  if (/^unmapped$/i.test(raw)) return "Unmapped";
   if (/^\$?[0-9a-f]{4}$/i.test(raw)) {
-    return `$${raw.replace(/^\$/, '').toUpperCase()}`;
+    return `$${raw.replace(/^\$/, "").toUpperCase()}`;
   }
   return raw;
 };
 
 export const parseSidBaseAddress = (value: unknown): number | null => {
   const formatted = formatAddressValue(value);
-  if (formatted === 'Unmapped') return null;
-  const hex = formatted.replace(/^\$/, '');
+  if (formatted === "Unmapped") return null;
+  const hex = formatted.replace(/^\$/, "");
   if (!/^[0-9A-F]{4}$/i.test(hex)) return null;
   return Number.parseInt(hex, 16);
 };
@@ -126,18 +126,18 @@ export const buildSidControlEntries = (
   sidAddressingCategory?: Record<string, unknown>,
 ): SidControlEntry[] =>
   SID_LAYOUT.map((entry) => {
-    const volume = getItemValue(audioMixerCategory, 'Audio Mixer', entry.volumeItem);
-    const pan = getItemValue(audioMixerCategory, 'Audio Mixer', entry.panItem);
-    const addressRaw = getItemValue(sidAddressingCategory, 'SID Addressing', entry.addressItem);
+    const volume = getItemValue(audioMixerCategory, "Audio Mixer", entry.volumeItem);
+    const pan = getItemValue(audioMixerCategory, "Audio Mixer", entry.panItem);
+    const addressRaw = getItemValue(sidAddressingCategory, "SID Addressing", entry.addressItem);
     return {
       key: entry.key,
       label: entry.label,
       volumeItem: entry.volumeItem,
       panItem: entry.panItem,
       addressItem: entry.addressItem,
-      volumeOptions: getItemOptions(audioMixerCategory, 'Audio Mixer', entry.volumeItem),
-      panOptions: getItemOptions(audioMixerCategory, 'Audio Mixer', entry.panItem),
-      addressOptions: getItemOptions(sidAddressingCategory, 'SID Addressing', entry.addressItem),
+      volumeOptions: getItemOptions(audioMixerCategory, "Audio Mixer", entry.volumeItem),
+      panOptions: getItemOptions(audioMixerCategory, "Audio Mixer", entry.panItem),
+      addressOptions: getItemOptions(sidAddressingCategory, "SID Addressing", entry.addressItem),
       volume: formatTextValue(volume),
       pan: formatTextValue(pan),
       address: formatAddressValue(addressRaw),

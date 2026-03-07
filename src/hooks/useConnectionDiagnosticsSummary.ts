@@ -6,11 +6,11 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useEffect, useMemo, useState } from 'react';
-import { buildConnectionDiagnosticsSummary } from '@/lib/diagnostics/connectionStatusDiagnostics';
-import type { ConnectionDiagnosticsSummary } from '@/lib/diagnostics/connectionStatusDiagnostics';
-import { getErrorLogs, getLogs } from '@/lib/logging';
-import { getTraceEvents } from '@/lib/tracing/traceSession';
+import { useEffect, useMemo, useState } from "react";
+import { buildConnectionDiagnosticsSummary } from "@/lib/diagnostics/connectionStatusDiagnostics";
+import type { ConnectionDiagnosticsSummary } from "@/lib/diagnostics/connectionStatusDiagnostics";
+import { getErrorLogs, getLogs } from "@/lib/logging";
+import { getTraceEvents } from "@/lib/tracing/traceSession";
 
 export const useConnectionDiagnosticsSummary = (): ConnectionDiagnosticsSummary => {
   const [traceEvents, setTraceEvents] = useState(getTraceEvents);
@@ -23,16 +23,13 @@ export const useConnectionDiagnosticsSummary = (): ConnectionDiagnosticsSummary 
       setLogs(getLogs());
       setErrorLogs(getErrorLogs());
     };
-    window.addEventListener('c64u-traces-updated', handleTracesUpdated);
-    window.addEventListener('c64u-logs-updated', handleLogsUpdated);
+    window.addEventListener("c64u-traces-updated", handleTracesUpdated);
+    window.addEventListener("c64u-logs-updated", handleLogsUpdated);
     return () => {
-      window.removeEventListener('c64u-traces-updated', handleTracesUpdated);
-      window.removeEventListener('c64u-logs-updated', handleLogsUpdated);
+      window.removeEventListener("c64u-traces-updated", handleTracesUpdated);
+      window.removeEventListener("c64u-logs-updated", handleLogsUpdated);
     };
   }, []);
 
-  return useMemo(
-    () => buildConnectionDiagnosticsSummary(traceEvents, logs, errorLogs),
-    [errorLogs, logs, traceEvents],
-  );
+  return useMemo(() => buildConnectionDiagnosticsSummary(traceEvents, logs, errorLogs), [errorLogs, logs, traceEvents]);
 };

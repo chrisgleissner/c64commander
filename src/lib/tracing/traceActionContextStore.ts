@@ -22,13 +22,13 @@
  * Uses Promise wrapping to capture and restore context across async boundaries.
  * When a promise is created within a context, its continuations (then/catch/finally)
  * will execute with that same context, regardless of when they run.
- * 
+ *
  * The implementation uses two mechanisms:
  * 1. A variable for the "current" action context during synchronous execution
  * 2. Promise/timer patching to restore captured contexts in async callbacks
  */
 
-import type { TraceActionContext } from '@/lib/tracing/types';
+import type { TraceActionContext } from "@/lib/tracing/types";
 
 // The active action context during synchronous execution
 // This is what getActiveAction() returns for synchronous callers
@@ -64,7 +64,7 @@ export function runWithActionContext<T>(ctx: TraceActionContext, fn: () => Promi
 export function runWithActionContext<T>(ctx: TraceActionContext, fn: () => T | Promise<T>): T | Promise<T> {
   // Save the previous context (for restoring on sync error or cleanup)
   const previousContext = currentActionContext;
-  
+
   // Set the new context as active
   currentActionContext = ctx;
 
@@ -108,7 +108,7 @@ const wrapCallback = <T extends (...args: any[]) => any>(callback: T, capturedCt
  */
 export const installAsyncContextPropagation = (): void => {
   if (isInstalled) return;
-  if (typeof Promise === 'undefined') return;
+  if (typeof Promise === "undefined") return;
 
   isInstalled = true;
 
@@ -124,40 +124,34 @@ export const installAsyncContextPropagation = (): void => {
   // Patch Promise.prototype.then
   Promise.prototype.then = function <TResult1 = unknown, TResult2 = never>(
     onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined,
-    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null | undefined
+    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null | undefined,
   ): Promise<TResult1 | TResult2> {
     const capturedCtx = getCurrentActionContext();
     return promiseThen.call(
       this,
       onfulfilled ? wrapCallback(onfulfilled, capturedCtx) : undefined,
-      onrejected ? wrapCallback(onrejected, capturedCtx) : undefined
+      onrejected ? wrapCallback(onrejected, capturedCtx) : undefined,
     );
   };
 
   // Patch Promise.prototype.catch
   Promise.prototype.catch = function <TResult = never>(
-    onrejected?: ((reason: unknown) => TResult | PromiseLike<TResult>) | null | undefined
+    onrejected?: ((reason: unknown) => TResult | PromiseLike<TResult>) | null | undefined,
   ): Promise<unknown | TResult> {
     const capturedCtx = getCurrentActionContext();
-    return promiseCatch.call(
-      this,
-      onrejected ? wrapCallback(onrejected, capturedCtx) : undefined
-    );
+    return promiseCatch.call(this, onrejected ? wrapCallback(onrejected, capturedCtx) : undefined);
   };
 
   // Patch Promise.prototype.finally
   if (promiseFinally) {
     Promise.prototype.finally = function (onfinally?: (() => void) | null | undefined): Promise<unknown> {
       const capturedCtx = getCurrentActionContext();
-      return promiseFinally.call(
-        this,
-        onfinally ? wrapCallback(onfinally, capturedCtx) : undefined
-      );
+      return promiseFinally.call(this, onfinally ? wrapCallback(onfinally, capturedCtx) : undefined);
     };
   }
 
   // Patch setTimeout
-  if (typeof globalThis !== 'undefined' && typeof globalThis.setTimeout === 'function') {
+  if (typeof globalThis !== "undefined" && typeof globalThis.setTimeout === "function") {
     originalSetTimeout = globalThis.setTimeout;
     (globalThis as any).setTimeout = ((
       callback: (...args: any[]) => void,
@@ -165,16 +159,12 @@ export const installAsyncContextPropagation = (): void => {
       ...args: any[]
     ): ReturnType<typeof setTimeout> => {
       const capturedCtx = getCurrentActionContext();
-      return originalSetTimeout!(
-        wrapCallback(callback, capturedCtx),
-        ms,
-        ...args
-      );
+      return originalSetTimeout!(wrapCallback(callback, capturedCtx), ms, ...args);
     }) as typeof setTimeout;
   }
 
   // Patch setInterval
-  if (typeof globalThis !== 'undefined' && typeof globalThis.setInterval === 'function') {
+  if (typeof globalThis !== "undefined" && typeof globalThis.setInterval === "function") {
     originalSetInterval = globalThis.setInterval;
     (globalThis as any).setInterval = ((
       callback: (...args: any[]) => void,
@@ -182,16 +172,12 @@ export const installAsyncContextPropagation = (): void => {
       ...args: any[]
     ): ReturnType<typeof setInterval> => {
       const capturedCtx = getCurrentActionContext();
-      return originalSetInterval!(
-        wrapCallback(callback, capturedCtx),
-        ms,
-        ...args
-      );
+      return originalSetInterval!(wrapCallback(callback, capturedCtx), ms, ...args);
     }) as typeof setInterval;
   }
 
   // Patch queueMicrotask
-  if (typeof globalThis !== 'undefined' && typeof globalThis.queueMicrotask === 'function') {
+  if (typeof globalThis !== "undefined" && typeof globalThis.queueMicrotask === "function") {
     originalQueueMicrotask = globalThis.queueMicrotask;
     globalThis.queueMicrotask = (callback: VoidFunction): void => {
       const capturedCtx = getCurrentActionContext();
@@ -218,15 +204,15 @@ export const uninstallAsyncContextPropagation = (): void => {
     Promise.prototype.finally = originalPromiseFinally;
     originalPromiseFinally = null;
   }
-  if (originalSetTimeout && typeof globalThis !== 'undefined') {
+  if (originalSetTimeout && typeof globalThis !== "undefined") {
     globalThis.setTimeout = originalSetTimeout;
     originalSetTimeout = null;
   }
-  if (originalSetInterval && typeof globalThis !== 'undefined') {
+  if (originalSetInterval && typeof globalThis !== "undefined") {
     globalThis.setInterval = originalSetInterval;
     originalSetInterval = null;
   }
-  if (originalQueueMicrotask && typeof globalThis !== 'undefined') {
+  if (originalQueueMicrotask && typeof globalThis !== "undefined") {
     globalThis.queueMicrotask = originalQueueMicrotask;
     originalQueueMicrotask = null;
   }
@@ -249,7 +235,7 @@ export const isAsyncContextInstalled = (): boolean => isInstalled;
 /**
  * Exit the current action context.
  * This should be called when an action completes to properly clean up the context.
- * 
+ *
  * IMPORTANT: This clears the current context, but any already-scheduled
  * async continuations will still have access to the captured context through
  * the Promise wrapper.
@@ -262,4 +248,4 @@ export const exitCurrentActionContext = (): void => {
  * Get the current context stack depth (for debugging/testing).
  * Note: With the new implementation, this returns 1 if there's a context, 0 otherwise.
  */
-export const getContextStackDepth = (): number => currentActionContext !== null ? 1 : 0;
+export const getContextStackDepth = (): number => (currentActionContext !== null ? 1 : 0);

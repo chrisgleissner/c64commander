@@ -6,10 +6,10 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { ensureWithinRoot, getParentPathWithinRoot } from './paths';
-import { addErrorLog } from '@/lib/logging';
-import type { SourceEntry, SourceLocation } from './types';
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ensureWithinRoot, getParentPathWithinRoot } from "./paths";
+import { addErrorLog } from "@/lib/logging";
+import type { SourceEntry, SourceLocation } from "./types";
 
 export type SourceNavigatorState = {
   path: string;
@@ -26,18 +26,18 @@ export type SourceNavigatorState = {
 const buildNavKey = (source: SourceLocation) => `c64u_source_nav:${source.type}:${source.id}`;
 
 const getStoredPath = (source: SourceLocation) => {
-  if (typeof localStorage === 'undefined') return null;
+  if (typeof localStorage === "undefined") return null;
   const raw = localStorage.getItem(buildNavKey(source));
   return raw || null;
 };
 
 const setStoredPath = (source: SourceLocation, path: string) => {
-  if (typeof localStorage === 'undefined') return;
+  if (typeof localStorage === "undefined") return;
   localStorage.setItem(buildNavKey(source), path);
 };
 
 export const useSourceNavigator = (source: SourceLocation | null): SourceNavigatorState => {
-  const [path, setPath] = useState('/');
+  const [path, setPath] = useState("/");
   const [entries, setEntries] = useState<SourceEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showLoadingIndicator, setShowLoadingIndicator] = useState(false);
@@ -45,69 +45,73 @@ export const useSourceNavigator = (source: SourceLocation | null): SourceNavigat
   const loadingTokenRef = useRef(0);
   const loadingShownAtRef = useRef<number | null>(null);
 
-  const loadEntries = useCallback(async (nextPath: string) => {
-    if (!source) return;
-    const token = loadingTokenRef.current + 1;
-    loadingTokenRef.current = token;
-    setIsLoading(true);
-    setError(null);
-    let loadingTimer: number | null = null;
-    if (source.type === 'ultimate') {
-      loadingTimer = window.setTimeout(() => {
-        if (loadingTokenRef.current === token) {
-          loadingShownAtRef.current = Date.now();
-          setShowLoadingIndicator(true);
-        }
-      }, 200);
-    } else {
-      setShowLoadingIndicator(false);
-    }
-    try {
-      const safePath = ensureWithinRoot(nextPath, source.rootPath);
-      const result = await source.listEntries(safePath);
-      if (loadingTokenRef.current !== token) return; // stale response — discard
-      setEntries(result);
-      setPath(safePath);
-    } catch (err) {
-      const error = err as Error;
-      setError(error.message);
-      addErrorLog('Source browse failed', {
-        sourceId: source.id,
-        sourceType: source.type,
-        path: nextPath,
-        error: {
-          name: error.name,
-          message: error.message,
-          stack: error.stack,
-        },
-      });
-    } finally {
-      if (loadingTimer !== null) {
-        window.clearTimeout(loadingTimer);
+  const loadEntries = useCallback(
+    async (nextPath: string) => {
+      if (!source) return;
+      const token = loadingTokenRef.current + 1;
+      loadingTokenRef.current = token;
+      setIsLoading(true);
+      setError(null);
+      let loadingTimer: number | null = null;
+      if (source.type === "ultimate") {
+        loadingTimer = window.setTimeout(() => {
+          if (loadingTokenRef.current === token) {
+            loadingShownAtRef.current = Date.now();
+            setShowLoadingIndicator(true);
+          }
+        }, 200);
+      } else {
+        setShowLoadingIndicator(false);
       }
-      if (loadingTokenRef.current === token) {
-        const shownAt = loadingShownAtRef.current;
-        if (shownAt) {
-          const elapsed = Date.now() - shownAt;
-          const remaining = 300 - elapsed;
-          if (remaining > 0) {
-            window.setTimeout(() => {
-              if (loadingTokenRef.current === token) {
-                setShowLoadingIndicator(false);
-                loadingShownAtRef.current = null;
-              }
-            }, remaining);
+      try {
+        const safePath = ensureWithinRoot(nextPath, source.rootPath);
+        const result = await source.listEntries(safePath);
+        if (loadingTokenRef.current !== token) return; // stale response — discard
+        setEntries(result);
+        setPath(safePath);
+      } catch (err) {
+        if (loadingTokenRef.current !== token) return;
+        const error = err as Error;
+        setError(error.message);
+        addErrorLog("Source browse failed", {
+          sourceId: source.id,
+          sourceType: source.type,
+          path: nextPath,
+          error: {
+            name: error.name,
+            message: error.message,
+            stack: error.stack,
+          },
+        });
+      } finally {
+        if (loadingTimer !== null) {
+          window.clearTimeout(loadingTimer);
+        }
+        if (loadingTokenRef.current === token) {
+          const shownAt = loadingShownAtRef.current;
+          if (shownAt) {
+            const elapsed = Date.now() - shownAt;
+            const remaining = 300 - elapsed;
+            if (remaining > 0) {
+              window.setTimeout(() => {
+                if (loadingTokenRef.current === token) {
+                  setShowLoadingIndicator(false);
+                  loadingShownAtRef.current = null;
+                }
+              }, remaining);
+            } else {
+              setShowLoadingIndicator(false);
+              loadingShownAtRef.current = null;
+            }
           } else {
             setShowLoadingIndicator(false);
-            loadingShownAtRef.current = null;
           }
-        } else {
-          setShowLoadingIndicator(false);
+          setIsLoading(false);
         }
       }
-      setIsLoading(false);
-    }
-  }, [source]);
+    },
+    [source],
+  );
 
   useEffect(() => {
     if (!source) return;
@@ -121,11 +125,13 @@ export const useSourceNavigator = (source: SourceLocation | null): SourceNavigat
     setStoredPath(source, path);
   }, [path, source]);
 
-
-  const navigateTo = useCallback((nextPath: string) => {
-    if (!source) return;
-    void loadEntries(nextPath);
-  }, [loadEntries, source]);
+  const navigateTo = useCallback(
+    (nextPath: string) => {
+      if (!source) return;
+      void loadEntries(nextPath);
+    },
+    [loadEntries, source],
+  );
 
   const navigateUp = useCallback(() => {
     if (!source) return;

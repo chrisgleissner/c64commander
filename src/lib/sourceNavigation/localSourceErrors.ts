@@ -6,10 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-export type LocalSourceListingErrorCode =
-  | 'saf-listing-unavailable'
-  | 'saf-listing-invalid'
-  | 'local-entries-missing';
+export type LocalSourceListingErrorCode = "saf-listing-unavailable" | "saf-listing-invalid" | "local-entries-missing";
 
 type LocalSourceListingErrorDetails = Record<string, unknown>;
 
@@ -19,7 +16,7 @@ export class LocalSourceListingError extends Error {
 
   constructor(message: string, code: LocalSourceListingErrorCode, details?: LocalSourceListingErrorDetails) {
     super(message);
-    this.name = 'LocalSourceListingError';
+    this.name = "LocalSourceListingError";
     this.code = code;
     this.details = details;
   }

@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import SparkMD5 from 'spark-md5';
+import SparkMD5 from "spark-md5";
 
 export const computeSidMd5 = async (data: ArrayBuffer) => {
   return SparkMD5.ArrayBuffer.hash(data);

@@ -158,17 +158,17 @@
 
 ## Bang-for-buck ranking
 
-| Improvement | Problem(s) addressed | Effort (S/M/L) | Impact (S/M/L) | CI cost (S/M/L) | Platform coverage | Why it’s worth it | Suggested phase |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| Explicit environment selection for “real vs mock” | Silent fallback to demo; non-deterministic discovery | S | L | S | Android, Web, iOS path, Docker | Makes tests deterministic and prevents accidental mock usage | Phase 0 |
-| Contract tests for discovery logic | Decision logic not validated independently of platform | M | L | S | All | High confidence in core logic without emulator | Phase 0 |
-| Deterministic timeout/latency controls | Premature demo fallback under slow networks | S–M | M | S | All | Mirrors real network slowness and prevents false positives | Phase 1 |
-| Standardized diagnostics bundle | Poor observability of discovery failures | M | M | S | Web now, Android/iOS later | Faster triage; actionable evidence | Phase 1 |
-| Real-device-present simulation via proxy | “Real device available but demo fallback” not covered | M | M | S | Web + Android emulator | Directly targets reported bug class | Phase 1 |
-| Targeted Android emulator E2E suite | Missing native networking + WebView behavior | M–L | L | M–L | Android now, iOS path later | Catches native-only regressions with minimal scope | Phase 2 |
-| Lifecycle background/foreground tests | Native lifecycle discovery failures | M | M | M | Android emulator + iOS path | Validates critical lifecycle behavior | Phase 2 |
-| Docker-compatible Playwright job | Future Docker CI portability | M | M | M | Web, Docker | Ensures CI portability and repeatability | Phase 3 |
-| iOS path guardrails | Avoid platform dead-ends | S | M | S | iOS path | Prevents future refactors and keeps parity | Phase 0 (ongoing) |
+| Improvement                                       | Problem(s) addressed                                   | Effort (S/M/L) | Impact (S/M/L) | CI cost (S/M/L) | Platform coverage              | Why it’s worth it                                            | Suggested phase   |
+| ------------------------------------------------- | ------------------------------------------------------ | -------------- | -------------- | --------------- | ------------------------------ | ------------------------------------------------------------ | ----------------- |
+| Explicit environment selection for “real vs mock” | Silent fallback to demo; non-deterministic discovery   | S              | L              | S               | Android, Web, iOS path, Docker | Makes tests deterministic and prevents accidental mock usage | Phase 0           |
+| Contract tests for discovery logic                | Decision logic not validated independently of platform | M              | L              | S               | All                            | High confidence in core logic without emulator               | Phase 0           |
+| Deterministic timeout/latency controls            | Premature demo fallback under slow networks            | S–M            | M              | S               | All                            | Mirrors real network slowness and prevents false positives   | Phase 1           |
+| Standardized diagnostics bundle                   | Poor observability of discovery failures               | M              | M              | S               | Web now, Android/iOS later     | Faster triage; actionable evidence                           | Phase 1           |
+| Real-device-present simulation via proxy          | “Real device available but demo fallback” not covered  | M              | M              | S               | Web + Android emulator         | Directly targets reported bug class                          | Phase 1           |
+| Targeted Android emulator E2E suite               | Missing native networking + WebView behavior           | M–L            | L              | M–L             | Android now, iOS path later    | Catches native-only regressions with minimal scope           | Phase 2           |
+| Lifecycle background/foreground tests             | Native lifecycle discovery failures                    | M              | M              | M               | Android emulator + iOS path    | Validates critical lifecycle behavior                        | Phase 2           |
+| Docker-compatible Playwright job                  | Future Docker CI portability                           | M              | M              | M               | Web, Docker                    | Ensures CI portability and repeatability                     | Phase 3           |
+| iOS path guardrails                               | Avoid platform dead-ends                               | S              | M              | S               | iOS path                       | Prevents future refactors and keeps parity                   | Phase 0 (ongoing) |
 
 ## Recommended path forward
 

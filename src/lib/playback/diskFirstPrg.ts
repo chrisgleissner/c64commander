@@ -6,8 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { C64API } from '@/lib/c64api';
-import { injectAutostart } from './autostart';
+import type { C64API } from "@/lib/c64api";
+import { injectAutostart } from "./autostart";
 
 const SECTOR_SIZE = 256;
 const FILE_TYPE_MASK = 0x07;
@@ -17,7 +17,7 @@ const TXTTAB = 0x002b;
 
 const MAX_BASIC_SCAN_STEPS = 2000;
 
-export type DiskImageType = 'd64' | 'd71' | 'd81';
+export type DiskImageType = "d64" | "d71" | "d81";
 
 type DiskLayout = {
   tracks: number;
@@ -43,10 +43,12 @@ const sectorsPerTrack1571 = (track: number) => {
 const sectorsPerTrack1581 = () => 40;
 
 const layoutForType = (type: DiskImageType, fileSize: number): DiskLayout => {
-  if (type === 'd64') {
+  if (type === "d64") {
     for (const tracks of [35, 40]) {
-      const baseSectors = Array.from({ length: tracks }, (_, idx) => sectorsPerTrack1541(idx + 1))
-        .reduce((sum, value) => sum + value, 0);
+      const baseSectors = Array.from({ length: tracks }, (_, idx) => sectorsPerTrack1541(idx + 1)).reduce(
+        (sum, value) => sum + value,
+        0,
+      );
       const baseSize = baseSectors * SECTOR_SIZE;
       const errorSize = baseSize + baseSectors;
       if (fileSize === baseSize) {
@@ -73,10 +75,12 @@ const layoutForType = (type: DiskImageType, fileSize: number): DiskLayout => {
     throw new Error(`Unsupported D64 size: ${fileSize} bytes`);
   }
 
-  if (type === 'd71') {
+  if (type === "d71") {
     const tracks = 70;
-    const baseSectors = Array.from({ length: tracks }, (_, idx) => sectorsPerTrack1571(idx + 1))
-      .reduce((sum, value) => sum + value, 0);
+    const baseSectors = Array.from({ length: tracks }, (_, idx) => sectorsPerTrack1571(idx + 1)).reduce(
+      (sum, value) => sum + value,
+      0,
+    );
     const baseSize = baseSectors * SECTOR_SIZE;
     const errorSize = baseSize + baseSectors;
     if (fileSize === baseSize) {
@@ -102,7 +106,7 @@ const layoutForType = (type: DiskImageType, fileSize: number): DiskLayout => {
     throw new Error(`Unsupported D71 size: ${fileSize} bytes`);
   }
 
-  if (type === 'd81') {
+  if (type === "d81") {
     const baseSectors = 80 * 40;
     const baseSize = baseSectors * SECTOR_SIZE;
     const errorSize = baseSize + baseSectors;
@@ -158,7 +162,7 @@ const readSector = (image: Uint8Array, layout: DiskLayout, track: number, sector
 
 const decodeDirName = (entryName: Uint8Array) =>
   String.fromCharCode(...Array.from(entryName))
-    .replace(/\u00a0/g, ' ')
+    .replace(/\u00a0/g, " ")
     .trim();
 
 const isPrgDirEntry = (entry: Uint8Array) => {
@@ -195,7 +199,7 @@ const findFirstPrg = (image: Uint8Array, layout: DiskLayout) => {
     sector = nextSector;
   }
 
-  throw new Error('No PRG found in directory');
+  throw new Error("No PRG found in directory");
 };
 
 const readPrgChain = (image: Uint8Array, layout: DiskLayout, startTrack: number, startSector: number) => {
@@ -206,7 +210,7 @@ const readPrgChain = (image: Uint8Array, layout: DiskLayout, startTrack: number,
 
   while (track !== 0) {
     const key = `${track}:${sector}`;
-    if (visited.has(key)) throw new Error('Loop detected while reading PRG sectors');
+    if (visited.has(key)) throw new Error("Loop detected while reading PRG sectors");
     visited.add(key);
 
     const sectorData = readSector(image, layout, track, sector);
@@ -229,18 +233,16 @@ const readPrgChain = (image: Uint8Array, layout: DiskLayout, startTrack: number,
 };
 
 const extractFirstPrg = (image: Uint8Array, layout: DiskLayout) => {
-  const trimmed = layout.hasErrorTable
-    ? image.slice(0, layout.totalSectors * SECTOR_SIZE)
-    : image;
+  const trimmed = layout.hasErrorTable ? image.slice(0, layout.totalSectors * SECTOR_SIZE) : image;
   const first = findFirstPrg(trimmed, layout);
   const prgData = readPrgChain(trimmed, layout, first.track, first.sector);
   if (prgData.length < 2) {
-    throw new Error('Extracted PRG is too small');
+    throw new Error("Extracted PRG is too small");
   }
   return { prgData, name: first.name };
 };
 
-const toHexAddress = (value: number) => value.toString(16).toUpperCase().padStart(4, '0');
+const toHexAddress = (value: number) => value.toString(16).toUpperCase().padStart(4, "0");
 
 const looksLikeTokenisedBasic = (prg: Uint8Array) => {
   if (prg.length < 8) return false;
@@ -271,11 +273,7 @@ const looksLikeTokenisedBasic = (prg: Uint8Array) => {
   }
 };
 
-const setBasicPointersAndClearVars = async (
-  api: C64API,
-  startAddress: number,
-  endAddressExclusive: number,
-) => {
+const setBasicPointersAndClearVars = async (api: C64API, startAddress: number, endAddressExclusive: number) => {
   if (startAddress !== 0x0801) return;
   if (endAddressExclusive < 0x0801 || endAddressExclusive > 0xfffe) {
     throw new Error(`Suspicious BASIC end address: $${endAddressExclusive.toString(16).toUpperCase()}`);
@@ -303,18 +301,13 @@ const petsciiCommand = (command: string) => {
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const dmaLoadPrg = async (
-  api: C64API,
-  prg: Uint8Array,
-  retries = 5,
-  backoffMs = 50,
-) => {
-  if (prg.length < 3) throw new Error('PRG payload is too small');
+const dmaLoadPrg = async (api: C64API, prg: Uint8Array, retries = 5, backoffMs = 50) => {
+  if (prg.length < 3) throw new Error("PRG payload is too small");
   const loadAddress = prg[0] | (prg[1] << 8);
   const payload = prg.slice(2);
   const endAddressExclusive = loadAddress + payload.length;
   if (endAddressExclusive > 0x10000) {
-    throw new Error('PRG payload exceeds C64 address space');
+    throw new Error("PRG payload exceeds C64 address space");
   }
 
   let lastError: unknown = null;
@@ -330,14 +323,10 @@ const dmaLoadPrg = async (
     }
   }
 
-  throw new Error(`DMA load failed after retries: ${(lastError as Error)?.message ?? 'Unknown error'}`);
+  throw new Error(`DMA load failed after retries: ${(lastError as Error)?.message ?? "Unknown error"}`);
 };
 
-export const loadFirstDiskPrgViaDma = async (
-  api: C64API,
-  diskImage: Uint8Array,
-  type: DiskImageType,
-) => {
+export const loadFirstDiskPrgViaDma = async (api: C64API, diskImage: Uint8Array, type: DiskImageType) => {
   const layout = layoutForType(type, diskImage.byteLength);
   const { prgData, name } = extractFirstPrg(diskImage, layout);
   const { loadAddress, endAddressExclusive } = await dmaLoadPrg(api, prgData);
@@ -345,7 +334,7 @@ export const loadFirstDiskPrgViaDma = async (
   const isBasic = loadAddress === 0x0801 && looksLikeTokenisedBasic(prgData);
   if (isBasic) {
     await setBasicPointersAndClearVars(api, loadAddress, endAddressExclusive);
-    await injectAutostart(api, petsciiCommand('RUN'));
+    await injectAutostart(api, petsciiCommand("RUN"));
   } else {
     await injectAutostart(api, petsciiCommand(`SYS ${loadAddress}`));
   }

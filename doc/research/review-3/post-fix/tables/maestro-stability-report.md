@@ -1,6 +1,6 @@
 # Maestro Stability Report
 
-| Run | Result | Evidence |
-| --- | --- | --- |
-| `./build --test-maestro-ci` | pass | `doc/research/review-3/post-fix/logs/phase-8-maestro.log` |
+| Run                                                        | Result               | Evidence                                                  |
+| ---------------------------------------------------------- | -------------------- | --------------------------------------------------------- |
+| `./build --test-maestro-ci`                                | pass                 | `doc/research/review-3/post-fix/logs/phase-8-maestro.log` |
 | `./build --test-maestro-tags "+device,+file-picker,-slow"` | pass (3 passed flow) | `doc/research/review-3/post-fix/logs/phase-8-maestro.log` |

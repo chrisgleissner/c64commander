@@ -6,9 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { TestInfo } from '@playwright/test';
-import { promises as fs } from 'node:fs';
-import path from 'node:path';
+import type { TestInfo } from "@playwright/test";
+import { promises as fs } from "node:fs";
+import path from "node:path";
 
 type EvidenceMetadata = {
   testId: string;
@@ -28,21 +28,24 @@ type EvidenceMetadata = {
  * Format: <file>--<describe>--<test>
  */
 const generateTestId = (testInfo: TestInfo): string => {
-  const fileName = path.basename(testInfo.file, '.ts').replace(/\.spec$/, '');
-  const titlePath = typeof (testInfo as any).titlePath === 'function'
-    ? (testInfo as any).titlePath()
-    : (testInfo as any).titlePath ?? [testInfo.title];
-  
-  const parts = [fileName, ...titlePath].map((part) =>
-    part
-      .toLowerCase()
-      .replace(/\s+/g, '-')
-      .replace(/[^a-z0-9-]+/g, '')
-      .replace(/-+/g, '-')
-      .replace(/^-|-$/g, '')
-  ).filter(Boolean);
-  
-  return parts.join('--');
+  const fileName = path.basename(testInfo.file, ".ts").replace(/\.spec$/, "");
+  const titlePath =
+    typeof (testInfo as any).titlePath === "function"
+      ? (testInfo as any).titlePath()
+      : ((testInfo as any).titlePath ?? [testInfo.title]);
+
+  const parts = [fileName, ...titlePath]
+    .map((part) =>
+      part
+        .toLowerCase()
+        .replace(/\s+/g, "-")
+        .replace(/[^a-z0-9-]+/g, "")
+        .replace(/-+/g, "-")
+        .replace(/^-|-$/g, ""),
+    )
+    .filter(Boolean);
+
+  return parts.join("--");
 };
 
 /**
@@ -51,13 +54,16 @@ const generateTestId = (testInfo: TestInfo): string => {
 export const getCanonicalEvidencePath = (testInfo: TestInfo): string => {
   const testId = generateTestId(testInfo);
   const deviceId = testInfo.project.name;
-  return path.resolve(process.cwd(), 'test-results', 'evidence', 'playwright', testId, deviceId);
+  return path.resolve(process.cwd(), "test-results", "evidence", "playwright", testId, deviceId);
 };
 
 /**
  * Create meta.json for the test evidence directly in canonical structure.
  */
-export const createEvidenceMetadata = async (testInfo: TestInfo, viewport: { width: number; height: number } | null): Promise<void> => {
+export const createEvidenceMetadata = async (
+  testInfo: TestInfo,
+  viewport: { width: number; height: number } | null,
+): Promise<void> => {
   const evidencePath = getCanonicalEvidencePath(testInfo);
   await fs.mkdir(evidencePath, { recursive: true });
 
@@ -71,11 +77,11 @@ export const createEvidenceMetadata = async (testInfo: TestInfo, viewport: { wid
     timestamp: new Date().toISOString(),
     testTitle: testInfo.title,
     testFile: testInfo.file,
-    status: testInfo.status ?? 'unknown',
+    status: testInfo.status ?? "unknown",
   };
 
-  const metaPath = path.join(evidencePath, 'meta.json');
-  await fs.writeFile(metaPath, JSON.stringify(metadata, null, 2), 'utf8');
+  const metaPath = path.join(evidencePath, "meta.json");
+  await fs.writeFile(metaPath, JSON.stringify(metadata, null, 2), "utf8");
 };
 
 /**
@@ -95,19 +101,19 @@ export const validateEvidenceStructure = async (testInfo: TestInfo): Promise<str
   const canonicalPath = getCanonicalEvidencePath(testInfo);
 
   // Check meta.json exists
-  const metaPath = path.join(canonicalPath, 'meta.json');
+  const metaPath = path.join(canonicalPath, "meta.json");
   try {
-    const metaContent = await fs.readFile(metaPath, 'utf8');
+    const metaContent = await fs.readFile(metaPath, "utf8");
     const meta = JSON.parse(metaContent) as EvidenceMetadata;
 
     // Validate required fields
-    if (!meta.testId) errors.push('meta.json missing testId');
-    if (!meta.deviceId) errors.push('meta.json missing deviceId');
-    if (!meta.viewport) errors.push('meta.json missing viewport');
-    if (!meta.deviceScaleFactor) errors.push('meta.json missing deviceScaleFactor');
-    if (meta.isMobile === undefined) errors.push('meta.json missing isMobile');
-    if (!meta.playwrightProject) errors.push('meta.json missing playwrightProject');
-    if (!meta.timestamp) errors.push('meta.json missing timestamp');
+    if (!meta.testId) errors.push("meta.json missing testId");
+    if (!meta.deviceId) errors.push("meta.json missing deviceId");
+    if (!meta.viewport) errors.push("meta.json missing viewport");
+    if (!meta.deviceScaleFactor) errors.push("meta.json missing deviceScaleFactor");
+    if (meta.isMobile === undefined) errors.push("meta.json missing isMobile");
+    if (!meta.playwrightProject) errors.push("meta.json missing playwrightProject");
+    if (!meta.timestamp) errors.push("meta.json missing timestamp");
   } catch (error) {
     errors.push(`meta.json missing or invalid: ${error}`);
   }

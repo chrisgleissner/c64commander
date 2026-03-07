@@ -13,9 +13,7 @@ import path from "path";
 import fs from "fs";
 import { spawnSync } from "child_process";
 
-const pkg = JSON.parse(
-  fs.readFileSync(new URL("./package.json", import.meta.url), "utf-8"),
-);
+const pkg = JSON.parse(fs.readFileSync(new URL("./package.json", import.meta.url), "utf-8"));
 
 type RunGitOptions = {
   quiet?: boolean;
@@ -26,9 +24,7 @@ const runGit = (args: string[], label: string, options: RunGitOptions = {}) => {
   const result = spawnSync("git", args, { encoding: "utf-8" });
   if (result.status === 0) return result.stdout.trim();
   const stderr = result.stderr?.trim() || "";
-  const shouldSuppress = Boolean(
-    options.suppressStderrPattern && stderr && options.suppressStderrPattern.test(stderr),
-  );
+  const shouldSuppress = Boolean(options.suppressStderrPattern && stderr && options.suppressStderrPattern.test(stderr));
   if (options.quiet || shouldSuppress) return "";
   if (result.error) {
     console.warn(`[build] ${label} failed: ${result.error.message}`);
@@ -38,11 +34,9 @@ const runGit = (args: string[], label: string, options: RunGitOptions = {}) => {
   return "";
 };
 
-const EXPECTED_GIT_DESCRIBE_NO_TAGS =
-  /(?:No names found|cannot describe anything|no tag exactly matches)/i;
+const EXPECTED_GIT_DESCRIBE_NO_TAGS = /(?:No names found|cannot describe anything|no tag exactly matches)/i;
 
-const gitTagFromEnv =
-  (process.env.GITHUB_REF_TYPE === "tag" && process.env.GITHUB_REF_NAME) || "";
+const gitTagFromEnv = (process.env.GITHUB_REF_TYPE === "tag" && process.env.GITHUB_REF_NAME) || "";
 
 const resolveGitSha = () =>
   process.env.VITE_GIT_SHA ||
@@ -80,9 +74,7 @@ const resolveAppVersion = (gitShaValue: string) => {
 const gitSha = resolveGitSha();
 const appVersion = resolveAppVersion(gitSha);
 const buildTime = process.env.VITE_BUILD_TIME || new Date().toISOString();
-const enableCoverageInstrumentation = ['1', 'true'].includes(
-  (process.env.VITE_COVERAGE || '').toLowerCase(),
-);
+const enableCoverageInstrumentation = ["1", "true"].includes((process.env.VITE_COVERAGE || "").toLowerCase());
 
 // https://vitejs.dev/config/
 export default defineConfig(() => ({
@@ -93,7 +85,7 @@ export default defineConfig(() => ({
       overlay: false,
     },
   },
-  assetsInclude: ['**/*.yaml', '**/*.yml'],
+  assetsInclude: ["**/*.yaml", "**/*.yml"],
   build: {
     outDir: "dist",
     // Adjust warning threshold to avoid noisy chunk warnings while keeping defaults.
@@ -101,17 +93,22 @@ export default defineConfig(() => ({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (!id.includes('node_modules')) return undefined;
-          if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('/react-router-dom/') || id.includes('/scheduler/')) {
-            return 'vendor-react';
+          if (!id.includes("node_modules")) return undefined;
+          if (
+            id.includes("/react/") ||
+            id.includes("/react-dom/") ||
+            id.includes("/react-router-dom/") ||
+            id.includes("/scheduler/")
+          ) {
+            return "vendor-react";
           }
-          if (id.includes('/@radix-ui/') || id.includes('/framer-motion/') || id.includes('/lucide-react/')) {
-            return 'vendor-ui';
+          if (id.includes("/@radix-ui/") || id.includes("/framer-motion/") || id.includes("/lucide-react/")) {
+            return "vendor-ui";
           }
-          if (id.includes('/7z-wasm/') || id.includes('/fflate/')) {
-            return 'vendor-hvsc';
+          if (id.includes("/7z-wasm/") || id.includes("/fflate/")) {
+            return "vendor-hvsc";
           }
-          return 'vendor';
+          return "vendor";
         },
       },
     },
@@ -120,15 +117,15 @@ export default defineConfig(() => ({
     react(),
     ...(enableCoverageInstrumentation
       ? [
-        istanbul({
-          include: 'src/**/*',
-          exclude: ['node_modules', 'test/', 'tests/', 'playwright/'],
-          extension: ['.js', '.ts', '.tsx'],
-          requireEnv: true,
-          envName: 'VITE_COVERAGE',
-          forceBuildInstrument: true,
-        }),
-      ]
+          istanbul({
+            include: "src/**/*",
+            exclude: ["node_modules", "test/", "tests/", "playwright/"],
+            extension: [".js", ".ts", ".tsx"],
+            requireEnv: true,
+            envName: "VITE_COVERAGE",
+            forceBuildInstrument: true,
+          }),
+        ]
       : []),
   ],
   define: {

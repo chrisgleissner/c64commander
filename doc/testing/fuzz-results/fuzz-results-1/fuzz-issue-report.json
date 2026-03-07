@@ -24,9 +24,7 @@
         "errorLog": 0,
         "warnLog": 45
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",
@@ -113,9 +111,7 @@
         "errorLog": 44,
         "warnLog": 0
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",
@@ -291,9 +287,7 @@
         "errorLog": 2,
         "warnLog": 0
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",
@@ -421,9 +415,7 @@
         "errorLog": 0,
         "warnLog": 45
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",
@@ -594,9 +586,7 @@
         "errorLog": 39,
         "warnLog": 0
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",
@@ -754,9 +744,7 @@
         "errorLog": 20,
         "warnLog": 0
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",
@@ -922,9 +910,7 @@
         "errorLog": 11,
         "warnLog": 0
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",
@@ -1088,9 +1074,7 @@
         "errorLog": 0,
         "warnLog": 37
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",
@@ -1214,9 +1198,7 @@
         "errorLog": 14,
         "warnLog": 0
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",
@@ -1399,9 +1381,7 @@
         "errorLog": 8,
         "warnLog": 0
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",
@@ -1613,9 +1593,7 @@
         "errorLog": 0,
         "warnLog": 31
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",
@@ -1803,9 +1781,7 @@
         "errorLog": 0,
         "warnLog": 19
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",
@@ -2017,9 +1993,7 @@
         "errorLog": 1,
         "warnLog": 0
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",
@@ -2101,9 +2075,7 @@
         "errorLog": 30,
         "warnLog": 0
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",
@@ -2304,9 +2276,7 @@
         "errorLog": 0,
         "warnLog": 30
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",
@@ -2507,9 +2477,7 @@
         "errorLog": 30,
         "warnLog": 0
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",
@@ -2710,9 +2678,7 @@
         "errorLog": 0,
         "warnLog": 30
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",
@@ -2913,9 +2879,7 @@
         "errorLog": 0,
         "warnLog": 0
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",
@@ -3127,9 +3091,7 @@
         "errorLog": 9,
         "warnLog": 0
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",
@@ -3262,9 +3224,7 @@
         "errorLog": 3,
         "warnLog": 0
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",
@@ -3476,9 +3436,7 @@
         "errorLog": 5,
         "warnLog": 0
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",
@@ -3690,9 +3648,7 @@
         "errorLog": 0,
         "warnLog": 12
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",
@@ -3904,9 +3860,7 @@
         "errorLog": 0,
         "warnLog": 10
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",
@@ -4118,9 +4072,7 @@
         "errorLog": 2,
         "warnLog": 0
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",
@@ -4267,9 +4219,7 @@
         "errorLog": 1,
         "warnLog": 0
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",
@@ -4351,9 +4301,7 @@
         "errorLog": 7,
         "warnLog": 0
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",
@@ -4565,9 +4513,7 @@
         "errorLog": 2,
         "warnLog": 0
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",
@@ -4714,9 +4660,7 @@
         "errorLog": 0,
         "warnLog": 1
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",
@@ -4798,9 +4742,7 @@
         "errorLog": 4,
         "warnLog": 0
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",
@@ -5012,9 +4954,7 @@
         "errorLog": 0,
         "warnLog": 0
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",
@@ -5096,9 +5036,7 @@
         "errorLog": 1,
         "warnLog": 0
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",
@@ -5140,9 +5078,7 @@
         "errorLog": 0,
         "warnLog": 0
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",
@@ -5224,9 +5160,7 @@
         "errorLog": 0,
         "warnLog": 0
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",
@@ -5308,9 +5242,7 @@
         "errorLog": 3,
         "warnLog": 0
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",
@@ -5522,9 +5454,7 @@
         "errorLog": 1,
         "warnLog": 0
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",
@@ -5606,9 +5536,7 @@
         "errorLog": 1,
         "warnLog": 0
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",
@@ -5690,9 +5618,7 @@
         "errorLog": 1,
         "warnLog": 0
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",
@@ -5774,9 +5700,7 @@
         "errorLog": 1,
         "warnLog": 0
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",
@@ -5858,9 +5782,7 @@
         "errorLog": 1,
         "warnLog": 0
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",
@@ -5942,9 +5864,7 @@
         "errorLog": 1,
         "warnLog": 0
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",
@@ -6026,9 +5946,7 @@
         "errorLog": 0,
         "warnLog": 0
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",
@@ -6110,9 +6028,7 @@
         "errorLog": 0,
         "warnLog": 0
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",
@@ -6194,9 +6110,7 @@
         "errorLog": 0,
         "warnLog": 0
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",
@@ -6278,9 +6192,7 @@
         "errorLog": 0,
         "warnLog": 0
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",
@@ -6362,9 +6274,7 @@
         "errorLog": 0,
         "warnLog": 0
       },
-      "platforms": [
-        "android-phone"
-      ],
+      "platforms": ["android-phone"],
       "examples": [
         {
           "platform": "android-phone",

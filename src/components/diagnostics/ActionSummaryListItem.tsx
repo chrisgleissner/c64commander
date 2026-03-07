@@ -6,12 +6,12 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { ActionSummary, ErrorEffect, FtpEffect, RestEffect } from '@/lib/diagnostics/actionSummaries';
-import { formatActionDuration } from '@/lib/diagnostics/actionSummaryDisplay';
-import { resolveActionSeverity } from '@/lib/diagnostics/diagnosticsSeverity';
-import { DiagnosticsListItem } from '@/components/diagnostics/DiagnosticsListItem';
-import { ActionExpandedContent } from '@/components/diagnostics/ActionExpandedContent';
-import type { ReactNode } from 'react';
+import type { ActionSummary, ErrorEffect, FtpEffect, RestEffect } from "@/lib/diagnostics/actionSummaries";
+import { formatActionDuration } from "@/lib/diagnostics/actionSummaryDisplay";
+import { resolveActionSeverity } from "@/lib/diagnostics/diagnosticsSeverity";
+import { DiagnosticsListItem } from "@/components/diagnostics/DiagnosticsListItem";
+import { ActionExpandedContent } from "@/components/diagnostics/ActionExpandedContent";
+import type { ReactNode } from "react";
 
 type Props = {
   summary: ActionSummary;
@@ -19,9 +19,9 @@ type Props = {
 
 export const ActionSummaryListItem = ({ summary }: Props) => {
   const effects = summary.effects ?? [];
-  const restCount = effects.filter((e): e is RestEffect => e.type === 'REST').length;
-  const ftpCount = effects.filter((e): e is FtpEffect => e.type === 'FTP').length;
-  const errorCount = effects.filter((e): e is ErrorEffect => e.type === 'ERROR').length;
+  const restCount = effects.filter((e): e is RestEffect => e.type === "REST").length;
+  const ftpCount = effects.filter((e): e is FtpEffect => e.type === "FTP").length;
+  const errorCount = effects.filter((e): e is ErrorEffect => e.type === "ERROR").length;
   const hasEffects = Boolean(restCount || ftpCount || errorCount);
 
   let badges: ReactNode = null;

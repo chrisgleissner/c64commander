@@ -21,7 +21,7 @@ const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
           className,
         )}
         ref={ref}
-        onChange={wrapUserEvent(onChange, 'change', 'Input', props, 'Input')}
+        onChange={wrapUserEvent(onChange, "change", "Input", props, "Input")}
         {...props}
       />
     );

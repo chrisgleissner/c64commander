@@ -6,30 +6,30 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { Filesystem, Directory } from '@capacitor/filesystem';
-import { normalizeSourcePath } from '@/lib/sourceNavigation/paths';
-import type { HvscFolderListing, HvscSong } from './hvscTypes';
-import { base64ToUint8 } from '@/lib/sid/sidUtils';
-import { addLog } from '@/lib/logging';
+import { Filesystem, Directory } from "@capacitor/filesystem";
+import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
+import type { HvscFolderListing, HvscSong } from "./hvscTypes";
+import { base64ToUint8 } from "@/lib/sid/sidUtils";
+import { addLog } from "@/lib/logging";
 import {
   ensureHvscSonglengthsReadyOnColdStart,
   resetHvscSonglengths,
   resolveHvscSonglengthDuration,
-} from './hvscSongLengthService';
+} from "./hvscSongLengthService";
 
-const HVSC_WORK_DIR = 'hvsc';
+const HVSC_WORK_DIR = "hvsc";
 const HVSC_LIBRARY_DIR = `${HVSC_WORK_DIR}/library`;
 const HVSC_CACHE_DIR = `${HVSC_WORK_DIR}/cache`;
 export const MAX_BRIDGE_READ_BYTES = 5 * 1024 * 1024;
 
-const normalizeFilePath = (path: string) => (path.startsWith('/') ? path : `/${path}`);
+const normalizeFilePath = (path: string) => (path.startsWith("/") ? path : `/${path}`);
 
 const logFilesystemWarning = (message: string, details?: Record<string, unknown>) => {
-  addLog('debug', `HVSC filesystem: ${message}`, details);
+  addLog("debug", `HVSC filesystem: ${message}`, details);
 };
 
 const uint8ToBase64 = (data: Uint8Array) => {
-  let binary = '';
+  let binary = "";
   data.forEach((byte) => {
     binary += String.fromCharCode(byte);
   });
@@ -41,7 +41,7 @@ const decodeBase64Text = (raw: string) => {
     const bytes = base64ToUint8(raw);
     return new TextDecoder().decode(bytes);
   } catch (error) {
-    logFilesystemWarning('Failed to decode base64 text', {
+    logFilesystemWarning("Failed to decode base64 text", {
       error,
     });
     return raw;
@@ -49,24 +49,27 @@ const decodeBase64Text = (raw: string) => {
 };
 
 const getErrorMessage = (error: unknown) => {
-  if (typeof error === 'string') return error;
-  if (error && typeof error === 'object') {
-    if ('message' in error && typeof (error as { message?: unknown }).message === 'string') {
-      return (error as { message?: string }).message ?? '';
+  if (typeof error === "string") return error;
+  if (error && typeof error === "object") {
+    if ("message" in error && typeof (error as { message?: unknown }).message === "string") {
+      return (error as { message?: string }).message ?? "";
     }
-    if ('error' in error && typeof (error as { error?: unknown }).error === 'string') {
-      return (error as { error?: string }).error ?? '';
+    if ("error" in error && typeof (error as { error?: unknown }).error === "string") {
+      return (error as { error?: string }).error ?? "";
     }
-    if ('error' in error && (error as { error?: unknown }).error && typeof (error as { error?: any }).error === 'object') {
+    if (
+      "error" in error &&
+      (error as { error?: unknown }).error &&
+      typeof (error as { error?: any }).error === "object"
+    ) {
       const nested = (error as { error?: { message?: unknown } }).error;
-      if (nested && typeof nested.message === 'string') return nested.message;
+      if (nested && typeof nested.message === "string") return nested.message;
     }
   }
-  return String(error ?? '');
+  return String(error ?? "");
 };
 
-const isExistsError = (error: unknown) =>
-  /exists|already exists/i.test(getErrorMessage(error));
+const isExistsError = (error: unknown) => /exists|already exists/i.test(getErrorMessage(error));
 
 const encodeText = (value: string) => {
   const bytes = new TextEncoder().encode(value);
@@ -77,7 +80,7 @@ const statPath = async (path: string) => {
   try {
     return await Filesystem.stat({ directory: Directory.Data, path });
   } catch (error) {
-    logFilesystemWarning('Filesystem stat failed', {
+    logFilesystemWarning("Filesystem stat failed", {
       path,
       error,
     });
@@ -91,7 +94,7 @@ const readFileWithSizeGuard = async (path: string) => {
     const stat = await Filesystem.stat({ directory: Directory.Data, path });
     statSize = stat?.size ?? null;
   } catch (error) {
-    logFilesystemWarning('Failed to stat before guarded read', {
+    logFilesystemWarning("Failed to stat before guarded read", {
       path,
       error,
     });
@@ -107,17 +110,21 @@ const writeFileWithRetry = async (path: string, data: string) => {
     await Filesystem.writeFile({ directory: Directory.Data, path, data });
     return;
   } catch (error) {
-    logFilesystemWarning('Initial write failed; attempting recovery', {
+    logFilesystemWarning("Initial write failed; attempting recovery", {
       path,
       error,
     });
     if (!isExistsError(error)) throw error;
     const existing = await statPath(path);
-    if (existing?.type === 'file') return;
+    if (existing?.type === "file") return;
     try {
-      await Filesystem.rmdir({ directory: Directory.Data, path, recursive: true });
+      await Filesystem.rmdir({
+        directory: Directory.Data,
+        path,
+        recursive: true,
+      });
     } catch (error) {
-      logFilesystemWarning('Failed to remove conflicting directory', {
+      logFilesystemWarning("Failed to remove conflicting directory", {
         path,
         error,
       });
@@ -125,7 +132,7 @@ const writeFileWithRetry = async (path: string, data: string) => {
     try {
       await Filesystem.deleteFile({ directory: Directory.Data, path });
     } catch (error) {
-      logFilesystemWarning('Failed to delete conflicting file', {
+      logFilesystemWarning("Failed to delete conflicting file", {
         path,
         error,
       });
@@ -135,9 +142,9 @@ const writeFileWithRetry = async (path: string, data: string) => {
     } catch (retryError) {
       if (isExistsError(retryError)) {
         const retryExisting = await statPath(path);
-        if (retryExisting?.type === 'file') return;
+        if (retryExisting?.type === "file") return;
       }
-      logFilesystemWarning('Failed to write file after retry', {
+      logFilesystemWarning("Failed to write file after retry", {
         path,
         error: retryError,
       });
@@ -148,28 +155,32 @@ const writeFileWithRetry = async (path: string, data: string) => {
 
 const ensureDir = async (path: string) => {
   const existing = await statPath(path);
-  if (existing?.type === 'directory') return;
-  if (existing?.type === 'file') {
+  if (existing?.type === "directory") return;
+  if (existing?.type === "file") {
     try {
       await Filesystem.deleteFile({ directory: Directory.Data, path });
     } catch (error) {
-      logFilesystemWarning('Failed to delete file while ensuring directory', {
+      logFilesystemWarning("Failed to delete file while ensuring directory", {
         path,
         error,
       });
     }
   }
   try {
-    await Filesystem.mkdir({ directory: Directory.Data, path, recursive: true });
+    await Filesystem.mkdir({
+      directory: Directory.Data,
+      path,
+      recursive: true,
+    });
   } catch (error) {
     if (!isExistsError(error)) {
-      logFilesystemWarning('Failed to create directory', {
+      logFilesystemWarning("Failed to create directory", {
         path,
         error,
       });
       throw error;
     }
-    logFilesystemWarning('Directory already exists', { path });
+    logFilesystemWarning("Directory already exists", { path });
   }
 };
 
@@ -183,22 +194,25 @@ export const getHvscLibraryDir = () => HVSC_LIBRARY_DIR;
 
 export const resolveLibraryPath = (virtualPath: string) => {
   const normalized = normalizeFilePath(virtualPath);
-  const relative = normalized.replace(/^\//, '');
+  const relative = normalized.replace(/^\//, "");
   return relative ? `${HVSC_LIBRARY_DIR}/${relative}` : HVSC_LIBRARY_DIR;
 };
 
 const resolveLibraryFolder = (path: string) => {
-  const normalized = normalizeSourcePath(path || '/');
-  const relative = normalized.replace(/^\//, '');
+  const normalized = normalizeSourcePath(path || "/");
+  const relative = normalized.replace(/^\//, "");
   return relative ? `${HVSC_LIBRARY_DIR}/${relative}` : HVSC_LIBRARY_DIR;
 };
 
 const listEntries = async (path: string) => {
   try {
-    const result = await Filesystem.readdir({ directory: Directory.Data, path });
+    const result = await Filesystem.readdir({
+      directory: Directory.Data,
+      path,
+    });
     return result.files ?? [];
   } catch (error) {
-    logFilesystemWarning('Filesystem read directory failed', {
+    logFilesystemWarning("Filesystem read directory failed", {
       path,
       error,
     });
@@ -206,57 +220,61 @@ const listEntries = async (path: string) => {
   }
 };
 
-const resolveEntry = async (basePath: string, entry: string | { name?: string; type?: 'file' | 'directory' }) => {
-  if (typeof entry === 'string') {
-    const stat = await Filesystem.stat({ directory: Directory.Data, path: `${basePath}/${entry}` });
+const resolveEntry = async (basePath: string, entry: string | { name?: string; type?: "file" | "directory" }) => {
+  if (typeof entry === "string") {
+    const stat = await Filesystem.stat({
+      directory: Directory.Data,
+      path: `${basePath}/${entry}`,
+    });
     return { name: entry, type: stat.type };
   }
-  const name = entry.name ?? '';
+  const name = entry.name ?? "";
   if (!entry.type && name) {
-    const stat = await Filesystem.stat({ directory: Directory.Data, path: `${basePath}/${name}` });
+    const stat = await Filesystem.stat({
+      directory: Directory.Data,
+      path: `${basePath}/${name}`,
+    });
     return { name, type: stat.type };
   }
   return { name, type: entry.type };
 };
 
 export const resetSonglengthsCache = () => {
-  resetHvscSonglengths('hvsc-filesystem-reset');
+  resetHvscSonglengths("hvsc-filesystem-reset");
 };
 
 export const listHvscFolder = async (path: string): Promise<HvscFolderListing> => {
-  const normalized = normalizeSourcePath(path || '/');
+  const normalized = normalizeSourcePath(path || "/");
   const basePath = resolveLibraryFolder(normalized);
   const entries = await listEntries(basePath);
   await ensureHvscSonglengthsReadyOnColdStart();
   const resolvedEntries = await Promise.all(entries.map(async (entry) => resolveEntry(basePath, entry)));
 
   const folders = resolvedEntries
-    .filter((entry) => entry.name && entry.type === 'directory')
-    .map((entry) => `${normalized === '/' ? '' : normalized}/${entry.name}`.replace(/\/+/g, '/'));
+    .filter((entry) => entry.name && entry.type === "directory")
+    .map((entry) => `${normalized === "/" ? "" : normalized}/${entry.name}`.replace(/\/+/g, "/"));
 
-  const songs = (
-    await Promise.all(
-      resolvedEntries
-        .filter((entry) => entry.name && entry.type === 'file' && entry.name.toLowerCase().endsWith('.sid'))
-        .map(async (entry) => {
-          const virtualPath = `${normalized === '/' ? '' : normalized}/${entry.name}`.replace(/\/+/g, '/');
-          const duration = await resolveHvscSonglengthDuration({
-            virtualPath,
-            fileName: entry.name,
-          });
-          const durations = duration.durations && duration.durations.length ? duration.durations : null;
-          const subsongCount = durations ? durations.length : duration.durationSeconds ? 1 : null;
-          const primaryDuration = durations?.[0] ?? duration.durationSeconds;
-          return {
-            id: Math.abs(Array.from(virtualPath).reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) | 0, 0)),
-            virtualPath,
-            fileName: entry.name,
-            durationSeconds: primaryDuration ?? null,
-            durationsSeconds: durations,
-            subsongCount,
-          };
-        }),
-    )
+  const songs = await Promise.all(
+    resolvedEntries
+      .filter((entry) => entry.name && entry.type === "file" && entry.name.toLowerCase().endsWith(".sid"))
+      .map(async (entry) => {
+        const virtualPath = `${normalized === "/" ? "" : normalized}/${entry.name}`.replace(/\/+/g, "/");
+        const duration = await resolveHvscSonglengthDuration({
+          virtualPath,
+          fileName: entry.name,
+        });
+        const durations = duration.durations && duration.durations.length ? duration.durations : null;
+        const subsongCount = durations ? durations.length : duration.durationSeconds ? 1 : null;
+        const primaryDuration = durations?.[0] ?? duration.durationSeconds;
+        return {
+          id: Math.abs(Array.from(virtualPath).reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) | 0, 0)),
+          virtualPath,
+          fileName: entry.name,
+          durationSeconds: primaryDuration ?? null,
+          durationsSeconds: durations,
+          subsongCount,
+        };
+      }),
   );
 
   return {
@@ -273,7 +291,7 @@ export const getHvscSongByVirtualPath = async (virtualPath: string): Promise<Hvs
     const result = await readFileWithSizeGuard(path);
     const duration = await resolveHvscSonglengthDuration({
       virtualPath,
-      fileName: virtualPath.split('/').pop() || virtualPath,
+      fileName: virtualPath.split("/").pop() || virtualPath,
     });
     const durations = duration.durations && duration.durations.length ? duration.durations : null;
     const subsongCount = durations ? durations.length : duration.durationSeconds ? 1 : null;
@@ -281,7 +299,7 @@ export const getHvscSongByVirtualPath = async (virtualPath: string): Promise<Hvs
     return {
       id: Math.abs(Array.from(virtualPath).reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) | 0, 0)),
       virtualPath: normalizeFilePath(virtualPath),
-      fileName: virtualPath.split('/').pop() || virtualPath,
+      fileName: virtualPath.split("/").pop() || virtualPath,
       durationSeconds: primaryDuration ?? null,
       durationsSeconds: durations,
       subsongCount,
@@ -289,7 +307,7 @@ export const getHvscSongByVirtualPath = async (virtualPath: string): Promise<Hvs
       dataBase64: result.data,
     };
   } catch (error) {
-    logFilesystemWarning('Failed to read HVSC song by path', {
+    logFilesystemWarning("Failed to read HVSC song by path", {
       virtualPath,
       error,
     });
@@ -305,7 +323,7 @@ export const getHvscDurationByMd5 = async (md5: string) => {
 
 export const writeLibraryFile = async (virtualPath: string, data: Uint8Array) => {
   const path = resolveLibraryPath(virtualPath);
-  const parent = path.split('/').slice(0, -1).join('/');
+  const parent = path.split("/").slice(0, -1).join("/");
   if (parent) {
     await ensureDir(parent);
   }
@@ -320,9 +338,13 @@ export const deleteLibraryFile = async (virtualPath: string) => {
 export const resetLibraryRoot = async () => {
   resetSonglengthsCache();
   try {
-    await Filesystem.rmdir({ directory: Directory.Data, path: HVSC_LIBRARY_DIR, recursive: true });
+    await Filesystem.rmdir({
+      directory: Directory.Data,
+      path: HVSC_LIBRARY_DIR,
+      recursive: true,
+    });
   } catch (error) {
-    logFilesystemWarning('Failed to remove HVSC library root', {
+    logFilesystemWarning("Failed to remove HVSC library root", {
       path: HVSC_LIBRARY_DIR,
       error,
     });
@@ -342,7 +364,7 @@ export const writeCachedArchive = async (relativePath: string, data: Uint8Array)
 
 export type HvscArchiveMarker = {
   version: number;
-  type: 'baseline' | 'update';
+  type: "baseline" | "update";
   sizeBytes?: number | null;
   completedAt: string;
 };
@@ -362,7 +384,7 @@ export const readCachedArchiveMarker = async (relativePath: string): Promise<Hvs
     if (!parsed?.completedAt) return null;
     return parsed;
   } catch (error) {
-    logFilesystemWarning('Failed to read cached archive marker', {
+    logFilesystemWarning("Failed to read cached archive marker", {
       relativePath,
       error,
     });
@@ -372,25 +394,35 @@ export const readCachedArchiveMarker = async (relativePath: string): Promise<Hvs
 
 export const deleteCachedArchive = async (relativePath: string) => {
   try {
-    await Filesystem.deleteFile({ directory: Directory.Data, path: `${HVSC_CACHE_DIR}/${relativePath}` });
+    await Filesystem.deleteFile({
+      directory: Directory.Data,
+      path: `${HVSC_CACHE_DIR}/${relativePath}`,
+    });
   } catch (error) {
-    logFilesystemWarning('Failed to delete cached archive file', {
+    logFilesystemWarning("Failed to delete cached archive file", {
       relativePath,
       error,
     });
     try {
-      await Filesystem.rmdir({ directory: Directory.Data, path: `${HVSC_CACHE_DIR}/${relativePath}`, recursive: true });
+      await Filesystem.rmdir({
+        directory: Directory.Data,
+        path: `${HVSC_CACHE_DIR}/${relativePath}`,
+        recursive: true,
+      });
     } catch (nestedError) {
-      logFilesystemWarning('Failed to remove cached archive directory', {
+      logFilesystemWarning("Failed to remove cached archive directory", {
         relativePath,
         error: nestedError,
       });
     }
   }
   try {
-    await Filesystem.deleteFile({ directory: Directory.Data, path: getHvscCacheMarkerPath(relativePath) });
+    await Filesystem.deleteFile({
+      directory: Directory.Data,
+      path: getHvscCacheMarkerPath(relativePath),
+    });
   } catch (error) {
-    logFilesystemWarning('Failed to delete cached archive marker', {
+    logFilesystemWarning("Failed to delete cached archive marker", {
       relativePath,
       error,
     });

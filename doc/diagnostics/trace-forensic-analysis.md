@@ -17,6 +17,7 @@
 **Description**: /v1/info is requested in rapid bursts, often multiple times within the same 200–500 ms window, even after failures. This is a high-risk pattern for a fragile device and a primary source of unnecessary traffic.
 
 **Evidence**:
+
 - Trace: audiomixer--audiomixerspects--audio-mixer-volumes--editing-while-solo-active-restores-other-volumes/android-phone/trace.json
   - EVT-0007 /v1/info at 2026-01-31T14:49:20.524Z (relativeMs 118)
   - EVT-0017 /v1/info at 2026-01-31T14:49:20.580Z (relativeMs 174)
@@ -38,6 +39,7 @@
 **Description**: /v1/configs (full configuration tree) is fetched repeatedly within sub-second windows. This is a heavy endpoint and its amplification is disproportionate to the user intent.
 
 **Evidence**:
+
 - Trace: audiomixer--audiomixerspects--audio-mixer-volumes--editing-while-solo-active-restores-other-volumes/android-phone/trace.json
   - EVT-0002 /v1/configs at 2026-01-31T14:49:20.500Z (relativeMs 94)
   - EVT-0024 /v1/configs at 2026-01-31T14:49:20.582Z (relativeMs 176)
@@ -53,6 +55,7 @@
 **Description**: Concurrent REST calls overlap in time, including configuration access and /v1/info polling. This overlap is unsafe given the device’s non-concurrent guarantees.
 
 **Evidence**:
+
 - Trace: demomode--demomodespects--automatic-demo-mode--demo-interstitial-appears-once-per-session-and-manual-retry-uses-discovery/android-phone/trace.json
   - EVT-0023 /v1/configs/SID Sockets Configuration/SID Socket 1 at 2026-01-31T14:49:40.273Z (relativeMs 250)
   - EVT-0026 /v1/info at 2026-01-31T14:49:40.274Z (relativeMs 251)
@@ -68,6 +71,7 @@
 **Description**: Requests are sent while the device is in UNKNOWN or DISCOVERING state, or immediately after “Host unreachable” errors.
 
 **Evidence**:
+
 - Trace: audiomixer--audiomixerspects--audio-mixer-volumes--editing-while-solo-active-restores-other-volumes/android-phone/trace.json
   - Action-start shows connectionState UNKNOWN immediately before EVT-0002 /v1/configs at 2026-01-31T14:49:20.500Z (relativeMs 94)
   - Action-start shows connectionState DISCOVERING immediately before EVT-0007 /v1/info at 2026-01-31T14:49:20.524Z (relativeMs 118)
@@ -85,6 +89,7 @@
 **Description**: Failures (AbortError, Host unreachable, HTTP 503) are immediately followed by more requests without backoff or state reset.
 
 **Evidence**:
+
 - Trace: audiomixer--audiomixerspects--audio-mixer-volumes--editing-while-solo-active-restores-other-volumes/android-phone/trace.json
   - EVT-0018 rest-response error “signal is aborted without reason” at 2026-01-31T14:49:20.582Z (relativeMs 176)
   - EVT-0020 error “Host unreachable” at 2026-01-31T14:49:20.582Z (relativeMs 176)
@@ -104,6 +109,7 @@
 **Description**: /v1/drives is polled repeatedly within tens of milliseconds, even in demo or transitional contexts.
 
 **Evidence**:
+
 - Trace: connectionsimulation--connectionsimulationspects--deterministic-connectivity-simulation--demo-enabled-real-device-reachable-informational-only/android-phone/trace.json
   - EVT-0237 /v1/drives at 2026-01-31T15:19:05.321Z (relativeMs 2151)
   - EVT-0267 /v1/drives at 2026-01-31T15:19:05.343Z (relativeMs 2173)
@@ -119,6 +125,7 @@
 **Description**: Multiple /v1/ftp/list calls are issued nearly simultaneously, indicating fan-out without serialization.
 
 **Evidence**:
+
 - Trace: itemselection--itemselectionspects--item-selection-dialog-ux--disks-page-c64-ultimate-full-flow-adds-disks/android-phone/trace.json
   - EVT-0132 /v1/ftp/list at 2026-01-31T14:50:33.414Z (relativeMs 2302)
   - EVT-0135 /v1/ftp/list at 2026-01-31T14:50:33.415Z (relativeMs 2303)
@@ -134,6 +141,7 @@
 **Description**: Full configuration reset is followed quickly by /v1/info polling without a stabilization window.
 
 **Evidence**:
+
 - Trace: coverageprobes--coverageprobesspects--coverage-probes--exercises-internal-helpers-for-coverage/android-phone/trace.json
   - EVT-0333 PUT /v1/configs:reset_to_default at 2026-01-31T14:49:24.409Z (relativeMs 7325)
   - EVT-0428 GET /v1/info at 2026-01-31T14:49:24.576Z (relativeMs 7492)
@@ -144,37 +152,44 @@
 
 ## Cross-Trace Pattern Catalog
 
-1) Info Endpoint Storm
+1. Info Endpoint Storm
+
 - Detection rule: ≥5 /v1/info requests within 500 ms.
 - Frequency: 272/294 traces.
 - Risk profile: High. Dominant traffic source and frequent during unstable device states.
 
-2) Config Read Amplification
+2. Config Read Amplification
+
 - Detection rule: ≥2 /v1/configs full-tree requests within 1,000 ms.
 - Frequency: 26/294 traces.
 - Risk profile: High. Heavy endpoint repeatedly used without clear need.
 
-3) Post-Error Blind Retry
+3. Post-Error Blind Retry
+
 - Detection rule: A failed request (AbortError or HTTP 5xx) followed by another request within 1,000 ms.
 - Frequency: 280/294 traces.
 - Risk profile: High. Likely to produce cascaded failures on a fragile device.
 
-4) Discovery-State Overlap
+4. Discovery-State Overlap
+
 - Detection rule: REST request issued while connectionState is UNKNOWN or DISCOVERING.
 - Frequency: 281/294 traces.
 - Risk profile: High. Requests are not gated by device availability.
 
-5) Concurrent Request Overlap
+5. Concurrent Request Overlap
+
 - Detection rule: A REST request starts before the prior request completes.
 - Frequency: 10/294 traces.
 - Risk profile: High. Concurrency violations on a device that is not concurrency-safe.
 
-6) Drive Status Burst
+6. Drive Status Burst
+
 - Detection rule: ≥2 /v1/drives requests within 500 ms.
 - Frequency: 88/294 traces.
 - Risk profile: Medium. Repeated drive polling can block other operations.
 
-7) FTP List Fan-Out
+7. FTP List Fan-Out
+
 - Detection rule: ≥2 /v1/ftp/list requests within 50 ms.
 - Frequency: 2/294 traces.
 - Risk profile: Medium. FTP handler overload or contention.
@@ -189,11 +204,11 @@
 
 ## Suggested Next Steps
 
-1) Establish a formal device state model and ensure REST access is gated on stable states only.
-2) Reduce /v1/info and /v1/drives polling rates, especially during discovery and failure windows.
-3) Enforce serialization of REST calls that target configuration, drive, and FTP endpoints.
-4) Introduce error-driven cooldown windows to suppress rapid retries after failures.
-5) Re-run golden traces after implementing architectural throttling to validate reductions in bursts and overlaps.
+1. Establish a formal device state model and ensure REST access is gated on stable states only.
+2. Reduce /v1/info and /v1/drives polling rates, especially during discovery and failure windows.
+3. Enforce serialization of REST calls that target configuration, drive, and FTP endpoints.
+4. Introduce error-driven cooldown windows to suppress rapid retries after failures.
+5. Re-run golden traces after implementing architectural throttling to validate reductions in bursts and overlaps.
 
 ## Methodology
 

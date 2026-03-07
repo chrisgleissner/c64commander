@@ -1,8 +1,5 @@
 {
-  "disks": [
-    "drives",
-    "disks"
-  ],
+  "disks": ["drives", "disks"],
   "config": [
     "audio-mixer",
     "sid-sockets-configuration",
@@ -24,22 +21,8 @@
     "modem-settings",
     "user-interface-settings"
   ],
-  "home": [
-    "system-info",
-    "machine",
-    "quick-config",
-    "drives",
-    "printers",
-    "sid",
-    "streams",
-    "config"
-  ],
-  "play": [
-    "playback-controls",
-    "playlist",
-    "hvsc-library",
-    "hvsc"
-  ],
+  "home": ["system-info", "machine", "quick-config", "drives", "printers", "sid", "streams", "config"],
+  "play": ["playback-controls", "playlist", "hvsc-library", "hvsc"],
   "settings": [
     "appearance",
     "connection",

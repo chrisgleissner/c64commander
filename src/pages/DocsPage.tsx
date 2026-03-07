@@ -6,22 +6,12 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import {
-  ChevronDown,
-  ExternalLink,
-  Wifi,
-  Settings,
-  Play,
-  Home,
-  Disc,
-  Sliders,
-  Activity,
-} from 'lucide-react';
-import { AppBar } from '@/components/AppBar';
-import { SOURCE_EXPLANATIONS, SOURCE_LABELS } from '@/lib/sourceNavigation/sourceTerms';
-import { wrapUserEvent } from '@/lib/tracing/userTrace';
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { ChevronDown, ExternalLink, Wifi, Settings, Play, Home, Disc, Sliders, Activity } from "lucide-react";
+import { AppBar } from "@/components/AppBar";
+import { SOURCE_EXPLANATIONS, SOURCE_LABELS } from "@/lib/sourceNavigation/sourceTerms";
+import { wrapUserEvent } from "@/lib/tracing/userTrace";
 
 interface DocSection {
   id: string;
@@ -32,43 +22,53 @@ interface DocSection {
 
 const docSections: DocSection[] = [
   {
-    id: 'getting-started',
-    title: 'Getting Started',
+    id: "getting-started",
+    title: "Getting Started",
     icon: Wifi,
     content: (
       <div className="space-y-3 text-sm">
         <p>
-          C64 Commander connects to your <strong>{SOURCE_LABELS.c64u}</strong> over the REST API. Stay on the same network and
-          make sure the device is reachable.
+          C64 Commander connects to your <strong>{SOURCE_LABELS.c64u}</strong> over the REST API. Stay on the same
+          network and make sure the device is reachable.
         </p>
         <p className="font-medium">Connect in 4 steps:</p>
         <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
-          <li>Open <strong>Settings</strong> → <strong>Connection</strong>.</li>
+          <li>
+            Open <strong>Settings</strong> → <strong>Connection</strong>.
+          </li>
           <li>Enter the {SOURCE_LABELS.c64u} hostname or IP address.</li>
           <li>Enter the network password if your device uses one.</li>
-          <li>Tap <strong>Save & Connect</strong>.</li>
+          <li>
+            Tap <strong>Save & Connect</strong>.
+          </li>
         </ol>
         <p className="text-muted-foreground">
-          Use the {SOURCE_LABELS.c64u} status pill in the header to see connection state and tap it to force a new discovery.
-          If no device is found, Demo Mode can be offered for exploration.
+          Use the {SOURCE_LABELS.c64u} status pill in the header to see connection state and tap it to force a new
+          discovery. If no device is found, Demo Mode can be offered for exploration.
         </p>
       </div>
     ),
   },
   {
-    id: 'home',
-    title: 'Home',
+    id: "home",
+    title: "Home",
     icon: Home,
     content: (
       <div className="space-y-3 text-sm">
-        <p>
-          Home is the operational dashboard: system info, machine controls, and high-value configuration shortcuts.
-        </p>
+        <p>Home is the operational dashboard: system info, machine controls, and high-value configuration shortcuts.</p>
         <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-          <li><strong>Reset / Reboot</strong> control the {SOURCE_LABELS.c64u} CPU and system state.</li>
-          <li><strong>Menu</strong> toggles the Ultimate menu (same as the hardware button).</li>
-          <li><strong>Pause / Resume</strong> stops or restarts the CPU via DMA.</li>
-          <li><strong>Power Off</strong> shuts down the machine.</li>
+          <li>
+            <strong>Reset / Reboot</strong> control the {SOURCE_LABELS.c64u} CPU and system state.
+          </li>
+          <li>
+            <strong>Menu</strong> toggles the Ultimate menu (same as the hardware button).
+          </li>
+          <li>
+            <strong>Pause / Resume</strong> stops or restarts the CPU via DMA.
+          </li>
+          <li>
+            <strong>Power Off</strong> shuts down the machine.
+          </li>
         </ul>
         <p className="text-muted-foreground">
           System info is collapsed by default, with version and firmware visible at a glance. The drive summary shows
@@ -78,21 +78,33 @@ const docSections: DocSection[] = [
     ),
   },
   {
-    id: 'play',
-    title: 'Play Files',
+    id: "play",
+    title: "Play Files",
     icon: Play,
     content: (
       <div className="space-y-3 text-sm">
         <p>
-          Use Play to find files, build a playlist, and control playback. Supported file types include SID, PRG, and CRT.
+          Use Play to find files, build a playlist, and control playback. Supported file types include SID, PRG, and
+          CRT.
         </p>
         <p className="font-medium">Find and play files:</p>
         <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
-          <li>Open <strong>Play</strong> and tap <strong>Add items</strong>.</li>
-          <li>Pick a source: <strong>{SOURCE_LABELS.local}</strong>, <strong>{SOURCE_LABELS.c64u}</strong>, or <strong>{SOURCE_LABELS.hvsc}</strong> (if enabled).</li>
-          <li>Source terms in this app: <strong>{SOURCE_LABELS.local}</strong> = {SOURCE_EXPLANATIONS.local}, <strong>{SOURCE_LABELS.c64u}</strong> = {SOURCE_EXPLANATIONS.c64u}, <strong>{SOURCE_LABELS.hvsc}</strong> = {SOURCE_EXPLANATIONS.hvsc}.</li>
+          <li>
+            Open <strong>Play</strong> and tap <strong>Add items</strong>.
+          </li>
+          <li>
+            Pick a source: <strong>{SOURCE_LABELS.local}</strong>, <strong>{SOURCE_LABELS.c64u}</strong>, or{" "}
+            <strong>{SOURCE_LABELS.hvsc}</strong> (if enabled).
+          </li>
+          <li>
+            Source terms in this app: <strong>{SOURCE_LABELS.local}</strong> = {SOURCE_EXPLANATIONS.local},{" "}
+            <strong>{SOURCE_LABELS.c64u}</strong> = {SOURCE_EXPLANATIONS.c64u}, <strong>{SOURCE_LABELS.hvsc}</strong> ={" "}
+            {SOURCE_EXPLANATIONS.hvsc}.
+          </li>
           <li>Browse folders, select files or folders, then confirm.</li>
-          <li>Use <strong>Play</strong> on the playlist or a single item.</li>
+          <li>
+            Use <strong>Play</strong> on the playlist or a single item.
+          </li>
         </ol>
         <p className="font-medium">Playback controls:</p>
         <ul className="list-disc list-inside space-y-1 text-muted-foreground">
@@ -104,84 +116,98 @@ const docSections: DocSection[] = [
     ),
   },
   {
-    id: 'disks',
-    title: 'Disks & Drives',
+    id: "disks",
+    title: "Disks & Drives",
     icon: Disc,
     content: (
       <div className="space-y-3 text-sm">
-        <p>
-          The Disks page manages drive state and your disk collection.
-        </p>
+        <p>The Disks page manages drive state and your disk collection.</p>
         <p className="font-medium">Find and mount disks:</p>
         <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
-          <li>Open <strong>Disks</strong>.</li>
-          <li>In a Drive card header, tap the <strong>disk icon</strong> to mount/eject.</li>
+          <li>
+            Open <strong>Disks</strong>.
+          </li>
+          <li>
+            In a Drive card header, tap the <strong>disk icon</strong> to mount/eject.
+          </li>
           <li>Choose a disk from the collection or add one first.</li>
         </ol>
         <p className="font-medium">Add disks to the collection:</p>
         <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-          <li>Tap <strong>Add disks</strong> and pick a source ({SOURCE_LABELS.local} or {SOURCE_LABELS.c64u}).</li>
-          <li>Use <strong>View all</strong> to search and manage large collections.</li>
+          <li>
+            Tap <strong>Add disks</strong> and pick a source ({SOURCE_LABELS.local} or {SOURCE_LABELS.c64u}).
+          </li>
+          <li>
+            Use <strong>View all</strong> to search and manage large collections.
+          </li>
           <li>Disk entries show size, date, and allow rename or delete actions.</li>
         </ul>
       </div>
     ),
   },
   {
-    id: 'disk-swapping',
-    title: 'Swapping Disks',
+    id: "disk-swapping",
+    title: "Swapping Disks",
     icon: Disc,
     content: (
       <div className="space-y-3 text-sm">
-        <p>
-          Disk swapping is designed for multi-disk titles.
-        </p>
+        <p>Disk swapping is designed for multi-disk titles.</p>
         <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-          <li><strong>Set group</strong> assigns disks to a rotation group.</li>
+          <li>
+            <strong>Set group</strong> assigns disks to a rotation group.
+          </li>
           <li>Use the drive-row rotate arrows to cycle disks in the group.</li>
-          <li>Use the header <strong>disk icon</strong> to open mount/eject actions.</li>
+          <li>
+            Use the header <strong>disk icon</strong> to open mount/eject actions.
+          </li>
         </ul>
       </div>
     ),
   },
   {
-    id: 'config',
-    title: 'Config',
+    id: "config",
+    title: "Config",
     icon: Sliders,
     content: (
       <div className="space-y-3 text-sm">
-        <p>
-          Config exposes all {SOURCE_LABELS.c64u} categories and items. Use search to find settings quickly.
-        </p>
+        <p>Config exposes all {SOURCE_LABELS.c64u} categories and items. Use search to find settings quickly.</p>
         <ul className="list-disc list-inside space-y-1 text-muted-foreground">
           <li>Changes apply immediately to the device.</li>
-          <li>Use Home → <strong>Save</strong> to persist changes to flash.</li>
+          <li>
+            Use Home → <strong>Save</strong> to persist changes to flash.
+          </li>
           <li>Audio Mixer includes SID socket and UltiSID controls with solo support.</li>
         </ul>
       </div>
     ),
   },
   {
-    id: 'settings',
-    title: 'Settings',
+    id: "settings",
+    title: "Settings",
     icon: Settings,
     content: (
       <div className="space-y-3 text-sm">
-        <p>
-          Settings controls connection details, appearance, and advanced behavior.
-        </p>
+        <p>Settings controls connection details, appearance, and advanced behavior.</p>
         <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-          <li><strong>Connection</strong> stores host/IP and password.</li>
-          <li><strong>Appearance</strong> switches between light, dark, and system themes.</li>
-          <li><strong>Play</strong> options include playlist preview limits and HVSC enablement.</li>
-          <li><strong>Device safety</strong> guards concurrency and retry behavior.</li>
+          <li>
+            <strong>Connection</strong> stores host/IP and password.
+          </li>
+          <li>
+            <strong>Appearance</strong> switches between light, dark, and system themes.
+          </li>
+          <li>
+            <strong>Play</strong> options include playlist preview limits and HVSC enablement.
+          </li>
+          <li>
+            <strong>Device safety</strong> guards concurrency and retry behavior.
+          </li>
         </ul>
       </div>
     ),
   },
   {
-    id: 'diagnostics',
-    title: 'Diagnostics',
+    id: "diagnostics",
+    title: "Diagnostics",
     icon: Activity,
     content: (
       <div className="space-y-3 text-sm">
@@ -190,14 +216,22 @@ const docSections: DocSection[] = [
           indicator.
         </p>
         <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-          <li><strong>Actions</strong> summarizes user operations with REST/FTP counts and outcomes.</li>
-          <li><strong>Traces</strong> lists individual REST/FTP requests with timing and status details.</li>
-          <li><strong>Logs</strong> captures app logs and device communication events.</li>
-          <li><strong>Errors</strong> collects error reports with context for debugging.</li>
+          <li>
+            <strong>Actions</strong> summarizes user operations with REST/FTP counts and outcomes.
+          </li>
+          <li>
+            <strong>Traces</strong> lists individual REST/FTP requests with timing and status details.
+          </li>
+          <li>
+            <strong>Logs</strong> captures app logs and device communication events.
+          </li>
+          <li>
+            <strong>Errors</strong> collects error reports with context for debugging.
+          </li>
         </ul>
         <p className="text-muted-foreground">
-          Use the per-tab filter to narrow results, <strong>Clear</strong> to reset local logs, and <strong>Share</strong> to
-          export a diagnostic bundle.
+          Use the per-tab filter to narrow results, <strong>Clear</strong> to reset local logs, and{" "}
+          <strong>Share</strong> to export a diagnostic bundle.
         </p>
       </div>
     ),
@@ -215,7 +249,13 @@ function DocSectionCard({ section }: { section: DocSection }) {
       className="bg-card border border-border rounded-xl overflow-hidden"
     >
       <button
-        onClick={wrapUserEvent(() => setIsOpen(!isOpen), 'toggle', 'DocsSection', { title: section.title }, 'DocsHeader')}
+        onClick={wrapUserEvent(
+          () => setIsOpen(!isOpen),
+          "toggle",
+          "DocsSection",
+          { title: section.title },
+          "DocsHeader",
+        )}
         className="w-full flex items-center justify-between p-4 text-left"
       >
         <div className="flex items-center gap-3">
@@ -224,10 +264,7 @@ function DocSectionCard({ section }: { section: DocSection }) {
           </div>
           <span className="font-medium">{section.title}</span>
         </div>
-        <motion.div
-          animate={{ rotate: isOpen ? 180 : 0 }}
-          transition={{ duration: 0.2 }}
-        >
+        <motion.div animate={{ rotate: isOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
           <ChevronDown className="h-5 w-5 text-muted-foreground" />
         </motion.div>
       </button>
@@ -236,13 +273,11 @@ function DocSectionCard({ section }: { section: DocSection }) {
         {isOpen && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
+            animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.2 }}
           >
-            <div className="border-t border-border p-4">
-              {section.content}
-            </div>
+            <div className="border-t border-border p-4">{section.content}</div>
           </motion.div>
         )}
       </AnimatePresence>

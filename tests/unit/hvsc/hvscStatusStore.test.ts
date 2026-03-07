@@ -7,7 +7,7 @@
  */
 
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   applyHvscProgressEventToSummary,
   clearHvscStatusSummary,
@@ -16,16 +16,16 @@ import {
   saveHvscStatusSummary,
   updateHvscStatusSummaryFromEvent,
   type HvscStatusSummary,
-} from '@/lib/hvsc/hvscStatusStore';
-import { addLog } from '@/lib/logging';
+} from "@/lib/hvsc/hvscStatusStore";
+import { addLog } from "@/lib/logging";
 
-vi.mock('@/lib/logging', () => ({
+vi.mock("@/lib/logging", () => ({
   addLog: vi.fn(),
 }));
 
-describe('hvscStatusStore', () => {
+describe("hvscStatusStore", () => {
   beforeEach(() => {
-    if (typeof globalThis.localStorage === 'undefined') {
+    if (typeof globalThis.localStorage === "undefined") {
       const store = new Map<string, string>();
       (globalThis as typeof globalThis & { localStorage?: Storage }).localStorage = {
         getItem: (key: string) => store.get(key) ?? null,
@@ -44,31 +44,31 @@ describe('hvscStatusStore', () => {
     }
   });
 
-  describe('Persistence', () => {
-    it('returns defaults when storage is empty', () => {
+  describe("Persistence", () => {
+    it("returns defaults when storage is empty", () => {
       expect(loadHvscStatusSummary()).toEqual(getDefaultHvscStatusSummary());
     });
 
-    it('persists and loads summary data', () => {
+    it("persists and loads summary data", () => {
       const summary: HvscStatusSummary = {
         download: {
-          status: 'success',
-          startedAt: 'now',
-          finishedAt: 'later',
+          status: "success",
+          startedAt: "now",
+          finishedAt: "later",
           durationMs: 1234,
           sizeBytes: 987,
           downloadedBytes: 456,
           totalBytes: 1024,
         },
         extraction: {
-          status: 'success',
-          startedAt: 'now',
-          finishedAt: 'later',
+          status: "success",
+          startedAt: "now",
+          finishedAt: "later",
           durationMs: 5678,
           filesExtracted: 42,
           totalFiles: 120,
         },
-        lastUpdatedAt: 'later',
+        lastUpdatedAt: "later",
       };
 
       saveHvscStatusSummary(summary);
@@ -78,81 +78,85 @@ describe('hvscStatusStore', () => {
       expect(loadHvscStatusSummary()).toEqual(getDefaultHvscStatusSummary());
     });
 
-    it('persists status updates from events', () => {
+    it("persists status updates from events", () => {
       const result = updateHvscStatusSummaryFromEvent({
-        ingestionId: 'test',
-        stage: 'download',
-        message: 'Downloading',
+        ingestionId: "test",
+        stage: "download",
+        message: "Downloading",
         downloadedBytes: 10,
         totalBytes: 20,
       });
 
-      const stored = JSON.parse(localStorage.getItem('c64u_hvsc_status:v1') ?? '{}');
+      const stored = JSON.parse(localStorage.getItem("c64u_hvsc_status:v1") ?? "{}");
       expect(stored.download?.downloadedBytes).toBe(10);
       expect(result.download.downloadedBytes).toBe(10);
     });
 
-    it('ignores updates when storage is corrupted', () => {
-      localStorage.setItem('c64u_hvsc_status:v1', 'invalid-json{');
+    it("ignores updates when storage is corrupted", () => {
+      localStorage.setItem("c64u_hvsc_status:v1", "invalid-json{");
       const loaded = loadHvscStatusSummary();
       expect(loaded).toEqual(getDefaultHvscStatusSummary());
-      expect(addLog).toHaveBeenCalledWith('warn', 'Failed to load HVSC status summary', expect.objectContaining({
-        storageKey: 'c64u_hvsc_status:v1',
-        error: expect.any(String),
-      }));
+      expect(addLog).toHaveBeenCalledWith(
+        "warn",
+        "Failed to load HVSC status summary",
+        expect.objectContaining({
+          storageKey: "c64u_hvsc_status:v1",
+          error: expect.any(String),
+        }),
+      );
     });
 
-    it('ignores updates when summary misses core properties', () => {
-      localStorage.setItem('c64u_hvsc_status:v1', '{}');
+    it("ignores updates when summary misses core properties", () => {
+      localStorage.setItem("c64u_hvsc_status:v1", "{}");
       const loaded = loadHvscStatusSummary();
       expect(loaded).toEqual(getDefaultHvscStatusSummary());
     });
   });
 
-  describe('State transitions', () => {
-    it('tracks incremental download progress', () => {
+  describe("State transitions", () => {
+    it("tracks incremental download progress", () => {
       const initial = getDefaultHvscStatusSummary();
       const summary = applyHvscProgressEventToSummary(initial, {
-        ingestionId: 'test',
-        stage: 'download',
-        message: 'Downloading',
+        ingestionId: "test",
+        stage: "download",
+        message: "Downloading",
         downloadedBytes: 512,
         totalBytes: 2048,
         percent: 25,
       });
-      expect(summary.download.status).toBe('in-progress');
+      expect(summary.download.status).toBe("in-progress");
       expect(summary.download.downloadedBytes).toBe(512);
       expect(summary.download.totalBytes).toBe(2048);
     });
 
-    it('marks marks download success when extraction starts', () => {
+    it("marks marks download success when extraction starts", () => {
       const base = getDefaultHvscStatusSummary();
       const downloadEvent = {
-        stage: 'download',
-        message: 'Downloading',
+        stage: "download",
+        message: "Downloading",
         downloadedBytes: 10,
         totalBytes: 100,
       } as any;
       const extractionEvent = {
-        stage: 'archive_extraction',
-        message: 'Extracting',
+        stage: "archive_extraction",
+        message: "Extracting",
         processedCount: 1,
         totalCount: 2,
       } as any;
 
       const afterDownload = applyHvscProgressEventToSummary(base, downloadEvent, null);
-      expect(afterDownload.download.status).toBe('in-progress');
+      expect(afterDownload.download.status).toBe("in-progress");
 
-      const afterExtraction = applyHvscProgressEventToSummary(afterDownload, extractionEvent, 'download');
-      expect(afterExtraction.download.status).toBe('success');
-      expect(afterExtraction.extraction.status).toBe('in-progress');
+      const afterExtraction = applyHvscProgressEventToSummary(afterDownload, extractionEvent, "download");
+      expect(afterExtraction.download.status).toBe("success");
+      expect(afterExtraction.extraction.status).toBe("in-progress");
     });
 
-    it('marks download success when percent reaches 100', () => {
+    it("marks download success when percent reaches 100", () => {
       const base = getDefaultHvscStatusSummary();
       const event = {
-        stage: 'download',
-        message: 'Downloaded',
+        stage: "download",
+        message: "Downloaded",
         downloadedBytes: 100,
         totalBytes: 100,
         percent: 100,
@@ -160,57 +164,57 @@ describe('hvscStatusStore', () => {
       } as any;
 
       const next = applyHvscProgressEventToSummary(base, event, null);
-      expect(next.download.status).toBe('success');
+      expect(next.download.status).toBe("success");
       expect(next.download.finishedAt).toBeTruthy();
       expect(next.download.durationMs).toBe(1234);
       expect(next.download.totalBytes).toBe(100);
     });
 
-    it('ignores non-complete events', () => {
+    it("ignores non-complete events", () => {
       const initial = getDefaultHvscStatusSummary();
       // @ts-expect-error - simulating unknown stage
       const result = applyHvscProgressEventToSummary(initial, {
-        stage: 'unknown_stage',
-        message: 'test',
+        stage: "unknown_stage",
+        message: "test",
       });
       expect(result).toEqual(initial);
     });
 
-    it('handles download success with existing finishedAt', () => {
+    it("handles download success with existing finishedAt", () => {
       const initial = getDefaultHvscStatusSummary();
-      initial.download.finishedAt = 'existing-time';
+      initial.download.finishedAt = "existing-time";
 
       const next = applyHvscProgressEventToSummary(initial, {
-        stage: 'download',
-        message: 'done',
+        stage: "download",
+        message: "done",
         percent: 100,
       });
 
-      expect(next.download.finishedAt).toBe('existing-time');
+      expect(next.download.finishedAt).toBe("existing-time");
     });
 
-    it('preserves existing duration when event does not provide it', () => {
+    it("preserves existing duration when event does not provide it", () => {
       const initial = getDefaultHvscStatusSummary();
       initial.download.durationMs = 999;
 
       const next = applyHvscProgressEventToSummary(initial, {
-        stage: 'download',
-        message: 'progress',
+        stage: "download",
+        message: "progress",
         percent: 50,
       });
 
       expect(next.download.durationMs).toBe(999);
     });
 
-    it('updates download size and total bytes properly', () => {
+    it("updates download size and total bytes properly", () => {
       const initial = getDefaultHvscStatusSummary();
       initial.download.downloadedBytes = 50;
       initial.download.sizeBytes = 50;
 
       // Case 1: event has totalBytes -> uses event.totalBytes
       let next = applyHvscProgressEventToSummary(initial, {
-        stage: 'download',
-        message: 'progress',
+        stage: "download",
+        message: "progress",
         downloadedBytes: 60,
         totalBytes: 100,
       });
@@ -221,8 +225,8 @@ describe('hvscStatusStore', () => {
       initial.download.downloadedBytes = 50;
       initial.download.sizeBytes = 50;
       next = applyHvscProgressEventToSummary(initial, {
-        stage: 'download',
-        message: 'done',
+        stage: "download",
+        message: "done",
         percent: 100,
         downloadedBytes: 120, // no totalBytes property
       });
@@ -231,131 +235,154 @@ describe('hvscStatusStore', () => {
       // Case 3: in-progress, no totalBytes -> keeps old sizeBytes
       initial.download.sizeBytes = 999;
       next = applyHvscProgressEventToSummary(initial, {
-        stage: 'download',
-        message: 'progress',
+        stage: "download",
+        message: "progress",
         downloadedBytes: 60,
         // no totalBytes, no completion
       });
       expect(next.download.sizeBytes).toBe(999);
     });
 
-    it('marks download success when extraction starts (with status transition)', () => {
+    it("marks download success when extraction starts (with status transition)", () => {
       const initial = getDefaultHvscStatusSummary();
-      initial.download.status = 'in-progress';
+      initial.download.status = "in-progress";
 
       const result = applyHvscProgressEventToSummary(initial, {
-        stage: 'archive_extraction',
-        message: 'extracting',
+        stage: "archive_extraction",
+        message: "extracting",
       });
 
-      expect(result.download.status).toBe('success');
+      expect(result.download.status).toBe("success");
     });
 
-    it('keeps download status if not in-progress when extraction starts', () => {
+    it("keeps download status if not in-progress when extraction starts", () => {
       const initial = getDefaultHvscStatusSummary();
-      initial.download.status = 'idle';
+      initial.download.status = "idle";
 
       const result = applyHvscProgressEventToSummary(initial, {
-        stage: 'archive_extraction',
-        message: 'extracting',
+        stage: "archive_extraction",
+        message: "extracting",
       });
 
-      expect(result.download.status).toBe('idle');
+      expect(result.download.status).toBe("idle");
     });
 
-    it('preserves success status on completion event', () => {
+    it("preserves success status on completion event", () => {
       const initial = getDefaultHvscStatusSummary();
-      initial.extraction.status = 'success';
-      initial.download.status = 'success';
+      initial.extraction.status = "success";
+      initial.download.status = "success";
 
       const result = applyHvscProgressEventToSummary(initial, {
-        stage: 'complete',
-        message: 'done',
+        stage: "complete",
+        message: "done",
       });
 
-      expect(result.extraction.status).toBe('success');
-      expect(result.download.status).toBe('success');
+      expect(result.extraction.status).toBe("success");
+      expect(result.download.status).toBe("success");
     });
 
-    it('handles generic errors not matching categories', () => {
+    it("handles generic errors not matching categories", () => {
       const initial = getDefaultHvscStatusSummary();
-      const result = applyHvscProgressEventToSummary(initial, {
-        stage: 'error',
-        message: 'Something weird happened',
-      }, 'download');
+      const result = applyHvscProgressEventToSummary(
+        initial,
+        {
+          stage: "error",
+          message: "Something weird happened",
+        },
+        "download",
+      );
 
-      expect(result.download.errorCategory).toBe('download');
+      expect(result.download.errorCategory).toBe("download");
     });
 
-    it('handles extraction failure when error stage is unknown', () => {
+    it("handles extraction failure when error stage is unknown", () => {
       const initial = getDefaultHvscStatusSummary();
-      const result = applyHvscProgressEventToSummary(initial, {
-        stage: 'error',
-        message: 'Something weird happened',
-      }, 'unknown_stage_name');
+      const result = applyHvscProgressEventToSummary(
+        initial,
+        {
+          stage: "error",
+          message: "Something weird happened",
+        },
+        "unknown_stage_name",
+      );
 
       // Default fallthrough logic for unknown lastStage?
       // The code: if (lastStage === 'download') { ... } return { extraction: ... }
       // So unexpected lastStage falls through to extraction error
-      expect(result.extraction.status).toBe('failure');
+      expect(result.extraction.status).toBe("failure");
     });
   });
 
-  describe('Failure handling', () => {
-    it('classifies download failures and stores error details', () => {
+  describe("Failure handling", () => {
+    it("classifies download failures and stores error details", () => {
       const initial = getDefaultHvscStatusSummary();
-      const summary = applyHvscProgressEventToSummary(initial, {
-        ingestionId: 'test',
-        stage: 'error',
-        message: 'Request failed',
-        errorCause: 'Connection refused',
-      }, 'download');
+      const summary = applyHvscProgressEventToSummary(
+        initial,
+        {
+          ingestionId: "test",
+          stage: "error",
+          message: "Request failed",
+          errorCause: "Connection refused",
+        },
+        "download",
+      );
 
-      expect(summary.download.status).toBe('failure');
-      expect(summary.download.errorCategory).toBe('network');
-      expect(summary.download.errorMessage).toBe('Connection refused');
+      expect(summary.download.status).toBe("failure");
+      expect(summary.download.errorCategory).toBe("network");
+      expect(summary.download.errorMessage).toBe("Connection refused");
     });
 
-    it('classifies extraction failures based on last stage', () => {
+    it("classifies extraction failures based on last stage", () => {
       const initial = getDefaultHvscStatusSummary();
-      const summary = applyHvscProgressEventToSummary(initial, {
-        ingestionId: 'test',
-        stage: 'error',
-        message: 'Disk full',
-        errorCause: 'ENOSPC',
-      }, 'archive_extraction');
+      const summary = applyHvscProgressEventToSummary(
+        initial,
+        {
+          ingestionId: "test",
+          stage: "error",
+          message: "Disk full",
+          errorCause: "ENOSPC",
+        },
+        "archive_extraction",
+      );
 
-      expect(summary.extraction.status).toBe('failure');
-      expect(summary.extraction.errorCategory).toBe('storage');
+      expect(summary.extraction.status).toBe("failure");
+      expect(summary.extraction.errorCategory).toBe("storage");
     });
 
-    it('upgrades in-progress statuses to success on complete event (BRDA:170 FALSE, BRDA:175 FALSE)', () => {
+    it("upgrades in-progress statuses to success on complete event (BRDA:170 FALSE, BRDA:175 FALSE)", () => {
       const initial = getDefaultHvscStatusSummary();
-      initial.download.status = 'in-progress';
-      initial.extraction.status = 'in-progress';
+      initial.download.status = "in-progress";
+      initial.extraction.status = "in-progress";
 
-      const result = applyHvscProgressEventToSummary(initial, { stage: 'complete', message: 'done' });
-      expect(result.download.status).toBe('success');
-      expect(result.extraction.status).toBe('success');
+      const result = applyHvscProgressEventToSummary(initial, {
+        stage: "complete",
+        message: "done",
+      });
+      expect(result.download.status).toBe("success");
+      expect(result.extraction.status).toBe("success");
     });
 
-    it('classifies error without lastStage context (BRDA:183 ?? null)', () => {
+    it("classifies error without lastStage context (BRDA:183 ?? null)", () => {
       const initial = getDefaultHvscStatusSummary();
       // lastStage omitted → undefined → ?? null fires at line 183
       const result = applyHvscProgressEventToSummary(initial, {
-        stage: 'error',
-        message: 'Unclassified error',
+        stage: "error",
+        message: "Unclassified error",
       });
-      expect(result.extraction.status).toBe('failure');
+      expect(result.extraction.status).toBe("failure");
     });
 
-    it('uses event.message as errorMessage when errorCause is absent (BRDA:184)', () => {
+    it("uses event.message as errorMessage when errorCause is absent (BRDA:184)", () => {
       const initial = getDefaultHvscStatusSummary();
-      const result = applyHvscProgressEventToSummary(initial, {
-        stage: 'error',
-        message: 'Fallback message used',
-      }, 'archive_extraction');
-      expect(result.extraction.errorMessage).toBe('Fallback message used');
+      const result = applyHvscProgressEventToSummary(
+        initial,
+        {
+          stage: "error",
+          message: "Fallback message used",
+        },
+        "archive_extraction",
+      );
+      expect(result.extraction.errorMessage).toBe("Fallback message used");
     });
   });
 });

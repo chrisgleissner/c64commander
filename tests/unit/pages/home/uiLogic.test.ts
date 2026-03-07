@@ -6,31 +6,35 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { describe, expect, it } from 'vitest';
-import { resolveToggleOption } from '@/pages/home/utils/uiLogic';
+import { describe, expect, it } from "vitest";
+import { resolveToggleOption } from "@/pages/home/utils/uiLogic";
 
-describe('resolveToggleOption', () => {
-  it('resolves explicit boolean tokens', () => {
-    const options = ['Disabled', 'Enabled'];
-    expect(resolveToggleOption(options, true)).toBe('Enabled');
-    expect(resolveToggleOption(options, false)).toBe('Disabled');
+describe("resolveToggleOption", () => {
+  it("resolves explicit boolean tokens", () => {
+    const options = ["Disabled", "Enabled"];
+    expect(resolveToggleOption(options, true)).toBe("Enabled");
+    expect(resolveToggleOption(options, false)).toBe("Disabled");
   });
 
-  it('resolves joystick swap options to swapped/normal values', () => {
-    const options = ['Normal', 'Swapped'];
-    expect(resolveToggleOption(options, true, {
-      enabled: ['Swapped', 'Swap'],
-      disabled: ['Normal'],
-    })).toBe('Swapped');
-    expect(resolveToggleOption(options, false, {
-      enabled: ['Swapped', 'Swap'],
-      disabled: ['Normal'],
-    })).toBe('Normal');
+  it("resolves joystick swap options to swapped/normal values", () => {
+    const options = ["Normal", "Swapped"];
+    expect(
+      resolveToggleOption(options, true, {
+        enabled: ["Swapped", "Swap"],
+        disabled: ["Normal"],
+      }),
+    ).toBe("Swapped");
+    expect(
+      resolveToggleOption(options, false, {
+        enabled: ["Swapped", "Swap"],
+        disabled: ["Normal"],
+      }),
+    ).toBe("Normal");
   });
 
-  it('falls back to first/last provided option when no token matches', () => {
-    const options = ['Primary', 'Secondary'];
-    expect(resolveToggleOption(options, true)).toBe('Primary');
-    expect(resolveToggleOption(options, false)).toBe('Secondary');
+  it("falls back to first/last provided option when no token matches", () => {
+    const options = ["Primary", "Secondary"];
+    expect(resolveToggleOption(options, true)).toBe("Primary");
+    expect(resolveToggleOption(options, false)).toBe("Secondary");
   });
 });

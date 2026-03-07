@@ -8,13 +8,13 @@ Can the Diagnostics UI safely hide raw Traces and expose only Action Summaries t
 
 ### Summary of Trade-Offs
 
-| Dimension | Keep Traces Visible | Hide Traces |
-|-----------|-------------------|-------------|
-| UX clarity | Lower – two overlapping views create cognitive load | Higher – single coherent view |
-| Data completeness | Full – all event types visible | Partial – per-event context, scoped traces, backend decisions, and intra-correlation ordering are lost |
-| Debuggability | Maximum – raw events are directly inspectable | Reduced for developers; adequate for end users if export preserved |
-| Maintenance burden | Moderate – two tabs require parallel UX evolution | Lower – single tab simplifies UI |
-| Architectural integrity | Preserved – traces remain visible as source of truth | At risk if export is also removed; safe if export is preserved |
+| Dimension               | Keep Traces Visible                                  | Hide Traces                                                                                            |
+| ----------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| UX clarity              | Lower – two overlapping views create cognitive load  | Higher – single coherent view                                                                          |
+| Data completeness       | Full – all event types visible                       | Partial – per-event context, scoped traces, backend decisions, and intra-correlation ordering are lost |
+| Debuggability           | Maximum – raw events are directly inspectable        | Reduced for developers; adequate for end users if export preserved                                     |
+| Maintenance burden      | Moderate – two tabs require parallel UX evolution    | Lower – single tab simplifies UI                                                                       |
+| Architectural integrity | Preserved – traces remain visible as source of truth | At risk if export is also removed; safe if export is preserved                                         |
 
 ### Recommended Path
 
@@ -53,14 +53,14 @@ Action Summaries are a **derived, presentation-oriented projection** (action-sum
 
 ### Contractual Guarantees
 
-| Guarantee | Traces | Action Summaries |
-|-----------|--------|-----------------|
-| Source of truth | Yes (tracing-spec §1) | No – derived projection (action-summary-spec §1) |
-| Schema stability | Yes – CI-friendly export format (tracing-spec §16.3) | No formal export schema |
-| Deterministic ordering | Yes – `relativeMs` primary key (tracing-spec §6) | Yes – `startTimestamp` + `correlationId` (action-summary-spec §9) |
-| Golden trace participation | Yes (tracing-spec §19) | No (action-summary-spec §12) |
-| Playwright assertion target | Yes – `assertRestTraceSequence`, `assertFtpTraceSequence` (tracing-spec §18.5) | No – not asserted by Playwright helpers |
-| Redaction at capture | Yes (tracing-spec §15) | Inherited from traces |
+| Guarantee                   | Traces                                                                         | Action Summaries                                                  |
+| --------------------------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
+| Source of truth             | Yes (tracing-spec §1)                                                          | No – derived projection (action-summary-spec §1)                  |
+| Schema stability            | Yes – CI-friendly export format (tracing-spec §16.3)                           | No formal export schema                                           |
+| Deterministic ordering      | Yes – `relativeMs` primary key (tracing-spec §6)                               | Yes – `startTimestamp` + `correlationId` (action-summary-spec §9) |
+| Golden trace participation  | Yes (tracing-spec §19)                                                         | No (action-summary-spec §12)                                      |
+| Playwright assertion target | Yes – `assertRestTraceSequence`, `assertFtpTraceSequence` (tracing-spec §18.5) | No – not asserted by Playwright helpers                           |
+| Redaction at capture        | Yes (tracing-spec §15)                                                         | Inherited from traces                                             |
 
 ### Where Each Is Source of Truth
 
@@ -99,11 +99,11 @@ No. `action-scope-start` and `action-scope-end` events (tracing-spec §9) are no
 
 ### 3.2 Backend Decisions
 
-**backend-decision events**: Not surfaced in Action Summaries. The `selectedTarget` and `reason` fields (`reachable`, `fallback`, `demo-mode`, `test-mode`) are only visible in raw traces. Action Summaries include the `target` on each REST/FTP effect, but the *reason* for target selection is lost.
+**backend-decision events**: Not surfaced in Action Summaries. The `selectedTarget` and `reason` fields (`reachable`, `fallback`, `demo-mode`, `test-mode`) are only visible in raw traces. Action Summaries include the `target` on each REST/FTP effect, but the _reason_ for target selection is lost.
 
-**Fallback reasoning**: Completely invisible in Action Summaries. When the system falls back from a real device to a mock, the `reason: "fallback"` event is only in traces. This is high-severity because fallback behavior is a primary diagnostic concern when users report connectivity issues – knowing *why* a target was selected (not just *which* target) is essential for root-cause analysis.
+**Fallback reasoning**: Completely invisible in Action Summaries. When the system falls back from a real device to a mock, the `reason: "fallback"` event is only in traces. This is high-severity because fallback behavior is a primary diagnostic concern when users report connectivity issues – knowing _why_ a target was selected (not just _which_ target) is essential for root-cause analysis.
 
-**Target selection visibility**: Partially preserved. The `target` field on each effect shows the *result* of target selection, but the *decision process* (why that target was chosen) requires traces.
+**Target selection visibility**: Partially preserved. The `target` field on each effect shows the _result_ of target selection, but the _decision process_ (why that target was chosen) requires traces.
 
 ### 3.3 Error Fidelity
 
@@ -135,26 +135,26 @@ No. `action-scope-start` and `action-scope-end` events (tracing-spec §9) are no
 
 ### Data Completeness Table
 
-| Data Type | Present in Traces | Present in Actions | Loss if Traces Hidden | Severity |
-|-----------|:-:|:-:|---|---|
-| Correlation boundaries | ✓ | ✓ | None | — |
-| Intra-correlation event ordering | ✓ | ✗ | Full sequence lost | Medium |
-| Sub-traces (scoped phases) | ✓ | ✗ | Phase boundaries invisible | Medium |
-| Backend decision reason | ✓ | ✗ | Fallback/demo reasoning lost | High |
-| Backend target (per effect) | ✓ | ✓ | None (target on effect) | — |
-| Error count (aggregate) | ✓ | ✓ | None | — |
-| Error category + isExpected | ✓ | ✗ | Classification lost | High |
-| Multiple error details | ✓ | Partial (first only) | Subsequent errors lost | Medium |
-| Per-event relativeMs | ✓ | ✗ | Fine-grained timing lost | Medium |
-| Overlapping effect timing | ✓ | ✗ | Interleaving invisible | Low |
-| Lifecycle state per event | ✓ | ✗ | Foreground/background context lost | Medium |
-| Route/query context | ✓ | ✗ | UI navigation context lost | Medium |
-| Playback context snapshot | ✓ | ✗ | Playback state at action time lost | Low |
-| Device guard events | ✓ | ✗ | Guard decisions invisible | Low |
-| Feature flag snapshot | ✓ | ✗ | Flag state at action time lost | Low |
-| Full request/response bodies | ✓ | ✗ | Payload details lost | High |
-| Event IDs (EVT-*) | ✓ | ✗ | Grepability lost | Low |
-| Raw JSON structure | ✓ | ✗ | Machine-parseable records lost | Medium |
+| Data Type                        | Present in Traces |  Present in Actions  | Loss if Traces Hidden              | Severity |
+| -------------------------------- | :---------------: | :------------------: | ---------------------------------- | -------- |
+| Correlation boundaries           |         ✓         |          ✓           | None                               | —        |
+| Intra-correlation event ordering |         ✓         |          ✗           | Full sequence lost                 | Medium   |
+| Sub-traces (scoped phases)       |         ✓         |          ✗           | Phase boundaries invisible         | Medium   |
+| Backend decision reason          |         ✓         |          ✗           | Fallback/demo reasoning lost       | High     |
+| Backend target (per effect)      |         ✓         |          ✓           | None (target on effect)            | —        |
+| Error count (aggregate)          |         ✓         |          ✓           | None                               | —        |
+| Error category + isExpected      |         ✓         |          ✗           | Classification lost                | High     |
+| Multiple error details           |         ✓         | Partial (first only) | Subsequent errors lost             | Medium   |
+| Per-event relativeMs             |         ✓         |          ✗           | Fine-grained timing lost           | Medium   |
+| Overlapping effect timing        |         ✓         |          ✗           | Interleaving invisible             | Low      |
+| Lifecycle state per event        |         ✓         |          ✗           | Foreground/background context lost | Medium   |
+| Route/query context              |         ✓         |          ✗           | UI navigation context lost         | Medium   |
+| Playback context snapshot        |         ✓         |          ✗           | Playback state at action time lost | Low      |
+| Device guard events              |         ✓         |          ✗           | Guard decisions invisible          | Low      |
+| Feature flag snapshot            |         ✓         |          ✗           | Flag state at action time lost     | Low      |
+| Full request/response bodies     |         ✓         |          ✗           | Payload details lost               | High     |
+| Event IDs (EVT-\*)               |         ✓         |          ✗           | Grepability lost                   | Low      |
+| Raw JSON structure               |         ✓         |          ✗           | Machine-parseable records lost     | Medium   |
 
 ---
 
@@ -162,27 +162,30 @@ No. `action-scope-start` and `action-scope-end` events (tracing-spec §9) are no
 
 ### 4.1 User Personas
 
-| Persona | Primary Need | Preferred View | Trace Need |
-|---------|-------------|---------------|------------|
-| **End user diagnosing connectivity** | "Is my device reachable? Why did this fail?" | Actions (outcome + error) | Rare – only if support escalation needed |
-| **Power user** | "What REST calls did this action trigger? What was the target?" | Actions with effect detail | Occasional – when debugging fallback behavior |
-| **Developer using production build** | "What is the exact event sequence? What was the backend decision?" | Traces | Frequent – raw events are the primary debugging tool |
-| **QA tester** | "Does this match the expected trace sequence? Are golden traces correct?" | Traces | Always – golden trace validation is trace-based |
+| Persona                              | Primary Need                                                              | Preferred View             | Trace Need                                           |
+| ------------------------------------ | ------------------------------------------------------------------------- | -------------------------- | ---------------------------------------------------- |
+| **End user diagnosing connectivity** | "Is my device reachable? Why did this fail?"                              | Actions (outcome + error)  | Rare – only if support escalation needed             |
+| **Power user**                       | "What REST calls did this action trigger? What was the target?"           | Actions with effect detail | Occasional – when debugging fallback behavior        |
+| **Developer using production build** | "What is the exact event sequence? What was the backend decision?"        | Traces                     | Frequent – raw events are the primary debugging tool |
+| **QA tester**                        | "Does this match the expected trace sequence? Are golden traces correct?" | Traces                     | Always – golden trace validation is trace-based      |
 
 ### 4.2 Cognitive Load Comparison
 
 **Two tabs model (current)**
+
 - Cognitive load: High. Users must understand the relationship between Traces and Actions.
 - Discovery overhead: Users must decide which tab contains the information they need.
 - Duplication concern: The same logical event (e.g., a REST call) appears in both views with different levels of detail, leading to potential confusion about which is authoritative.
 - Benefit: Maximum flexibility for all personas.
 
 **Single tab – Actions only**
+
 - Cognitive load: Low. One coherent view with expandable detail.
 - Risk: Developers and QA testers lose inline access to raw traces. They must export and inspect externally.
 - Benefit: Simplified UX for the majority use case.
 
 **Progressive disclosure (recommended)**
+
 - Cognitive load: Low by default, scalable on demand.
 - The Actions tab serves as the primary view. Each Action Summary can expand to show its constituent raw trace events inline.
 - Default state: collapsed (Actions view). Expanded state: raw trace events visible per correlation.
@@ -191,6 +194,7 @@ No. `action-scope-start` and `action-scope-end` events (tracing-spec §9) are no
 ### 4.3 Discoverability vs Noise
 
 The current two-tab model introduces noise for end users:
+
 - Raw traces include `backend-decision`, `device-guard`, `action-scope-start/end` events that are meaningless to non-developers.
 - Event IDs (`EVT-0042`) and correlation IDs (`COR-0007`) are opaque to end users.
 - The volume of trace events (up to 10,000) overwhelms non-technical users.
@@ -248,16 +252,19 @@ The Traces tab is a read-only view of `getTraceEvents()`. Hiding it changes only
 **Description**: No change. Traces and Actions tabs remain side-by-side.
 
 **Pros**:
+
 - Zero migration risk
 - Maximum data visibility for all personas
 - No spec changes required
 
 **Cons**:
+
 - Cognitive load remains high for non-developers
 - Users must understand the Traces/Actions relationship
 - Two tabs compete for attention, creating discoverability friction
 
 **Impact**:
+
 - Debuggability: Maximum
 - Support workflows: Adequate but noisy
 - Documentation: No changes needed
@@ -273,18 +280,21 @@ The Traces tab is a read-only view of `getTraceEvents()`. Hiding it changes only
 **Description**: Add a settings toggle (e.g., Settings → Diagnostics → Show Raw Traces) that controls Traces tab visibility. Default: off.
 
 **Pros**:
+
 - Clean default UX for end users
 - Developers can enable traces when needed
 - No data loss – traces remain fully accessible
 - Minimal code change
 
 **Cons**:
+
 - Adds a settings item that most users will never find
 - Developers must toggle a setting before debugging – adds friction
 - Risk of support scenarios where "enable Advanced mode" becomes a rote instruction
 - Settings state adds another dimension to test coverage
 
 **Impact**:
+
 - Debuggability: Preserved (when enabled)
 - Support workflows: Requires "enable advanced mode" step
 - Documentation: Must document the toggle
@@ -300,17 +310,20 @@ The Traces tab is a read-only view of `getTraceEvents()`. Hiding it changes only
 **Description**: Remove the Traces tab from the Diagnostics UI entirely. Traces remain available via the trace export ZIP and Playwright APIs.
 
 **Pros**:
+
 - Simplest possible UI – only Actions, Logs, and Errors tabs
 - No cognitive load from trace/action duality
 - Export-based debugging still possible
 
 **Cons**:
+
 - Developers cannot inspect traces in-app – must export and open externally
 - Increases debugging cycle time for developers
 - Live inspection during development is lost
 - Power users lose the ability to quickly correlate trace events with UI state
 
 **Impact**:
+
 - Debuggability: Reduced for in-app scenarios; preserved for export-based analysis
 - Support workflows: Users can share Actions export; full traces require separate export flow
 - Documentation: Must document export-based trace inspection workflow
@@ -326,6 +339,7 @@ The Traces tab is a read-only view of `getTraceEvents()`. Hiding it changes only
 **Description**: Remove the standalone Traces tab. Each Action Summary row in the Actions tab gains an expandable section that shows the raw trace events belonging to that `correlationId`. The expansion renders the same JSON detail currently shown in the Traces tab, scoped to one action.
 
 **Pros**:
+
 - Single coherent view (Actions tab) with full drill-down capability
 - Progressive disclosure: clean summary by default, raw detail on demand
 - No data loss – all trace events remain accessible in context
@@ -333,12 +347,14 @@ The Traces tab is a read-only view of `getTraceEvents()`. Hiding it changes only
 - Eliminates the need to cross-reference between tabs
 
 **Cons**:
+
 - More complex UI implementation (expandable rows with raw JSON)
 - Large expansions may affect scroll performance with many events per action
 - Requires clear visual separation between summary and raw trace data
 - Inline raw traces may be visually overwhelming if many events exist per correlation
 
 **Impact**:
+
 - Debuggability: Maximum – raw traces available in context of their action
 - Support workflows: Users share Actions export; developers expand inline for detail
 - Documentation: Must document expansion behavior
@@ -354,17 +370,20 @@ The Traces tab is a read-only view of `getTraceEvents()`. Hiding it changes only
 **Description**: Replace both Traces and Actions tabs with a single hierarchical view. Top level shows Action Summaries (grouped by `correlationId`). Expanding an action shows its effects. Further expanding an effect shows the raw trace events.
 
 **Pros**:
+
 - Most structured and information-dense model
 - Clear hierarchy: Action → Effects → Raw Events
 - Eliminates all tab switching for diagnostics data
 
 **Cons**:
+
 - Highest implementation complexity
 - Three-level hierarchy may be harder to navigate on mobile
 - Requires significant UI redesign
 - Performance risk with deep DOM trees for large trace sessions
 
 **Impact**:
+
 - Debuggability: Maximum (with good navigation)
 - Support workflows: Excellent – hierarchical context is self-explanatory
 - Documentation: Requires new UX documentation
@@ -387,7 +406,7 @@ The Traces tab is a read-only view of `getTraceEvents()`. Hiding it changes only
 4. **Golden trace recording is unaffected** – the `RECORD_TRACES=1` workflow produces identical output.
 5. **Action Summaries remain a pure projection** – no new heuristics, merging, or deduplication logic is added to compensate for hidden traces.
 
-The tracing-spec establishes traces as the source of truth for *implementation, testing, and diagnostics* (§1). The UI is one *presentation* of diagnostics, not the sole access path. Hiding the UI presentation does not compromise the source of truth if all other access paths remain intact.
+The tracing-spec establishes traces as the source of truth for _implementation, testing, and diagnostics_ (§1). The UI is one _presentation_ of diagnostics, not the sole access path. Hiding the UI presentation does not compromise the source of truth if all other access paths remain intact.
 
 ### Does It Risk Future Heuristic Creep in Actions?
 
@@ -447,10 +466,12 @@ Remove the standalone Traces tab. Make each Action Summary expandable to reveal 
 **Expanded state**: Below the existing Action Summary detail (correlation, origin, outcome, effects), a new section labeled "Raw Trace Events" renders the `TraceEvent[]` for that `correlationId` as collapsible JSON nodes, consistent with the current Traces tab rendering.
 
 **Labeling strategy**:
+
 - Section header: "Trace Events (N)" where N is the count of events in the correlation
 - Each event rendered identically to current Traces tab items (severity badge, title, timestamp, expandable JSON)
 
 **Export behavior**:
+
 - "Share" on the Actions tab exports Action Summary JSON (unchanged)
 - A separate "Export Full Traces" option (button or menu) exports the standard `trace.json` + `app-metadata.json` ZIP
 

@@ -15,9 +15,10 @@ if (expectWeb) {
   );
 }
 if (expectAndroid) {
-  targets.push(
-    { label: 'android jacoco', file: 'android/app/build/reports/jacoco/jacocoTestReport/jacocoTestReport.xml' },
-  );
+  targets.push({
+    label: 'android jacoco',
+    file: 'android/app/build/reports/jacoco/jacocoTestReport/jacocoTestReport.xml',
+  });
 }
 
 if (!targets.length) {

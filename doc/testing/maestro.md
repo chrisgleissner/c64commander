@@ -15,11 +15,11 @@ Source: https://docs.maestro.dev/api-reference/commands
 
 ## Platform Comparison Matrix
 
-| Platform | CI runner | Flows executed in CI | High-level description |
-| --- | --- | --- | --- |
-| Android | `scripts/run-maestro-gating.sh` with `CI=true` | `.maestro/smoke-launch.yaml`, `.maestro/smoke-hvsc.yaml` | `smoke-launch` validates app launch and primary shell availability. `smoke-hvsc` validates core HVSC browsing/import path on device. |
-| iPhone (iOS simulator) | `.github/workflows/ios.yaml` matrix (`ios-maestro-tests`) | `ios-smoke-launch`, `ios-playback-basics`, `ios-diagnostics-export`, `ios-ftp-browse`, `ios-local-import`, `ios-secure-storage-persist`, `ios-import-playback`, `ios-hvsc-browse`, `ios-config-persistence` | Covers launch stability, playback controls, diagnostics dialog export path, FTP browsing, local source option visibility, secure-storage persistence, import-to-playback path, HVSC controls visibility, and config persistence across app restarts. |
-| Web (Docker route via Android app) | `./build --test-maestro-docker` | `.maestro/smoke-launch.yaml`, `.maestro/smoke-hvsc.yaml` (CI-tag subset) | Builds/starts Docker web server and runs Android Maestro CI flows with app target set to `real` and host default `10.0.2.2:<docker-port>`, exercising the web route through the native client path. |
+| Platform                           | CI runner                                                 | Flows executed in CI                                                                                                                                                                                        | High-level description                                                                                                                                                                                                                               |
+| ---------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Android                            | `scripts/run-maestro-gating.sh` with `CI=true`            | `.maestro/smoke-launch.yaml`, `.maestro/smoke-hvsc.yaml`                                                                                                                                                    | `smoke-launch` validates app launch and primary shell availability. `smoke-hvsc` validates core HVSC browsing/import path on device.                                                                                                                 |
+| iPhone (iOS simulator)             | `.github/workflows/ios.yaml` matrix (`ios-maestro-tests`) | `ios-smoke-launch`, `ios-playback-basics`, `ios-diagnostics-export`, `ios-ftp-browse`, `ios-local-import`, `ios-secure-storage-persist`, `ios-import-playback`, `ios-hvsc-browse`, `ios-config-persistence` | Covers launch stability, playback controls, diagnostics dialog export path, FTP browsing, local source option visibility, secure-storage persistence, import-to-playback path, HVSC controls visibility, and config persistence across app restarts. |
+| Web (Docker route via Android app) | `./build --test-maestro-docker`                           | `.maestro/smoke-launch.yaml`, `.maestro/smoke-hvsc.yaml` (CI-tag subset)                                                                                                                                    | Builds/starts Docker web server and runs Android Maestro CI flows with app target set to `real` and host default `10.0.2.2:<docker-port>`, exercising the web route through the native client path.                                                  |
 
 ## Build helper Maestro modes
 
@@ -81,6 +81,7 @@ Tag filters are comma-separated. Prefix `+` to include and `-` to exclude. Unpre
 ### Timeouts
 
 Maestro configured with stricter timeouts to ensure performance:
+
 - LONG_TIMEOUT: 20s
 - TIMEOUT: 15s
 - SHORT_TIMEOUT: 5s
@@ -97,9 +98,9 @@ env:
   PASSWORD: ${PASSWORD || "hunter2"}
   DEFAULT_TIMEOUT: ${DEFAULT_TIMEOUT || 10000}
 ---
-- tapOn: "Your Username"
+- tapOn: 'Your Username'
 - inputText: ${USERNAME}
-- tapOn: "Your Password"
+- tapOn: 'Your Password'
 - inputText: ${PASSWORD}
 ```
 
@@ -114,7 +115,7 @@ When scrolling to reach a target, prefer a `repeat` loop with a `while` conditio
 ```yaml
 - repeat:
     while:
-      notVisible: "ValueX"
+      notVisible: 'ValueX'
     commands:
       - scroll
 ```
@@ -125,8 +126,8 @@ Add PNG, JPEG, GIF, or MP4 media to device gallery in Maestro tests.
 
 ```yaml
 - addMedia:
-    - "./assets/foo.png" # path of media file in workspace
-    - "./assets/foo.mp4"
+    - './assets/foo.png' # path of media file in workspace
+    - './assets/foo.mp4'
 ```
 
 ## `assertVisible`
@@ -135,9 +136,9 @@ Confirm element visibility with assertVisible, waiting for appearance and state 
 
 ```yaml
 - assertVisible:
-    # Same exact parameters as in tapOn or any other command that uses selectors
+  # Same exact parameters as in tapOn or any other command that uses selectors
 
-- assertVisible: "My Button"
+- assertVisible: 'My Button'
 ```
 
 ## `assertNotVisible`
@@ -146,9 +147,9 @@ Verify element disappearance with assertNotVisible using text, ID, or properties
 
 ```yaml
 - assertNotVisible:
-    # Same exact parameters as tapOn
+  # Same exact parameters as tapOn
 
-- assertNotVisible: "My Button"
+- assertNotVisible: 'My Button'
 ```
 
 ## `assertTrue`
@@ -205,8 +206,8 @@ Clear iOS keychain passwords in Maestro for clean test states.
 Remove all app data with clearState in Maestro for fresh test starts.
 
 ```yaml
-- clearState            # clears the state of the current app
-- clearState: app.id    # clears the state of an arbitrary app
+- clearState # clears the state of the current app
+- clearState: app.id # clears the state of an arbitrary app
 ```
 
 ## `copyTextFrom`
@@ -218,9 +219,9 @@ appId: com.example.app
 ---
 - launchApp
 - copyTextFrom:
-    id: "someId"
+    id: 'someId'
 - tapOn:
-    id: "searchFieldId"
+    id: 'searchFieldId'
 - pasteText
 ```
 
@@ -231,7 +232,7 @@ Run inline JavaScript snippets in Maestro YAML for quick tasks.
 ```yaml
 appId: com.example
 env:
-    MY_NAME: John
+  MY_NAME: John
 ---
 - launchApp
 - evalScript: ${output.myFlow = MY_NAME.toUpperCase()}
@@ -245,7 +246,7 @@ Remove characters from text fields with eraseText in Maestro by specifying count
 ```yaml
 - eraseText # Removes up to 50 characters (default)
 
-- eraseText: 100    # Removes up to 100 characters
+- eraseText: 100 # Removes up to 100 characters
 ```
 
 ## `extendedWaitUntil`
@@ -254,12 +255,12 @@ Wait for elements to appear or disappear with timeout in Maestro.
 
 ```yaml
 - extendedWaitUntil:
-    visible: "My text that should be visible" # or any other selector
-    timeout: 10000      # Timeout in milliseconds
+    visible: 'My text that should be visible' # or any other selector
+    timeout: 10000 # Timeout in milliseconds
 
 - extendedWaitUntil:
     notVisible:
-        id: "elementId" # or any other selector
+      id: 'elementId' # or any other selector
     timeout: 10000
 ```
 
@@ -272,8 +273,8 @@ Extract text from images or elements without ID using AI in Maestro and store in
 - inputText: ${aiOutput}
 
 - extractTextWithAI:
-    query: "CAPTCHA value"
-    outputVariable: "theCaptchaValue"
+    query: 'CAPTCHA value'
+    outputVariable: 'theCaptchaValue'
 ```
 
 ## `hideKeyboard`
@@ -289,15 +290,15 @@ Hide virtual keyboard in Maestro tests; note potential instability on iOS.
 Enter text into fields in Maestro, including random emails, names, or numbers with length.
 
 ```yaml
-- inputText: "Hello World"
+- inputText: 'Hello World'
 
-- inputRandomEmail         # Enters a random Email address
-- inputRandomPersonName    # Enters a random person name
-- inputRandomNumber        # Enters a random integer number
-- inputRandomText          # Enters random unstructured text
-- inputRandomCityName      # Enters a random city name, worldwide
-- inputRandomCountryName   # Enters the name of a random country
-- inputRandomColorName     # Enters a random colour. Might be multiple words.
+- inputRandomEmail # Enters a random Email address
+- inputRandomPersonName # Enters a random person name
+- inputRandomNumber # Enters a random integer number
+- inputRandomText # Enters random unstructured text
+- inputRandomCityName # Enters a random city name, worldwide
+- inputRandomCountryName # Enters the name of a random country
+- inputRandomColorName # Enters a random colour. Might be multiple words.
 ```
 
 ## `killApp`
@@ -323,12 +324,13 @@ Launch app in Maestro with appId, clear state/keychain, and launch arguments.
 - launchApp: appId
 
 - launchApp:
-    appId: "com.example.app"
+    appId: 'com.example.app'
     clearState: true
-    clearKeychain: true   # optional: clear *entire* iOS keychain
+    clearKeychain: true # optional: clear *entire* iOS keychain
     stopApp: false # optional (true by default): stop the app before launching it
-    permissions: { all: deny } # optional: by default all permissions are allowed,
-                               # even if clearState: true is passed
+    permissions:
+      { all: deny } # optional: by default all permissions are allowed,
+      # even if clearState: true is passed
 ```
 
 ## `openLink`
@@ -381,7 +383,7 @@ A command to repeat a set commands until a condition is met.
 
 - repeat:
     while:
-      notVisible: "ValueX"
+      notVisible: 'ValueX'
     commands:
       - tapOn: Button
 ```
@@ -395,7 +397,7 @@ Some flaky behaviour is expected or beyond an app's control. For those situation
     maxRetries: 3
     commands:
       - tapOn:
-          id: "button-that-might-not-be-here-yet"
+          id: 'button-that-might-not-be-here-yet'
 ```
 
 ## `runFlow`
@@ -452,10 +454,10 @@ To scroll towards a direction until an element becomes visible in the view hiera
 - scrollUntilVisible:
     centerElement: true
     element:
-      text: "Item 6"
+      text: 'Item 6'
 
 - scrollUntilVisible:
-    element: "My text" # or any other selector
+    element: 'My text' # or any other selector
     direction: DOWN
 ```
 
@@ -568,7 +570,7 @@ To have control over the swipe gesture, you have the following choices:
     start: 90%, 50% # From (90% of width, 50% of height)
     end: 10%, 50% # To (10% of width, 50% of height)
 
-- swipe:              # This command swipes in the left direction from the middle of the device.
+- swipe: # This command swipes in the left direction from the middle of the device.
     direction: LEFT
 ```
 
@@ -596,10 +598,10 @@ To have control over the swipe gesture, you have the following choices:
 Use the tapOn command in Maestro to tap by text or ID, repeat taps, adjust wait times, and handle retries for reliable UI test interactions.
 
 ```yaml
-- tapOn: "My text"
+- tapOn: 'My text'
 
 - tapOn:
-    id: "id" # or any other selector
+    id: 'id' # or any other selector
 ```
 
 ## `doubleTapOn`
@@ -607,10 +609,10 @@ Use the tapOn command in Maestro to tap by text or ID, repeat taps, adjust wait 
 Double tap elements or points in Maestro with configurable delay and selectors. Part of Maestro testing tutorial.
 
 ```yaml
-- doubleTapOn: "Button"
+- doubleTapOn: 'Button'
 
 - doubleTapOn:
-    id: "someId" # or any other selector
+    id: 'someId' # or any other selector
     delay: 100 # (optional) Delay between taps. Default, 100ms
 ```
 

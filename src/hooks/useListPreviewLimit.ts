@@ -6,8 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useState } from 'react';
-import { clampListPreviewLimit, getListPreviewLimit, setListPreviewLimit } from '@/lib/uiPreferences';
+import { useCallback, useEffect, useState } from "react";
+import { clampListPreviewLimit, getListPreviewLimit, setListPreviewLimit } from "@/lib/uiPreferences";
 
 export const useListPreviewLimit = () => {
   const [limit, setLimitState] = useState(() => getListPreviewLimit());
@@ -21,8 +21,8 @@ export const useListPreviewLimit = () => {
         setLimitState(getListPreviewLimit());
       }
     };
-    window.addEventListener('c64u-ui-preferences-changed', handler as EventListener);
-    return () => window.removeEventListener('c64u-ui-preferences-changed', handler as EventListener);
+    window.addEventListener("c64u-ui-preferences-changed", handler as EventListener);
+    return () => window.removeEventListener("c64u-ui-preferences-changed", handler as EventListener);
   }, []);
 
   const setLimit = useCallback((value: number) => {

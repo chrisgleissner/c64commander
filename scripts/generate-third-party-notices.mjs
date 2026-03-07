@@ -3,15 +3,19 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-const rootDir = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const rootDir = path.resolve(
+  path.dirname(new URL(import.meta.url).pathname),
+  '..',
+);
 
-const readJson = async (filePath) => JSON.parse(await fs.readFile(filePath, 'utf8'));
+const readJson = async (filePath) =>
+  JSON.parse(await fs.readFile(filePath, 'utf8'));
 
 const safeReadJson = async (filePath) => {
   try {
     return await readJson(filePath);
   } catch (error) {
-    if ((error)?.code === 'ENOENT') return null;
+    if (error?.code === 'ENOENT') return null;
     throw error;
   }
 };
@@ -40,7 +44,8 @@ const normalizeLicense = (value) => {
   return 'UNKNOWN';
 };
 
-const normalizeSource = (value) => (typeof value === 'string' && value.trim().length > 0 ? value.trim() : '-');
+const normalizeSource = (value) =>
+  typeof value === 'string' && value.trim().length > 0 ? value.trim() : '-';
 
 const licenseUrlFallbacks = new Map([
   ['JSON', 'https://www.json.org/license.html'],
@@ -84,7 +89,10 @@ const collectNpmEntries = async () => {
     if (!name) continue;
 
     const existing = entriesByName.get(name);
-    const version = typeof info.version === 'string' ? info.version : existing?.version ?? 'UNKNOWN';
+    const version =
+      typeof info.version === 'string'
+        ? info.version
+        : (existing?.version ?? 'UNKNOWN');
     let license = normalizeLicense(info.license ?? existing?.license);
 
     if (license === 'UNKNOWN') {
@@ -104,13 +112,17 @@ const collectNpmEntries = async () => {
     });
   }
 
-  return Array.from(entriesByName.values()).sort((a, b) => a.name.localeCompare(b.name));
+  return Array.from(entriesByName.values()).sort((a, b) =>
+    a.name.localeCompare(b.name),
+  );
 };
 
 const readAndroidDeps = async () => {
   const gradlePath = path.join(rootDir, 'android', 'app', 'build.gradle');
   if (!(await fileExists(gradlePath))) {
-    console.warn(`android dependency metadata missing at ${gradlePath}; skipping Gradle dependency extraction`);
+    console.warn(
+      `android dependency metadata missing at ${gradlePath}; skipping Gradle dependency extraction`,
+    );
     return [];
   }
   const content = await fs.readFile(gradlePath, 'utf8');
@@ -132,7 +144,9 @@ const readAndroidDeps = async () => {
   ];
 
   for (const line of lines) {
-    const match = line.match(/^\s*(implementation|api|runtimeOnly|compileOnly)\s+"([^"]+)"/);
+    const match = line.match(
+      /^\s*(implementation|api|runtimeOnly|compileOnly)\s+"([^"]+)"/,
+    );
     if (!match) continue;
     const coordinate = match[2].trim();
     const parts = coordinate.split(':');
@@ -140,7 +154,9 @@ const readAndroidDeps = async () => {
 
     const [group, artifact, version] = parts;
     const name = `${group}:${artifact}`;
-    const license = licenseByGroupPrefix.find(([prefix]) => group.startsWith(prefix))?.[1] ?? 'UNKNOWN';
+    const license =
+      licenseByGroupPrefix.find(([prefix]) => group.startsWith(prefix))?.[1] ??
+      'UNKNOWN';
 
     entries.push({
       ecosystem: 'Gradle',
@@ -173,7 +189,9 @@ const readAndroidDeps = async () => {
     if (!deduped.has(entry.name)) deduped.set(entry.name, entry);
   }
 
-  return Array.from(deduped.values()).sort((a, b) => a.name.localeCompare(b.name));
+  return Array.from(deduped.values()).sort((a, b) =>
+    a.name.localeCompare(b.name),
+  );
 };
 
 const readCocoapods = async () => {
@@ -188,13 +206,17 @@ const readCocoapods = async () => {
   const cocoapodsSourceByName = new Map([
     ['Capacitor', 'https://github.com/ionic-team/capacitor.git'],
     ['CapacitorCordova', 'https://github.com/ionic-team/capacitor'],
-    ['CapacitorFilesystem', 'https://github.com/ionic-team/capacitor-plugins.git'],
+    [
+      'CapacitorFilesystem',
+      'https://github.com/ionic-team/capacitor-plugins.git',
+    ],
     ['CapacitorShare', 'https://github.com/ionic-team/capacitor-plugins.git'],
   ]);
 
   const resolveCocoapodsSource = (name, source) => {
     const normalized = normalizeSource(source);
-    if (normalized === '-') return cocoapodsSourceByName.get(name) ?? normalized;
+    if (normalized === '-')
+      return cocoapodsSourceByName.get(name) ?? normalized;
     if (/^\.\.\/\.\.\/node_modules\//.test(normalized)) {
       return cocoapodsSourceByName.get(name) ?? normalized;
     }
@@ -272,16 +294,26 @@ const readCocoapods = async () => {
         name,
         version: podspec.version ?? existing?.version ?? 'UNKNOWN',
         license: normalizeLicense(podspec.license ?? existing?.license),
-        source: resolveCocoapodsSource(name, podspec?.source?.git ?? podspec?.homepage ?? existing?.source),
+        source: resolveCocoapodsSource(
+          name,
+          podspec?.source?.git ?? podspec?.homepage ?? existing?.source,
+        ),
       });
     }
   }
 
-  return Array.from(entries.values()).sort((a, b) => a.name.localeCompare(b.name));
+  return Array.from(entries.values()).sort((a, b) =>
+    a.name.localeCompare(b.name),
+  );
 };
 
 const readSwiftPm = async () => {
-  const resolvedPath = path.join(rootDir, 'ios', 'native-tests', 'Package.resolved');
+  const resolvedPath = path.join(
+    rootDir,
+    'ios',
+    'native-tests',
+    'Package.resolved',
+  );
   const resolved = await safeReadJson(resolvedPath);
   if (!resolved) return [];
 
@@ -295,7 +327,8 @@ const readSwiftPm = async () => {
     .map((pin) => ({
       ecosystem: 'SwiftPM',
       name: pin.identity ?? pin.location ?? 'UNKNOWN',
-      version: pin.state?.version ?? pin.state?.revision?.slice(0, 12) ?? 'UNKNOWN',
+      version:
+        pin.state?.version ?? pin.state?.revision?.slice(0, 12) ?? 'UNKNOWN',
       license: 'UNKNOWN',
       source: normalizeSource(pin.location),
     }))
@@ -309,13 +342,10 @@ const renderNotices = (entries) => {
   const separator = '| --- | --- | --- | --- | --- |';
   const rows = entries.map((entry) => {
     const licenseUrl = resolveLicenseUrl(entry.license);
-    const linkedLicense = licenseUrl === '-'
-      ? entry.license
-      : `[${entry.license}](${licenseUrl})`;
+    const linkedLicense =
+      licenseUrl === '-' ? entry.license : `[${entry.license}](${licenseUrl})`;
     const source = entry.source || '-';
-    const linkedSource = source === '-'
-      ? '-'
-      : `[${source}](${source})`;
+    const linkedSource = source === '-' ? '-' : `[${source}](${source})`;
 
     return `| ${escapeTableCell(entry.ecosystem)} | ${escapeTableCell(entry.name)} | ${escapeTableCell(entry.version)} | ${escapeTableCell(linkedLicense)} | ${escapeTableCell(linkedSource)} |`;
   });
@@ -344,21 +374,31 @@ const writeOrCheck = async ({ targetPath, content, check }) => {
   }
 
   if (typeof existing !== 'string' || existing !== content) {
-    throw new Error(`notice drift detected: ${path.relative(rootDir, targetPath)}`);
+    throw new Error(
+      `notice drift detected: ${path.relative(rootDir, targetPath)}`,
+    );
   }
 };
 
 const main = async () => {
   const { check } = parseArgs();
-  const [npmEntries, gradleEntries, cocoapodsEntries, swiftPmEntries] = await Promise.all([
-    collectNpmEntries(),
-    readAndroidDeps(),
-    readCocoapods(),
-    readSwiftPm(),
-  ]);
+  const [npmEntries, gradleEntries, cocoapodsEntries, swiftPmEntries] =
+    await Promise.all([
+      collectNpmEntries(),
+      readAndroidDeps(),
+      readCocoapods(),
+      readSwiftPm(),
+    ]);
 
-  const allEntries = [...npmEntries, ...gradleEntries, ...cocoapodsEntries, ...swiftPmEntries];
-  const unknownCount = allEntries.filter((entry) => entry.license === 'UNKNOWN').length;
+  const allEntries = [
+    ...npmEntries,
+    ...gradleEntries,
+    ...cocoapodsEntries,
+    ...swiftPmEntries,
+  ];
+  const unknownCount = allEntries.filter(
+    (entry) => entry.license === 'UNKNOWN',
+  ).length;
 
   const markdown = [
     '# Third-Party Notices',
@@ -380,11 +420,15 @@ const main = async () => {
   });
 
   if (check) {
-    console.log(`third-party notices check passed (${allEntries.length} entries, ${unknownCount} unknown licenses)`);
+    console.log(
+      `third-party notices check passed (${allEntries.length} entries, ${unknownCount} unknown licenses)`,
+    );
     return;
   }
 
-  console.log(`third-party notices generated (${allEntries.length} entries, ${unknownCount} unknown licenses)`);
+  console.log(
+    `third-party notices generated (${allEntries.length} entries, ${unknownCount} unknown licenses)`,
+  );
 };
 
 main().catch((error) => {

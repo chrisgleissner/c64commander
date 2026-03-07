@@ -11,7 +11,7 @@ import type {
   SongLengthLoadInput,
   SongLengthResolution,
   SongLengthResolveQuery,
-} from './songlengthTypes';
+} from "./songlengthTypes";
 
 export type SongLengthStoreBackend = {
   readonly backendId: string;

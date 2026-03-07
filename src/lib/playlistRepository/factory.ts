@@ -1,11 +1,11 @@
-import { isNativePlatform } from '@/lib/native/platform';
-import type { PlaylistDataRepository } from './repository';
-import { getIndexedDbPlaylistDataRepository } from './indexedDbRepository';
-import { getLocalStoragePlaylistDataRepository } from './localStorageRepository';
+import { isNativePlatform } from "@/lib/native/platform";
+import type { PlaylistDataRepository } from "./repository";
+import { getIndexedDbPlaylistDataRepository } from "./indexedDbRepository";
+import { getLocalStoragePlaylistDataRepository } from "./localStorageRepository";
 
 let repository: PlaylistDataRepository | null = null;
 
-const canUseIndexedDb = () => typeof indexedDB !== 'undefined';
+const canUseIndexedDb = () => typeof indexedDB !== "undefined";
 
 export const getPlaylistDataRepository = (): PlaylistDataRepository => {
   if (repository) return repository;

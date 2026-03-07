@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { parseSidBaseAddress, type SidDetailEntry } from '@/lib/config/sidDetails';
+import { parseSidBaseAddress, type SidDetailEntry } from "@/lib/config/sidDetails";
 
 export type SidSilenceWrite = {
   address: string;
@@ -14,7 +14,7 @@ export type SidSilenceWrite = {
 };
 
 export type SidSilenceTarget = {
-  key: SidDetailEntry['key'];
+  key: SidDetailEntry["key"];
   label: string;
   baseAddress: number;
 };
@@ -24,14 +24,10 @@ const MODE_VOLUME_OFFSET = 0x18;
 const ADSR_OFFSETS = [0x05, 0x06, 0x0c, 0x0d, 0x13, 0x14];
 const SILENCE_VALUE = 0x00;
 
-const toAddressHex = (value: number) => value.toString(16).toUpperCase().padStart(4, '0');
+const toAddressHex = (value: number) => value.toString(16).toUpperCase().padStart(4, "0");
 
 export const buildSidSilenceWrites = (baseAddress: number): SidSilenceWrite[] => {
-  const offsets = [
-    ...CTRL_OFFSETS,
-    MODE_VOLUME_OFFSET,
-    ...ADSR_OFFSETS,
-  ];
+  const offsets = [...CTRL_OFFSETS, MODE_VOLUME_OFFSET, ...ADSR_OFFSETS];
   return offsets.map((offset) => ({
     address: toAddressHex(baseAddress + offset),
     value: SILENCE_VALUE,
@@ -56,7 +52,7 @@ export const silenceSidTargets = async (
   targets: SidSilenceTarget[],
 ) => {
   if (!targets.length) {
-    throw new Error('No configured SID chips found.');
+    throw new Error("No configured SID chips found.");
   }
 
   const failures: Array<{ label: string; message: string }> = [];
@@ -82,7 +78,7 @@ export const silenceSidTargets = async (
   }
 
   if (failures.length) {
-    const details = failures.map((failure) => `${failure.label}: ${failure.message}`).join('; ');
+    const details = failures.map((failure) => `${failure.label}: ${failure.message}`).join("; ");
     throw new Error(`SID silence incomplete. ${details}`);
   }
 
@@ -90,4 +86,3 @@ export const silenceSidTargets = async (
     silenced: targets.map((target) => target.label),
   };
 };
-

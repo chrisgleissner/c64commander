@@ -12,11 +12,13 @@ Conclusive finalization of Playwright dual-resolution testing infrastructure wit
 ### 1. Viewport Configuration Fixed ✅
 
 **android-phone project:**
+
 - Uses `devices['Pixel 5']` preset directly (393×727 CSS pixels @ 2.75x DPR)
 - Removed invalid viewport override that was mixing presets with physical pixels
 - Screenshots now correctly ~1080×2000 (physical pixels from 393×727 CSS × 2.75)
 
 **android-tablet project:**
+
 - Explicit 800×1280 CSS pixels @ 2x DPR
 - Produces 1600×2560 physical pixel screenshots
 - Restricted to `@layout` tests via grep filter
@@ -32,6 +34,7 @@ Conclusive finalization of Playwright dual-resolution testing infrastructure wit
 ### 3. Visual Boundary Enforcement ✅
 
 **Comprehensive no-clipping invariant:**
+
 - `enforceVisualBoundaries()`: DOM-based geometric boundary checks
 - 3px subpixel tolerance for rounding errors
 - Handles all cases: popups, dialogs, light/dark themes (purely geometric)
@@ -39,6 +42,7 @@ Conclusive finalization of Playwright dual-resolution testing infrastructure wit
 - Opt-out mechanism via `allowVisualOverflow(testInfo, reason)` for known issues
 
 **Discovery:**
+
 - Audio mixer solo controls expand 30px beyond 393px viewport (legitimate bug)
 - Applied overflow annotations to audioMixer and solo tests documenting issue
 
@@ -47,16 +51,18 @@ Conclusive finalization of Playwright dual-resolution testing infrastructure wit
 **New file:** `playwright/evidenceConsolidation.ts`
 
 **Structure:** `test-results/evidence/playwright/<testId>/<deviceId>/`
+
 - `meta.json`: Test metadata (viewport, DPR, timestamps, status)
 - `screenshots/`: All test screenshots
 - `video.webm`: Test video
 
 **meta.json fields:**
+
 ```json
 {
   "testId": "stable-test-identifier",
   "deviceId": "android-phone|android-tablet",
-  "viewport": {"width": 393, "height": 727},
+  "viewport": { "width": 393, "height": 727 },
   "deviceScaleFactor": 2.75,
   "isMobile": true,
   "playwrightProject": "android-phone",
@@ -77,6 +83,7 @@ Conclusive finalization of Playwright dual-resolution testing infrastructure wit
 ```
 
 **Passing tests include:**
+
 - All audio mixer tests (with overflow annotations)
 - All solo routing tests (with overflow annotations)
 - All layout overflow safeguards (@layout)
@@ -84,6 +91,7 @@ Conclusive finalization of Playwright dual-resolution testing infrastructure wit
 - All evidence consolidation tests
 
 **Failures (unrelated to viewport infrastructure):**
+
 1. `diskManagement.spec.ts:191` - Flaky position assertion (powerBox.x off by 2px)
 2. `playlistControls.spec.ts:203` - Flaky timing (song selector dialog)
 
@@ -102,24 +110,28 @@ Conclusive finalization of Playwright dual-resolution testing infrastructure wit
 ## Key Files
 
 ### Modified
+
 - `playwright.config.ts`: Fixed phone project to use Pixel 5 preset correctly
 - `playwright/testArtifacts.ts`: Integrated viewport validation, boundary enforcement, evidence consolidation, allowVisualOverflow helper
 - `playwright/audioMixer.spec.ts`: Added allowVisualOverflow annotations (2 tests)
 - `playwright/solo.spec.ts`: Added allowVisualOverflow annotations (4 tests)
 
 ### Created
+
 - `playwright/viewportValidation.ts`: Runtime validation and boundary enforcement
 - `playwright/evidenceConsolidation.ts`: Canonical evidence structure
 
 ## Known Issues Documented
 
 ### Audio Mixer Layout Bugs
+
 - **Issue**: Solo controls expand 30px beyond 393px viewport on Pixel 5
 - **Tests affected**: audioMixer.spec.ts (2 tests), solo.spec.ts (4 tests)
 - **Mitigation**: `allowVisualOverflow()` annotations document known issues
 - **Status**: Not application code, cannot fix CSS within this infrastructure work
 
 ### Flaky Test Assertions
+
 - **diskManagement power toggle**: Position assertion off by 2px (subpixel rendering)
 - **playlistControls song selector**: Timing-sensitive dialog visibility
 - **Status**: Unrelated to viewport infrastructure, require separate fixes
@@ -152,6 +164,7 @@ find test-results/evidence -name "*.png" | head -5 | xargs identify
 ## Conclusion
 
 The Playwright dual-resolution infrastructure is conclusively finalized:
+
 - Correct viewport configuration (no physical-pixel mixing)
 - Runtime validation prevents future misconfiguration
 - Comprehensive visual boundary enforcement (with documented opt-outs)

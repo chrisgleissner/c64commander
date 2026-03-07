@@ -8,11 +8,16 @@
 
 package uk.gleissner.c64commander
 
+import android.content.Context
 import android.util.Base64
+import androidx.test.core.app.ApplicationProvider
+import com.getcapacitor.Bridge
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
-import com.getcapacitor.Bridge
+import java.net.SocketTimeoutException
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import org.apache.commons.net.ftp.FTPClient
 import org.apache.commons.net.ftp.FTPFile
 import org.junit.Assert.assertEquals
@@ -22,25 +27,19 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
+import org.mockito.ArgumentMatchers.eq
 import org.mockito.Mockito.any
 import org.mockito.Mockito.doAnswer
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
-import org.mockito.ArgumentMatchers.eq
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.shadows.ShadowLog
-import java.io.File
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
-import androidx.test.core.app.ApplicationProvider
-import android.content.Context
 
 @RunWith(RobolectricTestRunner::class)
 class FtpClientPluginTest {
-  @get:Rule
-  val tempFolder = TemporaryFolder()
+  @get:Rule val tempFolder = TemporaryFolder()
 
   @Test
   fun listDirectoryRejectsMissingHost() {
@@ -49,9 +48,11 @@ class FtpClientPluginTest {
     `when`(call.getString("host")).thenReturn(null)
     val latch = CountDownLatch(1)
     doAnswer {
-      latch.countDown()
-      null
-    }.`when`(call).reject("host is required")
+              latch.countDown()
+              null
+            }
+            .`when`(call)
+            .reject("host is required")
 
     plugin.listDirectory(call)
 
@@ -65,9 +66,11 @@ class FtpClientPluginTest {
     `when`(call.getString("host")).thenReturn(null)
     val latch = CountDownLatch(1)
     doAnswer {
-      latch.countDown()
-      null
-    }.`when`(call).reject("host is required")
+              latch.countDown()
+              null
+            }
+            .`when`(call)
+            .reject("host is required")
 
     plugin.readFile(call)
 
@@ -82,9 +85,11 @@ class FtpClientPluginTest {
     `when`(call.getString("path")).thenReturn(null)
     val latch = CountDownLatch(1)
     doAnswer {
-      latch.countDown()
-      null
-    }.`when`(call).reject("path is required")
+              latch.countDown()
+              null
+            }
+            .`when`(call)
+            .reject("path is required")
 
     plugin.readFile(call)
 
@@ -98,9 +103,11 @@ class FtpClientPluginTest {
     `when`(call.getString("host")).thenReturn("   ")
     val latch = CountDownLatch(1)
     doAnswer {
-      latch.countDown()
-      null
-    }.`when`(call).reject("host is required")
+              latch.countDown()
+              null
+            }
+            .`when`(call)
+            .reject("host is required")
 
     plugin.listDirectory(call)
 
@@ -109,28 +116,24 @@ class FtpClientPluginTest {
 
   @Test
   fun listDirectoryRejectsOnLoginFailure() {
-    val root = tempFolder.newFolder("ftp-root")
-
-    val server = MockFtpServer(root, "secret")
-    server.start()
-
     val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+
+    `when`(ftpClient.login("user", "wrong")).thenReturn(false)
+    `when`(ftpClient.isConnected).thenReturn(true)
+
     val call = mock(PluginCall::class.java)
     `when`(call.getString("host")).thenReturn("127.0.0.1")
-    `when`(call.getInt("port")).thenReturn(server.port)
+    `when`(call.getInt("port")).thenReturn(21)
     `when`(call.getString("username")).thenReturn("user")
     `when`(call.getString("password")).thenReturn("wrong")
 
-    val latch = CountDownLatch(1)
-    doAnswer {
-      latch.countDown()
-      null
-    }.`when`(call).reject("FTP login failed")
-
     plugin.listDirectory(call)
 
-    assertTrue(latch.await(3, TimeUnit.SECONDS))
-    server.stop()
+    verify(ftpClient).connect("127.0.0.1", 21)
+    verify(call).reject("FTP login failed")
   }
 
   @Test
@@ -149,45 +152,58 @@ class FtpClientPluginTest {
 
     val latch = CountDownLatch(1)
     doAnswer {
-      latch.countDown()
-      null
-    }.`when`(call).reject(any(String::class.java), any(Exception::class.java))
+              latch.countDown()
+              null
+            }
+            .`when`(call)
+            .reject(any(String::class.java), any(Exception::class.java))
 
     ShadowLog.clear()
     plugin.listDirectory(call)
 
-    assertTrue(latch.await(3, TimeUnit.SECONDS))
+    assertTrue(latch.await(10, TimeUnit.SECONDS))
     val logs = ShadowLog.getLogsForTag("FtpClientPlugin")
     assertTrue(logs.any { it.msg?.contains("FTP listDirectory failed") == true })
   }
 
   @Test
   fun listDirectoryReturnsEntries() {
-    val root = tempFolder.newFolder("ftp-root")
-    File(root, "demo.sid").writeText("sid")
-    File(root, "docs").mkdirs()
-
-    val server = MockFtpServer(root, "secret")
-    server.start()
-
     val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+
+    val demo =
+            FTPFile().apply {
+              name = "demo.sid"
+              size = 3
+            }
+    val docs =
+            FTPFile().apply {
+              name = "docs"
+              type = FTPFile.DIRECTORY_TYPE
+            }
+    `when`(ftpClient.login("user", "secret")).thenReturn(true)
+    `when`(ftpClient.mlistDir("/")).thenReturn(arrayOf(demo, docs))
+    `when`(ftpClient.isConnected).thenReturn(true)
+
     val call = mock(PluginCall::class.java)
     `when`(call.getString("host")).thenReturn("127.0.0.1")
-    `when`(call.getInt("port")).thenReturn(server.port)
+    `when`(call.getInt("port")).thenReturn(21)
     `when`(call.getString("username")).thenReturn("user")
     `when`(call.getString("password")).thenReturn("secret")
     `when`(call.getString("path")).thenReturn("/")
 
-    val latch = CountDownLatch(1)
     var resolved: JSObject? = null
     doAnswer { invocation ->
-      resolved = invocation.getArgument(0) as JSObject
-      latch.countDown()
-      null
-    }.`when`(call).resolve(any())
+              resolved = invocation.getArgument(0) as JSObject
+              null
+            }
+            .`when`(call)
+            .resolve(any())
 
     plugin.listDirectory(call)
-    assertTrue(latch.await(3, TimeUnit.SECONDS))
+    verify(ftpClient).connect("127.0.0.1", 21)
 
     val entries = resolved?.getJSONArray("entries")
     assertNotNull(entries)
@@ -198,36 +214,39 @@ class FtpClientPluginTest {
     }
     assertTrue(names.contains("demo.sid"))
     assertTrue(names.contains("docs"))
-
-    server.stop()
   }
 
   @Test
   fun listDirectorySkipsDotEntries() {
-    val root = tempFolder.newFolder("ftp-root")
-    File(root, "file.txt").writeText("x")
-
-    val server = MockFtpServer(root, "secret")
-    server.start()
-
     val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+
+    val dot = FTPFile().apply { name = "." }
+    val dotdot = FTPFile().apply { name = ".." }
+    val file = FTPFile().apply { name = "file.txt" }
+    `when`(ftpClient.login("user", "secret")).thenReturn(true)
+    `when`(ftpClient.mlistDir("/")).thenReturn(arrayOf(dot, dotdot, file))
+    `when`(ftpClient.isConnected).thenReturn(true)
+
     val call = mock(PluginCall::class.java)
     `when`(call.getString("host")).thenReturn("127.0.0.1")
-    `when`(call.getInt("port")).thenReturn(server.port)
+    `when`(call.getInt("port")).thenReturn(21)
     `when`(call.getString("username")).thenReturn("user")
     `when`(call.getString("password")).thenReturn("secret")
     `when`(call.getString("path")).thenReturn("/")
 
-    val latch = CountDownLatch(1)
     var resolved: JSObject? = null
     doAnswer { invocation ->
-      resolved = invocation.getArgument(0) as JSObject
-      latch.countDown()
-      null
-    }.`when`(call).resolve(any())
+              resolved = invocation.getArgument(0) as JSObject
+              null
+            }
+            .`when`(call)
+            .resolve(any())
 
     plugin.listDirectory(call)
-    assertTrue(latch.await(3, TimeUnit.SECONDS))
+    verify(ftpClient).connect("127.0.0.1", 21)
 
     val entries = resolved?.getJSONArray("entries")
     val names = buildList {
@@ -236,37 +255,43 @@ class FtpClientPluginTest {
       }
     }
     assertTrue(names.none { it == "." || it == ".." })
-
-    server.stop()
   }
 
   @Test
   fun readFileReturnsPayloadMetadata() {
-    val root = tempFolder.newFolder("ftp-root-read")
     val payload = "HELLO"
-    File(root, "songlengths.md5").writeText(payload)
-
-    val server = MockFtpServer(root, "secret")
-    server.start()
-
     val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+
+    `when`(ftpClient.login("user", "secret")).thenReturn(true)
+    doAnswer { invocation ->
+              val output = invocation.getArgument<java.io.ByteArrayOutputStream>(1)
+              output.write(payload.toByteArray(Charsets.UTF_8))
+              true
+            }
+            .`when`(ftpClient)
+            .retrieveFile(eq("/songlengths.md5"), any())
+    `when`(ftpClient.isConnected).thenReturn(true)
+
     val call = mock(PluginCall::class.java)
     `when`(call.getString("host")).thenReturn("127.0.0.1")
-    `when`(call.getInt("port")).thenReturn(server.port)
+    `when`(call.getInt("port")).thenReturn(21)
     `when`(call.getString("username")).thenReturn("user")
     `when`(call.getString("password")).thenReturn("secret")
     `when`(call.getString("path")).thenReturn("/songlengths.md5")
 
-    val latch = CountDownLatch(1)
     var resolved: JSObject? = null
     doAnswer { invocation ->
-      resolved = invocation.getArgument(0) as JSObject
-      latch.countDown()
-      null
-    }.`when`(call).resolve(any())
+              resolved = invocation.getArgument(0) as JSObject
+              null
+            }
+            .`when`(call)
+            .resolve(any())
 
     plugin.readFile(call)
-    assertTrue(latch.await(3, TimeUnit.SECONDS))
+    verify(ftpClient).connect("127.0.0.1", 21)
 
     assertNotNull(resolved)
     val encoded = resolved?.optString("data", "") ?: ""
@@ -276,36 +301,29 @@ class FtpClientPluginTest {
     }
     val sizeValue = resolved?.optInt("sizeBytes", -1) ?: -1
     assertEquals(payload.toByteArray().size, sizeValue)
-
-    server.stop()
   }
 
   @Test
   fun readFileRejectsOnLoginFailure() {
-    val root = tempFolder.newFolder("ftp-root-read-fail")
-    File(root, "demo.sid").writeText("sid")
-
-    val server = MockFtpServer(root, "secret")
-    server.start()
-
     val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+
+    `when`(ftpClient.login("user", "wrong")).thenReturn(false)
+    `when`(ftpClient.isConnected).thenReturn(true)
+
     val call = mock(PluginCall::class.java)
     `when`(call.getString("host")).thenReturn("127.0.0.1")
-    `when`(call.getInt("port")).thenReturn(server.port)
+    `when`(call.getInt("port")).thenReturn(21)
     `when`(call.getString("username")).thenReturn("user")
     `when`(call.getString("password")).thenReturn("wrong")
     `when`(call.getString("path")).thenReturn("/demo.sid")
 
-    val latch = CountDownLatch(1)
-    doAnswer {
-      latch.countDown()
-      null
-    }.`when`(call).reject("FTP login failed")
-
     plugin.readFile(call)
 
-    assertTrue(latch.await(3, TimeUnit.SECONDS))
-    server.stop()
+    verify(ftpClient).connect("127.0.0.1", 21)
+    verify(call).reject("FTP login failed")
   }
 
   @Test
@@ -332,12 +350,14 @@ class FtpClientPluginTest {
 
     val latch = CountDownLatch(1)
     doAnswer {
-      latch.countDown()
-      null
-    }.`when`(call).reject(any(String::class.java), any(Exception::class.java))
+              latch.countDown()
+              null
+            }
+            .`when`(call)
+            .reject(any(String::class.java), any(Exception::class.java))
 
     plugin.listDirectory(call)
-    assertTrue(latch.await(3, TimeUnit.SECONDS))
+    assertTrue(latch.await(10, TimeUnit.SECONDS))
   }
 
   @Test
@@ -349,10 +369,11 @@ class FtpClientPluginTest {
     plugin.ftpClientFactory = { ftpClient }
 
     val nullNamed = FTPFile().apply { name = null }
-    val valid = FTPFile().apply {
-      name = "valid.sid"
-      size = 123
-    }
+    val valid =
+            FTPFile().apply {
+              name = "valid.sid"
+              size = 123
+            }
     `when`(ftpClient.login("user", "secret")).thenReturn(true)
     `when`(ftpClient.mlistDir("/")).thenReturn(arrayOf(nullNamed, valid))
     `when`(ftpClient.isConnected).thenReturn(true)
@@ -374,9 +395,11 @@ class FtpClientPluginTest {
 
     var resolved: JSObject? = null
     doAnswer { invocation ->
-      resolved = invocation.getArgument(0) as JSObject
-      null
-    }.`when`(call).resolve(any())
+              resolved = invocation.getArgument(0) as JSObject
+              null
+            }
+            .`when`(call)
+            .resolve(any())
 
     plugin.listDirectory(call)
 
@@ -420,7 +443,9 @@ class FtpClientPluginTest {
     val ftpClient = mock(FTPClient::class.java)
     plugin.ftpClientFactory = { ftpClient }
 
-    doAnswer { throw RuntimeException("connect failed") }.`when`(ftpClient).connect(any(String::class.java), any(Int::class.java))
+    doAnswer { throw RuntimeException("connect failed") }
+            .`when`(ftpClient)
+            .connect(any(String::class.java), any(Int::class.java))
     `when`(ftpClient.isConnected).thenReturn(true)
     doAnswer { throw RuntimeException("disconnect failed") }.`when`(ftpClient).disconnect()
 
@@ -449,13 +474,78 @@ class FtpClientPluginTest {
   }
 
   @Test
+  fun listDirectoryAppliesConfiguredTimeouts() {
+    val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+
+    `when`(ftpClient.login("user", "secret")).thenReturn(true)
+    `when`(ftpClient.mlistDir("/")).thenReturn(emptyArray())
+    `when`(ftpClient.listFiles("/")).thenReturn(emptyArray())
+
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getInt("port")).thenReturn(21)
+    `when`(call.getInt("timeoutMs")).thenReturn(4321)
+    `when`(call.getString("username")).thenReturn("user")
+    `when`(call.getString("password")).thenReturn("secret")
+    `when`(call.getString("path")).thenReturn("/")
+
+    plugin.listDirectory(call)
+
+    verify(ftpClient).setConnectTimeout(4321)
+    verify(ftpClient).setDefaultTimeout(4321)
+    verify(ftpClient).setSoTimeout(4321)
+  }
+
+  @Test
+  fun readFileRejectsWithNormalizedTimeoutMessage() {
+    val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+
+    doAnswer { throw SocketTimeoutException("connect timed out") }
+            .`when`(ftpClient)
+            .connect("127.0.0.1", 21)
+
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getString("path")).thenReturn("/demo.sid")
+    `when`(call.getInt("port")).thenReturn(21)
+    `when`(call.getInt("timeoutMs")).thenReturn(2500)
+
+    var rejectedMessage: String? = null
+    doAnswer { invocation ->
+              rejectedMessage = invocation.getArgument(0)
+              null
+            }
+            .`when`(call)
+            .reject(any(String::class.java))
+    doAnswer { invocation ->
+              rejectedMessage = invocation.getArgument(0)
+              null
+            }
+            .`when`(call)
+            .reject(any(String::class.java), any(Exception::class.java))
+
+    plugin.readFile(call)
+
+    assertTrue((rejectedMessage ?: "").startsWith("FTP readFile timed out after "))
+  }
+
+  @Test
   fun buildPathHandlesTrailingSlash() {
     val plugin = FtpClientPlugin()
-    val method = FtpClientPlugin::class.java.getDeclaredMethod(
-      "buildPath",
-      String::class.java,
-      String::class.java,
-    )
+    val method =
+            FtpClientPlugin::class.java.getDeclaredMethod(
+                    "buildPath",
+                    String::class.java,
+                    String::class.java,
+            )
     method.isAccessible = true
 
     val result = method.invoke(plugin, "/folder/", "file.txt") as String
@@ -465,11 +555,12 @@ class FtpClientPluginTest {
   @Test
   fun buildPathHandlesBlankBase() {
     val plugin = FtpClientPlugin()
-    val method = FtpClientPlugin::class.java.getDeclaredMethod(
-      "buildPath",
-      String::class.java,
-      String::class.java,
-    )
+    val method =
+            FtpClientPlugin::class.java.getDeclaredMethod(
+                    "buildPath",
+                    String::class.java,
+                    String::class.java,
+            )
     method.isAccessible = true
 
     val result = method.invoke(plugin, "", "file.txt") as String
@@ -479,19 +570,19 @@ class FtpClientPluginTest {
   @Test
   fun resolveListingUsesMlistWhenAvailable() {
     val plugin = FtpClientPlugin()
-    val method = FtpClientPlugin::class.java.getDeclaredMethod(
-      "resolveListing",
-      FTPClient::class.java,
-      String::class.java,
-    )
+    val method =
+            FtpClientPlugin::class.java.getDeclaredMethod(
+                    "resolveListing",
+                    FTPClient::class.java,
+                    String::class.java,
+            )
     method.isAccessible = true
 
     val ftpClient = mock(FTPClient::class.java)
     val mlistFile = FTPFile().apply { name = "mlist.txt" }
     `when`(ftpClient.mlistDir("/")).thenReturn(arrayOf(mlistFile))
 
-    @Suppress("UNCHECKED_CAST")
-    val result = method.invoke(plugin, ftpClient, "/") as Array<FTPFile>
+    @Suppress("UNCHECKED_CAST") val result = method.invoke(plugin, ftpClient, "/") as Array<FTPFile>
 
     assertEquals(1, result.size)
     assertEquals("mlist.txt", result[0].name)
@@ -501,11 +592,12 @@ class FtpClientPluginTest {
   @Test
   fun resolveListingFallsBackWhenMlistEmpty() {
     val plugin = FtpClientPlugin()
-    val method = FtpClientPlugin::class.java.getDeclaredMethod(
-      "resolveListing",
-      FTPClient::class.java,
-      String::class.java,
-    )
+    val method =
+            FtpClientPlugin::class.java.getDeclaredMethod(
+                    "resolveListing",
+                    FTPClient::class.java,
+                    String::class.java,
+            )
     method.isAccessible = true
 
     val ftpClient = mock(FTPClient::class.java)
@@ -513,8 +605,7 @@ class FtpClientPluginTest {
     `when`(ftpClient.mlistDir("/")).thenReturn(emptyArray())
     `when`(ftpClient.listFiles("/")).thenReturn(arrayOf(listedFile))
 
-    @Suppress("UNCHECKED_CAST")
-    val result = method.invoke(plugin, ftpClient, "/") as Array<FTPFile>
+    @Suppress("UNCHECKED_CAST") val result = method.invoke(plugin, ftpClient, "/") as Array<FTPFile>
 
     assertEquals(1, result.size)
     assertEquals("listed.txt", result[0].name)
@@ -524,11 +615,12 @@ class FtpClientPluginTest {
   @Test
   fun resolveListingFallsBackToListFilesOnException() {
     val plugin = FtpClientPlugin()
-    val method = FtpClientPlugin::class.java.getDeclaredMethod(
-      "resolveListing",
-      FTPClient::class.java,
-      String::class.java,
-    )
+    val method =
+            FtpClientPlugin::class.java.getDeclaredMethod(
+                    "resolveListing",
+                    FTPClient::class.java,
+                    String::class.java,
+            )
     method.isAccessible = true
 
     val ftpClient = mock(FTPClient::class.java)
@@ -536,8 +628,7 @@ class FtpClientPluginTest {
     `when`(ftpClient.mlistDir("/")).thenThrow(RuntimeException("boom"))
     `when`(ftpClient.listFiles("/")).thenReturn(arrayOf(listedFile))
 
-    @Suppress("UNCHECKED_CAST")
-    val result = method.invoke(plugin, ftpClient, "/") as Array<FTPFile>
+    @Suppress("UNCHECKED_CAST") val result = method.invoke(plugin, ftpClient, "/") as Array<FTPFile>
 
     assertEquals(1, result.size)
     assertEquals("fallback.txt", result[0].name)

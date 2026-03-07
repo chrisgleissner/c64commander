@@ -18,7 +18,7 @@ export type NormalizedConfigItem = {
 };
 
 export const normalizeConfigItem = (config: unknown): NormalizedConfigItem => {
-  if (typeof config !== 'object' || config === null || Array.isArray(config)) {
+  if (typeof config !== "object" || config === null || Array.isArray(config)) {
     return { value: config as string | number };
   }
 
@@ -31,7 +31,7 @@ export const normalizeConfigItem = (config: unknown): NormalizedConfigItem => {
     cfg.currentValue ??
     cfg.default ??
     cfg.default_value ??
-    '';
+    "";
 
   const optionsCandidate = cfg.options ?? cfg.values ?? cfg.choices;
   const presetsCandidate = cfg.details?.presets ?? cfg.presets ?? cfg.values ?? cfg.choices;
@@ -43,9 +43,7 @@ export const normalizeConfigItem = (config: unknown): NormalizedConfigItem => {
   const format = cfg.details?.format ?? cfg.format;
 
   const details =
-    min !== undefined || max !== undefined || format || presets
-      ? { min, max, format, presets }
-      : undefined;
+    min !== undefined || max !== undefined || format || presets ? { min, max, format, presets } : undefined;
 
   return { value: selected, options, details };
 };

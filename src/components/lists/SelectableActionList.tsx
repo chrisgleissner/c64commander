@@ -6,12 +6,12 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import React, { useCallback, useMemo, useState, useRef } from 'react';
-import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
-import { MoreVertical, Play, Search, X } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import React, { useCallback, useMemo, useState, useRef } from "react";
+import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
+import { MoreVertical, Play, Search, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,18 +19,24 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
-import { PathWrap } from '@/components/PathWrap';
-import { AlphabetScrollbar } from './AlphabetScrollbar';
-import { cn } from '@/lib/utils';
-import { wrapUserEvent } from '@/lib/tracing/userTrace';
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { PathWrap } from "@/components/PathWrap";
+import { AlphabetScrollbar } from "./AlphabetScrollbar";
+import { cn } from "@/lib/utils";
+import { wrapUserEvent } from "@/lib/tracing/userTrace";
 
 export type ActionListMenuItem =
-  | { type: 'label'; label: string }
-  | { type: 'info'; label: string; value: string }
-  | { type: 'separator' }
-  | { type: 'action'; label: string; onSelect: () => void; disabled?: boolean; destructive?: boolean };
+  | { type: "label"; label: string }
+  | { type: "info"; label: string; value: string }
+  | { type: "separator" }
+  | {
+      type: "action";
+      label: string;
+      onSelect: () => void;
+      disabled?: boolean;
+      destructive?: boolean;
+    };
 
 export type ActionListItem = {
   id: string;
@@ -42,7 +48,7 @@ export type ActionListItem = {
   filterText?: string | null;
   meta?: React.ReactNode;
   icon?: React.ReactNode;
-  variant?: 'item' | 'header';
+  variant?: "item" | "header";
   selected: boolean;
   onSelectToggle?: (selected: boolean) => void;
   menuItems?: ActionListMenuItem[];
@@ -86,10 +92,10 @@ export type SelectableActionListProps = {
   selectionLabel?: string;
 };
 
-const sanitizeForTestId = (value: string) => value.replace(/[^a-zA-Z0-9_-]/g, '_');
+const sanitizeForTestId = (value: string) => value.replace(/[^a-zA-Z0-9_-]/g, "_");
 
 const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: string }) => {
-  if (item.variant === 'header') {
+  if (item.variant === "header") {
     const headerTestId = rowTestId ? `${rowTestId}-header` : undefined;
     return (
       <div
@@ -112,14 +118,14 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
   return (
     <div
       className={cn(
-        'flex items-center gap-2 py-2 px-1 rounded-md min-w-0 max-w-full',
+        "flex items-center gap-2 py-2 px-1 rounded-md min-w-0 max-w-full",
         item.isDimmed
-          ? 'opacity-40'
+          ? "opacity-40"
           : isPlaying
-            ? 'bg-primary/10 ring-1 ring-primary/35 hover:bg-primary/15'
+            ? "bg-primary/10 ring-1 ring-primary/35 hover:bg-primary/15"
             : item.selected
-              ? 'bg-muted/50 hover:bg-muted/60'
-              : 'hover:bg-muted/40',
+              ? "bg-muted/50 hover:bg-muted/60"
+              : "hover:bg-muted/40",
       )}
       onClick={(event) => {
         if (!item.onRowClick) return;
@@ -129,7 +135,7 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
       }}
       data-testid={rowTestId}
       data-row-id={item.id}
-      data-playing={isPlaying ? 'true' : 'false'}
+      data-playing={isPlaying ? "true" : "false"}
     >
       <div className="flex items-center gap-1 shrink-0">
         {item.showSelection !== false ? (
@@ -161,28 +167,28 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
             <DropdownMenuContent align="start">
               {item.menuItems?.length
                 ? item.menuItems.map((entry, index) => {
-                  if (entry.type === 'separator') return <DropdownMenuSeparator key={`sep-${index}`} />;
-                  if (entry.type === 'label') {
-                    return <DropdownMenuLabel key={`label-${index}`}>{entry.label}</DropdownMenuLabel>;
-                  }
-                  if (entry.type === 'info') {
+                    if (entry.type === "separator") return <DropdownMenuSeparator key={`sep-${index}`} />;
+                    if (entry.type === "label") {
+                      return <DropdownMenuLabel key={`label-${index}`}>{entry.label}</DropdownMenuLabel>;
+                    }
+                    if (entry.type === "info") {
+                      return (
+                        <DropdownMenuItem key={`info-${index}`} disabled>
+                          {entry.label}: {entry.value}
+                        </DropdownMenuItem>
+                      );
+                    }
                     return (
-                      <DropdownMenuItem key={`info-${index}`} disabled>
-                        {entry.label}: {entry.value}
+                      <DropdownMenuItem
+                        key={`action-${index}`}
+                        onSelect={entry.onSelect}
+                        disabled={entry.disabled}
+                        className={entry.destructive ? "text-destructive focus:text-destructive" : undefined}
+                      >
+                        {entry.label}
                       </DropdownMenuItem>
                     );
-                  }
-                  return (
-                    <DropdownMenuItem
-                      key={`action-${index}`}
-                      onSelect={entry.onSelect}
-                      disabled={entry.disabled}
-                      className={entry.destructive ? 'text-destructive focus:text-destructive' : undefined}
-                    >
-                      {entry.label}
-                    </DropdownMenuItem>
-                  );
-                })
+                  })
                 : null}
             </DropdownMenuContent>
           </DropdownMenu>
@@ -194,22 +200,29 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
           <button
             type="button"
             className="text-sm font-medium text-left hover:underline max-w-full min-w-0 flex items-center gap-1"
-            onClick={wrapUserEvent((event) => {
-              event.stopPropagation();
-              item.onTitleClick?.();
-            }, 'click', 'ActionListTitle', { title: item.title }, 'TitleButton')}
+            onClick={wrapUserEvent(
+              (event) => {
+                event.stopPropagation();
+                item.onTitleClick?.();
+              },
+              "click",
+              "ActionListTitle",
+              { title: item.title },
+              "TitleButton",
+            )}
             disabled={item.isDimmed || item.disableActions}
           >
-            <span className={cn(item.titleClassName, 'min-w-0 break-words whitespace-normal')}>
-              {item.title}
-            </span>
+            <span className={cn(item.titleClassName, "min-w-0 break-words whitespace-normal")}>{item.title}</span>
             {item.titleSuffix ? (
               <span className="text-xs text-muted-foreground tabular-nums shrink-0">{item.titleSuffix}</span>
             ) : null}
           </button>
           {item.subtitle ? (
             <div
-              className={cn('text-[11px] text-muted-foreground break-words whitespace-normal max-w-full', item.subtitleClassName)}
+              className={cn(
+                "text-[11px] text-muted-foreground break-words whitespace-normal max-w-full",
+                item.subtitleClassName,
+              )}
               data-testid={item.subtitleTestId}
             >
               {item.subtitle}
@@ -224,11 +237,11 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
       </div>
       <div className="flex flex-col gap-1 shrink-0">
         <Button
-          variant={isPlaying ? 'secondary' : 'ghost'}
+          variant={isPlaying ? "secondary" : "ghost"}
           size="icon"
           className={cn(
-            'h-9 w-9 min-h-[44px] min-w-[44px]',
-            isPlaying ? 'text-primary border border-primary/30' : null,
+            "h-9 w-9 min-h-[44px] min-w-[44px]",
+            isPlaying ? "text-primary border border-primary/30" : null,
           )}
           onClick={(event) => {
             event.stopPropagation();
@@ -263,8 +276,8 @@ export const SelectableActionList = ({
   title,
   items,
   emptyLabel,
-  selectAllLabel = 'Select all',
-  deselectAllLabel = 'Deselect all',
+  selectAllLabel = "Select all",
+  deselectAllLabel = "Deselect all",
   removeSelectedLabel,
   selectedCount,
   allSelected,
@@ -272,54 +285,57 @@ export const SelectableActionList = ({
   onRemoveSelected,
   maxVisible,
   viewAllTitle,
-  viewAllLabel = 'View all',
+  viewAllLabel = "View all",
   listTestId,
   rowTestId,
   headerActions,
   filterHeader,
-  filterPlaceholder = 'Filter files...',
+  filterPlaceholder = "Filter files...",
   showSelectionControls = true,
   selectionLabel,
 }: SelectableActionListProps) => {
   const [viewAllOpen, setViewAllOpen] = useState(false);
-  const [filterText, setFilterText] = useState('');
-  const [viewAllFilterText, setViewAllFilterText] = useState('');
+  const [filterText, setFilterText] = useState("");
+  const [viewAllFilterText, setViewAllFilterText] = useState("");
   const viewAllScrollRef = useRef<HTMLDivElement>(null);
   const virtuosoRef = useRef<VirtuosoHandle>(null);
 
-  const filterWithHeaders = useCallback((query: string) => {
-    const trimmed = query.trim();
-    if (!trimmed) return items;
-    const lower = trimmed.toLowerCase();
-    const list: ActionListItem[] = [];
-    let pendingHeader: ActionListItem | null = null;
-    let hasMatchInSection = false;
+  const filterWithHeaders = useCallback(
+    (query: string) => {
+      const trimmed = query.trim();
+      if (!trimmed) return items;
+      const lower = trimmed.toLowerCase();
+      const list: ActionListItem[] = [];
+      let pendingHeader: ActionListItem | null = null;
+      let hasMatchInSection = false;
 
-    const matchesItem = (item: ActionListItem) => {
-      const extra = item.filterText?.toLowerCase() ?? '';
-      const subtitle = item.subtitle?.toLowerCase() ?? '';
-      return item.title.toLowerCase().includes(lower) || subtitle.includes(lower) || extra.includes(lower);
-    };
+      const matchesItem = (item: ActionListItem) => {
+        const extra = item.filterText?.toLowerCase() ?? "";
+        const subtitle = item.subtitle?.toLowerCase() ?? "";
+        return item.title.toLowerCase().includes(lower) || subtitle.includes(lower) || extra.includes(lower);
+      };
 
-    items.forEach((item) => {
-      if (item.variant === 'header') {
-        if (pendingHeader && hasMatchInSection) {
-          list.push(pendingHeader);
+      items.forEach((item) => {
+        if (item.variant === "header") {
+          if (pendingHeader && hasMatchInSection) {
+            list.push(pendingHeader);
+          }
+          pendingHeader = item;
+          hasMatchInSection = false;
+          return;
         }
-        pendingHeader = item;
-        hasMatchInSection = false;
-        return;
-      }
-      if (!matchesItem(item)) return;
-      if (pendingHeader && !hasMatchInSection) {
-        list.push(pendingHeader);
-        hasMatchInSection = true;
-      }
-      list.push(item);
-    });
+        if (!matchesItem(item)) return;
+        if (pendingHeader && !hasMatchInSection) {
+          list.push(pendingHeader);
+          hasMatchInSection = true;
+        }
+        list.push(item);
+      });
 
-    return list;
-  }, [items]);
+      return list;
+    },
+    [items],
+  );
 
   const filteredItems = useMemo(() => filterWithHeaders(filterText), [items, filterText]);
 
@@ -329,12 +345,12 @@ export const SelectableActionList = ({
   const removeSelectedId = listTestId ? `${listTestId}-remove-selected` : undefined;
 
   const { visibleItems, hasMore } = useMemo(() => {
-    const totalItems = filteredItems.reduce((count, item) => (item.variant === 'header' ? count : count + 1), 0);
+    const totalItems = filteredItems.reduce((count, item) => (item.variant === "header" ? count : count + 1), 0);
     const list: ActionListItem[] = [];
     let pendingHeader: ActionListItem | null = null;
     let remaining = maxVisible;
     for (const item of filteredItems) {
-      if (item.variant === 'header') {
+      if (item.variant === "header") {
         pendingHeader = item;
         continue;
       }
@@ -366,9 +382,7 @@ export const SelectableActionList = ({
           <p className="text-sm font-medium">{title}</p>
           {showSelectionControls ? (
             <p className="text-xs text-muted-foreground">
-              {selectedCount
-                ? `${selectedCount} selected`
-                : `No ${(selectionLabel || title.toLowerCase())} selected`}
+              {selectedCount ? `${selectedCount} selected` : `No ${selectionLabel || title.toLowerCase()} selected`}
             </p>
           ) : null}
         </div>
@@ -397,7 +411,7 @@ export const SelectableActionList = ({
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setFilterText('')}
+            onClick={() => setFilterText("")}
             className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
             aria-label="Clear filter"
           >
@@ -407,9 +421,7 @@ export const SelectableActionList = ({
       </div>
 
       {filterHeader ? (
-        <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2">
-          {filterHeader}
-        </div>
+        <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2">{filterHeader}</div>
       ) : null}
 
       {showSelectionControls ? (
@@ -445,9 +457,7 @@ export const SelectableActionList = ({
         </div>
       ) : null}
 
-      <div className="bg-card border border-border rounded-xl p-4 overflow-hidden">
-        {renderList(visibleItems)}
-      </div>
+      <div className="bg-card border border-border rounded-xl p-4 overflow-hidden">{renderList(visibleItems)}</div>
 
       {viewAllTitle && (
         <Dialog open={viewAllOpen} onOpenChange={setViewAllOpen}>
@@ -472,7 +482,7 @@ export const SelectableActionList = ({
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => setViewAllFilterText('')}
+                      onClick={() => setViewAllFilterText("")}
                       className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
                       aria-label="Clear filter"
                     >
@@ -481,9 +491,7 @@ export const SelectableActionList = ({
                   )}
                 </div>
                 {filterHeader ? (
-                  <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2">
-                    {filterHeader}
-                  </div>
+                  <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2">{filterHeader}</div>
                 ) : null}
               </DialogHeader>
               <div className="flex-1 min-h-0 flex flex-col px-6 py-4">
@@ -493,7 +501,7 @@ export const SelectableActionList = ({
                   ) : (
                     <Virtuoso
                       ref={virtuosoRef}
-                      style={{ height: '100%' }}
+                      style={{ height: "100%" }}
                       data={viewAllFilteredItems}
                       defaultItemHeight={60}
                       overscan={500}
@@ -512,15 +520,20 @@ export const SelectableActionList = ({
                 </div>
               </div>
               <AlphabetScrollbar
-                items={viewAllFilteredItems.filter(item => item.variant !== 'header').map(item => ({ title: item.title, id: item.id }))}
+                items={viewAllFilteredItems
+                  .filter((item) => item.variant !== "header")
+                  .map((item) => ({ title: item.title, id: item.id }))}
                 scrollContainerRef={viewAllScrollRef}
                 onScrollToIndex={(index) => {
-                  const filtered = viewAllFilteredItems.filter(item => item.variant !== 'header');
+                  const filtered = viewAllFilteredItems.filter((item) => item.variant !== "header");
                   const targetItem = filtered[index];
                   if (targetItem) {
-                    const originalIndex = viewAllFilteredItems.findIndex(item => item.id === targetItem.id);
+                    const originalIndex = viewAllFilteredItems.findIndex((item) => item.id === targetItem.id);
                     if (originalIndex !== -1) {
-                      virtuosoRef.current?.scrollToIndex({ index: originalIndex, align: 'start' });
+                      virtuosoRef.current?.scrollToIndex({
+                        index: originalIndex,
+                        align: "start",
+                      });
                     }
                   }
                 }}

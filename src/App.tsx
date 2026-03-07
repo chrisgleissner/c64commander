@@ -15,8 +15,8 @@ import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import React, { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { TabBar } from "@/components/TabBar";
-import { ConnectionController } from '@/components/ConnectionController';
-import { DemoModeInterstitial } from '@/components/DemoModeInterstitial';
+import { ConnectionController } from "@/components/ConnectionController";
+import { DemoModeInterstitial } from "@/components/DemoModeInterstitial";
 import { RefreshControlProvider } from "@/hooks/useRefreshControl";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { loadDebugLoggingEnabled } from "@/lib/config/appSettings";
@@ -24,25 +24,25 @@ import { getPlatform } from "@/lib/native/platform";
 import { redactTreeUri } from "@/lib/native/safUtils";
 import { SidPlayerProvider } from "@/hooks/useSidPlayer";
 import { FeatureFlagsProvider } from "@/hooks/useFeatureFlags";
-import { TraceContextBridge } from '@/components/TraceContextBridge';
-import { GlobalDiagnosticsOverlay } from '@/components/diagnostics/GlobalDiagnosticsOverlay';
-import { TestHeartbeat } from '@/components/TestHeartbeat';
-import { createActionContext, getActiveAction } from '@/lib/tracing/actionTrace';
-import { recordActionEnd, recordActionStart, recordTraceError } from '@/lib/tracing/traceSession';
-import { registerGlobalButtonInteractionModel } from '@/lib/ui/buttonInteraction';
-import { installConsoleDiagnosticsBridge } from '@/lib/diagnostics/logger';
-import { invalidateForVisibilityResume } from '@/lib/query/c64QueryInvalidation';
-import { t } from '@/lib/i18n';
+import { TraceContextBridge } from "@/components/TraceContextBridge";
+import { GlobalDiagnosticsOverlay } from "@/components/diagnostics/GlobalDiagnosticsOverlay";
+import { TestHeartbeat } from "@/components/TestHeartbeat";
+import { createActionContext, getActiveAction } from "@/lib/tracing/actionTrace";
+import { recordActionEnd, recordActionStart, recordTraceError } from "@/lib/tracing/traceSession";
+import { registerGlobalButtonInteractionModel } from "@/lib/ui/buttonInteraction";
+import { installConsoleDiagnosticsBridge } from "@/lib/diagnostics/logger";
+import { invalidateForVisibilityResume } from "@/lib/query/c64QueryInvalidation";
+import { t } from "@/lib/i18n";
 
-const HomePage = lazy(() => import('./pages/HomePage'));
-const ConfigBrowserPage = lazy(() => import('./pages/ConfigBrowserPage'));
-const SettingsPage = lazy(() => import('./pages/SettingsPage'));
-const OpenSourceLicensesPage = lazy(() => import('./pages/OpenSourceLicensesPage'));
-const DocsPage = lazy(() => import('./pages/DocsPage'));
-const NotFound = lazy(() => import('./pages/NotFound'));
-const PlayFilesPage = lazy(() => import('./pages/PlayFilesPage'));
-const DisksPage = lazy(() => import('./pages/DisksPage'));
-const CoverageProbePage = lazy(() => import('./pages/CoverageProbePage'));
+const HomePage = lazy(() => import("./pages/HomePage"));
+const ConfigBrowserPage = lazy(() => import("./pages/ConfigBrowserPage"));
+const SettingsPage = lazy(() => import("./pages/SettingsPage"));
+const OpenSourceLicensesPage = lazy(() => import("./pages/OpenSourceLicensesPage"));
+const DocsPage = lazy(() => import("./pages/DocsPage"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const PlayFilesPage = lazy(() => import("./pages/PlayFilesPage"));
+const DisksPage = lazy(() => import("./pages/DisksPage"));
+const CoverageProbePage = lazy(() => import("./pages/CoverageProbePage"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -64,16 +64,16 @@ const RouteRefresher = () => {
         invalidateForVisibilityResume(client, location.pathname);
       }
     };
-    document.addEventListener('visibilitychange', handleVisibility);
-    return () => document.removeEventListener('visibilitychange', handleVisibility);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, [client, location.pathname]);
 
   return null;
 };
 
 const shouldEnableCoverageProbe = () => {
-  if (import.meta.env.VITE_ENABLE_TEST_PROBES === '1') return true;
-  if (typeof window !== 'undefined') {
+  if (import.meta.env.VITE_ENABLE_TEST_PROBES === "1") return true;
+  if (typeof window !== "undefined") {
     return Boolean((window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled);
   }
   return false;
@@ -81,7 +81,7 @@ const shouldEnableCoverageProbe = () => {
 
 const RouteLoadingFallback = () => (
   <div className="flex min-h-[calc(100vh-8rem)] items-center justify-center px-6 py-10 text-sm text-muted-foreground">
-    {t('app.loadingScreen', 'Loading screen...')}
+    {t("app.loadingScreen", "Loading screen...")}
   </div>
 );
 
@@ -101,9 +101,7 @@ const AppRoutes = () => {
       {coverageProbeEnabled && <TestHeartbeat />}
       <Suspense fallback={<RouteLoadingFallback />}>
         <Routes>
-          {coverageProbeEnabled ? (
-            <Route path="/__coverage__" element={<CoverageProbePage />} />
-          ) : null}
+          {coverageProbeEnabled ? <Route path="/__coverage__" element={<CoverageProbePage />} /> : null}
           <Route path="/" element={<HomePage />} />
           <Route path="/config" element={<ConfigBrowserPage />} />
           <Route path="/play" element={<PlayFilesPage />} />
@@ -149,16 +147,16 @@ const GlobalErrorListener = () => {
   useEffect(() => {
     const handleError = (event: ErrorEvent) => {
       const activeAction = getActiveAction();
-      const error = event.error instanceof Error ? event.error : new Error(event.message || 'Window error');
+      const error = event.error instanceof Error ? event.error : new Error(event.message || "Window error");
       if (activeAction) {
         recordTraceError(activeAction, error);
       } else {
-        const context = createActionContext('Window error', 'system', 'GlobalErrorListener');
+        const context = createActionContext("Window error", "system", "GlobalErrorListener");
         recordActionStart(context);
         recordTraceError(context, error);
         recordActionEnd(context, error);
       }
-      addErrorLog('Window error', {
+      addErrorLog("Window error", {
         message: event.message,
         filename: event.filename,
         lineno: event.lineno,
@@ -168,24 +166,25 @@ const GlobalErrorListener = () => {
     };
     const handleRejection = (event: PromiseRejectionEvent) => {
       const activeAction = getActiveAction();
-      const error = event.reason instanceof Error ? event.reason : new Error(String(event.reason ?? 'Unhandled rejection'));
+      const error =
+        event.reason instanceof Error ? event.reason : new Error(String(event.reason ?? "Unhandled rejection"));
       if (activeAction) {
         recordTraceError(activeAction, error);
       } else {
-        const context = createActionContext('Unhandled promise rejection', 'system', 'GlobalErrorListener');
+        const context = createActionContext("Unhandled promise rejection", "system", "GlobalErrorListener");
         recordActionStart(context);
         recordTraceError(context, error);
         recordActionEnd(context, error);
       }
-      addErrorLog('Unhandled promise rejection', {
+      addErrorLog("Unhandled promise rejection", {
         reason: event.reason,
       });
     };
-    window.addEventListener('error', handleError);
-    window.addEventListener('unhandledrejection', handleRejection);
+    window.addEventListener("error", handleError);
+    window.addEventListener("unhandledrejection", handleRejection);
     return () => {
-      window.removeEventListener('error', handleError);
-      window.removeEventListener('unhandledrejection', handleRejection);
+      window.removeEventListener("error", handleError);
+      window.removeEventListener("unhandledrejection", handleRejection);
     };
   }, []);
 
@@ -211,14 +210,10 @@ const DiagnosticsRuntimeBridge = () => {
     const startDeferredBridges = async () => {
       if (started || disposed) return;
       started = true;
-      const [
-        diagnosticsBridgeModule,
-        nativeDebugSnapshotsModule,
-        webServerLogsModule,
-      ] = await Promise.all([
-        import('@/lib/native/diagnosticsBridge'),
-        import('@/lib/diagnostics/nativeDebugSnapshots'),
-        import('@/lib/diagnostics/webServerLogs'),
+      const [diagnosticsBridgeModule, nativeDebugSnapshotsModule, webServerLogsModule] = await Promise.all([
+        import("@/lib/native/diagnosticsBridge"),
+        import("@/lib/diagnostics/nativeDebugSnapshots"),
+        import("@/lib/diagnostics/webServerLogs"),
       ]);
       if (disposed) return;
       stopNativeDiagnosticsBridge = diagnosticsBridgeModule.stopNativeDiagnosticsBridge;
@@ -229,14 +224,14 @@ const DiagnosticsRuntimeBridge = () => {
 
     const handleStartupMilestone = (event: Event) => {
       const detail = (event as CustomEvent<{ name?: string }>).detail;
-      if (detail?.name !== 'first-meaningful-interaction') return;
+      if (detail?.name !== "first-meaningful-interaction") return;
       void startDeferredBridges();
     };
 
-    window.addEventListener('c64u-startup-milestone', handleStartupMilestone);
+    window.addEventListener("c64u-startup-milestone", handleStartupMilestone);
     return () => {
       disposed = true;
-      window.removeEventListener('c64u-startup-milestone', handleStartupMilestone);
+      window.removeEventListener("c64u-startup-milestone", handleStartupMilestone);
       uninstallConsoleBridge();
       stopDebugSnapshotPublisher?.();
       stopWebServerLogBridge?.();
@@ -256,7 +251,7 @@ class AppErrorBoundary extends React.Component<{ children: React.ReactNode }, { 
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
-    addErrorLog('React render error', {
+    addErrorLog("React render error", {
       message: error.message,
       stack: error.stack,
       componentStack: info.componentStack,
@@ -268,12 +263,12 @@ class AppErrorBoundary extends React.Component<{ children: React.ReactNode }, { 
       return (
         <div className="flex min-h-screen items-center justify-center bg-background px-6">
           <div className="max-w-md rounded-xl border border-border bg-card p-6 text-center shadow-lg">
-            <p className="text-lg font-semibold text-foreground">{t('app.error.title', 'Something went wrong')}</p>
+            <p className="text-lg font-semibold text-foreground">{t("app.error.title", "Something went wrong")}</p>
             <p className="mt-2 text-sm text-muted-foreground">
-              {t('app.error.description', 'The app hit an unexpected error. Please reopen the page or try again.')}
+              {t("app.error.description", "The app hit an unexpected error. Please reopen the page or try again.")}
             </p>
             <Button className="mt-4" onClick={() => window.location.reload()}>
-              {t('app.error.reload', 'Reload')}
+              {t("app.error.reload", "Reload")}
             </Button>
           </div>
         </div>
@@ -285,19 +280,21 @@ class AppErrorBoundary extends React.Component<{ children: React.ReactNode }, { 
 
 const DebugStartupLogger = () => {
   useEffect(() => {
-    if (getPlatform() !== 'android') return;
+    if (getPlatform() !== "android") return;
     if (!loadDebugLoggingEnabled()) return;
-    void import('@/lib/native/folderPicker')
+    void import("@/lib/native/folderPicker")
       .then(({ FolderPicker }) => FolderPicker.getPersistedUris())
       .then((result) => {
         const uris = result?.uris ?? [];
-        addLog('debug', 'SAF persisted URIs on startup', {
+        addLog("debug", "SAF persisted URIs on startup", {
           count: uris.length,
           uris: uris.map((entry) => redactTreeUri(entry.uri)),
         });
       })
       .catch((error) => {
-        addLog('debug', 'SAF persisted URI lookup failed', { error: (error as Error).message });
+        addLog("debug", "SAF persisted URI lookup failed", {
+          error: (error as Error).message,
+        });
       });
   }, []);
   return null;

@@ -6,47 +6,38 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useState, useMemo, useEffect, useReducer, useRef, useCallback } from 'react';
-import { wrapUserEvent } from '@/lib/tracing/userTrace';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Search, ChevronDown, Loader2, RefreshCw, FolderOpen } from 'lucide-react';
-import { useC64Categories, useC64Category, useC64SetConfig, useC64Connection } from '@/hooks/useC64Connection';
-import { ConfigItemRow } from '@/components/ConfigItemRow';
-import { useC64UpdateConfigBatch } from '@/hooks/useC64Connection';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { toast } from '@/hooks/use-toast';
-import { reportUserError } from '@/lib/uiErrors';
-import { addErrorLog } from '@/lib/logging';
-import { resolveAudioMixerResetValue } from '@/lib/config/audioMixer';
-import { useRefreshControl } from '@/hooks/useRefreshControl';
-import { isAudioMixerValueEqual } from '@/lib/config/audioMixer';
-import { getC64API } from '@/lib/c64api';
-import { cn } from '@/lib/utils';
-import {
-  buildSoloRoutingUpdates,
-  isSidVolumeName,
-  soloReducer,
-} from '@/lib/config/audioMixerSolo';
-import { normalizeConfigItem, type NormalizedConfigItem } from '@/lib/config/normalizeConfigItem';
-import { AppBar } from '@/components/AppBar';
-import { updateHasChanges } from '@/lib/config/appConfigStore';
+import { useState, useMemo, useEffect, useReducer, useRef, useCallback } from "react";
+import { wrapUserEvent } from "@/lib/tracing/userTrace";
+import { motion, AnimatePresence } from "framer-motion";
+import { Search, ChevronDown, Loader2, RefreshCw, FolderOpen } from "lucide-react";
+import { useC64Categories, useC64Category, useC64SetConfig, useC64Connection } from "@/hooks/useC64Connection";
+import { ConfigItemRow } from "@/components/ConfigItemRow";
+import { useC64UpdateConfigBatch } from "@/hooks/useC64Connection";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { toast } from "@/hooks/use-toast";
+import { reportUserError } from "@/lib/uiErrors";
+import { addErrorLog } from "@/lib/logging";
+import { resolveAudioMixerResetValue } from "@/lib/config/audioMixer";
+import { useRefreshControl } from "@/hooks/useRefreshControl";
+import { isAudioMixerValueEqual } from "@/lib/config/audioMixer";
+import { getC64API } from "@/lib/c64api";
+import { cn } from "@/lib/utils";
+import { buildSoloRoutingUpdates, isSidVolumeName, soloReducer } from "@/lib/config/audioMixerSolo";
+import { normalizeConfigItem, type NormalizedConfigItem } from "@/lib/config/normalizeConfigItem";
+import { AppBar } from "@/components/AppBar";
+import { updateHasChanges } from "@/lib/config/appConfigStore";
 
 type ConfigListItem = {
   name: string;
   value: string | number;
   options?: string[];
-  details?: NormalizedConfigItem['details'];
+  details?: NormalizedConfigItem["details"];
 };
 
-const DHCP_STATIC_FIELDS = new Set([
-  'Static IP',
-  'Static Netmask',
-  'Static Gateway',
-  'Static DNS',
-]);
+const DHCP_STATIC_FIELDS = new Set(["Static IP", "Static Netmask", "Static Gateway", "Static DNS"]);
 
 function CategorySection({
   categoryName,
@@ -62,7 +53,7 @@ function CategorySection({
   const { data: categoryData, isLoading, refetch } = useC64Category(categoryName, isOpen);
   const setConfig = useC64SetConfig();
   const updateConfigBatch = useC64UpdateConfigBatch();
-  const isAudioMixer = categoryName === 'Audio Mixer';
+  const isAudioMixer = categoryName === "Audio Mixer";
   const [soloState, dispatchSolo] = useReducer(soloReducer, { soloItem: null });
   const [audioConfiguredItems, setAudioConfiguredItems] = useState<ConfigListItem[]>([]);
   const audioConfiguredRef = useRef<ConfigListItem[]>([]);
@@ -71,7 +62,7 @@ function CategorySection({
   const [isEditingVolumes, setIsEditingVolumes] = useState(false);
   const editTimeoutRef = useRef<number | null>(null);
   const skipSoloRoutingRef = useRef(false);
-  const soloSnapshotKey = 'c64u_audio_mixer_solo_snapshot';
+  const soloSnapshotKey = "c64u_audio_mixer_solo_snapshot";
 
   useEffect(() => {
     if (isOpen) {
@@ -87,12 +78,12 @@ function CategorySection({
     if (!categoryData) return [];
 
     const catData = categoryData[categoryName] as any;
-    if (!catData || typeof catData !== 'object') return [];
+    if (!catData || typeof catData !== "object") return [];
 
     const itemsData = (catData as any).items ?? catData;
 
     return Object.entries(itemsData)
-      .filter(([key]) => key !== 'errors')
+      .filter(([key]) => key !== "errors")
       .map(([name, config]) => ({
         name,
         ...normalizeConfigItem(config),
@@ -100,15 +91,13 @@ function CategorySection({
   }, [categoryData, categoryName]);
 
   const dhcpStatus = useMemo(() => {
-    if (categoryName !== 'Ethernet Settings' && categoryName !== 'WiFi settings') return null;
-    const dhcpItem = items.find((item) => item.name === 'Use DHCP');
+    if (categoryName !== "Ethernet Settings" && categoryName !== "WiFi settings") return null;
+    const dhcpItem = items.find((item) => item.name === "Use DHCP");
     if (!dhcpItem) return null;
     return String(dhcpItem.value).trim().toLowerCase();
   }, [categoryName, items]);
 
-  const isDhcpEnabled = dhcpStatus
-    ? ['enabled', 'on', 'true', 'yes', '1'].includes(dhcpStatus)
-    : false;
+  const isDhcpEnabled = dhcpStatus ? ["enabled", "on", "true", "yes", "1"].includes(dhcpStatus) : false;
 
   const syncAudioConfiguredItems = useCallback((next: ConfigListItem[]) => {
     setAudioConfiguredItems(next);
@@ -139,25 +128,29 @@ function CategorySection({
     audioConfiguredRef.current = audioConfiguredItems;
   }, [isAudioMixer, audioConfiguredItems]);
 
-  useEffect(() => () => {
-    if (editTimeoutRef.current) {
-      window.clearTimeout(editTimeoutRef.current);
-    }
-  }, []);
+  useEffect(
+    () => () => {
+      if (editTimeoutRef.current) {
+        window.clearTimeout(editTimeoutRef.current);
+      }
+    },
+    [],
+  );
 
   const applySoloRouting = useCallback(
     async (soloItem: string | null, configuredOverride?: ConfigListItem[]) => {
       if (!isAudioMixer) return;
-      const configured = configuredOverride && configuredOverride.length > 0
-        ? configuredOverride
-        : audioConfiguredRef.current;
+      const configured =
+        configuredOverride && configuredOverride.length > 0 ? configuredOverride : audioConfiguredRef.current;
       if (!configured.length) return;
       if (soloItem) {
         soloSnapshotRef.current = configured;
         try {
           sessionStorage.setItem(soloSnapshotKey, JSON.stringify(configured));
         } catch (error) {
-          addErrorLog('Solo snapshot save failed', { error: (error as Error).message });
+          addErrorLog("Solo snapshot save failed", {
+            error: (error as Error).message,
+          });
         }
       }
       const updates = buildSoloRoutingUpdates(configured, soloItem);
@@ -169,18 +162,20 @@ function CategorySection({
           try {
             sessionStorage.removeItem(soloSnapshotKey);
           } catch (error) {
-            addErrorLog('Solo snapshot cleanup failed', { error: (error as Error).message });
+            addErrorLog("Solo snapshot cleanup failed", {
+              error: (error as Error).message,
+            });
           }
         }
       } catch (error) {
         reportUserError({
-          operation: 'AUDIO_ROUTING',
-          title: 'Audio routing error',
+          operation: "AUDIO_ROUTING",
+          title: "Audio routing error",
           description: (error as Error).message,
           error,
           context: {
             category: categoryName,
-            soloItem: soloItem ?? 'none',
+            soloItem: soloItem ?? "none",
           },
         });
       }
@@ -212,7 +207,9 @@ function CategorySection({
     try {
       stored = sessionStorage.getItem(soloSnapshotKey);
     } catch (error) {
-      addErrorLog('Solo snapshot read failed', { error: (error as Error).message });
+      addErrorLog("Solo snapshot read failed", {
+        error: (error as Error).message,
+      });
       restoredSnapshotRef.current = true;
       return;
     }
@@ -226,7 +223,9 @@ function CategorySection({
         void applySoloRouting(null, parsed);
       }
     } catch (error) {
-      addErrorLog('Solo snapshot parse failed', { error: (error as Error).message });
+      addErrorLog("Solo snapshot parse failed", {
+        error: (error as Error).message,
+      });
     } finally {
       restoredSnapshotRef.current = true;
     }
@@ -236,9 +235,7 @@ function CategorySection({
     if (!isAudioMixer) return undefined;
     return () => {
       if (!wasSoloActiveRef.current && !soloState.soloItem) return;
-      const configured = audioConfiguredRef.current.length
-        ? audioConfiguredRef.current
-        : items;
+      const configured = audioConfiguredRef.current.length ? audioConfiguredRef.current : items;
       let snapshot = soloSnapshotRef.current.length ? soloSnapshotRef.current : configured;
       try {
         const stored = sessionStorage.getItem(soloSnapshotKey);
@@ -247,7 +244,9 @@ function CategorySection({
           if (Array.isArray(parsed) && parsed.length) snapshot = parsed;
         }
       } catch (error) {
-        addErrorLog('Solo snapshot restore failed', { error: (error as Error).message });
+        addErrorLog("Solo snapshot restore failed", {
+          error: (error as Error).message,
+        });
       }
       if (snapshot.length) {
         void applySoloRouting(null, snapshot);
@@ -265,8 +264,8 @@ function CategorySection({
       toast({ title: `${itemName} updated` });
     } catch (error) {
       reportUserError({
-        operation: 'CONFIG_UPDATE',
-        title: 'Error',
+        operation: "CONFIG_UPDATE",
+        title: "Error",
         description: (error as Error).message,
         error,
         context: {
@@ -293,7 +292,7 @@ function CategorySection({
     const wasSoloActive = Boolean(soloState.soloItem);
     if (wasSoloActive) {
       skipSoloRoutingRef.current = true;
-      dispatchSolo({ type: 'reset' });
+      dispatchSolo({ type: "reset" });
     }
     setIsEditingVolumes(true);
     if (editTimeoutRef.current) {
@@ -310,12 +309,15 @@ function CategorySection({
       const updates = buildSoloRoutingUpdates(snapshot, null);
       updates[itemName] = value;
       try {
-        await updateConfigBatch.mutateAsync({ category: categoryName, updates });
+        await updateConfigBatch.mutateAsync({
+          category: categoryName,
+          updates,
+        });
         soloSnapshotRef.current = audioConfiguredRef.current.length ? audioConfiguredRef.current : items;
       } catch (error) {
         reportUserError({
-          operation: 'AUDIO_MIXER_UPDATE',
-          title: 'Error',
+          operation: "AUDIO_MIXER_UPDATE",
+          title: "Error",
           description: (error as Error).message,
           error,
           context: {
@@ -332,7 +334,7 @@ function CategorySection({
   };
 
   const handleSyncClock = async () => {
-    if (categoryName !== 'Clock Settings') return;
+    if (categoryName !== "Clock Settings") return;
     const now = new Date();
     const updates: Record<string, string | number> = {};
     const normalizedItems = items.map((item) => ({
@@ -348,18 +350,18 @@ function CategorySection({
         });
     };
 
-    setIfMatch((name) => name.includes('year'), now.getFullYear());
-    setIfMatch((name) => name.includes('month'), now.getMonth() + 1);
-    setIfMatch((name) => name.includes('day'), now.getDate());
-    setIfMatch((name) => name.includes('hour'), now.getHours());
-    setIfMatch((name) => name.includes('minute'), now.getMinutes());
-    setIfMatch((name) => name.includes('second'), now.getSeconds());
+    setIfMatch((name) => name.includes("year"), now.getFullYear());
+    setIfMatch((name) => name.includes("month"), now.getMonth() + 1);
+    setIfMatch((name) => name.includes("day"), now.getDate());
+    setIfMatch((name) => name.includes("hour"), now.getHours());
+    setIfMatch((name) => name.includes("minute"), now.getMinutes());
+    setIfMatch((name) => name.includes("second"), now.getSeconds());
 
     if (Object.keys(updates).length === 0) {
       reportUserError({
-        operation: 'CLOCK_SYNC',
-        title: 'Clock sync unavailable',
-        description: 'No matching clock fields found in this section.',
+        operation: "CLOCK_SYNC",
+        title: "Clock sync unavailable",
+        description: "No matching clock fields found in this section.",
         context: { category: categoryName },
       });
       return;
@@ -368,11 +370,14 @@ function CategorySection({
     try {
       await updateConfigBatch.mutateAsync({ category: categoryName, updates });
       markChanged();
-      toast({ title: 'Clock synced', description: 'C64U clock updated from device time.' });
+      toast({
+        title: "Clock synced",
+        description: "C64U clock updated from device time.",
+      });
     } catch (error) {
       reportUserError({
-        operation: 'CLOCK_SYNC',
-        title: 'Clock sync failed',
+        operation: "CLOCK_SYNC",
+        title: "Clock sync failed",
         description: (error as Error).message,
         error,
         context: { category: categoryName },
@@ -381,9 +386,9 @@ function CategorySection({
   };
 
   const resetAudioMixer = async () => {
-    if (categoryName !== 'Audio Mixer') return;
+    if (categoryName !== "Audio Mixer") return;
     skipSoloRoutingRef.current = true;
-    dispatchSolo({ type: 'reset' });
+    dispatchSolo({ type: "reset" });
     soloSnapshotRef.current = [];
     setIsResetting(true);
     try {
@@ -396,18 +401,24 @@ function CategorySection({
       }
 
       if (Object.keys(updates).length === 0) {
-        toast({ title: 'Audio Mixer already at defaults', description: 'No changes needed.' });
+        toast({
+          title: "Audio Mixer already at defaults",
+          description: "No changes needed.",
+        });
         return;
       }
 
       await updateConfigBatch.mutateAsync({ category: categoryName, updates });
       await refetch();
       markChanged();
-      toast({ title: 'Audio Mixer reset', description: 'Volumes set to 0 dB, pans centered.' });
+      toast({
+        title: "Audio Mixer reset",
+        description: "Volumes set to 0 dB, pans centered.",
+      });
     } catch (error) {
       reportUserError({
-        operation: 'AUDIO_MIXER_RESET',
-        title: 'Error',
+        operation: "AUDIO_MIXER_RESET",
+        title: "Error",
         description: (error as Error).message,
         error,
         context: { category: categoryName },
@@ -420,7 +431,7 @@ function CategorySection({
   const handleRefresh = async () => {
     if (isAudioMixer) {
       skipSoloRoutingRef.current = true;
-      dispatchSolo({ type: 'reset' });
+      dispatchSolo({ type: "reset" });
       soloSnapshotRef.current = [];
       syncAudioConfiguredItems([]);
     }
@@ -436,9 +447,15 @@ function CategorySection({
       className="bg-card border border-border rounded-xl overflow-hidden"
     >
       <button
-        onClick={wrapUserEvent(() => setIsOpen(!isOpen), 'toggle', 'ConfigSection', { title: categoryName }, 'ConfigHeader')}
+        onClick={wrapUserEvent(
+          () => setIsOpen(!isOpen),
+          "toggle",
+          "ConfigSection",
+          { title: categoryName },
+          "ConfigHeader",
+        )}
         className="w-full flex items-center justify-between px-4 py-3 text-left"
-        data-testid={`config-category-${categoryName.toLowerCase().replace(/\s+/g, '-')}`}
+        data-testid={`config-category-${categoryName.toLowerCase().replace(/\s+/g, "-")}`}
       >
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-muted">
@@ -446,10 +463,7 @@ function CategorySection({
           </div>
           <span className="font-medium text-sm">{categoryName}</span>
         </div>
-        <motion.div
-          animate={{ rotate: isOpen ? 180 : 0 }}
-          transition={{ duration: 0.2 }}
-        >
+        <motion.div animate={{ rotate: isOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
           <ChevronDown className="h-5 w-5 text-muted-foreground" />
         </motion.div>
       </button>
@@ -458,14 +472,14 @@ function CategorySection({
         {isOpen && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
+            animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.2 }}
           >
             <div className="border-t border-border px-4 pt-2 pb-3">
               <div className="flex items-center justify-between gap-2 py-2" data-testid="config-group-actions">
                 <div className="flex items-center gap-2">
-                  {categoryName === 'Audio Mixer' && (
+                  {categoryName === "Audio Mixer" && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -476,7 +490,7 @@ function CategorySection({
                       Reset
                     </Button>
                   )}
-                  {categoryName === 'Clock Settings' && (
+                  {categoryName === "Clock Settings" && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -488,12 +502,7 @@ function CategorySection({
                     </Button>
                   )}
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleRefresh}
-                  className="text-xs"
-                >
+                <Button variant="ghost" size="sm" onClick={handleRefresh} className="text-xs">
                   <RefreshCw className="h-3 w-3 mr-1" />
                   Refresh
                 </Button>
@@ -504,9 +513,7 @@ function CategorySection({
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
               ) : items.length === 0 ? (
-                <div className="py-4 text-center text-sm text-muted-foreground">
-                  No settings available
-                </div>
+                <div className="py-4 text-center text-sm text-muted-foreground">No settings available</div>
               ) : (
                 <div className="divide-y divide-border" data-testid="config-group-list">
                   {displayItems.map((item) => {
@@ -514,21 +521,19 @@ function CategorySection({
                     const isSoloed = isSidVolume && soloState.soloItem === item.name;
                     const isMutedBySolo = isSidVolume && soloState.soloItem && soloState.soloItem !== item.name;
                     const isDhcpStaticField =
-                      (categoryName === 'Ethernet Settings' || categoryName === 'WiFi settings')
-                      && DHCP_STATIC_FIELDS.has(item.name);
+                      (categoryName === "Ethernet Settings" || categoryName === "WiFi settings") &&
+                      DHCP_STATIC_FIELDS.has(item.name);
                     const isReadOnly = isDhcpEnabled && isDhcpStaticField;
-                    const testIdBase = item.name.toLowerCase().replace(/\s+/g, '-');
+                    const testIdBase = item.name.toLowerCase().replace(/\s+/g, "-");
                     const rowClassName = cn(
-                      isSidVolume && 'rounded-md px-3',
-                      isSoloed && 'bg-primary/10',
-                      isMutedBySolo && 'bg-muted/20',
+                      isSidVolume && "rounded-md px-3",
+                      isSoloed && "bg-primary/10",
+                      isMutedBySolo && "bg-muted/20",
                     );
 
                     const rightAccessory = isSidVolume ? (
                       <div className="flex items-center gap-3">
-                        {isMutedBySolo && (
-                          <span className="text-[11px] font-medium text-muted-foreground">Muted</span>
-                        )}
+                        {isMutedBySolo && <span className="text-[11px] font-medium text-muted-foreground">Muted</span>}
                         <div className="flex items-center gap-2">
                           <Label htmlFor={`solo-${item.name}`} className="text-[11px] uppercase tracking-wide">
                             Solo
@@ -537,7 +542,7 @@ function CategorySection({
                             id={`solo-${item.name}`}
                             checked={isSoloed}
                             aria-label={`Solo ${item.name}`}
-                            onCheckedChange={() => dispatchSolo({ type: 'toggle', item: item.name })}
+                            onCheckedChange={() => dispatchSolo({ type: "toggle", item: item.name })}
                             disabled={isEditingVolumes}
                             data-testid={`audio-mixer-solo-${testIdBase}`}
                           />
@@ -578,7 +583,7 @@ function CategorySection({
 export default function ConfigBrowserPage() {
   const { status, runtimeBaseUrl } = useC64Connection();
   const { data: categoriesData, isLoading } = useC64Categories();
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const { setConfigExpanded } = useRefreshControl();
   const markChanged = useCallback(() => {
     updateHasChanges(runtimeBaseUrl, true);
@@ -588,21 +593,12 @@ export default function ConfigBrowserPage() {
     if (!categoriesData?.categories) return [];
     if (!searchQuery) return categoriesData.categories;
 
-    return categoriesData.categories.filter((cat) =>
-      cat.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    return categoriesData.categories.filter((cat) => cat.toLowerCase().includes(searchQuery.toLowerCase()));
   }, [categoriesData?.categories, searchQuery]);
 
   return (
     <div className="min-h-screen pb-24 pt-[var(--app-bar-height)]">
-      <AppBar
-        title="Config"
-        subtitle={
-          <span>
-            {categoriesData?.categories.length || 0} categories
-          </span>
-        }
-      >
+      <AppBar title="Config" subtitle={<span>{categoriesData?.categories.length || 0} categories</span>}>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -618,9 +614,7 @@ export default function ConfigBrowserPage() {
         {!status.isConnected ? (
           <div className="bg-destructive/10 border border-destructive/20 rounded-xl p-4 text-center">
             <p className="text-sm text-destructive font-medium">Not connected</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Configure connection in Settings
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">Configure connection in Settings</p>
           </div>
         ) : isLoading ? (
           <div className="flex items-center justify-center py-16">
@@ -628,7 +622,7 @@ export default function ConfigBrowserPage() {
           </div>
         ) : filteredCategories.length === 0 ? (
           <div className="py-8 text-center text-sm text-muted-foreground">
-            {searchQuery ? 'No categories match your search' : 'No categories available'}
+            {searchQuery ? "No categories match your search" : "No categories available"}
           </div>
         ) : (
           filteredCategories.map((category, index) => (

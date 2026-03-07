@@ -6,20 +6,20 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { ReactNode } from 'react';
-import { ChevronRight } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { DiagnosticsTimestamp } from '@/components/diagnostics/DiagnosticsTimestamp';
-import { getDiagnosticsSeverityMeta, type DiagnosticsSeverity } from '@/lib/diagnostics/diagnosticsSeverity';
+import type { ReactNode } from "react";
+import { ChevronRight } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { DiagnosticsTimestamp } from "@/components/diagnostics/DiagnosticsTimestamp";
+import { getDiagnosticsSeverityMeta, type DiagnosticsSeverity } from "@/lib/diagnostics/diagnosticsSeverity";
 
-export type DiagnosticsListItemMode = 'trace' | 'action' | 'log';
+export type DiagnosticsListItemMode = "trace" | "action" | "log";
 
 type Props = {
   mode: DiagnosticsListItemMode;
   severity: DiagnosticsSeverity;
   title: string;
   timestamp: string | number | Date | null;
-  origin?: 'user' | 'system' | 'unknown' | null;
+  origin?: "user" | "system" | "unknown" | null;
   secondaryLeft?: ReactNode;
   secondaryRight?: ReactNode;
   children?: ReactNode;
@@ -37,21 +37,20 @@ export const DiagnosticsListItem = ({
   children,
   testId,
 }: Props) => {
-  const showOrigin = mode === 'action';
+  const showOrigin = mode === "action";
   const originClass =
-    origin === 'user'
-      ? 'bg-diagnostics-user'
-      : origin === 'system'
-        ? 'bg-diagnostics-system'
-        : 'bg-muted-foreground';
+    origin === "user" ? "bg-diagnostics-user" : origin === "system" ? "bg-diagnostics-system" : "bg-muted-foreground";
   const severityMeta = getDiagnosticsSeverityMeta(severity);
   const hasSecondary = Boolean(secondaryLeft || secondaryRight);
-  const isActionMode = mode === 'action';
+  const isActionMode = mode === "action";
 
   return (
     <details className="group rounded-lg border border-border" data-testid={testId}>
       <summary className="list-none cursor-pointer select-none px-2 py-0.5 [&::-webkit-details-marker]:hidden">
-        <div className="grid grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-2" data-testid="diagnostics-summary-grid">
+        <div
+          className="grid grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-2"
+          data-testid="diagnostics-summary-grid"
+        >
           <div className="flex items-center justify-center gap-1 text-xs">
             <ChevronRight
               className="h-3.5 w-3.5 text-muted-foreground transition-transform duration-200 group-[open]:rotate-90"
@@ -60,7 +59,7 @@ export const DiagnosticsListItem = ({
             <span
               data-testid="diagnostics-severity-glyph"
               className={cn(
-                'inline-flex w-4 items-center justify-center text-[11px] font-semibold leading-none whitespace-nowrap',
+                "inline-flex w-4 items-center justify-center text-[11px] font-semibold leading-none whitespace-nowrap",
                 severityMeta.colorClass,
               )}
             >
@@ -68,14 +67,16 @@ export const DiagnosticsListItem = ({
             </span>
           </div>
           <div className="flex items-center gap-2 min-w-0 text-sm font-medium">
-             {showOrigin ? (
-                <span
-                  className={cn('h-2.5 w-2.5 rounded-full shrink-0', originClass)}
-                  role="img"
-                  aria-label={`origin: ${origin ?? 'unknown'}`}
-                />
-             ) : null}
-            <span className="min-w-0 truncate" data-testid="diagnostics-entry-title">{title}</span>
+            {showOrigin ? (
+              <span
+                className={cn("h-2.5 w-2.5 rounded-full shrink-0", originClass)}
+                role="img"
+                aria-label={`origin: ${origin ?? "unknown"}`}
+              />
+            ) : null}
+            <span className="min-w-0 truncate" data-testid="diagnostics-entry-title">
+              {title}
+            </span>
           </div>
           <DiagnosticsTimestamp className="text-muted-foreground text-right shrink-0" value={timestamp} />
         </div>
@@ -100,7 +101,7 @@ export const DiagnosticsListItem = ({
           <>
             <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide">
               <span
-                className={cn('inline-flex w-4 items-center justify-center', severityMeta.colorClass)}
+                className={cn("inline-flex w-4 items-center justify-center", severityMeta.colorClass)}
                 aria-hidden="true"
               >
                 {severityMeta.glyph}
@@ -111,9 +112,7 @@ export const DiagnosticsListItem = ({
             </div>
             {hasSecondary ? (
               <div className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] gap-2 text-xs">
-                <div className="min-w-0 flex flex-wrap items-center gap-2">
-                  {secondaryLeft}
-                </div>
+                <div className="min-w-0 flex flex-wrap items-center gap-2">{secondaryLeft}</div>
                 <div className="text-muted-foreground font-semibold tabular-nums text-right shrink-0">
                   {secondaryRight}
                 </div>
@@ -121,7 +120,7 @@ export const DiagnosticsListItem = ({
             ) : null}
           </>
         )}
-        {children ? <div className={cn('text-xs mt-2')}>{children}</div> : null}
+        {children ? <div className={cn("text-xs mt-2")}>{children}</div> : null}
       </div>
     </details>
   );

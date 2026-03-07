@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-export type SongSourceId = 'hvsc' | 'local';
+export type SongSourceId = "hvsc" | "local";
 
 export type SongFolder = {
   path: string;
@@ -28,5 +28,10 @@ export type SongSource = {
   id: SongSourceId;
   listFolders: (path: string) => Promise<SongFolder[]>;
   listSongs: (path: string) => Promise<SongEntry[]>;
-  getSong: (entry: SongEntry) => Promise<{ data: Uint8Array; durationMs?: number; title: string; path?: string }>;
+  getSong: (entry: SongEntry) => Promise<{
+    data: Uint8Array;
+    durationMs?: number;
+    title: string;
+    path?: string;
+  }>;
 };

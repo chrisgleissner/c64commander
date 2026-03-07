@@ -1,0 +1,48 @@
+appId: uk.gleissner.c64commander
+tags:
+  - edge
+  - slow
+  - hvsc
+  - device
+env:
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "20000"}
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
+  TIMEOUT: ${TIMEOUT || "15000"}
+---
+# edge-hvsc-ingest-lifecycle: trigger a full HVSC install/ingest cycle and
+# verify the progress stages transition monotonically to completion.
+- runFlow: subflows/launch-and-wait.yaml
+
+# Navigate to the HVSC / Music tab
+- tapOn:
+    point: "50%,95%"
+- extendedWaitUntil:
+    visible: "Music"
+    timeout: ${TIMEOUT}
+
+# Open HVSC settings/install
+- tapOn: "Install HVSC"
+- extendedWaitUntil:
+    visible: "Downloading"
+    timeout: ${LONG_TIMEOUT}
+
+- takeScreenshot: hvsc-ingest-downloading
+
+- extendedWaitUntil:
+    visible: "Extracting"
+    timeout: ${LONG_TIMEOUT}
+
+- takeScreenshot: hvsc-ingest-extracting
+
+- extendedWaitUntil:
+    visible: "Indexing"
+    timeout: ${LONG_TIMEOUT}
+
+- takeScreenshot: hvsc-ingest-indexing
+
+# Verify final ready state
+- extendedWaitUntil:
+    visible: "Ready"
+    timeout: ${LONG_TIMEOUT}
+
+- takeScreenshot: hvsc-ingest-complete

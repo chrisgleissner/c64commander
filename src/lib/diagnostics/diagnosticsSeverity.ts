@@ -6,33 +6,33 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { ActionSummaryOutcome } from '@/lib/diagnostics/actionSummaries';
-import type { LogLevel } from '@/lib/logging';
-import type { TraceEvent } from '@/lib/tracing/types';
+import type { ActionSummaryOutcome } from "@/lib/diagnostics/actionSummaries";
+import type { LogLevel } from "@/lib/logging";
+import type { TraceEvent } from "@/lib/tracing/types";
 
-export type DiagnosticsSeverity = 'error' | 'warn' | 'info' | 'debug';
-export type DiagnosticsDisplaySeverity = 'ERROR' | 'WARN' | 'INFO';
+export type DiagnosticsSeverity = "error" | "warn" | "info" | "debug";
+export type DiagnosticsDisplaySeverity = "ERROR" | "WARN" | "INFO";
 
 type DiagnosticsSeverityMeta = {
-  glyph: 'E' | 'W' | 'I' | 'D';
-  label: 'ERROR' | 'WARN' | 'INFO' | 'DEBUG';
+  glyph: "E" | "W" | "I" | "D";
+  label: "ERROR" | "WARN" | "INFO" | "DEBUG";
   colorClass: string;
 };
 
 export const DIAGNOSTICS_SEVERITY_META: Record<DiagnosticsSeverity, DiagnosticsSeverityMeta> = {
-  error: { glyph: 'E', label: 'ERROR', colorClass: 'text-destructive' },
-  warn: { glyph: 'W', label: 'WARN', colorClass: 'text-amber-600' },
-  info: { glyph: 'I', label: 'INFO', colorClass: 'text-muted-foreground' },
-  debug: { glyph: 'D', label: 'DEBUG', colorClass: 'text-c64-blue' },
+  error: { glyph: "E", label: "ERROR", colorClass: "text-destructive" },
+  warn: { glyph: "W", label: "WARN", colorClass: "text-amber-600" },
+  info: { glyph: "I", label: "INFO", colorClass: "text-muted-foreground" },
+  debug: { glyph: "D", label: "DEBUG", colorClass: "text-c64-blue" },
 };
 
 export const getDiagnosticsSeverityMeta = (severity: DiagnosticsSeverity): DiagnosticsSeverityMeta =>
   DIAGNOSTICS_SEVERITY_META[severity];
 
 const DISPLAY_TO_DIAGNOSTICS_SEVERITY: Record<DiagnosticsDisplaySeverity, DiagnosticsSeverity> = {
-  ERROR: 'error',
-  WARN: 'warn',
-  INFO: 'info',
+  ERROR: "error",
+  WARN: "warn",
+  INFO: "info",
 };
 
 export const getDiagnosticsColorClassForDisplaySeverity = (severity: DiagnosticsDisplaySeverity): string =>
@@ -40,20 +40,20 @@ export const getDiagnosticsColorClassForDisplaySeverity = (severity: Diagnostics
 
 export const resolveLogSeverity = (level: LogLevel): DiagnosticsSeverity => level;
 
-export const resolveTraceSeverity = (event: Pick<TraceEvent, 'type'>): DiagnosticsSeverity =>
-  event.type === 'error' ? 'error' : 'info';
+export const resolveTraceSeverity = (event: Pick<TraceEvent, "type">): DiagnosticsSeverity =>
+  event.type === "error" ? "error" : "info";
 
 export const resolveActionSeverity = (outcome: ActionSummaryOutcome): DiagnosticsSeverity => {
   switch (outcome) {
-    case 'error':
-      return 'error';
-    case 'blocked':
-    case 'timeout':
-    case 'incomplete':
-      return 'warn';
-    case 'success':
-      return 'info';
+    case "error":
+      return "error";
+    case "blocked":
+    case "timeout":
+    case "incomplete":
+      return "warn";
+    case "success":
+      return "info";
     default:
-      return 'info';
+      return "info";
   }
 };

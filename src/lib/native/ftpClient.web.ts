@@ -6,28 +6,28 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { FtpClientPlugin, FtpListOptions, FtpEntry, FtpReadOptions } from './ftpClient';
-import { getFtpBridgeUrl } from '@/lib/ftp/ftpConfig';
+import type { FtpClientPlugin, FtpListOptions, FtpEntry, FtpReadOptions } from "./ftpClient";
+import { getFtpBridgeUrl } from "@/lib/ftp/ftpConfig";
 
 const FTP_BRIDGE_TIMEOUT_MS = 5000;
 const FTP_BRIDGE_MAX_ATTEMPTS = 3;
 
 const isRetryableFtpBridgeFailure = (error: unknown, status?: number) => {
-  const resolvedStatus = typeof status === 'number'
-    ? status
-    : (error as { status?: number } | undefined)?.status;
-  if (typeof resolvedStatus === 'number' && resolvedStatus >= 500) {
+  const resolvedStatus = typeof status === "number" ? status : (error as { status?: number } | undefined)?.status;
+  if (typeof resolvedStatus === "number" && resolvedStatus >= 500) {
     return true;
   }
-  const message = (error as Error | undefined)?.message?.toLowerCase() ?? '';
-  return message.includes('timed out')
-    || message.includes('network')
-    || message.includes('failed to fetch')
-    || message.includes('connection reset')
-    || message.includes('econnreset');
+  const message = (error as Error | undefined)?.message?.toLowerCase() ?? "";
+  return (
+    message.includes("timed out") ||
+    message.includes("network") ||
+    message.includes("failed to fetch") ||
+    message.includes("connection reset") ||
+    message.includes("econnreset")
+  );
 };
 
-const runWithRetry = async <T,>(operation: () => Promise<T>) => {
+const runWithRetry = async <T>(operation: () => Promise<T>) => {
   let lastError: unknown;
   for (let attempt = 1; attempt <= FTP_BRIDGE_MAX_ATTEMPTS; attempt += 1) {
     try {
@@ -49,7 +49,7 @@ export class FtpClientWeb implements FtpClientPlugin {
   async listDirectory(options: FtpListOptions): Promise<{ entries: FtpEntry[] }> {
     const bridgeUrl = getFtpBridgeUrl();
     if (!bridgeUrl) {
-      throw new Error('FTP browsing is unavailable: missing FTP bridge URL.');
+      throw new Error("FTP browsing is unavailable: missing FTP bridge URL.");
     }
 
     return runWithRetry(async () => {
@@ -58,9 +58,9 @@ export class FtpClientWeb implements FtpClientPlugin {
 
       let response: Response;
       try {
-        response = await fetch(`${bridgeUrl.replace(/\/$/, '')}/v1/ftp/list`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+        response = await fetch(`${bridgeUrl.replace(/\/$/, "")}/v1/ftp/list`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           signal: controller.signal,
           body: JSON.stringify({
             host: options.host,
@@ -72,8 +72,8 @@ export class FtpClientWeb implements FtpClientPlugin {
           }),
         });
       } catch (error) {
-        if ((error as { name?: string }).name === 'AbortError') {
-          throw new Error('FTP bridge request timed out');
+        if ((error as { name?: string }).name === "AbortError") {
+          throw new Error("FTP bridge request timed out");
         }
         throw error;
       } finally {
@@ -99,7 +99,7 @@ export class FtpClientWeb implements FtpClientPlugin {
   async readFile(options: FtpReadOptions): Promise<{ data: string; sizeBytes?: number }> {
     const bridgeUrl = getFtpBridgeUrl();
     if (!bridgeUrl) {
-      throw new Error('FTP file download is unavailable: missing FTP bridge URL.');
+      throw new Error("FTP file download is unavailable: missing FTP bridge URL.");
     }
 
     return runWithRetry(async () => {
@@ -108,15 +108,15 @@ export class FtpClientWeb implements FtpClientPlugin {
 
       let response: Response;
       try {
-        response = await fetch(`${bridgeUrl.replace(/\/$/, '')}/v1/ftp/read`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+        response = await fetch(`${bridgeUrl.replace(/\/$/, "")}/v1/ftp/read`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           signal: controller.signal,
           body: JSON.stringify(options),
         });
       } catch (error) {
-        if ((error as { name?: string }).name === 'AbortError') {
-          throw new Error('FTP bridge request timed out');
+        if ((error as { name?: string }).name === "AbortError") {
+          throw new Error("FTP bridge request timed out");
         }
         throw error;
       } finally {
@@ -134,14 +134,17 @@ export class FtpClientWeb implements FtpClientPlugin {
         throw error;
       }
 
-      const payload = (await response.json()) as { data?: string; sizeBytes?: number } | null;
-      if (!payload || typeof payload.data !== 'string') {
-        throw new Error('FTP bridge error: invalid file payload');
+      const payload = (await response.json()) as {
+        data?: string;
+        sizeBytes?: number;
+      } | null;
+      if (!payload || typeof payload.data !== "string") {
+        throw new Error("FTP bridge error: invalid file payload");
       }
 
       return {
         data: payload.data,
-        sizeBytes: typeof payload.sizeBytes === 'number' ? payload.sizeBytes : payload.data.length,
+        sizeBytes: typeof payload.sizeBytes === "number" ? payload.sizeBytes : payload.data.length,
       };
     });
   }

@@ -23,7 +23,7 @@ export type VolumeUiTarget = {
   setAtMs: number;
 };
 
-export type VolumeSyncDecision = 'apply' | 'clear' | 'defer';
+export type VolumeSyncDecision = "apply" | "clear" | "defer";
 
 export const resolveVolumeSyncDecision = (
   pendingTarget: VolumeUiTarget | null,
@@ -31,8 +31,8 @@ export const resolveVolumeSyncDecision = (
   nowMs: number,
   holdMs = 2500,
 ): VolumeSyncDecision => {
-  if (!pendingTarget) return 'apply';
-  if (pendingTarget.index === nextIndex) return 'clear';
-  if (nowMs - pendingTarget.setAtMs < holdMs) return 'defer';
-  return 'clear';
+  if (!pendingTarget) return "apply";
+  if (pendingTarget.index === nextIndex) return "clear";
+  if (nowMs - pendingTarget.setAtMs < holdMs) return "defer";
+  return "clear";
 };

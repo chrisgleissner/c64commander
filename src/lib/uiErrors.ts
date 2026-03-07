@@ -6,8 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { toast } from '@/hooks/use-toast';
-import { addErrorLog, addLog } from '@/lib/logging';
+import { toast } from "@/hooks/use-toast";
+import { addErrorLog, addLog } from "@/lib/logging";
 
 export type UiErrorReport = {
   operation: string;
@@ -26,10 +26,10 @@ const buildErrorDetails = (error?: unknown) => {
       stack: error.stack,
     };
   }
-  if (typeof error === 'string') {
+  if (typeof error === "string") {
     return { message: error };
   }
-  if (typeof error === 'object') {
+  if (typeof error === "object") {
     return { ...(error as Record<string, unknown>) };
   }
   return { message: String(error) };
@@ -39,22 +39,18 @@ const buildErrorDetails = (error?: unknown) => {
 // instead of duplicating transient-failure pattern strings.
 export const isTransientConnectivityFailure = (message: string): boolean => {
   const normalized = message.toLowerCase();
-  return /host unreachable|service unavailable|http 503|failed to fetch|net::err|request timed out|networkerror|dns/.test(normalized);
+  return /host unreachable|service unavailable|http 503|failed to fetch|net::err|request timed out|networkerror|dns/.test(
+    normalized,
+  );
 };
 
 const isRecoverableConnectivityError = (description: string, error?: unknown) => {
   const details = buildErrorDetails(error) as { message?: string } | undefined;
-  const message = `${description} ${details?.message ?? ''}`;
+  const message = `${description} ${details?.message ?? ""}`;
   return isTransientConnectivityFailure(message);
 };
 
-export const reportUserError = ({
-  operation,
-  title,
-  description,
-  error,
-  context,
-}: UiErrorReport) => {
+export const reportUserError = ({ operation, title, description, error, context }: UiErrorReport) => {
   const logPayload = {
     operation,
     description,
@@ -74,6 +70,6 @@ export const reportUserError = ({
   toast({
     title,
     description,
-    variant: 'destructive',
+    variant: "destructive",
   });
 };

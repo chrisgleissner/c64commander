@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { PickedFolderEntry } from './folderPicker';
+import type { PickedFolderEntry } from "./folderPicker";
 
 type FolderEntryCandidate = {
   uri?: string;
@@ -16,19 +16,19 @@ type FolderEntryCandidate = {
   webkitRelativePath?: string;
 };
 
-const normalizePath = (value: string) => (value.startsWith('/') ? value : `/${value}`);
+const normalizePath = (value: string) => (value.startsWith("/") ? value : `/${value}`);
 
 const toPickedFolderEntry = (value: unknown): PickedFolderEntry | null => {
-  if (!value || typeof value !== 'object') return null;
+  if (!value || typeof value !== "object") return null;
   const candidate = value as FolderEntryCandidate;
-  const uri = typeof candidate.uri === 'string' ? candidate.uri : undefined;
-  const name = typeof candidate.name === 'string' ? candidate.name : undefined;
+  const uri = typeof candidate.uri === "string" ? candidate.uri : undefined;
+  const name = typeof candidate.name === "string" ? candidate.name : undefined;
   const pathRaw =
-    typeof candidate.path === 'string'
+    typeof candidate.path === "string"
       ? candidate.path
-      : typeof candidate.relativePath === 'string'
+      : typeof candidate.relativePath === "string"
         ? candidate.relativePath
-        : typeof candidate.webkitRelativePath === 'string'
+        : typeof candidate.webkitRelativePath === "string"
           ? candidate.webkitRelativePath
           : undefined;
   if (!uri || !name) return null;
@@ -37,10 +37,12 @@ const toPickedFolderEntry = (value: unknown): PickedFolderEntry | null => {
 };
 
 const isArrayLike = (value: unknown): value is ArrayLike<PickedFolderEntry> =>
-  Boolean(value && typeof value === 'object' && 'length' in value);
+  Boolean(value && typeof value === "object" && "length" in value);
 
 const isIterable = (value: unknown): value is Iterable<PickedFolderEntry> =>
-  Boolean(value && typeof value === 'object' && typeof (value as Iterable<PickedFolderEntry>)[Symbol.iterator] === 'function');
+  Boolean(
+    value && typeof value === "object" && typeof (value as Iterable<PickedFolderEntry>)[Symbol.iterator] === "function",
+  );
 
 const normalizeEntries = (entries: unknown[]): PickedFolderEntry[] | null => {
   if (!entries.length) return [];
@@ -50,10 +52,10 @@ const normalizeEntries = (entries: unknown[]): PickedFolderEntry[] | null => {
 };
 
 const entriesFromObject = (value: object): PickedFolderEntry[] | null => {
-  if ('files' in value) {
+  if ("files" in value) {
     return coerceFolderPickerEntries((value as { files?: unknown }).files);
   }
-  if ('entries' in value) {
+  if ("entries" in value) {
     return coerceFolderPickerEntries((value as { entries?: unknown }).entries);
   }
   const values = Object.values(value);
@@ -63,19 +65,19 @@ const entriesFromObject = (value: object): PickedFolderEntry[] | null => {
 export const coerceFolderPickerEntries = (files: unknown): PickedFolderEntry[] | null => {
   if (!files) return [];
   if (Array.isArray(files)) return normalizeEntries(files);
-  if (typeof files === 'string') {
+  if (typeof files === "string") {
     try {
       const parsed = JSON.parse(files) as unknown;
       if (Array.isArray(parsed)) return normalizeEntries(parsed);
-      if (parsed && typeof parsed === 'object') return entriesFromObject(parsed as object);
+      if (parsed && typeof parsed === "object") return entriesFromObject(parsed as object);
     } catch (error) {
-      console.warn('Failed to parse folder picker entries', { error });
+      console.warn("Failed to parse folder picker entries", { error });
       return null;
     }
   }
   if (isArrayLike(files)) return normalizeEntries(Array.from(files));
   if (isIterable(files)) return normalizeEntries(Array.from(files));
-  if (typeof files === 'object') {
+  if (typeof files === "object") {
     const single = toPickedFolderEntry(files);
     if (single) return [single];
     return entriesFromObject(files);

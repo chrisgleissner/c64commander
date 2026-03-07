@@ -1,4 +1,7 @@
-import { waitForLogPattern, assertNoDemoState } from '../helpers/assertions.mjs';
+import {
+  waitForLogPattern,
+  assertNoDemoState,
+} from '../helpers/assertions.mjs';
 
 export const spec = {
   id: 'connection',
@@ -22,7 +25,10 @@ export const spec = {
         await ctx.capture('settings-tab');
 
         await waitForLogPattern(ctx.evidence.logcatPath, /C64U_HTTP_NATIVE/);
-        await waitForLogPattern(ctx.evidence.logcatPath, /C64U_SMOKE_MOCK_CONNECTED|C64U_SMOKE_DISCOVERY_OVERRIDE/);
+        await waitForLogPattern(
+          ctx.evidence.logcatPath,
+          /C64U_SMOKE_MOCK_CONNECTED|C64U_SMOKE_DISCOVERY_OVERRIDE/,
+        );
       },
     },
     {
@@ -39,7 +45,10 @@ export const spec = {
         await ctx.tapConnectivityIndicator();
         await ctx.capture('manual-discovery');
 
-        await waitForLogPattern(ctx.evidence.logcatPath, /C64U_DISCOVERY_DECISION/);
+        await waitForLogPattern(
+          ctx.evidence.logcatPath,
+          /C64U_DISCOVERY_DECISION/,
+        );
       },
     },
   ],

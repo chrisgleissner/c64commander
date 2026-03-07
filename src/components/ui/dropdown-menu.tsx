@@ -29,7 +29,7 @@ const DropdownMenuRadioGroup = React.forwardRef<
 >(({ onValueChange, ...props }, ref) => (
   <DropdownMenuPrimitive.RadioGroup
     ref={ref}
-    onValueChange={wrapValueChange(onValueChange, 'select', 'DropdownMenuRadioGroup', props, 'MenuRadioGroup')}
+    onValueChange={wrapValueChange(onValueChange, "select", "DropdownMenuRadioGroup", props, "MenuRadioGroup")}
     {...props}
   />
 ));
@@ -76,15 +76,15 @@ const DropdownMenuContent = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content>
 >(({ className, sideOffset = 4, ...props }, ref) => (
   <DropdownMenuPrimitive.Portal>
-  <DropdownMenuPrimitive.Content
-    ref={ref}
-    sideOffset={sideOffset}
-    className={cn(
-      "z-50 min-w-[8rem] max-w-[calc(100vw-2rem-env(safe-area-inset-left)-env(safe-area-inset-right))] max-h-[calc(100dvh-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-y-auto overflow-x-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
-      className,
-    )}
-    {...props}
-  />
+    <DropdownMenuPrimitive.Content
+      ref={ref}
+      sideOffset={sideOffset}
+      className={cn(
+        "z-50 min-w-[8rem] max-w-[calc(100vw-2rem-env(safe-area-inset-left)-env(safe-area-inset-right))] max-h-[calc(100dvh-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-y-auto overflow-x-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
+        className,
+      )}
+      {...props}
+    />
   </DropdownMenuPrimitive.Portal>
 ));
 DropdownMenuContent.displayName = DropdownMenuPrimitive.Content.displayName;
@@ -97,7 +97,7 @@ const DropdownMenuItem = React.forwardRef<
 >(({ className, inset, onSelect, ...props }, ref) => (
   <DropdownMenuPrimitive.Item
     ref={ref}
-    onSelect={wrapUserEvent(onSelect, 'select', 'DropdownMenuItem', props, 'MenuItem')}
+    onSelect={wrapUserEvent(onSelect, "select", "DropdownMenuItem", props, "MenuItem")}
     className={cn(
       "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors data-[disabled]:pointer-events-none data-[disabled]:opacity-50 focus:bg-accent focus:text-accent-foreground whitespace-normal break-words min-w-0",
       inset && "pl-8",
@@ -114,7 +114,13 @@ const DropdownMenuCheckboxItem = React.forwardRef<
 >(({ className, children, checked, onCheckedChange, ...props }, ref) => (
   <DropdownMenuPrimitive.CheckboxItem
     ref={ref}
-    onCheckedChange={wrapValueChange(onCheckedChange, 'toggle', 'DropdownMenuCheckboxItem', { ...props, children }, 'MenuCheckboxItem')}
+    onCheckedChange={wrapValueChange(
+      onCheckedChange,
+      "toggle",
+      "DropdownMenuCheckboxItem",
+      { ...props, children },
+      "MenuCheckboxItem",
+    )}
     className={cn(
       "relative flex cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none transition-colors data-[disabled]:pointer-events-none data-[disabled]:opacity-50 focus:bg-accent focus:text-accent-foreground whitespace-normal break-words min-w-0",
       className,
@@ -162,7 +168,11 @@ const DropdownMenuLabel = React.forwardRef<
 >(({ className, inset, ...props }, ref) => (
   <DropdownMenuPrimitive.Label
     ref={ref}
-    className={cn("px-2 py-1.5 text-sm font-semibold whitespace-normal break-words min-w-0", inset && "pl-8", className)}
+    className={cn(
+      "px-2 py-1.5 text-sm font-semibold whitespace-normal break-words min-w-0",
+      inset && "pl-8",
+      className,
+    )}
     {...props}
   />
 ));

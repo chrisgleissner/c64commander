@@ -3289,31 +3289,19 @@
             },
             "Pan Socket 1": {
               "selected": "Left 1",
-              "options": [
-                "Left 1",
-                "Right 1"
-              ]
+              "options": ["Left 1", "Right 1"]
             },
             "Pan Socket 2": {
               "selected": "Left 2",
-              "options": [
-                "Left 2",
-                "Right 2"
-              ]
+              "options": ["Left 2", "Right 2"]
             },
             "Pan UltiSID 1": {
               "selected": "Left 1",
-              "options": [
-                "Left 1",
-                "Right 1"
-              ]
+              "options": ["Left 1", "Right 1"]
             },
             "Pan UltiSID 2": {
               "selected": "Left 2",
-              "options": [
-                "Left 2",
-                "Right 2"
-              ]
+              "options": ["Left 2", "Right 2"]
             }
           }
         },

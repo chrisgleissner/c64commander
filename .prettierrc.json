@@ -1,12 +1,9 @@
 {
+  "printWidth": 120,
   "overrides": [
     {
-      "files": [
-        "*.yaml",
-        "*.yml"
-      ],
+      "files": ["*.yaml", "*.yml"],
       "options": {
-        "singleQuote": false,
         "tabWidth": 2
       }
     }

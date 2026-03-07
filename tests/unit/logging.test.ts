@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   addErrorLog,
   addLog,
@@ -16,32 +16,38 @@ import {
   getErrorLogs,
   getLogs,
   setExternalLogs,
-} from '@/lib/logging';
-import { shouldSuppressDiagnosticsSideEffects } from '@/lib/diagnostics/diagnosticsOverlayState';
-import { installConsoleDiagnosticsBridge, logger } from '@/lib/diagnostics/logger';
+} from "@/lib/logging";
+import { shouldSuppressDiagnosticsSideEffects } from "@/lib/diagnostics/diagnosticsOverlayState";
+import { installConsoleDiagnosticsBridge, logger } from "@/lib/diagnostics/logger";
 
-vi.mock('@/lib/diagnostics/diagnosticsOverlayState', () => ({
+vi.mock("@/lib/diagnostics/diagnosticsOverlayState", () => ({
   shouldSuppressDiagnosticsSideEffects: vi.fn().mockReturnValue(false),
 }));
 
 const ensureWindow = () => {
-  if (typeof window !== 'undefined') return;
+  if (typeof window !== "undefined") return;
   const target = new EventTarget();
   const windowMock = {
-    addEventListener: (type: string, listener: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions) =>
-      target.addEventListener(type, listener, options),
-    removeEventListener: (type: string, listener: EventListenerOrEventListenerObject, options?: boolean | EventListenerOptions) =>
-      target.removeEventListener(type, listener, options),
+    addEventListener: (
+      type: string,
+      listener: EventListenerOrEventListenerObject,
+      options?: boolean | AddEventListenerOptions,
+    ) => target.addEventListener(type, listener, options),
+    removeEventListener: (
+      type: string,
+      listener: EventListenerOrEventListenerObject,
+      options?: boolean | EventListenerOptions,
+    ) => target.removeEventListener(type, listener, options),
     dispatchEvent: (event: Event) => target.dispatchEvent(event),
     setTimeout: globalThis.setTimeout.bind(globalThis),
     clearTimeout: globalThis.clearTimeout.bind(globalThis),
-    location: { origin: 'http://localhost' },
+    location: { origin: "http://localhost" },
   };
-  Object.defineProperty(globalThis, 'window', {
+  Object.defineProperty(globalThis, "window", {
     value: windowMock,
     configurable: true,
   });
-  if (typeof (globalThis as { CustomEvent?: typeof CustomEvent }).CustomEvent === 'undefined') {
+  if (typeof (globalThis as { CustomEvent?: typeof CustomEvent }).CustomEvent === "undefined") {
     class CustomEventShim<T = any> extends Event {
       detail?: T;
       constructor(type: string, params?: CustomEventInit<T>) {
@@ -49,7 +55,7 @@ const ensureWindow = () => {
         this.detail = params?.detail;
       }
     }
-    Object.defineProperty(globalThis, 'CustomEvent', {
+    Object.defineProperty(globalThis, "CustomEvent", {
       value: CustomEventShim,
       configurable: true,
     });
@@ -57,7 +63,7 @@ const ensureWindow = () => {
 };
 
 const ensureLocalStorage = () => {
-  if (typeof localStorage !== 'undefined') return;
+  if (typeof localStorage !== "undefined") return;
   const store = new Map<string, string>();
   const storage = {
     getItem: (key: string) => store.get(key) ?? null,
@@ -75,7 +81,7 @@ const ensureLocalStorage = () => {
       return store.size;
     },
   };
-  Object.defineProperty(globalThis, 'localStorage', {
+  Object.defineProperty(globalThis, "localStorage", {
     value: storage,
     configurable: true,
   });
@@ -84,235 +90,239 @@ const ensureLocalStorage = () => {
 ensureWindow();
 ensureLocalStorage();
 
-describe('logging', () => {
+describe("logging", () => {
   beforeEach(() => {
     localStorage.clear();
   });
 
-  it('adds logs and filters errors', () => {
+  it("adds logs and filters errors", () => {
     const handler = vi.fn();
-    window.addEventListener('c64u-logs-updated', handler as EventListener);
+    window.addEventListener("c64u-logs-updated", handler as EventListener);
 
-    addLog('info', 'hello');
-    addLog('debug', 'hidden');
-    addErrorLog('boom', { code: 500 });
+    addLog("info", "hello");
+    addLog("debug", "hidden");
+    addErrorLog("boom", { code: 500 });
 
     const logs = getLogs();
     expect(logs).toHaveLength(2);
     expect(getErrorLogs()).toHaveLength(1);
     expect(handler).toHaveBeenCalled();
 
-    window.removeEventListener('c64u-logs-updated', handler as EventListener);
+    window.removeEventListener("c64u-logs-updated", handler as EventListener);
   });
 
-  it('clears logs and formats entries for sharing', () => {
-    addLog('warn', 'warning', { note: 'check' });
+  it("clears logs and formats entries for sharing", () => {
+    addLog("warn", "warning", { note: "check" });
     const formatted = formatLogsForShare(getLogs());
-    expect(formatted).toContain('WARN');
-    expect(formatted).toContain('warning');
+    expect(formatted).toContain("WARN");
+    expect(formatted).toContain("warning");
 
     clearLogs();
     expect(getLogs()).toHaveLength(0);
   });
 
-  it('records debug logs when enabled', () => {
-    localStorage.setItem('c64u_debug_logging_enabled', '1');
-    addLog('debug', 'verbose');
+  it("records debug logs when enabled", () => {
+    localStorage.setItem("c64u_debug_logging_enabled", "1");
+    addLog("debug", "verbose");
     expect(getLogs()).toHaveLength(1);
-    expect(getLogs()[0].message).toBe('verbose');
+    expect(getLogs()[0].message).toBe("verbose");
   });
 
-  it('captures error stacks with trimming', () => {
-    const error = new Error('boom');
-    error.stack = Array.from({ length: 120 }, (_, index) => `line-${index + 1}`).join('\n');
+  it("captures error stacks with trimming", () => {
+    const error = new Error("boom");
+    error.stack = Array.from({ length: 120 }, (_, index) => `line-${index + 1}`).join("\n");
 
-    const details = buildErrorLogDetails(error, { context: 'rest' });
+    const details = buildErrorLogDetails(error, { context: "rest" });
 
-    expect(details.error).toEqual(expect.objectContaining({ name: 'Error', message: 'boom' }));
-    expect(details.errorName).toBe('Error');
-    expect(details.errorStack).toContain('line-1');
-    expect(details.errorStack).toContain('stack truncated');
+    expect(details.error).toEqual(expect.objectContaining({ name: "Error", message: "boom" }));
+    expect(details.errorName).toBe("Error");
+    expect(details.errorStack).toContain("line-1");
+    expect(details.errorStack).toContain("stack truncated");
   });
 
-  it('suppresses logs when diagnostics side effects are suppressed', () => {
+  it("suppresses logs when diagnostics side effects are suppressed", () => {
     vi.mocked(shouldSuppressDiagnosticsSideEffects).mockReturnValue(true);
-    addLog('info', 'ignored');
+    addLog("info", "ignored");
     expect(getLogs()).toHaveLength(0);
 
     // Errors should still be recorded
-    addLog('error', 'important');
+    addLog("error", "important");
     expect(getLogs()).toHaveLength(1);
     vi.mocked(shouldSuppressDiagnosticsSideEffects).mockReturnValue(false);
   });
 
-  it('handles corrupted log storage safely', () => {
-    localStorage.setItem('c64u_app_logs', 'invalid { json');
+  it("handles corrupted log storage safely", () => {
+    localStorage.setItem("c64u_app_logs", "invalid { json");
     expect(getLogs()).toEqual([]);
   });
 
-  it('truncates stack trace by character count', () => {
-    const error = new Error('long stack');
-    const longLine = 'a'.repeat(3005);
+  it("truncates stack trace by character count", () => {
+    const error = new Error("long stack");
+    const longLine = "a".repeat(3005);
     error.stack = `Error: long stack\n${longLine}`;
 
     const details = buildErrorLogDetails(error);
     expect(details.errorStack?.length).toBeLessThan(3100);
-    expect(details.errorStack).toContain('(stack truncated)');
+    expect(details.errorStack).toContain("(stack truncated)");
   });
 
-  it('preserves existing error message in details', () => {
-    const error = new Error('original');
-    const details = buildErrorLogDetails(error, { error: 'override' });
-    expect(details.error).toEqual(expect.objectContaining({ message: 'override' }));
+  it("preserves existing error message in details", () => {
+    const error = new Error("original");
+    const details = buildErrorLogDetails(error, { error: "override" });
+    expect(details.error).toEqual(expect.objectContaining({ message: "override" }));
   });
 
-  it('treats warnings as problem logs in Errors tab selector', () => {
-    addLog('warn', 'slow response');
-    addErrorLog('boom');
-    expect(getErrorLogs().map((entry) => entry.level)).toEqual(['error', 'warn']);
+  it("treats warnings as problem logs in Errors tab selector", () => {
+    addLog("warn", "slow response");
+    addErrorLog("boom");
+    expect(getErrorLogs().map((entry) => entry.level)).toEqual(["error", "warn"]);
   });
 
-  it('writes canonical error payloads through diagnostics logger wrapper', () => {
-    logger.error('wrapper failure', {
-      details: { error: new Error('wrapped failure') },
+  it("writes canonical error payloads through diagnostics logger wrapper", () => {
+    logger.error("wrapper failure", {
+      details: { error: new Error("wrapped failure") },
       includeConsole: false,
     });
 
     const logs = getLogs();
     expect(logs).toHaveLength(1);
-    const details = logs[0].details as { error?: { name?: string; message?: string } };
-    expect(details.error?.name).toBe('Error');
-    expect(details.error?.message).toBe('wrapped failure');
+    const details = logs[0].details as {
+      error?: { name?: string; message?: string };
+    };
+    expect(details.error?.name).toBe("Error");
+    expect(details.error?.message).toBe("wrapped failure");
   });
 
-  it('bridges console warn/error into diagnostics logs', () => {
+  it("bridges console warn/error into diagnostics logs", () => {
     const uninstallBridge = installConsoleDiagnosticsBridge();
-    const warnSpy = vi.spyOn(console, 'warn');
-    const errorSpy = vi.spyOn(console, 'error');
+    const warnSpy = vi.spyOn(console, "warn");
+    const errorSpy = vi.spyOn(console, "error");
 
-    console.warn('bridge warn', { code: 1 });
-    console.error('bridge error', { code: 2 });
+    console.warn("bridge warn", { code: 1 });
+    console.error("bridge error", { code: 2 });
 
     uninstallBridge();
 
     expect(warnSpy).toHaveBeenCalled();
     expect(errorSpy).toHaveBeenCalled();
     const messages = getLogs().map((entry) => entry.message);
-    expect(messages).toContain('bridge warn');
-    expect(messages).toContain('bridge error');
+    expect(messages).toContain("bridge warn");
+    expect(messages).toContain("bridge error");
   });
 
-  it('handles disabled and duplicate console bridge installation', () => {
-    const disabledUninstall = installConsoleDiagnosticsBridge({ enabled: false });
-    console.warn('disabled bridge');
+  it("handles disabled and duplicate console bridge installation", () => {
+    const disabledUninstall = installConsoleDiagnosticsBridge({
+      enabled: false,
+    });
+    console.warn("disabled bridge");
     expect(getLogs()).toHaveLength(0);
     disabledUninstall();
 
     const uninstallBridge = installConsoleDiagnosticsBridge();
     const duplicateUninstall = installConsoleDiagnosticsBridge();
-    console.warn('active bridge');
+    console.warn("active bridge");
     duplicateUninstall();
     uninstallBridge();
 
     const messages = getLogs().map((entry) => entry.message);
-    expect(messages).toContain('active bridge');
-    expect(messages).not.toContain('disabled bridge');
+    expect(messages).toContain("active bridge");
+    expect(messages).not.toContain("disabled bridge");
   });
 
-  it('normalizes non-string and error console messages', () => {
+  it("normalizes non-string and error console messages", () => {
     const uninstallBridge = installConsoleDiagnosticsBridge();
-    console.warn({ kind: 'object-message' });
-    console.error(new Error('error-message'));
+    console.warn({ kind: "object-message" });
+    console.error(new Error("error-message"));
     uninstallBridge();
 
     const logs = getLogs();
     expect(logs.map((entry) => entry.message)).toEqual(
-      expect.arrayContaining(['{"kind":"object-message"}', 'error-message']),
+      expect.arrayContaining(['{"kind":"object-message"}', "error-message"]),
     );
   });
 
-  it('captures empty console.warn invocations as empty message entries', () => {
+  it("captures empty console.warn invocations as empty message entries", () => {
     const uninstallBridge = installConsoleDiagnosticsBridge();
     // exercise normalizeConsoleMessage no-args branch
     console.warn();
     uninstallBridge();
 
-    const log = getLogs().find((entry) => entry.level === 'warn' && entry.message === '');
+    const log = getLogs().find((entry) => entry.level === "warn" && entry.message === "");
     expect(log).toBeDefined();
   });
 
-  it('preserves non-Error error payload values in logger details', () => {
-    logger.error('plain object failure', {
-      details: { error: { code: 'E_OBJ' } },
+  it("preserves non-Error error payload values in logger details", () => {
+    logger.error("plain object failure", {
+      details: { error: { code: "E_OBJ" } },
       includeConsole: false,
     });
 
     const details = getLogs()[0].details as { error?: { code?: string } };
-    expect(details.error?.code).toBe('E_OBJ');
+    expect(details.error?.code).toBe("E_OBJ");
   });
 
-  it('forwards logger info/debug to console by default', () => {
-    const infoSpy = vi.spyOn(console, 'info');
-    const debugSpy = vi.spyOn(console, 'debug');
+  it("forwards logger info/debug to console by default", () => {
+    const infoSpy = vi.spyOn(console, "info");
+    const debugSpy = vi.spyOn(console, "debug");
 
-    logger.info('info-level');
-    logger.debug('debug-level');
+    logger.info("info-level");
+    logger.debug("debug-level");
 
     expect(infoSpy).toHaveBeenCalled();
     expect(debugSpy).toHaveBeenCalled();
   });
 
-  it('redacts logs when requested', () => {
-    addLog('info', 'sensetive info');
+  it("redacts logs when requested", () => {
+    addLog("info", "sensetive info");
     const formatted = formatLogsForShare(getLogs(), { redacted: true });
     // Assuming redaction replaces common patterns, but here message is plain.
     // Redaction logic is in exportRedaction.
-    expect(formatted).toContain('sensetive info'); // redaction targets specifics like IPs.
+    expect(formatted).toContain("sensetive info"); // redaction targets specifics like IPs.
   });
 
-  it('generates ID without crypto', () => {
+  it("generates ID without crypto", () => {
     const originalCrypto = globalThis.crypto;
     // @ts-expect-error - intentionally deleting global for test
     delete globalThis.crypto;
 
-    addLog('info', 'no crypto');
+    addLog("info", "no crypto");
     const logs = getLogs();
     expect(logs[0].id).toMatch(/^\d+-\d+$/);
 
     globalThis.crypto = originalCrypto;
   });
 
-  it('readLogs returns empty when localStorage is undefined (line 36 TRUE)', () => {
-    vi.stubGlobal('localStorage', undefined);
+  it("readLogs returns empty when localStorage is undefined (line 36 TRUE)", () => {
+    vi.stubGlobal("localStorage", undefined);
     expect(getLogs()).toEqual([]);
     vi.unstubAllGlobals();
   });
 
-  it('addLog returns early when window is undefined (line 53 TRUE)', () => {
-    vi.stubGlobal('window', undefined);
-    addLog('info', 'should-not-store');
+  it("addLog returns early when window is undefined (line 53 TRUE)", () => {
+    vi.stubGlobal("window", undefined);
+    addLog("info", "should-not-store");
     vi.unstubAllGlobals();
     expect(getLogs()).toHaveLength(0);
   });
 
-  it('clearLogs returns early when window is undefined (line 123 TRUE)', () => {
-    addLog('info', 'persisted');
+  it("clearLogs returns early when window is undefined (line 123 TRUE)", () => {
+    addLog("info", "persisted");
     expect(getLogs()).toHaveLength(1);
-    vi.stubGlobal('window', undefined);
+    vi.stubGlobal("window", undefined);
     clearLogs();
     vi.unstubAllGlobals();
     expect(getLogs()).toHaveLength(1);
   });
 
-  it('trimStack returns null for undefined stack (line 73 TRUE)', () => {
-    const error = new Error('no-stack');
+  it("trimStack returns null for undefined stack (line 73 TRUE)", () => {
+    const error = new Error("no-stack");
     error.stack = undefined;
     const details = buildErrorLogDetails(error);
     expect(details.errorStack).toBeNull();
   });
 
-  it('mergeLogs deduplicates entries with the same id (line 107 TRUE)', () => {
-    addLog('info', 'original');
+  it("mergeLogs deduplicates entries with the same id (line 107 TRUE)", () => {
+    addLog("info", "original");
     const logs = getLogs();
     expect(logs).toHaveLength(1);
     setExternalLogs(logs);

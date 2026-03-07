@@ -6,16 +6,16 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { Page } from '@playwright/test';
-import path from 'node:path';
-import fs from 'node:fs';
-import { randomBytes } from 'node:crypto';
+import type { Page } from "@playwright/test";
+import path from "node:path";
+import fs from "node:fs";
+import { randomBytes } from "node:crypto";
 
-const istanbulCLIOutput = path.join(process.cwd(), '.nyc_output');
-const coverageEnabled = process.env.VITE_COVERAGE === '1' || process.env.VITE_COVERAGE === 'true';
+const istanbulCLIOutput = path.join(process.cwd(), ".nyc_output");
+const coverageEnabled = process.env.VITE_COVERAGE === "1" || process.env.VITE_COVERAGE === "true";
 
 function generateUUID(): string {
-  return randomBytes(16).toString('hex');
+  return randomBytes(16).toString("hex");
 }
 
 /**
@@ -33,10 +33,7 @@ export async function saveCoverageFromPage(page: Page, testName?: string): Promi
       if (!fs.existsSync(istanbulCLIOutput)) {
         fs.mkdirSync(istanbulCLIOutput, { recursive: true });
       }
-      await fs.promises.writeFile(
-        path.join(istanbulCLIOutput, fileName),
-        JSON.stringify(coverage)
-      );
+      await fs.promises.writeFile(path.join(istanbulCLIOutput, fileName), JSON.stringify(coverage));
     }
   } catch {
     // Intentionally silent to avoid disrupting Playwright progress output.

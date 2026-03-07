@@ -6,8 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useResponsivePathLabel, type PathDisplayMode } from '@/lib/ui/pathDisplay';
-import { cn } from '@/lib/utils';
+import { useResponsivePathLabel, type PathDisplayMode } from "@/lib/ui/pathDisplay";
+import { cn } from "@/lib/utils";
 
 type ResponsivePathTextProps = {
   path: string;
@@ -17,13 +17,7 @@ type ResponsivePathTextProps = {
   dataTestId?: string;
 };
 
-export const ResponsivePathText = ({
-  path,
-  mode,
-  className,
-  fallback = '—',
-  dataTestId,
-}: ResponsivePathTextProps) => {
+export const ResponsivePathText = ({ path, mode, className, fallback = "—", dataTestId }: ResponsivePathTextProps) => {
   const source = path.trim() || fallback;
   const { elementRef, label } = useResponsivePathLabel(source, mode);
 
@@ -32,7 +26,7 @@ export const ResponsivePathText = ({
       ref={(node) => {
         elementRef.current = node;
       }}
-      className={cn('block min-w-0', className)}
+      className={cn("block min-w-0", className)}
       title={source}
       data-testid={dataTestId}
     >

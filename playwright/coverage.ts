@@ -7,17 +7,17 @@
  */
 
 /* eslint-disable react-hooks/rules-of-hooks */
-import fs from 'fs';
-import path from 'path';
-import { test as base, type Page } from '@playwright/test';
-import type { TestInfo } from '@playwright/test';
+import fs from "fs";
+import path from "path";
+import { test as base, type Page } from "@playwright/test";
+import type { TestInfo } from "@playwright/test";
 
-const istanbulCLIOutput = path.join(process.cwd(), '.nyc_output');
+const istanbulCLIOutput = path.join(process.cwd(), ".nyc_output");
 
 export function generateUUID(): string {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
     const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
     return v.toString(16);
   });
 }
@@ -32,7 +32,7 @@ export async function saveCoverage(page: Page, testName?: string): Promise<void>
     if (coverage) {
       await fs.promises.mkdir(istanbulCLIOutput, { recursive: true });
       const uuid = generateUUID();
-      const safeName = testName ? testName.replace(/[^a-z0-9]/gi, '_').substring(0, 50) : 'test';
+      const safeName = testName ? testName.replace(/[^a-z0-9]/gi, "_").substring(0, 50) : "test";
       const fileName = `coverage-${safeName}-${uuid}.json`;
       const filePath = path.join(istanbulCLIOutput, fileName);
       await fs.promises.writeFile(filePath, JSON.stringify(coverage));

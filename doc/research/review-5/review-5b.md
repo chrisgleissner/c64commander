@@ -46,27 +46,27 @@ Full production readiness assessment covering Android, iOS, and Web platforms fo
 
 ## Environment
 
-| Item | Value |
-|------|-------|
-| Node.js | v24.11.0 |
-| npm | 11.6.1 |
-| Java | OpenJDK Corretto 25.0.1 |
-| OS | Linux (Ubuntu) |
+| Item     | Value                                      |
+| -------- | ------------------------------------------ |
+| Node.js  | v24.11.0                                   |
+| npm      | 11.6.1                                     |
+| Java     | OpenJDK Corretto 25.0.1                    |
+| OS       | Linux (Ubuntu)                             |
 | Git HEAD | `cf7d0826a429802524b6ee86beb73e81449f4e04` |
 
 ## Commands Executed
 
-| Command | Result |
-|---------|--------|
-| `npm run lint` | Pass — 0 errors |
-| `npm run build` | Pass — 5.00s, 5.4 MB dist |
-| `npm run test` | Pass — 232 files, 2204 tests |
-| `npm run test:coverage` | Pass — 91.6% stmts, 84.32% branches |
-| `npm run build:web-server` | Pass |
-| `npm audit --omit dev` | 1 critical vulnerability |
-| `npm audit` | 6 vulnerabilities (1 critical, 4 high, 1 moderate) |
-| `./gradlew assembleDebug` | Pass — 32s, 138 tasks |
-| `./gradlew test` | FAIL — 86/113 tests failed (Robolectric incompatible with Java 25) |
+| Command                    | Result                                                             |
+| -------------------------- | ------------------------------------------------------------------ |
+| `npm run lint`             | Pass — 0 errors                                                    |
+| `npm run build`            | Pass — 5.00s, 5.4 MB dist                                          |
+| `npm run test`             | Pass — 232 files, 2204 tests                                       |
+| `npm run test:coverage`    | Pass — 91.6% stmts, 84.32% branches                                |
+| `npm run build:web-server` | Pass                                                               |
+| `npm audit --omit dev`     | 1 critical vulnerability                                           |
+| `npm audit`                | 6 vulnerabilities (1 critical, 4 high, 1 moderate)                 |
+| `./gradlew assembleDebug`  | Pass — 32s, 138 tasks                                              |
+| `./gradlew test`           | FAIL — 86/113 tests failed (Robolectric incompatible with Java 25) |
 
 ---
 
@@ -74,55 +74,55 @@ Full production readiness assessment covering Android, iOS, and Web platforms fo
 
 ## Application Identity
 
-| Field | Value |
-|-------|-------|
-| Name | C64 Commander |
-| Package | `uk.gleissner.c64commander` |
-| Version | 0.1.0 (package.json) |
-| License | GPL v3 (LICENSE file) |
-| Platforms | Android, iOS, Web (Docker) |
+| Field     | Value                       |
+| --------- | --------------------------- |
+| Name      | C64 Commander               |
+| Package   | `uk.gleissner.c64commander` |
+| Version   | 0.1.0 (package.json)        |
+| License   | GPL v3 (LICENSE file)       |
+| Platforms | Android, iOS, Web (Docker)  |
 
 ## Technology Stack
 
-| Layer | Technology | Version |
-|-------|-----------|---------|
-| UI framework | React | ^18.3.1 |
-| Build tool | Vite | ^5.4.21 |
-| Native shell | Capacitor | ^6.2.1 |
-| State management | TanStack Query | ^5.83.0 |
-| CSS | Tailwind CSS | ^3.4.17 |
-| UI components | Radix UI + shadcn/ui | Various |
-| Language | TypeScript | ^5.8.3 |
-| Test framework | Vitest | ^3.2.4 |
-| E2E framework | Playwright | ^1.48.2 |
-| Web server | Custom Node.js http.createServer | — |
+| Layer            | Technology                       | Version |
+| ---------------- | -------------------------------- | ------- |
+| UI framework     | React                            | ^18.3.1 |
+| Build tool       | Vite                             | ^5.4.21 |
+| Native shell     | Capacitor                        | ^6.2.1  |
+| State management | TanStack Query                   | ^5.83.0 |
+| CSS              | Tailwind CSS                     | ^3.4.17 |
+| UI components    | Radix UI + shadcn/ui             | Various |
+| Language         | TypeScript                       | ^5.8.3  |
+| Test framework   | Vitest                           | ^3.2.4  |
+| E2E framework    | Playwright                       | ^1.48.2 |
+| Web server       | Custom Node.js http.createServer | —       |
 
 ## Platform SDK Targets
 
-| Platform | Min | Target/Compile | Language |
-|----------|-----|----------------|----------|
-| Android | API 22 (5.1) | API 35 (15) | Kotlin 1.9.22 |
-| iOS | 13.0 (project) / 15.0 (Podfile) | — | Swift 5.0 |
-| Web | Evergreen browsers | — | TypeScript → ES modules |
+| Platform | Min                             | Target/Compile | Language                |
+| -------- | ------------------------------- | -------------- | ----------------------- |
+| Android  | API 22 (5.1)                    | API 35 (15)    | Kotlin 1.9.22           |
+| iOS      | 13.0 (project) / 15.0 (Podfile) | —              | Swift 5.0               |
+| Web      | Evergreen browsers              | —              | TypeScript → ES modules |
 
 ## Build Outputs
 
-| Artifact | Size |
-|----------|------|
-| Web dist (total) | 5.4 MB |
-| Main JS bundle | 642 KB (208 KB gzipped) |
-| Total JS (51 chunks) | ~1.5 MB |
-| CSS | 78 KB |
-| Android debug APK | Built successfully |
+| Artifact             | Size                    |
+| -------------------- | ----------------------- |
+| Web dist (total)     | 5.4 MB                  |
+| Main JS bundle       | 642 KB (208 KB gzipped) |
+| Total JS (51 chunks) | ~1.5 MB                 |
+| CSS                  | 78 KB                   |
+| Android debug APK    | Built successfully      |
 
 ## CI Infrastructure
 
-| Workflow | Trigger | Jobs | Runner |
-|----------|---------|------|--------|
-| android.yaml | push/PR/dispatch | 9 | ubuntu-latest |
-| web.yaml | push/PR/dispatch | 2 | ubuntu-latest |
-| ios.yaml | push/PR/dispatch | 6 | macos-latest |
-| fuzz.yaml | daily 03:00 UTC / dispatch | 2 | ubuntu-latest |
+| Workflow     | Trigger                    | Jobs | Runner        |
+| ------------ | -------------------------- | ---- | ------------- |
+| android.yaml | push/PR/dispatch           | 9    | ubuntu-latest |
+| web.yaml     | push/PR/dispatch           | 2    | ubuntu-latest |
+| ios.yaml     | push/PR/dispatch           | 6    | macos-latest  |
+| fuzz.yaml    | daily 03:00 UTC / dispatch | 2    | ubuntu-latest |
 
 ---
 
@@ -147,16 +147,16 @@ The codebase follows a clear layered architecture:
 
 8 custom Capacitor plugins registered per platform:
 
-| Plugin | Android | iOS | Web |
-|--------|---------|-----|-----|
-| BackgroundExecution | Full | Stub (30s background task) | Stub |
-| DiagnosticsBridge | Full | Full | Stub |
-| FolderPicker | Full (SAF) | Full (UIDocumentPicker) | N/A |
-| MockC64U | Full | Full | N/A |
-| FeatureFlags | DataStore | UserDefaults | localStorage |
-| FtpClient | commons-net | CFStream | Web proxy |
-| HvscIngestion | Full (7z) | Delegated to JS | JS |
-| SecureStorage | EncryptedSharedPreferences | Keychain | Server-side |
+| Plugin              | Android                    | iOS                        | Web          |
+| ------------------- | -------------------------- | -------------------------- | ------------ |
+| BackgroundExecution | Full                       | Stub (30s background task) | Stub         |
+| DiagnosticsBridge   | Full                       | Full                       | Stub         |
+| FolderPicker        | Full (SAF)                 | Full (UIDocumentPicker)    | N/A          |
+| MockC64U            | Full                       | Full                       | N/A          |
+| FeatureFlags        | DataStore                  | UserDefaults               | localStorage |
+| FtpClient           | commons-net                | CFStream                   | Web proxy    |
+| HvscIngestion       | Full (7z)                  | Delegated to JS            | JS           |
+| SecureStorage       | EncryptedSharedPreferences | Keychain                   | Server-side  |
 
 ## Native Bridge Error Propagation
 
@@ -304,11 +304,11 @@ The C64 Ultimate device communicates exclusively over cleartext HTTP. This is a 
 
 ## Credential Storage
 
-| Platform | Method | Evidence |
-|----------|--------|---------|
-| Android | EncryptedSharedPreferences (AES-256-GCM via AndroidX Security Crypto) | `SecureStoragePlugin.kt` |
-| iOS | Keychain Services | `NativePlugins.swift` SecureStoragePlugin |
-| Web | Server-side `web-config.json` (not in browser) | `web/server/src/index.ts` L738-766 |
+| Platform | Method                                                                | Evidence                                  |
+| -------- | --------------------------------------------------------------------- | ----------------------------------------- |
+| Android  | EncryptedSharedPreferences (AES-256-GCM via AndroidX Security Crypto) | `SecureStoragePlugin.kt`                  |
+| iOS      | Keychain Services                                                     | `NativePlugins.swift` SecureStoragePlugin |
+| Web      | Server-side `web-config.json` (not in browser)                        | `web/server/src/index.ts` L738-766        |
 
 The device password is sent as `X-Password` header on every REST call. The web server injects this header server-side when proxying, so the browser never sees the raw password value.
 
@@ -395,18 +395,19 @@ basic-ftp  <5.2.0 — CRITICAL
 ## Overrides
 
 `package.json` pins three transitive dependencies via `overrides`:
+
 - `esbuild: 0.25.0` — MIT
 - `sucrase: 3.35.1` — MIT
 - `tar: 7.5.9` — ISC
 
 ## Outdated Tool Versions
 
-| Tool | Current | Latest (approx) | Risk |
-|------|---------|-----------------|------|
-| Gradle | 8.2.1 | 8.12.x | Missing security/performance fixes |
-| AGP | 8.2.1 | 8.7.x | `suppressUnsupportedCompileSdk=35` is a workaround |
-| Kotlin | 1.9.22 | 2.1.x | Missing K2 compiler improvements |
-| Capacitor | 6.2.1 | Latest 6.x | Potential bug fixes |
+| Tool      | Current | Latest (approx) | Risk                                               |
+| --------- | ------- | --------------- | -------------------------------------------------- |
+| Gradle    | 8.2.1   | 8.12.x          | Missing security/performance fixes                 |
+| AGP       | 8.2.1   | 8.7.x           | `suppressUnsupportedCompileSdk=35` is a workaround |
+| Kotlin    | 1.9.22  | 2.1.x           | Missing K2 compiler improvements                   |
+| Capacitor | 6.2.1   | Latest 6.x      | Potential bug fixes                                |
 
 ## ISSUE — Critical basic-ftp CVE in production dependency
 
@@ -462,23 +463,24 @@ basic-ftp  <5.2.0 — CRITICAL
 
 ## Storage Backends
 
-| Store | Platform | Backend | Max Size |
-|-------|----------|---------|----------|
-| Device password | Android | EncryptedSharedPreferences | Tiny |
-| Device password | iOS | Keychain | Tiny |
-| Device password | Web | Server JSON file | Tiny |
-| HVSC song index | Native | Capacitor Filesystem JSON + localStorage mirror | Potentially large (70k+ songs) |
-| HVSC song index | Web | localStorage only | ~5-10 MB quota |
-| Playlists | All | IndexedDB (primary) + localStorage (fallback) | Unlimited / ~5-10 MB |
-| App settings | All | localStorage | Small |
-| Feature flags | Android/iOS | DataStore/UserDefaults | Tiny |
-| Feature flags | Web | localStorage | Tiny |
-| Logs | All | localStorage | 500 entries |
-| FTP cache | All | localStorage (LRU) | Variable |
+| Store           | Platform    | Backend                                         | Max Size                       |
+| --------------- | ----------- | ----------------------------------------------- | ------------------------------ |
+| Device password | Android     | EncryptedSharedPreferences                      | Tiny                           |
+| Device password | iOS         | Keychain                                        | Tiny                           |
+| Device password | Web         | Server JSON file                                | Tiny                           |
+| HVSC song index | Native      | Capacitor Filesystem JSON + localStorage mirror | Potentially large (70k+ songs) |
+| HVSC song index | Web         | localStorage only                               | ~5-10 MB quota                 |
+| Playlists       | All         | IndexedDB (primary) + localStorage (fallback)   | Unlimited / ~5-10 MB           |
+| App settings    | All         | localStorage                                    | Small                          |
+| Feature flags   | Android/iOS | DataStore/UserDefaults                          | Tiny                           |
+| Feature flags   | Web         | localStorage                                    | Tiny                           |
+| Logs            | All         | localStorage                                    | 500 entries                    |
+| FTP cache       | All         | localStorage (LRU)                              | Variable                       |
 
 ## Migration Strategy
 
 The app uses **version stamps with destructive reset** rather than incremental migration scripts:
+
 - Schema version is baked into storage keys or checked on load
 - Version mismatch → discard data, start fresh
 - No forward migration paths exist
@@ -537,6 +539,7 @@ No issues identified in this chapter. The error handling and cleanup patterns ar
 ## Startup Path
 
 The startup is carefully staged:
+
 1. **Synchronous**: `initializeRuntimeMotionMode()` — detects low-end devices (≤4 cores / ≤4 GB RAM)
 2. **Render**: All 7 page routes use `React.lazy()` with dynamic imports
 3. **Post-paint deferred**: `requestAnimationFrame` → `requestAnimationFrame` → `requestIdleCallback` chain for font loading, trace hooks, secure-storage priming
@@ -544,13 +547,13 @@ The startup is carefully staged:
 
 ## Bundle Size
 
-| Metric | Value |
-|--------|-------|
-| Total dist | 5.4 MB |
-| Main JS bundle | 642 KB (208 KB gzip) |
-| Largest lazy chunk | PlayFilesPage 108 KB |
-| Total JS | ~1.5 MB across 51 chunks |
-| CSS | 78 KB |
+| Metric             | Value                    |
+| ------------------ | ------------------------ |
+| Total dist         | 5.4 MB                   |
+| Main JS bundle     | 642 KB (208 KB gzip)     |
+| Largest lazy chunk | PlayFilesPage 108 KB     |
+| Total JS           | ~1.5 MB across 51 chunks |
+| CSS                | 78 KB                    |
 
 The main bundle at 642 KB is moderately large. No `manualChunks` configuration or bundle analyzer is configured. `chunkSizeWarningLimit` is raised to 1200 KB (default 500 KB).
 
@@ -558,13 +561,13 @@ The main bundle at 642 KB is moderately large. No `manualChunks` configuration o
 
 CI-enforced budgets via `scripts/startup/assert-startup-budgets.mjs`:
 
-| Metric | Budget |
-|--------|--------|
-| StartupRequestCount (p95) | ≤ 25 |
-| TTFSC p50 | ≤ 5000 ms |
-| TTFSC p95 | ≤ 8000 ms |
-| UserTriggeredCommandLatency p95 | ≤ 900 ms |
-| DuplicateStartupConfigKeyRequests | 0 |
+| Metric                            | Budget    |
+| --------------------------------- | --------- |
+| StartupRequestCount (p95)         | ≤ 25      |
+| TTFSC p50                         | ≤ 5000 ms |
+| TTFSC p95                         | ≤ 8000 ms |
+| UserTriggeredCommandLatency p95   | ≤ 900 ms  |
+| DuplicateStartupConfigKeyRequests | 0         |
 
 Current baseline shows excellent numbers (p95 request count = 1).
 
@@ -581,6 +584,7 @@ No additional performance issues identified. The application already includes de
 ## Tracing System
 
 Always-on structured tracing with:
+
 - Semantic action traces with correlation IDs
 - REST and FTP interactions causally linked to user/system actions
 - Events: `action-start`, `action-end`, `rest-request`, `rest-response`, `ftp-operation`, `error`, `backend-decision`
@@ -595,6 +599,7 @@ localStorage-backed ring buffer (500 entries max). Levels: debug, info, warn, er
 ## User-Facing Diagnostics
 
 `GlobalDiagnosticsOverlay` provides an in-app overlay showing:
+
 - Live trace event count, REST/FTP in-flight counts, error counts
 - Action summaries with REST/FTP effects
 - Log viewer with level filtering
@@ -626,6 +631,7 @@ ZIP export of logs, traces, and actions with PII redaction. Uses `navigator.shar
 ## Accessibility
 
 **Strengths:**
+
 - Good `aria-label` coverage on interactive elements across pages
 - `sr-only` classes on icon-only buttons (close, carousel, breadcrumb)
 - `aria-hidden="true"` on decorative icons
@@ -633,6 +639,7 @@ ZIP export of logs, traces, and actions with PII redaction. Uses `navigator.shar
 - Global overflow-wrap protection for text elements
 
 **Gaps:**
+
 - No automated a11y testing (no axe-core, jest-axe, or Lighthouse CI)
 - `role=` usage is sparse — many interactive `div` elements lack semantic roles
 - No `aria-live` regions for dynamic content updates
@@ -708,16 +715,16 @@ Excellent internal documentation: `doc/ux-guidelines.md` (386 lines) and `doc/ux
 
 ## SDK Configuration
 
-| Setting | Value | File |
-|---------|-------|------|
-| namespace | `uk.gleissner.c64commander` | `android/app/build.gradle` L58 |
-| compileSdk | 35 | `android/variables.gradle` |
-| minSdk | 22 | `android/variables.gradle` |
-| targetSdk | 35 | `android/variables.gradle` |
-| Java/Kotlin compat | Java 17 | `android/app/build.gradle` |
-| Kotlin | 1.9.22 | `android/build.gradle` |
-| Gradle | 8.2.1 | `gradle-wrapper.properties` |
-| AGP | 8.2.1 | `android/build.gradle` |
+| Setting            | Value                       | File                           |
+| ------------------ | --------------------------- | ------------------------------ |
+| namespace          | `uk.gleissner.c64commander` | `android/app/build.gradle` L58 |
+| compileSdk         | 35                          | `android/variables.gradle`     |
+| minSdk             | 22                          | `android/variables.gradle`     |
+| targetSdk          | 35                          | `android/variables.gradle`     |
+| Java/Kotlin compat | Java 17                     | `android/app/build.gradle`     |
+| Kotlin             | 1.9.22                      | `android/build.gradle`         |
+| Gradle             | 8.2.1                       | `gradle-wrapper.properties`    |
+| AGP                | 8.2.1                       | `android/build.gradle`         |
 
 ## Signing
 
@@ -728,12 +735,12 @@ Excellent internal documentation: `doc/ux-guidelines.md` (386 lines) and `doc/ux
 
 ## Permissions
 
-| Permission | Purpose |
-|-----------|---------|
-| `INTERNET` | C64U REST/FTP communication |
-| `FOREGROUND_SERVICE` | Background SID playback |
-| `FOREGROUND_SERVICE_MEDIA_PLAYBACK` | Media session for playback |
-| `WAKE_LOCK` | Keep device awake during playback |
+| Permission                          | Purpose                           |
+| ----------------------------------- | --------------------------------- |
+| `INTERNET`                          | C64U REST/FTP communication       |
+| `FOREGROUND_SERVICE`                | Background SID playback           |
+| `FOREGROUND_SERVICE_MEDIA_PLAYBACK` | Media session for playback        |
+| `WAKE_LOCK`                         | Keep device awake during playback |
 
 Minimal permission set.
 
@@ -811,15 +818,15 @@ Minimal permission set.
 
 ## Configuration
 
-| Setting | Value | Source |
-|---------|-------|--------|
-| Deployment target (project) | 13.0 | `project.pbxproj` |
-| Deployment target (Podfile) | 15.0 | `ios/App/Podfile` |
-| Bundle ID | `uk.gleissner.c64commander` | `project.pbxproj` |
-| Marketing version | 1.0 | `project.pbxproj` |
-| Current project version | 1 | `project.pbxproj` |
-| Swift version | 5.0 | `project.pbxproj` |
-| Device family | 1,2 (iPhone + iPad) | `project.pbxproj` |
+| Setting                     | Value                       | Source            |
+| --------------------------- | --------------------------- | ----------------- |
+| Deployment target (project) | 13.0                        | `project.pbxproj` |
+| Deployment target (Podfile) | 15.0                        | `ios/App/Podfile` |
+| Bundle ID                   | `uk.gleissner.c64commander` | `project.pbxproj` |
+| Marketing version           | 1.0                         | `project.pbxproj` |
+| Current project version     | 1                           | `project.pbxproj` |
+| Swift version               | 5.0                         | `project.pbxproj` |
+| Device family               | 1,2 (iPhone + iPad)         | `project.pbxproj` |
 
 ## ATS (App Transport Security)
 
@@ -1022,6 +1029,7 @@ No CSS orientation media queries. No `screen.orientation` API usage. No manifest
 ## Coverage Blind Spots
 
 Per `doc/ux-interactions.md` Section 9.4:
+
 - **CRITICAL gap:** Add disks to library E2E flow
 - **HIGH gaps:** Shuffle mode, Home quick actions (Reset/Menu/Pause/Resume/Power Off), drive status navigation, Android folder picker, disk browser source selection
 
@@ -1138,57 +1146,57 @@ Play Store assets exist in `docs/play-store/` (feature graphics and icons). No t
 
 ## Full Issue Register (sorted by severity, then impact, then effort)
 
-| ID | Title | Severity | Likelihood | User Impact | Op Impact | Effort | Area |
-|----|-------|----------|------------|-------------|-----------|--------|------|
-| PRA-009 | Critical basic-ftp CVE | Critical | Low | High | High | S | SupplyChain |
-| PRA-006 | No web security headers | Critical | Medium | High | Medium | S | Web/Security |
-| PRA-017 | Android release minification off | Major | High | Medium | Low | S | Android |
-| PRA-029 | README license badge mismatch | Major | High | Medium | Low | S | Legal |
-| PRA-004 | No dependency update automation | Major | High | Medium | Medium | S | SupplyChain |
-| PRA-022 | No iOS audio background mode | Major | High | High | Low | M | iOS |
-| PRA-012 | No incremental data migration | Major | Medium | High | Low | M | Data |
-| PRA-032 | No iOS native unit tests | Major | Medium | Medium | Medium | L | iOS/Testing |
-| PRA-001 | Google Play upload not SHA-pinned | Major | Low | High | High | S | CI/CD |
-| PRA-002 | Maestro CLI curl pipe install | Major | Low | Medium | High | S | CI/CD |
-| PRA-014 | No automated a11y testing | Minor | Medium | Medium | Low | S | Accessibility |
-| PRA-016 | Touch targets below 44px | Minor | Medium | Medium | Low | S | UX |
-| PRA-023 | iOS version not CI-managed | Minor | High | Low | Medium | S | iOS/CI |
-| PRA-033 | E2E tests skip native runtime | Minor | Medium | Medium | Low | L | Testing |
-| PRA-015 | No localization infrastructure | Minor | Medium | Medium | Low | L | UX |
-| PRA-003 | Workflow perms too broad on PRs | Minor | Low | Low | Medium | S | CI/CD |
-| PRA-007 | Android cleartext globally enabled | Minor | Low | Low | Low | S | Android |
-| PRA-008 | Web Cache-Control no-store on all | Minor | High | Medium | Low | S | Web |
-| PRA-019 | Android tests fail on Java 25 | Minor | Medium | Low | Medium | S | Android |
-| PRA-021 | iOS deployment target mismatch | Minor | Low | Low | Low | S | iOS |
-| PRA-011 | Gradle/AGP significantly outdated | Minor | Medium | Low | Medium | M | Android |
-| PRA-010 | Rollup CVE (dev dependency) | Minor | Low | Low | Low | S | SupplyChain |
-| PRA-026 | No service worker for PWA | Minor | High | Medium | Low | M | Web |
-| PRA-013 | No remote crash reporting | Minor | High | Low | Medium | M | Observability |
-| PRA-018 | No Android backup rules | Minor | Medium | Low | Low | S | Android |
-| PRA-020 | Deprecated MediaSession APIs | Trivial | Low | Low | Low | S | Android |
-| PRA-024 | NativePlugins.swift >1000 lines | Trivial | High | Low | Low | S | iOS |
-| PRA-025 | No iOS entitlements file | Trivial | Low | Low | Low | S | iOS |
-| PRA-027 | Incomplete PWA manifest | Trivial | High | Low | Low | S | Web |
-| PRA-028 | Web server single 843-line file | Trivial | High | Low | Low | S | Web |
-| PRA-030 | No SPDX in package.json | Trivial | Medium | Low | Low | S | Legal |
-| PRA-031 | No Commodore trademark disclaimer | Trivial | Low | Low | Low | S | Legal |
+| ID      | Title                              | Severity | Likelihood | User Impact | Op Impact | Effort | Area          |
+| ------- | ---------------------------------- | -------- | ---------- | ----------- | --------- | ------ | ------------- |
+| PRA-009 | Critical basic-ftp CVE             | Critical | Low        | High        | High      | S      | SupplyChain   |
+| PRA-006 | No web security headers            | Critical | Medium     | High        | Medium    | S      | Web/Security  |
+| PRA-017 | Android release minification off   | Major    | High       | Medium      | Low       | S      | Android       |
+| PRA-029 | README license badge mismatch      | Major    | High       | Medium      | Low       | S      | Legal         |
+| PRA-004 | No dependency update automation    | Major    | High       | Medium      | Medium    | S      | SupplyChain   |
+| PRA-022 | No iOS audio background mode       | Major    | High       | High        | Low       | M      | iOS           |
+| PRA-012 | No incremental data migration      | Major    | Medium     | High        | Low       | M      | Data          |
+| PRA-032 | No iOS native unit tests           | Major    | Medium     | Medium      | Medium    | L      | iOS/Testing   |
+| PRA-001 | Google Play upload not SHA-pinned  | Major    | Low        | High        | High      | S      | CI/CD         |
+| PRA-002 | Maestro CLI curl pipe install      | Major    | Low        | Medium      | High      | S      | CI/CD         |
+| PRA-014 | No automated a11y testing          | Minor    | Medium     | Medium      | Low       | S      | Accessibility |
+| PRA-016 | Touch targets below 44px           | Minor    | Medium     | Medium      | Low       | S      | UX            |
+| PRA-023 | iOS version not CI-managed         | Minor    | High       | Low         | Medium    | S      | iOS/CI        |
+| PRA-033 | E2E tests skip native runtime      | Minor    | Medium     | Medium      | Low       | L      | Testing       |
+| PRA-015 | No localization infrastructure     | Minor    | Medium     | Medium      | Low       | L      | UX            |
+| PRA-003 | Workflow perms too broad on PRs    | Minor    | Low        | Low         | Medium    | S      | CI/CD         |
+| PRA-007 | Android cleartext globally enabled | Minor    | Low        | Low         | Low       | S      | Android       |
+| PRA-008 | Web Cache-Control no-store on all  | Minor    | High       | Medium      | Low       | S      | Web           |
+| PRA-019 | Android tests fail on Java 25      | Minor    | Medium     | Low         | Medium    | S      | Android       |
+| PRA-021 | iOS deployment target mismatch     | Minor    | Low        | Low         | Low       | S      | iOS           |
+| PRA-011 | Gradle/AGP significantly outdated  | Minor    | Medium     | Low         | Medium    | M      | Android       |
+| PRA-010 | Rollup CVE (dev dependency)        | Minor    | Low        | Low         | Low       | S      | SupplyChain   |
+| PRA-026 | No service worker for PWA          | Minor    | High       | Medium      | Low       | M      | Web           |
+| PRA-013 | No remote crash reporting          | Minor    | High       | Low         | Medium    | M      | Observability |
+| PRA-018 | No Android backup rules            | Minor    | Medium     | Low         | Low       | S      | Android       |
+| PRA-020 | Deprecated MediaSession APIs       | Trivial  | Low        | Low         | Low       | S      | Android       |
+| PRA-024 | NativePlugins.swift >1000 lines    | Trivial  | High       | Low         | Low       | S      | iOS           |
+| PRA-025 | No iOS entitlements file           | Trivial  | Low        | Low         | Low       | S      | iOS           |
+| PRA-027 | Incomplete PWA manifest            | Trivial  | High       | Low         | Low       | S      | Web           |
+| PRA-028 | Web server single 843-line file    | Trivial  | High       | Low         | Low       | S      | Web           |
+| PRA-030 | No SPDX in package.json            | Trivial  | Medium     | Low         | Low       | S      | Legal         |
+| PRA-031 | No Commodore trademark disclaimer  | Trivial  | Low        | Low         | Low       | S      | Legal         |
 
 ## Top 10 Low Effort / High Impact
 
 These issues can each be resolved in ≤0.5 day and have significant impact:
 
-| Priority | ID | Title | Effort | Why High Impact |
-|----------|-----|-------|--------|-----------------|
-| 1 | PRA-009 | Critical basic-ftp CVE | S | Critical CVE, `npm audit fix` resolves it |
-| 2 | PRA-006 | No web security headers | S | Eliminates clickjacking and XSS vectors |
-| 3 | PRA-017 | Android release minification off | S | Reduces APK size, adds obfuscation |
-| 4 | PRA-029 | README license badge mismatch | S | Legal clarity, one-line fix |
-| 5 | PRA-004 | No dependency update automation | S | Prevents future CVE accumulation |
-| 6 | PRA-001 | Google Play upload SHA pin | S | Closes supply-chain attack vector |
-| 7 | PRA-002 | Maestro CLI SHA pin | S | Closes CI supply-chain vector |
-| 8 | PRA-003 | PR workflow permissions | S | Least-privilege on PRs |
-| 9 | PRA-008 | Cache-Control for static assets | S | Faster page loads for web users |
-| 10 | PRA-023 | iOS version from CI | S | Enables iOS build tracking |
+| Priority | ID      | Title                            | Effort | Why High Impact                           |
+| -------- | ------- | -------------------------------- | ------ | ----------------------------------------- |
+| 1        | PRA-009 | Critical basic-ftp CVE           | S      | Critical CVE, `npm audit fix` resolves it |
+| 2        | PRA-006 | No web security headers          | S      | Eliminates clickjacking and XSS vectors   |
+| 3        | PRA-017 | Android release minification off | S      | Reduces APK size, adds obfuscation        |
+| 4        | PRA-029 | README license badge mismatch    | S      | Legal clarity, one-line fix               |
+| 5        | PRA-004 | No dependency update automation  | S      | Prevents future CVE accumulation          |
+| 6        | PRA-001 | Google Play upload SHA pin       | S      | Closes supply-chain attack vector         |
+| 7        | PRA-002 | Maestro CLI SHA pin              | S      | Closes CI supply-chain vector             |
+| 8        | PRA-003 | PR workflow permissions          | S      | Least-privilege on PRs                    |
+| 9        | PRA-008 | Cache-Control for static assets  | S      | Faster page loads for web users           |
+| 10       | PRA-023 | iOS version from CI              | S      | Enables iOS build tracking                |
 
 ---
 
@@ -1264,6 +1272,7 @@ These issues can each be resolved in ≤0.5 day and have significant impact:
 ### Rationale
 
 The application has strong fundamentals:
+
 - 91.6% statement coverage with 2204 passing unit tests
 - Comprehensive error handling with global boundaries and unhandled rejection capture
 - Structured tracing with PII redaction

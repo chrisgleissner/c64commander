@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-declare module '@playwright/test' {
+declare module "@playwright/test" {
   export const test: any;
   export const expect: any;
   export type Page = any;

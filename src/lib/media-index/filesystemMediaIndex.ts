@@ -6,26 +6,26 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { Directory, Filesystem } from '@capacitor/filesystem';
-import type { MediaIndexSnapshot, MediaIndexStorage } from './mediaIndex';
+import { Directory, Filesystem } from "@capacitor/filesystem";
+import type { MediaIndexSnapshot, MediaIndexStorage } from "./mediaIndex";
 
-const STORAGE_PATH = 'hvsc/index/media-index-v2.json';
+const STORAGE_PATH = "hvsc/index/media-index-v2.json";
 
 const encodeUtf8Base64 = (value: string) => {
-  if (typeof btoa === 'function') {
+  if (typeof btoa === "function") {
     const bytes = new TextEncoder().encode(value);
-    let binary = '';
+    let binary = "";
     bytes.forEach((byte) => {
       binary += String.fromCharCode(byte);
     });
     return btoa(binary);
   }
-  return Buffer.from(value, 'utf-8').toString('base64');
+  return Buffer.from(value, "utf-8").toString("base64");
 };
 
 const decodeUtf8Base64 = (value: string) => {
   try {
-    if (typeof atob === 'function') {
+    if (typeof atob === "function") {
       const binary = atob(value);
       const bytes = new Uint8Array(binary.length);
       for (let index = 0; index < binary.length; index += 1) {
@@ -33,7 +33,7 @@ const decodeUtf8Base64 = (value: string) => {
       }
       return new TextDecoder().decode(bytes);
     }
-    return Buffer.from(value, 'base64').toString('utf-8');
+    return Buffer.from(value, "base64").toString("utf-8");
   } catch {
     return value;
   }
@@ -63,7 +63,11 @@ export class FilesystemMediaIndexStorage implements MediaIndexStorage {
   }
 
   async write(snapshot: MediaIndexSnapshot): Promise<void> {
-    await Filesystem.mkdir({ directory: Directory.Data, path: 'hvsc/index', recursive: true });
+    await Filesystem.mkdir({
+      directory: Directory.Data,
+      path: "hvsc/index",
+      recursive: true,
+    });
     await Filesystem.writeFile({
       directory: Directory.Data,
       path: STORAGE_PATH,

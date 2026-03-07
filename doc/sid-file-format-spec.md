@@ -36,32 +36,32 @@ Source of truth: https://www.hvsc.c64.org/download/C64Music/DOCUMENTS/SID_file_f
 
 ### v1 base header (`dataOffset = 0x0076`)
 
-| Offset | Type | Field | Rules |
-|---|---|---|---|
-| `+00` | STRING(4) | `magicID` | `PSID` or `RSID` |
-| `+04` | WORD | `version` | `1..4` (`RSID`: `2..4`) |
-| `+06` | WORD | `dataOffset` | `0x0076` for v1, `0x007C` for v2+ |
-| `+08` | WORD | `loadAddress` | `0`: read LE load address from data prefix; RSID must be `0` |
-| `+0A` | WORD | `initAddress` | `0`: use effective load address |
-| `+0C` | WORD | `playAddress` | `0`: player installs IRQ path; RSID must be `0` |
-| `+0E` | WORD | `songs` | `1..256` |
-| `+10` | WORD | `startSong` | `1..songs` (default `1`) |
-| `+12` | LONGWORD | `speed` | Tune speed bitfield; RSID must be `0` |
-| `+16` | STRING(32) | `name` | Windows-1252 |
-| `+36` | STRING(32) | `author` | Windows-1252 |
-| `+56` | STRING(32) | `released` | Windows-1252 |
-| `+76` | bytes | `data` | C64 payload (v1 only) |
+| Offset | Type       | Field         | Rules                                                        |
+| ------ | ---------- | ------------- | ------------------------------------------------------------ |
+| `+00`  | STRING(4)  | `magicID`     | `PSID` or `RSID`                                             |
+| `+04`  | WORD       | `version`     | `1..4` (`RSID`: `2..4`)                                      |
+| `+06`  | WORD       | `dataOffset`  | `0x0076` for v1, `0x007C` for v2+                            |
+| `+08`  | WORD       | `loadAddress` | `0`: read LE load address from data prefix; RSID must be `0` |
+| `+0A`  | WORD       | `initAddress` | `0`: use effective load address                              |
+| `+0C`  | WORD       | `playAddress` | `0`: player installs IRQ path; RSID must be `0`              |
+| `+0E`  | WORD       | `songs`       | `1..256`                                                     |
+| `+10`  | WORD       | `startSong`   | `1..songs` (default `1`)                                     |
+| `+12`  | LONGWORD   | `speed`       | Tune speed bitfield; RSID must be `0`                        |
+| `+16`  | STRING(32) | `name`        | Windows-1252                                                 |
+| `+36`  | STRING(32) | `author`      | Windows-1252                                                 |
+| `+56`  | STRING(32) | `released`    | Windows-1252                                                 |
+| `+76`  | bytes      | `data`        | C64 payload (v1 only)                                        |
 
 ### v2/v3/v4 extension (`dataOffset = 0x007C`)
 
-| Offset | Type | Field | Rules |
-|---|---|---|---|
-| `+76` | WORD | `flags` | Bitfield (see below), valid mask `0x03FF` |
-| `+78` | BYTE | `startPage` | Relocation start page |
-| `+79` | BYTE | `pageLength` | Relocation page count |
-| `+7A` | BYTE | `secondSIDAddress` | v3+; v2 should be `0` |
-| `+7B` | BYTE | `thirdSIDAddress` | v4 only; v2/v3 should be `0` |
-| `+7C` | bytes | `data` | C64 payload |
+| Offset | Type  | Field              | Rules                                     |
+| ------ | ----- | ------------------ | ----------------------------------------- |
+| `+76`  | WORD  | `flags`            | Bitfield (see below), valid mask `0x03FF` |
+| `+78`  | BYTE  | `startPage`        | Relocation start page                     |
+| `+79`  | BYTE  | `pageLength`       | Relocation page count                     |
+| `+7A`  | BYTE  | `secondSIDAddress` | v3+; v2 should be `0`                     |
+| `+7B`  | BYTE  | `thirdSIDAddress`  | v4 only; v2/v3 should be `0`              |
+| `+7C`  | bytes | `data`             | C64 payload                               |
 
 ## 5. `flags` Bitfield (`+76`)
 
@@ -110,6 +110,7 @@ Source of truth: https://www.hvsc.c64.org/download/C64Music/DOCUMENTS/SID_file_f
 - `thirdSIDAddress` must differ from `secondSIDAddress`
 
 Version rules:
+
 - v2: `secondSIDAddress=0`, `thirdSIDAddress=0`
 - v3: `thirdSIDAddress=0`
 - v4: both may be used

@@ -6,17 +6,19 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { computeSidMd5, getSidSongCount } from '@/lib/sid/sidUtils';
-import { addErrorLog } from '@/lib/logging';
-import type { SongLengthResolveQuery, SongLengthResolution } from '@/lib/songlengths';
-import type { SongEntry, SongFolder, SongSource } from './SongSource';
+import { computeSidMd5, getSidSongCount } from "@/lib/sid/sidUtils";
+import { addErrorLog } from "@/lib/logging";
+import type { SongLengthResolveQuery, SongLengthResolution } from "@/lib/songlengths";
+import type { SongEntry, SongFolder, SongSource } from "./SongSource";
 
-export type LocalSidFile = File | {
-  name: string;
-  webkitRelativePath?: string;
-  lastModified: number;
-  arrayBuffer: () => Promise<ArrayBuffer>;
-};
+export type LocalSidFile =
+  | File
+  | {
+      name: string;
+      webkitRelativePath?: string;
+      lastModified: number;
+      arrayBuffer: () => Promise<ArrayBuffer>;
+    };
 
 export type LocalFsSongSourceOptions = {
   lookupDurationSeconds?: (md5: string) => Promise<number | null | undefined>;
@@ -25,11 +27,11 @@ export type LocalFsSongSourceOptions = {
   onSongMetadataResolved?: (update: { path: string; entries: SongEntry[] }) => void;
 };
 
-const normalizeLocalPath = (path: string) => (path.startsWith('/') ? path : `/${path}`);
+const normalizeLocalPath = (path: string) => (path.startsWith("/") ? path : `/${path}`);
 const getLocalPath = (file: LocalSidFile) => normalizeLocalPath(file.webkitRelativePath || file.name);
 const getPartialPath = (path: string) => {
   const normalized = normalizeLocalPath(path);
-  const separator = normalized.lastIndexOf('/');
+  const separator = normalized.lastIndexOf("/");
   if (separator <= 0) return null;
   return normalized.slice(0, separator);
 };
@@ -51,16 +53,18 @@ const buildSongEntries = (
   const baseId = `${file.name}-${file.lastModified ?? 0}-${pathValue}`;
   const makeTitle = (songNr: number) => (count > 1 ? `${file.name} (Song ${songNr}/${count})` : file.name);
   if (count === 1) {
-    return [{
-      id: baseId,
-      path: pathValue,
-      title: makeTitle(1),
-      durationMs: durationsSeconds?.[0] !== undefined ? durationsSeconds[0] * 1000 : undefined,
-      songNr: 1,
-      subsongCount: 1,
-      source: 'local',
-      payload: file,
-    }];
+    return [
+      {
+        id: baseId,
+        path: pathValue,
+        title: makeTitle(1),
+        durationMs: durationsSeconds?.[0] !== undefined ? durationsSeconds[0] * 1000 : undefined,
+        songNr: 1,
+        subsongCount: 1,
+        source: "local",
+        payload: file,
+      },
+    ];
   }
   return Array.from({ length: count }, (_, index) => ({
     id: `${baseId}:${index + 1}`,
@@ -69,7 +73,7 @@ const buildSongEntries = (
     durationMs: durationsSeconds?.[index] !== undefined ? durationsSeconds[index] * 1000 : undefined,
     songNr: index + 1,
     subsongCount: count,
-    source: 'local',
+    source: "local",
     payload: file,
   }));
 };
@@ -83,23 +87,18 @@ const extractDurations = (resolution: SongLengthResolution) => {
 };
 
 const isMd5FallbackCandidate = (resolution: SongLengthResolution, durations: number[] | null) =>
-  !durations
-  && resolution.strategy !== 'md5'
-  && resolution.strategy !== 'unavailable';
+  !durations && resolution.strategy !== "md5" && resolution.strategy !== "unavailable";
 
 const readSidHeader = async (file: LocalSidFile) => {
   const slice = (file as File).slice;
-  if (typeof slice === 'function') {
+  if (typeof slice === "function") {
     return slice.call(file, 0, 0x20).arrayBuffer();
   }
   const fullBuffer = await file.arrayBuffer();
   return fullBuffer.byteLength > 0x20 ? fullBuffer.slice(0, 0x20) : fullBuffer;
 };
 
-export const createLocalFsSongSource = (
-  files: LocalSidFile[],
-  options: LocalFsSongSourceOptions = {},
-): SongSource => {
+export const createLocalFsSongSource = (files: LocalSidFile[], options: LocalFsSongSourceOptions = {}): SongSource => {
   const metadataByPath = new Map<string, SongEntry[]>();
   const durationLookupByPath = new Map<string, number[] | null>();
   const metadataScanInFlight = new Map<string, Promise<void>>();
@@ -117,7 +116,7 @@ export const createLocalFsSongSource = (
         const initialResolution = await options.resolveSonglength(baseQuery);
         durations = extractDurations(initialResolution);
         if (isMd5FallbackCandidate(initialResolution, durations)) {
-          const fullBuffer = buffer ?? await file.arrayBuffer();
+          const fullBuffer = buffer ?? (await file.arrayBuffer());
           const md5 = await computeSidMd5(fullBuffer);
           const md5Resolution = await options.resolveSonglength({
             ...baseQuery,
@@ -126,18 +125,18 @@ export const createLocalFsSongSource = (
           durations = extractDurations(md5Resolution);
         }
       } else if (options.lookupDurationsByMd5Seconds) {
-        const fullBuffer = buffer ?? await file.arrayBuffer();
+        const fullBuffer = buffer ?? (await file.arrayBuffer());
         const md5 = await computeSidMd5(fullBuffer);
         const resolved = await options.lookupDurationsByMd5Seconds(md5);
         durations = resolved?.length ? resolved : null;
       } else if (options.lookupDurationSeconds) {
-        const fullBuffer = buffer ?? await file.arrayBuffer();
+        const fullBuffer = buffer ?? (await file.arrayBuffer());
         const md5 = await computeSidMd5(fullBuffer);
         const resolved = await options.lookupDurationSeconds(md5);
         durations = resolved !== null && resolved !== undefined ? [resolved] : null;
       }
     } catch (error) {
-      addErrorLog('SID duration lookup failed', {
+      addErrorLog("SID duration lookup failed", {
         error: (error as Error).message,
         path: pathValue,
       });
@@ -159,7 +158,7 @@ export const createLocalFsSongSource = (
         durationsSeconds = await resolveDurationsForFile(file, pathValue);
         subsongCount = Math.max(subsongCount, durationsSeconds?.length ?? 1);
       } catch (error) {
-        addErrorLog('Local SID metadata scan failed', {
+        addErrorLog("Local SID metadata scan failed", {
           error: (error as Error).message,
           path: pathValue,
         });
@@ -179,25 +178,28 @@ export const createLocalFsSongSource = (
 
   const listFolders = async (path: string): Promise<SongFolder[]> => {
     const folders = new Set<string>();
-    const normalized = normalizeLocalPath(path || '/');
+    const normalized = normalizeLocalPath(path || "/");
     files.forEach((file) => {
       const filePath = getLocalPath(file);
       if (!filePath.startsWith(normalized)) return;
-      const parts = filePath.split('/').filter(Boolean);
+      const parts = filePath.split("/").filter(Boolean);
       if (parts.length <= 1) return;
       parts.pop();
-      const folderPath = `/${parts.join('/')}`;
-      if (normalized === '/' || folderPath.startsWith(normalized)) {
+      const folderPath = `/${parts.join("/")}`;
+      if (normalized === "/" || folderPath.startsWith(normalized)) {
         folders.add(folderPath);
       }
     });
     return Array.from(folders)
-      .map((folder) => ({ path: folder, name: folder.split('/').pop() || folder }))
+      .map((folder) => ({
+        path: folder,
+        name: folder.split("/").pop() || folder,
+      }))
       .sort((a, b) => a.path.localeCompare(b.path));
   };
 
   const listSongs = async (path: string): Promise<SongEntry[]> => {
-    const normalized = normalizeLocalPath(path || '/');
+    const normalized = normalizeLocalPath(path || "/");
     const candidates = files.filter((file) => getLocalPath(file).toLowerCase().startsWith(normalized.toLowerCase()));
     const entries = candidates.flatMap((file) => {
       const pathValue = getLocalPath(file);
@@ -206,13 +208,14 @@ export const createLocalFsSongSource = (
       scanSongMetadataInBackground(file, pathValue);
       return buildSongEntries(file, pathValue, 1, null);
     });
-    return entries.sort((left, right) =>
-      left.path.localeCompare(right.path) || (left.songNr ?? 1) - (right.songNr ?? 1));
+    return entries.sort(
+      (left, right) => left.path.localeCompare(right.path) || (left.songNr ?? 1) - (right.songNr ?? 1),
+    );
   };
 
   const getSong = async (entry: SongEntry) => {
     const file = entry.payload as LocalSidFile | undefined;
-    if (!file) throw new Error('Missing local file data.');
+    if (!file) throw new Error("Missing local file data.");
     const buffer = await file.arrayBuffer();
     const data = new Uint8Array(buffer);
     let durationMs: number | undefined = entry.durationMs;
@@ -226,7 +229,7 @@ export const createLocalFsSongSource = (
   };
 
   return {
-    id: 'local',
+    id: "local",
     listFolders,
     listSongs,
     getSong,

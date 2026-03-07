@@ -6,13 +6,13 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-export type HvscIngestionState = 'idle' | 'installing' | 'updating' | 'ready' | 'error';
+export type HvscIngestionState = "idle" | "installing" | "updating" | "ready" | "error";
 
-export type HvscSidClock = 'unknown' | 'pal' | 'ntsc' | 'pal_ntsc';
-export type HvscSidModel = 'unknown' | 'mos6581' | 'mos8580' | 'both';
+export type HvscSidClock = "unknown" | "pal" | "ntsc" | "pal_ntsc";
+export type HvscSidModel = "unknown" | "mos6581" | "mos8580" | "both";
 
 export type HvscSidMetadata = {
-  magicId: 'PSID' | 'RSID';
+  magicId: "PSID" | "RSID";
   version: number;
   songs: number;
   startSong: number;

@@ -6,17 +6,15 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { redactTreeUri } from '@/lib/native/safUtils';
+import { redactTreeUri } from "@/lib/native/safUtils";
 
-const REDACTED = '***';
+const REDACTED = "***";
 
-const isSensitiveKey = (key: string) =>
-  /password|token|authorization|auth|secret|credential|cookie/i.test(key);
+const isSensitiveKey = (key: string) => /password|token|authorization|auth|secret|credential|cookie/i.test(key);
 
 // Audit confirmed: Covers Authorization, Cookie, and common sensitive JSON keys (password, token, secret)
 
-const isUriValue = (value: string) =>
-  /^(content:\/\/|file:\/\/|filesystem:|saf:)/i.test(value.trim());
+const isUriValue = (value: string) => /^(content:\/\/|file:\/\/|filesystem:|saf:)/i.test(value.trim());
 
 const redactUri = (value: string) => {
   if (!value) return value;
@@ -29,10 +27,10 @@ const redactUri = (value: string) => {
 };
 
 const redactValue = (value: unknown, keyHint?: string): unknown => {
-  if (typeof keyHint === 'string' && isSensitiveKey(keyHint)) return REDACTED;
-  if (typeof value === 'string') return redactUri(value);
+  if (typeof keyHint === "string" && isSensitiveKey(keyHint)) return REDACTED;
+  if (typeof value === "string") return redactUri(value);
   if (Array.isArray(value)) return value.map((entry) => redactValue(entry));
-  if (value && typeof value === 'object') {
+  if (value && typeof value === "object") {
     const result: Record<string, unknown> = {};
     Object.entries(value as Record<string, unknown>).forEach(([key, entry]) => {
       result[key] = redactValue(entry, key);
@@ -51,10 +49,10 @@ export const redactHeaders = (headers: Record<string, string | string[] | undefi
       return;
     }
     if (Array.isArray(value)) {
-      redacted[key] = value.map((entry) => (typeof entry === 'string' ? redactValue(entry, key) : entry)) as string[];
+      redacted[key] = value.map((entry) => (typeof entry === "string" ? redactValue(entry, key) : entry)) as string[];
       return;
     }
-    redacted[key] = typeof value === 'string' ? (redactValue(value, key) as string) : value;
+    redacted[key] = typeof value === "string" ? (redactValue(value, key) as string) : value;
   });
   return redacted;
 };

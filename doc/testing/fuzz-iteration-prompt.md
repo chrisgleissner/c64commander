@@ -33,16 +33,16 @@ A compact `fuzz-issue-summary.md` (REAL + UNCERTAIN IDs only) is also written al
 
 The classifier rules are:
 
-| Classification | Confidence | Conditions |
-|---|---|---|
-| EXPECTED | HIGH | Domain is FUZZ_INFRASTRUCTURE |
-| EXPECTED | HIGH | `isAlwaysExpectedFuzzBehavior` pattern matches |
-| EXPECTED | HIGH | Domain DEVICE_ACTION or NETWORK + chaos event in lastInteractions |
-| EXPECTED | MEDIUM | Domain DEVICE_ACTION or NETWORK, no chaos evidence (mock server always absent) |
-| REAL | HIGH | Severity contains crash or freeze |
-| REAL | MEDIUM | Exception is TypeError or ReferenceError in non-expected context |
-| UNCERTAIN | MEDIUM | Domain BACKEND, no direct chaos correlation |
-| UNCERTAIN | LOW | Domain UNKNOWN |
+| Classification | Confidence | Conditions                                                                     |
+| -------------- | ---------- | ------------------------------------------------------------------------------ |
+| EXPECTED       | HIGH       | Domain is FUZZ_INFRASTRUCTURE                                                  |
+| EXPECTED       | HIGH       | `isAlwaysExpectedFuzzBehavior` pattern matches                                 |
+| EXPECTED       | HIGH       | Domain DEVICE_ACTION or NETWORK + chaos event in lastInteractions              |
+| EXPECTED       | MEDIUM     | Domain DEVICE_ACTION or NETWORK, no chaos evidence (mock server always absent) |
+| REAL           | HIGH       | Severity contains crash or freeze                                              |
+| REAL           | MEDIUM     | Exception is TypeError or ReferenceError in non-expected context               |
+| UNCERTAIN      | MEDIUM     | Domain BACKEND, no direct chaos correlation                                    |
+| UNCERTAIN      | LOW        | Domain UNKNOWN                                                                 |
 
 Chaos events are detected in `lastInteractions` by the prefix `a=network-offline`,
 `a=connection-flap`, or `a=latency-spike`.
@@ -89,7 +89,7 @@ All of the following patterns must appear in the `# EXPECTED Issues` section:
   listing failed, HTTP 503, service unavailable, connection refused, upload failed)
 - All items where Domain is `FUZZ_INFRASTRUCTURE` (DiagnosticsBridge unavailable, category
   config fetch, HVSC entries, localStorage, fuzz mode blocked, API device host changed)
-- Device-operation failures that occurred under an active chaos event (HOME_*, AUDIO_ROUTING,
+- Device-operation failures that occurred under an active chaos event (HOME\_\*, AUDIO_ROUTING,
   RESET_DRIVES, etc.)
 
 If any of these appear in `# REAL` or `# UNCERTAIN`, that is a classifier bug — fix
@@ -103,7 +103,6 @@ For each issue in `# REAL Issues`:
 2. Read the corresponding session log(s) in `sessions/` to get the full event sequence.
 3. Determine whether the issue is a genuine application defect (crash, unhandled rejection,
    broken UI state) or a classifier false positive.
-
    - If it is a **genuine defect**: categorise, file against the source component, and
      proceed to Step 3.
    - If it is a **classifier false positive**: fix the classifier rule in
@@ -190,14 +189,14 @@ Before declaring work complete:
 
 ## Relevant source files
 
-| File | Purpose |
-|---|---|
-| `scripts/fuzzClassifier.mjs` | Classification rules (edit this to fix false positives) |
-| `scripts/fuzzReportUtils.mjs` | Report renderers |
-| `scripts/run-fuzz.mjs` | Fuzz launcher and report merger |
-| `playwright/fuzz/chaosRunner.fuzz.ts` | Issue grouping, session log format (read-only) |
-| `playwright/fuzz/fuzzBackend.ts` | `isAlwaysExpectedFuzzBehavior`, referenced by classifier |
-| `tests/unit/scripts/fuzzClassifier.test.ts` | Unit tests for classifier (keep green) |
-| `tests/unit/scripts/fuzzReportUtils.test.ts` | Unit tests for renderers (keep green) |
-| `doc/testing/chaos-fuzz.md` | Reference docs for the fuzz system |
-| `PLANS.md` | Execution plan (update when done) |
+| File                                         | Purpose                                                  |
+| -------------------------------------------- | -------------------------------------------------------- |
+| `scripts/fuzzClassifier.mjs`                 | Classification rules (edit this to fix false positives)  |
+| `scripts/fuzzReportUtils.mjs`                | Report renderers                                         |
+| `scripts/run-fuzz.mjs`                       | Fuzz launcher and report merger                          |
+| `playwright/fuzz/chaosRunner.fuzz.ts`        | Issue grouping, session log format (read-only)           |
+| `playwright/fuzz/fuzzBackend.ts`             | `isAlwaysExpectedFuzzBehavior`, referenced by classifier |
+| `tests/unit/scripts/fuzzClassifier.test.ts`  | Unit tests for classifier (keep green)                   |
+| `tests/unit/scripts/fuzzReportUtils.test.ts` | Unit tests for renderers (keep green)                    |
+| `doc/testing/chaos-fuzz.md`                  | Reference docs for the fuzz system                       |
+| `PLANS.md`                                   | Execution plan (update when done)                        |

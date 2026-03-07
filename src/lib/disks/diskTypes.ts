@@ -6,9 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { DISK_IMAGE_EXTENSIONS, getFileExtension } from '@/lib/playback/fileTypes';
+import { DISK_IMAGE_EXTENSIONS, getFileExtension } from "@/lib/playback/fileTypes";
 
-export type DiskLocation = 'local' | 'ultimate';
+export type DiskLocation = "local" | "ultimate";
 
 export type DiskEntry = {
   id: string;
@@ -25,35 +25,35 @@ export type DiskEntry = {
   importOrder?: number | null;
 };
 
-export type DiskLocationLabel = 'Local' | 'C64U';
+export type DiskLocationLabel = "Local" | "C64U";
 
 export const normalizeDiskPath = (value: string) => {
-  if (!value) return '/';
-  const trimmed = value.replace(/\s+/g, ' ').trim();
-  const withSlash = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
-  return withSlash.replace(/\/+/g, '/');
+  if (!value) return "/";
+  const trimmed = value.replace(/\s+/g, " ").trim();
+  const withSlash = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+  return withSlash.replace(/\/+/g, "/");
 };
 
 export const buildDiskId = (location: DiskLocation, path: string) => `${location}:${normalizeDiskPath(path)}`;
 
 export const getDiskName = (path: string) => {
   const normalized = normalizeDiskPath(path);
-  const parts = normalized.split('/').filter(Boolean);
+  const parts = normalized.split("/").filter(Boolean);
   return parts[parts.length - 1] || normalized;
 };
 
 export const getDiskFolderPath = (path: string) => {
   const normalized = normalizeDiskPath(path);
-  const parts = normalized.split('/').filter(Boolean);
-  if (parts.length <= 1) return '/';
-  return `/${parts.slice(0, -1).join('/')}/`;
+  const parts = normalized.split("/").filter(Boolean);
+  if (parts.length <= 1) return "/";
+  return `/${parts.slice(0, -1).join("/")}/`;
 };
 
 export const isDiskImagePath = (path: string) => DISK_IMAGE_EXTENSIONS.has(getFileExtension(path));
 
 export const getLeafFolderName = (path: string) => {
   const normalized = normalizeDiskPath(path);
-  const parts = normalized.split('/').filter(Boolean);
+  const parts = normalized.split("/").filter(Boolean);
   if (parts.length === 0) return null;
   if (isDiskImagePath(normalized)) {
     return parts.length >= 2 ? parts[parts.length - 2] : null;
@@ -91,4 +91,4 @@ export const createDiskEntry = (params: {
 };
 
 export const getLocationLabel = (location: DiskLocation): DiskLocationLabel =>
-  location === 'local' ? 'Local' : 'C64U';
+  location === "local" ? "Local" : "C64U";

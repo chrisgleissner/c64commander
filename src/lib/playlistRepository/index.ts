@@ -7,7 +7,7 @@ export type {
   PlaylistQueryResult,
   PlaylistQueryRow,
   RandomPlaySession,
-} from './types';
+} from "./types";
 
 export type {
   TrackRepository,
@@ -15,8 +15,8 @@ export type {
   PlaylistQueryRepository,
   RandomPlayRepository,
   PlaylistDataRepository,
-} from './repository';
+} from "./repository";
 
-export { getLocalStoragePlaylistDataRepository } from './localStorageRepository';
-export { getIndexedDbPlaylistDataRepository } from './indexedDbRepository';
-export { getPlaylistDataRepository, resetPlaylistDataRepositoryForTests } from './factory';
+export { getLocalStoragePlaylistDataRepository } from "./localStorageRepository";
+export { getIndexedDbPlaylistDataRepository } from "./indexedDbRepository";
+export { getPlaylistDataRepository, resetPlaylistDataRepositoryForTests } from "./factory";

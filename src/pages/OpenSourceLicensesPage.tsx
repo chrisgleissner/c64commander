@@ -6,21 +6,21 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { Fragment, useEffect, useMemo, useState } from 'react';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { addErrorLog } from '@/lib/logging';
-import { Button } from '@/components/ui/button';
-import { useNavigate } from 'react-router-dom';
+import { Fragment, useEffect, useMemo, useState } from "react";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { addErrorLog } from "@/lib/logging";
+import { Button } from "@/components/ui/button";
+import { useNavigate } from "react-router-dom";
 
 type MarkdownBlock =
-  | { type: 'heading'; level: number; text: string }
-  | { type: 'paragraph'; text: string }
-  | { type: 'list'; items: string[] };
+  | { type: "heading"; level: number; text: string }
+  | { type: "paragraph"; text: string }
+  | { type: "list"; items: string[] };
 
 const loadNoticeText = async (): Promise<string> => {
-  const baseUrl = import.meta.env.BASE_URL || '/';
+  const baseUrl = import.meta.env.BASE_URL || "/";
   const markdownUrl = `${baseUrl}THIRD_PARTY_NOTICES.md`;
-  const markdownResponse = await fetch(markdownUrl, { cache: 'no-store' });
+  const markdownResponse = await fetch(markdownUrl, { cache: "no-store" });
   if (!markdownResponse.ok) {
     throw new Error(`Failed to load third-party notices (${markdownResponse.status})`);
   }
@@ -32,12 +32,13 @@ const parseMarkdownBlocks = (source: string): MarkdownBlock[] => {
   const blocks: MarkdownBlock[] = [];
   let index = 0;
 
-  const splitTableRow = (line: string) => line
-    .trim()
-    .replace(/^\|\s*/, '')
-    .replace(/\s*\|$/, '')
-    .split('|')
-    .map((cell) => cell.trim());
+  const splitTableRow = (line: string) =>
+    line
+      .trim()
+      .replace(/^\|\s*/, "")
+      .replace(/\s*\|$/, "")
+      .split("|")
+      .map((cell) => cell.trim());
 
   const isTableSeparator = (line: string) => {
     const cells = splitTableRow(line);
@@ -56,7 +57,7 @@ const parseMarkdownBlocks = (source: string): MarkdownBlock[] => {
     const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
     if (headingMatch) {
       blocks.push({
-        type: 'heading',
+        type: "heading",
         level: headingMatch[1].length,
         text: headingMatch[2].trim(),
       });
@@ -64,14 +65,14 @@ const parseMarkdownBlocks = (source: string): MarkdownBlock[] => {
       continue;
     }
 
-    if (line.startsWith('|') && index + 1 < lines.length && isTableSeparator(lines[index + 1])) {
+    if (line.startsWith("|") && index + 1 < lines.length && isTableSeparator(lines[index + 1])) {
       const headerCells = splitTableRow(lines[index]).map((cell) => cell.toLowerCase());
       index += 2;
 
       const items: string[] = [];
       while (index < lines.length) {
         const tableLine = lines[index].trim();
-        if (!tableLine.startsWith('|')) break;
+        if (!tableLine.startsWith("|")) break;
         if (isTableSeparator(tableLine)) {
           index += 1;
           continue;
@@ -80,35 +81,33 @@ const parseMarkdownBlocks = (source: string): MarkdownBlock[] => {
         const rowCells = splitTableRow(tableLine);
         const rowByHeader = new Map<string, string>();
         for (let i = 0; i < headerCells.length; i += 1) {
-          rowByHeader.set(headerCells[i], rowCells[i] ?? '-');
+          rowByHeader.set(headerCells[i], rowCells[i] ?? "-");
         }
 
-        const ecosystem = rowByHeader.get('ecosystem') ?? '-';
-        const packageName = rowByHeader.get('package') ?? '-';
-        const version = rowByHeader.get('version') ?? '-';
-        const license = rowByHeader.get('license') ?? '-';
-        const source = rowByHeader.get('source') ?? rowByHeader.get('source url') ?? '-';
+        const ecosystem = rowByHeader.get("ecosystem") ?? "-";
+        const packageName = rowByHeader.get("package") ?? "-";
+        const version = rowByHeader.get("version") ?? "-";
+        const license = rowByHeader.get("license") ?? "-";
+        const source = rowByHeader.get("source") ?? rowByHeader.get("source url") ?? "-";
 
-        const firstLine = [ecosystem, packageName, version, license]
-          .filter((part) => part && part !== '-')
-          .join(' ');
-        const secondLine = `Source: ${source || '-'}`;
+        const firstLine = [ecosystem, packageName, version, license].filter((part) => part && part !== "-").join(" ");
+        const secondLine = `Source: ${source || "-"}`;
         items.push(`${firstLine}\n${secondLine}`);
 
         index += 1;
       }
 
       if (items.length > 0) {
-        blocks.push({ type: 'list', items });
+        blocks.push({ type: "list", items });
       }
       continue;
     }
 
-    if (line.startsWith('- ')) {
+    if (line.startsWith("- ")) {
       const items: string[] = [];
       while (index < lines.length) {
         const listLine = lines[index].trim();
-        if (!listLine.startsWith('- ')) break;
+        if (!listLine.startsWith("- ")) break;
 
         let item = listLine.slice(2).trim();
         index += 1;
@@ -123,7 +122,7 @@ const parseMarkdownBlocks = (source: string): MarkdownBlock[] => {
 
         items.push(item);
       }
-      blocks.push({ type: 'list', items });
+      blocks.push({ type: "list", items });
       continue;
     }
 
@@ -132,12 +131,12 @@ const parseMarkdownBlocks = (source: string): MarkdownBlock[] => {
       const paragraphLine = lines[index].trim();
       if (!paragraphLine) break;
       if (/^(#{1,6})\s+/.test(paragraphLine)) break;
-      if (paragraphLine.startsWith('- ')) break;
+      if (paragraphLine.startsWith("- ")) break;
       paragraphLines.push(paragraphLine);
       index += 1;
     }
     if (paragraphLines.length > 0) {
-      blocks.push({ type: 'paragraph', text: paragraphLines.join(' ') });
+      blocks.push({ type: "paragraph", text: paragraphLines.join(" ") });
       continue;
     }
 
@@ -148,7 +147,7 @@ const parseMarkdownBlocks = (source: string): MarkdownBlock[] => {
 };
 
 const renderTextWithBreaks = (text: string, keyPrefix: string) => {
-  const lines = text.split('\n');
+  const lines = text.split("\n");
   return lines.flatMap((line, lineIndex) => {
     if (lineIndex === 0) return [<Fragment key={`${keyPrefix}-line-${lineIndex}`}>{line}</Fragment>];
     return [
@@ -170,11 +169,7 @@ const renderInlineText = (value: string) => {
 
     if (start > cursor) {
       const plainText = value.slice(cursor, start);
-      nodes.push(
-        <Fragment key={`plain-${keyIndex}`}>
-          {renderTextWithBreaks(plainText, `plain-${keyIndex}`)}
-        </Fragment>,
-      );
+      nodes.push(<Fragment key={`plain-${keyIndex}`}>{renderTextWithBreaks(plainText, `plain-${keyIndex}`)}</Fragment>);
       keyIndex += 1;
     }
 
@@ -208,20 +203,14 @@ const renderInlineText = (value: string) => {
       continue;
     }
 
-    nodes.push(
-      <Fragment key={`fallback-${keyIndex}`}>
-        {renderTextWithBreaks(token, `fallback-${keyIndex}`)}
-      </Fragment>,
-    );
+    nodes.push(<Fragment key={`fallback-${keyIndex}`}>{renderTextWithBreaks(token, `fallback-${keyIndex}`)}</Fragment>);
     keyIndex += 1;
     cursor = start + token.length;
   }
 
   if (cursor < value.length) {
     nodes.push(
-      <Fragment key={`tail-${keyIndex}`}>
-        {renderTextWithBreaks(value.slice(cursor), `tail-${keyIndex}`)}
-      </Fragment>,
+      <Fragment key={`tail-${keyIndex}`}>{renderTextWithBreaks(value.slice(cursor), `tail-${keyIndex}`)}</Fragment>,
     );
   }
 
@@ -230,7 +219,7 @@ const renderInlineText = (value: string) => {
 
 export default function OpenSourceLicensesPage() {
   const navigate = useNavigate();
-  const [noticeText, setNoticeText] = useState<string>('Loading open source licenses...');
+  const [noticeText, setNoticeText] = useState<string>("Loading open source licenses...");
   const [hasError, setHasError] = useState(false);
 
   const blocks = useMemo(() => parseMarkdownBlocks(noticeText), [noticeText]);
@@ -249,7 +238,7 @@ export default function OpenSourceLicensesPage() {
         const message = (error as Error).message;
         setNoticeText(`Unable to load open source licenses. ${message}`);
         setHasError(true);
-        addErrorLog('Failed to load third-party notices', {
+        addErrorLog("Failed to load third-party notices", {
           error: message,
         });
       }
@@ -270,37 +259,55 @@ export default function OpenSourceLicensesPage() {
             <h1 className="text-lg font-semibold">Open Source Licenses</h1>
             <p className="text-sm text-muted-foreground">Rendered from bundled `THIRD_PARTY_NOTICES.md`.</p>
           </div>
-          <Button variant="ghost" size="icon" onClick={() => navigate('/settings')} aria-label="Close licenses overlay">
+          <Button variant="ghost" size="icon" onClick={() => navigate("/settings")} aria-label="Close licenses overlay">
             <span className="text-lg leading-none">×</span>
           </Button>
         </div>
 
         <div className="min-h-0 flex-1 overflow-hidden rounded-xl border border-border bg-card">
           <ScrollArea className="h-full">
-            <div className={`space-y-4 p-4 sm:p-6 ${hasError ? 'text-destructive' : 'text-foreground'}`}>
+            <div className={`space-y-4 p-4 sm:p-6 ${hasError ? "text-destructive" : "text-foreground"}`}>
               {hasError ? (
                 <p className="text-sm">{noticeText}</p>
               ) : (
                 blocks.map((block, blockIndex) => {
-                  if (block.type === 'heading') {
+                  if (block.type === "heading") {
                     if (block.level === 1) {
-                      return <h2 key={`h-${blockIndex}`} className="text-2xl font-semibold tracking-tight">{block.text}</h2>;
+                      return (
+                        <h2 key={`h-${blockIndex}`} className="text-2xl font-semibold tracking-tight">
+                          {block.text}
+                        </h2>
+                      );
                     }
                     if (block.level === 2) {
-                      return <h3 key={`h-${blockIndex}`} className="pt-2 text-xl font-semibold">{block.text}</h3>;
+                      return (
+                        <h3 key={`h-${blockIndex}`} className="pt-2 text-xl font-semibold">
+                          {block.text}
+                        </h3>
+                      );
                     }
-                    return <h4 key={`h-${blockIndex}`} className="text-lg font-medium">{block.text}</h4>;
+                    return (
+                      <h4 key={`h-${blockIndex}`} className="text-lg font-medium">
+                        {block.text}
+                      </h4>
+                    );
                   }
 
-                  if (block.type === 'paragraph') {
-                    return <p key={`p-${blockIndex}`} className="text-sm leading-6">{renderInlineText(block.text)}</p>;
+                  if (block.type === "paragraph") {
+                    return (
+                      <p key={`p-${blockIndex}`} className="text-sm leading-6">
+                        {renderInlineText(block.text)}
+                      </p>
+                    );
                   }
 
-                  if (block.type === 'list') {
+                  if (block.type === "list") {
                     return (
                       <ul key={`l-${blockIndex}`} className="list-disc space-y-2 pl-5 text-sm leading-6">
                         {block.items.map((item, itemIndex) => (
-                          <li key={`li-${itemIndex}`} className="break-words">{renderInlineText(item)}</li>
+                          <li key={`li-${itemIndex}`} className="break-words">
+                            {renderInlineText(item)}
+                          </li>
                         ))}
                       </ul>
                     );

@@ -6,11 +6,11 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { describe, expect, it } from 'vitest';
-import { PlaybackClock } from '@/lib/playback/playbackClock';
+import { describe, expect, it } from "vitest";
+import { PlaybackClock } from "@/lib/playback/playbackClock";
 
-describe('PlaybackClock', () => {
-  it('accumulates played time across pause/resume', () => {
+describe("PlaybackClock", () => {
+  it("accumulates played time across pause/resume", () => {
     const clock = new PlaybackClock();
     clock.start(0);
     expect(clock.current(0)).toBe(0);
@@ -23,7 +23,7 @@ describe('PlaybackClock', () => {
     expect(clock.current(8000)).toBe(6000);
   });
 
-  it('accumulates played time across skips without resetting', () => {
+  it("accumulates played time across skips without resetting", () => {
     const clock = new PlaybackClock();
     clock.start(0);
     clock.pause(2500);
@@ -33,7 +33,7 @@ describe('PlaybackClock', () => {
     expect(clock.current(4000)).toBe(3500);
   });
 
-  it('resets when requested', () => {
+  it("resets when requested", () => {
     const clock = new PlaybackClock();
     clock.start(0);
     clock.pause(2000);
@@ -43,7 +43,7 @@ describe('PlaybackClock', () => {
     expect(clock.current(4000)).toBe(0);
   });
 
-  it('start with reset clears prior base', () => {
+  it("start with reset clears prior base", () => {
     const clock = new PlaybackClock();
     clock.start(0);
     clock.pause(2000);

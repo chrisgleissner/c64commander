@@ -6,9 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { LocalPlayFile } from '@/lib/playback/playbackRouter';
-import { addErrorLog } from '@/lib/logging';
-import { computeSidMd5 } from '@/lib/sid/sidUtils';
+import type { LocalPlayFile } from "@/lib/playback/playbackRouter";
+import { addErrorLog } from "@/lib/logging";
+import { computeSidMd5 } from "@/lib/sid/sidUtils";
 
 export type SonglengthsData = {
   // Values are 1-based sub-tune durations (index 0 is song #1).
@@ -17,8 +17,8 @@ export type SonglengthsData = {
 };
 
 const normalizePath = (path: string) => {
-  const normalized = path.replace(/\\/g, '/');
-  return normalized.startsWith('/') ? normalized : `/${normalized}`;
+  const normalized = path.replace(/\\/g, "/");
+  return normalized.startsWith("/") ? normalized : `/${normalized}`;
 };
 
 const resolveDuration = (durations: number[] | undefined, songNr?: number | null) => {
@@ -36,7 +36,7 @@ export const resolveSonglengthsSeconds = (
 ) => {
   if (!data) return null;
 
-  const normalizedPath = normalizePath(path || '/');
+  const normalizedPath = normalizePath(path || "/");
   const pathMatch = resolveDuration(data.pathToSeconds.get(normalizedPath), songNr);
   if (pathMatch !== null) return pathMatch;
 
@@ -68,7 +68,7 @@ export const resolveSonglengthsDurationMs = async (
     const md5Seconds = resolveSonglengthsSeconds(data, path, md5, songNr);
     return md5Seconds !== null ? md5Seconds * 1000 : null;
   } catch (error) {
-    addErrorLog('Failed to resolve SID duration via songlengths MD5', {
+    addErrorLog("Failed to resolve SID duration via songlengths MD5", {
       error: (error as Error).message,
       path,
       songNr: songNr ?? null,
@@ -78,14 +78,14 @@ export const resolveSonglengthsDurationMs = async (
 };
 
 const parseTimeToSeconds = (value: string) => {
-  const parts = value.split(':');
+  const parts = value.split(":");
   if (!parts.length) return null;
   const minutes = Number(parts[0]);
   if (Number.isNaN(minutes)) return null;
-  const secondsPart = parts[1] ?? '0';
-  const secondsSplit = secondsPart.split('.');
-  const seconds = Number(secondsSplit[0] ?? '0');
-  const fraction = Number((secondsSplit[1] ?? '').padEnd(3, '0').slice(0, 3));
+  const secondsPart = parts[1] ?? "0";
+  const secondsSplit = secondsPart.split(".");
+  const seconds = Number(secondsSplit[0] ?? "0");
+  const fraction = Number((secondsSplit[1] ?? "").padEnd(3, "0").slice(0, 3));
   if (Number.isNaN(seconds) || Number.isNaN(fraction)) return null;
   const totalMs = (minutes * 60 + seconds) * 1000 + fraction;
   return Math.round(totalMs / 1000);
@@ -108,7 +108,7 @@ const parseDurations = (value: string) => {
 export const parseSonglengths = (content: string): SonglengthsData => {
   const pathToSeconds = new Map<string, number[]>();
   const md5ToSeconds = new Map<string, number[]>();
-  let currentPath = '';
+  let currentPath = "";
 
   const lines = content.split(/\r?\n/);
   lines.forEach((raw) => {
@@ -116,13 +116,13 @@ export const parseSonglengths = (content: string): SonglengthsData => {
     if (!line) return;
     const firstChar = line.charCodeAt(0);
     if (firstChar === 59 || firstChar === 35 || firstChar === 58) {
-      const path = line.replace(/^[:;#]+/, '').trim();
+      const path = line.replace(/^[:;#]+/, "").trim();
       if (path) currentPath = normalizePath(path);
       return;
     }
     if (firstChar === 91) return;
 
-    const eqIndex = line.indexOf('=');
+    const eqIndex = line.indexOf("=");
     if (eqIndex > 0) {
       const md5 = line.slice(0, eqIndex).trim().toLowerCase();
       const value = line.slice(eqIndex + 1).trim();

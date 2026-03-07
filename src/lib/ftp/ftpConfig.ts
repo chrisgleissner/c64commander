@@ -6,8 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-const FTP_PORT_KEY = 'c64u_ftp_port';
-const FTP_BRIDGE_URL_KEY = 'c64u_ftp_bridge_url';
+const FTP_PORT_KEY = "c64u_ftp_port";
+const FTP_BRIDGE_URL_KEY = "c64u_ftp_bridge_url";
 const DEFAULT_FTP_PORT = 21;
 
 let runtimeFtpPortOverride: number | null = null;
@@ -45,11 +45,11 @@ export const clearRuntimeFtpPortOverride = () => {
 export const getFtpBridgeUrl = () => {
   const stored = localStorage.getItem(FTP_BRIDGE_URL_KEY);
   if (stored) return stored;
-  if (import.meta.env.VITE_WEB_PLATFORM === '1') {
-    return '/api/ftp';
+  if (import.meta.env.VITE_WEB_PLATFORM === "1") {
+    return "/api/ftp";
   }
   const envUrl = import.meta.env.VITE_FTP_BRIDGE_URL as string | undefined;
-  return envUrl || '';
+  return envUrl || "";
 };
 
 export const setFtpBridgeUrl = (url: string) => {

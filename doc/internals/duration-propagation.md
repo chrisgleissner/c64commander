@@ -6,11 +6,11 @@ Song duration (songlength) determines auto-advance timing. Duration flows from m
 
 ## Duration by Source
 
-| Source | Duration Origin | Availability | Notes |
-|--------|----------------|-------------|-------|
-| **HVSC** | HVSC songlengths database (`.md5` / `.txt`) | Always available if song is in HVSC | Embedded during HVSC ingestion |
-| **Local** | Playlist item metadata (user-provided or HVSC cross-reference) | Optional | May be null for non-HVSC SIDs |
-| **Ultimate** | Playlist item metadata (propagated from HVSC lookup or prior playback) | Optional | Requires FTP fetch for SSL upload |
+| Source       | Duration Origin                                                        | Availability                        | Notes                             |
+| ------------ | ---------------------------------------------------------------------- | ----------------------------------- | --------------------------------- |
+| **HVSC**     | HVSC songlengths database (`.md5` / `.txt`)                            | Always available if song is in HVSC | Embedded during HVSC ingestion    |
+| **Local**    | Playlist item metadata (user-provided or HVSC cross-reference)         | Optional                            | May be null for non-HVSC SIDs     |
+| **Ultimate** | Playlist item metadata (propagated from HVSC lookup or prior playback) | Optional                            | Requires FTP fetch for SSL upload |
 
 ## Propagation Path
 
@@ -26,12 +26,12 @@ Song duration (songlength) determines auto-advance timing. Duration flows from m
 
 ## Failure Modes
 
-| Failure | Behavior | Observability |
-|---------|----------|---------------|
-| No duration metadata | Direct play without auto-advance | `playback-no-duration` info event |
-| FTP fetch fails | Fallback to direct play | `ssl-propagation-failure` error event |
-| SSL payload invalid | Fallback to direct play | `ssl-propagation-failure` error event |
-| Upload + fallback both fail | Error thrown to caller | Error log + classified trace error |
+| Failure                     | Behavior                         | Observability                         |
+| --------------------------- | -------------------------------- | ------------------------------------- |
+| No duration metadata        | Direct play without auto-advance | `playback-no-duration` info event     |
+| FTP fetch fails             | Fallback to direct play          | `ssl-propagation-failure` error event |
+| SSL payload invalid         | Fallback to direct play          | `ssl-propagation-failure` error event |
+| Upload + fallback both fail | Error thrown to caller           | Error log + classified trace error    |
 
 ## Test Coverage
 

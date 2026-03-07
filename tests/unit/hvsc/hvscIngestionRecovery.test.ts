@@ -6,10 +6,10 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock('@capacitor/filesystem', () => ({
-  Directory: { Data: 'DATA' },
+vi.mock("@capacitor/filesystem", () => ({
+  Directory: { Data: "DATA" },
   Filesystem: {
     readdir: vi.fn(),
     readFile: vi.fn(),
@@ -18,7 +18,7 @@ vi.mock('@capacitor/filesystem', () => ({
   },
 }));
 
-vi.mock('@capacitor/core', () => ({
+vi.mock("@capacitor/core", () => ({
   registerPlugin: vi.fn(() => ({
     ingestHvsc: vi.fn(),
     cancelIngestion: vi.fn(async () => undefined),
@@ -30,10 +30,10 @@ vi.mock('@capacitor/core', () => ({
   },
 }));
 
-vi.mock('@/lib/hvsc/hvscFilesystem', () => ({
+vi.mock("@/lib/hvsc/hvscFilesystem", () => ({
   MAX_BRIDGE_READ_BYTES: 5 * 1024 * 1024,
   ensureHvscDirs: vi.fn(async () => undefined),
-  getHvscCacheDir: vi.fn(() => 'hvsc/cache'),
+  getHvscCacheDir: vi.fn(() => "hvsc/cache"),
   listHvscFolder: vi.fn(),
   getHvscSongByVirtualPath: vi.fn(),
   getHvscDurationByMd5: vi.fn(),
@@ -52,7 +52,7 @@ const mockUpdateState = vi.fn((patch) => patch);
 const mockMarkUpdateApplied = vi.fn();
 const mockIsUpdateApplied = vi.fn(() => false);
 
-vi.mock('@/lib/hvsc/hvscStateStore', () => ({
+vi.mock("@/lib/hvsc/hvscStateStore", () => ({
   loadHvscState: (...args: unknown[]) => mockLoadState(...args),
   updateHvscState: (...args: unknown[]) => mockUpdateState(...args),
   markUpdateApplied: (...args: unknown[]) => mockMarkUpdateApplied(...args),
@@ -63,38 +63,38 @@ const mockLoadSummary = vi.fn();
 const mockSaveSummary = vi.fn();
 const mockUpdateSummaryFromEvent = vi.fn();
 
-vi.mock('@/lib/hvsc/hvscStatusStore', () => ({
+vi.mock("@/lib/hvsc/hvscStatusStore", () => ({
   updateHvscStatusSummaryFromEvent: (...args: unknown[]) => mockUpdateSummaryFromEvent(...args),
   loadHvscStatusSummary: (...args: unknown[]) => mockLoadSummary(...args),
   saveHvscStatusSummary: (...args: unknown[]) => mockSaveSummary(...args),
 }));
 
-vi.mock('@/lib/hvsc/hvscArchiveExtraction', () => ({
+vi.mock("@/lib/hvsc/hvscArchiveExtraction", () => ({
   extractArchiveEntries: vi.fn(),
 }));
 
-vi.mock('@/lib/hvsc/hvscReleaseService', () => ({
+vi.mock("@/lib/hvsc/hvscReleaseService", () => ({
   buildHvscBaselineUrl: vi.fn(),
   buildHvscUpdateUrl: vi.fn(),
   fetchLatestHvscVersions: vi.fn(),
 }));
 
-vi.mock('@/lib/sid/sidUtils', () => ({
+vi.mock("@/lib/sid/sidUtils", () => ({
   base64ToUint8: vi.fn(() => new Uint8Array()),
 }));
 
-vi.mock('@/lib/logging', () => ({
+vi.mock("@/lib/logging", () => ({
   addErrorLog: vi.fn(),
   addLog: vi.fn(),
 }));
 
-vi.mock('@/lib/hvsc/hvscSongLengthService', () => ({
+vi.mock("@/lib/hvsc/hvscSongLengthService", () => ({
   reloadHvscSonglengthsOnConfigChange: vi.fn(async () => undefined),
 }));
 
-import { recoverStaleIngestionState, isIngestionRuntimeActive } from '@/lib/hvsc/hvscIngestionRuntime';
+import { recoverStaleIngestionState, isIngestionRuntimeActive } from "@/lib/hvsc/hvscIngestionRuntime";
 
-describe('recoverStaleIngestionState', () => {
+describe("recoverStaleIngestionState", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -103,16 +103,16 @@ describe('recoverStaleIngestionState', () => {
     vi.restoreAllMocks();
   });
 
-  it('resets installing state to error on cold start', () => {
+  it("resets installing state to error on cold start", () => {
     mockLoadState.mockReturnValue({
       installedVersion: 0,
-      ingestionState: 'installing',
+      ingestionState: "installing",
       ingestionError: null,
       updates: {},
     });
     mockLoadSummary.mockReturnValue({
-      download: { status: 'in-progress' },
-      extraction: { status: 'idle' },
+      download: { status: "in-progress" },
+      extraction: { status: "idle" },
       lastUpdatedAt: null,
     });
 
@@ -120,27 +120,30 @@ describe('recoverStaleIngestionState', () => {
 
     expect(result).toBe(true);
     expect(mockUpdateState).toHaveBeenCalledWith({
-      ingestionState: 'error',
-      ingestionError: 'Interrupted by app restart',
+      ingestionState: "error",
+      ingestionError: "Interrupted by app restart",
     });
     expect(mockSaveSummary).toHaveBeenCalledWith(
       expect.objectContaining({
-        download: expect.objectContaining({ status: 'failure', errorMessage: 'Interrupted by app restart' }),
-        extraction: { status: 'idle' },
+        download: expect.objectContaining({
+          status: "failure",
+          errorMessage: "Interrupted by app restart",
+        }),
+        extraction: { status: "idle" },
       }),
     );
   });
 
-  it('resets updating state to error on cold start', () => {
+  it("resets updating state to error on cold start", () => {
     mockLoadState.mockReturnValue({
       installedVersion: 5,
-      ingestionState: 'updating',
+      ingestionState: "updating",
       ingestionError: null,
       updates: {},
     });
     mockLoadSummary.mockReturnValue({
-      download: { status: 'success' },
-      extraction: { status: 'in-progress' },
+      download: { status: "success" },
+      extraction: { status: "in-progress" },
       lastUpdatedAt: null,
     });
 
@@ -148,21 +151,24 @@ describe('recoverStaleIngestionState', () => {
 
     expect(result).toBe(true);
     expect(mockUpdateState).toHaveBeenCalledWith({
-      ingestionState: 'error',
-      ingestionError: 'Interrupted by app restart',
+      ingestionState: "error",
+      ingestionError: "Interrupted by app restart",
     });
     expect(mockSaveSummary).toHaveBeenCalledWith(
       expect.objectContaining({
-        download: { status: 'success' },
-        extraction: expect.objectContaining({ status: 'failure', errorMessage: 'Interrupted by app restart' }),
+        download: { status: "success" },
+        extraction: expect.objectContaining({
+          status: "failure",
+          errorMessage: "Interrupted by app restart",
+        }),
       }),
     );
   });
 
-  it('does not reset idle state', () => {
+  it("does not reset idle state", () => {
     mockLoadState.mockReturnValue({
       installedVersion: 0,
-      ingestionState: 'idle',
+      ingestionState: "idle",
       ingestionError: null,
       updates: {},
     });
@@ -173,10 +179,10 @@ describe('recoverStaleIngestionState', () => {
     expect(mockUpdateState).not.toHaveBeenCalled();
   });
 
-  it('does not reset ready state', () => {
+  it("does not reset ready state", () => {
     mockLoadState.mockReturnValue({
       installedVersion: 5,
-      ingestionState: 'ready',
+      ingestionState: "ready",
       ingestionError: null,
       updates: {},
     });
@@ -187,11 +193,11 @@ describe('recoverStaleIngestionState', () => {
     expect(mockUpdateState).not.toHaveBeenCalled();
   });
 
-  it('does not reset error state', () => {
+  it("does not reset error state", () => {
     mockLoadState.mockReturnValue({
       installedVersion: 0,
-      ingestionState: 'error',
-      ingestionError: 'Previous error',
+      ingestionState: "error",
+      ingestionError: "Previous error",
       updates: {},
     });
 
@@ -201,16 +207,16 @@ describe('recoverStaleIngestionState', () => {
     expect(mockUpdateState).not.toHaveBeenCalled();
   });
 
-  it('skips summary save when no steps are in-progress', () => {
+  it("skips summary save when no steps are in-progress", () => {
     mockLoadState.mockReturnValue({
       installedVersion: 0,
-      ingestionState: 'installing',
+      ingestionState: "installing",
       ingestionError: null,
       updates: {},
     });
     mockLoadSummary.mockReturnValue({
-      download: { status: 'idle' },
-      extraction: { status: 'idle' },
+      download: { status: "idle" },
+      extraction: { status: "idle" },
       lastUpdatedAt: null,
     });
 
@@ -221,7 +227,7 @@ describe('recoverStaleIngestionState', () => {
     expect(mockSaveSummary).not.toHaveBeenCalled();
   });
 
-  it('isIngestionRuntimeActive returns false when no ingestion running', () => {
+  it("isIngestionRuntimeActive returns false when no ingestion running", () => {
     expect(isIngestionRuntimeActive()).toBe(false);
   });
 });

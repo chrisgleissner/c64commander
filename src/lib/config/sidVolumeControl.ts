@@ -6,8 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { normalizeConfigItem } from '@/lib/config/normalizeConfigItem';
-import { isSidVolumeName, resolveAudioMixerMuteValue } from '@/lib/config/audioMixerSolo';
+import { normalizeConfigItem } from "@/lib/config/normalizeConfigItem";
+import { isSidVolumeName, resolveAudioMixerMuteValue } from "@/lib/config/audioMixerSolo";
 
 export type SidVolumeItem = {
   name: string;
@@ -29,10 +29,10 @@ export type SidVolumeOption = {
   isOff: boolean;
 };
 
-const normalizeToken = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase();
+const normalizeToken = (value: string) => value.trim().replace(/\s+/g, " ").toLowerCase();
 const isOffOption = (value: string) => {
   const normalized = normalizeToken(value);
-  return normalized === 'off' || normalized === 'mute' || normalized === 'muted';
+  return normalized === "off" || normalized === "mute" || normalized === "muted";
 };
 
 const parseNumericOption = (option: string) => {
@@ -42,7 +42,7 @@ const parseNumericOption = (option: string) => {
 
 const resolveEnabledValue = (value: string | number | undefined, disabledTokens: string[]) => {
   if (value === undefined || value === null) return undefined;
-  if (typeof value === 'number') return true;
+  if (typeof value === "number") return true;
   const trimmed = value.trim();
   if (!trimmed) return undefined;
   const normalized = normalizeToken(trimmed);
@@ -50,15 +50,11 @@ const resolveEnabledValue = (value: string | number | undefined, disabledTokens:
   return true;
 };
 
-const getCategoryItemValue = (
-  payload: Record<string, unknown> | undefined,
-  categoryName: string,
-  itemName: string,
-) => {
+const getCategoryItemValue = (payload: Record<string, unknown> | undefined, categoryName: string, itemName: string) => {
   if (!payload) return undefined;
   const categoryData = (payload as Record<string, any>)[categoryName] ?? payload;
   const itemsData = (categoryData as Record<string, any>)?.items ?? categoryData;
-  if (!itemsData || typeof itemsData !== 'object') return undefined;
+  if (!itemsData || typeof itemsData !== "object") return undefined;
   const itemConfig = (itemsData as Record<string, any>)[itemName];
   if (itemConfig === undefined) return undefined;
   return normalizeConfigItem(itemConfig).value;
@@ -68,16 +64,16 @@ export const buildSidEnablement = (
   sidSocketsCategory?: Record<string, unknown>,
   sidAddressingCategory?: Record<string, unknown>,
 ): SidEnablement => {
-  const socket1Value = getCategoryItemValue(sidSocketsCategory, 'SID Sockets Configuration', 'SID Socket 1');
-  const socket2Value = getCategoryItemValue(sidSocketsCategory, 'SID Sockets Configuration', 'SID Socket 2');
-  const ultiSid1Value = getCategoryItemValue(sidAddressingCategory, 'SID Addressing', 'UltiSID 1 Address');
-  const ultiSid2Value = getCategoryItemValue(sidAddressingCategory, 'SID Addressing', 'UltiSID 2 Address');
+  const socket1Value = getCategoryItemValue(sidSocketsCategory, "SID Sockets Configuration", "SID Socket 1");
+  const socket2Value = getCategoryItemValue(sidSocketsCategory, "SID Sockets Configuration", "SID Socket 2");
+  const ultiSid1Value = getCategoryItemValue(sidAddressingCategory, "SID Addressing", "UltiSID 1 Address");
+  const ultiSid2Value = getCategoryItemValue(sidAddressingCategory, "SID Addressing", "UltiSID 2 Address");
 
   return {
-    socket1: resolveEnabledValue(socket1Value, ['disabled', 'off', 'false']),
-    socket2: resolveEnabledValue(socket2Value, ['disabled', 'off', 'false']),
-    ultiSid1: resolveEnabledValue(ultiSid1Value, ['unmapped', 'disabled', 'off']),
-    ultiSid2: resolveEnabledValue(ultiSid2Value, ['unmapped', 'disabled', 'off']),
+    socket1: resolveEnabledValue(socket1Value, ["disabled", "off", "false"]),
+    socket2: resolveEnabledValue(socket2Value, ["disabled", "off", "false"]),
+    ultiSid1: resolveEnabledValue(ultiSid1Value, ["unmapped", "disabled", "off"]),
+    ultiSid2: resolveEnabledValue(ultiSid2Value, ["unmapped", "disabled", "off"]),
   };
 };
 
@@ -113,14 +109,7 @@ export const isSidEnabledForName = (name: string, enablement: SidEnablement) => 
   if (!match) return true;
   const type = match[1];
   const index = Number(match[2]);
-  const key =
-    type === 'socket'
-      ? index === 1
-        ? 'socket1'
-        : 'socket2'
-      : index === 1
-        ? 'ultiSid1'
-        : 'ultiSid2';
+  const key = type === "socket" ? (index === 1 ? "socket1" : "socket2") : index === 1 ? "ultiSid1" : "ultiSid2";
   const enabled = enablement[key];
   return enabled !== false;
 };
@@ -171,11 +160,7 @@ export const buildEnabledSidRestoreUpdates = (
   return {};
 };
 
-export const buildEnabledSidVolumeUpdates = (
-  items: SidVolumeItem[],
-  enablement: SidEnablement,
-  target: string,
-) => {
+export const buildEnabledSidVolumeUpdates = (items: SidVolumeItem[], enablement: SidEnablement, target: string) => {
   const updates: Record<string, string | number> = {};
   filterEnabledSidVolumeItems(items, enablement).forEach((item) => {
     updates[item.name] = target;

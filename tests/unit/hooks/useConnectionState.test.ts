@@ -6,11 +6,11 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { describe, expect, it, vi } from 'vitest';
-import { renderHook } from '@testing-library/react';
+import { describe, expect, it, vi } from "vitest";
+import { renderHook } from "@testing-library/react";
 
 const snapshot = {
-  state: 'REAL_CONNECTED',
+  state: "REAL_CONNECTED",
   lastDiscoveryTrigger: null,
   lastTransitionAtMs: 0,
   lastProbeAtMs: null,
@@ -29,23 +29,23 @@ const reactMocks = vi.hoisted(() => ({
   useSyncExternalStore: vi.fn(),
 }));
 
-vi.mock('react', async () => {
-  const actual = await vi.importActual<typeof import('react')>('react');
+vi.mock("react", async () => {
+  const actual = await vi.importActual<typeof import("react")>("react");
   return {
     ...actual,
     useSyncExternalStore: (...args: unknown[]) => reactMocks.useSyncExternalStore(...args),
   };
 });
 
-vi.mock('@/lib/connection/connectionManager', () => ({
+vi.mock("@/lib/connection/connectionManager", () => ({
   subscribeConnection: connectionMocks.subscribeConnection,
   getConnectionSnapshot: connectionMocks.getConnectionSnapshot,
 }));
 
-import { useConnectionState } from '@/hooks/useConnectionState';
+import { useConnectionState } from "@/hooks/useConnectionState";
 
-describe('useConnectionState', () => {
-  it('delegates to useSyncExternalStore with connection manager hooks', () => {
+describe("useConnectionState", () => {
+  it("delegates to useSyncExternalStore with connection manager hooks", () => {
     connectionMocks.getConnectionSnapshot.mockReturnValue(snapshot);
     reactMocks.useSyncExternalStore.mockReturnValue(snapshot);
     const { result } = renderHook(() => useConnectionState());
