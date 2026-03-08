@@ -169,7 +169,7 @@
     "globals": "^15.15.0",
     "jsdom": "^20.0.3",
     "lcov-result-merger": "^5.0.1",
-    "nextcov": "^1.1.0",
+    "nextcov": "^1.1.1",
     "nyc": "^17.1.0",
     "openapi-client-axios": "^7.6.0",
     "patch-package": "^8.0.1",
