@@ -25,6 +25,7 @@ comment:
 
 ignore:
   - "tests/**"
+  - "agents/tests/**"
   - "playwright/**"
   - "**/*.test.ts"
   - "**/*.test.tsx"

@@ -25,10 +25,14 @@ dist-ssr/
 nohup.out
 __pycache__/
 *.py[cod]
+*.iml
+.coverage
+.pytest_cache/
 
 # Test output
 .nyc_output/
 coverage/
+agents/coverage-agents.xml
 playwright-report/
 playwright-report-coverage/
 test-results/
@@ -86,6 +90,71 @@ doc/research/**/screenshots/
 # Full app coverage generated run artifacts
 doc/testing/agentic-tests/full-app-coverage/runs/*
 !doc/testing/agentic-tests/full-app-coverage/runs/README.md
+
+# Agent runtime artifacts
+agents/.coverage
+agents/.pytest_cache/
+agents/**/__pycache__/
+agents/logs/
+agents/runs/
+agents/runtime/logs/
+agents/runtime/runs/
+agents/runtime/state/
+agents/state/*
+!agents/state/README.md
+
+# Android generated files
+android/**/*.apk
+android/**/*.aar
+android/**/*.ap_
+android/**/*.aab
+android/**/*.dex
+android/**/*.class
+android/bin/
+android/gen/
+android/out/
+android/local.properties
+android/proguard/
+android/.navigation/
+android/captures/
+android/.externalNativeBuild/
+android/**/.cxx/
+android/freeline.py
+android/freeline/
+android/freeline_project_description.json
+android/fastlane/report.xml
+android/fastlane/Preview.html
+android/fastlane/screenshots/
+android/fastlane/test_output/
+android/fastlane/readme.md
+android/vcs.xml
+android/lint/intermediates/
+android/lint/generated/
+android/lint/outputs/
+android/lint/tmp/
+android/**/*.hprof
+android/capacitor-cordova-android-plugins/
+android/app/src/main/assets/public/
+android/app/src/main/assets/capacitor.config.json
+android/app/src/main/assets/capacitor.plugins.json
+android/app/src/main/res/xml/config.xml
+
+# iOS generated files
+ios/App/build/
+ios/App/Pods/
+ios/App/output/
+ios/App/App/public/
+ios/DerivedData/
+ios/xcuserdata/
+ios/capacitor-cordova-ios-plugins/
+ios/App/App/capacitor.config.json
+ios/App/App/config.xml
+
+# C64 Scope generated files
+c64scope/**/artifacts/
+c64scope/**/logs/
+c64scope/**/dist/
+c64scope/**/node_modules/
 
 # Symlinked projects
 android-mcp-server

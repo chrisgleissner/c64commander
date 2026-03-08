@@ -1,0 +1,18 @@
+[project]
+name = "c64commander-agent"
+version = "0.1.0"
+requires-python = ">=3.12"
+description = "Autonomous OpenHands loop for C64 Commander"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "--tb=short"
+
+[tool.coverage.run]
+source = ["openhands"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 90

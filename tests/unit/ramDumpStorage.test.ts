@@ -38,6 +38,7 @@ const { folderPickerMock, storeMock, platformMock, loggingMock, sidUtilsMock } =
   },
   loggingMock: {
     addErrorLog: vi.fn(),
+    addLog: vi.fn(),
   },
   sidUtilsMock: {
     base64ToUint8: vi.fn((base64: string) => new Uint8Array([1, 2, 3])),

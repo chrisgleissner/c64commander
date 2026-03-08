@@ -1,3 +1,49 @@
+# Plans
+
+## agents/ Directory Restructuring
+
+### Goal
+Normalise the `agents/` folder hierarchy: isolate runtime artifacts under `runtime/`, relocate the CLI script to `scripts/`, and fix the REPO_ROOT path bug.
+
+### Phase 1: Repository inspection
+- [x] 1.1 Read current `agents/` structure
+- [x] 1.2 Identify all path references to `logs/`, `runs/`, `state/`, `bin/`
+- [x] 1.3 Confirm REPO_ROOT bug (`parents[2]` resolves to `agents/` not repo root)
+
+### Phase 2: Runtime directory restructuring
+- [x] 2.1 Create `runtime/logs/`, `runtime/runs/`, `runtime/state/` with `.gitkeep`
+- [x] 2.2 Remove old `logs/`, `runs/`, `state/` from git tracking (were untracked)
+
+### Phase 3: Script relocation
+- [x] 3.1 Create `scripts/agent` with identical content to `bin/agent`
+- [x] 3.2 `bin/` left in place (untracked); `scripts/agent` is the new entrypoint
+
+### Phase 4: Code path updates
+- [x] 4.1 Fix `REPO_ROOT` in `config.py` (`parents[2]` → `parents[3]`)
+- [x] 4.2 Update `LOGS_ROOT`, `RUNS_ROOT`, `STATE_ROOT` to `runtime/` subdirs
+- [x] 4.3 Remove unused `OPENHANDS_ROOT`; add `RUNTIME_ROOT` constant
+
+### Phase 5: Test fixture updates
+- [x] 5.1 Update `conftest.py` `tmp_paths` fixture to use `runtime/` subdirs
+
+### Phase 6: Documentation updates
+- [x] 6.1 Update `agents/.gitignore` for new structure
+- [x] 6.2 Update `agents/README.md` to reflect new paths
+
+### Phase 7: Verification
+- [x] 7.1 Tests pass with ≥90% branch coverage (150 passed, 98.98% branch coverage)
+- [x] 7.2 `scripts/agent --help` runs correctly; resolves paths under `runtime/`
+
+### Work log
+- 2026-03-08: Inspection complete; identified REPO_ROOT bug (`parents[2]` resolved to `agents/` not repo root) and all path changes needed.
+- 2026-03-08: Created `runtime/logs/`, `runtime/runs/`, `runtime/state/` with `.gitkeep`. Created `scripts/agent`.
+- 2026-03-08: Fixed `config.py`: REPO_ROOT now uses `parents[3]`, removed `OPENHANDS_ROOT`, added `RUNTIME_ROOT`, updated `LOGS_ROOT`/`RUNS_ROOT`/`STATE_ROOT`; added `runtime_root` field to `RuntimePaths`.
+- 2026-03-08: Updated `conftest.py` to create `RuntimePaths` under `runtime/` subdirs.
+- 2026-03-08: Updated `.gitignore` (covers `runtime/` subtrees) and `README.md`.
+- 2026-03-08: Restored corrupted `pyproject.toml`. All 150 tests pass at 98.98% branch coverage.
+
+---
+
 # Full App-Coverage Autonomous Validation Plan
 
 ## Goal

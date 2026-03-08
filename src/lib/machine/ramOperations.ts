@@ -7,7 +7,7 @@
  */
 
 import type { C64API } from "@/lib/c64api";
-import { addErrorLog } from "@/lib/logging";
+import { addErrorLog, addLog } from "@/lib/logging";
 import { checkC64Liveness } from "@/lib/machine/c64Liveness";
 import { createActionContext, getActiveAction } from "@/lib/tracing/actionTrace";
 import { recordDeviceGuard } from "@/lib/tracing/traceSession";
@@ -159,6 +159,9 @@ const readRanges = async (
   onRetry?: (error: Error, attempt: number, maxAttempts: number) => Promise<void>,
 ) => {
   const image = new Uint8Array(FULL_RAM_SIZE_BYTES);
+  addLog("info", "RAM read: starting full image read", {
+    ranges: ranges.map((r) => ({ start: toHexAddress(r.start), endExclusive: toHexAddress(r.endExclusive) })),
+  });
   for (const range of ranges) {
     for (let address = range.start; address < range.endExclusive; address += READ_CHUNK_SIZE_BYTES) {
       const chunkSize = Math.min(READ_CHUNK_SIZE_BYTES, range.endExclusive - address);
@@ -196,6 +199,12 @@ const readRanges = async (
       image.set(chunk, address);
     }
   }
+  addLog("info", "RAM read: full image read completed", {
+    imageLength: image.length,
+    screenBytes: Array.from(image.slice(1024, 1028))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join(" "),
+  });
   return image;
 };
 
@@ -204,23 +213,38 @@ const writeFullImage = async (
   image: Uint8Array,
   onRetry?: (error: Error, attempt: number, maxAttempts: number) => Promise<void>,
 ) => {
+  const addressHex = toHexAddress(0);
+  addLog("info", "RAM write: starting full image write", {
+    address: addressHex,
+    imageLength: image.length,
+    firstBytes: Array.from(image.slice(0, 16))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join(" "),
+    screenBytes: Array.from(image.slice(1024, 1028))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join(" "),
+  });
   recordRamTrace({
     operation: "ram-write",
     status: "start",
-    address: toHexAddress(0),
+    address: addressHex,
     expectedLength: image.length,
     chunkSizeBytes: image.length,
   });
   await withRetry(
-    `Write RAM image at $${toHexAddress(0)}`,
-    () => api.writeMemoryBlock(toHexAddress(0), image),
+    `Write RAM image at $${addressHex}`,
+    () => api.writeMemoryBlock(addressHex, image),
     DEFAULT_RETRY_ATTEMPTS,
     onRetry ?? (async () => recoverFromLivenessFailure(api, "Load RAM")),
   );
+  addLog("info", "RAM write: full image write completed", {
+    address: addressHex,
+    imageLength: image.length,
+  });
   recordRamTrace({
     operation: "ram-write",
     status: "success",
-    address: toHexAddress(0),
+    address: addressHex,
     expectedLength: image.length,
     actualLength: image.length,
   });

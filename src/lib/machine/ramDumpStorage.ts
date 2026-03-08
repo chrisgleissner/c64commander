@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { addErrorLog } from "@/lib/logging";
+import { addErrorLog, addLog } from "@/lib/logging";
 import { FolderPicker } from "@/lib/native/folderPicker";
 import { getPlatform, isNativePlatform } from "@/lib/native/platform";
 import { base64ToUint8 } from "@/lib/sid/sidUtils";
@@ -68,8 +68,22 @@ const readFileFromPickerResult = async (result: {
   if (!result.permissionPersisted) {
     throw new Error("RAM dump file permission was not granted.");
   }
+  addLog("info", "RAM dump: reading file from picker", {
+    uri: result.uri,
+    name: result.name,
+    sizeBytes: result.sizeBytes,
+  });
   const payload = await FolderPicker.readFile({ uri: result.uri });
   const bytes = base64ToUint8(payload.data);
+  addLog("info", "RAM dump: file read completed", {
+    bytesLength: bytes.length,
+    screenBytes: Array.from(bytes.slice(1024, 1028))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join(" "),
+    firstBytes: Array.from(bytes.slice(0, 16))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join(" "),
+  });
   const parentFolder = (() => {
     const treeUri = result.parentTreeUri?.trim() ?? "";
     if (!treeUri) return null;
@@ -124,6 +138,18 @@ export const writeRamDumpToFolder = async (folder: RamDumpFolderConfig, fileName
   if (!isAndroidNative()) {
     throw new Error("RAM dump writing is only supported on Android native builds.");
   }
+  addLog("info", "RAM dump: writing to folder", {
+    fileName,
+    treeUri: folder.treeUri,
+    rootName: folder.rootName,
+    bytesLength: bytes.length,
+    screenBytes: Array.from(bytes.slice(1024, 1028))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join(" "),
+    firstBytes: Array.from(bytes.slice(0, 16))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join(" "),
+  });
   try {
     await FolderPicker.writeFileToTree({
       treeUri: folder.treeUri,
@@ -131,6 +157,10 @@ export const writeRamDumpToFolder = async (folder: RamDumpFolderConfig, fileName
       data: uint8ToBase64(bytes),
       mimeType: RAM_DUMP_MIME_TYPE,
       overwrite: true,
+    });
+    addLog("info", "RAM dump: write completed", {
+      fileName,
+      bytesLength: bytes.length,
     });
   } catch (error) {
     const err = error as Error;

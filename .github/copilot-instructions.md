@@ -76,6 +76,7 @@ npm run build
 - **E2E**: `npm run test:e2e` with specs in `playwright/` and fixtures in `playwright/fixtures/`
 - **Android JVM**: `cd android && ./gradlew test` with tests in `android/app/src/test/java/com/c64/commander/hvsc/`
 - **Android fixtures**: `android/app/src/test/fixtures/hvsc/`
+- **Python agents**: `npm run test:agents` (pytest) with specs in `agents/tests/`; requires ≥90% branch coverage
 
 ## Android (local)
 

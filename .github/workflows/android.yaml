@@ -654,6 +654,52 @@ jobs:
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
+  python-agents-tests:
+    name: Python | Agents tests + coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CI_SHA }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python test dependencies
+        run: pip install pytest pytest-cov
+
+      - name: Run agents tests with coverage
+        run: |
+          start=$(date +%s)
+          cd agents
+          python3 -m pytest \
+            --cov=openhands \
+            --cov-branch \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage-agents.xml \
+            tests/
+          end=$(date +%s)
+          echo "- python agent tests: $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload Python coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@v5
+        env:
+          CODECOV_SHA: ${{ env.CI_SHA }}
+          CC_SHA: ${{ env.CI_SHA }}
+        with:
+          files: agents/coverage-agents.xml
+          disable_search: true
+          flags: python
+          name: c64-commander-python-coverage
+          use_pypi: true
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
+
   android-maestro:
     name: Android | Maestro gating
     runs-on: ubuntu-latest
