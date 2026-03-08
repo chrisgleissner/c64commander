@@ -132,7 +132,19 @@ async function main(): Promise<void> {
   }
 
   // Write master report
-  const report = generateReport(allResults, serial, c64uHost, c64uInfo, repeatCount);
+  const report = generateReport(
+    allResults,
+    serial,
+    c64uHost,
+    c64uInfo,
+    {
+      model: hwModel,
+      hardware: hwType,
+      osVersion,
+      characteristics: hwChars,
+    },
+    repeatCount,
+  );
   const reportPath = path.join(artifactRoot, "validation-report.md");
   await writeFile(reportPath, report, "utf-8");
 

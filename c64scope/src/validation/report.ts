@@ -9,11 +9,19 @@
 import { ALL_CASES } from "./cases/index.js";
 import type { RunResult } from "./types.js";
 
+interface AndroidHardwareInfo {
+  model: string;
+  hardware: string;
+  osVersion: string;
+  characteristics: string;
+}
+
 export function generateReport(
   results: RunResult[],
   serial: string,
   c64uHost: string,
   c64uInfo: Record<string, string>,
+  androidInfo: AndroidHardwareInfo,
   repeatCount: number,
 ): string {
   const lines: string[] = [];
@@ -28,10 +36,10 @@ export function generateReport(
   lines.push("");
   lines.push("### Android Device");
   lines.push(`- Serial: \`${serial}\``);
-  lines.push("- Model: SM-G990B (Samsung Galaxy S21 FE)");
-  lines.push("- Hardware: Qualcomm (qcom)");
-  lines.push("- OS: Android 16");
-  lines.push("- Characteristics: phone");
+  lines.push(`- Model: ${androidInfo.model}`);
+  lines.push(`- Hardware: ${androidInfo.hardware}`);
+  lines.push(`- OS: Android ${androidInfo.osVersion}`);
+  lines.push(`- Characteristics: ${androidInfo.characteristics}`);
   lines.push("");
   lines.push("### C64 Ultimate");
   lines.push(`- Host: \`${c64uHost}\` (hostname: c64u)`);
@@ -145,13 +153,32 @@ export function generateReport(
   // Peer server proof
   lines.push("## Peer MCP Server Usage Proof");
   lines.push("");
-  lines.push("Every run used all three peer MCP servers:");
-  lines.push("");
-  lines.push("1. **mobile_controller** (DroidMind/ADB): Device screenshots, logcat, power state, app lifecycle");
-  lines.push("2. **c64bridge** (REST/FTP): C64U state queries, config reads, drive state, FTP directory listings");
   lines.push(
-    "3. **c64scope** (Session/Artifacts): Session lifecycle, timeline recording, evidence attachment, assertion recording, artifact packaging",
+    "Peer attribution is derived from each run's session timeline and persisted in `llm-decision-trace.json`.",
   );
+
+  const peerServerCounts = new Map<string, number>();
+  for (const run of results) {
+    const decision = run.explorationTrace?.decisionLog ?? [];
+    const peers = decision
+      .filter((line) => line.startsWith("peer:"))
+      .map((line) => line.replace("peer:", "").trim())
+      .filter((line) => line.length > 0);
+    for (const peer of peers) {
+      peerServerCounts.set(peer, (peerServerCounts.get(peer) ?? 0) + 1);
+    }
+  }
+
+  if (peerServerCounts.size === 0) {
+    lines.push("- No peer-server claims were synthesized in the report; see per-run trace files for observed peers.");
+  } else {
+    lines.push("");
+    lines.push("| Peer Server | Observed Runs |");
+    lines.push("|-------------|---------------|");
+    for (const [peer, count] of peerServerCounts) {
+      lines.push(`| ${peer} | ${count} |`);
+    }
+  }
   lines.push("");
 
   // Termination criteria check

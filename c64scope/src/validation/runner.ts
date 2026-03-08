@@ -6,7 +6,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { readdir, writeFile } from "node:fs/promises";
+import { readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { classifyRun } from "../oraclePolicy.js";
 import { ScopeSessionStore } from "../sessionStore.js";
@@ -123,6 +123,28 @@ export async function runCase(
   };
   await writeFile(path.join(artifactDir, "hardware-proof.json"), JSON.stringify(hwProof, null, 2), "utf-8");
 
+  const sessionSnapshot = JSON.parse(await readFile(path.join(artifactDir, "session.json"), "utf-8")) as {
+    timeline?: Array<{ peerServer?: string | null }>;
+    evidence?: unknown[];
+    assertions?: unknown[];
+  };
+
+  const observedPeerServers = new Set<string>();
+  for (const step of sessionSnapshot.timeline ?? []) {
+    if (step.peerServer && step.peerServer.trim().length > 0) {
+      observedPeerServers.add(step.peerServer.trim());
+    }
+  }
+  if ((sessionSnapshot.evidence?.length ?? 0) > 0 || (sessionSnapshot.assertions?.length ?? 0) > 0) {
+    observedPeerServers.add("c64scope");
+  }
+
+  if (caseResult) {
+    for (const peer of observedPeerServers) {
+      caseResult.explorationTrace.decisionLog.push(`peer:${peer}`);
+    }
+  }
+
   // Write LLM decision trace
   const llmTrace = {
     caseId: caseInfo.caseId,
@@ -142,7 +164,7 @@ export async function runCase(
       `LLM drove execution through ${caseInfo.oracleClasses.length} oracle classes`,
       `LLM classified outcome: ${finalOutcome}/${finalFailureClass}`,
     ],
-    peerServersUsed: ["mobile_controller (ADB)", "c64bridge (REST/FTP)", "c64scope (session/artifacts)"],
+    peerServersUsed: [...observedPeerServers],
   };
   await writeFile(path.join(artifactDir, "llm-decision-trace.json"), JSON.stringify(llmTrace, null, 2), "utf-8");
 

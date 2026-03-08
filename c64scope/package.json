@@ -15,6 +15,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "npm run build && npm run test",
+    "hil:evidence": "node dist/hilEvidenceRun.js",
     "mcp": "node dist/index.js",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage"
