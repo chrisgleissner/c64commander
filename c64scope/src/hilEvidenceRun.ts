@@ -9,6 +9,7 @@
 import { execFile, spawn } from "node:child_process";
 import { access, cp, mkdir, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { resolveAdbSerial, resolvePreferredPhysicalTestDeviceSerial } from "./deviceRegistry.js";
 import { runPreflight } from "./preflight.js";
@@ -49,22 +50,22 @@ interface BridgeUsageEntry {
   recordedAt: string;
 }
 
-function runIdPrefix(): string {
+export function runIdPrefix(): string {
   return new Date()
     .toISOString()
     .replace(/[:-]/g, "")
     .replace(/\.\d{3}Z$/, "Z");
 }
 
-function sleep(ms: number): Promise<void> {
+export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function resolveWorkspaceRoot(): string {
+export function resolveWorkspaceRoot(): string {
   return path.basename(process.cwd()) === "c64scope" ? path.resolve(process.cwd(), "..") : process.cwd();
 }
 
-async function runC64Capture(outputDir: string, durationMs: number, label: string): Promise<void> {
+export async function runC64Capture(outputDir: string, durationMs: number, label: string): Promise<void> {
   const scriptPath = await resolveCaptureScriptPath();
   await new Promise<void>((resolve, reject) => {
     const child = spawn(
@@ -94,7 +95,7 @@ async function runC64Capture(outputDir: string, durationMs: number, label: strin
   });
 }
 
-async function resolveCaptureScriptPath(): Promise<string> {
+export async function resolveCaptureScriptPath(): Promise<string> {
   const candidates = [
     path.resolve(process.cwd(), ".tmp", "c64_capture_render.mjs"),
     path.resolve(process.cwd(), "..", ".tmp", "c64_capture_render.mjs"),
@@ -112,7 +113,7 @@ async function resolveCaptureScriptPath(): Promise<string> {
   throw new Error(`Unable to locate c64 capture script. Checked: ${candidates.join(", ")}`);
 }
 
-async function setC64Stream(
+export async function setC64Stream(
   c64uHost: string,
   streamType: "video" | "audio",
   action: "start" | "stop",
@@ -138,7 +139,7 @@ async function setC64Stream(
   }
 }
 
-function assertAllowedBridgeAction(action: BridgeAction): void {
+export function assertAllowedBridgeAction(action: BridgeAction): void {
   const allowedProductActions = new Set<BridgeAction>([
     "streams.video.start",
     "streams.video.stop",
@@ -151,18 +152,18 @@ function assertAllowedBridgeAction(action: BridgeAction): void {
   }
 }
 
-async function startC64Streams(c64uHost: string, hostIpv4: string): Promise<void> {
+export async function startC64Streams(c64uHost: string, hostIpv4: string): Promise<void> {
   void hostIpv4;
   await setC64Stream(c64uHost, "video", "start", "239.0.1.64:11000");
   await setC64Stream(c64uHost, "audio", "start", "239.0.1.65:11001");
 }
 
-async function stopC64Streams(c64uHost: string): Promise<void> {
+export async function stopC64Streams(c64uHost: string): Promise<void> {
   await setC64Stream(c64uHost, "video", "stop");
   await setC64Stream(c64uHost, "audio", "stop");
 }
 
-async function runC64CaptureWithRetry(
+export async function runC64CaptureWithRetry(
   outputDir: string,
   durationMs: number,
   label: string,
@@ -188,7 +189,7 @@ async function runC64CaptureWithRetry(
   throw new Error(`C64 capture failed after ${retries} attempts: ${lastError?.message ?? "unknown error"}`);
 }
 
-async function gateArtifacts(artifactDir: string, expectedSteps: number): Promise<ArtifactGate> {
+export async function gateArtifacts(artifactDir: string, expectedSteps: number): Promise<ArtifactGate> {
   const appDir = path.join(artifactDir, "screenshots", "app");
   const c64Dir = path.join(artifactDir, "screenshots", "c64");
   const recDir = path.join(artifactDir, "recordings");
@@ -230,7 +231,7 @@ async function gateArtifacts(artifactDir: string, expectedSteps: number): Promis
   };
 }
 
-async function startAppRecording(serial: string): Promise<AppRecorderHandle> {
+export async function startAppRecording(serial: string): Promise<AppRecorderHandle> {
   try {
     await adb(serial, "shell", "rm", "-f", APP_RECORDING_REMOTE_PATH);
   } catch (error: unknown) {
@@ -268,12 +269,12 @@ async function startAppRecording(serial: string): Promise<AppRecorderHandle> {
   };
 }
 
-async function pullAppRecording(serial: string, localPath: string): Promise<void> {
+export async function pullAppRecording(serial: string, localPath: string): Promise<void> {
   await execFileAsync("adb", ["-s", serial, "pull", APP_RECORDING_REMOTE_PATH, localPath]);
   await adb(serial, "shell", "rm", "-f", APP_RECORDING_REMOTE_PATH);
 }
 
-async function readDirOrWarn(directoryPath: string): Promise<string[]> {
+export async function readDirOrWarn(directoryPath: string): Promise<string[]> {
   try {
     return await readdir(directoryPath);
   } catch (error: unknown) {
@@ -283,7 +284,7 @@ async function readDirOrWarn(directoryPath: string): Promise<string[]> {
   }
 }
 
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
   const serialInput = process.env["ANDROID_SERIAL"];
   const serial = serialInput ? await resolveAdbSerial(serialInput) : await resolvePreferredPhysicalTestDeviceSerial();
   const c64uHost = process.env["C64U_HOST"] ?? "c64u";
@@ -561,8 +562,15 @@ async function main(): Promise<void> {
   console.log(JSON.stringify({ runId, artifactDir, gate }, null, 2));
 }
 
-main().catch((error: unknown) => {
-  const message = error instanceof Error ? (error.stack ?? error.message) : String(error);
-  console.error(message);
-  process.exitCode = 1;
-});
+function isDirectExecution(metaUrl: string): boolean {
+  const entry = process.argv[1];
+  return Boolean(entry) && pathToFileURL(entry!).href === metaUrl;
+}
+
+if (isDirectExecution(import.meta.url)) {
+  main().catch((error: unknown) => {
+    const message = error instanceof Error ? (error.stack ?? error.message) : String(error);
+    console.error(message);
+    process.exitCode = 1;
+  });
+}

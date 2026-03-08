@@ -127,6 +127,7 @@ export function MachineControls({
             icon={Download}
             label="Save RAM"
             compact
+            dataTestId="home-save-ram"
             onClick={() => void onSaveRam()}
             disabled={!status.isConnected || machineTaskBusy}
             loading={machineTaskId === "save-ram"}
@@ -135,6 +136,7 @@ export function MachineControls({
             icon={Upload}
             label="Load RAM"
             compact
+            dataTestId="home-load-ram"
             onClick={() => void onLoadRam()}
             disabled={!status.isConnected || machineTaskBusy}
             loading={machineTaskId === "load-ram"}

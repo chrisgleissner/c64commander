@@ -65,4 +65,34 @@ describe("app-first UI XML parsing", () => {
     const activeTab = activeBottomTabLabel(nodes, ["Home", "Play", "Disks"], 1700);
     expect(activeTab).toBe("Play");
   });
+
+  it("decodes XML entities and rejects invisible or non-bottom matches", () => {
+    const xml = `
+    <hierarchy rotation="0">
+      <node text="Home &amp; Docs" class="android.widget.Button" clickable="true" enabled="true" selected="true" bounds="[30,1731][189,1887]" />
+      <node text="Play" class="android.widget.Button" clickable="true" enabled="false" bounds="[198,1731][345,1887]" />
+      <node text="Config" class="android.widget.Button" clickable="true" enabled="true" bounds="[198,1200][345,1300]" />
+      <node text="Broken" class="android.widget.Button" clickable="true" enabled="true" bounds="invalid" />
+    </hierarchy>
+    `;
+
+    const nodes = parseUiNodes(xml);
+
+    expect(nodes[0]?.text).toBe('Home & Docs');
+    expect(findVisibleText(nodes, "Play")).toBeNull();
+    expect(findBottomTabByText(nodes, "Config", 1700)).toBeNull();
+    expect(activeBottomTabLabel(nodes, ["Home & Docs", "Play"], 1700)).toBe("Home & Docs");
+  });
+
+  it("returns null when no active bottom tab is selected or focused", () => {
+    const xml = `
+    <hierarchy rotation="0">
+      <node text="Home" class="android.widget.Button" clickable="true" enabled="true" bounds="[30,1731][189,1887]" />
+      <node text="Docs" class="android.widget.Button" clickable="true" enabled="true" bounds="[900,1731][1040,1887]" />
+    </hierarchy>
+    `;
+
+    const nodes = parseUiNodes(xml);
+    expect(activeBottomTabLabel(nodes, ["Home", "Docs"], 1700)).toBeNull();
+  });
 });

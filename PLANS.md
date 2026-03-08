@@ -195,3 +195,98 @@ All timestamps UTC.
 2. Repository-owned app-first orchestration now exists in `c64scope` product track (`AF-001`…`AF-008`) and executes through `droidmind`.
 3. Prompt-run binding now exists via `fullAppCoverageExecutor` with schema-validated manifest output and per-feature evidence mapping.
 4. Coverage convergence reached full pass on the complete key-feature matrix (`PASS:23`, `FAIL:0`, `BLOCKED:0`) with run/evidence mapping captured in `fac-20260308T113632Z-executor-manifest.json`.
+
+---
+
+# RAM Snapshot System
+
+## Status: IN PROGRESS
+
+## Overview
+
+Replaces the raw `.bin` file Save/Load RAM workflow with a structured `.c64snap`
+snapshot system that includes typed memory ranges, metadata, and an in-app
+Snapshot Manager dialog (no filesystem browser).
+
+## Memory Ranges by Snapshot Type
+
+| Type   | Ranges                            | Notes                         |
+|--------|-----------------------------------|-------------------------------|
+| Full   | $0000–$FFFF                       | All 64 KB                     |
+| BASIC  | $0801–STREND, $002B–$0038         | STREND read from $002B–$002C  |
+| Screen | $0400–$07E7, $D800–$DBFF          | Screen + colour RAM           |
+| Custom | User-defined                      | Any hex address ranges        |
+
+## Binary File Format (.c64snap)
+
+Header (28 bytes):
+
+| Offset | Size | Field           | Notes                    |
+|--------|------|-----------------|--------------------------|
+| 0      | 8    | magic           | `C64SNAP\0`              |
+| 8      | 2    | version         | uint16 LE = 1            |
+| 10     | 2    | type            | uint16 LE (0–3)          |
+| 12     | 4    | timestamp       | uint32 LE (Unix seconds) |
+| 16     | 2    | range_count     | uint16 LE                |
+| 18     | 2    | flags           | uint16 LE = 0            |
+| 20     | 4    | metadata_offset | uint32 LE                |
+| 24     | 4    | metadata_size   | uint32 LE                |
+
+Range descriptors follow header: 4 bytes each (uint16 LE start, uint16 LE length).
+Memory blocks follow descriptors (concatenated, matching descriptor order).
+Optional UTF-8 JSON metadata at `metadata_offset`.
+
+## Filename Format
+
+```
+c64-{type}-{YYYYMMDD}-{HHMMSS}.c64snap
+```
+
+## Phases
+
+### Phase 1: Core Library  (src/lib/snapshot/)
+- [ ] 1.1 snapshotTypes.ts
+- [ ] 1.2 snapshotFormat.ts
+- [ ] 1.3 snapshotFilename.ts
+- [ ] 1.4 snapshotStore.ts
+- [ ] 1.5 snapshotFiltering.ts
+- [ ] 1.6 snapshotCreation.ts
+
+### Phase 2: RAM Operations Extension
+- [ ] 2.1 Export loadMemoryRanges() in ramOperations.ts
+
+### Phase 3: UI Dialogs
+- [ ] 3.1 SaveRamDialog.tsx
+- [ ] 3.2 SnapshotManagerDialog.tsx
+- [ ] 3.3 RestoreSnapshotDialog.tsx
+
+### Phase 4: Hook/Page Integration
+- [ ] 4.1 useHomeActions.ts — typed snapshot save/restore
+- [ ] 4.2 HomePage.tsx — dialog state
+- [ ] 4.3 MachineControls.tsx — props unchanged, callers change
+
+### Phase 5: Tests
+- [ ] 5.1 snapshotFormat.test.ts
+- [ ] 5.2 snapshotFilename.test.ts
+- [ ] 5.3 snapshotStore.test.ts
+- [ ] 5.4 snapshotFiltering.test.ts
+- [ ] 5.5 playwright/ramSnapshot.spec.ts
+
+### Phase 6: Screenshots and Documentation
+- [ ] 6.1 Playwright screenshots → docs/screenshots/
+- [ ] 6.2 README.md RAM Snapshots section
+
+### Phase 7: Validation
+- [ ] npm run test passes
+- [ ] npm run lint passes
+- [ ] npm run build passes
+- [ ] Coverage ≥ 90%
+
+## Decisions Log
+
+| Date       | Decision                                                              |
+|------------|-----------------------------------------------------------------------|
+| 2026-03-08 | localStorage as primary snapshot store (works on web + Android)       |
+| 2026-03-08 | Dump full 64 KB then extract ranges (simpler, single API call)        |
+| 2026-03-08 | STREND resolved by peeking $002B–$002C from full RAM dump             |
+| 2026-03-08 | No SAF folder dependency for snapshot list — app-managed in LS        |

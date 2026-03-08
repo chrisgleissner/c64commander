@@ -24,6 +24,7 @@ import { execFile } from "node:child_process";
 import { readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { resolveAdbSerial, resolvePreferredPhysicalTestDeviceSerial } from "./deviceRegistry.js";
 import { classifyRun, type AssertionRecord } from "./oraclePolicy.js";
@@ -392,7 +393,7 @@ async function runCase(
   };
 }
 
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
   const serialInput = process.env["ANDROID_SERIAL"];
   const serial = serialInput ? await resolveAdbSerial(serialInput) : await resolvePreferredPhysicalTestDeviceSerial();
   const c64uHost = process.env["C64U_HOST"] ?? "192.168.1.13";
@@ -470,7 +471,14 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((error: unknown) => {
-  console.error("Validation runner failed:", error);
-  process.exitCode = 1;
-});
+function isDirectExecution(metaUrl: string): boolean {
+  const entry = process.argv[1];
+  return Boolean(entry) && pathToFileURL(entry!).href === metaUrl;
+}
+
+if (isDirectExecution(import.meta.url)) {
+  main().catch((error: unknown) => {
+    console.error("Validation runner failed:", error);
+    process.exitCode = 1;
+  });
+}

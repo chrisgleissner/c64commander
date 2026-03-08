@@ -7,6 +7,7 @@
  */
 
 import { execFile } from "node:child_process";
+import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
@@ -183,7 +184,7 @@ export async function runPreflight(options: PreflightOptions = {}): Promise<Pref
 // CLI entry point
 // ---------------------------------------------------------------------------
 
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
   const dryRun = process.argv.includes("--dry-run");
   const serial = process.env["ANDROID_SERIAL"];
   const host = process.env["C64U_HOST"];
@@ -207,7 +208,14 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((error: unknown) => {
-  console.error("Preflight failed:", error);
-  process.exitCode = 1;
-});
+function isDirectExecution(metaUrl: string): boolean {
+  const entry = process.argv[1];
+  return Boolean(entry) && pathToFileURL(entry!).href === metaUrl;
+}
+
+if (isDirectExecution(import.meta.url)) {
+  main().catch((error: unknown) => {
+    console.error("Preflight failed:", error);
+    process.exitCode = 1;
+  });
+}

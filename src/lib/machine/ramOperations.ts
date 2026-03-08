@@ -382,3 +382,29 @@ export const clearRamAndReboot = async (api: C64API) => {
     throw new Error(`Reboot (Clear RAM) failed while resuming: ${resumeFailure.message}`);
   }
 };
+
+/**
+ * Writes a set of (address, bytes) pairs to C64 memory.
+ * Used for restoring typed RAM snapshots from the snapshot store.
+ */
+export const loadMemoryRanges = async (api: C64API, ranges: Array<{ start: number; bytes: Uint8Array }>) => {
+  if (ranges.length === 0) {
+    throw new Error("loadMemoryRanges: no ranges provided");
+  }
+  await ensureLiveness(api, "Load RAM Snapshot");
+  await runPaused(api, "Load RAM Snapshot", async () => {
+    for (const { start, bytes } of ranges) {
+      for (let offset = 0; offset < bytes.length; offset += WRITE_CHUNK_SIZE_BYTES) {
+        const chunkSize = Math.min(WRITE_CHUNK_SIZE_BYTES, bytes.length - offset);
+        const chunk = bytes.subarray(offset, offset + chunkSize);
+        const address = start + offset;
+        await withRetry(
+          `Write RAM snapshot chunk at $${toHexAddress(address)}`,
+          () => api.writeMemoryBlock(toHexAddress(address), chunk),
+          DEFAULT_RETRY_ATTEMPTS,
+          async () => recoverFromLivenessFailure(api, "Load RAM Snapshot"),
+        );
+      }
+    }
+  });
+};

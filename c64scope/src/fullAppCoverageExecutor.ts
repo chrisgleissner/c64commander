@@ -8,6 +8,7 @@
 
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { z } from "zod";
 import { resolveAdbSerial, resolvePreferredPhysicalTestDeviceSerial } from "./deviceRegistry.js";
 import { runPreflight } from "./preflight.js";
@@ -65,18 +66,18 @@ const featureToCaseIdMap: Record<string, string> = {
   F023: "AF-RUNTIME-RECOVERY-001",
 };
 
-function timestampId(): string {
+export function timestampId(): string {
   return new Date()
     .toISOString()
     .replace(/[-:]/g, "")
     .replace(/\.\d{3}Z$/, "Z");
 }
 
-function resolveWorkspaceRoot(): string {
+export function resolveWorkspaceRoot(): string {
   return path.basename(process.cwd()) === "c64scope" ? path.resolve(process.cwd(), "..") : process.cwd();
 }
 
-async function parseFeatureMatrix(matrixPath: string): Promise<Array<{ id: string; prompt: string }>> {
+export async function parseFeatureMatrix(matrixPath: string): Promise<Array<{ id: string; prompt: string }>> {
   const raw = await readFile(matrixPath, "utf-8");
   const jsonMatch = raw.match(/```json\n([\s\S]+?)\n```/);
   if (!jsonMatch) {
@@ -92,7 +93,7 @@ async function parseFeatureMatrix(matrixPath: string): Promise<Array<{ id: strin
   });
 }
 
-async function assertPromptFileExists(promptPath: string): Promise<void> {
+export async function assertPromptFileExists(promptPath: string): Promise<void> {
   try {
     await access(promptPath);
   } catch (error: unknown) {
@@ -101,11 +102,11 @@ async function assertPromptFileExists(promptPath: string): Promise<void> {
   }
 }
 
-function toFeatureResult(runResult: RunResult): "PASS" | "FAIL" {
+export function toFeatureResult(runResult: RunResult): "PASS" | "FAIL" {
   return runResult.outcome === "pass" ? "PASS" : "FAIL";
 }
 
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
   const workspaceRoot = resolveWorkspaceRoot();
   const docsRoot = path.join(workspaceRoot, "doc", "testing", "agentic-tests", "full-app-coverage");
   const runsRoot = path.join(docsRoot, "runs");
@@ -237,8 +238,15 @@ async function main(): Promise<void> {
   console.log(`Executor summary written:  ${summaryPath}`);
 }
 
-main().catch((error: unknown) => {
-  const message = error instanceof Error ? (error.stack ?? error.message) : String(error);
-  console.error(message);
-  process.exitCode = 1;
-});
+function isDirectExecution(metaUrl: string): boolean {
+  const entry = process.argv[1];
+  return Boolean(entry) && pathToFileURL(entry!).href === metaUrl;
+}
+
+if (isDirectExecution(import.meta.url)) {
+  main().catch((error: unknown) => {
+    const message = error instanceof Error ? (error.stack ?? error.message) : String(error);
+    console.error(message);
+    process.exitCode = 1;
+  });
+}
