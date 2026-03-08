@@ -26,6 +26,16 @@ const recordStepSchema = z.object({
   preconditions: z.array(z.string().min(1)).optional(),
   primaryOracle: z.string().min(1),
   fallbackOracle: z.string().min(1).optional(),
+  bridgeFallbackCategory: z
+    .enum([
+      "diagnostic_readback_only",
+      "stream_control_only",
+      "state_reset_only",
+      "emergency_recovery",
+      "app_path_unavailable",
+    ])
+    .optional(),
+  bridgeFallbackJustification: z.string().min(8).optional(),
   notes: z.string().min(1).optional(),
 });
 
@@ -83,6 +93,17 @@ export const sessionModule = defineToolModule({
           preconditions: { type: "array", items: { type: "string" } },
           primaryOracle: { type: "string" },
           fallbackOracle: { type: "string" },
+          bridgeFallbackCategory: {
+            type: "string",
+            enum: [
+              "diagnostic_readback_only",
+              "stream_control_only",
+              "state_reset_only",
+              "emergency_recovery",
+              "app_path_unavailable",
+            ],
+          },
+          bridgeFallbackJustification: { type: "string" },
           notes: { type: "string" },
         },
         required: ["runId", "stepId", "route", "featureArea", "action", "primaryOracle"],

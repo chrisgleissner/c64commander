@@ -83,6 +83,10 @@ doc/research/**/rollout-artifacts/
 doc/research/**/rollout-artifacts/**
 doc/research/**/screenshots/
 
+# Full app coverage generated run artifacts
+doc/testing/agentic-tests/full-app-coverage/runs/*
+!doc/testing/agentic-tests/full-app-coverage/runs/README.md
+
 # Symlinked projects
 android-mcp-server
 c64bridge

@@ -11,6 +11,14 @@ import path from "node:path";
 import { z } from "zod";
 import { createRunId, errorResult, okResult, type FailureClass, type RunOutcome, type ScopeResult } from "./types.js";
 
+const bridgeFallbackCategorySchema = z.enum([
+  "diagnostic_readback_only",
+  "stream_control_only",
+  "state_reset_only",
+  "emergency_recovery",
+  "app_path_unavailable",
+]);
+
 const captureStateSchema = z.object({
   endpoints: z.array(z.string()),
   reservedAt: z.string().nullable(),
@@ -28,6 +36,8 @@ const stepSchema = z.object({
   preconditions: z.array(z.string()),
   primaryOracle: z.string(),
   fallbackOracle: z.string().nullable(),
+  bridgeFallbackCategory: bridgeFallbackCategorySchema.nullable(),
+  bridgeFallbackJustification: z.string().nullable(),
   recordedAt: z.string(),
   notes: z.string().nullable(),
 });
@@ -85,6 +95,8 @@ interface RecordStepInput {
   preconditions?: string[];
   primaryOracle: string;
   fallbackOracle?: string;
+  bridgeFallbackCategory?: z.infer<typeof bridgeFallbackCategorySchema>;
+  bridgeFallbackJustification?: string;
   notes?: string;
 }
 
@@ -166,6 +178,37 @@ export class ScopeSessionStore {
       return session;
     }
 
+    if (input.peerServer === "c64bridge") {
+      if (!input.bridgeFallbackCategory) {
+        return errorResult(input.runId, "invalid_input", "bridgeFallbackCategory is required for c64bridge steps.", {
+          stepId: input.stepId,
+          action: input.action,
+        });
+      }
+      if (!input.bridgeFallbackJustification || input.bridgeFallbackJustification.trim().length < 8) {
+        return errorResult(
+          input.runId,
+          "invalid_input",
+          "bridgeFallbackJustification is required and must be at least 8 characters for c64bridge steps.",
+          {
+            stepId: input.stepId,
+            action: input.action,
+          },
+        );
+      }
+    } else if (input.bridgeFallbackCategory || input.bridgeFallbackJustification) {
+      return errorResult(
+        input.runId,
+        "invalid_input",
+        "bridge fallback fields are only valid when peerServer='c64bridge'.",
+        {
+          stepId: input.stepId,
+          action: input.action,
+          peerServer: input.peerServer ?? null,
+        },
+      );
+    }
+
     const step = stepSchema.parse({
       stepId: input.stepId,
       route: input.route,
@@ -175,6 +218,8 @@ export class ScopeSessionStore {
       preconditions: input.preconditions ?? [],
       primaryOracle: input.primaryOracle,
       fallbackOracle: input.fallbackOracle ?? null,
+      bridgeFallbackCategory: input.bridgeFallbackCategory ?? null,
+      bridgeFallbackJustification: input.bridgeFallbackJustification ?? null,
       recordedAt: new Date().toISOString(),
       notes: input.notes ?? null,
     });

@@ -35,6 +35,16 @@ import { generateReport } from "./validation/report.js";
 import { collectHardwareInfo, runCase } from "./validation/runner.js";
 import type { RunResult } from "./validation/types.js";
 
+type ValidationTrackMode = "product" | "calibration" | "all";
+
+function parseTrackMode(input: string | undefined): ValidationTrackMode {
+  const value = (input ?? "product").trim().toLowerCase();
+  if (value === "product" || value === "calibration" || value === "all") {
+    return value;
+  }
+  throw new Error(`Invalid VALIDATION_TRACK='${input ?? ""}'. Expected 'product', 'calibration', or 'all'.`);
+}
+
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
@@ -44,14 +54,22 @@ async function main(): Promise<void> {
   const serial = serialInput ? await resolveAdbSerial(serialInput) : await resolvePreferredPhysicalTestDeviceSerial();
   const c64uHost = process.env["C64U_HOST"] ?? "192.168.1.13";
   const repeatCount = parseInt(process.env["REPEAT"] ?? "1", 10);
+  const trackMode = parseTrackMode(process.env["VALIDATION_TRACK"]);
+  const selectedCases =
+    trackMode === "all" ? ALL_CASES : ALL_CASES.filter((caseInfo) => caseInfo.validationTrack === trackMode);
+
+  if (selectedCases.length === 0) {
+    throw new Error(`No validation cases selected for VALIDATION_TRACK='${trackMode}'.`);
+  }
 
   console.log("╔════════════════════════════════════════════════════════╗");
   console.log("║  C64 Commander — Autonomous Agentic Validation Runner  ║");
   console.log("╚════════════════════════════════════════════════════════╝");
   console.log(`  Device:  ${serial}`);
   console.log(`  C64U:    ${c64uHost}`);
+  console.log(`  Track:   ${trackMode}`);
   console.log(`  Repeats: ${repeatCount}`);
-  console.log(`  Cases:   ${ALL_CASES.length}`);
+  console.log(`  Cases:   ${selectedCases.length}`);
   console.log();
 
   // Preflight
@@ -90,7 +108,7 @@ async function main(): Promise<void> {
       console.log(`${"=".repeat(60)}`);
     }
 
-    for (const caseInfo of ALL_CASES) {
+    for (const caseInfo of selectedCases) {
       console.log(`\n--- [${caseInfo.id}] ${caseInfo.name} (${caseInfo.featureArea}) ---`);
       try {
         const result = await runCase(caseInfo, serial, c64uHost, artifactRoot);
@@ -112,6 +130,7 @@ async function main(): Promise<void> {
           caseName: caseInfo.name,
           featureArea: caseInfo.featureArea,
           route: caseInfo.route,
+          validationTrack: caseInfo.validationTrack,
           runId: "error",
           outcome: "error",
           failureClass: "infrastructure_failure",
@@ -158,7 +177,7 @@ async function main(): Promise<void> {
   console.log("=".repeat(60));
 
   const correctCount = allResults.filter((r, i) => {
-    const caseInfo = ALL_CASES[i % ALL_CASES.length]!;
+    const caseInfo = selectedCases[i % selectedCases.length]!;
     return r.outcome === caseInfo.expectedOutcome;
   }).length;
 

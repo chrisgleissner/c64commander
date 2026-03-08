@@ -30,6 +30,7 @@ export const playSourceBrowse: ValidationCase = {
   featureArea: "Play",
   route: "/play",
   safetyClass: "guarded-mutation",
+  validationTrack: "calibration",
   expectedOutcome: "pass",
   oracleClasses: ["REST-visible state", "UI"],
 
@@ -227,6 +228,7 @@ export const playTransport: ValidationCase = {
   featureArea: "Play",
   route: "/play",
   safetyClass: "read-only",
+  validationTrack: "calibration",
   expectedOutcome: "pass",
   oracleClasses: ["REST-visible state", "FTP-visible state"],
 
@@ -374,6 +376,7 @@ export const playStreamSignals: ValidationCase = {
   featureArea: "Play",
   route: "/play",
   safetyClass: "guarded-mutation",
+  validationTrack: "calibration",
   expectedOutcome: "pass",
   oracleClasses: ["A/V signal", "REST-visible state"],
 

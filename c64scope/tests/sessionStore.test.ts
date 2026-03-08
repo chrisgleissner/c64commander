@@ -33,6 +33,30 @@ describe("ScopeSessionStore", () => {
       const runId = started.runId;
       const artifactDir = started.data.artifactDir;
 
+      const missingBridgeFallback = await store.recordStep({
+        runId,
+        stepId: "bridge-missing-fallback",
+        route: "/play",
+        featureArea: "Play",
+        action: "read_machine_info",
+        peerServer: "c64bridge",
+        primaryOracle: "REST-visible state",
+      });
+      expect(missingBridgeFallback.ok).toBe(false);
+
+      const withBridgeFallback = await store.recordStep({
+        runId,
+        stepId: "bridge-with-fallback",
+        route: "/play",
+        featureArea: "Play",
+        action: "read_machine_info",
+        peerServer: "c64bridge",
+        bridgeFallbackCategory: "diagnostic_readback_only",
+        bridgeFallbackJustification: "App route uses REST readback correlation for this calibration case.",
+        primaryOracle: "REST-visible state",
+      });
+      expect(withBridgeFallback.ok).toBe(true);
+
       const stopBeforeStart = await store.stopCapture(runId);
       expect(stopBeforeStart.ok).toBe(false);
 
@@ -88,6 +112,7 @@ describe("ScopeSessionStore", () => {
       const sessionJson = JSON.parse(await readFile(path.join(artifactDir, "session.json"), "utf8"));
       const summary = await readFile(path.join(artifactDir, "summary.md"), "utf8");
 
+      expect(sessionJson.timeline).toHaveLength(1);
       expect(sessionJson.evidence).toHaveLength(1);
       expect(sessionJson.assertions).toHaveLength(1);
       expect(sessionJson.capture.status).toBe("stopped");

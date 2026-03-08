@@ -21,6 +21,7 @@ export const navRouteShell: ValidationCase = {
   featureArea: "Navigation",
   route: "/",
   safetyClass: "read-only",
+  validationTrack: "calibration",
   expectedOutcome: "pass",
   oracleClasses: ["UI", "Diagnostics and logs"],
 
@@ -137,6 +138,7 @@ export const connStatus: ValidationCase = {
   featureArea: "Connection",
   route: "/",
   safetyClass: "read-only",
+  validationTrack: "calibration",
   expectedOutcome: "pass",
   oracleClasses: ["UI", "REST-visible state"],
 
@@ -281,6 +283,7 @@ export const connDiagnostics: ValidationCase = {
   featureArea: "Connection",
   route: "/",
   safetyClass: "read-only",
+  validationTrack: "calibration",
   expectedOutcome: "pass",
   oracleClasses: ["REST-visible state", "Diagnostics and logs"],
 

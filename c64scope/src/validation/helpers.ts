@@ -11,6 +11,7 @@ import { writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
+const UI_DUMP_DEVICE_PATH = "/sdcard/Download/c64scope-ui.xml";
 
 export async function adb(serial: string, ...args: string[]): Promise<string> {
   const { stdout } = await execFileAsync("adb", ["-s", serial, ...args]);
@@ -64,6 +65,16 @@ export async function isAppInForeground(serial: string): Promise<boolean> {
   const dump = await adb(serial, "shell", "dumpsys", "activity", "activities");
   // Look for our activity in the mResumedActivity line
   return dump.includes("uk.gleissner.c64commander");
+}
+
+/** Dump the current Android UI hierarchy XML from the connected device. */
+export async function dumpUiHierarchy(serial: string): Promise<string> {
+  await adb(serial, "shell", "uiautomator", "dump", UI_DUMP_DEVICE_PATH);
+  const xml = await adb(serial, "shell", "cat", UI_DUMP_DEVICE_PATH);
+  if (!xml.includes("<hierarchy")) {
+    throw new Error(`uiautomator dump did not produce XML hierarchy content (bytes=${xml.length})`);
+  }
+  return xml;
 }
 
 /**

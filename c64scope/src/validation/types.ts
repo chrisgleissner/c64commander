@@ -16,6 +16,7 @@ export interface ValidationCase {
   featureArea: string;
   route: string;
   safetyClass: "read-only" | "guarded-mutation";
+  validationTrack: "product" | "calibration";
   expectedOutcome: "pass" | "fail";
   oracleClasses: string[];
   run: (ctx: CaseContext) => Promise<CaseResult>;
@@ -47,6 +48,7 @@ export interface RunResult {
   caseName: string;
   featureArea: string;
   route: string;
+  validationTrack: "product" | "calibration";
   runId: string;
   outcome: string;
   failureClass: string;

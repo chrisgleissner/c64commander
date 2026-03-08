@@ -14,6 +14,70 @@ import type { FailureClass, RunOutcome } from "../types.js";
 import { adb, c64uGet, resetC64Machine } from "./helpers.js";
 import type { CaseContext, CaseResult, RunResult, ValidationCase } from "./types.js";
 
+interface ProductPolicyViolation {
+  action: string;
+  peerServer: string;
+  reason: string;
+}
+
+const FORBIDDEN_PRODUCT_C64BRIDGE_ACTION_PATTERNS: readonly RegExp[] = [
+  /run_prg/i,
+  /upload_run_prg/i,
+  /mount/i,
+  /eject/i,
+  /power/i,
+  /reset/i,
+  /write/i,
+  /tokenize_basic_to_prg/i,
+];
+
+async function collectProductPolicyViolations(artifactDir: string): Promise<ProductPolicyViolation[]> {
+  const sessionPath = path.join(artifactDir, "session.json");
+  const raw = await readFile(sessionPath, "utf-8");
+  const snapshot = JSON.parse(raw) as {
+    timeline?: Array<{
+      action?: string | null;
+      peerServer?: string | null;
+      bridgeFallbackCategory?: string | null;
+      bridgeFallbackJustification?: string | null;
+    }>;
+  };
+
+  const violations: ProductPolicyViolation[] = [];
+
+  for (const step of snapshot.timeline ?? []) {
+    const action = step.action?.trim() ?? "";
+    const peerServer = step.peerServer?.trim() ?? "";
+    if (!action || !peerServer) {
+      continue;
+    }
+
+    if (peerServer !== "c64bridge") {
+      continue;
+    }
+
+    const isForbidden = FORBIDDEN_PRODUCT_C64BRIDGE_ACTION_PATTERNS.some((pattern) => pattern.test(action));
+    if (isForbidden) {
+      violations.push({
+        action,
+        peerServer,
+        reason: "forbidden direct c64bridge mutation in product track",
+      });
+      continue;
+    }
+
+    if (!step.bridgeFallbackCategory || !step.bridgeFallbackJustification) {
+      violations.push({
+        action,
+        peerServer,
+        reason: "missing bridge fallback category or justification",
+      });
+    }
+  }
+
+  return violations;
+}
+
 export async function runCase(
   caseInfo: ValidationCase,
   serial: string,
@@ -48,6 +112,17 @@ export async function runCase(
 
     finalOutcome = classification.outcome;
     finalFailureClass = classification.failureClass;
+
+    if (caseInfo.validationTrack === "product") {
+      const policyViolations = await collectProductPolicyViolations(artifactDir);
+      if (policyViolations.length > 0) {
+        finalOutcome = "fail";
+        finalFailureClass = "infrastructure_failure";
+        caseResult.explorationTrace.recoveryActions.push(
+          `product-policy-violation:${policyViolations.map((v) => `${v.action}:${v.reason}`).join("|")}`,
+        );
+      }
+    }
 
     try {
       await resetC64Machine(c64uHost);
@@ -176,6 +251,7 @@ export async function runCase(
     caseName: caseInfo.name,
     featureArea: caseInfo.featureArea,
     route: caseInfo.route,
+    validationTrack: caseInfo.validationTrack,
     runId,
     outcome: finalOutcome,
     failureClass: finalFailureClass,

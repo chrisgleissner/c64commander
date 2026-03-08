@@ -21,6 +21,7 @@ export const settingsDiagnostics: ValidationCase = {
   featureArea: "Settings",
   route: "/settings",
   safetyClass: "read-only",
+  validationTrack: "calibration",
   expectedOutcome: "pass",
   oracleClasses: ["UI", "Filesystem-visible state"],
 
@@ -150,6 +151,7 @@ export const homeVisibility: ValidationCase = {
   featureArea: "Home",
   route: "/",
   safetyClass: "read-only",
+  validationTrack: "calibration",
   expectedOutcome: "pass",
   oracleClasses: ["REST-visible state", "Diagnostics and logs"],
 
@@ -279,6 +281,7 @@ export const deliberateFailure: ValidationCase = {
   featureArea: "Diagnostics",
   route: "/",
   safetyClass: "read-only",
+  validationTrack: "calibration",
   expectedOutcome: "fail",
   oracleClasses: ["REST-visible state", "UI"],
 
@@ -380,6 +383,7 @@ export const docsReadOnly: ValidationCase = {
   featureArea: "Docs",
   route: "/docs",
   safetyClass: "read-only",
+  validationTrack: "calibration",
   expectedOutcome: "pass",
   oracleClasses: ["UI", "Diagnostics and logs"],
 

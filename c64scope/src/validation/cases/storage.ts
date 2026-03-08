@@ -21,6 +21,7 @@ export const diskBrowse: ValidationCase = {
   featureArea: "Disks",
   route: "/disks",
   safetyClass: "read-only",
+  validationTrack: "calibration",
   expectedOutcome: "pass",
   oracleClasses: ["REST-visible state", "FTP-visible state"],
 
@@ -159,6 +160,7 @@ export const diskDriveConfig: ValidationCase = {
   featureArea: "Disks",
   route: "/disks",
   safetyClass: "read-only",
+  validationTrack: "calibration",
   expectedOutcome: "pass",
   oracleClasses: ["REST-visible state", "UI"],
 
@@ -289,6 +291,7 @@ export const configBrowse: ValidationCase = {
   featureArea: "Config",
   route: "/config",
   safetyClass: "read-only",
+  validationTrack: "calibration",
   expectedOutcome: "pass",
   oracleClasses: ["REST-visible state", "UI"],
 
