@@ -76,9 +76,9 @@ describe("createSnapshot – program", () => {
   });
 
   it("includes trimmed label in metadata when provided", async () => {
-    await createSnapshot(mockApi, { type: "program", label: "  Before game  " });
+    await createSnapshot(mockApi, { type: "program", label: "  JupiterLander.crt  " });
     const saved = saveSnapshotToStoreMock.mock.calls[0][0];
-    expect(saved.metadata.label).toBe("Before game");
+    expect(saved.metadata.label).toBe("JupiterLander.crt");
   });
 
   it("omits label from metadata when label is blank", async () => {

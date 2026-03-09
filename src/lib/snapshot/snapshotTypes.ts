@@ -100,7 +100,7 @@ export const SNAPSHOT_TYPE_LIST: SnapshotTypeConfig[] = [
   },
   {
     type: "custom",
-    label: "Custom…",
+    label: "Custom Snapshot",
     rangeDisplay: "User-defined",
     filePrefix: "custom",
   },

@@ -64,8 +64,8 @@ const buildMinimalSnapshotBase64 = (typeCode: number, timestampSeconds: number):
 /**
  * Seed localStorage with snapshot entries for Snapshot Manager tests.
  */
-const seedSnapshots = async (page: Page) => {
-  await page.addInitScript(() => {
+const seedSnapshots = async (page: Page, count = 3) => {
+  await page.addInitScript((total: number) => {
     const builder = (typeCode: number, ts: number): string => {
       const HEADER_SIZE = 28;
       const meta = JSON.stringify({
@@ -93,50 +93,36 @@ const seedSnapshots = async (page: Page) => {
       return btoa(binary);
     };
 
+    const typeCodes = [0, 1, 2] as const;
+    const snapshots = Array.from({ length: total }, (_, index) => {
+      const typeCode = typeCodes[index % typeCodes.length];
+      const timestamp = 1736499600 - index * 3600;
+      const snapshotType = typeCode === 0 ? "program" : typeCode === 1 ? "basic" : "screen";
+      return {
+        id: `snap-${index + 1}`,
+        filename: `c64-${snapshotType}-${index + 1}.c64snap`,
+        bytesBase64: builder(typeCode, timestamp),
+        createdAt: new Date(timestamp * 1000).toISOString(),
+        snapshotType,
+        metadata: {
+          snapshot_type: snapshotType,
+          display_ranges:
+            typeCode === 0
+              ? ["$0000\u2013$00FF", "$0200\u2013$FFFF"]
+              : typeCode === 1
+                ? ["$0801\u2013STREND"]
+                : ["VICBANK", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"],
+          created_at: new Date(timestamp * 1000).toISOString().slice(0, 19).replace("T", " "),
+          ...(index === 0 ? { label: "JupiterLander.crt" } : {}),
+        },
+      };
+    });
     const store = {
       version: 1,
-      snapshots: [
-        {
-          id: "snap-1",
-          filename: "c64-program-20260110-090000.c64snap",
-          bytesBase64: builder(0, 1736499600),
-          createdAt: "2026-01-10T09:00:00.000Z",
-          snapshotType: "program",
-          metadata: {
-            snapshot_type: "program",
-            display_ranges: ["$0000\u2013$00FF", "$0200\u2013$FFFF"],
-            created_at: "2026-01-10 09:00:00",
-            label: "Before game",
-          },
-        },
-        {
-          id: "snap-2",
-          filename: "c64-basic-20260110-080000.c64snap",
-          bytesBase64: builder(1, 1736496000),
-          createdAt: "2026-01-10T08:00:00.000Z",
-          snapshotType: "basic",
-          metadata: {
-            snapshot_type: "basic",
-            display_ranges: ["$0801\u2013STREND"],
-            created_at: "2026-01-10 08:00:00",
-          },
-        },
-        {
-          id: "snap-3",
-          filename: "c64-screen-20260110-070000.c64snap",
-          bytesBase64: builder(2, 1736492400),
-          createdAt: "2026-01-10T07:00:00.000Z",
-          snapshotType: "screen",
-          metadata: {
-            snapshot_type: "screen",
-            display_ranges: ["VICBANK", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"],
-            created_at: "2026-01-10 07:00:00",
-          },
-        },
-      ],
+      snapshots,
     };
     localStorage.setItem("c64u_snapshots:v1", JSON.stringify(store));
-  });
+  }, count);
 };
 
 // ---------------------------------------------------------------------------
@@ -317,6 +303,32 @@ test.describe("RAM Snapshot system", () => {
     await expect(rows).toHaveCount(3);
   });
 
+  test("Snapshot Manager — central list scrolls independently for many snapshots", async ({ page }: { page: Page }) => {
+    await seedSnapshots(page, 18);
+    await page.goto("/");
+    await waitForConnected(page);
+
+    await page.getByTestId("home-load-ram").click();
+    await expect(page.getByTestId("snapshot-manager-dialog")).toBeVisible();
+
+    const metrics = await page.getByTestId("snapshot-list").evaluate((element) => ({
+      clientHeight: element.clientHeight,
+      scrollHeight: element.scrollHeight,
+      overflowY: window.getComputedStyle(element).overflowY,
+    }));
+
+    expect(metrics.overflowY).toMatch(/auto|scroll/);
+    expect(metrics.scrollHeight).toBeGreaterThan(metrics.clientHeight);
+
+    await page.getByTestId("snapshot-list").evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+    });
+
+    await expect
+      .poll(() => page.getByTestId("snapshot-list").evaluate((element) => element.scrollTop))
+      .toBeGreaterThan(0);
+  });
+
   test("Snapshot Manager — empty state shown when no snapshots", async ({
     page,
   }: {
@@ -355,7 +367,7 @@ test.describe("RAM Snapshot system", () => {
     await page.getByTestId("home-load-ram").click();
     await expect(page.getByTestId("snapshot-manager-dialog")).toBeVisible();
 
-    await page.getByTestId("snapshot-filter-input").fill("Before game");
+    await page.getByTestId("snapshot-filter-input").fill("JupiterLander.crt");
     await expect(page.getByTestId("snapshot-row")).toHaveCount(1);
     await snap(page, testInfo, "snapshot-manager-filter-text");
   });
@@ -444,5 +456,18 @@ test.describe("RAM Snapshot system", () => {
     await cancelBtn.click();
     await expect(page.getByTestId("restore-snapshot-dialog")).not.toBeVisible();
     await snap(page, testInfo, "restore-cancelled");
+  });
+
+  test("Snapshot Manager — tapping outside closes the dialog", async ({ page }: { page: Page }) => {
+    await seedSnapshots(page);
+    await page.goto("/");
+    await waitForConnected(page);
+
+    await page.getByTestId("home-load-ram").click();
+    await expect(page.getByTestId("snapshot-manager-dialog")).toBeVisible();
+
+    await page.mouse.click(10, 10);
+
+    await expect(page.getByTestId("snapshot-manager-dialog")).not.toBeVisible();
   });
 });

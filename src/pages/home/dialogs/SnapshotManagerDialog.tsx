@@ -7,14 +7,7 @@
  */
 
 import { useEffect, useState, type MouseEvent, type SyntheticEvent } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Trash2 } from "lucide-react";
@@ -190,73 +183,76 @@ export function SnapshotManagerDialog({
 
   const filtered = filterSnapshots(snapshots, query, typeFilter);
 
-  const handleClose = () => {
-    setQuery("");
-    setTypeFilter("all");
-    onOpenChange(false);
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      setQuery("");
+      setTypeFilter("all");
+    }
+    onOpenChange(nextOpen);
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-md max-h-[85vh]" data-testid="snapshot-manager-dialog">
-        <DialogHeader>
-          <DialogTitle>Load RAM</DialogTitle>
-          <DialogDescription>Select a snapshot to restore.</DialogDescription>
-        </DialogHeader>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent
+        className="max-w-md h-[min(85vh,calc(100dvh-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom)))] max-h-[calc(100dvh-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-hidden p-0"
+        data-testid="snapshot-manager-dialog"
+      >
+        <div className="flex h-full min-h-0 flex-col">
+          <DialogHeader className="border-b border-border px-6 pb-3 pt-6 pr-14">
+            <DialogTitle>Load RAM</DialogTitle>
+            <DialogDescription>Select a snapshot to restore.</DialogDescription>
+          </DialogHeader>
 
-        <div className="space-y-3">
-          {/* Text filter */}
-          <Input
-            placeholder="Filter snapshots…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            data-testid="snapshot-filter-input"
-          />
+          <div className="flex flex-1 min-h-0 flex-col gap-3 px-6 py-4">
+            {/* Text filter */}
+            <Input
+              placeholder="Filter snapshots…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              data-testid="snapshot-filter-input"
+            />
 
-          {/* Type filter tabs */}
-          <div className="flex gap-1 flex-wrap" data-testid="snapshot-type-filters">
-            {TYPE_FILTERS.map(({ value, label }) => (
-              <button
-                key={value}
-                data-testid={`snapshot-filter-type-${value}`}
-                className={[
-                  "px-3 py-1 rounded-full text-xs font-medium border transition-colors",
-                  typeFilter === value
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-transparent text-muted-foreground border-border hover:bg-accent",
-                ].join(" ")}
-                onClick={() => setTypeFilter(value as SnapshotType | "all")}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+            {/* Type filter tabs */}
+            <div className="flex gap-1 flex-wrap" data-testid="snapshot-type-filters">
+              {TYPE_FILTERS.map(({ value, label }) => (
+                <button
+                  key={value}
+                  data-testid={`snapshot-filter-type-${value}`}
+                  className={[
+                    "px-3 py-1 rounded-full text-xs font-medium border transition-colors",
+                    typeFilter === value
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-transparent text-muted-foreground border-border hover:bg-accent",
+                  ].join(" ")}
+                  onClick={() => setTypeFilter(value as SnapshotType | "all")}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
 
-          {/* Snapshot list */}
-          <div className="space-y-2" data-testid="snapshot-list">
-            {filtered.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center" data-testid="snapshot-empty">
-                {snapshots.length === 0 ? "No snapshots saved yet." : "No snapshots match the filter."}
-              </p>
-            ) : (
-              filtered.map((s) => (
-                <SnapshotRow
-                  key={s.id}
-                  snapshot={s}
-                  onRestore={onRestore}
-                  onDelete={onDelete}
-                  onUpdateLabel={onUpdateLabel}
-                />
-              ))
-            )}
+            {/* Snapshot list */}
+            <div className="flex-1 min-h-0 overflow-y-auto pr-2" data-testid="snapshot-list">
+              <div className="space-y-2" data-testid="snapshot-list-content">
+                {filtered.length === 0 ? (
+                  <p className="py-4 text-center text-sm text-muted-foreground" data-testid="snapshot-empty">
+                    {snapshots.length === 0 ? "No snapshots saved yet." : "No snapshots match the filter."}
+                  </p>
+                ) : (
+                  filtered.map((s) => (
+                    <SnapshotRow
+                      key={s.id}
+                      snapshot={s}
+                      onRestore={onRestore}
+                      onDelete={onDelete}
+                      onUpdateLabel={onUpdateLabel}
+                    />
+                  ))
+                )}
+              </div>
+            </div>
           </div>
         </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={handleClose}>
-            Close
-          </Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

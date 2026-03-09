@@ -25,7 +25,7 @@ const SNAPSHOT_WITH_LABEL: SnapshotStorageEntry = {
     snapshot_type: "program",
     display_ranges: ["$0000–$00FF", "$0200–$FFFF"],
     created_at: "2026-01-10 09:00:00",
-    label: "Before game",
+    label: "JupiterLander.crt",
   },
 };
 
@@ -98,7 +98,7 @@ describe("RestoreSnapshotDialog – snapshot with label", () => {
 
   it("shows the snapshot label", () => {
     renderDialog(SNAPSHOT_WITH_LABEL);
-    expect(screen.getByText("Before game")).toBeInTheDocument();
+    expect(screen.getByText("JupiterLander.crt")).toBeInTheDocument();
   });
 
   it("shows the type label (Program Snapshot)", () => {
@@ -116,7 +116,7 @@ describe("RestoreSnapshotDialog – snapshot without label", () => {
   it("does not show any label text", () => {
     renderDialog(SNAPSHOT_NO_LABEL);
     // Label should be absent
-    expect(screen.queryByText("Before game")).not.toBeInTheDocument();
+    expect(screen.queryByText("JupiterLander.crt")).not.toBeInTheDocument();
   });
 
   it("shows type label for basic snapshot", () => {

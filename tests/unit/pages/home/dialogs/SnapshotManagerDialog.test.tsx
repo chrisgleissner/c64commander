@@ -34,7 +34,7 @@ const makeSnapshot = (
 });
 
 const SNAPSHOTS: SnapshotStorageEntry[] = [
-  makeSnapshot("snap-1", "program", "Before game"),
+  makeSnapshot("snap-1", "program", "JupiterLander.crt"),
   makeSnapshot("snap-2", "basic"),
   makeSnapshot("snap-3", "screen"),
 ];
@@ -121,7 +121,7 @@ describe("SnapshotManagerDialog – populated list", () => {
   it("opens a compact comment editor without triggering restore", () => {
     const { onRestore } = renderDialog();
     fireEvent.click(screen.getByTestId("snapshot-comment-toggle-snap-1"));
-    expect(screen.getByTestId("snapshot-comment-input-snap-1")).toHaveValue("Before game");
+    expect(screen.getByTestId("snapshot-comment-input-snap-1")).toHaveValue("JupiterLander.crt");
     expect(onRestore).not.toHaveBeenCalled();
   });
 
@@ -152,7 +152,7 @@ describe("SnapshotManagerDialog – text filter", () => {
 
   it("filters rows by query text", () => {
     renderDialog();
-    fireEvent.change(screen.getByTestId("snapshot-filter-input"), { target: { value: "Before game" } });
+    fireEvent.change(screen.getByTestId("snapshot-filter-input"), { target: { value: "JupiterLander.crt" } });
     expect(screen.getAllByTestId("snapshot-row")).toHaveLength(1);
   });
 });
@@ -173,11 +173,9 @@ describe("SnapshotManagerDialog – type filter", () => {
 });
 
 describe("SnapshotManagerDialog – close", () => {
-  it("close button calls onOpenChange(false)", () => {
+  it("top-right close button calls onOpenChange(false)", () => {
     const { onOpenChange } = renderDialog();
-    // Radix also renders an X icon button with sr-only text "Close", so we pick
-    // the footer button (the one without an SVG child).
-    const closeBtn = screen.getAllByRole("button", { name: "Close" }).find((btn) => !btn.querySelector("svg"))!;
+    const closeBtn = screen.getByRole("button", { name: "Close" });
     fireEvent.click(closeBtn);
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
