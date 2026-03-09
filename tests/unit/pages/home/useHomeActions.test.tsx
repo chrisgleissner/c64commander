@@ -19,16 +19,15 @@ const reportUserErrorMock = vi.fn();
 const addErrorLogMock = vi.fn();
 
 const clearRamAndRebootMock = vi.fn();
-const dumpFullRamImageMock = vi.fn();
-const loadFullRamImageMock = vi.fn();
-
-const buildRamDumpFileNameMock = vi.fn(() => "ram-dump.bin");
-const pickRamDumpFileMock = vi.fn();
+const loadMemoryRangesMock = vi.fn();
 const selectRamDumpFolderMock = vi.fn();
-const writeRamDumpToFolderMock = vi.fn();
 
-const loadRamDumpFolderConfigMock = vi.fn(() => null);
-const saveRamDumpFolderConfigMock = vi.fn();
+const createSnapshotMock = vi.fn();
+const deleteSnapshotFromStoreMock = vi.fn();
+const updateSnapshotLabelMock = vi.fn();
+const snapshotEntryToBytesMock = vi.fn();
+const decodeSnapshotMock = vi.fn();
+const getCurrentPlaybackSnapshotLabelMock = vi.fn();
 
 const resetDiskDevicesMock = vi.fn();
 const resetPrinterDeviceMock = vi.fn();
@@ -66,20 +65,33 @@ vi.mock("@/hooks/useActionTrace", () => ({
 vi.mock("@/lib/machine/ramOperations", () => ({
   FULL_RAM_SIZE_BYTES: 1024,
   clearRamAndReboot: (...args: unknown[]) => clearRamAndRebootMock(...args),
-  dumpFullRamImage: (...args: unknown[]) => dumpFullRamImageMock(...args),
-  loadFullRamImage: (...args: unknown[]) => loadFullRamImageMock(...args),
+  loadMemoryRanges: (...args: unknown[]) => loadMemoryRangesMock(...args),
 }));
 
 vi.mock("@/lib/machine/ramDumpStorage", () => ({
-  buildRamDumpFileName: (...args: unknown[]) => buildRamDumpFileNameMock(...args),
-  pickRamDumpFile: (...args: unknown[]) => pickRamDumpFileMock(...args),
   selectRamDumpFolder: (...args: unknown[]) => selectRamDumpFolderMock(...args),
-  writeRamDumpToFolder: (...args: unknown[]) => writeRamDumpToFolderMock(...args),
 }));
 
 vi.mock("@/lib/config/ramDumpFolderStore", () => ({
-  loadRamDumpFolderConfig: () => loadRamDumpFolderConfigMock(),
-  saveRamDumpFolderConfig: (...args: unknown[]) => saveRamDumpFolderConfigMock(...args),
+  loadRamDumpFolderConfig: () => null,
+  saveRamDumpFolderConfig: vi.fn(),
+}));
+
+vi.mock("@/lib/snapshot/snapshotCreation", () => ({
+  createSnapshot: (...args: unknown[]) => createSnapshotMock(...args),
+}));
+
+vi.mock("@/lib/snapshot/snapshotStore", () => ({
+  useSnapshotStore: () => ({ snapshots: [], snapshotsByType: vi.fn().mockReturnValue([]) }),
+  deleteSnapshotFromStore: (...args: unknown[]) => deleteSnapshotFromStoreMock(...args),
+  updateSnapshotLabel: (...args: unknown[]) => updateSnapshotLabelMock(...args),
+  snapshotEntryToBytes: (...args: unknown[]) => snapshotEntryToBytesMock(...args),
+  saveSnapshotToStore: vi.fn(),
+  loadSnapshotStore: vi.fn().mockReturnValue([]),
+}));
+
+vi.mock("@/lib/snapshot/snapshotFormat", () => ({
+  decodeSnapshot: (...args: unknown[]) => decodeSnapshotMock(...args),
 }));
 
 vi.mock("@/lib/disks/resetDrives", () => ({
@@ -87,7 +99,12 @@ vi.mock("@/lib/disks/resetDrives", () => ({
   resetPrinterDevice: (...args: unknown[]) => resetPrinterDeviceMock(...args),
 }));
 
+vi.mock("@/lib/snapshot/currentPlaybackSnapshotLabel", () => ({
+  getCurrentPlaybackSnapshotLabel: (...args: unknown[]) => getCurrentPlaybackSnapshotLabelMock(...args),
+}));
+
 import { useHomeActions } from "@/pages/home/hooks/useHomeActions";
+import type { SnapshotStorageEntry } from "@/lib/snapshot/snapshotTypes";
 
 describe("useHomeActions", () => {
   beforeEach(() => {
@@ -98,17 +115,22 @@ describe("useHomeActions", () => {
     resumeMutateAsyncMock.mockResolvedValue(undefined);
     powerOffMutateAsyncMock.mockResolvedValue(undefined);
     clearRamAndRebootMock.mockResolvedValue(undefined);
-    dumpFullRamImageMock.mockResolvedValue(new Uint8Array([1, 2, 3, 4]));
-    loadFullRamImageMock.mockResolvedValue(undefined);
+    createSnapshotMock.mockResolvedValue({ displayTimestamp: "2026-01-01 12:00:00" });
+    getCurrentPlaybackSnapshotLabelMock.mockReturnValue(undefined);
+    loadMemoryRangesMock.mockResolvedValue(undefined);
+    snapshotEntryToBytesMock.mockReturnValue(new Uint8Array(100));
+    decodeSnapshotMock.mockReturnValue({
+      version: 1,
+      snapshotType: "program",
+      timestamp: 0,
+      ranges: [{ start: 0, length: 100 }],
+      blocks: [new Uint8Array(100)],
+      metadata: { snapshot_type: "program", display_ranges: [], created_at: "" },
+    });
     selectRamDumpFolderMock.mockResolvedValue({
       treeUri: "content://tree/music",
       rootName: "Music",
     });
-    pickRamDumpFileMock.mockResolvedValue({
-      bytes: new Uint8Array(1024),
-      parentFolder: { treeUri: "content://tree/music", rootName: "Music" },
-    });
-    writeRamDumpToFolderMock.mockResolvedValue(undefined);
     resetDiskDevicesMock.mockResolvedValue(undefined);
     resetPrinterDeviceMock.mockResolvedValue(undefined);
   });
@@ -153,43 +175,62 @@ describe("useHomeActions", () => {
     expect(result.current.pauseResumePending).toBe(false);
   });
 
-  it("saves RAM by selecting folder, dumping image, and writing file", async () => {
+  it("saves program snapshot and shows success toast", async () => {
     const { result } = renderHook(() => useHomeActions());
 
     await act(async () => {
-      await result.current.handleSaveRam();
+      await result.current.handleSaveRam("program");
     });
 
-    expect(selectRamDumpFolderMock).toHaveBeenCalledTimes(1);
-    expect(dumpFullRamImageMock).toHaveBeenCalledWith(apiMock);
-    expect(buildRamDumpFileNameMock).toHaveBeenCalledTimes(1);
-    expect(writeRamDumpToFolderMock).toHaveBeenCalledWith(
-      expect.objectContaining({ rootName: "Music" }),
-      "ram-dump.bin",
-      expect.any(Uint8Array),
-    );
-    expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: "RAM dump saved" }));
+    expect(createSnapshotMock).toHaveBeenCalledWith(apiMock, {
+      type: "program",
+      customRanges: undefined,
+      label: undefined,
+      contentName: undefined,
+    });
+    expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: "Snapshot saved" }));
   });
 
-  it("validates RAM dump size and reports load errors", async () => {
-    pickRamDumpFileMock.mockResolvedValueOnce({
-      bytes: new Uint8Array([1, 2, 3]),
-      parentFolder: { treeUri: "content://tree/music", rootName: "Music" },
-    });
+  it("uses the current playback item as the default snapshot comment", async () => {
+    getCurrentPlaybackSnapshotLabelMock.mockReturnValue("Katakis.d64");
     const { result } = renderHook(() => useHomeActions());
 
     await act(async () => {
-      await result.current.handleLoadRam();
+      await result.current.handleSaveRam("program");
     });
 
-    expect(saveRamDumpFolderConfigMock).toHaveBeenCalledWith(expect.objectContaining({ rootName: "Music" }));
-    expect(loadFullRamImageMock).not.toHaveBeenCalled();
-    expect(reportUserErrorMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        operation: "HOME_MACHINE_LOAD_RAM",
-        title: "Machine action failed",
-      }),
-    );
+    expect(createSnapshotMock).toHaveBeenCalledWith(apiMock, {
+      type: "program",
+      customRanges: undefined,
+      label: "Katakis.d64",
+      contentName: "Katakis.d64",
+    });
+  });
+
+  it("restores snapshot ranges to memory and shows success toast", async () => {
+    const snapshot: SnapshotStorageEntry = {
+      id: "snap-1",
+      filename: "c64-program-20260101-120000.c64snap",
+      bytesBase64: "",
+      createdAt: "2026-01-01T12:00:00.000Z",
+      snapshotType: "program",
+      metadata: {
+        snapshot_type: "program",
+        display_ranges: ["$0000\u2013$00FF", "$0200\u2013$FFFF"],
+        created_at: "2026-01-01 12:00:00",
+      },
+    };
+
+    const { result } = renderHook(() => useHomeActions());
+
+    await act(async () => {
+      await result.current.handleRestoreSnapshot(snapshot);
+    });
+
+    expect(snapshotEntryToBytesMock).toHaveBeenCalledWith(snapshot);
+    expect(decodeSnapshotMock).toHaveBeenCalled();
+    expect(loadMemoryRangesMock).toHaveBeenCalledWith(apiMock, [{ start: 0, bytes: expect.any(Uint8Array) }]);
+    expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: "Snapshot restored" }));
   });
 
   it("runs power-off confirmation flow through handleAction", async () => {
@@ -250,5 +291,62 @@ describe("useHomeActions", () => {
     });
 
     expect(clearRamAndRebootMock).not.toHaveBeenCalled();
+  });
+
+  it("handlePauseResume returns early when disconnected (line 130)", async () => {
+    statusState.isConnected = false;
+    const { result } = renderHook(() => useHomeActions());
+
+    await act(async () => {
+      await result.current.handlePauseResume();
+    });
+
+    expect(pauseMutateAsyncMock).not.toHaveBeenCalled();
+  });
+
+  it("handleSelectRamDumpFolder uses fallback description when rootName is null (line 99)", async () => {
+    selectRamDumpFolderMock.mockResolvedValue({ treeUri: "content://tree/", rootName: null });
+    const { result } = renderHook(() => useHomeActions());
+
+    await act(async () => {
+      await result.current.handleSelectRamDumpFolder();
+    });
+
+    expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ description: "Folder access granted" }));
+  });
+
+  it("runMachineTask catch branch fires when action throws (line 65)", async () => {
+    createSnapshotMock.mockRejectedValueOnce(new Error("snapshot failed"));
+    const { result } = renderHook(() => useHomeActions());
+
+    await act(async () => {
+      await result.current.handleSaveRam("program");
+    });
+
+    expect(reportUserErrorMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operation: "HOME_MACHINE_SAVE_RAM",
+        title: "Machine action failed",
+      }),
+    );
+  });
+
+  it("handleResetDrives and handleResetPrinter pass null when drivesData is null (lines 213, 225)", async () => {
+    const refreshDrivesFromDevice = vi.fn().mockResolvedValue(undefined);
+    const { result } = renderHook(() => useHomeActions());
+
+    await act(async () => {
+      await result.current.handleResetDrives(refreshDrivesFromDevice);
+      await result.current.handleResetPrinter(refreshDrivesFromDevice);
+    });
+
+    expect(resetDiskDevicesMock).toHaveBeenCalledWith(apiMock, null);
+    expect(resetPrinterDeviceMock).toHaveBeenCalledWith(apiMock, null);
+  });
+
+  it("updates a snapshot comment in the store", () => {
+    const { result } = renderHook(() => useHomeActions());
+    result.current.handleUpdateSnapshotLabel("snap-1", "Updated note");
+    expect(updateSnapshotLabelMock).toHaveBeenCalledWith("snap-1", "Updated note");
   });
 });

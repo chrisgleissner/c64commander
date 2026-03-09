@@ -184,6 +184,11 @@ describe("HomeConfigUtils", () => {
     it("handles whitespace", () => {
       expect(parseNumericValue("  42  ", 0)).toBe(42);
     });
+
+    it("returns fallback when parsed number is Infinity (line 49 FALSE branch)", () => {
+      // A very large digit string produces Infinity → !Number.isFinite → returns fallback
+      expect(parseNumericValue("9".repeat(400), 7)).toBe(7);
+    });
   });
 
   describe("resolveTurboControlValue", () => {

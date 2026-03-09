@@ -6,7 +6,8 @@ env:
 tags:
   - subflow
 ---
-- launchApp
+- launchApp:
+    stopApp: true
 - retry:
     maxRetries: 3
     commands:

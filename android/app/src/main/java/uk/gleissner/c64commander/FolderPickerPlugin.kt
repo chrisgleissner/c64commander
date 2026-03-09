@@ -32,12 +32,12 @@ class FolderPickerPlugin : Plugin() {
   private fun traceFields(call: PluginCall): AppLogger.TraceFields {
     val trace = call.getObject("traceContext") ?: return AppLogger.TraceFields()
     return AppLogger.TraceFields(
-      correlationId = trace.getString("correlationId"),
-      trackInstanceId = trace.getInteger("trackInstanceId")?.toString(),
-      playlistItemId = trace.getString("playlistItemId"),
-      sourceKind = trace.getString("sourceKind"),
-      localAccessMode = trace.getString("localAccessMode"),
-      lifecycleState = trace.getString("lifecycleState"),
+            correlationId = trace.getString("correlationId"),
+            trackInstanceId = trace.getInteger("trackInstanceId")?.toString(),
+            playlistItemId = trace.getString("playlistItemId"),
+            sourceKind = trace.getString("sourceKind"),
+            localAccessMode = trace.getString("localAccessMode"),
+            lifecycleState = trace.getString("lifecycleState"),
     )
   }
 
@@ -74,14 +74,16 @@ class FolderPickerPlugin : Plugin() {
   fun pickFile(call: PluginCall) {
     val intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
     intent.addCategory(Intent.CATEGORY_OPENABLE)
-    val extensions = parseStringArray(call, "extensions")
-      .map { ext -> ext.removePrefix(".").lowercase() }
-      .filter { ext -> ext.isNotBlank() }
-    intent.type = if (extensions.size == 1 && extensions.first() == "bin") {
-      "application/octet-stream"
-    } else {
-      "*/*"
-    }
+    val extensions =
+            parseStringArray(call, "extensions")
+                    .map { ext -> ext.removePrefix(".").lowercase() }
+                    .filter { ext -> ext.isNotBlank() }
+    intent.type =
+            if (extensions.size == 1 && extensions.first() == "bin") {
+              "application/octet-stream"
+            } else {
+              "*/*"
+            }
     val mimeTypes = parseStringArray(call, "mimeTypes")
     if (mimeTypes.isNotEmpty()) {
       intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes.toTypedArray())
@@ -91,7 +93,14 @@ class FolderPickerPlugin : Plugin() {
       try {
         intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, Uri.parse(initialUriString))
       } catch (error: Exception) {
-        AppLogger.warn(pluginContextOrNull(), logTag, "Invalid initial URI provided", "FolderPickerPlugin", error, traceFields(call))
+        AppLogger.warn(
+                pluginContextOrNull(),
+                logTag,
+                "Invalid initial URI provided",
+                "FolderPickerPlugin",
+                error,
+                traceFields(call)
+        )
       }
     }
     intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -113,22 +122,34 @@ class FolderPickerPlugin : Plugin() {
       return
     }
 
-    val flags = data.flags and (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+    val flags =
+            data.flags and
+                    (Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                            Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
     try {
       context.contentResolver.takePersistableUriPermission(treeUri, flags)
     } catch (error: SecurityException) {
-      AppLogger.error(pluginContextOrNull(), logTag, "Persistable permission rejected", "FolderPickerPlugin", error, traceFields(call))
+      AppLogger.error(
+              pluginContextOrNull(),
+              logTag,
+              "Persistable permission rejected",
+              "FolderPickerPlugin",
+              error,
+              traceFields(call)
+      )
       call.reject("Persistable permission rejected: ${error.message}", error)
       return
     }
 
     executor.execute {
       try {
-        val root = DocumentFile.fromTreeUri(context, treeUri)
-          ?: throw IllegalStateException("Unable to access selected directory")
-        val permissionPersisted = context.contentResolver.persistedUriPermissions.any {
-          it.uri == treeUri && it.isReadPermission
-        }
+        val root =
+                DocumentFile.fromTreeUri(context, treeUri)
+                        ?: throw IllegalStateException("Unable to access selected directory")
+        val permissionPersisted =
+                context.contentResolver.persistedUriPermissions.any {
+                  it.uri == treeUri && it.isReadPermission
+                }
         if (!permissionPersisted) {
           throw IllegalStateException("Persistable permission not persisted")
         }
@@ -138,7 +159,14 @@ class FolderPickerPlugin : Plugin() {
         response.put("permissionPersisted", true)
         call.resolve(response)
       } catch (error: Exception) {
-        AppLogger.error(pluginContextOrNull(), logTag, "Folder picker directory resolution failed", "FolderPickerPlugin", error, traceFields(call))
+        AppLogger.error(
+                pluginContextOrNull(),
+                logTag,
+                "Folder picker directory resolution failed",
+                "FolderPickerPlugin",
+                error,
+                traceFields(call)
+        )
         call.reject(error.message, error)
       }
     }
@@ -158,22 +186,34 @@ class FolderPickerPlugin : Plugin() {
       return
     }
 
-    val flags = data.flags and (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+    val flags =
+            data.flags and
+                    (Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                            Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
     try {
       context.contentResolver.takePersistableUriPermission(fileUri, flags)
     } catch (error: SecurityException) {
-      AppLogger.error(pluginContextOrNull(), logTag, "Persistable permission rejected", "FolderPickerPlugin", error, traceFields(call))
+      AppLogger.error(
+              pluginContextOrNull(),
+              logTag,
+              "Persistable permission rejected",
+              "FolderPickerPlugin",
+              error,
+              traceFields(call)
+      )
       call.reject("Persistable permission rejected: ${error.message}", error)
       return
     }
 
     executor.execute {
       try {
-        val doc = DocumentFile.fromSingleUri(context, fileUri)
-          ?: throw IllegalStateException("Unable to access selected file")
-        val extensions = parseStringArray(call, "extensions")
-          .map { ext -> ext.removePrefix(".").lowercase() }
-          .filter { ext -> ext.isNotBlank() }
+        val doc =
+                DocumentFile.fromSingleUri(context, fileUri)
+                        ?: throw IllegalStateException("Unable to access selected file")
+        val extensions =
+                parseStringArray(call, "extensions")
+                        .map { ext -> ext.removePrefix(".").lowercase() }
+                        .filter { ext -> ext.isNotBlank() }
         val fileName = doc.name ?: ""
         if (extensions.isNotEmpty()) {
           val normalizedName = fileName.lowercase()
@@ -182,9 +222,10 @@ class FolderPickerPlugin : Plugin() {
             throw IllegalStateException("Selected file does not match required extension.")
           }
         }
-        val permissionPersisted = context.contentResolver.persistedUriPermissions.any {
-          it.uri == fileUri && it.isReadPermission
-        }
+        val permissionPersisted =
+                context.contentResolver.persistedUriPermissions.any {
+                  it.uri == fileUri && it.isReadPermission
+                }
         if (!permissionPersisted) {
           throw IllegalStateException("Persistable permission not persisted")
         }
@@ -192,11 +233,16 @@ class FolderPickerPlugin : Plugin() {
         response.put("uri", fileUri.toString())
         response.put("name", fileName)
         response.put("sizeBytes", doc.length())
-        val modifiedAt = if (doc.lastModified() > 0) {
-          val formatter = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US)
-          formatter.timeZone = java.util.TimeZone.getTimeZone("UTC")
-          formatter.format(java.util.Date(doc.lastModified()))
-        } else null
+        val modifiedAt =
+                if (doc.lastModified() > 0) {
+                  val formatter =
+                          java.text.SimpleDateFormat(
+                                  "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
+                                  java.util.Locale.US
+                          )
+                  formatter.timeZone = java.util.TimeZone.getTimeZone("UTC")
+                  formatter.format(java.util.Date(doc.lastModified()))
+                } else null
         response.put("modifiedAt", modifiedAt)
         val documentId = DocumentsContract.getDocumentId(fileUri)
         val parentDocumentId = documentId.substringBeforeLast('/', "")
@@ -206,7 +252,14 @@ class FolderPickerPlugin : Plugin() {
           try {
             context.contentResolver.takePersistableUriPermission(parentTreeUri, flags)
           } catch (error: SecurityException) {
-            AppLogger.warn(pluginContextOrNull(), logTag, "Parent tree permission rejected", "FolderPickerPlugin", error, traceFields(call))
+            AppLogger.warn(
+                    pluginContextOrNull(),
+                    logTag,
+                    "Parent tree permission rejected",
+                    "FolderPickerPlugin",
+                    error,
+                    traceFields(call)
+            )
           }
           val parentRoot = DocumentFile.fromTreeUri(context, parentTreeUri)
           response.put("parentTreeUri", parentTreeUri.toString())
@@ -215,7 +268,14 @@ class FolderPickerPlugin : Plugin() {
         response.put("permissionPersisted", true)
         call.resolve(response)
       } catch (error: Exception) {
-        AppLogger.error(pluginContextOrNull(), logTag, "Folder picker file resolution failed", "FolderPickerPlugin", error, traceFields(call))
+        AppLogger.error(
+                pluginContextOrNull(),
+                logTag,
+                "Folder picker file resolution failed",
+                "FolderPickerPlugin",
+                error,
+                traceFields(call)
+        )
         call.reject(error.message, error)
       }
     }
@@ -235,11 +295,12 @@ class FolderPickerPlugin : Plugin() {
       try {
         val documentId = resolveDocumentId(treeUri, relativePath, true)
         val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, documentId)
-        val projection = arrayOf(
-          DocumentsContract.Document.COLUMN_DOCUMENT_ID,
-          DocumentsContract.Document.COLUMN_DISPLAY_NAME,
-          DocumentsContract.Document.COLUMN_MIME_TYPE
-        )
+        val projection =
+                arrayOf(
+                        DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                        DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+                        DocumentsContract.Document.COLUMN_MIME_TYPE
+                )
         val entries = mutableListOf<JSObject>()
         context.contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
           val nameIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
@@ -255,12 +316,20 @@ class FolderPickerPlugin : Plugin() {
             entry.put("path", buildChildPath(base, name))
             entries.add(entry)
           }
-        } ?: throw IllegalStateException("Unable to list directory")
+        }
+                ?: throw IllegalStateException("Unable to list directory")
         val response = JSObject()
         response.put("entries", entries)
         call.resolve(response)
       } catch (error: Exception) {
-        AppLogger.error(pluginContextOrNull(), logTag, "SAF listChildren failed", "FolderPickerPlugin", error, traceFields(call))
+        AppLogger.error(
+                pluginContextOrNull(),
+                logTag,
+                "SAF listChildren failed",
+                "FolderPickerPlugin",
+                error,
+                traceFields(call)
+        )
         call.reject(error.message, error)
       }
     }
@@ -292,15 +361,23 @@ class FolderPickerPlugin : Plugin() {
 
     executor.execute {
       try {
-        val input = context.contentResolver.openInputStream(Uri.parse(uri))
-          ?: throw IllegalStateException("Unable to open file")
+        val input =
+                context.contentResolver.openInputStream(Uri.parse(uri))
+                        ?: throw IllegalStateException("Unable to open file")
         val bytes = input.use { it.readBytes() }
         val encoded = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
         val result = JSObject()
         result.put("data", encoded)
         call.resolve(result)
       } catch (error: Exception) {
-        AppLogger.error(pluginContextOrNull(), logTag, "SAF readFile failed", "FolderPickerPlugin", error, traceFields(call))
+        AppLogger.error(
+                pluginContextOrNull(),
+                logTag,
+                "SAF readFile failed",
+                "FolderPickerPlugin",
+                error,
+                traceFields(call)
+        )
         call.reject(error.message, error)
       }
     }
@@ -324,15 +401,23 @@ class FolderPickerPlugin : Plugin() {
       try {
         val documentId = resolveDocumentId(treeUri, relativePath, false)
         val documentUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, documentId)
-        val input = context.contentResolver.openInputStream(documentUri)
-          ?: throw IllegalStateException("Unable to open file")
+        val input =
+                context.contentResolver.openInputStream(documentUri)
+                        ?: throw IllegalStateException("Unable to open file")
         val bytes = input.use { it.readBytes() }
         val encoded = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
         val result = JSObject()
         result.put("data", encoded)
         call.resolve(result)
       } catch (error: Exception) {
-        AppLogger.error(pluginContextOrNull(), logTag, "SAF readFileFromTree failed", "FolderPickerPlugin", error, traceFields(call))
+        AppLogger.error(
+                pluginContextOrNull(),
+                logTag,
+                "SAF readFileFromTree failed",
+                "FolderPickerPlugin",
+                error,
+                traceFields(call)
+        )
         call.reject(error.message, error)
       }
     }
@@ -370,7 +455,8 @@ class FolderPickerPlugin : Plugin() {
           if (!overwrite) {
             throw IllegalStateException("File already exists: $fileName")
           }
-          val existingUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, existing.documentId)
+          val existingUri =
+                  DocumentsContract.buildDocumentUriUsingTree(treeUri, existing.documentId)
           val deleted = DocumentsContract.deleteDocument(context.contentResolver, existingUri)
           if (!deleted) {
             throw IllegalStateException("Unable to overwrite existing file: $fileName")
@@ -378,14 +464,21 @@ class FolderPickerPlugin : Plugin() {
         }
 
         val parentUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, parentDocumentId)
-        val createdUri = DocumentsContract.createDocument(context.contentResolver, parentUri, mimeType, fileName)
-          ?: throw IllegalStateException("Unable to create file: $fileName")
+        val createdUri =
+                DocumentsContract.createDocument(
+                        context.contentResolver,
+                        parentUri,
+                        mimeType,
+                        fileName
+                )
+                        ?: throw IllegalStateException("Unable to create file: $fileName")
 
-        val bytes = android.util.Base64.decode(dataBase64, android.util.Base64.DEFAULT)
+        val bytes = android.util.Base64.decode(dataBase64, android.util.Base64.NO_WRAP)
         context.contentResolver.openOutputStream(createdUri, "w")?.use { output ->
           output.write(bytes)
           output.flush()
-        } ?: throw IllegalStateException("Unable to open output stream")
+        }
+                ?: throw IllegalStateException("Unable to open output stream")
 
         val response = JSObject()
         response.put("uri", createdUri.toString())
@@ -393,7 +486,14 @@ class FolderPickerPlugin : Plugin() {
         response.put("modifiedAt", isoTimestampNow())
         call.resolve(response)
       } catch (error: Exception) {
-        AppLogger.error(pluginContextOrNull(), logTag, "SAF writeFileToTree failed", "FolderPickerPlugin", error, traceFields(call))
+        AppLogger.error(
+                pluginContextOrNull(),
+                logTag,
+                "SAF writeFileToTree failed",
+                "FolderPickerPlugin",
+                error,
+                traceFields(call)
+        )
         call.reject(error.message, error)
       }
     }
@@ -412,15 +512,20 @@ class FolderPickerPlugin : Plugin() {
     }
   }
 
-  private fun resolveDocumentId(treeUri: Uri, relativePath: String?, requireDirectory: Boolean): String {
+  private fun resolveDocumentId(
+          treeUri: Uri,
+          relativePath: String?,
+          requireDirectory: Boolean
+  ): String {
     var documentId = DocumentsContract.getTreeDocumentId(treeUri)
     val normalized = normalizePath(relativePath)
     if (normalized.isBlank()) return documentId
     val segments = normalized.split('/').filter { it.isNotBlank() }
     for ((index, segment) in segments.withIndex()) {
       val isLeaf = index == segments.size - 1
-      val childId = findChildDocumentId(treeUri, documentId, segment, requireDirectory || !isLeaf)
-        ?: throw IllegalStateException("Path segment not found: $segment")
+      val childId =
+              findChildDocumentId(treeUri, documentId, segment, requireDirectory || !isLeaf)
+                      ?: throw IllegalStateException("Path segment not found: $segment")
       documentId = childId
     }
     return documentId
@@ -449,12 +554,14 @@ class FolderPickerPlugin : Plugin() {
         }
 
         val parentUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, parentDocumentId)
-        val createdUri = DocumentsContract.createDocument(
-          context.contentResolver,
-          parentUri,
-          DocumentsContract.Document.MIME_TYPE_DIR,
-          segment
-        ) ?: throw IllegalStateException("Unable to create directory: $segment")
+        val createdUri =
+                DocumentsContract.createDocument(
+                        context.contentResolver,
+                        parentUri,
+                        DocumentsContract.Document.MIME_TYPE_DIR,
+                        segment
+                )
+                        ?: throw IllegalStateException("Unable to create directory: $segment")
         parentDocumentId = DocumentsContract.getDocumentId(createdUri)
       }
     }
@@ -463,17 +570,18 @@ class FolderPickerPlugin : Plugin() {
   }
 
   private data class ChildDocument(
-    val documentId: String,
-    val mimeType: String,
+          val documentId: String,
+          val mimeType: String,
   )
 
   private fun findChildDocument(treeUri: Uri, parentId: String, name: String): ChildDocument? {
     val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, parentId)
-    val projection = arrayOf(
-      DocumentsContract.Document.COLUMN_DOCUMENT_ID,
-      DocumentsContract.Document.COLUMN_DISPLAY_NAME,
-      DocumentsContract.Document.COLUMN_MIME_TYPE
-    )
+    val projection =
+            arrayOf(
+                    DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                    DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+                    DocumentsContract.Document.COLUMN_MIME_TYPE
+            )
     context.contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
       val idIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
       val nameIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
@@ -489,13 +597,19 @@ class FolderPickerPlugin : Plugin() {
     return null
   }
 
-  private fun findChildDocumentId(treeUri: Uri, parentId: String, name: String, requireDirectory: Boolean): String? {
+  private fun findChildDocumentId(
+          treeUri: Uri,
+          parentId: String,
+          name: String,
+          requireDirectory: Boolean
+  ): String? {
     val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, parentId)
-    val projection = arrayOf(
-      DocumentsContract.Document.COLUMN_DOCUMENT_ID,
-      DocumentsContract.Document.COLUMN_DISPLAY_NAME,
-      DocumentsContract.Document.COLUMN_MIME_TYPE
-    )
+    val projection =
+            arrayOf(
+                    DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                    DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+                    DocumentsContract.Document.COLUMN_MIME_TYPE
+            )
     context.contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
       val idIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
       val nameIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DISPLAY_NAME)

@@ -280,7 +280,7 @@ Run all gates after implementation:
 7. If Playwright trace semantics changed: regenerate golden traces and run `npm run validate:traces`
 8. If Playwright evidence changed: `npm run validate:evidence`
 9. If Maestro flows changed and runtime is available: `npm run maestro:gating`
-10. Device validation: install debug APK on Samsung Note 3 (`2113b87f`), verify `Connected` state and real `/v1/info` calls in `logcat`
+10. Device validation: install debug APK on Samsung Note 3 (`211...`), verify `Connected` state and real `/v1/info` calls in `logcat`
 
 ## 5. Deliverables
 

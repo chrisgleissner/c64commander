@@ -114,6 +114,9 @@ export async function createMockC64Server(
   let faultMode: FaultMode = "none";
   let latencyMs: number | null = null;
   let responseQueue = Promise.resolve();
+  // Increments each time the jiffy clock address is read, so liveness checks
+  // see an advancing clock and treat the machine as healthy.
+  let jiffyCallCount = 0;
 
   // Use YAML as source of truth if no initial state provided
   const yamlState = Object.keys(initial).length === 0 ? await buildStateFromYaml() : {};
@@ -421,6 +424,13 @@ export async function createMockC64Server(
       const data = new Array(Math.max(1, length)).fill(0);
       if (address === "00C6") {
         data[0] = 0;
+      }
+      // Simulate an advancing jiffy clock so liveness checks see a healthy machine.
+      if (address === "00A2") {
+        jiffyCallCount += 1;
+        data[0] = jiffyCallCount & 0xff;
+        data[1] = (jiffyCallCount >> 8) & 0xff;
+        data[2] = (jiffyCallCount >> 16) & 0xff;
       }
       return sendJson(200, { data, errors: [] });
     }

@@ -71,5 +71,17 @@
     "editor.tabSize": 2
   },
   "vitest.configFile": "vitest.config.ts",
-  "bun.test.enable": false
+  "bun.test.enable": false,
+  "terminal.integrated.defaultProfile.linux": "bash-clean",
+  "terminal.integrated.profiles.linux": {
+    "bash-clean": {
+      "path": "/usr/bin/bash",
+      "args": ["-i"]
+    }
+  },
+  "terminal.integrated.automationProfile.linux": {
+    "path": "/usr/bin/bash",
+    "args": ["-i"]
+  },
+  "terminal.integrated.enablePersistentSessions": false
 }

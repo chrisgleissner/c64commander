@@ -63,6 +63,18 @@ describe("sliderPopupStateMachine", () => {
     expect(reduceSliderPopupState("Hidden", "idle-timeout")).toBe("Hidden");
   });
 
+  it("VisibleActive + idle-timeout transitions to Closing (line 24 TRUE branch)", () => {
+    // b17 L24: the TRUE arm of `if (event === "idle-timeout") return "Closing"` in VisibleActive
+    expect(reduceSliderPopupState("VisibleActive", "idle-timeout")).toBe("Closing");
+  });
+
+  it("unknown state returns itself unchanged (line 42 fallthrough, b37)", () => {
+    // Reaches the final `return state` after none of the state branches match
+    expect(reduceSliderPopupState("Bogus" as Parameters<typeof reduceSliderPopupState>[0], "idle-timeout")).toBe(
+      "Bogus",
+    );
+  });
+
   it("returns zero close delay when target is already in the past", () => {
     const delay = resolveSliderPopupCloseDelayMs(1_000, 1_100, 10_000);
     expect(delay).toBe(0);

@@ -39,6 +39,7 @@ This repository is **C64 Commander**, a React + Vite + Capacitor app for managin
 - **E2E**: `npm run test:e2e` with specs in `playwright/` and fixtures in `playwright/fixtures/`
 - **Android JVM**: `cd android && ./gradlew test` with tests in `android/app/src/test/java/com/c64/commander/hvsc/`
 - **Android fixtures**: `android/app/src/test/fixtures/hvsc/`
+- **Python agents**: `npm run test:agents` (pytest) with specs in `agents/tests/`; requires ≥90% branch coverage
 - **Maestro**: Read `doc/testing/maestro.md` before creating or updating flows under `.maestro/`
 
 ## Release tag APKs
@@ -108,6 +109,7 @@ Violine this rule is a release blocker.
 - For any plan/task that includes code changes, run `npm run test:coverage` before declaring completion.
 - The run must satisfy a safety margin of at least **90% branch coverage** (global), aligned with CI threshold enforcement.
 - If branch coverage is below 90%, continue adding meaningful tests until it is >= 90%.
+- For changes under `agents/`, also run `npm run test:agents` and confirm ≥90% branch coverage.
 
 ## MANDATORY: Concurrent changes
 

@@ -9,8 +9,11 @@
 import { test, expect } from "@playwright/test";
 import type { Page, TestInfo } from "@playwright/test";
 import { saveCoverageFromPage } from "./withCoverage";
+import { execFile as execFileCb } from "node:child_process";
+import { createHash } from "node:crypto";
 import * as path from "node:path";
 import * as fs from "node:fs/promises";
+import { promisify } from "node:util";
 import sharp from "sharp";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
 // Load full YAML config for tests
@@ -30,10 +33,12 @@ import { registerScreenshotSections, sanitizeSegment } from "./screenshotCatalog
 import { installFixedClock, installListPreviewLimit, installStableStorage, seedDiagnosticsTraces } from "./visualSeeds";
 
 const SCREENSHOT_ROOT = path.resolve("doc/img/app");
+const execFile = promisify(execFileCb);
 
 const screenshotPath = (relativePath: string) => path.resolve(SCREENSHOT_ROOT, relativePath);
 
 const screenshotLabel = (relativePath: string) => relativePath.replace(/\.[^.]+$/, "").replace(/[\\/]/g, "-");
+const screenshotRepoPath = (relativePath: string) => path.posix.join("doc/img/app", relativePath);
 
 const ensureScreenshotDir = async (filePath: string) => {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
@@ -49,6 +54,71 @@ const decodePngToRgba = async (source: string | Buffer) => {
     width: info.width,
     height: info.height,
   };
+};
+
+const pngFingerprint = ({ data, width, height }: Awaited<ReturnType<typeof decodePngToRgba>>) =>
+  `${width}x${height}:${createHash("sha256").update(data).digest("hex")}`;
+
+interface HeadScreenshotCatalog {
+  fingerprints: Map<string, string[]>;
+  trackedPaths: Set<string>;
+}
+
+let headScreenshotCatalogPromise: Promise<HeadScreenshotCatalog> | null = null;
+
+const loadHeadScreenshotCatalog = async (): Promise<HeadScreenshotCatalog> => {
+  if (!headScreenshotCatalogPromise) {
+    headScreenshotCatalogPromise = (async () => {
+      try {
+        const { stdout } = await execFile("git", ["ls-tree", "-r", "--name-only", "HEAD", "--", "doc/img/app"], {
+          maxBuffer: 8 * 1024 * 1024,
+        });
+        const trackedPaths = stdout
+          .split("\n")
+          .map((line) => line.trim())
+          .filter((line) => line.endsWith(".png"));
+        const fingerprints = new Map<string, string[]>();
+        const decodedEntries = await Promise.all(
+          trackedPaths.map(async (trackedPath) => {
+            try {
+              const { stdout: headBlob } = await execFile("git", ["show", `HEAD:${trackedPath}`], {
+                encoding: "buffer",
+                maxBuffer: 64 * 1024 * 1024,
+              });
+              const decoded = await decodePngToRgba(headBlob);
+              return {
+                trackedPath,
+                fingerprint: pngFingerprint(decoded),
+              };
+            } catch (error) {
+              console.warn(`Failed to load tracked screenshot ${trackedPath} from HEAD.`, error);
+              return null;
+            }
+          }),
+        );
+
+        decodedEntries.forEach((entry) => {
+          if (!entry) return;
+          const matches = fingerprints.get(entry.fingerprint) ?? [];
+          matches.push(entry.trackedPath);
+          fingerprints.set(entry.fingerprint, matches);
+        });
+
+        return {
+          fingerprints,
+          trackedPaths: new Set(trackedPaths),
+        };
+      } catch (error) {
+        console.warn("Failed to build tracked screenshot catalog from HEAD.", error);
+        return {
+          fingerprints: new Map<string, string[]>(),
+          trackedPaths: new Set<string>(),
+        };
+      }
+    })();
+  }
+
+  return headScreenshotCatalogPromise;
 };
 
 const hasPixelDiffAgainstExisting = async (filePath: string, screenshotBuffer: Buffer) => {
@@ -67,6 +137,23 @@ const hasPixelDiffAgainstExisting = async (filePath: string, screenshotBuffer: B
   } catch (error) {
     console.warn(`Failed to compare screenshot pixels for ${filePath}.`, error);
     return true;
+  }
+};
+
+const matchesTrackedScreenshotAtAnotherPath = async (relativePath: string, screenshotBuffer: Buffer) => {
+  const catalog = await loadHeadScreenshotCatalog();
+  const targetRepoPath = screenshotRepoPath(relativePath);
+  if (catalog.trackedPaths.has(targetRepoPath)) {
+    return false;
+  }
+
+  try {
+    const fingerprint = pngFingerprint(await decodePngToRgba(screenshotBuffer));
+    const matches = catalog.fingerprints.get(fingerprint) ?? [];
+    return matches.some((trackedPath) => trackedPath !== targetRepoPath);
+  } catch (error) {
+    console.warn(`Failed to compare ${relativePath} against tracked screenshot fingerprints.`, error);
+    return false;
   }
 };
 
@@ -94,7 +181,11 @@ const captureScreenshot = async (page: Page, testInfo: TestInfo, relativePath: s
     caret: "hide",
   });
   if (await hasPixelDiffAgainstExisting(filePath, screenshotBuffer)) {
-    await fs.writeFile(filePath, screenshotBuffer);
+    if (await matchesTrackedScreenshotAtAnotherPath(relativePath, screenshotBuffer)) {
+      console.info(`[screenshots] Skipped ${relativePath}; pixels match an existing tracked screenshot.`);
+    } else {
+      await fs.writeFile(filePath, screenshotBuffer);
+    }
   }
   await attachStepScreenshot(page, testInfo, screenshotLabel(relativePath));
 };
@@ -337,6 +428,192 @@ test.describe("App screenshots", () => {
         )
         .toBeGreaterThan(0);
       await scrollAndCapture(page, testInfo, page.getByTestId("home-sid-status"), "home/sid/01-reset-post-silence.png");
+    },
+  );
+
+  test(
+    "capture home RAM snapshot dialog screenshots",
+    { tag: "@screenshots" },
+    async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      const seedHomeDialogSnapshots = async (variant: "default" | "snapshot-manager") => {
+        await page.evaluate((mode) => {
+          const HEADER_SIZE = 28;
+          const buildSnap = (typeCode: number, ts: number): string => {
+            const displayRanges =
+              typeCode === 0
+                ? ["$0000\u2013$00FF", "$0200\u2013$FFFF"]
+                : typeCode === 1
+                  ? ["$002B\u2013$0038", "$0801\u2013STREND"]
+                  : typeCode === 2
+                    ? ["VICBANK", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"]
+                    : ["$0400\u2013$07E7", "$2000\u2013$20FF"];
+            const snapType =
+              typeCode === 0 ? "program" : typeCode === 1 ? "basic" : typeCode === 2 ? "screen" : "custom";
+            const meta = JSON.stringify({
+              snapshot_type: snapType,
+              display_ranges: displayRanges,
+              created_at: "2026-01-10 09:00:00",
+            });
+            const metaBytes = new TextEncoder().encode(meta);
+            const total = HEADER_SIZE + metaBytes.length;
+            const buf = new Uint8Array(total);
+            const view = new DataView(buf.buffer);
+            new TextEncoder().encode("C64SNAP\0").forEach((b: number, i: number) => {
+              buf[i] = b;
+            });
+            view.setUint16(8, 1, true);
+            view.setUint16(10, typeCode, true);
+            view.setUint32(12, ts, true);
+            view.setUint16(16, 0, true);
+            view.setUint16(18, 0, true);
+            view.setUint32(20, HEADER_SIZE, true);
+            view.setUint32(24, metaBytes.length, true);
+            buf.set(metaBytes, HEADER_SIZE);
+            let binary = "";
+            for (let i = 0; i < buf.length; i++) binary += String.fromCharCode(buf[i]);
+            return btoa(binary);
+          };
+          const snapshots =
+            mode === "snapshot-manager"
+              ? [
+                  {
+                    id: "snap-1",
+                    filename: "c64-program-20260110-090000.c64snap",
+                    bytesBase64: buildSnap(0, 1736499600),
+                    createdAt: "2026-01-10T09:00:00.000Z",
+                    snapshotType: "program",
+                    metadata: {
+                      snapshot_type: "program",
+                      display_ranges: ["$0000\u2013$00FF", "$0200\u2013$FFFF"],
+                      created_at: "2026-01-10 09:00:00",
+                      label: "JupiterLander.crt",
+                    },
+                  },
+                  {
+                    id: "snap-2",
+                    filename: "c64-basic-20260110-080000.c64snap",
+                    bytesBase64: buildSnap(1, 1736496000),
+                    createdAt: "2026-01-10T08:00:00.000Z",
+                    snapshotType: "basic",
+                    metadata: {
+                      snapshot_type: "basic",
+                      display_ranges: ["$002B\u2013$0038", "$0801\u2013STREND"],
+                      created_at: "2026-01-10 08:00:00",
+                    },
+                  },
+                  {
+                    id: "snap-3",
+                    filename: "c64-screen-20260110-070000.c64snap",
+                    bytesBase64: buildSnap(2, 1736492400),
+                    createdAt: "2026-01-10T07:00:00.000Z",
+                    snapshotType: "screen",
+                    metadata: {
+                      snapshot_type: "screen",
+                      display_ranges: ["VICBANK", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"],
+                      created_at: "2026-01-10 07:00:00",
+                    },
+                  },
+                  {
+                    id: "snap-4",
+                    filename: "c64-custom-20260110-060000.c64snap",
+                    bytesBase64: buildSnap(3, 1736488800),
+                    createdAt: "2026-01-10T06:00:00.000Z",
+                    snapshotType: "custom",
+                    metadata: {
+                      snapshot_type: "custom",
+                      display_ranges: ["$0400\u2013$07E7", "$2000\u2013$20FF"],
+                      created_at: "2026-01-10 06:00:00",
+                    },
+                  },
+                ]
+              : [
+                  {
+                    id: "snap-1",
+                    filename: "c64-program-20260110-090000.c64snap",
+                    bytesBase64: buildSnap(0, 1736499600),
+                    createdAt: "2026-01-10T09:00:00.000Z",
+                    snapshotType: "program",
+                    metadata: {
+                      snapshot_type: "program",
+                      display_ranges: ["$0000\u2013$00FF", "$0200\u2013$FFFF"],
+                      created_at: "2026-01-10 09:00:00",
+                      label: "JupiterLander.crt",
+                    },
+                  },
+                  {
+                    id: "snap-2",
+                    filename: "c64-basic-20260110-080000.c64snap",
+                    bytesBase64: buildSnap(1, 1736496000),
+                    createdAt: "2026-01-10T08:00:00.000Z",
+                    snapshotType: "basic",
+                    metadata: {
+                      snapshot_type: "basic",
+                      display_ranges: ["$002B\u2013$0038", "$0801\u2013STREND"],
+                      created_at: "2026-01-10 08:00:00",
+                    },
+                  },
+                  {
+                    id: "snap-3",
+                    filename: "c64-screen-20260110-070000.c64snap",
+                    bytesBase64: buildSnap(2, 1736492400),
+                    createdAt: "2026-01-10T07:00:00.000Z",
+                    snapshotType: "screen",
+                    metadata: {
+                      snapshot_type: "screen",
+                      display_ranges: ["VICBANK", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"],
+                      created_at: "2026-01-10 07:00:00",
+                    },
+                  },
+                ];
+
+          localStorage.setItem(
+            "c64u_snapshots:v1",
+            JSON.stringify({
+              version: 1,
+              snapshots,
+            }),
+          );
+          window.dispatchEvent(new CustomEvent("c64u-snapshots-updated", { detail: snapshots }));
+        }, variant);
+      };
+
+      await page.goto("/");
+      await waitForConnected(page);
+      await seedHomeDialogSnapshots("default");
+
+      // Save RAM dialog
+      await page.getByTestId("home-save-ram").click();
+      await expect(page.getByTestId("save-ram-dialog")).toBeVisible();
+      await captureScreenshot(page, testInfo, "home/dialogs/01-save-ram-dialog.png");
+      await page.getByTestId("save-ram-type-custom").click();
+      await expect(page.getByTestId("save-ram-custom-form")).toBeVisible();
+      await page.getByTestId("save-ram-custom-start").fill("0400");
+      await page.getByTestId("save-ram-custom-end").fill("07E7");
+      await page.getByTestId("save-ram-custom-add-range").click();
+      await page.getByTestId("save-ram-custom-start-1").fill("2000");
+      await page.getByTestId("save-ram-custom-end-1").fill("20FF");
+      await captureScreenshot(page, testInfo, "home/dialogs/02-save-ram-custom-range.png");
+      await page.keyboard.press("Escape");
+
+      // Snapshot Manager dialog
+      await seedHomeDialogSnapshots("snapshot-manager");
+      await page.getByTestId("home-load-ram").click();
+      await expect(page.getByTestId("snapshot-manager-dialog")).toBeVisible();
+      await expect(page.getByTestId("snapshot-row")).toHaveCount(4);
+      await captureScreenshot(page, testInfo, "home/dialogs/03-snapshot-manager.png");
+      await page.keyboard.press("Escape");
+      await expect(page.getByTestId("snapshot-manager-dialog")).not.toBeVisible();
+
+      // Restore confirmation dialog
+      await seedHomeDialogSnapshots("default");
+      await page.reload();
+      await waitForConnected(page);
+      await page.getByTestId("home-load-ram").click();
+      await expect(page.getByTestId("snapshot-manager-dialog")).toBeVisible();
+      await page.getByTestId("snapshot-row").first().click();
+      await expect(page.getByTestId("restore-snapshot-dialog")).toBeVisible();
+      await captureScreenshot(page, testInfo, "home/dialogs/04-restore-confirmation.png");
+      await page.keyboard.press("Escape");
     },
   );
 

@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  registerServiceWorker,
   registerServiceWorkerForEnvironment,
+  shouldRegisterServiceWorker,
   shouldRegisterServiceWorkerForEnvironment,
 } from "@/lib/startup/serviceWorkerRegistration";
 import { addErrorLog } from "@/lib/logging";
@@ -59,5 +61,15 @@ describe("serviceWorkerRegistration", () => {
         error: expect.objectContaining({ message: "registration failed" }),
       }),
     );
+  });
+
+  it("shouldRegisterServiceWorker delegates to ForEnvironment", () => {
+    // In Vitest, import.meta.env.DEV is true, so result is false (dev mode skips SW)
+    expect(shouldRegisterServiceWorker()).toBe(false);
+  });
+
+  it("registerServiceWorker delegates to ForEnvironment", () => {
+    // In Vitest, import.meta.env.DEV is true, so returns false (dev mode skips SW)
+    expect(registerServiceWorker()).toBe(false);
   });
 });

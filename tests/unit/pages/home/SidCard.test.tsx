@@ -162,6 +162,18 @@ describe("SidCard", () => {
     expect(change).toHaveBeenCalledWith(20);
   });
 
+  it("handles pan commit interaction", () => {
+    const commit = vi.fn();
+    const { rerender } = render(<SidCard {...defaultProps} onPanCommit={commit} />);
+    const sliders = screen.getAllByTestId("slider");
+    const panSlider = sliders[1];
+    const input = panSlider.querySelector("input")!;
+
+    rerender(<SidCard {...defaultProps} pan={30} onPanCommit={commit} />);
+    fireEvent.mouseUp(input);
+    expect(commit).toHaveBeenCalled();
+  });
+
   it("disables controls when disconnected or pending", () => {
     render(<SidCard {...defaultProps} isConnected={false} />);
     const buttons = screen.getAllByTestId("button");

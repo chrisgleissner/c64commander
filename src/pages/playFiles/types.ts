@@ -58,6 +58,7 @@ export type StoredPlaylistState = {
 export type StoredPlaybackSession = {
   playlistKey: string;
   currentItemId: string | null;
+  currentItemLabel?: string | null;
   currentIndex: number;
   isPlaying: boolean;
   isPaused: boolean;

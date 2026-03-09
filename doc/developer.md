@@ -227,7 +227,7 @@ Screenshot runs now prune pixel-identical PNG changes automatically (metadata-on
 ```bash
 ./build --emulator       # Launch Android emulator
 ./build --install-apk        # Build and install APK to connected device
-./build --device-id R5CRC3ZY9XH --install-apk  # Install to specific device
+./build --device-id R5C... --install-apk  # Install to specific device
 ./build --test-smoke          # Run emulator smoke tests (mock target only)
 ./build --test-smoke --c64u-target real  # Run mock + real target smoke tests
 ./build --test-smoke --c64u-target real --c64u-host C64U

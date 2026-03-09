@@ -38,7 +38,7 @@ test-results/
     runs/
       <timestamp>-<mode>-<auth>/
         meta.json
-        logs.ndjson
+        logs.jsonl
         endpoints.json
         latency-stats.json
         rest-cooldowns.json

@@ -650,4 +650,41 @@ describe("traceSession", () => {
     expect(meta.userAgent).toBe("TestBrowser/1.0");
     vi.unstubAllGlobals();
   });
+
+  it("evictExpired calls dropOldest for truly expired events (line 73)", () => {
+    vi.stubGlobal("window", {
+      dispatchEvent: vi.fn(),
+      setTimeout: vi.fn(),
+      CustomEvent: class {},
+    });
+    // Add an event with a timestamp older than RETENTION_WINDOW_MS (30 minutes)
+    const expiredTimestamp = new Date(Date.now() - 31 * 60 * 1000).toISOString();
+    const expiredEvent = {
+      id: "expired-1",
+      type: "action-start" as const,
+      timestamp: expiredTimestamp,
+      relativeMs: -31 * 60 * 1000,
+      origin: "user" as const,
+      correlationId: "COR-EXP",
+      data: {},
+    };
+    replaceTraceEvents([expiredEvent] as any);
+    // Recording a new event triggers appendEvent → evictExpired, which should drop the old one
+    recordActionStart(action);
+    const ids = getTraceEvents().map((e) => e.id);
+    expect(ids).not.toContain("expired-1");
+  });
+
+  it("shouldSuppressTraceEvent returns true for non-error when suppression active (lines 60, 62)", () => {
+    vi.stubGlobal("window", {
+      dispatchEvent: vi.fn(),
+      setTimeout: vi.fn(),
+      CustomEvent: class {},
+    });
+    shouldSuppressMock.mockReturnValue(true);
+    // action-start is not an error type → shouldSuppressTraceEvent returns true → event NOT recorded
+    const countBefore = getTraceEvents().length;
+    recordActionStart(action);
+    expect(getTraceEvents().length).toBe(countBefore);
+  });
 });

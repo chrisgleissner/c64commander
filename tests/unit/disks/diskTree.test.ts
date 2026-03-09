@@ -146,4 +146,63 @@ describe("diskTree sort — mixed folder/disk siblings", () => {
     expect(rootChildren[0]?.type).toBe("folder");
     expect(rootChildren[1]?.type).toBe("disk");
   });
+
+  it("sorts folder before disk when disk is inserted before folder (BRDA:77 arm 1)", () => {
+    // Disk is added to root first, folder is created second.
+    // sort comparator fires with a=disk, b=folder → returns 1 (disk arm).
+    const mixed = [
+      createDiskEntry({ location: "local", path: "/A.d64" }),
+      createDiskEntry({ location: "local", path: "/B/Two.d64" }),
+    ];
+    const state = buildDiskTreeState(mixed, "");
+    const rootChildren = state.root.children ?? [];
+    expect(rootChildren[0]?.type).toBe("folder");
+    expect(rootChildren[1]?.type).toBe("disk");
+  });
+});
+
+describe("diskTree buildDiskMatches coverage", () => {
+  it("matches by group when name and path do not match", () => {
+    const disk = createDiskEntry({ location: "local", path: "/X/Thing.d64", group: "Arcade" });
+    const state = buildDiskTreeState([disk], "Arcade");
+    // Group match should set matchedField to "group"
+    const folderX = state.root.children?.find((c) => c.type === "folder");
+    const diskNode = folderX?.children?.[0];
+    expect(state.hasMatch(diskNode!)).toBe(true);
+  });
+
+  it("matches by path when name does not match", () => {
+    const disk = createDiskEntry({ location: "local", path: "/SpecialFolder/Game.d64" });
+    const state = buildDiskTreeState([disk], "SpecialFolder");
+    const folder = state.root.children?.find((c) => c.type === "folder");
+    const diskNode = folder?.children?.[0];
+    expect(state.hasMatch(diskNode!)).toBe(true);
+  });
+
+  it("places two disks in the same folder without duplicating folder", () => {
+    const disks = [
+      createDiskEntry({ location: "local", path: "/Shared/One.d64" }),
+      createDiskEntry({ location: "local", path: "/Shared/Two.d64" }),
+    ];
+    const state = buildDiskTreeState(disks, "");
+    const rootChildren = state.root.children ?? [];
+    // Should have exactly one folder called "Shared"
+    const sharedFolders = rootChildren.filter((c) => c.name === "Shared");
+    expect(sharedFolders).toHaveLength(1);
+    expect(sharedFolders[0]?.children).toHaveLength(2);
+  });
+
+  it("hasMatch returns false for a disk node whose diskId has no match entry", () => {
+    const disks = [createDiskEntry({ location: "local", path: "/A/One.d64" })];
+    const state = buildDiskTreeState(disks, "Some Filter");
+    const nodeWithUnknownId: DiskTreeNode = {
+      id: "disk:unknown",
+      name: "Unknown",
+      path: "/Unknown.d64",
+      type: "disk",
+      diskId: "nonexistent-id",
+    };
+    // diskId not in state's matches → should return false via ?? false
+    expect(state.hasMatch(nodeWithUnknownId)).toBe(false);
+  });
 });

@@ -99,4 +99,9 @@ describe("audio mixer solo routing", () => {
     const updates = buildSoloRoutingUpdates([{ name: "master", value: "0 dB", options: ["0 dB", "-6 dB"] }], null);
     expect(Object.keys(updates)).toHaveLength(0);
   });
+
+  it('resolveAudioMixerMuteValue returns "OFF" for empty options array (line 52 ?? fallback)', () => {
+    // options[0] is undefined → ?? "OFF" right side fires
+    expect(resolveAudioMixerMuteValue([])).toBe("OFF");
+  });
 });

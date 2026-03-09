@@ -60,6 +60,12 @@ describe("localFileBrowser", () => {
       const f = [makeFile("A/B/C.txt")];
       expect(listLocalFolders(f, "/Z/")).toEqual([]);
     });
+
+    it("ignores file where next path segment is empty (BRDA:24)", () => {
+      // Double-slash produces an empty segment: suffix.split("/")[0] === "" → nextFolder = null
+      const f = [makeFile("Music//file.sid")];
+      expect(listLocalFolders(f, "/Music/")).toEqual([]);
+    });
   });
 
   describe("listLocalFiles", () => {

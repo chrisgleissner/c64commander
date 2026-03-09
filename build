@@ -186,7 +186,7 @@ Smoke test modifiers (require --test-smoke):
 Examples:
   ./build
   ./build --skip-tests
-  ./build --install-apk --device-id R5CRC3ZY9XH
+  ./build --install-apk --device-id <serial number>
   ./build --apk-path /path/to/app-debug.apk --install-apk
   ./build --emulator
   ./build --screenshots
@@ -1215,6 +1215,13 @@ fi
 if [[ "$RUN_TEST" == "true" ]]; then
   log "Running tests"
   (cd "$ROOT_DIR" && npm test)
+  AGENT_PYTHON="$ROOT_DIR/.venv/bin/python3"
+  if [[ -f "$AGENT_PYTHON" ]]; then
+    log "Running Python agent tests"
+    (cd "$ROOT_DIR/agents" && "$AGENT_PYTHON" -m pytest --cov=openhands --cov-branch --cov-report=term-missing tests/)
+  else
+    echo "Warning: .venv not found; skipping Python agent tests" >&2
+  fi
   (cd "$ROOT_DIR" && npx playwright install --check >/dev/null 2>&1 || npx playwright install)
   if [[ "$RUN_SCREENSHOTS" == "true" ]]; then
     (cd "$ROOT_DIR" && PLAYWRIGHT_WORKERS="${PLAYWRIGHT_WORKERS:-4}" npm run test:e2e)

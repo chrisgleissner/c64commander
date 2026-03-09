@@ -5,24 +5,15 @@ import { toast } from "@/hooks/use-toast";
 import { reportUserError } from "@/lib/uiErrors";
 import { addErrorLog } from "@/lib/logging";
 import { useActionTrace } from "@/hooks/useActionTrace";
-import {
-  FULL_RAM_SIZE_BYTES,
-  clearRamAndReboot,
-  dumpFullRamImage,
-  loadFullRamImage,
-} from "@/lib/machine/ramOperations";
-import {
-  buildRamDumpFileName,
-  pickRamDumpFile,
-  selectRamDumpFolder,
-  writeRamDumpToFolder,
-} from "@/lib/machine/ramDumpStorage";
-import {
-  loadRamDumpFolderConfig,
-  saveRamDumpFolderConfig,
-  type RamDumpFolderConfig,
-} from "@/lib/config/ramDumpFolderStore";
+import { clearRamAndReboot, loadMemoryRanges } from "@/lib/machine/ramOperations";
+import { selectRamDumpFolder } from "@/lib/machine/ramDumpStorage";
+import { loadRamDumpFolderConfig, type RamDumpFolderConfig } from "@/lib/config/ramDumpFolderStore";
 import { resetDiskDevices, resetPrinterDevice } from "@/lib/disks/resetDrives";
+import { createSnapshot } from "@/lib/snapshot/snapshotCreation";
+import { deleteSnapshotFromStore, snapshotEntryToBytes, updateSnapshotLabel } from "@/lib/snapshot/snapshotStore";
+import { decodeSnapshot } from "@/lib/snapshot/snapshotFormat";
+import { getCurrentPlaybackSnapshotLabel } from "@/lib/snapshot/currentPlaybackSnapshotLabel";
+import type { MemoryRange, SnapshotStorageEntry, SnapshotType } from "@/lib/snapshot/snapshotTypes";
 
 export function useHomeActions() {
   const api = getC64API();
@@ -66,10 +57,12 @@ export function useHomeActions() {
     setMachineTaskId(taskId);
     try {
       await action();
-      toast({
-        title: successTitle,
-        description: successDescription,
-      });
+      if (successTitle) {
+        toast({
+          title: successTitle,
+          description: successDescription,
+        });
+      }
     } catch (error) {
       reportUserError({
         operation: `HOME_MACHINE_${taskId.toUpperCase().replace(/-/g, "_")}`,
@@ -165,47 +158,55 @@ export function useHomeActions() {
     }
   });
 
-  const handleSaveRam = trace(async function handleSaveRam() {
+  const handleSaveRam = trace(async function handleSaveRam(type: SnapshotType, customRanges?: MemoryRange[]) {
     await runMachineTask(
       "save-ram",
       async () => {
-        const folder = ramDumpFolder ?? (await selectRamDumpFolder());
-        if (!ramDumpFolder) {
-          setRamDumpFolder(folder);
-        }
-        const image = await dumpFullRamImage(api);
-        const fileName = buildRamDumpFileName();
-        await writeRamDumpToFolder(folder, fileName, image);
+        const currentPlaybackLabel = getCurrentPlaybackSnapshotLabel();
+        const result = await createSnapshot(api, {
+          type,
+          customRanges,
+          label: currentPlaybackLabel,
+          contentName: currentPlaybackLabel,
+        });
+        toast({
+          title: "Snapshot saved",
+          description: result.displayTimestamp,
+        });
       },
-      "RAM dump saved",
-      "Saved to selected folder.",
+      // runMachineTask also toasts success — we suppress that and toast inside
+      // the action to include the timestamp.  Pass empty strings to avoid a
+      // double toast; the inner toast already ran.
+      "",
     );
     setMachineExecutionState("running");
   });
 
-  const handleLoadRam = trace(async function handleLoadRam() {
+  const handleRestoreSnapshot = trace(async function handleRestoreSnapshot(snapshot: SnapshotStorageEntry) {
     await runMachineTask(
       "load-ram",
       async () => {
-        const pickedFile = await pickRamDumpFile({
-          preferredFolder: ramDumpFolder ?? undefined,
-        });
-        if (!ramDumpFolder && pickedFile.parentFolder) {
-          saveRamDumpFolderConfig(pickedFile.parentFolder);
-          setRamDumpFolder(pickedFile.parentFolder);
-        }
-        if (pickedFile.bytes.length !== FULL_RAM_SIZE_BYTES) {
-          throw new Error(
-            `Invalid RAM dump size: expected ${FULL_RAM_SIZE_BYTES} bytes, got ${pickedFile.bytes.length} bytes`,
-          );
-        }
-        await loadFullRamImage(api, pickedFile.bytes);
+        const bytes = snapshotEntryToBytes(snapshot);
+        const decoded = decodeSnapshot(bytes);
+        const ranges = decoded.ranges.map((r, i) => ({
+          start: r.start,
+          bytes: decoded.blocks[i],
+        }));
+        await loadMemoryRanges(api, ranges);
       },
-      "RAM loaded",
-      "Memory image applied successfully.",
+      "Snapshot restored",
+      snapshot.metadata.label ?? snapshot.metadata.created_at,
     );
     setMachineExecutionState("running");
   });
+
+  const handleDeleteSnapshot = (id: string) => {
+    deleteSnapshotFromStore(id);
+  };
+
+  const handleUpdateSnapshotLabel = (id: string, label: string) => {
+    updateSnapshotLabel(id, label);
+  };
 
   const handlePowerOff = trace(async function handlePowerOff() {
     setPowerOffDialogOpen(true);
@@ -255,7 +256,9 @@ export function useHomeActions() {
     handleAction,
     handlePauseResume,
     handleSaveRam,
-    handleLoadRam,
+    handleRestoreSnapshot,
+    handleDeleteSnapshot,
+    handleUpdateSnapshotLabel,
     handleRebootClearMemory,
     handlePowerOff,
     confirmPowerOff,

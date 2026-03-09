@@ -23,6 +23,7 @@ vi.mock("@/lib/logging", () => ({
 
 import {
   InMemoryFeatureFlagRepository,
+  PluginFeatureFlagRepository,
   FeatureFlagManager,
   isHvscEnabled,
   type FeatureFlags,
@@ -158,6 +159,52 @@ describe("featureFlags", () => {
 
     it("returns false when hvsc_enabled is false", () => {
       expect(isHvscEnabled({ hvsc_enabled: false })).toBe(false);
+    });
+  });
+
+  describe("PluginFeatureFlagRepository", () => {
+    it("getFlag returns the boolean value when the plugin returns a boolean", async () => {
+      const { FeatureFlags } = await import("@/lib/native/featureFlags");
+      vi.mocked(FeatureFlags.getFlag).mockResolvedValueOnce({ value: true });
+      const repo = new PluginFeatureFlagRepository();
+      expect(await repo.getFlag("hvsc_enabled")).toBe(true);
+    });
+
+    it("getFlag returns null when plugin value is not a boolean", async () => {
+      const { FeatureFlags } = await import("@/lib/native/featureFlags");
+      vi.mocked(FeatureFlags.getFlag).mockResolvedValueOnce({ value: null });
+      const repo = new PluginFeatureFlagRepository();
+      expect(await repo.getFlag("hvsc_enabled")).toBeNull();
+    });
+
+    it("getAllFlags returns flags from plugin", async () => {
+      const { FeatureFlags } = await import("@/lib/native/featureFlags");
+      vi.mocked(FeatureFlags.getAllFlags).mockResolvedValueOnce({
+        flags: { hvsc_enabled: false },
+      });
+      const repo = new PluginFeatureFlagRepository();
+      const result = await repo.getAllFlags(["hvsc_enabled"]);
+      expect(result).toEqual({ hvsc_enabled: false });
+    });
+
+    it("getAllFlags returns empty object when flags is undefined", async () => {
+      const { FeatureFlags } = await import("@/lib/native/featureFlags");
+      vi.mocked(FeatureFlags.getAllFlags).mockResolvedValueOnce({
+        flags: undefined,
+      });
+      const repo = new PluginFeatureFlagRepository();
+      const result = await repo.getAllFlags(["hvsc_enabled"]);
+      expect(result).toEqual({});
+    });
+
+    it("setFlag delegates to the plugin", async () => {
+      const { FeatureFlags } = await import("@/lib/native/featureFlags");
+      const repo = new PluginFeatureFlagRepository();
+      await repo.setFlag("hvsc_enabled", true);
+      expect(FeatureFlags.setFlag).toHaveBeenCalledWith({
+        key: "hvsc_enabled",
+        value: true,
+      });
     });
   });
 });

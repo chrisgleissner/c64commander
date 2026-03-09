@@ -25,6 +25,7 @@ const { livenessMock, traceSessionMock, loggingMock } = vi.hoisted(() => ({
   },
   loggingMock: {
     addErrorLog: vi.fn(),
+    addLog: vi.fn(),
   },
 }));
 

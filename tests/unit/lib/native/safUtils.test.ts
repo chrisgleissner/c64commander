@@ -59,5 +59,10 @@ describe("safUtils", () => {
       expect(redactTreeUri("a//b/c")).toBe("a//b/c");
       expect(redactTreeUri("a//b/looooooongfilename")).toBe("a//b/looo...ame");
     });
+
+    it("handles trailing slash producing empty last segment (line 17 || fallback)", () => {
+      // path ends with "/" → last part is "" → `|| ""` right side fires
+      expect(redactTreeUri("a/b/c/")).toBe("a/b/c/");
+    });
   });
 });

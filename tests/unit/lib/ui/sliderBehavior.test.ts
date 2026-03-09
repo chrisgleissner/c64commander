@@ -185,6 +185,14 @@ describe("sliderBehavior", () => {
       // Should not throw, no timer to clear
     });
 
+    it("commit without prior schedule hits null pendingValue in flush (line 73 TRUE)", () => {
+      // flush() is called by commit(); pendingValue is null → TRUE branch fires
+      const onChange = vi.fn();
+      const queue = createSliderAsyncQueue({ onChange });
+      queue.commit(5);
+      expect(onChange).not.toHaveBeenCalled();
+    });
+
     it("cancel clears a pending scheduled call", () => {
       const onChange = vi.fn();
       const queue = createSliderAsyncQueue({ onChange, throttleMs: 100 });

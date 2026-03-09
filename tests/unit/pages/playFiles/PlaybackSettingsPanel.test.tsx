@@ -66,4 +66,34 @@ describe("PlaybackSettingsPanel", () => {
     expect(screen.getByRole("button", { name: "Subsong 2/5" })).toBeInTheDocument();
     expect(screen.getByText("Available subsongs: 1–5")).toBeInTheDocument();
   });
+
+  it("calls onDurationInputChange when input value changes", () => {
+    const onDurationInputChange = vi.fn();
+    render(<PlaybackSettingsPanel {...baseProps} onDurationInputChange={onDurationInputChange} />);
+
+    fireEvent.change(screen.getByTestId("duration-input"), { target: { value: "03:00" } });
+    expect(onDurationInputChange).toHaveBeenCalledWith("03:00");
+  });
+
+  it("calls onSelectSong when subsong button is clicked in picker", () => {
+    const onSelectSong = vi.fn();
+    render(
+      <PlaybackSettingsPanel
+        {...baseProps}
+        songSelectorVisible
+        songPickerOpen
+        clampedSongNr={1}
+        subsongCount={3}
+        onSelectSong={onSelectSong}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Subsong 2" }));
+    expect(onSelectSong).toHaveBeenCalledWith(2);
+  });
+
+  it("displays songlengths error when provided", () => {
+    render(<PlaybackSettingsPanel {...baseProps} songlengthsError="File not found" />);
+    expect(screen.getByText("File not found")).toBeInTheDocument();
+  });
 });

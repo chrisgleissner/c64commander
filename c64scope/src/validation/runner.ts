@@ -1,0 +1,289 @@
+/*
+ * C64 Commander - C64 Scope
+ * Autonomous testing MCP server for session capture and audio/video verification
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
+import { readdir, readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { classifyRun } from "../oraclePolicy.js";
+import { ScopeSessionStore } from "../sessionStore.js";
+import type { FailureClass, RunOutcome } from "../types.js";
+import { adb, c64uGet, resetC64Machine } from "./helpers.js";
+import type { CaseContext, CaseResult, RunResult, ValidationCase } from "./types.js";
+
+interface ProductPolicyViolation {
+  action: string;
+  peerServer: string;
+  reason: string;
+}
+
+const FORBIDDEN_PRODUCT_C64BRIDGE_ACTION_PATTERNS: readonly RegExp[] = [
+  /run_prg/i,
+  /upload_run_prg/i,
+  /mount/i,
+  /eject/i,
+  /power/i,
+  /reset/i,
+  /write/i,
+  /tokenize_basic_to_prg/i,
+];
+
+async function collectProductPolicyViolations(artifactDir: string): Promise<ProductPolicyViolation[]> {
+  const sessionPath = path.join(artifactDir, "session.json");
+  const raw = await readFile(sessionPath, "utf-8");
+  const snapshot = JSON.parse(raw) as {
+    timeline?: Array<{
+      action?: string | null;
+      peerServer?: string | null;
+      bridgeFallbackCategory?: string | null;
+      bridgeFallbackJustification?: string | null;
+    }>;
+  };
+
+  const violations: ProductPolicyViolation[] = [];
+
+  for (const step of snapshot.timeline ?? []) {
+    const action = step.action?.trim() ?? "";
+    const peerServer = step.peerServer?.trim() ?? "";
+    if (!action || !peerServer) {
+      continue;
+    }
+
+    if (peerServer !== "c64bridge") {
+      continue;
+    }
+
+    const isForbidden = FORBIDDEN_PRODUCT_C64BRIDGE_ACTION_PATTERNS.some((pattern) => pattern.test(action));
+    if (isForbidden) {
+      violations.push({
+        action,
+        peerServer,
+        reason: "forbidden direct c64bridge mutation in product track",
+      });
+      continue;
+    }
+
+    if (!step.bridgeFallbackCategory || !step.bridgeFallbackJustification) {
+      violations.push({
+        action,
+        peerServer,
+        reason: "missing bridge fallback category or justification",
+      });
+    }
+  }
+
+  return violations;
+}
+
+export async function runCase(
+  caseInfo: ValidationCase,
+  serial: string,
+  c64uHost: string,
+  artifactRoot: string,
+): Promise<RunResult> {
+  const startTime = Date.now();
+  const store = new ScopeSessionStore(artifactRoot);
+  const result = await store.startSession({ caseId: caseInfo.caseId });
+
+  if (!result.ok) {
+    throw new Error(`Failed to start session: ${result.error.message}`);
+  }
+
+  const runId = result.runId;
+  const artifactDir = (result.data as { artifactDir: string }).artifactDir;
+  const ctx: CaseContext = { store, runId, serial, c64uHost, artifactDir };
+
+  let caseResult: CaseResult | undefined;
+  let finalOutcome: RunOutcome = "inconclusive";
+  let finalFailureClass: FailureClass = "inconclusive";
+  let resetFailure: string | null = null;
+
+  try {
+    caseResult = await caseInfo.run(ctx);
+
+    // Classify using oracle policy
+    const classification = classifyRun({
+      assertions: caseResult.assertions,
+      safety: caseInfo.safetyClass === "read-only" ? "read-only" : "guarded-mutation",
+    });
+
+    finalOutcome = classification.outcome;
+    finalFailureClass = classification.failureClass;
+
+    if (caseInfo.validationTrack === "product") {
+      const policyViolations = await collectProductPolicyViolations(artifactDir);
+      if (policyViolations.length > 0) {
+        finalOutcome = "fail";
+        finalFailureClass = "infrastructure_failure";
+        caseResult.explorationTrace.recoveryActions.push(
+          `product-policy-violation:${policyViolations.map((v) => `${v.action}:${v.reason}`).join("|")}`,
+        );
+      }
+    }
+
+    try {
+      await resetC64Machine(c64uHost);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      resetFailure = message;
+      finalOutcome = "fail";
+      finalFailureClass = "infrastructure_failure";
+    }
+
+    const summary = resetFailure
+      ? `${caseInfo.name}: fail — post-test reset failed (${resetFailure})`
+      : `${caseInfo.name}: ${classification.outcome} — ${classification.reason}`;
+
+    await store.finalizeSession({
+      runId,
+      outcome: finalOutcome,
+      failureClass: finalFailureClass,
+      summary,
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    finalOutcome = "fail";
+    finalFailureClass = "infrastructure_failure";
+
+    try {
+      await resetC64Machine(c64uHost);
+    } catch (resetError: unknown) {
+      const resetMessage = resetError instanceof Error ? resetError.message : String(resetError);
+      resetFailure = resetMessage;
+    }
+
+    await store.finalizeSession({
+      runId,
+      outcome: "fail",
+      failureClass: "infrastructure_failure",
+      summary: resetFailure ? `Case aborted: ${message}; reset failed: ${resetFailure}` : `Case aborted: ${message}`,
+    });
+  }
+
+  // Write exploration trace
+  if (caseResult) {
+    await writeFile(
+      path.join(artifactDir, "exploration-trace.json"),
+      JSON.stringify(caseResult.explorationTrace, null, 2),
+      "utf-8",
+    );
+  }
+
+  // Write hardware proof from live device and C64U identity to avoid stale hardcoded metadata.
+  const hwModel = (await adb(serial, "shell", "getprop", "ro.product.model")).trim();
+  const hwType = (await adb(serial, "shell", "getprop", "ro.hardware")).trim();
+  const hwProduct = (await adb(serial, "shell", "getprop", "ro.product.name")).trim();
+  const osVersion = (await adb(serial, "shell", "getprop", "ro.build.version.release")).trim();
+  const c64uInfo = JSON.parse(await c64uGet(c64uHost, "/v1/info")) as Record<string, string | undefined>;
+
+  const hwProof = {
+    android: {
+      serial,
+      model: hwModel,
+      hardware: hwType,
+      os: osVersion,
+      product: hwProduct,
+    },
+    c64u: {
+      host: c64uHost,
+      hostname: c64uInfo.hostname ?? "unknown",
+      firmware: c64uInfo.firmware_version ?? "unknown",
+      product: c64uInfo.product ?? "unknown",
+      uniqueId: c64uInfo.unique_id ?? "unknown",
+    },
+    timestamp: new Date().toISOString(),
+  };
+  await writeFile(path.join(artifactDir, "hardware-proof.json"), JSON.stringify(hwProof, null, 2), "utf-8");
+
+  const sessionSnapshot = JSON.parse(await readFile(path.join(artifactDir, "session.json"), "utf-8")) as {
+    timeline?: Array<{ peerServer?: string | null }>;
+    evidence?: unknown[];
+    assertions?: unknown[];
+  };
+
+  const observedPeerServers = new Set<string>();
+  for (const step of sessionSnapshot.timeline ?? []) {
+    if (step.peerServer && step.peerServer.trim().length > 0) {
+      observedPeerServers.add(step.peerServer.trim());
+    }
+  }
+  if ((sessionSnapshot.evidence?.length ?? 0) > 0 || (sessionSnapshot.assertions?.length ?? 0) > 0) {
+    observedPeerServers.add("c64scope");
+  }
+
+  if (caseResult) {
+    for (const peer of observedPeerServers) {
+      caseResult.explorationTrace.decisionLog.push(`peer:${peer}`);
+    }
+  }
+
+  // Write LLM decision trace
+  const llmTrace = {
+    caseId: caseInfo.caseId,
+    caseName: caseInfo.name,
+    featureArea: caseInfo.featureArea,
+    route: caseInfo.route,
+    safetyClass: caseInfo.safetyClass,
+    oracleClassesUsed: caseInfo.oracleClasses,
+    expectedOutcome: caseInfo.expectedOutcome,
+    actualOutcome: finalOutcome,
+    failureClass: finalFailureClass,
+    explorationTrace: caseResult?.explorationTrace,
+    llmSequence: [
+      "LLM selected case from catalog",
+      `LLM chose oracle pair: ${caseInfo.oracleClasses.join(" + ")}`,
+      `LLM enforced safety budget: ${caseInfo.safetyClass}`,
+      `LLM drove execution through ${caseInfo.oracleClasses.length} oracle classes`,
+      `LLM classified outcome: ${finalOutcome}/${finalFailureClass}`,
+    ],
+    peerServersUsed: [...observedPeerServers],
+  };
+  await writeFile(path.join(artifactDir, "llm-decision-trace.json"), JSON.stringify(llmTrace, null, 2), "utf-8");
+
+  // Get artifacts list
+  const files = await readdir(artifactDir);
+
+  return {
+    caseId: caseInfo.caseId,
+    caseName: caseInfo.name,
+    featureArea: caseInfo.featureArea,
+    route: caseInfo.route,
+    validationTrack: caseInfo.validationTrack,
+    runId,
+    outcome: finalOutcome,
+    failureClass: finalFailureClass,
+    oracleClasses: caseInfo.oracleClasses,
+    artifactDir,
+    artifacts: files,
+    explorationTrace: caseResult?.explorationTrace ?? {
+      routeDiscovery: [],
+      decisionLog: [],
+      safetyBudget: caseInfo.safetyClass,
+      oracleSelection: [],
+      recoveryActions: [],
+    },
+    durationMs: Date.now() - startTime,
+  };
+}
+
+/** Collect real hardware identity info from android device and C64U. */
+export async function collectHardwareInfo(
+  serial: string,
+  c64uHost: string,
+): Promise<{
+  hwModel: string;
+  hwType: string;
+  hwChars: string;
+  osVersion: string;
+  c64uInfo: Record<string, string>;
+}> {
+  const hwModel = (await adb(serial, "shell", "getprop", "ro.product.model")).trim();
+  const hwType = (await adb(serial, "shell", "getprop", "ro.hardware")).trim();
+  const hwChars = (await adb(serial, "shell", "getprop", "ro.build.characteristics")).trim();
+  const osVersion = (await adb(serial, "shell", "getprop", "ro.build.version.release")).trim();
+  const c64uInfo = JSON.parse(await c64uGet(c64uHost, "/v1/info"));
+  return { hwModel, hwType, hwChars, osVersion, c64uInfo };
+}

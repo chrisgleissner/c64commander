@@ -65,18 +65,11 @@ import { getOnOffButtonClass } from "@/lib/ui/buttonStyles";
 import { formatDbValue, formatPanValue } from "@/lib/ui/sliderValueFormat";
 import { resetDiskDevices, resetPrinterDevice } from "@/lib/disks/resetDrives";
 import { buildSidSilenceTargets, silenceSidTargets } from "@/lib/sid/sidSilence";
-import {
-  FULL_RAM_SIZE_BYTES,
-  clearRamAndReboot,
-  dumpFullRamImage,
-  loadFullRamImage,
-} from "@/lib/machine/ramOperations";
-import {
-  buildRamDumpFileName,
-  pickRamDumpFile,
-  selectRamDumpFolder,
-  writeRamDumpToFolder,
-} from "@/lib/machine/ramDumpStorage";
+import { SaveRamDialog } from "./home/dialogs/SaveRamDialog";
+import { RestoreSnapshotDialog } from "./home/dialogs/RestoreSnapshotDialog";
+import { SnapshotManagerDialog } from "./home/dialogs/SnapshotManagerDialog";
+import { useSnapshotStore } from "@/lib/snapshot/snapshotStore";
+import type { SnapshotStorageEntry } from "@/lib/snapshot/snapshotTypes";
 import {
   loadRamDumpFolderConfig,
   saveRamDumpFolderConfig,
@@ -146,7 +139,9 @@ function HomePageContent() {
     handleAction,
     handlePauseResume,
     handleSaveRam,
-    handleLoadRam,
+    handleRestoreSnapshot,
+    handleDeleteSnapshot,
+    handleUpdateSnapshotLabel,
     handleRebootClearMemory,
     handlePowerOff,
     confirmPowerOff,
@@ -171,6 +166,10 @@ function HomePageContent() {
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [loadDialogOpen, setLoadDialogOpen] = useState(false);
   const [manageDialogOpen, setManageDialogOpen] = useState(false);
+  const [saveRamDialogOpen, setSaveRamDialogOpen] = useState(false);
+  const [snapshotManagerOpen, setSnapshotManagerOpen] = useState(false);
+  const [restoreTarget, setRestoreTarget] = useState<SnapshotStorageEntry | null>(null);
+  const { snapshots } = useSnapshotStore();
 
   const [applyingConfigId, setApplyingConfigId] = useState<string | null>(null);
 
@@ -450,8 +449,8 @@ function HomePageContent() {
           pauseResumePending={pauseResumePending}
           machineTaskId={machineTaskId}
           onPauseResume={handlePauseResume}
-          onSaveRam={handleSaveRam}
-          onLoadRam={handleLoadRam}
+          onSaveRam={() => setSaveRamDialogOpen(true)}
+          onLoadRam={() => setSnapshotManagerOpen(true)}
           onRebootClearMemory={handleRebootClearMemory}
           onPowerOff={handlePowerOff}
           onAction={handleAction}
@@ -1015,6 +1014,47 @@ function HomePageContent() {
         configs={appConfigs}
         onRename={renameAppConfig}
         onDelete={deleteAppConfig}
+      />
+
+      <SaveRamDialog
+        open={saveRamDialogOpen}
+        onOpenChange={setSaveRamDialogOpen}
+        onSave={(type, customRanges) => {
+          setSaveRamDialogOpen(false);
+          void handleSaveRam(type, customRanges);
+        }}
+        isSaving={machineTaskId === "save-ram"}
+      />
+
+      <SnapshotManagerDialog
+        open={snapshotManagerOpen}
+        onOpenChange={setSnapshotManagerOpen}
+        snapshots={snapshots}
+        onRestore={(snapshot) => {
+          setRestoreTarget(snapshot);
+        }}
+        onDelete={(id) => {
+          handleDeleteSnapshot(id);
+        }}
+        onUpdateLabel={(id, label) => {
+          handleUpdateSnapshotLabel(id, label);
+        }}
+      />
+
+      <RestoreSnapshotDialog
+        open={restoreTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setRestoreTarget(null);
+        }}
+        snapshot={restoreTarget}
+        onConfirm={() => {
+          if (restoreTarget) {
+            setSnapshotManagerOpen(false);
+            setRestoreTarget(null);
+            void handleRestoreSnapshot(restoreTarget);
+          }
+        }}
+        isPending={machineTaskId === "load-ram"}
       />
     </div>
   );
