@@ -1,5 +1,146 @@
 # Plans
 
+## iOS Maestro Coverage And CI Failure Propagation
+
+### Problem statement
+
+Resolve two linked defects in the iOS Maestro CI route:
+
+1. iOS Maestro test failures are visible in CI logs but do not fail the workflow/job.
+2. The iOS Maestro route itself regressed between 2026-02-22 and 2026-02-28 and now reports test errors.
+
+The objective is to determine both root causes, implement the smallest safe fix set, and verify via GitHub Actions that the iOS path is green and that future iOS Maestro failures correctly fail CI.
+
+### Constraints and assumptions
+
+- iOS execution cannot be reproduced locally on this Linux workstation; Apple-hosted CI is the only validation path for iOS execution.
+- Local validation must focus on workflow logic, shell exit-code correctness, Maestro flow structure, and non-iOS regression risk reduction.
+- iOS CI is slow and expensive, so each push must be justified by confirmed evidence.
+- Android and Web routes are in active use and must remain stable.
+- Existing unrelated work recorded later in this file remains historical context and is out of scope unless directly impacted.
+
+### Current status
+
+- Status: aggregate artifact-layout follow-up fix implemented locally; pushing for CI verification
+- Branch: `test/fix-ios-maestro-tests`
+- Verified starting point: dedicated branch already exists; no local unstaged changes at task start.
+
+### Phase-based plan
+
+#### Phase 1: Baseline and historical comparison
+
+- [x] Inspect current iOS workflow, reusable logic, invoked scripts, and Maestro artifacts.
+- [x] Compare current iOS path with Android Maestro path for orchestration differences.
+- [x] Compare repository changes and CI behavior between 2026-02-22 and 2026-02-28 for iOS-relevant files.
+
+#### Phase 2: Failure propagation analysis
+
+- [x] Trace every command path that runs or wraps Maestro on iOS.
+- [x] Check for exit-code swallowing patterns: `continue-on-error`, `|| true`, missing `set -euo pipefail`, `tee` without `pipefail`, unconditional artifact steps, and status overwrites.
+- [x] Identify the exact false-green mechanism and document it.
+
+#### Phase 3: iOS Maestro regression analysis
+
+- [x] Read Maestro flows, selectors, platform gating, and app startup assumptions used by iOS.
+- [x] Use historical diff analysis and current logs to isolate the strongest confirmed iOS-specific regression cause.
+- [x] Confirm whether the regression is in flows, app behavior, build packaging, or CI environment setup.
+
+#### Phase 4: Minimal fix implementation
+
+- [x] Implement a minimal CI fix so iOS Maestro test errors deterministically fail the job.
+- [x] Implement a minimal fix for the underlying iOS Maestro failure.
+- [ ] Update docs or comments only where needed for maintainability.
+
+#### Phase 5: Validation loop
+
+- [ ] Run relevant local validation for workflow syntax, scripts, and non-iOS safety.
+- [ ] Commit coherent changes.
+- [ ] Push branch and inspect GitHub Actions runs and logs.
+- [ ] Iterate until the iOS Maestro path is green and false-green behavior is eliminated.
+
+#### Phase 6: Completion record
+
+- [ ] Capture final workflow/job/run identifiers and evidence URLs.
+- [ ] Record both root causes, code changes, local validations, CI validations, and residual risks.
+- [ ] Mark all required checklist items complete or explicitly out of scope with justification.
+
+### Explicit checklist
+
+- [x] PLANS.md updated before code changes
+- [x] iOS workflow and invoked scripts inspected
+- [x] Android versus iOS Maestro route compared
+- [x] Historical diff between 2026-02-22 and 2026-02-28 reviewed for iOS-relevant changes
+- [x] False-green mechanism identified
+- [x] False-green fix implemented
+- [x] iOS Maestro failure mechanism identified
+- [x] iOS Maestro fix implemented
+- [ ] Relevant local validations passed
+- [ ] Changes committed on dedicated branch
+- [ ] CI run proves iOS Maestro failures now fail the workflow when present
+- [ ] CI run proves iOS Maestro route is green after the fix
+- [ ] No collateral Android/Web regression observed in relevant checks
+- [ ] Final evidence captured in PLANS.md
+
+### Risk register
+
+- Risk: workflow fix may alter artifact collection ordering and hide useful logs.
+  Mitigation: preserve `if: always()` artifact upload where needed, but explicitly rethrow test failure status afterward if necessary.
+- Risk: iOS Maestro stabilization may accidentally mask a real app defect with timing hacks.
+  Mitigation: prefer selector or readiness fixes over sleeps; document any unavoidable synchronization.
+- Risk: changes to shared scripts may destabilize Android or Web.
+  Mitigation: compare Android and iOS call paths first and run relevant non-iOS checks locally before push.
+- Risk: CI iteration cost is high.
+  Mitigation: push only after root-cause-backed changes and local validation.
+
+### Validation strategy
+
+- Local:
+  - inspect workflows and scripts for shell correctness and exit propagation
+  - run relevant lint/test/build or targeted checks when shared files are touched
+  - validate any changed shell behavior directly from Linux where feasible
+- CI:
+  - inspect branch workflow runs with GitHub tooling
+  - read iOS job logs before and after changes
+  - confirm the job fails on Maestro error conditions and passes once the route is fixed
+
+### Work log
+
+- 2026-03-09T00:00Z: Task started on branch `test/fix-ios-maestro-tests`.
+- 2026-03-09T00:00Z: Reviewed repo instructions, memory, current branch state, workflow file inventory, and existing `PLANS.md` contents.
+- 2026-03-09T00:00Z: Added this iOS Maestro execution plan section and set it as the active task record.
+- 2026-03-09T00:10Z: Read current `ios.yaml`, Android Maestro path, `scripts/ci/ios-maestro-run-flow.sh`, `scripts/run-maestro.sh`, and Maestro docs. Confirmed the iOS path is separate from Android and uses per-flow JUnit plus aggregate reporting.
+- 2026-03-09T00:18Z: Pulled historical logs for successful run `22279943725` / job `64449062635` and regressed run `22527358627` / job `65261482123`.
+- 2026-03-09T00:22Z: Confirmed false-green behavior in historical logs: both `ios-smoke-launch` and `ios-diagnostics-export` reported `[Failed] ... Assertion is false: "Home" is visible`, yet the wrapper logged `Flow ... completed ... (exit=0)` and `Group group-1 completed with overall exit code 0`.
+- 2026-03-09T00:24Z: Confirmed JUnit already recorded the failures (`failures=1`) while the aggregate workflow only wrote summary JSON and did not fail on merged failures/errors.
+- 2026-03-09T00:29Z: Compared healthy and regressed app diffs. No `.maestro` flow changes occurred between the two runs. Relevant product change found in `src/components/DemoModeInterstitial.tsx`, which added a host input and extra action to the dialog.
+- 2026-03-09T00:33Z: Downloaded historical iOS artifacts and OCR'd the failed screenshot. Confirmed the iOS keyboard was open on the Demo Mode interstitial, covering the dialog buttons so `Continue in Demo Mode` was not reachable. Healthy screenshot showed normal Home screen.
+- 2026-03-09T00:38Z: Implemented app fix: prevent auto-focus when Demo Mode dialog opens so iOS does not summon the keyboard and hide the CTA.
+- 2026-03-09T00:40Z: Implemented CI fixes: `scripts/ci/ios-maestro-run-flow.sh` now parses JUnit and fails when Maestro reports failures/errors even if the process exits 0; `ios.yaml` now enforces merged JUnit summary and connectivity summary instead of warning-only behavior.
+- 2026-03-09T00:55Z: Inspected follow-up CI failure in run `22852199801`. Confirmed all iOS Maestro groups were green and only aggregate failed because the merge step found zero JUnit files.
+- 2026-03-09T00:58Z: Downloaded current per-group artifacts and confirmed the artifact layout is flat (`ios-smoke-launch/`, `ios-diagnostics-export/`, `_infra/`) rather than nested under `artifacts/ios/`.
+- 2026-03-09T01:02Z: Updated the aggregate re-root logic in `ios.yaml` to support both nested and flat artifact layouts. Local sanity check confirmed merged flow JUnit discovery now finds non-zero tests.
+
+### Next actions
+
+- Commit the aggregate workflow fix.
+- Push the branch and wait for the next iOS workflow run.
+- Confirm the aggregate job merges non-zero tests and the full iOS Maestro route stays green.
+
+1. Run local validation (`npm run lint`, `npm run test:coverage`, `npm run build`, and `./build` as feasible for this change set).
+2. Commit the fix set and push the branch.
+3. Poll GitHub Actions until the iOS Maestro path is green and failure propagation is confirmed.
+
+### Confirmed findings
+
+- False-green CI root cause:
+  - The iOS wrapper relied on the Maestro process exit code only.
+  - In the regressed historical run, Maestro emitted `[Failed]` output and wrote JUnit with `failures=1`, but still surfaced process success to the wrapper path used by CI.
+  - The aggregate job merged JUnit into summary artifacts but did not fail on merged `totalFailures` or `totalErrors`, and connectivity summary failures were warning-only.
+- iOS Maestro regression root cause:
+  - The Demo Mode interstitial gained a host input field between the healthy and regressed runs.
+  - On iOS simulator, the dialog auto-focused that input, which opened the software keyboard.
+  - The keyboard obscured the dialog action buttons, including `Continue in Demo Mode`, leaving the launch flow stuck on the interstitial until the `Home` assertion timed out.
+
 ## agents/ Directory Restructuring
 
 ### Goal

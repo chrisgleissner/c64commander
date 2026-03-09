@@ -283,6 +283,7 @@ import json
 import subprocess
 import sys
 import time
+import xml.etree.ElementTree as ET
 
 maestro_bin, flow_yaml, udid, junit_file, raw_log_file = sys.argv[1:6]
 cmd = [
@@ -305,7 +306,57 @@ with open(raw_log_file, "w", encoding="utf-8") as handle:
         handle.write(json.dumps(entry, sort_keys=True) + "\n")
         print(line, end="")
 exit_code = process.wait()
-sys.exit(exit_code)
+
+def summarize_junit(path: str) -> tuple[int, int, int]:
+  tree = ET.parse(path)
+  root = tree.getroot()
+
+  if root.tag == "testsuite":
+    tests = int(root.attrib.get("tests", "0"))
+    failures = int(root.attrib.get("failures", "0"))
+    errors = int(root.attrib.get("errors", "0"))
+    return tests, failures, errors
+
+  if root.tag == "testsuites":
+    tests = 0
+    failures = 0
+    errors = 0
+    for suite in root.findall("testsuite"):
+      tests += int(suite.attrib.get("tests", "0"))
+      failures += int(suite.attrib.get("failures", "0"))
+      errors += int(suite.attrib.get("errors", "0"))
+    return tests, failures, errors
+
+  raise ValueError(f"Unexpected JUnit root element: {root.tag}")
+
+junit_status = 0
+try:
+  tests, failures, errors = summarize_junit(junit_file)
+  if tests == 0:
+    print(f"Maestro JUnit report contains zero tests: {junit_file}")
+    junit_status = 1
+  elif failures > 0 or errors > 0:
+    if exit_code == 0:
+      print(
+        f"Maestro JUnit report recorded failures/errors despite process exit {exit_code}: "
+        f"tests={tests} failures={failures} errors={errors}"
+      )
+    else:
+      print(
+        f"Maestro JUnit report recorded failures/errors (process exit={exit_code}): "
+        f"tests={tests} failures={failures} errors={errors}"
+      )
+    junit_status = 1
+except FileNotFoundError:
+  print(f"Maestro JUnit report missing: {junit_file}")
+  junit_status = 1
+except Exception as exc:
+  print(f"Failed to parse Maestro JUnit report {junit_file}: {exc}")
+  junit_status = 1
+
+if exit_code != 0:
+  sys.exit(exit_code)
+sys.exit(junit_status)
 PY
 
   cp "$raw_log_file" "$raw_log_latest_file"

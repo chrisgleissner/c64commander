@@ -675,31 +675,35 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts/ios/_combined/flows
+          shopt -s nullglob
 
           # Re-root per-flow artifacts from group directories
           for group_dir in downloaded-artifacts/ios-maestro-*/; do
-            group_name="$(basename "$group_dir" | sed 's/^ios-maestro-//')"
+            artifact_root="$group_dir/artifacts/ios"
+            if [[ ! -d "$artifact_root" ]]; then
+              artifact_root="${group_dir%/}"
+            fi
 
             # Process flow directories
-            if [[ -d "$group_dir/artifacts/ios" ]]; then
-              for flow_dir in "$group_dir/artifacts/ios"/*/; do
-                flow_name="$(basename "$flow_dir")"
-                # Skip _infra directory at this level
-                if [[ "$flow_name" == "_infra" ]]; then
-                  continue
-                fi
-                if [[ -d "$flow_dir" ]]; then
-                  cp -r "$flow_dir" "artifacts/ios/_combined/flows/$flow_name"
-                fi
-              done
-
-              # Copy infra diagnostics
-              if [[ -d "$group_dir/artifacts/ios/_infra" ]]; then
-                mkdir -p "artifacts/ios/_infra"
-                cp -r "$group_dir/artifacts/ios/_infra"/* "artifacts/ios/_infra/" 2>/dev/null || true
+            for flow_dir in "$artifact_root"/*/; do
+              flow_name="$(basename "$flow_dir")"
+              # Skip _infra directory at this level
+              if [[ "$flow_name" == "_infra" ]]; then
+                continue
               fi
+              if [[ -d "$flow_dir" ]]; then
+                rm -rf "artifacts/ios/_combined/flows/$flow_name"
+                cp -r "$flow_dir" "artifacts/ios/_combined/flows/$flow_name"
+              fi
+            done
+
+            # Copy infra diagnostics
+            if [[ -d "$artifact_root/_infra" ]]; then
+              mkdir -p "artifacts/ios/_infra"
+              cp -r "$artifact_root/_infra"/* "artifacts/ios/_infra/" 2>/dev/null || true
             fi
           done
+          shopt -u nullglob
 
       - name: Merge JUnit reports
         run: |
@@ -790,6 +794,37 @@ jobs:
           print(f"Merged {len(flow_summaries)} flows: {total_tests} tests, {total_failures} failures, {total_errors} errors")
           MERGE
 
+      - name: Enforce merged Maestro results
+        if: always()
+        run: |
+          set -euo pipefail
+          python3 <<'ENFORCE'
+          import json
+          import sys
+
+          try:
+              with open("artifacts/ios/_combined/summary.json", encoding="utf-8") as handle:
+                  summary = json.load(handle)
+          except FileNotFoundError:
+              print("Merged Maestro summary not found: artifacts/ios/_combined/summary.json")
+              sys.exit(1)
+
+          total_tests = int(summary.get("totalTests", 0))
+          total_failures = int(summary.get("totalFailures", 0))
+          total_errors = int(summary.get("totalErrors", 0))
+
+          if total_tests == 0:
+              print("Merged Maestro summary contains zero tests")
+              sys.exit(1)
+
+          if total_failures or total_errors:
+              print(
+                  f"Merged Maestro summary contains failures/errors: tests={total_tests} "
+                  f"failures={total_failures} errors={total_errors}"
+              )
+              sys.exit(1)
+          ENFORCE
+
       - name: Run connectivity validation summary
         if: always()
         run: |
@@ -823,10 +858,11 @@ jobs:
               json.dump(summary, f, indent=2)
 
           if not all_valid:
-              print("::warning::Connectivity validation failed for some flows")
+              print("Connectivity validation failed for some flows")
               for v in validations:
                   if not v.get("valid", True):
                       print(f"  FAIL: {v.get('flow', 'unknown')} - {v.get('errors', [])}")
+              sys.exit(1)
 
           print(json.dumps(summary, indent=2))
           VALIDATE

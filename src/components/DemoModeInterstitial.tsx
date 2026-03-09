@@ -58,7 +58,11 @@ export function DemoModeInterstitial() {
         if (!open) dismissDemoInterstitial();
       }}
     >
-      <DialogContent>
+      <DialogContent
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>Demo Mode</DialogTitle>
           <DialogDescription>
