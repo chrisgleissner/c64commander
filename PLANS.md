@@ -21,7 +21,7 @@ The objective is to determine both root causes, implement the smallest safe fix 
 
 ### Current status
 
-- Status: implementing validated local fix set; local verification in progress before CI push
+- Status: aggregate artifact-layout follow-up fix implemented locally; pushing for CI verification
 - Branch: `test/fix-ios-maestro-tests`
 - Verified starting point: dedicated branch already exists; no local unstaged changes at task start.
 
@@ -116,8 +116,15 @@ The objective is to determine both root causes, implement the smallest safe fix 
 - 2026-03-09T00:33Z: Downloaded historical iOS artifacts and OCR'd the failed screenshot. Confirmed the iOS keyboard was open on the Demo Mode interstitial, covering the dialog buttons so `Continue in Demo Mode` was not reachable. Healthy screenshot showed normal Home screen.
 - 2026-03-09T00:38Z: Implemented app fix: prevent auto-focus when Demo Mode dialog opens so iOS does not summon the keyboard and hide the CTA.
 - 2026-03-09T00:40Z: Implemented CI fixes: `scripts/ci/ios-maestro-run-flow.sh` now parses JUnit and fails when Maestro reports failures/errors even if the process exits 0; `ios.yaml` now enforces merged JUnit summary and connectivity summary instead of warning-only behavior.
+- 2026-03-09T00:55Z: Inspected follow-up CI failure in run `22852199801`. Confirmed all iOS Maestro groups were green and only aggregate failed because the merge step found zero JUnit files.
+- 2026-03-09T00:58Z: Downloaded current per-group artifacts and confirmed the artifact layout is flat (`ios-smoke-launch/`, `ios-diagnostics-export/`, `_infra/`) rather than nested under `artifacts/ios/`.
+- 2026-03-09T01:02Z: Updated the aggregate re-root logic in `ios.yaml` to support both nested and flat artifact layouts. Local sanity check confirmed merged flow JUnit discovery now finds non-zero tests.
 
 ### Next actions
+
+- Commit the aggregate workflow fix.
+- Push the branch and wait for the next iOS workflow run.
+- Confirm the aggregate job merges non-zero tests and the full iOS Maestro route stays green.
 
 1. Run local validation (`npm run lint`, `npm run test:coverage`, `npm run build`, and `./build` as feasible for this change set).
 2. Commit the fix set and push the branch.
