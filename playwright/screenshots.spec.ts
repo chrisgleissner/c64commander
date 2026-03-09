@@ -444,7 +444,7 @@ test.describe("App screenshots", () => {
               ? ["$0000\u2013$00FF", "$0200\u2013$FFFF"]
               : typeCode === 1
                 ? ["$002B\u2013$0038", "$0801\u2013STREND"]
-                : ["$0400\u2013$07E7", "$D800\u2013$DBFF"];
+                : ["SCRRAM", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"];
           const snapType = typeCode === 0 ? "program" : typeCode === 1 ? "basic" : "screen";
           const meta = JSON.stringify({
             snapshot_type: snapType,
@@ -509,7 +509,7 @@ test.describe("App screenshots", () => {
                 snapshotType: "screen",
                 metadata: {
                   snapshot_type: "screen",
-                  display_ranges: ["$0400\u2013$07E7", "$D800\u2013$DBFF"],
+                  display_ranges: ["SCRRAM", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"],
                   created_at: "2026-01-10 07:00:00",
                 },
               },

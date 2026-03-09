@@ -129,7 +129,7 @@ const seedSnapshots = async (page: Page) => {
           snapshotType: "screen",
           metadata: {
             snapshot_type: "screen",
-            display_ranges: ["$0400\u2013$07E7"],
+            display_ranges: ["SCRRAM", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"],
             created_at: "2026-01-10 07:00:00",
           },
         },

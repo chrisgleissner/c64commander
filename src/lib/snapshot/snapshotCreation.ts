@@ -33,10 +33,28 @@ const BASIC_PTR_START = 0x002b;
 /** BASIC pointer region end (inclusive). */
 const BASIC_PTR_END = 0x0038;
 
-/** Screen character memory. */
-const SCREEN_START = 0x0400;
-const SCREEN_END_INCLUSIVE = 0x07e7;
-/** Colour RAM. */
+/** Number of bytes in the 40×25 screen character matrix. */
+const SCREEN_SIZE_BYTES = 1000;
+/** VIC-II register block ($D000–$D02E). Controls all display parameters. */
+const VIC_REG_START = 0xd000;
+const VIC_REG_END_INCLUSIVE = 0xd02e;
+/**
+ * CIA2 Port A address. Bits 1:0 (inverted) select the VIC bank:
+ *   VIC bank = (~value) & 0x03 → bank base = bank × $4000
+ */
+const CIA2_PA_ADDR = 0xdd00;
+/**
+ * CIA2 register block ($DD00–$DD0F). Saving Port A (bank select) and Port A DDR
+ * is required to correctly restore the VIC bank configuration.
+ */
+const CIA2_REG_START = 0xdd00;
+const CIA2_REG_END_INCLUSIVE = 0xdd0f;
+/**
+ * VIC $D018 register address. Bits 7-4 (VM13-VM10) select the screen character
+ * matrix within the active VIC bank: screen_offset = ((value >> 4) & 0x0F) × $0400
+ */
+const VIC_MATRIX_REG_ADDR = 0xd018;
+/** Colour RAM (fixed CPU address, not banked). */
 const COLOR_START = 0xd800;
 const COLOR_END_INCLUSIVE = 0xdbff;
 
@@ -46,17 +64,40 @@ const COLOR_END_INCLUSIVE = 0xdbff;
 
 const toHex = (n: number) => "$" + n.toString(16).toUpperCase().padStart(4, "0");
 
-/** Derives the fixed screen snapshot ranges. */
-const screenRanges = (): { ranges: MemoryRange[]; displayRanges: string[] } => {
+/**
+ * Computes the CPU start address of the screen character matrix from the
+ * underlying DRAM image. Best-effort: valid when the DRAM values at $DD00 and
+ * $D018 reflect the active CIA2/VIC register state (reliable for KERNAL/BASIC
+ * sessions; games typically write to I/O registers whose underlying DRAM values
+ * may diverge).
+ *
+ * Exported for unit-testing the VIC bank/offset calculation in isolation.
+ */
+export const computeScreenStart = (fullImage: Uint8Array): number => {
+  const cia2Pa = fullImage[CIA2_PA_ADDR];
+  const vicBank = ~cia2Pa & 0x03;
+  const bankBase = vicBank * 0x4000;
+  const d018 = fullImage[VIC_MATRIX_REG_ADDR];
+  const screenOffset = ((d018 >> 4) & 0x0f) * 0x0400;
+  return bankBase + screenOffset;
+};
+
+/** Derives screen snapshot ranges from the full RAM image. */
+const screenRanges = (fullImage: Uint8Array): { ranges: MemoryRange[]; displayRanges: string[] } => {
+  const screenStart = computeScreenStart(fullImage);
   const ranges: MemoryRange[] = [
-    { start: SCREEN_START, length: SCREEN_END_INCLUSIVE - SCREEN_START + 1 },
+    { start: screenStart, length: SCREEN_SIZE_BYTES },
+    { start: VIC_REG_START, length: VIC_REG_END_INCLUSIVE - VIC_REG_START + 1 },
     { start: COLOR_START, length: COLOR_END_INCLUSIVE - COLOR_START + 1 },
+    { start: CIA2_REG_START, length: CIA2_REG_END_INCLUSIVE - CIA2_REG_START + 1 },
   ];
   return {
     ranges,
     displayRanges: [
-      `${toHex(SCREEN_START)}-${toHex(SCREEN_END_INCLUSIVE)}`,
+      "SCRRAM",
+      `${toHex(VIC_REG_START)}-${toHex(VIC_REG_END_INCLUSIVE)}`,
       `${toHex(COLOR_START)}-${toHex(COLOR_END_INCLUSIVE)}`,
+      `${toHex(CIA2_REG_START)}-${toHex(CIA2_REG_END_INCLUSIVE)}`,
     ],
   };
 };
@@ -129,7 +170,7 @@ export const createSnapshot = async (
   } else if (type === "basic") {
     ({ ranges, displayRanges } = basicRanges(fullImage));
   } else if (type === "screen") {
-    ({ ranges, displayRanges } = screenRanges());
+    ({ ranges, displayRanges } = screenRanges(fullImage));
   } else {
     // custom
     if (!customRanges || customRanges.length === 0) {
