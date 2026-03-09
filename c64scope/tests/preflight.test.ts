@@ -162,7 +162,9 @@ describe("preflight", () => {
     const result = await runPreflight();
 
     expect(result.ready).toBe(false);
-    expect(result.checks.find((check) => check.name === "device_connected")?.detail).toBe("No Android devices connected");
+    expect(result.checks.find((check) => check.name === "device_connected")?.detail).toBe(
+      "No Android devices connected",
+    );
     expect(result.checks.find((check) => check.name === "app_installed")?.detail).toContain("Failed to check");
   });
 

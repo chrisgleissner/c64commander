@@ -17,7 +17,7 @@ export type SnapshotTypeFilter = SnapshotType | "all";
  * Text matching is case-insensitive and checked against:
  *   - metadata.label
  *   - metadata.content_name
- *   - snapshotType (e.g. "full", "basic")
+ *   - snapshotType (e.g. "program", "basic")
  *   - metadata.created_at (e.g. "2026-03-08")
  */
 export const filterSnapshots = (

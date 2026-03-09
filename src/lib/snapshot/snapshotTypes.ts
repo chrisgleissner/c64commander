@@ -6,11 +6,11 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-export type SnapshotType = "full" | "basic" | "screen" | "custom";
+export type SnapshotType = "program" | "basic" | "screen" | "custom";
 
 /** Binary type code stored in .c64snap header. */
 export const SNAPSHOT_TYPE_CODES: Record<SnapshotType, number> = {
-  full: 0,
+  program: 0,
   basic: 1,
   screen: 2,
   custom: 3,
@@ -18,7 +18,7 @@ export const SNAPSHOT_TYPE_CODES: Record<SnapshotType, number> = {
 
 /** Reverse map from binary code to SnapshotType. */
 export const SNAPSHOT_TYPE_FROM_CODE: Record<number, SnapshotType> = {
-  0: "full",
+  0: "program",
   1: "basic",
   2: "screen",
   3: "custom",
@@ -81,14 +81,14 @@ export type SnapshotTypeConfig = {
 
 export const SNAPSHOT_TYPE_LIST: SnapshotTypeConfig[] = [
   {
-    type: "full",
-    label: "Full Snapshot",
-    rangeDisplay: "$0000–$FFFF",
-    filePrefix: "full",
+    type: "program",
+    label: "Program Snapshot",
+    rangeDisplay: "$0000–$00FF, $0200–$FFFF",
+    filePrefix: "program",
   },
   {
     type: "basic",
-    label: "BASIC Snapshot",
+    label: "Basic Snapshot",
     rangeDisplay: "$0801–STREND, $002B–$0038",
     filePrefix: "basic",
   },

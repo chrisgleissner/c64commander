@@ -10,8 +10,9 @@ import { selectRamDumpFolder } from "@/lib/machine/ramDumpStorage";
 import { loadRamDumpFolderConfig, type RamDumpFolderConfig } from "@/lib/config/ramDumpFolderStore";
 import { resetDiskDevices, resetPrinterDevice } from "@/lib/disks/resetDrives";
 import { createSnapshot } from "@/lib/snapshot/snapshotCreation";
-import { deleteSnapshotFromStore, snapshotEntryToBytes } from "@/lib/snapshot/snapshotStore";
+import { deleteSnapshotFromStore, snapshotEntryToBytes, updateSnapshotLabel } from "@/lib/snapshot/snapshotStore";
 import { decodeSnapshot } from "@/lib/snapshot/snapshotFormat";
+import { getCurrentPlaybackSnapshotLabel } from "@/lib/snapshot/currentPlaybackSnapshotLabel";
 import type { MemoryRange, SnapshotStorageEntry, SnapshotType } from "@/lib/snapshot/snapshotTypes";
 
 export function useHomeActions() {
@@ -161,7 +162,13 @@ export function useHomeActions() {
     await runMachineTask(
       "save-ram",
       async () => {
-        const result = await createSnapshot(api, { type, customRanges });
+        const currentPlaybackLabel = getCurrentPlaybackSnapshotLabel();
+        const result = await createSnapshot(api, {
+          type,
+          customRanges,
+          label: currentPlaybackLabel,
+          contentName: currentPlaybackLabel,
+        });
         toast({
           title: "Snapshot saved",
           description: result.displayTimestamp,
@@ -195,6 +202,10 @@ export function useHomeActions() {
 
   const handleDeleteSnapshot = (id: string) => {
     deleteSnapshotFromStore(id);
+  };
+
+  const handleUpdateSnapshotLabel = (id: string, label: string) => {
+    updateSnapshotLabel(id, label);
   };
 
   const handlePowerOff = trace(async function handlePowerOff() {
@@ -247,6 +258,7 @@ export function useHomeActions() {
     handleSaveRam,
     handleRestoreSnapshot,
     handleDeleteSnapshot,
+    handleUpdateSnapshotLabel,
     handleRebootClearMemory,
     handlePowerOff,
     confirmPowerOff,

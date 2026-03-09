@@ -46,13 +46,13 @@ describe("formatFileTimestamp", () => {
 
 describe("buildSnapshotFileName", () => {
   it("includes type prefix for known types", () => {
-    const fn = buildSnapshotFileName("full", LOCAL_DATE);
-    expect(fn).toMatch(/^c64-full-\d{8}-\d{6}\.c64snap$/);
+    const fn = buildSnapshotFileName("program", LOCAL_DATE);
+    expect(fn).toMatch(/^c64-program-\d{8}-\d{6}\.c64snap$/);
   });
 
   it("uses correct prefix for each type", () => {
-    const pairs: Array<["full" | "basic" | "screen" | "custom", string]> = [
-      ["full", "full"],
+    const pairs: Array<["program" | "basic" | "screen" | "custom", string]> = [
+      ["program", "program"],
       ["basic", "basic"],
       ["screen", "screen"],
       ["custom", "custom"],
@@ -68,11 +68,17 @@ describe("buildSnapshotFileName", () => {
 
   it("uses current date when none provided", () => {
     const before = Date.now();
-    const name = buildSnapshotFileName("full");
+    const name = buildSnapshotFileName("program");
     const after = Date.now();
     // The filename contains a year — just check it's in a reasonable range
     const year = new Date(before).getFullYear();
     expect(name).toContain(String(year));
     expect(after).toBeGreaterThanOrEqual(before);
+  });
+
+  it('uses "custom" prefix for unknown snapshot type (line 47 ?? fallback)', () => {
+    // config?.filePrefix is undefined for unknown types → ?? "custom" right side fires
+    const name = buildSnapshotFileName("unknown-type" as Parameters<typeof buildSnapshotFileName>[0], LOCAL_DATE);
+    expect(name).toContain("c64-custom-");
   });
 });

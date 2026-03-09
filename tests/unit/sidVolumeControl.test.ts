@@ -204,4 +204,11 @@ describe("sid volume control helpers", () => {
     expect(result.ultiSid1).toBe(false);
     expect(result.ultiSid2).toBe(true);
   });
+
+  it("returns undefined for all when category value is a non-object scalar (BRDA:57)", () => {
+    // itemsData = "not-an-object" (string) → typeof itemsData !== "object" → returns undefined
+    const result = buildSidEnablement({ "SID Sockets Configuration": "not-an-object" } as any, {});
+    expect(result.socket1).toBeUndefined();
+    expect(result.socket2).toBeUndefined();
+  });
 });

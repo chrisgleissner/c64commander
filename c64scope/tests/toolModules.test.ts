@@ -162,10 +162,51 @@ describe("tool modules", () => {
           streamType: "audio",
         }),
       );
+      await writeFile(
+        path.join(artifactDir, "audio-stream-analysis.json"),
+        JSON.stringify({ rms: 0.02 }, null, 2),
+        "utf-8",
+      );
+      await writeFile(
+        path.join(artifactDir, "video-stream-analysis.json"),
+        JSON.stringify(
+          {
+            dominantBorderColor: 2,
+            dominantBackgroundColor: 6,
+            frameCompleteness: 0.8,
+          },
+          null,
+          2,
+        ),
+        "utf-8",
+      );
+      const videoDefaultExpectations = parseJsonText(
+        await toolRegistry.invoke("scope_assert.verify_stream_signature", {
+          runId,
+          streamType: "video",
+        }),
+      );
+      await writeFile(path.join(artifactDir, "audio-stream-analysis.json"), JSON.stringify({}, null, 2), "utf-8");
+      await writeFile(path.join(artifactDir, "video-stream-analysis.json"), JSON.stringify({}, null, 2), "utf-8");
+      const audioDefaultValues = parseJsonText(
+        await toolRegistry.invoke("scope_assert.verify_stream_signature", {
+          runId,
+          streamType: "audio",
+        }),
+      );
+      const videoMissingValues = parseJsonText(
+        await toolRegistry.invoke("scope_assert.verify_stream_signature", {
+          runId,
+          streamType: "video",
+        }),
+      );
 
       expect(audioFail.data.passed).toBe(false);
       expect(videoFail.data.passed).toBe(false);
       expect(missingSummary.ok).toBe(false);
+      expect(videoDefaultExpectations.data.passed).toBe(true);
+      expect(audioDefaultValues.data.passed).toBe(false);
+      expect(videoMissingValues.data.passed).toBe(false);
     } finally {
       await rm(artifactRoot, { recursive: true, force: true });
     }

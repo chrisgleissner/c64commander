@@ -269,5 +269,49 @@ describe("ramOperations", () => {
       // Must opt-in to recoveryMode to exercise recoverFromLivenessFailure on retry
       await expect(dumpFullRamImage(api as any, { recoveryMode: true })).rejects.toThrow("liveness check crashed");
     });
+
+    it("recovery follows reboot path when machine stays wedged after soft reset (line 131 FALSE)", async () => {
+      // First readMemory fails → triggers onRetry (recoverFromLivenessFailure)
+      // In recoverFromLivenessFailure:
+      //   call 2: wedged → soft reset triggered
+      //   call 3: still wedged after soft reset → reboot triggered (line 131 FALSE)
+      //   call 4: healthy after reboot → recovers
+      // Second readMemory succeeds
+      let readCount = 0;
+      api.readMemory.mockImplementation(async (_addr: string, length: number) => {
+        if (++readCount === 1) throw new Error("read failed");
+        return new Uint8Array(length);
+      });
+      let livenessCall = 0;
+      vi.mocked(checkC64Liveness).mockImplementation(async () => {
+        livenessCall++;
+        if (livenessCall === 2 || livenessCall === 3) {
+          return {
+            decision: "wedged",
+            jiffyAdvanced: false,
+            rasterChanged: false,
+          } as any;
+        }
+        return { decision: "healthy", jiffyAdvanced: true, rasterChanged: true } as any;
+      });
+      const image = await dumpFullRamImage(api as any, { recoveryMode: true });
+      expect(image).toBeInstanceOf(Uint8Array);
+      expect(api.machineReset).toHaveBeenCalled();
+      expect(api.machineReboot).toHaveBeenCalled();
+    });
+
+    it("runPaused throws combined error when read fails and resume also fails (lines 303, 314)", async () => {
+      api.readMemory.mockRejectedValue(new Error("read failed"));
+      api.machineResume.mockRejectedValue(new Error("resume failed"));
+      await expect(dumpFullRamImage(api as any)).rejects.toThrow(/failed.*resume failed|resume failed/);
+    });
+  });
+
+  describe("loadFullRamImage recovery mode", () => {
+    it("loadFullRamImage with recoveryMode covers ternary TRUE branch (line 337)", async () => {
+      const image = new Uint8Array(FULL_RAM_SIZE_BYTES);
+      await loadFullRamImage(api as any, image, { recoveryMode: true });
+      expect(api.writeMemoryBlock).toHaveBeenCalled();
+    });
   });
 });

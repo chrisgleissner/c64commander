@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -17,9 +17,17 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Trash2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import type { MemoryRange, SnapshotType } from "@/lib/snapshot/snapshotTypes";
 import { SNAPSHOT_TYPE_LIST } from "@/lib/snapshot/snapshotTypes";
+import {
+  EMPTY_CUSTOM_SNAPSHOT_RANGE_DRAFT,
+  sanitizeHexAddressInput,
+  validateCustomSnapshotRanges,
+  type CustomSnapshotRangeDraft,
+} from "@/lib/snapshot/customSnapshotRanges";
+import { loadCustomSnapshotDrafts, saveCustomSnapshotDrafts } from "@/lib/snapshot/customSnapshotDraftStore";
 
 interface SaveRamDialogProps {
   open: boolean;
@@ -28,24 +36,74 @@ interface SaveRamDialogProps {
   isSaving: boolean;
 }
 
-const HEX_RE = /^[0-9a-fA-F]{1,4}$/;
+const buildRangeTestId = (base: string, index: number) => (index === 0 ? base : `${base}-${index}`);
 
-const parseHexAddress = (raw: string): number | null => {
-  const cleaned = raw.trim().replace(/^\$/, "");
-  if (!HEX_RE.test(cleaned)) return null;
-  return parseInt(cleaned, 16);
-};
+function HexAddressInput({
+  value,
+  onChange,
+  placeholder,
+  testId,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  testId: string;
+}) {
+  return (
+    <div className="relative flex-1">
+      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-mono text-sm text-muted-foreground">
+        $
+      </span>
+      <Input
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(sanitizeHexAddressInput(e.target.value))}
+        data-testid={testId}
+        className="pl-7 font-mono uppercase"
+        inputMode="text"
+        autoComplete="off"
+        spellCheck={false}
+        maxLength={4}
+      />
+    </div>
+  );
+}
 
 export function SaveRamDialog({ open, onOpenChange, onSave, isSaving }: SaveRamDialogProps) {
   const [showCustom, setShowCustom] = useState(false);
-  const [customStart, setCustomStart] = useState("");
-  const [customEnd, setCustomEnd] = useState("");
+  const [customRanges, setCustomRanges] = useState<CustomSnapshotRangeDraft[]>(() => loadCustomSnapshotDrafts());
+
+  useEffect(() => {
+    saveCustomSnapshotDrafts(customRanges);
+  }, [customRanges]);
 
   const handleClose = () => {
     setShowCustom(false);
-    setCustomStart("");
-    setCustomEnd("");
     onOpenChange(false);
+  };
+
+  const updateRange = (index: number, field: keyof CustomSnapshotRangeDraft, value: string) => {
+    setCustomRanges((current) =>
+      current.map((range, rangeIndex) =>
+        rangeIndex === index
+          ? {
+            ...range,
+            [field]: sanitizeHexAddressInput(value),
+          }
+          : range,
+      ),
+    );
+  };
+
+  const addRange = () => {
+    setCustomRanges((current) => [...current, { ...EMPTY_CUSTOM_SNAPSHOT_RANGE_DRAFT }]);
+  };
+
+  const deleteRange = (index: number) => {
+    setCustomRanges((current) => {
+      const next = current.filter((_, rangeIndex) => rangeIndex !== index);
+      return next.length > 0 ? next : [{ ...EMPTY_CUSTOM_SNAPSHOT_RANGE_DRAFT }];
+    });
   };
 
   const handleTypeSelect = (type: SnapshotType) => {
@@ -58,18 +116,12 @@ export function SaveRamDialog({ open, onOpenChange, onSave, isSaving }: SaveRamD
   };
 
   const handleCustomSave = () => {
-    const start = parseHexAddress(customStart);
-    const end = parseHexAddress(customEnd);
-    if (start === null || end === null) {
-      toast({ title: "Invalid address", description: "Enter hex addresses like $0400 or 0400." });
+    const validation = validateCustomSnapshotRanges(customRanges);
+    if (!validation.ok) {
+      toast({ title: validation.title, description: validation.description });
       return;
     }
-    if (end < start) {
-      toast({ title: "Invalid range", description: "End address must be ≥ start address." });
-      return;
-    }
-    const length = end - start + 1;
-    onSave("custom", [{ start, length }]);
+    onSave("custom", validation.ranges);
     handleClose();
   };
 
@@ -78,7 +130,10 @@ export function SaveRamDialog({ open, onOpenChange, onSave, isSaving }: SaveRamD
       <DialogContent data-testid="save-ram-dialog">
         <DialogHeader>
           <DialogTitle>Save RAM</DialogTitle>
-          <DialogDescription>Choose the memory region to snapshot.</DialogDescription>
+          <DialogDescription>
+            Choose the memory region to snapshot.
+            {showCustom && " Enter one or more hex ranges."}
+          </DialogDescription>
         </DialogHeader>
 
         {!showCustom ? (
@@ -100,22 +155,47 @@ export function SaveRamDialog({ open, onOpenChange, onSave, isSaving }: SaveRamD
           </div>
         ) : (
           <div className="space-y-3" data-testid="save-ram-custom-form">
-            <p className="text-sm text-muted-foreground">Enter the start and end addresses in hex (e.g. $0400).</p>
-            <div className="flex gap-2 items-center">
-              <Input
-                placeholder="Start (e.g. $0400)"
-                value={customStart}
-                onChange={(e) => setCustomStart(e.target.value)}
-                data-testid="save-ram-custom-start"
-              />
-              <span className="text-muted-foreground">–</span>
-              <Input
-                placeholder="End (e.g. $07E7)"
-                value={customEnd}
-                onChange={(e) => setCustomEnd(e.target.value)}
-                data-testid="save-ram-custom-end"
-              />
+            <div className="space-y-2">
+              {customRanges.map((range, index) => (
+                <div key={`custom-range-${index}`} className="flex items-center gap-2">
+                  <HexAddressInput
+                    placeholder="Start"
+                    value={range.start}
+                    onChange={(value) => updateRange(index, "start", value)}
+                    testId={buildRangeTestId("save-ram-custom-start", index)}
+                  />
+                  <span className="text-muted-foreground">–</span>
+                  <HexAddressInput
+                    placeholder="End"
+                    value={range.end}
+                    onChange={(value) => updateRange(index, "end", value)}
+                    testId={buildRangeTestId("save-ram-custom-end", index)}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 shrink-0 text-destructive hover:text-destructive"
+                    onClick={() => deleteRange(index)}
+                    aria-label={`Delete range ${index + 1}`}
+                    data-testid={`save-ram-custom-delete-range-${index}`}
+                    disabled={isSaving}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ))}
             </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={addRange}
+              disabled={isSaving}
+              data-testid="save-ram-custom-add-range"
+            >
+              Add Range
+            </Button>
           </div>
         )}
 

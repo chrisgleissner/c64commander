@@ -100,4 +100,58 @@ describe("useActionTrace", () => {
     expect(output).toBe(7);
     expect(createActionContext).toHaveBeenCalledWith("Widget.anonymousAction", "user", "Widget");
   });
+
+  it("resolvedComponent is null when all stack frames are filtered (line 52 null fallback + line 17 true)", () => {
+    createActionContext.mockReset();
+    runWithActionTrace.mockReset();
+    createActionContext.mockReturnValue({ correlationId: "COR-4" });
+    runWithActionTrace.mockImplementation((_ctx: unknown, fn: () => unknown) => fn());
+
+    class MockError extends Error {
+      constructor() {
+        super();
+        // Stack only contains filtered frame names → candidates = []
+        this.stack =
+          "\n  at useActionTrace (hook.ts:1:1)\n  at renderWithHooks (react.js:1:1)\n  at beginWork (react.js:2:1)";
+      }
+    }
+    vi.stubGlobal("Error", MockError as unknown as typeof Error);
+
+    const { result } = renderHook(() => useActionTrace());
+    const fn = function myFunc() {
+      return 99;
+    };
+    act(() => {
+      result.current(fn)();
+    });
+
+    expect(createActionContext).toHaveBeenCalledWith("myFunc", "user", null);
+    vi.unstubAllGlobals();
+  });
+
+  it("resolvedComponent is null when stack is undefined (line 25 true + line 17 false)", () => {
+    createActionContext.mockReset();
+    runWithActionTrace.mockReset();
+    createActionContext.mockReturnValue({ correlationId: "COR-5" });
+    runWithActionTrace.mockImplementation((_ctx: unknown, fn: () => unknown) => fn());
+
+    class MockError extends Error {
+      constructor() {
+        super();
+        this.stack = undefined as unknown as string;
+      }
+    }
+    vi.stubGlobal("Error", MockError as unknown as typeof Error);
+
+    const { result } = renderHook(() => useActionTrace());
+    // Anonymous function (no name) covers inferActionName line 17 FALSE → "anonymousAction"
+    const fn = () => 42;
+    Object.defineProperty(fn, "name", { value: "" });
+    act(() => {
+      result.current(fn)();
+    });
+
+    expect(createActionContext).toHaveBeenCalledWith("anonymousAction", "user", null);
+    vi.unstubAllGlobals();
+  });
 });

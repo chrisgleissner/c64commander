@@ -311,4 +311,22 @@ describe("fetchTrace", () => {
     };
     expect(payload.body.mimeType).toBeNull();
   });
+
+  it("covers .catch callback when thrown Response has non-JSON body (line 190)", async () => {
+    const nonJsonResponse = new Response("not-json-text", { status: 502 });
+    window.fetch = vi.fn().mockRejectedValue(nonJsonResponse) as unknown as typeof window.fetch;
+    registerFetchTrace();
+
+    await expect(window.fetch("/api/rest/v1/info")).rejects.toBeInstanceOf(Response);
+    expect(recordRestResponseMock).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ body: null }));
+  });
+
+  it("uses String(input) fallback for non-string/Request/URL input (line 225)", async () => {
+    registerFetchTrace();
+    const weirdInput = { toString: () => "http://localhost/api/rest/v1/info" };
+
+    await window.fetch(weirdInput as unknown as RequestInfo);
+
+    expect(recordRestRequestMock).toHaveBeenCalledTimes(1);
+  });
 });

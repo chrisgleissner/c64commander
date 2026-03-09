@@ -579,4 +579,88 @@ describe("useC64Connection", () => {
       );
     });
   });
+
+  it("rateLimitedInfoRefetch returns early when called back-to-back (line 90 rate-limit)", async () => {
+    const { wrapper } = createWrapper();
+    const { result } = renderHook(() => useC64Connection(), { wrapper });
+    await waitFor(() => expect(result.current.status.isConnected).toBe(true));
+
+    // First call sets the last-run timestamp
+    act(() => result.current.updateConfig("host1.local", "pw1"));
+    // Second call immediately after — within the min interval — should be suppressed
+    act(() => result.current.updateConfig("host2.local", "pw2"));
+
+    // Both calls changed settings, but the second rateLimitedInfoRefetch was suppressed
+    expect(updateC64APIConfigMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("setPassword receives empty string when loadStoredPassword returns null (line 102 || fallback)", async () => {
+    hasStoredPasswordFlagMock.mockReturnValue(true);
+    loadStoredPasswordMock.mockResolvedValue(null as unknown as string);
+    const { wrapper } = createWrapper();
+    const { result } = renderHook(() => useC64Connection(), { wrapper });
+
+    await waitFor(() => expect(result.current.password).toBe(""));
+  });
+
+  it("connection change event uses current.baseUrl when detail.baseUrl is not a string (line 117 FALSE)", async () => {
+    const { wrapper } = createWrapper();
+    const { result } = renderHook(() => useC64Connection(), { wrapper });
+    await waitFor(() => expect(result.current.status.isConnected).toBe(true));
+
+    const initialBaseUrl = result.current.baseUrl;
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent("c64u-connection-change", {
+          detail: { password: "new-secret", baseUrl: 42 },
+        }),
+      );
+    });
+
+    await waitFor(() => expect(result.current.password).toBe("new-secret"));
+    // baseUrl should NOT have changed since detail.baseUrl is not a string
+    expect(result.current.baseUrl).toBe(initialBaseUrl);
+  });
+
+  it("config-items placeholder returns undefined when requested items are absent from snapshot (line 232 TRUE)", async () => {
+    loadInitialSnapshotMock.mockReturnValue({
+      data: {
+        Audio: {
+          items: {
+            Bass: { selected: "0" },
+          },
+        },
+      },
+    });
+
+    const { wrapper } = createWrapper();
+    const { result } = renderHook(() => useC64ConfigItems("Audio", ["Volume"]), { wrapper });
+
+    // No matching item → placeholderData should be undefined
+    expect(result.current.data).toBeUndefined();
+  });
+
+  it("config-items falls back to categoryPayload when nested category key is missing (line 224 fallback)", async () => {
+    loadInitialSnapshotMock.mockReturnValue({
+      data: {
+        Audio: {
+          items: {
+            Volume: { selected: "Flat" },
+          },
+        },
+      },
+    });
+    mockApi.getConfigItems = vi.fn().mockResolvedValue({ Audio: { items: {} }, errors: [] });
+
+    const { wrapper } = createWrapper();
+    const { result } = renderHook(() => useC64ConfigItems("Audio", ["Volume"]), { wrapper });
+
+    // categoryPayload["Audio"] is undefined → fallback to categoryPayload itself
+    // (categoryPayload has .items) → Volume is found in items
+    expect(result.current.data).toEqual({
+      Audio: { items: { Volume: { selected: "Flat" } } },
+      errors: [],
+    });
+  });
 });

@@ -34,8 +34,8 @@ const waitForConnected = async (page: Page) => {
 const buildMinimalSnapshotBase64 = (typeCode: number, timestampSeconds: number): string => {
   const HEADER_SIZE = 28;
   const meta = JSON.stringify({
-    snapshot_type: "full",
-    display_ranges: ["$0000\u2013$FFFF"],
+    snapshot_type: "program",
+    display_ranges: ["$0000\u2013$00FF", "$0200\u2013$FFFF"],
     created_at: "2026-01-10 09:00:00",
   });
   const metaBytes = new TextEncoder().encode(meta);
@@ -69,8 +69,8 @@ const seedSnapshots = async (page: Page) => {
     const builder = (typeCode: number, ts: number): string => {
       const HEADER_SIZE = 28;
       const meta = JSON.stringify({
-        snapshot_type: typeCode === 0 ? "full" : typeCode === 1 ? "basic" : "screen",
-        display_ranges: ["$0000\u2013$FFFF"],
+        snapshot_type: typeCode === 0 ? "program" : typeCode === 1 ? "basic" : "screen",
+        display_ranges: typeCode === 0 ? ["$0000\u2013$00FF", "$0200\u2013$FFFF"] : ["$0000\u2013$FFFF"],
         created_at: "2026-01-10 09:00:00",
       });
       const metaBytes = new TextEncoder().encode(meta);
@@ -98,13 +98,13 @@ const seedSnapshots = async (page: Page) => {
       snapshots: [
         {
           id: "snap-1",
-          filename: "c64-full-20260110-090000.c64snap",
+          filename: "c64-program-20260110-090000.c64snap",
           bytesBase64: builder(0, 1736499600),
           createdAt: "2026-01-10T09:00:00.000Z",
-          snapshotType: "full",
+          snapshotType: "program",
           metadata: {
-            snapshot_type: "full",
-            display_ranges: ["$0000\u2013$FFFF"],
+            snapshot_type: "program",
+            display_ranges: ["$0000\u2013$00FF", "$0200\u2013$FFFF"],
             created_at: "2026-01-10 09:00:00",
             label: "Before game",
           },
@@ -176,13 +176,17 @@ test.describe("RAM Snapshot system", () => {
     await snap(page, testInfo, "save-ram-dialog-open");
 
     // All four type buttons visible
-    await expect(page.getByTestId("save-ram-type-full")).toBeVisible();
+    await expect(page.getByTestId("save-ram-type-program")).toBeVisible();
     await expect(page.getByTestId("save-ram-type-basic")).toBeVisible();
     await expect(page.getByTestId("save-ram-type-screen")).toBeVisible();
     await expect(page.getByTestId("save-ram-type-custom")).toBeVisible();
   });
 
-  test("Save RAM — custom type shows address form", async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test("Save RAM — custom type shows address form with multiple ranges", async ({
+    page,
+  }: {
+    page: Page;
+  }, testInfo: TestInfo) => {
     await page.goto("/");
     await waitForConnected(page);
 
@@ -191,10 +195,16 @@ test.describe("RAM Snapshot system", () => {
 
     await page.getByTestId("save-ram-type-custom").click();
     await expect(page.getByTestId("save-ram-custom-form")).toBeVisible();
-    await snap(page, testInfo, "save-ram-custom-form");
+    await expect(page.getByTestId("save-ram-custom-add-range")).toBeVisible();
 
     await page.getByTestId("save-ram-custom-start").fill("0400");
     await page.getByTestId("save-ram-custom-end").fill("07E7");
+    await page.getByTestId("save-ram-custom-add-range").click();
+    await expect(page.getByTestId("save-ram-custom-start-1")).toBeVisible();
+    await page.getByTestId("save-ram-custom-start-1").fill("2000");
+    await page.getByTestId("save-ram-custom-end-1").fill("20FF");
+
+    await snap(page, testInfo, "save-ram-custom-form");
   });
 
   test("Save RAM — invalid custom addresses show validation toast", async ({
@@ -212,10 +222,52 @@ test.describe("RAM Snapshot system", () => {
     await page.getByTestId("save-ram-custom-end").fill("07E7");
     await page.getByTestId("save-ram-custom-confirm").click();
 
-    await expect(page.getByText("Invalid address")).toBeVisible();
+    await expect(page.getByText("Invalid address").first()).toBeVisible();
   });
 
-  test("Save RAM — full snapshot triggers API read and stores snapshot", async ({
+  test("Save RAM — overlapping custom ranges show validation toast", async ({ page }: { page: Page }) => {
+    await page.goto("/");
+    await waitForConnected(page);
+
+    await page.getByTestId("home-save-ram").click();
+    await page.getByTestId("save-ram-type-custom").click();
+
+    await page.getByTestId("save-ram-custom-start").fill("0400");
+    await page.getByTestId("save-ram-custom-end").fill("07E7");
+    await page.getByTestId("save-ram-custom-add-range").click();
+    await page.getByTestId("save-ram-custom-start-1").fill("0700");
+    await page.getByTestId("save-ram-custom-end-1").fill("0800");
+    await page.getByTestId("save-ram-custom-confirm").click();
+
+    await expect(page.getByText("Overlapping ranges").first()).toBeVisible();
+  });
+
+  test("Save RAM — custom ranges persist across reload", async ({ page }: { page: Page }) => {
+    await page.goto("/");
+    await waitForConnected(page);
+
+    await page.getByTestId("home-save-ram").click();
+    await page.getByTestId("save-ram-type-custom").click();
+    await page.getByTestId("save-ram-custom-start").fill("C000");
+    await page.getByTestId("save-ram-custom-end").fill("CFFF");
+    await page.getByTestId("save-ram-custom-add-range").click();
+    await page.getByTestId("save-ram-custom-start-1").fill("D800");
+    await page.getByTestId("save-ram-custom-end-1").fill("DBFF");
+    await page.keyboard.press("Escape");
+
+    await page.reload();
+    await waitForConnected(page);
+
+    await page.getByTestId("home-save-ram").click();
+    await page.getByTestId("save-ram-type-custom").click();
+
+    await expect(page.getByTestId("save-ram-custom-start")).toHaveValue("C000");
+    await expect(page.getByTestId("save-ram-custom-end")).toHaveValue("CFFF");
+    await expect(page.getByTestId("save-ram-custom-start-1")).toHaveValue("D800");
+    await expect(page.getByTestId("save-ram-custom-end-1")).toHaveValue("DBFF");
+  });
+
+  test("Save RAM — program snapshot triggers API read and stores snapshot", async ({
     page,
   }: {
     page: Page;
@@ -226,14 +278,14 @@ test.describe("RAM Snapshot system", () => {
     await page.getByTestId("home-save-ram").click();
     await expect(page.getByTestId("save-ram-dialog")).toBeVisible();
 
-    await page.getByTestId("save-ram-type-full").click();
+    await page.getByTestId("save-ram-type-program").click();
 
     // Dialog closes and machine starts a readmem sequence
     await expect(page.getByTestId("save-ram-dialog")).not.toBeVisible({ timeout: 5000 });
 
     // Wait for success toast
-    await expect(page.getByText("Snapshot saved")).toBeVisible({ timeout: 15000 });
-    await snap(page, testInfo, "save-ram-full-done");
+    await expect(page.getByText("Snapshot saved", { exact: true })).toBeVisible({ timeout: 15000 });
+    await snap(page, testInfo, "save-ram-program-done");
 
     // Verify readmem requests were fired
     const readmemCount = server.requests.filter(
@@ -323,6 +375,33 @@ test.describe("RAM Snapshot system", () => {
     await page.getByTestId("snapshot-delete").first().click();
     await expect(page.getByTestId("snapshot-row")).toHaveCount(2);
     await snap(page, testInfo, "snapshot-manager-after-delete");
+  });
+
+  test("Snapshot Manager — comment edits update the stored snapshot label", async ({
+    page,
+  }: {
+    page: Page;
+  }, testInfo: TestInfo) => {
+    await seedSnapshots(page);
+    await page.goto("/");
+    await waitForConnected(page);
+
+    await page.getByTestId("home-load-ram").click();
+    await expect(page.getByTestId("snapshot-manager-dialog")).toBeVisible();
+
+    await page.getByTestId("snapshot-comment-toggle-snap-1").click();
+    await page.getByTestId("snapshot-comment-input-snap-1").fill("After game");
+    await page.getByTestId("snapshot-comment-confirm-snap-1").click();
+
+    await expect(page.getByTestId("snapshot-comment-toggle-snap-1")).toHaveText("After game");
+    const storedLabel = await page.evaluate(() => {
+      const raw = localStorage.getItem("c64u_snapshots:v1");
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as { snapshots?: Array<{ id: string; metadata?: { label?: string } }> };
+      return parsed.snapshots?.find((snapshot) => snapshot.id === "snap-1")?.metadata?.label ?? null;
+    });
+    expect(storedLabel).toBe("After game");
+    await snap(page, testInfo, "snapshot-manager-comment-updated");
   });
 
   // -------------------------------------------------------------------------

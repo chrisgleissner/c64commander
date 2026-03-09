@@ -469,9 +469,11 @@ export function usePlaybackPersistence({
       return;
     }
     const currentItemId = playlist[currentIndex]?.id ?? null;
+    const currentItemLabel = playlist[currentIndex]?.label ?? null;
     const payload: StoredPlaybackSession = {
       playlistKey: playlistStorageKey,
       currentItemId,
+      currentItemLabel,
       currentIndex,
       isPlaying,
       isPaused,

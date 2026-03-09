@@ -107,4 +107,45 @@ describe("validation helpers", () => {
       await rm(shotPath, { force: true });
     }
   });
+
+  it("surfaces helper failure states for foreground checks, PRG runs, memory reads, and resets", async () => {
+    execFileMock.mockImplementation((_cmd, _args, cb) => cb(null, { stdout: "other.app/.MainActivity" }));
+
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 503,
+        statusText: "Service Unavailable",
+        text: async () => "busy",
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        statusText: "Internal Server Error",
+        arrayBuffer: async () => new Uint8Array([]).buffer,
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        statusText: "Internal Server Error",
+        text: async () => "reset failed",
+      } as Response);
+
+    const { isAppInForeground, readC64Memory, resetC64Machine, runPrgOnC64u } =
+      await import("../src/validation/helpers.js");
+
+    try {
+      await expect(isAppInForeground("serial-1")).resolves.toBe(false);
+      await expect(runPrgOnC64u("c64u", Buffer.from([1, 2, 3]))).resolves.toMatchObject({
+        ok: false,
+        status: 503,
+        body: "busy",
+      });
+      await expect(readC64Memory("c64u", 0x1000, 3)).rejects.toThrow(/readmem failed: 500 Internal Server Error/);
+      await expect(resetC64Machine("c64u")).rejects.toThrow(/machine reset failed: 500 Internal Server Error/);
+    } finally {
+      fetchMock.mockRestore();
+    }
+  });
 });

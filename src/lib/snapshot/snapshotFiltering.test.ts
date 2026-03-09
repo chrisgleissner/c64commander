@@ -33,11 +33,11 @@ const makeEntry = (
 });
 
 const ENTRIES: SnapshotStorageEntry[] = [
-  makeEntry("1", "full", { label: "World of games", content_name: "Boulderdash" }),
+  makeEntry("1", "program", { label: "World of games", content_name: "Boulderdash" }),
   makeEntry("2", "basic", { label: "My BASIC prog", created_at: "2026-03-15 08:00:00" }),
   makeEntry("3", "screen", { content_name: "Title screen save" }),
   makeEntry("4", "custom", { label: undefined }),
-  makeEntry("5", "full", { label: "Backup before play" }),
+  makeEntry("5", "program", { label: "Backup before play" }),
 ];
 
 // ---------------------------------------------------------------------------
@@ -49,10 +49,10 @@ describe("filterSnapshots — type filter", () => {
     expect(filterSnapshots(ENTRIES, "", "all")).toHaveLength(ENTRIES.length);
   });
 
-  it("filters to only full snapshots", () => {
-    const result = filterSnapshots(ENTRIES, "", "full");
+  it("filters to only program snapshots", () => {
+    const result = filterSnapshots(ENTRIES, "", "program");
     expect(result).toHaveLength(2);
-    expect(result.every((e) => e.snapshotType === "full")).toBe(true);
+    expect(result.every((e) => e.snapshotType === "program")).toBe(true);
   });
 
   it("filters to only basic snapshots", () => {
@@ -113,15 +113,25 @@ describe("filterSnapshots — text filter", () => {
 
 describe("filterSnapshots — combined filters", () => {
   it("applies both type and text filters simultaneously", () => {
-    // type=full, query matches "backup"
-    const result = filterSnapshots(ENTRIES, "backup", "full");
+    // type=program, query matches "backup"
+    const result = filterSnapshots(ENTRIES, "backup", "program");
     expect(result).toHaveLength(1);
     expect(result[0].id).toBe("5");
   });
 
   it("returns empty when type narrows out text match", () => {
-    // "boulderdash" is full type, but filtering to basic should return empty
+    // "boulderdash" is program type, but filtering to basic should return empty
     const result = filterSnapshots(ENTRIES, "boulderdash", "basic");
     expect(result).toHaveLength(0);
+  });
+
+  it("handles entry with missing created_at (line 41 ?? fallback)", () => {
+    // metadata.created_at is undefined → ?? "" right side fires
+    const entryNoDate: SnapshotStorageEntry = makeEntry("99", "program", {
+      created_at: undefined as unknown as string,
+      label: "no-date-entry",
+    });
+    const result = filterSnapshots([entryNoDate], "no-date-entry", "all");
+    expect(result).toHaveLength(1);
   });
 });

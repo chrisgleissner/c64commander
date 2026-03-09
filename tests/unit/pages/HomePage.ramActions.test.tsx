@@ -15,32 +15,26 @@ const {
   toastSpy,
   reportUserErrorSpy,
   clearRamAndRebootSpy,
-  dumpFullRamImageSpy,
-  loadFullRamImageSpy,
-  pickRamDumpFileSpy,
-  writeRamDumpToFolderSpy,
-  buildRamDumpFileNameSpy,
   selectRamDumpFolderSpy,
   saveRamDumpFolderConfigSpy,
-  ramDumpFolderConfigRef,
+  createSnapshotSpy,
+  loadMemoryRangesSpy,
+  deleteSnapshotFromStoreSpy,
+  updateSnapshotLabelSpy,
+  snapshotEntryToBytesSpy,
+  getCurrentPlaybackSnapshotLabelSpy,
 } = vi.hoisted(() => ({
   toastSpy: vi.fn(),
   reportUserErrorSpy: vi.fn(),
   clearRamAndRebootSpy: vi.fn(),
-  dumpFullRamImageSpy: vi.fn(),
-  loadFullRamImageSpy: vi.fn(),
-  pickRamDumpFileSpy: vi.fn(),
-  writeRamDumpToFolderSpy: vi.fn(),
-  buildRamDumpFileNameSpy: vi.fn(),
   selectRamDumpFolderSpy: vi.fn(),
   saveRamDumpFolderConfigSpy: vi.fn(),
-  ramDumpFolderConfigRef: {
-    current: null as null | {
-      treeUri: string;
-      rootName?: string | null;
-      selectedAt?: string | null;
-    },
-  },
+  createSnapshotSpy: vi.fn(),
+  loadMemoryRangesSpy: vi.fn(),
+  deleteSnapshotFromStoreSpy: vi.fn(),
+  updateSnapshotLabelSpy: vi.fn(),
+  snapshotEntryToBytesSpy: vi.fn(),
+  getCurrentPlaybackSnapshotLabelSpy: vi.fn(),
 }));
 
 vi.mock("@/hooks/useC64Connection", () => ({
@@ -167,21 +161,45 @@ vi.mock("@/lib/c64api", () => ({
 vi.mock("@/lib/machine/ramOperations", () => ({
   FULL_RAM_SIZE_BYTES: 0x10000,
   clearRamAndReboot: clearRamAndRebootSpy,
-  dumpFullRamImage: dumpFullRamImageSpy,
-  loadFullRamImage: loadFullRamImageSpy,
+  loadMemoryRanges: loadMemoryRangesSpy,
 }));
 
 vi.mock("@/lib/machine/ramDumpStorage", () => ({
-  pickRamDumpFile: pickRamDumpFileSpy,
-  writeRamDumpToFolder: writeRamDumpToFolderSpy,
   selectRamDumpFolder: selectRamDumpFolderSpy,
-  buildRamDumpFileName: buildRamDumpFileNameSpy,
 }));
 
 vi.mock("@/lib/config/ramDumpFolderStore", () => ({
-  loadRamDumpFolderConfig: () => ramDumpFolderConfigRef.current,
+  loadRamDumpFolderConfig: () => null,
   saveRamDumpFolderConfig: saveRamDumpFolderConfigSpy,
   deriveRamDumpFolderDisplayPath: (treeUri: string) => treeUri,
+}));
+
+vi.mock("@/lib/snapshot/snapshotCreation", () => ({
+  createSnapshot: createSnapshotSpy,
+}));
+
+vi.mock("@/lib/snapshot/snapshotStore", () => ({
+  useSnapshotStore: () => ({ snapshots: [], snapshotsByType: vi.fn().mockReturnValue([]) }),
+  deleteSnapshotFromStore: deleteSnapshotFromStoreSpy,
+  updateSnapshotLabel: updateSnapshotLabelSpy,
+  snapshotEntryToBytes: snapshotEntryToBytesSpy,
+  saveSnapshotToStore: vi.fn(),
+  loadSnapshotStore: vi.fn().mockReturnValue([]),
+}));
+
+vi.mock("@/lib/snapshot/currentPlaybackSnapshotLabel", () => ({
+  getCurrentPlaybackSnapshotLabel: getCurrentPlaybackSnapshotLabelSpy,
+}));
+
+vi.mock("@/lib/snapshot/snapshotFormat", () => ({
+  decodeSnapshot: vi.fn().mockReturnValue({
+    version: 1,
+    snapshotType: "program",
+    timestamp: 0,
+    ranges: [],
+    blocks: [],
+    metadata: { snapshot_type: "program", display_ranges: [], created_at: "" },
+  }),
 }));
 
 vi.mock("@tanstack/react-query", () => ({
@@ -208,23 +226,9 @@ describe("HomePage RAM actions", () => {
     (globalThis as any).__GIT_SHA__ = "deadbeef";
     (globalThis as any).__BUILD_TIME__ = "";
     clearRamAndRebootSpy.mockResolvedValue(undefined);
-    dumpFullRamImageSpy.mockResolvedValue(new Uint8Array(0x10000));
-    loadFullRamImageSpy.mockResolvedValue(undefined);
-    ramDumpFolderConfigRef.current = null;
-    selectRamDumpFolderSpy.mockResolvedValue({
-      treeUri: "content://ram-folder",
-      rootName: "RAM",
-      selectedAt: "2026-02-07T00:00:00.000Z",
-    });
-    pickRamDumpFileSpy.mockResolvedValue({
-      name: "ram.bin",
-      sizeBytes: 0x10000,
-      modifiedAt: "2026-02-07T00:00:00.000Z",
-      bytes: new Uint8Array(0x10000),
-      parentFolder: null,
-    });
-    writeRamDumpToFolderSpy.mockResolvedValue(undefined);
-    buildRamDumpFileNameSpy.mockReturnValue("c64u-ram-01-02-03.bin");
+    createSnapshotSpy.mockResolvedValue({ displayTimestamp: "2026-01-01 12:00:00" });
+    getCurrentPlaybackSnapshotLabelSpy.mockReturnValue(undefined);
+    loadMemoryRangesSpy.mockResolvedValue(undefined);
   });
 
   it("runs reboot clear memory action", async () => {
@@ -239,84 +243,49 @@ describe("HomePage RAM actions", () => {
     });
   }, 15000);
 
-  it("runs save RAM directly when RAM dump folder is already configured", async () => {
-    ramDumpFolderConfigRef.current = {
-      treeUri: "content://existing-folder",
-      rootName: "Existing",
-      selectedAt: "2026-02-07T00:00:00.000Z",
-    };
-
+  it("opens Save RAM dialog when Save RAM button is clicked", async () => {
     renderHomePage();
 
     fireEvent.click(screen.getByRole("button", { name: /save ram/i }));
 
-    await waitFor(() => expect(dumpFullRamImageSpy).toHaveBeenCalledTimes(1));
-    expect(selectRamDumpFolderSpy).not.toHaveBeenCalled();
-    expect(writeRamDumpToFolderSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ treeUri: "content://existing-folder" }),
-      "c64u-ram-01-02-03.bin",
-      expect.any(Uint8Array),
-    );
+    await waitFor(() => expect(screen.getByTestId("save-ram-dialog")).toBeInTheDocument());
   }, 15000);
 
-  it("prompts for folder and then saves RAM when no RAM dump folder is configured", async () => {
+  it("saves program snapshot and shows toast when Program type is selected", async () => {
     renderHomePage();
 
     fireEvent.click(screen.getByRole("button", { name: /save ram/i }));
+    await waitFor(() => expect(screen.getByTestId("save-ram-dialog")).toBeInTheDocument());
 
-    await waitFor(() => expect(selectRamDumpFolderSpy).toHaveBeenCalledTimes(1));
-    expect(writeRamDumpToFolderSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ treeUri: "content://ram-folder" }),
-      "c64u-ram-01-02-03.bin",
-      expect.any(Uint8Array),
+    fireEvent.click(screen.getByTestId("save-ram-type-program"));
+
+    await waitFor(() =>
+      expect(createSnapshotSpy).toHaveBeenCalledWith(
+        {},
+        {
+          type: "program",
+          customRanges: undefined,
+          label: undefined,
+          contentName: undefined,
+        },
+      ),
     );
+    expect(toastSpy).toHaveBeenCalledWith(expect.objectContaining({ title: "Snapshot saved" }));
   }, 15000);
 
-  it("runs load RAM from configured folder with .bin picker", async () => {
-    ramDumpFolderConfigRef.current = {
-      treeUri: "content://existing-folder",
-      rootName: "Existing",
-      selectedAt: "2026-02-07T00:00:00.000Z",
-    };
-
+  it("opens Snapshot Manager dialog when Load RAM button is clicked", async () => {
     renderHomePage();
 
     fireEvent.click(screen.getByRole("button", { name: /load ram/i }));
 
-    await waitFor(() => expect(pickRamDumpFileSpy).toHaveBeenCalledTimes(1));
-    expect(pickRamDumpFileSpy).toHaveBeenCalledWith({
-      preferredFolder: expect.objectContaining({
-        treeUri: "content://existing-folder",
-      }),
-    });
-    expect(saveRamDumpFolderConfigSpy).not.toHaveBeenCalled();
-    expect(loadFullRamImageSpy).toHaveBeenCalledWith({}, expect.any(Uint8Array));
+    await waitFor(() => expect(screen.getByTestId("snapshot-manager-dialog")).toBeInTheDocument());
   }, 15000);
 
-  it("bootstraps RAM dump folder from selected .bin parent when folder is not configured", async () => {
-    pickRamDumpFileSpy.mockResolvedValue({
-      name: "ram.bin",
-      sizeBytes: 0x10000,
-      modifiedAt: "2026-02-07T00:00:00.000Z",
-      bytes: new Uint8Array(0x10000),
-      parentFolder: {
-        treeUri: "content://picked-parent",
-        rootName: "Picked Parent",
-        selectedAt: "2026-02-07T00:00:00.000Z",
-      },
-    });
-
+  it("shows empty state in Snapshot Manager when no snapshots exist", async () => {
     renderHomePage();
 
     fireEvent.click(screen.getByRole("button", { name: /load ram/i }));
 
-    await waitFor(() => expect(pickRamDumpFileSpy).toHaveBeenCalledTimes(1));
-    expect(pickRamDumpFileSpy).toHaveBeenCalledWith({
-      preferredFolder: undefined,
-    });
-    expect(saveRamDumpFolderConfigSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ treeUri: "content://picked-parent" }),
-    );
-    expect(loadFullRamImageSpy).toHaveBeenCalledWith({}, expect.any(Uint8Array));
+    await waitFor(() => expect(screen.getByTestId("snapshot-empty")).toBeInTheDocument());
   }, 15000);
 });

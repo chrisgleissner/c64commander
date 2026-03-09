@@ -508,3 +508,57 @@ describe("requireLocalSourceEntries", () => {
     expect(requireLocalSourceEntries(source, "test")).toBe(entries);
   });
 });
+
+describe("branch coverage fill-ins", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    pickDirectoryMock.mockReset();
+    platformState.value = "web";
+    platformState.native = false;
+  });
+
+  it("normalizes null rootName via createLocalSourceFromPicker (line 61: !value true)", async () => {
+    platformState.value = "android";
+    platformState.native = true;
+    pickDirectoryMock.mockResolvedValue({
+      treeUri: "content://tree/root",
+      rootName: null,
+      permissionPersisted: true,
+    });
+    const result = await createLocalSourceFromPicker(null);
+    expect(result?.source.rootName).toBeNull();
+    expect(result?.source.rootPath).toBe("/");
+  });
+
+  it("normalizes whitespace-only rootName to null (line 65: trimmed falsy)", async () => {
+    platformState.value = "android";
+    platformState.native = true;
+    pickDirectoryMock.mockResolvedValue({
+      treeUri: "content://tree/root",
+      rootName: "   ",
+      permissionPersisted: true,
+    });
+    const result = await createLocalSourceFromPicker(null);
+    expect(result?.source.rootName).toBeNull();
+  });
+
+  it("uses label when file has no webkitRelativePath (line 101: label || 'Folder')", () => {
+    const file = createFile("song.sid", "SID");
+    const result = createLocalSourceFromFileList([file], "SIDFolder");
+    expect(result.source.rootName).toBe("SIDFolder");
+  });
+
+  it("loadLocalSources keeps existing rootPath for SAF source (line 88: rootPath || '/')", () => {
+    const source = {
+      id: "saf-1",
+      name: "SAF Source",
+      rootName: null,
+      rootPath: "/Music/",
+      createdAt: new Date().toISOString(),
+      android: { treeUri: "content://tree/music", rootName: null, permissionGrantedAt: new Date().toISOString() },
+    };
+    saveLocalSources([source]);
+    const loaded = loadLocalSources();
+    expect(loaded[0].rootPath).toBe("/Music/");
+  });
+});

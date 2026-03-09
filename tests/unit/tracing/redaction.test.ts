@@ -80,4 +80,16 @@ describe("redaction", () => {
     expect(result["X-Paths"]).toEqual(["REDACTED:file:///a", "REDACTED:file:///b"]);
     vi.mocked(redactTreeUri).mockImplementation(() => "REDACTED_URI");
   });
+
+  it("passes non-string array entries through unchanged (line 52 ternary FALSE)", () => {
+    // entry is not a string → `typeof entry === "string"` FALSE → returns entry as-is
+    const result = redactHeaders({ "X-Paths": ["/path", 42 as unknown as string] });
+    expect((result["X-Paths"] as unknown[])[1]).toBe(42);
+  });
+
+  it("passes non-string, non-array header values through unchanged (line 55 ternary FALSE)", () => {
+    // value is not string and not array → `typeof value === "string"` FALSE → returns value as-is
+    const result = redactHeaders({ "X-Custom": 42 as unknown as string });
+    expect(result["X-Custom"]).toBe(42);
+  });
 });

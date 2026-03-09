@@ -107,13 +107,13 @@ describe("validation report", () => {
       [
         {
           caseId: "FAIL-CLASSIFY-001",
-          caseName: "Failure Case",
+          caseName: "Passing Case",
           featureArea: "Home",
           route: "/",
           validationTrack: "product",
           runId: "run-1",
-          outcome: "fail",
-          failureClass: "product_failure",
+          outcome: "pass",
+          failureClass: "inconclusive",
           oracleClasses: ["UI", "REST-visible state"],
           artifactDir: "/tmp/run-1",
           artifacts: ["session.json", "summary.md", "llm-decision-trace.json", "hardware-proof.json"],
@@ -146,8 +146,60 @@ describe("validation report", () => {
     );
 
     expect(report).not.toContain("Repeatability Metrics");
-    expect(report).toContain("| run-1 | FAIL-CLASSIFY-001 | product_failure | Home |");
+    expect(report).toContain("No failure runs recorded.");
     expect(report).toContain("No peer-server claims were synthesized");
     expect(report).toContain("Some termination criteria not yet satisfied.");
+  });
+
+  it("marks all termination criteria satisfied when the evidence set is complete", () => {
+    const results = Array.from({ length: 10 }, (_, index) => {
+      const caseId = index < 3 ? "AF-001" : index < 6 ? "AF-002" : index < 9 ? "AF-003" : "FAIL-CLASSIFY-001";
+      const outcome = caseId === "FAIL-CLASSIFY-001" ? "fail" : "pass";
+      return {
+        caseId,
+        caseName: `Case ${caseId}`,
+        featureArea: index % 2 === 0 ? "Play" : "Config",
+        route: index % 2 === 0 ? "/play" : "/config",
+        validationTrack: "product" as const,
+        runId: `run-${index + 1}`,
+        outcome,
+        failureClass: outcome === "fail" ? ("product_failure" as const) : ("inconclusive" as const),
+        oracleClasses: ["UI", "REST-visible state"],
+        artifactDir: `/tmp/run-${index + 1}`,
+        artifacts: ["session.json", "summary.md", "llm-decision-trace.json", "hardware-proof.json"],
+        explorationTrace: {
+          routeDiscovery: [],
+          decisionLog: ["peer:mobile_controller", "peer:c64scope"],
+          safetyBudget: "read-only" as const,
+          oracleSelection: [],
+          recoveryActions: [],
+        },
+        durationMs: 100 + index,
+      };
+    });
+
+    const report = generateReport(
+      results,
+      "serial-1",
+      "c64u",
+      {
+        product: "Ultimate 64",
+        firmware_version: "1.0",
+        fpga_version: "2.0",
+        core_version: "3.0",
+        unique_id: "abc",
+      },
+      {
+        model: "Phone",
+        hardware: "hw",
+        osVersion: "14",
+        characteristics: "default",
+      },
+      3,
+    );
+
+    expect(report).toContain("All termination criteria satisfied.");
+    expect(report).toContain("- [x] At least 10 independent runs");
+    expect(report).toContain("- [x] Deliberate failure classified correctly");
   });
 });

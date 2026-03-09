@@ -120,4 +120,26 @@ describe("diagnosticsExport", () => {
       expect.objectContaining({ error: "override failed" }),
     );
   });
+
+  it("isTestProbeEnabled returns true when __c64uTestProbeEnabled flag is set (lines 34, 51)", async () => {
+    (window as unknown as { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled = true;
+    isNativePlatform.mockReturnValue(true);
+    writeFile.mockResolvedValue(undefined);
+    getUri.mockResolvedValue({ uri: "file://cache/export.zip" });
+    share.mockResolvedValue(undefined);
+
+    const { shareDiagnosticsZip } = await import("@/lib/diagnostics/diagnosticsExport");
+    await shareDiagnosticsZip("logs", [{ id: 1 }]);
+
+    // Native share was called — override is still null even when probe flag is set
+    expect(share).toHaveBeenCalledTimes(1);
+    delete (window as unknown as { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled;
+  });
+
+  it("buildDiagnosticsZipBlob null data falls back to empty array (line 79 ?? branch)", async () => {
+    const { buildDiagnosticsZipBlob } = await import("@/lib/diagnostics/diagnosticsExport");
+    const blob = buildDiagnosticsZipBlob("logs", null);
+    expect(blob).toBeInstanceOf(Blob);
+    expect(blob.type).toBe("application/zip");
+  });
 });

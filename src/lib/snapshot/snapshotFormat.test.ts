@@ -33,10 +33,10 @@ const TS = new Date(1_700_000_000_000); // exact unix second
 
 describe("encodeSnapshot / decodeSnapshot", () => {
   it("round-trips type, timestamp, ranges and blocks without metadata", () => {
-    const bytes = encodeSnapshot("full", TS, RANGES, BLOCKS);
+    const bytes = encodeSnapshot("program", TS, RANGES, BLOCKS);
     const decoded = decodeSnapshot(bytes);
 
-    expect(decoded.snapshotType).toBe("full");
+    expect(decoded.snapshotType).toBe("program");
     // Timestamps are stored at second precision
     expect(Math.floor(decoded.timestamp.getTime() / 1000)).toBe(Math.floor(TS.getTime() / 1000));
     expect(decoded.ranges).toEqual(RANGES);
@@ -47,7 +47,7 @@ describe("encodeSnapshot / decodeSnapshot", () => {
   });
 
   it("round-trips all snapshot types", () => {
-    const types: Array<"full" | "basic" | "screen" | "custom"> = ["full", "basic", "screen", "custom"];
+    const types: Array<"program" | "basic" | "screen" | "custom"> = ["program", "basic", "screen", "custom"];
     for (const type of types) {
       const bytes = encodeSnapshot(type, TS, [{ start: 0, length: 1 }], [new Uint8Array([0])]);
       const decoded = decodeSnapshot(bytes);
@@ -83,7 +83,7 @@ describe("encodeSnapshot / decodeSnapshot", () => {
     const largeBlock = new Uint8Array(0x4000);
     for (let i = 0; i < largeBlock.length; i++) largeBlock[i] = i & 0xff;
 
-    const bytes = encodeSnapshot("full", TS, [{ start: 0x0000, length: 0x4000 }], [largeBlock]);
+    const bytes = encodeSnapshot("program", TS, [{ start: 0x0000, length: 0x4000 }], [largeBlock]);
     const decoded = decodeSnapshot(bytes);
 
     expect(decoded.blocks[0]).toEqual(largeBlock);
@@ -106,7 +106,7 @@ describe("decodeSnapshot error handling", () => {
   });
 
   it('falls back to "custom" for an unknown type code', () => {
-    const valid = encodeSnapshot("full", TS, [], []);
+    const valid = encodeSnapshot("program", TS, [], []);
     // Patch type code field at offset 10 (uint16) to an unknown value
     const patched = new Uint8Array(valid);
     new DataView(patched.buffer).setUint16(10, 255, true);
@@ -115,7 +115,7 @@ describe("decodeSnapshot error handling", () => {
   });
 
   it("throws on unsupported version", () => {
-    const valid = encodeSnapshot("full", TS, [], []);
+    const valid = encodeSnapshot("program", TS, [], []);
     // Patch version field at offset 8 (uint16)
     const patched = new Uint8Array(valid);
     new DataView(patched.buffer).setUint16(8, 99, true);
@@ -123,21 +123,21 @@ describe("decodeSnapshot error handling", () => {
   });
 
   it("throws on truncated range descriptors", () => {
-    const valid = encodeSnapshot("full", TS, RANGES, BLOCKS);
+    const valid = encodeSnapshot("program", TS, RANGES, BLOCKS);
     // Truncate to just 29 bytes so the range descriptors are cut off
     expect(() => decodeSnapshot(valid.slice(0, 29))).toThrow(/truncated/i);
   });
 
   it("throws on truncated memory block", () => {
-    const valid = encodeSnapshot("full", TS, RANGES, BLOCKS);
+    const valid = encodeSnapshot("program", TS, RANGES, BLOCKS);
     // Keep header + descriptors but truncate the first block mid-way
     const headerAndDesc = 28 + RANGES.length * 4;
     expect(() => decodeSnapshot(valid.slice(0, headerAndDesc + 2))).toThrow(/truncated/i);
   });
 
   it("throws on malformed metadata JSON", () => {
-    const valid = encodeSnapshot("full", TS, [], [], {
-      snapshot_type: "full",
+    const valid = encodeSnapshot("program", TS, [], [], {
+      snapshot_type: "program",
       display_ranges: [],
       created_at: "2026-01-01 00:00:00",
     });
@@ -148,8 +148,8 @@ describe("decodeSnapshot error handling", () => {
   });
 
   it("throws on truncated metadata (offset + size beyond file)", () => {
-    const valid = encodeSnapshot("full", TS, [], [], {
-      snapshot_type: "full",
+    const valid = encodeSnapshot("program", TS, [], [], {
+      snapshot_type: "program",
       display_ranges: [],
       created_at: "2026-01-01 00:00:00",
     });
@@ -166,6 +166,6 @@ describe("decodeSnapshot error handling", () => {
 
 describe("encodeSnapshot validation", () => {
   it("throws when ranges and blocks arrays differ in length", () => {
-    expect(() => encodeSnapshot("full", TS, [{ start: 0, length: 4 }], [])).toThrow(/ranges.length/);
+    expect(() => encodeSnapshot("program", TS, [{ start: 0, length: 4 }], [])).toThrow(/ranges.length/);
   });
 });

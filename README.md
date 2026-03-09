@@ -150,6 +150,12 @@ Your everyday dashboard: quick access to the controls you touch most often.
   <tr>
     <td><img src="doc/img/app/home/02-connection-status-popover.png" alt="Connection Status pop-up" width="360"/></td>
     <td><img src="doc/img/app/home/03-demo-mode-interstitial.png" alt="Demo Mode interstitial" width="360"/></td>
+    <td><img src="doc/img/app/home/dialogs/01-save-ram-dialog.png" alt="Save RAM type selection" width="360"/></td>
+  </tr>
+  <tr>
+    <td><img src="doc/img/app/home/dialogs/02-save-ram-custom-range.png" alt="Save RAM custom ranges" width="360"/></td>
+    <td><img src="doc/img/app/home/dialogs/03-snapshot-manager.png" alt="Load RAM snapshot manager" width="360"/></td>
+    <td><img src="doc/img/app/home/dialogs/04-restore-confirmation.png" alt="Load RAM restore confirmation" width="360"/></td>
   </tr>
 </table>
 
@@ -240,8 +246,8 @@ Four snapshot types are supported:
 
 | Type | Memory saved | Use case |
 |------|-------------|----------|
-| **Full** | $0000–$FFFF (64 KB) | Complete state capture |
-| **BASIC** | $0801–STREND + $002B–$0038 | BASIC program + pointer block |
+| **Program** | $0000–$00FF + $0200–$FFFF | Machine-code or game memory, excluding the stack page |
+| **Basic** | $0801–STREND + $002B–$0038 | BASIC program + pointer block |
 | **Screen** | $0400–$07E7 + $D800–$DBFF | Screen RAM + Color RAM |
 | **Custom** | User-defined range | Targeted saves |
 
@@ -257,7 +263,7 @@ Snapshots are stored in the app (browser `localStorage`) — up to 100 entries, 
 |--------|------|-------|
 | 0 | 8 B | Magic: `C64SNAP\0` |
 | 8 | 2 B | Version (uint16 LE, currently 1) |
-| 10 | 2 B | Snapshot type code (0=full, 1=basic, 2=screen, 3=custom) |
+| 10 | 2 B | Snapshot type code (0=program, 1=basic, 2=screen, 3=custom) |
 | 12 | 4 B | Unix timestamp (uint32 LE) |
 | 16 | 2 B | Range count (uint16 LE) |
 | 18 | 2 B | Flags (uint16 LE, currently 0) |

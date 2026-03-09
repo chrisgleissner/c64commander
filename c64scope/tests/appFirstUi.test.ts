@@ -78,7 +78,7 @@ describe("app-first UI XML parsing", () => {
 
     const nodes = parseUiNodes(xml);
 
-    expect(nodes[0]?.text).toBe('Home & Docs');
+    expect(nodes[0]?.text).toBe("Home & Docs");
     expect(findVisibleText(nodes, "Play")).toBeNull();
     expect(findBottomTabByText(nodes, "Config", 1700)).toBeNull();
     expect(activeBottomTabLabel(nodes, ["Home & Docs", "Play"], 1700)).toBe("Home & Docs");

@@ -20,6 +20,10 @@ import type { MemoryRange, SnapshotMetadata, SnapshotType } from "./snapshotType
 
 /** BASIC program start (hardcoded). */
 const BASIC_START = 0x0801;
+/** Stack page start. */
+const STACK_START = 0x0100;
+/** Stack page end (inclusive). */
+const STACK_END_INCLUSIVE = 0x01ff;
 /** STREND pointer low byte address. */
 const STREND_LO = 0x002b;
 /** STREND pointer high byte address. */
@@ -72,10 +76,13 @@ const basicRanges = (fullImage: Uint8Array): { ranges: MemoryRange[]; displayRan
   };
 };
 
-/** Derives ranges for the full snapshot (all 64 KB). */
-const fullRanges = (): { ranges: MemoryRange[]; displayRanges: string[] } => ({
-  ranges: [{ start: 0x0000, length: 0x10000 }],
-  displayRanges: ["$0000-$FFFF"],
+/** Derives ranges for the program snapshot (all RAM except the stack page). */
+const programRanges = (): { ranges: MemoryRange[]; displayRanges: string[] } => ({
+  ranges: [
+    { start: 0x0000, length: STACK_START },
+    { start: STACK_END_INCLUSIVE + 1, length: 0x10000 - (STACK_END_INCLUSIVE + 1) },
+  ],
+  displayRanges: ["$0000-$00FF", "$0200-$FFFF"],
 });
 
 /** Builds a unique snapshot ID from the current time. */
@@ -96,6 +103,7 @@ export type CreateSnapshotOptions = {
   /** Required for custom snapshots. */
   customRanges?: MemoryRange[];
   label?: string;
+  contentName?: string;
 };
 
 /**
@@ -108,7 +116,7 @@ export const createSnapshot = async (
   api: C64API,
   options: CreateSnapshotOptions,
 ): Promise<{ displayTimestamp: string }> => {
-  const { type, customRanges, label } = options;
+  const { type, customRanges, label, contentName } = options;
 
   const fullImage = await dumpFullRamImage(api);
   const now = new Date();
@@ -116,8 +124,8 @@ export const createSnapshot = async (
   let ranges: MemoryRange[];
   let displayRanges: string[];
 
-  if (type === "full") {
-    ({ ranges, displayRanges } = fullRanges());
+  if (type === "program") {
+    ({ ranges, displayRanges } = programRanges());
   } else if (type === "basic") {
     ({ ranges, displayRanges } = basicRanges(fullImage));
   } else if (type === "screen") {
@@ -145,6 +153,7 @@ export const createSnapshot = async (
     created_at: displayTimestamp,
     app_version: getBuildInfo().versionLabel,
     ...(label?.trim() ? { label: label.trim() } : {}),
+    ...(contentName?.trim() ? { content_name: contentName.trim() } : {}),
   };
 
   const bytes = encodeSnapshot(type, now, ranges, blocks, metadata);

@@ -196,4 +196,44 @@ describe("stream capture", () => {
       await rm(artifactDir, { recursive: true, force: true });
     }
   });
+
+  it("tolerates recoverable timeout starts when packets still arrive on a multicast bind", async () => {
+    const { captureAndAnalyzeStream } = await import("../src/stream/capture.js");
+    const artifactDir = await mkdtemp(path.join(os.tmpdir(), "c64scope-stream-timeout-"));
+    const timeoutError = Object.assign(new Error("start timed out"), { name: "TimeoutError" });
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValueOnce(timeoutError)
+      .mockResolvedValueOnce({
+        ok: true,
+        text: async () => "",
+      } as Response);
+
+    mockSocket.once.mockImplementation((_event, _handler) => undefined);
+    mockSocket.on.mockImplementation((event, handler) => {
+      if (event === "message") {
+        setTimeout(() => handler(Buffer.alloc(2 + 384 * 2, 1)), 10);
+      }
+      return mockSocket;
+    });
+    mockSocket.bind.mockImplementation((_port, _addr, cb) => cb());
+
+    try {
+      const pending = captureAndAnalyzeStream({
+        streamType: "audio",
+        c64uHost: "c64u",
+        artifactDir,
+        durationMs: 20,
+        bindAddress: "127.0.0.1",
+      });
+      await vi.advanceTimersByTimeAsync(30);
+      const result = await pending;
+
+      expect(result.capture.packets).toHaveLength(1);
+      expect(mockSocket.addMembership).toHaveBeenCalledWith("239.0.1.65", "127.0.0.1");
+    } finally {
+      fetchMock.mockRestore();
+      await rm(artifactDir, { recursive: true, force: true });
+    }
+  });
 });

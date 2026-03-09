@@ -71,6 +71,12 @@ describe("getParentPathWithinRoot", () => {
   it("returns parent directory for nested path", () => {
     expect(getParentPathWithinRoot("/games/level1/file.sid", "/games/")).toBe("/games/level1/");
   });
+
+  it("returns root when parent directory is outside root (line 38 TRUE branch)", () => {
+    // path "/games/level1/file.sid" is within root "/games/level1/"
+    // but parent "/games/" is NOT within root "/games/level1/" → returns root
+    expect(getParentPathWithinRoot("/games/level1/file.sid", "/games/level1/")).toBe("/games/level1/");
+  });
 });
 
 describe("ensureWithinRoot", () => {

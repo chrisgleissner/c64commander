@@ -51,20 +51,20 @@ vi.spyOn(globalThis as unknown as Window, "dispatchEvent").mockImplementation(()
 // ---------------------------------------------------------------------------
 
 const BASE_META: SnapshotMetadata = {
-  snapshot_type: "full",
-  display_ranges: ["$0000–$FFFF"],
+  snapshot_type: "program",
+  display_ranges: ["$0000–$00FF", "$0200–$FFFF"],
   created_at: "2026-01-10 09:00:00",
 };
 
 const makeBytes = () =>
-  encodeSnapshot("full", new Date(2026, 0, 10, 9, 0, 0), [{ start: 0, length: 4 }], [new Uint8Array([1, 2, 3, 4])]);
+  encodeSnapshot("program", new Date(2026, 0, 10, 9, 0, 0), [{ start: 0, length: 4 }], [new Uint8Array([1, 2, 3, 4])]);
 
 const makeEntry = (id: string, createdAt = "2026-01-10T09:00:00.000Z") => ({
   id,
-  filename: `c64-full-20260110-090000.c64snap`,
+  filename: `c64-program-20260110-090000.c64snap`,
   bytes: makeBytes(),
   createdAt,
-  snapshotType: "full" as const,
+  snapshotType: "program" as const,
   metadata: { ...BASE_META, created_at: "2026-01-10 09:00:00" },
 });
 
@@ -107,6 +107,17 @@ describe("loadSnapshotStore", () => {
   it("skips entries that fail isValidEntry check", () => {
     const store = { version: 1, snapshots: [{ id: "bad" }] };
     localStorageMock.setItem("c64u_snapshots:v1", JSON.stringify(store));
+    expect(loadSnapshotStore()).toHaveLength(0);
+  });
+
+  it("filters out null and non-object entries (isValidEntry null/primitive path)", () => {
+    const store = { version: 1, snapshots: [null, "bad", 42] };
+    localStorageMock.setItem("c64u_snapshots:v1", JSON.stringify(store));
+    expect(loadSnapshotStore()).toHaveLength(0);
+  });
+
+  it("defaults to empty array when snapshots field is absent (?? [] fallback)", () => {
+    localStorageMock.setItem("c64u_snapshots:v1", JSON.stringify({ version: 1 }));
     expect(loadSnapshotStore()).toHaveLength(0);
   });
 });

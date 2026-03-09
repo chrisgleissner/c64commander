@@ -116,6 +116,8 @@ describe("ConnectivityIndicator", () => {
     const button = getByTestId("connectivity-indicator");
     fireEvent.click(button);
     expect(getByRole("button", { name: "Retry Now" })).toBeTruthy();
+    fireEvent.click(getByRole("button", { name: "Retry Now" }));
+    expect(discoverConnection).toHaveBeenCalledWith("manual");
 
     connectionState = "REAL_CONNECTED";
     lastProbeAtMs = Date.now() - 2_000;
@@ -172,6 +174,20 @@ describe("ConnectivityIndicator", () => {
 
     fireEvent.click(restRow);
     expect(requestDiagnosticsOpen).toHaveBeenCalledWith("actions");
+  });
+
+  it("ftp row click opens actions diagnostics tab", () => {
+    const { getByTestId } = render(<ConnectivityIndicator />);
+    fireEvent.click(getByTestId("connectivity-indicator"));
+    fireEvent.click(getByTestId("connection-diagnostics-row-ftp"));
+    expect(requestDiagnosticsOpen).toHaveBeenCalledWith("actions");
+  });
+
+  it("log issues row click opens error-logs diagnostics tab", () => {
+    const { getByTestId } = render(<ConnectivityIndicator />);
+    fireEvent.click(getByTestId("connectivity-indicator"));
+    fireEvent.click(getByTestId("connection-diagnostics-row-log-issues"));
+    expect(requestDiagnosticsOpen).toHaveBeenCalledWith("error-logs");
   });
 
   it("renders host and change action on one row before edit mode", () => {

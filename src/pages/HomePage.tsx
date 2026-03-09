@@ -141,6 +141,7 @@ function HomePageContent() {
     handleSaveRam,
     handleRestoreSnapshot,
     handleDeleteSnapshot,
+    handleUpdateSnapshotLabel,
     handleRebootClearMemory,
     handlePowerOff,
     confirmPowerOff,
@@ -1034,6 +1035,9 @@ function HomePageContent() {
         }}
         onDelete={(id) => {
           handleDeleteSnapshot(id);
+        }}
+        onUpdateLabel={(id, label) => {
+          handleUpdateSnapshotLabel(id, label);
         }}
       />
 

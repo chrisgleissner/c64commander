@@ -116,4 +116,26 @@ describe("deviceRegistry", () => {
 
     await expect(resolvePreferredPhysicalTestDeviceSerial()).resolves.toBe("R5C");
   });
+
+  it("fails when multiple fallback devices match a configured prefix", async () => {
+    mockAdbDevicesOutput(
+      [
+        "List of devices attached",
+        "R5C12345678\tdevice product:x model:Galaxy device:y transport_id:1",
+        "R5CABCDEFGH\tdevice product:x model:Galaxy device:y transport_id:2",
+      ].join("\n"),
+    );
+
+    await expect(resolvePreferredPhysicalTestDeviceSerial()).rejects.toThrow(
+      /Multiple connected Android devices matched fallback prefix "R5C"/,
+    );
+  });
+
+  it("fails when no configured physical test device is connected", async () => {
+    mockAdbDevicesOutput(["List of devices attached", "emulator-5554\tdevice product:sdk model:Android"].join("\n"));
+
+    await expect(resolvePreferredPhysicalTestDeviceSerial()).rejects.toThrow(
+      /No configured physical test device is connected/,
+    );
+  });
 });

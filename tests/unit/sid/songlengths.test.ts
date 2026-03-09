@@ -278,4 +278,13 @@ describe("parseSonglengths", () => {
     const result = resolveSonglengthsSeconds(data, "/test.sid", "abc", 10);
     expect(result).toBeNull();
   });
+
+  it("returns null for undefined element in durations array (line 28 ?? fallback)", () => {
+    // Manually construct a sparse array to trigger the durations[index] ?? null branch
+    const data = {
+      pathToSeconds: new Map([["/x.sid", [30, undefined as unknown as number, 60]]]),
+      md5ToSeconds: new Map<string, number[]>(),
+    };
+    expect(resolveSonglengthsSeconds(data, "/x.sid", null, 2)).toBeNull();
+  });
 });

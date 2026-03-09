@@ -53,9 +53,13 @@ describe("appSettings", () => {
     it("defaults correctly", () => {
       expect(appSettings.loadAutomaticDemoModeEnabled()).toBe(appSettings.DEFAULT_AUTO_DEMO_MODE_ENABLED);
     });
-    it("saves and loads", () => {
+    it("saves and loads false", () => {
       appSettings.saveAutomaticDemoModeEnabled(false);
       expect(appSettings.loadAutomaticDemoModeEnabled()).toBe(false);
+    });
+    it('saves true and stores "1" (BRDA:93)', () => {
+      appSettings.saveAutomaticDemoModeEnabled(true);
+      expect(localStorage.getItem("c64u_automatic_demo_mode_enabled")).toBe("1");
     });
   });
 
@@ -152,6 +156,8 @@ describe("appSettings", () => {
       expect(() => appSettings.saveBackgroundRediscoveryIntervalMs(1000)).not.toThrow();
       expect(() => appSettings.saveDiscoveryProbeTimeoutMs(1000)).not.toThrow();
       expect(() => appSettings.saveDiskAutostartMode("dma")).not.toThrow();
+      // Covers BRDA:137 — loadDiskAutostartMode early-returns DEFAULT when localStorage absent
+      expect(appSettings.loadDiskAutostartMode()).toBe(appSettings.DEFAULT_DISK_AUTOSTART_MODE);
     });
 
     it("handles numeric reads without storage", () => {

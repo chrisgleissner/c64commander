@@ -330,4 +330,166 @@ describe("validation runner", () => {
       await rm(artifactRoot, { recursive: true, force: true });
     }
   });
+
+  it("ignores non-c64bridge and incomplete timeline entries during product policy scans", async () => {
+    adbMock
+      .mockResolvedValueOnce("Pixel")
+      .mockResolvedValueOnce("tensor")
+      .mockResolvedValueOnce("phone")
+      .mockResolvedValueOnce("14");
+    c64uGetMock.mockResolvedValueOnce(
+      JSON.stringify({
+        hostname: "c64u",
+        firmware_version: "1.0",
+        product: "Ultimate 64",
+        unique_id: "abc",
+      }),
+    );
+    resetC64MachineMock.mockResolvedValue(undefined);
+
+    const artifactRoot = await mkdtemp(path.join(os.tmpdir(), "c64scope-runner-skip-policy-"));
+    const { runCase } = await import("../src/validation/runner.js");
+
+    try {
+      const result = await runCase(
+        {
+          id: "TEST-SKIP-POLICY",
+          name: "Runner Skip Policy Case",
+          caseId: "RUN-005",
+          featureArea: "Settings",
+          route: "/settings",
+          validationTrack: "product",
+          safetyClass: "read-only",
+          expectedOutcome: "pass",
+          oracleClasses: ["UI", "REST-visible state"],
+          run: async (ctx) => {
+            const stepResult = await ctx.store.recordStep({
+              runId: ctx.runId,
+              stepId: "step-01",
+              route: "/settings",
+              featureArea: "Settings",
+              action: "inspect_connection",
+              peerServer: "c64bridge",
+              primaryOracle: "REST-visible state",
+              bridgeFallbackCategory: "app_path_unavailable",
+              bridgeFallbackJustification: "The app route was unavailable for this inspection",
+            });
+            expect(stepResult.ok).toBe(true);
+
+            const sessionPath = path.join(ctx.artifactDir, "session.json");
+            const session = JSON.parse(await readFile(sessionPath, "utf-8")) as {
+              timeline: Array<Record<string, string | null>>;
+            };
+            session.timeline.push({
+              stepId: "step-02",
+              route: "/settings",
+              featureArea: "Settings",
+              action: "inspect_from_ui",
+              peerServer: "mobile_controller",
+              primaryOracle: "UI",
+              fallbackOracle: null,
+              bridgeFallbackCategory: null,
+              bridgeFallbackJustification: null,
+              recordedAt: new Date().toISOString(),
+              notes: null,
+            });
+            session.timeline.push({
+              stepId: "step-03",
+              route: "/settings",
+              featureArea: "Settings",
+              action: "",
+              peerServer: "",
+              primaryOracle: "UI",
+              fallbackOracle: null,
+              bridgeFallbackCategory: null,
+              bridgeFallbackJustification: null,
+              recordedAt: new Date().toISOString(),
+              notes: null,
+            });
+            await writeFile(sessionPath, JSON.stringify(session, null, 2), "utf-8");
+
+            return {
+              assertions: [
+                { oracleClass: "UI", passed: true, details: {} },
+                { oracleClass: "REST-visible state", passed: true, details: {} },
+              ],
+              explorationTrace: {
+                routeDiscovery: ["/settings"],
+                decisionLog: [],
+                safetyBudget: "read-only",
+                oracleSelection: ["UI", "REST-visible state"],
+                recoveryActions: [],
+              },
+            };
+          },
+        },
+        "serial-1",
+        "c64u",
+        artifactRoot,
+      );
+
+      expect(result.outcome).toBe("pass");
+      expect(result.explorationTrace.recoveryActions).toEqual([]);
+    } finally {
+      await rm(artifactRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("writes unknown hardware identity fields and leaves peer usage empty when no evidence or timeline peers exist", async () => {
+    adbMock
+      .mockResolvedValueOnce("Pixel")
+      .mockResolvedValueOnce("tensor")
+      .mockResolvedValueOnce("phone")
+      .mockResolvedValueOnce("14");
+    c64uGetMock.mockResolvedValueOnce(JSON.stringify({}));
+    resetC64MachineMock.mockResolvedValue(undefined);
+
+    const artifactRoot = await mkdtemp(path.join(os.tmpdir(), "c64scope-runner-unknowns-"));
+    const { runCase } = await import("../src/validation/runner.js");
+
+    try {
+      const result = await runCase(
+        {
+          id: "TEST-UNKNOWNS",
+          name: "Runner Unknowns Case",
+          caseId: "RUN-006",
+          featureArea: "Docs",
+          route: "/docs",
+          validationTrack: "calibration",
+          safetyClass: "read-only",
+          expectedOutcome: "pass",
+          oracleClasses: ["UI", "REST-visible state"],
+          run: async () => ({
+            assertions: [
+              { oracleClass: "UI", passed: true, details: {} },
+              { oracleClass: "REST-visible state", passed: true, details: {} },
+            ],
+            explorationTrace: {
+              routeDiscovery: ["/docs"],
+              decisionLog: [],
+              safetyBudget: "read-only",
+              oracleSelection: ["UI", "REST-visible state"],
+              recoveryActions: [],
+            },
+          }),
+        },
+        "serial-1",
+        "c64u",
+        artifactRoot,
+      );
+
+      const hardwareProof = JSON.parse(await readFile(path.join(result.artifactDir, "hardware-proof.json"), "utf-8"));
+      const llmTrace = JSON.parse(await readFile(path.join(result.artifactDir, "llm-decision-trace.json"), "utf-8"));
+
+      expect(hardwareProof.c64u).toMatchObject({
+        hostname: "unknown",
+        firmware: "unknown",
+        product: "unknown",
+        uniqueId: "unknown",
+      });
+      expect(llmTrace.peerServersUsed).toEqual([]);
+    } finally {
+      await rm(artifactRoot, { recursive: true, force: true });
+    }
+  });
 });

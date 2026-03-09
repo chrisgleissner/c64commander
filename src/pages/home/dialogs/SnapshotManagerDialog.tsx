@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useState } from "react";
+import { useEffect, useState, type MouseEvent, type SyntheticEvent } from "react";
 import {
   Dialog,
   DialogContent,
@@ -29,12 +29,13 @@ interface SnapshotManagerDialogProps {
   snapshots: SnapshotStorageEntry[];
   onRestore: (snapshot: SnapshotStorageEntry) => void;
   onDelete: (id: string) => void;
+  onUpdateLabel: (id: string, label: string) => void;
 }
 
 const TYPE_FILTERS: Array<{ value: SnapshotTypeFilter; label: string }> = [
   { value: "all", label: "All" },
-  { value: "full", label: "Full" },
-  { value: "basic", label: "BASIC" },
+  { value: "program", label: "Program" },
+  { value: "basic", label: "Basic" },
   { value: "screen", label: "Screen" },
   { value: "custom", label: "Custom" },
 ];
@@ -43,16 +44,42 @@ function SnapshotRow({
   snapshot,
   onRestore,
   onDelete,
+  onUpdateLabel,
 }: {
   snapshot: SnapshotStorageEntry;
   onRestore: (s: SnapshotStorageEntry) => void;
   onDelete: (id: string) => void;
+  onUpdateLabel: (id: string, label: string) => void;
 }) {
   const typeConfig = SNAPSHOT_TYPE_LIST.find((c) => c.type === snapshot.snapshotType);
   const typeLabel = typeConfig?.label ?? snapshot.snapshotType;
   const ranges = snapshot.metadata.display_ranges.join(", ");
   const label = snapshot.metadata.label;
   const createdAt = snapshot.metadata.created_at;
+  const [isEditingLabel, setIsEditingLabel] = useState(false);
+  const [labelDraft, setLabelDraft] = useState(label ?? "");
+
+  useEffect(() => {
+    setLabelDraft(label ?? "");
+  }, [label]);
+
+  const handleEditOpen = (event: MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    setLabelDraft(label ?? "");
+    setIsEditingLabel(true);
+  };
+
+  const handleEditCancel = (event?: SyntheticEvent) => {
+    event?.stopPropagation();
+    setLabelDraft(label ?? "");
+    setIsEditingLabel(false);
+  };
+
+  const handleEditSave = (event?: SyntheticEvent) => {
+    event?.stopPropagation();
+    onUpdateLabel(snapshot.id, labelDraft);
+    setIsEditingLabel(false);
+  };
 
   return (
     <div
@@ -62,13 +89,75 @@ function SnapshotRow({
       role="button"
       tabIndex={0}
       onKeyDown={(e) => {
+        if (e.target !== e.currentTarget || isEditingLabel) return;
         if (e.key === "Enter" || e.key === " ") onRestore(snapshot);
       }}
     >
-      <div className="flex-1 min-w-0 space-y-0.5">
+      <div className="flex-1 min-w-0 space-y-1">
         <div className="text-sm font-semibold leading-tight">{typeLabel}</div>
         <div className="text-xs text-muted-foreground">{ranges}</div>
-        {label && <div className="text-xs text-foreground">{label}</div>}
+        {!isEditingLabel ? (
+          <button
+            type="button"
+            className={[
+              "block max-w-full truncate text-left text-xs transition-colors hover:text-foreground",
+              label ? "text-foreground" : "text-muted-foreground",
+            ].join(" ")}
+            data-testid={`snapshot-comment-toggle-${snapshot.id}`}
+            onClick={handleEditOpen}
+            aria-label={label ? "Edit snapshot comment" : "Add snapshot comment"}
+          >
+            {label ?? "Add comment..."}
+          </button>
+        ) : (
+          <div
+            className="rounded-md border border-border/60 bg-background p-2.5"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="grid grid-cols-1 gap-2 text-[11px] md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-end">
+              <div className="space-y-1">
+                <label htmlFor={`snapshot-comment-${snapshot.id}`} className="text-muted-foreground">
+                  Comment
+                </label>
+                <Input
+                  id={`snapshot-comment-${snapshot.id}`}
+                  value={labelDraft}
+                  onChange={(event) => setLabelDraft(event.target.value)}
+                  onKeyDown={(event) => {
+                    event.stopPropagation();
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      handleEditSave(event);
+                    } else if (event.key === "Escape") {
+                      event.preventDefault();
+                      handleEditCancel(event);
+                    }
+                  }}
+                  data-testid={`snapshot-comment-input-${snapshot.id}`}
+                  aria-label="Snapshot comment"
+                  autoFocus
+                />
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleEditCancel}
+                data-testid={`snapshot-comment-cancel-${snapshot.id}`}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleEditSave}
+                data-testid={`snapshot-comment-confirm-${snapshot.id}`}
+              >
+                OK
+              </Button>
+            </div>
+          </div>
+        )}
         <div className="text-xs text-muted-foreground">{createdAt}</div>
       </div>
       <Button
@@ -94,6 +183,7 @@ export function SnapshotManagerDialog({
   snapshots,
   onRestore,
   onDelete,
+  onUpdateLabel,
 }: SnapshotManagerDialogProps) {
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<SnapshotTypeFilter>("all");
@@ -108,7 +198,7 @@ export function SnapshotManagerDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-md" data-testid="snapshot-manager-dialog">
+      <DialogContent className="max-w-md max-h-[85vh]" data-testid="snapshot-manager-dialog">
         <DialogHeader>
           <DialogTitle>Load RAM</DialogTitle>
           <DialogDescription>Select a snapshot to restore.</DialogDescription>
@@ -143,13 +233,21 @@ export function SnapshotManagerDialog({
           </div>
 
           {/* Snapshot list */}
-          <div className="space-y-2 max-h-[50vh] overflow-y-auto" data-testid="snapshot-list">
+          <div className="space-y-2 max-h-[62vh] overflow-y-auto" data-testid="snapshot-list">
             {filtered.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4 text-center" data-testid="snapshot-empty">
                 {snapshots.length === 0 ? "No snapshots saved yet." : "No snapshots match the filter."}
               </p>
             ) : (
-              filtered.map((s) => <SnapshotRow key={s.id} snapshot={s} onRestore={onRestore} onDelete={onDelete} />)
+              filtered.map((s) => (
+                <SnapshotRow
+                  key={s.id}
+                  snapshot={s}
+                  onRestore={onRestore}
+                  onDelete={onDelete}
+                  onUpdateLabel={onUpdateLabel}
+                />
+              ))
             )}
           </div>
         </div>
