@@ -6,6 +6,7 @@ import com.getcapacitor.Bridge
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
+import java.io.File
 import java.lang.reflect.Method
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -163,5 +164,33 @@ class HvscIngestionPluginTest {
             "HVSC 7z method chain [3, 4, 1] is unsupported by Android native extraction; retry will use the non-native fallback extractor",
             result,
     )
+  }
+
+  @Test
+  fun readArchiveChunkReturnsBoundedBase64Payload() {
+    val archiveDir = File(context.filesDir, "hvsc/cache")
+    archiveDir.mkdirs()
+    val archiveFile = File(archiveDir, "baseline.7z")
+    archiveFile.writeBytes(byteArrayOf(1, 2, 3, 4, 5, 6))
+
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("relativeArchivePath")).thenReturn("hvsc/cache/baseline.7z")
+    `when`(call.getLong("offsetBytes")).thenReturn(2L)
+    `when`(call.getInt("lengthBytes")).thenReturn(3)
+
+    val payloadHolder = arrayOfNulls<JSObject>(1)
+    doAnswer { invocation ->
+              payloadHolder[0] = invocation.getArgument(0) as JSObject
+              null
+            }
+            .`when`(call)
+            .resolve(any(JSObject::class.java))
+
+    plugin.readArchiveChunk(call)
+
+    val payload = payloadHolder[0]
+    assertEquals(3, payload?.getInteger("sizeBytes"))
+    assertEquals(false, payload?.getBoolean("eof"))
+    assertEquals("AwQF", payload?.getString("data"))
   }
 }

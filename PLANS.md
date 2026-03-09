@@ -1,5 +1,139 @@
 # Plans
 
+## Android Regression Remediation And Proof
+
+### Problem statement
+
+Resolve five Android regressions in the Capacitor app and produce reproducible evidence for each fix:
+
+1. FTP import from a real C64U times out after 8000 ms during listing.
+2. Local Android file playback/upload corrupts or mishandles `d64`, `prg`, and possibly `crt`, while local `sid` playback must remain working.
+3. HVSC large-archive ingestion fails after download because the fallback path attempts a guarded bridge read of a large cached archive.
+4. Playlist import is aborted by in-app navigation instead of warning and requiring explicit confirmation.
+5. HVSC full-library import throughput degrades badly over time and needs structural improvement plus before/after measurement.
+
+### Constraints and assumptions
+
+- Linux workstation; Android and repository-local validation are possible, iOS is irrelevant for this task.
+- Real-device validation is expected against Android hardware and a real C64U at hostname `c64u` when reachable from the attached environment.
+- Existing historical sections in this file remain as prior task history; this section is the active task record.
+- No timeout inflation without a root-cause-backed explanation.
+- Local SID playback is a non-regression requirement.
+
+### Current status
+
+- Status: fixes implemented; automated validation mostly complete; Android-real-device and Android-JVM validation blocked by environment.
+- Branch: `test/fix-ios-maestro-tests`.
+- Initial hotspot mapping completed across Android native FTP, TypeScript upload routes, HVSC native/non-native ingestion, and Play page import lifecycle.
+- Implemented fixes cover FTP directory listing, raw binary upload transport, HVSC large-archive native fallback, import navigation confirmation, and bulk songlength application throughput.
+
+### Phase plan
+
+#### Phase 1: Baseline and instrumentation
+
+- [x] Identify the concrete code paths for FTP listing, local upload/playback, HVSC ingestion, playlist import lifecycle, and HVSC indexing/import.
+- [x] Add or extend instrumentation and regression tests where current visibility is insufficient.
+- [ ] Capture baseline reproduction evidence for each issue in local, mocked, emulator, or real-device environments as available.
+
+#### Phase 2: Root-cause analysis
+
+- [x] Confirm the FTP timeout mechanism with code and test evidence.
+- [x] Confirm the local binary transfer corruption mechanism for `d64`/`prg`/`crt` and contrast it with working local `sid` flow.
+- [x] Confirm the HVSC large-archive failure mechanism in the native-to-fallback ingest path.
+- [x] Confirm why playlist import work is tied to page/component lifecycle and is lost on navigation.
+- [x] Confirm the main throughput degradation sources in the HVSC import/index pipeline.
+
+#### Phase 3: Minimal durable fixes
+
+- [x] Implement the FTP fix with justified control/data/listing behavior.
+- [x] Implement binary-safe upload/integrity fixes for local `d64`/`prg`/`crt` without regressing `sid`.
+- [x] Remove the unsafe large-archive bridge-read dependency from HVSC ingestion fallback.
+- [x] Add explicit navigation blocking/confirmation while playlist import is active.
+- [x] Restructure HVSC import/index work to keep throughput stable over large imports.
+
+#### Phase 4: Automated validation
+
+- [x] Add or update unit/Android/Playwright coverage for each regression.
+- [ ] Run relevant local tests, coverage, lint, build, Android tests, and full build.
+- [ ] Run Maestro / Android validation where feasible from the current environment.
+
+#### Phase 5: Real-device proof and artifact package
+
+- [ ] Validate fixed behavior on attached Android device against real C64U where reachable.
+- [ ] Record logs, screenshots, and measurements under `docs/repro/android-regressions-2026-03-09/`.
+- [ ] Document root cause, fix, and evidence for each issue group.
+
+### Explicit checklist
+
+- [x] `PLANS.md` updated before Android regression code changes
+- [x] Relevant implementation hotspots identified
+- [x] FTP regression root cause confirmed with evidence
+- [x] Local binary upload regression root cause confirmed with evidence
+- [x] HVSC large archive regression root cause confirmed with evidence
+- [x] Playlist navigation-abort root cause confirmed with evidence
+- [x] HVSC throughput degradation root cause confirmed with evidence
+- [x] All targeted fixes implemented
+- [x] Relevant tests added or updated
+- [x] `npm run lint` passed
+- [x] `npm run test:coverage` passed with >=90% branch coverage
+- [x] `npm run build` passed
+- [ ] `./build` passed or explicit blocker documented
+- [ ] Android tests passed
+- [ ] Real-device validation captured or explicit external blocker documented
+- [ ] Proof artifacts written under `docs/repro/android-regressions-2026-03-09/`
+
+### Confirmed findings so far
+
+- FTP listing currently calls `mlistDir(path)` first in [android/app/src/main/java/uk/gleissner/c64commander/FtpClientPlugin.kt](/home/chris/dev/c64/c64commander/android/app/src/main/java/uk/gleissner/c64commander/FtpClientPlugin.kt). A C64U that stalls rather than quickly rejecting MLSD/MLST will spend the full 8000 ms timeout before falling back to LIST, which matches the reported regression profile.
+- Local `sid` uploads use multipart form upload in [src/lib/c64api.ts](/home/chris/dev/c64/c64commander/src/lib/c64api.ts), while local `d64`/`prg`/`crt` uploads use raw `application/octet-stream` POST bodies via separate endpoints in the same file. That asymmetry is the strongest current candidate for format-specific regression.
+- HVSC fallback ingestion still depends on `readArchiveBuffer()` in [src/lib/hvsc/hvscDownload.ts](/home/chris/dev/c64/c64commander/src/lib/hvsc/hvscDownload.ts), which intentionally blocks bridge reads above `MAX_BRIDGE_READ_BYTES`. This exactly matches the reported large-archive failure after native extraction fallback.
+- Play page import state is page-scoped in [src/pages/PlayFilesPage.tsx](/home/chris/dev/c64/c64commander/src/pages/PlayFilesPage.tsx); there is no route blocker or leave-confirmation around active import work, and cleanup on unmount can tear down in-progress UI/import state.
+- HVSC full-library imports were paying an avoidable MD5 fallback cost during bulk songlength enrichment. Disabling MD5 fallback for bulk additions and yielding periodically keeps import work from degrading over long runs while preserving path-based resolution.
+
+### Implemented fixes
+
+- FTP directory browsing on Android now prefers LIST and only falls back to MLSD/MLIST if LIST is empty or errors, removing the repeated 8000 ms stall path on C64U.
+- Raw local uploads for `d64`, `prg`, `crt`, and other non-SID binary flows now serialize `Blob` payloads to `ArrayBuffer` before `fetch`, matching binary-safe transport expectations while leaving SID multipart upload behavior unchanged.
+- HVSC large archive reads now use a native chunked bridge path instead of attempting a guarded whole-archive bridge read.
+- Play-page imports now register an app-level navigation confirmation guard during active work and also block browser unloads.
+- Bulk playlist enrichment now uses path-based songlength resolution without MD5 fallback during imports and yields every 250 items to prevent long-run slowdown.
+
+### Validation status
+
+- Focused regression tests passed for [src/lib/c64api.test.ts](/home/chris/dev/c64/c64commander/src/lib/c64api.test.ts), [src/pages/playFiles/songlengthsResolution.test.ts](/home/chris/dev/c64/c64commander/src/pages/playFiles/songlengthsResolution.test.ts), and [src/lib/navigation/navigationGuards.test.ts](/home/chris/dev/c64/c64commander/src/lib/navigation/navigationGuards.test.ts).
+- `npm run lint` passed.
+- `npm run build` passed.
+- Isolated coverage run passed with totals `statements 91.77`, `branches 90.86`, `functions 90.91`, `lines 91.77`.
+- Focused Playwright route/coverage probe passed after restarting a stale preview server.
+- Android/JVM tests remain blocked locally by toolchain/runtime issues rather than by confirmed source failures: Kotlin daemon/JDK parsing rejected `25.0.1`, and subsequent Robolectric execution hit `NoClassDefFoundError`/`ClassReader` failures.
+- Real-device validation is currently blocked because `adb devices -l` returned no attached Android devices, although hostname `c64u` resolves to `192.168.1.13`.
+- Full repository helper `./build` is still running in the Playwright phase at the time of this update; final pass/fail state remains pending.
+
+### Work log
+
+- 2026-03-09T00:00Z: Started Android regression remediation task; reviewed repository instructions and existing task history in `PLANS.md`.
+- 2026-03-09T00:08Z: Mapped relevant code via workspace search: Android FTP plugin, HVSC ingestion plugin, TypeScript upload endpoints, Play page import lifecycle, and HVSC filesystem/download/ingestion helpers.
+- 2026-03-09T00:18Z: Confirmed current FTP listing prefers MLSD/MLIST before LIST in the Android native plugin.
+- 2026-03-09T00:22Z: Confirmed local `sid` upload uses multipart while local `d64`/`prg`/`crt` flows use raw octet-stream uploads.
+- 2026-03-09T00:26Z: Confirmed HVSC large-archive fallback currently routes through `readArchiveBuffer()` and its explicit large-bridge guard.
+- 2026-03-09T00:30Z: Confirmed Play page import progress/state is local to `PlayFilesPage` with no navigation blocker for route changes during active import.
+- 2026-03-09T01:05Z: Switched Android FTP listing resolution to LIST-first with MLSD fallback and updated native tests accordingly.
+- 2026-03-09T01:18Z: Changed raw binary C64U upload calls to send `ArrayBuffer` request bodies while preserving multipart SID upload behavior.
+- 2026-03-09T01:39Z: Added native chunked HVSC archive reads and wired the download path to use them for large cached archives.
+- 2026-03-09T02:03Z: Replaced router-blocker attempt with shared app-level navigation guards plus `beforeunload` protection for active Play imports.
+- 2026-03-09T02:24Z: Extracted songlength resolution policy, disabled MD5 fallback for bulk imports, and added periodic yielding during long enrichment passes.
+- 2026-03-09T03:10Z: Added focused regression tests for binary upload transport, navigation guards, songlength resolution policy, and Android HVSC chunk reads.
+- 2026-03-09T03:48Z: Resolved follow-on validation issues in test harnesses and imports: Blob portability in `c64api.test.ts`, missing `PlayableEntry` import, and Capacitor `registerPlugin` mocking for HVSC tests.
+- 2026-03-09T04:10Z: Confirmed `npm run lint`, `npm run build`, focused Vitest, focused Playwright route probe, and isolated coverage all pass locally.
+- 2026-03-09T04:15Z: Confirmed `adb devices -l` shows no connected devices; confirmed `c64u` resolves on the local network.
+- 2026-03-09T04:20Z: Started full repository helper `./build`; helper remains in progress in Playwright execution.
+
+### Next actions
+
+1. Let `./build` finish and record the final result or concrete failure.
+2. Capture proof notes under `docs/repro/android-regressions-2026-03-09/` with the implemented fixes, local evidence, and external blockers.
+3. Re-run Android real-device validation if an adb-connected handset becomes available.
+
 ## iOS Maestro Coverage And CI Failure Propagation
 
 ### Problem statement

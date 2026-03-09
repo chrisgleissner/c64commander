@@ -13,6 +13,15 @@ vi.mock("@capacitor/core", () => ({
     isNativePlatform: vi.fn(() => false),
     isPluginAvailable: vi.fn(() => false),
   },
+  registerPlugin: vi.fn(() => ({
+    ingestHvsc: vi.fn(),
+    cancelIngestion: vi.fn(),
+    getIngestionStats: vi.fn(),
+    readArchiveChunk: vi.fn(),
+    addListener: vi.fn(async () => ({
+      remove: vi.fn(async () => undefined),
+    })),
+  })),
 }));
 
 vi.mock("@capacitor/filesystem", () => ({

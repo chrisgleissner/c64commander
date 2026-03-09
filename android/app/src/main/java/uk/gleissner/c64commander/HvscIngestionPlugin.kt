@@ -23,6 +23,7 @@ import java.io.BufferedOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
+import java.io.RandomAccessFile
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.regex.Pattern
@@ -50,6 +51,7 @@ open class HvscIngestionPlugin : Plugin() {
 
   private companion object {
     private const val MAX_DELETION_LIST_SIZE_BYTES = 10L * 1024 * 1024
+    private const val MAX_ARCHIVE_CHUNK_SIZE_BYTES = 1024 * 1024
     private val REQUIRED_XZ_CLASS: Class<*> = LZMA2Options::class.java
     private val UNSUPPORTED_SEVEN_Z_METHOD_PATTERN =
             Pattern.compile("Unsupported compression method \\[(.*?)\\]", Pattern.CASE_INSENSITIVE)
@@ -79,6 +81,14 @@ open class HvscIngestionPlugin : Plugin() {
           } catch (_: Throwable) {
             null
           }
+
+  private fun resolveArchiveFile(relativeArchivePath: String): File {
+    val archiveFile = File(context.filesDir, relativeArchivePath)
+    if (!archiveFile.exists() || !archiveFile.isFile) {
+      throw IllegalStateException("HVSC archive not found: ${archiveFile.absolutePath}")
+    }
+    return archiveFile
+  }
 
   private fun traceFields(call: PluginCall): AppLogger.TraceFields {
     val trace = call.getObject("traceContext") ?: return AppLogger.TraceFields()
@@ -666,15 +676,12 @@ open class HvscIngestionPlugin : Plugin() {
               var dbHelper: HvscMetadataDbHelper? = null
               var db: SQLiteDatabase? = null
               try {
-                val filesDir = context.filesDir
-                val archiveFile = File(filesDir, relativeArchivePath)
-                if (!archiveFile.exists() || !archiveFile.isFile) {
-                  throw IllegalStateException("HVSC archive not found: ${archiveFile.absolutePath}")
-                }
+                val archiveFile = resolveArchiveFile(relativeArchivePath)
                 if (archiveFile.length() <= 0L) {
                   throw IllegalStateException("HVSC archive is empty: ${archiveFile.absolutePath}")
                 }
 
+                val filesDir = context.filesDir
                 val libraryRoot = File(filesDir, "hvsc/library")
                 dbHelper = HvscMetadataDbHelper(this@HvscIngestionPlugin)
                 db = dbHelper.writableDatabase
@@ -813,6 +820,59 @@ open class HvscIngestionPlugin : Plugin() {
                 }
               }
             }
+  }
+
+  @PluginMethod
+  fun readArchiveChunk(call: PluginCall) {
+    val relativeArchivePath = call.getString("relativeArchivePath")
+    val offsetBytes = call.getLong("offsetBytes") ?: -1L
+    val requestedLength = call.getInt("lengthBytes") ?: 0
+
+    if (relativeArchivePath.isNullOrBlank()) {
+      call.reject("relativeArchivePath is required")
+      return
+    }
+    if (offsetBytes < 0L) {
+      call.reject("offsetBytes must be >= 0")
+      return
+    }
+    if (requestedLength <= 0) {
+      call.reject("lengthBytes must be > 0")
+      return
+    }
+
+    try {
+      val archiveFile = resolveArchiveFile(relativeArchivePath)
+      val boundedLength = requestedLength.coerceAtMost(MAX_ARCHIVE_CHUNK_SIZE_BYTES)
+      RandomAccessFile(archiveFile, "r").use { input ->
+        input.seek(offsetBytes)
+        val buffer = ByteArray(boundedLength)
+        val bytesRead = input.read(buffer)
+        val payload = JSObject()
+        if (bytesRead <= 0) {
+          payload.put("data", "")
+          payload.put("sizeBytes", 0)
+          payload.put("eof", true)
+          call.resolve(payload)
+          return
+        }
+        val actual = if (bytesRead == buffer.size) buffer else buffer.copyOf(bytesRead)
+        payload.put("data", android.util.Base64.encodeToString(actual, android.util.Base64.NO_WRAP))
+        payload.put("sizeBytes", bytesRead)
+        payload.put("eof", offsetBytes + bytesRead >= archiveFile.length())
+        call.resolve(payload)
+      }
+    } catch (error: Exception) {
+      AppLogger.error(
+              pluginContextOrNull(),
+              logTag,
+              "HVSC archive chunk read failed",
+              "HvscIngestionPlugin",
+              error,
+              traceFields(call),
+      )
+      call.reject(error.message ?: "HVSC archive chunk read failed", error)
+    }
   }
 
   @PluginMethod

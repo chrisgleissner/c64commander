@@ -577,6 +577,21 @@ export class C64API {
     return headers;
   }
 
+  private async buildBinaryUploadRequest(body: Blob): Promise<{
+    headers: Record<string, string>;
+    body: ArrayBuffer;
+  }> {
+    const uploadBody =
+      typeof body.arrayBuffer === "function" ? await body.arrayBuffer() : await new Response(body).arrayBuffer();
+    return {
+      headers: {
+        ...this.buildAuthHeaders(),
+        "Content-Type": "application/octet-stream",
+      },
+      body: uploadBody,
+    };
+  }
+
   private buildMalformedResponseError(
     path: string,
     response: Response,
@@ -1490,6 +1505,7 @@ export class C64API {
     let response: Response;
     try {
       const baseUrl = this.getBaseUrl();
+      const upload = await this.buildBinaryUploadRequest(image);
       addLog("debug", "Drive mount upload payload prepared", {
         drive,
         type: type ?? null,
@@ -1502,11 +1518,8 @@ export class C64API {
         `${baseUrl}${path}`,
         {
           method,
-          headers: {
-            ...this.buildAuthHeaders(),
-            "Content-Type": "application/octet-stream",
-          },
-          body: image,
+          headers: upload.headers,
+          body: upload.body,
         },
         UPLOAD_REQUEST_TIMEOUT_MS,
       );
@@ -1666,15 +1679,13 @@ export class C64API {
     let response: Response;
     try {
       const baseUrl = this.getBaseUrl();
+      const upload = await this.buildBinaryUploadRequest(modFile);
       response = await this.fetchWithTimeout(
         `${baseUrl}${path}`,
         {
           method,
-          headers: {
-            ...this.buildAuthHeaders(),
-            "Content-Type": "application/octet-stream",
-          },
-          body: modFile,
+          headers: upload.headers,
+          body: upload.body,
         },
         UPLOAD_REQUEST_TIMEOUT_MS,
       );
@@ -1715,15 +1726,13 @@ export class C64API {
     let response: Response;
     try {
       const baseUrl = this.getBaseUrl();
+      const upload = await this.buildBinaryUploadRequest(prgFile);
       response = await this.fetchWithTimeout(
         `${baseUrl}${path}`,
         {
           method,
-          headers: {
-            ...this.buildAuthHeaders(),
-            "Content-Type": "application/octet-stream",
-          },
-          body: prgFile,
+          headers: upload.headers,
+          body: upload.body,
         },
         UPLOAD_REQUEST_TIMEOUT_MS,
       );
@@ -1764,15 +1773,13 @@ export class C64API {
     let response: Response;
     try {
       const baseUrl = this.getBaseUrl();
+      const upload = await this.buildBinaryUploadRequest(prgFile);
       response = await this.fetchWithTimeout(
         `${baseUrl}${path}`,
         {
           method,
-          headers: {
-            ...this.buildAuthHeaders(),
-            "Content-Type": "application/octet-stream",
-          },
-          body: prgFile,
+          headers: upload.headers,
+          body: upload.body,
         },
         UPLOAD_REQUEST_TIMEOUT_MS,
       );
@@ -1813,15 +1820,13 @@ export class C64API {
     let response: Response;
     try {
       const baseUrl = this.getBaseUrl();
+      const upload = await this.buildBinaryUploadRequest(crtFile);
       response = await this.fetchWithTimeout(
         `${baseUrl}${path}`,
         {
           method,
-          headers: {
-            ...this.buildAuthHeaders(),
-            "Content-Type": "application/octet-stream",
-          },
-          body: crtFile,
+          headers: upload.headers,
+          body: upload.body,
         },
         UPLOAD_REQUEST_TIMEOUT_MS,
       );

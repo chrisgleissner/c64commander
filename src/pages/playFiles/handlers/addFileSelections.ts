@@ -431,7 +431,9 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
       if (elapsed < minDuration) {
         await new Promise((resolve) => setTimeout(resolve, minDuration - elapsed));
       }
-      const resolvedItems = await applySonglengthsToItems(playlistItems, discoveredSonglengths);
+      const resolvedItems = await applySonglengthsToItems(playlistItems, discoveredSonglengths, {
+        allowMd5Fallback: false,
+      });
       setPlaylist((prev) => [...prev, ...resolvedItems]);
       if (localTreeUri) {
         addLog("debug", "SAF scan complete", {

@@ -17,7 +17,10 @@ import {
   readCachedArchiveMarker,
   MAX_BRIDGE_READ_BYTES,
 } from "./hvscFilesystem";
+import { HvscIngestion } from "@/lib/native/hvscIngestion";
 import { addErrorLog, addLog } from "@/lib/logging";
+
+const HVSC_NATIVE_ARCHIVE_READ_CHUNK_BYTES = 512 * 1024;
 
 // ── Utility helpers ──────────────────────────────────────────────
 
@@ -335,11 +338,12 @@ export const getCacheStatusInternal = async () => {
 export const readArchiveBuffer = async (archivePath: string) => {
   const heapBefore = readHeapUsageBytes();
   const cacheDir = getHvscCacheDir();
+  const relativeArchivePath = `${cacheDir}/${archivePath}`;
   let statSize: number | null = null;
   try {
     const stat = await Filesystem.stat({
       directory: Directory.Data,
-      path: `${cacheDir}/${archivePath}`,
+      path: relativeArchivePath,
     });
     statSize = stat?.size ?? null;
   } catch (error) {
@@ -349,11 +353,37 @@ export const readArchiveBuffer = async (archivePath: string) => {
     });
   }
   if (statSize !== null && statSize > MAX_BRIDGE_READ_BYTES) {
+    if (shouldUseNativeDownload()) {
+      const chunks: Uint8Array[] = [];
+      let offsetBytes = 0;
+      while (offsetBytes < statSize) {
+        const chunk = await HvscIngestion.readArchiveChunk({
+          relativeArchivePath,
+          offsetBytes,
+          lengthBytes: Math.min(HVSC_NATIVE_ARCHIVE_READ_CHUNK_BYTES, statSize - offsetBytes),
+        });
+        if (chunk.sizeBytes <= 0) break;
+        chunks.push(decodeBase64ToUint8Chunked(chunk.data));
+        offsetBytes += chunk.sizeBytes;
+        if (chunk.eof) break;
+      }
+      const decoded = concatChunks(chunks, statSize);
+      const heapAfter = readHeapUsageBytes();
+      addLog("info", "HVSC archive read via native chunk bridge", {
+        archivePath,
+        bytes: decoded.byteLength,
+        chunks: chunks.length,
+        heapBefore,
+        heapAfter,
+        heapDelta: heapBefore !== null && heapAfter !== null ? heapAfter - heapBefore : null,
+      });
+      return decoded;
+    }
     throw new Error(`HVSC bridge read blocked for large archive (${statSize} bytes): ${archivePath}`);
   }
   const archiveData = await Filesystem.readFile({
     directory: Directory.Data,
-    path: `${cacheDir}/${archivePath}`,
+    path: relativeArchivePath,
   });
   const decoded = decodeBase64ToUint8Chunked(archiveData.data);
   const heapAfter = readHeapUsageBytes();

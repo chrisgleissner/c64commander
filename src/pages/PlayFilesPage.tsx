@@ -25,6 +25,7 @@ import { toast } from "@/hooks/use-toast";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { reportUserError } from "@/lib/uiErrors";
 import { getC64API } from "@/lib/c64api";
+import { registerNavigationGuard } from "@/lib/navigation/navigationGuards";
 import type { TraceSourceKind } from "@/lib/tracing/types";
 import { discoverConnection, getConnectionSnapshot } from "@/lib/connection/connectionManager";
 import { getParentPath } from "@/lib/playback/localFileBrowser";
@@ -72,7 +73,7 @@ import { getPlaylistDataRepository } from "@/lib/playlistRepository";
 import type { PlaylistItemRecord, TrackRecord } from "@/lib/playlistRepository";
 import { createAddFileSelectionsHandler } from "@/pages/playFiles/handlers/addFileSelections";
 import { resolveVolumeSyncDecision } from "@/pages/playFiles/playbackGuards";
-import type { PlaylistItem, StoredPlaybackSession, StoredPlaylistState } from "@/pages/playFiles/types";
+import type { PlayableEntry, PlaylistItem, StoredPlaybackSession, StoredPlaylistState } from "@/pages/playFiles/types";
 import {
   CATEGORY_OPTIONS,
   DEFAULT_SONG_DURATION_MS,
@@ -160,6 +161,7 @@ export default function PlayFilesPage() {
   });
   const [showAddItemsOverlay, setShowAddItemsOverlay] = useState(false);
   const [isAddingItems, setIsAddingItems] = useState(false);
+  const isImportNavigationBlocked = isAddingItems || addItemsProgress.status === "scanning";
   const [queryFilteredPlaylist, setQueryFilteredPlaylist] = useState<PlaylistItem[]>([]);
   const addItemsOverlayStartedAtRef = useRef<number | null>(null);
   const addItemsOverlayActiveRef = useRef(false);
@@ -391,6 +393,25 @@ export default function PlayFilesPage() {
       setAddItemsSurface("dialog");
     }
   }, [browserOpen]);
+
+  useEffect(() => {
+    if (!isImportNavigationBlocked) return;
+    return registerNavigationGuard(() =>
+      window.confirm("Importing items will stop if you leave this page. Leave anyway?"),
+    );
+  }, [isImportNavigationBlocked]);
+
+  useEffect(() => {
+    if (!isImportNavigationBlocked) return;
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [isImportNavigationBlocked]);
 
   const [lastKnownDeviceId, setLastKnownDeviceId] = useState<string | null>(() => {
     if (typeof localStorage === "undefined") return null;

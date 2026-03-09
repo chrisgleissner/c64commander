@@ -255,17 +255,21 @@ class FtpClientPlugin : Plugin() {
 
   private fun resolveListing(client: FTPClient, path: String): Array<FTPFile> {
     return try {
-      val mlist = client.mlistDir(path)
-      if (mlist != null && mlist.isNotEmpty()) mlist else client.listFiles(path)
+      val listed = client.listFiles(path)
+      if (listed != null && listed.isNotEmpty()) {
+        listed
+      } else {
+        client.mlistDir(path) ?: emptyArray()
+      }
     } catch (error: Exception) {
       AppLogger.warn(
               pluginContextOrNull(),
               logTag,
-              "FTP MLSD failed; falling back to LIST",
+              "FTP LIST failed; falling back to MLSD",
               "FtpClientPlugin",
               error
       )
-      client.listFiles(path)
+      client.mlistDir(path) ?: emptyArray()
     }
   }
 

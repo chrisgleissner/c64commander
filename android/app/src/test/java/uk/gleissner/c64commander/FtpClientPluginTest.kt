@@ -184,7 +184,7 @@ class FtpClientPluginTest {
               type = FTPFile.DIRECTORY_TYPE
             }
     `when`(ftpClient.login("user", "secret")).thenReturn(true)
-    `when`(ftpClient.mlistDir("/")).thenReturn(arrayOf(demo, docs))
+    `when`(ftpClient.listFiles("/")).thenReturn(arrayOf(demo, docs))
     `when`(ftpClient.isConnected).thenReturn(true)
 
     val call = mock(PluginCall::class.java)
@@ -227,7 +227,7 @@ class FtpClientPluginTest {
     val dotdot = FTPFile().apply { name = ".." }
     val file = FTPFile().apply { name = "file.txt" }
     `when`(ftpClient.login("user", "secret")).thenReturn(true)
-    `when`(ftpClient.mlistDir("/")).thenReturn(arrayOf(dot, dotdot, file))
+    `when`(ftpClient.listFiles("/")).thenReturn(arrayOf(dot, dotdot, file))
     `when`(ftpClient.isConnected).thenReturn(true)
 
     val call = mock(PluginCall::class.java)
@@ -375,7 +375,7 @@ class FtpClientPluginTest {
               size = 123
             }
     `when`(ftpClient.login("user", "secret")).thenReturn(true)
-    `when`(ftpClient.mlistDir("/")).thenReturn(arrayOf(nullNamed, valid))
+    `when`(ftpClient.listFiles("/")).thenReturn(arrayOf(nullNamed, valid))
     `when`(ftpClient.isConnected).thenReturn(true)
     doAnswer { throw RuntimeException("disconnect failed") }.`when`(ftpClient).disconnect()
 
@@ -482,7 +482,6 @@ class FtpClientPluginTest {
     plugin.ftpClientFactory = { ftpClient }
 
     `when`(ftpClient.login("user", "secret")).thenReturn(true)
-    `when`(ftpClient.mlistDir("/")).thenReturn(emptyArray())
     `when`(ftpClient.listFiles("/")).thenReturn(emptyArray())
 
     val call = mock(PluginCall::class.java)
@@ -568,29 +567,7 @@ class FtpClientPluginTest {
   }
 
   @Test
-  fun resolveListingUsesMlistWhenAvailable() {
-    val plugin = FtpClientPlugin()
-    val method =
-            FtpClientPlugin::class.java.getDeclaredMethod(
-                    "resolveListing",
-                    FTPClient::class.java,
-                    String::class.java,
-            )
-    method.isAccessible = true
-
-    val ftpClient = mock(FTPClient::class.java)
-    val mlistFile = FTPFile().apply { name = "mlist.txt" }
-    `when`(ftpClient.mlistDir("/")).thenReturn(arrayOf(mlistFile))
-
-    @Suppress("UNCHECKED_CAST") val result = method.invoke(plugin, ftpClient, "/") as Array<FTPFile>
-
-    assertEquals(1, result.size)
-    assertEquals("mlist.txt", result[0].name)
-    verify(ftpClient, never()).listFiles("/")
-  }
-
-  @Test
-  fun resolveListingFallsBackWhenMlistEmpty() {
+  fun resolveListingUsesListWhenAvailable() {
     val plugin = FtpClientPlugin()
     val method =
             FtpClientPlugin::class.java.getDeclaredMethod(
@@ -602,18 +579,40 @@ class FtpClientPluginTest {
 
     val ftpClient = mock(FTPClient::class.java)
     val listedFile = FTPFile().apply { name = "listed.txt" }
-    `when`(ftpClient.mlistDir("/")).thenReturn(emptyArray())
     `when`(ftpClient.listFiles("/")).thenReturn(arrayOf(listedFile))
 
     @Suppress("UNCHECKED_CAST") val result = method.invoke(plugin, ftpClient, "/") as Array<FTPFile>
 
     assertEquals(1, result.size)
     assertEquals("listed.txt", result[0].name)
-    verify(ftpClient).listFiles("/")
+    verify(ftpClient, never()).mlistDir("/")
   }
 
   @Test
-  fun resolveListingFallsBackToListFilesOnException() {
+  fun resolveListingFallsBackToMlistWhenListEmpty() {
+    val plugin = FtpClientPlugin()
+    val method =
+            FtpClientPlugin::class.java.getDeclaredMethod(
+                    "resolveListing",
+                    FTPClient::class.java,
+                    String::class.java,
+            )
+    method.isAccessible = true
+
+    val ftpClient = mock(FTPClient::class.java)
+    val listedFile = FTPFile().apply { name = "mlist.txt" }
+    `when`(ftpClient.listFiles("/")).thenReturn(emptyArray())
+    `when`(ftpClient.mlistDir("/")).thenReturn(arrayOf(listedFile))
+
+    @Suppress("UNCHECKED_CAST") val result = method.invoke(plugin, ftpClient, "/") as Array<FTPFile>
+
+    assertEquals(1, result.size)
+    assertEquals("mlist.txt", result[0].name)
+    verify(ftpClient).mlistDir("/")
+  }
+
+  @Test
+  fun resolveListingFallsBackToMlistOnListException() {
     val plugin = FtpClientPlugin()
     val method =
             FtpClientPlugin::class.java.getDeclaredMethod(
@@ -625,13 +624,13 @@ class FtpClientPluginTest {
 
     val ftpClient = mock(FTPClient::class.java)
     val listedFile = FTPFile().apply { name = "fallback.txt" }
-    `when`(ftpClient.mlistDir("/")).thenThrow(RuntimeException("boom"))
-    `when`(ftpClient.listFiles("/")).thenReturn(arrayOf(listedFile))
+    `when`(ftpClient.listFiles("/")).thenThrow(RuntimeException("boom"))
+    `when`(ftpClient.mlistDir("/")).thenReturn(arrayOf(listedFile))
 
     @Suppress("UNCHECKED_CAST") val result = method.invoke(plugin, ftpClient, "/") as Array<FTPFile>
 
     assertEquals(1, result.size)
     assertEquals("fallback.txt", result[0].name)
-    verify(ftpClient).listFiles("/")
+    verify(ftpClient).mlistDir("/")
   }
 }
