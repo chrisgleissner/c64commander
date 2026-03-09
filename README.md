@@ -238,41 +238,6 @@ Track actions, inspect traces, and export logs when it is time for serious troub
 
 Full screenshot set: [doc/img/app/](doc/img/app/)
 
-### RAM Snapshots
-
-The **Save RAM** and **Load RAM** buttons on the Home page let you capture and restore the C64's memory in the `.c64snap` format — a structured binary with an index, a metadata block and the raw memory data.
-
-Four snapshot types are supported:
-
-| Type | Memory saved | Use case |
-|------|-------------|----------|
-| **Program** | $0000–$00FF + $0200–$FFFF | Machine-code or game memory, excluding the stack page |
-| **Basic** | $0801–STREND + $002B–$0038 | BASIC program + pointer block |
-| **Screen** | $0400–$07E7 + $D800–$DBFF | Screen RAM + Color RAM |
-| **Custom** | User-defined range | Targeted saves |
-
-Snapshots are stored in the app (browser `localStorage`) — up to 100 entries, newest first.
-
-**Saving:** tap **Save RAM** → choose a type → the snapshot is captured and stored immediately.
-
-**Restoring:** tap **Load RAM** → the Snapshot Manager opens, showing all stored snapshots. Filter by type or free text. Click a row to open the restore confirmation, then tap **Restore** to write the blocks back to the C64.
-
-`.c64snap` binary layout:
-
-| Offset | Size | Field |
-|--------|------|-------|
-| 0 | 8 B | Magic: `C64SNAP\0` |
-| 8 | 2 B | Version (uint16 LE, currently 1) |
-| 10 | 2 B | Snapshot type code (0=program, 1=basic, 2=screen, 3=custom) |
-| 12 | 4 B | Unix timestamp (uint32 LE) |
-| 16 | 2 B | Range count (uint16 LE) |
-| 18 | 2 B | Flags (uint16 LE, currently 0) |
-| 20 | 4 B | Metadata offset (uint32 LE, 0 if none) |
-| 24 | 4 B | Metadata size in bytes (uint32 LE) |
-| 28 | 4 × N B | Range descriptors (uint16 start + uint16 length per range) |
-| … | variable | Memory blocks (one per range, in declaration order) |
-| … | variable | UTF-8 JSON metadata |
-
 ## 🛟 Troubleshooting
 
 ### Connectivity
