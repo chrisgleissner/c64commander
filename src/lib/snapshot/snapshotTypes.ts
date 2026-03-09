@@ -95,7 +95,7 @@ export const SNAPSHOT_TYPE_LIST: SnapshotTypeConfig[] = [
   {
     type: "screen",
     label: "Screen Snapshot",
-    rangeDisplay: "SCRRAM, $D000–$D02E, $D800–$DBFF, $DD00–$DD0F",
+    rangeDisplay: "VICBANK, $D000–$D02E, $D800–$DBFF, $DD00–$DD0F",
     filePrefix: "screen",
   },
   {

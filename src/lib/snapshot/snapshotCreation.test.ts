@@ -7,7 +7,8 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { computeScreenStart, createSnapshot } from "./snapshotCreation";
+import { computeVicBankStart, createSnapshot } from "./snapshotCreation";
+import { decodeSnapshot } from "./snapshotFormat";
 import type { C64API } from "@/lib/c64api";
 
 // ---------------------------------------------------------------------------
@@ -143,59 +144,61 @@ describe("createSnapshot – screen", () => {
     expect(result.displayTimestamp).toBeDefined();
   });
 
-  it("saves four ranges: SCRRAM, VIC registers, colour RAM, and CIA2", async () => {
+  it("saves four ranges: VICBANK, VIC registers, colour RAM, and CIA2", async () => {
     await createSnapshot(mockApi, { type: "screen" });
     const saved = saveSnapshotToStoreMock.mock.calls[0][0];
     expect(saved.snapshotType).toBe("screen");
     expect(saved.metadata.display_ranges).toHaveLength(4);
-    expect(saved.metadata.display_ranges[0]).toBe("SCRRAM");
+    expect(saved.metadata.display_ranges[0]).toBe("VICBANK");
     expect(saved.metadata.display_ranges[1]).toMatch(/\$D000/);
     expect(saved.metadata.display_ranges[2]).toMatch(/\$D800/);
     expect(saved.metadata.display_ranges[3]).toMatch(/\$DD00/);
   });
+
+  it("encodes VICBANK range as full 16 KiB starting at bank base", async () => {
+    await createSnapshot(mockApi, { type: "screen" });
+    const saved = saveSnapshotToStoreMock.mock.calls[0][0];
+    const decoded = decodeSnapshot(saved.bytes);
+    // First range = VICBANK: bank 0 base ($0000), length $4000
+    expect(decoded.ranges[0].start).toBe(0x0000);
+    expect(decoded.ranges[0].length).toBe(0x4000);
+  });
+
+  it("tracks CIA2 bank selection: bank 1 ($DD00=0xFE) starts VICBANK at $4000", async () => {
+    const ram = buildRam();
+    ram[0xdd00] = 0xfe; // bank 1
+    dumpFullRamImageMock.mockResolvedValue(ram);
+    await createSnapshot(mockApi, { type: "screen" });
+    const saved = saveSnapshotToStoreMock.mock.calls[0][0];
+    const decoded = decodeSnapshot(saved.bytes);
+    expect(decoded.ranges[0].start).toBe(0x4000);
+    expect(decoded.ranges[0].length).toBe(0x4000);
+  });
 });
 
-describe("computeScreenStart – VIC bank / matrix calculation", () => {
-  it("bank 0, screen at $0400 with KERNAL defaults ($DD00=0x3F, $D018=0x15)", () => {
+describe("computeVicBankStart – VIC bank calculation", () => {
+  it("bank 0 with KERNAL default ($DD00=0x3F) → bank base $0000", () => {
     const ram = new Uint8Array(65536);
     ram[0xdd00] = 0x3f; // (~0x3F) & 0x03 = 0 → bank 0
-    ram[0xd018] = 0x15; // VM13-VM10 = 0001 → offset = 1 × $0400 = $0400
-    expect(computeScreenStart(ram)).toBe(0x0400);
+    expect(computeVicBankStart(ram)).toBe(0x0000);
   });
 
-  it("bank 1 ($DD00=0xFE, $D018=0x15) → screen at $4400", () => {
+  it("bank 1 ($DD00=0xFE) → bank base $4000", () => {
     const ram = new Uint8Array(65536);
-    ram[0xdd00] = 0xfe; // (~0xFE) & 0x03 = 0x01 → bank 1 → base $4000
-    ram[0xd018] = 0x15; // offset $0400
-    expect(computeScreenStart(ram)).toBe(0x4400);
+    ram[0xdd00] = 0xfe; // (~0xFE) & 0x03 = 1 → bank 1
+    expect(computeVicBankStart(ram)).toBe(0x4000);
   });
 
-  it("bank 2 ($DD00=0xFD, $D018=0x15) → screen at $8400", () => {
+  it("bank 2 ($DD00=0xFD) → bank base $8000", () => {
     const ram = new Uint8Array(65536);
-    ram[0xdd00] = 0xfd; // (~0xFD) & 0x03 = 0x02 → bank 2 → base $8000
-    ram[0xd018] = 0x15; // offset $0400
-    expect(computeScreenStart(ram)).toBe(0x8400);
+    ram[0xdd00] = 0xfd; // (~0xFD) & 0x03 = 2 → bank 2
+    expect(computeVicBankStart(ram)).toBe(0x8000);
   });
 
-  it("bank 3 ($DD00=0xFC, $D018=0x15) → screen at $C400", () => {
+  it("bank 3 ($DD00=0xFC) → bank base $C000", () => {
     const ram = new Uint8Array(65536);
-    ram[0xdd00] = 0xfc; // (~0xFC) & 0x03 = 0x03 → bank 3 → base $C000
-    ram[0xd018] = 0x15; // offset $0400
-    expect(computeScreenStart(ram)).toBe(0xc400);
-  });
-
-  it("bank 0, high screen offset ($D018=0x85) → screen at $2000", () => {
-    const ram = new Uint8Array(65536);
-    ram[0xdd00] = 0x3f; // bank 0
-    ram[0xd018] = 0x85; // VM13-VM10 = 1000 = 8 → offset = 8 × $0400 = $2000
-    expect(computeScreenStart(ram)).toBe(0x2000);
-  });
-
-  it("bank 0, maximum screen offset ($D018=0xF5) → screen at $3C00", () => {
-    const ram = new Uint8Array(65536);
-    ram[0xdd00] = 0x3f; // bank 0
-    ram[0xd018] = 0xf5; // VM13-VM10 = 1111 = 15 → offset = 15 × $0400 = $3C00
-    expect(computeScreenStart(ram)).toBe(0x3c00);
+    ram[0xdd00] = 0xfc; // (~0xFC) & 0x03 = 3 → bank 3
+    expect(computeVicBankStart(ram)).toBe(0xc000);
   });
 });
 
