@@ -38,6 +38,9 @@ export function TabBar() {
               key={tab.path}
               id={tabId}
               data-testid={tabId}
+              aria-label={tab.label}
+              aria-current={isActive ? "page" : undefined}
+              title={tab.label}
               onClick={wrapUserEvent(() => navigate(tab.path), "click", "Tab", { title: tab.label }, "Tab")}
               className={`tab-item touch-none ${isActive ? "active" : ""}`}
             >

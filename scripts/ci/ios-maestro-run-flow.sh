@@ -619,6 +619,15 @@ stop_video() {
   fi
 }
 
+prepare_app_for_flow() {
+  local flow="$1"
+  local flow_dir="$2"
+
+  trace_event "$flow_dir" "app.reset.before_flow" "runner" "{\"flow\":\"${flow}\"}"
+  xcrun simctl terminate "$UDID" "$APP_ID" >/dev/null 2>&1 || true
+  sleep 2
+}
+
 # ── Infra Diagnostics (on failure) ─────────────────────────────
 capture_infra_diagnostics() {
   local flow="$1"
@@ -705,6 +714,8 @@ TJSON
     emit_timing_trace "$flow" "$flow_dir"
     return $flow_exit
   fi
+
+  prepare_app_for_flow "$flow" "$flow_dir"
 
   capture_accessibility_snapshot "$flow_dir" "pre-flow"
   start_unified_log_capture "$flow_dir"
