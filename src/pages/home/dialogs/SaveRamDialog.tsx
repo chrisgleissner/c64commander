@@ -87,9 +87,9 @@ export function SaveRamDialog({ open, onOpenChange, onSave, isSaving }: SaveRamD
       current.map((range, rangeIndex) =>
         rangeIndex === index
           ? {
-            ...range,
-            [field]: sanitizeHexAddressInput(value),
-          }
+              ...range,
+              [field]: sanitizeHexAddressInput(value),
+            }
           : range,
       ),
     );

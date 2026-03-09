@@ -89,7 +89,7 @@ export const SNAPSHOT_TYPE_LIST: SnapshotTypeConfig[] = [
   {
     type: "basic",
     label: "Basic Snapshot",
-    rangeDisplay: "$0801–STREND, $002B–$0038",
+    rangeDisplay: "$002B–$0038, $0801–STREND",
     filePrefix: "basic",
   },
   {
