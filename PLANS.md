@@ -84,10 +84,10 @@ Resolve five Android regressions in the Capacitor app and produce reproducible e
 
 ### Confirmed findings so far
 
-- FTP listing currently calls `mlistDir(path)` first in [android/app/src/main/java/uk/gleissner/c64commander/FtpClientPlugin.kt](/home/chris/dev/c64/c64commander/android/app/src/main/java/uk/gleissner/c64commander/FtpClientPlugin.kt). A C64U that stalls rather than quickly rejecting MLSD/MLST will spend the full 8000 ms timeout before falling back to LIST, which matches the reported regression profile.
-- Local `sid` uploads use multipart form upload in [src/lib/c64api.ts](/home/chris/dev/c64/c64commander/src/lib/c64api.ts), while local `d64`/`prg`/`crt` uploads use raw `application/octet-stream` POST bodies via separate endpoints in the same file. That asymmetry is the strongest current candidate for format-specific regression.
-- HVSC fallback ingestion still depends on `readArchiveBuffer()` in [src/lib/hvsc/hvscDownload.ts](/home/chris/dev/c64/c64commander/src/lib/hvsc/hvscDownload.ts), which intentionally blocks bridge reads above `MAX_BRIDGE_READ_BYTES`. This exactly matches the reported large-archive failure after native extraction fallback.
-- Play page import state is page-scoped in [src/pages/PlayFilesPage.tsx](/home/chris/dev/c64/c64commander/src/pages/PlayFilesPage.tsx); there is no route blocker or leave-confirmation around active import work, and cleanup on unmount can tear down in-progress UI/import state.
+- FTP listing currently calls `mlistDir(path)` first in [android/app/src/main/java/uk/gleissner/c64commander/FtpClientPlugin.kt](android/app/src/main/java/uk/gleissner/c64commander/FtpClientPlugin.kt). A C64U that stalls rather than quickly rejecting MLSD/MLST will spend the full 8000 ms timeout before falling back to LIST, which matches the reported regression profile.
+- Local `sid` uploads use multipart form upload in [src/lib/c64api.ts](src/lib/c64api.ts), while local `d64`/`prg`/`crt` uploads use raw `application/octet-stream` POST bodies via separate endpoints in the same file. That asymmetry is the strongest current candidate for format-specific regression.
+- HVSC fallback ingestion still depends on `readArchiveBuffer()` in [src/lib/hvsc/hvscDownload.ts](src/lib/hvsc/hvscDownload.ts), which intentionally blocks bridge reads above `MAX_BRIDGE_READ_BYTES`. This exactly matches the reported large-archive failure after native extraction fallback.
+- Play page import state is page-scoped in [src/pages/PlayFilesPage.tsx](src/pages/PlayFilesPage.tsx); there is no route blocker or leave-confirmation around active import work, and cleanup on unmount can tear down in-progress UI/import state.
 - HVSC full-library imports were paying an avoidable MD5 fallback cost during bulk songlength enrichment. Disabling MD5 fallback for bulk additions and yielding periodically keeps import work from degrading over long runs while preserving path-based resolution.
 
 ### Implemented fixes
