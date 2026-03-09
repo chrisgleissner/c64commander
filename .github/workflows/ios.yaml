@@ -802,8 +802,12 @@ jobs:
           import json
           import sys
 
-          with open("artifacts/ios/_combined/summary.json", encoding="utf-8") as handle:
-              summary = json.load(handle)
+          try:
+              with open("artifacts/ios/_combined/summary.json", encoding="utf-8") as handle:
+                  summary = json.load(handle)
+          except FileNotFoundError:
+              print("Merged Maestro summary not found: artifacts/ios/_combined/summary.json")
+              sys.exit(1)
 
           total_tests = int(summary.get("totalTests", 0))
           total_failures = int(summary.get("totalFailures", 0))

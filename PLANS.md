@@ -66,7 +66,7 @@ The objective is to determine both root causes, implement the smallest safe fix 
 
 ### Explicit checklist
 
-- [ ] PLANS.md updated before code changes
+- [x] PLANS.md updated before code changes
 - [x] iOS workflow and invoked scripts inspected
 - [x] Android versus iOS Maestro route compared
 - [x] Historical diff between 2026-02-22 and 2026-02-28 reviewed for iOS-relevant changes
