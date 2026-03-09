@@ -356,6 +356,7 @@ export const readArchiveBuffer = async (archivePath: string) => {
     if (shouldUseNativeDownload()) {
       const chunks: Uint8Array[] = [];
       let offsetBytes = 0;
+      let decodedBytes = 0;
       while (offsetBytes < statSize) {
         const chunk = await HvscIngestion.readArchiveChunk({
           relativeArchivePath,
@@ -363,11 +364,23 @@ export const readArchiveBuffer = async (archivePath: string) => {
           lengthBytes: Math.min(HVSC_NATIVE_ARCHIVE_READ_CHUNK_BYTES, statSize - offsetBytes),
         });
         if (chunk.sizeBytes <= 0) break;
-        chunks.push(decodeBase64ToUint8Chunked(chunk.data));
+        const decodedChunk = decodeBase64ToUint8Chunked(chunk.data);
+        if (decodedChunk.byteLength !== chunk.sizeBytes) {
+          throw new Error(
+            `HVSC native chunk size mismatch for ${archivePath}: decoded ${decodedChunk.byteLength} bytes, expected ${chunk.sizeBytes}`,
+          );
+        }
+        chunks.push(decodedChunk);
         offsetBytes += chunk.sizeBytes;
+        decodedBytes += decodedChunk.byteLength;
         if (chunk.eof) break;
       }
-      const decoded = concatChunks(chunks, statSize);
+      if (decodedBytes !== statSize) {
+        throw new Error(
+          `HVSC native chunk read incomplete for ${archivePath}: expected ${statSize} bytes, received ${decodedBytes}`,
+        );
+      }
+      const decoded = concatChunks(chunks, decodedBytes);
       const heapAfter = readHeapUsageBytes();
       addLog("info", "HVSC archive read via native chunk bridge", {
         archivePath,

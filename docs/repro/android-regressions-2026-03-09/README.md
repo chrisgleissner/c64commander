@@ -1,7 +1,7 @@
 # Android regression remediation proof
 
 Date: 2026-03-09
-Branch: `test/fix-ios-maestro-tests`
+Branch: `fix/remote-playback`
 Repository: `c64commander`
 
 ## Scope
@@ -26,9 +26,9 @@ Root cause:
 
 Fix:
 
-- [android/app/src/main/java/uk/gleissner/c64commander/FtpClientPlugin.kt](/home/chris/dev/c64/c64commander/android/app/src/main/java/uk/gleissner/c64commander/FtpClientPlugin.kt) now tries `LIST` first.
+- [android/app/src/main/java/uk/gleissner/c64commander/FtpClientPlugin.kt](android/app/src/main/java/uk/gleissner/c64commander/FtpClientPlugin.kt) now tries `LIST` first.
 - `MLSD` fallback is retained only when LIST is empty or throws.
-- Native regression coverage was updated in [android/app/src/test/java/uk/gleissner/c64commander/FtpClientPluginTest.kt](/home/chris/dev/c64/c64commander/android/app/src/test/java/uk/gleissner/c64commander/FtpClientPluginTest.kt).
+- Native regression coverage was updated in [android/app/src/test/java/uk/gleissner/c64commander/FtpClientPluginTest.kt](android/app/src/test/java/uk/gleissner/c64commander/FtpClientPluginTest.kt).
 
 ### 2. Local non-SID binary upload corruption risk
 
@@ -40,24 +40,24 @@ Root cause:
 
 Fix:
 
-- [src/lib/c64api.ts](/home/chris/dev/c64/c64commander/src/lib/c64api.ts) now converts raw binary upload payloads to `ArrayBuffer` before request dispatch.
+- [src/lib/c64api.ts](src/lib/c64api.ts) now converts raw binary upload payloads to `ArrayBuffer` before request dispatch.
 - SID upload remains multipart and unchanged.
-- Coverage added in [src/lib/c64api.test.ts](/home/chris/dev/c64/c64commander/src/lib/c64api.test.ts).
+- Coverage added in [src/lib/c64api.test.ts](src/lib/c64api.test.ts).
 
 ### 3. HVSC large-archive ingestion failure
 
 Root cause:
 
-- The fallback path in [src/lib/hvsc/hvscDownload.ts](/home/chris/dev/c64/c64commander/src/lib/hvsc/hvscDownload.ts) depended on `readArchiveBuffer()`.
+- The fallback path in [src/lib/hvsc/hvscDownload.ts](src/lib/hvsc/hvscDownload.ts) depended on `readArchiveBuffer()`.
 - That helper intentionally rejects reads above the bridge guard threshold.
 - Large cached HVSC archives therefore failed on the fallback route.
 
 Fix:
 
-- Added native chunk reads in [android/app/src/main/java/uk/gleissner/c64commander/HvscIngestionPlugin.kt](/home/chris/dev/c64/c64commander/android/app/src/main/java/uk/gleissner/c64commander/HvscIngestionPlugin.kt).
-- Exposed the bridge in [src/lib/native/hvscIngestion.ts](/home/chris/dev/c64/c64commander/src/lib/native/hvscIngestion.ts).
-- Updated [src/lib/hvsc/hvscDownload.ts](/home/chris/dev/c64/c64commander/src/lib/hvsc/hvscDownload.ts) to assemble large archives from native chunks instead of requesting a guarded whole-file bridge read.
-- Added Android coverage in [android/app/src/test/java/uk/gleissner/c64commander/HvscIngestionPluginTest.kt](/home/chris/dev/c64/c64commander/android/app/src/test/java/uk/gleissner/c64commander/HvscIngestionPluginTest.kt).
+- Added native chunk reads in [android/app/src/main/java/uk/gleissner/c64commander/HvscIngestionPlugin.kt](android/app/src/main/java/uk/gleissner/c64commander/HvscIngestionPlugin.kt).
+- Exposed the bridge in [src/lib/native/hvscIngestion.ts](src/lib/native/hvscIngestion.ts).
+- Updated [src/lib/hvsc/hvscDownload.ts](src/lib/hvsc/hvscDownload.ts) to assemble large archives from native chunks instead of requesting a guarded whole-file bridge read.
+- Added Android coverage in [android/app/src/test/java/uk/gleissner/c64commander/HvscIngestionPluginTest.kt](android/app/src/test/java/uk/gleissner/c64commander/HvscIngestionPluginTest.kt).
 
 ### 4. Playlist import lost on navigation
 
@@ -69,10 +69,10 @@ Root cause:
 
 Fix:
 
-- Added a shared navigation-guard registry in [src/lib/navigation/navigationGuards.ts](/home/chris/dev/c64/c64commander/src/lib/navigation/navigationGuards.ts).
-- [src/components/TabBar.tsx](/home/chris/dev/c64/c64commander/src/components/TabBar.tsx) now confirms guarded navigation before tab changes.
-- [src/pages/PlayFilesPage.tsx](/home/chris/dev/c64/c64commander/src/pages/PlayFilesPage.tsx) registers the guard only while imports are active and also adds `beforeunload` protection.
-- Coverage added in [src/lib/navigation/navigationGuards.test.ts](/home/chris/dev/c64/c64commander/src/lib/navigation/navigationGuards.test.ts).
+- Added a shared navigation-guard registry in [src/lib/navigation/navigationGuards.ts](src/lib/navigation/navigationGuards.ts).
+- [src/App.tsx](src/App.tsx) now installs a router-level blocker so guarded transitions are enforced for all in-app route changes.
+- [src/pages/PlayFilesPage.tsx](src/pages/PlayFilesPage.tsx) registers the guard only while imports are active and also adds `beforeunload` protection.
+- Coverage added in [src/lib/navigation/navigationGuards.test.ts](src/lib/navigation/navigationGuards.test.ts).
 
 ### 5. HVSC import throughput degradation
 
@@ -84,35 +84,35 @@ Root cause:
 
 Fix:
 
-- Extracted policy into [src/pages/playFiles/songlengthsResolution.ts](/home/chris/dev/c64/c64commander/src/pages/playFiles/songlengthsResolution.ts).
-- [src/pages/playFiles/hooks/useSonglengths.ts](/home/chris/dev/c64/c64commander/src/pages/playFiles/hooks/useSonglengths.ts) now supports `allowMd5Fallback` options and yields every 250 items.
-- [src/pages/playFiles/handlers/addFileSelections.ts](/home/chris/dev/c64/c64commander/src/pages/playFiles/handlers/addFileSelections.ts) disables MD5 fallback during bulk imports.
-- Coverage added in [src/pages/playFiles/songlengthsResolution.test.ts](/home/chris/dev/c64/c64commander/src/pages/playFiles/songlengthsResolution.test.ts).
+- Extracted policy into [src/pages/playFiles/songlengthsResolution.ts](src/pages/playFiles/songlengthsResolution.ts).
+- [src/pages/playFiles/hooks/useSonglengths.ts](src/pages/playFiles/hooks/useSonglengths.ts) now supports `allowMd5Fallback` options and yields every 250 items.
+- [src/pages/playFiles/handlers/addFileSelections.ts](src/pages/playFiles/handlers/addFileSelections.ts) disables MD5 fallback during bulk imports.
+- Coverage added in [src/pages/playFiles/songlengthsResolution.test.ts](src/pages/playFiles/songlengthsResolution.test.ts).
 
 ## Automated proof
 
 Local checks completed successfully:
 
 - Focused Vitest regression set for binary uploads, navigation guards, and songlength resolution.
-- `npm run lint`
+- Additional focused regression coverage passed for the native HVSC chunk-read path.
+- `npm run test:coverage` with `90.82%` branch coverage.
 - `npm run build`
-- Focused Playwright route/coverage probe after restarting a stale preview server.
-- Isolated coverage run with totals:
-  - statements: 91.77
-  - branches: 90.86
-  - functions: 90.91
-  - lines: 91.77
+- Focused Playwright golden-trace refresh and compare pass for:
+  - `disk image triggers mount and autostart sequence`
+  - `disk image uses DMA autostart when enabled`
+  - `prev/next navigates within playlist`
+- Full `./build` helper completed successfully.
 
 Additional observations:
 
 - `c64u` resolves locally to `192.168.1.13`.
-- The repository helper `./build` was still running in the Playwright phase when this proof note was written.
+- Attached Android device `9B081FFAZ001WX` is visible via `adb devices -l`.
 
 ## External blockers
 
 ### Android device validation
 
-Real-device validation could not be executed because `adb devices -l` returned no attached devices at validation time.
+The attached Android device is now available as `9B081FFAZ001WX`, but a real-device regression pass against the live C64U was not executed in this validation slice.
 
 ### Android JVM validation
 
@@ -121,10 +121,10 @@ Targeted Android plugin tests were attempted but are currently blocked by local 
 - Kotlin daemon / incremental tooling rejected JDK version `25.0.1`.
 - Robolectric execution later failed with `NoClassDefFoundError` / `ClassReader` before producing a clean signal on the updated plugin tests.
 
-These blockers prevent a final local Android-native validation claim, but they do not contradict the web/unit/build evidence for the implemented fixes.
+These blockers no longer prevent a full repository build claim, but they still limit native plugin-specific runtime proof beyond the automated coverage and build evidence.
 
 ## Remaining work
 
-1. Let `./build` complete and record the final pass/fail result.
-2. Re-run Android validation when an adb-connected device is available.
-3. Re-run Android JVM tests after the local JDK/Robolectric environment is repaired.
+1. Run targeted Android real-device regression checks on `9B081FFAZ001WX` against the live C64U.
+2. Capture device-side screenshots/logs for the proof bundle.
+3. Re-run Android JVM plugin tests if deeper native-runtime proof is still required beyond the green `./build` result.

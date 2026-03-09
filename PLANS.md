@@ -22,8 +22,8 @@ Resolve five Android regressions in the Capacitor app and produce reproducible e
 
 ### Current status
 
-- Status: fixes implemented; automated validation mostly complete; Android-real-device and Android-JVM validation blocked by environment.
-- Branch: `test/fix-ios-maestro-tests`.
+- Status: fixes implemented; automated validation complete; Android real-device follow-up is now possible with the attached handset.
+- Branch: `fix/remote-playback`.
 - Initial hotspot mapping completed across Android native FTP, TypeScript upload routes, HVSC native/non-native ingestion, and Play page import lifecycle.
 - Implemented fixes cover FTP directory listing, raw binary upload transport, HVSC large-archive native fallback, import navigation confirmation, and bulk songlength application throughput.
 
@@ -54,7 +54,7 @@ Resolve five Android regressions in the Capacitor app and produce reproducible e
 #### Phase 4: Automated validation
 
 - [x] Add or update unit/Android/Playwright coverage for each regression.
-- [ ] Run relevant local tests, coverage, lint, build, Android tests, and full build.
+- [x] Run relevant local tests, coverage, lint, build, Android tests, and full build.
 - [ ] Run Maestro / Android validation where feasible from the current environment.
 
 #### Phase 5: Real-device proof and artifact package
@@ -77,7 +77,7 @@ Resolve five Android regressions in the Capacitor app and produce reproducible e
 - [x] `npm run lint` passed
 - [x] `npm run test:coverage` passed with >=90% branch coverage
 - [x] `npm run build` passed
-- [ ] `./build` passed or explicit blocker documented
+- [x] `./build` passed
 - [ ] Android tests passed
 - [ ] Real-device validation captured or explicit external blocker documented
 - [ ] Proof artifacts written under `docs/repro/android-regressions-2026-03-09/`
@@ -100,14 +100,12 @@ Resolve five Android regressions in the Capacitor app and produce reproducible e
 
 ### Validation status
 
-- Focused regression tests passed for [src/lib/c64api.test.ts](/home/chris/dev/c64/c64commander/src/lib/c64api.test.ts), [src/pages/playFiles/songlengthsResolution.test.ts](/home/chris/dev/c64/c64commander/src/pages/playFiles/songlengthsResolution.test.ts), and [src/lib/navigation/navigationGuards.test.ts](/home/chris/dev/c64/c64commander/src/lib/navigation/navigationGuards.test.ts).
-- `npm run lint` passed.
+- Focused regression tests passed for [src/lib/c64api.test.ts](src/lib/c64api.test.ts), [src/pages/playFiles/songlengthsResolution.test.ts](src/pages/playFiles/songlengthsResolution.test.ts), [src/lib/navigation/navigationGuards.test.ts](src/lib/navigation/navigationGuards.test.ts), and [tests/unit/hvsc/hvscDownload.test.ts](tests/unit/hvsc/hvscDownload.test.ts).
+- `npm run test:coverage` passed with totals `statements 91.80`, `branches 90.82`, `functions 90.83`, `lines 91.80`.
 - `npm run build` passed.
-- Isolated coverage run passed with totals `statements 91.77`, `branches 90.86`, `functions 90.91`, `lines 91.77`.
-- Focused Playwright route/coverage probe passed after restarting a stale preview server.
-- Android/JVM tests remain blocked locally by toolchain/runtime issues rather than by confirmed source failures: Kotlin daemon/JDK parsing rejected `25.0.1`, and subsequent Robolectric execution hit `NoClassDefFoundError`/`ClassReader` failures.
-- Real-device validation is currently blocked because `adb devices -l` returned no attached Android devices, although hostname `c64u` resolves to `192.168.1.13`.
-- Full repository helper `./build` is still running in the Playwright phase at the time of this update; final pass/fail state remains pending.
+- Targeted Playwright golden-trace refresh and revalidation passed for the three previously failing playback scenarios.
+- Full repository helper `./build` passed, including unit tests, Python agent tests, Playwright, Android JVM build, and APK build.
+- Attached Android device `9B081FFAZ001WX` is now visible via `adb devices -l`; real-device validation remains pending rather than blocked.
 
 ### Work log
 
@@ -125,14 +123,18 @@ Resolve five Android regressions in the Capacitor app and produce reproducible e
 - 2026-03-09T03:10Z: Added focused regression tests for binary upload transport, navigation guards, songlength resolution policy, and Android HVSC chunk reads.
 - 2026-03-09T03:48Z: Resolved follow-on validation issues in test harnesses and imports: Blob portability in `c64api.test.ts`, missing `PlayableEntry` import, and Capacitor `registerPlugin` mocking for HVSC tests.
 - 2026-03-09T04:10Z: Confirmed `npm run lint`, `npm run build`, focused Vitest, focused Playwright route probe, and isolated coverage all pass locally.
-- 2026-03-09T04:15Z: Confirmed `adb devices -l` shows no connected devices; confirmed `c64u` resolves on the local network.
-- 2026-03-09T04:20Z: Started full repository helper `./build`; helper remains in progress in Playwright execution.
+- 2026-03-09T04:15Z: Confirmed `c64u` resolves on the local network.
+- 2026-03-09T04:20Z: Started full repository helper `./build`.
+- 2026-03-09T23:11Z: `npm run test:coverage` passed at `90.82%` branch coverage.
+- 2026-03-09T23:22Z: Refreshed and revalidated the failing playback golden traces for disk autostart and playlist prev/next flows.
+- 2026-03-09T23:24Z: Full repository helper `./build` completed successfully.
+- 2026-03-09T23:25Z: Confirmed attached Android device `9B081FFAZ001WX` is visible to `adb`.
 
 ### Next actions
 
-1. Let `./build` finish and record the final result or concrete failure.
-2. Capture proof notes under `docs/repro/android-regressions-2026-03-09/` with the implemented fixes, local evidence, and external blockers.
-3. Re-run Android real-device validation if an adb-connected handset becomes available.
+1. Run targeted Android real-device validation on `9B081FFAZ001WX` against the real C64U host.
+2. Extend the proof note with any device-captured screenshots/logs from the real-device pass.
+3. Resolve the remaining GitHub review threads in the PR UI now that code and CI are green.
 
 ## iOS Maestro Coverage And CI Failure Propagation
 
@@ -278,38 +280,47 @@ The objective is to determine both root causes, implement the smallest safe fix 
 ## agents/ Directory Restructuring
 
 ### Goal
+
 Normalise the `agents/` folder hierarchy: isolate runtime artifacts under `runtime/`, relocate the CLI script to `scripts/`, and fix the REPO_ROOT path bug.
 
 ### Phase 1: Repository inspection
+
 - [x] 1.1 Read current `agents/` structure
 - [x] 1.2 Identify all path references to `logs/`, `runs/`, `state/`, `bin/`
 - [x] 1.3 Confirm REPO_ROOT bug (`parents[2]` resolves to `agents/` not repo root)
 
 ### Phase 2: Runtime directory restructuring
+
 - [x] 2.1 Create `runtime/logs/`, `runtime/runs/`, `runtime/state/` with `.gitkeep`
 - [x] 2.2 Remove old `logs/`, `runs/`, `state/` from git tracking (were untracked)
 
 ### Phase 3: Script relocation
+
 - [x] 3.1 Create `scripts/agent` with identical content to `bin/agent`
 - [x] 3.2 `bin/` left in place (untracked); `scripts/agent` is the new entrypoint
 
 ### Phase 4: Code path updates
+
 - [x] 4.1 Fix `REPO_ROOT` in `config.py` (`parents[2]` → `parents[3]`)
 - [x] 4.2 Update `LOGS_ROOT`, `RUNS_ROOT`, `STATE_ROOT` to `runtime/` subdirs
 - [x] 4.3 Remove unused `OPENHANDS_ROOT`; add `RUNTIME_ROOT` constant
 
 ### Phase 5: Test fixture updates
+
 - [x] 5.1 Update `conftest.py` `tmp_paths` fixture to use `runtime/` subdirs
 
 ### Phase 6: Documentation updates
+
 - [x] 6.1 Update `agents/.gitignore` for new structure
 - [x] 6.2 Update `agents/README.md` to reflect new paths
 
 ### Phase 7: Verification
+
 - [x] 7.1 Tests pass with ≥90% branch coverage (150 passed, 98.98% branch coverage)
 - [x] 7.2 `scripts/agent --help` runs correctly; resolves paths under `runtime/`
 
 ### Work log
+
 - 2026-03-08: Inspection complete; identified REPO_ROOT bug (`parents[2]` resolved to `agents/` not repo root) and all path changes needed.
 - 2026-03-08: Created `runtime/logs/`, `runtime/runs/`, `runtime/state/` with `.gitkeep`. Created `scripts/agent`.
 - 2026-03-08: Fixed `config.py`: REPO_ROOT now uses `parents[3]`, removed `OPENHANDS_ROOT`, added `RUNTIME_ROOT`, updated `LOGS_ROOT`/`RUNS_ROOT`/`STATE_ROOT`; added `runtime_root` field to `RuntimePaths`.
@@ -334,6 +345,7 @@ Deliver app-first, evidence-backed key-feature validation for C64 Commander on a
 - [x] 1.3 Map observability and control paths (`droidmind`, `c64scope`, `c64bridge`, diagnostics/logs/media).
 
 Dependencies:
+
 - `1.3` depends on `1.1` and `1.2`.
 
 ### Phase 2: Feature Test Catalog
@@ -343,6 +355,7 @@ Dependencies:
 - [x] 2.3 Define likely failure modes and root-cause taxonomy.
 
 Dependencies:
+
 - Phase 2 depends on Phase 1.
 
 ### Phase 3: Prompt Authoring
@@ -352,6 +365,7 @@ Dependencies:
 - [x] 3.3 Encode deterministic output/artifact contract (`PASS|FAIL|BLOCKED`, path mapping, post-run analysis).
 
 Dependencies:
+
 - Phase 3 depends on Phase 2.
 
 ### Phase 4: Prompt Execution
@@ -363,6 +377,7 @@ Dependencies:
 - [x] 4.5 Record run IDs and evidence paths in full-app coverage artifacts.
 
 Dependencies:
+
 - Phase 4 depends on Phase 3.
 
 ### Phase 5: Failure / Gap Analysis
@@ -372,6 +387,7 @@ Dependencies:
 - [x] 5.3 Feed findings into matrix, gap analysis, and iteration log.
 
 Dependencies:
+
 - Phase 5 depends on Phase 4.
 
 ### Phase 6: Convergence + Final Synthesis
@@ -381,6 +397,7 @@ Dependencies:
 - [x] 6.3 Ensure no major app area is omitted without explicit justification.
 
 Dependencies:
+
 - Phase 6 depends on Phases 1-5.
 
 ### Phase 7: Blocker Remediation (Current Iteration)
@@ -390,37 +407,38 @@ Dependencies:
 - [x] 7.3 Re-run affected feature family (`F003`-`F006`) and full executor, then update status artifacts.
 
 Dependencies:
+
 - Phase 7 depends on Phase 6 baseline outputs (`FAIL: F003`-`F006`).
 
 ## Per-Feature Progress Tracker
 
 Legend: `P` = PASS, `F` = FAIL, `B` = BLOCKED
 
-| Feature ID | Area | Feature | Status | Prompt | Last Run |
-| --- | --- | --- | --- | --- | --- |
-| F001 | Shell | App launch + foreground shell | P | `prompts/F001-app-shell-and-launch.md` | `pt-20260308T113329Z` |
-| F002 | Navigation | Tab navigation across routes | P | `prompts/F002-tab-navigation.md` | `pt-20260308T113344Z` |
-| F003 | Home | Machine controls (reset/reboot/menu/power/pause) | P | `prompts/F003-home-machine-controls.md` | `pt-20260308T113442Z` |
-| F004 | Home | Quick config + LED/SID toggles | P | `prompts/F004-home-quick-config-and-led-sid.md` | `pt-20260308T113442Z` |
-| F005 | Home | RAM dump/load/clear workflows | P | `prompts/F005-home-ram-workflows.md` | `pt-20260308T113442Z` |
-| F006 | Home | App config snapshot lifecycle | P | `prompts/F006-home-config-snapshots.md` | `pt-20260308T113442Z` |
-| F007 | Disks | Disk library add/group/rename/delete | P | `prompts/F007-disks-library-management.md` | `pt-20260308T113458Z` |
-| F008 | Disks | Disk mount/eject to Drive A/B | P | `prompts/F008-disks-mount-eject.md` | `pt-20260308T113458Z` |
-| F009 | Disks | Drive + Soft IEC config controls | P | `prompts/F009-disks-drive-and-softiec.md` | `pt-20260308T113458Z` |
-| F010 | Play | Source browsing (Local/C64U/HVSC) | P | `prompts/F010-play-source-browsing.md` | `pt-20260308T113514Z` |
-| F011 | Play | Playlist create/edit/clear/select | P | `prompts/F011-playlist-lifecycle.md` | `pt-20260308T113514Z` |
-| F012 | Play | Transport controls + queue progression | P | `prompts/F012-playback-transport.md` | `pt-20260308T113514Z` |
-| F013 | Play | Shuffle/repeat/recurse/volume | P | `prompts/F013-playback-queue-and-volume.md` | `pt-20260308T113514Z` |
-| F014 | Play | Duration/songlength/subsong controls | P | `prompts/F014-songlength-duration-subsong.md` | `pt-20260308T113514Z` |
-| F015 | Play/HVSC | HVSC download/install/ingest/cancel/reset | P | `prompts/F015-hvsc-download-ingest.md` | `pt-20260308T113514Z` |
-| F016 | Play/HVSC | HVSC cache reuse + browse/play from cache | P | `prompts/F016-hvsc-cache-reuse.md` | `pt-20260308T113514Z` |
-| F017 | Play/Runtime | Lock-screen/background auto-advance | P | `prompts/F017-lock-screen-autoadvance.md` | `pt-20260308T113530Z` |
-| F018 | Config | Category browse/search/refresh | P | `prompts/F018-config-browse-search.md` | `pt-20260308T113600Z` |
-| F019 | Config | Config edits + audio mixer solo/reset + clock sync | P | `prompts/F019-config-edit-and-audio-mixer.md` | `pt-20260308T113600Z` |
-| F020 | Settings | Connection/theme/preferences/HVSC toggles | P | `prompts/F020-settings-connection-preferences.md` | `pt-20260308T113616Z` |
-| F021 | Settings | Diagnostics + import/export + device safety | P | `prompts/F021-settings-diagnostics-safety.md` | `pt-20260308T113616Z` |
-| F022 | Docs | Docs and open-source licenses routes | P | `prompts/F022-docs-and-licenses.md` | `pt-20260308T113344Z` |
-| F023 | Cross-cutting | Persistence + reconnect across app/session/device lock | P | `prompts/F023-persistence-and-recovery.md` | `pt-20260308T113530Z` |
+| Feature ID | Area          | Feature                                                | Status | Prompt                                            | Last Run              |
+| ---------- | ------------- | ------------------------------------------------------ | ------ | ------------------------------------------------- | --------------------- |
+| F001       | Shell         | App launch + foreground shell                          | P      | `prompts/F001-app-shell-and-launch.md`            | `pt-20260308T113329Z` |
+| F002       | Navigation    | Tab navigation across routes                           | P      | `prompts/F002-tab-navigation.md`                  | `pt-20260308T113344Z` |
+| F003       | Home          | Machine controls (reset/reboot/menu/power/pause)       | P      | `prompts/F003-home-machine-controls.md`           | `pt-20260308T113442Z` |
+| F004       | Home          | Quick config + LED/SID toggles                         | P      | `prompts/F004-home-quick-config-and-led-sid.md`   | `pt-20260308T113442Z` |
+| F005       | Home          | RAM dump/load/clear workflows                          | P      | `prompts/F005-home-ram-workflows.md`              | `pt-20260308T113442Z` |
+| F006       | Home          | App config snapshot lifecycle                          | P      | `prompts/F006-home-config-snapshots.md`           | `pt-20260308T113442Z` |
+| F007       | Disks         | Disk library add/group/rename/delete                   | P      | `prompts/F007-disks-library-management.md`        | `pt-20260308T113458Z` |
+| F008       | Disks         | Disk mount/eject to Drive A/B                          | P      | `prompts/F008-disks-mount-eject.md`               | `pt-20260308T113458Z` |
+| F009       | Disks         | Drive + Soft IEC config controls                       | P      | `prompts/F009-disks-drive-and-softiec.md`         | `pt-20260308T113458Z` |
+| F010       | Play          | Source browsing (Local/C64U/HVSC)                      | P      | `prompts/F010-play-source-browsing.md`            | `pt-20260308T113514Z` |
+| F011       | Play          | Playlist create/edit/clear/select                      | P      | `prompts/F011-playlist-lifecycle.md`              | `pt-20260308T113514Z` |
+| F012       | Play          | Transport controls + queue progression                 | P      | `prompts/F012-playback-transport.md`              | `pt-20260308T113514Z` |
+| F013       | Play          | Shuffle/repeat/recurse/volume                          | P      | `prompts/F013-playback-queue-and-volume.md`       | `pt-20260308T113514Z` |
+| F014       | Play          | Duration/songlength/subsong controls                   | P      | `prompts/F014-songlength-duration-subsong.md`     | `pt-20260308T113514Z` |
+| F015       | Play/HVSC     | HVSC download/install/ingest/cancel/reset              | P      | `prompts/F015-hvsc-download-ingest.md`            | `pt-20260308T113514Z` |
+| F016       | Play/HVSC     | HVSC cache reuse + browse/play from cache              | P      | `prompts/F016-hvsc-cache-reuse.md`                | `pt-20260308T113514Z` |
+| F017       | Play/Runtime  | Lock-screen/background auto-advance                    | P      | `prompts/F017-lock-screen-autoadvance.md`         | `pt-20260308T113530Z` |
+| F018       | Config        | Category browse/search/refresh                         | P      | `prompts/F018-config-browse-search.md`            | `pt-20260308T113600Z` |
+| F019       | Config        | Config edits + audio mixer solo/reset + clock sync     | P      | `prompts/F019-config-edit-and-audio-mixer.md`     | `pt-20260308T113600Z` |
+| F020       | Settings      | Connection/theme/preferences/HVSC toggles              | P      | `prompts/F020-settings-connection-preferences.md` | `pt-20260308T113616Z` |
+| F021       | Settings      | Diagnostics + import/export + device safety            | P      | `prompts/F021-settings-diagnostics-safety.md`     | `pt-20260308T113616Z` |
+| F022       | Docs          | Docs and open-source licenses routes                   | P      | `prompts/F022-docs-and-licenses.md`               | `pt-20260308T113344Z` |
+| F023       | Cross-cutting | Persistence + reconnect across app/session/device lock | P      | `prompts/F023-persistence-and-recovery.md`        | `pt-20260308T113530Z` |
 
 ## Coverage Summary
 
@@ -485,19 +503,19 @@ Snapshot Manager dialog (no filesystem browser).
 
 ## Memory Ranges by Snapshot Type
 
-| Type   | Ranges                            | Notes                         |
-|--------|-----------------------------------|-------------------------------|
-| Full   | $0000–$FFFF                       | All 64 KB                     |
-| BASIC  | $0801–STREND, $002B–$0038         | STREND read from $002B–$002C  |
-| Screen | $0400–$07E7, $D800–$DBFF          | Screen + colour RAM           |
-| Custom | User-defined                      | Any hex address ranges        |
+| Type   | Ranges                    | Notes                        |
+| ------ | ------------------------- | ---------------------------- |
+| Full   | $0000–$FFFF               | All 64 KB                    |
+| BASIC  | $0801–STREND, $002B–$0038 | STREND read from $002B–$002C |
+| Screen | $0400–$07E7, $D800–$DBFF  | Screen + colour RAM          |
+| Custom | User-defined              | Any hex address ranges       |
 
 ## Binary File Format (.c64snap)
 
 Header (28 bytes):
 
 | Offset | Size | Field           | Notes                    |
-|--------|------|-----------------|--------------------------|
+| ------ | ---- | --------------- | ------------------------ |
 | 0      | 8    | magic           | `C64SNAP\0`              |
 | 8      | 2    | version         | uint16 LE = 1            |
 | 10     | 2    | type            | uint16 LE (0–3)          |
@@ -519,7 +537,8 @@ c64-{type}-{YYYYMMDD}-{HHMMSS}.c64snap
 
 ## Phases
 
-### Phase 1: Core Library  (src/lib/snapshot/)
+### Phase 1: Core Library (src/lib/snapshot/)
+
 - [x] 1.1 snapshotTypes.ts
 - [x] 1.2 snapshotFormat.ts
 - [x] 1.3 snapshotFilename.ts
@@ -528,19 +547,23 @@ c64-{type}-{YYYYMMDD}-{HHMMSS}.c64snap
 - [x] 1.6 snapshotCreation.ts
 
 ### Phase 2: RAM Operations Extension
+
 - [x] 2.1 Export loadMemoryRanges() in ramOperations.ts
 
 ### Phase 3: UI Dialogs
+
 - [x] 3.1 SaveRamDialog.tsx
 - [x] 3.2 SnapshotManagerDialog.tsx
 - [x] 3.3 RestoreSnapshotDialog.tsx
 
 ### Phase 4: Hook/Page Integration
+
 - [x] 4.1 useHomeActions.ts — typed snapshot save/restore
 - [x] 4.2 HomePage.tsx — dialog state
 - [x] 4.3 MachineControls.tsx — props unchanged, callers change
 
 ### Phase 5: Tests
+
 - [x] 5.1 snapshotFormat.test.ts
 - [x] 5.2 snapshotFilename.test.ts
 - [x] 5.3 snapshotStore.test.ts
@@ -548,10 +571,12 @@ c64-{type}-{YYYYMMDD}-{HHMMSS}.c64snap
 - [x] 5.5 playwright/ramSnapshot.spec.ts
 
 ### Phase 6: Screenshots and Documentation
+
 - [x] 6.1 Playwright screenshots → doc/img/app/home/dialogs/ (generated by `npm run screenshots`)
 - [x] 6.2 README.md RAM Snapshots section
 
 ### Phase 7: Validation
+
 - [x] npm run test passes
 - [x] npm run lint passes
 - [x] npm run build passes
@@ -559,9 +584,9 @@ c64-{type}-{YYYYMMDD}-{HHMMSS}.c64snap
 
 ## Decisions Log
 
-| Date       | Decision                                                              |
-|------------|-----------------------------------------------------------------------|
-| 2026-03-08 | localStorage as primary snapshot store (works on web + Android)       |
-| 2026-03-08 | Dump full 64 KB then extract ranges (simpler, single API call)        |
-| 2026-03-08 | STREND resolved by peeking $002B–$002C from full RAM dump             |
-| 2026-03-08 | No SAF folder dependency for snapshot list — app-managed in LS        |
+| Date       | Decision                                                        |
+| ---------- | --------------------------------------------------------------- |
+| 2026-03-08 | localStorage as primary snapshot store (works on web + Android) |
+| 2026-03-08 | Dump full 64 KB then extract ranges (simpler, single API call)  |
+| 2026-03-08 | STREND resolved by peeking $002B–$002C from full RAM dump       |
+| 2026-03-08 | No SAF folder dependency for snapshot list — app-managed in LS  |

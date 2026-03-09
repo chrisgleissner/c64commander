@@ -9,7 +9,6 @@
 import { motion } from "framer-motion";
 import { Home, Sliders, Settings, BookOpen, Play, Disc } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { confirmNavigation } from "@/lib/navigation/navigationGuards";
 import { wrapUserEvent } from "@/lib/tracing/userTrace";
 
 const baseTabs = [
@@ -42,16 +41,7 @@ export function TabBar() {
               aria-label={tab.label}
               aria-current={isActive ? "page" : undefined}
               title={tab.label}
-              onClick={wrapUserEvent(
-                () => {
-                  if (!confirmNavigation()) return;
-                  navigate(tab.path);
-                },
-                "click",
-                "Tab",
-                { title: tab.label },
-                "Tab",
-              )}
+              onClick={wrapUserEvent(() => navigate(tab.path), "click", "Tab", { title: tab.label }, "Tab")}
               className={`tab-item touch-none ${isActive ? "active" : ""}`}
             >
               <div className="relative">

@@ -32,6 +32,7 @@ import { recordActionEnd, recordActionStart, recordTraceError } from "@/lib/trac
 import { registerGlobalButtonInteractionModel } from "@/lib/ui/buttonInteraction";
 import { installConsoleDiagnosticsBridge } from "@/lib/diagnostics/logger";
 import { invalidateForVisibilityResume } from "@/lib/query/c64QueryInvalidation";
+import { useNavigationGuardBlocker } from "@/lib/navigation/navigationGuards";
 import { t } from "@/lib/i18n";
 
 const HomePage = lazy(() => import("./pages/HomePage"));
@@ -71,6 +72,11 @@ const RouteRefresher = () => {
   return null;
 };
 
+const GlobalNavigationBlocker = () => {
+  useNavigationGuardBlocker();
+  return null;
+};
+
 const shouldEnableCoverageProbe = () => {
   if (import.meta.env.VITE_ENABLE_TEST_PROBES === "1") return true;
   if (typeof window !== "undefined") {
@@ -91,6 +97,7 @@ const AppRoutes = () => {
     <BrowserRouter>
       <GlobalErrorListener />
       <GlobalButtonInteractionModel />
+      <GlobalNavigationBlocker />
       <RouteRefresher />
       <DebugStartupLogger />
       <DiagnosticsRuntimeBridge />
