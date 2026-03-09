@@ -233,7 +233,7 @@ export function SnapshotManagerDialog({
           </div>
 
           {/* Snapshot list */}
-          <div className="space-y-2 max-h-[62vh] overflow-y-auto" data-testid="snapshot-list">
+          <div className="space-y-2" data-testid="snapshot-list">
             {filtered.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4 text-center" data-testid="snapshot-empty">
                 {snapshots.length === 0 ? "No snapshots saved yet." : "No snapshots match the filter."}

@@ -439,9 +439,16 @@ test.describe("App screenshots", () => {
       await page.addInitScript(() => {
         const HEADER_SIZE = 28;
         const buildSnap = (typeCode: number, ts: number): string => {
+          const displayRanges =
+            typeCode === 0
+              ? ["$0000\u2013$00FF", "$0200\u2013$FFFF"]
+              : typeCode === 1
+                ? ["$002B\u2013$0038", "$0801\u2013STREND"]
+                : ["$0400\u2013$07E7", "$D800\u2013$DBFF"];
+          const snapType = typeCode === 0 ? "program" : typeCode === 1 ? "basic" : "screen";
           const meta = JSON.stringify({
-            snapshot_type: typeCode === 0 ? "program" : "basic",
-            display_ranges: typeCode === 0 ? ["$0000\u2013$00FF", "$0200\u2013$FFFF"] : ["$0801\u2013STREND"],
+            snapshot_type: snapType,
+            display_ranges: displayRanges,
             created_at: "2026-01-10 09:00:00",
             ...(typeCode === 0 ? { label: "Before game" } : {}),
           });
@@ -490,8 +497,20 @@ test.describe("App screenshots", () => {
                 snapshotType: "basic",
                 metadata: {
                   snapshot_type: "basic",
-                  display_ranges: ["$0801\u2013STREND"],
+                  display_ranges: ["$002B\u2013$0038", "$0801\u2013STREND"],
                   created_at: "2026-01-10 08:00:00",
+                },
+              },
+              {
+                id: "snap-3",
+                filename: "c64-screen-20260110-070000.c64snap",
+                bytesBase64: buildSnap(2, 1736492400),
+                createdAt: "2026-01-10T07:00:00.000Z",
+                snapshotType: "screen",
+                metadata: {
+                  snapshot_type: "screen",
+                  display_ranges: ["$0400\u2013$07E7", "$D800\u2013$DBFF"],
+                  created_at: "2026-01-10 07:00:00",
                 },
               },
             ],
