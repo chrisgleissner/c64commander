@@ -336,10 +336,16 @@ try:
     print(f"Maestro JUnit report contains zero tests: {junit_file}")
     junit_status = 1
   elif failures > 0 or errors > 0:
-    print(
-      f"Maestro JUnit report recorded failures/errors despite process exit {exit_code}: "
-      f"tests={tests} failures={failures} errors={errors}"
-    )
+    if exit_code == 0:
+      print(
+        f"Maestro JUnit report recorded failures/errors despite process exit {exit_code}: "
+        f"tests={tests} failures={failures} errors={errors}"
+      )
+    else:
+      print(
+        f"Maestro JUnit report recorded failures/errors (process exit={exit_code}): "
+        f"tests={tests} failures={failures} errors={errors}"
+      )
     junit_status = 1
 except FileNotFoundError:
   print(f"Maestro JUnit report missing: {junit_file}")
