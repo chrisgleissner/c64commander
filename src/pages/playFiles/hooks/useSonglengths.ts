@@ -18,6 +18,10 @@ import { collectSonglengthsSearchPaths, DOCUMENTS_FOLDER, isSonglengthsFileName 
 import { getParentPath } from "@/lib/playback/localFileBrowser";
 import { getLocalFilePath, normalizeLocalPath } from "@/pages/playFiles/playFilesUtils";
 import type { PlaylistItem } from "@/pages/playFiles/types";
+import {
+  resolveSonglengthDurationMsWithFacade,
+  type SonglengthResolutionOptions,
+} from "@/pages/playFiles/songlengthsResolution";
 
 import { getPlatform, isNativePlatform } from "@/lib/native/platform";
 
@@ -67,6 +71,7 @@ export type UseSonglengthsResult = {
   applySonglengthsToItems: (
     items: PlaylistItem[],
     songlengthsOverrides?: SonglengthsFileEntry[],
+    options?: SonglengthResolutionOptions,
   ) => Promise<PlaylistItem[]>;
   resolveSonglengthDurationMsForPath: (
     path: string,
@@ -437,65 +442,41 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
     });
   }, []);
 
-  const resolveDurationMsWithFacade = useCallback(
-    async (service: SongLengthServiceFacade, path: string, file?: LocalPlayFile | null, songNr?: number | null) => {
-      const normalizedPath = normalizeLocalPath(path || "/");
-      const fileName = normalizedPath.split("/").pop() ?? null;
-      const resolvedByPath = service.resolveDurationSeconds({
-        virtualPath: normalizedPath,
-        fileName,
-        songNr: songNr ?? null,
-      });
-      if (resolvedByPath.durationSeconds !== null) {
-        return resolvedByPath.durationSeconds * 1000;
-      }
-      if (!file) return null;
-      try {
-        const buffer = await file.arrayBuffer();
-        const { computeSidMd5 } = await import("@/lib/sid/sidUtils");
-        const md5 = await computeSidMd5(buffer);
-        const resolvedByMd5 = service.resolveDurationSeconds({
-          virtualPath: normalizedPath,
-          fileName,
-          md5,
-          songNr: songNr ?? null,
-        });
-        return resolvedByMd5.durationSeconds !== null ? resolvedByMd5.durationSeconds * 1000 : null;
-      } catch (error) {
-        addErrorLog("Failed to resolve songlength via facade md5 fallback", {
-          path: normalizedPath,
-          songNr: songNr ?? null,
-          error: (error as Error).message,
-        });
-        return null;
-      }
-    },
-    [],
-  );
-
   const applySonglengthsToItems = useCallback(
-    async (items: PlaylistItem[], songlengthsOverrides?: SonglengthsFileEntry[]) => {
-      const updated = await Promise.all(
-        items.map(async (item) => {
-          if (item.category !== "sid") return item;
+    async (
+      items: PlaylistItem[],
+      songlengthsOverrides?: SonglengthsFileEntry[],
+      options?: SonglengthResolutionOptions,
+    ) => {
+      const updated: PlaylistItem[] = [];
+      for (const [index, item] of items.entries()) {
+        if (item.category !== "sid") {
+          updated.push(item);
+        } else {
           const isLocal = item.request.source === "local";
           const filePath =
             isLocal && item.request.file ? getLocalFilePath(item.request.file) : normalizeLocalPath(item.request.path);
           const bundle = await loadSonglengthBundleForPath(filePath, songlengthsOverrides);
-          if (!bundle) return item;
-          const resolvedDurationMs = await resolveDurationMsWithFacade(
-            bundle.service,
-            filePath,
-            isLocal ? item.request.file : null,
-            item.request.songNr ?? null,
-          );
-          if (resolvedDurationMs === null) return item;
-          return { ...item, durationMs: resolvedDurationMs };
-        }),
-      );
+          if (!bundle) {
+            updated.push(item);
+          } else {
+            const resolvedDurationMs = await resolveSonglengthDurationMsWithFacade({
+              service: bundle.service,
+              path: filePath,
+              file: isLocal ? item.request.file : null,
+              songNr: item.request.songNr ?? null,
+              options,
+            });
+            updated.push(resolvedDurationMs === null ? item : { ...item, durationMs: resolvedDurationMs });
+          }
+        }
+        if ((index + 1) % 250 === 0) {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+      }
       return updated;
     },
-    [loadSonglengthBundleForPath, resolveDurationMsWithFacade],
+    [loadSonglengthBundleForPath],
   );
 
   const resolveSonglengthDurationMsForPath = useCallback(
@@ -507,9 +488,14 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
     ) => {
       const bundle = await loadSonglengthBundleForPath(path, songlengthsOverrides);
       if (!bundle) return null;
-      return resolveDurationMsWithFacade(bundle.service, path, file ?? null, songNr ?? null);
+      return resolveSonglengthDurationMsWithFacade({
+        service: bundle.service,
+        path,
+        file: file ?? null,
+        songNr: songNr ?? null,
+      });
     },
-    [loadSonglengthBundleForPath, resolveDurationMsWithFacade],
+    [loadSonglengthBundleForPath],
   );
 
   const collectSonglengthsCandidates = useCallback((paths: string[]) => {

@@ -1,0 +1,109 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v3.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
+import { describe, expect, it, vi } from "vitest";
+import {
+  confirmNavigation,
+  installNavigationBlocker,
+  registerNavigationGuard,
+} from "@/lib/navigation/navigationGuards";
+
+describe("navigationGuards", () => {
+  it("blocks large playlist import navigation until the warning guard explicitly allows it", () => {
+    const unregister = registerNavigationGuard(vi.fn(() => false));
+
+    expect(confirmNavigation()).toBe(false);
+
+    unregister();
+  });
+
+  it("allows navigation after guard removal", () => {
+    const unregister = registerNavigationGuard(() => true);
+    unregister();
+
+    expect(confirmNavigation()).toBe(true);
+  });
+
+  it("stops evaluating guards after the first rejection", () => {
+    const first = vi.fn(() => false);
+    const second = vi.fn(() => true);
+    const unregisterFirst = registerNavigationGuard(first);
+    const unregisterSecond = registerNavigationGuard(second);
+
+    expect(confirmNavigation()).toBe(false);
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(second).not.toHaveBeenCalled();
+
+    unregisterSecond();
+    unregisterFirst();
+  });
+
+  it("retries blocked transitions after confirmation", () => {
+    const retry = vi.fn();
+    const unblock = vi.fn();
+    const navigator = {
+      block: vi.fn((handler: (transition: { retry: () => void }) => void) => {
+        handler({ retry });
+        return unblock;
+      }),
+    };
+
+    const dispose = installNavigationBlocker(navigator);
+
+    expect(retry).toHaveBeenCalledTimes(1);
+    expect(unblock).toHaveBeenCalledTimes(1);
+    dispose();
+  });
+
+  it("keeps in-app navigation cancelled when an active import warning guard rejects the transition", () => {
+    const retry = vi.fn();
+    const unregister = registerNavigationGuard(() => false);
+    const unblock = vi.fn();
+    const navigator = {
+      block: vi.fn((handler: (transition: { retry: () => void }) => void) => {
+        handler({ retry });
+        return unblock;
+      }),
+    };
+
+    const dispose = installNavigationBlocker(navigator);
+
+    expect(retry).not.toHaveBeenCalled();
+    expect(unblock).not.toHaveBeenCalled();
+
+    dispose();
+    unregister();
+  });
+
+  it("retries transitions immediately after the blocker has been installed", () => {
+    const retry = vi.fn();
+    const unblock = vi.fn();
+    let handler: ((transition: { retry: () => void }) => void) | null = null;
+    const navigator = {
+      block: vi.fn((nextHandler: (transition: { retry: () => void }) => void) => {
+        handler = nextHandler;
+        return unblock;
+      }),
+    };
+
+    const dispose = installNavigationBlocker(navigator);
+
+    handler?.({ retry });
+
+    expect(unblock).toHaveBeenCalledTimes(1);
+    expect(retry).toHaveBeenCalledTimes(1);
+
+    dispose();
+  });
+
+  it("returns a no-op disposer when the navigator cannot block transitions", () => {
+    const dispose = installNavigationBlocker({});
+
+    expect(() => dispose()).not.toThrow();
+  });
+});

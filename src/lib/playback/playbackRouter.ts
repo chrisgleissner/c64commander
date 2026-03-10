@@ -58,6 +58,14 @@ export type PlayPlan = {
   durationMs?: number;
 };
 
+type PhysicalDriveMode = "1541" | "1571" | "1581";
+
+const DISK_AUTOPLAY_DRIVE_MODE_BY_EXTENSION: Partial<Record<string, PhysicalDriveMode>> = {
+  d64: "1541",
+  d71: "1571",
+  d81: "1581",
+};
+
 export const buildPlayPlan = (request: PlayRequest): PlayPlan => {
   const category = getPlayCategory(request.path);
   if (!category) {
@@ -77,6 +85,40 @@ export const buildPlayPlan = (request: PlayRequest): PlayPlan => {
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const normalizeUltimatePath = (path: string) => (path.startsWith("/") ? path : `/${path}`);
+
+const getDiskAutoplayDriveMode = (path: string): PhysicalDriveMode | null => {
+  const extension = getFileExtension(path);
+  return DISK_AUTOPLAY_DRIVE_MODE_BY_EXTENSION[extension] ?? null;
+};
+
+const getDriveInfo = (drives: Awaited<ReturnType<C64API["getDrives"]>>, drive: "a" | "b") => {
+  const entry = drives.drives.find((item) => Object.prototype.hasOwnProperty.call(item, drive));
+  return entry?.[drive] ?? null;
+};
+
+const ensureDiskAutoplayDriveReady = async (api: C64API, drive: "a" | "b", path: string) => {
+  const desiredMode = getDiskAutoplayDriveMode(path);
+  if (!desiredMode) return;
+
+  if (
+    typeof api.getDrives !== "function" ||
+    typeof api.driveOn !== "function" ||
+    typeof api.setDriveMode !== "function"
+  ) {
+    return;
+  }
+
+  const drives = await api.getDrives();
+  const driveInfo = getDriveInfo(drives, drive);
+
+  if (driveInfo?.enabled === false) {
+    await api.driveOn(drive);
+  }
+
+  if (driveInfo?.type !== desiredMode) {
+    await api.setDriveMode(drive, desiredMode);
+  }
+};
 
 const emitDurationPropagationEvent = (payload: {
   type: "ssl-propagation-failure" | "playback-no-duration";
@@ -325,6 +367,8 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
           await api.machineReset();
           await delay(resetDelayMs);
         }
+
+        await ensureDiskAutoplayDriveReady(api, drive, plan.path);
 
         let localBlob: Blob | null = null;
 

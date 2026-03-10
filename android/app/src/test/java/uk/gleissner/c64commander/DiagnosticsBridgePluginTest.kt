@@ -11,10 +11,11 @@ package uk.gleissner.c64commander
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.Build
+import androidx.test.core.app.ApplicationProvider
 import com.getcapacitor.Bridge
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
-import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
@@ -22,12 +23,17 @@ import org.junit.runner.RunWith
 import org.mockito.Mockito.*
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows
+import org.robolectric.annotation.Config
 
 /** Test-only subclass that captures notifyListeners calls for verification. */
 private open class TestableDiagnosticsBridgePlugin : DiagnosticsBridgePlugin() {
     val notifyListenersCalls = mutableListOf<Triple<String?, JSObject?, Boolean>>()
 
-    public override fun notifyListeners(eventName: String?, data: JSObject?, retainUntilConsumed: Boolean) {
+    public override fun notifyListeners(
+            eventName: String?,
+            data: JSObject?,
+            retainUntilConsumed: Boolean
+    ) {
         notifyListenersCalls.add(Triple(eventName, data, retainUntilConsumed))
     }
 }
@@ -53,14 +59,16 @@ class DiagnosticsBridgePluginTest {
     }
 
     @Test
-    fun loadRegistersReceiver() {
+    @Config(sdk = [Build.VERSION_CODES.TIRAMISU])
+    fun loadRegistersReceiverOnAndroid13PlusWithoutReceiverExportErrors() {
         plugin.load()
         val shadowApp = Shadows.shadowOf(context as android.app.Application)
         val receivers = shadowApp.registeredReceivers
-        val hasReceiver = receivers.any { wrapper ->
-            wrapper.broadcastReceiver.javaClass.name.contains("DiagnosticsBridgePlugin")
-                || wrapper.intentFilter.hasAction(AppLogger.ACTION_DIAGNOSTICS_LOG)
-        }
+        val hasReceiver =
+                receivers.any { wrapper ->
+                    wrapper.broadcastReceiver.javaClass.name.contains("DiagnosticsBridgePlugin") ||
+                            wrapper.intentFilter.hasAction(AppLogger.ACTION_DIAGNOSTICS_LOG)
+                }
         assertTrue("Diagnostics receiver should be registered after load()", hasReceiver)
     }
 
@@ -88,11 +96,12 @@ class DiagnosticsBridgePluginTest {
     @Test
     fun receiverProcessesDiagnosticsIntent() {
         plugin.load()
-        val intent = Intent(AppLogger.ACTION_DIAGNOSTICS_LOG).apply {
-            putExtra(AppLogger.EXTRA_LEVEL, "error")
-            putExtra(AppLogger.EXTRA_MESSAGE, "Test error message")
-            putExtra(AppLogger.EXTRA_COMPONENT, "TestComponent")
-        }
+        val intent =
+                Intent(AppLogger.ACTION_DIAGNOSTICS_LOG).apply {
+                    putExtra(AppLogger.EXTRA_LEVEL, "error")
+                    putExtra(AppLogger.EXTRA_MESSAGE, "Test error message")
+                    putExtra(AppLogger.EXTRA_COMPONENT, "TestComponent")
+                }
         // This exercises the receiver's onReceive — it will call notifyListeners
         // which may be a no-op without real webview. Main goal: no crash.
         context.sendBroadcast(intent)
@@ -101,13 +110,14 @@ class DiagnosticsBridgePluginTest {
     @Test
     fun receiverHandlesErrorExtras() {
         plugin.load()
-        val intent = Intent(AppLogger.ACTION_DIAGNOSTICS_LOG).apply {
-            putExtra(AppLogger.EXTRA_LEVEL, "error")
-            putExtra(AppLogger.EXTRA_MESSAGE, "Crash detected")
-            putExtra(AppLogger.EXTRA_ERROR_NAME, "RuntimeError")
-            putExtra(AppLogger.EXTRA_ERROR_MESSAGE, "null pointer")
-            putExtra(AppLogger.EXTRA_ERROR_STACK, "at com.example.Foo.bar()")
-        }
+        val intent =
+                Intent(AppLogger.ACTION_DIAGNOSTICS_LOG).apply {
+                    putExtra(AppLogger.EXTRA_LEVEL, "error")
+                    putExtra(AppLogger.EXTRA_MESSAGE, "Crash detected")
+                    putExtra(AppLogger.EXTRA_ERROR_NAME, "RuntimeError")
+                    putExtra(AppLogger.EXTRA_ERROR_MESSAGE, "null pointer")
+                    putExtra(AppLogger.EXTRA_ERROR_STACK, "at com.example.Foo.bar()")
+                }
         context.sendBroadcast(intent)
     }
 
@@ -121,24 +131,26 @@ class DiagnosticsBridgePluginTest {
 
     @Test
     fun receiverProcessesDetailedPayloadViaDirectInvocation() {
-        val receiverField = DiagnosticsBridgePlugin::class.java.getDeclaredField("diagnosticsReceiver")
+        val receiverField =
+                DiagnosticsBridgePlugin::class.java.getDeclaredField("diagnosticsReceiver")
         receiverField.isAccessible = true
         val receiver = receiverField.get(plugin) as BroadcastReceiver
 
-        val intent = Intent(AppLogger.ACTION_DIAGNOSTICS_LOG).apply {
-            putExtra(AppLogger.EXTRA_LEVEL, "warn")
-            putExtra(AppLogger.EXTRA_MESSAGE, "native warning")
-            putExtra(AppLogger.EXTRA_COMPONENT, "Bridge")
-            putExtra(AppLogger.EXTRA_CORRELATION_ID, "corr-123")
-            putExtra(AppLogger.EXTRA_TRACK_INSTANCE_ID, "7")
-            putExtra(AppLogger.EXTRA_PLAYLIST_ITEM_ID, "p-11")
-            putExtra(AppLogger.EXTRA_SOURCE_KIND, "hvsc")
-            putExtra(AppLogger.EXTRA_LOCAL_ACCESS_MODE, "ftp")
-            putExtra(AppLogger.EXTRA_LIFECYCLE_STATE, "playing")
-            putExtra(AppLogger.EXTRA_ERROR_NAME, "IllegalStateException")
-            putExtra(AppLogger.EXTRA_ERROR_MESSAGE, "boom")
-            putExtra(AppLogger.EXTRA_ERROR_STACK, "stack")
-        }
+        val intent =
+                Intent(AppLogger.ACTION_DIAGNOSTICS_LOG).apply {
+                    putExtra(AppLogger.EXTRA_LEVEL, "warn")
+                    putExtra(AppLogger.EXTRA_MESSAGE, "native warning")
+                    putExtra(AppLogger.EXTRA_COMPONENT, "Bridge")
+                    putExtra(AppLogger.EXTRA_CORRELATION_ID, "corr-123")
+                    putExtra(AppLogger.EXTRA_TRACK_INSTANCE_ID, "7")
+                    putExtra(AppLogger.EXTRA_PLAYLIST_ITEM_ID, "p-11")
+                    putExtra(AppLogger.EXTRA_SOURCE_KIND, "hvsc")
+                    putExtra(AppLogger.EXTRA_LOCAL_ACCESS_MODE, "ftp")
+                    putExtra(AppLogger.EXTRA_LIFECYCLE_STATE, "playing")
+                    putExtra(AppLogger.EXTRA_ERROR_NAME, "IllegalStateException")
+                    putExtra(AppLogger.EXTRA_ERROR_MESSAGE, "boom")
+                    putExtra(AppLogger.EXTRA_ERROR_STACK, "stack")
+                }
 
         plugin.notifyListenersCalls.clear()
         receiver.onReceive(context, intent)
@@ -162,14 +174,56 @@ class DiagnosticsBridgePluginTest {
 
     @Test
     fun receiverIgnoresNullIntentViaDirectInvocation() {
-        val receiverField = DiagnosticsBridgePlugin::class.java.getDeclaredField("diagnosticsReceiver")
+        val receiverField =
+                DiagnosticsBridgePlugin::class.java.getDeclaredField("diagnosticsReceiver")
         receiverField.isAccessible = true
         val receiver = receiverField.get(plugin) as BroadcastReceiver
 
         plugin.notifyListenersCalls.clear()
         receiver.onReceive(context, null)
 
-        assertTrue("notifyListeners should not be called for null intent",
-            plugin.notifyListenersCalls.none { it.first == "diagnosticsLog" })
+        assertTrue(
+                "notifyListeners should not be called for null intent",
+                plugin.notifyListenersCalls.none { it.first == "diagnosticsLog" }
+        )
+    }
+
+    @Test
+    fun loadHandlesReceiverRegistrationFailure() {
+        val bridge = mock(Bridge::class.java)
+        `when`(bridge.context).thenReturn(context)
+        val target =
+                object : DiagnosticsBridgePlugin() {
+                    override fun registerPluginReceiver(
+                            receiver: BroadcastReceiver,
+                            filter: android.content.IntentFilter
+                    ) {
+                        throw RuntimeException("register failed")
+                    }
+                }
+        val field = Plugin::class.java.getDeclaredField("bridge")
+        field.isAccessible = true
+        field.set(target, bridge)
+
+        target.load()
+    }
+
+    @Test
+    fun handleOnDestroyHandlesReceiverUnregisterFailure() {
+        val brokenContext = mock(Context::class.java)
+        doThrow(RuntimeException("unregister failed"))
+                .`when`(brokenContext)
+                .unregisterReceiver(any(BroadcastReceiver::class.java))
+
+        val bridge = mock(Bridge::class.java)
+        `when`(bridge.context).thenReturn(brokenContext)
+        val target = DiagnosticsBridgePlugin()
+        val field = Plugin::class.java.getDeclaredField("bridge")
+        field.isAccessible = true
+        field.set(target, bridge)
+
+        val method = Plugin::class.java.getDeclaredMethod("handleOnDestroy")
+        method.isAccessible = true
+        method.invoke(target)
     }
 }

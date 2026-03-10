@@ -168,5 +168,5 @@ Stale assertions in `tests/unit/ramOperations.test.ts` updated (16-chunk).
 | `npm run test:coverage` | pass                            |
 | `node scripts/check-coverage-threshold.mjs` | pass (branch 90.85%) |
 | `npm run test:e2e`      | pass (355 passed, 4 skipped)    |
-| `npm run maestro:gating -- --device-id 9B081FFAZ001WX --skip-emulator-start` | pass |
+| `npm run maestro:gating -- --device-id 9B0... --skip-emulator-start` | pass |
 | `./build`               | pass                            |

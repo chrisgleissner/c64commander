@@ -104,6 +104,13 @@ Violine this rule is a release blocker.
 - Keep the repository buildable. If changes break builds, fix them before declaring work complete.
 - Exceptions must never be ignored; log them or let them bubble up.
 
+## MANDATORY: Bug-fix regression coverage
+
+- Every bug fix must add or update a dedicated regression test that fails before the fix and passes after it.
+- The regression test must target the specific edge condition, acceptance criterion, or failure mode being fixed instead of only broad happy-path behavior.
+- Test names must describe the locked-in behavior precisely so future reviewers can tell which bug is being prevented from regressing.
+- If a fix spans multiple layers, add the narrowest deterministic test at each affected layer instead of relying on a single broad integration test.
+
 ## MANDATORY: Coverage gate before completion
 
 - For any plan/task that includes code changes, run `npm run test:coverage` before declaring completion.
@@ -169,6 +176,11 @@ Set `JAVA_HOME` to a valid JDK install and avoid hardcoded system paths.
 - Responsive UI and clear feedback.
 - Stable network interactions with the C64U.
 - Test reliability and clean error reporting.
+
+## Exploratory investigations
+
+- For Android exploratory or regression investigations, assume a local Android handset is attached over adb and a live C64 Ultimate is reachable at hostname `c64u`.
+- Prefer proving Android/C64U fixes against that real-device path before treating emulator-only evidence as sufficient.
 
 ## Modularization guardrails
 

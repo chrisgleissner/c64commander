@@ -503,6 +503,32 @@ export interface CategoriesResponse {
   errors: string[];
 }
 
+const hasStructuredConfigMetadata = (config: unknown) => {
+  if (typeof config !== "object" || config === null || Array.isArray(config)) return false;
+
+  const record = config as Record<string, unknown>;
+  return [
+    "selected",
+    "value",
+    "current",
+    "current_value",
+    "currentValue",
+    "default",
+    "default_value",
+    "defaultValue",
+    "options",
+    "values",
+    "choices",
+    "details",
+    "presets",
+    "min",
+    "max",
+    "minimum",
+    "maximum",
+    "format",
+  ].some((key) => Object.prototype.hasOwnProperty.call(record, key));
+};
+
 export interface DriveInfo {
   enabled?: boolean;
   bus_id?: number;
@@ -575,6 +601,21 @@ export class C64API {
       headers["X-C64U-Host"] = this.deviceHost;
     }
     return headers;
+  }
+
+  private async buildBinaryUploadRequest(body: Blob): Promise<{
+    headers: Record<string, string>;
+    body: ArrayBuffer;
+  }> {
+    const uploadBody =
+      typeof body.arrayBuffer === "function" ? await body.arrayBuffer() : await new Response(body).arrayBuffer();
+    return {
+      headers: {
+        ...this.buildAuthHeaders(),
+        "Content-Type": "application/octet-stream",
+      },
+      body: uploadBody,
+    };
   }
 
   private buildMalformedResponseError(
@@ -1232,6 +1273,7 @@ export class C64API {
     }
 
     const mergedItems: Record<string, unknown> = {};
+    const itemsNeedingEnrichment = new Set<string>();
     try {
       const categoryPayload = await this.getCategory(category);
       const payload = categoryPayload as Record<string, any>;
@@ -1240,7 +1282,11 @@ export class C64API {
       if (itemsBlock && typeof itemsBlock === "object") {
         uniqueItems.forEach((item) => {
           if (Object.prototype.hasOwnProperty.call(itemsBlock, item)) {
-            mergedItems[item] = (itemsBlock as Record<string, unknown>)[item];
+            const itemConfig = (itemsBlock as Record<string, unknown>)[item];
+            mergedItems[item] = itemConfig;
+            if (!hasStructuredConfigMetadata(itemConfig)) {
+              itemsNeedingEnrichment.add(item);
+            }
           }
         });
       }
@@ -1251,7 +1297,9 @@ export class C64API {
       });
     }
 
-    const missingItems = uniqueItems.filter((item) => !Object.prototype.hasOwnProperty.call(mergedItems, item));
+    const missingItems = uniqueItems.filter(
+      (item) => !Object.prototype.hasOwnProperty.call(mergedItems, item) || itemsNeedingEnrichment.has(item),
+    );
     if (missingItems.length > 0) {
       const responses = await Promise.allSettled(missingItems.map((item) => this.getConfigItem(category, item)));
       responses.forEach((result) => {
@@ -1490,6 +1538,7 @@ export class C64API {
     let response: Response;
     try {
       const baseUrl = this.getBaseUrl();
+      const upload = await this.buildBinaryUploadRequest(image);
       addLog("debug", "Drive mount upload payload prepared", {
         drive,
         type: type ?? null,
@@ -1502,11 +1551,8 @@ export class C64API {
         `${baseUrl}${path}`,
         {
           method,
-          headers: {
-            ...this.buildAuthHeaders(),
-            "Content-Type": "application/octet-stream",
-          },
-          body: image,
+          headers: upload.headers,
+          body: upload.body,
         },
         UPLOAD_REQUEST_TIMEOUT_MS,
       );
@@ -1666,15 +1712,13 @@ export class C64API {
     let response: Response;
     try {
       const baseUrl = this.getBaseUrl();
+      const upload = await this.buildBinaryUploadRequest(modFile);
       response = await this.fetchWithTimeout(
         `${baseUrl}${path}`,
         {
           method,
-          headers: {
-            ...this.buildAuthHeaders(),
-            "Content-Type": "application/octet-stream",
-          },
-          body: modFile,
+          headers: upload.headers,
+          body: upload.body,
         },
         UPLOAD_REQUEST_TIMEOUT_MS,
       );
@@ -1715,15 +1759,13 @@ export class C64API {
     let response: Response;
     try {
       const baseUrl = this.getBaseUrl();
+      const upload = await this.buildBinaryUploadRequest(prgFile);
       response = await this.fetchWithTimeout(
         `${baseUrl}${path}`,
         {
           method,
-          headers: {
-            ...this.buildAuthHeaders(),
-            "Content-Type": "application/octet-stream",
-          },
-          body: prgFile,
+          headers: upload.headers,
+          body: upload.body,
         },
         UPLOAD_REQUEST_TIMEOUT_MS,
       );
@@ -1764,15 +1806,13 @@ export class C64API {
     let response: Response;
     try {
       const baseUrl = this.getBaseUrl();
+      const upload = await this.buildBinaryUploadRequest(prgFile);
       response = await this.fetchWithTimeout(
         `${baseUrl}${path}`,
         {
           method,
-          headers: {
-            ...this.buildAuthHeaders(),
-            "Content-Type": "application/octet-stream",
-          },
-          body: prgFile,
+          headers: upload.headers,
+          body: upload.body,
         },
         UPLOAD_REQUEST_TIMEOUT_MS,
       );
@@ -1813,15 +1853,13 @@ export class C64API {
     let response: Response;
     try {
       const baseUrl = this.getBaseUrl();
+      const upload = await this.buildBinaryUploadRequest(crtFile);
       response = await this.fetchWithTimeout(
         `${baseUrl}${path}`,
         {
           method,
-          headers: {
-            ...this.buildAuthHeaders(),
-            "Content-Type": "application/octet-stream",
-          },
-          body: crtFile,
+          headers: upload.headers,
+          body: upload.body,
         },
         UPLOAD_REQUEST_TIMEOUT_MS,
       );

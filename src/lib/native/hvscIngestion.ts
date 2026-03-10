@@ -47,6 +47,12 @@ type HvscIngestionPlugin = {
   }) => Promise<HvscNativeIngestResult>;
   cancelIngestion: (options?: { traceContext?: NativeTraceContext }) => Promise<void>;
   getIngestionStats: (options?: { traceContext?: NativeTraceContext }) => Promise<{ metadataRows: number }>;
+  readArchiveChunk: (options: {
+    relativeArchivePath: string;
+    offsetBytes: number;
+    lengthBytes: number;
+    traceContext?: NativeTraceContext;
+  }) => Promise<{ data: string; sizeBytes: number; eof: boolean }>;
   addListener: (
     eventName: "hvscProgress",
     listenerFunc: (event: HvscNativeProgressEvent) => void,
@@ -75,6 +81,11 @@ export const HvscIngestion = {
     }),
   getIngestionStats: () =>
     plugin.getIngestionStats({
+      traceContext: resolveNativeTraceContext(getActiveAction()),
+    }),
+  readArchiveChunk: (options: { relativeArchivePath: string; offsetBytes: number; lengthBytes: number }) =>
+    plugin.readArchiveChunk({
+      ...options,
       traceContext: resolveNativeTraceContext(getActiveAction()),
     }),
   addProgressListener: (listener: (event: HvscNativeProgressEvent) => void) =>

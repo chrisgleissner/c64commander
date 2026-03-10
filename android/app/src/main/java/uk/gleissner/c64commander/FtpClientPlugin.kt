@@ -30,6 +30,7 @@ class FtpClientPlugin : Plugin() {
   private val executor = Executors.newSingleThreadExecutor()
   private val logTag = "FtpClientPlugin"
   private val defaultTimeoutMs = 8_000
+  private val timeoutMessagePattern = Regex("\\b(timed out|timeout)\\b", RegexOption.IGNORE_CASE)
   internal var ftpClientFactory: () -> FTPClient = { FTPClient() }
   internal var runTask: (Runnable) -> Unit = { runnable -> executor.execute(runnable) }
 
@@ -58,9 +59,12 @@ class FtpClientPlugin : Plugin() {
     return configured.coerceIn(1_000, 60_000)
   }
 
-  private fun applyTimeouts(client: FTPClient, timeoutMs: Int) {
+  private fun applyPreConnectTimeouts(client: FTPClient, timeoutMs: Int) {
     client.connectTimeout = timeoutMs
     client.defaultTimeout = timeoutMs
+  }
+
+  private fun applyConnectedTimeouts(client: FTPClient, timeoutMs: Int) {
     client.soTimeout = timeoutMs
     try {
       FTPClient::class
@@ -95,9 +99,7 @@ class FtpClientPlugin : Plugin() {
 
   private fun buildFailureMessage(operation: String, error: Exception, timeoutMs: Int): String {
     val message = error.message ?: "FTP $operation failed"
-    return if (error is SocketTimeoutException ||
-                    Regex("timed out|timeout", RegexOption.IGNORE_CASE).containsMatchIn(message)
-    ) {
+    return if (error is SocketTimeoutException || timeoutMessagePattern.containsMatchIn(message)) {
       "FTP $operation timed out after ${timeoutMs}ms"
     } else {
       message
@@ -121,8 +123,9 @@ class FtpClientPlugin : Plugin() {
             Runnable {
               val client = ftpClientFactory()
               try {
-                applyTimeouts(client, timeoutMs)
+                applyPreConnectTimeouts(client, timeoutMs)
                 client.connect(host, port)
+                applyConnectedTimeouts(client, timeoutMs)
                 val loggedIn = client.login(username, password)
                 if (!loggedIn) {
                   call.reject("FTP login failed")
@@ -203,8 +206,9 @@ class FtpClientPlugin : Plugin() {
             Runnable {
               val client = ftpClientFactory()
               try {
-                applyTimeouts(client, timeoutMs)
+                applyPreConnectTimeouts(client, timeoutMs)
                 client.connect(host, port)
+                applyConnectedTimeouts(client, timeoutMs)
                 val loggedIn = client.login(username, password)
                 if (!loggedIn) {
                   call.reject("FTP login failed")
@@ -255,17 +259,21 @@ class FtpClientPlugin : Plugin() {
 
   private fun resolveListing(client: FTPClient, path: String): Array<FTPFile> {
     return try {
-      val mlist = client.mlistDir(path)
-      if (mlist != null && mlist.isNotEmpty()) mlist else client.listFiles(path)
+      val listed = client.listFiles(path)
+      if (listed != null && listed.isNotEmpty()) {
+        listed
+      } else {
+        client.mlistDir(path) ?: emptyArray()
+      }
     } catch (error: Exception) {
       AppLogger.warn(
               pluginContextOrNull(),
               logTag,
-              "FTP MLSD failed; falling back to LIST",
+              "FTP LIST failed; falling back to MLSD",
               "FtpClientPlugin",
               error
       )
-      client.listFiles(path)
+      client.mlistDir(path) ?: emptyArray()
     }
   }
 

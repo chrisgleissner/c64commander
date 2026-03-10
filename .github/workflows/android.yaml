@@ -618,7 +618,6 @@ jobs:
 
       - name: Normalize Android coverage report path
         if: always()
-        id: normalize_android_coverage
         run: |
           set -e
           report=$(find android/app/build/reports -type f -name "*.xml" | grep -i jacoco | head -n 1)
@@ -631,7 +630,7 @@ jobs:
           if [ "$report" != "$target" ]; then
             cp "$report" "$target"
           fi
-          echo "report=$target" >> $GITHUB_OUTPUT
+          ls -l "$target"
 
       - name: Verify coverage artifacts
         if: always()
@@ -646,13 +645,14 @@ jobs:
           CODECOV_SHA: ${{ env.CI_SHA }}
           CC_SHA: ${{ env.CI_SHA }}
         with:
-          files: ${{ steps.normalize_android_coverage.outputs.report }}
+          files: ./android/app/build/reports/jacoco/jacocoTestReport/jacocoTestReport.xml
           disable_search: true
           flags: android
           name: c64-commander-android-coverage
           use_pypi: true
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
+          verbose: true
 
   python-agents-tests:
     name: Python | Agents tests + coverage

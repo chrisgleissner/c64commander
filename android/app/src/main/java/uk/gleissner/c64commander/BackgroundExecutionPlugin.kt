@@ -20,40 +20,62 @@ import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
 
 /**
- * Capacitor plugin that exposes start/stop lifecycle control for the
- * [BackgroundExecutionService]. Both methods are idempotent.
+ * Capacitor plugin that exposes start/stop lifecycle control for the [BackgroundExecutionService].
+ * Both methods are idempotent.
  */
 @CapacitorPlugin(name = "BackgroundExecution")
 open class BackgroundExecutionPlugin : Plugin() {
     private val logTag = "BackgroundExecutionPlugin"
 
-    private val autoSkipReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action != BackgroundExecutionService.ACTION_AUTO_SKIP_DUE) return
-            val dueAtMs = intent.getLongExtra(BackgroundExecutionService.EXTRA_DUE_AT_MS, -1L)
-            val firedAtMs = intent.getLongExtra(BackgroundExecutionService.EXTRA_FIRED_AT_MS, -1L)
-            if (dueAtMs <= 0L || firedAtMs <= 0L) return
-            val payload = JSObject()
-            payload.put("dueAtMs", dueAtMs)
-            payload.put("firedAtMs", firedAtMs)
-            notifyListeners("backgroundAutoSkipDue", payload)
-        }
-    }
+    private val autoSkipReceiver =
+            object : BroadcastReceiver() {
+                override fun onReceive(context: Context?, intent: Intent?) {
+                    if (intent?.action != BackgroundExecutionService.ACTION_AUTO_SKIP_DUE) return
+                    val dueAtMs =
+                            intent.getLongExtra(BackgroundExecutionService.EXTRA_DUE_AT_MS, -1L)
+                    val firedAtMs =
+                            intent.getLongExtra(BackgroundExecutionService.EXTRA_FIRED_AT_MS, -1L)
+                    if (dueAtMs <= 0L || firedAtMs <= 0L) return
+                    val payload = JSObject()
+                    payload.put("dueAtMs", dueAtMs)
+                    payload.put("firedAtMs", firedAtMs)
+                    notifyListeners("backgroundAutoSkipDue", payload)
+                }
+            }
 
     override fun load() {
         super.load()
         try {
-            context.registerReceiver(autoSkipReceiver, IntentFilter(BackgroundExecutionService.ACTION_AUTO_SKIP_DUE))
+            registerPluginReceiver(
+                    autoSkipReceiver,
+                    IntentFilter(BackgroundExecutionService.ACTION_AUTO_SKIP_DUE),
+            )
         } catch (e: Exception) {
-            AppLogger.error(context, logTag, "Failed to register auto-skip receiver", "BackgroundExecutionPlugin", e)
+            AppLogger.error(
+                    context,
+                    logTag,
+                    "Failed to register auto-skip receiver",
+                    "BackgroundExecutionPlugin",
+                    e
+            )
         }
+    }
+
+    internal open fun registerPluginReceiver(receiver: BroadcastReceiver, filter: IntentFilter) {
+        BroadcastReceiverCompat.registerNotExported(context, receiver, filter)
     }
 
     override fun handleOnDestroy() {
         try {
             context.unregisterReceiver(autoSkipReceiver)
         } catch (e: Exception) {
-            AppLogger.warn(context, logTag, "Failed to unregister auto-skip receiver", "BackgroundExecutionPlugin", e)
+            AppLogger.warn(
+                    context,
+                    logTag,
+                    "Failed to unregister auto-skip receiver",
+                    "BackgroundExecutionPlugin",
+                    e
+            )
         }
         super.handleOnDestroy()
     }
@@ -61,12 +83,12 @@ open class BackgroundExecutionPlugin : Plugin() {
     private fun traceFields(call: PluginCall): AppLogger.TraceFields {
         val trace = call.getObject("traceContext") ?: return AppLogger.TraceFields()
         return AppLogger.TraceFields(
-            correlationId = trace.getString("correlationId"),
-            trackInstanceId = trace.getInteger("trackInstanceId")?.toString(),
-            playlistItemId = trace.getString("playlistItemId"),
-            sourceKind = trace.getString("sourceKind"),
-            localAccessMode = trace.getString("localAccessMode"),
-            lifecycleState = trace.getString("lifecycleState"),
+                correlationId = trace.getString("correlationId"),
+                trackInstanceId = trace.getInteger("trackInstanceId")?.toString(),
+                playlistItemId = trace.getString("playlistItemId"),
+                sourceKind = trace.getString("sourceKind"),
+                localAccessMode = trace.getString("localAccessMode"),
+                lifecycleState = trace.getString("lifecycleState"),
         )
     }
 
@@ -85,7 +107,14 @@ open class BackgroundExecutionPlugin : Plugin() {
             BackgroundExecutionService.start(context)
             call.resolve()
         } catch (e: Exception) {
-            AppLogger.error(pluginContextOrNull(), logTag, "Failed to start background execution", "BackgroundExecutionPlugin", e, traceFields(call))
+            AppLogger.error(
+                    pluginContextOrNull(),
+                    logTag,
+                    "Failed to start background execution",
+                    "BackgroundExecutionPlugin",
+                    e,
+                    traceFields(call)
+            )
             call.reject("Failed to start background execution", e)
         }
     }
@@ -101,7 +130,14 @@ open class BackgroundExecutionPlugin : Plugin() {
             }
             call.resolve()
         } catch (e: Exception) {
-            AppLogger.error(pluginContextOrNull(), logTag, "Failed to update background auto-skip due time", "BackgroundExecutionPlugin", e, traceFields(call))
+            AppLogger.error(
+                    pluginContextOrNull(),
+                    logTag,
+                    "Failed to update background auto-skip due time",
+                    "BackgroundExecutionPlugin",
+                    e,
+                    traceFields(call)
+            )
             call.reject("Failed to update background auto-skip due time", e)
         }
     }
@@ -113,7 +149,14 @@ open class BackgroundExecutionPlugin : Plugin() {
             BackgroundExecutionService.stop(context)
             call.resolve()
         } catch (e: Exception) {
-            AppLogger.error(pluginContextOrNull(), logTag, "Failed to stop background execution", "BackgroundExecutionPlugin", e, traceFields(call))
+            AppLogger.error(
+                    pluginContextOrNull(),
+                    logTag,
+                    "Failed to stop background execution",
+                    "BackgroundExecutionPlugin",
+                    e,
+                    traceFields(call)
+            )
             call.reject("Failed to stop background execution", e)
         }
     }

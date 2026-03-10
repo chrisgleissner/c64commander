@@ -1,0 +1,56 @@
+appId: uk.gleissner.c64commander
+tags:
+  - device
+  - slow
+  - real-network
+  - android-regression-proof
+env:
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "30000"}
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
+  TIMEOUT: ${TIMEOUT || "15000"}
+---
+- runFlow: subflows/launch-and-wait.yaml
+- retry:
+    maxRetries: 3
+    commands:
+      - tapOn:
+          id: "tab-play"
+          optional: true
+      - waitForAnimationToEnd
+      - extendedWaitUntil:
+          visible:
+            text: "PLAY FILES"
+          timeout: ${TIMEOUT}
+- scrollUntilVisible:
+    element:
+      id: "add-items-to-playlist"
+    direction: DOWN
+    timeout: ${TIMEOUT}
+- tapOn:
+    id: "add-items-to-playlist"
+- extendedWaitUntil:
+    visible:
+      text: "Choose source"
+    timeout: ${TIMEOUT}
+- scrollUntilVisible:
+    element:
+      id: "import-option-c64u"
+    direction: DOWN
+    timeout: ${TIMEOUT}
+- tapOn:
+    id: "import-option-c64u"
+- extendedWaitUntil:
+    notVisible:
+      id: "ftp-loading"
+    timeout: ${LONG_TIMEOUT}
+- assertVisible: "Path:"
+- assertVisible:
+    id: "navigate-root"
+- assertNotVisible: "Browse failed"
+- assertNotVisible: "Add items failed"
+- assertVisible:
+    id: "source-entry-row"
+- takeScreenshot: c64u-browse-root
+- tapOn:
+    text: "Cancel"
+    optional: true

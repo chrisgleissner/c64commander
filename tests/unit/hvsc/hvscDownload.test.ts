@@ -13,6 +13,15 @@ vi.mock("@capacitor/core", () => ({
     isNativePlatform: vi.fn(() => false),
     isPluginAvailable: vi.fn(() => false),
   },
+  registerPlugin: vi.fn(() => ({
+    ingestHvsc: vi.fn(),
+    cancelIngestion: vi.fn(),
+    getIngestionStats: vi.fn(),
+    readArchiveChunk: vi.fn(),
+    addListener: vi.fn(async () => ({
+      remove: vi.fn(async () => undefined),
+    })),
+  })),
 }));
 
 vi.mock("@capacitor/filesystem", () => ({
@@ -46,6 +55,7 @@ vi.mock("@/lib/sid/sidUtils", () => ({
 import {
   getErrorMessage,
   isExistsError,
+  shouldUseNativeDownload,
   normalizeEntryName,
   normalizeVirtualPath,
   normalizeLibraryPath,
@@ -64,12 +74,31 @@ import {
   getCacheStatusInternal,
 } from "@/lib/hvsc/hvscDownload";
 import { Filesystem } from "@capacitor/filesystem";
+import { Capacitor } from "@capacitor/core";
 
 import { addLog } from "@/lib/logging";
+import { HvscIngestion } from "@/lib/native/hvscIngestion";
 
 describe("hvscDownload", () => {
   beforeEach(() => {
+    vi.restoreAllMocks();
     vi.clearAllMocks();
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(false);
+    vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(false);
+    delete process.env.VITE_ENABLE_TEST_PROBES;
+  });
+
+  it("returns false when native platform detection throws", () => {
+    vi.mocked(Capacitor.isNativePlatform).mockImplementation(() => {
+      throw new Error("native probe failed");
+    });
+
+    expect(shouldUseNativeDownload()).toBe(false);
+    expect(vi.mocked(addLog)).toHaveBeenCalledWith(
+      "warn",
+      "Failed to detect native platform for HVSC download",
+      expect.objectContaining({ error: "native probe failed" }),
+    );
   });
 
   it("logs when content length fetch fails", async () => {
@@ -431,6 +460,47 @@ describe("hvscDownload", () => {
       vi.mocked(Filesystem.readFile).mockResolvedValue({ data: "" } as any);
       const decoded = await readArchiveBuffer("hvsc-baseline-84.7z");
       expect(decoded).toEqual(new Uint8Array(0));
+    });
+
+    it("keeps hvsc-baseline-84.7z off the guarded whole-file bridge read by assembling native chunks on Android", async () => {
+      const firstChunk = new Uint8Array(3 * 1024 * 1024).fill(1);
+      const secondChunk = new Uint8Array(3 * 1024 * 1024).fill(2);
+
+      vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+      vi.mocked(Filesystem.stat).mockResolvedValue({ size: firstChunk.byteLength + secondChunk.byteLength } as any);
+      vi.spyOn(HvscIngestion, "readArchiveChunk")
+        .mockResolvedValueOnce({
+          data: Buffer.from(firstChunk).toString("base64"),
+          sizeBytes: firstChunk.byteLength,
+          eof: false,
+        })
+        .mockResolvedValueOnce({
+          data: Buffer.from(secondChunk).toString("base64"),
+          sizeBytes: secondChunk.byteLength,
+          eof: true,
+        });
+
+      const decoded = await readArchiveBuffer("hvsc-baseline-84.7z");
+
+      expect(decoded).toHaveLength(firstChunk.byteLength + secondChunk.byteLength);
+      expect(decoded[0]).toBe(1);
+      expect(decoded[firstChunk.byteLength - 1]).toBe(1);
+      expect(decoded[firstChunk.byteLength]).toBe(2);
+      expect(decoded[decoded.length - 1]).toBe(2);
+      expect(HvscIngestion.readArchiveChunk).toHaveBeenCalledTimes(2);
+      expect(Filesystem.readFile).not.toHaveBeenCalled();
+    });
+
+    it("fails loudly when hvsc-baseline-84.7z native chunk reads stop before the full archive length", async () => {
+      vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+      vi.mocked(Filesystem.stat).mockResolvedValue({ size: 6 * 1024 * 1024 } as any);
+      vi.spyOn(HvscIngestion, "readArchiveChunk").mockResolvedValue({
+        data: "AQID",
+        sizeBytes: 3,
+        eof: true,
+      });
+
+      await expect(readArchiveBuffer("hvsc-baseline-84.7z")).rejects.toThrow("HVSC native chunk read incomplete");
     });
   });
 

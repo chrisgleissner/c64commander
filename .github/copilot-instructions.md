@@ -12,6 +12,10 @@
    - Ensure relevant docs are updated (`README.md`, `doc/`, `docs/`).
    - Run tests and build steps that apply to your change set.
    - Always run a full build (use `./build` when available) and fix any errors before saying work is done.
+5. **Every bug fix needs a dedicated regression test**:
+   - Add or update a precise regression test for the bug you fixed.
+   - Name the test after the edge condition or acceptance criterion it locks in.
+   - Prefer the narrowest deterministic test that proves the fix, and add additional layer-specific tests when a bug spans multiple layers.
 
 ## Quick discovery
 
@@ -84,6 +88,11 @@ npm run build
 npm run cap:build
 ./build --install-apk
 ```
+
+## Exploratory investigations
+
+- For Android exploratory or regression investigations, assume a local Android phone is attached and a live C64 Ultimate is reachable at hostname `c64u`.
+- Use that attached Android + `c64u` path for exploratory validation before falling back to emulator-only evidence.
 
 ## Release tag APKs
 

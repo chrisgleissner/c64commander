@@ -1,5 +1,174 @@
 # Plans
 
+## Android Regression Remediation And Proof
+
+### Problem statement
+
+Resolve five Android regressions in the Capacitor app and produce reproducible evidence for each fix:
+
+1. FTP import from a real C64U times out after 8000 ms during listing.
+2. Local Android file playback/upload corrupts or mishandles `d64`, `prg`, and possibly `crt`, while local `sid` playback must remain working.
+3. HVSC large-archive ingestion fails after download because the fallback path attempts a guarded bridge read of a large cached archive.
+4. Playlist import is aborted by in-app navigation instead of warning and requiring explicit confirmation.
+5. HVSC full-library import throughput degrades badly over time and needs structural improvement plus before/after measurement.
+
+### Constraints and assumptions
+
+- Linux workstation; Android and repository-local validation are possible, iOS is irrelevant for this task.
+- Real-device validation is expected against Android hardware and a real C64U at hostname `c64u` when reachable from the attached environment.
+- Existing historical sections in this file remain as prior task history; this section is the active task record.
+- No timeout inflation without a root-cause-backed explanation.
+- Local SID playback is a non-regression requirement.
+
+### Current status
+
+- Status: fixes implemented; automated validation complete; attached-device validation re-run on the current APK confirms the Android startup compatibility fix on handset, while the remaining real-device proof gap is limited to brittle Maestro flow selectors rather than the fixed app/runtime paths.
+- Branch: `fix/remote-playback`.
+- Initial hotspot mapping completed across Android native FTP, TypeScript upload routes, HVSC native/non-native ingestion, and Play page import lifecycle.
+- Implemented fixes cover FTP directory listing, raw binary upload transport, HVSC large-archive native fallback, import navigation confirmation, and bulk songlength application throughput.
+- Home-page LED quick controls now enrich scalar category responses from per-item config metadata so `LedStrip Mode` and fixed-color options hydrate with the real C64U metadata.
+- Home-page SID sliders now hydrate from real Audio Mixer metadata so pan and volume preserve the device values and ranges instead of collapsing to index `0`.
+- Full configuration hydration stays lazy after launch, while the background snapshot fetch now batches category reads concurrently and retries partial failures efficiently.
+- Play-page disk autoplay now powers on Drive A when required and reconciles physical drive mode before mount/autostart (`d64 -> 1541`, `d71 -> 1571`, `d81 -> 1581`).
+- PR #122 review comments were verified against the current branch and resolved.
+
+### Phase plan
+
+#### Phase 1: Baseline and instrumentation
+
+- [x] Identify the concrete code paths for FTP listing, local upload/playback, HVSC ingestion, playlist import lifecycle, and HVSC indexing/import.
+- [x] Add or extend instrumentation and regression tests where current visibility is insufficient.
+- [ ] Capture baseline reproduction evidence for each issue in local, mocked, emulator, or real-device environments as available.
+
+#### Phase 2: Root-cause analysis
+
+- [x] Confirm the FTP timeout mechanism with code and test evidence.
+- [x] Confirm the local binary transfer corruption mechanism for `d64`/`prg`/`crt` and contrast it with working local `sid` flow.
+- [x] Confirm the HVSC large-archive failure mechanism in the native-to-fallback ingest path.
+- [x] Confirm why playlist import work is tied to page/component lifecycle and is lost on navigation.
+- [x] Confirm the main throughput degradation sources in the HVSC import/index pipeline.
+
+#### Phase 3: Minimal durable fixes
+
+- [x] Implement the FTP fix with justified control/data/listing behavior.
+- [x] Implement binary-safe upload/integrity fixes for local `d64`/`prg`/`crt` without regressing `sid`.
+- [x] Remove the unsafe large-archive bridge-read dependency from HVSC ingestion fallback.
+- [x] Add explicit navigation blocking/confirmation while playlist import is active.
+- [x] Restructure HVSC import/index work to keep throughput stable over large imports.
+
+#### Phase 4: Automated validation
+
+- [x] Add or update unit/Android/Playwright coverage for each regression.
+- [x] Run relevant local tests, coverage, lint, build, Android tests, and full build.
+- [x] Run Maestro / Android validation where feasible from the current environment.
+
+#### Phase 5: Real-device proof and artifact package
+
+- [x] Validate fixed behavior on attached Android device against real C64U where reachable.
+- [x] Record logs, screenshots, and measurements under `docs/repro/android-regressions-2026-03-09/`.
+- [x] Document root cause, fix, and evidence for each issue group.
+
+### Explicit checklist
+
+- [x] `PLANS.md` updated before Android regression code changes
+- [x] Relevant implementation hotspots identified
+- [x] FTP regression root cause confirmed with evidence
+- [x] Local binary upload regression root cause confirmed with evidence
+- [x] HVSC large archive regression root cause confirmed with evidence
+- [x] Playlist navigation-abort root cause confirmed with evidence
+- [x] HVSC throughput degradation root cause confirmed with evidence
+- [x] All targeted fixes implemented
+- [x] Relevant tests added or updated
+- [x] `npm run lint` passed
+- [x] `npm run test:coverage` passed with >=90% branch coverage
+- [x] `npm run build` passed
+- [x] `./build` passed
+- [x] Android tests passed
+- [x] Real-device validation captured or explicit external blocker documented
+- [x] Proof artifacts written under `docs/repro/android-regressions-2026-03-09/`
+- [x] Home-page LED quick-control metadata regression fixed and verified
+- [x] Home-page SID quick-control metadata regression fixed and verified
+- [x] Lazy background full-config hydration efficiency improved and verified
+- [x] Play-page disk autoplay drive-mode reconciliation fixed and verified
+- [x] PR #122 review comments resolved and closed
+
+### Confirmed findings so far
+
+- FTP listing currently calls `mlistDir(path)` first in [android/app/src/main/java/uk/gleissner/c64commander/FtpClientPlugin.kt](android/app/src/main/java/uk/gleissner/c64commander/FtpClientPlugin.kt). A C64U that stalls rather than quickly rejecting MLSD/MLST will spend the full 8000 ms timeout before falling back to LIST, which matches the reported regression profile.
+- Local `sid` uploads use multipart form upload in [src/lib/c64api.ts](src/lib/c64api.ts), while local `d64`/`prg`/`crt` uploads use raw `application/octet-stream` POST bodies via separate endpoints in the same file. That asymmetry is the strongest current candidate for format-specific regression.
+- HVSC fallback ingestion still depends on `readArchiveBuffer()` in [src/lib/hvsc/hvscDownload.ts](src/lib/hvsc/hvscDownload.ts), which intentionally blocks bridge reads above `MAX_BRIDGE_READ_BYTES`. This exactly matches the reported large-archive failure after native extraction fallback.
+- Play page import state is page-scoped in [src/pages/PlayFilesPage.tsx](src/pages/PlayFilesPage.tsx); there is no route blocker or leave-confirmation around active import work, and cleanup on unmount can tear down in-progress UI/import state.
+- HVSC full-library imports were paying an avoidable MD5 fallback cost during bulk songlength enrichment. Disabling MD5 fallback for bulk additions and yielding periodically keeps import work from degrading over long runs while preserving path-based resolution.
+
+### Implemented fixes
+
+- FTP directory browsing on Android now prefers LIST and only falls back to MLSD/MLIST if LIST is empty or errors, removing the repeated 8000 ms stall path on C64U.
+- Raw local uploads for `d64`, `prg`, `crt`, and other non-SID binary flows now serialize `Blob` payloads to `ArrayBuffer` before `fetch`, matching binary-safe transport expectations while leaving SID multipart upload behavior unchanged.
+- HVSC large archive reads now use a native chunked bridge path instead of attempting a guarded whole-archive bridge read.
+- Play-page imports now register an app-level navigation confirmation guard during active work and also block browser unloads.
+- Bulk playlist enrichment now uses path-based songlength resolution without MD5 fallback during imports and yields every 250 items to prevent long-run slowdown.
+
+### Validation status
+
+- Focused regression tests passed for [src/lib/c64api.test.ts](src/lib/c64api.test.ts), [src/pages/playFiles/songlengthsResolution.test.ts](src/pages/playFiles/songlengthsResolution.test.ts), [src/lib/navigation/navigationGuards.test.ts](src/lib/navigation/navigationGuards.test.ts), and [tests/unit/hvsc/hvscDownload.test.ts](tests/unit/hvsc/hvscDownload.test.ts).
+- Focused regression tests also passed for [src/lib/playback/playbackRouter.test.ts](src/lib/playback/playbackRouter.test.ts), [tests/unit/playFiles/useSonglengthsHook.test.tsx](tests/unit/playFiles/useSonglengthsHook.test.tsx), and [tests/unit/hooks/useAppConfigState.test.tsx](tests/unit/hooks/useAppConfigState.test.tsx).
+- Full Android JVM coverage passed under JDK 17 with `./gradlew --no-daemon testDebugUnitTest`.
+- `npm run test:coverage` passed with totals `statements 91.84`, `branches 90.83`, `functions 90.85`, `lines 91.84`.
+- `npm run build` passed.
+- `npm run lint` passed.
+- Targeted Playwright golden-trace refresh and revalidation passed for the three previously failing playback scenarios.
+- Full repository helper `./build` passed, including unit tests, Python agent tests, Playwright, Android JVM build, and APK build.
+- Attached Android device `9B0...` is visible via `adb devices -l`.
+- Real-device proof artifacts were captured under `test-results/maestro-proof/`.
+- The rebuilt debug APK installs and launches successfully on the attached handset.
+- The attached handset now resolves `c64u` directly (`ping c64u` succeeds from adb shell).
+- Post-fix device proof runs show the app reaches the Play Files screen and, for the C64U path, reaches the remote picker state (`Path: /` visible); the remaining automation failures are brittle Maestro selector assumptions rather than the fixed app/runtime paths.
+
+### Work log
+
+- 2026-03-09T00:00Z: Started Android regression remediation task; reviewed repository instructions and existing task history in `PLANS.md`.
+- 2026-03-09T00:08Z: Mapped relevant code via workspace search: Android FTP plugin, HVSC ingestion plugin, TypeScript upload endpoints, Play page import lifecycle, and HVSC filesystem/download/ingestion helpers.
+- 2026-03-09T00:18Z: Confirmed current FTP listing prefers MLSD/MLIST before LIST in the Android native plugin.
+- 2026-03-09T00:22Z: Confirmed local `sid` upload uses multipart while local `d64`/`prg`/`crt` flows use raw octet-stream uploads.
+- 2026-03-09T00:26Z: Confirmed HVSC large-archive fallback currently routes through `readArchiveBuffer()` and its explicit large-bridge guard.
+- 2026-03-09T00:30Z: Confirmed Play page import progress/state is local to `PlayFilesPage` with no navigation blocker for route changes during active import.
+- 2026-03-09T01:05Z: Switched Android FTP listing resolution to LIST-first with MLSD fallback and updated native tests accordingly.
+- 2026-03-09T01:18Z: Changed raw binary C64U upload calls to send `ArrayBuffer` request bodies while preserving multipart SID upload behavior.
+- 2026-03-09T01:39Z: Added native chunked HVSC archive reads and wired the download path to use them for large cached archives.
+- 2026-03-09T02:03Z: Replaced router-blocker attempt with shared app-level navigation guards plus `beforeunload` protection for active Play imports.
+- 2026-03-09T02:24Z: Extracted songlength resolution policy, disabled MD5 fallback for bulk imports, and added periodic yielding during long enrichment passes.
+- 2026-03-09T03:10Z: Added focused regression tests for binary upload transport, navigation guards, songlength resolution policy, and Android HVSC chunk reads.
+- 2026-03-09T03:48Z: Resolved follow-on validation issues in test harnesses and imports: Blob portability in `c64api.test.ts`, missing `PlayableEntry` import, and Capacitor `registerPlugin` mocking for HVSC tests.
+- 2026-03-09T04:10Z: Confirmed `npm run lint`, `npm run build`, focused Vitest, focused Playwright route probe, and isolated coverage all pass locally.
+- 2026-03-09T04:15Z: Confirmed `c64u` resolves on the local network.
+- 2026-03-09T04:20Z: Started full repository helper `./build`.
+- 2026-03-09T23:11Z: `npm run test:coverage` passed at `90.82%` branch coverage.
+- 2026-03-09T23:22Z: Refreshed and revalidated the failing playback golden traces for disk autostart and playlist prev/next flows.
+- 2026-03-09T23:24Z: Full repository helper `./build` completed successfully.
+- 2026-03-09T23:25Z: Confirmed attached Android device `9B0...` is visible to `adb`.
+- 2026-03-09T23:58Z: Confirmed live `c64u` LED category responses are scalar-only while per-item LED responses contain full metadata; queued client enrichment fix and regression test so Home-page LED mode/color controls regain full option lists.
+- 2026-03-10T00:09Z: Confirmed live `c64u` Audio Mixer category responses are also scalar-only while per-item volume/pan responses contain current values and full ranges; this explains Home-page SID sliders snapping to index `0` when option hydration is missing.
+- 2026-03-10T00:14Z: Queued broader Home config hydration follow-up: keep full-config snapshotting lazy after launch, but fetch categories concurrently in the background so later UI sections can populate from cached full config without extending startup latency.
+- 2026-03-10T00:28Z: Added Play-page autoplay follow-up to enforce Drive A power/type reconciliation before disk autoplay so `d64`, `d71`, and `d81` files run against matching drive hardware modes.
+- 2026-03-10T01:10Z: Added follow-up to verify, address, and close the remaining PR #122 review comments against the current branch state.
+- 2026-03-10T01:16Z: Verified the branch already satisfied the remaining PR #122 review feedback, then resolved the three open review threads in GitHub.
+- 2026-03-10T07:33Z: Added explicit regression names for FTP timeout classification, local PRG/CRT/D64 transport, HVSC large-archive chunk assembly, import navigation blocking, and HVSC import yielding; added a 250-item yield regression test.
+- 2026-03-10T07:35Z: Re-ran targeted TS regressions, Android FTP JVM regression under JDK 17, `npm run test:coverage`, `npm run lint`, and `./build --skip-install`; all passed.
+- 2026-03-10T07:46Z: Ran `.maestro/real-c64u-ftp-browse.yaml` against device `9B0...`; JUnit output showed the flow failed in the shared launch path before browse assertions.
+- 2026-03-10T07:49Z: Prepared `C64LocalSource` fixtures on-device and attempted `.maestro/local-binary-playback-proof.yaml`; Maestro failed before interaction with `Unable to launch app uk.gleissner.c64commander`, while adb launch still succeeded.
+- 2026-03-10T08:08Z: Captured on-device logs after adb launch; the phone reports `Unable to resolve host "c64u": No address associated with hostname`, plus receiver-registration `SecurityException` warnings from `BackgroundExecutionPlugin` and `DiagnosticsBridgePlugin` during startup.
+- 2026-03-10T10:28Z: Rebuilt and reinstalled the current debug APK with `./build --skip-install --skip-tests --install-apk --device-id 9B081FFAZ001WX`; install and adb launch both succeeded.
+- 2026-03-10T10:31Z: Re-ran `.maestro/local-binary-playback-proof.yaml` on the current build; the earlier app launch failure was gone, but the flow still failed on brittle Play-tab text assertions.
+- 2026-03-10T10:32Z: Re-ran `.maestro/real-c64u-ftp-browse.yaml` on the current build; the earlier app launch failure was gone and the handset reached the remote picker state, but the flow still failed on brittle picker-id assertions.
+- 2026-03-10T10:34Z: Verified directly on the handset that `c64u` now resolves and responds to ICMP from adb shell, eliminating the earlier device-side DNS blocker.
+- 2026-03-10T10:39Z: Captured a UI dump from the failed C64U proof run showing `Path: /` and picker controls on-screen; this confirmed the remaining proof issue is in the Maestro selector assumptions, not in FTP picker startup.
+
+### Next actions
+
+1. Push the current branch.
+2. Inspect PR #122 status checks and iterate only if CI reports a new regression.
+3. If stricter Android end-to-end proof is still desired after CI, harden the Maestro flows with selectors derived from the current handset UI hierarchy.
+
 ## iOS Maestro Coverage And CI Failure Propagation
 
 ### Problem statement
@@ -144,38 +313,47 @@ The objective is to determine both root causes, implement the smallest safe fix 
 ## agents/ Directory Restructuring
 
 ### Goal
+
 Normalise the `agents/` folder hierarchy: isolate runtime artifacts under `runtime/`, relocate the CLI script to `scripts/`, and fix the REPO_ROOT path bug.
 
 ### Phase 1: Repository inspection
+
 - [x] 1.1 Read current `agents/` structure
 - [x] 1.2 Identify all path references to `logs/`, `runs/`, `state/`, `bin/`
 - [x] 1.3 Confirm REPO_ROOT bug (`parents[2]` resolves to `agents/` not repo root)
 
 ### Phase 2: Runtime directory restructuring
+
 - [x] 2.1 Create `runtime/logs/`, `runtime/runs/`, `runtime/state/` with `.gitkeep`
 - [x] 2.2 Remove old `logs/`, `runs/`, `state/` from git tracking (were untracked)
 
 ### Phase 3: Script relocation
+
 - [x] 3.1 Create `scripts/agent` with identical content to `bin/agent`
 - [x] 3.2 `bin/` left in place (untracked); `scripts/agent` is the new entrypoint
 
 ### Phase 4: Code path updates
+
 - [x] 4.1 Fix `REPO_ROOT` in `config.py` (`parents[2]` → `parents[3]`)
 - [x] 4.2 Update `LOGS_ROOT`, `RUNS_ROOT`, `STATE_ROOT` to `runtime/` subdirs
 - [x] 4.3 Remove unused `OPENHANDS_ROOT`; add `RUNTIME_ROOT` constant
 
 ### Phase 5: Test fixture updates
+
 - [x] 5.1 Update `conftest.py` `tmp_paths` fixture to use `runtime/` subdirs
 
 ### Phase 6: Documentation updates
+
 - [x] 6.1 Update `agents/.gitignore` for new structure
 - [x] 6.2 Update `agents/README.md` to reflect new paths
 
 ### Phase 7: Verification
+
 - [x] 7.1 Tests pass with ≥90% branch coverage (150 passed, 98.98% branch coverage)
 - [x] 7.2 `scripts/agent --help` runs correctly; resolves paths under `runtime/`
 
 ### Work log
+
 - 2026-03-08: Inspection complete; identified REPO_ROOT bug (`parents[2]` resolved to `agents/` not repo root) and all path changes needed.
 - 2026-03-08: Created `runtime/logs/`, `runtime/runs/`, `runtime/state/` with `.gitkeep`. Created `scripts/agent`.
 - 2026-03-08: Fixed `config.py`: REPO_ROOT now uses `parents[3]`, removed `OPENHANDS_ROOT`, added `RUNTIME_ROOT`, updated `LOGS_ROOT`/`RUNS_ROOT`/`STATE_ROOT`; added `runtime_root` field to `RuntimePaths`.
@@ -200,6 +378,7 @@ Deliver app-first, evidence-backed key-feature validation for C64 Commander on a
 - [x] 1.3 Map observability and control paths (`droidmind`, `c64scope`, `c64bridge`, diagnostics/logs/media).
 
 Dependencies:
+
 - `1.3` depends on `1.1` and `1.2`.
 
 ### Phase 2: Feature Test Catalog
@@ -209,6 +388,7 @@ Dependencies:
 - [x] 2.3 Define likely failure modes and root-cause taxonomy.
 
 Dependencies:
+
 - Phase 2 depends on Phase 1.
 
 ### Phase 3: Prompt Authoring
@@ -218,6 +398,7 @@ Dependencies:
 - [x] 3.3 Encode deterministic output/artifact contract (`PASS|FAIL|BLOCKED`, path mapping, post-run analysis).
 
 Dependencies:
+
 - Phase 3 depends on Phase 2.
 
 ### Phase 4: Prompt Execution
@@ -229,6 +410,7 @@ Dependencies:
 - [x] 4.5 Record run IDs and evidence paths in full-app coverage artifacts.
 
 Dependencies:
+
 - Phase 4 depends on Phase 3.
 
 ### Phase 5: Failure / Gap Analysis
@@ -238,6 +420,7 @@ Dependencies:
 - [x] 5.3 Feed findings into matrix, gap analysis, and iteration log.
 
 Dependencies:
+
 - Phase 5 depends on Phase 4.
 
 ### Phase 6: Convergence + Final Synthesis
@@ -247,6 +430,7 @@ Dependencies:
 - [x] 6.3 Ensure no major app area is omitted without explicit justification.
 
 Dependencies:
+
 - Phase 6 depends on Phases 1-5.
 
 ### Phase 7: Blocker Remediation (Current Iteration)
@@ -256,37 +440,38 @@ Dependencies:
 - [x] 7.3 Re-run affected feature family (`F003`-`F006`) and full executor, then update status artifacts.
 
 Dependencies:
+
 - Phase 7 depends on Phase 6 baseline outputs (`FAIL: F003`-`F006`).
 
 ## Per-Feature Progress Tracker
 
 Legend: `P` = PASS, `F` = FAIL, `B` = BLOCKED
 
-| Feature ID | Area | Feature | Status | Prompt | Last Run |
-| --- | --- | --- | --- | --- | --- |
-| F001 | Shell | App launch + foreground shell | P | `prompts/F001-app-shell-and-launch.md` | `pt-20260308T113329Z` |
-| F002 | Navigation | Tab navigation across routes | P | `prompts/F002-tab-navigation.md` | `pt-20260308T113344Z` |
-| F003 | Home | Machine controls (reset/reboot/menu/power/pause) | P | `prompts/F003-home-machine-controls.md` | `pt-20260308T113442Z` |
-| F004 | Home | Quick config + LED/SID toggles | P | `prompts/F004-home-quick-config-and-led-sid.md` | `pt-20260308T113442Z` |
-| F005 | Home | RAM dump/load/clear workflows | P | `prompts/F005-home-ram-workflows.md` | `pt-20260308T113442Z` |
-| F006 | Home | App config snapshot lifecycle | P | `prompts/F006-home-config-snapshots.md` | `pt-20260308T113442Z` |
-| F007 | Disks | Disk library add/group/rename/delete | P | `prompts/F007-disks-library-management.md` | `pt-20260308T113458Z` |
-| F008 | Disks | Disk mount/eject to Drive A/B | P | `prompts/F008-disks-mount-eject.md` | `pt-20260308T113458Z` |
-| F009 | Disks | Drive + Soft IEC config controls | P | `prompts/F009-disks-drive-and-softiec.md` | `pt-20260308T113458Z` |
-| F010 | Play | Source browsing (Local/C64U/HVSC) | P | `prompts/F010-play-source-browsing.md` | `pt-20260308T113514Z` |
-| F011 | Play | Playlist create/edit/clear/select | P | `prompts/F011-playlist-lifecycle.md` | `pt-20260308T113514Z` |
-| F012 | Play | Transport controls + queue progression | P | `prompts/F012-playback-transport.md` | `pt-20260308T113514Z` |
-| F013 | Play | Shuffle/repeat/recurse/volume | P | `prompts/F013-playback-queue-and-volume.md` | `pt-20260308T113514Z` |
-| F014 | Play | Duration/songlength/subsong controls | P | `prompts/F014-songlength-duration-subsong.md` | `pt-20260308T113514Z` |
-| F015 | Play/HVSC | HVSC download/install/ingest/cancel/reset | P | `prompts/F015-hvsc-download-ingest.md` | `pt-20260308T113514Z` |
-| F016 | Play/HVSC | HVSC cache reuse + browse/play from cache | P | `prompts/F016-hvsc-cache-reuse.md` | `pt-20260308T113514Z` |
-| F017 | Play/Runtime | Lock-screen/background auto-advance | P | `prompts/F017-lock-screen-autoadvance.md` | `pt-20260308T113530Z` |
-| F018 | Config | Category browse/search/refresh | P | `prompts/F018-config-browse-search.md` | `pt-20260308T113600Z` |
-| F019 | Config | Config edits + audio mixer solo/reset + clock sync | P | `prompts/F019-config-edit-and-audio-mixer.md` | `pt-20260308T113600Z` |
-| F020 | Settings | Connection/theme/preferences/HVSC toggles | P | `prompts/F020-settings-connection-preferences.md` | `pt-20260308T113616Z` |
-| F021 | Settings | Diagnostics + import/export + device safety | P | `prompts/F021-settings-diagnostics-safety.md` | `pt-20260308T113616Z` |
-| F022 | Docs | Docs and open-source licenses routes | P | `prompts/F022-docs-and-licenses.md` | `pt-20260308T113344Z` |
-| F023 | Cross-cutting | Persistence + reconnect across app/session/device lock | P | `prompts/F023-persistence-and-recovery.md` | `pt-20260308T113530Z` |
+| Feature ID | Area          | Feature                                                | Status | Prompt                                            | Last Run              |
+| ---------- | ------------- | ------------------------------------------------------ | ------ | ------------------------------------------------- | --------------------- |
+| F001       | Shell         | App launch + foreground shell                          | P      | `prompts/F001-app-shell-and-launch.md`            | `pt-20260308T113329Z` |
+| F002       | Navigation    | Tab navigation across routes                           | P      | `prompts/F002-tab-navigation.md`                  | `pt-20260308T113344Z` |
+| F003       | Home          | Machine controls (reset/reboot/menu/power/pause)       | P      | `prompts/F003-home-machine-controls.md`           | `pt-20260308T113442Z` |
+| F004       | Home          | Quick config + LED/SID toggles                         | P      | `prompts/F004-home-quick-config-and-led-sid.md`   | `pt-20260308T113442Z` |
+| F005       | Home          | RAM dump/load/clear workflows                          | P      | `prompts/F005-home-ram-workflows.md`              | `pt-20260308T113442Z` |
+| F006       | Home          | App config snapshot lifecycle                          | P      | `prompts/F006-home-config-snapshots.md`           | `pt-20260308T113442Z` |
+| F007       | Disks         | Disk library add/group/rename/delete                   | P      | `prompts/F007-disks-library-management.md`        | `pt-20260308T113458Z` |
+| F008       | Disks         | Disk mount/eject to Drive A/B                          | P      | `prompts/F008-disks-mount-eject.md`               | `pt-20260308T113458Z` |
+| F009       | Disks         | Drive + Soft IEC config controls                       | P      | `prompts/F009-disks-drive-and-softiec.md`         | `pt-20260308T113458Z` |
+| F010       | Play          | Source browsing (Local/C64U/HVSC)                      | P      | `prompts/F010-play-source-browsing.md`            | `pt-20260308T113514Z` |
+| F011       | Play          | Playlist create/edit/clear/select                      | P      | `prompts/F011-playlist-lifecycle.md`              | `pt-20260308T113514Z` |
+| F012       | Play          | Transport controls + queue progression                 | P      | `prompts/F012-playback-transport.md`              | `pt-20260308T113514Z` |
+| F013       | Play          | Shuffle/repeat/recurse/volume                          | P      | `prompts/F013-playback-queue-and-volume.md`       | `pt-20260308T113514Z` |
+| F014       | Play          | Duration/songlength/subsong controls                   | P      | `prompts/F014-songlength-duration-subsong.md`     | `pt-20260308T113514Z` |
+| F015       | Play/HVSC     | HVSC download/install/ingest/cancel/reset              | P      | `prompts/F015-hvsc-download-ingest.md`            | `pt-20260308T113514Z` |
+| F016       | Play/HVSC     | HVSC cache reuse + browse/play from cache              | P      | `prompts/F016-hvsc-cache-reuse.md`                | `pt-20260308T113514Z` |
+| F017       | Play/Runtime  | Lock-screen/background auto-advance                    | P      | `prompts/F017-lock-screen-autoadvance.md`         | `pt-20260308T113530Z` |
+| F018       | Config        | Category browse/search/refresh                         | P      | `prompts/F018-config-browse-search.md`            | `pt-20260308T113600Z` |
+| F019       | Config        | Config edits + audio mixer solo/reset + clock sync     | P      | `prompts/F019-config-edit-and-audio-mixer.md`     | `pt-20260308T113600Z` |
+| F020       | Settings      | Connection/theme/preferences/HVSC toggles              | P      | `prompts/F020-settings-connection-preferences.md` | `pt-20260308T113616Z` |
+| F021       | Settings      | Diagnostics + import/export + device safety            | P      | `prompts/F021-settings-diagnostics-safety.md`     | `pt-20260308T113616Z` |
+| F022       | Docs          | Docs and open-source licenses routes                   | P      | `prompts/F022-docs-and-licenses.md`               | `pt-20260308T113344Z` |
+| F023       | Cross-cutting | Persistence + reconnect across app/session/device lock | P      | `prompts/F023-persistence-and-recovery.md`        | `pt-20260308T113530Z` |
 
 ## Coverage Summary
 
@@ -351,19 +536,19 @@ Snapshot Manager dialog (no filesystem browser).
 
 ## Memory Ranges by Snapshot Type
 
-| Type   | Ranges                            | Notes                         |
-|--------|-----------------------------------|-------------------------------|
-| Full   | $0000–$FFFF                       | All 64 KB                     |
-| BASIC  | $0801–STREND, $002B–$0038         | STREND read from $002B–$002C  |
-| Screen | $0400–$07E7, $D800–$DBFF          | Screen + colour RAM           |
-| Custom | User-defined                      | Any hex address ranges        |
+| Type   | Ranges                    | Notes                        |
+| ------ | ------------------------- | ---------------------------- |
+| Full   | $0000–$FFFF               | All 64 KB                    |
+| BASIC  | $0801–STREND, $002B–$0038 | STREND read from $002B–$002C |
+| Screen | $0400–$07E7, $D800–$DBFF  | Screen + colour RAM          |
+| Custom | User-defined              | Any hex address ranges       |
 
 ## Binary File Format (.c64snap)
 
 Header (28 bytes):
 
 | Offset | Size | Field           | Notes                    |
-|--------|------|-----------------|--------------------------|
+| ------ | ---- | --------------- | ------------------------ |
 | 0      | 8    | magic           | `C64SNAP\0`              |
 | 8      | 2    | version         | uint16 LE = 1            |
 | 10     | 2    | type            | uint16 LE (0–3)          |
@@ -385,7 +570,8 @@ c64-{type}-{YYYYMMDD}-{HHMMSS}.c64snap
 
 ## Phases
 
-### Phase 1: Core Library  (src/lib/snapshot/)
+### Phase 1: Core Library (src/lib/snapshot/)
+
 - [x] 1.1 snapshotTypes.ts
 - [x] 1.2 snapshotFormat.ts
 - [x] 1.3 snapshotFilename.ts
@@ -394,19 +580,23 @@ c64-{type}-{YYYYMMDD}-{HHMMSS}.c64snap
 - [x] 1.6 snapshotCreation.ts
 
 ### Phase 2: RAM Operations Extension
+
 - [x] 2.1 Export loadMemoryRanges() in ramOperations.ts
 
 ### Phase 3: UI Dialogs
+
 - [x] 3.1 SaveRamDialog.tsx
 - [x] 3.2 SnapshotManagerDialog.tsx
 - [x] 3.3 RestoreSnapshotDialog.tsx
 
 ### Phase 4: Hook/Page Integration
+
 - [x] 4.1 useHomeActions.ts — typed snapshot save/restore
 - [x] 4.2 HomePage.tsx — dialog state
 - [x] 4.3 MachineControls.tsx — props unchanged, callers change
 
 ### Phase 5: Tests
+
 - [x] 5.1 snapshotFormat.test.ts
 - [x] 5.2 snapshotFilename.test.ts
 - [x] 5.3 snapshotStore.test.ts
@@ -414,10 +604,12 @@ c64-{type}-{YYYYMMDD}-{HHMMSS}.c64snap
 - [x] 5.5 playwright/ramSnapshot.spec.ts
 
 ### Phase 6: Screenshots and Documentation
+
 - [x] 6.1 Playwright screenshots → doc/img/app/home/dialogs/ (generated by `npm run screenshots`)
 - [x] 6.2 README.md RAM Snapshots section
 
 ### Phase 7: Validation
+
 - [x] npm run test passes
 - [x] npm run lint passes
 - [x] npm run build passes
@@ -425,9 +617,9 @@ c64-{type}-{YYYYMMDD}-{HHMMSS}.c64snap
 
 ## Decisions Log
 
-| Date       | Decision                                                              |
-|------------|-----------------------------------------------------------------------|
-| 2026-03-08 | localStorage as primary snapshot store (works on web + Android)       |
-| 2026-03-08 | Dump full 64 KB then extract ranges (simpler, single API call)        |
-| 2026-03-08 | STREND resolved by peeking $002B–$002C from full RAM dump             |
-| 2026-03-08 | No SAF folder dependency for snapshot list — app-managed in LS        |
+| Date       | Decision                                                        |
+| ---------- | --------------------------------------------------------------- |
+| 2026-03-08 | localStorage as primary snapshot store (works on web + Android) |
+| 2026-03-08 | Dump full 64 KB then extract ranges (simpler, single API call)  |
+| 2026-03-08 | STREND resolved by peeking $002B–$002C from full RAM dump       |
+| 2026-03-08 | No SAF folder dependency for snapshot list — app-managed in LS  |

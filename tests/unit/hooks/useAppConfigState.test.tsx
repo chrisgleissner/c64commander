@@ -329,12 +329,11 @@ describe("useAppConfigState", () => {
     status.isConnected = true;
   });
 
-  it("marks hasCaptured from sessionStorage on effect run (line 134)", async () => {
-    // Pre-populate sessionStorage so the hook marks hasCaptured=true on first effect
-    sessionStorage.setItem("c64u-snapshot-captured-http://c64u", "1");
+  it("does not recapture the initial snapshot when the current baseUrl already has a session marker", async () => {
+    sessionStorage.setItem("c64u_initial_snapshot_session:http://c64u", "1");
     renderHook(() => useAppConfigState(), { wrapper });
     await act(async () => {});
-    // The hook won't fetch again since hasCaptured=true — snapshot was not saved this run
+    expect(getCategories).not.toHaveBeenCalled();
     expect(saveInitialSnapshot).not.toHaveBeenCalled();
   });
 
@@ -374,7 +373,8 @@ describe("useAppConfigState", () => {
     expect(Object.keys(batchPayload)).not.toContain("BadCat");
   });
 
-  it("fetchAllConfig logs on category failure and partial result (lines 57-64)", async () => {
+  it("fetchAllConfig retries failed categories and logs partial result (lines 57-64)", async () => {
+    const { addLog } = await import("@/lib/logging");
     getCategories.mockResolvedValue({ categories: ["Audio", "Video"] });
     getCategory
       .mockResolvedValueOnce({ items: { Volume: { selected: "5" } } })
@@ -383,7 +383,12 @@ describe("useAppConfigState", () => {
 
     await waitFor(
       () => {
-        expect(getCategory).toHaveBeenCalledTimes(2);
+        expect(getCategory).toHaveBeenCalledTimes(3);
+        expect(addLog).toHaveBeenCalledWith(
+          "debug",
+          expect.stringContaining("partially failed"),
+          expect.objectContaining({ failedCategories: ["Video"] }),
+        );
       },
       { timeout: 3000 },
     );

@@ -24,6 +24,8 @@ import {
 import { useC64Connection } from "@/hooks/useC64Connection";
 import { addLog } from "@/lib/logging";
 
+const FULL_CONFIG_BACKGROUND_CONCURRENCY = 4;
+
 const isReadOnlyItem = (name: string) => name.startsWith("SID Detected Socket");
 
 const extractValue = (config: unknown) => {
@@ -61,19 +63,45 @@ const fetchAllConfig = async () => {
   const configs: Record<string, ConfigResponse> = {};
   const failedCategories: string[] = [];
 
-  for (const category of cats.categories) {
+  for (let index = 0; index < cats.categories.length; index += FULL_CONFIG_BACKGROUND_CONCURRENCY) {
+    const batch = cats.categories.slice(index, index + FULL_CONFIG_BACKGROUND_CONCURRENCY);
+    const results = await Promise.allSettled(
+      batch.map(async (category) => ({
+        category,
+        response: await api.getCategory(category),
+      })),
+    );
+
+    results.forEach((result, resultIndex) => {
+      const category = batch[resultIndex];
+      if (result.status === "fulfilled") {
+        configs[category] = result.value.response;
+        return;
+      }
+
+      addLog("debug", "Config category fetch failed; will retry individually", {
+        category,
+        error: (result.reason as Error).message,
+      });
+      failedCategories.push(category);
+    });
+  }
+
+  for (const category of failedCategories) {
     try {
       configs[category] = await api.getCategory(category);
     } catch (catError) {
-      addLog("debug", "Config category fetch failed; will retry individually", {
+      addLog("debug", "Config category retry failed; category omitted from snapshot", {
         category,
         error: (catError as Error).message,
       });
-      failedCategories.push(category);
     }
   }
 
-  const hasFailures = failedCategories.length > 0;
+  const unresolvedFailures = failedCategories.filter(
+    (category) => !Object.prototype.hasOwnProperty.call(configs, category),
+  );
+  const hasFailures = unresolvedFailures.length > 0;
   const hasSuccesses = Object.keys(configs).length > 0;
 
   if (hasFailures && hasSuccesses) {
@@ -81,11 +109,11 @@ const fetchAllConfig = async () => {
     // can diagnose incomplete config snapshots without noisy per-category spam.
     addLog(
       "debug",
-      `Config fetch partially failed: ${failedCategories.join(", ")} unavailable (using partial snapshot)`,
-      { failedCategories },
+      `Config fetch partially failed: ${unresolvedFailures.join(", ")} unavailable (using partial snapshot)`,
+      { failedCategories: unresolvedFailures },
     );
   } else if (hasFailures && !hasSuccesses) {
-    throw new Error(`Failed to fetch configuration categories: ${failedCategories.join(", ")}`);
+    throw new Error(`Failed to fetch configuration categories: ${unresolvedFailures.join(", ")}`);
   }
 
   return configs;

@@ -12,11 +12,12 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.os.Build
+import androidx.test.core.app.ApplicationProvider
 import com.getcapacitor.Bridge
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
-import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
@@ -25,6 +26,7 @@ import org.mockito.ArgumentMatchers.eq
 import org.mockito.Mockito.*
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows
+import org.robolectric.annotation.Config
 
 /** Test-only subclass that captures notifyListeners calls for verification. */
 private open class TestableBackgroundExecutionPlugin : BackgroundExecutionPlugin() {
@@ -130,59 +132,70 @@ class BackgroundExecutionPluginTest {
     }
 
     @Test
-    fun loadRegistersAutoSkipReceiver() {
+    @Config(sdk = [Build.VERSION_CODES.TIRAMISU])
+    fun loadRegistersAutoSkipReceiverOnAndroid13PlusWithoutReceiverExportErrors() {
         plugin.load()
         val shadowApp = Shadows.shadowOf(context as android.app.Application)
-        val hasReceiver = shadowApp.registeredReceivers.any { wrapper ->
-            wrapper.intentFilter.hasAction(BackgroundExecutionService.ACTION_AUTO_SKIP_DUE)
-        }
+        val hasReceiver =
+                shadowApp.registeredReceivers.any { wrapper ->
+                    wrapper.intentFilter.hasAction(BackgroundExecutionService.ACTION_AUTO_SKIP_DUE)
+                }
         assertTrue("Auto-skip receiver should be registered after load()", hasReceiver)
     }
 
     @Test
     fun autoSkipReceiverIgnoresWrongAction() {
         plugin.load()
-        val receiverField = BackgroundExecutionPlugin::class.java.getDeclaredField("autoSkipReceiver")
+        val receiverField =
+                BackgroundExecutionPlugin::class.java.getDeclaredField("autoSkipReceiver")
         receiverField.isAccessible = true
         val receiver = receiverField.get(plugin) as BroadcastReceiver
 
         plugin.notifyListenersCalls.clear()
         receiver.onReceive(context, Intent("uk.gleissner.c64commander.WRONG"))
 
-        assertTrue("notifyListeners should not be called for wrong action",
-            plugin.notifyListenersCalls.none { it.first == "backgroundAutoSkipDue" })
+        assertTrue(
+                "notifyListeners should not be called for wrong action",
+                plugin.notifyListenersCalls.none { it.first == "backgroundAutoSkipDue" }
+        )
     }
 
     @Test
     fun autoSkipReceiverIgnoresInvalidDueValues() {
         plugin.load()
-        val receiverField = BackgroundExecutionPlugin::class.java.getDeclaredField("autoSkipReceiver")
+        val receiverField =
+                BackgroundExecutionPlugin::class.java.getDeclaredField("autoSkipReceiver")
         receiverField.isAccessible = true
         val receiver = receiverField.get(plugin) as BroadcastReceiver
 
-        val invalidIntent = Intent(BackgroundExecutionService.ACTION_AUTO_SKIP_DUE).apply {
-            putExtra(BackgroundExecutionService.EXTRA_DUE_AT_MS, -1L)
-            putExtra(BackgroundExecutionService.EXTRA_FIRED_AT_MS, 0L)
-        }
+        val invalidIntent =
+                Intent(BackgroundExecutionService.ACTION_AUTO_SKIP_DUE).apply {
+                    putExtra(BackgroundExecutionService.EXTRA_DUE_AT_MS, -1L)
+                    putExtra(BackgroundExecutionService.EXTRA_FIRED_AT_MS, 0L)
+                }
         plugin.notifyListenersCalls.clear()
         receiver.onReceive(context, invalidIntent)
 
-        assertTrue("notifyListeners should not be called for invalid due values",
-            plugin.notifyListenersCalls.none { it.first == "backgroundAutoSkipDue" })
+        assertTrue(
+                "notifyListeners should not be called for invalid due values",
+                plugin.notifyListenersCalls.none { it.first == "backgroundAutoSkipDue" }
+        )
     }
 
     @Test
     fun autoSkipReceiverAcceptsValidPayload() {
         plugin.load()
-        val receiverField = BackgroundExecutionPlugin::class.java.getDeclaredField("autoSkipReceiver")
+        val receiverField =
+                BackgroundExecutionPlugin::class.java.getDeclaredField("autoSkipReceiver")
         receiverField.isAccessible = true
         val receiver = receiverField.get(plugin) as BroadcastReceiver
 
         val now = System.currentTimeMillis()
-        val validIntent = Intent(BackgroundExecutionService.ACTION_AUTO_SKIP_DUE).apply {
-            putExtra(BackgroundExecutionService.EXTRA_DUE_AT_MS, now - 1_000L)
-            putExtra(BackgroundExecutionService.EXTRA_FIRED_AT_MS, now)
-        }
+        val validIntent =
+                Intent(BackgroundExecutionService.ACTION_AUTO_SKIP_DUE).apply {
+                    putExtra(BackgroundExecutionService.EXTRA_DUE_AT_MS, now - 1_000L)
+                    putExtra(BackgroundExecutionService.EXTRA_FIRED_AT_MS, now)
+                }
         plugin.notifyListenersCalls.clear()
         receiver.onReceive(context, validIntent)
 
@@ -229,15 +242,47 @@ class BackgroundExecutionPluginTest {
     }
 
     @Test
-    fun loadHandlesReceiverRegistrationFailure() {
-        val brokenContext = mock(Context::class.java)
-        `when`(
-            brokenContext.registerReceiver(any(BroadcastReceiver::class.java), any(IntentFilter::class.java)),
-        ).thenThrow(RuntimeException("register failed"))
-
-        val bridge = mock(Bridge::class.java)
-        `when`(bridge.context).thenReturn(brokenContext)
+    fun setDueAtMsRejectsWhenPluginContextGetterThrows() {
+        val throwingBridge = mock(Bridge::class.java)
+        `when`(throwingBridge.context).thenThrow(RuntimeException("bridge context unavailable"))
         val target = BackgroundExecutionPlugin()
+        val field = Plugin::class.java.getDeclaredField("bridge")
+        field.isAccessible = true
+        field.set(target, throwingBridge)
+
+        val call = mock(PluginCall::class.java)
+        `when`(call.getLong("dueAtMs")).thenReturn(System.currentTimeMillis() + 1_000L)
+        val traceContext = JSObject()
+        traceContext.put("correlationId", "corr-due")
+        traceContext.put("trackInstanceId", 99)
+        traceContext.put("playlistItemId", "playlist-99")
+        traceContext.put("sourceKind", "local")
+        traceContext.put("localAccessMode", "filesystem")
+        traceContext.put("lifecycleState", "playing")
+        `when`(call.getObject("traceContext")).thenReturn(traceContext)
+
+        target.setDueAtMs(call)
+
+        verify(call)
+                .reject(
+                        eq("Failed to update background auto-skip due time"),
+                        any(Exception::class.java)
+                )
+    }
+
+    @Test
+    fun loadHandlesReceiverRegistrationFailure() {
+        val bridge = mock(Bridge::class.java)
+        `when`(bridge.context).thenReturn(context)
+        val target =
+                object : BackgroundExecutionPlugin() {
+                    override fun registerPluginReceiver(
+                            receiver: BroadcastReceiver,
+                            filter: IntentFilter
+                    ) {
+                        throw RuntimeException("register failed")
+                    }
+                }
         val field = Plugin::class.java.getDeclaredField("bridge")
         field.isAccessible = true
         field.set(target, bridge)
@@ -248,8 +293,9 @@ class BackgroundExecutionPluginTest {
     @Test
     fun handleOnDestroyHandlesReceiverUnregisterFailure() {
         val brokenContext = mock(Context::class.java)
-        doThrow(RuntimeException("unregister failed")).`when`(brokenContext)
-            .unregisterReceiver(any(BroadcastReceiver::class.java))
+        doThrow(RuntimeException("unregister failed"))
+                .`when`(brokenContext)
+                .unregisterReceiver(any(BroadcastReceiver::class.java))
 
         val bridge = mock(Bridge::class.java)
         `when`(bridge.context).thenReturn(brokenContext)
