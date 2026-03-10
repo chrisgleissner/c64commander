@@ -30,6 +30,14 @@ export interface Rect {
   bottom: number;
 }
 
+function normalizedNodeLabel(node: UiNode): string {
+  return (node.text || node.contentDesc).trim().toLowerCase();
+}
+
+function nodeHasVisibleLabel(node: UiNode): boolean {
+  return normalizedNodeLabel(node).length > 0;
+}
+
 function decodeXmlEntity(value: string): string {
   return value
     .replaceAll("&amp;", "&")
@@ -95,10 +103,10 @@ export function parseBoundsCenter(bounds: string): Point | null {
 export function findVisibleText(nodes: readonly UiNode[], expectedText: string): UiNode | null {
   const normalized = expectedText.trim().toLowerCase();
   for (const node of nodes) {
-    if (!node.text || !node.enabled) {
+    if (!nodeHasVisibleLabel(node) || !node.enabled) {
       continue;
     }
-    if (node.text.trim().toLowerCase() === normalized) {
+    if (normalizedNodeLabel(node) === normalized) {
       const center = parseBoundsCenter(node.bounds);
       if (center) {
         return node;
@@ -110,6 +118,93 @@ export function findVisibleText(nodes: readonly UiNode[], expectedText: string):
 
 export function hasVisibleText(nodes: readonly UiNode[], expectedText: string): boolean {
   return findVisibleText(nodes, expectedText) !== null;
+}
+
+export function findVisibleTextContaining(nodes: readonly UiNode[], token: string): UiNode | null {
+  const normalized = token.trim().toLowerCase();
+  for (const node of nodes) {
+    if (!nodeHasVisibleLabel(node) || !node.enabled) {
+      continue;
+    }
+    const center = parseBoundsCenter(node.bounds);
+    if (!center) {
+      continue;
+    }
+    if (normalizedNodeLabel(node).includes(normalized)) {
+      return node;
+    }
+  }
+  return null;
+}
+
+export function findFirstNodeByClass(nodes: readonly UiNode[], className: string): UiNode | null {
+  const normalizedClass = className.trim().toLowerCase();
+  for (const node of nodes) {
+    if (!node.enabled) {
+      continue;
+    }
+    const center = parseBoundsCenter(node.bounds);
+    if (!center) {
+      continue;
+    }
+    if (node.className.trim().toLowerCase() === normalizedClass) {
+      return node;
+    }
+  }
+  return null;
+}
+
+export function findTopmostVisibleText(nodes: readonly UiNode[], candidates: readonly string[]): UiNode | null {
+  const normalizedCandidates = new Set(candidates.map((candidate) => candidate.trim().toLowerCase()));
+  let bestNode: UiNode | null = null;
+  let bestTop = Number.POSITIVE_INFINITY;
+
+  for (const node of nodes) {
+    if (!nodeHasVisibleLabel(node) || !node.enabled) {
+      continue;
+    }
+    const rect = parseBoundsRect(node.bounds);
+    if (!rect) {
+      continue;
+    }
+    if (!normalizedCandidates.has(normalizedNodeLabel(node))) {
+      continue;
+    }
+    if (rect.top < bestTop) {
+      bestTop = rect.top;
+      bestNode = node;
+    }
+  }
+
+  return bestNode;
+}
+
+export function checkboxTapPointForLabel(node: UiNode, paddingPx: number = 48): Point | null {
+  const rect = parseBoundsRect(node.bounds);
+  if (!rect) {
+    return null;
+  }
+  return {
+    x: Math.max(24, Math.min(96, rect.left - paddingPx)),
+    y: Math.floor((rect.top + rect.bottom) / 2),
+  };
+}
+
+export function findNodeByResourceId(nodes: readonly UiNode[], resourceIdSuffix: string): UiNode | null {
+  const normalizedSuffix = resourceIdSuffix.trim();
+  for (const node of nodes) {
+    if (!node.enabled || !node.clickable) {
+      continue;
+    }
+    const center = parseBoundsCenter(node.bounds);
+    if (!center) {
+      continue;
+    }
+    if (node.resourceId === normalizedSuffix || node.resourceId.endsWith(normalizedSuffix)) {
+      return node;
+    }
+  }
+  return null;
 }
 
 function isBottomCandidate(node: UiNode, minCenterY: number): boolean {
@@ -129,7 +224,7 @@ export function findBottomTabByText(nodes: readonly UiNode[], expectedText: stri
     if (node.className !== "android.widget.Button") {
       continue;
     }
-    if (node.text.trim().toLowerCase() !== normalized) {
+    if (normalizedNodeLabel(node) !== normalized) {
       continue;
     }
     if (!isBottomCandidate(node, minCenterY)) {
@@ -153,12 +248,12 @@ export function activeBottomTabLabel(
     if (!isBottomCandidate(node, minCenterY)) {
       continue;
     }
-    const normalizedText = node.text.trim().toLowerCase();
+    const normalizedText = normalizedNodeLabel(node);
     if (!normalizedLabels.has(normalizedText)) {
       continue;
     }
     if (node.focused || node.selected) {
-      return node.text;
+      return node.text || node.contentDesc;
     }
   }
   return null;

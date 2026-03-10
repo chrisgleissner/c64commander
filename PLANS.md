@@ -1,4 +1,66 @@
-# Plans
+# MCP-Driven Android Exploratory Testing Plan
+
+## Status
+
+- State: in progress
+- Started: 2026-03-10
+- Owner: GitHub Copilot
+- Primary driver: DroidMind MCP
+- Verification authority: C64 Scope MCP streaming and session evidence
+
+## Objectives
+
+- Align implementation with the documented agentic testing architecture.
+- Exercise Android app workflows through the mandatory interaction chain: LLM -> DroidMind -> Android app -> C64 Ultimate.
+- Use C64 Scope for session lifecycle, environment reset support, evidence capture, and streaming-based verification.
+- Explore the mirrored `test-data` trees dynamically, with symlink-safe traversal and load-ramped missions.
+- Fix discovered defects immediately, redeploy, rerun, and document outcomes.
+
+## Execution Phases
+
+1. Bootstrap planning and architecture re-familiarization.
+2. Inventory repo testing/runtime seams and both data trees.
+3. Implement discovery, mission, and evidence infrastructure gaps.
+4. Execute first mission wave: SID playback continuity and playlist auto-skip.
+5. Expand to cross-format, multi-disk, and RAM save/restore missions.
+6. Stabilize with repeated runs, fixes, regressions, and final evidence capture.
+
+## Initial Mission Set
+
+- M1: Local and device test-data discovery with stats, depth, symlink handling, and format distribution.
+- M2: SID playback continuity under tab switches, backgrounding, app switching, and lock/unlock.
+- M3: Playlist auto-advance validation with streaming-based confirmation.
+- M4: HVSC ramp from small subsets to deeper corpus traversal.
+
+## Risk Register
+
+- Streaming startup can fail intermittently based on prior repository evidence.
+- HVSC traversal can trigger latency, memory pressure, and recursion hazards.
+- Android UI automation may need app-state recovery between missions.
+- Device-side data visibility and permissions may differ from local assumptions.
+
+## Load Ramp Strategy
+
+- Stage 1: few files
+- Stage 2: tens to hundreds
+- Stage 3: thousands
+- Stage 4: deep HVSC traversal
+- Stage 5: near-full HVSC corpus exploration
+
+## Termination Tracking
+
+- [ ] Agentic testing architecture integrated and aligned with docs.
+- [ ] PLANS.md reflects process, findings, evidence, and results.
+- [ ] Mission sets implemented.
+- [ ] Each mission has three consecutive passing runs.
+- [ ] HVSC large-scale exploration completed and documented.
+- [ ] Defects fixed or explicitly documented.
+- [ ] Streaming verification used where applicable.
+- [ ] Workflows reproducible by another engineer.
+
+## Working Log
+
+- 2026-03-10: Created initial plan scaffold. Architecture review, repo discovery, and data inventory pending.# Plans
 
 ## Android Regression Remediation And Proof
 

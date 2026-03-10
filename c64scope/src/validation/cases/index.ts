@@ -12,6 +12,8 @@ import {
   appFirstDisksSurface,
   appFirstHomeSurface,
   appFirstLaunchShell,
+  appFirstPlaybackContinuity,
+  appFirstPlaylistAutoAdvance,
   appFirstPlaySurface,
   appFirstRuntimeRecovery,
   appFirstSettingsSurface,
@@ -27,6 +29,8 @@ export {
   appFirstDisksSurface,
   appFirstHomeSurface,
   appFirstLaunchShell,
+  appFirstPlaybackContinuity,
+  appFirstPlaylistAutoAdvance,
   appFirstPlaySurface,
   appFirstRuntimeRecovery,
   appFirstSettingsSurface,
@@ -46,6 +50,8 @@ export const ALL_CASES: ValidationCase[] = [
   appFirstPlaySurface, // AF-006 Product app-first
   appFirstConfigSurface, // AF-007 Product app-first
   appFirstSettingsSurface, // AF-008 Product app-first
+  appFirstPlaybackContinuity, // AF-009 Product app-first
+  appFirstPlaylistAutoAdvance, // AF-010 Product app-first
   navRouteShell, // NAV-001 Navigation
   connStatus, // CONN-001 Connection
   connDiagnostics, // CONN-002 Connection

@@ -9,8 +9,13 @@
 import { describe, expect, it } from "vitest";
 import {
   activeBottomTabLabel,
+  checkboxTapPointForLabel,
+  findFirstNodeByClass,
   findBottomTabByText,
+  findNodeByResourceId,
+  findTopmostVisibleText,
   findVisibleText,
+  findVisibleTextContaining,
   hasVisibleText,
   parseBoundsCenter,
   parseBoundsRect,
@@ -94,5 +99,73 @@ describe("app-first UI XML parsing", () => {
 
     const nodes = parseUiNodes(xml);
     expect(activeBottomTabLabel(nodes, ["Home", "Docs"], 1700)).toBeNull();
+  });
+
+  it("finds visible text by token, topmost candidate text, class nodes, and checkbox tap points", () => {
+    const xml = `
+    <hierarchy rotation="0">
+      <node text="Default duration" class="android.widget.TextView" clickable="false" enabled="true" bounds="[40,200][260,260]" />
+      <node text="Track A.sid" class="android.widget.TextView" clickable="false" enabled="true" bounds="[160,420][480,480]" />
+      <node text="Track B.sid" class="android.widget.TextView" clickable="false" enabled="true" bounds="[160,860][480,920]" />
+      <node text="Track B.sid" class="android.widget.TextView" clickable="false" enabled="true" bounds="[160,320][480,380]" />
+      <node text="5" class="android.widget.EditText" clickable="true" enabled="true" bounds="[800,200][980,260]" />
+    </hierarchy>
+    `;
+
+    const nodes = parseUiNodes(xml);
+    expect(findVisibleTextContaining(nodes, "duration")?.text).toBe("Default duration");
+    expect(findFirstNodeByClass(nodes, "android.widget.EditText")?.text).toBe("5");
+    expect(findTopmostVisibleText(nodes, ["Track A.sid", "Track B.sid"])?.text).toBe("Track B.sid");
+    expect(checkboxTapPointForLabel(findVisibleText(nodes, "Track A.sid")!)).toEqual({ x: 96, y: 450 });
+  });
+
+  it("ignores disabled and malformed nodes while decoding xml entities", () => {
+    const xml = `
+    <hierarchy rotation="0">
+      <node text="Tom &amp; Jerry" class="android.widget.TextView" clickable="false" enabled="false" bounds="[40,200][260,260]" />
+      <node text="Tom &amp; Jerry" class="android.widget.TextView" clickable="false" enabled="true" bounds="[bad]" />
+      <node text="&lt;Ready&gt;" class="android.widget.TextView" clickable="false" enabled="true" bounds="[40,300][260,360]" />
+      <node text="Current" class="android.widget.TextView" clickable="false" enabled="true" bounds="[40,500][260,560]" />
+      <node text="Open" class="android.widget.Button" clickable="true" enabled="true" selected="false" focused="false" bounds="[10,1800][110,1880]" />
+    </hierarchy>
+    `;
+
+    const nodes = parseUiNodes(xml);
+    expect(nodes[0]?.text).toBe("Tom & Jerry");
+    expect(nodes[2]?.text).toBe("<Ready>");
+    expect(findVisibleTextContaining(nodes, "tom")).toBeNull();
+    expect(findFirstNodeByClass(nodes, "android.widget.TextView")?.text).toBe("<Ready>");
+    expect(findTopmostVisibleText(nodes, ["Missing"])).toBeNull();
+    expect(checkboxTapPointForLabel(nodes[1]!)).toBeNull();
+    expect(parseBoundsRect("[bad]")).toBeNull();
+    expect(parseBoundsCenter("[1,2][1,5]")).toBeNull();
+    expect(findBottomTabByText(nodes, "Open", 1900)).toBeNull();
+    expect(activeBottomTabLabel(nodes, ["Open"], 1700)).toBeNull();
+  });
+
+  it("matches icon-only bottom tabs through content descriptions", () => {
+    const xml = `
+    <hierarchy rotation="0">
+      <node text="" content-desc="Home" class="android.widget.Button" clickable="true" enabled="true" bounds="[33,2004][181,2150]" />
+      <node text="" content-desc="Play" class="android.widget.Button" clickable="true" enabled="true" focused="true" bounds="[203,2004][341,2150]" />
+    </hierarchy>
+    `;
+
+    const nodes = parseUiNodes(xml);
+    expect(findBottomTabByText(nodes, "Play", 1900)?.contentDesc).toBe("Play");
+    expect(activeBottomTabLabel(nodes, ["Home", "Play"], 1900)).toBe("Play");
+    expect(findVisibleText(nodes, "Play")?.contentDesc).toBe("Play");
+    expect(findVisibleTextContaining(nodes, "pla")?.contentDesc).toBe("Play");
+  });
+
+  it("finds clickable nodes by resource id suffix", () => {
+    const xml = `
+    <hierarchy rotation="0">
+      <node text="" resource-id="uk.gleissner.c64commander:id/add-items-to-playlist" content-desc="Add items to playlist" class="android.widget.Button" clickable="true" enabled="true" bounds="[734,1845][990,1969]" />
+    </hierarchy>
+    `;
+
+    const nodes = parseUiNodes(xml);
+    expect(findNodeByResourceId(nodes, "add-items-to-playlist")?.contentDesc).toBe("Add items to playlist");
   });
 });
