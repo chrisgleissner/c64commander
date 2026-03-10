@@ -20,7 +20,7 @@ env:
       - waitForAnimationToEnd
       - extendedWaitUntil:
           visible:
-                        text: "PLAY FILES"
+            text: "PLAY FILES"
           timeout: ${TIMEOUT}
 - scrollUntilVisible:
     element:
