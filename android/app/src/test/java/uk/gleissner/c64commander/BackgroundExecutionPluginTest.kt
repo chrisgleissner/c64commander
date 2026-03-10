@@ -263,10 +263,11 @@ class BackgroundExecutionPluginTest {
 
         target.setDueAtMs(call)
 
-        verify(call).reject(
-                eq("Failed to update background auto-skip due time"),
-                any(Exception::class.java)
-        )
+        verify(call)
+                .reject(
+                        eq("Failed to update background auto-skip due time"),
+                        any(Exception::class.java)
+                )
     }
 
     @Test
