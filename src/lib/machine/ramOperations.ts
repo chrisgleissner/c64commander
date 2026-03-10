@@ -391,20 +391,21 @@ export const loadMemoryRanges = async (api: C64API, ranges: Array<{ start: numbe
   if (ranges.length === 0) {
     throw new Error("loadMemoryRanges: no ranges provided");
   }
-  await ensureLiveness(api, "Load RAM Snapshot");
-  await runPaused(api, "Load RAM Snapshot", async () => {
-    for (const { start, bytes } of ranges) {
-      for (let offset = 0; offset < bytes.length; offset += WRITE_CHUNK_SIZE_BYTES) {
-        const chunkSize = Math.min(WRITE_CHUNK_SIZE_BYTES, bytes.length - offset);
-        const chunk = bytes.subarray(offset, offset + chunkSize);
-        const address = start + offset;
-        await withRetry(
-          `Write RAM snapshot chunk at $${toHexAddress(address)}`,
-          () => api.writeMemoryBlock(toHexAddress(address), chunk),
-          DEFAULT_RETRY_ATTEMPTS,
-          async () => recoverFromLivenessFailure(api, "Load RAM Snapshot"),
-        );
-      }
+  for (const { start, bytes } of ranges) {
+    if (start < 0 || start >= FULL_RAM_SIZE_BYTES) {
+      throw new Error(`loadMemoryRanges: range start out of bounds: ${start}`);
     }
+    if (start + bytes.length > FULL_RAM_SIZE_BYTES) {
+      throw new Error(`loadMemoryRanges: range end out of bounds: start=${start}, length=${bytes.length}`);
+    }
+  }
+  await ensureLiveness(api, "Load RAM Snapshot");
+  const onRetry = async () => recoverFromLivenessFailure(api, "Load RAM Snapshot");
+  await runPaused(api, "Load RAM Snapshot", async () => {
+    const image = await readRanges(api, FULL_RAM_RANGE, onRetry);
+    for (const { start, bytes } of ranges) {
+      image.set(bytes, start);
+    }
+    await writeFullImage(api, image, onRetry);
   });
 };

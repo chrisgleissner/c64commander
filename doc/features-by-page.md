@@ -71,7 +71,7 @@ Connection/diagnostics header surfaces used on Home | Playwright | `playwright/h
 #### Observed Risk Areas
 
 - Machine-task serialization is page-local; external device actions can still race UI assumptions.
-- RAM save/load moves full-memory images through SAF/native bridges and chunked memory writes.
+- RAM save/load moves full-memory images through SAF/native bridges, and snapshot restore now overlays saved ranges onto a live RAM image before a single full-memory write.
 - Home mixes many independent config categories; partial fetch or invalidation lag can leave cards temporarily stale.
 - Drive path/status summaries rely on both config and drive-status queries.
 

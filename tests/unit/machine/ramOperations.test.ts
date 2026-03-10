@@ -32,6 +32,7 @@ import {
   dumpFullRamImage,
   loadFullRamImage,
   clearRamAndReboot,
+  loadMemoryRanges,
 } from "@/lib/machine/ramOperations";
 
 type MockApi = {
@@ -164,6 +165,48 @@ describe("ramOperations", () => {
         addr: "0000",
         data: image,
       });
+    });
+  });
+
+  describe("loadMemoryRanges", () => {
+    it("reads the live image, overlays snapshot ranges, then restores in one full write", async () => {
+      const originalImage = new Uint8Array(FULL_RAM_SIZE_BYTES);
+      for (let i = 0; i < originalImage.length; i += 1) {
+        originalImage[i] = i % 251;
+      }
+      api.readMemory.mockImplementation(async (addr: string, length: number) => {
+        const start = parseInt(addr, 16);
+        return originalImage.slice(start, start + length);
+      });
+
+      const screenBytes = new Uint8Array([0x54, 0x45, 0x53, 0x54]);
+      await loadMemoryRanges(api as any, [{ start: 0x0400, bytes: screenBytes }]);
+
+      expect(api.machinePause).toHaveBeenCalledTimes(1);
+      expect(api.machineResume).toHaveBeenCalledTimes(1);
+      expect(api.readMemory).toHaveBeenCalledTimes(FULL_RAM_SIZE_BYTES / 0x1000);
+      expect(api.writeMemoryBlock).toHaveBeenCalledTimes(1);
+      expect(api.writeMemoryBlock).toHaveBeenCalledWith(
+        "0000",
+        expect.objectContaining({
+          length: FULL_RAM_SIZE_BYTES,
+        }),
+      );
+
+      const writtenImage = api.writeMemoryBlock.mock.calls[0][1] as Uint8Array;
+      expect(Array.from(writtenImage.slice(0x0400, 0x0404))).toEqual(Array.from(screenBytes));
+      expect(writtenImage[0x0200]).toBe(originalImage[0x0200]);
+      expect(writtenImage[0xd800]).toBe(originalImage[0xd800]);
+    });
+
+    it("rejects empty snapshot ranges", async () => {
+      await expect(loadMemoryRanges(api as any, [])).rejects.toThrow("loadMemoryRanges: no ranges provided");
+    });
+
+    it("rejects snapshot ranges that extend past full RAM", async () => {
+      await expect(loadMemoryRanges(api as any, [{ start: 0xfffe, bytes: new Uint8Array([1, 2, 3]) }])).rejects.toThrow(
+        "loadMemoryRanges: range end out of bounds",
+      );
     });
   });
 

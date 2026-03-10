@@ -69,6 +69,7 @@
     "startup:baseline": "node scripts/startup/collect-android-startup-baseline.mjs",
     "startup:gate": "node scripts/startup/assert-startup-budgets.mjs --file=ci-artifacts/startup/startup-baseline.json",
     "startup:gate:hvsc": "node scripts/startup/assert-hvsc-startup-safety.mjs --file=ci-artifacts/startup/startup-baseline.json",
+    "prove:screen-snapshot-restore": "npx --yes vite-node scripts/prove-screen-snapshot-restore.ts",
     "notices:generate": "node scripts/generate-third-party-notices.mjs",
     "notices:check": "node scripts/generate-third-party-notices.mjs --check",
     "scope:build": "cd c64scope && npm run build",
