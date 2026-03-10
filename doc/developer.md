@@ -226,7 +226,8 @@ Screenshot runs now prune pixel-identical PNG changes automatically (metadata-on
 
 ```bash
 ./build --emulator       # Launch Android emulator
-./build --install-apk        # Build and install APK to connected device
+./build --install-apk        # Build and install debug APK to connected device
+./build --install-apk --apk-variant release  # Build and install release APK
 ./build --device-id R5C... --install-apk  # Install to specific device
 ./build --test-smoke          # Run emulator smoke tests (mock target only)
 ./build --test-smoke --c64u-target real  # Run mock + real target smoke tests
@@ -237,6 +238,7 @@ Screenshot runs now prune pixel-identical PNG changes automatically (metadata-on
 Notes:
 
 - `./build --test-maestro-*` auto-starts the Android emulator if none is running and uses it unless `--test-device-id` is provided.
+- `./build --install-apk` defaults to the debug APK. Use `--apk-variant release` to install the release APK instead. Release builds require the Android signing config to be present.
 
 Read `doc/testing/maestro.md` before writing or editing Maestro flows.
 

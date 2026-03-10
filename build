@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APK_DEFAULT=""
+APK_VARIANT="debug"
 
 RUN_INSTALL=true
 RUN_BUILD=true
@@ -127,8 +128,9 @@ Build domain (default build only):
   --skip-build
   --skip-tests
   --skip-apk
-  --skip-format
+  --skip-format            Skip Prettier + ESLint formatting (saves time for quick local builds)
   --install-apk            Install APK to a connected Android device (via adb)
+  --apk-variant <variant>  APK build/install variant: debug or release (default: debug)
   --apk-path <path>        APK path to install (default: android/app/build/outputs/apk/debug/app-debug.apk)
   --device-id <id>         Device ID for adb (optional). If omitted, picks the first real phone.
 
@@ -186,7 +188,10 @@ Smoke test modifiers (require --test-smoke):
 Examples:
   ./build
   ./build --skip-tests
+  ./build --skip-format       # Skip time-consuming formatting step
+  ./build --skip-tests --skip-format  # Quick APK build without tests or formatting
   ./build --install-apk --device-id <serial number>
+  ./build --install-apk --apk-variant release
   ./build --apk-path /path/to/app-debug.apk --install-apk
   ./build --emulator
   ./build --screenshots
@@ -210,6 +215,7 @@ Notes:
   --test-maestro-docker  Builds/starts web Docker and runs Maestro CI flows against 10.0.2.2:<docker-port> unless --c64u-host overrides it.
   --test-fuzz         Always targets mock devices; --c64u-target real is rejected.
   --coverage          Runs unit + E2E coverage regardless of test category.
+  --apk-variant release requires Android release signing to be configured.
   Playwright port     Auto-selected to avoid clashes; set PLAYWRIGHT_PORT to pin a specific port.
 EOF
 }
@@ -262,6 +268,40 @@ require_cmd() {
     echo "Missing command: $1" >&2
     exit 1
   fi
+}
+
+resolve_apk_gradle_task() {
+  case "$1" in
+    debug)
+      echo "assembleDebug"
+      ;;
+    release)
+      echo "assembleRelease"
+      ;;
+    *)
+      echo "Unsupported APK variant: $1" >&2
+      exit 1
+      ;;
+  esac
+}
+
+resolve_apk_default_path() {
+  local variant="$1"
+  local suffix=""
+  case "$variant" in
+    debug)
+      suffix="-debug"
+      ;;
+    release)
+      suffix=""
+      ;;
+    *)
+      echo "Unsupported APK variant: $variant" >&2
+      exit 1
+      ;;
+  esac
+
+  echo "$ROOT_DIR/android/app/build/outputs/apk/${variant}/c64commander-${VITE_APP_VERSION:-unknown}${suffix}.apk"
 }
 
 is_local_port_in_use() {
@@ -618,6 +658,12 @@ while [[ $# -gt 0 ]]; do
       INSTALL_APK=true
       shift
       ;;
+    --apk-variant)
+      record_flag BUILD_FLAGS "$1"
+      require_value "$1" "${2:-}"
+      APK_VARIANT="$2"
+      shift 2
+      ;;
     --apk-path)
       record_flag BUILD_FLAGS "$1"
       require_value "$1" "${2:-}"
@@ -951,6 +997,11 @@ if [[ "$PRIMARY_ACTION" == "test-maestro-tags" && -z "$MAESTRO_TAGS" ]]; then
   exit 1
 fi
 
+if [[ "$APK_VARIANT" != "debug" && "$APK_VARIANT" != "release" ]]; then
+  echo "Invalid --apk-variant: ${APK_VARIANT}. Expected debug or release." >&2
+  exit 1
+fi
+
 if [[ ! "$DOCKER_PORT" =~ ^[0-9]+$ ]] || [[ "$DOCKER_PORT" -lt 1 ]] || [[ "$DOCKER_PORT" -gt 65535 ]]; then
   echo "Invalid --docker-port: ${DOCKER_PORT}" >&2
   exit 1
@@ -1164,7 +1215,7 @@ if [[ -n "${VITE_APP_VERSION:-}" && -z "${VERSION_NAME:-}" ]]; then
   export VERSION_NAME="$VITE_APP_VERSION"
 fi
 if [[ -z "$APK_DEFAULT" ]]; then
-  APK_DEFAULT="$ROOT_DIR/android/app/build/outputs/apk/debug/c64commander-${VITE_APP_VERSION:-unknown}-debug.apk"
+  APK_DEFAULT="$(resolve_apk_default_path "$APK_VARIANT")"
 fi
 
 if [[ "$RECORD_TRACES" == "true" ]]; then
@@ -1323,8 +1374,9 @@ if [[ "$RUN_DOCKER_START" == "true" ]]; then
 fi
 
 if [[ "$RUN_APK" == "true" ]]; then
-  log "Building debug APK"
-  (cd "$ROOT_DIR" && npm run android:apk -- --warning-mode none)
+  APK_GRADLE_TASK="$(resolve_apk_gradle_task "$APK_VARIANT")"
+  log "Building ${APK_VARIANT} APK"
+  (cd "$ROOT_DIR/android" && ./gradlew "$APK_GRADLE_TASK" --warning-mode none)
 fi
 
 if [[ "$RUN_TEST_MAESTRO_CI" == "true" || "$RUN_TEST_MAESTRO_ALL" == "true" || "$RUN_TEST_MAESTRO_TAGS" == "true" || "$RUN_TEST_MAESTRO_DOCKER" == "true" ]]; then
