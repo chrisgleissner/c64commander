@@ -76,6 +76,28 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function dismissConnectionStatusOverlay(client: DroidmindClient, serial: string): Promise<void> {
+  const xml = await dumpUiHierarchy(serial);
+  const nodes = parseUiNodes(xml);
+  const overlayVisible = findVisibleText(nodes, "Connection Status");
+  if (!overlayVisible) {
+    return;
+  }
+
+  const closeButton = findVisibleText(nodes, "Close");
+  if (!closeButton) {
+    return;
+  }
+
+  const center = parseBoundsCenter(closeButton.bounds);
+  if (!center) {
+    return;
+  }
+
+  await client.tap(serial, center.x, center.y);
+  await sleep(600);
+}
+
 async function isKeyguardShowing(client: DroidmindClient, serial: string): Promise<boolean> {
   const windowDump = await client.shell(serial, "dumpsys window | grep isKeyguardShowing");
   return windowDump.includes("isKeyguardShowing=true");
@@ -215,6 +237,7 @@ function findBottomTabByResourceId(
 
 export async function navigateToRoute(client: DroidmindClient, serial: string, route: string): Promise<void> {
   const tabLabel = routeLabel(route);
+  await dismissConnectionStatusOverlay(client, serial);
   const tabResourceId = TAB_RESOURCE_ID_BY_ROUTE[route];
   const xml = await dumpUiHierarchy(serial);
   const nodes = parseUiNodes(xml);

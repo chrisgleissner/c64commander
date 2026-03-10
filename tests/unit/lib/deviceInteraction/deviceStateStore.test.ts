@@ -53,6 +53,21 @@ describe("deviceStateStore branch coverage", () => {
     markDeviceRequestEnd({ success: true });
   });
 
+  it("records the most recent request timestamp when a device request starts", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2024-01-01T00:00:00Z"));
+      updateDeviceConnectionState("REAL_CONNECTED");
+
+      markDeviceRequestStart();
+
+      expect(getDeviceStateSnapshot().lastRequestAtMs).toBe(Date.now());
+      markDeviceRequestEnd({ success: true });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("computeState returns ERROR when circuit is open (line 59)", () => {
     updateDeviceConnectionState("REAL_CONNECTED");
     markDeviceRequestEnd({ success: true });

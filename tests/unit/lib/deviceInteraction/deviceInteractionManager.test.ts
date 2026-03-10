@@ -39,6 +39,7 @@ const getDeviceStateSnapshot = vi.fn(() => ({
   state: deviceStateValue,
   connectionState: "REAL_CONNECTED",
   busyCount: 0,
+  lastRequestAtMs: null,
   lastUpdatedAtMs: Date.now(),
   lastErrorMessage: null,
   lastSuccessAtMs: null,

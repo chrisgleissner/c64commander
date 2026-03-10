@@ -6,12 +6,13 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useConnectionDiagnosticsSummary } from "@/hooks/useConnectionDiagnosticsSummary";
 import { useConnectionState } from "@/hooks/useConnectionState";
+import { getDeviceStateSnapshot, subscribeDeviceState } from "@/lib/deviceInteraction/deviceStateStore";
 import { discoverConnection } from "@/lib/connection/connectionManager";
 import { requestDiagnosticsOpen, type DiagnosticsTabKey } from "@/lib/diagnostics/diagnosticsOverlay";
 import type { DiagnosticsSeverity } from "@/lib/diagnostics/connectionStatusDiagnostics";
@@ -25,6 +26,7 @@ type Props = {
 
 export function ConnectivityIndicator({ className }: Props) {
   const snapshot = useConnectionState();
+  const deviceState = useSyncExternalStore(subscribeDeviceState, getDeviceStateSnapshot, getDeviceStateSnapshot);
   const diagnosticsSummary = useConnectionDiagnosticsSummary();
   const [open, setOpen] = useState(false);
   const [editingHost, setEditingHost] = useState(false);
@@ -41,6 +43,10 @@ export function ConnectivityIndicator({ className }: Props) {
 
   const lastAttemptAt = snapshot.lastProbeAtMs;
   const lastSuccessAt = snapshot.lastProbeSucceededAtMs;
+  const lastObservedRequestAt =
+    typeof deviceState.lastRequestAtMs === "number" && typeof lastAttemptAt === "number"
+      ? Math.max(deviceState.lastRequestAtMs, lastAttemptAt)
+      : deviceState.lastRequestAtMs ?? lastAttemptAt;
   const attemptInFlight = snapshot.state === "DISCOVERING";
   const lastAttemptSucceeded = useMemo(
     () => deriveLastAttemptSucceeded(lastAttemptAt, lastSuccessAt, snapshot.lastProbeFailedAtMs),
@@ -54,7 +60,7 @@ export function ConnectivityIndicator({ className }: Props) {
       : lastAttemptSucceeded === false && lastSuccessAt !== null
         ? "Offline"
         : "Not yet connected";
-  const lastRequest = lastAttemptAt !== null ? formatRelative(lastAttemptAt) : "none yet";
+  const lastRequest = lastObservedRequestAt !== null ? formatRelative(lastObservedRequestAt) : "none yet";
 
   const label = isDemoMode ? "C64U Demo" : "C64U";
   const showRetryNow = status === "Offline" || status === "Not yet connected";

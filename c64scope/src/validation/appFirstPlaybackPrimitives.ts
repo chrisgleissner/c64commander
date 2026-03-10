@@ -27,8 +27,39 @@ const SOURCE_OPTION_RESOURCE_IDS: Record<string, string> = {
     hvsc: "import-option-hvsc",
 };
 
+const SOURCE_OPTION_TEXT_CANDIDATES: Record<string, readonly string[]> = {
+    c64u: ["Add file / folder from C64U", "Add file / folder from C64 Ultimate", "C64 Ultimate", "C64U"],
+    "c64 ultimate": ["Add file / folder from C64U", "Add file / folder from C64 Ultimate", "C64 Ultimate", "C64U"],
+    "commodore 64 ultimate": ["Add file / folder from C64U", "Add file / folder from C64 Ultimate", "C64 Ultimate", "C64U"],
+    local: ["Add file / folder from Local", "Local"],
+    hvsc: ["Add file / folder from HVSC", "HVSC"],
+};
+
 function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function readPickerPathFromNodes(nodes: ReturnType<typeof parseUiNodes>): string | null {
+    const pathNode = findVisibleTextContaining(nodes, "Path:");
+    if (!pathNode) {
+        return null;
+    }
+
+    const rawLabel = (pathNode.text || pathNode.contentDesc).trim();
+    if (!rawLabel.toLowerCase().startsWith("path:")) {
+        return null;
+    }
+    return normalizePath(rawLabel.slice("Path:".length));
+}
+
+function c64uPickerLooksReady(nodes: ReturnType<typeof parseUiNodes>): boolean {
+    return (
+        readPickerPathFromNodes(nodes) !== null ||
+        findVisibleText(nodes, "Select items") !== null ||
+        readSelectedCount(nodes) !== null ||
+        findVisibleText(nodes, "Filter files…") !== null ||
+        findVisibleText(nodes, "Filter files...") !== null
+    );
 }
 
 function readSelectedCount(nodes: ReturnType<typeof parseUiNodes>): number | null {
@@ -74,16 +105,7 @@ function currentPathAlreadyAtSegment(currentPath: string, segment: string): bool
 async function readPickerPath(serial: string): Promise<string | null> {
     const xml = await dumpUiHierarchy(serial);
     const nodes = parseUiNodes(xml);
-    const pathNode = findVisibleTextContaining(nodes, "Path:");
-    if (!pathNode) {
-        return null;
-    }
-
-    const rawLabel = (pathNode.text || pathNode.contentDesc).trim();
-    if (!rawLabel.toLowerCase().startsWith("path:")) {
-        return null;
-    }
-    return normalizePath(rawLabel.slice("Path:".length));
+    return readPickerPathFromNodes(nodes);
 }
 
 async function waitForPickerPath(serial: string, expectedPath: string, retries: number, delayMs: number): Promise<boolean> {
@@ -108,12 +130,34 @@ async function waitForAnyPickerPath(serial: string, retries: number, delayMs: nu
     return null;
 }
 
+async function waitForC64UPickerReady(serial: string, retries: number, delayMs: number): Promise<boolean> {
+    for (let attempt = 1; attempt <= retries; attempt += 1) {
+        const xml = await dumpUiHierarchy(serial);
+        const nodes = parseUiNodes(xml);
+        if (c64uPickerLooksReady(nodes)) {
+            return true;
+        }
+        await sleep(delayMs);
+    }
+    return false;
+}
+
 async function swipePickerContents(client: DroidmindClient, serial: string): Promise<void> {
     await client.swipe(serial, 540, 1620, 540, 1080, 260);
     await sleep(300);
 }
 
+async function dismissConnectionStatusOverlay(client: DroidmindClient, serial: string): Promise<void> {
+    const closed =
+        (await tapByResourceId(client, serial, "connection-status-close")) || (await tapByText(client, serial, "Close"));
+
+    if (closed) {
+        await sleep(400);
+    }
+}
+
 export async function openAddItemsDialog(client: DroidmindClient, serial: string): Promise<void> {
+    await dismissConnectionStatusOverlay(client, serial);
     const opened =
         (await tapByResourceId(client, serial, "add-items-to-playlist")) ||
         (await tapByText(client, serial, "Add items")) ||
@@ -127,25 +171,32 @@ export async function openAddItemsDialog(client: DroidmindClient, serial: string
 
 export async function chooseSource(client: DroidmindClient, serial: string, labels: readonly string[]): Promise<void> {
     for (const label of labels) {
-        const resourceId = SOURCE_OPTION_RESOURCE_IDS[label.trim().toLowerCase()];
+        const normalizedLabel = label.trim().toLowerCase();
+        const resourceId = SOURCE_OPTION_RESOURCE_IDS[normalizedLabel];
+        const labelCandidates = SOURCE_OPTION_TEXT_CANDIDATES[normalizedLabel] ?? [label];
         if (resourceId === "import-option-c64u") {
-            const existingPickerPath = await waitForAnyPickerPath(serial, 1, 1);
-            if (existingPickerPath) {
+            const existingPickerReady = await waitForC64UPickerReady(serial, 1, 1);
+            if (existingPickerReady) {
                 return;
             }
         }
         const selectionAttempts = resourceId === "import-option-c64u" ? 3 : 1;
         for (let attempt = 1; attempt <= selectionAttempts; attempt += 1) {
-            const selected =
-                (resourceId && (await tapByResourceId(client, serial, resourceId))) ||
-                (await tapByText(client, serial, label)) ||
-                (await tapByTextContaining(client, serial, label));
+            let selected = resourceId ? await tapByResourceId(client, serial, resourceId) : false;
+            if (!selected) {
+                for (const candidateLabel of labelCandidates) {
+                    selected = (await tapByText(client, serial, candidateLabel)) || (await tapByTextContaining(client, serial, candidateLabel));
+                    if (selected) {
+                        break;
+                    }
+                }
+            }
             if (!selected) {
                 continue;
             }
             if (resourceId === "import-option-c64u") {
-                const pickerPath = await waitForAnyPickerPath(serial, 12, 300);
-                if (pickerPath) {
+                const pickerReady = await waitForC64UPickerReady(serial, 20, 400);
+                if (pickerReady) {
                     return;
                 }
                 continue;
