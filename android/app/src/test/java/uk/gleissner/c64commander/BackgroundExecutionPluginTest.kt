@@ -242,6 +242,34 @@ class BackgroundExecutionPluginTest {
     }
 
     @Test
+    fun setDueAtMsRejectsWhenPluginContextGetterThrows() {
+        val throwingBridge = mock(Bridge::class.java)
+        `when`(throwingBridge.context).thenThrow(RuntimeException("bridge context unavailable"))
+        val target = BackgroundExecutionPlugin()
+        val field = Plugin::class.java.getDeclaredField("bridge")
+        field.isAccessible = true
+        field.set(target, throwingBridge)
+
+        val call = mock(PluginCall::class.java)
+        `when`(call.getLong("dueAtMs")).thenReturn(System.currentTimeMillis() + 1_000L)
+        val traceContext = JSObject()
+        traceContext.put("correlationId", "corr-due")
+        traceContext.put("trackInstanceId", 99)
+        traceContext.put("playlistItemId", "playlist-99")
+        traceContext.put("sourceKind", "local")
+        traceContext.put("localAccessMode", "filesystem")
+        traceContext.put("lifecycleState", "playing")
+        `when`(call.getObject("traceContext")).thenReturn(traceContext)
+
+        target.setDueAtMs(call)
+
+        verify(call).reject(
+                eq("Failed to update background auto-skip due time"),
+                any(Exception::class.java)
+        )
+    }
+
+    @Test
     fun loadHandlesReceiverRegistrationFailure() {
         val bridge = mock(Bridge::class.java)
         `when`(bridge.context).thenReturn(context)

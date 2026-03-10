@@ -39,7 +39,6 @@ C64 Commander lets you control and manage a C64 Ultimate from Android, iOS, or a
       - [Can’t reach the device](#cant-reach-the-device)
       - [Device becomes unresponsive](#device-becomes-unresponsive)
     - [iOS specifics](#ios-specifics)
-  - [🛠️ For Developers](#️-for-developers)
   - [🔧 Advanced Topics](#-advanced-topics)
     - [Advanced - Network Security](#advanced---network-security)
     - [Web Server Details](#web-server-details)
@@ -48,6 +47,7 @@ C64 Commander lets you control and manage a C64 Ultimate from Android, iOS, or a
       - [Web logging](#web-logging)
       - [Update to a newer version](#update-to-a-newer-version)
       - [Linux auto-update](#linux-auto-update)
+  - [🛠️ For Developers](#️-for-developers)
   - [🙏 Acknowledgments](#-acknowledgments)
     - [High Voltage SID Collection (HVSC)](#high-voltage-sid-collection-hvsc)
     - [Commodore and the C64 Ultimate](#commodore-and-the-c64-ultimate)
@@ -69,17 +69,17 @@ Because it gives you full control of your C64 Ultimate from any modern device:
 
 ### Install on Android
 
-1.  Download the latest **APK** (e.g. `c64commander-0.5.0-android.apk`) from the [Releases](https://github.com/chrisgleissner/c64commander/releases) page.
-2.  Open the APK.
-3.  Allow installs from unknown sources if prompted.
-4.  Tap **Install** and launch C64 Commander.
+1. Download the latest **APK** (e.g. `c64commander-0.5.0-android.apk`) from the [Releases](https://github.com/chrisgleissner/c64commander/releases) page.
+2. Open the APK.
+3. Allow installs from unknown sources if prompted.
+4. Tap **Install** and launch C64 Commander.
 
 ### Install on iOS
 
-1.  Set up [SideStore](https://docs.sidestore.io/).
-2.  Download the latest **IPA** (e.g. `c64commander-0.5.0-ios.ipa`) from the [Releases](https://github.com/chrisgleissner/c64commander/releases) page.
-3.  In **SideStore → My Apps**, tap **+** and select the IPA.
-4.  Launch C64 Commander.
+1. Set up [SideStore](https://docs.sidestore.io/).
+2. Download the latest **IPA** (e.g. `c64commander-0.5.0-ios.ipa`) from the [Releases](https://github.com/chrisgleissner/c64commander/releases) page.
+3. In **SideStore → My Apps**, tap **+** and select the IPA.
+4. Launch C64 Commander.
 
 SideStore refreshes apps every 7 days to renew the signature automatically.
 
@@ -122,11 +122,11 @@ Then launch C64 Commander by opening http://`<host-ip>`:8064 in a browser.
 
 ### First Connection Checklist
 
-1.  Power on the C64 Ultimate.
-2.  Ensure C64 Commander and C64U are on the same network.
-3.  In C64 Commander open **Settings → Device → Connection**.
-4.  Enter the correct C64U IP address or hostname.
-5.  Check that the C64U logo on the top-right of C64 Commander turns green.
+1. Power on the C64 Ultimate.
+2. Ensure C64 Commander and C64U are on the same network.
+3. In C64 Commander open **Settings → Device → Connection**.
+4. Enter the correct C64U IP address or hostname.
+5. Check that the C64U logo on the top-right of C64 Commander turns green.
 
 🎉 **DONE!** C64 Commander is now connected to your C64 Ultimate.
 
@@ -262,18 +262,6 @@ C64 Commander includes configurable **Device Safety** controls under **Settings 
 - **Install/signing errors**: Re-download the IPA and checksum, then verify again.
 - **Compatibility note**: CI runtime selection validates iOS `26 -> 18 -> 17`; iOS 17 and 18 are baseline support targets.
 
-## 🛠️ For Developers
-
-If you want to build, test, or contribute:
-
-- Developer guide: [doc/developer.md](doc/developer.md)
-- Chaos/fuzz testing docs: [doc/testing/chaos-fuzz.md](doc/testing/chaos-fuzz.md)
-- Web server runtime dependency note: `basic-ftp` is in `dependencies` because the web server uses it at runtime inside the Docker image.
-- OSS compliance / notices (Linux-friendly):
-  - `npm run notices:generate` to regenerate `THIRD_PARTY_NOTICES.md` at repo root from dependency metadata
-  - `npm run notices:check` to enforce deterministic root notice output
-  - `npm run build` automatically refreshes notices and packages `THIRD_PARTY_NOTICES.md` into `dist/` for web / Android / iOS app bundles
-
 ## 🔧 Advanced Topics
 
 ### Advanced - Network Security
@@ -387,6 +375,18 @@ Optional GitHub API token (helps with rate limits):
 ```bash
 export GITHUB_TOKEN=<your-token>
 ```
+
+## 🛠️ For Developers
+
+If you want to build, test, or contribute:
+
+- Developer guide: [doc/developer.md](doc/developer.md)
+- Chaos/fuzz testing docs: [doc/testing/chaos-fuzz.md](doc/testing/chaos-fuzz.md)
+- Web server runtime dependency note: `basic-ftp` is in `dependencies` because the web server uses it at runtime inside the Docker image.
+- OSS compliance / notices (Linux-friendly):
+  - `npm run notices:generate` to regenerate `THIRD_PARTY_NOTICES.md` at repo root from dependency metadata
+  - `npm run notices:check` to enforce deterministic root notice output
+  - `npm run build` automatically refreshes notices and packages `THIRD_PARTY_NOTICES.md` into `dist/` for web / Android / iOS app bundles
 
 ## 🙏 Acknowledgments
 

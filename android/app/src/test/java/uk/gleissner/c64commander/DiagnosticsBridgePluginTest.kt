@@ -187,4 +187,43 @@ class DiagnosticsBridgePluginTest {
                 plugin.notifyListenersCalls.none { it.first == "diagnosticsLog" }
         )
     }
+
+    @Test
+    fun loadHandlesReceiverRegistrationFailure() {
+        val bridge = mock(Bridge::class.java)
+        `when`(bridge.context).thenReturn(context)
+        val target =
+                object : DiagnosticsBridgePlugin() {
+                    override fun registerPluginReceiver(
+                            receiver: BroadcastReceiver,
+                            filter: android.content.IntentFilter
+                    ) {
+                        throw RuntimeException("register failed")
+                    }
+                }
+        val field = Plugin::class.java.getDeclaredField("bridge")
+        field.isAccessible = true
+        field.set(target, bridge)
+
+        target.load()
+    }
+
+    @Test
+    fun handleOnDestroyHandlesReceiverUnregisterFailure() {
+        val brokenContext = mock(Context::class.java)
+        doThrow(RuntimeException("unregister failed"))
+                .`when`(brokenContext)
+                .unregisterReceiver(any(BroadcastReceiver::class.java))
+
+        val bridge = mock(Bridge::class.java)
+        `when`(bridge.context).thenReturn(brokenContext)
+        val target = DiagnosticsBridgePlugin()
+        val field = Plugin::class.java.getDeclaredField("bridge")
+        field.isAccessible = true
+        field.set(target, bridge)
+
+        val method = Plugin::class.java.getDeclaredMethod("handleOnDestroy")
+        method.isAccessible = true
+        method.invoke(target)
+    }
 }

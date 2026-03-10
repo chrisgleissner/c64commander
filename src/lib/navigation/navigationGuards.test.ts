@@ -29,6 +29,20 @@ describe("navigationGuards", () => {
     expect(confirmNavigation()).toBe(true);
   });
 
+  it("stops evaluating guards after the first rejection", () => {
+    const first = vi.fn(() => false);
+    const second = vi.fn(() => true);
+    const unregisterFirst = registerNavigationGuard(first);
+    const unregisterSecond = registerNavigationGuard(second);
+
+    expect(confirmNavigation()).toBe(false);
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(second).not.toHaveBeenCalled();
+
+    unregisterSecond();
+    unregisterFirst();
+  });
+
   it("retries blocked transitions after confirmation", () => {
     const retry = vi.fn();
     const unblock = vi.fn();
@@ -64,5 +78,32 @@ describe("navigationGuards", () => {
 
     dispose();
     unregister();
+  });
+
+  it("retries transitions immediately after the blocker has been installed", () => {
+    const retry = vi.fn();
+    const unblock = vi.fn();
+    let handler: ((transition: { retry: () => void }) => void) | null = null;
+    const navigator = {
+      block: vi.fn((nextHandler: (transition: { retry: () => void }) => void) => {
+        handler = nextHandler;
+        return unblock;
+      }),
+    };
+
+    const dispose = installNavigationBlocker(navigator);
+
+    handler?.({ retry });
+
+    expect(unblock).toHaveBeenCalledTimes(1);
+    expect(retry).toHaveBeenCalledTimes(1);
+
+    dispose();
+  });
+
+  it("returns a no-op disposer when the navigator cannot block transitions", () => {
+    const dispose = installNavigationBlocker({});
+
+    expect(() => dispose()).not.toThrow();
   });
 });

@@ -55,6 +55,7 @@ vi.mock("@/lib/sid/sidUtils", () => ({
 import {
   getErrorMessage,
   isExistsError,
+  shouldUseNativeDownload,
   normalizeEntryName,
   normalizeVirtualPath,
   normalizeLibraryPath,
@@ -84,6 +85,20 @@ describe("hvscDownload", () => {
     vi.clearAllMocks();
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(false);
     vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(false);
+    delete process.env.VITE_ENABLE_TEST_PROBES;
+  });
+
+  it("returns false when native platform detection throws", () => {
+    vi.mocked(Capacitor.isNativePlatform).mockImplementation(() => {
+      throw new Error("native probe failed");
+    });
+
+    expect(shouldUseNativeDownload()).toBe(false);
+    expect(vi.mocked(addLog)).toHaveBeenCalledWith(
+      "warn",
+      "Failed to detect native platform for HVSC download",
+      expect.objectContaining({ error: "native probe failed" }),
+    );
   });
 
   it("logs when content length fetch fails", async () => {
