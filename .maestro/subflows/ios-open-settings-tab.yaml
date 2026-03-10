@@ -7,7 +7,7 @@ tags:
   - subflow
 ---
 - launchApp:
-  stopApp: true
+    stopApp: true
 - retry:
     maxRetries: 3
     commands:
@@ -18,39 +18,39 @@ tags:
       - tapOn:
           text: "Continue in Demo Mode"
           optional: true
-    - tapOn:
-      text: "Got it"
-      optional: true
-    - tapOn:
-      text: "Wait"
-      optional: true
-    - tapOn:
-      text: "Close app"
-      optional: true
-    - tapOn:
-      text: "Allow"
-      optional: true
-    - tapOn:
-      text: "Allow access"
-      optional: true
-    - tapOn:
-      text: "Allow all the time"
-      optional: true
-    - tapOn:
-      text: "Allow only while using the app"
-      optional: true
+      - tapOn:
+          text: "Got it"
+          optional: true
+      - tapOn:
+          text: "Wait"
+          optional: true
+      - tapOn:
+          text: "Close app"
+          optional: true
+      - tapOn:
+          text: "Allow"
+          optional: true
+      - tapOn:
+          text: "Allow access"
+          optional: true
+      - tapOn:
+          text: "Allow all the time"
+          optional: true
+      - tapOn:
+          text: "Allow only while using the app"
+          optional: true
       - waitForAnimationToEnd
-    - tapOn:
-      text: "Settings"
-      optional: true
-    - extendedWaitUntil:
-      visible:
-      text: "Settings"
-      timeout: ${LONG_TIMEOUT}
+      - tapOn:
+          text: "Settings"
+          optional: true
+      - extendedWaitUntil:
+          visible:
+            text: "Settings"
+          timeout: ${LONG_TIMEOUT}
 - tapOn:
     text: "Settings"
-  optional: true
+    optional: true
 - extendedWaitUntil:
     visible: "Settings"
-  timeout: ${LONG_TIMEOUT}
+    timeout: ${LONG_TIMEOUT}
 - assertVisible: "Settings"
