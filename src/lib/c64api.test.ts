@@ -11,6 +11,16 @@ import { C64API, type ConfigResponse } from "@/lib/c64api";
 
 describe("C64API upload bodies", () => {
   const originalFetch = globalThis.fetch;
+  const createBinaryBody = (bytes: number[]) =>
+    ({
+      size: bytes.length,
+      arrayBuffer: vi.fn(async () => Uint8Array.from(bytes).buffer),
+    }) as unknown as Blob;
+
+  const getLastRequest = () => {
+    const fetchMock = vi.mocked(globalThis.fetch);
+    return fetchMock.mock.calls.at(-1)?.[1];
+  };
 
   beforeEach(() => {
     vi.stubGlobal(
@@ -24,29 +34,48 @@ describe("C64API upload bodies", () => {
     globalThis.fetch = originalFetch;
   });
 
-  it("sends raw binary uploads as ArrayBuffer payloads", async () => {
+  it("keeps local PRG playback on raw ArrayBuffer uploads so Android binary bytes are not coerced like the SID-safe multipart path", async () => {
     const api = new C64API("http://127.0.0.1");
-    const body = {
-      size: 4,
-      arrayBuffer: vi.fn(async () => Uint8Array.from([1, 2, 3, 4]).buffer),
-    } as unknown as Blob;
+    const body = createBinaryBody([1, 2, 3, 4]);
 
     await api.runPrgUpload(body);
 
-    const fetchMock = vi.mocked(globalThis.fetch);
-    const request = fetchMock.mock.calls[0]?.[1];
+    const request = getLastRequest();
     expect(request).toBeDefined();
     expect(request?.body).toBeInstanceOf(ArrayBuffer);
     expect(Array.from(new Uint8Array(request?.body as ArrayBuffer))).toEqual([1, 2, 3, 4]);
   });
 
-  it("keeps SID uploads on multipart FormData", async () => {
+  it("keeps local CRT playback on raw ArrayBuffer uploads so Android cartridge bytes stay intact", async () => {
+    const api = new C64API("http://127.0.0.1");
+    const body = createBinaryBody([5, 6, 7, 8]);
+
+    await api.runCartridgeUpload(body);
+
+    const request = getLastRequest();
+    expect(request).toBeDefined();
+    expect(request?.body).toBeInstanceOf(ArrayBuffer);
+    expect(Array.from(new Uint8Array(request?.body as ArrayBuffer))).toEqual([5, 6, 7, 8]);
+  });
+
+  it("keeps local D64 playback on raw ArrayBuffer uploads so Android disk images are not corrupted in transit", async () => {
+    const api = new C64API("http://127.0.0.1");
+    const body = createBinaryBody([9, 10, 11, 12]);
+
+    await api.mountDriveUpload("a", body, "d64", "readwrite");
+
+    const request = getLastRequest();
+    expect(request).toBeDefined();
+    expect(request?.body).toBeInstanceOf(ArrayBuffer);
+    expect(Array.from(new Uint8Array(request?.body as ArrayBuffer))).toEqual([9, 10, 11, 12]);
+  });
+
+  it("keeps local SID playback on multipart FormData so the known-good upload path stays unchanged", async () => {
     const api = new C64API("http://127.0.0.1");
 
     await api.playSidUpload(new Blob([Uint8Array.from([9, 8, 7])]), 1);
 
-    const fetchMock = vi.mocked(globalThis.fetch);
-    const request = fetchMock.mock.calls[0]?.[1];
+    const request = getLastRequest();
     expect(request).toBeDefined();
     expect(request?.body).toBeInstanceOf(FormData);
   });

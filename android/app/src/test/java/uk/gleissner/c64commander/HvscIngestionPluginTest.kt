@@ -193,4 +193,45 @@ class HvscIngestionPluginTest {
     assertEquals(false, payload?.getBoolean("eof"))
     assertEquals("AwQF", payload?.getString("data"))
   }
+
+  @Test
+  fun readArchiveChunkMarksEofWhenOffsetStartsAtFinalByteRange() {
+    val archiveDir = File(context.filesDir, "hvsc/cache")
+    archiveDir.mkdirs()
+    val archiveFile = File(archiveDir, "final-range.7z")
+    archiveFile.writeBytes(byteArrayOf(10, 11, 12, 13, 14, 15))
+
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("relativeArchivePath")).thenReturn("hvsc/cache/final-range.7z")
+    `when`(call.getLong("offsetBytes")).thenReturn(4L)
+    `when`(call.getInt("lengthBytes")).thenReturn(8)
+
+    val payloadHolder = arrayOfNulls<JSObject>(1)
+    doAnswer { invocation ->
+              payloadHolder[0] = invocation.getArgument(0) as JSObject
+              null
+            }
+            .`when`(call)
+            .resolve(any(JSObject::class.java))
+
+    plugin.readArchiveChunk(call)
+
+    val payload = payloadHolder[0]
+    assertEquals(2, payload?.getInteger("sizeBytes"))
+    assertEquals(true, payload?.getBoolean("eof"))
+    assertEquals("Dg8=", payload?.getString("data"))
+  }
+
+  @Test
+  fun readArchiveChunkRejectsNegativeOffsetsBeforeTouchingFilesystem() {
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("relativeArchivePath")).thenReturn("hvsc/cache/missing.7z")
+    `when`(call.getLong("offsetBytes")).thenReturn(-1L)
+    `when`(call.getInt("lengthBytes")).thenReturn(4)
+
+    plugin.readArchiveChunk(call)
+
+    verify(call).reject("offsetBytes must be >= 0")
+    verify(call, never()).resolve(any(JSObject::class.java))
+  }
 }

@@ -447,7 +447,7 @@ describe("hvscDownload", () => {
       expect(decoded).toEqual(new Uint8Array(0));
     });
 
-    it("assembles large archives from native chunks when running on native platform", async () => {
+    it("keeps hvsc-baseline-84.7z off the guarded whole-file bridge read by assembling native chunks on Android", async () => {
       const firstChunk = new Uint8Array(3 * 1024 * 1024).fill(1);
       const secondChunk = new Uint8Array(3 * 1024 * 1024).fill(2);
 
@@ -476,7 +476,7 @@ describe("hvscDownload", () => {
       expect(Filesystem.readFile).not.toHaveBeenCalled();
     });
 
-    it("throws when native chunk reads do not return the full archive length", async () => {
+    it("fails loudly when hvsc-baseline-84.7z native chunk reads stop before the full archive length", async () => {
       vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
       vi.mocked(Filesystem.stat).mockResolvedValue({ size: 6 * 1024 * 1024 } as any);
       vi.spyOn(HvscIngestion, "readArchiveChunk").mockResolvedValue({

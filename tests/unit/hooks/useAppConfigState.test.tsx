@@ -323,18 +323,17 @@ describe("useAppConfigState", () => {
     status.isConnected = false;
     renderHook(() => useAppConfigState(), { wrapper });
     // Allow React to process effects
-    await act(async () => { });
+    await act(async () => {});
     // When disconnected, effect returns early before fetching
     expect(saveInitialSnapshot).not.toHaveBeenCalled();
     status.isConnected = true;
   });
 
-  it("marks hasCaptured from sessionStorage on effect run (line 134)", async () => {
-    // Pre-populate sessionStorage so the hook marks hasCaptured=true on first effect
-    sessionStorage.setItem("c64u-snapshot-captured-http://c64u", "1");
+  it("does not recapture the initial snapshot when the current baseUrl already has a session marker", async () => {
+    sessionStorage.setItem("c64u_initial_snapshot_session:http://c64u", "1");
     renderHook(() => useAppConfigState(), { wrapper });
-    await act(async () => { });
-    // The hook won't fetch again since hasCaptured=true — snapshot was not saved this run
+    await act(async () => {});
+    expect(getCategories).not.toHaveBeenCalled();
     expect(saveInitialSnapshot).not.toHaveBeenCalled();
   });
 

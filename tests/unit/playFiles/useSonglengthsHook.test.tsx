@@ -280,6 +280,32 @@ describe("useSonglengths", () => {
     expect(secondPass?.[0]?.durationMs).toBe(45_000);
   });
 
+  it("yields every 250 SID items so full-HVSC imports do not monopolize the event loop", async () => {
+    const { result } = renderUseSonglengths([]);
+    const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout").mockImplementation(((
+      handler: TimerHandler,
+      _timeout?: number,
+      ...args: unknown[]
+    ) => {
+      if (typeof handler === "function") {
+        handler(...args);
+      }
+      return 0 as ReturnType<typeof setTimeout>;
+    }) as typeof setTimeout);
+    const items: PlaylistItem[] = Array.from({ length: 250 }, (_, index) => ({
+      id: `song-${index}`,
+      category: "sid",
+      label: `demo-${index}.sid`,
+      path: `/MUSICIANS/demo-${index}.sid`,
+      request: { source: "local", path: `/MUSICIANS/demo-${index}.sid`, songNr: 1 },
+    }));
+
+    const updated = await result.current?.applySonglengthsToItems(items);
+
+    expect(updated).toHaveLength(250);
+    expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 0);
+  });
+
   it("prefers Songlengths.md5 over Songlengths.txt when both exist in the same folder", async () => {
     const txt = makeTextFile("DOCUMENTS/Songlengths.txt", "/MUSICIANS/demo.sid 0:10\n");
     const md5 = makeTextFile("DOCUMENTS/Songlengths.md5", "; /MUSICIANS/demo.sid\nabc=0:20\n");

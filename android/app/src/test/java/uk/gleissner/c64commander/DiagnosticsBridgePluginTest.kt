@@ -11,6 +11,7 @@ package uk.gleissner.c64commander
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import com.getcapacitor.Bridge
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
@@ -22,6 +23,7 @@ import org.junit.runner.RunWith
 import org.mockito.Mockito.*
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows
+import org.robolectric.annotation.Config
 
 /** Test-only subclass that captures notifyListeners calls for verification. */
 private open class TestableDiagnosticsBridgePlugin : DiagnosticsBridgePlugin() {
@@ -53,7 +55,8 @@ class DiagnosticsBridgePluginTest {
     }
 
     @Test
-    fun loadRegistersReceiver() {
+    @Config(sdk = [Build.VERSION_CODES.TIRAMISU])
+    fun loadRegistersReceiverOnAndroid13PlusWithoutReceiverExportErrors() {
         plugin.load()
         val shadowApp = Shadows.shadowOf(context as android.app.Application)
         val receivers = shadowApp.registeredReceivers

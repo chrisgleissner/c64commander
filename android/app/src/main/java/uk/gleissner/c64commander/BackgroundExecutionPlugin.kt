@@ -43,10 +43,17 @@ open class BackgroundExecutionPlugin : Plugin() {
     override fun load() {
         super.load()
         try {
-            context.registerReceiver(autoSkipReceiver, IntentFilter(BackgroundExecutionService.ACTION_AUTO_SKIP_DUE))
+            registerPluginReceiver(
+                    autoSkipReceiver,
+                    IntentFilter(BackgroundExecutionService.ACTION_AUTO_SKIP_DUE),
+            )
         } catch (e: Exception) {
             AppLogger.error(context, logTag, "Failed to register auto-skip receiver", "BackgroundExecutionPlugin", e)
         }
+    }
+
+    internal open fun registerPluginReceiver(receiver: BroadcastReceiver, filter: IntentFilter) {
+        BroadcastReceiverCompat.registerNotExported(context, receiver, filter)
     }
 
     override fun handleOnDestroy() {

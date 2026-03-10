@@ -106,13 +106,35 @@ Local checks completed successfully:
 Additional observations:
 
 - `c64u` resolves locally to `192.168.1.13`.
-- Attached Android device `9B081FFAZ001WX` is visible via `adb devices -l`.
+- Attached Android device `9B0...` is visible via `adb devices -l`.
+
+## Real-device proof
+
+Exploratory Android regression investigations should assume this setup is available:
+
+- Attached Android device over adb.
+- Live C64 Ultimate reachable at hostname `c64u`.
+
+Completed on-device validation:
+
+- The app was installed on the device with ID prefix `9B0`, fixture files were pushed to `/sdcard/Download/C64LocalSource`, and the package launched via adb.
+- Evidence bundles were written under `test-results/maestro-proof/`.
+
+Attempted on-device validation:
+
+- Real C64U FTP browse flow `.maestro/real-c64u-ftp-browse.yaml` failed in the shared launch path before reaching browse assertions; report: `test-results/maestro-proof/real-c64u-ftp-browse/report.xml`.
+- Local Android binary playback proof `.maestro/local-binary-playback-proof.yaml` also failed before any playback assertion with `Unable to launch app uk.gleissner.c64commander`; reports: `test-results/maestro-proof/local-binary-playback-proof/report.xml` and `test-results/maestro-proof/local-binary-playback-proof-foreground.xml`.
+- Device logs show the phone cannot resolve hostname `c64u` even though the workstation can: `Unable to resolve host "c64u": No address associated with hostname`.
+- Device logs also show Android 15 receiver-registration `SecurityException` warnings from `BackgroundExecutionPlugin` and `DiagnosticsBridgePlugin` during startup, which are additional real-device runtime issues outside the five regression fixes.
 
 ## External blockers
 
 ### Android device validation
 
-The attached Android device is now available as `9B081FFAZ001WX`, but a real-device regression pass against the live C64U was not executed in this validation slice.
+Real-device validation is blocked by device-side runtime/environment issues:
+
+- The attached phone does not resolve hostname `c64u`, so it cannot reach the live C64U over the required hostname path.
+- Maestro reports launch failures on the same device for the local binary playback flow, despite adb being able to launch the installed package.
 
 ### Android JVM validation
 
@@ -125,6 +147,6 @@ These blockers no longer prevent a full repository build claim, but they still l
 
 ## Remaining work
 
-1. Run targeted Android real-device regression checks on `9B081FFAZ001WX` against the live C64U.
+1. Run targeted Android real-device regression checks on `9B0...` against the live C64U.
 2. Capture device-side screenshots/logs for the proof bundle.
 3. Re-run Android JVM plugin tests if deeper native-runtime proof is still required beyond the green `./build` result.

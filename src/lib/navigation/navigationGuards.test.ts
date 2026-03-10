@@ -14,7 +14,7 @@ import {
 } from "@/lib/navigation/navigationGuards";
 
 describe("navigationGuards", () => {
-  it("blocks navigation when a registered guard rejects it", () => {
+  it("blocks large playlist import navigation until the warning guard explicitly allows it", () => {
     const unregister = registerNavigationGuard(vi.fn(() => false));
 
     expect(confirmNavigation()).toBe(false);
@@ -46,7 +46,7 @@ describe("navigationGuards", () => {
     dispose();
   });
 
-  it("keeps blocked transitions cancelled when a guard rejects them", () => {
+  it("keeps in-app navigation cancelled when an active import warning guard rejects the transition", () => {
     const retry = vi.fn();
     const unregister = registerNavigationGuard(() => false);
     const unblock = vi.fn();

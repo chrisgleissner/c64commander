@@ -166,7 +166,7 @@ Commands run:
 	- `.maestro/edge-ram-restore-chunked.yaml`
 	- `.maestro/edge-volume-mute-race.yaml`
 - Re-ran Maestro gating successfully using Pixel 4 serial only:
-	- `npm run maestro:gating -- --device-id 9B081FFAZ001WX --skip-emulator-start`
+	- `npm run maestro:gating -- --device-id 9B0... --skip-emulator-start`
 	- Result: pass (`smoke-file-picker-cancel` passed)
 
 ### Final gate rerun results

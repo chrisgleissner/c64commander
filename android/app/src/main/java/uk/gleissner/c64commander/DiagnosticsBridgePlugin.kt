@@ -57,10 +57,14 @@ open class DiagnosticsBridgePlugin : Plugin() {
   override fun load() {
     super.load()
     try {
-      context.registerReceiver(diagnosticsReceiver, IntentFilter(AppLogger.ACTION_DIAGNOSTICS_LOG))
+      registerPluginReceiver(diagnosticsReceiver, IntentFilter(AppLogger.ACTION_DIAGNOSTICS_LOG))
     } catch (error: Exception) {
       AppLogger.error(context, logTag, "Failed to register diagnostics receiver", "DiagnosticsBridgePlugin", error)
     }
+  }
+
+  internal open fun registerPluginReceiver(receiver: BroadcastReceiver, filter: IntentFilter) {
+    BroadcastReceiverCompat.registerNotExported(context, receiver, filter)
   }
 
   override fun handleOnDestroy() {

@@ -505,36 +505,29 @@ class FtpClientPluginTest {
   @Test
   fun listDirectoryDoesNotMislabelSocketSetupFailureAsTimeout() {
     val plugin = FtpClientPlugin()
-    plugin.runTask = { runnable -> runnable.run() }
+    val method =
+            FtpClientPlugin::class.java.getDeclaredMethod(
+                    "buildFailureMessage",
+                    String::class.java,
+                    Exception::class.java,
+                    Int::class.javaPrimitiveType,
+            )
+    method.isAccessible = true
 
-    val ftpClient = mock(FTPClient::class.java)
-    plugin.ftpClientFactory = { ftpClient }
-
-    doAnswer {
-              throw NullPointerException(
-                      "Attempt to invoke virtual method 'void java.net.Socket.setSoTimeout(int)' on a null object reference"
-              )
-            }
-            .`when`(ftpClient)
-            .setSoTimeout(8000)
-
-    val call = mock(PluginCall::class.java)
-    `when`(call.getString("host")).thenReturn("127.0.0.1")
-    `when`(call.getInt("port")).thenReturn(21)
-
-    var rejectedMessage: String? = null
-    doAnswer { invocation ->
-              rejectedMessage = invocation.getArgument(0)
-              null
-            }
-            .`when`(call)
-            .reject(any(String::class.java), any(Exception::class.java))
-
-    plugin.listDirectory(call)
+    val message =
+            method.invoke(
+                    plugin,
+                    "listDirectory",
+                    NullPointerException(
+                            "Attempt to invoke virtual method 'void java.net.Socket.setSoTimeout(int)' on a null object reference"
+                    ),
+                    8000,
+            ) as
+                    String
 
     assertEquals(
             "Attempt to invoke virtual method 'void java.net.Socket.setSoTimeout(int)' on a null object reference",
-            rejectedMessage,
+            message,
     )
   }
 

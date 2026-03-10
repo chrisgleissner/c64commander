@@ -12,6 +12,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.os.Build
 import com.getcapacitor.Bridge
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
@@ -21,6 +22,7 @@ import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 import org.mockito.ArgumentMatchers.eq
 import org.mockito.Mockito.*
 import org.robolectric.RobolectricTestRunner
@@ -130,7 +132,8 @@ class BackgroundExecutionPluginTest {
     }
 
     @Test
-    fun loadRegistersAutoSkipReceiver() {
+    @Config(sdk = [Build.VERSION_CODES.TIRAMISU])
+    fun loadRegistersAutoSkipReceiverOnAndroid13PlusWithoutReceiverExportErrors() {
         plugin.load()
         val shadowApp = Shadows.shadowOf(context as android.app.Application)
         val hasReceiver = shadowApp.registeredReceivers.any { wrapper ->
@@ -230,14 +233,13 @@ class BackgroundExecutionPluginTest {
 
     @Test
     fun loadHandlesReceiverRegistrationFailure() {
-        val brokenContext = mock(Context::class.java)
-        `when`(
-            brokenContext.registerReceiver(any(BroadcastReceiver::class.java), any(IntentFilter::class.java)),
-        ).thenThrow(RuntimeException("register failed"))
-
         val bridge = mock(Bridge::class.java)
-        `when`(bridge.context).thenReturn(brokenContext)
-        val target = BackgroundExecutionPlugin()
+        `when`(bridge.context).thenReturn(context)
+        val target = object : BackgroundExecutionPlugin() {
+            override fun registerPluginReceiver(receiver: BroadcastReceiver, filter: IntentFilter) {
+                throw RuntimeException("register failed")
+            }
+        }
         val field = Plugin::class.java.getDeclaredField("bridge")
         field.isAccessible = true
         field.set(target, bridge)

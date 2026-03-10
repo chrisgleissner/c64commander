@@ -29,7 +29,7 @@ describe("resolveSonglengthDurationMsWithFacade", () => {
     expect(file.arrayBuffer).not.toHaveBeenCalled();
   });
 
-  it("skips md5 fallback when disabled for bulk imports", async () => {
+  it("skips MD5 fallback during bulk HVSC imports so songlength lookups stay lazy and throughput does not collapse", async () => {
     const service = {
       resolveDurationSeconds: vi.fn(() => ({ durationSeconds: null })),
     };
@@ -49,7 +49,7 @@ describe("resolveSonglengthDurationMsWithFacade", () => {
     expect(file.arrayBuffer).not.toHaveBeenCalled();
   });
 
-  it("uses md5 fallback when enabled", async () => {
+  it("still allows MD5 fallback for interactive playback lookups when bulk-import throttling is not active", async () => {
     const service = {
       resolveDurationSeconds: vi
         .fn()
