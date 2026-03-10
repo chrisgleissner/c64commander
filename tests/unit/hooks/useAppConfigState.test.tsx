@@ -374,7 +374,8 @@ describe("useAppConfigState", () => {
     expect(Object.keys(batchPayload)).not.toContain("BadCat");
   });
 
-  it("fetchAllConfig logs on category failure and partial result (lines 57-64)", async () => {
+  it("fetchAllConfig retries failed categories and logs partial result (lines 57-64)", async () => {
+    const { addLog } = await import("@/lib/logging");
     getCategories.mockResolvedValue({ categories: ["Audio", "Video"] });
     getCategory
       .mockResolvedValueOnce({ items: { Volume: { selected: "5" } } })
@@ -383,7 +384,12 @@ describe("useAppConfigState", () => {
 
     await waitFor(
       () => {
-        expect(getCategory).toHaveBeenCalledTimes(2);
+        expect(getCategory).toHaveBeenCalledTimes(3);
+        expect(addLog).toHaveBeenCalledWith(
+          "debug",
+          expect.stringContaining("partially failed"),
+          expect.objectContaining({ failedCategories: ["Video"] }),
+        );
       },
       { timeout: 3000 },
     );

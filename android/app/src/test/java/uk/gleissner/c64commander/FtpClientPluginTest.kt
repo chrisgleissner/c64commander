@@ -30,6 +30,7 @@ import org.junit.runner.RunWith
 import org.mockito.ArgumentMatchers.eq
 import org.mockito.Mockito.any
 import org.mockito.Mockito.doAnswer
+import org.mockito.Mockito.inOrder
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
@@ -494,9 +495,47 @@ class FtpClientPluginTest {
 
     plugin.listDirectory(call)
 
-    verify(ftpClient).setConnectTimeout(4321)
-    verify(ftpClient).setDefaultTimeout(4321)
-    verify(ftpClient).setSoTimeout(4321)
+    val ordered = inOrder(ftpClient)
+    ordered.verify(ftpClient).setConnectTimeout(4321)
+    ordered.verify(ftpClient).setDefaultTimeout(4321)
+    ordered.verify(ftpClient).connect("127.0.0.1", 21)
+    ordered.verify(ftpClient).setSoTimeout(4321)
+  }
+
+  @Test
+  fun listDirectoryDoesNotMislabelSocketSetupFailureAsTimeout() {
+    val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+
+    doAnswer {
+              throw NullPointerException(
+                      "Attempt to invoke virtual method 'void java.net.Socket.setSoTimeout(int)' on a null object reference"
+              )
+            }
+            .`when`(ftpClient)
+            .setSoTimeout(8000)
+
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getInt("port")).thenReturn(21)
+
+    var rejectedMessage: String? = null
+    doAnswer { invocation ->
+              rejectedMessage = invocation.getArgument(0)
+              null
+            }
+            .`when`(call)
+            .reject(any(String::class.java), any(Exception::class.java))
+
+    plugin.listDirectory(call)
+
+    assertEquals(
+            "Attempt to invoke virtual method 'void java.net.Socket.setSoTimeout(int)' on a null object reference",
+            rejectedMessage,
+    )
   }
 
   @Test

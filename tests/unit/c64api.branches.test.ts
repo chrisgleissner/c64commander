@@ -1119,13 +1119,26 @@ describe("c64api branches", () => {
   // #48: getConfigItems with category response missing category sub-key (BRDA:1129, 1130)
   it("getConfigItems handles category response with no category sub-key or items block", async () => {
     const fetchMock = getFetchMock();
-    // Response has neither a 'network' key nor an 'items' key → both ?? fallbacks triggered
-    fetchMock.mockResolvedValueOnce(okJsonResponse({ myItem: "value" }));
+    // A scalar category payload is accepted, then enriched with a per-item fetch
+    // so callers still receive the structured item metadata shape.
+    fetchMock.mockResolvedValueOnce(okJsonResponse({ myItem: "value" })).mockResolvedValueOnce(
+      okJsonResponse({
+        network: {
+          items: {
+            myItem: { selected: "value" },
+          },
+        },
+      }),
+    );
 
     const api = new C64API("http://c64u");
     const result = await api.getConfigItems("network", ["myItem"]);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect((result as any).network).toBeDefined();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect((result as any).network).toEqual({
+      items: {
+        myItem: { selected: "value" },
+      },
+    });
   });
 
   // #49: getConfigItems with per-item fetch rejection (BRDA:1151)

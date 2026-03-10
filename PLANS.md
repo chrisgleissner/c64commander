@@ -26,6 +26,10 @@ Resolve five Android regressions in the Capacitor app and produce reproducible e
 - Branch: `fix/remote-playback`.
 - Initial hotspot mapping completed across Android native FTP, TypeScript upload routes, HVSC native/non-native ingestion, and Play page import lifecycle.
 - Implemented fixes cover FTP directory listing, raw binary upload transport, HVSC large-archive native fallback, import navigation confirmation, and bulk songlength application throughput.
+- Follow-up TODO: Home-page LED quick controls must enrich scalar category responses from per-item config metadata so `LedStrip Mode` shows `Off`, `Fixed Color`, `SID Music`, `Rainbow` and `Fixed Color` exposes the full color list instead of only the selected value.
+- Follow-up TODO: Home-page SID sliders must hydrate from real Audio Mixer metadata so pan and volume use the current C64U values and full option ranges instead of collapsing to index `0` when category fetches return only scalar values.
+- Follow-up TODO: Full configuration hydration should keep happening lazily after launch, but the background snapshot fetch should be as efficient as possible so cached config can populate later UI without slowing first paint.
+- Follow-up TODO: Play-page disk autoplay must ensure Drive A is powered on when needed and switched to the required physical drive mode before mount/autostart (`d64 -> 1541`, `d71 -> 1571`, `d81 -> 1581`).
 
 ### Phase plan
 
@@ -81,6 +85,10 @@ Resolve five Android regressions in the Capacitor app and produce reproducible e
 - [ ] Android tests passed
 - [ ] Real-device validation captured or explicit external blocker documented
 - [ ] Proof artifacts written under `docs/repro/android-regressions-2026-03-09/`
+- [ ] Home-page LED quick-control metadata regression fixed and verified
+- [ ] Home-page SID quick-control metadata regression fixed and verified
+- [ ] Lazy background full-config hydration efficiency improved and verified
+- [ ] Play-page disk autoplay drive-mode reconciliation fixed and verified
 
 ### Confirmed findings so far
 
@@ -129,6 +137,10 @@ Resolve five Android regressions in the Capacitor app and produce reproducible e
 - 2026-03-09T23:22Z: Refreshed and revalidated the failing playback golden traces for disk autostart and playlist prev/next flows.
 - 2026-03-09T23:24Z: Full repository helper `./build` completed successfully.
 - 2026-03-09T23:25Z: Confirmed attached Android device `9B081FFAZ001WX` is visible to `adb`.
+- 2026-03-09T23:58Z: Confirmed live `c64u` LED category responses are scalar-only while per-item LED responses contain full metadata; queued client enrichment fix and regression test so Home-page LED mode/color controls regain full option lists.
+- 2026-03-10T00:09Z: Confirmed live `c64u` Audio Mixer category responses are also scalar-only while per-item volume/pan responses contain current values and full ranges; this explains Home-page SID sliders snapping to index `0` when option hydration is missing.
+- 2026-03-10T00:14Z: Queued broader Home config hydration follow-up: keep full-config snapshotting lazy after launch, but fetch categories concurrently in the background so later UI sections can populate from cached full config without extending startup latency.
+- 2026-03-10T00:28Z: Added Play-page autoplay follow-up to enforce Drive A power/type reconciliation before disk autoplay so `d64`, `d71`, and `d81` files run against matching drive hardware modes.
 
 ### Next actions
 
