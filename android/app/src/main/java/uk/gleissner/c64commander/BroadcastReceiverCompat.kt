@@ -15,17 +15,16 @@ import android.os.Build
 import androidx.core.content.ContextCompat
 
 object BroadcastReceiverCompat {
-    fun registerNotExported(
-            context: Context,
-            receiver: BroadcastReceiver,
-            filter: IntentFilter,
-            sdkInt: Int = Build.VERSION.SDK_INT,
-    ) {
-        if (sdkInt >= Build.VERSION_CODES.TIRAMISU) {
-            ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
-            return
-        }
-        @Suppress("DEPRECATION")
-        context.registerReceiver(receiver, filter)
+  fun registerNotExported(
+          context: Context,
+          receiver: BroadcastReceiver,
+          filter: IntentFilter,
+          sdkInt: Int = Build.VERSION.SDK_INT,
+  ) {
+    if (sdkInt >= Build.VERSION_CODES.TIRAMISU) {
+      ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+      return
     }
+    @Suppress("DEPRECATION") context.registerReceiver(receiver, filter)
+  }
 }

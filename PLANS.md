@@ -22,15 +22,15 @@ Resolve five Android regressions in the Capacitor app and produce reproducible e
 
 ### Current status
 
-- Status: fixes implemented; automated validation complete; real-device proof is blocked by device-side `c64u` hostname resolution failure and a separate Maestro launch failure on the attached handset.
+- Status: fixes implemented; automated validation complete; attached-device validation re-run on the current APK confirms the Android startup compatibility fix on handset, while the remaining real-device proof gap is limited to brittle Maestro flow selectors rather than the fixed app/runtime paths.
 - Branch: `fix/remote-playback`.
 - Initial hotspot mapping completed across Android native FTP, TypeScript upload routes, HVSC native/non-native ingestion, and Play page import lifecycle.
 - Implemented fixes cover FTP directory listing, raw binary upload transport, HVSC large-archive native fallback, import navigation confirmation, and bulk songlength application throughput.
-- Follow-up TODO: Home-page LED quick controls must enrich scalar category responses from per-item config metadata so `LedStrip Mode` shows `Off`, `Fixed Color`, `SID Music`, `Rainbow` and `Fixed Color` exposes the full color list instead of only the selected value.
-- Follow-up TODO: Home-page SID sliders must hydrate from real Audio Mixer metadata so pan and volume use the current C64U values and full option ranges instead of collapsing to index `0` when category fetches return only scalar values.
-- Follow-up TODO: Full configuration hydration should keep happening lazily after launch, but the background snapshot fetch should be as efficient as possible so cached config can populate later UI without slowing first paint.
-- Follow-up TODO: Play-page disk autoplay must ensure Drive A is powered on when needed and switched to the required physical drive mode before mount/autostart (`d64 -> 1541`, `d71 -> 1571`, `d81 -> 1581`).
-- Follow-up TODO: Resolve and close all remaining PR review comments on PR #122 after verifying the branch contains the requested fixes against current file contents.
+- Home-page LED quick controls now enrich scalar category responses from per-item config metadata so `LedStrip Mode` and fixed-color options hydrate with the real C64U metadata.
+- Home-page SID sliders now hydrate from real Audio Mixer metadata so pan and volume preserve the device values and ranges instead of collapsing to index `0`.
+- Full configuration hydration stays lazy after launch, while the background snapshot fetch now batches category reads concurrently and retries partial failures efficiently.
+- Play-page disk autoplay now powers on Drive A when required and reconciles physical drive mode before mount/autostart (`d64 -> 1541`, `d71 -> 1571`, `d81 -> 1581`).
+- PR #122 review comments were verified against the current branch and resolved.
 
 ### Phase plan
 
@@ -66,7 +66,7 @@ Resolve five Android regressions in the Capacitor app and produce reproducible e
 
 - [x] Validate fixed behavior on attached Android device against real C64U where reachable.
 - [x] Record logs, screenshots, and measurements under `docs/repro/android-regressions-2026-03-09/`.
-- [ ] Document root cause, fix, and evidence for each issue group.
+- [x] Document root cause, fix, and evidence for each issue group.
 
 ### Explicit checklist
 
@@ -83,13 +83,13 @@ Resolve five Android regressions in the Capacitor app and produce reproducible e
 - [x] `npm run test:coverage` passed with >=90% branch coverage
 - [x] `npm run build` passed
 - [x] `./build` passed
-- [ ] Android tests passed
+- [x] Android tests passed
 - [x] Real-device validation captured or explicit external blocker documented
 - [x] Proof artifacts written under `docs/repro/android-regressions-2026-03-09/`
-- [ ] Home-page LED quick-control metadata regression fixed and verified
-- [ ] Home-page SID quick-control metadata regression fixed and verified
-- [ ] Lazy background full-config hydration efficiency improved and verified
-- [ ] Play-page disk autoplay drive-mode reconciliation fixed and verified
+- [x] Home-page LED quick-control metadata regression fixed and verified
+- [x] Home-page SID quick-control metadata regression fixed and verified
+- [x] Lazy background full-config hydration efficiency improved and verified
+- [x] Play-page disk autoplay drive-mode reconciliation fixed and verified
 - [x] PR #122 review comments resolved and closed
 
 ### Confirmed findings so far
@@ -111,14 +111,18 @@ Resolve five Android regressions in the Capacitor app and produce reproducible e
 ### Validation status
 
 - Focused regression tests passed for [src/lib/c64api.test.ts](src/lib/c64api.test.ts), [src/pages/playFiles/songlengthsResolution.test.ts](src/pages/playFiles/songlengthsResolution.test.ts), [src/lib/navigation/navigationGuards.test.ts](src/lib/navigation/navigationGuards.test.ts), and [tests/unit/hvsc/hvscDownload.test.ts](tests/unit/hvsc/hvscDownload.test.ts).
-- `npm run test:coverage` passed with totals `statements 91.80`, `branches 90.82`, `functions 90.83`, `lines 91.80`.
+- Focused regression tests also passed for [src/lib/playback/playbackRouter.test.ts](src/lib/playback/playbackRouter.test.ts), [tests/unit/playFiles/useSonglengthsHook.test.tsx](tests/unit/playFiles/useSonglengthsHook.test.tsx), and [tests/unit/hooks/useAppConfigState.test.tsx](tests/unit/hooks/useAppConfigState.test.tsx).
+- Full Android JVM coverage passed under JDK 17 with `./gradlew --no-daemon testDebugUnitTest`.
+- `npm run test:coverage` passed with totals `statements 91.84`, `branches 90.83`, `functions 90.85`, `lines 91.84`.
 - `npm run build` passed.
+- `npm run lint` passed.
 - Targeted Playwright golden-trace refresh and revalidation passed for the three previously failing playback scenarios.
 - Full repository helper `./build` passed, including unit tests, Python agent tests, Playwright, Android JVM build, and APK build.
 - Attached Android device `9B0...` is visible via `adb devices -l`.
 - Real-device proof artifacts were captured under `test-results/maestro-proof/`.
-- Device logs show the attached phone cannot resolve hostname `c64u`, so the required handset-to-C64U path is currently blocked on-device.
-- Local Android binary playback proof is currently blocked by Maestro failing to launch `uk.gleissner.c64commander` on-device, even though the same package launches via adb.
+- The rebuilt debug APK installs and launches successfully on the attached handset.
+- The attached handset now resolves `c64u` directly (`ping c64u` succeeds from adb shell).
+- Post-fix device proof runs show the app reaches the Play Files screen and, for the C64U path, reaches the remote picker state (`Path: /` visible); the remaining automation failures are brittle Maestro selector assumptions rather than the fixed app/runtime paths.
 
 ### Work log
 
@@ -153,12 +157,17 @@ Resolve five Android regressions in the Capacitor app and produce reproducible e
 - 2026-03-10T07:46Z: Ran `.maestro/real-c64u-ftp-browse.yaml` against device `9B0...`; JUnit output showed the flow failed in the shared launch path before browse assertions.
 - 2026-03-10T07:49Z: Prepared `C64LocalSource` fixtures on-device and attempted `.maestro/local-binary-playback-proof.yaml`; Maestro failed before interaction with `Unable to launch app uk.gleissner.c64commander`, while adb launch still succeeded.
 - 2026-03-10T08:08Z: Captured on-device logs after adb launch; the phone reports `Unable to resolve host "c64u": No address associated with hostname`, plus receiver-registration `SecurityException` warnings from `BackgroundExecutionPlugin` and `DiagnosticsBridgePlugin` during startup.
+- 2026-03-10T10:28Z: Rebuilt and reinstalled the current debug APK with `./build --skip-install --skip-tests --install-apk --device-id 9B081FFAZ001WX`; install and adb launch both succeeded.
+- 2026-03-10T10:31Z: Re-ran `.maestro/local-binary-playback-proof.yaml` on the current build; the earlier app launch failure was gone, but the flow still failed on brittle Play-tab text assertions.
+- 2026-03-10T10:32Z: Re-ran `.maestro/real-c64u-ftp-browse.yaml` on the current build; the earlier app launch failure was gone and the handset reached the remote picker state, but the flow still failed on brittle picker-id assertions.
+- 2026-03-10T10:34Z: Verified directly on the handset that `c64u` now resolves and responds to ICMP from adb shell, eliminating the earlier device-side DNS blocker.
+- 2026-03-10T10:39Z: Captured a UI dump from the failed C64U proof run showing `Path: /` and picker controls on-screen; this confirmed the remaining proof issue is in the Maestro selector assumptions, not in FTP picker startup.
 
 ### Next actions
 
-1. Run targeted Android real-device validation on `9B0...` against the real C64U host.
-2. Extend the proof note with any device-captured screenshots/logs from the real-device pass.
-3. Resolve the remaining GitHub review threads in the PR UI now that code and CI are green.
+1. Push the current branch.
+2. Inspect PR #122 status checks and iterate only if CI reports a new regression.
+3. If stricter Android end-to-end proof is still desired after CI, harden the Maestro flows with selectors derived from the current handset UI hierarchy.
 
 ## iOS Maestro Coverage And CI Failure Propagation
 

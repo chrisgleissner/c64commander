@@ -13,20 +13,13 @@ env:
 - retry:
     maxRetries: 3
     commands:
-      - extendedWaitUntil:
-          visible:
-            text: "Play"
-          timeout: ${TIMEOUT}
       - tapOn:
           id: "tab-play"
-          optional: true
-      - tapOn:
-          text: "Play"
           optional: true
       - waitForAnimationToEnd
       - extendedWaitUntil:
           visible:
-            text: "Playlist"
+            text: "PLAY FILES"
           timeout: ${TIMEOUT}
 - scrollUntilVisible:
     element:
@@ -46,10 +39,6 @@ env:
     timeout: ${TIMEOUT}
 - tapOn:
     id: "import-option-c64u"
-- extendedWaitUntil:
-    visible:
-      id: "c64u-file-picker"
-    timeout: ${SHORT_TIMEOUT}
 - extendedWaitUntil:
     notVisible:
       id: "ftp-loading"

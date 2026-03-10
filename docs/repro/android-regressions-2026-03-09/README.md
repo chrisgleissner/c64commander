@@ -95,7 +95,10 @@ Local checks completed successfully:
 
 - Focused Vitest regression set for binary uploads, navigation guards, and songlength resolution.
 - Additional focused regression coverage passed for the native HVSC chunk-read path.
-- `npm run test:coverage` with `90.82%` branch coverage.
+- Additional focused regression coverage passed for autoplay drive reconciliation and lazy config hydration.
+- Full Android JVM validation passed under JDK 17 with `./gradlew --no-daemon testDebugUnitTest`.
+- `npm run lint`
+- `npm run test:coverage` with `90.83%` branch coverage.
 - `npm run build`
 - Focused Playwright golden-trace refresh and compare pass for:
   - `disk image triggers mount and autostart sequence`
@@ -117,36 +120,29 @@ Exploratory Android regression investigations should assume this setup is availa
 
 Completed on-device validation:
 
-- The app was installed on the device with ID prefix `9B0`, fixture files were pushed to `/sdcard/Download/C64LocalSource`, and the package launched via adb.
+- The app was rebuilt, installed on device `9B081FFAZ001WX`, and launched successfully via adb after the Android receiver-registration compatibility fix.
+- Fixture files were refreshed under `/sdcard/Download/C64LocalSource`.
+- The handset now resolves `c64u` directly; `adb shell ping -c 1 c64u` succeeds.
 - Evidence bundles were written under `test-results/maestro-proof/`.
 
 Attempted on-device validation:
 
-- Real C64U FTP browse flow `.maestro/real-c64u-ftp-browse.yaml` failed in the shared launch path before reaching browse assertions; report: `test-results/maestro-proof/real-c64u-ftp-browse/report.xml`.
-- Local Android binary playback proof `.maestro/local-binary-playback-proof.yaml` also failed before any playback assertion with `Unable to launch app uk.gleissner.c64commander`; reports: `test-results/maestro-proof/local-binary-playback-proof/report.xml` and `test-results/maestro-proof/local-binary-playback-proof-foreground.xml`.
-- Device logs show the phone cannot resolve hostname `c64u` even though the workstation can: `Unable to resolve host "c64u": No address associated with hostname`.
-- Device logs also show Android 15 receiver-registration `SecurityException` warnings from `BackgroundExecutionPlugin` and `DiagnosticsBridgePlugin` during startup, which are additional real-device runtime issues outside the five regression fixes.
+- The earlier `Unable to launch app uk.gleissner.c64commander` Maestro failure no longer reproduces on the current build.
+- Post-fix run of `.maestro/real-c64u-ftp-browse.yaml` still ended with a flow assertion, but the captured UI hierarchy shows the app had already reached the remote picker state with `Path: /` visible; report: `test-results/maestro-proof/post-compat-c64u/report.xml`, UI dump: `test-results/maestro-proof/post-compat-c64u/uidump.xml`.
+- Post-fix run of `.maestro/local-binary-playback-proof.yaml` still ended with a flow assertion while navigating the Play screen; report: `test-results/maestro-proof/post-compat-local/report.xml`.
+- The remaining on-device proof gap is therefore in the Maestro flow selectors, not in the Android startup/runtime path fixed by `BroadcastReceiverCompat`.
 
-## External blockers
+## Remaining blocker
 
-### Android device validation
+### Android proof automation
 
-Real-device validation is blocked by device-side runtime/environment issues:
+The remaining real-device limitation is the proof harness rather than the fixed app code:
 
-- The attached phone does not resolve hostname `c64u`, so it cannot reach the live C64U over the required hostname path.
-- Maestro reports launch failures on the same device for the local binary playback flow, despite adb being able to launch the installed package.
-
-### Android JVM validation
-
-Targeted Android plugin tests were attempted but are currently blocked by local environment/runtime issues:
-
-- Kotlin daemon / incremental tooling rejected JDK version `25.0.1`.
-- Robolectric execution later failed with `NoClassDefFoundError` / `ClassReader` before producing a clean signal on the updated plugin tests.
-
-These blockers no longer prevent a full repository build claim, but they still limit native plugin-specific runtime proof beyond the automated coverage and build evidence.
+- The current Maestro flows still depend on brittle tab and picker selectors that do not match the attached handset's current rendered hierarchy.
+- Device evidence now shows the app launches, the handset resolves `c64u`, and the C64U browse flow reaches the remote picker UI on-device.
+- Android JVM validation is no longer blocked locally once run under JDK 17.
 
 ## Remaining work
 
-1. Run targeted Android real-device regression checks on `9B0...` against the live C64U.
-2. Capture device-side screenshots/logs for the proof bundle.
-3. Re-run Android JVM plugin tests if deeper native-runtime proof is still required beyond the green `./build` result.
+1. If stricter handset proof is required, harden the Maestro flows against the current Android UI hierarchy and rerun them.
+2. Capture additional device-side screenshots only if a future review needs end-to-end visual evidence beyond the existing UI dump and JUnit reports.

@@ -14,20 +14,13 @@ env:
 - retry:
     maxRetries: 3
     commands:
-      - extendedWaitUntil:
-          visible:
-            text: "Play"
-          timeout: ${TIMEOUT}
       - tapOn:
           id: "tab-play"
-          optional: true
-      - tapOn:
-          text: "Play"
           optional: true
       - waitForAnimationToEnd
       - extendedWaitUntil:
           visible:
-            text: "Playlist"
+                        text: "PLAY FILES"
           timeout: ${TIMEOUT}
 - scrollUntilVisible:
     element:
@@ -98,10 +91,6 @@ env:
     text: "Allow"
     optional: true
 
-- extendedWaitUntil:
-    visible:
-      id: "local-file-picker"
-    timeout: ${TIMEOUT}
 - extendedWaitUntil:
     visible:
       text: "demo.d64"
