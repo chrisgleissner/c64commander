@@ -20,6 +20,14 @@ import {
   markDeviceRequestStart,
   setCircuitOpenUntil,
 } from "@/lib/deviceInteraction/deviceStateStore";
+import { waitForBackgroundReadsToResume } from "@/lib/deviceInteraction/deviceActivityGate";
+import {
+  buildRestRequestIdentity,
+  canonicalizeRestPath,
+  isConfigMutationPath,
+  isMachineControlPath,
+  isReadOnlyRestMethod,
+} from "@/lib/deviceInteraction/restRequestIdentity";
 
 export type InteractionIntent = "user" | "system" | "background";
 
@@ -58,6 +66,15 @@ type QueueTask<T> = {
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const isTestEnv = () => {
+  if (
+    (
+      globalThis as {
+        __c64uForceInteractionScheduling?: boolean;
+      }
+    ).__c64uForceInteractionScheduling === true
+  ) {
+    return false;
+  }
   if (typeof import.meta !== "undefined") {
     const env = (import.meta as ImportMeta).env as { VITE_ENABLE_TEST_PROBES?: string } | undefined;
     if (env?.VITE_ENABLE_TEST_PROBES === "1") return true;
@@ -158,7 +175,11 @@ export const resetInteractionState = (reason: string) => {
 
 subscribeDeviceSafetyUpdates(updateConfig);
 
-const restScheduler = new InteractionScheduler(() => config.restMaxConcurrency);
+const REST_MAX_CONCURRENCY = 1;
+const MACHINE_CONTROL_COOLDOWN_MS = 250;
+const CONFIG_MUTATION_COOLDOWN_MS = 120;
+
+const restScheduler = new InteractionScheduler(() => REST_MAX_CONCURRENCY);
 const ftpScheduler = new InteractionScheduler(() => config.ftpMaxConcurrency);
 
 const restCache = new Map<string, CacheEntry<unknown>>();
@@ -238,26 +259,41 @@ const resetFtpFailure = () => {
 };
 
 const resolveRestPolicy = (method: string, path: string, baseUrl: string) => {
-  const normalizedPath = path.split("?")[0];
+  const canonicalPath = canonicalizeRestPath(path, baseUrl);
+  const normalizedPath = canonicalPath.split("?")[0];
   if (method === "GET" && normalizedPath === "/v1/info") {
     return {
-      key: `${baseUrl}:rest-info`,
+      key: buildRestRequestIdentity({ method, path: canonicalPath, baseUrl }),
       cacheMs: config.infoCacheMs,
       cooldownMs: 0,
     };
   }
   if (method === "GET" && normalizedPath === "/v1/configs") {
     return {
-      key: `${baseUrl}:rest-configs`,
+      key: buildRestRequestIdentity({ method, path: canonicalPath, baseUrl }),
       cacheMs: config.configsCacheMs,
       cooldownMs: config.configsCooldownMs,
     };
   }
   if (method === "GET" && normalizedPath === "/v1/drives") {
     return {
-      key: `${baseUrl}:rest-drives`,
+      key: buildRestRequestIdentity({ method, path: canonicalPath, baseUrl }),
       cacheMs: 0,
       cooldownMs: config.drivesCooldownMs,
+    };
+  }
+  if (!isReadOnlyRestMethod(method) && isMachineControlPath(canonicalPath)) {
+    return {
+      key: `${baseUrl}:rest-machine-control`,
+      cacheMs: 0,
+      cooldownMs: MACHINE_CONTROL_COOLDOWN_MS,
+    };
+  }
+  if (!isReadOnlyRestMethod(method) && isConfigMutationPath(canonicalPath)) {
+    return {
+      key: `${baseUrl}:rest-config-mutation`,
+      cacheMs: 0,
+      cooldownMs: CONFIG_MUTATION_COOLDOWN_MS,
     };
   }
   return { key: null, cacheMs: 0, cooldownMs: 0 };
@@ -319,6 +355,16 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
     throw error;
   }
 
+  if (meta.intent === "background" && isReadOnlyRestMethod(meta.method)) {
+    if (getDeviceStateSnapshot().state === "BUSY") {
+      recordDeviceGuard(meta.action, {
+        decision: "defer",
+        reason: "device-busy",
+      });
+    }
+    await waitForBackgroundReadsToResume();
+  }
+
   const now = Date.now();
   if (restCircuitUntilMs > now && !(meta.intent === "user" && config.allowUserOverrideCircuit)) {
     recordDeviceGuard(meta.action, {
@@ -336,7 +382,8 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
     });
   }
 
-  const policy = resolveRestPolicy(meta.method, meta.path, meta.baseUrl);
+  const canonicalPath = canonicalizeRestPath(meta.path, meta.baseUrl);
+  const policy = resolveRestPolicy(meta.method, canonicalPath, meta.baseUrl);
   if (policy.key && !meta.bypassCache) {
     const cached = restCache.get(policy.key);
     if (cached && cached.expiresAt > now) {

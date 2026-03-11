@@ -331,7 +331,7 @@ Transfer settings | Export/Import buttons | Tap or choose file | Exports or impo
 Tune play/disk prefs | List preview limit, disk autostart mode | Edit/select | Persists list preview limit and disk DMA vs KERNAL autostart preference | `useListPreviewLimit` + `saveDiskAutostartMode`
 Toggle HVSC feature flag | HVSC checkbox | Toggle | Shows or hides HVSC controls on Play page | feature-flag storage + context
 Override HVSC base URL | Developer-only input | Edit | Persists alternate HVSC mirror base URL | `setHvscBaseUrlOverride`
-Tune device safety | Safety mode select + advanced fields | Change mode or numeric overrides | Persists concurrency/cache/backoff/circuit-breaker limits; relaxed mode requires confirm dialog | `deviceSafetySettings` store
+Tune device safety | Safety mode select + advanced fields | Change mode or numeric overrides | Persists FTP pacing/cache/backoff/circuit-breaker limits; REST mutation scheduling stays internal; relaxed mode requires confirm dialog | `deviceSafetySettings` store
 Enable developer mode | About card | Tap 7 times in 3s | Enables developer-only controls | `developerModeStore`
 Open licenses | About card button | Tap | Navigates to bundled notices route | `navigate("/settings/open-source-licenses")`
 
@@ -340,7 +340,7 @@ Open licenses | About card button | Tap | Navigates to bundled notices route | `
 - Connection settings update both persistent config and in-memory API runtime config; discovery is then delegated to `connectionManager`.
 - Diagnostics dialog is local-app data only: logs, traces, and action summaries come from structured logging and tracing stores.
 - Most settings are local persistence only (`localStorage`, `sessionStorage`, secure storage); they do not touch the C64U until another page uses them.
-- Device safety settings directly affect request throttling, concurrency, cooldown, and retry behavior used across REST/FTP flows.
+- Device safety settings directly affect request throttling, FTP concurrency, cooldown, and retry behavior used across REST/FTP flows.
 - The `Automatic Demo Mode` control is intentionally duplicated in two sections and writes the same persisted setting.
 
 #### Existing Test Coverage

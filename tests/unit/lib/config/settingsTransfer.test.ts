@@ -38,7 +38,6 @@ vi.mock("@/lib/config/deviceSafetySettings", () => ({
   loadDeviceSafetyConfig: vi.fn(),
 
   saveDeviceSafetyMode: vi.fn(),
-  saveRestMaxConcurrency: vi.fn(),
   saveFtpMaxConcurrency: vi.fn(),
   saveInfoCacheMs: vi.fn(),
   saveConfigsCacheMs: vi.fn(),
@@ -88,7 +87,6 @@ describe("settingsTransfer", () => {
       },
       deviceSafety: {
         mode: "BALANCED",
-        restMaxConcurrency: 5,
         ftpMaxConcurrency: 2,
         infoCacheMs: 1000,
         configsCacheMs: 1000,
@@ -208,7 +206,7 @@ describe("settingsTransfer", () => {
         ...validPayload,
         deviceSafety: {
           ...validPayload.deviceSafety,
-          restMaxConcurrency: "bad",
+          ftpMaxConcurrency: "bad",
         },
       };
       expect(importSettingsJson(JSON.stringify(invalid))).toEqual({

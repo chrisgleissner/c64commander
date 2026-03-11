@@ -99,7 +99,6 @@ import {
 import {
   loadDeviceSafetyConfig,
   saveDeviceSafetyMode,
-  saveRestMaxConcurrency,
   saveFtpMaxConcurrency,
   saveInfoCacheMs,
   saveConfigsCacheMs,
@@ -191,7 +190,6 @@ export default function SettingsPage() {
   const [deviceSafetyMode, setDeviceSafetyMode] = useState<DeviceSafetyMode>(deviceSafetyConfig.mode);
   const [pendingSafetyMode, setPendingSafetyMode] = useState<DeviceSafetyMode | null>(null);
   const [relaxedWarningOpen, setRelaxedWarningOpen] = useState(false);
-  const [restConcurrencyInput, setRestConcurrencyInput] = useState(String(deviceSafetyConfig.restMaxConcurrency));
   const [ftpConcurrencyInput, setFtpConcurrencyInput] = useState(String(deviceSafetyConfig.ftpMaxConcurrency));
   const [infoCacheInput, setInfoCacheInput] = useState(String(deviceSafetyConfig.infoCacheMs));
   const [configsCacheInput, setConfigsCacheInput] = useState(String(deviceSafetyConfig.configsCacheMs));
@@ -295,7 +293,6 @@ export default function SettingsPage() {
     const next = loadDeviceSafetyConfig();
     setDeviceSafetyConfig(next);
     setDeviceSafetyMode(next.mode);
-    setRestConcurrencyInput(String(next.restMaxConcurrency));
     setFtpConcurrencyInput(String(next.ftpMaxConcurrency));
     setInfoCacheInput(String(next.infoCacheMs));
     setConfigsCacheInput(String(next.configsCacheMs));
@@ -1164,15 +1161,15 @@ export default function SettingsPage() {
                 <SelectValue placeholder="Select safety mode" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="RELAXED">Relaxed (higher concurrency, higher risk)</SelectItem>
+                <SelectItem value="RELAXED">Relaxed (lighter throttling, higher risk)</SelectItem>
                 <SelectItem value="BALANCED">Balanced (recommended)</SelectItem>
                 <SelectItem value="CONSERVATIVE">Conservative (maximum safety)</SelectItem>
                 <SelectItem value="TROUBLESHOOTING">Troubleshooting (low concurrency, extra logging)</SelectItem>
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              Mode presets adjust concurrency limits, caching, cooldowns, and backoff behavior. Troubleshooting mode
-              also enables debug logging for richer diagnostics.
+              Mode presets adjust throttling, caching, cooldowns, and backoff behavior. Troubleshooting mode also
+              enables debug logging for richer diagnostics.
             </p>
           </div>
 
@@ -1289,28 +1286,6 @@ export default function SettingsPage() {
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="rest-concurrency" className="text-sm">
-                  REST max concurrency
-                </Label>
-                <Input
-                  id="rest-concurrency"
-                  type="number"
-                  min={1}
-                  max={4}
-                  step={1}
-                  value={restConcurrencyInput}
-                  onChange={(event) => setRestConcurrencyInput(event.target.value)}
-                  onBlur={() =>
-                    commitDeviceSafetyNumber(
-                      restConcurrencyInput,
-                      saveRestMaxConcurrency,
-                      deviceSafetyConfig.restMaxConcurrency,
-                    )
-                  }
-                />
-              </div>
-
               <div className="space-y-2">
                 <Label htmlFor="ftp-concurrency" className="text-sm">
                   FTP max concurrency
@@ -1642,8 +1617,8 @@ export default function SettingsPage() {
           <DialogHeader>
             <DialogTitle>Enable Relaxed Safety Mode?</DialogTitle>
             <DialogDescription>
-              Relaxed mode increases concurrency and reduces protection. This can overload or destabilize real hardware.
-              Confirm only if you understand the risks.
+              Relaxed mode increases FTP concurrency and reduces protection. This can overload or destabilize real
+              hardware. Confirm only if you understand the risks.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

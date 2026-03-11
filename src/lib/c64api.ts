@@ -25,6 +25,7 @@ import { recordRestRequest, recordRestResponse, recordTraceError } from "@/lib/t
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
 import { withRestInteraction, type InteractionIntent } from "@/lib/deviceInteraction/deviceInteractionManager";
 import { getDeviceStateSnapshot } from "@/lib/deviceInteraction/deviceStateStore";
+import { canonicalizeRestPath } from "@/lib/deviceInteraction/restRequestIdentity";
 
 const DEFAULT_BASE_URL = "http://c64u";
 const DEFAULT_DEVICE_HOST = "c64u";
@@ -69,7 +70,7 @@ const isSidUploadTransientFailure = (error: unknown) => {
 const normalizeUrlPath = (url: string) => {
   try {
     const parsed = new URL(url);
-    return `${parsed.pathname}${parsed.search}`;
+    return canonicalizeRestPath(`${parsed.pathname}${parsed.search}`, parsed.origin);
   } catch (error) {
     addLog("warn", "Failed to normalize API URL path", {
       url,
@@ -153,12 +154,13 @@ const buildReadRequestDedupeKey = (
 ) => {
   if (!DEDUPEABLE_READ_METHODS.has(method)) return null;
   if (body !== undefined && body !== null) return null;
+  const normalizedUrl = normalizeUrlPath(url);
   const headerKey = Object.entries(headers)
     .map(([name, value]) => [name.toLowerCase(), String(value)] as const)
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([name, value]) => `${name}:${value}`)
     .join("|");
-  return `${method} ${url} ${headerKey}`;
+  return `${method} ${normalizedUrl} ${headerKey}`;
 };
 
 const cloneBudgetValue = <T>(value: T): T => {
@@ -503,6 +505,16 @@ export interface CategoriesResponse {
   errors: string[];
 }
 
+type C64ReadRequestOptions = RequestInit & {
+  timeoutMs?: number;
+  __c64uTraceSuppressed?: boolean;
+  __c64uIntent?: InteractionIntent;
+  __c64uAllowDuringDiscovery?: boolean;
+  __c64uBypassCache?: boolean;
+  __c64uBypassCooldown?: boolean;
+  __c64uBypassBackoff?: boolean;
+};
+
 const hasStructuredConfigMetadata = (config: unknown) => {
   if (typeof config !== "object" || config === null || Array.isArray(config)) return false;
 
@@ -742,18 +754,7 @@ export class C64API {
     });
   }
 
-  private async request<T>(
-    path: string,
-    options: RequestInit & {
-      timeoutMs?: number;
-      __c64uTraceSuppressed?: boolean;
-      __c64uIntent?: InteractionIntent;
-      __c64uAllowDuringDiscovery?: boolean;
-      __c64uBypassCache?: boolean;
-      __c64uBypassCooldown?: boolean;
-      __c64uBypassBackoff?: boolean;
-    } = {},
-  ): Promise<T> {
+  private async request<T>(path: string, options: C64ReadRequestOptions = {}): Promise<T> {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       ...this.buildAuthHeaders(),
@@ -769,15 +770,7 @@ export class C64API {
     const bypassCache = Boolean(options.__c64uBypassCache);
     const bypassCooldown = Boolean(options.__c64uBypassCooldown);
     const bypassBackoff = Boolean(options.__c64uBypassBackoff);
-    const requestOptions = { ...options } as RequestInit & {
-      timeoutMs?: number;
-      __c64uTraceSuppressed?: boolean;
-      __c64uIntent?: InteractionIntent;
-      __c64uAllowDuringDiscovery?: boolean;
-      __c64uBypassCache?: boolean;
-      __c64uBypassCooldown?: boolean;
-      __c64uBypassBackoff?: boolean;
-    };
+    const requestOptions = { ...options } as C64ReadRequestOptions;
     requestOptions.__c64uTraceSuppressed = true;
     delete (requestOptions as { __c64uIntent?: InteractionIntent }).__c64uIntent;
     delete (requestOptions as { __c64uAllowDuringDiscovery?: boolean }).__c64uAllowDuringDiscovery;
@@ -1232,36 +1225,31 @@ export class C64API {
     return this.request("/v1/version");
   }
 
-  async getInfo(
-    options: RequestInit & {
-      timeoutMs?: number;
-      __c64uIntent?: InteractionIntent;
-      __c64uAllowDuringDiscovery?: boolean;
-      __c64uBypassCache?: boolean;
-      __c64uBypassCooldown?: boolean;
-      __c64uBypassBackoff?: boolean;
-    } = {},
-  ): Promise<DeviceInfo> {
+  async getInfo(options: C64ReadRequestOptions = {}): Promise<DeviceInfo> {
     return this.request("/v1/info", options);
   }
 
   // Config endpoints
-  async getCategories(): Promise<CategoriesResponse> {
-    return this.request("/v1/configs");
+  async getCategories(options: C64ReadRequestOptions = {}): Promise<CategoriesResponse> {
+    return this.request("/v1/configs", options);
   }
 
-  async getCategory(category: string): Promise<ConfigResponse> {
+  async getCategory(category: string, options: C64ReadRequestOptions = {}): Promise<ConfigResponse> {
     const encoded = encodeURIComponent(category);
-    return this.request(`/v1/configs/${encoded}`);
+    return this.request(`/v1/configs/${encoded}`, options);
   }
 
-  async getConfigItem(category: string, item: string): Promise<ConfigResponse> {
+  async getConfigItem(category: string, item: string, options: C64ReadRequestOptions = {}): Promise<ConfigResponse> {
     const catEncoded = encodeURIComponent(category);
     const itemEncoded = encodeURIComponent(item);
-    return this.request(`/v1/configs/${catEncoded}/${itemEncoded}`);
+    return this.request(`/v1/configs/${catEncoded}/${itemEncoded}`, options);
   }
 
-  async getConfigItems(category: string, items: string[]): Promise<ConfigResponse> {
+  async getConfigItems(
+    category: string,
+    items: string[],
+    options: C64ReadRequestOptions = {},
+  ): Promise<ConfigResponse> {
     const uniqueItems = Array.from(new Set(items));
     if (!uniqueItems.length) {
       return {
@@ -1275,7 +1263,7 @@ export class C64API {
     const mergedItems: Record<string, unknown> = {};
     const itemsNeedingEnrichment = new Set<string>();
     try {
-      const categoryPayload = await this.getCategory(category);
+      const categoryPayload = await this.getCategory(category, options);
       const payload = categoryPayload as Record<string, any>;
       const categoryBlock = payload?.[category] ?? payload;
       const itemsBlock = categoryBlock?.items ?? categoryBlock;
@@ -1301,7 +1289,9 @@ export class C64API {
       (item) => !Object.prototype.hasOwnProperty.call(mergedItems, item) || itemsNeedingEnrichment.has(item),
     );
     if (missingItems.length > 0) {
-      const responses = await Promise.allSettled(missingItems.map((item) => this.getConfigItem(category, item)));
+      const responses = await Promise.allSettled(
+        missingItems.map((item) => this.getConfigItem(category, item, options)),
+      );
       responses.forEach((result) => {
         if (result.status !== "fulfilled") return;
         const payload = result.value as Record<string, any>;
@@ -1502,8 +1492,8 @@ export class C64API {
   }
 
   // Drive endpoints
-  async getDrives(): Promise<DrivesResponse> {
-    return this.request("/v1/drives");
+  async getDrives(options: C64ReadRequestOptions = {}): Promise<DrivesResponse> {
+    return this.request("/v1/drives", options);
   }
 
   async mountDrive(

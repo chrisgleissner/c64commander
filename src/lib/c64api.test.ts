@@ -143,8 +143,8 @@ describe("C64API getConfigItems", () => {
       errors: [],
     });
     expect(getConfigItem).toHaveBeenCalledTimes(2);
-    expect(getConfigItem).toHaveBeenNthCalledWith(1, "LED Strip Settings", "LedStrip Mode");
-    expect(getConfigItem).toHaveBeenNthCalledWith(2, "LED Strip Settings", "Fixed Color");
+    expect(getConfigItem).toHaveBeenNthCalledWith(1, "LED Strip Settings", "LedStrip Mode", {});
+    expect(getConfigItem).toHaveBeenNthCalledWith(2, "LED Strip Settings", "Fixed Color", {});
   });
 
   it("enriches scalar audio mixer items so Home SID sliders receive real ranges and positions", async () => {
@@ -208,7 +208,67 @@ describe("C64API getConfigItems", () => {
       errors: [],
     });
     expect(getConfigItem).toHaveBeenCalledTimes(2);
-    expect(getConfigItem).toHaveBeenNthCalledWith(1, "Audio Mixer", "Vol Socket 1");
-    expect(getConfigItem).toHaveBeenNthCalledWith(2, "Audio Mixer", "Pan Socket 1");
+    expect(getConfigItem).toHaveBeenNthCalledWith(1, "Audio Mixer", "Vol Socket 1", {});
+    expect(getConfigItem).toHaveBeenNthCalledWith(2, "Audio Mixer", "Pan Socket 1", {});
+  });
+});
+
+describe("C64API request identity", () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ errors: [] }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+      ),
+    );
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    globalThis.fetch = originalFetch;
+  });
+
+  it("reuses one in-flight GET when query params are reordered but semantically equal", async () => {
+    let releaseFetch!: () => void;
+    const fetchBlocked = new Promise<void>((resolve) => {
+      releaseFetch = resolve;
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        await fetchBlocked;
+        return new Response(JSON.stringify({ errors: [] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }),
+    );
+    const api = new C64API("http://127.0.0.1");
+
+    const left = (api as any).request("/v1/configs?a=1&b=2");
+    const right = (api as any).request("/v1/configs?b=2&a=1");
+
+    await Promise.resolve();
+    expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledTimes(1);
+
+    releaseFetch();
+    await Promise.all([left, right]);
+  });
+
+  it("does not dedupe repeated writes even when their path is identical", async () => {
+    const api = new C64API("http://127.0.0.1");
+
+    await Promise.all([
+      api.updateConfigBatch({ "Audio Mixer": { "Vol Socket 1": "0 dB" } }, { immediate: true }),
+      api.updateConfigBatch({ "Audio Mixer": { "Vol Socket 1": "0 dB" } }, { immediate: true }),
+    ]);
+
+    expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledTimes(2);
   });
 });

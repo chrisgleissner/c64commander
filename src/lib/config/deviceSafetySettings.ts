@@ -10,7 +10,6 @@ export type DeviceSafetyMode = "RELAXED" | "BALANCED" | "CONSERVATIVE" | "TROUBL
 
 export type DeviceSafetyConfig = {
   mode: DeviceSafetyMode;
-  restMaxConcurrency: number;
   ftpMaxConcurrency: number;
   infoCacheMs: number;
   configsCacheMs: number;
@@ -27,7 +26,6 @@ export type DeviceSafetyConfig = {
 };
 
 const DEVICE_SAFETY_MODE_KEY = "c64u_device_safety_mode";
-const REST_MAX_CONCURRENCY_KEY = "c64u_device_safety_rest_max_concurrency";
 const FTP_MAX_CONCURRENCY_KEY = "c64u_device_safety_ftp_max_concurrency";
 const INFO_CACHE_MS_KEY = "c64u_device_safety_info_cache_ms";
 const CONFIGS_CACHE_MS_KEY = "c64u_device_safety_configs_cache_ms";
@@ -46,14 +44,13 @@ export const DEFAULT_DEVICE_SAFETY_MODE: DeviceSafetyMode = "BALANCED";
 
 const MODE_DEFAULTS: Record<DeviceSafetyMode, Omit<DeviceSafetyConfig, "mode">> = {
   RELAXED: {
-    restMaxConcurrency: 2,
-    ftpMaxConcurrency: 2,
+    ftpMaxConcurrency: 3,
     infoCacheMs: 200,
     configsCacheMs: 400,
     configsCooldownMs: 200,
     drivesCooldownMs: 200,
     ftpListCooldownMs: 100,
-    backoffBaseMs: 150,
+    backoffBaseMs: 100,
     backoffMaxMs: 1500,
     backoffFactor: 1.5,
     circuitBreakerThreshold: 6,
@@ -62,14 +59,13 @@ const MODE_DEFAULTS: Record<DeviceSafetyMode, Omit<DeviceSafetyConfig, "mode">> 
     allowUserOverrideCircuit: true,
   },
   BALANCED: {
-    restMaxConcurrency: 2,
-    ftpMaxConcurrency: 1,
+    ftpMaxConcurrency: 2,
     infoCacheMs: 600,
     configsCacheMs: 1000,
     configsCooldownMs: 500,
     drivesCooldownMs: 500,
     ftpListCooldownMs: 300,
-    backoffBaseMs: 300,
+    backoffBaseMs: 200,
     backoffMaxMs: 3000,
     backoffFactor: 1.8,
     circuitBreakerThreshold: 4,
@@ -78,14 +74,13 @@ const MODE_DEFAULTS: Record<DeviceSafetyMode, Omit<DeviceSafetyConfig, "mode">> 
     allowUserOverrideCircuit: true,
   },
   CONSERVATIVE: {
-    restMaxConcurrency: 1,
     ftpMaxConcurrency: 1,
     infoCacheMs: 1200,
     configsCacheMs: 2000,
     configsCooldownMs: 1200,
     drivesCooldownMs: 1000,
     ftpListCooldownMs: 800,
-    backoffBaseMs: 500,
+    backoffBaseMs: 300,
     backoffMaxMs: 6000,
     backoffFactor: 2,
     circuitBreakerThreshold: 2,
@@ -94,7 +89,6 @@ const MODE_DEFAULTS: Record<DeviceSafetyMode, Omit<DeviceSafetyConfig, "mode">> 
     allowUserOverrideCircuit: false,
   },
   TROUBLESHOOTING: {
-    restMaxConcurrency: 1,
     ftpMaxConcurrency: 1,
     infoCacheMs: 300,
     configsCacheMs: 600,
@@ -169,7 +163,6 @@ export const saveDeviceSafetyMode = (mode: DeviceSafetyMode) => {
 export const resetDeviceSafetyOverrides = () => {
   if (typeof localStorage === "undefined") return;
   [
-    REST_MAX_CONCURRENCY_KEY,
     FTP_MAX_CONCURRENCY_KEY,
     INFO_CACHE_MS_KEY,
     CONFIGS_CACHE_MS_KEY,
@@ -202,7 +195,6 @@ export const loadDeviceSafetyConfig = (): DeviceSafetyConfig => {
   const defaults = MODE_DEFAULTS[mode];
   return {
     mode,
-    restMaxConcurrency: clampNumber(resolveOverride(REST_MAX_CONCURRENCY_KEY, defaults.restMaxConcurrency), 1, 4, 1),
     ftpMaxConcurrency: clampNumber(resolveOverride(FTP_MAX_CONCURRENCY_KEY, defaults.ftpMaxConcurrency), 1, 4, 1),
     infoCacheMs: clampNumber(resolveOverride(INFO_CACHE_MS_KEY, defaults.infoCacheMs), 0, 5000, 50),
     configsCacheMs: clampNumber(resolveOverride(CONFIGS_CACHE_MS_KEY, defaults.configsCacheMs), 0, 10000, 50),
@@ -249,9 +241,6 @@ const saveBooleanOverride = (key: string, value: boolean) => {
   broadcast(key, value);
 };
 
-export const saveRestMaxConcurrency = (value: number) =>
-  saveNumberOverride(REST_MAX_CONCURRENCY_KEY, clampNumber(value, 1, 4, 1));
-
 export const saveFtpMaxConcurrency = (value: number) =>
   saveNumberOverride(FTP_MAX_CONCURRENCY_KEY, clampNumber(value, 1, 4, 1));
 
@@ -293,7 +282,6 @@ export const saveAllowUserOverrideCircuit = (value: boolean) =>
 
 export const DEVICE_SAFETY_SETTING_KEYS = {
   DEVICE_SAFETY_MODE_KEY,
-  REST_MAX_CONCURRENCY_KEY,
   FTP_MAX_CONCURRENCY_KEY,
   INFO_CACHE_MS_KEY,
   CONFIGS_CACHE_MS_KEY,

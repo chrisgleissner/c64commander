@@ -1,5 +1,10 @@
-import { useCallback, type MutableRefObject } from "react";
+import { useCallback, useRef, type MutableRefObject } from "react";
 import { getC64API } from "@/lib/c64api";
+import { beginMachineTransition } from "@/lib/deviceInteraction/deviceActivityGate";
+import {
+  createMachineTransitionCoordinator,
+  SupersededMachineTransitionError,
+} from "@/lib/deviceInteraction/machineTransitionCoordinator";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { reportUserError } from "@/lib/uiErrors";
 import {
@@ -171,6 +176,7 @@ export function usePlaybackController({
   setAutoAdvanceDueAtMs,
 }: UsePlaybackControllerProps) {
   const durationFallbackMs = durationSeconds * 1000;
+  const machineTransitionCoordinatorRef = useRef(createMachineTransitionCoordinator());
 
   const withTimeout = useCallback(async <T>(promise: Promise<T>, timeoutMs: number, operation: string) => {
     let timeoutId: number | null = null;
@@ -585,68 +591,77 @@ export function usePlaybackController({
   const handlePauseResume = useCallback(
     trace(async function handlePauseResume() {
       if (!isPlaying) return;
-      const api = getC64API();
       try {
-        if (isPaused) {
-          pausingFromPauseRef.current = false;
-          const resumeItems = await resolveEnabledSidVolumeItems(true);
-          const resumeSnapshot = pauseMuteSnapshotRef.current;
-          const wasMuted =
-            resumeSnapshot && resumeItems.length
-              ? resumeItems.every(
-                  (item) => resumeSnapshot.volumes[item.name] === resolveAudioMixerMuteValue(item.options),
-                )
-              : false;
-          // Raise the guard before the unmute mutation so the hardware-sync
-          // useEffect does not re-assert muted state while the React Query
-          // cache is stale (i.e. before the refetch confirms the new values).
-          if (!wasMuted) resumingFromPauseRef.current = true;
-          await resumeMachineWithRetry(api);
-          if (pauseMuteSnapshotRef.current && resumeItems.length) {
-            try {
-              await applyAudioMixerUpdates(snapshotToUpdates(pauseMuteSnapshotRef.current, resumeItems), "Resume");
-            } catch (error) {
-              resumingFromPauseRef.current = false;
-              addErrorLog("Failed to reapply audio mixer settings after resume", {
-                error: (error as Error).message,
-                itemCount: resumeItems.length,
+        const target = isPaused ? "running" : "paused";
+        await machineTransitionCoordinatorRef.current.request(target, async () => {
+          const endTransition = beginMachineTransition();
+          const api = getC64API();
+          try {
+            if (target === "running") {
+              pausingFromPauseRef.current = false;
+              const resumeItems = await resolveEnabledSidVolumeItems();
+              const resumeSnapshot = pauseMuteSnapshotRef.current;
+              const wasMuted =
+                resumeSnapshot && resumeItems.length
+                  ? resumeItems.every(
+                      (item) => resumeSnapshot.volumes[item.name] === resolveAudioMixerMuteValue(item.options),
+                    )
+                  : false;
+              if (!wasMuted) resumingFromPauseRef.current = true;
+              await resumeMachineWithRetry(api);
+              if (pauseMuteSnapshotRef.current && resumeItems.length) {
+                try {
+                  await applyAudioMixerUpdates(snapshotToUpdates(pauseMuteSnapshotRef.current, resumeItems), "Resume");
+                } catch (error) {
+                  resumingFromPauseRef.current = false;
+                  addErrorLog("Failed to reapply audio mixer settings after resume", {
+                    error: (error as Error).message,
+                    itemCount: resumeItems.length,
+                  });
+                }
+              }
+              pauseMuteSnapshotRef.current = null;
+              setIsPaused(false);
+              dispatchVolume({
+                type: wasMuted ? "mute" : "unmute",
+                reason: "pause",
               });
+              const now = Date.now();
+              trackStartedAtRef.current = now - elapsedMs;
+              playedClockRef.current.resume(now);
+              setPlayedMs(playedClockRef.current.current(now));
+              if (autoAdvanceGuardRef.current && typeof durationMs === "number") {
+                autoAdvanceGuardRef.current.dueAtMs = now + Math.max(0, durationMs - elapsedMs);
+                autoAdvanceGuardRef.current.autoFired = false;
+                autoAdvanceGuardRef.current.userCancelled = false;
+                setAutoAdvanceDueAtMs(autoAdvanceGuardRef.current.dueAtMs);
+              }
+              return;
             }
+
+            const pauseItems = await resolveEnabledSidVolumeItems();
+            if (pauseItems.length) {
+              pauseMuteSnapshotRef.current = captureSidMuteSnapshot(pauseItems, sidEnablement);
+            }
+            await withTimeout(api.machinePause(), 3000, "Pause");
+            if (pauseItems.length) {
+              pausingFromPauseRef.current = true;
+              await applyAudioMixerUpdates(buildEnabledSidMuteUpdates(pauseItems, sidEnablement), "Pause");
+              dispatchVolume({ type: "mute", reason: "pause" });
+            }
+            const now = Date.now();
+            playedClockRef.current.pause(now);
+            setPlayedMs(playedClockRef.current.current(now));
+            setIsPaused(true);
+            setAutoAdvanceDueAtMs(null);
+          } finally {
+            endTransition();
           }
-          pauseMuteSnapshotRef.current = null;
-          setIsPaused(false);
-          dispatchVolume({
-            type: wasMuted ? "mute" : "unmute",
-            reason: "pause",
-          });
-          const now = Date.now();
-          trackStartedAtRef.current = now - elapsedMs;
-          playedClockRef.current.resume(now);
-          setPlayedMs(playedClockRef.current.current(now));
-          if (autoAdvanceGuardRef.current && typeof durationMs === "number") {
-            autoAdvanceGuardRef.current.dueAtMs = now + Math.max(0, durationMs - elapsedMs);
-            autoAdvanceGuardRef.current.autoFired = false;
-            autoAdvanceGuardRef.current.userCancelled = false;
-            setAutoAdvanceDueAtMs(autoAdvanceGuardRef.current.dueAtMs);
-          }
-        } else {
-          const pauseItems = await resolveEnabledSidVolumeItems();
-          if (pauseItems.length) {
-            pauseMuteSnapshotRef.current = captureSidMuteSnapshot(pauseItems, sidEnablement);
-          }
-          await withTimeout(api.machinePause(), 3000, "Pause");
-          if (pauseItems.length) {
-            pausingFromPauseRef.current = true;
-            await applyAudioMixerUpdates(buildEnabledSidMuteUpdates(pauseItems, sidEnablement), "Pause");
-            dispatchVolume({ type: "mute", reason: "pause" });
-          }
-          const now = Date.now();
-          playedClockRef.current.pause(now);
-          setPlayedMs(playedClockRef.current.current(now));
-          setIsPaused(true);
-          setAutoAdvanceDueAtMs(null);
-        }
+        });
       } catch (error) {
+        if (error instanceof SupersededMachineTransitionError) {
+          return;
+        }
         reportUserError({
           operation: "PLAYBACK_CONTROL",
           title: "Playback control failed",

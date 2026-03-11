@@ -13,7 +13,6 @@ import type { TraceActionContext } from "@/lib/tracing/types";
 
 const createConfig = (): DeviceSafetyConfig => ({
   mode: "BALANCED",
-  restMaxConcurrency: 1,
   ftpMaxConcurrency: 1,
   infoCacheMs: 300,
   configsCacheMs: 0,

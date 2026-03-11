@@ -289,7 +289,7 @@ describe("useC64Connection", () => {
     });
 
     await waitFor(() => expect(result.current.data).toBeDefined());
-    expect(mockApi.getConfigItem).toHaveBeenCalledWith("Audio", "Volume");
+    expect(mockApi.getConfigItem).toHaveBeenCalledWith("Audio", "Volume", { __c64uIntent: "background" });
   });
 
   it("fetches drives", async () => {
@@ -510,7 +510,9 @@ describe("useC64Connection", () => {
       errors: [],
     });
 
-    await waitFor(() => expect(mockApi.getConfigItems).toHaveBeenCalledWith("Audio", ["Volume"]));
+    await waitFor(() =>
+      expect(mockApi.getConfigItems).toHaveBeenCalledWith("Audio", ["Volume"], { __c64uIntent: "background" }),
+    );
   });
 
   it("supports nested snapshot category blocks for config-items placeholder data", async () => {
