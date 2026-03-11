@@ -380,6 +380,7 @@ export GITHUB_TOKEN=<your-token>
 
 If you want to build, test, or contribute:
 
+- Documentation index: [doc/index.md](doc/index.md)
 - Developer guide: [doc/developer.md](doc/developer.md)
 - Chaos/fuzz testing docs: [doc/testing/chaos-fuzz.md](doc/testing/chaos-fuzz.md)
 - Web server runtime dependency note: `basic-ftp` is in `dependencies` because the web server uses it at runtime inside the Docker image.
