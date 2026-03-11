@@ -22,6 +22,12 @@ Run a SAFE session:
 node tests/contract/dist/run.js --config tests/contract/config.sample.json
 ```
 
+Run the deterministic SID volume breakpoint profile:
+
+```bash
+node tests/contract/dist/run.js --config tests/contract/config.stress.breakpoint.sample.json
+```
+
 Compare AUTH ON vs AUTH OFF runs:
 
 ```bash
@@ -86,9 +92,21 @@ Increase `concurrency.restMaxInFlight` to probe high-load behavior. The harness 
 - REST concurrency observations (errors, drift, max latency).
 - Per-operation latency percentiles, which feed cooldown suggestions.
 
+## Breakpoint Stress
+
+Enable the optional `stressBreakpoint` block in `STRESS` mode to skip the normal STRESS matrix and run a single
+deterministic breakpoint profile. Breakpoint runs:
+
+- ramp `rateRampMs` and `concurrencyRamp` in a fixed order
+- mutate the configured SID volume targets via the shared REST request path
+- append full `rest-trace` entries to `logs.jsonl`
+- stop scheduling immediately when REST or health failures occur
+- write `breakpoint-stages.json`, `failure-summary.json`, and `request-trace-tail.json`
+- skip automatic reboot/recovery after a breakpoint-triggered failure so the device state is preserved for forensics
+
 ## Notes
 
 - REST auth uses the network password (`X-Password` header).
 - FTP auth uses PASS with the same network password.
 - If the network password is empty, AUTH OFF mode is supported by firmware.
-- The harness always reboots the device and waits for `/v1/info` to recover before exiting.
+- The harness reboots the device and waits for `/v1/info` to recover before exiting, except after a breakpoint failure.

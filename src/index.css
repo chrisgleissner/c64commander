@@ -207,14 +207,21 @@ button:focus-visible,
   [role='link'],
   [role='tab'],
   [role='menuitem'],
+  [role='checkbox'],
+  [role='switch'],
+  [role='option'],
   [tabindex]:not([tabindex='-1'])
 ) {
   -webkit-tap-highlight-color: transparent;
 }
 
-[data-c64-tap-flash='true'] {
+[data-c64-tap-flash='true'],
+[data-c64-persistent-active='true'] {
   border-color: hsl(var(--ring) / 0.65);
-  box-shadow: 0 0 0 1px hsl(var(--ring) / 0.35);
+  box-shadow:
+    0 0 0 2px hsl(var(--ring) / 0.2),
+    0 0 14px -4px hsl(var(--ring) / 0.75);
+  filter: brightness(1.04) saturate(1.05);
 }
 
 @layer base {

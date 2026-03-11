@@ -96,6 +96,8 @@ interface UsePlaybackControllerProps {
   dispatchVolume: React.Dispatch<VolumeAction>;
   sidEnablement: SidEnablement;
   pauseMuteSnapshotRef: MutableRefObject<SidMuteSnapshot | null>;
+  resumingFromPauseRef: MutableRefObject<boolean>;
+  ensureUnmuted: () => Promise<void>;
 
   // Refs
   playedClockRef: MutableRefObject<{
@@ -152,6 +154,8 @@ export function usePlaybackController({
   dispatchVolume,
   sidEnablement,
   pauseMuteSnapshotRef,
+  resumingFromPauseRef,
+  ensureUnmuted,
   playedClockRef,
   trackStartedAtRef,
   trackInstanceIdRef,
@@ -319,6 +323,13 @@ export function usePlaybackController({
           }
         }
         try {
+          await ensureUnmuted();
+        } catch (error) {
+          addErrorLog("Unmute before playback start failed", {
+            error: (error as Error).message,
+          });
+        }
+        try {
           await ensurePlaybackConnection();
         } catch (error) {
           reportUserError({
@@ -376,10 +387,10 @@ export function usePlaybackController({
             prev.map((entry) =>
               entry.id === item.id
                 ? {
-                    ...entry,
-                    durationMs: resolvedDuration,
-                    subsongCount: subsongCount ?? entry.subsongCount,
-                  }
+                  ...entry,
+                  durationMs: resolvedDuration,
+                  subsongCount: subsongCount ?? entry.subsongCount,
+                }
                 : entry,
             ),
           );
@@ -392,6 +403,7 @@ export function usePlaybackController({
       durationFallbackMs,
       enqueuePlayTransition,
       ensurePlaybackConnection,
+      ensureUnmuted,
       localEntriesBySourceId,
       localSourceTreeUris,
       resolveSidMetadata,
@@ -585,14 +597,19 @@ export function usePlaybackController({
           const wasMuted =
             resumeSnapshot && resumeItems.length
               ? resumeItems.every(
-                  (item) => resumeSnapshot.volumes[item.name] === resolveAudioMixerMuteValue(item.options),
-                )
+                (item) => resumeSnapshot.volumes[item.name] === resolveAudioMixerMuteValue(item.options),
+              )
               : false;
+          // Raise the guard before the unmute mutation so the hardware-sync
+          // useEffect does not re-assert muted state while the React Query
+          // cache is stale (i.e. before the refetch confirms the new values).
+          if (!wasMuted) resumingFromPauseRef.current = true;
           await resumeMachineWithRetry(api);
           if (pauseMuteSnapshotRef.current && resumeItems.length) {
             try {
               await applyAudioMixerUpdates(snapshotToUpdates(pauseMuteSnapshotRef.current, resumeItems), "Resume");
             } catch (error) {
+              resumingFromPauseRef.current = false;
               addErrorLog("Failed to reapply audio mixer settings after resume", {
                 error: (error as Error).message,
                 itemCount: resumeItems.length,
@@ -658,6 +675,7 @@ export function usePlaybackController({
       snapshotToUpdates,
       trace,
       pauseMuteSnapshotRef,
+      resumingFromPauseRef,
       playedClockRef,
       resumeMachineWithRetry,
       setAutoAdvanceDueAtMs,

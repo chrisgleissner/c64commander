@@ -1,37 +1,21 @@
 {
-	"servers": {
-		"mobile-mcp": {
-			"command": "npx",
-			"args": [
-				"-y",
-				"@mobilenext/mobile-mcp@latest"
-			]
-		},
-		"droidmind": {
-			"command": "uvx",
-			"args": [
-				"--from",
-				"git+https://github.com/hyperb1iss/droidmind",
-				"droidmind",
-				"--transport",
-				"stdio"
-			]
-		},
-		"c64bridge": {
-			"command": "npx",
-			"args": [
-				"-y",
-				"c64bridge@latest"
-			]
-		},
-		"c64scope": {
-			"command": "npx",
-			"args": [
-				"-y",
-				"tsx",
-				"${workspaceFolder}/c64scope/src/index.ts"
-			],
-			"type": "stdio"
-		}
-	}
+  "servers": {
+    "mobile-mcp": {
+      "command": "npx",
+      "args": ["-y", "@mobilenext/mobile-mcp@latest"]
+    },
+    "droidmind": {
+      "command": "uvx",
+      "args": ["--from", "git+https://github.com/hyperb1iss/droidmind", "droidmind", "--transport", "stdio"]
+    },
+    "c64bridge": {
+      "command": "npx",
+      "args": ["-y", "c64bridge@latest"]
+    },
+    "c64scope": {
+      "command": "npx",
+      "args": ["-y", "tsx", "${workspaceFolder}/c64scope/src/index.ts"],
+      "type": "stdio"
+    }
+  }
 }

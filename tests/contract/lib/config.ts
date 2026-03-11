@@ -9,11 +9,42 @@
 import fs from "node:fs";
 import path from "node:path";
 import { z } from "zod";
+import yaml from "js-yaml";
 
 const ModeSchema = z.union([z.literal("SAFE"), z.literal("STRESS")]);
 const AuthSchema = z.union([z.literal("ON"), z.literal("OFF")]);
 const FtpModeSchema = z.union([z.literal("PASV"), z.literal("PORT")]);
 const PrgActionSchema = z.union([z.literal("run"), z.literal("load")]);
+const BreakpointScenarioIdSchema = z.literal("rest.breakpoint.sid-volume");
+
+const StressBreakpointTargetSchema = z.object({
+  category: z.string().min(1),
+  item: z.string().min(1),
+});
+
+const StressBreakpointSchema = z
+  .object({
+    scenarioId: BreakpointScenarioIdSchema,
+    rateRampMs: z.array(z.number().int().min(1)).min(1),
+    concurrencyRamp: z.array(z.number().int().min(1)).min(1),
+    stageDurationMs: z.number().int().min(100),
+    failureDetectionTimeoutMs: z.number().int().min(100),
+    tailRequestCount: z.number().int().min(1),
+    targets: z.array(StressBreakpointTargetSchema).min(1),
+  })
+  .superRefine((value, ctx) => {
+    const knownTargets = loadKnownConfigTargets();
+    for (const [index, target] of value.targets.entries()) {
+      if (knownTargets.has(configTargetKey(target.category, target.item))) {
+        continue;
+      }
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["targets", index],
+        message: `Unknown config target: ${target.category} / ${target.item}`,
+      });
+    }
+  });
 
 export const ConfigSchema = z
   .object({
@@ -75,13 +106,20 @@ export const ConfigSchema = z
         maxSockets: z.number().int().min(1).optional(),
       })
       .optional(),
+    stressBreakpoint: StressBreakpointSchema.optional(),
   })
   .refine((value) => (value.auth === "ON" ? Boolean(value.password) : true), {
     message: "password is required when auth is ON",
     path: ["password"],
+  })
+  .refine((value) => (value.stressBreakpoint ? value.mode === "STRESS" : true), {
+    message: "stressBreakpoint is only supported when mode is STRESS",
+    path: ["stressBreakpoint"],
   });
 
 export type HarnessConfig = z.infer<typeof ConfigSchema>;
+export type StressBreakpointConfig = z.infer<typeof StressBreakpointSchema>;
+export type StressBreakpointTarget = z.infer<typeof StressBreakpointTargetSchema>;
 
 export const DefaultConfig: HarnessConfig = {
   baseUrl: "http://c64u",
@@ -129,4 +167,36 @@ export function loadConfig(configPath?: string): HarnessConfig {
   const raw = fs.readFileSync(absolutePath, "utf8");
   const data = JSON.parse(raw);
   return ConfigSchema.parse({ ...DefaultConfig, ...data });
+}
+
+let knownConfigTargetsCache: Set<string> | null = null;
+
+function loadKnownConfigTargets(): Set<string> {
+  if (knownConfigTargetsCache) {
+    return knownConfigTargetsCache;
+  }
+
+  const configCatalogPath = path.join(process.cwd(), "doc/c64/c64u-config.yaml");
+  const raw = fs.readFileSync(configCatalogPath, "utf8");
+  const doc = yaml.load(raw) as {
+    config?: {
+      categories?: Record<string, { items?: Record<string, unknown> }>;
+    };
+  };
+
+  const targets = new Set<string>();
+  const categories = doc.config?.categories ?? {};
+  for (const [category, categoryEntry] of Object.entries(categories)) {
+    const items = categoryEntry.items ?? {};
+    for (const item of Object.keys(items)) {
+      targets.add(configTargetKey(category, item));
+    }
+  }
+
+  knownConfigTargetsCache = targets;
+  return targets;
+}
+
+function configTargetKey(category: string, item: string): string {
+  return `${category}::${item}`;
 }

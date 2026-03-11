@@ -61,8 +61,15 @@ describe("app-first primitives", () => {
   }, 6000);
 
   it("launches, restarts, taps by text, and validates route markers", async () => {
-    const { launchAppForeground, navigateToRoute, restartApp, tapByResourceId, tapByText, tapByTextContaining, waitForRouteMarkers } =
-      await import("../src/validation/appFirstPrimitives.js");
+    const {
+      launchAppForeground,
+      navigateToRoute,
+      restartApp,
+      tapByResourceId,
+      tapByText,
+      tapByTextContaining,
+      waitForRouteMarkers,
+    } = await import("../src/validation/appFirstPrimitives.js");
     dumpUiHierarchyMock.mockReset();
 
     const client = {
@@ -137,34 +144,29 @@ describe("app-first primitives", () => {
     expect(await tapByResourceId(client as never, "serial-1", "add-items-to-playlist")).toBe(true);
 
     dumpUiHierarchyMock.mockReset();
-    dumpUiHierarchyMock
-      .mockResolvedValueOnce(`
+    dumpUiHierarchyMock.mockResolvedValueOnce(`
         <hierarchy>
           <node text="PLAY FILES" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,154][300,243]" />
           <node text="Playlist" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,300][300,360]" />
         </hierarchy>
-      `)
-      .mockResolvedValueOnce(`
+      `).mockResolvedValueOnce(`
         <hierarchy>
           <node text="PLAY FILES" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,154][300,243]" />
           <node text="Playlist" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,300][300,360]" />
         </hierarchy>
-      `)
-      .mockResolvedValueOnce(`
+      `).mockResolvedValueOnce(`
         <hierarchy>
           <node text="Play" class="android.widget.Button" clickable="true" enabled="true" focused="true" bounds="[198,1731][345,1887]" />
           <node text="PLAY FILES" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,154][300,243]" />
           <node text="Playlist" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,300][300,360]" />
         </hierarchy>
-      `)
-      .mockResolvedValueOnce(`
+      `).mockResolvedValueOnce(`
         <hierarchy>
           <node text="Play" class="android.widget.Button" clickable="true" enabled="true" focused="true" bounds="[198,1731][345,1887]" />
           <node text="PLAY FILES" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,154][300,243]" />
           <node text="Playlist" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,300][300,360]" />
         </hierarchy>
-      `)
-      .mockResolvedValueOnce(`
+      `).mockResolvedValueOnce(`
         <hierarchy>
           <node text="HOME" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,154][300,243]" />
           <node text="Save RAM" class="android.widget.Button" clickable="true" enabled="true" bounds="[100,100][200,200]" />
@@ -196,20 +198,17 @@ describe("app-first primitives", () => {
       tap: vi.fn().mockResolvedValue(undefined),
     };
 
-    dumpUiHierarchyMock
-      .mockResolvedValueOnce(`
+    dumpUiHierarchyMock.mockResolvedValueOnce(`
         <hierarchy>
           <node text="PLAY FILES" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,154][300,243]" />
           <node text="Playlist" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,300][300,360]" />
         </hierarchy>
-      `)
-      .mockResolvedValueOnce(`
+      `).mockResolvedValueOnce(`
         <hierarchy>
           <node text="" resource-id="tab-home" content-desc="Home" class="android.widget.Button" clickable="true" enabled="true" bounds="[33,2004][181,2150]" />
           <node text="" resource-id="tab-play" content-desc="Play" class="android.widget.Button" clickable="true" enabled="true" bounds="[203,2004][341,2150]" />
         </hierarchy>
-      `)
-      .mockResolvedValueOnce(`
+      `).mockResolvedValueOnce(`
         <hierarchy>
           <node text="PLAY FILES" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,154][300,243]" />
           <node text="Playlist" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,300][300,360]" />
@@ -228,21 +227,18 @@ describe("app-first primitives", () => {
       tap: vi.fn().mockResolvedValue(undefined),
     };
 
-    dumpUiHierarchyMock
-      .mockResolvedValueOnce(`
+    dumpUiHierarchyMock.mockResolvedValueOnce(`
         <hierarchy>
           <node text="Connection Status" class="android.widget.TextView" clickable="false" enabled="true" bounds="[167,814][913,869]" />
           <node text="Close" class="android.widget.Button" clickable="true" enabled="true" bounds="[888,792][935,841]" />
         </hierarchy>
-      `)
-      .mockResolvedValueOnce(`
+      `).mockResolvedValueOnce(`
         <hierarchy>
           <node text="Play" class="android.widget.Button" clickable="true" enabled="true" focused="true" bounds="[198,1731][345,1887]" />
           <node text="PLAY FILES" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,154][300,243]" />
           <node text="Playlist" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,300][300,360]" />
         </hierarchy>
-      `)
-      .mockResolvedValueOnce(`
+      `).mockResolvedValueOnce(`
         <hierarchy>
           <node text="Play" class="android.widget.Button" clickable="true" enabled="true" focused="true" bounds="[198,1731][345,1887]" />
           <node text="PLAY FILES" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,154][300,243]" />

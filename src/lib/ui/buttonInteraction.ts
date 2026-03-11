@@ -12,10 +12,12 @@ type InteractiveElement = HTMLElement & {
 
 export const CTA_HIGHLIGHT_ATTR = "data-c64-tap-flash";
 export const CTA_HIGHLIGHT_SET_AT_ATTR = "data-c64-tap-flash-set-at";
-export const CTA_HIGHLIGHT_DURATION_MS = 220;
+export const CTA_HIGHLIGHT_DURATION_MS = 150;
+export const CTA_HIGHLIGHT_MIN_EXPECTED_MS = 120;
+export const CTA_HIGHLIGHT_MAX_EXPECTED_MS = 200;
 export const CTA_HIGHLIGHT_MAX_AGE_MS = 2000;
-const CTA_PERSISTENT_ACTIVE_ATTR = "data-c64-persistent-active";
-const INTERACTIVE_SELECTOR = [
+export const CTA_PERSISTENT_ACTIVE_ATTR = "data-c64-persistent-active";
+export const INTERACTIVE_SELECTOR = [
   "button",
   "a[href]",
   "summary",
@@ -30,8 +32,16 @@ const INTERACTIVE_SELECTOR = [
   '[role="switch"]',
   '[role="checkbox"]',
   '[data-c64-interactive="true"]',
-  '[tabindex]:not([tabindex="-1"])',
 ].join(",");
+
+const hasDisabledState = (element: HTMLElement) => {
+  if (element.matches(":disabled")) return true;
+  if (element.hasAttribute("disabled")) return true;
+  if (element.getAttribute("aria-disabled") === "true") return true;
+  if (element.hasAttribute("data-disabled")) return true;
+  if (element.closest('[aria-disabled="true"]')) return true;
+  return false;
+};
 
 const clearTapFlash = (element: InteractiveElement) => {
   if (typeof element.__c64TapFlashTimeoutId === "number") {
@@ -68,6 +78,7 @@ const resolveInteractiveElement = (target: EventTarget | null) => {
 
 export const applyPointerButtonInteraction = (element: HTMLElement) => {
   clearPointerFocus(element);
+  if (hasDisabledState(element)) return;
   if (shouldSkipStatelessInteraction(element)) return;
   setTapFlash(element as InteractiveElement);
 };
@@ -95,21 +106,38 @@ export const sweepStaleHighlights = (nowMs = Date.now()) => {
 };
 
 export const registerGlobalButtonInteractionModel = () => {
-  const handler = (event: PointerEvent) => {
+  const pointerUpHandler = (event: PointerEvent) => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
     const interactive = resolveInteractiveElement(event.target);
     if (!interactive) return;
     applyPointerButtonInteraction(interactive);
   };
 
+  // When the app regains visibility (e.g. after a native file-picker dialog
+  // closes), blur any interactive element that received automatic focus
+  // restoration so that :focus-visible does not persist.
+  const visibilityChangeHandler = () => {
+    sweepStaleHighlights();
+    if (document.visibilityState !== "visible") return;
+    const active = document.activeElement;
+    if (!(active instanceof HTMLElement)) return;
+    if (active === document.body) return;
+    if (!active.closest(INTERACTIVE_SELECTOR)) return;
+    if (hasDisabledState(active)) return;
+    if (shouldSkipStatelessInteraction(active)) return;
+    window.setTimeout(() => {
+      if (document.activeElement === active) active.blur();
+    }, 0);
+  };
+
   const sweep = () => sweepStaleHighlights();
 
-  document.addEventListener("pointerup", handler, true);
-  document.addEventListener("visibilitychange", sweep);
+  document.addEventListener("pointerup", pointerUpHandler, true);
+  document.addEventListener("visibilitychange", visibilityChangeHandler);
   window.addEventListener("focus", sweep);
   return () => {
-    document.removeEventListener("pointerup", handler, true);
-    document.removeEventListener("visibilitychange", sweep);
+    document.removeEventListener("pointerup", pointerUpHandler, true);
+    document.removeEventListener("visibilitychange", visibilityChangeHandler);
     window.removeEventListener("focus", sweep);
   };
 };

@@ -25,48 +25,36 @@ vi.mock("../src/validation/appFirstPrimitives.js", () => ({
 
 describe("app-first playback primitives", () => {
   it("opens add-items dialogs, chooses sources, opens path segments, and confirms add", async () => {
-    const {
-      chooseSource,
-      confirmAddItems,
-      openAddItemsDialog,
-      openPathSegments,
-    } = await import("../src/validation/appFirstPlaybackPrimitives.js");
+    const { chooseSource, confirmAddItems, openAddItemsDialog, openPathSegments } =
+      await import("../src/validation/appFirstPlaybackPrimitives.js");
 
     tapByTextMock.mockReset();
     tapByTextContainingMock.mockReset();
     tapByResourceIdMock.mockReset();
     dumpUiHierarchyMock.mockReset();
-    dumpUiHierarchyMock
-      .mockResolvedValueOnce(`
+    dumpUiHierarchyMock.mockResolvedValueOnce(`
         <hierarchy>
           <node text="Select items" class="android.widget.TextView" enabled="true" bounds="[110,561][968,629]" />
         </hierarchy>
-      `)
-      .mockResolvedValueOnce(`
+      `).mockResolvedValueOnce(`
         <hierarchy>
           <node text="Path: /USB2" class="android.widget.TextView" enabled="true" bounds="[176,1001][415,1058]" />
         </hierarchy>
-      `)
-      .mockResolvedValueOnce(`
+      `).mockResolvedValueOnce(`
         <hierarchy>
           <node text="Path: /USB2" class="android.widget.TextView" enabled="true" bounds="[176,1001][415,1058]" />
         </hierarchy>
-      `)
-      .mockResolvedValueOnce(`
+      `).mockResolvedValueOnce(`
         <hierarchy>
           <node text="Path: /USB2" class="android.widget.TextView" enabled="true" bounds="[176,1001][415,1058]" />
         </hierarchy>
-      `)
-      .mockResolvedValueOnce(`
+      `).mockResolvedValueOnce(`
         <hierarchy>
           <node text="Path: /USB2/test-data" class="android.widget.TextView" enabled="true" bounds="[176,1001][415,1058]" />
         </hierarchy>
       `);
     tapByResourceIdMock.mockResolvedValueOnce(true).mockResolvedValueOnce(true);
-    tapByTextMock
-      .mockResolvedValueOnce(false)
-      .mockResolvedValueOnce(true)
-      .mockResolvedValueOnce(true);
+    tapByTextMock.mockResolvedValueOnce(false).mockResolvedValueOnce(true).mockResolvedValueOnce(true);
     tapByTextContainingMock.mockResolvedValueOnce(false);
 
     const client = { tap: vi.fn(), pressKey: vi.fn(), inputText: vi.fn(), swipe: vi.fn() };
@@ -106,13 +94,11 @@ describe("app-first playback primitives", () => {
     tapByTextContainingMock.mockReset();
     tapByResourceIdMock.mockReset();
     dumpUiHierarchyMock.mockReset();
-    dumpUiHierarchyMock
-      .mockResolvedValueOnce(`
+    dumpUiHierarchyMock.mockResolvedValueOnce(`
         <hierarchy>
           <node text="Path: /USB2" class="android.widget.TextView" enabled="true" bounds="[176,1001][415,1058]" />
         </hierarchy>
-      `)
-      .mockResolvedValueOnce(`
+      `).mockResolvedValueOnce(`
         <hierarchy>
           <node text="Path: /USB2/test-data" class="android.widget.TextView" enabled="true" bounds="[176,1001][470,1058]" />
         </hierarchy>
@@ -143,28 +129,23 @@ describe("app-first playback primitives", () => {
     tapByTextContainingMock.mockReset();
     tapByResourceIdMock.mockReset();
     dumpUiHierarchyMock.mockReset();
-    dumpUiHierarchyMock
-      .mockResolvedValueOnce(`
+    dumpUiHierarchyMock.mockResolvedValueOnce(`
         <hierarchy>
           <node text="Path: /USB2/test-data/mod" class="android.widget.TextView" enabled="true" bounds="[176,1001][560,1058]" />
         </hierarchy>
-      `)
-      .mockResolvedValueOnce(`
+      `).mockResolvedValueOnce(`
         <hierarchy>
           <node text="Path: /" class="android.widget.TextView" enabled="true" bounds="[176,1001][250,1058]" />
         </hierarchy>
-      `)
-      .mockResolvedValueOnce(`
+      `).mockResolvedValueOnce(`
         <hierarchy>
           <node text="Path: /USB2" class="android.widget.TextView" enabled="true" bounds="[176,1001][415,1058]" />
         </hierarchy>
-      `)
-      .mockResolvedValueOnce(`
+      `).mockResolvedValueOnce(`
         <hierarchy>
           <node text="Path: /USB2/test-data" class="android.widget.TextView" enabled="true" bounds="[176,1001][470,1058]" />
         </hierarchy>
-      `)
-      .mockResolvedValueOnce(`
+      `).mockResolvedValueOnce(`
         <hierarchy>
           <node text="Path: /USB2/test-data/SID" class="android.widget.TextView" enabled="true" bounds="[176,1001][520,1058]" />
         </hierarchy>
@@ -253,9 +234,7 @@ describe("app-first playback primitives", () => {
     tapByResourceIdMock.mockResolvedValueOnce(false);
     tapByTextMock.mockResolvedValueOnce(false);
     tapByTextContainingMock.mockResolvedValueOnce(true);
-    dumpUiHierarchyMock
-      .mockResolvedValueOnce(`<hierarchy></hierarchy>`)
-      .mockResolvedValueOnce(`
+    dumpUiHierarchyMock.mockResolvedValueOnce(`<hierarchy></hierarchy>`).mockResolvedValueOnce(`
         <hierarchy>
           <node text="Select items" class="android.widget.TextView" enabled="true" bounds="[160,280][520,340]" />
           <node text="0 selected" class="android.widget.TextView" enabled="true" bounds="[160,350][420,410]" />
@@ -277,46 +256,36 @@ describe("app-first playback primitives", () => {
   });
 
   it("targets entry checkboxes, edits duration, and reads topmost current track labels", async () => {
-    const {
-      readTopmostTrackLabel,
-      setDurationSeconds,
-      tapCheckboxForText,
-      waitForTrackLabel,
-    } = await import("../src/validation/appFirstPlaybackPrimitives.js");
+    const { readTopmostTrackLabel, setDurationSeconds, tapCheckboxForText, waitForTrackLabel } =
+      await import("../src/validation/appFirstPlaybackPrimitives.js");
 
     dumpUiHierarchyMock.mockReset();
-    dumpUiHierarchyMock
-      .mockResolvedValueOnce(`
+    dumpUiHierarchyMock.mockResolvedValueOnce(`
         <hierarchy>
           <node text="0 selected" class="android.widget.TextView" enabled="true" bounds="[110,627][968,673]" />
           <node text="Tune.sid" class="android.widget.TextView" enabled="true" bounds="[160,420][480,480]" />
         </hierarchy>
-      `)
-      .mockResolvedValueOnce(`
+      `).mockResolvedValueOnce(`
         <hierarchy>
           <node text="1 selected" class="android.widget.TextView" enabled="true" bounds="[110,627][968,673]" />
           <node text="Tune.sid" class="android.widget.TextView" enabled="true" bounds="[160,420][480,480]" />
         </hierarchy>
-      `)
-      .mockResolvedValueOnce(`
+      `).mockResolvedValueOnce(`
         <hierarchy>
           <node text="Default duration" class="android.widget.TextView" enabled="true" bounds="[40,200][260,260]" />
           <node text="Songlengths file" class="android.widget.TextView" enabled="true" bounds="[40,320][260,380]" />
           <node text="3:00" class="android.widget.EditText" enabled="true" bounds="[800,200][980,260]" />
         </hierarchy>
-      `)
-      .mockResolvedValueOnce(`
+      `).mockResolvedValueOnce(`
         <hierarchy>
           <node text="Second.sid" class="android.widget.TextView" enabled="true" bounds="[140,260][460,320]" />
           <node text="First.sid" class="android.widget.TextView" enabled="true" bounds="[140,760][460,820]" />
         </hierarchy>
-      `)
-      .mockResolvedValueOnce(`
+      `).mockResolvedValueOnce(`
         <hierarchy>
           <node text="First.sid" class="android.widget.TextView" enabled="true" bounds="[140,760][460,820]" />
         </hierarchy>
-      `)
-      .mockResolvedValueOnce(`
+      `).mockResolvedValueOnce(`
         <hierarchy>
           <node text="Second.sid" class="android.widget.TextView" enabled="true" bounds="[140,260][460,320]" />
         </hierarchy>
@@ -344,9 +313,8 @@ describe("app-first playback primitives", () => {
   });
 
   it("falls back across add-items labels and blur targets", async () => {
-    const { openAddItemsDialog, readTopmostTrackLabel, setDurationSeconds } = await import(
-      "../src/validation/appFirstPlaybackPrimitives.js"
-    );
+    const { openAddItemsDialog, readTopmostTrackLabel, setDurationSeconds } =
+      await import("../src/validation/appFirstPlaybackPrimitives.js");
 
     tapByTextMock.mockReset();
     tapByTextContainingMock.mockReset();
@@ -395,20 +363,17 @@ describe("app-first playback primitives", () => {
     const { tapCheckboxForText } = await import("../src/validation/appFirstPlaybackPrimitives.js");
 
     dumpUiHierarchyMock.mockReset();
-    dumpUiHierarchyMock
-      .mockResolvedValueOnce(`
+    dumpUiHierarchyMock.mockResolvedValueOnce(`
         <hierarchy>
           <node text="0 selected" class="android.widget.TextView" enabled="true" bounds="[110,627][968,673]" />
           <node text="Tune.sid" class="android.widget.TextView" enabled="true" bounds="[160,420][480,480]" />
         </hierarchy>
-      `)
-      .mockResolvedValueOnce(`
+      `).mockResolvedValueOnce(`
         <hierarchy>
           <node text="0 selected" class="android.widget.TextView" enabled="true" bounds="[110,627][968,673]" />
           <node text="Tune.sid" class="android.widget.TextView" enabled="true" bounds="[160,420][480,480]" />
         </hierarchy>
-      `)
-      .mockResolvedValueOnce(`
+      `).mockResolvedValueOnce(`
         <hierarchy>
           <node text="1 selected" class="android.widget.TextView" enabled="true" bounds="[110,627][968,673]" />
           <node text="Tune.sid" class="android.widget.TextView" enabled="true" bounds="[160,420][480,480]" />
@@ -438,8 +403,7 @@ describe("app-first playback primitives", () => {
     tapByResourceIdMock.mockResolvedValueOnce(true);
     dumpUiHierarchyMock
       .mockResolvedValueOnce(`<hierarchy></hierarchy>`)
-      .mockResolvedValueOnce(`<hierarchy></hierarchy>`)
-      .mockResolvedValueOnce(`
+      .mockResolvedValueOnce(`<hierarchy></hierarchy>`).mockResolvedValueOnce(`
         <hierarchy>
           <node text="Select items" class="android.widget.TextView" enabled="true" bounds="[160,280][520,340]" />
           <node text="0 selected" class="android.widget.TextView" enabled="true" bounds="[160,350][420,410]" />
@@ -484,31 +448,47 @@ describe("app-first playback primitives", () => {
     tapByTextContainingMock.mockResolvedValue(false);
     tapByResourceIdMock.mockResolvedValue(false);
     dumpUiHierarchyMock.mockResolvedValue(`<hierarchy></hierarchy>`);
-    await expect(openAddItemsDialog(client as never, "serial-1")).rejects.toThrow(/Could not open the Add items dialog/);
-    await expect(chooseSource(client as never, "serial-1", ["Missing"])).rejects.toThrow(/Could not select any source option/);
-    await expect(openPathSegments(client as never, "serial-1", ["USB2"])).rejects.toThrow(/Could not open path segment/);
-    await expect(confirmAddItems(client as never, "serial-1")).rejects.toThrow(/Could not confirm the Add items dialog/);
+    await expect(openAddItemsDialog(client as never, "serial-1")).rejects.toThrow(
+      /Could not open the Add items dialog/,
+    );
+    await expect(chooseSource(client as never, "serial-1", ["Missing"])).rejects.toThrow(
+      /Could not select any source option/,
+    );
+    await expect(openPathSegments(client as never, "serial-1", ["USB2"])).rejects.toThrow(
+      /Could not open path segment/,
+    );
+    await expect(confirmAddItems(client as never, "serial-1")).rejects.toThrow(
+      /Could not confirm the Add items dialog/,
+    );
 
     dumpUiHierarchyMock.mockReset();
     dumpUiHierarchyMock.mockResolvedValueOnce(`<hierarchy></hierarchy>`);
-    await expect(tapCheckboxForText(client as never, "serial-1", "Tune.sid")).rejects.toThrow(/Could not find selectable row/);
+    await expect(tapCheckboxForText(client as never, "serial-1", "Tune.sid")).rejects.toThrow(
+      /Could not find selectable row/,
+    );
 
     dumpUiHierarchyMock.mockResolvedValueOnce(`
       <hierarchy>
         <node text="Tune.sid" class="android.widget.TextView" enabled="true" bounds="[bad]" />
       </hierarchy>
     `);
-    await expect(tapCheckboxForText(client as never, "serial-1", "Tune.sid")).rejects.toThrow(/Could not find selectable row/);
+    await expect(tapCheckboxForText(client as never, "serial-1", "Tune.sid")).rejects.toThrow(
+      /Could not find selectable row/,
+    );
 
     dumpUiHierarchyMock.mockResolvedValueOnce(`<hierarchy></hierarchy>`);
-    await expect(setDurationSeconds(client as never, "serial-1", 5)).rejects.toThrow(/Could not find the duration input field/);
+    await expect(setDurationSeconds(client as never, "serial-1", 5)).rejects.toThrow(
+      /Could not find the duration input field/,
+    );
 
     dumpUiHierarchyMock.mockResolvedValueOnce(`
       <hierarchy>
         <node text="5" class="android.widget.EditText" enabled="true" bounds="[bad]" />
       </hierarchy>
     `);
-    await expect(setDurationSeconds(client as never, "serial-1", 5)).rejects.toThrow(/Could not find the duration input field/);
+    await expect(setDurationSeconds(client as never, "serial-1", 5)).rejects.toThrow(
+      /Could not find the duration input field/,
+    );
 
     dumpUiHierarchyMock.mockResolvedValueOnce(`
       <hierarchy>

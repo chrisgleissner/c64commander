@@ -12,10 +12,12 @@ import { delay } from "../../lib/timing.js";
 import type { HarnessConfig } from "../../lib/config.js";
 import type { LogEventInput } from "../../lib/logging.js";
 import { FtpClient } from "../../lib/ftpClient.js";
+import type { SharedRestRequest } from "../../lib/restRequest.js";
+import { prepareSidVolumeBreakpointScenario } from "./breakpointSidVolume.js";
 
 export type RestScenarioContext = {
   rest: RestClient;
-  request: RestClient["request"];
+  request: SharedRestRequest;
   config: HarnessConfig;
   log: (event: LogEventInput) => void;
   recordConcurrencyObservation: (observation: ConcurrencyObservation) => void;
@@ -623,6 +625,24 @@ export function buildRestScenarios(): RestScenario[] {
     //  STRESS scenarios
     // ═══════════════════════════════════════════════════════════════════
 
+    scenario("rest.breakpoint.sid-volume", false, async ({ request, log, config }) => {
+      if (!config.stressBreakpoint || config.stressBreakpoint.scenarioId !== "rest.breakpoint.sid-volume") {
+        log({
+          kind: "scenario",
+          op: "rest.breakpoint.sid-volume",
+          status: "skipped",
+          details: { reason: "stressBreakpoint not configured" },
+        });
+        return;
+      }
+
+      const scenarioRunner = await prepareSidVolumeBreakpointScenario({ request, log, config });
+      for (let i = 0; i < scenarioRunner.targets.length; i += 1) {
+        await scenarioRunner.mutate({ clientId: `breakpoint-direct-${i + 1}` });
+        await delay(config.pacing.restMinDelayMs);
+      }
+    }),
+
     scenario("rest.machine.reset", false, async ({ request, log, config }) => {
       if (!config.allowMachineReset) {
         log({
@@ -1210,7 +1230,7 @@ async function resolveOrScratch(
   return `/${scratchPath(config, fallbackFile)}`;
 }
 
-async function listCategories(request: RestClient["request"]): Promise<string[]> {
+async function listCategories(request: SharedRestRequest): Promise<string[]> {
   const r = await request({ method: "GET", url: "/v1/configs" });
   if (r.status !== 200 || typeof r.data !== "object" || r.data === null) return [];
   return ((r.data as Record<string, unknown>).categories as string[]) || [];
@@ -1350,7 +1370,7 @@ function encodeFilePath(value: string): string {
 }
 
 async function pickConfigTarget(
-  request: RestClient["request"],
+  request: SharedRestRequest,
   log: (event: LogEventInput) => void,
 ): Promise<{
   category: string;
@@ -1374,7 +1394,7 @@ async function pickConfigTarget(
 }
 
 async function readConfigValue(
-  request: RestClient["request"],
+  request: SharedRestRequest,
   category: string,
   item: string,
   _log: (event: LogEventInput) => void,
@@ -1398,7 +1418,7 @@ async function runConcurrentRequests({
   totalRequests,
   targets,
 }: {
-  request: RestClient["request"];
+  request: SharedRestRequest;
   log: (event: LogEventInput) => void;
   maxInFlight: number;
   totalRequests: number;

@@ -1,3 +1,138 @@
+## Active Task: Android Button Highlight Audit And Remediation
+
+### Audit Status
+
+- State: implementation complete; verification complete except for a pre-existing repo-wide `npm run lint` formatting blocker outside this change set
+- Started: 2026-03-10
+- Owner: GitHub Copilot
+- Objective: enforce deterministic 150 ms button highlight feedback across Android UI, with the Play transport button remaining highlighted for the full real playback duration.
+
+### Audit Invariants
+
+- Invariant A: every user-clickable button flashes highlighted for about 150 ms, with acceptable runtime tolerance of 120-200 ms.
+- Invariant B: the Play button on the Play page stays highlighted for the full real playback session and clears only when playback stops.
+- Invariant C: unit, component, and Playwright UI tests fail on regressions.
+
+### Audit Implementation Strategy
+
+- Use `src/lib/ui/buttonInteraction.ts` as the single reusable highlight mechanism.
+- Tighten the transient flash duration from 220 ms to 150 ms.
+- Apply the same visual highlight styling to both transient flash and persistent playback-active state.
+- Keep the Play-page exception derived from real playback state via `isPlaying`, not timers.
+- Remove over-broad generic focusable targeting and explicitly reject disabled and aria-disabled controls in the shared interaction model.
+
+### Clickable Inventory
+
+#### Shared Primitives And Cross-Page Controls
+
+| Page / area | Button identifier                                             | Component source file                                | Click handler                                             |
+| ----------- | ------------------------------------------------------------- | ---------------------------------------------------- | --------------------------------------------------------- |
+| Global      | app reload fallback                                           | `src/App.tsx`                                        | `window.location.reload()`                                |
+| Global      | bottom tab buttons: Home, Play, Disks, Config, Settings, Docs | `src/components/TabBar.tsx`                          | `navigate(tab.path)` via `wrapUserEvent`                  |
+| Global      | diagnostics activity indicator                                | `src/components/DiagnosticsActivityIndicator.tsx`    | `onClick`                                                 |
+| Global      | connectivity indicator and diagnostics rows                   | `src/components/ConnectivityIndicator.tsx`           | `handleClick`, `openDiagnosticsTab`, `discoverConnection` |
+| Shared UI   | standard buttons                                              | `src/components/ui/button.tsx`                       | wrapped `onClick` + shared highlight hook                 |
+| Shared UI   | quick action cards                                            | `src/components/QuickActionCard.tsx`                 | `onClick` + shared highlight hook                         |
+| Shared UI   | item selection folder rows                                    | `src/components/itemSelection/ItemSelectionView.tsx` | `onOpen(entry.path)`                                      |
+| Shared UI   | snapshot rows and filter pills                                | `src/pages/home/dialogs/SnapshotManagerDialog.tsx`   | `onRestore`, `setTypeFilter`, comment edit actions        |
+| Shared UI   | selectable action list rows and batch actions                 | `src/components/lists/SelectableActionList.tsx`      | row select/open handlers and bulk actions                 |
+| Shared UI   | disk tree rows and inline actions                             | `src/components/disks/DiskTree.tsx`                  | `onMount`, `onGroup`, `onRename`, `onDelete`              |
+
+#### Home Page Catalog
+
+| Page / area | Button identifier                                            | Component source file                           | Click handler                                                          |
+| ----------- | ------------------------------------------------------------ | ----------------------------------------------- | ---------------------------------------------------------------------- |
+| Home        | RAM dump folder picker, config save/load/reset/revert/manage | `src/pages/HomePage.tsx`                        | `handleSelectRamDumpFolder`, `handleAction`, dialog open setters       |
+| Home        | machine control quick actions                                | `src/pages/home/components/MachineControls.tsx` | reset, reboot, pause/resume, menu, save/load RAM, power off            |
+| Home        | drive cards                                                  | src/pages/home/DriveCard.tsx                    | onToggle; onMountedPathClick or onPathClick; onStatusClick             |
+| Home        | stream status controls                                       | `src/pages/home/components/StreamStatus.tsx`    | edit, start, stop, cancel, commit                                      |
+| Home        | printer controls                                             | `src/pages/home/components/PrinterManager.tsx`  | `handleEnabledToggle` and related updates                              |
+| Home        | disk manager controls                                        | `src/components/disks/HomeDiskManager.tsx`      | drive power, browse, rotate, reset, group, rename, delete, bulk delete |
+
+#### Play Page Catalog
+
+| Page / area | Button identifier                                  | Component source file                                      | Click handler                                                                       |
+| ----------- | -------------------------------------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Play        | prev / play-stop / pause-resume / next / reshuffle | `src/pages/playFiles/components/PlaybackControlsCard.tsx`  | `onPrevious`, `onPlay`, `onStop`, `onPauseResume`, `onNext`, `onReshuffle`          |
+| Play        | volume mute                                        | `src/pages/playFiles/components/VolumeControls.tsx`        | `onToggleMute`                                                                      |
+| Play        | playlist add / clear                               | `src/pages/playFiles/components/PlaylistPanel.tsx`         | `onAddItems`, `onClearPlaylist`                                                     |
+| Play        | HVSC controls                                      | `src/pages/playFiles/components/HvscControls.tsx`          | `onInstall`, `onIngest`, `onReset`, `onCancel`                                      |
+| Play        | playback settings song picker actions              | `src/pages/playFiles/components/PlaybackSettingsPanel.tsx` | `onChooseSonglengthsFile`, `onSongPickerClick`, `onSelectSong`, `onCloseSongPicker` |
+
+#### Config, Settings, Docs, Disks, And Dialogs
+
+| Page / area  | Button identifier                                                              | Component source file                                                           | Click handler                                                                                     |
+| ------------ | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Config       | refresh, reset audio mixer, sync clock, row actions                            | `src/pages/ConfigBrowserPage.tsx`                                               | `handleRefresh`, `resetAudioMixer`, `handleSyncClock`, row handlers                               |
+| Settings     | connection, diagnostics, SAF, import/export, HVSC, relaxed mode, about card    | `src/pages/SettingsPage.tsx`                                                    | `handleSaveConnection`, `discoverConnection`, diagnostics open/share, flag toggles, developer tap |
+| Docs         | docs navigation controls                                                       | `src/pages/DocsPage.tsx`                                                        | wrapped navigation handlers                                                                       |
+| Disks        | source selection and disk management actions                                   | `src/components/disks/HomeDiskManager.tsx`, `src/components/disks/DiskTree.tsx` | browse, mount, edit, bulk actions                                                                 |
+| Home dialogs | power off, save config, load config, manage config, restore snapshot, save RAM | `src/pages/home/dialogs/*.tsx`                                                  | dialog close / confirm / item action handlers                                                     |
+
+### Current Behaviour Assessment
+
+- Existing centralized highlight model already covers most buttons through `pointerup` capture plus shared `Button` handling.
+- Pre-fix transient flash duration was 220 ms, outside the required 150 ms target and above the allowed 200 ms ceiling.
+- Pre-fix persistent playback state used `data-c64-persistent-active` only as a logic bypass, without shared highlight styling.
+- Pre-fix selector scope included generic `[tabindex]` elements, which was broader than the button-only contract.
+- Pre-fix disabled filtering did not explicitly reject `aria-disabled` and `data-disabled` custom controls.
+
+### Audit Progress Tracker
+
+- [x] Discover clickable surfaces by static scan.
+- [x] Record clickable inventory in `PLANS.md`.
+- [x] Tighten the shared highlight mechanism.
+- [x] Verify Play-button exception against real playback state.
+- [x] Add unit, component, and Playwright regression coverage.
+- [x] Run coverage, build, and full `./build` verification.
+- [x] Clear the unrelated repo-wide formatting drift currently blocking `npm run lint`.
+
+### Audit Test Coverage Report
+
+- Unit coverage added in `src/lib/ui/buttonInteraction.test.ts` for transient timing, persistent-active bypass, and disabled custom-control guards.
+- Component coverage added in `src/pages/playFiles/components/PlaybackControlsCard.test.tsx` for Play-button transient-to-persistent transition.
+- Playwright coverage added in `playwright/buttonHighlightProof.spec.ts` for transient timing, rapid taps, navigation buttons, disabled controls, and persistent playback highlight.
+- Static inventory coverage remains centered on shared primitives plus route-level controls on `/`, `/play`, `/disks`, `/config`, `/settings`, and `/docs`.
+- Validation results: `npx playwright test playwright/buttonHighlightProof.spec.ts` passed; `npm run test:coverage` passed at 90.85% branch coverage; `npm run build` passed; `./build` passed.
+
+### Audit Risk Register
+
+- Risk: broad selector changes could stop highlighting legitimate custom controls.
+  Mitigation: keep explicit role-based selectors and retain `data-c64-interactive` opt-in.
+- Risk: persistent playback highlight could clear too early on async state transitions.
+  Mitigation: derive persistent state directly from `isPlaying` and keep transient flash only for non-persistent clicks.
+- Risk: disabled custom controls could still flash through synthetic events.
+  Mitigation: reject `:disabled`, `disabled`, `aria-disabled`, and `data-disabled` in the shared handler.
+
+### Audit Verification Checklist
+
+- [x] Inventory captured in `PLANS.md`
+- [x] Shared highlight duration set to 150 ms
+- [x] Disabled controls excluded from highlight
+- [x] Play button uses persistent highlight while playback is active
+- [x] Unit regression tests added
+- [x] Component regression tests added
+- [x] Playwright UI regression tests added
+- [x] `npm run lint` passed
+- [x] `npm run test:coverage` passed with >=90% branch coverage
+- [x] `npm run build` passed
+- [x] `./build` passed
+
+### Audit Work Log
+
+- 2026-03-10T11:00Z: Started Android button highlight audit and created the active execution plan.
+- 2026-03-10T11:08Z: Completed static inventory scan of clickable surfaces across shared primitives and route components.
+- 2026-03-10T11:15Z: Confirmed existing shared interaction model, identified 220 ms transient duration, missing persistent highlight styling, missing disabled guards, and over-broad generic `[tabindex]` targeting.
+- 2026-03-10T23:00Z: Tightened the shared interaction model to 150 ms, added explicit disabled-state guards, removed generic `[tabindex]` matching, and applied the same highlight styling to transient and persistent-active states.
+- 2026-03-10T23:06Z: Added regression coverage in `src/lib/ui/buttonInteraction.test.ts`, `src/pages/playFiles/components/PlaybackControlsCard.test.tsx`, and `playwright/buttonHighlightProof.spec.ts`.
+- 2026-03-10T23:18Z: Verified the highlight proof suite passes end-to-end, including transient timing, rapid taps, navigation controls, disabled controls, and persistent playback highlight behavior.
+- 2026-03-10T23:30Z: Verified `npm run test:coverage` passes at 90.85% branch coverage.
+- 2026-03-10T23:36Z: Verified `npm run build` passes.
+- 2026-03-10T23:52Z: Re-ran `./build`; unit tests, Python agent tests, Playwright, Gradle, and debug APK build all passed.
+- 2026-03-10T23:53Z: Confirmed `npm run lint` remains blocked by pre-existing repository formatting drift in unrelated files, including `.vscode/mcp.json`, several `c64scope/` files, `src/components/ConnectivityIndicator.tsx`, `tests/unit/c64api.test.ts`, and `tests/unit/machine/screenSnapshotRoundtrip.test.ts`.
+- 2026-03-11T08:14Z: Fixed Prettier formatting drift in `playwright/buttonHighlightProof.spec.ts` and `src/pages/playFiles/components/PlaybackControlsCard.test.tsx`; `npm run lint` now passes. All 290 unit test files (3523 tests) and all 5 Playwright highlight proof tests confirmed passing. All checklist items complete.
+- 2026-03-11T08:14Z: Fixed Prettier formatting drift in `playwright/buttonHighlightProof.spec.ts` and `src/pages/playFiles/components/PlaybackControlsCard.test.tsx`; `npm run lint` now passes. All 290 unit test files (3523 tests) and all 5 Playwright highlight proof tests confirmed passing. All checklist items complete.
+
 # MCP-Driven Android Exploratory Testing Plan
 
 ## Status
@@ -685,3 +820,48 @@ c64-{type}-{YYYYMMDD}-{HHMMSS}.c64snap
 | 2026-03-08 | Dump full 64 KB then extract ranges (simpler, single API call)  |
 | 2026-03-08 | STREND resolved by peeking $002B–$002C from full RAM dump       |
 | 2026-03-08 | No SAF folder dependency for snapshot list — app-managed in LS  |
+
+# Contract Harness Breakpoint Stress Plan
+
+## Status
+
+- State: in progress
+- Started: 2026-03-11
+- Owner: Codex
+- Scope: `tests/contract`
+
+## Objective
+
+Extend the existing contract harness `STRESS` mode with a deterministic breakpoint profile that ramps SID volume mutation rate and concurrency, captures full shared-path REST traces, aborts immediately on control-plane failure, preserves forensic artifacts, and skips auto-recovery after breakpoint-triggered failure.
+
+## Constraints
+
+- Keep `tests/contract/run.ts` as the single runner.
+- Keep `logs.jsonl` as the single JSONL log stream.
+- Reuse the shared REST request path and existing REST client.
+- Remove nondeterministic retry jitter only for breakpoint runs.
+- Preserve existing artifact formats and keep `tests/contract/compare.ts` working.
+- Skip the normal STRESS scenario sweep when `stressBreakpoint` is enabled.
+
+## Implementation Plan
+
+1. Extend config parsing and schema validation for `stressBreakpoint`, including target validation against `doc/c64/c64u-config.yaml`.
+2. Add deterministic breakpoint planning and failure-artifact helpers under `tests/contract/lib`.
+3. Add shared REST trace logging in the shared request wrapper so breakpoint requests are traced centrally.
+4. Implement `rest.breakpoint.sid-volume` using deterministic target cycling and valid SID volume values.
+5. Integrate a breakpoint execution branch into `tests/contract/run.ts`, with immediate abort handling and conditional teardown suppression on breakpoint failure.
+6. Extend `tests/contract/mockRestServer.ts` only as needed for deterministic failure testing.
+7. Add regression tests for config parsing, stage planning, trace logging, failure summary generation, abort behavior, and teardown policy.
+8. Run `npm run test`, `npm run test:coverage`, and `npx tsc -p tests/contract/tsconfig.json`, then fix any failures.
+
+## Acceptance Checklist
+
+- [ ] `stressBreakpoint` config is parsed and schema-validated.
+- [ ] Breakpoint stage order is deterministic and respects `concurrency.restMaxInFlight`.
+- [ ] SID volume targets mutate with valid deterministic values.
+- [ ] Breakpoint REST traces are emitted from the shared request path into `logs.jsonl`.
+- [ ] Breakpoint runs abort on request failure, health failure, or transport failure.
+- [ ] `breakpoint-stages.json`, `failure-summary.json`, and `request-trace-tail.json` are written.
+- [ ] Auto recovery is skipped only after breakpoint failure.
+- [ ] SAFE and normal STRESS behavior remain unchanged.
+- [ ] Regression tests cover the new behavior.

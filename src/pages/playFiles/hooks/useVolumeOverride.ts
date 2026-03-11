@@ -87,6 +87,10 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
   const volumeUpdateTimerRef = useRef<number | null>(null);
   const volumeUpdateSeqRef = useRef(0);
   const volumeUiTargetRef = useRef<{ index: number; setAtMs: number } | null>(null);
+  // Set to true during the resume-from-pause window to prevent the hardware
+  // sync effect from re-asserting the muted state while the unmute API call
+  // result propagates back through the React Query cache.
+  const resumingFromPauseRef = useRef(false);
 
   const defaultVolumeIndex = useMemo(() => {
     const zeroIndex = volumeSteps.findIndex((option) => option.numeric === 0);
@@ -452,6 +456,12 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
       return;
     }
     if (!activeIndices.length) {
+      // During the resume-from-pause transition the hardware-side audio mixer
+      // may still report muted values until the React Query refetch picks up
+      // the unmute that was just written.  Skip the muted sync until the
+      // hardware confirms the unmuted state (activeIndices will be non-empty),
+      // at which point we clear the flag and fall through to the sync below.
+      if (resumingFromPauseRef.current) return;
       const snapshot = manualMuteSnapshotRef.current;
       const snapshotIndices = snapshot ? Object.values(snapshot.volumes).map((value) => resolveVolumeIndex(value)) : [];
       const muteIndices = muteValues.map((value) => resolveVolumeIndex(value));
@@ -477,6 +487,8 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
     if (syncDecision === "clear") {
       volumeUiTargetRef.current = null;
     }
+    // Hardware has confirmed the unmuted state – clear the resume guard.
+    resumingFromPauseRef.current = false;
     dispatchVolume({ type: "sync", index: nextIndex, muted: false });
   }, [
     defaultVolumeIndex,
@@ -496,6 +508,35 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
     };
   }, []);
 
+  const ensureUnmuted = useCallback(async () => {
+    if (!volumeMuted) return;
+    const items = await resolveEnabledSidVolumeItems(true);
+    if (!items.length) return;
+    const snapshot = manualMuteSnapshotRef.current;
+    let updates = snapshotToUpdates(snapshot, items);
+    if (!Object.keys(updates).length) {
+      const fallbackIndex = previousVolumeIndexRef.current ?? volumeIndex;
+      const target = volumeSteps[fallbackIndex]?.option;
+      if (target) updates = buildEnabledSidVolumeUpdates(items, sidEnablement, target);
+    }
+    if (Object.keys(updates).length) {
+      await applyAudioMixerUpdates(updates, "Unmute on playback start");
+    }
+    dispatchVolume({ type: "unmute", reason: "manual" });
+    manualMuteSnapshotRef.current = null;
+    volumeUiTargetRef.current = null;
+  }, [
+    applyAudioMixerUpdates,
+    buildEnabledSidVolumeUpdates,
+    dispatchVolume,
+    resolveEnabledSidVolumeItems,
+    sidEnablement,
+    snapshotToUpdates,
+    volumeIndex,
+    volumeMuted,
+    volumeSteps,
+  ]);
+
   return {
     volumeState,
     dispatchVolume,
@@ -511,6 +552,7 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
     applyAudioMixerUpdates,
     manualMuteSnapshotRef,
     pauseMuteSnapshotRef,
+    resumingFromPauseRef,
     volumeSessionSnapshotRef,
     volumeSessionActiveRef,
     volumeUpdateTimerRef,
@@ -521,5 +563,6 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
     handleVolumeAsyncChange,
     handleVolumeCommit,
     handleToggleMute,
+    ensureUnmuted,
   };
 }

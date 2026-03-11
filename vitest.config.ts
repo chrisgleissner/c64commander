@@ -11,6 +11,7 @@ import react from "@vitejs/plugin-react-swc";
 import path from "path";
 
 const nodeTestGlobs = [
+  "tests/contract/**/*.test.ts",
   "tests/unit/tracing/traceFormatter.test.ts",
   "tests/unit/tracing/traceIds.test.ts",
   "tests/unit/tracing/traceSession.test.ts",

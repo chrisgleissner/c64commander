@@ -46,7 +46,7 @@ export function ConnectivityIndicator({ className }: Props) {
   const lastObservedRequestAt =
     typeof deviceState.lastRequestAtMs === "number" && typeof lastAttemptAt === "number"
       ? Math.max(deviceState.lastRequestAtMs, lastAttemptAt)
-      : deviceState.lastRequestAtMs ?? lastAttemptAt;
+      : (deviceState.lastRequestAtMs ?? lastAttemptAt);
   const attemptInFlight = snapshot.state === "DISCOVERING";
   const lastAttemptSucceeded = useMemo(
     () => deriveLastAttemptSucceeded(lastAttemptAt, lastSuccessAt, snapshot.lastProbeFailedAtMs),

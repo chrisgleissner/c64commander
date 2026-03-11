@@ -182,7 +182,11 @@ export async function tapByTextContaining(client: DroidmindClient, serial: strin
   return true;
 }
 
-export async function tapByResourceId(client: DroidmindClient, serial: string, resourceIdSuffix: string): Promise<boolean> {
+export async function tapByResourceId(
+  client: DroidmindClient,
+  serial: string,
+  resourceIdSuffix: string,
+): Promise<boolean> {
   const xml = await dumpUiHierarchy(serial);
   const nodes = parseUiNodes(xml);
   const node = findNodeByResourceId(nodes, resourceIdSuffix);
@@ -242,7 +246,9 @@ export async function navigateToRoute(client: DroidmindClient, serial: string, r
   const xml = await dumpUiHierarchy(serial);
   const nodes = parseUiNodes(xml);
   const bottomThreshold = computeBottomTabThreshold(nodes);
-  const tabNode = findBottomTabByText(nodes, tabLabel, bottomThreshold) ?? findBottomTabByResourceId(nodes, tabResourceId, bottomThreshold);
+  const tabNode =
+    findBottomTabByText(nodes, tabLabel, bottomThreshold) ??
+    findBottomTabByResourceId(nodes, tabResourceId, bottomThreshold);
 
   if (tabNode) {
     const center = parseBoundsCenter(tabNode.bounds);

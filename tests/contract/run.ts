@@ -20,6 +20,11 @@ import { LatencyTracker, deriveCooldown, delay } from "./lib/timing.js";
 import { SchemaValidator, schemaPath } from "./lib/schema.js";
 import type { LogEventInput } from "./lib/logging.js";
 import yaml from "js-yaml";
+import { createRestRequest } from "./lib/restRequest.js";
+import type { BreakpointRequestTraceContext, BreakpointTraceEntry } from "./lib/breakpoint.js";
+import { hasStressBreakpoint, shouldSkipRecoveryAfterBreakpointFailure } from "./lib/breakpoint.js";
+import { runStressBreakpointProfile, type BreakpointRunResult } from "./lib/breakpointRunner.js";
+import { prepareSidVolumeBreakpointScenario } from "./scenarios/rest/breakpointSidVolume.js";
 
 type LogEvent = LogEventInput & { timestamp: string };
 type ConcurrencyObservation = {
@@ -78,13 +83,40 @@ const restClient = new RestClient({
   maxSockets: config.http?.maxSockets ?? 8,
 });
 
-const restRequest = createRestRequest(restClient, config.mode);
+let currentTraceDefaults: BreakpointRequestTraceContext | null = null;
+const traceListeners = new Set<(entry: BreakpointTraceEntry) => void>();
+const restRequest = createRestRequest(restClient, {
+  mode: config.mode,
+  breakpointTrace: hasStressBreakpoint(config)
+    ? {
+        runId,
+        log,
+        getDefaults: () => currentTraceDefaults,
+        onTrace: (entry) => {
+          for (const listener of traceListeners) {
+            listener(entry);
+          }
+        },
+      }
+    : undefined,
+});
 
 const healthMonitor = new HealthMonitor(
   async () => {
     try {
       const response = await withTimeout(
-        restClient.request({ method: "GET", url: config.health.endpoint }),
+        restRequest(
+          hasStressBreakpoint(config)
+            ? {
+                method: "GET",
+                url: config.health.endpoint,
+                trace: {
+                  clientId: "health-monitor",
+                  target: { category: null, item: null },
+                },
+              }
+            : { method: "GET", url: config.health.endpoint },
+        ),
         config.health.timeoutMs,
         `Health probe timeout: ${config.health.endpoint}`,
       );
@@ -98,38 +130,67 @@ const healthMonitor = new HealthMonitor(
       return { ok: false, error: String(error) };
     }
   },
-  { maxConsecutiveFailures: 3, maxUnreachableMs: 30000 },
+  {
+    maxConsecutiveFailures: hasStressBreakpoint(config) ? 2 : 3,
+    maxUnreachableMs: hasStressBreakpoint(config) ? config.stressBreakpoint.failureDetectionTimeoutMs : 30000,
+  },
 );
 
-const restScenarios = filterScenarios(buildRestScenarios(), config.scenarios?.rest);
+const allRestScenarios = buildRestScenarios();
+const restScenarios = filterScenarios(allRestScenarios, config.scenarios?.rest);
 const ftpScenarios = filterScenarios(buildFtpScenarios(), config.scenarios?.ftp);
 const mixedScenarios = filterScenarios(buildMixedScenarios(), config.scenarios?.mixed);
+let breakpointResult: BreakpointRunResult | null = null;
+let runError: unknown = null;
 
 try {
-  await runScenarioGroup("rest", restScenarios, async (scenario) => {
-    await runScenario(scenario.id, scenario.safe, () =>
-      scenario.run({
-        rest: restClient,
-        request: restRequest,
-        config,
-        log,
-        recordConcurrencyObservation: (observation) => {
-          concurrencyObservations.push(observation);
-        },
-      }),
-    );
-  });
+  if (hasStressBreakpoint(config)) {
+    const breakpointScenario = allRestScenarios.find((scenario) => scenario.id === config.stressBreakpoint.scenarioId);
+    if (!breakpointScenario) {
+      throw new Error(`Breakpoint scenario ${config.stressBreakpoint.scenarioId} is not available`);
+    }
+    breakpointResult = await runStressBreakpointProfile({
+      config,
+      log,
+      healthMonitor,
+      prepareScenario: () => prepareSidVolumeBreakpointScenario({ request: restRequest, log, config }),
+      setTraceDefaults: (defaults) => {
+        currentTraceDefaults = defaults;
+      },
+      onTrace: (listener) => {
+        traceListeners.add(listener);
+      },
+    });
+  } else {
+    await runScenarioGroup("rest", restScenarios, async (scenario) => {
+      await runScenario(scenario.id, scenario.safe, () =>
+        scenario.run({
+          rest: restClient,
+          request: restRequest,
+          config,
+          log,
+          recordConcurrencyObservation: (observation) => {
+            concurrencyObservations.push(observation);
+          },
+        }),
+      );
+    });
 
-  await runScenarioGroup("ftp", ftpScenarios, async (scenario) => {
-    await runScenario(scenario.id, scenario.safe, () => scenario.run({ config, log }));
-  });
+    await runScenarioGroup("ftp", ftpScenarios, async (scenario) => {
+      await runScenario(scenario.id, scenario.safe, () => scenario.run({ config, log }));
+    });
 
-  await runScenarioGroup("mixed", mixedScenarios, async (scenario) => {
-    await runScenario(scenario.id, scenario.safe, () =>
-      scenario.run({ rest: restClient, request: restRequest, config, log }),
-    );
-  });
+    await runScenarioGroup("mixed", mixedScenarios, async (scenario) => {
+      await runScenario(scenario.id, scenario.safe, () =>
+        scenario.run({ rest: restClient, request: restRequest, config, log }),
+      );
+    });
+  }
+} catch (error) {
+  runError = error;
+}
 
+try {
   const latencyStats = buildLatencyStats(latencyMap, config);
   const restCooldowns = buildCooldowns(latencyStats, "REST", config);
   const ftpCooldowns = buildCooldowns(latencyStats, "FTP", config);
@@ -242,6 +303,28 @@ try {
   validateOrThrow(validator, schemaPath("concurrency.schema.json"), path.join(runRoot, "concurrency.json"));
   validateOrThrow(validator, schemaPath("conflicts.schema.json"), path.join(runRoot, "conflicts.json"));
 
+  if (breakpointResult) {
+    writeJson(path.join(runRoot, "breakpoint-stages.json"), {
+      generatedAt: new Date().toISOString(),
+      mode: config.mode,
+      auth: config.auth,
+      scenarioId: config.stressBreakpoint?.scenarioId ?? null,
+      stages: breakpointResult.stages,
+    });
+    writeJson(path.join(runRoot, "failure-summary.json"), breakpointResult.failureSummary);
+    writeJson(path.join(runRoot, "request-trace-tail.json"), {
+      generatedAt: new Date().toISOString(),
+      runId,
+      limit: config.stressBreakpoint?.tailRequestCount ?? 0,
+      entries: breakpointResult.traceTail,
+    });
+    if (breakpointResult.aborted && !runError) {
+      runError = new Error(
+        breakpointResult.failureSummary.abortReason ?? "Breakpoint stress profile aborted without a recorded reason",
+      );
+    }
+  }
+
   copyLatest(runRoot, latestRoot, [
     "meta.json",
     "logs.jsonl",
@@ -251,16 +334,30 @@ try {
     "ftp-cooldowns.json",
     "concurrency.json",
     "conflicts.json",
+    "breakpoint-stages.json",
+    "failure-summary.json",
+    "request-trace-tail.json",
   ]);
 } finally {
   try {
-    await rebootAndRecover(restClient, config);
+    if (
+      !shouldSkipRecoveryAfterBreakpointFailure({
+        config,
+        abortReason: breakpointResult?.failureSummary.abortReason ?? null,
+      })
+    ) {
+      await rebootAndRecover(restClient, config);
+    }
   } finally {
     logStream.end();
     if (mockServers) {
       await mockServers.close();
     }
   }
+}
+
+if (runError) {
+  throw runError;
 }
 
 async function runScenarioGroup<T extends { id: string }>(
@@ -523,6 +620,9 @@ function copyLatest(sourceDir: string, targetDir: string, files: string[]): void
   for (const file of files) {
     const src = path.join(sourceDir, file);
     const dest = path.join(targetDir, file);
+    if (!fs.existsSync(src)) {
+      continue;
+    }
     fs.copyFileSync(src, dest);
   }
 }
@@ -613,42 +713,4 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: s
       clearTimeout(timeout);
     }
   }
-}
-
-function createRestRequest(client: RestClient, mode: "SAFE" | "STRESS") {
-  if (mode !== "STRESS") {
-    return (config: Parameters<RestClient["request"]>[0]) => client.request(config);
-  }
-  return async (req: Parameters<RestClient["request"]>[0]) => {
-    const maxRetries = 2;
-    const baseDelayMs = 200;
-    for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
-      try {
-        const response = await client.request(req);
-        if (response.status >= 500 && attempt < maxRetries) {
-          const waitMs = baseDelayMs * Math.pow(2, attempt) + Math.floor(Math.random() * 100);
-          console.warn("REST retryable response", {
-            status: response.status,
-            attempt,
-            waitMs,
-          });
-          await delay(waitMs);
-          continue;
-        }
-        return response;
-      } catch (error) {
-        if (attempt >= maxRetries) {
-          throw error;
-        }
-        const waitMs = baseDelayMs * Math.pow(2, attempt) + Math.floor(Math.random() * 100);
-        console.warn("REST request failed, retrying", {
-          error: String(error),
-          attempt,
-          waitMs,
-        });
-        await delay(waitMs);
-      }
-    }
-    throw new Error("REST retry loop exhausted");
-  };
 }

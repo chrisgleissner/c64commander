@@ -190,6 +190,8 @@ export default function PlayFilesPage() {
     handleVolumeAsyncChange,
     handleVolumeCommit,
     handleToggleMute,
+    resumingFromPauseRef,
+    ensureUnmuted,
   } = useVolumeOverride({ isPlaying, isPaused });
   const volumeIndex = volumeState.index;
   const volumeMuted = volumeState.muted;
@@ -292,6 +294,8 @@ export default function PlayFilesPage() {
     durationSeconds,
     trace,
     setAutoAdvanceDueAtMs,
+    resumingFromPauseRef,
+    ensureUnmuted,
   });
 
   useEffect(() => {

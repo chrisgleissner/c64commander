@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   applyPointerButtonInteraction,
   CTA_HIGHLIGHT_DURATION_MS,
+  CTA_PERSISTENT_ACTIVE_ATTR,
   handlePointerButtonClick,
   registerGlobalButtonInteractionModel,
 } from "./buttonInteraction";
@@ -35,11 +36,31 @@ describe("buttonInteraction", () => {
 
   it("skips transient flash for persistent-active buttons", () => {
     const button = document.createElement("button");
-    button.setAttribute("data-c64-persistent-active", "true");
+    button.setAttribute(CTA_PERSISTENT_ACTIVE_ATTR, "true");
     document.body.appendChild(button);
 
     applyPointerButtonInteraction(button);
     expect(button.hasAttribute("data-c64-tap-flash")).toBe(false);
+  });
+
+  it("skips transient flash for aria-disabled custom controls", () => {
+    const control = document.createElement("div");
+    control.setAttribute("role", "button");
+    control.setAttribute("aria-disabled", "true");
+    document.body.appendChild(control);
+
+    applyPointerButtonInteraction(control);
+    expect(control.hasAttribute("data-c64-tap-flash")).toBe(false);
+  });
+
+  it("skips transient flash for data-disabled radix controls", () => {
+    const control = document.createElement("div");
+    control.setAttribute("role", "menuitem");
+    control.setAttribute("data-disabled", "");
+    document.body.appendChild(control);
+
+    applyPointerButtonInteraction(control);
+    expect(control.hasAttribute("data-c64-tap-flash")).toBe(false);
   });
 
   it("ignores keyboard-triggered clicks for stateless flash", () => {
