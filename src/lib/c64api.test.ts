@@ -271,4 +271,16 @@ describe("C64API request identity", () => {
 
     expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledTimes(2);
   });
+
+  it("does not dedupe GET bursts when query parameters differ by address", async () => {
+    const api = new C64API("http://127.0.0.1");
+
+    await Promise.all(
+      Array.from({ length: 20 }, (_, index) =>
+        (api as any).request(`/v1/machine:readmem?address=${(0xc000 + index).toString(16).toUpperCase()}`),
+      ),
+    );
+
+    expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledTimes(20);
+  });
 });

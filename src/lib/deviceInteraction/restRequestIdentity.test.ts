@@ -46,6 +46,21 @@ describe("restRequestIdentity", () => {
     expect(left).not.toBe(right);
   });
 
+  it("keeps GET and PUT identities distinct even on the same canonical path", () => {
+    const read = buildRestRequestIdentity({
+      method: "GET",
+      path: "/v1/configs/Audio%20Mixer/Vol%20Socket%201?value=0%20dB",
+      baseUrl: "http://c64u",
+    });
+    const write = buildRestRequestIdentity({
+      method: "PUT",
+      path: "/v1/configs/Audio%20Mixer/Vol%20Socket%201?value=0%20dB",
+      baseUrl: "http://c64u",
+    });
+
+    expect(read).not.toBe(write);
+  });
+
   it("classifies machine-control and config mutations without collapsing them together", () => {
     expect(isMachineControlPath("/v1/machine:pause")).toBe(true);
     expect(isMachineControlPath("/v1/runners:sidplay?file=test.sid")).toBe(true);
