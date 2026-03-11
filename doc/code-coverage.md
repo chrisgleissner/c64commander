@@ -4,9 +4,11 @@
 
 C64 Commander uses a comprehensive multi-language code coverage approach that tracks coverage across:
 
-1. **TypeScript/TSX** (React UI and business logic)
-2. **Kotlin** (Android native code for HVSC ingestion and native plugins)
-3. **E2E tests** (Playwright for integration testing)
+1. **TypeScript/TSX unit coverage** (Vitest + V8)
+2. **Web E2E/browser coverage** merged into the web LCOV artifact during CI
+3. **Kotlin/Java Android coverage** (JaCoCo for Android unit tests)
+4. **Python agent coverage** (`pytest --cov --cov-branch`)
+5. **Swift native iOS coverage** (SwiftPM/Xcode -> lcov in the iOS workflow)
 
 All coverage reports are aggregated and submitted to [Codecov](https://codecov.io/gh/chrisgleissner/c64commander) for unified tracking and visualization.
 
@@ -30,16 +32,11 @@ All coverage reports are aggregated and submitted to [Codecov](https://codecov.i
 - `html` - Human-readable HTML report (`coverage/index.html`)
 - `json` - Machine-readable JSON report (`coverage/coverage-final.json`)
 
-**Coverage thresholds** (enforced by `scripts/check-coverage-threshold.mjs` in CI):
+**Coverage gate**:
 
-```typescript
-{
-  statements: 90,
-  branches: 90,
-  functions: 90,
-  lines: 90
-}
-```
+- `vitest.config.ts` intentionally does **not** enforce internal thresholds.
+- CI enforces **90% line coverage** and **90% branch coverage** through `scripts/check-coverage-threshold.mjs`.
+- The default gate input is `coverage/lcov-merged.info`, with fallback to `coverage/lcov.info` when the merged file is not present.
 
 ### Kotlin Coverage (Jacoco)
 
@@ -62,14 +59,15 @@ All coverage reports are aggregated and submitted to [Codecov](https://codecov.i
 - Unit tests: `android/app/src/test/java/`
 - Integration tests: `android/app/src/androidTest/java/`
 
-### E2E Testing (Playwright)
+### E2E and merged web coverage (Playwright + NYC)
 
 **Tool**: Playwright
 **Configuration**: `playwright.config.ts`
 **Commands**:
 
-- `npm run test:e2e` - Run all E2E tests
-- `npm run screenshots` - Generate screenshot tests
+- `npm run test:e2e` - Run Playwright tests
+- `npm run screenshots` - Run screenshot-specific Playwright coverage
+- `scripts/collect-coverage.sh` - Build the merged LCOV artifact used by CI
 
 **What's covered**:
 
@@ -103,49 +101,25 @@ cd android
 
 View report: `open app/build/reports/jacoco/jacocoTestReport/html/index.html`
 
-### CI Pipeline Coverage
+### CI pipeline coverage
 
-The GitHub Actions workflow (`.github/workflows/android.yaml`) automatically:
+The Android workflow (`.github/workflows/android.yaml`) currently:
 
-1. **Run TypeScript tests with coverage**:
+1. runs `npm run test:coverage`
+2. builds with browser coverage probes enabled
+3. runs Playwright to produce browser coverage
+4. merges LCOV into `coverage/lcov-merged.info`
+5. validates artifacts with `scripts/verify-coverage-artifacts.mjs`
+6. enforces the 90% line/branch gate with `scripts/check-coverage-threshold.mjs`
+7. uploads merged web LCOV, Android JaCoCo XML, and Python agent coverage XML to Codecov
 
-   ```yaml
-   - name: Run unit tests with coverage
-     run: npm run test:coverage
-   ```
+The iOS workflow (`.github/workflows/ios.yaml`) exports Swift coverage to `ios/native-tests/swift-lcov.info` and uploads it to Codecov under the `swift` flag.
 
-2. **Run Kotlin tests with coverage**:
+### CI threshold policy
 
-   ```yaml
-   - name: Run Android tests with coverage
-     run: |
-       cd android
-       ./gradlew testDebugUnitTest jacocoTestReport
-   ```
-
-3. **Run E2E tests** (for integration coverage):
-
-   ```yaml
-   - name: Run Playwright e2e tests
-     run: npm run test:e2e
-   ```
-
-4. **Upload all coverage to Codecov**:
-
-   ```yaml
-   - name: Upload coverage to Codecov
-     uses: codecov/codecov-action@v5
-     with:
-       files: ./coverage/lcov.info,./android/app/build/reports/jacoco/jacocoTestReport/jacocoTestReport.xml
-       flags: unittests,android
-       token: ${{ secrets.CODECOV_TOKEN }}
-   ```
-
-### CI Threshold Policy (Unit vs Merged LCOV)
-
-- Branch/line threshold enforcement in CI uses **unit-test LCOV** (`coverage/lcov.info`) via `scripts/check-coverage-threshold.mjs`.
-- The merged file (`coverage/lcov-merged.info`) is still produced and uploaded to Codecov for cross-suite reporting and historical trend analysis.
-- Rationale: merged E2E instrumentation can significantly expand the branch denominator and produce unstable gating behavior; release gate quality is anchored to deterministic unit coverage while preserving merged observability in Codecov.
+- The enforced web gate uses **merged LCOV** (`coverage/lcov-merged.info`) in the Android workflow.
+- `scripts/check-coverage-threshold.mjs` also supports a local/unit-only fallback to `coverage/lcov.info`.
+- `scripts/report-coverage.mjs` and `scripts/verify-coverage-artifacts.mjs` operate on the same merged-artifact model.
 
 ### Codecov Integration
 
@@ -159,8 +133,10 @@ The GitHub Actions workflow (`.github/workflows/android.yaml`) automatically:
 
 **Flags**:
 
-- `unittests` - TypeScript/TSX unit tests
-- `android` - Kotlin/Android tests
+- `web` - merged web LCOV upload
+- `android` - Android JaCoCo upload
+- `python` - Python agent coverage upload
+- `swift` - iOS native coverage upload
 
 Codecov automatically:
 
@@ -169,25 +145,12 @@ Codecov automatically:
 - Comments on PRs with coverage changes
 - Fails builds if coverage drops significantly (configurable)
 
-## Coverage Goals
+## Current enforcement summary
 
-### Short-term (Current Baseline)
-
-- TypeScript: 10% lines, 55% branches
-- Kotlin: Establish baseline (first measurements)
-- E2E: Maintain 100% of critical user paths
-
-### Medium-term (Next Quarter)
-
-- TypeScript: 50% lines, 70% branches
-- Kotlin: 60% lines, 70% branches
-- Add component-level testing for React components
-
-### Long-term (6+ Months)
-
-- TypeScript: 90% lines, 90% branches
-- Kotlin: 90% lines, 90% branches
-- Full E2E coverage of all user-facing features
+- Web coverage gate: **90% lines / 90% branches** on merged LCOV
+- Python agent gate: branch coverage is enforced in CI via `pytest --cov-branch`
+- Android and iOS native coverage are uploaded for visibility and review
+- Playwright coverage contributes to the merged web artifact rather than using a separate threshold file
 
 ## Best Practices
 
