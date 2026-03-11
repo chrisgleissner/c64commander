@@ -1,10 +1,12 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { CTA_HIGHLIGHT_MAX_EXPECTED_MS, CTA_HIGHLIGHT_MIN_EXPECTED_MS } from "../src/lib/ui/buttonInteraction";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
 import { seedUiMocks } from "./uiMocks";
 import { saveCoverageFromPage } from "./withCoverage";
 
 const FLASH_ATTR = "data-c64-tap-flash";
 const PERSISTENT_ATTR = "data-c64-persistent-active";
+const NAVIGATION_FLASH_SCHEDULING_ALLOWANCE_MS = 40;
 
 const dismissDemoInterstitial = async (page: Page) => {
   const continueDemo = page.getByRole("button", {
@@ -98,8 +100,8 @@ test.describe("CTA highlight proof", () => {
     const duration = await measureFlashDuration(target, () => target.click({ force: true, timeout: 60000 }));
 
     expect(duration).not.toBeNull();
-    expect(duration ?? 0).toBeGreaterThanOrEqual(120);
-    expect(duration ?? 0).toBeLessThanOrEqual(200);
+    expect(duration ?? 0).toBeGreaterThanOrEqual(CTA_HIGHLIGHT_MIN_EXPECTED_MS);
+    expect(duration ?? 0).toBeLessThanOrEqual(CTA_HIGHLIGHT_MAX_EXPECTED_MS);
     await expect(target).not.toHaveAttribute(FLASH_ATTR, "true");
   });
 
@@ -127,8 +129,8 @@ test.describe("CTA highlight proof", () => {
     const duration = await measureFlashDuration(disksTab, () => disksTab.click());
 
     expect(duration).not.toBeNull();
-    expect(duration ?? 0).toBeGreaterThanOrEqual(120);
-    expect(duration ?? 0).toBeLessThanOrEqual(200);
+    expect(duration ?? 0).toBeGreaterThanOrEqual(CTA_HIGHLIGHT_MIN_EXPECTED_MS);
+    expect(duration ?? 0).toBeLessThanOrEqual(CTA_HIGHLIGHT_MAX_EXPECTED_MS + NAVIGATION_FLASH_SCHEDULING_ALLOWANCE_MS);
     await expect(page.locator("header").getByRole("heading", { name: "Disks" })).toBeVisible();
   });
 

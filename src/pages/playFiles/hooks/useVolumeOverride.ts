@@ -258,10 +258,11 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
   const resolveSidVolumeItems = useCallback(
     async (forceRefresh = false) => {
       if (sidVolumeItems.length && !forceRefresh) return sidVolumeItems;
+      const readOptions = forceRefresh
+        ? { __c64uIntent: "background" as const, __c64uBypassCache: true }
+        : { __c64uIntent: "background" as const };
       try {
-        const data = await getC64API().getConfigItems("Audio Mixer", AUDIO_MIXER_VOLUME_ITEMS, {
-          __c64uIntent: "background",
-        });
+        const data = await getC64API().getConfigItems("Audio Mixer", AUDIO_MIXER_VOLUME_ITEMS, readOptions);
         return extractAudioMixerItems(data as Record<string, unknown>).filter((item) => isSidVolumeName(item.name));
       } catch (error) {
         addErrorLog("Audio mixer lookup failed", {
@@ -281,15 +282,14 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
           sidAddressingCategory as Record<string, unknown>,
         );
       }
+      const readOptions = forceRefresh
+        ? { __c64uIntent: "background" as const, __c64uBypassCache: true }
+        : { __c64uIntent: "background" as const };
       try {
         const api = getC64API();
         const [sockets, addressing] = await Promise.all([
-          api.getConfigItems("SID Sockets Configuration", SID_SOCKETS_ITEMS, {
-            __c64uIntent: "background",
-          }),
-          api.getConfigItems("SID Addressing", SID_ADDRESSING_ITEMS, {
-            __c64uIntent: "background",
-          }),
+          api.getConfigItems("SID Sockets Configuration", SID_SOCKETS_ITEMS, readOptions),
+          api.getConfigItems("SID Addressing", SID_ADDRESSING_ITEMS, readOptions),
         ]);
         return buildSidEnablement(sockets as Record<string, unknown>, addressing as Record<string, unknown>);
       } catch (error) {
@@ -344,7 +344,7 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
         volumeUiTargetRef.current = null;
         return;
       }
-      const items = await resolveEnabledSidVolumeItems();
+      const items = await resolveEnabledSidVolumeItems(true);
       const updates = buildEnabledSidRestoreUpdates(items, sidEnablement, snapshot);
       if (Object.keys(updates).length) {
         await applyAudioMixerUpdates(updates, `Restore (${reason})`);
@@ -482,7 +482,7 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
   );
 
   const handleToggleMute = useCallback(async () => {
-    const items = await resolveEnabledSidVolumeItems();
+    const items = await resolveEnabledSidVolumeItems(true);
     if (!items.length) return;
     if (volumeUpdateTimerRef.current) {
       window.clearTimeout(volumeUpdateTimerRef.current);
@@ -643,7 +643,7 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
 
   const ensureUnmuted = useCallback(async () => {
     if (!volumeMuted) return;
-    const items = await resolveEnabledSidVolumeItems();
+    const items = await resolveEnabledSidVolumeItems(true);
     if (!items.length) return;
     const snapshot = manualMuteSnapshotRef.current;
     let updates = snapshotToUpdates(snapshot, items);

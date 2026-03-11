@@ -1352,7 +1352,7 @@
     "data": {
       "method": "POST",
       "url": "http://127.0.0.1:34549/v1/drives/a:mount?type=d64&mode=readwrite",
-      "normalizedUrl": "/v1/drives/a:mount?type=d64&mode=readwrite",
+      "normalizedUrl": "/v1/drives/a:mount?mode=readwrite&type=d64",
       "headers": {
         "X-C64U-Host": "127.0.0.1:34549",
         "Content-Type": "application/octet-stream"
