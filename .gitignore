@@ -158,6 +158,7 @@ c64scope/**/dist/
 c64scope/**/node_modules/
 
 # Symlinked projects
+1541ultimate
 android-mcp-server
 c64bridge
 c64stream

@@ -1,162 +1,260 @@
-# Android Button Highlight And Playback Remediation
+# Device Interaction Hardening Plan
 
-## Status
+## Planning Position
 
-- State: complete
-- Date: 2026-03-11
-- Scope: finish the takeover of the unfinished Android highlight remediation, fix the remaining playback mute regressions, add regression coverage, and produce screenshot evidence.
+This plan is derived from [doc/research/device-interaction/c64u-rest-hang-analysis.md](/home/chris/dev/c64/c64commander/doc/research/device-interaction/c64u-rest-hang-analysis.md).
 
-## Final Outcome
+The current C64 Ultimate firmware should be treated as having a single effective REST control lane. Because of that, I agree with not exposing REST concurrency as a user-facing setting.
 
-- The shared touch-highlight system now clears pointer-retained focus on app resume instead of relying on the user to defocus manually.
-- The Play-page `Change` button no longer stays visually highlighted after the native picker is dismissed.
-- `Play` only keeps the allowed persistent highlight while playback is actively running, not while paused.
-- `Unmute` now uses the allowed persistent highlight while the app is muted.
-- Starting playback from a muted state now restores audible output before the play request completes.
-- Pause then resume now restores audible output correctly instead of leaving playback running while still muted.
+Reasoning:
 
-## Audit Of Prior Work
+- the firmware-side REST path is effectively single-lane
+- higher client-side REST concurrency does not create useful throughput
+- extra concurrency increases failure surface, queue interactions, and testing complexity
+- the main goal here is stability, not tunability
 
-### Correct prior work kept
+Plan assumption:
 
-- Centralized highlight behavior already existed in [`src/lib/ui/buttonInteraction.ts`](/home/chris/dev/c64/c64commander/src/lib/ui/buttonInteraction.ts).
-- The shared 150 ms flash model and stale-flash sweep were already viable.
-- Auto-unmute and pause/resume mute logic already existed in the Play-page hooks and could be repaired instead of replaced.
+- REST mutation concurrency will be fixed in code to `1`
+- any remaining concurrency behavior should be an internal implementation detail, not a user-configurable safety knob
 
-### Incomplete or regressive prior work fixed
+If future firmware proves that a specific read-only path is safely parallelizable, that can be introduced later as an internal policy change. It should still not be exposed as a user preference unless there is strong evidence that the setting is both safe and meaningful.
 
-- Pointer-originated focus was not reliably cleared after native picker dismissal because app-return paths were incomplete.
-- The `Unmute` control was missing the only other allowed persistent highlight.
-- The `Play` control stayed persistently highlighted while paused.
-- Playback-start unmute failure could be swallowed.
-- Pause mute state could be reverted by stale query data during the pause transition.
-- The earlier evidence package was incomplete and did not prove the native picker regression was fixed.
+## Scope
 
-## Root Cause
+The implementation plan focuses on the smallest set of changes that materially reduce hang risk while preserving correctness:
 
-### Stuck button highlight after picker dismissal
+- one REST mutation lane
+- one machine transition at a time
+- latest-intent-wins playback write handling
+- stale-read suppression for affected playback state
+- reduced hot-path reads during playback interactions
+- suspension of low-value background reads during active transitions
+- targeted tests that prove these behaviors
 
-- The real defect was retained DOM focus on the tapped button after the native picker returned control to the WebView.
-- The shared button logic blurred pointer-focused elements after touch interaction, but that blur was not retried on all Android app-resume paths.
-- Returning from the picker could therefore leave the element focused, which kept the button in the blue focus-tinted state.
-- This was caused by focus styling plus incomplete focus clearing, not by the temporary flash attribute itself.
+Broader interaction-layer hardening is included as later phases only where it materially improves correctness without diluting the main stabilization work.
 
-### Playback regressions
+## Phase 0 - Baseline And Inventory
 
-- Playback start depended on `ensureUnmuted()`, but failure handling did not enforce a fail-fast path.
-- Pause/resume used async volume-state reconciliation that could temporarily replay stale pre-pause values into the UI.
+Goal: build a precise implementation map before editing behavior.
 
-## Central Remediation
+Tasks:
 
-### Focus lifecycle
+- [ ] Inventory all REST interaction-manager key paths:
+  - `src/lib/deviceInteraction/deviceInteractionManager.ts`
+  - related stores, policy helpers, caches, cooldown maps, breaker state, and tracing
+- [ ] Inventory all playback-side callers that emit hot-path writes or force fresh reads:
+  - pause/resume
+  - mute/unmute
+  - volume slider
+  - polling/reconciliation paths
+- [ ] Identify where `restMaxConcurrency` is configured and where user-facing safety settings currently expose it
+- [ ] Identify tests covering:
+  - interaction scheduling
+  - playback volume/mute behavior
+  - pause/resume sequencing
+  - stale reads or racing writes
+- [ ] Convert the inventory into a defect-to-file map inside this plan before implementation starts
 
-- Added pending pointer-focus tracking in [`src/lib/ui/buttonInteraction.ts`](/home/chris/dev/c64/c64commander/src/lib/ui/buttonInteraction.ts).
-- Retried pointer-focus clearing on `focus`, `pageshow`, and visible `visibilitychange`.
-- Kept the fix centralized and pointer-specific so keyboard focus treatment is not removed indiscriminately.
+Acceptance criteria:
 
-### Allowed persistent highlights
+- every planned code change has a concrete target file
+- every known hang-related risk maps to a remediation task below
+- user-visible REST concurrency configuration is identified for removal or internalization
 
-- Restricted `Play` persistent highlight to `isPlaying && !isPaused` in [`src/pages/playFiles/components/PlaybackControlsCard.tsx`](/home/chris/dev/c64/c64commander/src/pages/playFiles/components/PlaybackControlsCard.tsx).
-- Added `data-c64-persistent-active` to the muted-state `Unmute` control in [`src/pages/playFiles/components/VolumeControls.tsx`](/home/chris/dev/c64/c64commander/src/pages/playFiles/components/VolumeControls.tsx).
+## Phase 1 - Fixed Single-Lane REST Mutation Model
 
-### Playback mute consistency
+Goal: remove unsafe overlap of mutating REST work.
 
-- Enforced auto-unmute before play in [`src/pages/playFiles/hooks/usePlaybackController.ts`](/home/chris/dev/c64/c64commander/src/pages/playFiles/hooks/usePlaybackController.ts).
-- Added a pause-transition guard in [`src/pages/playFiles/hooks/useVolumeOverride.ts`](/home/chris/dev/c64/c64commander/src/pages/playFiles/hooks/useVolumeOverride.ts) and threaded it through [`src/pages/PlayFilesPage.tsx`](/home/chris/dev/c64/c64commander/src/pages/PlayFilesPage.tsx).
+Tasks:
 
-## Clickable Inventory Summary
+- [ ] Refactor the interaction layer so all mutating REST requests execute with one in-flight operation per device
+- [ ] Ensure the serialized mutation class includes:
+  - `PUT /v1/machine:*`
+  - `POST /v1/configs`
+  - `PUT /v1/configs/...`
+  - runner/start endpoints that mutate machine state
+- [ ] Remove or internalize user-facing REST concurrency configuration
+- [ ] Update safety-setting docs/types/UI so users cannot increase REST mutation parallelism
+- [ ] Add regression tests proving:
+  - overlapping mutation requests are serialized
+  - repeated user actions do not produce overlapping machine/config mutations
 
-The codebase was rechecked for shared and page-local button usage. The central highlight system covers the app-wide button surfaces below.
+Acceptance criteria:
 
-- Shared UI: [`src/components/ui/button.tsx`](/home/chris/dev/c64/c64commander/src/components/ui/button.tsx), [`src/components/TabBar.tsx`](/home/chris/dev/c64/c64commander/src/components/TabBar.tsx), [`src/components/QuickActionCard.tsx`](/home/chris/dev/c64/c64commander/src/components/QuickActionCard.tsx), [`src/components/itemSelection/ItemSelectionView.tsx`](/home/chris/dev/c64/c64commander/src/components/itemSelection/ItemSelectionView.tsx)
-- Home: [`src/pages/HomePage.tsx`](/home/chris/dev/c64/c64commander/src/pages/HomePage.tsx), [`src/pages/home/components/MachineControls.tsx`](/home/chris/dev/c64/c64commander/src/pages/home/components/MachineControls.tsx), [`src/pages/home/components/PrinterManager.tsx`](/home/chris/dev/c64/c64commander/src/pages/home/components/PrinterManager.tsx)
-- Play: [`src/pages/PlayFilesPage.tsx`](/home/chris/dev/c64/c64commander/src/pages/PlayFilesPage.tsx), [`src/pages/playFiles/components/PlaybackControlsCard.tsx`](/home/chris/dev/c64/c64commander/src/pages/playFiles/components/PlaybackControlsCard.tsx), [`src/pages/playFiles/components/VolumeControls.tsx`](/home/chris/dev/c64/c64commander/src/pages/playFiles/components/VolumeControls.tsx), [`src/pages/playFiles/components/PlaybackSettingsPanel.tsx`](/home/chris/dev/c64/c64commander/src/pages/playFiles/components/PlaybackSettingsPanel.tsx), [`src/pages/playFiles/components/PlaylistPanel.tsx`](/home/chris/dev/c64/c64commander/src/pages/playFiles/components/PlaylistPanel.tsx)
-- Remaining routes: [`src/pages/DisksPage.tsx`](/home/chris/dev/c64/c64commander/src/pages/DisksPage.tsx), [`src/pages/ConfigBrowserPage.tsx`](/home/chris/dev/c64/c64commander/src/pages/ConfigBrowserPage.tsx), [`src/pages/SettingsPage.tsx`](/home/chris/dev/c64/c64commander/src/pages/SettingsPage.tsx), [`src/pages/DocsPage.tsx`](/home/chris/dev/c64/c64commander/src/pages/DocsPage.tsx)
+- no path exists where two mutating REST requests can overlap for the same device
+- REST concurrency is no longer a user-facing tuning knob
+- tests prove serialization
 
-## Files Changed And Why
+## Phase 2 - Single-Flight Machine Transitions
 
-- [`src/lib/ui/buttonInteraction.ts`](/home/chris/dev/c64/c64commander/src/lib/ui/buttonInteraction.ts): central focus-clear retry logic for app resume after picker-like interruptions
-- [`src/lib/ui/buttonInteraction.test.ts`](/home/chris/dev/c64/c64commander/src/lib/ui/buttonInteraction.test.ts): regression test for app-regain-focus clearing
-- [`src/pages/playFiles/components/PlaybackControlsCard.tsx`](/home/chris/dev/c64/c64commander/src/pages/playFiles/components/PlaybackControlsCard.tsx): `Play` persistent highlight restricted to active playback
-- [`src/pages/playFiles/components/PlaybackControlsCard.test.tsx`](/home/chris/dev/c64/c64commander/src/pages/playFiles/components/PlaybackControlsCard.test.tsx): pause-state highlight regression coverage
-- [`src/pages/playFiles/components/VolumeControls.tsx`](/home/chris/dev/c64/c64commander/src/pages/playFiles/components/VolumeControls.tsx): muted-state `Unmute` persistent highlight
-- [`src/pages/playFiles/components/VolumeControls.test.tsx`](/home/chris/dev/c64/c64commander/src/pages/playFiles/components/VolumeControls.test.tsx): persistent-highlight coverage for `Unmute`
-- [`src/pages/playFiles/hooks/usePlaybackController.ts`](/home/chris/dev/c64/c64commander/src/pages/playFiles/hooks/usePlaybackController.ts): fail-fast auto-unmute on play and pause-transition tracking
-- [`src/pages/playFiles/hooks/useVolumeOverride.ts`](/home/chris/dev/c64/c64commander/src/pages/playFiles/hooks/useVolumeOverride.ts): stale-query guard for pause/resume mute reconciliation
-- [`src/pages/PlayFilesPage.tsx`](/home/chris/dev/c64/c64commander/src/pages/PlayFilesPage.tsx): pause-transition ref wiring
-- [`tests/unit/playFiles/usePlaybackController.test.tsx`](/home/chris/dev/c64/c64commander/tests/unit/playFiles/usePlaybackController.test.tsx): start-while-muted regression coverage
-- [`tests/unit/playFiles/volumeMuteRace.test.ts`](/home/chris/dev/c64/c64commander/tests/unit/playFiles/volumeMuteRace.test.ts): pause/resume stale-state race coverage
-- [`playwright/buttonHighlightProof.spec.ts`](/home/chris/dev/c64/c64commander/playwright/buttonHighlightProof.spec.ts): picker-return focus regression coverage
-- [`playwright/playback.part2.spec.ts`](/home/chris/dev/c64/c64commander/playwright/playback.part2.spec.ts): play-start auto-unmute and pause/resume audible-output coverage
-- [`playwright/playback.spec.ts`](/home/chris/dev/c64/c64commander/playwright/playback.spec.ts): deterministic reconciliation test updated to match the current non-interval resume behavior
-- [`doc/testing/investigations/interactions1/verification-notes.md`](/home/chris/dev/c64/c64commander/doc/testing/investigations/interactions1/verification-notes.md): scenario-to-screenshot mapping and capture notes
+Goal: make pause/resume safe under repeated taps and overlapping UI activity.
 
-## Regression Coverage Added Or Updated
+Tasks:
 
-- [`src/lib/ui/buttonInteraction.test.ts`](/home/chris/dev/c64/c64commander/src/lib/ui/buttonInteraction.test.ts): `clears pending pointer focus when the window regains focus after a picker-like interruption`
-- [`src/pages/playFiles/components/VolumeControls.test.tsx`](/home/chris/dev/c64/c64commander/src/pages/playFiles/components/VolumeControls.test.tsx): muted `Unmute` button persists and clears correctly
-- [`src/pages/playFiles/components/PlaybackControlsCard.test.tsx`](/home/chris/dev/c64/c64commander/src/pages/playFiles/components/PlaybackControlsCard.test.tsx): `Play` persistent highlight clears while paused
-- [`tests/unit/playFiles/usePlaybackController.test.tsx`](/home/chris/dev/c64/c64commander/tests/unit/playFiles/usePlaybackController.test.tsx): start-while-muted unmute ordering and fail-fast failure handling
-- [`tests/unit/playFiles/volumeMuteRace.test.ts`](/home/chris/dev/c64/c64commander/tests/unit/playFiles/volumeMuteRace.test.ts): pause-transition stale-query guard
-- [`playwright/buttonHighlightProof.spec.ts`](/home/chris/dev/c64/c64commander/playwright/buttonHighlightProof.spec.ts): native-picker-equivalent focus regression
-- [`playwright/playback.part2.spec.ts`](/home/chris/dev/c64/c64commander/playwright/playback.part2.spec.ts): muted-start and pause/resume audible-output flows
+- [ ] Introduce a single-flight guard for pause/resume transitions
+- [ ] Define deterministic repeated-tap behavior:
+  - ignore repeated taps while a transition is active, or
+  - collapse to final desired transition state
+- [ ] Ensure machine transition code cannot interleave with playback mixer writes
+- [ ] Add tests proving:
+  - repeated pause taps do not overlap
+  - repeated resume taps do not overlap
+  - pause then resume bursts resolve deterministically
 
-## Tests Run
+Acceptance criteria:
 
-- `npx vitest run src/lib/ui/buttonInteraction.test.ts src/pages/playFiles/components/PlaybackControlsCard.test.tsx src/pages/playFiles/components/VolumeControls.test.tsx tests/unit/playFiles/usePlaybackController.test.tsx tests/unit/playFiles/volumeMuteRace.test.ts`
-- `npx playwright test playwright/buttonHighlightProof.spec.ts --grep "change button clears retained pointer focus|standard button flash|rapid repeated taps|play button stays highlighted"`
-- `npx playwright test playwright/playback.part2.spec.ts --grep "starting playback while muted clears mute before SID playback begins|pause mutes SID outputs and resume restores them"`
-- `npm run test:coverage`
-- `npm run lint`
-- `npm run build`
-- `./build --skip-install`
+- at most one machine transition is active at a time
+- transition behavior under repeated taps is deterministic and test-covered
 
-## Coverage And Build Result
+## Phase 3 - Latest-Intent-Wins Playback Write Lane
 
-- `npm run test:coverage` passed with global branch coverage above the required 90% threshold.
-- `./build --skip-install` completed successfully, including the web build, unit tests, Playwright suite, Android JVM tests, and debug APK build.
-- Debug APK verified at [`android/app/build/outputs/apk/debug/c64commander-0.1.0-debug.apk`](/home/chris/dev/c64/c64commander/android/app/build/outputs/apk/debug/c64commander-0.1.0-debug.apk) and installed onto the attached Pixel 4 device.
+Goal: keep slider and mute interactions correct while reducing device load.
 
-## Evidence Package
+Tasks:
 
-Stored under [`doc/testing/investigations/interactions1`](/home/chris/dev/c64/c64commander/doc/testing/investigations/interactions1):
+- [ ] Replace playback-side `immediate: true` write bursts with a dedicated per-resource write lane
+- [ ] Implement latest-intent-wins semantics for slider-backed playback controls
+- [ ] Ensure queued but not yet executed intermediate values are superseded by the latest value
+- [ ] Ensure stale completions from older writes cannot roll back newer local intent
+- [ ] Apply the same design to mute/unmute if it targets the same logical mixer resource
+- [ ] Add tests proving:
+  - rapid slider bursts end on the final value
+  - older writes cannot overwrite newer intent
+  - intermediate queued values are dropped when superseded
 
-- `a1-change-before-open.png`
-- `a2-change-picker-open.png`
-- `a3-change-after-close.png`
-- `a4-change-after-timeout.png`
-- `b1-start-muted-before-play.png`
-- `b2-start-playback-auto-unmuted.png`
-- `c1-pause-resume-playing-before-pause.png`
-- `c2-pause-resume-paused.png`
-- `c3-pause-resume-muted-state.png`
-- `c4-pause-resume-resumed.png`
-- `c5-pause-resume-audio-restored.png`
-- `verification-notes.md`
+Acceptance criteria:
 
-## Verification Checklist
+- final device-facing value after a burst reflects the latest user intent
+- no stale write completion can roll playback state backward
+- slider behavior remains responsive under load
 
-- [x] No button remains highlighted only because it retained focus after picker dismissal
-- [x] `Change` button regression reproduced and proven fixed
-- [x] Tap flash remains centrally controlled by the shared interaction layer
-- [x] `Play` stays highlighted only while actively playing
-- [x] `Unmute` stays highlighted while muted
-- [x] Starting playback from muted state restores audible output state
-- [x] Pause then resume restores audible output state
-- [x] Automated regression coverage updated
-- [x] Screenshots stored in `doc/testing/investigations/interactions1`
-- [x] Verification notes stored beside the screenshots
+## Phase 4 - Stale Read Suppression And Hot-Path Read Reduction
 
-## Remaining Risks
+Goal: stop reads from reapplying old state during active playback interaction.
 
-- No known unresolved defects remain for this task.
-- The native picker transition is immediate, so an isolated frame of the transient tap flash during picker launch is not a stable artifact to capture. That gap is covered by the shared interaction unit test and Playwright regression harness.
+Tasks:
 
-## Work Log
+- [ ] Remove forced fresh config reads from hot pause/resume/mute/volume paths where possible
+- [ ] Replace hot-path reads with:
+  - local cached mixer state
+  - last-known-good playback snapshot
+  - deferred reconciliation after transition settle
+- [ ] Add generation or sequence-based stale-read suppression for affected playback state
+- [ ] Ensure reads started before a newer local write intent cannot overwrite that newer local state on completion
+- [ ] Add tests proving:
+  - stale GET results cannot roll back newer local playback state
+  - read-after-write reconciliation stays deterministic
 
-- 2026-03-11: Audited the prior remediation and re-established the real root cause.
-- 2026-03-11: Fixed the shared pointer-focus lifecycle in the central interaction layer.
-- 2026-03-11: Repaired the allowed persistent-highlight exceptions on the Play page.
-- 2026-03-11: Fixed muted-start and pause/resume audible-output regressions.
-- 2026-03-11: Added regression coverage across unit, component, and Playwright layers.
-- 2026-03-11: Captured Android and Playwright evidence under `doc/testing/investigations/interactions1`.
+Acceptance criteria:
+
+- playback control paths no longer force unnecessary config reads in the fragile window
+- stale reads cannot make the slider or mute state jump backward
+
+## Phase 5 - Transition Window Protection
+
+Goal: reduce queue depth and prevent background interference during fragile machine-control windows.
+
+Tasks:
+
+- [ ] Defer playback mixer writes while a machine transition is active
+- [ ] Flush only the final coalesced mixer state after transition completion and cooldown
+- [ ] Suspend low-value background reads during:
+  - pause/resume transitions
+  - active playback write bursts if needed
+- [ ] Add endpoint-specific cooldowns for:
+  - machine control
+  - playback mixer writes
+- [ ] Add tests proving:
+  - background polling does not interfere with active playback control
+  - machine transitions flush one final mixer state rather than many intermediate states
+
+Acceptance criteria:
+
+- machine transitions are isolated from slider traffic
+- background reads do not increase pressure in the most fragile control window
+
+## Phase 6 - Targeted Correctness Hardening
+
+Goal: fix secondary correctness issues that are worth addressing while touching the interaction layer.
+
+Tasks:
+
+- [ ] Audit REST request identity generation
+- [ ] Ensure request identity includes:
+  - method
+  - path
+  - canonical query parameters
+- [ ] Ensure query-sensitive GETs never collide in coalescing or caching
+- [ ] Ensure distinct writes are not transport-coalesced unless explicitly safe and documented
+- [ ] Add targeted cache invalidation or bypass after related writes
+- [ ] Add tests proving:
+  - same query params in different order normalize identically
+  - different query params do not collide
+  - write paths do not accidentally coalesce
+  - stale cached reads are not reused after invalidating writes
+
+Acceptance criteria:
+
+- no query-sensitive request collision remains
+- cached/read-coalesced behavior is semantically correct for touched endpoints
+
+## Phase 7 - Optional Interaction-Layer Hardening
+
+Goal: improve resilience further without expanding the first stabilization patch unnecessarily.
+
+Tasks:
+
+- [ ] Evaluate whether scheduler waits currently consume active execution slots in a harmful way
+- [ ] If warranted, redesign deferred cooldown/backoff waiting so it does not waste scarce worker capacity
+- [ ] Evaluate circuit-breaker behavior and, if needed, add an explicit cautious recovery state
+- [ ] Centralize and tighten error classification for breaker decisions
+- [ ] Add tests only for the hardening that is actually implemented
+
+Acceptance criteria:
+
+- any added complexity is justified by concrete benefits
+- this phase does not block shipping the core hang fix unless investigation shows it is required
+
+## Defect Inventory
+
+To be completed during Phase 0.
+
+- [ ] Unsafe overlapping mutating REST requests: file mapping pending
+- [ ] Playback-side immediate config writes under burst interaction: file mapping pending
+- [ ] Missing single-flight protection for pause/resume: file mapping pending
+- [ ] Hot-path fresh config reads during playback interaction: file mapping pending
+- [ ] Stale read rollback of newer local intent: file mapping pending
+- [ ] User-facing REST concurrency setting despite single effective server lane: file mapping pending
+- [ ] Query-sensitive request identity correctness: file mapping pending
+- [ ] Cache invalidation gaps after writes: file mapping pending
+- [ ] Scheduler wait occupancy risk: file mapping pending
+- [ ] Circuit-breaker recovery-model limitations: file mapping pending
+
+## Verification Plan
+
+Core verification required before completion:
+
+- [ ] Unit tests for serialized mutation scheduling
+- [ ] Unit tests for single-flight pause/resume
+- [ ] Unit tests for latest-intent-wins slider/write behavior
+- [ ] Unit tests for stale-read suppression
+- [ ] Unit tests for background polling suppression during active transitions
+- [ ] Unit tests for query-sensitive request identity correctness
+- [ ] Run targeted Vitest suites during each phase
+- [ ] Run `npm run test`
+- [ ] Run `npm run test:coverage`
+- [ ] Confirm global branch coverage remains at or above 90%
+
+If touched code affects broader app behavior materially:
+
+- [ ] Run `npm run lint`
+- [ ] Run any directly relevant Playwright coverage for the changed flows
+
+## Worklog
+
+### 2026-03-11
+
+- Created this phased execution plan from the firmware-backed research note.
+- Decided that REST concurrency should not remain user-configurable because the current C64U firmware exposes only one effective REST handler lane.
+- Ordered the work so the smallest stability-critical fixes land first, with broader interaction-layer hardening pushed later unless proven necessary.
