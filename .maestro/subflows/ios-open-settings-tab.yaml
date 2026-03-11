@@ -41,16 +41,22 @@ tags:
           optional: true
       - waitForAnimationToEnd
       - tapOn:
+          id: "tab-settings"
+          optional: true
+      - tapOn:
           text: "Settings"
+          optional: true
+      - tapOn:
+          point: "75%,95%"
           optional: true
       - extendedWaitUntil:
           visible:
-            text: "Settings"
+            text: "Connection"
           timeout: ${LONG_TIMEOUT}
 - tapOn:
-    text: "Settings"
+    id: "tab-settings"
     optional: true
 - extendedWaitUntil:
-    visible: "Settings"
+    visible: "Connection"
     timeout: ${LONG_TIMEOUT}
-- assertVisible: "Settings"
+- assertVisible: "Connection"

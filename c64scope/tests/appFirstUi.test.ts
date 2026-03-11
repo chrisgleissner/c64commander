@@ -168,4 +168,20 @@ describe("app-first UI XML parsing", () => {
     const nodes = parseUiNodes(xml);
     expect(findNodeByResourceId(nodes, "add-items-to-playlist")?.contentDesc).toBe("Add items to playlist");
   });
+
+  it("matches exact resource ids, skips non-clickable entries, and clamps checkbox tap points", () => {
+    const xml = `
+    <hierarchy rotation="0">
+      <node text="" resource-id="playlist-play" content-desc="Play" class="android.widget.Button" clickable="false" enabled="true" bounds="[300,1800][420,1900]" />
+      <node text="" resource-id="playlist-play" content-desc="Play" class="android.widget.Button" clickable="true" enabled="true" bounds="[300,1800][420,1900]" />
+      <node text="Tiny" class="android.widget.TextView" clickable="false" enabled="true" bounds="[40,420][120,480]" />
+      <node text="Settings" content-desc="Settings" class="android.widget.Button" clickable="true" enabled="true" selected="true" bounds="[700,2004][860,2150]" />
+    </hierarchy>
+    `;
+
+    const nodes = parseUiNodes(xml);
+    expect(findNodeByResourceId(nodes, "playlist-play")?.clickable).toBe(true);
+    expect(checkboxTapPointForLabel(findVisibleText(nodes, "Tiny")!, 80)).toEqual({ x: 24, y: 450 });
+    expect(activeBottomTabLabel(nodes, ["Settings"], 1900)).toBe("Settings");
+  });
 });

@@ -44,6 +44,7 @@ export function createRestRequest(client: RestClient, options: CreateRestRequest
       try {
         const response = await client.request(requestConfig);
         const retryable = response.status >= 500 && attempt <= maxRetries;
+        const retryDelayMs = retryable ? computeRetryDelay(shouldTrace, baseDelayMs, attempt) : undefined;
         if (shouldTrace) {
           emitTrace({
             options,
@@ -53,31 +54,24 @@ export function createRestRequest(client: RestClient, options: CreateRestRequest
             requestSequence: sequence,
             attempt,
             willRetry: retryable,
-            retryDelayMs: retryable ? deterministicRetryDelay(baseDelayMs, attempt) : undefined,
+            retryDelayMs,
           });
         }
         if (retryable) {
-          await delay(deterministicRetryDelay(baseDelayMs, attempt));
-          continue;
-        }
-        if (!shouldTrace && options.mode === "STRESS" && response.status >= 500 && attempt <= maxRetries) {
-          const waitMs = baseDelayMs * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 100);
-          console.warn("REST retryable response", {
-            status: response.status,
-            attempt: attempt - 1,
-            waitMs,
-          });
-          await delay(waitMs);
+          if (!shouldTrace && options.mode === "STRESS") {
+            console.warn("REST retryable response", {
+              status: response.status,
+              attempt: attempt - 1,
+              waitMs: retryDelayMs,
+            });
+          }
+          await delay(retryDelayMs ?? 0);
           continue;
         }
         return response;
       } catch (error) {
         const willRetry = attempt <= maxRetries;
-        const retryDelayMs = willRetry
-          ? shouldTrace
-            ? deterministicRetryDelay(baseDelayMs, attempt)
-            : baseDelayMs * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 100)
-          : undefined;
+        const retryDelayMs = willRetry ? computeRetryDelay(shouldTrace, baseDelayMs, attempt) : undefined;
         if (shouldTrace) {
           emitTrace({
             options,
@@ -115,6 +109,13 @@ function stripTraceConfig(config: SharedRestRequestConfig): AxiosRequestConfig {
 
 function deterministicRetryDelay(baseDelayMs: number, attempt: number): number {
   return baseDelayMs * Math.pow(2, attempt - 1);
+}
+
+function computeRetryDelay(shouldTrace: boolean, baseDelayMs: number, attempt: number): number {
+  if (shouldTrace) {
+    return deterministicRetryDelay(baseDelayMs, attempt);
+  }
+  return baseDelayMs * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 100);
 }
 
 function emitTrace(input: {

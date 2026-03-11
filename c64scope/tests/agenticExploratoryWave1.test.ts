@@ -278,4 +278,16 @@ describe("agentic exploratory wave 1", () => {
       await rm(tempRoot, { recursive: true, force: true });
     }
   });
+
+  it("rejects invalid repeat overrides before running preflight", async () => {
+    process.env["REPEAT"] = "not-a-number";
+    resolvePreferredPhysicalTestDeviceSerialMock.mockResolvedValue("serial-invalid-repeat");
+
+    const { main } = await import("../src/agenticExploratoryWave1.js");
+
+    await expect(main()).rejects.toThrow(/Invalid REPEAT value "not-a-number"/);
+    expect(runPreflightMock).not.toHaveBeenCalled();
+    expect(discoverMirroredCorporaMock).not.toHaveBeenCalled();
+    expect(runCaseMock).not.toHaveBeenCalled();
+  });
 });

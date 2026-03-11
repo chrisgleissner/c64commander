@@ -422,6 +422,33 @@ describe("app-first playback primitives", () => {
     expect(tapByResourceIdMock).toHaveBeenCalledWith(client, "serial-1", "import-option-c64u");
   });
 
+  it("fails when the C64U picker never becomes ready after repeated source selection attempts", async () => {
+    vi.useFakeTimers();
+    const { chooseSource } = await import("../src/validation/appFirstPlaybackPrimitives.js");
+
+    tapByTextMock.mockReset();
+    tapByTextContainingMock.mockReset();
+    tapByResourceIdMock.mockReset();
+    dumpUiHierarchyMock.mockReset();
+    tapByResourceIdMock.mockResolvedValue(true);
+    dumpUiHierarchyMock.mockResolvedValue(`<hierarchy></hierarchy>`);
+
+    const client = {
+      tap: vi.fn().mockResolvedValue(undefined),
+      pressKey: vi.fn().mockResolvedValue(undefined),
+      inputText: vi.fn().mockResolvedValue(undefined),
+      swipe: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const promise = chooseSource(client as never, "serial-1", ["C64U"]);
+    const expectation = expect(promise).rejects.toThrow(/C64U source picker did not become ready/);
+    await vi.runAllTimersAsync();
+
+    await expectation;
+    expect(tapByResourceIdMock).toHaveBeenCalledTimes(3);
+    vi.useRealTimers();
+  });
+
   it("raises clear errors when required UI affordances are missing", async () => {
     const {
       chooseSource,
@@ -498,5 +525,49 @@ describe("app-first playback primitives", () => {
     await expect(waitForTrackLabel("serial-1", "Second.sid", ["First.sid", "Second.sid"], 1, 1)).rejects.toThrow(
       /Expected current track 'Second.sid', observed 'First.sid'/,
     );
+  });
+
+  it("fails when checkbox taps never increase the selected count", async () => {
+    const { tapCheckboxForText } = await import("../src/validation/appFirstPlaybackPrimitives.js");
+
+    dumpUiHierarchyMock.mockReset();
+    dumpUiHierarchyMock.mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="0 selected" class="android.widget.TextView" enabled="true" bounds="[110,627][968,673]" />
+          <node text="Tune.sid" class="android.widget.TextView" enabled="true" bounds="[160,420][480,480]" />
+        </hierarchy>
+      `).mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="0 selected" class="android.widget.TextView" enabled="true" bounds="[110,627][968,673]" />
+          <node text="Tune.sid" class="android.widget.TextView" enabled="true" bounds="[160,420][480,480]" />
+        </hierarchy>
+      `).mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="0 selected" class="android.widget.TextView" enabled="true" bounds="[110,627][968,673]" />
+          <node text="Tune.sid" class="android.widget.TextView" enabled="true" bounds="[160,420][480,480]" />
+        </hierarchy>
+      `).mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="0 selected" class="android.widget.TextView" enabled="true" bounds="[110,627][968,673]" />
+          <node text="Tune.sid" class="android.widget.TextView" enabled="true" bounds="[160,420][480,480]" />
+        </hierarchy>
+      `).mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="0 selected" class="android.widget.TextView" enabled="true" bounds="[110,627][968,673]" />
+          <node text="Tune.sid" class="android.widget.TextView" enabled="true" bounds="[160,420][480,480]" />
+        </hierarchy>
+      `);
+
+    const client = {
+      tap: vi.fn().mockResolvedValue(undefined),
+      pressKey: vi.fn().mockResolvedValue(undefined),
+      inputText: vi.fn().mockResolvedValue(undefined),
+      swipe: vi.fn().mockResolvedValue(undefined),
+    };
+
+    await expect(tapCheckboxForText(client as never, "serial-1", "Tune.sid")).rejects.toThrow(
+      /Could not confirm checkbox selection for 'Tune.sid' after 4 attempts \(selected count=0\)\./,
+    );
+    expect(client.tap).toHaveBeenCalledTimes(4);
   });
 });

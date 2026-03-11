@@ -11,13 +11,7 @@ import path from "node:path";
 import { captureAndAnalyzeStream } from "../../stream/index.js";
 import { discoverDeviceMirror } from "../../testDataDiscovery.js";
 import { DroidmindClient } from "../droidmindClient.js";
-import {
-  launchAppForeground,
-  navigateToRoute,
-  ensureDeviceUnlocked,
-  tapByResourceId,
-  tapByText,
-} from "../appFirstPrimitives.js";
+import { launchAppForeground, navigateToRoute, ensureDeviceUnlocked, tapByResourceId } from "../appFirstPrimitives.js";
 import {
   chooseSource,
   confirmAddItems,
@@ -187,6 +181,9 @@ export const appFirstPlaybackContinuity: ValidationCase = {
         logcat.text,
       );
       const continuityPassed = recoveredTrack === targets.sidCandidates[0] && rms >= AUDIO_RMS_THRESHOLD;
+      trace.decisionLog.push(
+        `${ts()} Observed: continuity ui=${recoveredTrack === targets.sidCandidates[0]}; audio=${rms >= AUDIO_RMS_THRESHOLD}; combined=${continuityPassed}`,
+      );
 
       await ctx.store.attachEvidence({
         runId: ctx.runId,

@@ -219,6 +219,38 @@ describe("app-first primitives", () => {
     expect(client.tap).toHaveBeenCalledWith("serial-1", 272, 2077);
   }, 4000);
 
+  it("navigates using a bottom-tab resource id when the first hierarchy already exposes it", async () => {
+    const { navigateToRoute } = await import("../src/validation/appFirstPrimitives.js");
+    dumpUiHierarchyMock.mockReset();
+
+    const client = {
+      tap: vi.fn().mockResolvedValue(undefined),
+    };
+
+    dumpUiHierarchyMock.mockResolvedValueOnce(`
+        <hierarchy></hierarchy>
+      `).mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="" resource-id="tab-play" content-desc="" class="android.widget.Button" clickable="true" enabled="true" bounds="[203,2004][341,2150]" />
+        </hierarchy>
+      `).mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="PLAY FILES" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,154][300,243]" />
+          <node text="Playlist" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,300][300,360]" />
+          <node text="Play" class="android.widget.Button" clickable="true" enabled="true" focused="true" bounds="[198,1731][345,1887]" />
+        </hierarchy>
+      `).mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="PLAY FILES" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,154][300,243]" />
+          <node text="Playlist" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,300][300,360]" />
+          <node text="Play" class="android.widget.Button" clickable="true" enabled="true" focused="true" bounds="[198,1731][345,1887]" />
+        </hierarchy>
+      `);
+
+    await navigateToRoute(client as never, "serial-1", "/play");
+    expect(client.tap).toHaveBeenCalledWith("serial-1", 272, 2077);
+  }, 4000);
+
   it("dismisses the connection-status overlay before route navigation", async () => {
     const { navigateToRoute } = await import("../src/validation/appFirstPrimitives.js");
     dumpUiHierarchyMock.mockReset();
@@ -250,6 +282,131 @@ describe("app-first primitives", () => {
 
     expect(client.tap).toHaveBeenNthCalledWith(1, "serial-1", 911, 816);
     expect(client.tap).toHaveBeenNthCalledWith(2, "serial-1", 271, 1809);
+  }, 4000);
+
+  it("returns false for tappable nodes without usable bounds and tolerates non-tappable overlays", async () => {
+    const { navigateToRoute, tapByResourceId, tapByText, tapByTextContaining, waitForRouteMarkers } =
+      await import("../src/validation/appFirstPrimitives.js");
+    dumpUiHierarchyMock.mockReset();
+
+    const client = {
+      tap: vi.fn().mockResolvedValue(undefined),
+    };
+
+    dumpUiHierarchyMock.mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="Broken" class="android.widget.Button" clickable="true" enabled="true" bounds="[bad]" />
+        </hierarchy>
+      `);
+    await expect(tapByText(client as never, "serial-1", "Broken")).resolves.toBe(false);
+
+    dumpUiHierarchyMock.mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="Broken suffix" class="android.widget.Button" clickable="true" enabled="true" bounds="[bad]" />
+        </hierarchy>
+      `);
+    await expect(tapByTextContaining(client as never, "serial-1", "suffix")).resolves.toBe(false);
+
+    dumpUiHierarchyMock.mockResolvedValueOnce(`<hierarchy></hierarchy>`);
+    await expect(tapByTextContaining(client as never, "serial-1", "missing")).resolves.toBe(false);
+
+    dumpUiHierarchyMock.mockResolvedValueOnce(`
+        <hierarchy>
+          <node resource-id="playlist-play" class="android.widget.Button" clickable="true" enabled="true" bounds="[bad]" />
+        </hierarchy>
+      `);
+    await expect(tapByResourceId(client as never, "serial-1", "playlist-play")).resolves.toBe(false);
+
+    dumpUiHierarchyMock.mockResolvedValueOnce(`<hierarchy></hierarchy>`);
+    await expect(tapByResourceId(client as never, "serial-1", "playlist-play")).resolves.toBe(false);
+
+    dumpUiHierarchyMock.mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="Connection Status" class="android.widget.TextView" clickable="false" enabled="true" bounds="[167,814][913,869]" />
+          <node text="Close" class="android.widget.Button" clickable="true" enabled="true" bounds="[bad]" />
+        </hierarchy>
+      `).mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="HOME" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,154][300,243]" />
+          <node text="Save RAM" class="android.widget.Button" clickable="true" enabled="true" bounds="[100,100][200,200]" />
+          <node text="QUICK CONFIG" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,300][300,360]" />
+        </hierarchy>
+      `).mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="HOME" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,154][300,243]" />
+          <node text="Save RAM" class="android.widget.Button" clickable="true" enabled="true" bounds="[100,100][200,200]" />
+          <node text="QUICK CONFIG" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,300][300,360]" />
+        </hierarchy>
+      `);
+
+    await navigateToRoute(client as never, "serial-1", "/");
+    expect(client.tap).toHaveBeenLastCalledWith("serial-1", 107, 2077);
+
+    dumpUiHierarchyMock.mockReset();
+    dumpUiHierarchyMock.mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="HOME" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,154][300,243]" />
+          <node text="Save RAM" class="android.widget.Button" clickable="true" enabled="true" bounds="[100,100][200,200]" />
+          <node text="QUICK CONFIG" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,300][300,360]" />
+        </hierarchy>
+      `);
+    await expect(waitForRouteMarkers("serial-1", "/", 1)).resolves.toBeUndefined();
+  }, 6000);
+
+  it("fails when route marker expectations are missing for a route", async () => {
+    const { waitForRouteMarkers } = await import("../src/validation/appFirstPrimitives.js");
+
+    await expect(waitForRouteMarkers("serial-1", "/missing", 1)).rejects.toThrow(
+      /No route markers configured for route '\/missing'/,
+    );
+  });
+
+  it("fails route marker checks when the active bottom tab points at a different route", async () => {
+    const { waitForRouteMarkers } = await import("../src/validation/appFirstPrimitives.js");
+    dumpUiHierarchyMock.mockReset();
+
+    dumpUiHierarchyMock.mockResolvedValue(`
+        <hierarchy>
+          <node text="HOME" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,154][300,243]" />
+          <node text="Save RAM" class="android.widget.Button" clickable="true" enabled="true" bounds="[100,100][200,200]" />
+          <node text="QUICK CONFIG" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,300][300,360]" />
+          <node text="Play" class="android.widget.Button" clickable="true" enabled="true" focused="true" bounds="[198,1731][345,1887]" />
+        </hierarchy>
+      `);
+
+    await expect(waitForRouteMarkers("serial-1", "/", 1)).rejects.toThrow(/activeTab=Play/);
+  });
+
+  it("ignores overlays that do not expose a close button and continues navigation", async () => {
+    const { navigateToRoute } = await import("../src/validation/appFirstPrimitives.js");
+    dumpUiHierarchyMock.mockReset();
+
+    const client = {
+      tap: vi.fn().mockResolvedValue(undefined),
+    };
+
+    dumpUiHierarchyMock.mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="Connection Status" class="android.widget.TextView" clickable="false" enabled="true" bounds="[167,814][913,869]" />
+        </hierarchy>
+      `).mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="Play" class="android.widget.Button" clickable="true" enabled="true" focused="true" bounds="[198,1731][345,1887]" />
+          <node text="PLAY FILES" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,154][300,243]" />
+          <node text="Playlist" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,300][300,360]" />
+        </hierarchy>
+      `).mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="Play" class="android.widget.Button" clickable="true" enabled="true" focused="true" bounds="[198,1731][345,1887]" />
+          <node text="PLAY FILES" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,154][300,243]" />
+          <node text="Playlist" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,300][300,360]" />
+        </hierarchy>
+      `);
+
+    await navigateToRoute(client as never, "serial-1", "/play");
+
+    expect(client.tap).toHaveBeenCalledTimes(1);
+    expect(client.tap).toHaveBeenCalledWith("serial-1", 271, 1809);
   }, 4000);
 
   it("fails for unsupported routes and missing markers", async () => {

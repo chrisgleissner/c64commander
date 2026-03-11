@@ -129,17 +129,6 @@ async function waitForPickerPath(
   return false;
 }
 
-async function waitForAnyPickerPath(serial: string, retries: number, delayMs: number): Promise<string | null> {
-  for (let attempt = 1; attempt <= retries; attempt += 1) {
-    const observedPath = await readPickerPath(serial);
-    if (observedPath) {
-      return observedPath;
-    }
-    await sleep(delayMs);
-  }
-  return null;
-}
-
 async function waitForC64UPickerReady(serial: string, retries: number, delayMs: number): Promise<boolean> {
   for (let attempt = 1; attempt <= retries; attempt += 1) {
     const xml = await dumpUiHierarchy(serial);
@@ -287,6 +276,7 @@ export async function tapCheckboxForText(client: DroidmindClient, serial: string
   if (!point) {
     throw new Error(`Selectable row for '${label}' did not expose checkbox tap bounds.`);
   }
+  let observedSelectedCount: number | null = beforeSelectedCount;
   for (const candidate of tapCandidates) {
     await client.tap(serial, candidate.x, candidate.y);
     await sleep(350);
@@ -294,10 +284,15 @@ export async function tapCheckboxForText(client: DroidmindClient, serial: string
     const afterTapXml = await dumpUiHierarchy(serial);
     const afterTapNodes = parseUiNodes(afterTapXml);
     const afterTapCount = readSelectedCount(afterTapNodes);
+    observedSelectedCount = afterTapCount;
     if (afterTapCount !== null && (beforeSelectedCount === null || afterTapCount > beforeSelectedCount)) {
       return;
     }
   }
+
+  throw new Error(
+    `Could not confirm checkbox selection for '${label}' after ${tapCandidates.length} attempts (selected count=${observedSelectedCount ?? "<unknown>"}).`,
+  );
 }
 
 export async function confirmAddItems(client: DroidmindClient, serial: string): Promise<void> {

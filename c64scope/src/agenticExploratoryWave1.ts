@@ -36,7 +36,11 @@ export async function main(): Promise<void> {
   const serialInput = process.env["ANDROID_SERIAL"];
   const serial = serialInput ? await resolveAdbSerial(serialInput) : await resolvePreferredPhysicalTestDeviceSerial();
   const c64uHost = process.env["C64U_HOST"] ?? "c64u";
-  const repeatCount = Number.parseInt(process.env["REPEAT"] ?? "3", 10);
+  const repeatRaw = process.env["REPEAT"] ?? "3";
+  const repeatCount = Number.parseInt(repeatRaw, 10);
+  if (!Number.isFinite(repeatCount) || repeatCount < 1) {
+    throw new Error(`Invalid REPEAT value "${repeatRaw}". REPEAT must be a positive integer (>= 1).`);
+  }
   const workspaceRoot = resolveWorkspaceRoot();
   const artifactRoot = path.join(workspaceRoot, "c64scope", "artifacts");
   const runRoot = path.join(artifactRoot, `wave1-${timestampId()}`);

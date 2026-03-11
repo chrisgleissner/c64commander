@@ -42,10 +42,16 @@ tags:
       - waitForAnimationToEnd
       - extendedWaitUntil:
           visible:
-            text: "Home"
+            id: "tab-home"
           timeout: ${LONG_TIMEOUT}
+- tapOn:
+    id: "tab-home"
+    optional: true
 - tapOn:
     text: "Home"
     optional: true
 - waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Quick Config"
+    timeout: ${LONG_TIMEOUT}
 - takeScreenshot: home
