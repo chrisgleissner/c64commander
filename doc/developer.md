@@ -36,7 +36,23 @@ npm run format
 npm run format:check
 ```
 
+Current repo formatting details:
+
+- `.prettierrc.json` sets `printWidth: 120`
+- YAML uses a `tabWidth` override of `2`
+- TypeScript/TSX/JSON formatting uses Prettier defaults plus the repo ESLint rules
+
 The `./build` script runs `npm run format` automatically before build steps (use `--skip-format` to bypass).
+
+## Documentation map
+
+Use these files as the current-state canonical references:
+
+- [doc/index.md](index.md) - documentation entrypoint
+- [doc/architecture.md](architecture.md) - runtime architecture and integrations
+- [doc/features-by-page.md](features-by-page.md) - implemented feature surface
+- [doc/code-coverage.md](code-coverage.md) - coverage model and CI gates
+- [doc/c64/](c64/) - C64 Ultimate REST, FTP, and stream protocol docs
 
 ## Manual SID playback (local file)
 
@@ -749,13 +765,36 @@ flowchart LR
 
 ## Code conventions
 
-- **TypeScript** for all source code
-- **React** with hooks (no class components)
-- **TanStack Query** for server state
-- **Tailwind CSS** for styling
-- **Shadcn/ui** for component library
-- **Vitest** for unit tests
-- **Playwright** for E2E tests
+- **TypeScript** for all app source code, with React hooks rather than class components
+- **Naming**:
+  - React components and page files use PascalCase
+  - Hooks are camelCase and begin with `use`
+  - Utility and service modules use camelCase
+  - Tests use `*.test.ts` or `*.test.tsx`
+- **Imports**:
+  - Prefer the `@/` alias for `src/*`
+  - Keep external imports before internal alias imports
+- **State and UI**:
+  - TanStack Query for server state
+  - Tailwind CSS plus Radix/shadcn-style components for UI
+- **Errors and logging**:
+  - Do not swallow caught exceptions
+  - Re-throw with context or log through the structured logging path in `src/lib/logging.ts` / `src/lib/diagnostics/logger.ts`
+- **Tests**:
+  - Vitest for unit/component tests
+  - Playwright for web E2E
+  - Maestro for Android device/emulator flows where applicable
+
+## Current structural hotspots
+
+These are current implementation risks, not future proposals:
+
+- TypeScript remains intentionally non-strict in `tsconfig.json` (`noImplicitAny: false`, `strictNullChecks: false`)
+- Several large files still carry above-average change risk:
+  - `src/pages/PlayFilesPage.tsx` (1218 lines)
+  - `src/pages/SettingsPage.tsx` (1899 lines)
+  - `src/components/disks/HomeDiskManager.tsx` (2055 lines)
+- `tests/unit/pages/PlayFilesPage.test.tsx` is still only a harness placeholder, so Play-page regressions rely heavily on lower-level tests plus Playwright/Maestro coverage
 
 ## Adding E2E tests
 

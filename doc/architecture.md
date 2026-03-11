@@ -1,13 +1,28 @@
 # Architecture Overview
 
-C64 Commander is a React + Vite + Capacitor app that controls a C64 Ultimate device via its REST API. It runs as a web app in a Capacitor shell on Android with optional native bridges (FTP, folder picker). HVSC ingestion and indexing run in TypeScript by default; on Android a native `HvscIngestionPlugin` (Kotlin) is selected at runtime when the Capacitor plugin is available (`resolveHvscIngestionMode` in `src/lib/hvsc/hvscIngestionRuntime.ts`). The TypeScript path remains the sole path on Web and iOS.
+C64 Commander is a React + Vite application that targets three runtimes from the same TypeScript codebase:
+
+- Web via the bundled Vite app and local web server
+- Android via Capacitor plus native plugins
+- iOS via Capacitor, using the TypeScript implementations where no native bridge exists
+
+The core app controls a C64 Ultimate over REST and FTP, keeps app-local state in browser/native storage, and layers optional native bridges on top for platform-specific capabilities such as FTP access, secure storage, diagnostics bridging, background execution, and HVSC ingestion. HVSC ingestion and indexing run in TypeScript by default; on Android a native `HvscIngestionPlugin` (Kotlin) is selected at runtime when the Capacitor plugin is available (`resolveHvscIngestionMode` in `src/lib/hvsc/hvscIngestionRuntime.ts`).
+
+## Runtime and stack summary
+
+- **UI/runtime**: React 18, React Router 6, Vite 5, Capacitor 6
+- **State and forms**: TanStack Query, React Hook Form, Zod
+- **UI primitives**: Tailwind CSS, Radix UI, shadcn-style component patterns, Framer Motion
+- **Core domain modules**: `src/lib/c64api.ts`, `src/lib/playback/`, `src/lib/hvsc/`, `src/lib/disks/`, `src/lib/config/`, `src/lib/sourceNavigation/`
+- **Native implementations**: Android Kotlin/Java plugins under `android/app/src/main/java/uk/gleissner/c64commander/`
+- **Observability**: `src/lib/logging.ts`, `src/lib/diagnostics/`, `src/lib/tracing/`, optional Sentry via `VITE_SENTRY_DSN`
 
 ## Stack and Layers
 
 - **UI**: React pages in [src/pages](../src/pages) with shared components in [src/components](../src/components).
 - **State + data fetching**: React hooks in [src/hooks](../src/hooks) backed by TanStack Query.
 - **API client**: REST client in [src/lib/c64api.ts](../src/lib/c64api.ts).
-- **Domain modules**: playback, disks, HVSC, config, and logging in [src/lib](../src/lib).
+- **Domain modules**: playback, disks, HVSC, config, source navigation, SID utilities, and logging in [src/lib](../src/lib).
 - **Native bridges**: Capacitor plugins in [src/lib/native](../src/lib/native) and Android implementations under [android/app/src/main/java](../android/app/src/main/java).
 - **Secure storage**: Device password is stored via the SecureStorage bridge (Android Keystore); localStorage only tracks a `c64u_has_password` flag for presence.
 
@@ -19,10 +34,22 @@ flowchart TD
   Hooks --> API[c64api REST client]
   API --> C64U[C64 Ultimate REST API]
   Hooks --> Storage[LocalStorage/SessionStorage]
-  Hooks --> Domain[Domain modules: disks/playback/HVSC]
+  Hooks --> Domain[Domain modules: disks/playback/HVSC/source navigation]
   Domain --> Native[Capacitor native bridges]
   Native --> Android[Android Java/Kotlin plugins]
 ```
+
+## External systems and persistence
+
+| Concern | Current implementation |
+| --- | --- |
+| C64U control plane | REST API via `src/lib/c64api.ts`, documented in `doc/c64/c64u-openapi.yaml` and `doc/c64/c64u-rest-api.md` |
+| C64U file access | FTP via `src/lib/ftp/ftpClient.ts` and `src/lib/native/ftpClient.ts`; Android native implementation in `FtpClientPlugin.kt` |
+| HVSC acquisition | Release discovery and download via `src/lib/hvsc/hvscReleaseService.ts`; extraction/indexing in `src/lib/hvsc/` |
+| Local app state | localStorage/sessionStorage-backed stores plus repository abstractions under `src/lib/playlistRepository/`, `src/lib/disks/`, and config stores |
+| Secure secrets | `src/lib/secureStorage.ts` with native secure-storage bridge; local storage only tracks password presence metadata |
+| Diagnostics and traces | Structured logs via `src/lib/logging.ts` and diagnostics/tracing modules under `src/lib/diagnostics/` and `src/lib/tracing/` |
+| Optional crash reporting | Sentry when `VITE_SENTRY_DSN` is configured |
 
 ## Playback flow (Play page)
 
