@@ -41,14 +41,13 @@ tags:
           optional: true
       - waitForAnimationToEnd
       - extendedWaitUntil:
-          visible:
-            id: "tab-home"
+          visible: "Quick Config"
           timeout: ${LONG_TIMEOUT}
 - tapOn:
-    id: "tab-home"
+    text: "Home"
     optional: true
 - tapOn:
-    text: "Home"
+    point: "8%,95%"
     optional: true
 - waitForAnimationToEnd
 - extendedWaitUntil:
