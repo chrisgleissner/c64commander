@@ -1,7 +1,8 @@
 import { renderHook } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { usePlaybackController } from "@/pages/playFiles/hooks/usePlaybackController";
 import type { PlaylistItem } from "@/pages/playFiles/types";
+import { executePlayPlan } from "@/lib/playback/playbackRouter";
 
 vi.mock("@/lib/c64api", () => ({
   getC64API: vi.fn(() => ({})),
@@ -52,6 +53,8 @@ const renderPlaybackController = (
     durationMs?: number;
     setPlaylist?: ReturnType<typeof vi.fn>;
     setDurationMs?: ReturnType<typeof vi.fn>;
+    ensurePlaybackConnection?: ReturnType<typeof vi.fn>;
+    ensureUnmuted?: ReturnType<typeof vi.fn>;
   },
 ) =>
   renderHook(() =>
@@ -75,7 +78,7 @@ const renderPlaybackController = (
       repeatEnabled: false,
       localEntriesBySourceId: new Map(),
       localSourceTreeUris: new Map(),
-      ensurePlaybackConnection: vi.fn().mockResolvedValue(undefined),
+      ensurePlaybackConnection: options?.ensurePlaybackConnection ?? vi.fn().mockResolvedValue(undefined),
       resolveSonglengthDurationMsForPath: vi.fn().mockResolvedValue(null),
       applySonglengthsToItems: vi.fn().mockImplementation(async (items) => items),
       restoreVolumeOverrides: vi.fn().mockResolvedValue(undefined),
@@ -87,6 +90,7 @@ const renderPlaybackController = (
       dispatchVolume: vi.fn(),
       sidEnablement: {} as any,
       pauseMuteSnapshotRef: { current: null },
+      pausingFromPauseRef: { current: false },
       playedClockRef: {
         current: {
           start: vi.fn(),
@@ -107,10 +111,15 @@ const renderPlaybackController = (
       trace: (fn: (...args: unknown[]) => unknown) => fn,
       setTrackInstanceId: vi.fn(),
       setAutoAdvanceDueAtMs: vi.fn(),
+      ensureUnmuted: options?.ensureUnmuted ?? vi.fn().mockResolvedValue(undefined),
     }),
   );
 
 describe("usePlaybackController", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("applies fallback duration for non-song playlist rows before playback starts", () => {
     const playlist = [createPlaylistItem()];
     const { result } = renderPlaybackController(playlist);
@@ -140,5 +149,33 @@ describe("usePlaybackController", () => {
     expect(playlistUpdater).toBeDefined();
     const nextPlaylist = playlistUpdater?.(playlist);
     expect(nextPlaylist?.[0]?.durationMs).toBe(45_000);
+  });
+
+  it("unmutes before starting playback and only then executes the play plan", async () => {
+    const playlist = [createPlaylistItem()];
+    const ensureUnmuted = vi.fn().mockResolvedValue(undefined);
+    const ensurePlaybackConnection = vi.fn().mockResolvedValue(undefined);
+    const { result } = renderPlaybackController(playlist, { ensurePlaybackConnection, ensureUnmuted });
+
+    await result.current.playItem(playlist[0], { playlistIndex: 0 });
+
+    expect(ensureUnmuted).toHaveBeenCalledTimes(1);
+    expect(ensurePlaybackConnection).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
+    expect(ensureUnmuted.mock.invocationCallOrder[0]).toBeLessThan(
+      ensurePlaybackConnection.mock.invocationCallOrder[0],
+    );
+    expect(ensurePlaybackConnection.mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(executePlayPlan).mock.invocationCallOrder[0],
+    );
+  });
+
+  it("fails playback start when unmuting before playback start fails", async () => {
+    const playlist = [createPlaylistItem()];
+    const ensureUnmuted = vi.fn().mockRejectedValue(new Error("unmute failed"));
+    const { result } = renderPlaybackController(playlist, { ensureUnmuted });
+
+    await expect(result.current.playItem(playlist[0], { playlistIndex: 0 })).rejects.toThrow("unmute failed");
+    expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
   });
 });

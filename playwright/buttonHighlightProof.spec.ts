@@ -132,6 +132,41 @@ test.describe("CTA highlight proof", () => {
     await expect(page.locator("header").getByRole("heading", { name: "Disks" })).toBeVisible();
   });
 
+  test("play-page change button clears retained pointer focus when the app regains focus", async ({ page }) => {
+    await page.goto("/play");
+
+    const changeButton = page.getByTestId("play-section-playback").getByRole("button", { name: "Change", exact: true });
+    await expect(changeButton).toBeVisible();
+
+    const state = await changeButton.evaluate((element, flashAttr) => {
+      element.focus();
+
+      const event = new Event("pointerup", { bubbles: true }) as PointerEvent;
+      Object.defineProperty(event, "button", { value: -1 });
+      Object.defineProperty(event, "pointerType", { value: "touch" });
+      element.dispatchEvent(event);
+
+      const focusedAfterPointer = document.activeElement === element;
+      const flashAfterPointer = element.getAttribute(flashAttr);
+
+      window.dispatchEvent(new Event("focus"));
+
+      return {
+        flashAfterPointer,
+        focusedAfterPointer,
+        focusedAfterResume: document.activeElement === element,
+      };
+    }, FLASH_ATTR);
+
+    expect(state.focusedAfterPointer).toBe(true);
+    expect(state.flashAfterPointer).toBe("true");
+    expect(state.focusedAfterResume).toBe(false);
+
+    await page.waitForTimeout(250);
+    await expect(changeButton).not.toHaveAttribute(FLASH_ATTR, "true");
+    await expect.poll(() => changeButton.evaluate((element) => document.activeElement === element)).toBe(false);
+  });
+
   test("disabled controls do not trigger highlight", async ({ page }) => {
     await page.goto("/play");
 

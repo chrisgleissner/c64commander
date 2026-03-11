@@ -281,3 +281,58 @@ describe("convergence: rapid mute/unmute sequence", () => {
     expect(allDispatches).toHaveLength(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// E. Pause transition: stale query data must not cancel the paused mute state
+// ---------------------------------------------------------------------------
+
+function syncPauseMuteState(opts: {
+  activeIndices: number[];
+  pausingFromPauseRef: { current: boolean };
+  resumingFromPauseRef: { current: boolean };
+  dispatch: (state: "muted" | "unmuted") => void;
+}) {
+  const { activeIndices, pausingFromPauseRef, resumingFromPauseRef, dispatch } = opts;
+  if (pausingFromPauseRef.current && activeIndices.length) {
+    return;
+  }
+  if (!activeIndices.length) {
+    if (resumingFromPauseRef.current) return;
+    pausingFromPauseRef.current = false;
+    dispatch("muted");
+    return;
+  }
+  dispatch("unmuted");
+}
+
+describe("pause transition mute guard", () => {
+  it("does not revert the UI to unmuted while stale pre-pause values are still in the query cache", () => {
+    const dispatch = vi.fn();
+    const pausingFromPauseRef = { current: true };
+
+    syncPauseMuteState({
+      activeIndices: [3],
+      pausingFromPauseRef,
+      resumingFromPauseRef: { current: false },
+      dispatch,
+    });
+
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(pausingFromPauseRef.current).toBe(true);
+  });
+
+  it("clears the pause guard once the hardware mute state is observed", () => {
+    const dispatch = vi.fn();
+    const pausingFromPauseRef = { current: true };
+
+    syncPauseMuteState({
+      activeIndices: [],
+      pausingFromPauseRef,
+      resumingFromPauseRef: { current: false },
+      dispatch,
+    });
+
+    expect(dispatch).toHaveBeenCalledWith("muted");
+    expect(pausingFromPauseRef.current).toBe(false);
+  });
+});

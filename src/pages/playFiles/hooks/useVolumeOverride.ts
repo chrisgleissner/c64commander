@@ -87,6 +87,10 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
   const volumeUpdateTimerRef = useRef<number | null>(null);
   const volumeUpdateSeqRef = useRef(0);
   const volumeUiTargetRef = useRef<{ index: number; setAtMs: number } | null>(null);
+  // Set to true during the pause-to-mute transition to prevent stale query
+  // data from immediately flipping the UI back to the pre-pause unmuted state
+  // before the hardware mute write is observed.
+  const pausingFromPauseRef = useRef(false);
   // Set to true during the resume-from-pause window to prevent the hardware
   // sync effect from re-asserting the muted state while the unmute API call
   // result propagates back through the React Query cache.
@@ -455,6 +459,9 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
     if (manualMuteSnapshotRef.current && volumeMuted && activeIndices.length) {
       return;
     }
+    if (pausingFromPauseRef.current && activeIndices.length) {
+      return;
+    }
     if (!activeIndices.length) {
       // During the resume-from-pause transition the hardware-side audio mixer
       // may still report muted values until the React Query refetch picks up
@@ -462,6 +469,7 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
       // hardware confirms the unmuted state (activeIndices will be non-empty),
       // at which point we clear the flag and fall through to the sync below.
       if (resumingFromPauseRef.current) return;
+      pausingFromPauseRef.current = false;
       const snapshot = manualMuteSnapshotRef.current;
       const snapshotIndices = snapshot ? Object.values(snapshot.volumes).map((value) => resolveVolumeIndex(value)) : [];
       const muteIndices = muteValues.map((value) => resolveVolumeIndex(value));
@@ -552,6 +560,7 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
     applyAudioMixerUpdates,
     manualMuteSnapshotRef,
     pauseMuteSnapshotRef,
+    pausingFromPauseRef,
     resumingFromPauseRef,
     volumeSessionSnapshotRef,
     volumeSessionActiveRef,

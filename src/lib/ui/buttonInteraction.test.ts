@@ -97,4 +97,20 @@ describe("buttonInteraction", () => {
 
     cleanup();
   });
+
+  it("clears pending pointer focus when the window regains focus after a picker-like interruption", () => {
+    vi.useFakeTimers();
+    const cleanup = registerGlobalButtonInteractionModel();
+    const button = document.createElement("button");
+    document.body.appendChild(button);
+    button.focus();
+
+    applyPointerButtonInteraction(button);
+    expect(document.activeElement).toBe(button);
+
+    window.dispatchEvent(new Event("focus"));
+
+    expect(document.activeElement).not.toBe(button);
+    cleanup();
+  });
 });

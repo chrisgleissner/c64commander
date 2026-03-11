@@ -68,6 +68,10 @@ describe("PlaybackControlsCard", () => {
     expect(screen.getByTestId("playlist-play")).not.toHaveAttribute("data-c64-tap-flash");
     expect(screen.getByTestId("playlist-play")).toHaveAttribute(CTA_PERSISTENT_ACTIVE_ATTR, "true");
 
+    rerender(<PlaybackControlsCard {...buildProps({ isPlaying: true, isPaused: true, canPause: true })} />);
+
+    expect(screen.getByTestId("playlist-play")).not.toHaveAttribute(CTA_PERSISTENT_ACTIVE_ATTR);
+
     rerender(<PlaybackControlsCard {...buildProps({ isPlaying: false })} />);
 
     expect(screen.getByTestId("playlist-play")).not.toHaveAttribute(CTA_PERSISTENT_ACTIVE_ATTR);

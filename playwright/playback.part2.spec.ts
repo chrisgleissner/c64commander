@@ -26,6 +26,8 @@ import { clearTraces, enableTraceAssertions, expectFtpTraceSequence } from "./tr
 import { enableGoldenTrace } from "./goldenTraceRegistry";
 import { clickSourceSelectionButton } from "./sourceSelection";
 
+const PERSISTENT_ATTR = "data-c64-persistent-active";
+
 const waitForRequests = async (predicate: () => boolean) => {
   await expect.poll(predicate, { timeout: 10000 }).toBe(true);
 };
@@ -338,6 +340,58 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "volume-updated");
   });
 
+  test("starting playback while muted clears mute before SID playback begins", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
+    const initialState = server.getState()["Audio Mixer"];
+    await seedPlaylistStorage(page, [
+      {
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/demo.sid",
+        name: "demo.sid",
+        durationMs: 8000,
+      },
+    ]);
+
+    await page.goto("/play");
+    const muteButton = page.getByTestId("volume-mute");
+    const playButton = page.getByTestId("playlist-play");
+    await expect(page.getByTestId("playlist-item")).toHaveCount(1);
+
+    await muteButton.click();
+    await expect(muteButton).toContainText("Unmute");
+    await expect(muteButton).toHaveAttribute(PERSISTENT_ATTR, "true");
+    await expect.poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 1"].value).toBe("OFF");
+    await snap(page, testInfo, "start-muted");
+
+    const configCountBeforePlay = server.requests.filter(
+      (req) => req.method === "POST" && req.url.startsWith("/v1/configs"),
+    ).length;
+
+    await playButton.click();
+    await expect(playButton).toHaveAttribute("aria-label", "Stop");
+    await expect(muteButton).toContainText("Mute");
+    await expect(muteButton).not.toHaveAttribute(PERSISTENT_ATTR, "true");
+    await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(0);
+    await expect
+      .poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 1"].value)
+      .toBe(initialState["Vol UltiSid 1"].value);
+    await expect
+      .poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 2"].value)
+      .toBe(initialState["Vol UltiSid 2"].value);
+    await snap(page, testInfo, "start-unmuted");
+
+    const sidplayIndex = server.requests.findIndex((req) => req.url.includes("/v1/runners:sidplay"));
+    const configIndicesAfterPlay = server.requests
+      .map((req, index) => (req.method === "POST" && req.url.startsWith("/v1/configs") ? index : -1))
+      .filter((index) => index >= 0)
+      .slice(configCountBeforePlay);
+    const lastConfigBeforeSidplay = configIndicesAfterPlay.filter((index) => index < sidplayIndex).pop() ?? -1;
+    expect(configIndicesAfterPlay.length).toBeGreaterThan(0);
+    expect(sidplayIndex).toBeGreaterThan(-1);
+    expect(lastConfigBeforeSidplay).toBeGreaterThan(-1);
+  });
+
   test("pause mutes SID outputs and resume restores them", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     const initialState = server.getState()["Audio Mixer"];
     await seedPlaylistStorage(page, [
@@ -363,6 +417,8 @@ test.describe("Playback file browser (part 2)", () => {
 
     await pauseButton.click();
     await snap(page, testInfo, "paused");
+    await expect(page.getByTestId("volume-mute")).toContainText("Unmute");
+    await expect(page.getByTestId("volume-mute")).toHaveAttribute(PERSISTENT_ATTR, "true");
 
     await expect
       .poll(() => {
@@ -379,6 +435,8 @@ test.describe("Playback file browser (part 2)", () => {
 
     await pauseButton.click();
     await snap(page, testInfo, "resumed");
+    await expect(page.getByTestId("volume-mute")).toContainText("Mute");
+    await expect(page.getByTestId("volume-mute")).not.toHaveAttribute(PERSISTENT_ATTR, "true");
 
     await expect
       .poll(() => server.requests.some((req) => req.url.includes("/v1/machine:resume")), { timeout: 2000 })

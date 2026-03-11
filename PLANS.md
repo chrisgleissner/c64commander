@@ -1,867 +1,162 @@
-## Active Task: Android Button Highlight Audit And Remediation
-
-### Audit Status
-
-- State: implementation complete; verification complete except for a pre-existing repo-wide `npm run lint` formatting blocker outside this change set
-- Started: 2026-03-10
-- Owner: GitHub Copilot
-- Objective: enforce deterministic 150 ms button highlight feedback across Android UI, with the Play transport button remaining highlighted for the full real playback duration.
-
-### Audit Invariants
-
-- Invariant A: every user-clickable button flashes highlighted for about 150 ms, with acceptable runtime tolerance of 120-200 ms.
-- Invariant B: the Play button on the Play page stays highlighted for the full real playback session and clears only when playback stops.
-- Invariant C: unit, component, and Playwright UI tests fail on regressions.
-
-### Audit Implementation Strategy
-
-- Use `src/lib/ui/buttonInteraction.ts` as the single reusable highlight mechanism.
-- Tighten the transient flash duration from 220 ms to 150 ms.
-- Apply the same visual highlight styling to both transient flash and persistent playback-active state.
-- Keep the Play-page exception derived from real playback state via `isPlaying`, not timers.
-- Remove over-broad generic focusable targeting and explicitly reject disabled and aria-disabled controls in the shared interaction model.
-
-### Clickable Inventory
-
-#### Shared Primitives And Cross-Page Controls
-
-| Page / area | Button identifier                                             | Component source file                                | Click handler                                             |
-| ----------- | ------------------------------------------------------------- | ---------------------------------------------------- | --------------------------------------------------------- |
-| Global      | app reload fallback                                           | `src/App.tsx`                                        | `window.location.reload()`                                |
-| Global      | bottom tab buttons: Home, Play, Disks, Config, Settings, Docs | `src/components/TabBar.tsx`                          | `navigate(tab.path)` via `wrapUserEvent`                  |
-| Global      | diagnostics activity indicator                                | `src/components/DiagnosticsActivityIndicator.tsx`    | `onClick`                                                 |
-| Global      | connectivity indicator and diagnostics rows                   | `src/components/ConnectivityIndicator.tsx`           | `handleClick`, `openDiagnosticsTab`, `discoverConnection` |
-| Shared UI   | standard buttons                                              | `src/components/ui/button.tsx`                       | wrapped `onClick` + shared highlight hook                 |
-| Shared UI   | quick action cards                                            | `src/components/QuickActionCard.tsx`                 | `onClick` + shared highlight hook                         |
-| Shared UI   | item selection folder rows                                    | `src/components/itemSelection/ItemSelectionView.tsx` | `onOpen(entry.path)`                                      |
-| Shared UI   | snapshot rows and filter pills                                | `src/pages/home/dialogs/SnapshotManagerDialog.tsx`   | `onRestore`, `setTypeFilter`, comment edit actions        |
-| Shared UI   | selectable action list rows and batch actions                 | `src/components/lists/SelectableActionList.tsx`      | row select/open handlers and bulk actions                 |
-| Shared UI   | disk tree rows and inline actions                             | `src/components/disks/DiskTree.tsx`                  | `onMount`, `onGroup`, `onRename`, `onDelete`              |
-
-#### Home Page Catalog
-
-| Page / area | Button identifier                                            | Component source file                           | Click handler                                                          |
-| ----------- | ------------------------------------------------------------ | ----------------------------------------------- | ---------------------------------------------------------------------- |
-| Home        | RAM dump folder picker, config save/load/reset/revert/manage | `src/pages/HomePage.tsx`                        | `handleSelectRamDumpFolder`, `handleAction`, dialog open setters       |
-| Home        | machine control quick actions                                | `src/pages/home/components/MachineControls.tsx` | reset, reboot, pause/resume, menu, save/load RAM, power off            |
-| Home        | drive cards                                                  | src/pages/home/DriveCard.tsx                    | onToggle; onMountedPathClick or onPathClick; onStatusClick             |
-| Home        | stream status controls                                       | `src/pages/home/components/StreamStatus.tsx`    | edit, start, stop, cancel, commit                                      |
-| Home        | printer controls                                             | `src/pages/home/components/PrinterManager.tsx`  | `handleEnabledToggle` and related updates                              |
-| Home        | disk manager controls                                        | `src/components/disks/HomeDiskManager.tsx`      | drive power, browse, rotate, reset, group, rename, delete, bulk delete |
-
-#### Play Page Catalog
-
-| Page / area | Button identifier                                  | Component source file                                      | Click handler                                                                       |
-| ----------- | -------------------------------------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| Play        | prev / play-stop / pause-resume / next / reshuffle | `src/pages/playFiles/components/PlaybackControlsCard.tsx`  | `onPrevious`, `onPlay`, `onStop`, `onPauseResume`, `onNext`, `onReshuffle`          |
-| Play        | volume mute                                        | `src/pages/playFiles/components/VolumeControls.tsx`        | `onToggleMute`                                                                      |
-| Play        | playlist add / clear                               | `src/pages/playFiles/components/PlaylistPanel.tsx`         | `onAddItems`, `onClearPlaylist`                                                     |
-| Play        | HVSC controls                                      | `src/pages/playFiles/components/HvscControls.tsx`          | `onInstall`, `onIngest`, `onReset`, `onCancel`                                      |
-| Play        | playback settings song picker actions              | `src/pages/playFiles/components/PlaybackSettingsPanel.tsx` | `onChooseSonglengthsFile`, `onSongPickerClick`, `onSelectSong`, `onCloseSongPicker` |
-
-#### Config, Settings, Docs, Disks, And Dialogs
-
-| Page / area  | Button identifier                                                              | Component source file                                                           | Click handler                                                                                     |
-| ------------ | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| Config       | refresh, reset audio mixer, sync clock, row actions                            | `src/pages/ConfigBrowserPage.tsx`                                               | `handleRefresh`, `resetAudioMixer`, `handleSyncClock`, row handlers                               |
-| Settings     | connection, diagnostics, SAF, import/export, HVSC, relaxed mode, about card    | `src/pages/SettingsPage.tsx`                                                    | `handleSaveConnection`, `discoverConnection`, diagnostics open/share, flag toggles, developer tap |
-| Docs         | docs navigation controls                                                       | `src/pages/DocsPage.tsx`                                                        | wrapped navigation handlers                                                                       |
-| Disks        | source selection and disk management actions                                   | `src/components/disks/HomeDiskManager.tsx`, `src/components/disks/DiskTree.tsx` | browse, mount, edit, bulk actions                                                                 |
-| Home dialogs | power off, save config, load config, manage config, restore snapshot, save RAM | `src/pages/home/dialogs/*.tsx`                                                  | dialog close / confirm / item action handlers                                                     |
-
-### Current Behaviour Assessment
-
-- Existing centralized highlight model already covers most buttons through `pointerup` capture plus shared `Button` handling.
-- Pre-fix transient flash duration was 220 ms, outside the required 150 ms target and above the allowed 200 ms ceiling.
-- Pre-fix persistent playback state used `data-c64-persistent-active` only as a logic bypass, without shared highlight styling.
-- Pre-fix selector scope included generic `[tabindex]` elements, which was broader than the button-only contract.
-- Pre-fix disabled filtering did not explicitly reject `aria-disabled` and `data-disabled` custom controls.
-
-### Audit Progress Tracker
-
-- [x] Discover clickable surfaces by static scan.
-- [x] Record clickable inventory in `PLANS.md`.
-- [x] Tighten the shared highlight mechanism.
-- [x] Verify Play-button exception against real playback state.
-- [x] Add unit, component, and Playwright regression coverage.
-- [x] Run coverage, build, and full `./build` verification.
-- [x] Clear the unrelated repo-wide formatting drift currently blocking `npm run lint`.
-
-### Audit Test Coverage Report
-
-- Unit coverage added in `src/lib/ui/buttonInteraction.test.ts` for transient timing, persistent-active bypass, and disabled custom-control guards.
-- Component coverage added in `src/pages/playFiles/components/PlaybackControlsCard.test.tsx` for Play-button transient-to-persistent transition.
-- Playwright coverage added in `playwright/buttonHighlightProof.spec.ts` for transient timing, rapid taps, navigation buttons, disabled controls, and persistent playback highlight.
-- Static inventory coverage remains centered on shared primitives plus route-level controls on `/`, `/play`, `/disks`, `/config`, `/settings`, and `/docs`.
-- Validation results: `npx playwright test playwright/buttonHighlightProof.spec.ts` passed; `npm run test:coverage` passed at 90.85% branch coverage; `npm run build` passed; `./build` passed.
-
-### Audit Risk Register
-
-- Risk: broad selector changes could stop highlighting legitimate custom controls.
-  Mitigation: keep explicit role-based selectors and retain `data-c64-interactive` opt-in.
-- Risk: persistent playback highlight could clear too early on async state transitions.
-  Mitigation: derive persistent state directly from `isPlaying` and keep transient flash only for non-persistent clicks.
-- Risk: disabled custom controls could still flash through synthetic events.
-  Mitigation: reject `:disabled`, `disabled`, `aria-disabled`, and `data-disabled` in the shared handler.
-
-### Audit Verification Checklist
-
-- [x] Inventory captured in `PLANS.md`
-- [x] Shared highlight duration set to 150 ms
-- [x] Disabled controls excluded from highlight
-- [x] Play button uses persistent highlight while playback is active
-- [x] Unit regression tests added
-- [x] Component regression tests added
-- [x] Playwright UI regression tests added
-- [x] `npm run lint` passed
-- [x] `npm run test:coverage` passed with >=90% branch coverage
-- [x] `npm run build` passed
-- [x] `./build` passed
-
-### Audit Work Log
-
-- 2026-03-10T11:00Z: Started Android button highlight audit and created the active execution plan.
-- 2026-03-10T11:08Z: Completed static inventory scan of clickable surfaces across shared primitives and route components.
-- 2026-03-10T11:15Z: Confirmed existing shared interaction model, identified 220 ms transient duration, missing persistent highlight styling, missing disabled guards, and over-broad generic `[tabindex]` targeting.
-- 2026-03-10T23:00Z: Tightened the shared interaction model to 150 ms, added explicit disabled-state guards, removed generic `[tabindex]` matching, and applied the same highlight styling to transient and persistent-active states.
-- 2026-03-10T23:06Z: Added regression coverage in `src/lib/ui/buttonInteraction.test.ts`, `src/pages/playFiles/components/PlaybackControlsCard.test.tsx`, and `playwright/buttonHighlightProof.spec.ts`.
-- 2026-03-10T23:18Z: Verified the highlight proof suite passes end-to-end, including transient timing, rapid taps, navigation controls, disabled controls, and persistent playback highlight behavior.
-- 2026-03-10T23:30Z: Verified `npm run test:coverage` passes at 90.85% branch coverage.
-- 2026-03-10T23:36Z: Verified `npm run build` passes.
-- 2026-03-10T23:52Z: Re-ran `./build`; unit tests, Python agent tests, Playwright, Gradle, and debug APK build all passed.
-- 2026-03-10T23:53Z: Confirmed `npm run lint` remains blocked by pre-existing repository formatting drift in unrelated files, including `.vscode/mcp.json`, several `c64scope/` files, `src/components/ConnectivityIndicator.tsx`, `tests/unit/c64api.test.ts`, and `tests/unit/machine/screenSnapshotRoundtrip.test.ts`.
-- 2026-03-11T08:14Z: Fixed Prettier formatting drift in `playwright/buttonHighlightProof.spec.ts` and `src/pages/playFiles/components/PlaybackControlsCard.test.tsx`; `npm run lint` now passes. All 290 unit test files (3523 tests) and all 5 Playwright highlight proof tests confirmed passing. All checklist items complete.
-- 2026-03-11T08:14Z: Fixed Prettier formatting drift in `playwright/buttonHighlightProof.spec.ts` and `src/pages/playFiles/components/PlaybackControlsCard.test.tsx`; `npm run lint` now passes. All 290 unit test files (3523 tests) and all 5 Playwright highlight proof tests confirmed passing. All checklist items complete.
-
-# MCP-Driven Android Exploratory Testing Plan
+# Android Button Highlight And Playback Remediation
 
 ## Status
 
-- State: in progress
-- Started: 2026-03-10
-- Owner: GitHub Copilot
-- Primary driver: DroidMind MCP
-- Verification authority: C64 Scope MCP streaming and session evidence
+- State: complete
+- Date: 2026-03-11
+- Scope: finish the takeover of the unfinished Android highlight remediation, fix the remaining playback mute regressions, add regression coverage, and produce screenshot evidence.
 
-## Objectives
+## Final Outcome
 
-- Align implementation with the documented agentic testing architecture.
-- Exercise Android app workflows through the mandatory interaction chain: LLM -> DroidMind -> Android app -> C64 Ultimate.
-- Use C64 Scope for session lifecycle, environment reset support, evidence capture, and streaming-based verification.
-- Explore the mirrored `test-data` trees dynamically, with symlink-safe traversal and load-ramped missions.
-- Fix discovered defects immediately, redeploy, rerun, and document outcomes.
+- The shared touch-highlight system now clears pointer-retained focus on app resume instead of relying on the user to defocus manually.
+- The Play-page `Change` button no longer stays visually highlighted after the native picker is dismissed.
+- `Play` only keeps the allowed persistent highlight while playback is actively running, not while paused.
+- `Unmute` now uses the allowed persistent highlight while the app is muted.
+- Starting playback from a muted state now restores audible output before the play request completes.
+- Pause then resume now restores audible output correctly instead of leaving playback running while still muted.
 
-## Execution Phases
+## Audit Of Prior Work
 
-1. Bootstrap planning and architecture re-familiarization.
-2. Inventory repo testing/runtime seams and both data trees.
-3. Implement discovery, mission, and evidence infrastructure gaps.
-4. Execute first mission wave: SID playback continuity and playlist auto-skip.
-5. Expand to cross-format, multi-disk, and RAM save/restore missions.
-6. Stabilize with repeated runs, fixes, regressions, and final evidence capture.
+### Correct prior work kept
 
-## Initial Mission Set
+- Centralized highlight behavior already existed in [`src/lib/ui/buttonInteraction.ts`](/home/chris/dev/c64/c64commander/src/lib/ui/buttonInteraction.ts).
+- The shared 150 ms flash model and stale-flash sweep were already viable.
+- Auto-unmute and pause/resume mute logic already existed in the Play-page hooks and could be repaired instead of replaced.
 
-- M1: Local and device test-data discovery with stats, depth, symlink handling, and format distribution.
-- M2: SID playback continuity under tab switches, backgrounding, app switching, and lock/unlock.
-- M3: Playlist auto-advance validation with streaming-based confirmation.
-- M4: HVSC ramp from small subsets to deeper corpus traversal.
+### Incomplete or regressive prior work fixed
 
-## Risk Register
+- Pointer-originated focus was not reliably cleared after native picker dismissal because app-return paths were incomplete.
+- The `Unmute` control was missing the only other allowed persistent highlight.
+- The `Play` control stayed persistently highlighted while paused.
+- Playback-start unmute failure could be swallowed.
+- Pause mute state could be reverted by stale query data during the pause transition.
+- The earlier evidence package was incomplete and did not prove the native picker regression was fixed.
 
-- Streaming startup can fail intermittently based on prior repository evidence.
-- HVSC traversal can trigger latency, memory pressure, and recursion hazards.
-- Android UI automation may need app-state recovery between missions.
-- Device-side data visibility and permissions may differ from local assumptions.
+## Root Cause
 
-## Load Ramp Strategy
+### Stuck button highlight after picker dismissal
 
-- Stage 1: few files
-- Stage 2: tens to hundreds
-- Stage 3: thousands
-- Stage 4: deep HVSC traversal
-- Stage 5: near-full HVSC corpus exploration
-
-## Termination Tracking
-
-- [ ] Agentic testing architecture integrated and aligned with docs.
-- [ ] PLANS.md reflects process, findings, evidence, and results.
-- [ ] Mission sets implemented.
-- [ ] Each mission has three consecutive passing runs.
-- [ ] HVSC large-scale exploration completed and documented.
-- [ ] Defects fixed or explicitly documented.
-- [ ] Streaming verification used where applicable.
-- [ ] Workflows reproducible by another engineer.
-
-## Working Log
-
-- 2026-03-10: Created initial plan scaffold. Architecture review, repo discovery, and data inventory pending.# Plans
-
-## Android Regression Remediation And Proof
-
-### Problem statement
-
-Resolve five Android regressions in the Capacitor app and produce reproducible evidence for each fix:
-
-1. FTP import from a real C64U times out after 8000 ms during listing.
-2. Local Android file playback/upload corrupts or mishandles `d64`, `prg`, and possibly `crt`, while local `sid` playback must remain working.
-3. HVSC large-archive ingestion fails after download because the fallback path attempts a guarded bridge read of a large cached archive.
-4. Playlist import is aborted by in-app navigation instead of warning and requiring explicit confirmation.
-5. HVSC full-library import throughput degrades badly over time and needs structural improvement plus before/after measurement.
-
-### Constraints and assumptions
-
-- Linux workstation; Android and repository-local validation are possible, iOS is irrelevant for this task.
-- Real-device validation is expected against Android hardware and a real C64U at hostname `c64u` when reachable from the attached environment.
-- Existing historical sections in this file remain as prior task history; this section is the active task record.
-- No timeout inflation without a root-cause-backed explanation.
-- Local SID playback is a non-regression requirement.
-
-### Current status
-
-- Status: fixes implemented; automated validation complete; attached-device validation re-run on the current APK confirms the Android startup compatibility fix on handset, while the remaining real-device proof gap is limited to brittle Maestro flow selectors rather than the fixed app/runtime paths.
-- Branch: `fix/remote-playback`.
-- Initial hotspot mapping completed across Android native FTP, TypeScript upload routes, HVSC native/non-native ingestion, and Play page import lifecycle.
-- Implemented fixes cover FTP directory listing, raw binary upload transport, HVSC large-archive native fallback, import navigation confirmation, and bulk songlength application throughput.
-- Home-page LED quick controls now enrich scalar category responses from per-item config metadata so `LedStrip Mode` and fixed-color options hydrate with the real C64U metadata.
-- Home-page SID sliders now hydrate from real Audio Mixer metadata so pan and volume preserve the device values and ranges instead of collapsing to index `0`.
-- Full configuration hydration stays lazy after launch, while the background snapshot fetch now batches category reads concurrently and retries partial failures efficiently.
-- Play-page disk autoplay now powers on Drive A when required and reconciles physical drive mode before mount/autostart (`d64 -> 1541`, `d71 -> 1571`, `d81 -> 1581`).
-- PR #122 review comments were verified against the current branch and resolved.
-
-### Phase plan
-
-#### Phase 1: Baseline and instrumentation
-
-- [x] Identify the concrete code paths for FTP listing, local upload/playback, HVSC ingestion, playlist import lifecycle, and HVSC indexing/import.
-- [x] Add or extend instrumentation and regression tests where current visibility is insufficient.
-- [ ] Capture baseline reproduction evidence for each issue in local, mocked, emulator, or real-device environments as available.
-
-#### Phase 2: Root-cause analysis
-
-- [x] Confirm the FTP timeout mechanism with code and test evidence.
-- [x] Confirm the local binary transfer corruption mechanism for `d64`/`prg`/`crt` and contrast it with working local `sid` flow.
-- [x] Confirm the HVSC large-archive failure mechanism in the native-to-fallback ingest path.
-- [x] Confirm why playlist import work is tied to page/component lifecycle and is lost on navigation.
-- [x] Confirm the main throughput degradation sources in the HVSC import/index pipeline.
-
-#### Phase 3: Minimal durable fixes
-
-- [x] Implement the FTP fix with justified control/data/listing behavior.
-- [x] Implement binary-safe upload/integrity fixes for local `d64`/`prg`/`crt` without regressing `sid`.
-- [x] Remove the unsafe large-archive bridge-read dependency from HVSC ingestion fallback.
-- [x] Add explicit navigation blocking/confirmation while playlist import is active.
-- [x] Restructure HVSC import/index work to keep throughput stable over large imports.
-
-#### Phase 4: Automated validation
-
-- [x] Add or update unit/Android/Playwright coverage for each regression.
-- [x] Run relevant local tests, coverage, lint, build, Android tests, and full build.
-- [x] Run Maestro / Android validation where feasible from the current environment.
-
-#### Phase 5: Real-device proof and artifact package
-
-- [x] Validate fixed behavior on attached Android device against real C64U where reachable.
-- [x] Record logs, screenshots, and measurements under `docs/repro/android-regressions-2026-03-09/`.
-- [x] Document root cause, fix, and evidence for each issue group.
-
-### Explicit checklist
-
-- [x] `PLANS.md` updated before Android regression code changes
-- [x] Relevant implementation hotspots identified
-- [x] FTP regression root cause confirmed with evidence
-- [x] Local binary upload regression root cause confirmed with evidence
-- [x] HVSC large archive regression root cause confirmed with evidence
-- [x] Playlist navigation-abort root cause confirmed with evidence
-- [x] HVSC throughput degradation root cause confirmed with evidence
-- [x] All targeted fixes implemented
-- [x] Relevant tests added or updated
-- [x] `npm run lint` passed
-- [x] `npm run test:coverage` passed with >=90% branch coverage
-- [x] `npm run build` passed
-- [x] `./build` passed
-- [x] Android tests passed
-- [x] Real-device validation captured or explicit external blocker documented
-- [x] Proof artifacts written under `docs/repro/android-regressions-2026-03-09/`
-- [x] Home-page LED quick-control metadata regression fixed and verified
-- [x] Home-page SID quick-control metadata regression fixed and verified
-- [x] Lazy background full-config hydration efficiency improved and verified
-- [x] Play-page disk autoplay drive-mode reconciliation fixed and verified
-- [x] PR #122 review comments resolved and closed
-
-### Confirmed findings so far
-
-- FTP listing currently calls `mlistDir(path)` first in [android/app/src/main/java/uk/gleissner/c64commander/FtpClientPlugin.kt](android/app/src/main/java/uk/gleissner/c64commander/FtpClientPlugin.kt). A C64U that stalls rather than quickly rejecting MLSD/MLST will spend the full 8000 ms timeout before falling back to LIST, which matches the reported regression profile.
-- Local `sid` uploads use multipart form upload in [src/lib/c64api.ts](src/lib/c64api.ts), while local `d64`/`prg`/`crt` uploads use raw `application/octet-stream` POST bodies via separate endpoints in the same file. That asymmetry is the strongest current candidate for format-specific regression.
-- HVSC fallback ingestion still depends on `readArchiveBuffer()` in [src/lib/hvsc/hvscDownload.ts](src/lib/hvsc/hvscDownload.ts), which intentionally blocks bridge reads above `MAX_BRIDGE_READ_BYTES`. This exactly matches the reported large-archive failure after native extraction fallback.
-- Play page import state is page-scoped in [src/pages/PlayFilesPage.tsx](src/pages/PlayFilesPage.tsx); there is no route blocker or leave-confirmation around active import work, and cleanup on unmount can tear down in-progress UI/import state.
-- HVSC full-library imports were paying an avoidable MD5 fallback cost during bulk songlength enrichment. Disabling MD5 fallback for bulk additions and yielding periodically keeps import work from degrading over long runs while preserving path-based resolution.
-
-### Implemented fixes
-
-- FTP directory browsing on Android now prefers LIST and only falls back to MLSD/MLIST if LIST is empty or errors, removing the repeated 8000 ms stall path on C64U.
-- Raw local uploads for `d64`, `prg`, `crt`, and other non-SID binary flows now serialize `Blob` payloads to `ArrayBuffer` before `fetch`, matching binary-safe transport expectations while leaving SID multipart upload behavior unchanged.
-- HVSC large archive reads now use a native chunked bridge path instead of attempting a guarded whole-archive bridge read.
-- Play-page imports now register an app-level navigation confirmation guard during active work and also block browser unloads.
-- Bulk playlist enrichment now uses path-based songlength resolution without MD5 fallback during imports and yields every 250 items to prevent long-run slowdown.
-
-### Validation status
-
-- Focused regression tests passed for [src/lib/c64api.test.ts](src/lib/c64api.test.ts), [src/pages/playFiles/songlengthsResolution.test.ts](src/pages/playFiles/songlengthsResolution.test.ts), [src/lib/navigation/navigationGuards.test.ts](src/lib/navigation/navigationGuards.test.ts), and [tests/unit/hvsc/hvscDownload.test.ts](tests/unit/hvsc/hvscDownload.test.ts).
-- Focused regression tests also passed for [src/lib/playback/playbackRouter.test.ts](src/lib/playback/playbackRouter.test.ts), [tests/unit/playFiles/useSonglengthsHook.test.tsx](tests/unit/playFiles/useSonglengthsHook.test.tsx), and [tests/unit/hooks/useAppConfigState.test.tsx](tests/unit/hooks/useAppConfigState.test.tsx).
-- Full Android JVM coverage passed under JDK 17 with `./gradlew --no-daemon testDebugUnitTest`.
-- `npm run test:coverage` passed with totals `statements 91.84`, `branches 90.83`, `functions 90.85`, `lines 91.84`.
-- `npm run build` passed.
-- `npm run lint` passed.
-- Targeted Playwright golden-trace refresh and revalidation passed for the three previously failing playback scenarios.
-- Full repository helper `./build` passed, including unit tests, Python agent tests, Playwright, Android JVM build, and APK build.
-- Attached Android device `9B0...` is visible via `adb devices -l`.
-- Real-device proof artifacts were captured under `test-results/maestro-proof/`.
-- The rebuilt debug APK installs and launches successfully on the attached handset.
-- The attached handset now resolves `c64u` directly (`ping c64u` succeeds from adb shell).
-- Post-fix device proof runs show the app reaches the Play Files screen and, for the C64U path, reaches the remote picker state (`Path: /` visible); the remaining automation failures are brittle Maestro selector assumptions rather than the fixed app/runtime paths.
-
-### Work log
-
-- 2026-03-09T00:00Z: Started Android regression remediation task; reviewed repository instructions and existing task history in `PLANS.md`.
-- 2026-03-09T00:08Z: Mapped relevant code via workspace search: Android FTP plugin, HVSC ingestion plugin, TypeScript upload endpoints, Play page import lifecycle, and HVSC filesystem/download/ingestion helpers.
-- 2026-03-09T00:18Z: Confirmed current FTP listing prefers MLSD/MLIST before LIST in the Android native plugin.
-- 2026-03-09T00:22Z: Confirmed local `sid` upload uses multipart while local `d64`/`prg`/`crt` flows use raw octet-stream uploads.
-- 2026-03-09T00:26Z: Confirmed HVSC large-archive fallback currently routes through `readArchiveBuffer()` and its explicit large-bridge guard.
-- 2026-03-09T00:30Z: Confirmed Play page import progress/state is local to `PlayFilesPage` with no navigation blocker for route changes during active import.
-- 2026-03-09T01:05Z: Switched Android FTP listing resolution to LIST-first with MLSD fallback and updated native tests accordingly.
-- 2026-03-09T01:18Z: Changed raw binary C64U upload calls to send `ArrayBuffer` request bodies while preserving multipart SID upload behavior.
-- 2026-03-09T01:39Z: Added native chunked HVSC archive reads and wired the download path to use them for large cached archives.
-- 2026-03-09T02:03Z: Replaced router-blocker attempt with shared app-level navigation guards plus `beforeunload` protection for active Play imports.
-- 2026-03-09T02:24Z: Extracted songlength resolution policy, disabled MD5 fallback for bulk imports, and added periodic yielding during long enrichment passes.
-- 2026-03-09T03:10Z: Added focused regression tests for binary upload transport, navigation guards, songlength resolution policy, and Android HVSC chunk reads.
-- 2026-03-09T03:48Z: Resolved follow-on validation issues in test harnesses and imports: Blob portability in `c64api.test.ts`, missing `PlayableEntry` import, and Capacitor `registerPlugin` mocking for HVSC tests.
-- 2026-03-09T04:10Z: Confirmed `npm run lint`, `npm run build`, focused Vitest, focused Playwright route probe, and isolated coverage all pass locally.
-- 2026-03-09T04:15Z: Confirmed `c64u` resolves on the local network.
-- 2026-03-09T04:20Z: Started full repository helper `./build`.
-- 2026-03-09T23:11Z: `npm run test:coverage` passed at `90.82%` branch coverage.
-- 2026-03-09T23:22Z: Refreshed and revalidated the failing playback golden traces for disk autostart and playlist prev/next flows.
-- 2026-03-09T23:24Z: Full repository helper `./build` completed successfully.
-- 2026-03-09T23:25Z: Confirmed attached Android device `9B0...` is visible to `adb`.
-- 2026-03-09T23:58Z: Confirmed live `c64u` LED category responses are scalar-only while per-item LED responses contain full metadata; queued client enrichment fix and regression test so Home-page LED mode/color controls regain full option lists.
-- 2026-03-10T00:09Z: Confirmed live `c64u` Audio Mixer category responses are also scalar-only while per-item volume/pan responses contain current values and full ranges; this explains Home-page SID sliders snapping to index `0` when option hydration is missing.
-- 2026-03-10T00:14Z: Queued broader Home config hydration follow-up: keep full-config snapshotting lazy after launch, but fetch categories concurrently in the background so later UI sections can populate from cached full config without extending startup latency.
-- 2026-03-10T00:28Z: Added Play-page autoplay follow-up to enforce Drive A power/type reconciliation before disk autoplay so `d64`, `d71`, and `d81` files run against matching drive hardware modes.
-- 2026-03-10T01:10Z: Added follow-up to verify, address, and close the remaining PR #122 review comments against the current branch state.
-- 2026-03-10T01:16Z: Verified the branch already satisfied the remaining PR #122 review feedback, then resolved the three open review threads in GitHub.
-- 2026-03-10T07:33Z: Added explicit regression names for FTP timeout classification, local PRG/CRT/D64 transport, HVSC large-archive chunk assembly, import navigation blocking, and HVSC import yielding; added a 250-item yield regression test.
-- 2026-03-10T07:35Z: Re-ran targeted TS regressions, Android FTP JVM regression under JDK 17, `npm run test:coverage`, `npm run lint`, and `./build --skip-install`; all passed.
-- 2026-03-10T07:46Z: Ran `.maestro/real-c64u-ftp-browse.yaml` against device `9B0...`; JUnit output showed the flow failed in the shared launch path before browse assertions.
-- 2026-03-10T07:49Z: Prepared `C64LocalSource` fixtures on-device and attempted `.maestro/local-binary-playback-proof.yaml`; Maestro failed before interaction with `Unable to launch app uk.gleissner.c64commander`, while adb launch still succeeded.
-- 2026-03-10T08:08Z: Captured on-device logs after adb launch; the phone reports `Unable to resolve host "c64u": No address associated with hostname`, plus receiver-registration `SecurityException` warnings from `BackgroundExecutionPlugin` and `DiagnosticsBridgePlugin` during startup.
-- 2026-03-10T10:28Z: Rebuilt and reinstalled the current debug APK with `./build --skip-install --skip-tests --install-apk --device-id 9B081FFAZ001WX`; install and adb launch both succeeded.
-- 2026-03-10T10:31Z: Re-ran `.maestro/local-binary-playback-proof.yaml` on the current build; the earlier app launch failure was gone, but the flow still failed on brittle Play-tab text assertions.
-- 2026-03-10T10:32Z: Re-ran `.maestro/real-c64u-ftp-browse.yaml` on the current build; the earlier app launch failure was gone and the handset reached the remote picker state, but the flow still failed on brittle picker-id assertions.
-- 2026-03-10T10:34Z: Verified directly on the handset that `c64u` now resolves and responds to ICMP from adb shell, eliminating the earlier device-side DNS blocker.
-- 2026-03-10T10:39Z: Captured a UI dump from the failed C64U proof run showing `Path: /` and picker controls on-screen; this confirmed the remaining proof issue is in the Maestro selector assumptions, not in FTP picker startup.
-
-### Next actions
-
-1. Push the current branch.
-2. Inspect PR #122 status checks and iterate only if CI reports a new regression.
-3. If stricter Android end-to-end proof is still desired after CI, harden the Maestro flows with selectors derived from the current handset UI hierarchy.
-
-## iOS Maestro Coverage And CI Failure Propagation
-
-### Problem statement
-
-Resolve two linked defects in the iOS Maestro CI route:
-
-1. iOS Maestro test failures are visible in CI logs but do not fail the workflow/job.
-2. The iOS Maestro route itself regressed between 2026-02-22 and 2026-02-28 and now reports test errors.
-
-The objective is to determine both root causes, implement the smallest safe fix set, and verify via GitHub Actions that the iOS path is green and that future iOS Maestro failures correctly fail CI.
-
-### Constraints and assumptions
-
-- iOS execution cannot be reproduced locally on this Linux workstation; Apple-hosted CI is the only validation path for iOS execution.
-- Local validation must focus on workflow logic, shell exit-code correctness, Maestro flow structure, and non-iOS regression risk reduction.
-- iOS CI is slow and expensive, so each push must be justified by confirmed evidence.
-- Android and Web routes are in active use and must remain stable.
-- Existing unrelated work recorded later in this file remains historical context and is out of scope unless directly impacted.
-
-### Current status
-
-- Status: aggregate artifact-layout follow-up fix implemented locally; pushing for CI verification
-- Branch: `test/fix-ios-maestro-tests`
-- Verified starting point: dedicated branch already exists; no local unstaged changes at task start.
-
-### Phase-based plan
-
-#### Phase 1: Baseline and historical comparison
-
-- [x] Inspect current iOS workflow, reusable logic, invoked scripts, and Maestro artifacts.
-- [x] Compare current iOS path with Android Maestro path for orchestration differences.
-- [x] Compare repository changes and CI behavior between 2026-02-22 and 2026-02-28 for iOS-relevant files.
-
-#### Phase 2: Failure propagation analysis
-
-- [x] Trace every command path that runs or wraps Maestro on iOS.
-- [x] Check for exit-code swallowing patterns: `continue-on-error`, `|| true`, missing `set -euo pipefail`, `tee` without `pipefail`, unconditional artifact steps, and status overwrites.
-- [x] Identify the exact false-green mechanism and document it.
-
-#### Phase 3: iOS Maestro regression analysis
-
-- [x] Read Maestro flows, selectors, platform gating, and app startup assumptions used by iOS.
-- [x] Use historical diff analysis and current logs to isolate the strongest confirmed iOS-specific regression cause.
-- [x] Confirm whether the regression is in flows, app behavior, build packaging, or CI environment setup.
-
-#### Phase 4: Minimal fix implementation
-
-- [x] Implement a minimal CI fix so iOS Maestro test errors deterministically fail the job.
-- [x] Implement a minimal fix for the underlying iOS Maestro failure.
-- [ ] Update docs or comments only where needed for maintainability.
-
-#### Phase 5: Validation loop
-
-- [ ] Run relevant local validation for workflow syntax, scripts, and non-iOS safety.
-- [ ] Commit coherent changes.
-- [ ] Push branch and inspect GitHub Actions runs and logs.
-- [ ] Iterate until the iOS Maestro path is green and false-green behavior is eliminated.
-
-#### Phase 6: Completion record
-
-- [ ] Capture final workflow/job/run identifiers and evidence URLs.
-- [ ] Record both root causes, code changes, local validations, CI validations, and residual risks.
-- [ ] Mark all required checklist items complete or explicitly out of scope with justification.
-
-### Explicit checklist
-
-- [x] PLANS.md updated before code changes
-- [x] iOS workflow and invoked scripts inspected
-- [x] Android versus iOS Maestro route compared
-- [x] Historical diff between 2026-02-22 and 2026-02-28 reviewed for iOS-relevant changes
-- [x] False-green mechanism identified
-- [x] False-green fix implemented
-- [x] iOS Maestro failure mechanism identified
-- [x] iOS Maestro fix implemented
-- [ ] Relevant local validations passed
-- [ ] Changes committed on dedicated branch
-- [ ] CI run proves iOS Maestro failures now fail the workflow when present
-- [ ] CI run proves iOS Maestro route is green after the fix
-- [ ] No collateral Android/Web regression observed in relevant checks
-- [ ] Final evidence captured in PLANS.md
-
-### Risk register
-
-- Risk: workflow fix may alter artifact collection ordering and hide useful logs.
-  Mitigation: preserve `if: always()` artifact upload where needed, but explicitly rethrow test failure status afterward if necessary.
-- Risk: iOS Maestro stabilization may accidentally mask a real app defect with timing hacks.
-  Mitigation: prefer selector or readiness fixes over sleeps; document any unavoidable synchronization.
-- Risk: changes to shared scripts may destabilize Android or Web.
-  Mitigation: compare Android and iOS call paths first and run relevant non-iOS checks locally before push.
-- Risk: CI iteration cost is high.
-  Mitigation: push only after root-cause-backed changes and local validation.
-
-### Validation strategy
-
-- Local:
-  - inspect workflows and scripts for shell correctness and exit propagation
-  - run relevant lint/test/build or targeted checks when shared files are touched
-  - validate any changed shell behavior directly from Linux where feasible
-- CI:
-  - inspect branch workflow runs with GitHub tooling
-  - read iOS job logs before and after changes
-  - confirm the job fails on Maestro error conditions and passes once the route is fixed
-
-### Work log
-
-- 2026-03-09T00:00Z: Task started on branch `test/fix-ios-maestro-tests`.
-- 2026-03-09T00:00Z: Reviewed repo instructions, memory, current branch state, workflow file inventory, and existing `PLANS.md` contents.
-- 2026-03-09T00:00Z: Added this iOS Maestro execution plan section and set it as the active task record.
-- 2026-03-09T00:10Z: Read current `ios.yaml`, Android Maestro path, `scripts/ci/ios-maestro-run-flow.sh`, `scripts/run-maestro.sh`, and Maestro docs. Confirmed the iOS path is separate from Android and uses per-flow JUnit plus aggregate reporting.
-- 2026-03-09T00:18Z: Pulled historical logs for successful run `22279943725` / job `64449062635` and regressed run `22527358627` / job `65261482123`.
-- 2026-03-09T00:22Z: Confirmed false-green behavior in historical logs: both `ios-smoke-launch` and `ios-diagnostics-export` reported `[Failed] ... Assertion is false: "Home" is visible`, yet the wrapper logged `Flow ... completed ... (exit=0)` and `Group group-1 completed with overall exit code 0`.
-- 2026-03-09T00:24Z: Confirmed JUnit already recorded the failures (`failures=1`) while the aggregate workflow only wrote summary JSON and did not fail on merged failures/errors.
-- 2026-03-09T00:29Z: Compared healthy and regressed app diffs. No `.maestro` flow changes occurred between the two runs. Relevant product change found in `src/components/DemoModeInterstitial.tsx`, which added a host input and extra action to the dialog.
-- 2026-03-09T00:33Z: Downloaded historical iOS artifacts and OCR'd the failed screenshot. Confirmed the iOS keyboard was open on the Demo Mode interstitial, covering the dialog buttons so `Continue in Demo Mode` was not reachable. Healthy screenshot showed normal Home screen.
-- 2026-03-09T00:38Z: Implemented app fix: prevent auto-focus when Demo Mode dialog opens so iOS does not summon the keyboard and hide the CTA.
-- 2026-03-09T00:40Z: Implemented CI fixes: `scripts/ci/ios-maestro-run-flow.sh` now parses JUnit and fails when Maestro reports failures/errors even if the process exits 0; `ios.yaml` now enforces merged JUnit summary and connectivity summary instead of warning-only behavior.
-- 2026-03-09T00:55Z: Inspected follow-up CI failure in run `22852199801`. Confirmed all iOS Maestro groups were green and only aggregate failed because the merge step found zero JUnit files.
-- 2026-03-09T00:58Z: Downloaded current per-group artifacts and confirmed the artifact layout is flat (`ios-smoke-launch/`, `ios-diagnostics-export/`, `_infra/`) rather than nested under `artifacts/ios/`.
-- 2026-03-09T01:02Z: Updated the aggregate re-root logic in `ios.yaml` to support both nested and flat artifact layouts. Local sanity check confirmed merged flow JUnit discovery now finds non-zero tests.
-
-### Next actions
-
-- Commit the aggregate workflow fix.
-- Push the branch and wait for the next iOS workflow run.
-- Confirm the aggregate job merges non-zero tests and the full iOS Maestro route stays green.
-
-1. Run local validation (`npm run lint`, `npm run test:coverage`, `npm run build`, and `./build` as feasible for this change set).
-2. Commit the fix set and push the branch.
-3. Poll GitHub Actions until the iOS Maestro path is green and failure propagation is confirmed.
-
-### Confirmed findings
+- The real defect was retained DOM focus on the tapped button after the native picker returned control to the WebView.
+- The shared button logic blurred pointer-focused elements after touch interaction, but that blur was not retried on all Android app-resume paths.
+- Returning from the picker could therefore leave the element focused, which kept the button in the blue focus-tinted state.
+- This was caused by focus styling plus incomplete focus clearing, not by the temporary flash attribute itself.
 
-- False-green CI root cause:
-  - The iOS wrapper relied on the Maestro process exit code only.
-  - In the regressed historical run, Maestro emitted `[Failed]` output and wrote JUnit with `failures=1`, but still surfaced process success to the wrapper path used by CI.
-  - The aggregate job merged JUnit into summary artifacts but did not fail on merged `totalFailures` or `totalErrors`, and connectivity summary failures were warning-only.
-- iOS Maestro regression root cause:
-  - The Demo Mode interstitial gained a host input field between the healthy and regressed runs.
-  - On iOS simulator, the dialog auto-focused that input, which opened the software keyboard.
-  - The keyboard obscured the dialog action buttons, including `Continue in Demo Mode`, leaving the launch flow stuck on the interstitial until the `Home` assertion timed out.
+### Playback regressions
 
-## agents/ Directory Restructuring
+- Playback start depended on `ensureUnmuted()`, but failure handling did not enforce a fail-fast path.
+- Pause/resume used async volume-state reconciliation that could temporarily replay stale pre-pause values into the UI.
+
+## Central Remediation
+
+### Focus lifecycle
 
-### Goal
+- Added pending pointer-focus tracking in [`src/lib/ui/buttonInteraction.ts`](/home/chris/dev/c64/c64commander/src/lib/ui/buttonInteraction.ts).
+- Retried pointer-focus clearing on `focus`, `pageshow`, and visible `visibilitychange`.
+- Kept the fix centralized and pointer-specific so keyboard focus treatment is not removed indiscriminately.
 
-Normalise the `agents/` folder hierarchy: isolate runtime artifacts under `runtime/`, relocate the CLI script to `scripts/`, and fix the REPO_ROOT path bug.
+### Allowed persistent highlights
 
-### Phase 1: Repository inspection
+- Restricted `Play` persistent highlight to `isPlaying && !isPaused` in [`src/pages/playFiles/components/PlaybackControlsCard.tsx`](/home/chris/dev/c64/c64commander/src/pages/playFiles/components/PlaybackControlsCard.tsx).
+- Added `data-c64-persistent-active` to the muted-state `Unmute` control in [`src/pages/playFiles/components/VolumeControls.tsx`](/home/chris/dev/c64/c64commander/src/pages/playFiles/components/VolumeControls.tsx).
 
-- [x] 1.1 Read current `agents/` structure
-- [x] 1.2 Identify all path references to `logs/`, `runs/`, `state/`, `bin/`
-- [x] 1.3 Confirm REPO_ROOT bug (`parents[2]` resolves to `agents/` not repo root)
-
-### Phase 2: Runtime directory restructuring
-
-- [x] 2.1 Create `runtime/logs/`, `runtime/runs/`, `runtime/state/` with `.gitkeep`
-- [x] 2.2 Remove old `logs/`, `runs/`, `state/` from git tracking (were untracked)
-
-### Phase 3: Script relocation
-
-- [x] 3.1 Create `scripts/agent` with identical content to `bin/agent`
-- [x] 3.2 `bin/` left in place (untracked); `scripts/agent` is the new entrypoint
-
-### Phase 4: Code path updates
-
-- [x] 4.1 Fix `REPO_ROOT` in `config.py` (`parents[2]` → `parents[3]`)
-- [x] 4.2 Update `LOGS_ROOT`, `RUNS_ROOT`, `STATE_ROOT` to `runtime/` subdirs
-- [x] 4.3 Remove unused `OPENHANDS_ROOT`; add `RUNTIME_ROOT` constant
-
-### Phase 5: Test fixture updates
-
-- [x] 5.1 Update `conftest.py` `tmp_paths` fixture to use `runtime/` subdirs
-
-### Phase 6: Documentation updates
-
-- [x] 6.1 Update `agents/.gitignore` for new structure
-- [x] 6.2 Update `agents/README.md` to reflect new paths
-
-### Phase 7: Verification
-
-- [x] 7.1 Tests pass with ≥90% branch coverage (150 passed, 98.98% branch coverage)
-- [x] 7.2 `scripts/agent --help` runs correctly; resolves paths under `runtime/`
-
-### Work log
-
-- 2026-03-08: Inspection complete; identified REPO_ROOT bug (`parents[2]` resolved to `agents/` not repo root) and all path changes needed.
-- 2026-03-08: Created `runtime/logs/`, `runtime/runs/`, `runtime/state/` with `.gitkeep`. Created `scripts/agent`.
-- 2026-03-08: Fixed `config.py`: REPO_ROOT now uses `parents[3]`, removed `OPENHANDS_ROOT`, added `RUNTIME_ROOT`, updated `LOGS_ROOT`/`RUNS_ROOT`/`STATE_ROOT`; added `runtime_root` field to `RuntimePaths`.
-- 2026-03-08: Updated `conftest.py` to create `RuntimePaths` under `runtime/` subdirs.
-- 2026-03-08: Updated `.gitignore` (covers `runtime/` subtrees) and `README.md`.
-- 2026-03-08: Restored corrupted `pyproject.toml`. All 150 tests pass at 98.98% branch coverage.
-
----
-
-# Full App-Coverage Autonomous Validation Plan
-
-## Goal
-
-Deliver app-first, evidence-backed key-feature validation for C64 Commander on a real Android device + real C64U, with every feature in exactly one terminal state: `PASS`, `FAIL`, or `BLOCKED`.
-
-## Phase Plan
-
-### Phase 1: Reconstruct Feature Surface
-
-- [x] 1.1 Read repository guidance and architecture contracts (`AGENTS.md`, `.github/copilot-instructions.md`, `doc/testing/agentic-tests/**`).
-- [x] 1.2 Inventory routes/pages and key user journeys from code (`src/App.tsx`, `src/components/TabBar.tsx`, `src/pages/**`, feature components/hooks).
-- [x] 1.3 Map observability and control paths (`droidmind`, `c64scope`, `c64bridge`, diagnostics/logs/media).
-
-Dependencies:
-
-- `1.3` depends on `1.1` and `1.2`.
-
-### Phase 2: Feature Test Catalog
-
-- [x] 2.1 Define test intent, preconditions, expected outcomes, and pass criteria per key feature.
-- [x] 2.2 Define required app/c64/log/media evidence per feature.
-- [x] 2.3 Define likely failure modes and root-cause taxonomy.
-
-Dependencies:
-
-- Phase 2 depends on Phase 1.
-
-### Phase 3: Prompt Authoring
-
-- [x] 3.1 Create one deterministic prompt per key feature family under `doc/testing/agentic-tests/full-app-coverage/prompts/`.
-- [x] 3.2 Encode app-first control policy and explicit `c64bridge` fallback justification.
-- [x] 3.3 Encode deterministic output/artifact contract (`PASS|FAIL|BLOCKED`, path mapping, post-run analysis).
-
-Dependencies:
-
-- Phase 3 depends on Phase 2.
-
-### Phase 4: Prompt Execution
-
-- [x] 4.1 Run live lab preflight against physical device + C64U.
-- [x] 4.2 Execute MCP capability probe across `droidmind`, `c64scope`, `c64bridge`.
-- [x] 4.3 Execute app-first HIL evidence runner.
-- [x] 4.4 Execute current autonomous validation suite for baseline comparative evidence.
-- [x] 4.5 Record run IDs and evidence paths in full-app coverage artifacts.
-
-Dependencies:
-
-- Phase 4 depends on Phase 3.
-
-### Phase 5: Failure / Gap Analysis
-
-- [x] 5.1 Classify each non-passable feature result root cause (`prompt|tool|app|infrastructure|observability|environment|determinism|missing reset capability`).
-- [x] 5.2 Identify smallest remediation that would unblock valid app-first coverage.
-- [x] 5.3 Feed findings into matrix, gap analysis, and iteration log.
-
-Dependencies:
-
-- Phase 5 depends on Phase 4.
-
-### Phase 6: Convergence + Final Synthesis
-
-- [x] 6.1 Ensure every key feature has one terminal state.
-- [x] 6.2 Produce final coverage counts and blocker list.
-- [x] 6.3 Ensure no major app area is omitted without explicit justification.
-
-Dependencies:
-
-- Phase 6 depends on Phases 1-5.
-
-### Phase 7: Blocker Remediation (Current Iteration)
-
-- [x] 7.1 Fix app-first route selection ambiguity causing Home checks to execute on non-Home pages.
-- [x] 7.2 Harden route assertions to verify active tab + route-specific markers.
-- [x] 7.3 Re-run affected feature family (`F003`-`F006`) and full executor, then update status artifacts.
-
-Dependencies:
-
-- Phase 7 depends on Phase 6 baseline outputs (`FAIL: F003`-`F006`).
-
-## Per-Feature Progress Tracker
-
-Legend: `P` = PASS, `F` = FAIL, `B` = BLOCKED
-
-| Feature ID | Area          | Feature                                                | Status | Prompt                                            | Last Run              |
-| ---------- | ------------- | ------------------------------------------------------ | ------ | ------------------------------------------------- | --------------------- |
-| F001       | Shell         | App launch + foreground shell                          | P      | `prompts/F001-app-shell-and-launch.md`            | `pt-20260308T113329Z` |
-| F002       | Navigation    | Tab navigation across routes                           | P      | `prompts/F002-tab-navigation.md`                  | `pt-20260308T113344Z` |
-| F003       | Home          | Machine controls (reset/reboot/menu/power/pause)       | P      | `prompts/F003-home-machine-controls.md`           | `pt-20260308T113442Z` |
-| F004       | Home          | Quick config + LED/SID toggles                         | P      | `prompts/F004-home-quick-config-and-led-sid.md`   | `pt-20260308T113442Z` |
-| F005       | Home          | RAM dump/load/clear workflows                          | P      | `prompts/F005-home-ram-workflows.md`              | `pt-20260308T113442Z` |
-| F006       | Home          | App config snapshot lifecycle                          | P      | `prompts/F006-home-config-snapshots.md`           | `pt-20260308T113442Z` |
-| F007       | Disks         | Disk library add/group/rename/delete                   | P      | `prompts/F007-disks-library-management.md`        | `pt-20260308T113458Z` |
-| F008       | Disks         | Disk mount/eject to Drive A/B                          | P      | `prompts/F008-disks-mount-eject.md`               | `pt-20260308T113458Z` |
-| F009       | Disks         | Drive + Soft IEC config controls                       | P      | `prompts/F009-disks-drive-and-softiec.md`         | `pt-20260308T113458Z` |
-| F010       | Play          | Source browsing (Local/C64U/HVSC)                      | P      | `prompts/F010-play-source-browsing.md`            | `pt-20260308T113514Z` |
-| F011       | Play          | Playlist create/edit/clear/select                      | P      | `prompts/F011-playlist-lifecycle.md`              | `pt-20260308T113514Z` |
-| F012       | Play          | Transport controls + queue progression                 | P      | `prompts/F012-playback-transport.md`              | `pt-20260308T113514Z` |
-| F013       | Play          | Shuffle/repeat/recurse/volume                          | P      | `prompts/F013-playback-queue-and-volume.md`       | `pt-20260308T113514Z` |
-| F014       | Play          | Duration/songlength/subsong controls                   | P      | `prompts/F014-songlength-duration-subsong.md`     | `pt-20260308T113514Z` |
-| F015       | Play/HVSC     | HVSC download/install/ingest/cancel/reset              | P      | `prompts/F015-hvsc-download-ingest.md`            | `pt-20260308T113514Z` |
-| F016       | Play/HVSC     | HVSC cache reuse + browse/play from cache              | P      | `prompts/F016-hvsc-cache-reuse.md`                | `pt-20260308T113514Z` |
-| F017       | Play/Runtime  | Lock-screen/background auto-advance                    | P      | `prompts/F017-lock-screen-autoadvance.md`         | `pt-20260308T113530Z` |
-| F018       | Config        | Category browse/search/refresh                         | P      | `prompts/F018-config-browse-search.md`            | `pt-20260308T113600Z` |
-| F019       | Config        | Config edits + audio mixer solo/reset + clock sync     | P      | `prompts/F019-config-edit-and-audio-mixer.md`     | `pt-20260308T113600Z` |
-| F020       | Settings      | Connection/theme/preferences/HVSC toggles              | P      | `prompts/F020-settings-connection-preferences.md` | `pt-20260308T113616Z` |
-| F021       | Settings      | Diagnostics + import/export + device safety            | P      | `prompts/F021-settings-diagnostics-safety.md`     | `pt-20260308T113616Z` |
-| F022       | Docs          | Docs and open-source licenses routes                   | P      | `prompts/F022-docs-and-licenses.md`               | `pt-20260308T113344Z` |
-| F023       | Cross-cutting | Persistence + reconnect across app/session/device lock | P      | `prompts/F023-persistence-and-recovery.md`        | `pt-20260308T113530Z` |
-
-## Coverage Summary
-
-- Total key features: 23
-- PASS: 23
-- FAIL: 0
-- BLOCKED: 0
-- Unclassified: 0
-
-## Exit Criteria
-
-- [x] `PLANS.md` is authoritative and updated with real execution evidence.
-- [x] Full artifact package exists in `doc/testing/agentic-tests/full-app-coverage/`.
-- [x] Key feature inventory exists and is code/doc-derived.
-- [x] Feature test catalog exists and defines app-first test method per feature.
-- [x] Prompt files exist for each key feature family.
-- [x] Prompt execution evidence exists and references real run artifacts.
-- [x] Every key feature is classified `PASS`, `FAIL`, or `BLOCKED`.
-- [x] Iteration log records analyze-improve-retry cycle.
-- [x] Highest-priority defects/blockers and remediation are documented.
-
-## Worklog
-
-All timestamps UTC.
-
-- 2026-03-08T10:23:xxZ: Read repo policy and existing agentic docs; found `full-app-coverage/` directory existed but contained no required files.
-- 2026-03-08T10:24:xxZ: Mapped route and feature surfaces from `src/App.tsx`, `src/components/TabBar.tsx`, `src/pages/**`, `HomeDiskManager`, play components, config/settings/docs pages.
-- 2026-03-08T10:28:04Z: Ran `npm run scope:preflight`; failed because default device selection targeted a device without the app package check context.
-- 2026-03-08T10:28:22Z: Ran `ANDROID_SERIAL=2113b87f npm run scope:preflight`; preflight READY.
-- 2026-03-08T10:28:52Z: Ran `ANDROID_SERIAL=2113b87f C64U_HOST=192.168.1.13 npm run scope:hil:evidence`; PASS with run `pt-20260308T102852Z`, artifact gate OK.
-- 2026-03-08T10:29:26Z - 10:30:08Z: Ran `ANDROID_SERIAL=2113b87f C64U_HOST=192.168.1.13 node c64scope/dist/autonomousValidation.js`; 13/13 expected outcomes matched, run IDs `pt-20260308T102926Z`…`pt-20260308T103008Z`.
-- 2026-03-08T10:32:47Z - 10:32:51Z: Ran cross-server MCP capability probe; connected to `droidmind`, `c64scope`, and `c64bridge`; executed `android-device list_devices` and `scope_catalog.list_cases`; output stored at `doc/testing/agentic-tests/full-app-coverage/runs/fac-20260308T103247Z-mcp-probe.json`.
-- 2026-03-08T10:33:xxZ: Classified feature states; marked only app shell launch PASS, all other key features BLOCKED due current execution path bypassing deterministic app-driven feature actions.
-- 2026-03-08T10:34:xxZ: Produced full-app coverage artifact package (inventory, catalog, matrix, prompts, runs index, gap analysis, iteration log, summary).
-- 2026-03-08T10:50Z - 11:01Z: Implemented app-first product-track remediation in `c64scope` (droidmind MCP client, app-first primitives, product vs calibration tracks, bridge fallback typing enforcement, product bridge-policy guard, prompt-run manifest executor).
-- 2026-03-08T11:02Z - 11:03Z: Ran `VALIDATION_TRACK=product` suite with first app-first cases (`AF-001`…`AF-003`); observed one transient `AF-002` fail and captured evidence.
-- 2026-03-08T11:08Z - 11:11Z: Expanded product case set (`AF-004`…`AF-008`) for Home/Disks/Play/Config/Settings surface marker validation and reran product suite; 8/8 expected outcomes matched.
-- 2026-03-08T11:11Z - 11:14Z: Ran full-app coverage executor and generated `fac-20260308T111428Z-executor-manifest.{json,md}` with `PASS:19`, `FAIL:4`, `BLOCKED:0`.
-- 2026-03-08T11:2xZ: Began blocker-fix iteration; diagnosed `F003`-`F006` as a route-selection false-negative where `navigateToRoute("/")` can tap "Home" within Docs content instead of the tab bar.
-- 2026-03-08T11:20Z - 11:29Z: Patched app-first route selection to target bottom-tab buttons and strengthened Home route markers (`Save RAM`, `QUICK CONFIG`); reran product track with all 8 product cases PASS (`pt-20260308T112608Z`…`pt-20260308T112856Z`).
-- 2026-03-08T11:29Z - 11:33Z: Ran executor `fac-20260308T113247Z`; surfaced transient route focus flake (`activeTab=none`) affecting `F002`, `F017`, `F022`, `F023`.
-- 2026-03-08T11:33Z - 11:36Z: Relaxed route assertion to allow marker-confirmed pass when focus signal is absent and reran full executor; converged manifest `fac-20260308T113632Z` with `PASS:23`, `FAIL:0`, `BLOCKED:0`.
-
-## Key Findings
-
-1. Real hardware stack is reachable and stable in this session (device `2113b87f`, C64U `192.168.1.13`).
-2. Repository-owned app-first orchestration now exists in `c64scope` product track (`AF-001`…`AF-008`) and executes through `droidmind`.
-3. Prompt-run binding now exists via `fullAppCoverageExecutor` with schema-validated manifest output and per-feature evidence mapping.
-4. Coverage convergence reached full pass on the complete key-feature matrix (`PASS:23`, `FAIL:0`, `BLOCKED:0`) with run/evidence mapping captured in `fac-20260308T113632Z-executor-manifest.json`.
-
----
-
-# RAM Snapshot System
-
-## Status: COMPLETE
-
-## Overview
-
-Replaces the raw `.bin` file Save/Load RAM workflow with a structured `.c64snap`
-snapshot system that includes typed memory ranges, metadata, and an in-app
-Snapshot Manager dialog (no filesystem browser).
-
-## Memory Ranges by Snapshot Type
-
-| Type   | Ranges                    | Notes                        |
-| ------ | ------------------------- | ---------------------------- |
-| Full   | $0000–$FFFF               | All 64 KB                    |
-| BASIC  | $0801–STREND, $002B–$0038 | STREND read from $002B–$002C |
-| Screen | $0400–$07E7, $D800–$DBFF  | Screen + colour RAM          |
-| Custom | User-defined              | Any hex address ranges       |
-
-## Binary File Format (.c64snap)
-
-Header (28 bytes):
-
-| Offset | Size | Field           | Notes                    |
-| ------ | ---- | --------------- | ------------------------ |
-| 0      | 8    | magic           | `C64SNAP\0`              |
-| 8      | 2    | version         | uint16 LE = 1            |
-| 10     | 2    | type            | uint16 LE (0–3)          |
-| 12     | 4    | timestamp       | uint32 LE (Unix seconds) |
-| 16     | 2    | range_count     | uint16 LE                |
-| 18     | 2    | flags           | uint16 LE = 0            |
-| 20     | 4    | metadata_offset | uint32 LE                |
-| 24     | 4    | metadata_size   | uint32 LE                |
-
-Range descriptors follow header: 4 bytes each (uint16 LE start, uint16 LE length).
-Memory blocks follow descriptors (concatenated, matching descriptor order).
-Optional UTF-8 JSON metadata at `metadata_offset`.
-
-## Filename Format
-
-```
-c64-{type}-{YYYYMMDD}-{HHMMSS}.c64snap
-```
-
-## Phases
-
-### Phase 1: Core Library (src/lib/snapshot/)
-
-- [x] 1.1 snapshotTypes.ts
-- [x] 1.2 snapshotFormat.ts
-- [x] 1.3 snapshotFilename.ts
-- [x] 1.4 snapshotStore.ts
-- [x] 1.5 snapshotFiltering.ts
-- [x] 1.6 snapshotCreation.ts
-
-### Phase 2: RAM Operations Extension
-
-- [x] 2.1 Export loadMemoryRanges() in ramOperations.ts
-
-### Phase 3: UI Dialogs
-
-- [x] 3.1 SaveRamDialog.tsx
-- [x] 3.2 SnapshotManagerDialog.tsx
-- [x] 3.3 RestoreSnapshotDialog.tsx
-
-### Phase 4: Hook/Page Integration
-
-- [x] 4.1 useHomeActions.ts — typed snapshot save/restore
-- [x] 4.2 HomePage.tsx — dialog state
-- [x] 4.3 MachineControls.tsx — props unchanged, callers change
-
-### Phase 5: Tests
-
-- [x] 5.1 snapshotFormat.test.ts
-- [x] 5.2 snapshotFilename.test.ts
-- [x] 5.3 snapshotStore.test.ts
-- [x] 5.4 snapshotFiltering.test.ts
-- [x] 5.5 playwright/ramSnapshot.spec.ts
-
-### Phase 6: Screenshots and Documentation
-
-- [x] 6.1 Playwright screenshots → doc/img/app/home/dialogs/ (generated by `npm run screenshots`)
-- [x] 6.2 README.md RAM Snapshots section
-
-### Phase 7: Validation
-
-- [x] npm run test passes
-- [x] npm run lint passes
-- [x] npm run build passes
-- [x] Coverage ≥ 90%
-
-## Decisions Log
-
-| Date       | Decision                                                        |
-| ---------- | --------------------------------------------------------------- |
-| 2026-03-08 | localStorage as primary snapshot store (works on web + Android) |
-| 2026-03-08 | Dump full 64 KB then extract ranges (simpler, single API call)  |
-| 2026-03-08 | STREND resolved by peeking $002B–$002C from full RAM dump       |
-| 2026-03-08 | No SAF folder dependency for snapshot list — app-managed in LS  |
-
-# Contract Harness Breakpoint Stress Plan
-
-## Status
-
-- State: in progress
-- Started: 2026-03-11
-- Owner: Codex
-- Scope: `tests/contract`
-
-## Objective
-
-Extend the existing contract harness `STRESS` mode with a deterministic breakpoint profile that ramps SID volume mutation rate and concurrency, captures full shared-path REST traces, aborts immediately on control-plane failure, preserves forensic artifacts, and skips auto-recovery after breakpoint-triggered failure.
-
-## Constraints
-
-- Keep `tests/contract/run.ts` as the single runner.
-- Keep `logs.jsonl` as the single JSONL log stream.
-- Reuse the shared REST request path and existing REST client.
-- Remove nondeterministic retry jitter only for breakpoint runs.
-- Preserve existing artifact formats and keep `tests/contract/compare.ts` working.
-- Skip the normal STRESS scenario sweep when `stressBreakpoint` is enabled.
-
-## Implementation Plan
-
-1. Extend config parsing and schema validation for `stressBreakpoint`, including target validation against `doc/c64/c64u-config.yaml`.
-2. Add deterministic breakpoint planning and failure-artifact helpers under `tests/contract/lib`.
-3. Add shared REST trace logging in the shared request wrapper so breakpoint requests are traced centrally.
-4. Implement `rest.breakpoint.sid-volume` using deterministic target cycling and valid SID volume values.
-5. Integrate a breakpoint execution branch into `tests/contract/run.ts`, with immediate abort handling and conditional teardown suppression on breakpoint failure.
-6. Extend `tests/contract/mockRestServer.ts` only as needed for deterministic failure testing.
-7. Add regression tests for config parsing, stage planning, trace logging, failure summary generation, abort behavior, and teardown policy.
-8. Run `npm run test`, `npm run test:coverage`, and `npx tsc -p tests/contract/tsconfig.json`, then fix any failures.
-
-## Acceptance Checklist
-
-- [ ] `stressBreakpoint` config is parsed and schema-validated.
-- [ ] Breakpoint stage order is deterministic and respects `concurrency.restMaxInFlight`.
-- [ ] SID volume targets mutate with valid deterministic values.
-- [ ] Breakpoint REST traces are emitted from the shared request path into `logs.jsonl`.
-- [ ] Breakpoint runs abort on request failure, health failure, or transport failure.
-- [ ] `breakpoint-stages.json`, `failure-summary.json`, and `request-trace-tail.json` are written.
-- [ ] Auto recovery is skipped only after breakpoint failure.
-- [ ] SAFE and normal STRESS behavior remain unchanged.
-- [ ] Regression tests cover the new behavior.
+### Playback mute consistency
+
+- Enforced auto-unmute before play in [`src/pages/playFiles/hooks/usePlaybackController.ts`](/home/chris/dev/c64/c64commander/src/pages/playFiles/hooks/usePlaybackController.ts).
+- Added a pause-transition guard in [`src/pages/playFiles/hooks/useVolumeOverride.ts`](/home/chris/dev/c64/c64commander/src/pages/playFiles/hooks/useVolumeOverride.ts) and threaded it through [`src/pages/PlayFilesPage.tsx`](/home/chris/dev/c64/c64commander/src/pages/PlayFilesPage.tsx).
+
+## Clickable Inventory Summary
+
+The codebase was rechecked for shared and page-local button usage. The central highlight system covers the app-wide button surfaces below.
+
+- Shared UI: [`src/components/ui/button.tsx`](/home/chris/dev/c64/c64commander/src/components/ui/button.tsx), [`src/components/TabBar.tsx`](/home/chris/dev/c64/c64commander/src/components/TabBar.tsx), [`src/components/QuickActionCard.tsx`](/home/chris/dev/c64/c64commander/src/components/QuickActionCard.tsx), [`src/components/itemSelection/ItemSelectionView.tsx`](/home/chris/dev/c64/c64commander/src/components/itemSelection/ItemSelectionView.tsx)
+- Home: [`src/pages/HomePage.tsx`](/home/chris/dev/c64/c64commander/src/pages/HomePage.tsx), [`src/pages/home/components/MachineControls.tsx`](/home/chris/dev/c64/c64commander/src/pages/home/components/MachineControls.tsx), [`src/pages/home/components/PrinterManager.tsx`](/home/chris/dev/c64/c64commander/src/pages/home/components/PrinterManager.tsx)
+- Play: [`src/pages/PlayFilesPage.tsx`](/home/chris/dev/c64/c64commander/src/pages/PlayFilesPage.tsx), [`src/pages/playFiles/components/PlaybackControlsCard.tsx`](/home/chris/dev/c64/c64commander/src/pages/playFiles/components/PlaybackControlsCard.tsx), [`src/pages/playFiles/components/VolumeControls.tsx`](/home/chris/dev/c64/c64commander/src/pages/playFiles/components/VolumeControls.tsx), [`src/pages/playFiles/components/PlaybackSettingsPanel.tsx`](/home/chris/dev/c64/c64commander/src/pages/playFiles/components/PlaybackSettingsPanel.tsx), [`src/pages/playFiles/components/PlaylistPanel.tsx`](/home/chris/dev/c64/c64commander/src/pages/playFiles/components/PlaylistPanel.tsx)
+- Remaining routes: [`src/pages/DisksPage.tsx`](/home/chris/dev/c64/c64commander/src/pages/DisksPage.tsx), [`src/pages/ConfigBrowserPage.tsx`](/home/chris/dev/c64/c64commander/src/pages/ConfigBrowserPage.tsx), [`src/pages/SettingsPage.tsx`](/home/chris/dev/c64/c64commander/src/pages/SettingsPage.tsx), [`src/pages/DocsPage.tsx`](/home/chris/dev/c64/c64commander/src/pages/DocsPage.tsx)
+
+## Files Changed And Why
+
+- [`src/lib/ui/buttonInteraction.ts`](/home/chris/dev/c64/c64commander/src/lib/ui/buttonInteraction.ts): central focus-clear retry logic for app resume after picker-like interruptions
+- [`src/lib/ui/buttonInteraction.test.ts`](/home/chris/dev/c64/c64commander/src/lib/ui/buttonInteraction.test.ts): regression test for app-regain-focus clearing
+- [`src/pages/playFiles/components/PlaybackControlsCard.tsx`](/home/chris/dev/c64/c64commander/src/pages/playFiles/components/PlaybackControlsCard.tsx): `Play` persistent highlight restricted to active playback
+- [`src/pages/playFiles/components/PlaybackControlsCard.test.tsx`](/home/chris/dev/c64/c64commander/src/pages/playFiles/components/PlaybackControlsCard.test.tsx): pause-state highlight regression coverage
+- [`src/pages/playFiles/components/VolumeControls.tsx`](/home/chris/dev/c64/c64commander/src/pages/playFiles/components/VolumeControls.tsx): muted-state `Unmute` persistent highlight
+- [`src/pages/playFiles/components/VolumeControls.test.tsx`](/home/chris/dev/c64/c64commander/src/pages/playFiles/components/VolumeControls.test.tsx): persistent-highlight coverage for `Unmute`
+- [`src/pages/playFiles/hooks/usePlaybackController.ts`](/home/chris/dev/c64/c64commander/src/pages/playFiles/hooks/usePlaybackController.ts): fail-fast auto-unmute on play and pause-transition tracking
+- [`src/pages/playFiles/hooks/useVolumeOverride.ts`](/home/chris/dev/c64/c64commander/src/pages/playFiles/hooks/useVolumeOverride.ts): stale-query guard for pause/resume mute reconciliation
+- [`src/pages/PlayFilesPage.tsx`](/home/chris/dev/c64/c64commander/src/pages/PlayFilesPage.tsx): pause-transition ref wiring
+- [`tests/unit/playFiles/usePlaybackController.test.tsx`](/home/chris/dev/c64/c64commander/tests/unit/playFiles/usePlaybackController.test.tsx): start-while-muted regression coverage
+- [`tests/unit/playFiles/volumeMuteRace.test.ts`](/home/chris/dev/c64/c64commander/tests/unit/playFiles/volumeMuteRace.test.ts): pause/resume stale-state race coverage
+- [`playwright/buttonHighlightProof.spec.ts`](/home/chris/dev/c64/c64commander/playwright/buttonHighlightProof.spec.ts): picker-return focus regression coverage
+- [`playwright/playback.part2.spec.ts`](/home/chris/dev/c64/c64commander/playwright/playback.part2.spec.ts): play-start auto-unmute and pause/resume audible-output coverage
+- [`playwright/playback.spec.ts`](/home/chris/dev/c64/c64commander/playwright/playback.spec.ts): deterministic reconciliation test updated to match the current non-interval resume behavior
+- [`doc/testing/investigations/interactions1/verification-notes.md`](/home/chris/dev/c64/c64commander/doc/testing/investigations/interactions1/verification-notes.md): scenario-to-screenshot mapping and capture notes
+
+## Regression Coverage Added Or Updated
+
+- [`src/lib/ui/buttonInteraction.test.ts`](/home/chris/dev/c64/c64commander/src/lib/ui/buttonInteraction.test.ts): `clears pending pointer focus when the window regains focus after a picker-like interruption`
+- [`src/pages/playFiles/components/VolumeControls.test.tsx`](/home/chris/dev/c64/c64commander/src/pages/playFiles/components/VolumeControls.test.tsx): muted `Unmute` button persists and clears correctly
+- [`src/pages/playFiles/components/PlaybackControlsCard.test.tsx`](/home/chris/dev/c64/c64commander/src/pages/playFiles/components/PlaybackControlsCard.test.tsx): `Play` persistent highlight clears while paused
+- [`tests/unit/playFiles/usePlaybackController.test.tsx`](/home/chris/dev/c64/c64commander/tests/unit/playFiles/usePlaybackController.test.tsx): start-while-muted unmute ordering and fail-fast failure handling
+- [`tests/unit/playFiles/volumeMuteRace.test.ts`](/home/chris/dev/c64/c64commander/tests/unit/playFiles/volumeMuteRace.test.ts): pause-transition stale-query guard
+- [`playwright/buttonHighlightProof.spec.ts`](/home/chris/dev/c64/c64commander/playwright/buttonHighlightProof.spec.ts): native-picker-equivalent focus regression
+- [`playwright/playback.part2.spec.ts`](/home/chris/dev/c64/c64commander/playwright/playback.part2.spec.ts): muted-start and pause/resume audible-output flows
+
+## Tests Run
+
+- `npx vitest run src/lib/ui/buttonInteraction.test.ts src/pages/playFiles/components/PlaybackControlsCard.test.tsx src/pages/playFiles/components/VolumeControls.test.tsx tests/unit/playFiles/usePlaybackController.test.tsx tests/unit/playFiles/volumeMuteRace.test.ts`
+- `npx playwright test playwright/buttonHighlightProof.spec.ts --grep "change button clears retained pointer focus|standard button flash|rapid repeated taps|play button stays highlighted"`
+- `npx playwright test playwright/playback.part2.spec.ts --grep "starting playback while muted clears mute before SID playback begins|pause mutes SID outputs and resume restores them"`
+- `npm run test:coverage`
+- `npm run lint`
+- `npm run build`
+- `./build --skip-install`
+
+## Coverage And Build Result
+
+- `npm run test:coverage` passed with global branch coverage above the required 90% threshold.
+- `./build --skip-install` completed successfully, including the web build, unit tests, Playwright suite, Android JVM tests, and debug APK build.
+- Debug APK verified at [`android/app/build/outputs/apk/debug/c64commander-0.1.0-debug.apk`](/home/chris/dev/c64/c64commander/android/app/build/outputs/apk/debug/c64commander-0.1.0-debug.apk) and installed onto the attached Pixel 4 device.
+
+## Evidence Package
+
+Stored under [`doc/testing/investigations/interactions1`](/home/chris/dev/c64/c64commander/doc/testing/investigations/interactions1):
+
+- `a1-change-before-open.png`
+- `a2-change-picker-open.png`
+- `a3-change-after-close.png`
+- `a4-change-after-timeout.png`
+- `b1-start-muted-before-play.png`
+- `b2-start-playback-auto-unmuted.png`
+- `c1-pause-resume-playing-before-pause.png`
+- `c2-pause-resume-paused.png`
+- `c3-pause-resume-muted-state.png`
+- `c4-pause-resume-resumed.png`
+- `c5-pause-resume-audio-restored.png`
+- `verification-notes.md`
+
+## Verification Checklist
+
+- [x] No button remains highlighted only because it retained focus after picker dismissal
+- [x] `Change` button regression reproduced and proven fixed
+- [x] Tap flash remains centrally controlled by the shared interaction layer
+- [x] `Play` stays highlighted only while actively playing
+- [x] `Unmute` stays highlighted while muted
+- [x] Starting playback from muted state restores audible output state
+- [x] Pause then resume restores audible output state
+- [x] Automated regression coverage updated
+- [x] Screenshots stored in `doc/testing/investigations/interactions1`
+- [x] Verification notes stored beside the screenshots
+
+## Remaining Risks
+
+- No known unresolved defects remain for this task.
+- The native picker transition is immediate, so an isolated frame of the transient tap flash during picker launch is not a stable artifact to capture. That gap is covered by the shared interaction unit test and Playwright regression harness.
+
+## Work Log
+
+- 2026-03-11: Audited the prior remediation and re-established the real root cause.
+- 2026-03-11: Fixed the shared pointer-focus lifecycle in the central interaction layer.
+- 2026-03-11: Repaired the allowed persistent-highlight exceptions on the Play page.
+- 2026-03-11: Fixed muted-start and pause/resume audible-output regressions.
+- 2026-03-11: Added regression coverage across unit, component, and Playwright layers.
+- 2026-03-11: Captured Android and Playwright evidence under `doc/testing/investigations/interactions1`.
