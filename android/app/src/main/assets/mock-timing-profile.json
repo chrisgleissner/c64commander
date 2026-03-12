@@ -43,10 +43,50 @@
             "jitterRangeMs": 12,
             "jitterSeed": 6
         },
-        "driveAction": {
+        "driveListRead": {
             "baseDelayMs": 16,
-            "jitterRangeMs": 14,
+            "jitterRangeMs": 7,
             "jitterSeed": 7
+        },
+        "driveMountPut": {
+            "baseDelayMs": 744,
+            "jitterRangeMs": 21,
+            "jitterSeed": 12
+        },
+        "driveMountPost": {
+            "baseDelayMs": 1110,
+            "jitterRangeMs": 30,
+            "jitterSeed": 13
+        },
+        "driveReset": {
+            "baseDelayMs": 20,
+            "jitterRangeMs": 6,
+            "jitterSeed": 14
+        },
+        "driveRemove": {
+            "baseDelayMs": 110,
+            "jitterRangeMs": 12,
+            "jitterSeed": 15
+        },
+        "drivePower": {
+            "baseDelayMs": 10,
+            "jitterRangeMs": 4,
+            "jitterSeed": 16
+        },
+        "driveLoadRomPut": {
+            "baseDelayMs": 56,
+            "jitterRangeMs": 10,
+            "jitterSeed": 17
+        },
+        "driveLoadRomPost": {
+            "baseDelayMs": 68,
+            "jitterRangeMs": 10,
+            "jitterSeed": 18
+        },
+        "driveSetMode": {
+            "baseDelayMs": 112,
+            "jitterRangeMs": 12,
+            "jitterSeed": 19
         },
         "runner": {
             "baseDelayMs": 30,
@@ -135,16 +175,71 @@
             ],
             "pathType": "exact",
             "path": "/v1/drives",
-            "timingClass": "driveAction"
+            "timingClass": "driveListRead"
         },
         {
             "methods": [
-                "PUT",
+                "PUT"
+            ],
+            "pathType": "regex",
+            "path": "^/v1/drives/[^/]+:mount$",
+            "timingClass": "driveMountPut"
+        },
+        {
+            "methods": [
                 "POST"
             ],
-            "pathType": "prefix",
-            "path": "/v1/drives/",
-            "timingClass": "driveAction"
+            "pathType": "regex",
+            "path": "^/v1/drives/[^/]+:mount$",
+            "timingClass": "driveMountPost"
+        },
+        {
+            "methods": [
+                "PUT"
+            ],
+            "pathType": "regex",
+            "path": "^/v1/drives/[^/]+:reset$",
+            "timingClass": "driveReset"
+        },
+        {
+            "methods": [
+                "PUT"
+            ],
+            "pathType": "regex",
+            "path": "^/v1/drives/[^/]+:remove$",
+            "timingClass": "driveRemove"
+        },
+        {
+            "methods": [
+                "PUT"
+            ],
+            "pathType": "regex",
+            "path": "^/v1/drives/[^/]+:(on|off)$",
+            "timingClass": "drivePower"
+        },
+        {
+            "methods": [
+                "PUT"
+            ],
+            "pathType": "regex",
+            "path": "^/v1/drives/[^/]+:load_rom$",
+            "timingClass": "driveLoadRomPut"
+        },
+        {
+            "methods": [
+                "POST"
+            ],
+            "pathType": "regex",
+            "path": "^/v1/drives/[^/]+:load_rom$",
+            "timingClass": "driveLoadRomPost"
+        },
+        {
+            "methods": [
+                "PUT"
+            ],
+            "pathType": "regex",
+            "path": "^/v1/drives/[^/]+:set_mode$",
+            "timingClass": "driveSetMode"
         },
         {
             "methods": [

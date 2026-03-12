@@ -79,11 +79,59 @@ class MockTimingProfile(
                                               jitterRangeMs = 12,
                                               jitterSeed = 6
                                       ),
-                              "driveAction" to
+                              "driveListRead" to
                                       MockTimingClassConfig(
                                               baseDelayMs = 16,
-                                              jitterRangeMs = 14,
+                                              jitterRangeMs = 7,
                                               jitterSeed = 7
+                                      ),
+                              "driveMountPut" to
+                                      MockTimingClassConfig(
+                                              baseDelayMs = 744,
+                                              jitterRangeMs = 21,
+                                              jitterSeed = 12
+                                      ),
+                              "driveMountPost" to
+                                      MockTimingClassConfig(
+                                              baseDelayMs = 1110,
+                                              jitterRangeMs = 30,
+                                              jitterSeed = 13
+                                      ),
+                              "driveReset" to
+                                      MockTimingClassConfig(
+                                              baseDelayMs = 20,
+                                              jitterRangeMs = 6,
+                                              jitterSeed = 14
+                                      ),
+                              "driveRemove" to
+                                      MockTimingClassConfig(
+                                              baseDelayMs = 110,
+                                              jitterRangeMs = 12,
+                                              jitterSeed = 15
+                                      ),
+                              "drivePower" to
+                                      MockTimingClassConfig(
+                                              baseDelayMs = 10,
+                                              jitterRangeMs = 4,
+                                              jitterSeed = 16
+                                      ),
+                              "driveLoadRomPut" to
+                                      MockTimingClassConfig(
+                                              baseDelayMs = 56,
+                                              jitterRangeMs = 10,
+                                              jitterSeed = 17
+                                      ),
+                              "driveLoadRomPost" to
+                                      MockTimingClassConfig(
+                                              baseDelayMs = 68,
+                                              jitterRangeMs = 10,
+                                              jitterSeed = 18
+                                      ),
+                              "driveSetMode" to
+                                      MockTimingClassConfig(
+                                              baseDelayMs = 112,
+                                              jitterRangeMs = 12,
+                                              jitterSeed = 19
                                       ),
                               "runner" to
                                       MockTimingClassConfig(
@@ -158,13 +206,55 @@ class MockTimingProfile(
                                       methods = setOf("GET"),
                                       pathType = "exact",
                                       path = "/v1/drives",
-                                      timingClass = "driveAction"
+                                      timingClass = "driveListRead"
                               ),
                               MockTimingRule(
-                                      methods = setOf("PUT", "POST"),
-                                      pathType = "prefix",
-                                      path = "/v1/drives/",
-                                      timingClass = "driveAction"
+                                      methods = setOf("PUT"),
+                                      pathType = "regex",
+                                      path = "^/v1/drives/[^/]+:mount$",
+                                      timingClass = "driveMountPut"
+                              ),
+                              MockTimingRule(
+                                      methods = setOf("POST"),
+                                      pathType = "regex",
+                                      path = "^/v1/drives/[^/]+:mount$",
+                                      timingClass = "driveMountPost"
+                              ),
+                              MockTimingRule(
+                                      methods = setOf("PUT"),
+                                      pathType = "regex",
+                                      path = "^/v1/drives/[^/]+:reset$",
+                                      timingClass = "driveReset"
+                              ),
+                              MockTimingRule(
+                                      methods = setOf("PUT"),
+                                      pathType = "regex",
+                                      path = "^/v1/drives/[^/]+:remove$",
+                                      timingClass = "driveRemove"
+                              ),
+                              MockTimingRule(
+                                      methods = setOf("PUT"),
+                                      pathType = "regex",
+                                      path = "^/v1/drives/[^/]+:(on|off)$",
+                                      timingClass = "drivePower"
+                              ),
+                              MockTimingRule(
+                                      methods = setOf("PUT"),
+                                      pathType = "regex",
+                                      path = "^/v1/drives/[^/]+:load_rom$",
+                                      timingClass = "driveLoadRomPut"
+                              ),
+                              MockTimingRule(
+                                      methods = setOf("POST"),
+                                      pathType = "regex",
+                                      path = "^/v1/drives/[^/]+:load_rom$",
+                                      timingClass = "driveLoadRomPost"
+                              ),
+                              MockTimingRule(
+                                      methods = setOf("PUT"),
+                                      pathType = "regex",
+                                      path = "^/v1/drives/[^/]+:set_mode$",
+                                      timingClass = "driveSetMode"
                               ),
                               MockTimingRule(
                                       methods = setOf("PUT", "POST"),
@@ -266,8 +356,10 @@ class MockTimingProfile(
                 false
               } else if (rule.pathType == "exact") {
                 path == rule.path
-              } else {
+                                                        } else if (rule.pathType == "prefix") {
                 path.startsWith(rule.path)
+                                                        } else {
+                                                                Regex(rule.path).matches(path)
               }
             }
     return matchedRule?.timingClass ?: defaultClassId

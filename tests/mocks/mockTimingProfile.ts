@@ -12,7 +12,7 @@ export type MockTimingClass = {
 
 export type MockTimingRule = {
   methods: string[];
-  pathType: "exact" | "prefix";
+  pathType: "exact" | "prefix" | "regex";
   path: string;
   timingClass: string;
 };
@@ -52,7 +52,13 @@ export const resolveMockTimingClassId = (profile: MockTimingProfile, method: str
     const methods = rule.methods.map(normalizeMethod);
     const methodMatches = methods.includes(normalizedMethod);
     if (!methodMatches) return false;
-    return rule.pathType === "exact" ? pathname === rule.path : pathname.startsWith(rule.path);
+    if (rule.pathType === "exact") {
+      return pathname === rule.path;
+    }
+    if (rule.pathType === "prefix") {
+      return pathname.startsWith(rule.path);
+    }
+    return new RegExp(rule.path).test(pathname);
   });
   return matchedRule?.timingClass ?? profile.defaultClassId;
 };

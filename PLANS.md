@@ -46,4 +46,5 @@
 - Do not weaken assertions; add deterministic clocks, seeds, and request-trace checks where needed.
 - Shared mock timing profile, diagnostics screenshot refresh, lint, targeted tests, full coverage, and direct build validation completed.
 - Physical-device latency measurement against a live C64U was completed on 2026-03-12 against hostname `c64u`, and the shared timing profile was recalibrated from those safe REST probes.
+- Follow-up timing investigation established that drive-mount latency is route-specific and synchronous: five rebooted live samples for `PUT /v1/drives/b:mount` measured about `753`-`766` ms, and observable `/v1/drives` state completion matched HTTP response timing.
 - `./build --skip-install` was blocked by an unrelated flaky Playwright proof on `playwright/buttonHighlightProof.spec.ts` for the `android-phone` project. A direct rerun of that proof passed on `PLAYWRIGHT_PORT=4174`.

@@ -245,7 +245,7 @@ describe("createMockC64Server", () => {
       .slice(firstRequestCount)
       .sort((left, right) => left.requestId - right.requestId);
     expect(recentRequests).toHaveLength(3);
-    expect(recentRequests.map((entry) => entry.timingClass)).toEqual(["probe", "configRead", "driveAction"]);
+    expect(recentRequests.map((entry) => entry.timingClass)).toEqual(["probe", "configRead", "driveListRead"]);
     expect(recentRequests.every((entry) => entry.plannedDelayMs > 0)).toBe(true);
     expect(recentRequests.every((entry) => entry.startedProcessingAtMs !== null && entry.completedAtMs !== null)).toBe(
       true,

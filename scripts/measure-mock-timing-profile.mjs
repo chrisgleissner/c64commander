@@ -19,6 +19,8 @@ const REBOOT_POLL_DELAY_MS = Number(process.env.C64U_TIMING_REBOOT_POLL_DELAY_MS
 const REBOOT_BEFORE_EACH_OPERATION = process.env.C64U_TIMING_REBOOT_BEFORE_EACH_OPERATION !== '0';
 const SLOW_SAMPLE_THRESHOLD_MS = Number(process.env.C64U_TIMING_SLOW_SAMPLE_THRESHOLD_MS || '3000');
 const VARIATION_THRESHOLD_MS = Number(process.env.C64U_TIMING_VARIATION_THRESHOLD_MS || '1500');
+const COMPLETION_TIMEOUT_MS = Number(process.env.C64U_TIMING_COMPLETION_TIMEOUT_MS || '10000');
+const COMPLETION_POLL_DELAY_MS = Number(process.env.C64U_TIMING_COMPLETION_POLL_DELAY_MS || '50');
 const OUTPUT_PATH =
     process.env.C64U_TIMING_OUTPUT_PATH?.trim() ||
     path.resolve('doc/c64/mock-timing-calibration-2026-03-12.json');
@@ -125,17 +127,14 @@ class TimingProbe {
 
     async waitUntilReady() {
         const deadline = Date.now() + REBOOT_READY_TIMEOUT_MS;
-        let sawUnavailableState = false;
         let stableSuccessCount = 0;
 
         while (Date.now() < deadline) {
             try {
                 await this.request({ method: 'GET', pathName: '/v1/version' });
                 stableSuccessCount += 1;
-                if (sawUnavailableState && stableSuccessCount >= 2) return;
-                if (!sawUnavailableState && Date.now() + REBOOT_POLL_DELAY_MS >= deadline && stableSuccessCount >= 1) return;
+                if (stableSuccessCount >= 2) return;
             } catch {
-                sawUnavailableState = true;
                 stableSuccessCount = 0;
             }
             await delay(REBOOT_POLL_DELAY_MS);
@@ -356,6 +355,19 @@ class TimingProbe {
         this.localStreamIp = preferred;
         return preferred;
     }
+
+    async waitForDriveState({ driveKey, predicate, timeoutMs = COMPLETION_TIMEOUT_MS }) {
+        const deadline = Date.now() + timeoutMs;
+        while (Date.now() < deadline) {
+            const drives = await this.getDrivesByKey();
+            const drive = drives[driveKey];
+            if (drive && predicate(drive)) {
+                return;
+            }
+            await delay(COMPLETION_POLL_DELAY_MS);
+        }
+        throw new Error(`Timed out waiting for drive ${driveKey} to reach the expected state`);
+    }
 }
 
 function diskTypeFromFile(filename) {
@@ -363,11 +375,23 @@ function diskTypeFromFile(filename) {
     return ['d64', 'd71', 'd81', 'g64', 'g71'].includes(ext) ? ext : 'd64';
 }
 
+function normalizeMeasurementSample(result) {
+    if (typeof result === 'number') {
+        const latencyMs = Number(result.toFixed(3));
+        return { responseLatencyMs: latencyMs, completionLatencyMs: latencyMs };
+    }
+    const responseLatencyMs = Number(result.responseLatencyMs.toFixed(3));
+    const completionLatencyMs = Number((result.completionLatencyMs ?? result.responseLatencyMs).toFixed(3));
+    return { responseLatencyMs, completionLatencyMs };
+}
+
 async function measureOperation({ probe, id, description, invoke }) {
-    const samples = [];
+    const responseSamples = [];
+    const completionSamples = [];
     for (let index = 0; index < SAMPLE_COUNT; index += 1) {
-        const result = await invoke(probe, index);
-        samples.push(Number(result.toFixed(3)));
+        const result = normalizeMeasurementSample(await invoke(probe, index));
+        responseSamples.push(result.responseLatencyMs);
+        completionSamples.push(result.completionLatencyMs);
         await delay(SAMPLE_DELAY_MS);
     }
     return {
@@ -375,16 +399,27 @@ async function measureOperation({ probe, id, description, invoke }) {
         description,
         sampleCount: SAMPLE_COUNT,
         sampleDelayMs: SAMPLE_DELAY_MS,
-        medianMs: Number(median(samples).toFixed(3)),
-        minMs: Number(Math.min(...samples).toFixed(3)),
-        maxMs: Number(Math.max(...samples).toFixed(3)),
-        samplesMs: samples,
+        responseMedianMs: Number(median(responseSamples).toFixed(3)),
+        responseMinMs: Number(Math.min(...responseSamples).toFixed(3)),
+        responseMaxMs: Number(Math.max(...responseSamples).toFixed(3)),
+        responseSamplesMs: responseSamples,
+        activityCompletionMedianMs: Number(median(completionSamples).toFixed(3)),
+        activityCompletionMinMs: Number(Math.min(...completionSamples).toFixed(3)),
+        activityCompletionMaxMs: Number(Math.max(...completionSamples).toFixed(3)),
+        activityCompletionSamplesMs: completionSamples,
+        completionDeltaMedianMs: Number((median(completionSamples) - median(responseSamples)).toFixed(3)),
     };
 }
 
 function shouldRerunMeasurement(measurement) {
-    const rangeMs = measurement.maxMs - measurement.minMs;
-    return measurement.maxMs > SLOW_SAMPLE_THRESHOLD_MS || rangeMs > VARIATION_THRESHOLD_MS;
+    const responseRangeMs = measurement.responseMaxMs - measurement.responseMinMs;
+    const completionRangeMs = measurement.activityCompletionMaxMs - measurement.activityCompletionMinMs;
+    return (
+        measurement.responseMaxMs > SLOW_SAMPLE_THRESHOLD_MS ||
+        measurement.activityCompletionMaxMs > SLOW_SAMPLE_THRESHOLD_MS ||
+        responseRangeMs > VARIATION_THRESHOLD_MS ||
+        completionRangeMs > VARIATION_THRESHOLD_MS
+    );
 }
 
 async function main() {
@@ -690,12 +725,20 @@ async function main() {
             invoke: async (ctx) => {
                 const original = await ctx.getDriveBState();
                 try {
+                    const startedAt = performance.now();
                     const response = await ctx.request({
                         method: 'PUT',
                         pathName: '/v1/drives/b:mount',
                         query: { image: media.d64, type: 'd64', mode: 'readonly' },
                     });
-                    return response.latencyMs;
+                    await ctx.waitForDriveState({
+                        driveKey: 'b',
+                        predicate: (drive) => drive.image_file === path.basename(media.d64),
+                    });
+                    return {
+                        responseLatencyMs: response.latencyMs,
+                        completionLatencyMs: Number((performance.now() - startedAt).toFixed(3)),
+                    };
                 } finally {
                     await delay(MUTATION_RECOVERY_DELAY_MS);
                     await ctx.restoreDriveB(original);
@@ -708,6 +751,7 @@ async function main() {
             invoke: async (ctx) => {
                 const original = await ctx.getDriveBState();
                 try {
+                    const startedAt = performance.now();
                     const response = await ctx.request({
                         method: 'POST',
                         pathName: '/v1/drives/b:mount',
@@ -715,7 +759,14 @@ async function main() {
                         headers: { 'Content-Type': 'application/octet-stream' },
                         body: await ctx.getDiskBytes(),
                     });
-                    return response.latencyMs;
+                    await ctx.waitForDriveState({
+                        driveKey: 'b',
+                        predicate: (drive) => Boolean(drive.image_file),
+                    });
+                    return {
+                        responseLatencyMs: response.latencyMs,
+                        completionLatencyMs: Number((performance.now() - startedAt).toFixed(3)),
+                    };
                 } finally {
                     await delay(MUTATION_RECOVERY_DELAY_MS);
                     await ctx.restoreDriveB(original);
@@ -985,7 +1036,7 @@ async function main() {
         });
         if (shouldRerunMeasurement(measurement)) {
             console.log(
-                `  repeating series because max=${measurement.maxMs}ms range=${Number((measurement.maxMs - measurement.minMs).toFixed(3))}ms`,
+                `  repeating series because responseMax=${measurement.responseMaxMs}ms responseRange=${Number((measurement.responseMaxMs - measurement.responseMinMs).toFixed(3))}ms completionMax=${measurement.activityCompletionMaxMs}ms completionRange=${Number((measurement.activityCompletionMaxMs - measurement.activityCompletionMinMs).toFixed(3))}ms`,
             );
             if (REBOOT_BEFORE_EACH_OPERATION) {
                 console.log('  hard rebooting device before repeat');
@@ -998,7 +1049,9 @@ async function main() {
                 invoke: operation.invoke,
             });
         }
-        console.log(`  median=${measurement.medianMs}ms range=${measurement.minMs}-${measurement.maxMs}ms`);
+        console.log(
+            `  response median=${measurement.responseMedianMs}ms range=${measurement.responseMinMs}-${measurement.responseMaxMs}ms completion median=${measurement.activityCompletionMedianMs}ms range=${measurement.activityCompletionMinMs}-${measurement.activityCompletionMaxMs}ms`,
+        );
         measurements.push(measurement);
     }
 
