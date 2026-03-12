@@ -30,11 +30,11 @@ class MockTimingProfile(
         private val rules: List<MockTimingRule>,
         private val faults: MockTimingFaults,
 ) {
-  companion object {
-    fun defaultProfile(): MockTimingProfile {
-      return fromJson(
-              JSONObject(
-                      """
+        companion object {
+                fun defaultProfile(): MockTimingProfile {
+                        return fromJson(
+                                JSONObject(
+                                        """
         {
           "version": 1,
           "seed": 19,
@@ -147,94 +147,106 @@ class MockTimingProfile(
           ]
         }
         """.trimIndent(),
-              ),
-      )
-    }
+                                ),
+                        )
+                }
 
-    fun fromJson(payload: JSONObject): MockTimingProfile {
-      val classesObj = payload.getJSONObject("classes")
-      val classMap = mutableMapOf<String, MockTimingClassConfig>()
-      val classKeys = classesObj.keys()
-      while (classKeys.hasNext()) {
-        val classId = classKeys.next()
-        val classObj = classesObj.getJSONObject(classId)
-        classMap[classId] =
-                MockTimingClassConfig(
-                        baseDelayMs = classObj.optInt("baseDelayMs", 0),
-                        jitterRangeMs = classObj.optInt("jitterRangeMs", 0),
-                        jitterSeed = classObj.optInt("jitterSeed", 0),
-                )
-      }
+                fun fromJson(payload: JSONObject): MockTimingProfile {
+                        val classesObj = payload.getJSONObject("classes")
+                        val classMap = mutableMapOf<String, MockTimingClassConfig>()
+                        val classKeys = classesObj.keys()
+                        while (classKeys.hasNext()) {
+                                val classId = classKeys.next()
+                                val classObj = classesObj.getJSONObject(classId)
+                                classMap[classId] =
+                                        MockTimingClassConfig(
+                                                baseDelayMs = classObj.optInt("baseDelayMs", 0),
+                                                jitterRangeMs = classObj.optInt("jitterRangeMs", 0),
+                                                jitterSeed = classObj.optInt("jitterSeed", 0),
+                                        )
+                        }
 
-      val faultsObj = payload.getJSONObject("faults")
-      val rulesArray = payload.getJSONArray("rules")
-      val parsedRules = mutableListOf<MockTimingRule>()
-      for (index in 0 until rulesArray.length()) {
-        val ruleObj = rulesArray.getJSONObject(index)
-        val methodsArray = ruleObj.getJSONArray("methods")
-        val methods = mutableSetOf<String>()
-        for (methodIndex in 0 until methodsArray.length()) {
-          methods.add(methodsArray.getString(methodIndex).trim().uppercase())
+                        val faultsObj = payload.getJSONObject("faults")
+                        val rulesArray = payload.getJSONArray("rules")
+                        val parsedRules = mutableListOf<MockTimingRule>()
+                        for (index in 0 until rulesArray.length()) {
+                                val ruleObj = rulesArray.getJSONObject(index)
+                                val methodsArray = ruleObj.getJSONArray("methods")
+                                val methods = mutableSetOf<String>()
+                                for (methodIndex in 0 until methodsArray.length()) {
+                                        methods.add(
+                                                methodsArray
+                                                        .getString(methodIndex)
+                                                        .trim()
+                                                        .uppercase()
+                                        )
+                                }
+                                parsedRules.add(
+                                        MockTimingRule(
+                                                methods = methods,
+                                                pathType = ruleObj.getString("pathType"),
+                                                path = ruleObj.getString("path"),
+                                                timingClass = ruleObj.getString("timingClass"),
+                                        ),
+                                )
+                        }
+
+                        return MockTimingProfile(
+                                seed = payload.optInt("seed", 0),
+                                defaultClassId = payload.optString("defaultClassId", "default"),
+                                classes = classMap,
+                                rules = parsedRules,
+                                faults =
+                                        MockTimingFaults(
+                                                slowExtraDelayMs =
+                                                        faultsObj.optInt("slowExtraDelayMs", 0),
+                                                slowJitterRangeMs =
+                                                        faultsObj.optInt("slowJitterRangeMs", 0),
+                                                timeoutMinimumDelayMs =
+                                                        faultsObj.optInt(
+                                                                "timeoutMinimumDelayMs",
+                                                                1500
+                                                        ),
+                                        ),
+                        )
+                }
         }
-        parsedRules.add(
-                MockTimingRule(
-                        methods = methods,
-                        pathType = ruleObj.getString("pathType"),
-                        path = ruleObj.getString("path"),
-                        timingClass = ruleObj.getString("timingClass"),
-                ),
-        )
-      }
 
-      return MockTimingProfile(
-              seed = payload.optInt("seed", 0),
-              defaultClassId = payload.optString("defaultClassId", "default"),
-              classes = classMap,
-              rules = parsedRules,
-              faults =
-                      MockTimingFaults(
-                              slowExtraDelayMs = faultsObj.optInt("slowExtraDelayMs", 0),
-                              slowJitterRangeMs = faultsObj.optInt("slowJitterRangeMs", 0),
-                              timeoutMinimumDelayMs =
-                                      faultsObj.optInt("timeoutMinimumDelayMs", 1500),
-                      ),
-      )
-    }
-  }
+        fun resolveTimingClassId(method: String, path: String): String {
+                val normalizedMethod = method.trim().uppercase()
+                val matchedRule =
+                        rules.firstOrNull { rule ->
+                                val methodMatches = rule.methods.contains(normalizedMethod)
+                                if (!methodMatches) {
+                                        false
+                                } else if (rule.pathType == "exact") {
+                                        path == rule.path
+                                } else if (rule.pathType == "prefix") {
+                                        path.startsWith(rule.path)
+                                } else {
+                                        Regex(rule.path).matches(path)
+                                }
+                        }
+                return matchedRule?.timingClass ?: defaultClassId
+        }
 
-  fun resolveTimingClassId(method: String, path: String): String {
-    val normalizedMethod = method.trim().uppercase()
-    val matchedRule =
-            rules.firstOrNull { rule ->
-              val methodMatches = rule.methods.contains(normalizedMethod)
-              if (!methodMatches) {
-                false
-              } else if (rule.pathType == "exact") {
-                path == rule.path
-              } else if (rule.pathType == "prefix") {
-                path.startsWith(rule.path)
-              } else {
-                Regex(rule.path).matches(path)
-              }
-            }
-    return matchedRule?.timingClass ?: defaultClassId
-  }
+        fun resolveDelayMs(method: String, path: String, requestSequence: Int): Int {
+                val classId = resolveTimingClassId(method, path)
+                val timingClass =
+                        classes[classId]
+                                ?: classes[defaultClassId]
+                                        ?: error("Mock timing class missing: $classId")
+                val range = max(0, timingClass.jitterRangeMs)
+                val jitter =
+                        if (range == 0) {
+                                0
+                        } else {
+                                val jitterSeed =
+                                        seed + timingClass.jitterSeed * 13 + requestSequence * 17
+                                abs(jitterSeed % (range + 1))
+                        }
+                return timingClass.baseDelayMs + jitter
+        }
 
-  fun resolveDelayMs(method: String, path: String, requestSequence: Int): Int {
-    val classId = resolveTimingClassId(method, path)
-    val timingClass =
-            classes[classId]
-                    ?: classes[defaultClassId] ?: error("Mock timing class missing: $classId")
-    val range = max(0, timingClass.jitterRangeMs)
-    val jitter =
-            if (range == 0) {
-              0
-            } else {
-              val jitterSeed = seed + timingClass.jitterSeed * 13 + requestSequence * 17
-              abs(jitterSeed % (range + 1))
-            }
-    return timingClass.baseDelayMs + jitter
-  }
-
-  fun timeoutMinimumDelayMs(): Int = faults.timeoutMinimumDelayMs
+        fun timeoutMinimumDelayMs(): Int = faults.timeoutMinimumDelayMs
 }
