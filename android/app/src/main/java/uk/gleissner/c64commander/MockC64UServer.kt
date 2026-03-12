@@ -22,6 +22,7 @@ import java.net.Socket
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 import java.util.Collections
+import java.util.concurrent.ExecutionException
 import java.util.Locale
 import java.util.concurrent.Executors
 import kotlin.math.max
@@ -41,12 +42,18 @@ data class HttpResponse(
   val body: ByteArray,
 )
 
-class MockC64UServer(private val state: MockC64UState) {
-  private val executor = Executors.newCachedThreadPool()
+class MockC64UServer(
+  private val state: MockC64UState,
+  private val timingProfile: MockTimingProfile = MockTimingProfile.defaultProfile(),
+) {
+  private val acceptExecutor = Executors.newSingleThreadExecutor()
+  private val connectionExecutor = Executors.newCachedThreadPool()
+  private val requestExecutor = Executors.newSingleThreadExecutor()
   private val sockets = Collections.synchronizedSet(mutableSetOf<Socket>())
   private var serverSocket: ServerSocket? = null
   @Volatile private var running = false
   private val logTag = "MockC64UServer"
+  @Volatile private var requestSequence = 0
   var port: Int = 0
     private set
 
@@ -60,7 +67,7 @@ class MockC64UServer(private val state: MockC64UState) {
     serverSocket = ServerSocket(resolvedPort, 50, address)
     port = serverSocket?.localPort ?: 0
     running = true
-    executor.execute { acceptLoop() }
+    acceptExecutor.execute { acceptLoop() }
     return port
   }
 
@@ -75,7 +82,9 @@ class MockC64UServer(private val state: MockC64UState) {
       }
     }
     sockets.clear()
-    executor.shutdownNow()
+    acceptExecutor.shutdownNow()
+    connectionExecutor.shutdownNow()
+    requestExecutor.shutdownNow()
   }
 
   fun isRunning(): Boolean = running
@@ -85,7 +94,7 @@ class MockC64UServer(private val state: MockC64UState) {
       try {
         val socket = serverSocket?.accept() ?: break
         sockets.add(socket)
-        executor.execute { handleClient(socket) }
+        connectionExecutor.execute { handleClient(socket) }
       } catch (error: Exception) {
         if (running) {
           Log.w(logTag, "Accept loop error while running", error)
@@ -96,14 +105,33 @@ class MockC64UServer(private val state: MockC64UState) {
 
   private fun handleClient(socket: Socket) {
     socket.use { client ->
-      val input = BufferedInputStream(client.getInputStream())
-      val output = BufferedOutputStream(client.getOutputStream())
-      val request = readRequest(input) ?: return
-      val response = handleRequest(request)
-      writeResponse(output, response)
-      output.flush()
+      try {
+        val input = BufferedInputStream(client.getInputStream())
+        val output = BufferedOutputStream(client.getOutputStream())
+        val request = readRequest(input) ?: return
+        val response = requestExecutor.submit<HttpResponse> {
+          val requestId = nextRequestSequence()
+          val delayMs = timingProfile.resolveDelayMs(request.method, request.path, requestId)
+          if (delayMs > 0) {
+            Thread.sleep(delayMs.toLong())
+          }
+          handleRequest(request)
+        }.get()
+        writeResponse(output, response)
+        output.flush()
+      } catch (error: ExecutionException) {
+        Log.w(logTag, "Mock request execution failed", error.cause ?: error)
+      } catch (error: Exception) {
+        Log.w(logTag, "Mock client handling failed", error)
+      }
     }
     sockets.remove(socket)
+  }
+
+  @Synchronized
+  private fun nextRequestSequence(): Int {
+    requestSequence += 1
+    return requestSequence
   }
 
   private fun readRequest(input: InputStream): HttpRequest? {

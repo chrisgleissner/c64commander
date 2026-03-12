@@ -19,32 +19,34 @@ env:
     visible: "Play Files"
     timeout: ${TIMEOUT}
 
-# Assert the volume slider is visible (connected + playing assumed in this flow)
-- assertVisible: "Volume"
+# Assert the playback volume controls are visible (connected + playing assumed in this flow)
+- assertVisible: "Playback volume"
+- assertVisible: "Mute"
 
-# Rapid slider sweeps: tap far left then far right 5 times
+# Rapid slider sweeps: tap far left then far right repeatedly to stress preview coalescing
 - repeat:
-    times: 5
+    times: 6
     commands:
       - tapOn:
-          point: "10%,70%"
+          point: "20%,70%"
       - tapOn:
-          point: "90%,70%"
+          point: "80%,70%"
 
-# Mute/unmute 5 times
+# Mute/unmute repeatedly and assert the button label flips each time
 - repeat:
     times: 5
     commands:
       - tapOn: "Mute"
       - extendedWaitUntil:
-          visible: "Muted"
+          visible: "Unmute"
           timeout: ${TIMEOUT}
-      - tapOn: "Mute"
+      - tapOn: "Unmute"
       - extendedWaitUntil:
-          notVisible: "Muted"
+          visible: "Mute"
           timeout: ${TIMEOUT}
 
-# Final state: unmuted and volume label visible
-- assertNotVisible: "Muted"
-- assertVisible: "Volume"
+# Final state: unmuted and playback volume label visible
+- assertNotVisible: "Unmute"
+- assertVisible: "Playback volume"
+- assertVisible: "Mute"
 - takeScreenshot: volume-mute-race-final

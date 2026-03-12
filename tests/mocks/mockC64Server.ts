@@ -10,6 +10,7 @@ import * as http from "node:http";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { getMockConfigPayload, setMockConfigLoader } from "../../src/lib/mock/mockConfig.js";
 import { loadConfigYaml } from "../../src/lib/mock/mockConfigLoader.node.js";
+import { loadMockTimingProfile, resolveMockTimingClassId, resolveMockTimingDelayMs } from "./mockTimingProfile";
 
 // Set the full YAML loader for tests
 setMockConfigLoader(loadConfigYaml);
@@ -17,7 +18,7 @@ setMockConfigLoader(loadConfigYaml);
 export interface MockC64Server {
   baseUrl: string;
   close: () => Promise<void>;
-  requests: Array<{ method: string; url: string }>;
+  requests: MockRequestRecord[];
   sidplayRequests: Array<{
     method: string;
     url: string;
@@ -32,6 +33,17 @@ export interface MockC64Server {
   isReachable: () => boolean;
   getFaultMode: () => FaultMode;
 }
+
+export type MockRequestRecord = {
+  requestId: number;
+  method: string;
+  url: string;
+  timingClass: string;
+  plannedDelayMs: number;
+  receivedAtMs: number;
+  startedProcessingAtMs: number | null;
+  completedAtMs: number | null;
+};
 
 export type FaultMode = "none" | "timeout" | "refused" | "auth" | "slow";
 
@@ -103,7 +115,8 @@ export async function createMockC64Server(
   initial: Record<string, Record<string, string | number | ConfigItemState>> = {},
   itemDetails: ItemDetailsState = {},
 ): Promise<MockC64Server> {
-  const requests: Array<{ method: string; url: string }> = [];
+  const timingProfile = await loadMockTimingProfile();
+  const requests: MockRequestRecord[] = [];
   const sidplayRequests: Array<{
     method: string;
     url: string;
@@ -114,6 +127,7 @@ export async function createMockC64Server(
   let faultMode: FaultMode = "none";
   let latencyMs: number | null = null;
   let responseQueue = Promise.resolve();
+  let requestSequence = 0;
   // Increments each time the jiffy clock address is read, so liveness checks
   // see an advancing clock and treat the machine as healthy.
   let jiffyCallCount = 0;
@@ -224,9 +238,19 @@ export async function createMockC64Server(
   const server = http.createServer((req: IncomingMessage, res: ServerResponse) => {
     const method = req.method ?? "GET";
     const url = req.url ?? "/";
-    requests.push({ method, url });
-
     const parsed = new URL(url, "http://127.0.0.1");
+    const requestId = ++requestSequence;
+    const requestRecord: MockRequestRecord = {
+      requestId,
+      method,
+      url,
+      timingClass: resolveMockTimingClassId(timingProfile, method, parsed.pathname),
+      plannedDelayMs: 0,
+      receivedAtMs: Date.now(),
+      startedProcessingAtMs: null,
+      completedAtMs: null,
+    };
+    requests.push(requestRecord);
 
     const corsHeaders = {
       "Access-Control-Allow-Origin": "*",
@@ -236,19 +260,28 @@ export async function createMockC64Server(
 
     const respond = (handler: () => void) => {
       if (faultMode === "refused") {
+        requestRecord.completedAtMs = Date.now();
         req.socket.destroy();
         return;
       }
-      const timeoutDelayMs = Math.max(latencyMs ?? 0, 1500);
-      const delayMs =
-        faultMode === "timeout" ? timeoutDelayMs : faultMode === "slow" ? (latencyMs ?? 300) : (latencyMs ?? 0);
+      const delayMs = resolveMockTimingDelayMs({
+        profile: timingProfile,
+        method,
+        pathname: parsed.pathname,
+        requestSequence: requestId,
+        faultMode,
+        latencyOverrideMs: latencyMs,
+      });
+      requestRecord.plannedDelayMs = delayMs;
       responseQueue = responseQueue.then(
         () =>
           new Promise<void>((resolve) => {
             const run = () => {
+              requestRecord.startedProcessingAtMs = Date.now();
               if (!res.writableEnded) {
                 handler();
               }
+              requestRecord.completedAtMs = Date.now();
               resolve();
             };
             if (delayMs > 0) {
@@ -543,6 +576,7 @@ export async function createMockC64Server(
         getState: () => clone(state),
         resetState: () => {
           state = clone(defaults);
+          syncAllDriveStateFromConfig();
         },
         setReachable: (next) => {
           reachable = next;

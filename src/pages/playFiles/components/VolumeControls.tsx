@@ -20,6 +20,7 @@ export type VolumeControlsProps = {
   onVolumeChange: (value: number[]) => void;
   onVolumeChangeAsync: (value: number) => void;
   onVolumeCommit: (value: number) => void;
+  previewIntervalMs: number;
   volumeLabel: string;
   volumeValueFormatter?: (value: number) => string;
 };
@@ -34,6 +35,7 @@ export const VolumeControls = ({
   onVolumeChange,
   onVolumeChangeAsync,
   onVolumeCommit,
+  previewIntervalMs,
   volumeLabel,
   volumeValueFormatter,
 }: VolumeControlsProps) => (
@@ -63,7 +65,7 @@ export const VolumeControls = ({
           onValueChange={onVolumeChange}
           onValueChangeAsync={onVolumeChangeAsync}
           onValueCommitAsync={onVolumeCommit}
-          asyncThrottleMs={200}
+          asyncThrottleMs={previewIntervalMs}
           valueFormatter={volumeValueFormatter}
           disabled={!canControlVolume}
           data-testid="volume-slider"

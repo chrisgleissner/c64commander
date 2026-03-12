@@ -10,6 +10,10 @@ C64 Commander is a companion app for the C64 Ultimate. It provides configuration
 - Easily swap disks.
 - Use songlengths.md5 or songlengths.txt to apply SID duration metadata in playlists.
 
+## Diagnostics
+
+- Diagnostics screenshots: [Diagnostics screenshot set](diagnostics/index.md)
+
 ## Support
 
 - Email: [apps@gleissner.uk](mailto:apps@gleissner.uk)

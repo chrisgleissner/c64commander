@@ -1,0 +1,154 @@
+{
+  "version": 1,
+  "seed": 19,
+  "defaultClassId": "default",
+  "faults": {
+    "slowExtraDelayMs": 180,
+    "slowJitterRangeMs": 70,
+    "timeoutMinimumDelayMs": 1500
+  },
+  "classes": {
+    "probe": {
+      "baseDelayMs": 35,
+      "jitterRangeMs": 12,
+      "jitterSeed": 1
+    },
+    "configRead": {
+      "baseDelayMs": 55,
+      "jitterRangeMs": 18,
+      "jitterSeed": 2
+    },
+    "configWrite": {
+      "baseDelayMs": 95,
+      "jitterRangeMs": 24,
+      "jitterSeed": 3
+    },
+    "machineControl": {
+      "baseDelayMs": 85,
+      "jitterRangeMs": 22,
+      "jitterSeed": 4
+    },
+    "memoryRead": {
+      "baseDelayMs": 45,
+      "jitterRangeMs": 14,
+      "jitterSeed": 5
+    },
+    "memoryWrite": {
+      "baseDelayMs": 70,
+      "jitterRangeMs": 20,
+      "jitterSeed": 6
+    },
+    "driveAction": {
+      "baseDelayMs": 90,
+      "jitterRangeMs": 28,
+      "jitterSeed": 7
+    },
+    "runner": {
+      "baseDelayMs": 110,
+      "jitterRangeMs": 32,
+      "jitterSeed": 8
+    },
+    "streamControl": {
+      "baseDelayMs": 80,
+      "jitterRangeMs": 20,
+      "jitterSeed": 9
+    },
+    "default": {
+      "baseDelayMs": 60,
+      "jitterRangeMs": 16,
+      "jitterSeed": 10
+    }
+  },
+  "rules": [
+    {
+      "methods": ["OPTIONS"],
+      "pathType": "prefix",
+      "path": "/",
+      "timingClass": "probe"
+    },
+    {
+      "methods": ["GET"],
+      "pathType": "exact",
+      "path": "/v1/info",
+      "timingClass": "probe"
+    },
+    {
+      "methods": ["GET"],
+      "pathType": "exact",
+      "path": "/v1/version",
+      "timingClass": "probe"
+    },
+    {
+      "methods": ["GET"],
+      "pathType": "exact",
+      "path": "/v1/configs",
+      "timingClass": "configRead"
+    },
+    {
+      "methods": ["POST"],
+      "pathType": "exact",
+      "path": "/v1/configs",
+      "timingClass": "configWrite"
+    },
+    {
+      "methods": ["GET"],
+      "pathType": "prefix",
+      "path": "/v1/configs/",
+      "timingClass": "configRead"
+    },
+    {
+      "methods": ["PUT"],
+      "pathType": "prefix",
+      "path": "/v1/configs/",
+      "timingClass": "configWrite"
+    },
+    {
+      "methods": ["PUT"],
+      "pathType": "prefix",
+      "path": "/v1/configs:",
+      "timingClass": "configWrite"
+    },
+    {
+      "methods": ["GET"],
+      "pathType": "exact",
+      "path": "/v1/drives",
+      "timingClass": "driveAction"
+    },
+    {
+      "methods": ["PUT", "POST"],
+      "pathType": "prefix",
+      "path": "/v1/drives/",
+      "timingClass": "driveAction"
+    },
+    {
+      "methods": ["PUT", "POST"],
+      "pathType": "prefix",
+      "path": "/v1/runners:",
+      "timingClass": "runner"
+    },
+    {
+      "methods": ["GET"],
+      "pathType": "exact",
+      "path": "/v1/machine:readmem",
+      "timingClass": "memoryRead"
+    },
+    {
+      "methods": ["PUT", "POST"],
+      "pathType": "exact",
+      "path": "/v1/machine:writemem",
+      "timingClass": "memoryWrite"
+    },
+    {
+      "methods": ["PUT"],
+      "pathType": "prefix",
+      "path": "/v1/machine:",
+      "timingClass": "machineControl"
+    },
+    {
+      "methods": ["PUT"],
+      "pathType": "prefix",
+      "path": "/v1/streams/",
+      "timingClass": "streamControl"
+    }
+  ]
+}

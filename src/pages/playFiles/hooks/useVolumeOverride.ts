@@ -38,9 +38,10 @@ type PlaybackMixerWrite = {
 interface UseVolumeOverrideProps {
   isPlaying: boolean;
   isPaused: boolean;
+  previewIntervalMs: number;
 }
 
-export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProps) {
+export function useVolumeOverride({ isPlaying, isPaused, previewIntervalMs }: UseVolumeOverrideProps) {
   const { status } = useC64Connection();
   const updateConfigBatch = useC64UpdateConfigBatch();
 
@@ -516,17 +517,18 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
       if (volumeMuted) return;
       const now = Date.now();
       const lastSentAt = lastPreviewSentAtRef.current;
-      if (lastSentAt !== null && now - lastSentAt < 200) {
-        addLog("debug", "Play volume preview suppressed by 200ms rate limit", {
+      if (lastSentAt !== null && now - lastSentAt < previewIntervalMs) {
+        addLog("debug", "Play volume preview suppressed by configured rate limit", {
           index: nextIndex,
           elapsedMs: now - lastSentAt,
+          previewIntervalMs,
         });
         return;
       }
       lastPreviewSentAtRef.current = now;
       void sendVolumeWrite(nextIndex, "preview");
     },
-    [sendVolumeWrite, volumeMuted],
+    [previewIntervalMs, sendVolumeWrite, volumeMuted],
   );
 
   const handleVolumeCommit = useCallback(

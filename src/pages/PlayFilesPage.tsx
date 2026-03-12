@@ -45,6 +45,7 @@ import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 import { prepareDirectoryInput } from "@/lib/sourceNavigation/localSourcesStore";
 
 import { buildEnabledSidMuteUpdates } from "@/lib/config/sidVolumeControl";
+import { APP_SETTINGS_KEYS, loadVolumeSliderPreviewIntervalMs } from "@/lib/config/appSettings";
 import { getPlatform, isNativePlatform } from "@/lib/native/platform";
 import { FolderPicker } from "@/lib/native/folderPicker";
 import { redactTreeUri } from "@/lib/native/safUtils";
@@ -167,6 +168,9 @@ export default function PlayFilesPage() {
   const addItemsOverlayActiveRef = useRef(false);
   const [addItemsSurface, setAddItemsSurface] = useState<"dialog" | "page">("dialog");
   const { limit: listPreviewLimit } = useListPreviewLimit();
+  const [volumeSliderPreviewIntervalMs, setVolumeSliderPreviewIntervalMs] = useState(
+    loadVolumeSliderPreviewIntervalMs(),
+  );
   const isAndroid = getPlatform() === "android" && isNativePlatform();
   const trace = useActionTrace("PlayFilesPage");
 
@@ -193,7 +197,7 @@ export default function PlayFilesPage() {
     handleToggleMute,
     resumingFromPauseRef,
     ensureUnmuted,
-  } = useVolumeOverride({ isPlaying, isPaused });
+  } = useVolumeOverride({ isPlaying, isPaused, previewIntervalMs: volumeSliderPreviewIntervalMs });
   const volumeIndex = volumeState.index;
   const volumeMuted = volumeState.muted;
 
@@ -217,6 +221,17 @@ export default function PlayFilesPage() {
 
   useEffect(() => {
     prepareDirectoryInput(localSourceInputRef.current);
+  }, []);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent).detail as { key?: string } | undefined;
+      if (detail?.key !== APP_SETTINGS_KEYS.VOLUME_SLIDER_PREVIEW_INTERVAL_MS_KEY) return;
+      setVolumeSliderPreviewIntervalMs(loadVolumeSliderPreviewIntervalMs());
+    };
+
+    window.addEventListener("c64u-app-settings-updated", handler as EventListener);
+    return () => window.removeEventListener("c64u-app-settings-updated", handler as EventListener);
   }, []);
 
   const enqueuePlayTransition = useCallback(async <T,>(task: () => Promise<T>) => {
@@ -1065,6 +1080,7 @@ export default function PlayFilesPage() {
                 onVolumeChange={handleVolumeLocalChange}
                 onVolumeChangeAsync={handleVolumeAsyncChange}
                 onVolumeCommit={(value) => void handleVolumeCommit(value)}
+                previewIntervalMs={volumeSliderPreviewIntervalMs}
                 volumeLabel={volumeLabel}
                 volumeValueFormatter={(value) => volumeSteps[Math.round(value)]?.label ?? "—"}
               />

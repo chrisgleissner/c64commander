@@ -78,6 +78,7 @@ import { getHvscBaseUrl, getHvscBaseUrlOverride, setHvscBaseUrlOverride } from "
 import {
   clampConfigWriteIntervalMs,
   clampDiscoveryProbeTimeoutMs,
+  clampVolumeSliderPreviewIntervalMs,
   loadConfigWriteIntervalMs,
   clampBackgroundRediscoveryIntervalMs,
   clampStartupDiscoveryWindowMs,
@@ -87,6 +88,7 @@ import {
   loadStartupDiscoveryWindowMs,
   loadDebugLoggingEnabled,
   loadDiskAutostartMode,
+  loadVolumeSliderPreviewIntervalMs,
   saveAutomaticDemoModeEnabled,
   saveBackgroundRediscoveryIntervalMs,
   saveDiscoveryProbeTimeoutMs,
@@ -94,6 +96,7 @@ import {
   saveConfigWriteIntervalMs,
   saveDebugLoggingEnabled,
   saveDiskAutostartMode,
+  saveVolumeSliderPreviewIntervalMs,
   type DiskAutostartMode,
 } from "@/lib/config/appSettings";
 import {
@@ -179,6 +182,9 @@ export default function SettingsPage() {
   const [configWriteIntervalMs, setConfigWriteIntervalMs] = useState(loadConfigWriteIntervalMs());
   const [automaticDemoModeEnabled, setAutomaticDemoModeEnabled] = useState(loadAutomaticDemoModeEnabled());
   const [diskAutostartMode, setDiskAutostartMode] = useState<DiskAutostartMode>(loadDiskAutostartMode());
+  const [volumeSliderPreviewIntervalMs, setVolumeSliderPreviewIntervalMs] = useState(
+    loadVolumeSliderPreviewIntervalMs(),
+  );
   const [startupDiscoveryWindowInput, setStartupDiscoveryWindowInput] = useState(
     String(loadStartupDiscoveryWindowMs() / 1000),
   );
@@ -283,6 +289,9 @@ export default function SettingsPage() {
       }
       if (detail.key === "c64u_disk_autostart_mode") {
         setDiskAutostartMode(loadDiskAutostartMode());
+      }
+      if (detail.key === "c64u_volume_slider_preview_interval_ms") {
+        setVolumeSliderPreviewIntervalMs(loadVolumeSliderPreviewIntervalMs());
       }
     };
     window.addEventListener("c64u-app-settings-updated", handler);
@@ -974,6 +983,34 @@ export default function SettingsPage() {
               />
               <p className="text-xs text-muted-foreground">
                 Controls how many playlist or disk items are shown before opening View all. Default is 50.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="volume-slider-preview-interval" className="text-sm">
+                Volume slider preview interval (milliseconds)
+              </Label>
+              <Input
+                id="volume-slider-preview-interval"
+                type="number"
+                min={100}
+                max={500}
+                step={10}
+                value={volumeSliderPreviewIntervalMs}
+                onChange={(event) => {
+                  const parsed = Number(event.target.value);
+                  if (Number.isFinite(parsed)) {
+                    setVolumeSliderPreviewIntervalMs(clampVolumeSliderPreviewIntervalMs(parsed));
+                  }
+                }}
+                onBlur={() => saveVolumeSliderPreviewIntervalMs(volumeSliderPreviewIntervalMs)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") saveVolumeSliderPreviewIntervalMs(volumeSliderPreviewIntervalMs);
+                }}
+              />
+              <p className="text-xs text-muted-foreground">
+                Controls how often drag previews are sent while the playback volume slider is moving. Default 200 ms.
+                Range 100–500 ms.
               </p>
             </div>
 

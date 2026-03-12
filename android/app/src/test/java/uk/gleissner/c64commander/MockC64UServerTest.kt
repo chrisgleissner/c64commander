@@ -11,11 +11,14 @@ package uk.gleissner.c64commander
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.net.HttpURLConnection
 import java.net.Socket
 import java.net.URL
 import java.util.Arrays
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 class MockC64UServerTest {
   private fun readBody(connection: HttpURLConnection): String {
@@ -236,7 +239,86 @@ class MockC64UServerTest {
     })
 
     val state = MockC64UState.fromPayload(config)
-    val server = MockC64UServer(state)
+    val timingProfile = MockTimingProfile.fromJson(
+      JSONObject(
+        """
+        {
+          "seed": 19,
+          "defaultClassId": "default",
+          "faults": {
+            "slowExtraDelayMs": 180,
+            "slowJitterRangeMs": 70,
+            "timeoutMinimumDelayMs": 1500
+          },
+          "classes": {
+            "default": {
+              "baseDelayMs": 50,
+              "jitterRangeMs": 0,
+              "jitterSeed": 1
+            }
+          },
+          "rules": []
+        }
+        """.trimIndent(),
+      ),
+    )
+    val server = MockC64UServer(state, timingProfile)
     assertNotNull("Server should not be null", server)
+  }
+
+  @Test
+  fun serializesConcurrentRequestsUsingSharedTimingProfile() {
+    val config = JSONObject().apply {
+      put("general", JSONObject().apply { put("baseUrl", "http://localhost") })
+    }
+    val state = MockC64UState.fromPayload(config)
+    val timingProfile = MockTimingProfile.fromJson(
+      JSONObject(
+        """
+        {
+          "seed": 19,
+          "defaultClassId": "default",
+          "faults": {
+            "slowExtraDelayMs": 180,
+            "slowJitterRangeMs": 70,
+            "timeoutMinimumDelayMs": 1500
+          },
+          "classes": {
+            "default": {
+              "baseDelayMs": 90,
+              "jitterRangeMs": 0,
+              "jitterSeed": 1
+            }
+          },
+          "rules": []
+        }
+        """.trimIndent(),
+      ),
+    )
+    val server = MockC64UServer(state, timingProfile)
+    server.start()
+    waitForServer(server)
+
+    val executor = Executors.newFixedThreadPool(2)
+    val startedAt = System.nanoTime()
+    val first = executor.submit<Int> {
+      val connection = URL("${server.baseUrl}/v1/info").openConnection() as HttpURLConnection
+      connection.requestMethod = "GET"
+      connection.responseCode
+    }
+    val second = executor.submit<Int> {
+      val connection = URL("${server.baseUrl}/v1/version").openConnection() as HttpURLConnection
+      connection.requestMethod = "GET"
+      connection.responseCode
+    }
+
+    assertEquals(200, first.get(5, TimeUnit.SECONDS))
+    assertEquals(200, second.get(5, TimeUnit.SECONDS))
+    val elapsedMs = (System.nanoTime() - startedAt) / 1_000_000
+
+    executor.shutdownNow()
+    server.stop()
+
+    assertTrue("Expected serialized handling to take at least 160 ms, got $elapsedMs ms", elapsedMs >= 160)
   }
 }

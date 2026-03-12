@@ -19,6 +19,7 @@ vi.mock("@/lib/config/appSettings", () => ({
   loadBackgroundRediscoveryIntervalMs: vi.fn(),
   loadDiscoveryProbeTimeoutMs: vi.fn(),
   loadDiskAutostartMode: vi.fn(),
+  loadVolumeSliderPreviewIntervalMs: vi.fn(),
 
   saveDebugLoggingEnabled: vi.fn(),
   saveConfigWriteIntervalMs: vi.fn(),
@@ -27,11 +28,13 @@ vi.mock("@/lib/config/appSettings", () => ({
   saveBackgroundRediscoveryIntervalMs: vi.fn(),
   saveDiscoveryProbeTimeoutMs: vi.fn(),
   saveDiskAutostartMode: vi.fn(),
+  saveVolumeSliderPreviewIntervalMs: vi.fn(),
 
   clampConfigWriteIntervalMs: (v: number) => v,
   clampStartupDiscoveryWindowMs: (v: number) => v,
   clampBackgroundRediscoveryIntervalMs: (v: number) => v,
   clampDiscoveryProbeTimeoutMs: (v: number) => v,
+  clampVolumeSliderPreviewIntervalMs: (v: number) => v,
 }));
 
 vi.mock("@/lib/config/deviceSafetySettings", () => ({
@@ -61,6 +64,7 @@ describe("settingsTransfer", () => {
   describe("exportSettingsSnapshot", () => {
     it("collects all settings", () => {
       vi.mocked(appSettings.loadDebugLoggingEnabled).mockReturnValue(true);
+      vi.mocked(appSettings.loadVolumeSliderPreviewIntervalMs).mockReturnValue(250);
       vi.mocked(deviceSafetySettings.loadDeviceSafetyConfig).mockReturnValue({
         mode: "RELAXED",
         // other props... spread mock return
@@ -69,6 +73,7 @@ describe("settingsTransfer", () => {
       const result = exportSettingsSnapshot();
       expect(result.version).toBe(1);
       expect(result.appSettings.debugLoggingEnabled).toBe(true);
+      expect(result.appSettings.volumeSliderPreviewIntervalMs).toBe(250);
       expect(result.deviceSafety.mode).toBe("RELAXED");
     });
   });
@@ -84,6 +89,7 @@ describe("settingsTransfer", () => {
         backgroundRediscoveryIntervalMs: 60000,
         discoveryProbeTimeoutMs: 2000,
         diskAutostartMode: "dma",
+        volumeSliderPreviewIntervalMs: 200,
       },
       deviceSafety: {
         mode: "BALANCED",
@@ -108,6 +114,7 @@ describe("settingsTransfer", () => {
       expect(result).toEqual({ ok: true });
 
       expect(appSettings.saveDebugLoggingEnabled).toHaveBeenCalledWith(true);
+      expect(appSettings.saveVolumeSliderPreviewIntervalMs).toHaveBeenCalledWith(200);
       expect(deviceSafetySettings.saveDeviceSafetyMode).toHaveBeenCalledWith("BALANCED");
     });
 
@@ -188,6 +195,7 @@ describe("settingsTransfer", () => {
         ["backgroundRediscoveryIntervalMs", "bad", "backgroundRediscoveryIntervalMs must be a number."],
         ["discoveryProbeTimeoutMs", "notanumber", "discoveryProbeTimeoutMs must be a number."],
         ["diskAutostartMode", "usb", "diskAutostartMode must be kernal or dma."],
+        ["volumeSliderPreviewIntervalMs", "slow", "volumeSliderPreviewIntervalMs must be a number."],
       ];
       for (const [field, value, expectedError] of fields) {
         const invalid = {

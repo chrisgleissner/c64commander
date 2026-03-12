@@ -23,6 +23,7 @@ const renderVolumeControls = (volumeMuted: boolean) =>
       onVolumeChange={vi.fn()}
       onVolumeChangeAsync={vi.fn()}
       onVolumeCommit={vi.fn()}
+      previewIntervalMs={200}
       volumeLabel="0 dB"
     />,
   );

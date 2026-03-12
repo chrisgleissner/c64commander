@@ -741,6 +741,10 @@ test.describe("App screenshots", () => {
 
       const actionsTab = dialog.getByRole("tab", { name: "Actions" });
       await actionsTab.click();
+      await expect(dialog.getByRole("button", { name: "Share All", exact: true })).toBeVisible();
+      await expect(dialog.getByRole("button", { name: "Clear All", exact: true })).toBeVisible();
+      await expect(dialog.getByTestId("diagnostics-share-actions")).toBeVisible();
+      await captureScreenshot(page, testInfo, "diagnostics/00-controls.png");
       const actionSummary = dialog.getByTestId("action-summary-COR-1000");
       await expect(actionSummary).toBeVisible();
       await actionSummary.locator("summary").click();

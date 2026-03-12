@@ -211,6 +211,18 @@ VS Code workspace settings in `.vscode/settings.json` enable:
 - Android plugins/services mirror structured logs to JS diagnostics via `DiagnosticsBridge`.
 - Native logs continue to write to logcat and are additionally forwarded with trace-context fields when available.
 
+## Mock timing profile
+
+- The external Node mock server and the Android in-app demo server now share one ordered timing profile definition from `android/app/src/main/assets/mock-timing-profile.json`.
+- The profile defines endpoint classes, deterministic jitter ranges, and fallback fault-mode timing so Playwright and Android demo mode observe the same request pacing model.
+- Both implementations serialize request handling through a single request-processing lane. This preserves request order under concurrent client activity and makes rate-limit regressions reproducible.
+
+## Playback volume preview interval
+
+- Playback volume drag previews use the persisted app setting `c64u_volume_slider_preview_interval_ms`.
+- Default: `200` ms. Allowed range: `100`–`500` ms.
+- The Play page uses the same interval for slider preview coalescing and REST preview suppression, so a long interval deterministically collapses rapid drags into a single final commit.
+
 ## build - One-stop build tool
 
 All common development tasks use `./build`:

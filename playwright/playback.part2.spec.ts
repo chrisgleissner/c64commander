@@ -1190,6 +1190,63 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "volume-updated");
   });
 
+  test("rapid volume drag coalesces into one write when preview interval is long", async ({ page }: { page: Page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem("c64u_volume_slider_preview_interval_ms", "500");
+    });
+
+    await page.request.post(`${server.baseUrl}/v1/configs`, {
+      data: {
+        "SID Sockets Configuration": {
+          "SID Socket 1": "Enabled",
+          "SID Socket 2": "Enabled",
+        },
+        "SID Addressing": {
+          "UltiSID 1 Address": "$D400",
+          "UltiSID 2 Address": "$D420",
+        },
+      },
+    });
+
+    await page.goto("/play");
+
+    const slider = page.getByTestId("volume-slider");
+    await expect(slider).toBeVisible();
+
+    const writesBeforeDrag = server.requests.filter(
+      (req) => req.method === "POST" && req.url.startsWith("/v1/configs"),
+    ).length;
+
+    const box = await slider.boundingBox();
+    expect(box).not.toBeNull();
+    if (box) {
+      const y = box.y + box.height / 2;
+      await page.mouse.move(box.x + 4, y);
+      await page.mouse.down();
+      await page.mouse.move(box.x + box.width * 0.25, y);
+      await page.waitForTimeout(60);
+      await page.mouse.move(box.x + box.width * 0.5, y);
+      await page.waitForTimeout(60);
+      await page.mouse.move(box.x + box.width * 0.75, y);
+      await page.waitForTimeout(60);
+      await page.mouse.move(box.x + box.width - 4, y);
+      await page.mouse.up();
+    }
+
+    await waitForRequests(
+      () =>
+        server.requests.filter((req) => req.method === "POST" && req.url.startsWith("/v1/configs")).length >
+        writesBeforeDrag,
+    );
+
+    await page.waitForTimeout(250);
+
+    const writesAfterDrag = server.requests.filter((req) => req.method === "POST" && req.url.startsWith("/v1/configs"));
+    const dragWrites = writesAfterDrag.slice(writesBeforeDrag);
+    expect(dragWrites).toHaveLength(1);
+    expect(dragWrites[0]?.timingClass).toBe("configWrite");
+  });
+
   test("unmute skips SID volumes disabled while muted", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.request.post(`${server.baseUrl}/v1/configs`, {
       data: {

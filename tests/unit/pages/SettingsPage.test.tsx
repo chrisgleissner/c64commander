@@ -33,6 +33,7 @@ import {
   loadBackgroundRediscoveryIntervalMs,
   loadDiscoveryProbeTimeoutMs,
   loadDiskAutostartMode,
+  loadVolumeSliderPreviewIntervalMs,
 } from "@/lib/config/appSettings";
 
 vi.mock("framer-motion", () => ({
@@ -245,6 +246,7 @@ vi.mock("@/lib/config/appSettings", () => ({
   loadStartupDiscoveryWindowMs: vi.fn(() => 3000),
   loadDebugLoggingEnabled: vi.fn(() => true),
   loadDiskAutostartMode: vi.fn(() => "kernal"),
+  loadVolumeSliderPreviewIntervalMs: vi.fn(() => 200),
   saveAutomaticDemoModeEnabled: vi.fn(),
   saveBackgroundRediscoveryIntervalMs: vi.fn(),
   saveDiscoveryProbeTimeoutMs: vi.fn(),
@@ -252,6 +254,7 @@ vi.mock("@/lib/config/appSettings", () => ({
   saveConfigWriteIntervalMs: vi.fn(),
   saveDebugLoggingEnabled: vi.fn(),
   saveDiskAutostartMode: vi.fn(),
+  saveVolumeSliderPreviewIntervalMs: vi.fn(),
 }));
 
 vi.mock("@/lib/hvsc/hvscReleaseService", () => ({
@@ -1047,6 +1050,7 @@ describe("SettingsPage", () => {
     vi.mocked(loadBackgroundRediscoveryIntervalMs).mockClear();
     vi.mocked(loadDiscoveryProbeTimeoutMs).mockClear();
     vi.mocked(loadDiskAutostartMode).mockClear();
+    vi.mocked(loadVolumeSliderPreviewIntervalMs).mockClear();
 
     const keys = [
       // debug_logging uses a direct state setter (no load function)
@@ -1057,6 +1061,7 @@ describe("SettingsPage", () => {
       "c64u_background_rediscovery_interval_ms",
       "c64u_discovery_probe_timeout_ms",
       "c64u_disk_autostart_mode",
+      "c64u_volume_slider_preview_interval_ms",
     ];
 
     for (const key of keys) {
@@ -1075,6 +1080,7 @@ describe("SettingsPage", () => {
     expect(vi.mocked(loadBackgroundRediscoveryIntervalMs)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(loadDiscoveryProbeTimeoutMs)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(loadDiskAutostartMode)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(loadVolumeSliderPreviewIntervalMs)).toHaveBeenCalledTimes(1);
   });
 
   it("ignores c64u-app-settings-updated events with no key", async () => {

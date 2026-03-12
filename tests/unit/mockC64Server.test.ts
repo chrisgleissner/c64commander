@@ -232,6 +232,28 @@ describe("createMockC64Server", () => {
     server.setFaultMode("none");
   });
 
+  it("serializes concurrent requests through the shared timing queue", async () => {
+    const firstRequestCount = server.requests.length;
+
+    await Promise.all([
+      requestJson(`${server.baseUrl}/v1/info`),
+      requestJson(`${server.baseUrl}/v1/configs`),
+      requestJson(`${server.baseUrl}/v1/drives`),
+    ]);
+
+    const recentRequests = server.requests
+      .slice(firstRequestCount)
+      .sort((left, right) => left.requestId - right.requestId);
+    expect(recentRequests).toHaveLength(3);
+    expect(recentRequests.map((entry) => entry.timingClass)).toEqual(["probe", "configRead", "driveAction"]);
+    expect(recentRequests.every((entry) => entry.plannedDelayMs > 0)).toBe(true);
+    expect(recentRequests.every((entry) => entry.startedProcessingAtMs !== null && entry.completedAtMs !== null)).toBe(
+      true,
+    );
+    expect((recentRequests[1].startedProcessingAtMs ?? 0) >= (recentRequests[0].completedAtMs ?? 0)).toBe(true);
+    expect((recentRequests[2].startedProcessingAtMs ?? 0) >= (recentRequests[1].completedAtMs ?? 0)).toBe(true);
+  });
+
   it("syncs drive state when configs update", async () => {
     // Drive A enabled check
     await requestJson(`${server.baseUrl}/v1/configs/Drive%20A%20Settings/Drive?value=Disabled`, { method: "PUT" });

@@ -147,6 +147,7 @@ HVSC download/ingest/browse/failure handling | Playwright + Unit + Maestro | `pl
 - Auto-advance depends on local timing and resume reconciliation; there is no authoritative runner-finished endpoint in the current REST surface.
 - Mixed-source playlists can lose local file access when SAF permissions or runtime file handles expire.
 - Pause/resume mutates both machine state and audio-mixer state, creating multi-request race windows.
+- Volume preview writes are intentionally coalesced and rate-limited by the persisted preview interval setting to avoid request storms during fast drags.
 - Disk playback mixes mount/reset/autostart behavior into playlist transitions.
 - HVSC actions are long-running and stateful across app sessions.
 
