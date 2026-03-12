@@ -536,10 +536,10 @@ export default function SettingsPage() {
     icon: React.ElementType;
     label: string;
   }[] = [
-      { value: "light", icon: Sun, label: "Light" },
-      { value: "dark", icon: Moon, label: "Dark" },
-      { value: "system", icon: Monitor, label: "System" },
-    ];
+    { value: "light", icon: Sun, label: "Light" },
+    { value: "dark", icon: Moon, label: "Dark" },
+    { value: "system", icon: Monitor, label: "System" },
+  ];
 
   const commitListPreviewLimit = () => {
     const parsed = Number(listPreviewInput);
@@ -693,8 +693,9 @@ export default function SettingsPage() {
                     { title: option.label },
                     "ThemeOption",
                   )}
-                  className={`flex flex-col items-center gap-2 p-4 rounded-lg border transition-colors ${isActive ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground"
-                    }`}
+                  className={`flex flex-col items-center gap-2 p-4 rounded-lg border transition-colors ${
+                    isActive ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground"
+                  }`}
                 >
                   <Icon className={`h-6 w-6 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
                   <span className={`text-sm ${isActive ? "font-medium" : ""}`}>{option.label}</span>
@@ -801,14 +802,15 @@ export default function SettingsPage() {
 
           {/* Connection Status */}
           <div
-            className={`p-3 rounded-lg text-sm break-words ${status.isConnected
+            className={`p-3 rounded-lg text-sm break-words ${
+              status.isConnected
                 ? "bg-success/10 text-success"
                 : isDemoActive
                   ? "bg-primary/10 text-primary"
                   : status.isConnecting
                     ? "bg-muted text-muted-foreground"
                     : "bg-destructive/10 text-destructive"
-              }`}
+            }`}
           >
             {status.isConnecting
               ? "Connecting..."

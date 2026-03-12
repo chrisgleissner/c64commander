@@ -28,7 +28,7 @@ test.describe("Settings diagnostics workflows", () => {
     await seedUiMocks(page, server.baseUrl);
 
     await page.addInitScript(() => {
-      window.addEventListener("c64u-logs-updated", () => { });
+      window.addEventListener("c64u-logs-updated", () => {});
 
       const logs = [
         {
