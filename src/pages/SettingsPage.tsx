@@ -545,10 +545,10 @@ export default function SettingsPage() {
     icon: React.ElementType;
     label: string;
   }[] = [
-      { value: "light", icon: Sun, label: "Light" },
-      { value: "dark", icon: Moon, label: "Dark" },
-      { value: "system", icon: Monitor, label: "System" },
-    ];
+    { value: "light", icon: Sun, label: "Light" },
+    { value: "dark", icon: Moon, label: "Dark" },
+    { value: "system", icon: Monitor, label: "System" },
+  ];
 
   const commitListPreviewLimit = () => {
     const parsed = Number(listPreviewInput);

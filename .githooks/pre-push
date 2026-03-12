@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+
+echo "Running coverage gate before push..."
+npm run coverage:gate

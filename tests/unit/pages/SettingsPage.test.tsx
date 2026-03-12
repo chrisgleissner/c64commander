@@ -16,12 +16,13 @@ import { discoverConnection } from "@/lib/connection/connectionManager";
 import { toast } from "@/hooks/use-toast";
 import { addErrorLog, clearLogs, getErrorLogs, getLogs } from "@/lib/logging";
 import { clearTraceEvents, getTraceEvents } from "@/lib/tracing/traceSession";
-import { shareDiagnosticsZip } from "@/lib/diagnostics/diagnosticsExport";
+import { shareAllDiagnosticsZip, shareDiagnosticsZip } from "@/lib/diagnostics/diagnosticsExport";
 import {
   saveAutomaticDemoModeEnabled,
   saveBackgroundRediscoveryIntervalMs,
   saveDebugLoggingEnabled,
   saveStartupDiscoveryWindowMs,
+  saveVolumeSliderPreviewIntervalMs,
 } from "@/lib/config/appSettings";
 import * as deviceSafetySettings from "@/lib/config/deviceSafetySettings";
 import { exportSettingsJson, importSettingsJson } from "@/lib/config/settingsTransfer";
@@ -177,6 +178,7 @@ vi.mock("@/lib/uiErrors", () => ({
 }));
 
 vi.mock("@/lib/diagnostics/diagnosticsExport", () => ({
+  shareAllDiagnosticsZip: vi.fn(),
   shareDiagnosticsZip: vi.fn(),
 }));
 
@@ -290,6 +292,7 @@ beforeEach(() => {
   vi.mocked(getLogs).mockReturnValue([]);
   vi.mocked(getErrorLogs).mockReturnValue([]);
   vi.mocked(getTraceEvents).mockReturnValue([]);
+  vi.mocked(shareAllDiagnosticsZip).mockReset();
   vi.mocked(shareDiagnosticsZip).mockReset();
 });
 
@@ -937,6 +940,42 @@ describe("SettingsPage", () => {
     });
   });
 
+  it("shares all diagnostics and reports share-all failures", async () => {
+    vi.mocked(shareAllDiagnosticsZip).mockImplementation(() => undefined);
+
+    renderSettingsPage();
+
+    fireEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
+    const dialog = await screen.findByRole("dialog");
+    const shareAllButton = within(dialog).getByRole("button", { name: /^share all$/i });
+
+    fireEvent.click(shareAllButton);
+
+    expect(shareAllDiagnosticsZip).toHaveBeenCalledWith(
+      expect.objectContaining({
+        "error-logs": expect.any(Array),
+        logs: expect.any(Array),
+        traces: expect.any(Array),
+        actions: expect.any(Array),
+      }),
+    );
+
+    vi.mocked(shareAllDiagnosticsZip).mockImplementation(() => {
+      throw new Error("share all failed");
+    });
+
+    fireEvent.click(shareAllButton);
+
+    await waitFor(() => {
+      expect(reportUserError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: "DIAGNOSTICS_EXPORT",
+          description: "share all failed",
+        }),
+      );
+    });
+  });
+
   it("requires confirmation when switching into relaxed safety mode", async () => {
     const saveSpy = vi.spyOn(deviceSafetySettings, "saveDeviceSafetyMode");
 
@@ -1107,6 +1146,25 @@ describe("SettingsPage", () => {
     fireEvent.blur(input);
 
     expect(setHvscBaseUrlOverride).toHaveBeenCalledWith("https://custom.hvsc.example.com");
+  });
+
+  it("saves the playback volume preview interval on blur and enter", () => {
+    renderSettingsPage();
+
+    vi.mocked(loadVolumeSliderPreviewIntervalMs).mockReturnValue(345);
+    window.dispatchEvent(
+      new CustomEvent("c64u-app-settings-updated", {
+        detail: { key: "c64u_volume_slider_preview_interval_ms" },
+      }),
+    );
+
+    const input = screen.getByLabelText(/volume slider preview interval/i);
+    fireEvent.change(input, { target: { value: "345" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    fireEvent.blur(input);
+
+    expect(saveVolumeSliderPreviewIntervalMs).toHaveBeenCalledWith(345);
+    expect(saveVolumeSliderPreviewIntervalMs).toHaveBeenCalledTimes(2);
   });
 
   it("handles HVSC base URL commit with empty value", () => {

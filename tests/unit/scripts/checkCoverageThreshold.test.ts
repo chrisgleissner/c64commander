@@ -18,6 +18,55 @@ const runScript = (cwd: string, env: Record<string, string> = {}) => {
 };
 
 describe("check-coverage-threshold", () => {
+  it("defaults both line and branch thresholds to 91 percent", () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), "coverage-default-threshold-"));
+    try {
+      mkdirSync(path.join(root, "coverage"), { recursive: true });
+      writeFileSync(
+        path.join(root, "coverage/lcov.info"),
+        [
+          "TN:",
+          "SF:src/file.ts",
+          "DA:1,1",
+          "DA:2,1",
+          "DA:3,1",
+          "DA:4,1",
+          "DA:5,1",
+          "DA:6,1",
+          "DA:7,1",
+          "DA:8,1",
+          "DA:9,1",
+          "DA:10,0",
+          "LF:10",
+          "LH:9",
+          "BRDA:1,0,0,1",
+          "BRDA:1,0,1,1",
+          "BRDA:2,0,0,1",
+          "BRDA:2,0,1,1",
+          "BRDA:3,0,0,1",
+          "BRDA:3,0,1,1",
+          "BRDA:4,0,0,1",
+          "BRDA:4,0,1,1",
+          "BRDA:5,0,0,1",
+          "BRDA:5,0,1,0",
+          "BRF:10",
+          "BRH:9",
+          "end_of_record",
+        ].join("\n"),
+        "utf8",
+      );
+
+      const result = runScript(root, {
+        COVERAGE_FILE: "coverage/lcov.info",
+      });
+
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain("Line coverage below minimum threshold: 90.00% < 91%");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it("passes when line and branch coverage satisfy thresholds", () => {
     const root = mkdtempSync(path.join(os.tmpdir(), "coverage-pass-"));
     try {
