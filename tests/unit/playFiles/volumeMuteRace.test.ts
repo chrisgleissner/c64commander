@@ -295,6 +295,8 @@ function shouldSkipVolumeWrite(opts: {
   allowKnownDeviceSkip?: boolean;
 }) {
   const { pending, knownDevice, requested, isDragging, allowKnownDeviceSkip = true } = opts;
+  const pendingMatchesRequestedState =
+    !pending || (pending.index === requested.index && pending.muted === requested.muted);
   if (pending && pending.index === requested.index && pending.muted === requested.muted) {
     return "pending" as const;
   }
@@ -303,7 +305,8 @@ function shouldSkipVolumeWrite(opts: {
     !isDragging &&
     knownDevice &&
     knownDevice.index === requested.index &&
-    knownDevice.muted === requested.muted
+    knownDevice.muted === requested.muted &&
+    pendingMatchesRequestedState
   ) {
     return "device" as const;
   }
@@ -361,6 +364,17 @@ describe("pending volume write protection", () => {
         requested: { index: 18, muted: false },
         isDragging: false,
         allowKnownDeviceSkip: false,
+      }),
+    ).toBeNull();
+  });
+
+  it("does not skip a commit back to the current device value while a different preview write is pending", () => {
+    expect(
+      shouldSkipVolumeWrite({
+        pending: { index: 27, muted: false },
+        knownDevice: { index: 18, muted: false },
+        requested: { index: 18, muted: false },
+        isDragging: false,
       }),
     ).toBeNull();
   });

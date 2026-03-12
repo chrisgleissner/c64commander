@@ -37,8 +37,8 @@
 ### 5. Documentation And Validation
 
 - [done] Update developer and user documentation for Share All export, export file naming, preview interval, and shared mock/demo timing architecture.
-- [in-progress] Run targeted tests, Playwright screenshots, Playwright suites, Maestro flows, coverage, lint, build, and ./build.
-- [in-progress] Confirm final artifacts and summarize evidence for all required deliverables.
+- [done] Run targeted tests, Playwright screenshots, Playwright suites, Maestro flows, coverage, lint, build, and ./build.
+- [done] Confirm final artifacts and summarize evidence for all required deliverables.
 
 ## Notes
 
@@ -47,4 +47,4 @@
 - Shared mock timing profile, diagnostics screenshot refresh, lint, targeted tests, full coverage, and direct build validation completed.
 - Physical-device latency measurement against a live C64U was completed on 2026-03-12 against hostname `c64u`, and the shared timing profile was recalibrated from those safe REST probes.
 - Follow-up timing investigation established that drive-mount latency is route-specific and synchronous: five rebooted live samples for `PUT /v1/drives/b:mount` measured about `753`-`766` ms, and observable `/v1/drives` state completion matched HTTP response timing.
-- `./build --skip-install` was blocked by an unrelated flaky Playwright proof on `playwright/buttonHighlightProof.spec.ts` for the `android-phone` project. A direct rerun of that proof passed on `PLAYWRIGHT_PORT=4174`.
+- Final validation is green: targeted Android playback throttling proof passes, fresh lint/build pass, `npm run test:coverage` passes at 90.92% branch coverage, and `./build` completes successfully.

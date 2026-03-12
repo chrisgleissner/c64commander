@@ -47,6 +47,14 @@ const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
 };
 
+const dispatchPlaybackResumeSignals = async (page: Page) => {
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event("focus"));
+    window.dispatchEvent(new Event("pageshow"));
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+};
+
 const seedPlaylistStorage = async (
   page: Page,
   items: Array<{
@@ -1210,9 +1218,7 @@ test.describe("Playback file browser", () => {
     await expect
       .poll(async () => {
         if (server.sidplayRequests.length === 1) {
-          await page.evaluate(() => {
-            document.dispatchEvent(new Event("visibilitychange"));
-          });
+          await dispatchPlaybackResumeSignals(page);
         }
         return server.sidplayRequests.length;
       })

@@ -190,9 +190,9 @@ export function useVolumeOverride({ isPlaying, isPaused, previewIntervalMs }: Us
       volumeUiTargetRef.current = muted
         ? null
         : {
-            index,
-            setAtMs: nextIntent.setAtMs,
-          };
+          index,
+          setAtMs: nextIntent.setAtMs,
+        };
     },
     [setPlaybackSyncIntent],
   );
@@ -280,6 +280,7 @@ export function useVolumeOverride({ isPlaying, isPaused, previewIntervalMs }: Us
   const queuePlaybackMixerWrite = useCallback(
     async (write: PlaybackMixerWrite) => {
       const pending = pendingVolumeWriteRef.current;
+      const pendingMatchesRequestedState = !pending || (pending.index === write.index && pending.muted === write.muted);
       if (pending && pending.index === write.index && pending.muted === write.muted) {
         addLog("debug", "Play volume write skipped while identical write is pending", {
           context: write.context,
@@ -295,7 +296,8 @@ export function useVolumeOverride({ isPlaying, isPaused, previewIntervalMs }: Us
         !isDraggingVolumeRef.current &&
         knownDevice &&
         knownDevice.index === write.index &&
-        knownDevice.muted === write.muted
+        knownDevice.muted === write.muted &&
+        pendingMatchesRequestedState
       ) {
         clearPendingVolumeWrite();
         addLog("debug", "Play volume write skipped because device already reflects requested state", {
@@ -442,7 +444,14 @@ export function useVolumeOverride({ isPlaying, isPaused, previewIntervalMs }: Us
       if (!target) return;
 
       const knownDevice = lastKnownDeviceVolumeRef.current;
-      if (knownDevice && knownDevice.index === nextIndex && knownDevice.muted === false) {
+      const pending = pendingVolumeWriteRef.current;
+      const pendingMatchesRequestedState = !pending || (pending.index === nextIndex && pending.muted === false);
+      if (
+        knownDevice &&
+        knownDevice.index === nextIndex &&
+        knownDevice.muted === false &&
+        pendingMatchesRequestedState
+      ) {
         clearPendingVolumeWrite();
         return;
       }
