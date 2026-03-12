@@ -44,6 +44,7 @@ const seedPlaylistStorage = async (
 const measureFlashDuration = async (target: Locator, trigger: () => Promise<void>) => {
   const durationPromise = target.evaluate((element, attr) => {
     return new Promise<number | null>((resolve) => {
+      const setAtAttr = `${attr}-set-at`;
       let startedAt: number | null = null;
       let deadlineTimer: number | null = null;
 
@@ -58,20 +59,20 @@ const measureFlashDuration = async (target: Locator, trigger: () => Promise<void
         const active = element.getAttribute(attr) === "true";
         if (active) {
           if (startedAt === null) {
-            startedAt = performance.now();
+            startedAt = Number(element.getAttribute(setAtAttr) ?? "0") || Date.now();
           }
           window.requestAnimationFrame(poll);
           return;
         }
         if (startedAt !== null) {
-          finish(performance.now() - startedAt);
+          finish(Date.now() - startedAt);
           return;
         }
         window.requestAnimationFrame(poll);
       };
 
       deadlineTimer = window.setTimeout(() => {
-        finish(startedAt === null ? null : performance.now() - startedAt);
+        finish(startedAt === null ? null : Date.now() - startedAt);
       }, 2000);
 
       poll();
