@@ -284,6 +284,107 @@ describe("convergence: rapid mute/unmute sequence", () => {
 });
 
 // ---------------------------------------------------------------------------
+// E. Pending-write protection: stale device state cannot roll back latest intent
+// ---------------------------------------------------------------------------
+
+function shouldSkipVolumeWrite(opts: {
+  pending: { index: number; muted: boolean } | null;
+  knownDevice: { index: number; muted: boolean } | null;
+  requested: { index: number; muted: boolean };
+  isDragging: boolean;
+  allowKnownDeviceSkip?: boolean;
+}) {
+  const { pending, knownDevice, requested, isDragging, allowKnownDeviceSkip = true } = opts;
+  if (pending && pending.index === requested.index && pending.muted === requested.muted) {
+    return "pending" as const;
+  }
+  if (
+    allowKnownDeviceSkip &&
+    !isDragging &&
+    knownDevice &&
+    knownDevice.index === requested.index &&
+    knownDevice.muted === requested.muted
+  ) {
+    return "device" as const;
+  }
+  return null;
+}
+
+function shouldDeferExternalSync(opts: {
+  pending: { index: number; muted: boolean } | null;
+  device: { index: number; muted: boolean };
+}) {
+  const { pending, device } = opts;
+  if (!pending) return false;
+  return pending.index !== device.index || pending.muted !== device.muted;
+}
+
+describe("pending volume write protection", () => {
+  it("skips an identical write while the same write is still pending", () => {
+    expect(
+      shouldSkipVolumeWrite({
+        pending: { index: 27, muted: false },
+        knownDevice: null,
+        requested: { index: 27, muted: false },
+        isDragging: true,
+      }),
+    ).toBe("pending");
+  });
+
+  it("skips a redundant write when the device already reflects the requested state", () => {
+    expect(
+      shouldSkipVolumeWrite({
+        pending: null,
+        knownDevice: { index: 10, muted: true },
+        requested: { index: 10, muted: true },
+        isDragging: false,
+      }),
+    ).toBe("device");
+  });
+
+  it("does not treat matching device state as authoritative while the user is dragging", () => {
+    expect(
+      shouldSkipVolumeWrite({
+        pending: null,
+        knownDevice: { index: 18, muted: false },
+        requested: { index: 18, muted: false },
+        isDragging: true,
+      }),
+    ).toBeNull();
+  });
+
+  it("does not skip explicit mute or unmute writes when the known device snapshot is stale", () => {
+    expect(
+      shouldSkipVolumeWrite({
+        pending: null,
+        knownDevice: { index: 18, muted: false },
+        requested: { index: 18, muted: false },
+        isDragging: false,
+        allowKnownDeviceSkip: false,
+      }),
+    ).toBeNull();
+  });
+
+  it("defers external sync while an unconfirmed device state lags the pending write", () => {
+    expect(
+      shouldDeferExternalSync({
+        pending: { index: 27, muted: false },
+        device: { index: 24, muted: false },
+      }),
+    ).toBe(true);
+  });
+
+  it("allows external sync once the device matches the pending write", () => {
+    expect(
+      shouldDeferExternalSync({
+        pending: { index: 27, muted: false },
+        device: { index: 27, muted: false },
+      }),
+    ).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // F. Unmute refresh: skip SIDs disabled while muted
 // ---------------------------------------------------------------------------
 

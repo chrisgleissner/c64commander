@@ -62,7 +62,7 @@ import { clearTraceEvents, getTraceEvents } from "@/lib/tracing/traceSession";
 import { getTraceTitle } from "@/lib/tracing/traceFormatter";
 import { DiagnosticsListItem } from "@/components/diagnostics/DiagnosticsListItem";
 import { ActionSummaryListItem } from "@/components/diagnostics/ActionSummaryListItem";
-import { shareDiagnosticsZip } from "@/lib/diagnostics/diagnosticsExport";
+import { shareAllDiagnosticsZip, shareDiagnosticsZip } from "@/lib/diagnostics/diagnosticsExport";
 import { resetDiagnosticsActivity } from "@/lib/diagnostics/diagnosticsActivity";
 import { consumeDiagnosticsOpenRequest, type DiagnosticsTabKey } from "@/lib/diagnostics/diagnosticsOverlay";
 import { setDiagnosticsOverlayActive, withDiagnosticsTraceOverride } from "@/lib/diagnostics/diagnosticsOverlayState";
@@ -451,17 +451,33 @@ export default function SettingsPage() {
     });
   }, [actionSummaries, diagnosticsFilters]);
 
+  const diagnosticsExportData = useMemo(
+    () => ({
+      "error-logs": errorLogs,
+      logs,
+      traces: traceEvents,
+      actions: actionSummaries,
+    }),
+    [actionSummaries, errorLogs, logs, traceEvents],
+  );
+
   const handleShareDiagnostics = trace(async function handleShareDiagnostics() {
-    const data =
-      diagnosticsTab === "error-logs"
-        ? errorLogs
-        : diagnosticsTab === "logs"
-          ? logs
-          : diagnosticsTab === "traces"
-            ? traceEvents
-            : actionSummaries;
+    const data = diagnosticsExportData[diagnosticsTab];
     try {
       await shareDiagnosticsZip(diagnosticsTab, data);
+    } catch (error) {
+      reportUserError({
+        operation: "DIAGNOSTICS_EXPORT",
+        title: "Unable to share",
+        description: (error as Error).message,
+        error,
+      });
+    }
+  });
+
+  const handleShareAllDiagnostics = trace(async function handleShareAllDiagnostics() {
+    try {
+      await shareAllDiagnosticsZip(diagnosticsExportData);
     } catch (error) {
       reportUserError({
         operation: "DIAGNOSTICS_EXPORT",
@@ -520,10 +536,10 @@ export default function SettingsPage() {
     icon: React.ElementType;
     label: string;
   }[] = [
-    { value: "light", icon: Sun, label: "Light" },
-    { value: "dark", icon: Moon, label: "Dark" },
-    { value: "system", icon: Monitor, label: "System" },
-  ];
+      { value: "light", icon: Sun, label: "Light" },
+      { value: "dark", icon: Moon, label: "Dark" },
+      { value: "system", icon: Monitor, label: "System" },
+    ];
 
   const commitListPreviewLimit = () => {
     const parsed = Number(listPreviewInput);
@@ -677,9 +693,8 @@ export default function SettingsPage() {
                     { title: option.label },
                     "ThemeOption",
                   )}
-                  className={`flex flex-col items-center gap-2 p-4 rounded-lg border transition-colors ${
-                    isActive ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground"
-                  }`}
+                  className={`flex flex-col items-center gap-2 p-4 rounded-lg border transition-colors ${isActive ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground"
+                    }`}
                 >
                   <Icon className={`h-6 w-6 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
                   <span className={`text-sm ${isActive ? "font-medium" : ""}`}>{option.label}</span>
@@ -786,15 +801,14 @@ export default function SettingsPage() {
 
           {/* Connection Status */}
           <div
-            className={`p-3 rounded-lg text-sm break-words ${
-              status.isConnected
+            className={`p-3 rounded-lg text-sm break-words ${status.isConnected
                 ? "bg-success/10 text-success"
                 : isDemoActive
                   ? "bg-primary/10 text-primary"
                   : status.isConnecting
                     ? "bg-muted text-muted-foreground"
                     : "bg-destructive/10 text-destructive"
-            }`}
+              }`}
           >
             {status.isConnecting
               ? "Connecting..."
@@ -1639,6 +1653,13 @@ export default function SettingsPage() {
             <DialogDescription>Review warnings/errors, logs, traces, and action summaries.</DialogDescription>
           </DialogHeader>
           <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void withDiagnosticsTraceOverride(handleShareAllDiagnostics)}
+            >
+              Share All
+            </Button>
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button variant="destructive" size="sm">

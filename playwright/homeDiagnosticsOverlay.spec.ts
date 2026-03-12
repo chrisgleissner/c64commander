@@ -474,7 +474,7 @@ test.describe("Home header and diagnostics overlay", () => {
     const shareForTab = async (
       tabLabel: string,
       shareTestId: string,
-      expectedFile: string,
+      expectedPrefix: string,
       assertPayload: (data: unknown) => void,
     ) => {
       await dialog.getByRole("tab", { name: tabLabel }).click();
@@ -497,31 +497,56 @@ test.describe("Home header and diagnostics overlay", () => {
       )) as Array<{ tab: string; zipData: number[] }>;
       const payload = payloads[payloads.length - 1];
       const files = decodeZip(payload.zipData);
-      expect(Object.keys(files)).toEqual([expectedFile]);
-      const parsed = JSON.parse(files[expectedFile]);
+      const fileNames = Object.keys(files);
+      expect(fileNames).toHaveLength(1);
+      expect(fileNames[0]).toMatch(new RegExp(`^${expectedPrefix}-\\d{4}-\\d{2}-\\d{2}-\\d{4}-\\d{2}Z\\.json$`));
+      const parsed = JSON.parse(files[fileNames[0]]);
       assertPayload(parsed);
       await snap(page, testInfo, `share-${tabLabel.toLowerCase()}`);
     };
 
-    await shareForTab("Errors", "diagnostics-share-errors", "error-logs.json", (data) => {
+    await shareForTab("Errors", "diagnostics-share-errors", "error-logs", (data) => {
       const entries = data as Array<{ id: string; level?: string }>;
       expect(entries.some((entry) => entry.id === "err-1")).toBeTruthy();
       expect(entries.every((entry) => entry.level === "warn" || entry.level === "error")).toBeTruthy();
     });
-    await shareForTab("Logs", "diagnostics-share-logs", "logs.json", (data) => {
+    await shareForTab("Logs", "diagnostics-share-logs", "logs", (data) => {
       const entries = data as Array<{ id: string }>;
       expect(entries.some((entry) => entry.id === "err-1")).toBeTruthy();
       expect(entries.some((entry) => entry.id === "log-1")).toBeTruthy();
     });
-    await shareForTab("Traces", "diagnostics-share-traces", "traces.json", (data) => {
+    await shareForTab("Traces", "diagnostics-share-traces", "traces", (data) => {
       const entries = data as Array<{ id: string }>;
       const ids = entries.map((entry) => entry.id);
       expect(ids).toEqual(expect.arrayContaining(["EVT-9200", "EVT-9201", "EVT-9202"]));
     });
-    await shareForTab("Actions", "diagnostics-share-actions", "actions.json", (data) => {
+    await shareForTab("Actions", "diagnostics-share-actions", "actions", (data) => {
       const entries = data as Array<{ correlationId?: string }>;
       expect(entries.some((entry) => entry.correlationId === "COR-9200")).toBeTruthy();
     });
+
+    await dialog.getByRole("button", { name: "Share All", exact: true }).click();
+    await expect
+      .poll(async () =>
+        page.evaluate(
+          () =>
+            ((window as Window & { __c64uDiagnosticsSharePayloads?: unknown[] }).__c64uDiagnosticsSharePayloads ?? [])
+              .length,
+        ),
+      )
+      .toBeGreaterThan(4);
+
+    const payloads = (await page.evaluate(
+      () => (window as Window & { __c64uDiagnosticsSharePayloads?: unknown[] }).__c64uDiagnosticsSharePayloads ?? [],
+    )) as Array<{ filename: string; zipData: number[] }>;
+    const shareAllPayload = payloads[payloads.length - 1];
+    expect(shareAllPayload.filename).toMatch(/^c64commander-diagnostics-all-\d{4}-\d{2}-\d{2}-\d{4}-\d{2}Z\.zip$/);
+    const files = decodeZip(shareAllPayload.zipData);
+    const fileNames = Object.keys(files).sort();
+    expect(fileNames).toHaveLength(4);
+    expect(fileNames[0]).toMatch(/-\d{4}-\d{2}-\d{2}-\d{4}-\d{2}Z\.json$/);
+    const timestamps = new Set(fileNames.map((name) => name.match(/(\d{4}-\d{2}-\d{2}-\d{4}-\d{2}Z)\.json$/)?.[1]));
+    expect(timestamps.size).toBe(1);
   });
 
   test("app header and footer remain fixed during scroll on core pages", async ({

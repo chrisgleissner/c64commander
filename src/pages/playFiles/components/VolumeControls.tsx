@@ -63,6 +63,7 @@ export const VolumeControls = ({
           onValueChange={onVolumeChange}
           onValueChangeAsync={onVolumeChangeAsync}
           onValueCommitAsync={onVolumeCommit}
+          asyncThrottleMs={200}
           valueFormatter={volumeValueFormatter}
           disabled={!canControlVolume}
           data-testid="volume-slider"
