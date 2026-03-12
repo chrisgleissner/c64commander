@@ -356,10 +356,10 @@ class MockTimingProfile(
                 false
               } else if (rule.pathType == "exact") {
                 path == rule.path
-                                                        } else if (rule.pathType == "prefix") {
+              } else if (rule.pathType == "prefix") {
                 path.startsWith(rule.path)
-                                                        } else {
-                                                                Regex(rule.path).matches(path)
+              } else {
+                Regex(rule.path).matches(path)
               }
             }
     return matchedRule?.timingClass ?: defaultClassId
