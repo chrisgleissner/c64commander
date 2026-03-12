@@ -67,7 +67,7 @@ const requestJson = async (url: string, options: RequestOptions = {}): Promise<J
     const response = await fetch(url, {
       method: options.method ?? "GET",
       headers: options.headers,
-      body: options.body,
+      body: options.body as BodyInit | undefined,
     });
     const text = await response.text();
     const json = text ? JSON.parse(text) : null;
@@ -185,6 +185,39 @@ describe("createMockC64Server", () => {
     expect(mem.json.data).toHaveLength(2);
   });
 
+  it("supports debug register reads and writes", async () => {
+    const initial = await requestJson(`${server.baseUrl}/v1/machine:debugreg`);
+    expect(initial.status).toBe(200);
+    expect(initial.json.value).toBe("0");
+
+    const updated = await requestJson(`${server.baseUrl}/v1/machine:debugreg?value=2A`, { method: "PUT" });
+    expect(updated.status).toBe(200);
+    expect(updated.json.value).toBe("2A");
+
+    const reread = await requestJson(`${server.baseUrl}/v1/machine:debugreg`);
+    expect(reread.json.value).toBe("2A");
+  });
+
+  it("supports file metadata and disk image creation endpoints", async () => {
+    const info = await requestJson(`${server.baseUrl}/v1/files/%2FFlash%2Froms%2F1541.rom:info`);
+    expect(info.status).toBe(200);
+    expect(info.json.files.filename).toBe("1541.rom");
+    expect(info.json.files.extension).toBe("ROM");
+
+    const create = await requestJson(
+      `${server.baseUrl}/v1/files/%2FUSB2%2Ftest-data%2Fprobe.d81:create_d81?diskname=PROBE`,
+      {
+        method: "PUT",
+      },
+    );
+    expect(create.status).toBe(200);
+
+    const createdInfo = await requestJson(`${server.baseUrl}/v1/files/%2FUSB2%2Ftest-data%2Fprobe.d81:info`);
+    expect(createdInfo.status).toBe(200);
+    expect(createdInfo.json.files.filename).toBe("probe.d81");
+    expect(createdInfo.json.files.size).toBe(819200);
+  });
+
   it("supports preflight requests", async () => {
     const options = await requestJson(`${server.baseUrl}/v1/info`, {
       method: "OPTIONS",
@@ -232,6 +265,24 @@ describe("createMockC64Server", () => {
     server.setFaultMode("none");
   });
 
+  it("defaults to fast timing mode and can switch back to realistic timing", async () => {
+    expect(server.getTimingMode()).toBe("fast");
+
+    const fastStart = Date.now();
+    await requestJson(`${server.baseUrl}/v1/drives/a:mount?image=disks/demo.d64`, { method: "PUT" });
+    const fastElapsed = Date.now() - fastStart;
+
+    server.setTimingMode("realistic");
+    expect(server.getTimingMode()).toBe("realistic");
+
+    const realisticStart = Date.now();
+    await requestJson(`${server.baseUrl}/v1/drives/a:mount?image=disks/demo.d64`, { method: "PUT" });
+    const realisticElapsed = Date.now() - realisticStart;
+
+    expect(fastElapsed).toBeLessThan(250);
+    expect(realisticElapsed).toBeGreaterThan(700);
+  });
+
   it("serializes concurrent requests through the shared timing queue", async () => {
     const firstRequestCount = server.requests.length;
 
@@ -245,7 +296,7 @@ describe("createMockC64Server", () => {
       .slice(firstRequestCount)
       .sort((left, right) => left.requestId - right.requestId);
     expect(recentRequests).toHaveLength(3);
-    expect(recentRequests.map((entry) => entry.timingClass)).toEqual(["probe", "configRead", "driveListRead"]);
+    expect(recentRequests.map((entry) => entry.timingClass)).toEqual(["infoRead", "configsListRead", "driveListRead"]);
     expect(recentRequests.every((entry) => entry.plannedDelayMs > 0)).toBe(true);
     expect(recentRequests.every((entry) => entry.startedProcessingAtMs !== null && entry.completedAtMs !== null)).toBe(
       true,

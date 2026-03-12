@@ -46,6 +46,8 @@ class MockC64UServer(
         private val state: MockC64UState,
         private val timingProfile: MockTimingProfile = MockTimingProfile.defaultProfile(),
 ) {
+  constructor(state: MockC64UState) : this(state, MockTimingProfile.defaultProfile())
+
   private val acceptExecutor = Executors.newSingleThreadExecutor()
   private val connectionExecutor = Executors.newCachedThreadPool()
   private val requestExecutor = Executors.newSingleThreadExecutor()

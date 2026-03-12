@@ -123,6 +123,21 @@ const runDeviceLockUnlockCycle = (serial?: string) => {
 test.describe("Playback file browser", () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
   let ftpServers: Awaited<ReturnType<typeof startFtpTestServers>>;
+  const usesRealisticTiming = (title: string) =>
+    [
+      "playback sends runner request to real device mock",
+      "pause then stop never hangs",
+      "playback progression survives lock/unlock cycle",
+      "local SID playback uploads before play",
+      "play immediately after import targets the real device",
+      "rapid play/stop/play sequences remain stable",
+      "skipping tracks quickly updates current track",
+      "auto-advance triggers once per track transition without cascades",
+      "user next cancels old-track auto-advance and transitions immediately",
+      "non-interval reconciliation catches up after timer throttling",
+      "playback persists across navigation while active",
+      "settings changes while playback active do not interrupt playback",
+    ].some((label) => title.includes(label));
 
   test.beforeAll(async () => {
     ftpServers = await startFtpTestServers();
@@ -134,7 +149,13 @@ test.describe("Playback file browser", () => {
 
   test.beforeEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
-    server = await createMockC64Server(uiFixtures.configState);
+    server = await createMockC64Server(
+      uiFixtures.configState,
+      {},
+      {
+        timingMode: usesRealisticTiming(testInfo.title) ? "realistic" : "fast",
+      },
+    );
     await seedFtpConfig(page, {
       host: ftpServers.ftpServer.host,
       port: ftpServers.ftpServer.port,

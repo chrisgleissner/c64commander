@@ -1244,7 +1244,7 @@ test.describe("Playback file browser (part 2)", () => {
     const writesAfterDrag = server.requests.filter((req) => req.method === "POST" && req.url.startsWith("/v1/configs"));
     const dragWrites = writesAfterDrag.slice(writesBeforeDrag);
     expect(dragWrites).toHaveLength(1);
-    expect(dragWrites[0]?.timingClass).toBe("configWrite");
+    expect(dragWrites[0]?.timingClass).toBe("configsBatchWrite");
   });
 
   test("unmute skips SID volumes disabled while muted", async ({ page }: { page: Page }, testInfo: TestInfo) => {

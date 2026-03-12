@@ -21,6 +21,7 @@ const SLOW_SAMPLE_THRESHOLD_MS = Number(process.env.C64U_TIMING_SLOW_SAMPLE_THRE
 const VARIATION_THRESHOLD_MS = Number(process.env.C64U_TIMING_VARIATION_THRESHOLD_MS || '1500');
 const COMPLETION_TIMEOUT_MS = Number(process.env.C64U_TIMING_COMPLETION_TIMEOUT_MS || '10000');
 const COMPLETION_POLL_DELAY_MS = Number(process.env.C64U_TIMING_COMPLETION_POLL_DELAY_MS || '50');
+const OPERATION_FILTER = process.env.C64U_TIMING_OPERATION_FILTER?.trim() || '';
 const OUTPUT_PATH =
     process.env.C64U_TIMING_OUTPUT_PATH?.trim() ||
     path.resolve('doc/c64/mock-timing-calibration-2026-03-12.json');
@@ -283,6 +284,13 @@ class TimingProbe {
         if (!driveB) throw new Error('Drive B not present');
         this.cachedDriveBState = { ...driveB };
         return { ...driveB };
+    }
+
+    async ensureDriveBEnabled() {
+        const driveB = await this.getDriveBState();
+        if (driveB.enabled) return;
+        await this.request({ method: 'PUT', pathName: '/v1/drives/b:on' });
+        await delay(MUTATION_RECOVERY_DELAY_MS);
     }
 
     async restoreDriveB(original) {
@@ -725,6 +733,7 @@ async function main() {
             invoke: async (ctx) => {
                 const original = await ctx.getDriveBState();
                 try {
+                    await ctx.ensureDriveBEnabled();
                     const startedAt = performance.now();
                     const response = await ctx.request({
                         method: 'PUT',
@@ -751,6 +760,7 @@ async function main() {
             invoke: async (ctx) => {
                 const original = await ctx.getDriveBState();
                 try {
+                    await ctx.ensureDriveBEnabled();
                     const startedAt = performance.now();
                     const response = await ctx.request({
                         method: 'POST',
@@ -1021,8 +1031,17 @@ async function main() {
         },
     ];
 
+    const operationMatcher = OPERATION_FILTER ? new RegExp(OPERATION_FILTER) : null;
+    const selectedOperations = operationMatcher
+        ? operations.filter((operation) => operationMatcher.test(operation.id))
+        : operations;
+
+    if (selectedOperations.length === 0) {
+        throw new Error(`No operations matched C64U_TIMING_OPERATION_FILTER=${OPERATION_FILTER}`);
+    }
+
     const measurements = [];
-    for (const operation of operations) {
+    for (const operation of selectedOperations) {
         console.log(`Measuring ${operation.id} (${operation.description})`);
         if (REBOOT_BEFORE_EACH_OPERATION) {
             console.log('  hard rebooting device before series');

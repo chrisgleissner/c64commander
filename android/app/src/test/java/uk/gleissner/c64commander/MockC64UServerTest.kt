@@ -27,6 +27,21 @@ class MockC64UServerTest {
     return stream.bufferedReader().use { it.readText() }
   }
 
+  @Test
+  fun singleArgumentConstructorUsesDefaultTimingProfile() {
+    val state = MockC64UState.fromPayload(JSONObject())
+    val server = MockC64UServer(state)
+
+    server.start()
+    waitForServer(server)
+
+    val connection = URL("${server.baseUrl}/v1/info").openConnection() as HttpURLConnection
+    connection.requestMethod = "GET"
+
+    assertEquals(200, connection.responseCode)
+    server.stop()
+  }
+
   private fun waitForServer(server: MockC64UServer) {
     repeat(10) {
       try {

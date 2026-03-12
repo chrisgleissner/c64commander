@@ -214,15 +214,20 @@ VS Code workspace settings in `.vscode/settings.json` enable:
 ## Mock timing profile
 
 - The external Node mock server and the Android in-app demo server now share one ordered timing profile definition from `android/app/src/main/assets/mock-timing-profile.json`.
-- The profile defines endpoint classes, deterministic jitter ranges, regex-capable route matching, and fallback fault-mode timing so Playwright and Android demo mode observe the same request pacing model.
+- The profile now contains explicit rules for the full documented safe REST surface from `doc/c64/c64u-openapi.yaml`, plus estimated timings for the small set of destructive or non-recoverable endpoints that were intentionally not live-probed.
+- The profile defines endpoint classes, deterministic jitter ranges, regex-capable route matching, and fallback fault-mode timing so Android demo mode and realistic mock clients observe the same request pacing model.
 - Both implementations serialize request handling through a single request-processing lane. This preserves request order under concurrent client activity and makes rate-limit regressions reproducible.
-- The profile is calibrated from live C64U measurements captured on 2026-03-12 against hostname `c64u` using repeated safe REST probes with a hard reboot before each measured series.
-- Measured medians / observed maxima from 12 samples each were: `OPTIONS /` 186.7 / 203.9 ms, `GET /v1/info` 10.24 / 20.39 ms, `GET /v1/version` 8.96 / 35.01 ms, `GET /v1/configs` 13.04 / 17.68 ms, `GET /v1/configs/Audio Mixer` 15.35 / 37.08 ms, `GET /v1/drives` 16.46 / 28.36 ms, `GET /v1/machine:readmem` 9.41 / 19.13 ms.
-- `OPTIONS` now has its own timing class because the live device was consistently much slower there than on `GET /v1/info` and `GET /v1/version`.
-- Drive mutations no longer share one generic `driveAction` class. The shared profile now distinguishes list, mount, reset, remove, power, ROM load, and set-mode paths because live response times differ by orders of magnitude.
+- The profile is calibrated from live C64U measurements captured on 2026-03-12 against hostname `c64u` using five rebooted samples per safe endpoint series. Probe and stream/file artifacts are currently stored under `doc/c64/mock-timing-calibration-probes-2026-03-12.json` and `doc/c64/mock-timing-calibration-streams-files-2026-03-12.json`.
+- Measured medians now include, for example: `OPTIONS /` 29.6 ms, `GET /v1/version` 15.5 ms, `GET /v1/info` 15.5 ms, `PUT /v1/runners:run_prg` 1987.0 ms, `PUT /v1/drives/b:mount` about 753-766 ms across the earlier rebooted mount probe, `PUT /v1/streams/debug:start` 1017.2 ms, `GET /v1/files/{path}:info` 34.9 ms, and `PUT /v1/files/{path}:create_dnp` 981.8 ms.
+- `OPTIONS` now has its own timing class because the live device is consistently slower there than on `GET /v1/info` and `GET /v1/version`.
+- Drive mutations no longer share one generic class. The shared profile distinguishes list, mount, reset, remove, power, ROM load, and set-mode paths because live response times differ by orders of magnitude.
 - Live `PUT /v1/drives/b:mount` response latency on the physical device measured `752.8`, `766.2`, `757.6`, `757.9`, and `758.5` ms across five rebooted samples. Polling `/v1/drives` after each mount showed the mounted image became observable at the same instant as the HTTP response within probe resolution, so the mock does not add an extra asynchronous completion delay for drive mount.
 - This synchronous mount behavior matches the checked-in 1541Ultimate firmware path: `route_drives.cc` calls `SubsysCommand::execute()`, which blocks on the drive subsystem mutex, and `C1541::executeCommand()` performs `fopen`, `mount_d64` or `mount_g64`, drive state updates, and `drive_reset(0)` before returning.
 - The timing probe script now records both REST response latency and activity-completion latency. For operations without a dedicated completion observer, completion currently defaults to response time; drive mount uses explicit `/v1/drives` polling.
+- The Node mock has two timing modes:
+  - `realistic`: uses the shared production-like timings from the JSON profile.
+  - `fast`: scales those delays down for low-value web/unit scenarios while preserving ordering and relative endpoint cost.
+- The Android in-app demo mock always uses the realistic timing profile. The Node mock defaults to `fast`, and critical Playwright flows opt into `realistic` explicitly.
 
 ## Playback volume preview interval
 
