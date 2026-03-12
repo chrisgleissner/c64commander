@@ -13,7 +13,6 @@ import type { TraceActionContext } from "@/lib/tracing/types";
 
 const createConfig = (): DeviceSafetyConfig => ({
   mode: "BALANCED",
-  restMaxConcurrency: 1,
   ftpMaxConcurrency: 1,
   infoCacheMs: 300,
   configsCacheMs: 0,
@@ -39,6 +38,7 @@ const getDeviceStateSnapshot = vi.fn(() => ({
   state: deviceStateValue,
   connectionState: "REAL_CONNECTED",
   busyCount: 0,
+  lastRequestAtMs: null,
   lastUpdatedAtMs: Date.now(),
   lastErrorMessage: null,
   lastSuccessAtMs: null,
@@ -95,6 +95,7 @@ describe("deviceInteractionManager", () => {
   let restoreEnv: (() => void) | null = null;
 
   beforeEach(() => {
+    vi.resetModules();
     restoreEnv = applyNonTestEnv();
     config = createConfig();
     deviceStateValue = "READY";
@@ -152,6 +153,211 @@ describe("deviceInteractionManager", () => {
     expect(recordDeviceGuard).toHaveBeenCalledWith(action, expect.objectContaining({ decision: "cache" }));
   });
 
+  it("coalesces a burst of identical GET requests behind one inflight handler", async () => {
+    const { withRestInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+
+    const meta = {
+      action: makeAction("rest-info-burst"),
+      method: "GET",
+      path: "/v1/info",
+      normalizedUrl: "http://device/v1/info",
+      intent: "system" as const,
+      baseUrl: "http://device",
+    };
+
+    let releaseHandler!: () => void;
+    const handlerBlocked = new Promise<void>((resolve) => {
+      releaseHandler = resolve;
+    });
+    const handler = vi.fn(async () => {
+      await handlerBlocked;
+      return { product: "C64U" };
+    });
+
+    const requests = Array.from({ length: 20 }, () => withRestInteraction(meta, handler));
+
+    await Promise.resolve();
+    expect(handler).toHaveBeenCalledTimes(1);
+
+    releaseHandler();
+    await expect(Promise.all(requests)).resolves.toEqual(Array.from({ length: 20 }, () => ({ product: "C64U" })));
+  });
+
+  it("does not coalesce concurrent config writes that share the same mutation lane", async () => {
+    const { withRestInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+
+    const meta = {
+      action: makeAction("rest-config-write"),
+      method: "POST",
+      path: "/v1/configs",
+      normalizedUrl: "http://device/v1/configs",
+      intent: "user" as const,
+      baseUrl: "http://device",
+    };
+
+    let releaseFirst!: () => void;
+    const firstBlocked = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const callOrder: string[] = [];
+    const firstHandler = vi.fn(async () => {
+      callOrder.push("first");
+      await firstBlocked;
+      return { errors: [] };
+    });
+    const secondHandler = vi.fn(async () => {
+      callOrder.push("second");
+      return { errors: [] };
+    });
+
+    const first = withRestInteraction(meta, firstHandler);
+    const second = withRestInteraction(meta, secondHandler);
+
+    await Promise.resolve();
+    expect(firstHandler).toHaveBeenCalledTimes(1);
+    expect(secondHandler).not.toHaveBeenCalled();
+
+    releaseFirst();
+    await Promise.all([first, second]);
+
+    expect(secondHandler).toHaveBeenCalledTimes(1);
+    expect(callOrder).toEqual(["first", "second"]);
+  });
+
+  it("invalidates cached config reads after a successful config mutation", async () => {
+    config = {
+      ...createConfig(),
+      configsCacheMs: 300,
+    };
+
+    const { withRestInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+
+    const readMeta = {
+      action: makeAction("rest-config-read"),
+      method: "GET",
+      path: "/v1/configs",
+      normalizedUrl: "http://device/v1/configs",
+      intent: "system" as const,
+      baseUrl: "http://device",
+    };
+    const writeMeta = {
+      action: makeAction("rest-config-write-invalidate"),
+      method: "PUT",
+      path: "/v1/configs/Audio%20Mixer/Vol%20Socket%201?value=0%20dB",
+      normalizedUrl: "http://device/v1/configs/Audio%20Mixer/Vol%20Socket%201?value=0%20dB",
+      intent: "user" as const,
+      baseUrl: "http://device",
+    };
+
+    const firstRead = vi.fn().mockResolvedValue({ value: 1 });
+    const cachedRead = vi.fn().mockResolvedValue({ value: 999 });
+    const refreshedRead = vi.fn().mockResolvedValue({ value: 2 });
+
+    await expect(withRestInteraction(readMeta, firstRead)).resolves.toEqual({ value: 1 });
+    await expect(withRestInteraction(readMeta, cachedRead)).resolves.toEqual({ value: 1 });
+    expect(cachedRead).not.toHaveBeenCalled();
+
+    await expect(withRestInteraction(writeMeta, vi.fn().mockResolvedValue({ errors: [] }))).resolves.toEqual({
+      errors: [],
+    });
+
+    await expect(withRestInteraction(readMeta, refreshedRead)).resolves.toEqual({ value: 2 });
+    expect(refreshedRead).toHaveBeenCalledTimes(1);
+  });
+
+  it("applies concurrent slider-style writes in order so the final device value is the last value", async () => {
+    const { withRestInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+
+    const meta = {
+      action: makeAction("rest-slider-write"),
+      method: "POST",
+      path: "/v1/configs",
+      normalizedUrl: "http://device/v1/configs",
+      intent: "user" as const,
+      baseUrl: "http://device",
+    };
+
+    let deviceValue = 0;
+    let releaseFirst!: () => void;
+    const firstBlocked = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const writeOrder: number[] = [];
+
+    const writes = [20, 40, 60, 80].map((value, index) =>
+      withRestInteraction(meta, async () => {
+        writeOrder.push(value);
+        if (index === 0) {
+          await firstBlocked;
+        }
+        deviceValue = value;
+        return { errors: [] };
+      }),
+    );
+
+    await Promise.resolve();
+    releaseFirst();
+    await Promise.all(writes);
+
+    expect(writeOrder).toEqual([20, 40, 60, 80]);
+    expect(deviceValue).toBe(80);
+  });
+
+  it("does not let a cooled-down read occupy the only REST slot before a ready write can run", async () => {
+    vi.useFakeTimers();
+    config = {
+      ...createConfig(),
+      configsCooldownMs: 100,
+    };
+
+    const { withRestInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
+
+    const readMeta = {
+      action: makeAction("rest-config-cooldown"),
+      method: "GET",
+      path: "/v1/configs",
+      normalizedUrl: "http://device/v1/configs",
+      intent: "system" as const,
+      baseUrl: "http://device",
+    };
+    const writeMeta = {
+      action: makeAction("rest-machine-write"),
+      method: "PUT",
+      path: "/v1/machine:pause",
+      normalizedUrl: "http://device/v1/machine:pause",
+      intent: "user" as const,
+      baseUrl: "http://device",
+    };
+
+    await withRestInteraction(readMeta, vi.fn().mockResolvedValue({ errors: [] }));
+
+    const cooledReadHandler = vi.fn().mockResolvedValue({ errors: [] });
+    const cooledRead = withRestInteraction(readMeta, cooledReadHandler);
+    const writeHandler = vi.fn().mockResolvedValue({ errors: [] });
+    const write = withRestInteraction(writeMeta, writeHandler);
+
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(writeHandler).toHaveBeenCalledTimes(1);
+    expect(cooledReadHandler).not.toHaveBeenCalled();
+
+    await expect(write).resolves.toEqual({ errors: [] });
+
+    await vi.advanceTimersByTimeAsync(100);
+    await expect(cooledRead).resolves.toEqual({ errors: [] });
+    expect(cooledReadHandler).toHaveBeenCalledTimes(1);
+  });
+
   it("blocks REST calls when device is in error state", async () => {
     const { withRestInteraction, resetInteractionState } =
       await import("@/lib/deviceInteraction/deviceInteractionManager");
@@ -181,10 +387,6 @@ describe("deviceInteractionManager", () => {
   });
 
   it("applies backoff and opens circuit after critical failures", async () => {
-    const { withRestInteraction, resetInteractionState } =
-      await import("@/lib/deviceInteraction/deviceInteractionManager");
-    resetInteractionState("test");
-
     config = {
       ...createConfig(),
       backoffBaseMs: 100,
@@ -194,6 +396,10 @@ describe("deviceInteractionManager", () => {
       circuitBreakerCooldownMs: 500,
       allowUserOverrideCircuit: false,
     };
+
+    const { withRestInteraction, resetInteractionState } =
+      await import("@/lib/deviceInteraction/deviceInteractionManager");
+    resetInteractionState("test");
 
     const action = makeAction("rest-backoff");
     const meta = {
@@ -213,9 +419,10 @@ describe("deviceInteractionManager", () => {
     await expect(second).rejects.toThrow("Network timed out");
 
     await expect(withRestInteraction(meta, handler)).rejects.toThrow("Device circuit open");
+    expect(handler).toHaveBeenCalledTimes(2);
     expect(recordDeviceGuard).toHaveBeenCalledWith(
       action,
-      expect.objectContaining({ decision: "defer", reason: "backoff" }),
+      expect.objectContaining({ decision: "block", reason: "circuit-open" }),
     );
     expect(setCircuitOpenUntil).toHaveBeenCalled();
   });

@@ -43,7 +43,6 @@ import {
   saveFtpListCooldownMs,
   saveFtpMaxConcurrency,
   saveInfoCacheMs,
-  saveRestMaxConcurrency,
   type DeviceSafetyMode,
 } from "@/lib/config/deviceSafetySettings";
 
@@ -62,7 +61,6 @@ export type SettingsExportPayload = {
   };
   deviceSafety: {
     mode: DeviceSafetyMode;
-    restMaxConcurrency: number;
     ftpMaxConcurrency: number;
     infoCacheMs: number;
     configsCacheMs: number;
@@ -91,7 +89,6 @@ const APP_SETTINGS_KEYS = [
 
 const DEVICE_SAFETY_KEYS = [
   "mode",
-  "restMaxConcurrency",
   "ftpMaxConcurrency",
   "infoCacheMs",
   "configsCacheMs",
@@ -106,6 +103,8 @@ const DEVICE_SAFETY_KEYS = [
   "discoveryProbeIntervalMs",
   "allowUserOverrideCircuit",
 ] as const;
+
+const LEGACY_DEVICE_SAFETY_OPTIONAL_KEYS = ["restMaxConcurrency"] as const;
 
 const hasOnlyKeys = (value: Record<string, unknown>, keys: readonly string[]) => {
   const valueKeys = Object.keys(value);
@@ -132,7 +131,6 @@ export const exportSettingsSnapshot = (): SettingsExportPayload => {
     },
     deviceSafety: {
       mode: safety.mode,
-      restMaxConcurrency: safety.restMaxConcurrency,
       ftpMaxConcurrency: safety.ftpMaxConcurrency,
       infoCacheMs: safety.infoCacheMs,
       configsCacheMs: safety.configsCacheMs,
@@ -170,7 +168,10 @@ const validateAppSettings = (value: unknown) => {
 const validateDeviceSafety = (value: unknown) => {
   if (!value || typeof value !== "object") return "deviceSafety must be an object.";
   const record = value as Record<string, unknown>;
-  if (!hasOnlyKeys(record, DEVICE_SAFETY_KEYS)) return "deviceSafety contains unknown or missing keys.";
+  const allowedKeys = [...DEVICE_SAFETY_KEYS, ...LEGACY_DEVICE_SAFETY_OPTIONAL_KEYS];
+  const keysAreAllowed = Object.keys(record).every((key) => allowedKeys.includes(key as (typeof allowedKeys)[number]));
+  const requiredKeysPresent = DEVICE_SAFETY_KEYS.every((key) => key in record);
+  if (!keysAreAllowed || !requiredKeysPresent) return "deviceSafety contains unknown or missing keys.";
   if (!isDeviceSafetyMode(record.mode)) return "deviceSafety.mode is invalid.";
   const numericKeys = DEVICE_SAFETY_KEYS.filter((key) => key !== "mode" && key !== "allowUserOverrideCircuit");
   if (numericKeys.some((key) => !Number.isFinite(record[key] as number))) {
@@ -212,7 +213,6 @@ export const importSettingsJson = (raw: string): { ok: true } | { ok: false; err
   saveDiskAutostartMode(safeApp.diskAutostartMode);
 
   saveDeviceSafetyMode(safeSafety.mode);
-  saveRestMaxConcurrency(safeSafety.restMaxConcurrency);
   saveFtpMaxConcurrency(safeSafety.ftpMaxConcurrency);
   saveInfoCacheMs(safeSafety.infoCacheMs);
   saveConfigsCacheMs(safeSafety.configsCacheMs);

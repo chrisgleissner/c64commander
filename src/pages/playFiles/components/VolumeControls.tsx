@@ -44,6 +44,7 @@ export const VolumeControls = ({
       className="min-w-[96px] justify-center"
       onClick={onToggleMute}
       disabled={!canControlVolume}
+      data-c64-persistent-active={volumeMuted ? "true" : undefined}
       data-testid="volume-mute"
     >
       {volumeMuted ? <Volume2 className="h-4 w-4 mr-1" /> : <VolumeX className="h-4 w-4 mr-1" />}

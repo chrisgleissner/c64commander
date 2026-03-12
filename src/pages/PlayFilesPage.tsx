@@ -183,6 +183,7 @@ export default function PlayFilesPage() {
     restoreVolumeOverrides,
     applyAudioMixerUpdates,
     pauseMuteSnapshotRef,
+    pausingFromPauseRef,
     volumeSessionActiveRef,
     captureSidMuteSnapshot,
     snapshotToUpdates,
@@ -190,6 +191,8 @@ export default function PlayFilesPage() {
     handleVolumeAsyncChange,
     handleVolumeCommit,
     handleToggleMute,
+    resumingFromPauseRef,
+    ensureUnmuted,
   } = useVolumeOverride({ isPlaying, isPaused });
   const volumeIndex = volumeState.index;
   const volumeMuted = volumeState.muted;
@@ -282,6 +285,7 @@ export default function PlayFilesPage() {
     dispatchVolume,
     sidEnablement,
     pauseMuteSnapshotRef,
+    pausingFromPauseRef,
     playedClockRef,
     trackStartedAtRef,
     trackInstanceIdRef,
@@ -292,6 +296,8 @@ export default function PlayFilesPage() {
     durationSeconds,
     trace,
     setAutoAdvanceDueAtMs,
+    resumingFromPauseRef,
+    ensureUnmuted,
   });
 
   useEffect(() => {

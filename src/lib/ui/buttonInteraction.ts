@@ -8,14 +8,17 @@
 
 type InteractiveElement = HTMLElement & {
   __c64TapFlashTimeoutId?: number;
+  __c64PointerFocusClearPending?: boolean;
 };
 
 export const CTA_HIGHLIGHT_ATTR = "data-c64-tap-flash";
 export const CTA_HIGHLIGHT_SET_AT_ATTR = "data-c64-tap-flash-set-at";
-export const CTA_HIGHLIGHT_DURATION_MS = 220;
+export const CTA_HIGHLIGHT_DURATION_MS = 150;
+export const CTA_HIGHLIGHT_MIN_EXPECTED_MS = 120;
+export const CTA_HIGHLIGHT_MAX_EXPECTED_MS = 200;
 export const CTA_HIGHLIGHT_MAX_AGE_MS = 2000;
-const CTA_PERSISTENT_ACTIVE_ATTR = "data-c64-persistent-active";
-const INTERACTIVE_SELECTOR = [
+export const CTA_PERSISTENT_ACTIVE_ATTR = "data-c64-persistent-active";
+export const INTERACTIVE_SELECTOR = [
   "button",
   "a[href]",
   "summary",
@@ -30,8 +33,16 @@ const INTERACTIVE_SELECTOR = [
   '[role="switch"]',
   '[role="checkbox"]',
   '[data-c64-interactive="true"]',
-  '[tabindex]:not([tabindex="-1"])',
 ].join(",");
+
+const hasDisabledState = (element: HTMLElement) => {
+  if (element.matches(":disabled")) return true;
+  if (element.hasAttribute("disabled")) return true;
+  if (element.getAttribute("aria-disabled") === "true") return true;
+  if (element.hasAttribute("data-disabled")) return true;
+  if (element.closest('[aria-disabled="true"]')) return true;
+  return false;
+};
 
 const clearTapFlash = (element: InteractiveElement) => {
   if (typeof element.__c64TapFlashTimeoutId === "number") {
@@ -40,6 +51,30 @@ const clearTapFlash = (element: InteractiveElement) => {
   delete element.__c64TapFlashTimeoutId;
   element.removeAttribute(CTA_HIGHLIGHT_ATTR);
   element.removeAttribute(CTA_HIGHLIGHT_SET_AT_ATTR);
+};
+
+const clearPendingPointerFocus = (element: InteractiveElement) => {
+  delete element.__c64PointerFocusClearPending;
+};
+
+const attemptPendingPointerFocusClear = (element: InteractiveElement) => {
+  if (!element.__c64PointerFocusClearPending) return;
+  if (!element.isConnected) {
+    clearPendingPointerFocus(element);
+    return;
+  }
+  if (document.activeElement !== element) {
+    clearPendingPointerFocus(element);
+    return;
+  }
+  if (typeof element.blur !== "function") {
+    clearPendingPointerFocus(element);
+    return;
+  }
+  element.blur();
+  if (document.activeElement !== element) {
+    clearPendingPointerFocus(element);
+  }
 };
 
 const setTapFlash = (element: InteractiveElement) => {
@@ -52,8 +87,11 @@ const setTapFlash = (element: InteractiveElement) => {
 };
 
 const clearPointerFocus = (element: HTMLElement) => {
-  if (document.activeElement !== element || typeof element.blur !== "function") return;
-  window.setTimeout(() => element.blur(), 0);
+  const interactive = element as InteractiveElement;
+  interactive.__c64PointerFocusClearPending = true;
+  window.setTimeout(() => {
+    attemptPendingPointerFocusClear(interactive);
+  }, 0);
 };
 
 const shouldSkipStatelessInteraction = (element: HTMLElement) =>
@@ -68,6 +106,7 @@ const resolveInteractiveElement = (target: EventTarget | null) => {
 
 export const applyPointerButtonInteraction = (element: HTMLElement) => {
   clearPointerFocus(element);
+  if (hasDisabledState(element)) return;
   if (shouldSkipStatelessInteraction(element)) return;
   setTapFlash(element as InteractiveElement);
 };
@@ -95,21 +134,40 @@ export const sweepStaleHighlights = (nowMs = Date.now()) => {
 };
 
 export const registerGlobalButtonInteractionModel = () => {
-  const handler = (event: PointerEvent) => {
+  const pointerUpHandler = (event: PointerEvent) => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
     const interactive = resolveInteractiveElement(event.target);
     if (!interactive) return;
     applyPointerButtonInteraction(interactive);
   };
 
-  const sweep = () => sweepStaleHighlights();
+  const clearPendingActiveFocus = () => {
+    sweepStaleHighlights();
+    const active = document.activeElement;
+    if (!(active instanceof HTMLElement)) return;
+    if (active === document.body) return;
+    const interactive = resolveInteractiveElement(active);
+    if (!interactive) return;
+    attemptPendingPointerFocusClear(interactive as InteractiveElement);
+  };
 
-  document.addEventListener("pointerup", handler, true);
-  document.addEventListener("visibilitychange", sweep);
-  window.addEventListener("focus", sweep);
+  // When the app regains focus or visibility after a native picker / overlay,
+  // retry the pointer-originated blur so focus-visible styling cannot stick.
+  const visibilityChangeHandler = () => {
+    if (document.visibilityState !== "visible") return;
+    clearPendingActiveFocus();
+  };
+
+  const resumeHandler = () => clearPendingActiveFocus();
+
+  document.addEventListener("pointerup", pointerUpHandler, true);
+  document.addEventListener("visibilitychange", visibilityChangeHandler);
+  window.addEventListener("focus", resumeHandler);
+  window.addEventListener("pageshow", resumeHandler);
   return () => {
-    document.removeEventListener("pointerup", handler, true);
-    document.removeEventListener("visibilitychange", sweep);
-    window.removeEventListener("focus", sweep);
+    document.removeEventListener("pointerup", pointerUpHandler, true);
+    document.removeEventListener("visibilitychange", visibilityChangeHandler);
+    window.removeEventListener("focus", resumeHandler);
+    window.removeEventListener("pageshow", resumeHandler);
   };
 };

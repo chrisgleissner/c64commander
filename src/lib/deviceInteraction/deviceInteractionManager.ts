@@ -20,6 +20,14 @@ import {
   markDeviceRequestStart,
   setCircuitOpenUntil,
 } from "@/lib/deviceInteraction/deviceStateStore";
+import { waitForBackgroundReadsToResume } from "@/lib/deviceInteraction/deviceActivityGate";
+import {
+  buildRestRequestIdentity,
+  canonicalizeRestPath,
+  isConfigMutationPath,
+  isMachineControlPath,
+  isReadOnlyRestMethod,
+} from "@/lib/deviceInteraction/restRequestIdentity";
 
 export type InteractionIntent = "user" | "system" | "background";
 
@@ -53,11 +61,21 @@ type QueueTask<T> = {
   resolve?: (value: T) => void;
   reject?: (error: Error) => void;
   intent: InteractionIntent;
+  getReadyAtMs?: () => number;
 };
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const isTestEnv = () => {
+  if (
+    (
+      globalThis as {
+        __c64uForceInteractionScheduling?: boolean;
+      }
+    ).__c64uForceInteractionScheduling === true
+  ) {
+    return false;
+  }
   if (typeof import.meta !== "undefined") {
     const env = (import.meta as ImportMeta).env as { VITE_ENABLE_TEST_PROBES?: string } | undefined;
     if (env?.VITE_ENABLE_TEST_PROBES === "1") return true;
@@ -76,6 +94,7 @@ const isTestEnv = () => {
 
 class InteractionScheduler {
   private running = 0;
+  private deferredDrainTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly queues: Record<InteractionIntent, Array<QueueTask<unknown>>> = {
     user: [],
     system: [],
@@ -96,18 +115,52 @@ class InteractionScheduler {
     });
   }
 
-  private takeNext(): QueueTask<unknown> | null {
-    if (this.queues.user.length) return this.queues.user.shift() ?? null;
-    if (this.queues.system.length) return this.queues.system.shift() ?? null;
-    if (this.queues.background.length) return this.queues.background.shift() ?? null;
-    return null;
+  private clearDeferredDrainTimer() {
+    if (this.deferredDrainTimer) {
+      clearTimeout(this.deferredDrainTimer);
+      this.deferredDrainTimer = null;
+    }
+  }
+
+  private scheduleDeferredDrain(nextReadyAtMs: number | null) {
+    this.clearDeferredDrainTimer();
+    if (nextReadyAtMs === null) return;
+    this.deferredDrainTimer = setTimeout(
+      () => {
+        this.deferredDrainTimer = null;
+        this.drain();
+      },
+      Math.max(0, nextReadyAtMs - Date.now()),
+    );
+  }
+
+  private takeNext(): { task: QueueTask<unknown> | null; nextReadyAtMs: number | null } {
+    const now = Date.now();
+    let nextReadyAtMs: number | null = null;
+    for (const intent of ["user", "system", "background"] as const) {
+      const queue = this.queues[intent];
+      for (let index = 0; index < queue.length; index += 1) {
+        const candidate = queue[index];
+        const readyAtMs = candidate.getReadyAtMs?.() ?? now;
+        if (readyAtMs <= now) {
+          queue.splice(index, 1);
+          return { task: candidate, nextReadyAtMs: null };
+        }
+        nextReadyAtMs = nextReadyAtMs === null ? readyAtMs : Math.min(nextReadyAtMs, readyAtMs);
+      }
+    }
+    return { task: null, nextReadyAtMs };
   }
 
   private drain() {
+    this.clearDeferredDrainTimer();
     const limit = Math.max(1, this.maxConcurrency());
     while (this.running < limit) {
-      const task = this.takeNext();
-      if (!task) return;
+      const { task, nextReadyAtMs } = this.takeNext();
+      if (!task) {
+        this.scheduleDeferredDrain(nextReadyAtMs);
+        return;
+      }
       this.running += 1;
       void task
         .run()
@@ -158,7 +211,11 @@ export const resetInteractionState = (reason: string) => {
 
 subscribeDeviceSafetyUpdates(updateConfig);
 
-const restScheduler = new InteractionScheduler(() => config.restMaxConcurrency);
+const REST_MAX_CONCURRENCY = 1;
+const MACHINE_CONTROL_COOLDOWN_MS = 250;
+const CONFIG_MUTATION_COOLDOWN_MS = 120;
+
+const restScheduler = new InteractionScheduler(() => REST_MAX_CONCURRENCY);
 const ftpScheduler = new InteractionScheduler(() => config.ftpMaxConcurrency);
 
 const restCache = new Map<string, CacheEntry<unknown>>();
@@ -238,26 +295,41 @@ const resetFtpFailure = () => {
 };
 
 const resolveRestPolicy = (method: string, path: string, baseUrl: string) => {
-  const normalizedPath = path.split("?")[0];
+  const canonicalPath = canonicalizeRestPath(path, baseUrl);
+  const normalizedPath = canonicalPath.split("?")[0];
   if (method === "GET" && normalizedPath === "/v1/info") {
     return {
-      key: `${baseUrl}:rest-info`,
+      key: buildRestRequestIdentity({ method, path: canonicalPath, baseUrl }),
       cacheMs: config.infoCacheMs,
       cooldownMs: 0,
     };
   }
   if (method === "GET" && normalizedPath === "/v1/configs") {
     return {
-      key: `${baseUrl}:rest-configs`,
+      key: buildRestRequestIdentity({ method, path: canonicalPath, baseUrl }),
       cacheMs: config.configsCacheMs,
       cooldownMs: config.configsCooldownMs,
     };
   }
   if (method === "GET" && normalizedPath === "/v1/drives") {
     return {
-      key: `${baseUrl}:rest-drives`,
+      key: buildRestRequestIdentity({ method, path: canonicalPath, baseUrl }),
       cacheMs: 0,
       cooldownMs: config.drivesCooldownMs,
+    };
+  }
+  if (!isReadOnlyRestMethod(method) && isMachineControlPath(canonicalPath)) {
+    return {
+      key: `${baseUrl}:rest-machine-control`,
+      cacheMs: 0,
+      cooldownMs: MACHINE_CONTROL_COOLDOWN_MS,
+    };
+  }
+  if (!isReadOnlyRestMethod(method) && isConfigMutationPath(canonicalPath)) {
+    return {
+      key: `${baseUrl}:rest-config-mutation`,
+      cacheMs: 0,
+      cooldownMs: CONFIG_MUTATION_COOLDOWN_MS,
     };
   }
   return { key: null, cacheMs: 0, cooldownMs: 0 };
@@ -296,6 +368,50 @@ const applyCooldown = async (
   await sleep(waitMs);
 };
 
+const normalizeRestResourcePath = (path: string, baseUrl: string) => canonicalizeRestPath(path, baseUrl).split("?")[0];
+
+const pathsShareResourceTree = (leftPath: string, rightPath: string) =>
+  leftPath === rightPath || leftPath.startsWith(`${rightPath}/`) || rightPath.startsWith(`${leftPath}/`);
+
+const invalidateRestReadStateForWrite = (method: string, path: string, baseUrl: string) => {
+  if (isReadOnlyRestMethod(method)) return;
+
+  const writePath = normalizeRestResourcePath(path, baseUrl);
+  const invalidatedReadPaths = new Set<string>(["/v1/info"]);
+  if (writePath.startsWith("/v1/configs")) {
+    invalidatedReadPaths.add("/v1/configs");
+  }
+  if (writePath.startsWith("/v1/drives")) {
+    invalidatedReadPaths.add("/v1/drives");
+  }
+  if (isMachineControlPath(writePath)) {
+    invalidatedReadPaths.add("/v1/drives");
+  }
+
+  const shouldInvalidateKey = (key: string) => {
+    if (!key.startsWith(`GET ${baseUrl}`)) return false;
+    const readPath = normalizeRestResourcePath(key.slice(`GET ${baseUrl}`.length), baseUrl);
+    if (invalidatedReadPaths.has(readPath)) return true;
+    return Array.from(invalidatedReadPaths).some((candidate) => pathsShareResourceTree(readPath, candidate));
+  };
+
+  Array.from(restCache.keys()).forEach((key) => {
+    if (shouldInvalidateKey(key)) {
+      restCache.delete(key);
+    }
+  });
+  Array.from(restInflight.keys()).forEach((key) => {
+    if (shouldInvalidateKey(key)) {
+      restInflight.delete(key);
+    }
+  });
+  Array.from(restCooldownUntil.keys()).forEach((key) => {
+    if (shouldInvalidateKey(key)) {
+      restCooldownUntil.delete(key);
+    }
+  });
+};
+
 export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () => Promise<T>): Promise<T> => {
   if (isTestEnv()) {
     markDeviceRequestStart();
@@ -319,6 +435,16 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
     throw error;
   }
 
+  if (meta.intent === "background" && isReadOnlyRestMethod(meta.method)) {
+    if (getDeviceStateSnapshot().state === "BUSY") {
+      recordDeviceGuard(meta.action, {
+        decision: "defer",
+        reason: "device-busy",
+      });
+    }
+    await waitForBackgroundReadsToResume();
+  }
+
   const now = Date.now();
   if (restCircuitUntilMs > now && !(meta.intent === "user" && config.allowUserOverrideCircuit)) {
     recordDeviceGuard(meta.action, {
@@ -336,8 +462,12 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
     });
   }
 
-  const policy = resolveRestPolicy(meta.method, meta.path, meta.baseUrl);
-  if (policy.key && !meta.bypassCache) {
+  const canonicalPath = canonicalizeRestPath(meta.path, meta.baseUrl);
+  const policy = resolveRestPolicy(meta.method, canonicalPath, meta.baseUrl);
+  const usesSharedReadState = isReadOnlyRestMethod(meta.method) && Boolean(policy.key) && !meta.bypassCache;
+  const defersReadWaitsInScheduler = isReadOnlyRestMethod(meta.method);
+
+  if (usesSharedReadState && policy.key) {
     const cached = restCache.get(policy.key);
     if (cached && cached.expiresAt > now) {
       recordDeviceGuard(meta.action, {
@@ -359,7 +489,7 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
   }
 
   const scheduleTask = async () => {
-    if (!meta.bypassBackoff && restBackoffUntilMs > Date.now()) {
+    if (!defersReadWaitsInScheduler && !meta.bypassBackoff && restBackoffUntilMs > Date.now()) {
       const waitMs = restBackoffUntilMs - Date.now();
       recordDeviceGuard(meta.action, {
         decision: "defer",
@@ -369,7 +499,7 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
       await sleep(waitMs);
     }
 
-    if (!meta.bypassCooldown) {
+    if (!defersReadWaitsInScheduler && !meta.bypassCooldown) {
       await applyCooldown(policy.key, policy.cooldownMs, meta.intent, meta.action);
     }
 
@@ -380,12 +510,13 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
     markDeviceRequestStart();
     try {
       const result = await handler();
-      if (policy.key && policy.cacheMs > 0 && !meta.bypassCache) {
+      if (usesSharedReadState && policy.key && policy.cacheMs > 0) {
         restCache.set(policy.key, {
           value: result,
           expiresAt: Date.now() + policy.cacheMs,
         });
       }
+      invalidateRestReadStateForWrite(meta.method, canonicalPath, meta.baseUrl);
       resetRestFailure();
       markDeviceRequestEnd({ success: true });
       return result;
@@ -395,7 +526,7 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
       markDeviceRequestEnd({ success: false, errorMessage: err.message });
       throw error;
     } finally {
-      if (policy.key && !meta.bypassCache) {
+      if (usesSharedReadState && policy.key) {
         restInflight.delete(policy.key);
       }
     }
@@ -404,9 +535,21 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
   const scheduledPromise = restScheduler.schedule<T>({
     intent: meta.intent,
     run: scheduleTask,
+    getReadyAtMs: defersReadWaitsInScheduler
+      ? () => {
+          let readyAtMs = Date.now();
+          if (!meta.bypassBackoff) {
+            readyAtMs = Math.max(readyAtMs, restBackoffUntilMs);
+          }
+          if (!meta.bypassCooldown && policy.key && policy.cooldownMs > 0) {
+            readyAtMs = Math.max(readyAtMs, restCooldownUntil.get(policy.key) ?? 0);
+          }
+          return readyAtMs;
+        }
+      : undefined,
   });
 
-  if (policy.key && !meta.bypassCache) {
+  if (usesSharedReadState && policy.key) {
     restInflight.set(policy.key, scheduledPromise as Promise<unknown>);
   }
 

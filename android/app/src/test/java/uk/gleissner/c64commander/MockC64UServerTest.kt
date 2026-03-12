@@ -9,11 +9,13 @@
 package uk.gleissner.c64commander
 
 import org.json.JSONObject
-import org.junit.Assert.*
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Test
 import java.net.HttpURLConnection
-import java.net.URL
 import java.net.Socket
+import java.net.URL
+import java.util.Arrays
 
 class MockC64UServerTest {
   private fun readBody(connection: HttpURLConnection): String {
@@ -120,6 +122,84 @@ class MockC64UServerTest {
   }
 
   @Test
+  fun screenMemoryDefaultsMatchLiveHardwareAssumptions() {
+    val config = JSONObject().apply {
+      put("general", JSONObject().apply { put("baseUrl", "http://localhost") })
+    }
+    val state = MockC64UState.fromPayload(config)
+    val server = MockC64UServer(state)
+    server.start()
+    waitForServer(server)
+
+    val screenConnection = URL("${server.baseUrl}/v1/machine:readmem?address=0400&length=16").openConnection() as HttpURLConnection
+    screenConnection.requestMethod = "GET"
+    val screenBody = readBody(screenConnection)
+    val screenData = JSONObject(screenBody).getJSONArray("data")
+    repeat(16) { index ->
+      assertEquals(0x20, screenData.getInt(index))
+    }
+
+    val cia2Connection = URL("${server.baseUrl}/v1/machine:readmem?address=DD00&length=1").openConnection() as HttpURLConnection
+    cia2Connection.requestMethod = "GET"
+    val cia2 = JSONObject(readBody(cia2Connection)).getJSONArray("data")
+    assertEquals(0x3F, cia2.getInt(0))
+
+    val vicConnection = URL("${server.baseUrl}/v1/machine:readmem?address=D018&length=1").openConnection() as HttpURLConnection
+    vicConnection.requestMethod = "GET"
+    val vic = JSONObject(readBody(vicConnection)).getJSONArray("data")
+    assertEquals(0x15, vic.getInt(0))
+
+    server.stop()
+  }
+
+  @Test
+  fun binaryWriteSupportsFullScreenBufferRoundTrip() {
+    val config = JSONObject().apply {
+      put("general", JSONObject().apply { put("baseUrl", "http://localhost") })
+    }
+    val state = MockC64UState.fromPayload(config)
+    val server = MockC64UServer(state)
+    server.start()
+    waitForServer(server)
+
+    val baselineConnection = URL("${server.baseUrl}/v1/machine:readmem?address=0400&length=16").openConnection() as HttpURLConnection
+    baselineConnection.requestMethod = "GET"
+    val baseline = JSONObject(readBody(baselineConnection)).getJSONArray("data")
+    val baselineBytes = IntArray(16) { index -> baseline.getInt(index) }
+
+    val mutateConnection = URL("${server.baseUrl}/v1/machine:writemem?address=0400&data=54455354").openConnection() as HttpURLConnection
+    mutateConnection.requestMethod = "PUT"
+    assertEquals(200, mutateConnection.responseCode)
+    mutateConnection.disconnect()
+
+    val fullImage = ByteArray(65536)
+    Arrays.fill(fullImage, 0)
+    fullImage[0xDD00] = 0x3F.toByte()
+    fullImage[0xD018] = 0x15.toByte()
+    repeat(1000) { offset ->
+      fullImage[0x0400 + offset] = 0x20.toByte()
+      fullImage[0xD800 + offset] = 0x0E.toByte()
+    }
+
+    val restoreConnection = URL("${server.baseUrl}/v1/machine:writemem?address=0000").openConnection() as HttpURLConnection
+    restoreConnection.requestMethod = "POST"
+    restoreConnection.doOutput = true
+    restoreConnection.setRequestProperty("Content-Type", "application/octet-stream")
+    restoreConnection.outputStream.use { it.write(fullImage) }
+    assertEquals(200, restoreConnection.responseCode)
+    restoreConnection.disconnect()
+
+    val verifyConnection = URL("${server.baseUrl}/v1/machine:readmem?address=0400&length=16").openConnection() as HttpURLConnection
+    verifyConnection.requestMethod = "GET"
+    val verify = JSONObject(readBody(verifyConnection)).getJSONArray("data")
+    repeat(16) { index ->
+      assertEquals(baselineBytes[index], verify.getInt(index))
+    }
+
+    server.stop()
+  }
+
+  @Test
   fun resetClearsKeyboardBuffer() {
     val config = JSONObject().apply {
       put("general", JSONObject().apply { put("baseUrl", "http://localhost") })
@@ -147,6 +227,7 @@ class MockC64UServerTest {
     assertEquals(0, data.getInt(0))
     server.stop()
   }
+
   @Test
   fun mockC64UServerCanBeInstantiated() {
     val config = JSONObject()

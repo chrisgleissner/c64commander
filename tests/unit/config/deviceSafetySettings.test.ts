@@ -15,57 +15,86 @@ import {
   saveAllowUserOverrideCircuit,
   saveDeviceSafetyMode,
   saveFtpMaxConcurrency,
-  saveRestMaxConcurrency,
   subscribeDeviceSafetyUpdates,
   DEVICE_SAFETY_SETTING_KEYS,
 } from "@/lib/config/deviceSafetySettings";
 
 type ExpectedDefaults = {
-  restMaxConcurrency: number;
   ftpMaxConcurrency: number;
+  infoCacheMs: number;
+  configsCacheMs: number;
+  configsCooldownMs: number;
+  drivesCooldownMs: number;
+  ftpListCooldownMs: number;
   backoffBaseMs: number;
   backoffMaxMs: number;
   backoffFactor: number;
   circuitBreakerThreshold: number;
   circuitBreakerCooldownMs: number;
+  discoveryProbeIntervalMs: number;
+  allowUserOverrideCircuit: boolean;
 };
 
 const MODE_EXPECTATIONS: Record<DeviceSafetyMode, ExpectedDefaults> = {
   RELAXED: {
-    restMaxConcurrency: 2,
-    ftpMaxConcurrency: 2,
-    backoffBaseMs: 150,
+    ftpMaxConcurrency: 3,
+    infoCacheMs: 200,
+    configsCacheMs: 400,
+    configsCooldownMs: 200,
+    drivesCooldownMs: 200,
+    ftpListCooldownMs: 100,
+    backoffBaseMs: 100,
     backoffMaxMs: 1500,
     backoffFactor: 1.5,
     circuitBreakerThreshold: 6,
     circuitBreakerCooldownMs: 2000,
+    discoveryProbeIntervalMs: 400,
+    allowUserOverrideCircuit: true,
   },
   BALANCED: {
-    restMaxConcurrency: 2,
-    ftpMaxConcurrency: 1,
-    backoffBaseMs: 300,
+    ftpMaxConcurrency: 2,
+    infoCacheMs: 600,
+    configsCacheMs: 1000,
+    configsCooldownMs: 500,
+    drivesCooldownMs: 500,
+    ftpListCooldownMs: 300,
+    backoffBaseMs: 200,
     backoffMaxMs: 3000,
     backoffFactor: 1.8,
     circuitBreakerThreshold: 4,
     circuitBreakerCooldownMs: 4000,
+    discoveryProbeIntervalMs: 700,
+    allowUserOverrideCircuit: true,
   },
   CONSERVATIVE: {
-    restMaxConcurrency: 1,
     ftpMaxConcurrency: 1,
-    backoffBaseMs: 500,
+    infoCacheMs: 1200,
+    configsCacheMs: 2000,
+    configsCooldownMs: 1200,
+    drivesCooldownMs: 1000,
+    ftpListCooldownMs: 800,
+    backoffBaseMs: 300,
     backoffMaxMs: 6000,
     backoffFactor: 2,
     circuitBreakerThreshold: 2,
     circuitBreakerCooldownMs: 6000,
+    discoveryProbeIntervalMs: 1000,
+    allowUserOverrideCircuit: false,
   },
   TROUBLESHOOTING: {
-    restMaxConcurrency: 1,
     ftpMaxConcurrency: 1,
+    infoCacheMs: 300,
+    configsCacheMs: 600,
+    configsCooldownMs: 300,
+    drivesCooldownMs: 300,
+    ftpListCooldownMs: 200,
     backoffBaseMs: 200,
     backoffMaxMs: 1200,
     backoffFactor: 1.4,
     circuitBreakerThreshold: 2,
     circuitBreakerCooldownMs: 2000,
+    discoveryProbeIntervalMs: 500,
+    allowUserOverrideCircuit: true,
   },
 };
 
@@ -79,27 +108,29 @@ describe("deviceSafetySettings defaults", () => {
 
     const config = loadDeviceSafetyConfig();
 
-    expect(config.restMaxConcurrency).toBe(expected.restMaxConcurrency);
     expect(config.ftpMaxConcurrency).toBe(expected.ftpMaxConcurrency);
+    expect(config.infoCacheMs).toBe(expected.infoCacheMs);
+    expect(config.configsCacheMs).toBe(expected.configsCacheMs);
+    expect(config.configsCooldownMs).toBe(expected.configsCooldownMs);
+    expect(config.drivesCooldownMs).toBe(expected.drivesCooldownMs);
+    expect(config.ftpListCooldownMs).toBe(expected.ftpListCooldownMs);
     expect(config.backoffBaseMs).toBe(expected.backoffBaseMs);
     expect(config.backoffMaxMs).toBe(expected.backoffMaxMs);
     expect(config.backoffFactor).toBeCloseTo(expected.backoffFactor, 6);
     expect(config.circuitBreakerThreshold).toBe(expected.circuitBreakerThreshold);
     expect(config.circuitBreakerCooldownMs).toBe(expected.circuitBreakerCooldownMs);
+    expect(config.discoveryProbeIntervalMs).toBe(expected.discoveryProbeIntervalMs);
+    expect(config.allowUserOverrideCircuit).toBe(expected.allowUserOverrideCircuit);
   });
 
-  it("keeps REST and FTP concurrency independent", () => {
+  it("keeps FTP concurrency independent from cache overrides", () => {
     saveDeviceSafetyMode("BALANCED");
 
-    saveRestMaxConcurrency(4);
-    let config = loadDeviceSafetyConfig();
-    expect(config.restMaxConcurrency).toBe(4);
-    expect(config.ftpMaxConcurrency).toBe(1);
-
     saveFtpMaxConcurrency(3);
-    config = loadDeviceSafetyConfig();
-    expect(config.restMaxConcurrency).toBe(4);
+    const config = loadDeviceSafetyConfig();
+
     expect(config.ftpMaxConcurrency).toBe(3);
+    expect(config.configsCacheMs).toBe(MODE_EXPECTATIONS.BALANCED.configsCacheMs);
   });
 });
 
@@ -115,14 +146,13 @@ describe("deviceSafetySettings undefined-environment branches", () => {
     expect(loadDeviceSafetyMode()).toBe("BALANCED");
     const config = loadDeviceSafetyConfig();
     expect(config.mode).toBe("BALANCED");
-    expect(config.restMaxConcurrency).toBe(2);
+    expect(config.ftpMaxConcurrency).toBe(2);
   });
 
   it("readNumber returns null for non-finite stored value (line 125 FALSE)", () => {
-    localStorage.setItem(DEVICE_SAFETY_SETTING_KEYS.REST_MAX_CONCURRENCY_KEY, "not-a-number");
+    localStorage.setItem(DEVICE_SAFETY_SETTING_KEYS.FTP_MAX_CONCURRENCY_KEY, "not-a-number");
     const config = loadDeviceSafetyConfig();
-    // Falls back to default (BALANCED = 2)
-    expect(config.restMaxConcurrency).toBe(2);
+    expect(config.ftpMaxConcurrency).toBe(2);
   });
 
   it("broadcast is skipped when window is undefined (line 147)", () => {

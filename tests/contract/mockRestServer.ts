@@ -34,6 +34,16 @@ export type MockRestServer = {
   close: () => Promise<void>;
 };
 
+export type MockRestServerOptions = {
+  breakpointFailure?: {
+    afterRequests: number;
+    mode: "status" | "hang";
+    status?: number;
+    methods?: string[];
+    pathIncludes?: string;
+  };
+};
+
 const readBody = async (req: IncomingMessage): Promise<string> => {
   const chunks: Buffer[] = [];
   for await (const chunk of req) {
@@ -69,6 +79,22 @@ const createDefaultConfigState = (): ConfigState => ({
     "Drive Type": { value: "1541", values: ["1541", "1571"] },
   },
   "Audio Mixer": {
+    "Vol Socket 1": {
+      value: " 0 dB",
+      values: ["OFF", "-1 dB", " 0 dB", "+1 dB"],
+    },
+    "Vol Socket 2": {
+      value: " 0 dB",
+      values: ["OFF", "-1 dB", " 0 dB", "+1 dB"],
+    },
+    "Vol UltiSid 1": {
+      value: " 0 dB",
+      values: ["OFF", "-1 dB", " 0 dB", "+1 dB"],
+    },
+    "Vol UltiSid 2": {
+      value: " 0 dB",
+      values: ["OFF", "-1 dB", " 0 dB", "+1 dB"],
+    },
     "Pan Socket 1": {
       value: "Center",
       values: ["Left 1", "Center", "Right 1"],
@@ -76,7 +102,7 @@ const createDefaultConfigState = (): ConfigState => ({
   },
 });
 
-export async function createMockRestServer(): Promise<MockRestServer> {
+export async function createMockRestServer(options: MockRestServerOptions = {}): Promise<MockRestServer> {
   const configState: ConfigState = createDefaultConfigState();
   const driveState: Record<"a" | "b" | "softiec" | "printer", DriveState> = {
     a: { enabled: true, bus_id: 8, type: "1541" },
@@ -89,11 +115,23 @@ export async function createMockRestServer(): Promise<MockRestServer> {
     },
     printer: { enabled: false, bus_id: 4 },
   };
+  let matchingRequestCount = 0;
 
   const server = http.createServer(async (req, res) => {
     const method = req.method ?? "GET";
     const url = req.url ?? "/";
     const parsed = new URL(url, "http://127.0.0.1");
+
+    if (shouldInjectBreakpointFailure({ failure: options.breakpointFailure, method, path: parsed.pathname })) {
+      matchingRequestCount += 1;
+      if (matchingRequestCount > options.breakpointFailure!.afterRequests) {
+        if (options.breakpointFailure!.mode === "hang") {
+          return;
+        }
+        json(res, options.breakpointFailure!.status ?? 503, { errors: ["Breakpoint failure injected"] });
+        return;
+      }
+    }
 
     if (method === "OPTIONS") {
       json(res, 204, {});
@@ -313,4 +351,18 @@ export async function createMockRestServer(): Promise<MockRestServer> {
     baseUrl: `http://127.0.0.1:${address.port}`,
     close: () => new Promise<void>((resolve) => server.close(() => resolve())),
   };
+}
+
+function shouldInjectBreakpointFailure(input: {
+  failure?: MockRestServerOptions["breakpointFailure"];
+  method: string;
+  path: string;
+}): boolean {
+  if (!input.failure) {
+    return false;
+  }
+  const methodMatch =
+    !input.failure.methods || input.failure.methods.length === 0 || input.failure.methods.includes(input.method);
+  const pathMatch = !input.failure.pathIncludes || input.path.includes(input.failure.pathIncludes);
+  return methodMatch && pathMatch;
 }

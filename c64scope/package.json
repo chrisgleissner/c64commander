@@ -15,6 +15,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "npm run build && npm run test",
+    "explore:wave1": "node dist/agenticExploratoryWave1.js",
     "full-coverage:execute": "node dist/fullAppCoverageExecutor.js",
     "hil:evidence": "node dist/hilEvidenceRun.js",
     "mcp": "node dist/index.js",

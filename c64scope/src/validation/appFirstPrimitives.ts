@@ -10,7 +10,9 @@ import { dumpUiHierarchy } from "./helpers.js";
 import {
   activeBottomTabLabel,
   findBottomTabByText,
+  findNodeByResourceId,
   findVisibleText,
+  findVisibleTextContaining,
   parseBoundsCenter,
   parseUiNodes,
 } from "./appFirstUi.js";
@@ -28,6 +30,15 @@ const TAB_LABEL_BY_ROUTE: Record<string, string> = {
   "/docs": "Docs",
 };
 
+const TAB_RESOURCE_ID_BY_ROUTE: Record<string, string> = {
+  "/": "tab-home",
+  "/play": "tab-play",
+  "/disks": "tab-disks",
+  "/config": "tab-config",
+  "/settings": "tab-settings",
+  "/docs": "tab-docs",
+};
+
 const ROUTE_MARKERS: Record<string, readonly string[]> = {
   "/": ["HOME", "Save RAM", "QUICK CONFIG"],
   "/play": ["PLAY FILES", "Playlist"],
@@ -38,12 +49,12 @@ const ROUTE_MARKERS: Record<string, readonly string[]> = {
 };
 
 const TAB_FALLBACK_COORDS: Record<string, { x: number; y: number }> = {
-  Home: { x: 110, y: 1800 },
-  Play: { x: 270, y: 1800 },
-  Disks: { x: 430, y: 1800 },
-  Config: { x: 605, y: 1800 },
-  Settings: { x: 790, y: 1800 },
-  Docs: { x: 970, y: 1800 },
+  Home: { x: 107, y: 2077 },
+  Play: { x: 272, y: 2077 },
+  Disks: { x: 433, y: 2077 },
+  Config: { x: 606, y: 2077 },
+  Settings: { x: 797, y: 2077 },
+  Docs: { x: 978, y: 2077 },
 };
 const TAB_LABELS = Object.values(TAB_LABEL_BY_ROUTE);
 
@@ -65,6 +76,33 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function dismissConnectionStatusOverlay(client: DroidmindClient, serial: string): Promise<void> {
+  const xml = await dumpUiHierarchy(serial);
+  const nodes = parseUiNodes(xml);
+  const overlayVisible = findVisibleText(nodes, "Connection Status");
+  if (!overlayVisible) {
+    return;
+  }
+
+  const closeButton = findVisibleText(nodes, "Close");
+  if (!closeButton) {
+    return;
+  }
+
+  const center = parseBoundsCenter(closeButton.bounds);
+  if (!center) {
+    return;
+  }
+
+  await client.tap(serial, center.x, center.y);
+  await sleep(600);
+}
+
+async function isKeyguardShowing(client: DroidmindClient, serial: string): Promise<boolean> {
+  const windowDump = await client.shell(serial, "dumpsys window | grep isKeyguardShowing");
+  return windowDump.includes("isKeyguardShowing=true");
+}
+
 function routeLabel(route: string): string {
   const label = TAB_LABEL_BY_ROUTE[route];
   if (!label) {
@@ -74,16 +112,26 @@ function routeLabel(route: string): string {
 }
 
 export async function ensureDeviceUnlocked(client: DroidmindClient, serial: string): Promise<void> {
-  const windowDump = await client.shell(serial, "dumpsys window | grep isKeyguardShowing");
-  if (!windowDump.includes("isKeyguardShowing=true")) {
+  if (!(await isKeyguardShowing(client, serial))) {
     return;
   }
 
-  // Wake + dismiss lock screen on lab device.
-  await client.pressKey(serial, 82);
-  await sleep(300);
-  await client.swipe(serial, 540, 1700, 540, 350, 220);
-  await sleep(800);
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    await client.pressKey(serial, 224);
+    await sleep(150);
+    await client.shell(serial, "wm dismiss-keyguard");
+    await sleep(150);
+    await client.pressKey(serial, 82);
+    await sleep(300);
+    await client.swipe(serial, 540, 1700, 540, 350, 220);
+    await sleep(800);
+
+    if (!(await isKeyguardShowing(client, serial))) {
+      return;
+    }
+  }
+
+  throw new Error("Device remained locked after app-first unlock attempts.");
 }
 
 export async function launchAppForeground(client: DroidmindClient, serial: string): Promise<void> {
@@ -116,6 +164,46 @@ export async function tapByText(client: DroidmindClient, serial: string, text: s
   return true;
 }
 
+export async function tapByTextContaining(client: DroidmindClient, serial: string, text: string): Promise<boolean> {
+  const xml = await dumpUiHierarchy(serial);
+  const nodes = parseUiNodes(xml);
+  const node = findVisibleTextContaining(nodes, text);
+  if (!node) {
+    return false;
+  }
+
+  const center = parseBoundsCenter(node.bounds);
+  if (!center) {
+    return false;
+  }
+
+  await client.tap(serial, center.x, center.y);
+  await sleep(900);
+  return true;
+}
+
+export async function tapByResourceId(
+  client: DroidmindClient,
+  serial: string,
+  resourceIdSuffix: string,
+): Promise<boolean> {
+  const xml = await dumpUiHierarchy(serial);
+  const nodes = parseUiNodes(xml);
+  const node = findNodeByResourceId(nodes, resourceIdSuffix);
+  if (!node) {
+    return false;
+  }
+
+  const center = parseBoundsCenter(node.bounds);
+  if (!center) {
+    return false;
+  }
+
+  await client.tap(serial, center.x, center.y);
+  await sleep(900);
+  return true;
+}
+
 function computeBottomTabThreshold(nodes: ReturnType<typeof parseUiNodes>): number {
   let maxCenterY = 0;
   for (const node of nodes) {
@@ -130,12 +218,37 @@ function computeBottomTabThreshold(nodes: ReturnType<typeof parseUiNodes>): numb
   return Math.floor(maxCenterY * 0.92);
 }
 
+function findBottomTabByResourceId(
+  nodes: ReturnType<typeof parseUiNodes>,
+  resourceId: string,
+  minCenterY: number,
+): ReturnType<typeof parseUiNodes>[number] | null {
+  for (const node of nodes) {
+    if (!node.enabled || !node.clickable || node.className !== "android.widget.Button") {
+      continue;
+    }
+    if (!node.resourceId.endsWith(resourceId)) {
+      continue;
+    }
+    const center = parseBoundsCenter(node.bounds);
+    if (!center || center.y < minCenterY) {
+      continue;
+    }
+    return node;
+  }
+  return null;
+}
+
 export async function navigateToRoute(client: DroidmindClient, serial: string, route: string): Promise<void> {
   const tabLabel = routeLabel(route);
+  await dismissConnectionStatusOverlay(client, serial);
+  const tabResourceId = TAB_RESOURCE_ID_BY_ROUTE[route];
   const xml = await dumpUiHierarchy(serial);
   const nodes = parseUiNodes(xml);
   const bottomThreshold = computeBottomTabThreshold(nodes);
-  const tabNode = findBottomTabByText(nodes, tabLabel, bottomThreshold);
+  const tabNode =
+    findBottomTabByText(nodes, tabLabel, bottomThreshold) ??
+    findBottomTabByResourceId(nodes, tabResourceId, bottomThreshold);
 
   if (tabNode) {
     const center = parseBoundsCenter(tabNode.bounds);
@@ -153,7 +266,7 @@ export async function navigateToRoute(client: DroidmindClient, serial: string, r
     await sleep(900);
   }
 
-  await waitForRouteMarkers(serial, route, 8);
+  await waitForRouteMarkers(serial, route, 20);
 }
 
 export async function waitForRouteMarkers(serial: string, route: string, retries: number): Promise<void> {

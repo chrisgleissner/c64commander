@@ -13,6 +13,7 @@ let connectionState = "UNKNOWN";
 let lastProbeAtMs: number | null = null;
 let lastProbeSucceededAtMs: number | null = null;
 let lastProbeFailedAtMs: number | null = null;
+let lastDeviceRequestAtMs: number | null = null;
 let configuredHost = "192.168.0.64";
 let diagnosticsSummary = {
   rest: { total: 10, failed: 2, severity: "medium" },
@@ -32,6 +33,32 @@ vi.mock("@/hooks/useConnectionState", () => ({
     lastProbeFailedAtMs,
   }),
 }));
+
+vi.mock("@/lib/deviceInteraction/deviceStateStore", () => ({
+  getDeviceStateSnapshot: () =>
+    deviceStateSnapshotRef ?? {
+      state: "READY",
+      connectionState,
+      busyCount: 0,
+      lastRequestAtMs: lastDeviceRequestAtMs,
+      lastUpdatedAtMs: Date.now(),
+      lastErrorMessage: null,
+      lastSuccessAtMs: lastDeviceRequestAtMs,
+      circuitOpenUntilMs: null,
+    },
+  subscribeDeviceState: () => () => undefined,
+}));
+
+let deviceStateSnapshotRef: {
+  state: string;
+  connectionState: string;
+  busyCount: number;
+  lastRequestAtMs: number | null;
+  lastUpdatedAtMs: number;
+  lastErrorMessage: string | null;
+  lastSuccessAtMs: number | null;
+  circuitOpenUntilMs: number | null;
+} | null = null;
 
 vi.mock("@/lib/connection/connectionManager", () => ({
   discoverConnection: (...args: unknown[]) => discoverConnection(...args),
@@ -66,14 +93,39 @@ describe("ConnectivityIndicator", () => {
     lastProbeAtMs = null;
     lastProbeSucceededAtMs = null;
     lastProbeFailedAtMs = null;
+    lastDeviceRequestAtMs = null;
+    deviceStateSnapshotRef = {
+      state: "READY",
+      connectionState,
+      busyCount: 0,
+      lastRequestAtMs: lastDeviceRequestAtMs,
+      lastUpdatedAtMs: Date.now(),
+      lastErrorMessage: null,
+      lastSuccessAtMs: lastDeviceRequestAtMs,
+      circuitOpenUntilMs: null,
+    };
     requestDiagnosticsOpen.mockReset();
   });
+
+  const syncDeviceSnapshot = () => {
+    deviceStateSnapshotRef = {
+      state: "READY",
+      connectionState,
+      busyCount: 0,
+      lastRequestAtMs: lastDeviceRequestAtMs,
+      lastUpdatedAtMs: Date.now(),
+      lastErrorMessage: null,
+      lastSuccessAtMs: lastDeviceRequestAtMs,
+      circuitOpenUntilMs: null,
+    };
+  };
 
   it("renders real mode indicator and opens status pop-up with last-request line", () => {
     connectionState = "REAL_CONNECTED";
     lastProbeAtMs = Date.now() - 2_000;
     lastProbeSucceededAtMs = Date.now() - 2_000;
     lastProbeFailedAtMs = null;
+    syncDeviceSnapshot();
 
     const { getByTestId, queryByText } = render(<ConnectivityIndicator />);
     const button = getByTestId("connectivity-indicator");
@@ -96,6 +148,7 @@ describe("ConnectivityIndicator", () => {
     lastProbeAtMs = Date.now() - 1_000;
     lastProbeSucceededAtMs = null;
     lastProbeFailedAtMs = Date.now() - 1_000;
+    syncDeviceSnapshot();
 
     const { getByTestId } = render(<ConnectivityIndicator />);
     const button = getByTestId("connectivity-indicator");
@@ -111,6 +164,7 @@ describe("ConnectivityIndicator", () => {
     lastProbeAtMs = Date.now() - 5_000;
     lastProbeSucceededAtMs = Date.now() - 20_000;
     lastProbeFailedAtMs = Date.now() - 5_000;
+    syncDeviceSnapshot();
 
     const { getByTestId, getByRole, queryByRole, rerender } = render(<ConnectivityIndicator />);
     const button = getByTestId("connectivity-indicator");
@@ -123,6 +177,7 @@ describe("ConnectivityIndicator", () => {
     lastProbeAtMs = Date.now() - 2_000;
     lastProbeSucceededAtMs = Date.now() - 2_000;
     lastProbeFailedAtMs = null;
+    syncDeviceSnapshot();
     rerender(<ConnectivityIndicator />);
     fireEvent.click(getByTestId("connectivity-indicator"));
     expect(queryByRole("button", { name: "Retry Now" })).toBeNull();
@@ -134,6 +189,7 @@ describe("ConnectivityIndicator", () => {
     lastProbeSucceededAtMs = null;
     lastProbeFailedAtMs = Date.now() - 5_000;
     configuredHost = "192.168.0.10";
+    syncDeviceSnapshot();
 
     const { getByTestId, getByRole, getByLabelText, queryByTestId } = render(<ConnectivityIndicator />);
     fireEvent.click(getByTestId("connectivity-indicator"));
@@ -150,6 +206,7 @@ describe("ConnectivityIndicator", () => {
   it("saves host when Enter is pressed", () => {
     connectionState = "OFFLINE_NO_DEMO";
     configuredHost = "192.168.0.11";
+    syncDeviceSnapshot();
     const { getByTestId, getByRole, getByLabelText } = render(<ConnectivityIndicator />);
     fireEvent.click(getByTestId("connectivity-indicator"));
     fireEvent.click(getByRole("button", { name: "Change" }));
@@ -160,6 +217,7 @@ describe("ConnectivityIndicator", () => {
   });
 
   it("renders diagnostics rows with deterministic grammar and opens diagnostics tabs", () => {
+    syncDeviceSnapshot();
     const { getByTestId } = render(<ConnectivityIndicator />);
     fireEvent.click(getByTestId("connectivity-indicator"));
 
@@ -177,6 +235,7 @@ describe("ConnectivityIndicator", () => {
   });
 
   it("ftp row click opens actions diagnostics tab", () => {
+    syncDeviceSnapshot();
     const { getByTestId } = render(<ConnectivityIndicator />);
     fireEvent.click(getByTestId("connectivity-indicator"));
     fireEvent.click(getByTestId("connection-diagnostics-row-ftp"));
@@ -184,6 +243,7 @@ describe("ConnectivityIndicator", () => {
   });
 
   it("log issues row click opens error-logs diagnostics tab", () => {
+    syncDeviceSnapshot();
     const { getByTestId } = render(<ConnectivityIndicator />);
     fireEvent.click(getByTestId("connectivity-indicator"));
     fireEvent.click(getByTestId("connection-diagnostics-row-log-issues"));
@@ -191,6 +251,7 @@ describe("ConnectivityIndicator", () => {
   });
 
   it("renders host and change action on one row before edit mode", () => {
+    syncDeviceSnapshot();
     const { getByTestId, getByRole } = render(<ConnectivityIndicator />);
     fireEvent.click(getByTestId("connectivity-indicator"));
 
@@ -200,6 +261,7 @@ describe("ConnectivityIndicator", () => {
   });
 
   it("uses a two-group popover structure with direct last request line", () => {
+    syncDeviceSnapshot();
     const { getByTestId } = render(<ConnectivityIndicator />);
     fireEvent.click(getByTestId("connectivity-indicator"));
 
@@ -219,6 +281,7 @@ describe("ConnectivityIndicator", () => {
       lastProbeAtMs = Date.now() - 3_000;
       lastProbeSucceededAtMs = lastProbeAtMs;
       lastProbeFailedAtMs = null;
+      syncDeviceSnapshot();
 
       const { getByTestId } = render(<ConnectivityIndicator />);
       fireEvent.click(getByTestId("connectivity-indicator"));
@@ -236,10 +299,30 @@ describe("ConnectivityIndicator", () => {
       lastProbeAtMs = Date.now() - 123_000;
       lastProbeSucceededAtMs = lastProbeAtMs;
       lastProbeFailedAtMs = null;
+      syncDeviceSnapshot();
 
       const { getByTestId } = render(<ConnectivityIndicator />);
       fireEvent.click(getByTestId("connectivity-indicator"));
       expect(getByTestId("connection-status-popover").textContent).toMatch(/Last request:\s+2m 3s ago/);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("prefers the freshest device REST/FTP request over a stale discovery probe", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2024-01-01T00:00:00Z"));
+      connectionState = "REAL_CONNECTED";
+      lastProbeAtMs = Date.now() - 2 * 60 * 60 * 1000;
+      lastProbeSucceededAtMs = lastProbeAtMs;
+      lastProbeFailedAtMs = null;
+      lastDeviceRequestAtMs = Date.now() - 4_000;
+      syncDeviceSnapshot();
+
+      const { getByTestId } = render(<ConnectivityIndicator />);
+      fireEvent.click(getByTestId("connectivity-indicator"));
+      expect(getByTestId("connection-status-popover").textContent).toMatch(/Last request:\s+4s ago/);
     } finally {
       vi.useRealTimers();
     }
@@ -253,6 +336,7 @@ describe("ConnectivityIndicator", () => {
       lastProbeAtMs = Date.now() - 500;
       lastProbeSucceededAtMs = lastProbeAtMs;
       lastProbeFailedAtMs = null;
+      syncDeviceSnapshot();
 
       const { getByTestId } = render(<ConnectivityIndicator />);
       fireEvent.click(getByTestId("connectivity-indicator"));
@@ -264,12 +348,14 @@ describe("ConnectivityIndicator", () => {
   });
 
   it("has a close button in the popover", () => {
+    syncDeviceSnapshot();
     const { getByTestId } = render(<ConnectivityIndicator />);
     fireEvent.click(getByTestId("connectivity-indicator"));
     expect(getByTestId("connection-status-close")).toBeTruthy();
   });
 
   it("provides data-testid on status, host, and last-request rows", () => {
+    syncDeviceSnapshot();
     const { getByTestId } = render(<ConnectivityIndicator />);
     fireEvent.click(getByTestId("connectivity-indicator"));
     expect(getByTestId("connection-status-row-status").textContent).toContain("Status:");

@@ -9,7 +9,7 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 const adbMock = vi.fn();
 const c64uGetMock = vi.fn();
@@ -20,6 +20,10 @@ vi.mock("../src/validation/helpers.js", () => ({
   c64uGet: c64uGetMock,
   resetC64Machine: resetC64MachineMock,
 }));
+
+afterEach(() => {
+  vi.doUnmock("../src/sessionStore.js");
+});
 
 describe("validation runner", () => {
   it("collects hardware info from helpers", async () => {
@@ -161,6 +165,58 @@ describe("validation runner", () => {
 
       expect(result.outcome).toBe("fail");
       expect(result.failureClass).toBe("infrastructure_failure");
+    } finally {
+      await rm(artifactRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("records a plain abort summary when execution fails but the recovery reset succeeds", async () => {
+    adbMock
+      .mockResolvedValueOnce("Pixel")
+      .mockResolvedValueOnce("tensor")
+      .mockResolvedValueOnce("phone")
+      .mockResolvedValueOnce("14");
+    c64uGetMock.mockResolvedValueOnce(
+      JSON.stringify({
+        hostname: "c64u",
+        firmware_version: "1.0",
+        product: "Ultimate 64",
+        unique_id: "abc",
+      }),
+    );
+    resetC64MachineMock.mockResolvedValue(undefined);
+
+    const artifactRoot = await mkdtemp(path.join(os.tmpdir(), "c64scope-runner-abort-"));
+    const { runCase } = await import("../src/validation/runner.js");
+
+    try {
+      const result = await runCase(
+        {
+          id: "TEST-ABORT",
+          name: "Runner Abort Case",
+          caseId: "RUN-002B",
+          featureArea: "Home",
+          route: "/",
+          validationTrack: "calibration",
+          safetyClass: "read-only",
+          expectedOutcome: "fail",
+          oracleClasses: ["UI"],
+          run: async () => {
+            throw new Error("execution aborted cleanly");
+          },
+        },
+        "serial-1",
+        "c64u",
+        artifactRoot,
+      );
+
+      const session = JSON.parse(await readFile(path.join(result.artifactDir, "session.json"), "utf-8")) as {
+        summary: string;
+      };
+
+      expect(result.outcome).toBe("fail");
+      expect(session.summary).toContain("Case aborted: execution aborted cleanly");
+      expect(session.summary).not.toContain("reset failed");
     } finally {
       await rm(artifactRoot, { recursive: true, force: true });
     }
@@ -491,5 +547,48 @@ describe("validation runner", () => {
     } finally {
       await rm(artifactRoot, { recursive: true, force: true });
     }
+  });
+
+  it("fails fast when the session store cannot start a run", async () => {
+    vi.resetModules();
+    vi.doMock("../src/sessionStore.js", () => ({
+      ScopeSessionStore: vi.fn().mockImplementation(() => ({
+        startSession: vi.fn().mockResolvedValue({
+          ok: false,
+          error: { message: "session-start failed" },
+        }),
+      })),
+    }));
+
+    const { runCase } = await import("../src/validation/runner.js");
+
+    await expect(
+      runCase(
+        {
+          id: "TEST-START-FAIL",
+          name: "Runner Start Failure",
+          caseId: "RUN-007",
+          featureArea: "Play",
+          route: "/play",
+          validationTrack: "calibration",
+          safetyClass: "read-only",
+          expectedOutcome: "inconclusive",
+          oracleClasses: ["UI"],
+          run: async () => ({
+            assertions: [{ oracleClass: "UI", passed: true, details: {} }],
+            explorationTrace: {
+              routeDiscovery: ["/play"],
+              decisionLog: [],
+              safetyBudget: "read-only",
+              oracleSelection: ["UI"],
+              recoveryActions: [],
+            },
+          }),
+        },
+        "serial-1",
+        "c64u",
+        "/tmp/c64scope-runner-start-fail",
+      ),
+    ).rejects.toThrow(/Failed to start session: session-start failed/);
   });
 });

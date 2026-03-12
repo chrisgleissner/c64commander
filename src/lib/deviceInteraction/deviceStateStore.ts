@@ -15,6 +15,7 @@ export type DeviceStateSnapshot = Readonly<{
   state: DeviceState;
   connectionState: ConnectionState | null;
   busyCount: number;
+  lastRequestAtMs: number | null;
   lastUpdatedAtMs: number;
   lastErrorMessage: string | null;
   lastSuccessAtMs: number | null;
@@ -23,6 +24,7 @@ export type DeviceStateSnapshot = Readonly<{
 
 let connectionState: ConnectionState | null = null;
 let busyCount = 0;
+let lastRequestAtMs: number | null = null;
 let lastErrorMessage: string | null = null;
 let lastSuccessAtMs: number | null = null;
 let circuitOpenUntilMs: number | null = null;
@@ -31,6 +33,7 @@ let snapshot: DeviceStateSnapshot = Object.freeze({
   state: "UNKNOWN",
   connectionState: null,
   busyCount: 0,
+  lastRequestAtMs: null,
   lastUpdatedAtMs: Date.now(),
   lastErrorMessage: null,
   lastSuccessAtMs: null,
@@ -68,6 +71,7 @@ const updateSnapshot = (note?: string) => {
     state,
     connectionState,
     busyCount,
+    lastRequestAtMs,
     lastUpdatedAtMs: Date.now(),
     lastErrorMessage,
     lastSuccessAtMs,
@@ -101,6 +105,7 @@ export const updateDeviceConnectionState = (next: ConnectionState) => {
 
 export const markDeviceRequestStart = () => {
   busyCount += 1;
+  lastRequestAtMs = Date.now();
   updateSnapshot("request-start");
 };
 

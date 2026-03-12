@@ -9,7 +9,6 @@ import {
 vi.mock("@/lib/config/deviceSafetySettings", () => ({
   loadDeviceSafetyConfig: () => ({
     mode: "BALANCED",
-    restMaxConcurrency: 2,
     ftpMaxConcurrency: 1,
     infoCacheMs: 600,
     configsCacheMs: 1000,

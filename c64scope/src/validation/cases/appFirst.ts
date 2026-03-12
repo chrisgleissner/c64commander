@@ -11,6 +11,7 @@ import { dumpUiHierarchy, ts } from "../helpers.js";
 import { parseUiNodes } from "../appFirstUi.js";
 import { DroidmindClient } from "../droidmindClient.js";
 import { ensureDeviceUnlocked, launchAppForeground, navigateToRoute, restartApp } from "../appFirstPrimitives.js";
+import { appFirstPlaybackContinuity, appFirstPlaylistAutoAdvance } from "./exploratoryPlayback.js";
 import type { ValidationCase } from "../types.js";
 
 function hasMarker(nodes: ReturnType<typeof parseUiNodes>, marker: string): boolean {
@@ -592,3 +593,5 @@ export const appFirstSettingsSurface: ValidationCase = {
     };
   },
 };
+
+export { appFirstPlaybackContinuity, appFirstPlaylistAutoAdvance };

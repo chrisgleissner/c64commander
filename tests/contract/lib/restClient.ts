@@ -24,6 +24,7 @@ export type RestResponse = {
   status: number;
   data: unknown;
   headers: Record<string, string | string[] | undefined>;
+  requestHeaders: Record<string, string | string[] | undefined>;
   latencyMs: number;
   correlationId: string;
 };
@@ -73,6 +74,7 @@ export class RestClient {
       status: response.status,
       data: response.data,
       headers: normalizeHeaders(response.headers),
+      requestHeaders: normalizeHeaders(headers),
       latencyMs,
       correlationId,
     };

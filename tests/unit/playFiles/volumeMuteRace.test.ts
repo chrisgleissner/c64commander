@@ -7,6 +7,7 @@
  */
 
 import { describe, expect, it, vi } from "vitest";
+import { buildEnabledSidUnmuteUpdates, type SidEnablement } from "@/lib/config/sidVolumeControl";
 
 /**
  * Unit tests for Issue 1 (volume/mute desync) fixes.
@@ -279,5 +280,102 @@ describe("convergence: rapid mute/unmute sequence", () => {
       });
     }
     expect(allDispatches).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// F. Unmute refresh: skip SIDs disabled while muted
+// ---------------------------------------------------------------------------
+
+async function resolveManualUnmuteUpdates(opts: {
+  snapshot: Record<string, string | number>;
+  staleEnablement: SidEnablement;
+  resolveEnabledSidVolumeItems: (forceRefresh?: boolean) => Promise<Array<{ name: string }>>;
+}) {
+  const { snapshot, staleEnablement, resolveEnabledSidVolumeItems } = opts;
+  const items = await resolveEnabledSidVolumeItems(true);
+  const allowedNames = new Set(items.map((item) => item.name));
+  return Object.fromEntries(
+    Object.entries(buildEnabledSidUnmuteUpdates(snapshot, staleEnablement)).filter(([name]) => allowedNames.has(name)),
+  );
+}
+
+describe("unmute refresh uses live SID enablement", () => {
+  it("skips restoring SIDs that were disabled while muted", async () => {
+    const resolveEnabledSidVolumeItems = vi.fn().mockResolvedValue([{ name: "Vol UltiSid 2" }]);
+
+    const updates = await resolveManualUnmuteUpdates({
+      snapshot: {
+        "Vol Socket 1": "+6 dB",
+        "Vol UltiSid 2": "+6 dB",
+      },
+      staleEnablement: {
+        socket1: true,
+        socket2: false,
+        ultiSid1: false,
+        ultiSid2: true,
+      },
+      resolveEnabledSidVolumeItems,
+    });
+
+    expect(resolveEnabledSidVolumeItems).toHaveBeenCalledWith(true);
+    expect(updates).toEqual({
+      "Vol UltiSid 2": "+6 dB",
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// E. Pause transition: stale query data must not cancel the paused mute state
+// ---------------------------------------------------------------------------
+
+function syncPauseMuteState(opts: {
+  activeIndices: number[];
+  pausingFromPauseRef: { current: boolean };
+  resumingFromPauseRef: { current: boolean };
+  dispatch: (state: "muted" | "unmuted") => void;
+}) {
+  const { activeIndices, pausingFromPauseRef, resumingFromPauseRef, dispatch } = opts;
+  if (pausingFromPauseRef.current && activeIndices.length) {
+    return;
+  }
+  if (!activeIndices.length) {
+    if (resumingFromPauseRef.current) return;
+    pausingFromPauseRef.current = false;
+    dispatch("muted");
+    return;
+  }
+  dispatch("unmuted");
+}
+
+describe("pause transition mute guard", () => {
+  it("does not revert the UI to unmuted while stale pre-pause values are still in the query cache", () => {
+    const dispatch = vi.fn();
+    const pausingFromPauseRef = { current: true };
+
+    syncPauseMuteState({
+      activeIndices: [3],
+      pausingFromPauseRef,
+      resumingFromPauseRef: { current: false },
+      dispatch,
+    });
+
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(pausingFromPauseRef.current).toBe(true);
+  });
+
+  it("clears the pause guard once the hardware mute state is observed", () => {
+    const dispatch = vi.fn();
+    const pausingFromPauseRef = { current: true };
+
+    syncPauseMuteState({
+      activeIndices: [],
+      pausingFromPauseRef,
+      resumingFromPauseRef: { current: false },
+      dispatch,
+    });
+
+    expect(dispatch).toHaveBeenCalledWith("muted");
+    expect(pausingFromPauseRef.current).toBe(false);
   });
 });

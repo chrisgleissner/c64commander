@@ -5518,7 +5518,7 @@
     "data": {
       "method": "PUT",
       "url": "http://127.0.0.1:43039/v1/drives/a:mount?image=%2FUsb0%2FGames%2FTurrican%20II%2FDisk%201.d64&type=d64&mode=readwrite",
-      "normalizedUrl": "/v1/drives/a:mount?image=%2FUsb0%2FGames%2FTurrican%20II%2FDisk%201.d64&type=d64&mode=readwrite",
+      "normalizedUrl": "/v1/drives/a:mount?image=%2FUsb0%2FGames%2FTurrican+II%2FDisk+1.d64&mode=readwrite&type=d64",
       "headers": {
         "Content-Type": "application/json",
         "X-C64U-Host": "127.0.0.1:43039"

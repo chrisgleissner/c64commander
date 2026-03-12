@@ -11,10 +11,11 @@ import { RestClient } from "../../lib/restClient.js";
 import { FtpClient } from "../../lib/ftpClient.js";
 import { delay } from "../../lib/timing.js";
 import type { LogEventInput } from "../../lib/logging.js";
+import type { SharedRestRequest } from "../../lib/restRequest.js";
 
 export type MixedScenarioContext = {
   rest: RestClient;
-  request: RestClient["request"];
+  request: SharedRestRequest;
   config: HarnessConfig;
   log: (event: LogEventInput) => void;
 };

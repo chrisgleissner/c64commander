@@ -53,6 +53,7 @@ test-results/
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
+!.vscode/mcp.json
 
 # Android signing
 *.keystore
@@ -157,8 +158,10 @@ c64scope/**/dist/
 c64scope/**/node_modules/
 
 # Symlinked projects
+1541ultimate
 android-mcp-server
 c64bridge
 c64stream
 droidmind
 mobile-mcp
+test-data

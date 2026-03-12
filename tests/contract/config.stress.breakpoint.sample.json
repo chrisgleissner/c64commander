@@ -1,0 +1,45 @@
+{
+  "baseUrl": "http://c64u",
+  "mode": "STRESS",
+  "auth": "OFF",
+  "ftpMode": "PASV",
+  "ftpPort": 21,
+  "outputDir": "test-results/contract",
+  "concurrency": {
+    "restMaxInFlight": 5,
+    "ftpMaxSessions": 1,
+    "mixedMaxInFlight": 2
+  },
+  "pacing": {
+    "restMinDelayMs": 100,
+    "ftpMinDelayMs": 100
+  },
+  "health": {
+    "endpoint": "/v1/version",
+    "intervalMs": 1000,
+    "timeoutMs": 2000
+  },
+  "timeouts": {
+    "restTimeoutMs": 4000,
+    "ftpTimeoutMs": 15000,
+    "scenarioTimeoutMs": 60000,
+    "maxDestructiveScenarioMs": 120000
+  },
+  "scratch": {
+    "ftpDir": "/Temp/contract-test"
+  },
+  "stressBreakpoint": {
+    "scenarioId": "rest.breakpoint.sid-volume",
+    "rateRampMs": [2000, 1000, 500, 250, 125, 60, 30, 15],
+    "concurrencyRamp": [1, 2, 3, 4, 5],
+    "stageDurationMs": 15000,
+    "failureDetectionTimeoutMs": 4000,
+    "tailRequestCount": 100,
+    "targets": [
+      { "category": "Audio Mixer", "item": "Vol Socket 1" },
+      { "category": "Audio Mixer", "item": "Vol Socket 2" },
+      { "category": "Audio Mixer", "item": "Vol UltiSid 1" },
+      { "category": "Audio Mixer", "item": "Vol UltiSid 2" }
+    ]
+  }
+}

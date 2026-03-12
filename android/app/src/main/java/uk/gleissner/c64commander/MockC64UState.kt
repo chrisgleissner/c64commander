@@ -64,6 +64,21 @@ class MockC64UState private constructor(
   var debugRegister: String = "00"
   val memory: MutableMap<Int, Int> = mutableMapOf()
 
+  init {
+    initializeVideoDefaults()
+    resetKeyboardBuffer()
+  }
+
+  private fun initializeVideoDefaults() {
+    memory[0xDD00] = 0x3F
+    memory[0xD018] = 0x15
+
+    repeat(1000) { offset ->
+      memory[0x0400 + offset] = 0x20
+      memory[0xD800 + offset] = 0x0E
+    }
+  }
+
   fun resetKeyboardBuffer() {
     val bufferStart = 0x0277
     val bufferLength = 10

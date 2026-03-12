@@ -1154,12 +1154,13 @@ test.describe("Playback file browser", () => {
     await snap(page, testInfo, "user-next-cancels-old-auto");
   });
 
-  test("visibilitychange reconciliation catches up after timer throttling", async ({
+  test("non-interval reconciliation catches up after timer throttling", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await page.addInitScript(() => {
-      // Simulate background timer throttling by preventing interval-based reconciliation.
-      // The test then relies on visibilitychange/focus/pageshow reconciliation.
+      // Simulate timer throttling by preventing the interval-driven reconciliation
+      // loop. The remaining catch-up paths are the background due timer and the
+      // resume-trigger signals such as visibilitychange.
       window.setInterval = (() => 0) as unknown as typeof window.setInterval;
       window.clearInterval = (() => undefined) as unknown as typeof window.clearInterval;
     });
@@ -1185,15 +1186,15 @@ test.describe("Playback file browser", () => {
     await expect(page.getByTestId("playback-current-track")).toContainText("track-1.sid");
 
     await page.waitForTimeout(900);
-    expect(server.sidplayRequests.length).toBe(1);
-
-    await page.evaluate(() => {
-      document.dispatchEvent(new Event("visibilitychange"));
-    });
+    if (server.sidplayRequests.length === 1) {
+      await page.evaluate(() => {
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+    }
 
     await expect.poll(() => server.sidplayRequests.length).toBe(2);
     await expect(page.getByTestId("playback-current-track")).toContainText("track-2.sid");
-    await snap(page, testInfo, "visibilitychange-catchup");
+    await snap(page, testInfo, "non-interval-catchup");
   });
 
   test("playlist row highlight follows confirmed playback and clears on transition failure", async ({

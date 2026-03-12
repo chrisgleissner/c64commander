@@ -41,11 +41,16 @@ tags:
           optional: true
       - waitForAnimationToEnd
       - extendedWaitUntil:
-          visible:
-            text: "Home"
+          visible: "Quick Config"
           timeout: ${LONG_TIMEOUT}
 - tapOn:
     text: "Home"
     optional: true
+- tapOn:
+    point: "8%,95%"
+    optional: true
 - waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Quick Config"
+    timeout: ${LONG_TIMEOUT}
 - takeScreenshot: home

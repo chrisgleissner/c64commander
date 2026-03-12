@@ -249,10 +249,10 @@ Full screenshot set: [doc/img/app/](doc/img/app/)
 
 #### Device becomes unresponsive
 
-C64 Commander includes configurable **Device Safety** controls under **Settings → Device Safety** to help avoid overload from REST and FTP traffic. If you spot issues with the default **Balanced** preset, try **Conservative**.
+C64 Commander includes configurable **Device Safety** controls under **Settings → Device Safety** to help avoid overload from REST and FTP traffic. REST mutations are fixed to a single in-flight lane; the presets and advanced controls tune the remaining pacing and FTP pressure. If you spot issues with the default **Balanced** preset, try **Conservative**.
 
 - **Presets**: Relaxed, Balanced (default), Conservative
-- **Advanced controls**: REST/FTP concurrency, read coalescing windows, cooldowns, backoff strategy, circuit-breaker thresholds, discovery probe interval
+- **Advanced controls**: FTP concurrency, read coalescing windows, cooldowns, backoff strategy, circuit-breaker thresholds, discovery probe interval
 - **Important**: Relaxed settings can overwhelm some setups. Use carefully.
 
 ### iOS specifics

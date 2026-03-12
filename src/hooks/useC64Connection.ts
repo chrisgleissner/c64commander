@@ -196,7 +196,7 @@ export function useC64Categories() {
     queryKey: ["c64-categories"],
     queryFn: async () => {
       const api = getC64API();
-      return api.getCategories();
+      return api.getCategories({ __c64uIntent: "background" });
     },
     staleTime: 60000,
   });
@@ -207,7 +207,7 @@ export function useC64Category(category: string, enabled = true) {
     queryKey: ["c64-category", category],
     queryFn: async () => {
       const api = getC64API();
-      return api.getCategory(category);
+      return api.getCategory(category, { __c64uIntent: "background" });
     },
     enabled: enabled && !!category,
     staleTime: 30000,
@@ -241,7 +241,7 @@ export function useC64ConfigItems(category: string, items: string[], enabled = t
     queryKey: ["c64-config-items", category, itemKey],
     queryFn: async () => {
       const api = getC64API();
-      return api.getConfigItems(category, items);
+      return api.getConfigItems(category, items, { __c64uIntent: "background" });
     },
     enabled: enabled && !!category && items.length > 0,
     placeholderData,
@@ -256,12 +256,12 @@ export function useC64AllConfig() {
     queryKey: ["c64-all-config"],
     queryFn: async () => {
       const api = getC64API();
-      const cats = await api.getCategories();
+      const cats = await api.getCategories({ __c64uIntent: "background" });
       const configs: Record<string, ConfigResponse> = {};
 
       for (const cat of cats.categories) {
         try {
-          configs[cat] = await api.getCategory(cat);
+          configs[cat] = await api.getCategory(cat, { __c64uIntent: "background" });
         } catch (catError) {
           // Per-category failures are tolerated; callers can render partial config safely.
           addLog("debug", "Config category fetch failed; partial config in use", {
@@ -308,15 +308,21 @@ export function useC64UpdateConfigBatch() {
       category,
       updates,
       immediate,
+      skipInvalidation,
     }: {
       category: string;
       updates: Record<string, string | number>;
       immediate?: boolean;
+      skipInvalidation?: boolean;
     }) => {
       const api = getC64API();
       return api.updateConfigBatch({ [category]: updates }, { immediate });
     },
     onSuccess: (_, variables) => {
+      if (variables.skipInvalidation) {
+        updateHasChanges(getActiveBaseUrl(), true);
+        return;
+      }
       queryClient.invalidateQueries({
         queryKey: ["c64-category", variables.category],
       });
@@ -334,7 +340,7 @@ export function useC64ConfigItem(category?: string, item?: string, enabled = tru
       if (!category || !item) {
         return null;
       }
-      return api.getConfigItem(category, item);
+      return api.getConfigItem(category, item, { __c64uIntent: "background" });
     },
     enabled: enabled && !!category && !!item,
     staleTime: 30000,
@@ -346,7 +352,7 @@ export function useC64Drives() {
     queryKey: ["c64-drives"],
     queryFn: async () => {
       const api = getC64API();
-      return api.getDrives();
+      return api.getDrives({ __c64uIntent: "background" });
     },
     staleTime: 10000,
   });
