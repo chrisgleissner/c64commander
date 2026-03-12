@@ -95,9 +95,7 @@ class MockC64UPlugin : Plugin() {
     if (entries.isEmpty()) {
       val outputFile = java.io.File(targetDir, assetPath.substringAfterLast('/'))
       assetManager.open(assetPath).use { input ->
-        outputFile.outputStream().use { output ->
-          input.copyTo(output)
-        }
+        outputFile.outputStream().use { output -> input.copyTo(output) }
       }
       return
     }
@@ -110,9 +108,7 @@ class MockC64UPlugin : Plugin() {
         copyAssets(childAssetPath, childDir)
       } else {
         assetManager.open(childAssetPath).use { input ->
-          childDir.outputStream().use { output ->
-            input.copyTo(output)
-          }
+          childDir.outputStream().use { output -> input.copyTo(output) }
         }
       }
     }
@@ -120,11 +116,18 @@ class MockC64UPlugin : Plugin() {
 
   private fun loadTimingProfile(): MockTimingProfile {
     return try {
-      val payload = context.assets.open("mock-timing-profile.json").bufferedReader().use { it.readText() }
+      val payload =
+              context.assets.open("mock-timing-profile.json").bufferedReader().use { it.readText() }
       MockTimingProfile.fromJson(JSONObject(payload))
     } catch (error: Exception) {
       Log.e(logTag, "Failed to load mock timing profile", error)
-      AppLogger.error(context, logTag, "Failed to load mock timing profile", "MockC64UPlugin", error)
+      AppLogger.error(
+              context,
+              logTag,
+              "Failed to load mock timing profile",
+              "MockC64UPlugin",
+              error
+      )
       throw error
     }
   }
