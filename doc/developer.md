@@ -290,13 +290,13 @@ maestro test .maestro
 
 Maestro smoke evidence (screenshots + logs + meta) is written to:
 
-```
+```text
 test-results/evidence/maestro/<flow-name>/<deviceType>/
 ```
 
 Raw Maestro runner output is written to:
 
-```
+```text
 test-results/maestro/
 ```
 
@@ -364,7 +364,7 @@ Run:
 
 Evidence structure:
 
-```
+```text
 test-results/
   evidence/
     playwright/
@@ -383,7 +383,7 @@ playwright-report/
 
 Android emulator smoke evidence:
 
-```
+```text
 test-results/
   maestro/                 # raw Maestro output (runner-owned)
   evidence/
@@ -400,7 +400,7 @@ test-results/
 
 Android emulator smoke tests are Maestro flows under `.maestro/` (read `doc/testing/maestro.md` before editing):
 
-```
+```text
 .maestro/
   smoke-launch.yaml
   smoke-file-picker.yaml
@@ -533,7 +533,7 @@ These overrides are stored locally and take effect immediately for FTP listings 
 
 ## Project structure
 
-```
+```text
 src/
   components/       # React components (UI, disks, lists, item selection)
   hooks/            # React hooks (TanStack Query + custom hooks)

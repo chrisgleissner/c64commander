@@ -1207,13 +1207,16 @@ test.describe("Playback file browser", () => {
     await expect(page.getByTestId("playback-current-track")).toContainText("track-1.sid");
 
     await page.waitForTimeout(900);
-    if (server.sidplayRequests.length === 1) {
-      await page.evaluate(() => {
-        document.dispatchEvent(new Event("visibilitychange"));
-      });
-    }
-
-    await expect.poll(() => server.sidplayRequests.length).toBe(2);
+    await expect
+      .poll(async () => {
+        if (server.sidplayRequests.length === 1) {
+          await page.evaluate(() => {
+            document.dispatchEvent(new Event("visibilitychange"));
+          });
+        }
+        return server.sidplayRequests.length;
+      })
+      .toBe(2);
     await expect(page.getByTestId("playback-current-track")).toContainText("track-2.sid");
     await snap(page, testInfo, "non-interval-catchup");
   });

@@ -259,8 +259,10 @@ export async function createMockC64Server(
 
   const upsertFileState = (rawPath: string, size: number) => {
     const normalizedPath = rawPath.startsWith("/") ? rawPath : `/${rawPath}`;
-    const filename = normalizedPath.split("/").filter(Boolean).at(-1) ?? "";
-    const extension = filename.includes(".") ? (filename.split(".").at(-1)?.toUpperCase() ?? "") : "";
+    const pathParts = normalizedPath.split("/").filter(Boolean);
+    const filename = pathParts[pathParts.length - 1] ?? "";
+    const filenameParts = filename.split(".");
+    const extension = filename.includes(".") ? (filenameParts[filenameParts.length - 1]?.toUpperCase() ?? "") : "";
     const entry = {
       size,
       extension,
@@ -275,7 +277,8 @@ export async function createMockC64Server(
     const normalizedPath = rawPath.startsWith("/") ? rawPath : `/${rawPath}`;
     const existing = fileState.get(normalizedPath);
     if (existing) return existing;
-    const extension = normalizedPath.split(".").at(-1)?.toLowerCase() ?? "";
+    const normalizedParts = normalizedPath.split(".");
+    const extension = normalizedParts[normalizedParts.length - 1]?.toLowerCase() ?? "";
     const sizeByExtension: Record<string, number> = {
       rom: 16384,
       d64: 174848,
