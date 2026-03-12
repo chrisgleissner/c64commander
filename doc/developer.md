@@ -216,6 +216,10 @@ VS Code workspace settings in `.vscode/settings.json` enable:
 - The external Node mock server and the Android in-app demo server now share one ordered timing profile definition from `android/app/src/main/assets/mock-timing-profile.json`.
 - The profile defines endpoint classes, deterministic jitter ranges, and fallback fault-mode timing so Playwright and Android demo mode observe the same request pacing model.
 - Both implementations serialize request handling through a single request-processing lane. This preserves request order under concurrent client activity and makes rate-limit regressions reproducible.
+- The profile is now calibrated from live C64U measurements captured on 2026-03-12 against hostname `c64u` using repeated safe REST probes.
+- Measured medians / observed maxima from 12 samples each were: `OPTIONS /` 186.7 / 203.9 ms, `GET /v1/info` 10.24 / 20.39 ms, `GET /v1/version` 8.96 / 35.01 ms, `GET /v1/configs` 13.04 / 17.68 ms, `GET /v1/configs/Audio Mixer` 15.35 / 37.08 ms, `GET /v1/drives` 16.46 / 28.36 ms, `GET /v1/machine:readmem` 9.41 / 19.13 ms.
+- `OPTIONS` now has its own timing class because the live device was consistently much slower there than on `GET /v1/info` and `GET /v1/version`.
+- Mutating classes remain conservative derived estimates rather than directly measured values, because this calibration pass intentionally avoided write operations against the live device.
 
 ## Playback volume preview interval
 
@@ -821,15 +825,10 @@ These are current implementation risks, not future proposals:
 Example:
 
 ```typescript
-import { test, expect, type Page, type TestInfo } from '@playwright/test';
-import {
-  assertNoUiIssues,
-  attachStepScreenshot,
-  finalizeEvidence,
-  startStrictUiMonitoring,
-} from './testArtifacts';
+import { test, expect, type Page, type TestInfo } from "@playwright/test";
+import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from "./testArtifacts";
 
-test.describe('My feature', () => {
+test.describe("My feature", () => {
   test.beforeEach(async ({ page }: { page: Page }, testInfo) => {
     await startStrictUiMonitoring(page, testInfo);
   });
@@ -842,15 +841,15 @@ test.describe('My feature', () => {
     }
   });
 
-  test('does something', async ({ page }: { page: Page }, testInfo) => {
-    await page.goto('/');
-    await attachStepScreenshot(page, testInfo, 'initial-state');
+  test("does something", async ({ page }: { page: Page }, testInfo) => {
+    await page.goto("/");
+    await attachStepScreenshot(page, testInfo, "initial-state");
 
     await page.click('[data-testid="my-button"]');
-    await attachStepScreenshot(page, testInfo, 'after-click');
+    await attachStepScreenshot(page, testInfo, "after-click");
 
     await expect(page.locator('[data-testid="result"]')).toBeVisible();
-    await attachStepScreenshot(page, testInfo, 'final-state');
+    await attachStepScreenshot(page, testInfo, "final-state");
   });
 });
 ```

@@ -37,64 +37,70 @@ class MockTimingProfile(
               defaultClassId = "default",
               classes =
                       mapOf(
+                              "optionsProbe" to
+                                      MockTimingClassConfig(
+                                              baseDelayMs = 180,
+                                              jitterRangeMs = 18,
+                                              jitterSeed = 11
+                                      ),
                               "probe" to
                                       MockTimingClassConfig(
-                                              baseDelayMs = 35,
+                                              baseDelayMs = 9,
                                               jitterRangeMs = 12,
                                               jitterSeed = 1
                                       ),
                               "configRead" to
                                       MockTimingClassConfig(
-                                              baseDelayMs = 55,
-                                              jitterRangeMs = 18,
+                                              baseDelayMs = 13,
+                                              jitterRangeMs = 22,
                                               jitterSeed = 2
                                       ),
                               "configWrite" to
                                       MockTimingClassConfig(
-                                              baseDelayMs = 95,
-                                              jitterRangeMs = 24,
+                                              baseDelayMs = 24,
+                                              jitterRangeMs = 18,
                                               jitterSeed = 3
                                       ),
                               "machineControl" to
                                       MockTimingClassConfig(
-                                              baseDelayMs = 85,
-                                              jitterRangeMs = 22,
+                                              baseDelayMs = 22,
+                                              jitterRangeMs = 14,
                                               jitterSeed = 4
                                       ),
                               "memoryRead" to
                                       MockTimingClassConfig(
-                                              baseDelayMs = 45,
-                                              jitterRangeMs = 14,
+                                              baseDelayMs = 9,
+                                              jitterRangeMs = 10,
                                               jitterSeed = 5
                                       ),
                               "memoryWrite" to
                                       MockTimingClassConfig(
-                                              baseDelayMs = 70,
-                                              jitterRangeMs = 20,
+                                              baseDelayMs = 18,
+                                              jitterRangeMs = 12,
                                               jitterSeed = 6
                                       ),
                               "driveAction" to
                                       MockTimingClassConfig(
-                                              baseDelayMs = 90,
-                                              jitterRangeMs = 28,
+                                              baseDelayMs = 16,
+                                              jitterRangeMs = 14,
                                               jitterSeed = 7
                                       ),
                               "runner" to
                                       MockTimingClassConfig(
-                                              baseDelayMs = 110,
-                                              jitterRangeMs = 32,
+                                              baseDelayMs = 30,
+                                              jitterRangeMs = 20,
                                               jitterSeed = 8
                                       ),
                               "streamControl" to
                                       MockTimingClassConfig(
-                                              baseDelayMs = 80,
-                                              jitterRangeMs = 20,
+                                              baseDelayMs = 22,
+                                              jitterRangeMs = 14,
                                               jitterSeed = 9
                                       ),
                               "default" to
                                       MockTimingClassConfig(
-                                              baseDelayMs = 60,
-                                              jitterRangeMs = 16,
+                                              baseDelayMs = 18,
+                                              jitterRangeMs = 14,
                                               jitterSeed = 10
                                       ),
                       ),
@@ -104,7 +110,7 @@ class MockTimingProfile(
                                       methods = setOf("OPTIONS"),
                                       pathType = "prefix",
                                       path = "/",
-                                      timingClass = "probe"
+                                      timingClass = "optionsProbe"
                               ),
                               MockTimingRule(
                                       methods = setOf("GET"),

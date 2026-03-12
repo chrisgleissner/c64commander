@@ -13,7 +13,7 @@
 ### 1. Baseline Investigation
 
 - [done] Inspect current diagnostics export, Play page volume control, mock server, demo mode, and existing automated coverage.
-- [not done] Measure relevant C64U REST endpoint latency against the physical device and derive a bounded reproducible timing profile.
+- [done] Measure relevant C64U REST endpoint latency against the physical device and derive a bounded reproducible timing profile.
 - [done] Identify current screenshot generation and documentation references for diagnostics overlay.
 
 ### 2. Shared Timing Implementation
@@ -45,5 +45,5 @@
 - Keep this file current as work progresses.
 - Do not weaken assertions; add deterministic clocks, seeds, and request-trace checks where needed.
 - Shared mock timing profile, diagnostics screenshot refresh, lint, targeted tests, full coverage, and direct build validation completed.
-- Physical-device latency measurement against a live C64U remains outstanding; the current shared timing profile is bounded and reproducible but not yet calibrated from captured device traces.
+- Physical-device latency measurement against a live C64U was completed on 2026-03-12 against hostname `c64u`, and the shared timing profile was recalibrated from those safe REST probes.
 - `./build --skip-install` was blocked by an unrelated flaky Playwright proof on `playwright/buttonHighlightProof.spec.ts` for the `android-phone` project. A direct rerun of that proof passed on `PLAYWRIGHT_PORT=4174`.
