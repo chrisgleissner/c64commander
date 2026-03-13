@@ -12,11 +12,11 @@ Implement and verify every task in `doc/research/review-6/review-6-rollout-plan.
 
 ## Phase Status
 
-- [ ] Phase 0 - Baseline Alignment
-- [ ] Phase 1 - Web Rollout Safety
-- [ ] Phase 2 - Release Metadata and Documentation Hygiene
+- [x] Phase 0 - Baseline Alignment
+- [x] Phase 1 - Web Rollout Safety
+- [x] Phase 2 - Release Metadata and Documentation Hygiene
 - [ ] Phase 3 - Dependency and Platform Security Hygiene
-- [ ] Phase 4 - Playlist Persistence Hardening
+- [x] Phase 4 - Playlist Persistence Hardening
 - [ ] Phase 5 - Maintainability Hardening
 - [ ] Phase 6 - Coverage Closeout
 - [ ] Final verification and rollout plan closeout
@@ -31,16 +31,16 @@ Implementation targets:
 
 Tasks:
 
-- [ ] Remove stale Android release-signing TODO wording from `AGENTS.md`
-- [ ] State the iOS sideload-only release scope explicitly in `README.md`
-- [ ] State that Android Play upload is already operational in `README.md`
-- [ ] Record the device transport boundary (HTTP/FTP) in one canonical location and reference it nearby
-- [ ] Record that GitHub Actions version-tag usage is an intentional contributor-facing policy
+- [x] Remove stale Android release-signing TODO wording from `AGENTS.md`
+- [x] State the iOS sideload-only release scope explicitly in `README.md`
+- [x] State that Android Play upload is already operational in `README.md`
+- [x] Record the device transport boundary (HTTP/FTP) in one canonical location and reference it nearby
+- [x] Record that GitHub Actions version-tag usage is an intentional contributor-facing policy
 
 Verification:
 
-- [ ] Search docs for stale Android publishing TODO wording
-- [ ] Confirm one canonical rollout-boundary section exists and nearby docs point to the current state
+- [x] Search docs for stale Android publishing TODO wording
+- [x] Confirm one canonical rollout-boundary section exists and nearby docs point to the current state
 
 ## Phase 1 - Web Rollout Safety
 
@@ -53,16 +53,16 @@ Implementation targets:
 
 Tasks:
 
-- [ ] Replace fixed service-worker cache names with build-versioned cache names
-- [ ] Stop cache-first handling for `/` and `/index.html`
-- [ ] Add deterministic regression coverage for shell invalidation on deployment
-- [ ] Add deterministic regression coverage for activation-time cache eviction
-- [ ] Document deploy, hard-refresh, and rollback behavior for operators
+- [x] Replace fixed service-worker cache names with build-versioned cache names
+- [x] Stop cache-first handling for `/` and `/index.html`
+- [x] Add deterministic regression coverage for shell invalidation on deployment
+- [x] Add deterministic regression coverage for activation-time cache eviction
+- [x] Document deploy, hard-refresh, and rollback behavior for operators
 
 Verification:
 
-- [ ] Run targeted service-worker tests
-- [ ] Confirm shell requests bypass stale cache after activation
+- [x] Run targeted service-worker tests
+- [x] Confirm shell requests bypass stale cache after activation
 
 ## Phase 2 - Release Metadata and Documentation Hygiene
 
@@ -77,17 +77,17 @@ Implementation targets:
 
 Tasks:
 
-- [ ] Choose one canonical app version source and enforce it in build metadata
-- [ ] Remove mismatch-tolerant publish behavior from `.github/workflows/web.yaml`
-- [ ] Update README artifact examples to the current naming convention
-- [ ] Update contract-test runtime documentation to Node 24
-- [ ] Remove the remote crash-reporting SDK from runtime, dependencies, and current docs
-- [ ] Align the privacy policy with the no-crash-reporting runtime behavior
+- [x] Choose one canonical app version source and enforce it in build metadata
+- [x] Remove mismatch-tolerant publish behavior from `.github/workflows/web.yaml`
+- [x] Update README artifact examples to the current naming convention
+- [x] Update contract-test runtime documentation to Node 24
+- [x] Remove the remote crash-reporting SDK from runtime, dependencies, and current docs
+- [x] Align the privacy policy with the no-crash-reporting runtime behavior
 
 Verification:
 
-- [ ] Run targeted tests for build/version helpers if changed
-- [ ] Validate workflow version check logic by inspection and lint/build usage
+- [x] Run targeted tests for build/version helpers if changed
+- [x] Validate workflow version check logic by inspection and lint/build usage
 
 ## Phase 3 - Dependency and Platform Security Hygiene
 
@@ -100,11 +100,11 @@ Implementation targets:
 
 Tasks:
 
-- [ ] Triage `npm audit` findings into upgrade, replace, or accepted-risk buckets
+- [x] Triage `npm audit` findings into upgrade, replace, or accepted-risk buckets
 - [ ] Upgrade or replace vulnerable direct dependencies, starting with `@capacitor/cli`, `ftp-srv`, `ajv`, and `jsdom`
-- [ ] Refresh overrides if still required after upgrades
-- [ ] Capture post-remediation `npm audit` results in the worklog
-- [ ] Make Android backup posture intentional and implement it in manifest/XML rules
+- [x] Refresh overrides if still required after upgrades
+- [x] Capture post-remediation `npm audit` results in the worklog
+- [x] Make Android backup posture intentional and implement it in manifest/XML rules
 
 Verification:
 
@@ -123,16 +123,16 @@ Implementation targets:
 
 Tasks:
 
-- [ ] Define the persisted playlist query model and migration strategy in code/docs
-- [ ] Move filtering, sorting, and pagination into repository-backed indexed/queryable structures
-- [ ] Preserve recovery artifacts for schema mismatch and parse/migration failures
-- [ ] Add deterministic regression tests for corruption and migration recovery
-- [ ] Add deterministic regression tests for large playlist query behavior
+- [x] Define the persisted playlist query model and migration strategy in code/docs
+- [x] Move filtering, sorting, and pagination into repository-backed indexed/queryable structures
+- [x] Preserve recovery artifacts for schema mismatch and parse/migration failures
+- [x] Add deterministic regression tests for corruption and migration recovery
+- [x] Add deterministic regression tests for large playlist query behavior
 
 Verification:
 
-- [ ] Run targeted playlist repository tests
-- [ ] Confirm large playlist queries no longer depend on full scan/sort of all rows at query time
+- [x] Run targeted playlist repository tests
+- [x] Confirm large playlist queries no longer depend on full scan/sort of all rows at query time
 
 ## Phase 5 - Maintainability Hardening
 
@@ -149,14 +149,14 @@ Implementation targets:
 
 Tasks:
 
-- [ ] Define and record the extraction order for hotspot files
+- [x] Define and record the extraction order for hotspot files
 - [ ] Split `src/lib/c64api.ts` into request/domain modules
 - [ ] Split `src/pages/SettingsPage.tsx` by settings area
 - [ ] Split `src/pages/PlayFilesPage.tsx` by browsing, playlist, and playback concerns
 - [ ] Split `src/components/disks/HomeDiskManager.tsx` by collection, dialog, and mount-control concerns
 - [ ] Split `src/lib/hvsc/hvscIngestionRuntime.ts` by ingestion stage and runtime/persistence concerns
 - [ ] Re-enable a documented subset of stricter TypeScript checks without breaking the build
-- [ ] Replace silent Gradle catches with explicit logging or contextual failure
+- [x] Replace silent Gradle catches with explicit logging or contextual failure
 
 Verification:
 
@@ -176,7 +176,7 @@ Implementation targets:
 
 Tasks:
 
-- [ ] Include shipped `web/server/**` runtime in enforced coverage reporting or add an equivalent enforced server gate
+- [x] Include shipped `web/server/**` runtime in enforced coverage reporting or add an equivalent enforced server gate
 - [ ] Update coverage scripts and Codecov config to match the chosen gate
 - [ ] Record the resulting measured line and branch baseline in the worklog
 
@@ -193,9 +193,13 @@ Verification:
 | --- | --- | --- | --- |
 | 2026-03-13 | Planning | Replaced the stale audit-only `PLANS.md` with the rollout execution tracker tied to phases 0-6, verification steps, and live completion markers. | done |
 | 2026-03-13 | Planning | Completed initial implementation discovery for docs, service worker, workflow versioning, Android backup config, playlist repository, coverage scripts, and hotspot files. | done |
+| 2026-03-13 | Phase 0-2 | Aligned rollout docs, made `package.json` the canonical app version source, removed mismatch-tolerant web publish behavior, and removed the remote crash-reporting SDK plus its privacy-policy contradictions. | done |
+| 2026-03-13 | Phase 1 | Switched service-worker registration and caches to build-versioned behavior, stopped cache-first shell handling, and added deterministic lifecycle regression coverage. | done |
+| 2026-03-13 | Phase 3-4 | Upgraded `ajv`/`jsdom`/`tar`, disabled Android backup at the manifest level, replaced silent Gradle catches with warnings, moved playlist queries to persisted indexes, and added migration/recovery coverage. | done |
+| 2026-03-13 | Phase 3-6 | Hardened the shared slider against invalid bounds exposed by the `jsdom` upgrade, stabilized HomePage and structured-recovery tests on quick-action test ids, and included `tests/unit/web/**` + `web/server/**` in enforced unit coverage. | done |
 
 ## Audit / Verification Notes
 
-- Pending: baseline `npm audit` triage and direct dependency upgrade plan
-- Pending: hotspot file size baseline capture for refactor closeout
-- Pending: full build/test/coverage closeout after all phases
+- Residual `npm audit` risk after upgrades: `ftp-srv`/`ip` remain in contract-test infrastructure, while older `ajv` and `minimatch` copies remain under upstream tooling trees.
+- Hotspot extraction order recorded from repo exploration: `src/lib/c64api.ts` host-resolution split first, then `src/pages/SettingsPage.tsx` diagnostics panel, then `src/lib/hvsc/hvscIngestionRuntime.ts` core pipeline extraction, followed by `src/pages/PlayFilesPage.tsx` playback/browsing split and `src/components/disks/HomeDiskManager.tsx` drive/library/dialog split.
+- `runTests` now passes the unit suite but still reports broader Playwright/environment failures outside the rollout-specific changes; final lint/build/coverage closeout remains pending.
