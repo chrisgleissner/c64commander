@@ -66,7 +66,7 @@ const createFakeIndexedDb = (options: FakeIndexedDbOptions = {}) => {
         },
       }),
     }),
-    close: () => { },
+    close: () => {},
   };
 
   return {
@@ -257,7 +257,7 @@ describe("indexedDB playlist repository", () => {
       configurable: true,
       writable: true,
     });
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => { });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     const repository = getIndexedDbPlaylistDataRepository({
       preferDurableStorage: false,
@@ -307,7 +307,7 @@ describe("indexedDB playlist repository", () => {
       writable: true,
     });
 
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => { });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const repository = getIndexedDbPlaylistDataRepository({
       preferDurableStorage: false,
     });
@@ -535,7 +535,7 @@ describe("indexedDB playlist repository", () => {
       configurable: true,
       writable: true,
     });
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => { });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const repository = getIndexedDbPlaylistDataRepository({
       preferDurableStorage: false,
     });

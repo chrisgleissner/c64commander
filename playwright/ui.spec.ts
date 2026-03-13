@@ -26,6 +26,12 @@ const runGit = (args: string[]) => {
 
 const resolveExpectedVersion = () => {
   const envVersion = process.env.VITE_APP_VERSION || process.env.VERSION_NAME || "";
+  if (envVersion) return envVersion;
+
+  const pkg = JSON.parse(fs.readFileSync(path.resolve("package.json"), "utf8")) as { version?: string };
+  const packageVersion = pkg.version || "";
+  if (packageVersion) return packageVersion;
+
   const gitSha =
     process.env.VITE_GIT_SHA || process.env.GIT_SHA || process.env.GITHUB_SHA || runGit(["rev-parse", "HEAD"]);
   const fullGitSha = gitSha && gitSha.length < 8 ? runGit(["rev-parse", "HEAD"]) : gitSha;
@@ -41,9 +47,7 @@ const resolveExpectedVersion = () => {
     return latestTag;
   }
 
-  if (envVersion) return envVersion;
-  const pkg = JSON.parse(fs.readFileSync(path.resolve("package.json"), "utf8")) as { version?: string };
-  return pkg.version || "";
+  return "";
 };
 
 test.describe("UI coverage", () => {

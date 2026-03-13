@@ -956,6 +956,7 @@ function HomePageContent() {
               label="Revert"
               description="Changes"
               compact
+              dataTestId="home-config-revert-changes"
               onClick={() => handleAction(() => revertToInitial(), "Config reverted")}
               disabled={!isActive || isApplying || !hasChanges || machineTaskBusy}
               loading={isApplying}

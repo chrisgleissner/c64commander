@@ -782,11 +782,11 @@ describe("HomePage SID status", () => {
 
     renderHomePage();
 
-    fireEvent.click(screen.getByRole("button", { name: /revert changes/i }));
+    fireEvent.click(screen.getByTestId("home-config-revert-changes"));
     await waitFor(() => expect(appConfigStatePayloadRef.current.revertToInitial).toHaveBeenCalled());
     expect(toastSpy).toHaveBeenCalledWith({ title: "Config reverted" });
 
-    fireEvent.click(screen.getByRole("button", { name: /save to app/i }));
+    fireEvent.click(screen.getByTestId("home-config-save-app"));
     const saveDialog = screen.getByRole("dialog");
     fireEvent.click(within(saveDialog).getByRole("button", { name: /^save$/i }));
     expect(toastSpy).toHaveBeenCalledWith({
@@ -813,7 +813,7 @@ describe("HomePage SID status", () => {
       description: "Config C",
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /load from app/i }));
+    fireEvent.click(screen.getByTestId("home-config-load-app"));
     const loadDialog = screen.getByRole("dialog");
     fireEvent.click(within(loadDialog).getByRole("button", { name: /config a/i }));
     await waitFor(() => expect(appConfigStatePayloadRef.current.loadAppConfig).toHaveBeenCalled());
@@ -823,7 +823,7 @@ describe("HomePage SID status", () => {
       savedAt,
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /manage app configs/i }));
+    fireEvent.click(screen.getByTestId("home-config-manage-app"));
     const manageDialog = screen.getByRole("dialog");
     fireEvent.change(within(manageDialog).getByDisplayValue("Config A"), {
       target: { value: "  New Name  " },
@@ -1032,7 +1032,7 @@ describe("HomePage SID status", () => {
 
     renderHomePage();
 
-    fireEvent.click(screen.getByRole("button", { name: /save to app/i }));
+    fireEvent.click(screen.getByTestId("home-config-save-app"));
     const saveDialog = screen.getByRole("dialog");
     fireEvent.change(within(saveDialog).getByPlaceholderText(/config name/i), {
       target: { value: "New Config" },
@@ -1061,7 +1061,7 @@ describe("HomePage SID status", () => {
 
     renderHomePage();
 
-    fireEvent.click(screen.getByRole("button", { name: /load from app/i }));
+    fireEvent.click(screen.getByTestId("home-config-load-app"));
     const loadDialog = screen.getByRole("dialog");
     fireEvent.click(within(loadDialog).getByRole("button", { name: /config a/i }));
 

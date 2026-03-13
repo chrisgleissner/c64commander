@@ -15,6 +15,7 @@ import { registerTraceBridge } from "./lib/tracing/traceBridge";
 import { markStartupBootstrapComplete } from "./lib/startup/startupMilestones";
 import { initializeRuntimeMotionMode } from "./lib/startup/runtimeMotionBudget";
 import { registerServiceWorker } from "./lib/startup/serviceWorkerRegistration";
+import { addErrorLog } from "./lib/logging";
 import "./index.css";
 
 const loadFonts = () => {

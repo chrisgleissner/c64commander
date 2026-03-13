@@ -81,7 +81,7 @@ Tasks:
 - [ ] Remove mismatch-tolerant publish behavior from `.github/workflows/web.yaml`
 - [ ] Update README artifact examples to the current naming convention
 - [ ] Update contract-test runtime documentation to Node 24
-- [ ] Remove Sentry from runtime, dependencies, and current docs
+- [ ] Remove the remote crash-reporting SDK from runtime, dependencies, and current docs
 - [ ] Align the privacy policy with the no-crash-reporting runtime behavior
 
 Verification:
