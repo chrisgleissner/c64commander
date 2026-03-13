@@ -102,14 +102,14 @@ export default defineConfig(() => ({
     react(),
     ...(enableCoverageInstrumentation
       ? [
-          istanbul({
-            include: "src/**/*",
-            exclude: ["node_modules", "test/", "tests/", "playwright/"],
-            extension: [".js", ".ts", ".tsx"],
-            requireEnv: true,
-            forceBuildInstrument: true,
-          }),
-        ]
+        istanbul({
+          include: "src/**/*",
+          exclude: ["node_modules", "test/", "tests/", "playwright/"],
+          extension: [".js", ".ts", ".tsx"],
+          requireEnv: true,
+          forceBuildInstrument: true,
+        }),
+      ]
       : []),
   ],
   define: {
