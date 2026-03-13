@@ -10,6 +10,15 @@ if (!existsSync(gitDir)) {
     process.exit(0);
 }
 
+const probeResult = spawnSync('git', ['rev-parse', '--is-inside-work-tree'], {
+    cwd: repoRoot,
+    stdio: 'ignore',
+});
+
+if (probeResult.error || probeResult.status !== 0) {
+    process.exit(0);
+}
+
 const result = spawnSync('git', ['config', 'core.hooksPath', '.githooks'], {
     cwd: repoRoot,
     stdio: 'inherit',

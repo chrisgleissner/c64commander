@@ -190,9 +190,9 @@ export function useVolumeOverride({ isPlaying, isPaused, previewIntervalMs }: Us
       volumeUiTargetRef.current = muted
         ? null
         : {
-          index,
-          setAtMs: nextIntent.setAtMs,
-        };
+            index,
+            setAtMs: nextIntent.setAtMs,
+          };
     },
     [setPlaybackSyncIntent],
   );
