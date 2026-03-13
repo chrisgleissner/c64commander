@@ -13,10 +13,14 @@ import { Capacitor } from "@capacitor/core";
 import { addErrorLog } from "@/lib/logging";
 
 export type DiagnosticsExportTab = "error-logs" | "logs" | "traces" | "actions";
+export type DiagnosticsExportScope = DiagnosticsExportTab | "all";
+export type DiagnosticsExportPayload = Record<DiagnosticsExportTab, unknown>;
+
+const DIAGNOSTICS_EXPORT_TABS: DiagnosticsExportTab[] = ["error-logs", "logs", "traces", "actions"];
 
 type DiagnosticsShareOverridePayload = {
   filename: string;
-  tab: DiagnosticsExportTab;
+  scope: DiagnosticsExportScope;
   data: unknown;
   zipData: Uint8Array;
 };
@@ -67,26 +71,44 @@ const blobToBase64 = (blob: Blob): Promise<string> => {
   });
 };
 
-const buildDiagnosticsZipData = (tab: DiagnosticsExportTab, data: unknown) => {
-  const fileName =
-    tab === "error-logs"
-      ? "error-logs.json"
-      : tab === "logs"
-        ? "logs.json"
-        : tab === "traces"
-          ? "traces.json"
-          : "actions.json";
-  const json = JSON.stringify(data ?? [], null, 2);
-  return zipSync({
-    [fileName]: strToU8(json),
-  });
+const formatTimestampSegment = (value: number) => value.toString().padStart(2, "0");
+
+export const formatDiagnosticsExportTimestamp = (date = new Date()) => {
+  const year = date.getUTCFullYear();
+  const month = formatTimestampSegment(date.getUTCMonth() + 1);
+  const day = formatTimestampSegment(date.getUTCDate());
+  const hours = formatTimestampSegment(date.getUTCHours());
+  const minutes = formatTimestampSegment(date.getUTCMinutes());
+  const seconds = formatTimestampSegment(date.getUTCSeconds());
+  return `${year}-${month}-${day}-${hours}${minutes}-${seconds}Z`;
 };
 
-export const buildDiagnosticsZipBlob = (tab: DiagnosticsExportTab, data: unknown) =>
-  new Blob([buildDiagnosticsZipData(tab, data)], { type: "application/zip" });
+const buildDiagnosticsJsonFilename = (tab: DiagnosticsExportTab, timestamp: string) => `${tab}-${timestamp}.json`;
 
-const downloadDiagnosticsZip = (filename: string, tab: DiagnosticsExportTab, data: unknown) => {
-  const blob = buildDiagnosticsZipBlob(tab, data);
+const buildDiagnosticsZipFilename = (scope: DiagnosticsExportScope, timestamp: string) =>
+  `c64commander-diagnostics-${scope}-${timestamp}.zip`;
+
+const buildDiagnosticsZipEntries = (scope: DiagnosticsExportScope, data: unknown, timestamp: string) => {
+  const payloads =
+    scope === "all"
+      ? (data as DiagnosticsExportPayload)
+      : ({ [scope]: data } as Pick<DiagnosticsExportPayload, DiagnosticsExportTab>);
+  return Object.fromEntries(
+    DIAGNOSTICS_EXPORT_TABS.filter((tab) => scope === "all" || tab === scope).map((tab) => [
+      buildDiagnosticsJsonFilename(tab, timestamp),
+      strToU8(JSON.stringify(payloads[tab] ?? [], null, 2)),
+    ]),
+  );
+};
+
+export const buildDiagnosticsZipData = (scope: DiagnosticsExportScope, data: unknown, timestamp: string) =>
+  zipSync(buildDiagnosticsZipEntries(scope, data, timestamp));
+
+export const buildDiagnosticsZipBlob = (scope: DiagnosticsExportScope, data: unknown, timestamp: string) =>
+  new Blob([buildDiagnosticsZipData(scope, data, timestamp)], { type: "application/zip" });
+
+const downloadDiagnosticsZip = (filename: string, scope: DiagnosticsExportScope, data: unknown, timestamp: string) => {
+  const blob = buildDiagnosticsZipBlob(scope, data, timestamp);
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -95,13 +117,14 @@ const downloadDiagnosticsZip = (filename: string, tab: DiagnosticsExportTab, dat
   window.setTimeout(() => URL.revokeObjectURL(url), 5000);
 };
 
-export const shareDiagnosticsZip = async (tab: DiagnosticsExportTab, data: unknown) => {
-  const filename = `c64commander-diagnostics-${tab}.zip`;
+const shareDiagnosticsExport = async (scope: DiagnosticsExportScope, data: unknown) => {
+  const timestamp = formatDiagnosticsExportTimestamp();
+  const filename = buildDiagnosticsZipFilename(scope, timestamp);
   const override = getShareOverride();
   if (override) {
     try {
-      const zipData = buildDiagnosticsZipData(tab, data);
-      await override({ filename, tab, data, zipData });
+      const zipData = buildDiagnosticsZipData(scope, data, timestamp);
+      await override({ filename, scope, data, zipData });
       return;
     } catch (error) {
       addErrorLog("Diagnostics share override failed", {
@@ -112,7 +135,7 @@ export const shareDiagnosticsZip = async (tab: DiagnosticsExportTab, data: unkno
   }
   if (Capacitor.isNativePlatform()) {
     try {
-      const blob = buildDiagnosticsZipBlob(tab, data);
+      const blob = buildDiagnosticsZipBlob(scope, data, timestamp);
       const base64Data = await blobToBase64(blob);
 
       await Filesystem.writeFile({
@@ -137,6 +160,11 @@ export const shareDiagnosticsZip = async (tab: DiagnosticsExportTab, data: unkno
       throw error;
     }
   } else {
-    downloadDiagnosticsZip(filename, tab, data);
+    downloadDiagnosticsZip(filename, scope, data, timestamp);
   }
 };
+
+export const shareDiagnosticsZip = async (tab: DiagnosticsExportTab, data: unknown) =>
+  shareDiagnosticsExport(tab, data);
+
+export const shareAllDiagnosticsZip = async (data: DiagnosticsExportPayload) => shareDiagnosticsExport("all", data);

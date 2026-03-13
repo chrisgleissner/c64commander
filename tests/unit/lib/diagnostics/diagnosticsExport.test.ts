@@ -55,6 +55,12 @@ describe("diagnosticsExport", () => {
     await shareDiagnosticsZip("logs", [{ id: 1 }]);
 
     expect(override).toHaveBeenCalledTimes(1);
+    expect(override).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scope: "logs",
+        filename: expect.stringMatching(/^c64commander-diagnostics-logs-\d{4}-\d{2}-\d{2}-\d{4}-\d{2}Z\.zip$/),
+      }),
+    );
     expect(share).not.toHaveBeenCalled();
   });
 
@@ -102,8 +108,49 @@ describe("diagnosticsExport", () => {
     await shareDiagnosticsZip("actions", [{ action: "A" }]);
 
     expect(writeFile).toHaveBeenCalledTimes(1);
+    expect(writeFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: expect.stringMatching(/^c64commander-diagnostics-actions-\d{4}-\d{2}-\d{2}-\d{4}-\d{2}Z\.zip$/),
+      }),
+    );
     expect(getUri).toHaveBeenCalledTimes(1);
     expect(share).toHaveBeenCalledTimes(1);
+  });
+
+  it("shares all diagnostics tabs in a single timestamped zip", async () => {
+    const override = vi.fn(async () => undefined);
+    (window as unknown as { __c64uDiagnosticsShareOverride?: unknown }).__c64uDiagnosticsShareOverride = override;
+
+    const { buildDiagnosticsZipData, shareAllDiagnosticsZip } = await import("@/lib/diagnostics/diagnosticsExport");
+    await shareAllDiagnosticsZip({
+      "error-logs": [{ id: "err-1" }],
+      logs: [{ id: "log-1" }],
+      traces: [{ id: "trace-1" }],
+      actions: [{ correlationId: "COR-1" }],
+    });
+
+    expect(override).toHaveBeenCalledTimes(1);
+    const payload = override.mock.calls[0]?.[0] as { filename: string; scope: string };
+    expect(payload.scope).toBe("all");
+    expect(payload.filename).toMatch(/^c64commander-diagnostics-all-\d{4}-\d{2}-\d{2}-\d{4}-\d{2}Z\.zip$/);
+
+    const zipData = buildDiagnosticsZipData(
+      "all",
+      {
+        "error-logs": [{ id: "err-1" }],
+        logs: [{ id: "log-1" }],
+        traces: [{ id: "trace-1" }],
+        actions: [{ correlationId: "COR-1" }],
+      },
+      "2026-03-12-0913-33Z",
+    );
+    expect(zipData).toBeInstanceOf(Uint8Array);
+    expect(zipData.byteLength).toBeGreaterThan(0);
+  });
+
+  it("formats diagnostics export timestamps in UTC filename-safe form", async () => {
+    const { formatDiagnosticsExportTimestamp } = await import("@/lib/diagnostics/diagnosticsExport");
+    expect(formatDiagnosticsExportTimestamp(new Date("2026-03-12T09:13:33.000Z"))).toBe("2026-03-12-0913-33Z");
   });
 
   it("logs and rethrows when override fails", async () => {
@@ -136,9 +183,9 @@ describe("diagnosticsExport", () => {
     delete (window as unknown as { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled;
   });
 
-  it("buildDiagnosticsZipBlob null data falls back to empty array (line 79 ?? branch)", async () => {
+  it("buildDiagnosticsZipBlob null data falls back to empty array", async () => {
     const { buildDiagnosticsZipBlob } = await import("@/lib/diagnostics/diagnosticsExport");
-    const blob = buildDiagnosticsZipBlob("logs", null);
+    const blob = buildDiagnosticsZipBlob("logs", null, "2026-03-12-0913-33Z");
     expect(blob).toBeInstanceOf(Blob);
     expect(blob.type).toBe("application/zip");
   });

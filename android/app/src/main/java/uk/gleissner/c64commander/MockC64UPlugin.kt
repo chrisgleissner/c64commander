@@ -14,6 +14,7 @@ import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
+import org.json.JSONObject
 
 @CapacitorPlugin(name = "MockC64U")
 class MockC64UPlugin : Plugin() {
@@ -41,7 +42,8 @@ class MockC64UPlugin : Plugin() {
 
       val preferredPort = call.getInt("preferredPort")
       val state = MockC64UState.fromPayload(config)
-      val nextServer = MockC64UServer(state)
+      val timingProfile = loadTimingProfile()
+      val nextServer = MockC64UServer(state, timingProfile)
       val port = nextServer.start(preferredPort)
       server = nextServer
 
@@ -93,9 +95,7 @@ class MockC64UPlugin : Plugin() {
     if (entries.isEmpty()) {
       val outputFile = java.io.File(targetDir, assetPath.substringAfterLast('/'))
       assetManager.open(assetPath).use { input ->
-        outputFile.outputStream().use { output ->
-          input.copyTo(output)
-        }
+        outputFile.outputStream().use { output -> input.copyTo(output) }
       }
       return
     }
@@ -108,11 +108,27 @@ class MockC64UPlugin : Plugin() {
         copyAssets(childAssetPath, childDir)
       } else {
         assetManager.open(childAssetPath).use { input ->
-          childDir.outputStream().use { output ->
-            input.copyTo(output)
-          }
+          childDir.outputStream().use { output -> input.copyTo(output) }
         }
       }
+    }
+  }
+
+  private fun loadTimingProfile(): MockTimingProfile {
+    return try {
+      val payload =
+              context.assets.open("mock-timing-profile.json").bufferedReader().use { it.readText() }
+      MockTimingProfile.fromJson(JSONObject(payload))
+    } catch (error: Exception) {
+      Log.e(logTag, "Failed to load mock timing profile", error)
+      AppLogger.error(
+              context,
+              logTag,
+              "Failed to load mock timing profile",
+              "MockC64UPlugin",
+              error
+      )
+      throw error
     }
   }
 }

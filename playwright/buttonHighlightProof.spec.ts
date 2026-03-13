@@ -45,28 +45,37 @@ const measureFlashDuration = async (target: Locator, trigger: () => Promise<void
   const durationPromise = target.evaluate((element, attr) => {
     return new Promise<number | null>((resolve) => {
       const setAtAttr = `${attr}-set-at`;
-      let startedAt = Number(element.getAttribute(setAtAttr) ?? "0") || null;
-      const observer = new MutationObserver(() => {
+      let startedAt: number | null = null;
+      let deadlineTimer: number | null = null;
+
+      const finish = (value: number | null) => {
+        if (deadlineTimer !== null) {
+          window.clearTimeout(deadlineTimer);
+        }
+        resolve(value);
+      };
+
+      const poll = () => {
         const active = element.getAttribute(attr) === "true";
-        if (active && startedAt === null) {
-          startedAt = Number(element.getAttribute(setAtAttr) ?? "0") || Date.now();
+        if (active) {
+          if (startedAt === null) {
+            startedAt = Number(element.getAttribute(setAtAttr) ?? "0") || Date.now();
+          }
+          window.requestAnimationFrame(poll);
           return;
         }
-        if (!active && startedAt !== null) {
-          observer.disconnect();
-          resolve(Date.now() - startedAt);
+        if (startedAt !== null) {
+          finish(Date.now() - startedAt);
+          return;
         }
-      });
+        window.requestAnimationFrame(poll);
+      };
 
-      observer.observe(element, {
-        attributes: true,
-        attributeFilter: [attr],
-      });
-
-      window.setTimeout(() => {
-        observer.disconnect();
-        resolve(startedAt === null ? null : Date.now() - startedAt);
+      deadlineTimer = window.setTimeout(() => {
+        finish(startedAt === null ? null : Date.now() - startedAt);
       }, 2000);
+
+      poll();
     });
   }, FLASH_ATTR);
 

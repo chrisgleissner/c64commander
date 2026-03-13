@@ -11,6 +11,7 @@ import {
   clampConfigWriteIntervalMs,
   clampDiscoveryProbeTimeoutMs,
   clampStartupDiscoveryWindowMs,
+  clampVolumeSliderPreviewIntervalMs,
   loadAutomaticDemoModeEnabled,
   loadBackgroundRediscoveryIntervalMs,
   loadConfigWriteIntervalMs,
@@ -18,6 +19,7 @@ import {
   loadDiscoveryProbeTimeoutMs,
   loadDiskAutostartMode,
   loadStartupDiscoveryWindowMs,
+  loadVolumeSliderPreviewIntervalMs,
   saveAutomaticDemoModeEnabled,
   saveBackgroundRediscoveryIntervalMs,
   saveConfigWriteIntervalMs,
@@ -25,6 +27,7 @@ import {
   saveDiscoveryProbeTimeoutMs,
   saveDiskAutostartMode,
   saveStartupDiscoveryWindowMs,
+  saveVolumeSliderPreviewIntervalMs,
   type DiskAutostartMode,
 } from "@/lib/config/appSettings";
 import {
@@ -58,6 +61,7 @@ export type SettingsExportPayload = {
     backgroundRediscoveryIntervalMs: number;
     discoveryProbeTimeoutMs: number;
     diskAutostartMode: DiskAutostartMode;
+    volumeSliderPreviewIntervalMs: number;
   };
   deviceSafety: {
     mode: DeviceSafetyMode;
@@ -85,6 +89,7 @@ const APP_SETTINGS_KEYS = [
   "backgroundRediscoveryIntervalMs",
   "discoveryProbeTimeoutMs",
   "diskAutostartMode",
+  "volumeSliderPreviewIntervalMs",
 ] as const;
 
 const DEVICE_SAFETY_KEYS = [
@@ -128,6 +133,7 @@ export const exportSettingsSnapshot = (): SettingsExportPayload => {
       backgroundRediscoveryIntervalMs: loadBackgroundRediscoveryIntervalMs(),
       discoveryProbeTimeoutMs: loadDiscoveryProbeTimeoutMs(),
       diskAutostartMode: loadDiskAutostartMode(),
+      volumeSliderPreviewIntervalMs: loadVolumeSliderPreviewIntervalMs(),
     },
     deviceSafety: {
       mode: safety.mode,
@@ -162,6 +168,7 @@ const validateAppSettings = (value: unknown) => {
     return "backgroundRediscoveryIntervalMs must be a number.";
   if (!Number.isFinite(record.discoveryProbeTimeoutMs)) return "discoveryProbeTimeoutMs must be a number.";
   if (!isDiskAutostartMode(record.diskAutostartMode)) return "diskAutostartMode must be kernal or dma.";
+  if (!Number.isFinite(record.volumeSliderPreviewIntervalMs)) return "volumeSliderPreviewIntervalMs must be a number.";
   return null;
 };
 
@@ -211,6 +218,7 @@ export const importSettingsJson = (raw: string): { ok: true } | { ok: false; err
   saveBackgroundRediscoveryIntervalMs(clampBackgroundRediscoveryIntervalMs(safeApp.backgroundRediscoveryIntervalMs));
   saveDiscoveryProbeTimeoutMs(clampDiscoveryProbeTimeoutMs(safeApp.discoveryProbeTimeoutMs));
   saveDiskAutostartMode(safeApp.diskAutostartMode);
+  saveVolumeSliderPreviewIntervalMs(clampVolumeSliderPreviewIntervalMs(safeApp.volumeSliderPreviewIntervalMs));
 
   saveDeviceSafetyMode(safeSafety.mode);
   saveFtpMaxConcurrency(safeSafety.ftpMaxConcurrency);

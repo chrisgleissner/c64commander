@@ -1,33 +1,50 @@
-# REST Interaction Hardening Plan
+# Plan: Diagnostics Export And Volume Control Hardening
 
-## Audit Findings
+## Scope
 
-- [x] Request identity already canonicalizes query parameters in [`src/lib/deviceInteraction/restRequestIdentity.ts`](/home/chris/dev/c64/c64commander/src/lib/deviceInteraction/restRequestIdentity.ts) via `canonicalizeRestPath()` and `buildRestRequestIdentity()`.
-- [x] `src/lib/c64api.ts` also canonicalizes query parameters for its GET dedupe key via `normalizeUrlPath()`.
-- [x] `src/lib/c64api.ts` only enables its local inflight dedupe / replay budget for read-only methods.
-- [ ] `src/lib/deviceInteraction/deviceInteractionManager.ts` still reuses `restInflight` for mutation policy keys, so overlapping writes can coalesce incorrectly in production.
-- [ ] `src/lib/deviceInteraction/deviceInteractionManager.ts` keeps short-lived REST cache entries after successful writes, so cached `GET /v1/configs` can survive a `PUT` or `POST`.
-- [ ] `src/lib/deviceInteraction/deviceInteractionManager.ts` performs cooldown/backoff sleeps inside the REST scheduler task, which can occupy the single REST slot before the real request starts.
-- [x] `src/pages/playFiles/hooks/useVolumeOverride.ts` uses a latest-intent write lane plus immediate writes; transport-level correctness depends on writes never coalescing and cache invalidation staying correct.
-- [x] Existing circuit-breaker logic appears bounded by time and success resets, but it still needs regression coverage alongside the scheduler changes.
+- Verify and harden diagnostics Share All UX, export naming, and ZIP contents.
+- Replace simplistic mock timing with a shared realistic single-threaded timing core reused by the external mock server and in-app demo mode.
+- Expand volume slider, mute/unmute, Playwright, and Maestro coverage with deterministic rate-limiting assertions.
+- Add a configurable volume slider preview interval setting and wire it into runtime behaviour.
+- Retake diagnostics screenshots, update docs, and complete full validation.
 
-## Implementation Tasks
+## Execution Plan
 
-- [x] Phase 1: audit REST identity, dedupe, cache, scheduler, slider write path, and circuit-breaker behavior.
-- [ ] Phase 2: harden request identity tests where needed, without refactoring the architecture.
-- [ ] Phase 3: prevent write coalescing in the shared REST interaction manager.
-- [ ] Phase 4: add targeted REST cache invalidation on successful writes.
-- [ ] Phase 5: remove self-blocking scheduler sleeps while keeping REST concurrency at `1`.
-- [ ] Phase 6: add deterministic regression tests for:
-  - identical GET burst coalescing
-  - query-sensitive GET separation
-  - cache invalidation after writes
-  - slider-style ordered write bursts
-  - scheduler non-stall behavior
-- [ ] Phase 7: run required validation:
-  - targeted unit tests
-  - `npm run test:coverage`
-  - `npm run lint`
-  - `npm run build`
-  - `./build`
+### 1. Baseline Investigation
 
+- [done] Inspect current diagnostics export, Play page volume control, mock server, demo mode, and existing automated coverage.
+- [done] Measure relevant C64U REST endpoint latency against the physical device and derive a bounded reproducible timing profile.
+- [done] Identify current screenshot generation and documentation references for diagnostics overlay.
+
+### 2. Shared Timing Implementation
+
+- [done] Introduce one shared timing and single-threaded request scheduling core.
+- [done] Reuse that core in the external mock server used by Playwright and in the in-app demo/mock server used by demo mode.
+- [done] Add deterministic tests proving both modes share timing, queueing, and jitter semantics.
+
+### 3. Diagnostics Export Hardening
+
+- [done] Verify export helpers around timestamp generation, ZIP assembly, and deterministic naming against the current implementation.
+- [done] Extend unit, integration, and UI tests for per-tab export and Share All export.
+- [done] Retake diagnostics screenshots showing Share All, Clear All, per-tab Share buttons, and populated tabs.
+
+### 4. Volume Control Hardening
+
+- [done] Add configurable slider preview propagation interval setting with validation and persistence.
+- [done] Ensure slider preview writes are coalesced and rate-limited using the configured interval.
+- [done] Expand mute/unmute and slider behaviour tests across unit, Playwright, and Maestro layers.
+
+### 5. Documentation And Validation
+
+- [done] Update developer and user documentation for Share All export, export file naming, preview interval, and shared mock/demo timing architecture.
+- [done] Run targeted tests, Playwright screenshots, Playwright suites, Maestro flows, coverage, lint, build, and ./build.
+- [done] Confirm final artifacts and summarize evidence for all required deliverables.
+
+## Notes
+
+- Keep this file current as work progresses.
+- Do not weaken assertions; add deterministic clocks, seeds, and request-trace checks where needed.
+- Shared mock timing profile, diagnostics screenshot refresh, lint, targeted tests, full coverage, and direct build validation completed.
+- Physical-device latency measurement against a live C64U was completed on 2026-03-12 against hostname `c64u`, and the shared timing profile was recalibrated from those safe REST probes.
+- Follow-up timing investigation established that drive-mount latency is route-specific and synchronous: five rebooted live samples for `PUT /v1/drives/b:mount` measured about `753`-`766` ms, and observable `/v1/drives` state completion matched HTTP response timing.
+- Final validation is green: targeted Android playback throttling proof passes, fresh lint/build pass, `npm run test:coverage` passes at 90.92% branch coverage, and `./build` completes successfully.

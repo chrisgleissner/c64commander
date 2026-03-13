@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import { useC64ConfigItems, useC64Connection, useC64UpdateConfigBatch } from "@/hooks/useC64Connection";
 import { toast } from "@/hooks/use-toast";
-import { addErrorLog } from "@/lib/logging";
+import { addErrorLog, addLog } from "@/lib/logging";
 import { getC64API } from "@/lib/c64api";
 import { isSidVolumeName, resolveAudioMixerMuteValue } from "@/lib/config/audioMixerSolo";
 import { AUDIO_MIXER_VOLUME_ITEMS, SID_ADDRESSING_ITEMS, SID_SOCKETS_ITEMS } from "@/lib/config/configItems";
@@ -20,7 +20,7 @@ import {
 } from "@/lib/config/sidVolumeControl";
 import { reduceVolumeState } from "../volumeState";
 import { extractAudioMixerItems, parseVolumeOption } from "../playFilesUtils";
-import { resolvePlaybackSyncDecision, type PlaybackSyncIntent } from "../playbackMixerSync";
+import { type PlaybackSyncIntent, type PlaybackSyncState } from "../playbackMixerSync";
 
 type SidMuteSnapshot = {
   volumes: Record<string, string | number>;
@@ -32,14 +32,16 @@ type PlaybackMixerWrite = {
   index: number;
   muted: boolean;
   updates: Record<string, string | number>;
+  allowKnownDeviceSkip?: boolean;
 };
 
 interface UseVolumeOverrideProps {
   isPlaying: boolean;
   isPaused: boolean;
+  previewIntervalMs: number;
 }
 
-export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProps) {
+export function useVolumeOverride({ isPlaying, isPaused, previewIntervalMs }: UseVolumeOverrideProps) {
   const { status } = useC64Connection();
   const updateConfigBatch = useC64UpdateConfigBatch();
 
@@ -97,6 +99,10 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
   const volumeUpdateSeqRef = useRef(0);
   const volumeUiTargetRef = useRef<{ index: number; setAtMs: number } | null>(null);
   const playbackSyncIntentRef = useRef<PlaybackSyncIntent | null>(null);
+  const pendingVolumeWriteRef = useRef<PlaybackSyncIntent | null>(null);
+  const lastKnownDeviceVolumeRef = useRef<PlaybackSyncState | null>(null);
+  const isDraggingVolumeRef = useRef(false);
+  const lastPreviewSentAtRef = useRef<number | null>(null);
   const playbackReconcileTimerRef = useRef<number | null>(null);
   const playbackWriteLaneRef = useRef<LatestIntentWriteLane<PlaybackMixerWrite> | null>(null);
   // Set to true during the pause-to-mute transition to prevent stale query
@@ -165,6 +171,31 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
       setAtMs: Date.now(),
     };
   }, []);
+
+  const clearPendingVolumeWrite = useCallback(() => {
+    pendingVolumeWriteRef.current = null;
+    playbackSyncIntentRef.current = null;
+    volumeUiTargetRef.current = null;
+  }, []);
+
+  const markPendingVolumeWrite = useCallback(
+    (index: number, muted: boolean) => {
+      const nextIntent = {
+        index,
+        muted,
+        setAtMs: Date.now(),
+      };
+      pendingVolumeWriteRef.current = nextIntent;
+      setPlaybackSyncIntent(index, muted);
+      volumeUiTargetRef.current = muted
+        ? null
+        : {
+            index,
+            setAtMs: nextIntent.setAtMs,
+          };
+    },
+    [setPlaybackSyncIntent],
+  );
 
   const withTimeout = useCallback(async <T>(promise: Promise<T>, timeoutMs: number, operation: string) => {
     let timeoutId: number | null = null;
@@ -248,11 +279,48 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
 
   const queuePlaybackMixerWrite = useCallback(
     async (write: PlaybackMixerWrite) => {
-      setPlaybackSyncIntent(write.index, write.muted);
-      await playbackWriteLaneRef.current?.schedule(write);
-      schedulePlaybackReconciliation();
+      const pending = pendingVolumeWriteRef.current;
+      const pendingMatchesRequestedState = !pending || (pending.index === write.index && pending.muted === write.muted);
+      if (pending && pending.index === write.index && pending.muted === write.muted) {
+        addLog("debug", "Play volume write skipped while identical write is pending", {
+          context: write.context,
+          index: write.index,
+          muted: write.muted,
+        });
+        return;
+      }
+
+      const knownDevice = lastKnownDeviceVolumeRef.current;
+      if (
+        write.allowKnownDeviceSkip !== false &&
+        !isDraggingVolumeRef.current &&
+        knownDevice &&
+        knownDevice.index === write.index &&
+        knownDevice.muted === write.muted &&
+        pendingMatchesRequestedState
+      ) {
+        clearPendingVolumeWrite();
+        addLog("debug", "Play volume write skipped because device already reflects requested state", {
+          context: write.context,
+          index: write.index,
+          muted: write.muted,
+        });
+        return;
+      }
+
+      markPendingVolumeWrite(write.index, write.muted);
+      try {
+        await playbackWriteLaneRef.current?.schedule(write);
+        schedulePlaybackReconciliation();
+      } catch (error) {
+        const activePending = pendingVolumeWriteRef.current;
+        if (activePending?.index === write.index && activePending.muted === write.muted) {
+          clearPendingVolumeWrite();
+        }
+        throw error;
+      }
     },
-    [schedulePlaybackReconciliation, setPlaybackSyncIntent],
+    [clearPendingVolumeWrite, markPendingVolumeWrite, schedulePlaybackReconciliation],
   );
 
   const resolveSidVolumeItems = useCallback(
@@ -369,61 +437,61 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
     ],
   );
 
-  const scheduleVolumeUpdate = useCallback(
-    (nextIndex: number, immediate = false) => {
+  const sendVolumeWrite = useCallback(
+    async (nextIndex: number, phase: "preview" | "commit") => {
       if (!volumeSteps.length || !sidVolumeItems.length) return;
       const target = volumeSteps[nextIndex]?.option;
       if (!target) return;
-      const updates = buildEnabledSidVolumeUpdates(sidVolumeItems, sidEnablement, target);
-      manualMuteSnapshotRef.current = null;
-      previousVolumeIndexRef.current = nextIndex;
 
-      volumeUpdateSeqRef.current += 1;
-      const token = volumeUpdateSeqRef.current;
-      reserveVolumeUiTarget(nextIndex);
-
-      const runUpdate = async () => {
-        if (token !== volumeUpdateSeqRef.current) return;
-        void ensureVolumeSessionSnapshot();
-        try {
-          await queuePlaybackMixerWrite({
-            updates,
-            context: "Volume",
-            index: nextIndex,
-            muted: false,
-          });
-        } catch (error) {
-          addErrorLog("Volume update failed", {
-            error: (error as Error).message,
-          });
-          // Write failed; skip UI state update to avoid desync.
-          return;
-        } finally {
-          const pendingTarget = volumeUiTargetRef.current;
-          if (pendingTarget?.index === nextIndex) {
-            if (Date.now() - pendingTarget.setAtMs >= 2500) {
-              volumeUiTargetRef.current = null;
-            }
-          }
-        }
-        if (token !== volumeUpdateSeqRef.current) return;
-        dispatchVolume({ type: "unmute", reason: "manual" });
-      };
-
-      if (volumeUpdateTimerRef.current) {
-        window.clearTimeout(volumeUpdateTimerRef.current);
-        volumeUpdateTimerRef.current = null;
-      }
-
-      if (immediate) {
-        void runUpdate();
+      const knownDevice = lastKnownDeviceVolumeRef.current;
+      const pending = pendingVolumeWriteRef.current;
+      const pendingMatchesRequestedState = !pending || (pending.index === nextIndex && pending.muted === false);
+      if (
+        knownDevice &&
+        knownDevice.index === nextIndex &&
+        knownDevice.muted === false &&
+        pendingMatchesRequestedState
+      ) {
+        clearPendingVolumeWrite();
         return;
       }
 
-      volumeUpdateTimerRef.current = window.setTimeout(() => void runUpdate(), 200);
+      const updates = buildEnabledSidVolumeUpdates(sidVolumeItems, sidEnablement, target);
+      manualMuteSnapshotRef.current = null;
+      previousVolumeIndexRef.current = nextIndex;
+      volumeUpdateSeqRef.current += 1;
+      reserveVolumeUiTarget(nextIndex);
+      void ensureVolumeSessionSnapshot();
+
+      addLog(
+        phase === "preview" ? "debug" : "info",
+        phase === "preview" ? "Play volume preview send" : "Play volume commit send",
+        {
+          index: nextIndex,
+          target,
+        },
+      );
+
+      try {
+        await queuePlaybackMixerWrite({
+          updates,
+          context: phase === "preview" ? "Volume preview" : "Volume commit",
+          index: nextIndex,
+          muted: false,
+          allowKnownDeviceSkip: true,
+        });
+        dispatchVolume({ type: "unmute", reason: "manual", index: nextIndex });
+      } catch (error) {
+        addErrorLog("Volume update failed", {
+          error: (error as Error).message,
+          phase,
+          index: nextIndex,
+        });
+      }
     },
     [
       buildEnabledSidVolumeUpdates,
+      clearPendingVolumeWrite,
       ensureVolumeSessionSnapshot,
       queuePlaybackMixerWrite,
       reserveVolumeUiTarget,
@@ -436,6 +504,7 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
   const handleVolumeLocalChange = useCallback(
     (value: number[]) => {
       const nextIndex = value[0] ?? 0;
+      isDraggingVolumeRef.current = true;
       dispatchVolume({ type: "set-index", index: nextIndex });
       reserveVolumeUiTarget(nextIndex);
       if (!volumeMuted) return;
@@ -455,13 +524,25 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
   const handleVolumeAsyncChange = useCallback(
     (nextIndex: number) => {
       if (volumeMuted) return;
-      scheduleVolumeUpdate(nextIndex);
+      const now = Date.now();
+      const lastSentAt = lastPreviewSentAtRef.current;
+      if (lastSentAt !== null && now - lastSentAt < previewIntervalMs) {
+        addLog("debug", "Play volume preview suppressed by configured rate limit", {
+          index: nextIndex,
+          elapsedMs: now - lastSentAt,
+          previewIntervalMs,
+        });
+        return;
+      }
+      lastPreviewSentAtRef.current = now;
+      void sendVolumeWrite(nextIndex, "preview");
     },
-    [scheduleVolumeUpdate, volumeMuted],
+    [previewIntervalMs, sendVolumeWrite, volumeMuted],
   );
 
   const handleVolumeCommit = useCallback(
     async (nextIndex: number) => {
+      isDraggingVolumeRef.current = false;
       dispatchVolume({ type: "set-index", index: nextIndex });
       reserveVolumeUiTarget(nextIndex);
       if (volumeMuted) {
@@ -476,28 +557,30 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
         }
         return;
       }
-      scheduleVolumeUpdate(nextIndex, true);
+      lastPreviewSentAtRef.current = null;
+      await sendVolumeWrite(nextIndex, "commit");
     },
-    [reserveVolumeUiTarget, scheduleVolumeUpdate, volumeMuted, volumeSteps],
+    [reserveVolumeUiTarget, sendVolumeWrite, volumeMuted, volumeSteps],
   );
 
   const handleToggleMute = useCallback(async () => {
     const items = await resolveEnabledSidVolumeItems(true);
     if (!items.length) return;
-    if (volumeUpdateTimerRef.current) {
-      window.clearTimeout(volumeUpdateTimerRef.current);
-      volumeUpdateTimerRef.current = null;
-    }
+    isDraggingVolumeRef.current = false;
+    lastPreviewSentAtRef.current = null;
     if (!volumeMuted) {
       previousVolumeIndexRef.current = volumeIndex;
       await ensureVolumeSessionSnapshot();
       manualMuteSnapshotRef.current = captureSidMuteSnapshot(items, sidEnablement);
-      volumeUiTargetRef.current = null;
       await queuePlaybackMixerWrite({
         updates: buildEnabledSidMuteUpdates(items, sidEnablement),
         context: "Mute",
         index: volumeIndex,
         muted: true,
+        allowKnownDeviceSkip: false,
+      });
+      addLog("info", "Play volume mute sent", {
+        index: volumeIndex,
       });
       dispatchVolume({ type: "mute", reason: "manual" });
       return;
@@ -517,13 +600,18 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
         context: "Unmute",
         index: previousVolumeIndexRef.current ?? volumeIndex,
         muted: false,
+        allowKnownDeviceSkip: false,
+      });
+      addLog("info", "Play volume unmute sent", {
+        index: previousVolumeIndexRef.current ?? volumeIndex,
       });
     }
     dispatchVolume({ type: "unmute", reason: "manual" });
     manualMuteSnapshotRef.current = null;
-    volumeUiTargetRef.current = null;
+    clearPendingVolumeWrite();
   }, [
     captureSidMuteSnapshot,
+    clearPendingVolumeWrite,
     ensureVolumeSessionSnapshot,
     queuePlaybackMixerWrite,
     resolveEnabledSidVolumeItems,
@@ -537,9 +625,13 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
   useEffect(() => {
     if (updateConfigBatch.isPending) return;
     if (!enabledSidVolumeItems.length || !volumeSteps.length) {
+      lastKnownDeviceVolumeRef.current = null;
       dispatchVolume({ type: "reset", index: defaultVolumeIndex });
-      playbackSyncIntentRef.current = null;
-      volumeUiTargetRef.current = null;
+      clearPendingVolumeWrite();
+      isDraggingVolumeRef.current = false;
+      return;
+    }
+    if (isDraggingVolumeRef.current) {
       return;
     }
     const muteValues = enabledSidVolumeItems.map((item) => resolveAudioMixerMuteValue(item.options));
@@ -574,16 +666,21 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
         snapshotIndices.forEach((index) => counts.set(index, (counts.get(index) ?? 0) + 1));
         nextIndex = Array.from(counts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? defaultVolumeIndex;
       }
-      const syncDecision = resolvePlaybackSyncDecision(
-        playbackSyncIntentRef.current,
-        { index: nextIndex, muted: true },
-        Date.now(),
-      );
-      if (syncDecision === "defer") {
-        return;
-      }
-      if (syncDecision === "clear") {
-        playbackSyncIntentRef.current = null;
+      lastKnownDeviceVolumeRef.current = {
+        index: nextIndex,
+        muted: true,
+      };
+      const pendingWrite = pendingVolumeWriteRef.current;
+      if (pendingWrite) {
+        if (pendingWrite.index === nextIndex && pendingWrite.muted) {
+          clearPendingVolumeWrite();
+        } else {
+          addLog("debug", "Play volume sync deferred while muted write confirmation is pending", {
+            pendingIndex: pendingWrite.index,
+            deviceIndex: nextIndex,
+          });
+          return;
+        }
       }
       dispatchVolume({ type: "sync", index: nextIndex, muted: true });
       return;
@@ -591,35 +688,27 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
     const counts = new Map<number, number>();
     activeIndices.forEach((index) => counts.set(index, (counts.get(index) ?? 0) + 1));
     const nextIndex = Array.from(counts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? defaultVolumeIndex;
-    const nowMs = Date.now();
-    const playbackSyncDecision = resolvePlaybackSyncDecision(
-      playbackSyncIntentRef.current,
-      { index: nextIndex, muted: false },
-      nowMs,
-    );
-    if (playbackSyncDecision === "defer") {
-      return;
-    }
-    if (playbackSyncDecision === "clear") {
-      playbackSyncIntentRef.current = null;
-    }
-    const syncDecision = resolvePlaybackSyncDecision(
-      volumeUiTargetRef.current
-        ? { index: volumeUiTargetRef.current.index, muted: false, setAtMs: volumeUiTargetRef.current.setAtMs }
-        : null,
-      { index: nextIndex, muted: false },
-      nowMs,
-    );
-    if (syncDecision === "defer") {
-      return;
-    }
-    if (syncDecision === "clear") {
-      volumeUiTargetRef.current = null;
+    lastKnownDeviceVolumeRef.current = {
+      index: nextIndex,
+      muted: false,
+    };
+    const pendingWrite = pendingVolumeWriteRef.current;
+    if (pendingWrite) {
+      if (pendingWrite.index === nextIndex && pendingWrite.muted === false) {
+        clearPendingVolumeWrite();
+      } else {
+        addLog("debug", "Play volume sync deferred while unmuted write confirmation is pending", {
+          pendingIndex: pendingWrite.index,
+          deviceIndex: nextIndex,
+        });
+        return;
+      }
     }
     // Hardware has confirmed the unmuted state – clear the resume guard.
     resumingFromPauseRef.current = false;
     dispatchVolume({ type: "sync", index: nextIndex, muted: false });
   }, [
+    clearPendingVolumeWrite,
     defaultVolumeIndex,
     enabledSidVolumeItems,
     resolveVolumeIndex,
@@ -630,10 +719,6 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
 
   useEffect(() => {
     return () => {
-      if (volumeUpdateTimerRef.current) {
-        window.clearTimeout(volumeUpdateTimerRef.current);
-        volumeUpdateTimerRef.current = null;
-      }
       if (playbackReconcileTimerRef.current) {
         window.clearTimeout(playbackReconcileTimerRef.current);
         playbackReconcileTimerRef.current = null;
@@ -658,13 +743,18 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
         context: "Unmute on playback start",
         index: previousVolumeIndexRef.current ?? volumeIndex,
         muted: false,
+        allowKnownDeviceSkip: false,
+      });
+      addLog("info", "Play volume unmute sent on playback start", {
+        index: previousVolumeIndexRef.current ?? volumeIndex,
       });
     }
     dispatchVolume({ type: "unmute", reason: "manual" });
     manualMuteSnapshotRef.current = null;
-    volumeUiTargetRef.current = null;
+    clearPendingVolumeWrite();
   }, [
     buildEnabledSidVolumeUpdates,
+    clearPendingVolumeWrite,
     dispatchVolume,
     queuePlaybackMixerWrite,
     resolveEnabledSidVolumeItems,

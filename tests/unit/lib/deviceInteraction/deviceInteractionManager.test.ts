@@ -96,6 +96,7 @@ describe("deviceInteractionManager", () => {
 
   beforeEach(() => {
     vi.resetModules();
+    (globalThis as { __c64uForceInteractionScheduling?: boolean }).__c64uForceInteractionScheduling = true;
     restoreEnv = applyNonTestEnv();
     config = createConfig();
     deviceStateValue = "READY";
@@ -110,6 +111,7 @@ describe("deviceInteractionManager", () => {
 
   afterEach(() => {
     restoreEnv?.();
+    delete (globalThis as { __c64uForceInteractionScheduling?: boolean }).__c64uForceInteractionScheduling;
     vi.useRealTimers();
   });
 
@@ -139,8 +141,7 @@ describe("deviceInteractionManager", () => {
     const first = withRestInteraction(meta, handler);
     const second = withRestInteraction(meta, handler);
 
-    await Promise.resolve();
-    expect(handler).toHaveBeenCalledTimes(1);
+    await expect.poll(() => handler.mock.calls.length).toBe(1);
     resolveHandler?.({ status: "ok" });
 
     await expect(first).resolves.toEqual({ status: "ok" });
@@ -178,8 +179,7 @@ describe("deviceInteractionManager", () => {
 
     const requests = Array.from({ length: 20 }, () => withRestInteraction(meta, handler));
 
-    await Promise.resolve();
-    expect(handler).toHaveBeenCalledTimes(1);
+    await expect.poll(() => handler.mock.calls.length).toBe(1);
 
     releaseHandler();
     await expect(Promise.all(requests)).resolves.toEqual(Array.from({ length: 20 }, () => ({ product: "C64U" })));
@@ -217,8 +217,7 @@ describe("deviceInteractionManager", () => {
     const first = withRestInteraction(meta, firstHandler);
     const second = withRestInteraction(meta, secondHandler);
 
-    await Promise.resolve();
-    expect(firstHandler).toHaveBeenCalledTimes(1);
+    await expect.poll(() => firstHandler.mock.calls.length).toBe(1);
     expect(secondHandler).not.toHaveBeenCalled();
 
     releaseFirst();

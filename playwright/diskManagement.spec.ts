@@ -156,6 +156,14 @@ const seedUltimateTurricanDisks = async (page: Page) => {
 test.describe("Disk management", () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
   let ftpServers: Awaited<ReturnType<typeof startFtpTestServers>>;
+  const usesRealisticTiming = (title: string) =>
+    [
+      "mounting ultimate disks uses mount endpoint",
+      "settings changes while disk mounted preserve mounted state",
+      "mount failure surfaces error and does not mark drive mounted",
+      "multi-drive mounting and rotation within group",
+      "disk presence indicator and deletion ejects mounted disks",
+    ].some((label) => title.includes(label));
 
   test.beforeAll(async () => {
     ftpServers = await startFtpTestServers();
@@ -168,7 +176,11 @@ test.describe("Disk management", () => {
   test.beforeEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     enforceDeviceTestMapping(testInfo);
     await startStrictUiMonitoring(page, testInfo);
-    server = await createMockC64Server({});
+    server = await createMockC64Server(
+      {},
+      {},
+      { timingMode: usesRealisticTiming(testInfo.title) ? "realistic" : "fast" },
+    );
     await seedFtpConfig(page, {
       host: ftpServers.ftpServer.host,
       port: ftpServers.ftpServer.port,

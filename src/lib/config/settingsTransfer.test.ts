@@ -8,6 +8,7 @@
 
 import { beforeEach, describe, expect, it } from "vitest";
 import { loadDeviceSafetyConfig } from "@/lib/config/deviceSafetySettings";
+import { loadVolumeSliderPreviewIntervalMs } from "@/lib/config/appSettings";
 import { exportSettingsSnapshot, importSettingsJson } from "@/lib/config/settingsTransfer";
 
 describe("settingsTransfer", () => {
@@ -19,6 +20,7 @@ describe("settingsTransfer", () => {
     const snapshot = exportSettingsSnapshot();
 
     expect(snapshot.deviceSafety).not.toHaveProperty("restMaxConcurrency");
+    expect(snapshot.appSettings.volumeSliderPreviewIntervalMs).toBe(200);
   });
 
   it("imports legacy settings payloads that still contain restMaxConcurrency", () => {
@@ -33,6 +35,7 @@ describe("settingsTransfer", () => {
           backgroundRediscoveryIntervalMs: 5000,
           discoveryProbeTimeoutMs: 2500,
           diskAutostartMode: "kernal",
+          volumeSliderPreviewIntervalMs: 320,
         },
         deviceSafety: {
           mode: "CONSERVATIVE",
@@ -60,5 +63,6 @@ describe("settingsTransfer", () => {
       ftpMaxConcurrency: 2,
       allowUserOverrideCircuit: false,
     });
+    expect(loadVolumeSliderPreviewIntervalMs()).toBe(320);
   });
 });

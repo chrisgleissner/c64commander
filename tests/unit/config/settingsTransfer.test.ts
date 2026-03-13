@@ -15,6 +15,7 @@ import {
   loadDiscoveryProbeTimeoutMs,
   loadDiskAutostartMode,
   loadStartupDiscoveryWindowMs,
+  loadVolumeSliderPreviewIntervalMs,
 } from "@/lib/config/appSettings";
 import { loadDeviceSafetyConfig } from "@/lib/config/deviceSafetySettings";
 import { exportSettingsSnapshot, importSettingsJson, SETTINGS_EXPORT_VERSION } from "@/lib/config/settingsTransfer";
@@ -28,6 +29,7 @@ describe("settingsTransfer", () => {
     const snapshot = exportSettingsSnapshot();
     expect(snapshot.version).toBe(SETTINGS_EXPORT_VERSION);
     expect(snapshot.appSettings).toHaveProperty("debugLoggingEnabled");
+    expect(snapshot.appSettings).toHaveProperty("volumeSliderPreviewIntervalMs");
     expect(snapshot.deviceSafety).toHaveProperty("mode");
     expect(JSON.stringify(snapshot)).not.toMatch(/password/i);
   });
@@ -43,6 +45,7 @@ describe("settingsTransfer", () => {
         backgroundRediscoveryIntervalMs: 5000,
         discoveryProbeTimeoutMs: 2500,
         diskAutostartMode: "kernal",
+        volumeSliderPreviewIntervalMs: 200,
         extra: "nope",
       },
       deviceSafety: {
@@ -79,6 +82,7 @@ describe("settingsTransfer", () => {
         backgroundRediscoveryIntervalMs: 7000,
         discoveryProbeTimeoutMs: 3200,
         diskAutostartMode: "dma",
+        volumeSliderPreviewIntervalMs: 300,
       },
       deviceSafety: {
         mode: "TROUBLESHOOTING",
@@ -108,6 +112,7 @@ describe("settingsTransfer", () => {
     expect(loadBackgroundRediscoveryIntervalMs()).toBe(7000);
     expect(loadDiscoveryProbeTimeoutMs()).toBe(3200);
     expect(loadDiskAutostartMode()).toBe("dma");
+    expect(loadVolumeSliderPreviewIntervalMs()).toBe(300);
 
     const safety = loadDeviceSafetyConfig();
     expect(safety.mode).toBe("TROUBLESHOOTING");
@@ -141,6 +146,7 @@ describe("settingsTransfer", () => {
         backgroundRediscoveryIntervalMs: 5000,
         discoveryProbeTimeoutMs: 2500,
         diskAutostartMode: "never",
+        volumeSliderPreviewIntervalMs: 200,
       },
       deviceSafety: {
         mode: "BALANCED",
@@ -176,6 +182,7 @@ describe("settingsTransfer", () => {
         backgroundRediscoveryIntervalMs: 5000,
         discoveryProbeTimeoutMs: 2500,
         diskAutostartMode: "kernal",
+        volumeSliderPreviewIntervalMs: 200,
       },
       deviceSafety: {
         mode: "BALANCED",

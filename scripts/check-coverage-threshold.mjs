@@ -5,8 +5,8 @@ import path from 'node:path';
 const defaultCoverageFile = 'coverage/lcov-merged.info';
 const fallbackCoverageFile = 'coverage/lcov.info';
 const coverageFile = process.env.COVERAGE_FILE ?? defaultCoverageFile;
-const minLineCoverage = Number(process.env.COVERAGE_MIN ?? '90');
-const minBranchCoverage = Number(process.env.COVERAGE_MIN_BRANCH ?? '90');
+const minLineCoverage = Number(process.env.COVERAGE_MIN ?? '91');
+const minBranchCoverage = Number(process.env.COVERAGE_MIN_BRANCH ?? '91');
 
 const filePath = path.resolve(process.cwd(), coverageFile);
 let content = '';

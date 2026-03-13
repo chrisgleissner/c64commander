@@ -3,6 +3,11 @@ import http from 'node:http';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
+import {
+  loadMockTimingProfile,
+  resolveMockTimingClassId,
+  resolveMockTimingDelayMs,
+} from './lib/mockTimingProfile.mjs';
 
 const args = process.argv.slice(2);
 const outIndex = args.indexOf('--out');
@@ -37,41 +42,62 @@ const buildConfigPayload = () => {
 
 const { categories, configs } = buildConfigPayload();
 const requests = [];
+const timingProfile = await loadMockTimingProfile();
+let requestSequence = 0;
 
 const server = http.createServer((req, res) => {
   const method = req.method ?? 'GET';
   const url = req.url ?? '/';
-  requests.push({ method, url });
+  const parsed = new URL(url, 'http://127.0.0.1');
+  const requestId = ++requestSequence;
+  requests.push({
+    method,
+    url,
+    timingClass: resolveMockTimingClassId(timingProfile, method, parsed.pathname),
+    plannedDelayMs: resolveMockTimingDelayMs({
+      profile: timingProfile,
+      method,
+      pathname: parsed.pathname,
+      requestSequence: requestId,
+    }),
+  });
+
+  const respond = (handler) => {
+    const delayMs = requests.at(-1)?.plannedDelayMs ?? 0;
+    setTimeout(handler, delayMs);
+  };
 
   if (method === 'OPTIONS') {
-    res.writeHead(204, {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS',
-      'Access-Control-Allow-Headers': '*',
+    respond(() => {
+      res.writeHead(204, {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS',
+        'Access-Control-Allow-Headers': '*',
+      });
+      res.end();
     });
-    res.end();
     return;
   }
 
   if (url.startsWith('/v1/info')) {
-    return json(res, 200, {
+    return respond(() => json(res, 200, {
       product: 'C64 Ultimate',
       firmware_version: '3.12.0',
       core_version: '1.0.0',
       hostname: 'mock-c64u',
       unique_id: 'mock-uid',
       errors: [],
-    });
+    }));
   }
 
   if (url.startsWith('/v1/version')) {
-    return json(res, 200, { version: '3.12.0', errors: [] });
+    return respond(() => json(res, 200, { version: '3.12.0', errors: [] }));
   }
 
   if (url.startsWith('/v1/configs')) {
     const parts = url.split('/').filter(Boolean);
     if (parts.length === 2) {
-      return json(res, 200, { categories, errors: [] });
+      return respond(() => json(res, 200, { categories, errors: [] }));
     }
     if (parts.length >= 3) {
       const category = decodeURIComponent(parts[2]);
@@ -79,20 +105,20 @@ const server = http.createServer((req, res) => {
       if (parts.length >= 4) {
         const item = decodeURIComponent(parts[3]);
         const entry = config && config[item] ? { [item]: config[item] } : {};
-        return json(res, 200, { [category]: entry, errors: [] });
+        return respond(() => json(res, 200, { [category]: entry, errors: [] }));
       }
-      return json(res, 200, { [category]: config, errors: [] });
+      return respond(() => json(res, 200, { [category]: config, errors: [] }));
     }
   }
 
   if (url.startsWith('/v1/drives')) {
-    return json(res, 200, {
+    return respond(() => json(res, 200, {
       drives: [{ a: { enabled: true, bus_id: 8, type: '1541' } }],
       errors: [],
-    });
+    }));
   }
 
-  return json(res, 200, { errors: [] });
+  return respond(() => json(res, 200, { errors: [] }));
 });
 
 const startServer = async () => {
