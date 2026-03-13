@@ -26,7 +26,7 @@
     "build:web-platform": "npm run build && npm run build:web-server",
     "build:dev": "vite build --mode development",
     "lint": "npm run format:check:ts && eslint .",
-    "postinstall": "patch-package && node scripts/install-git-hooks.mjs",
+    "postinstall": "patch-package && node --input-type=module -e \"import { existsSync } from 'node:fs'; if (existsSync('./scripts/install-git-hooks.mjs')) await import('./scripts/install-git-hooks.mjs');\"",
     "preview": "vite preview",
     "start:web": "node web/server/dist/index.js",
     "test": "vitest run",
