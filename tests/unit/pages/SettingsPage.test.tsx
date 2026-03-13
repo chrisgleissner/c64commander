@@ -239,6 +239,7 @@ vi.mock("@/lib/config/settingsTransfer", () => ({
 vi.mock("@/lib/config/appSettings", () => ({
   clampConfigWriteIntervalMs: (value: number) => value,
   clampDiscoveryProbeTimeoutMs: (value: number) => value,
+  clampVolumeSliderPreviewIntervalMs: (value: number) => value,
   loadConfigWriteIntervalMs: vi.fn(() => 500),
   clampBackgroundRediscoveryIntervalMs: (value: number) => value,
   clampStartupDiscoveryWindowMs: (value: number) => value,

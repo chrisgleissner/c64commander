@@ -7,14 +7,14 @@ const repoRoot = process.cwd();
 const gitDir = path.join(repoRoot, '.git');
 
 if (!existsSync(gitDir)) {
-  process.exit(0);
+    process.exit(0);
 }
 
 const result = spawnSync('git', ['config', 'core.hooksPath', '.githooks'], {
-  cwd: repoRoot,
-  stdio: 'inherit',
+    cwd: repoRoot,
+    stdio: 'inherit',
 });
 
 if (result.status !== 0) {
-  process.exit(result.status ?? 1);
+    process.exit(result.status ?? 1);
 }
