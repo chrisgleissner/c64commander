@@ -13,6 +13,7 @@ import {
   DEFAULT_CONFIG_WRITE_INTERVAL_MS,
   DEFAULT_DISCOVERY_PROBE_TIMEOUT_MS,
   DEFAULT_DISK_AUTOSTART_MODE,
+  DEFAULT_VOLUME_SLIDER_PREVIEW_INTERVAL_MS,
   DEFAULT_STARTUP_DISCOVERY_WINDOW_MS,
   APP_SETTINGS_KEYS,
   loadAutomaticDemoModeEnabled,
@@ -22,6 +23,7 @@ import {
   loadDebugLoggingEnabled,
   loadDiskAutostartMode,
   loadStartupDiscoveryWindowMs,
+  loadVolumeSliderPreviewIntervalMs,
   saveAutomaticDemoModeEnabled,
   saveBackgroundRediscoveryIntervalMs,
   saveDiscoveryProbeTimeoutMs,
@@ -29,6 +31,7 @@ import {
   saveDebugLoggingEnabled,
   saveDiskAutostartMode,
   saveStartupDiscoveryWindowMs,
+  saveVolumeSliderPreviewIntervalMs,
 } from "@/lib/config/appSettings";
 
 const collectSettingEvents = () => {
@@ -60,6 +63,7 @@ describe("appSettings", () => {
     expect(loadBackgroundRediscoveryIntervalMs()).toBe(DEFAULT_BACKGROUND_REDISCOVERY_INTERVAL_MS);
     expect(loadDiscoveryProbeTimeoutMs()).toBe(DEFAULT_DISCOVERY_PROBE_TIMEOUT_MS);
     expect(loadDiskAutostartMode()).toBe(DEFAULT_DISK_AUTOSTART_MODE);
+    expect(loadVolumeSliderPreviewIntervalMs()).toBe(DEFAULT_VOLUME_SLIDER_PREVIEW_INTERVAL_MS);
   });
 
   it("saves values and emits setting events", () => {
@@ -72,6 +76,7 @@ describe("appSettings", () => {
     saveBackgroundRediscoveryIntervalMs(800);
     saveDiscoveryProbeTimeoutMs(2780);
     saveDiskAutostartMode("dma");
+    saveVolumeSliderPreviewIntervalMs(321);
 
     dispose();
 
@@ -82,6 +87,7 @@ describe("appSettings", () => {
     expect(localStorage.getItem(APP_SETTINGS_KEYS.BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY)).toBe("1000");
     expect(localStorage.getItem(APP_SETTINGS_KEYS.DISCOVERY_PROBE_TIMEOUT_MS_KEY)).toBe("2800");
     expect(localStorage.getItem(APP_SETTINGS_KEYS.DISK_AUTOSTART_MODE_KEY)).toBe("dma");
+    expect(localStorage.getItem(APP_SETTINGS_KEYS.VOLUME_SLIDER_PREVIEW_INTERVAL_MS_KEY)).toBe("321");
 
     expect(events).toEqual(
       expect.arrayContaining([
@@ -95,6 +101,7 @@ describe("appSettings", () => {
         },
         { key: APP_SETTINGS_KEYS.DISCOVERY_PROBE_TIMEOUT_MS_KEY, value: 2800 },
         { key: APP_SETTINGS_KEYS.DISK_AUTOSTART_MODE_KEY, value: "dma" },
+        { key: APP_SETTINGS_KEYS.VOLUME_SLIDER_PREVIEW_INTERVAL_MS_KEY, value: 321 },
       ]),
     );
   });

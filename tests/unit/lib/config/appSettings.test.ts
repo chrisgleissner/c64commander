@@ -134,6 +134,25 @@ describe("appSettings", () => {
     });
   });
 
+  describe("volumeSliderPreviewIntervalMs", () => {
+    it("defaults correctly", () => {
+      expect(appSettings.loadVolumeSliderPreviewIntervalMs()).toBe(
+        appSettings.DEFAULT_VOLUME_SLIDER_PREVIEW_INTERVAL_MS,
+      );
+    });
+
+    it("clamps and saves correctly", () => {
+      expect(appSettings.clampVolumeSliderPreviewIntervalMs(50)).toBe(100);
+      expect(appSettings.clampVolumeSliderPreviewIntervalMs(999)).toBe(500);
+      expect(appSettings.clampVolumeSliderPreviewIntervalMs(NaN)).toBe(
+        appSettings.DEFAULT_VOLUME_SLIDER_PREVIEW_INTERVAL_MS,
+      );
+
+      appSettings.saveVolumeSliderPreviewIntervalMs(345);
+      expect(appSettings.loadVolumeSliderPreviewIntervalMs()).toBe(345);
+    });
+  });
+
   // Edge case: localStorage undefined
   describe("environment without localStorage", () => {
     let originalLocalStorage: any;
@@ -156,8 +175,12 @@ describe("appSettings", () => {
       expect(() => appSettings.saveBackgroundRediscoveryIntervalMs(1000)).not.toThrow();
       expect(() => appSettings.saveDiscoveryProbeTimeoutMs(1000)).not.toThrow();
       expect(() => appSettings.saveDiskAutostartMode("dma")).not.toThrow();
+      expect(() => appSettings.saveVolumeSliderPreviewIntervalMs(250)).not.toThrow();
       // Covers BRDA:137 — loadDiskAutostartMode early-returns DEFAULT when localStorage absent
       expect(appSettings.loadDiskAutostartMode()).toBe(appSettings.DEFAULT_DISK_AUTOSTART_MODE);
+      expect(appSettings.loadVolumeSliderPreviewIntervalMs()).toBe(
+        appSettings.DEFAULT_VOLUME_SLIDER_PREVIEW_INTERVAL_MS,
+      );
     });
 
     it("handles numeric reads without storage", () => {

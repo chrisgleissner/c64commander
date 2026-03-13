@@ -13,6 +13,7 @@ const STARTUP_DISCOVERY_WINDOW_MS_KEY = "c64u_startup_discovery_window_ms";
 const BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY = "c64u_background_rediscovery_interval_ms";
 const DISCOVERY_PROBE_TIMEOUT_MS_KEY = "c64u_discovery_probe_timeout_ms";
 const DISK_AUTOSTART_MODE_KEY = "c64u_disk_autostart_mode";
+const VOLUME_SLIDER_PREVIEW_INTERVAL_MS_KEY = "c64u_volume_slider_preview_interval_ms";
 
 export const DEFAULT_CONFIG_WRITE_INTERVAL_MS = 500;
 export const DEFAULT_AUTO_DEMO_MODE_ENABLED = true;
@@ -21,6 +22,7 @@ export const DEFAULT_BACKGROUND_REDISCOVERY_INTERVAL_MS = 5000;
 export const DEFAULT_DISCOVERY_PROBE_TIMEOUT_MS = 2500;
 export type DiskAutostartMode = "kernal" | "dma";
 export const DEFAULT_DISK_AUTOSTART_MODE: DiskAutostartMode = "kernal";
+export const DEFAULT_VOLUME_SLIDER_PREVIEW_INTERVAL_MS = 200;
 
 const clampInterval = (value: number) => {
   if (Number.isNaN(value)) return DEFAULT_CONFIG_WRITE_INTERVAL_MS;
@@ -43,6 +45,11 @@ const clampDiscoveryProbeTimeoutMsInternal = (value: number) => {
   if (Number.isNaN(value)) return DEFAULT_DISCOVERY_PROBE_TIMEOUT_MS;
   const rounded = Math.round(value / 100) * 100;
   return Math.min(10000, Math.max(500, rounded));
+};
+
+const clampVolumeSliderPreviewIntervalMsInternal = (value: number) => {
+  if (Number.isNaN(value)) return DEFAULT_VOLUME_SLIDER_PREVIEW_INTERVAL_MS;
+  return Math.min(500, Math.max(100, Math.round(value)));
 };
 
 const readBoolean = (key: string, fallback: boolean) => {
@@ -145,6 +152,21 @@ export const saveDiskAutostartMode = (mode: DiskAutostartMode) => {
   localStorage.setItem(DISK_AUTOSTART_MODE_KEY, normalized);
   broadcast(DISK_AUTOSTART_MODE_KEY, normalized);
 };
+
+export const loadVolumeSliderPreviewIntervalMs = () =>
+  clampVolumeSliderPreviewIntervalMsInternal(
+    readNumber(VOLUME_SLIDER_PREVIEW_INTERVAL_MS_KEY, DEFAULT_VOLUME_SLIDER_PREVIEW_INTERVAL_MS),
+  );
+
+export const saveVolumeSliderPreviewIntervalMs = (value: number) => {
+  if (typeof localStorage === "undefined") return;
+  const clamped = clampVolumeSliderPreviewIntervalMsInternal(value);
+  localStorage.setItem(VOLUME_SLIDER_PREVIEW_INTERVAL_MS_KEY, String(clamped));
+  broadcast(VOLUME_SLIDER_PREVIEW_INTERVAL_MS_KEY, clamped);
+};
+
+export const clampVolumeSliderPreviewIntervalMs = (value: number) => clampVolumeSliderPreviewIntervalMsInternal(value);
+
 export const APP_SETTINGS_KEYS = {
   DEBUG_LOGGING_KEY,
   CONFIG_WRITE_INTERVAL_KEY,
@@ -153,4 +175,5 @@ export const APP_SETTINGS_KEYS = {
   BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY,
   DISCOVERY_PROBE_TIMEOUT_MS_KEY,
   DISK_AUTOSTART_MODE_KEY,
+  VOLUME_SLIDER_PREVIEW_INTERVAL_MS_KEY,
 };

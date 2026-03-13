@@ -34,7 +34,7 @@ import { formatDiagnosticsTimestamp } from "@/lib/diagnostics/timeFormat";
 import { buildActionSummaries } from "@/lib/diagnostics/actionSummaries";
 import { DiagnosticsListItem } from "@/components/diagnostics/DiagnosticsListItem";
 import { ActionSummaryListItem } from "@/components/diagnostics/ActionSummaryListItem";
-import { shareDiagnosticsZip } from "@/lib/diagnostics/diagnosticsExport";
+import { shareAllDiagnosticsZip, shareDiagnosticsZip } from "@/lib/diagnostics/diagnosticsExport";
 import { resetDiagnosticsActivity } from "@/lib/diagnostics/diagnosticsActivity";
 import { consumeDiagnosticsOpenRequest, type DiagnosticsTabKey } from "@/lib/diagnostics/diagnosticsOverlay";
 import { setDiagnosticsOverlayActive, withDiagnosticsTraceOverride } from "@/lib/diagnostics/diagnosticsOverlayState";
@@ -191,17 +191,33 @@ export const GlobalDiagnosticsOverlay = () => {
     });
   }, [actionSummaries, diagnosticsFilters]);
 
+  const diagnosticsExportData = useMemo(
+    () => ({
+      "error-logs": errorLogs,
+      logs,
+      traces: traceEvents,
+      actions: actionSummaries,
+    }),
+    [actionSummaries, errorLogs, logs, traceEvents],
+  );
+
   const handleShareDiagnostics = trace(async function handleShareDiagnostics() {
-    const data =
-      diagnosticsTab === "error-logs"
-        ? errorLogs
-        : diagnosticsTab === "logs"
-          ? logs
-          : diagnosticsTab === "traces"
-            ? traceEvents
-            : actionSummaries;
+    const data = diagnosticsExportData[diagnosticsTab];
     try {
       await shareDiagnosticsZip(diagnosticsTab, data);
+    } catch (error) {
+      reportUserError({
+        operation: "DIAGNOSTICS_EXPORT",
+        title: "Unable to share",
+        description: (error as Error).message,
+        error,
+      });
+    }
+  });
+
+  const handleShareAllDiagnostics = trace(async function handleShareAllDiagnostics() {
+    try {
+      await shareAllDiagnosticsZip(diagnosticsExportData);
     } catch (error) {
       reportUserError({
         operation: "DIAGNOSTICS_EXPORT",
@@ -232,6 +248,13 @@ export const GlobalDiagnosticsOverlay = () => {
           <DialogDescription>Review warnings/errors, logs, traces, and action summaries.</DialogDescription>
         </DialogHeader>
         <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void withDiagnosticsTraceOverride(handleShareAllDiagnostics)}
+          >
+            Share All
+          </Button>
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button variant="destructive" size="sm">

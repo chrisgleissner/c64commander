@@ -10,6 +10,12 @@ import * as http from "node:http";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { getMockConfigPayload, setMockConfigLoader } from "../../src/lib/mock/mockConfig.js";
 import { loadConfigYaml } from "../../src/lib/mock/mockConfigLoader.node.js";
+import {
+  loadMockTimingProfile,
+  resolveMockTimingClassId,
+  resolveMockTimingDelayMs,
+  type MockTimingMode,
+} from "./mockTimingProfile";
 
 // Set the full YAML loader for tests
 setMockConfigLoader(loadConfigYaml);
@@ -17,7 +23,7 @@ setMockConfigLoader(loadConfigYaml);
 export interface MockC64Server {
   baseUrl: string;
   close: () => Promise<void>;
-  requests: Array<{ method: string; url: string }>;
+  requests: MockRequestRecord[];
   sidplayRequests: Array<{
     method: string;
     url: string;
@@ -29,9 +35,26 @@ export interface MockC64Server {
   setReachable: (reachable: boolean) => void;
   setFaultMode: (mode: FaultMode) => void;
   setLatencyMs: (ms: number | null) => void;
+  setTimingMode: (mode: MockTimingMode) => void;
   isReachable: () => boolean;
   getFaultMode: () => FaultMode;
+  getTimingMode: () => MockTimingMode;
 }
+
+export type MockC64ServerOptions = {
+  timingMode?: MockTimingMode;
+};
+
+export type MockRequestRecord = {
+  requestId: number;
+  method: string;
+  url: string;
+  timingClass: string;
+  plannedDelayMs: number;
+  receivedAtMs: number;
+  startedProcessingAtMs: number | null;
+  completedAtMs: number | null;
+};
 
 export type FaultMode = "none" | "timeout" | "refused" | "auth" | "slow";
 
@@ -102,8 +125,10 @@ const normalizeInitialState = (initial: Record<string, Record<string, string | n
 export async function createMockC64Server(
   initial: Record<string, Record<string, string | number | ConfigItemState>> = {},
   itemDetails: ItemDetailsState = {},
+  options: MockC64ServerOptions = {},
 ): Promise<MockC64Server> {
-  const requests: Array<{ method: string; url: string }> = [];
+  const timingProfile = await loadMockTimingProfile();
+  const requests: MockRequestRecord[] = [];
   const sidplayRequests: Array<{
     method: string;
     url: string;
@@ -113,7 +138,9 @@ export async function createMockC64Server(
   let reachable = true;
   let faultMode: FaultMode = "none";
   let latencyMs: number | null = null;
+  let timingMode: MockTimingMode = options.timingMode ?? "fast";
   let responseQueue = Promise.resolve();
+  let requestSequence = 0;
   // Increments each time the jiffy clock address is read, so liveness checks
   // see an advancing clock and treat the machine as healthy.
   let jiffyCallCount = 0;
@@ -219,14 +246,66 @@ export async function createMockC64Server(
   };
 
   syncAllDriveStateFromConfig();
+  let debugRegisterValue = "0";
+  const fileState = new Map<
+    string,
+    {
+      size: number;
+      extension: string;
+      filename: string;
+      path: string;
+    }
+  >();
+
+  const upsertFileState = (rawPath: string, size: number) => {
+    const normalizedPath = rawPath.startsWith("/") ? rawPath : `/${rawPath}`;
+    const pathParts = normalizedPath.split("/").filter(Boolean);
+    const filename = pathParts[pathParts.length - 1] ?? "";
+    const filenameParts = filename.split(".");
+    const extension = filename.includes(".") ? (filenameParts[filenameParts.length - 1]?.toUpperCase() ?? "") : "";
+    const entry = {
+      size,
+      extension,
+      filename,
+      path: normalizedPath,
+    };
+    fileState.set(normalizedPath, entry);
+    return entry;
+  };
+
+  const ensureFileState = (rawPath: string) => {
+    const normalizedPath = rawPath.startsWith("/") ? rawPath : `/${rawPath}`;
+    const existing = fileState.get(normalizedPath);
+    if (existing) return existing;
+    const normalizedParts = normalizedPath.split(".");
+    const extension = normalizedParts[normalizedParts.length - 1]?.toLowerCase() ?? "";
+    const sizeByExtension: Record<string, number> = {
+      rom: 16384,
+      d64: 174848,
+      d71: 349696,
+      d81: 819200,
+      dnp: 1064960,
+    };
+    return upsertFileState(normalizedPath, sizeByExtension[extension] ?? 4096);
+  };
   const sockets = new Set<import("node:net").Socket>();
 
   const server = http.createServer((req: IncomingMessage, res: ServerResponse) => {
     const method = req.method ?? "GET";
     const url = req.url ?? "/";
-    requests.push({ method, url });
-
     const parsed = new URL(url, "http://127.0.0.1");
+    const requestId = ++requestSequence;
+    const requestRecord: MockRequestRecord = {
+      requestId,
+      method,
+      url,
+      timingClass: resolveMockTimingClassId(timingProfile, method, parsed.pathname),
+      plannedDelayMs: 0,
+      receivedAtMs: Date.now(),
+      startedProcessingAtMs: null,
+      completedAtMs: null,
+    };
+    requests.push(requestRecord);
 
     const corsHeaders = {
       "Access-Control-Allow-Origin": "*",
@@ -236,19 +315,29 @@ export async function createMockC64Server(
 
     const respond = (handler: () => void) => {
       if (faultMode === "refused") {
+        requestRecord.completedAtMs = Date.now();
         req.socket.destroy();
         return;
       }
-      const timeoutDelayMs = Math.max(latencyMs ?? 0, 1500);
-      const delayMs =
-        faultMode === "timeout" ? timeoutDelayMs : faultMode === "slow" ? (latencyMs ?? 300) : (latencyMs ?? 0);
+      const delayMs = resolveMockTimingDelayMs({
+        profile: timingProfile,
+        method,
+        pathname: parsed.pathname,
+        requestSequence: requestId,
+        faultMode,
+        timingMode,
+        latencyOverrideMs: latencyMs,
+      });
+      requestRecord.plannedDelayMs = delayMs;
       responseQueue = responseQueue.then(
         () =>
           new Promise<void>((resolve) => {
             const run = () => {
+              requestRecord.startedProcessingAtMs = Date.now();
               if (!res.writableEnded) {
                 handler();
               }
+              requestRecord.completedAtMs = Date.now();
               resolve();
             };
             if (delayMs > 0) {
@@ -335,6 +424,16 @@ export async function createMockC64Server(
         syncAllDriveStateFromConfig();
       }
       return sendJson(200, { errors: [] });
+    }
+
+    if (parsed.pathname === "/v1/machine:debugreg") {
+      if (method === "GET") {
+        return sendJson(200, { value: debugRegisterValue, errors: [] });
+      }
+      if (method === "PUT") {
+        debugRegisterValue = parsed.searchParams.get("value") ?? debugRegisterValue;
+        return sendJson(200, { value: debugRegisterValue, errors: [] });
+      }
     }
 
     const drivePowerOrResetMatch = parsed.pathname.match(/^\/v1\/drives\/([^/]+):(on|off|reset)$/);
@@ -523,6 +622,35 @@ export async function createMockC64Server(
       return sendJson(200, { errors: [] });
     }
 
+    const fileInfoMatch = parsed.pathname.match(/^\/v1\/files\/(.+):info$/);
+    if (method === "GET" && fileInfoMatch) {
+      const decodedPath = decodeURIComponent(fileInfoMatch[1]);
+      const entry = ensureFileState(decodedPath);
+      return sendJson(200, {
+        files: {
+          path: entry.path,
+          filename: entry.filename,
+          size: entry.size,
+          extension: entry.extension,
+        },
+        errors: [],
+      });
+    }
+
+    const fileCreateMatch = parsed.pathname.match(/^\/v1\/files\/(.+):(create_d64|create_d71|create_d81|create_dnp)$/);
+    if (method === "PUT" && fileCreateMatch) {
+      const decodedPath = decodeURIComponent(fileCreateMatch[1]);
+      const action = fileCreateMatch[2];
+      const sizeByAction: Record<string, number> = {
+        create_d64: 174848,
+        create_d71: 349696,
+        create_d81: 819200,
+        create_dnp: 1064960,
+      };
+      upsertFileState(decodedPath, sizeByAction[action] ?? 4096);
+      return sendJson(200, { errors: [] });
+    }
+
     return sendJson(404, { errors: ["Not found"] });
   });
 
@@ -543,6 +671,7 @@ export async function createMockC64Server(
         getState: () => clone(state),
         resetState: () => {
           state = clone(defaults);
+          syncAllDriveStateFromConfig();
         },
         setReachable: (next) => {
           reachable = next;
@@ -553,8 +682,12 @@ export async function createMockC64Server(
         setLatencyMs: (ms) => {
           latencyMs = ms;
         },
+        setTimingMode: (mode) => {
+          timingMode = mode;
+        },
         isReachable: () => reachable,
         getFaultMode: () => faultMode,
+        getTimingMode: () => timingMode,
         close: () =>
           new Promise<void>((resClose) => {
             if (!server.listening) {

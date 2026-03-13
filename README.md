@@ -235,6 +235,9 @@ Built-in guides for setup, workflows, and practical day-to-day usage.
 
 Track actions, inspect traces, and export logs when it is time for serious troubleshooting.
 
+- `Share` exports the active diagnostics tab as a ZIP containing one timestamped JSON file.
+- `Share All` exports errors, logs, traces, and action summaries together in a single ZIP with a shared UTC timestamp in every filename.
+
 <table>
   <tr>
     <td><img src="doc/img/app/diagnostics/01-actions-expanded.png" alt="Diagnostics actions" width="360"/></td>

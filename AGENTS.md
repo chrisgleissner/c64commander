@@ -115,8 +115,8 @@ Violine this rule is a release blocker.
 ## MANDATORY: Coverage gate before completion
 
 - For any plan/task that includes code changes, run `npm run test:coverage` before declaring completion.
-- The run must satisfy a safety margin of at least **90% branch coverage** (global), aligned with CI threshold enforcement.
-- If branch coverage is below 90%, continue adding meaningful tests until it is >= 90%.
+- The run must satisfy a safety margin of at least **91% branch coverage** (global), aligned with CI threshold enforcement.
+- If branch coverage is below 91%, continue adding meaningful tests until it is >= 91%.
 - For changes under `agents/`, also run `npm run test:agents` and confirm ≥90% branch coverage.
 
 ## MANDATORY: Concurrent changes

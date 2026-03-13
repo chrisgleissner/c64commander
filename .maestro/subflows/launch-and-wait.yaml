@@ -41,7 +41,7 @@ tags:
           optional: true
       - waitForAnimationToEnd
       - extendedWaitUntil:
-          visible: "Quick Config"
+          visible: "Home"
           timeout: ${LONG_TIMEOUT}
 - tapOn:
     text: "Home"

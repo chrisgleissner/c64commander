@@ -36,6 +36,9 @@ echo "==> Merging coverage reports with nextcov..."
 npx nextcov merge coverage coverage/e2e -o coverage/merged --reporters lcov,text-summary
 cp coverage/merged/lcov.info coverage/lcov-merged.info
 
+echo "==> Enforcing merged coverage threshold..."
+COVERAGE_MIN=91 COVERAGE_MIN_BRANCH=91 COVERAGE_FILE=coverage/lcov-merged.info node scripts/check-coverage-threshold.mjs
+
 echo ""
 echo "==> Coverage collection complete!"
 echo "  Unit test coverage: coverage/lcov.info"

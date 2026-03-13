@@ -1,0 +1,62 @@
+{
+  "capturedAt": "2026-03-12T17:03:10.001Z",
+  "baseUrl": "http://c64u/",
+  "sampleCount": 5,
+  "sampleDelayMs": 900,
+  "mutationRecoveryDelayMs": 300,
+  "rebootBeforeEachOperation": true,
+  "rebootSettleDelayMs": 2500,
+  "rebootReadyTimeoutMs": 90000,
+  "measuredSafeOperations": [
+    {
+      "id": "options.root",
+      "description": "OPTIONS /",
+      "sampleCount": 5,
+      "sampleDelayMs": 900,
+      "responseMedianMs": 29.618,
+      "responseMinMs": 27.843,
+      "responseMaxMs": 36.739,
+      "responseSamplesMs": [36.739, 28.175, 29.618, 29.762, 27.843],
+      "activityCompletionMedianMs": 29.618,
+      "activityCompletionMinMs": 27.843,
+      "activityCompletionMaxMs": 36.739,
+      "activityCompletionSamplesMs": [36.739, 28.175, 29.618, 29.762, 27.843],
+      "completionDeltaMedianMs": 0
+    },
+    {
+      "id": "version.read",
+      "description": "GET /v1/version",
+      "sampleCount": 5,
+      "sampleDelayMs": 900,
+      "responseMedianMs": 15.506,
+      "responseMinMs": 12.617,
+      "responseMaxMs": 34.34,
+      "responseSamplesMs": [15.506, 34.34, 12.617, 15.095, 17.885],
+      "activityCompletionMedianMs": 15.506,
+      "activityCompletionMinMs": 12.617,
+      "activityCompletionMaxMs": 34.34,
+      "activityCompletionSamplesMs": [15.506, 34.34, 12.617, 15.095, 17.885],
+      "completionDeltaMedianMs": 0
+    },
+    {
+      "id": "info.read",
+      "description": "GET /v1/info",
+      "sampleCount": 5,
+      "sampleDelayMs": 900,
+      "responseMedianMs": 15.5,
+      "responseMinMs": 11.338,
+      "responseMaxMs": 17.005,
+      "responseSamplesMs": [15.649, 17.005, 11.338, 15.5, 14.997],
+      "activityCompletionMedianMs": 15.5,
+      "activityCompletionMinMs": 11.338,
+      "activityCompletionMaxMs": 17.005,
+      "activityCompletionSamplesMs": [15.649, 17.005, 11.338, 15.5, 14.997],
+      "completionDeltaMedianMs": 0
+    }
+  ],
+  "skippedDestructiveOperations": [
+    "PUT /v1/configs:reset_to_default",
+    "PUT /v1/machine:reset",
+    "PUT /v1/machine:poweroff"
+  ]
+}

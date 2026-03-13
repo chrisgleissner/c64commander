@@ -147,6 +147,7 @@ HVSC download/ingest/browse/failure handling | Playwright + Unit + Maestro | `pl
 - Auto-advance depends on local timing and resume reconciliation; there is no authoritative runner-finished endpoint in the current REST surface.
 - Mixed-source playlists can lose local file access when SAF permissions or runtime file handles expire.
 - Pause/resume mutates both machine state and audio-mixer state, creating multi-request race windows.
+- Volume preview writes are intentionally coalesced and rate-limited by the persisted preview interval setting to avoid request storms during fast drags.
 - Disk playback mixes mount/reset/autostart behavior into playlist transitions.
 - HVSC actions are long-running and stateful across app sessions.
 
@@ -325,7 +326,7 @@ Save connection | Host/password inputs + `Save & Connect` | Edit and tap | Persi
 Retry discovery | Refresh button | Tap | Re-runs device discovery without changing stored config | `discoverConnection("manual")`
 Toggle automatic demo mode | Checkboxes in Connection and Config cards | Toggle | Persists whether demo mode is offered automatically when probes fail | `saveAutomaticDemoModeEnabled`
 Open diagnostics | `Diagnostics` button or app-bar activity indicator | Tap | Opens diagnostics dialog on requested tab | diagnostics overlay store + dialog state
-Filter/share/clear diagnostics | Diagnostics dialog | Type, share, clear | Filters logs/traces/actions/errors, exports ZIP, or clears local stores | `getLogs/getTraceEvents` + `shareDiagnosticsZip` + `clearLogs/clearTraceEvents`
+Filter/share/clear diagnostics | Diagnostics dialog | Type, share, clear | Filters logs/traces/actions/errors, exports a timestamped per-tab ZIP or Share All bundle, or clears local stores | `getLogs/getTraceEvents` + `shareDiagnosticsZip/shareAllDiagnosticsZip` + `clearLogs/clearTraceEvents`
 Enable debug logging and SAF diagnostics | Diagnostics section | Toggle or tap tools | Persists debug logging; on Android can enumerate persisted SAF URIs | app settings + native folder picker diagnostics
 Transfer settings | Export/Import buttons | Tap or choose file | Exports or imports non-sensitive settings JSON | `settingsTransfer.exportSettingsJson/importSettingsJson`
 Tune play/disk prefs | List preview limit, disk autostart mode | Edit/select | Persists list preview limit and disk DMA vs KERNAL autostart preference | `useListPreviewLimit` + `saveDiskAutostartMode`

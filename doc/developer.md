@@ -211,6 +211,30 @@ VS Code workspace settings in `.vscode/settings.json` enable:
 - Android plugins/services mirror structured logs to JS diagnostics via `DiagnosticsBridge`.
 - Native logs continue to write to logcat and are additionally forwarded with trace-context fields when available.
 
+## Mock timing profile
+
+- The external Node mock server and the Android in-app demo server now share one ordered timing profile definition from `android/app/src/main/assets/mock-timing-profile.json`.
+- The profile now contains explicit rules for the full documented safe REST surface from `doc/c64/c64u-openapi.yaml`, plus estimated timings for the small set of destructive or non-recoverable endpoints that were intentionally not live-probed.
+- The profile defines endpoint classes, deterministic jitter ranges, regex-capable route matching, and fallback fault-mode timing so Android demo mode and realistic mock clients observe the same request pacing model.
+- Both implementations serialize request handling through a single request-processing lane. This preserves request order under concurrent client activity and makes rate-limit regressions reproducible.
+- The profile is calibrated from live C64U measurements captured on 2026-03-12 against hostname `c64u` using five rebooted samples per safe endpoint series. Probe and stream/file artifacts are currently stored under `doc/c64/measurements/mock-timing-calibration-probes-2026-03-12.json` and `doc/c64/measurements/mock-timing-calibration-streams-files-2026-03-12.json`.
+- Measured medians now include, for example: `OPTIONS /` 29.6 ms, `GET /v1/version` 15.5 ms, `GET /v1/info` 15.5 ms, `PUT /v1/runners:run_prg` 1987.0 ms, `PUT /v1/drives/b:mount` about 753-766 ms across the earlier rebooted mount probe, `PUT /v1/streams/debug:start` 1017.2 ms, `GET /v1/files/{path}:info` 34.9 ms, and `PUT /v1/files/{path}:create_dnp` 981.8 ms.
+- `OPTIONS` now has its own timing class because the live device is consistently slower there than on `GET /v1/info` and `GET /v1/version`.
+- Drive mutations no longer share one generic class. The shared profile distinguishes list, mount, reset, remove, power, ROM load, and set-mode paths because live response times differ by orders of magnitude.
+- Live `PUT /v1/drives/b:mount` response latency on the physical device measured `752.8`, `766.2`, `757.6`, `757.9`, and `758.5` ms across five rebooted samples. Polling `/v1/drives` after each mount showed the mounted image became observable at the same instant as the HTTP response within probe resolution, so the mock does not add an extra asynchronous completion delay for drive mount.
+- This synchronous mount behavior matches the checked-in 1541Ultimate firmware path: `route_drives.cc` calls `SubsysCommand::execute()`, which blocks on the drive subsystem mutex, and `C1541::executeCommand()` performs `fopen`, `mount_d64` or `mount_g64`, drive state updates, and `drive_reset(0)` before returning.
+- The timing probe script now records both REST response latency and activity-completion latency. For operations without a dedicated completion observer, completion currently defaults to response time; drive mount uses explicit `/v1/drives` polling.
+- The Node mock has two timing modes:
+  - `realistic`: uses the shared production-like timings from the JSON profile.
+  - `fast`: scales those delays down for low-value web/unit scenarios while preserving ordering and relative endpoint cost.
+- The Android in-app demo mock always uses the realistic timing profile. The Node mock defaults to `fast`, and critical Playwright flows opt into `realistic` explicitly.
+
+## Playback volume preview interval
+
+- Playback volume drag previews use the persisted app setting `c64u_volume_slider_preview_interval_ms`.
+- Default: `200` ms. Allowed range: `100`–`500` ms.
+- The Play page uses the same interval for slider preview coalescing and REST preview suppression, so a long interval deterministically collapses rapid drags into a single final commit.
+
 ## build - One-stop build tool
 
 All common development tasks use `./build`:
@@ -266,13 +290,13 @@ maestro test .maestro
 
 Maestro smoke evidence (screenshots + logs + meta) is written to:
 
-```
+```text
 test-results/evidence/maestro/<flow-name>/<deviceType>/
 ```
 
 Raw Maestro runner output is written to:
 
-```
+```text
 test-results/maestro/
 ```
 
@@ -340,7 +364,7 @@ Run:
 
 Evidence structure:
 
-```
+```text
 test-results/
   evidence/
     playwright/
@@ -359,7 +383,7 @@ playwright-report/
 
 Android emulator smoke evidence:
 
-```
+```text
 test-results/
   maestro/                 # raw Maestro output (runner-owned)
   evidence/
@@ -376,7 +400,7 @@ test-results/
 
 Android emulator smoke tests are Maestro flows under `.maestro/` (read `doc/testing/maestro.md` before editing):
 
-```
+```text
 .maestro/
   smoke-launch.yaml
   smoke-file-picker.yaml
@@ -447,7 +471,7 @@ VITE_COVERAGE=true npm run test:e2e
 npx nyc report --temp-dir .nyc_output --report-dir coverage/e2e --reporter=lcov --reporter=text-summary
 npx lcov-result-merger "coverage/{lcov.info,e2e/lcov.info}" coverage/lcov-merged.info
 EXPECT_WEB_COVERAGE=1 node scripts/verify-coverage-artifacts.mjs
-COVERAGE_MIN=90 node scripts/check-coverage-threshold.mjs
+COVERAGE_MIN=91 COVERAGE_MIN_BRANCH=91 node scripts/check-coverage-threshold.mjs
 ```
 
 Local reproduction (Android coverage):
@@ -466,7 +490,7 @@ Coverage outputs:
 CI guardrails:
 
 - `scripts/verify-coverage-artifacts.mjs` fails if expected coverage files are missing or empty.
-- `scripts/check-coverage-threshold.mjs` enforces minimum line/branch coverage (default 90%).
+- `scripts/check-coverage-threshold.mjs` enforces minimum line/branch coverage (default 91%).
 - `scripts/report-coverage.mjs` lists lowest-covered files to target for additional tests.
 
 Download artifacts:
@@ -509,7 +533,7 @@ These overrides are stored locally and take effect immediately for FTP listings 
 
 ## Project structure
 
-```
+```text
 src/
   components/       # React components (UI, disks, lists, item selection)
   hooks/            # React hooks (TanStack Query + custom hooks)
@@ -809,15 +833,10 @@ These are current implementation risks, not future proposals:
 Example:
 
 ```typescript
-import { test, expect, type Page, type TestInfo } from '@playwright/test';
-import {
-  assertNoUiIssues,
-  attachStepScreenshot,
-  finalizeEvidence,
-  startStrictUiMonitoring,
-} from './testArtifacts';
+import { test, expect, type Page, type TestInfo } from "@playwright/test";
+import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from "./testArtifacts";
 
-test.describe('My feature', () => {
+test.describe("My feature", () => {
   test.beforeEach(async ({ page }: { page: Page }, testInfo) => {
     await startStrictUiMonitoring(page, testInfo);
   });
@@ -830,15 +849,15 @@ test.describe('My feature', () => {
     }
   });
 
-  test('does something', async ({ page }: { page: Page }, testInfo) => {
-    await page.goto('/');
-    await attachStepScreenshot(page, testInfo, 'initial-state');
+  test("does something", async ({ page }: { page: Page }, testInfo) => {
+    await page.goto("/");
+    await attachStepScreenshot(page, testInfo, "initial-state");
 
     await page.click('[data-testid="my-button"]');
-    await attachStepScreenshot(page, testInfo, 'after-click');
+    await attachStepScreenshot(page, testInfo, "after-click");
 
     await expect(page.locator('[data-testid="result"]')).toBeVisible();
-    await attachStepScreenshot(page, testInfo, 'final-state');
+    await attachStepScreenshot(page, testInfo, "final-state");
   });
 });
 ```

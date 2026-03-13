@@ -9,8 +9,6 @@
 package uk.gleissner.c64commander
 
 import android.util.Log
-import org.json.JSONArray
-import org.json.JSONObject
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.ByteArrayOutputStream
@@ -23,30 +21,41 @@ import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 import java.util.Collections
 import java.util.Locale
+import java.util.concurrent.ExecutionException
 import java.util.concurrent.Executors
 import kotlin.math.max
 import kotlin.math.min
+import org.json.JSONArray
+import org.json.JSONObject
 
 data class HttpRequest(
-  val method: String,
-  val path: String,
-  val queryParams: Map<String, String>,
-  val headers: Map<String, String>,
-  val body: ByteArray,
+        val method: String,
+        val path: String,
+        val queryParams: Map<String, String>,
+        val headers: Map<String, String>,
+        val body: ByteArray,
 )
 
 data class HttpResponse(
-  val status: Int,
-  val headers: Map<String, String>,
-  val body: ByteArray,
+        val status: Int,
+        val headers: Map<String, String>,
+        val body: ByteArray,
 )
 
-class MockC64UServer(private val state: MockC64UState) {
-  private val executor = Executors.newCachedThreadPool()
+class MockC64UServer(
+        private val state: MockC64UState,
+        private val timingProfile: MockTimingProfile = MockTimingProfile.defaultProfile(),
+) {
+  constructor(state: MockC64UState) : this(state, MockTimingProfile.defaultProfile())
+
+  private val acceptExecutor = Executors.newSingleThreadExecutor()
+  private val connectionExecutor = Executors.newCachedThreadPool()
+  private val requestExecutor = Executors.newSingleThreadExecutor()
   private val sockets = Collections.synchronizedSet(mutableSetOf<Socket>())
   private var serverSocket: ServerSocket? = null
   @Volatile private var running = false
   private val logTag = "MockC64UServer"
+  @Volatile private var requestSequence = 0
   var port: Int = 0
     private set
 
@@ -60,7 +69,7 @@ class MockC64UServer(private val state: MockC64UState) {
     serverSocket = ServerSocket(resolvedPort, 50, address)
     port = serverSocket?.localPort ?: 0
     running = true
-    executor.execute { acceptLoop() }
+    acceptExecutor.execute { acceptLoop() }
     return port
   }
 
@@ -75,7 +84,9 @@ class MockC64UServer(private val state: MockC64UState) {
       }
     }
     sockets.clear()
-    executor.shutdownNow()
+    acceptExecutor.shutdownNow()
+    connectionExecutor.shutdownNow()
+    requestExecutor.shutdownNow()
   }
 
   fun isRunning(): Boolean = running
@@ -85,7 +96,7 @@ class MockC64UServer(private val state: MockC64UState) {
       try {
         val socket = serverSocket?.accept() ?: break
         sockets.add(socket)
-        executor.execute { handleClient(socket) }
+        connectionExecutor.execute { handleClient(socket) }
       } catch (error: Exception) {
         if (running) {
           Log.w(logTag, "Accept loop error while running", error)
@@ -96,14 +107,41 @@ class MockC64UServer(private val state: MockC64UState) {
 
   private fun handleClient(socket: Socket) {
     socket.use { client ->
-      val input = BufferedInputStream(client.getInputStream())
-      val output = BufferedOutputStream(client.getOutputStream())
-      val request = readRequest(input) ?: return
-      val response = handleRequest(request)
-      writeResponse(output, response)
-      output.flush()
+      try {
+        val input = BufferedInputStream(client.getInputStream())
+        val output = BufferedOutputStream(client.getOutputStream())
+        val request = readRequest(input) ?: return
+        val response =
+                requestExecutor
+                        .submit<HttpResponse> {
+                          val requestId = nextRequestSequence()
+                          val delayMs =
+                                  timingProfile.resolveDelayMs(
+                                          request.method,
+                                          request.path,
+                                          requestId
+                                  )
+                          if (delayMs > 0) {
+                            Thread.sleep(delayMs.toLong())
+                          }
+                          handleRequest(request)
+                        }
+                        .get()
+        writeResponse(output, response)
+        output.flush()
+      } catch (error: ExecutionException) {
+        Log.w(logTag, "Mock request execution failed", error.cause ?: error)
+      } catch (error: Exception) {
+        Log.w(logTag, "Mock client handling failed", error)
+      }
     }
     sockets.remove(socket)
+  }
+
+  @Synchronized
+  private fun nextRequestSequence(): Int {
+    requestSequence += 1
+    return requestSequence
   }
 
   private fun readRequest(input: InputStream): HttpRequest? {
@@ -128,11 +166,12 @@ class MockC64UServer(private val state: MockC64UState) {
     }
 
     val contentLength = headers["content-length"]?.toIntOrNull() ?: 0
-    val body = if (contentLength > 0) {
-      readBytes(input, contentLength)
-    } else {
-      ByteArray(0)
-    }
+    val body =
+            if (contentLength > 0) {
+              readBytes(input, contentLength)
+            } else {
+              ByteArray(0)
+            }
 
     return HttpRequest(method, path, parseQuery(query), headers, body)
   }
@@ -167,17 +206,19 @@ class MockC64UServer(private val state: MockC64UState) {
 
   private fun parseQuery(query: String): Map<String, String> {
     if (query.isBlank()) return emptyMap()
-    return query.split("&").mapNotNull { part ->
-      if (part.isBlank()) return@mapNotNull null
-      val key = part.substringBefore("=").trim()
-      val rawValue = part.substringAfter("=", "")
-      if (key.isBlank()) return@mapNotNull null
-      decode(key) to decode(rawValue)
-    }.toMap()
+    return query.split("&")
+            .mapNotNull { part ->
+              if (part.isBlank()) return@mapNotNull null
+              val key = part.substringBefore("=").trim()
+              val rawValue = part.substringAfter("=", "")
+              if (key.isBlank()) return@mapNotNull null
+              decode(key) to decode(rawValue)
+            }
+            .toMap()
   }
 
   private fun decode(value: String): String =
-    URLDecoder.decode(value, StandardCharsets.UTF_8.toString())
+          URLDecoder.decode(value, StandardCharsets.UTF_8.toString())
 
   private fun handleRequest(request: HttpRequest): HttpResponse {
     if (request.method == "OPTIONS") {
@@ -297,12 +338,12 @@ class MockC64UServer(private val state: MockC64UState) {
       }
     }
 
-    if (
-      request.method == "PUT" &&
-      setOf(
-        "/v1/configs:load_from_flash",
-        "/v1/configs:save_to_flash",
-      ).contains(path)
+    if (request.method == "PUT" &&
+                    setOf(
+                                    "/v1/configs:load_from_flash",
+                                    "/v1/configs:save_to_flash",
+                            )
+                            .contains(path)
     ) {
       return okResponse()
     }
@@ -312,42 +353,47 @@ class MockC64UServer(private val state: MockC64UState) {
       return okResponse()
     }
 
-    if (
-      request.method == "PUT" &&
-      setOf(
-        "/v1/machine:reset",
-        "/v1/machine:reboot",
-        "/v1/machine:pause",
-        "/v1/machine:resume",
-        "/v1/machine:poweroff",
-        "/v1/machine:menu_button",
-      ).contains(path)
+    if (request.method == "PUT" &&
+                    setOf(
+                                    "/v1/machine:reset",
+                                    "/v1/machine:reboot",
+                                    "/v1/machine:pause",
+                                    "/v1/machine:resume",
+                                    "/v1/machine:poweroff",
+                                    "/v1/machine:menu_button",
+                            )
+                            .contains(path)
     ) {
-      if (path == "/v1/machine:reset" || path == "/v1/machine:reboot" || path == "/v1/machine:poweroff") {
+      if (path == "/v1/machine:reset" ||
+                      path == "/v1/machine:reboot" ||
+                      path == "/v1/machine:poweroff"
+      ) {
         state.resetKeyboardBuffer()
       }
       return okResponse()
     }
 
     if (path == "/v1/machine:writemem" && (request.method == "PUT" || request.method == "POST")) {
-      val address = parseHex(request.queryParams["address"])
-        ?: return errorResponse(400, "Missing address")
-      val bytes = if (request.method == "PUT") {
-        val data = request.queryParams["data"] ?: return errorResponse(400, "Missing data")
-        parseHexBytes(data) ?: return errorResponse(400, "Invalid data")
-      } else {
-        request.body.map { it.toInt() and 0xFF }
-      }
-      bytes.forEachIndexed { idx, value ->
-        state.memory[address + idx] = value
-      }
+      val address =
+              parseHex(request.queryParams["address"])
+                      ?: return errorResponse(400, "Missing address")
+      val bytes =
+              if (request.method == "PUT") {
+                val data = request.queryParams["data"] ?: return errorResponse(400, "Missing data")
+                parseHexBytes(data) ?: return errorResponse(400, "Invalid data")
+              } else {
+                request.body.map { it.toInt() and 0xFF }
+              }
+      bytes.forEachIndexed { idx, value -> state.memory[address + idx] = value }
       return okResponse()
     }
 
     if (path == "/v1/machine:readmem" && request.method == "GET") {
-      val address = parseHex(request.queryParams["address"])
-        ?: return errorResponse(400, "Missing address")
-      val length = request.queryParams["length"]?.toIntOrNull()?.let { min(max(it, 1), 4096) } ?: 256
+      val address =
+              parseHex(request.queryParams["address"])
+                      ?: return errorResponse(400, "Missing address")
+      val length =
+              request.queryParams["length"]?.toIntOrNull()?.let { min(max(it, 1), 4096) } ?: 256
       val data = JSONArray()
       repeat(length) { offset ->
         val value = state.memory[address + offset] ?: 0
@@ -388,11 +434,12 @@ class MockC64UServer(private val state: MockC64UState) {
 
       when (action) {
         "mount" -> {
-          val image = if (request.method == "PUT") {
-            request.queryParams["image"] ?: return errorResponse(400, "Missing image")
-          } else {
-            request.queryParams["image"] ?: "upload-${System.currentTimeMillis()}"
-          }
+          val image =
+                  if (request.method == "PUT") {
+                    request.queryParams["image"] ?: return errorResponse(400, "Missing image")
+                  } else {
+                    request.queryParams["image"] ?: "upload-${System.currentTimeMillis()}"
+                  }
           val imageFile = image.substringAfterLast('/')
           val imagePath = image.substringBeforeLast('/', "")
           drive.imageFile = imageFile
@@ -414,11 +461,12 @@ class MockC64UServer(private val state: MockC64UState) {
           return okResponse()
         }
         "load_rom" -> {
-          val file = if (request.method == "PUT") {
-            request.queryParams["file"] ?: return errorResponse(400, "Missing file")
-          } else {
-            request.queryParams["file"] ?: "upload-${System.currentTimeMillis()}.rom"
-          }
+          val file =
+                  if (request.method == "PUT") {
+                    request.queryParams["file"] ?: return errorResponse(400, "Missing file")
+                  } else {
+                    request.queryParams["file"] ?: "upload-${System.currentTimeMillis()}.rom"
+                  }
           drive.rom = file.substringAfterLast('/')
           return okResponse()
         }
@@ -477,19 +525,18 @@ class MockC64UServer(private val state: MockC64UState) {
   private fun resolveDriveRom(driveKey: String, mode: String): String? {
     val category = if (driveKey == "a") "Drive A Settings" else "Drive B Settings"
     val items = state.getCategory(category) ?: return null
-    val key = when (mode) {
-      "1571" -> "ROM for 1571 mode"
-      "1581" -> "ROM for 1581 mode"
-      else -> "ROM for 1541 mode"
-    }
+    val key =
+            when (mode) {
+              "1571" -> "ROM for 1571 mode"
+              "1581" -> "ROM for 1581 mode"
+              else -> "ROM for 1541 mode"
+            }
     return items[key]?.value?.toString()
   }
 
   private fun parseHex(value: String?): Int? {
     if (value.isNullOrBlank()) return null
-    val cleaned = value.trim().lowercase(Locale.ROOT)
-      .removePrefix("0x")
-      .removePrefix("$")
+    val cleaned = value.trim().lowercase(Locale.ROOT).removePrefix("0x").removePrefix("$")
     return cleaned.toIntOrNull(16)
   }
 
@@ -538,9 +585,7 @@ class MockC64UServer(private val state: MockC64UState) {
 
   private fun buildCategoryPayload(items: Map<String, MockConfigItem>): JSONObject {
     val itemsObj = JSONObject()
-    items.forEach { (name, item) ->
-      itemsObj.put(name, buildConfigItem(item))
-    }
+    items.forEach { (name, item) -> itemsObj.put(name, buildConfigItem(item)) }
     val categoryObj = JSONObject()
     categoryObj.put("items", itemsObj)
     return categoryObj
@@ -580,20 +625,22 @@ class MockC64UServer(private val state: MockC64UState) {
   }
 
   private fun writeResponse(output: OutputStream, response: HttpResponse) {
-    val statusText = when (response.status) {
-      200 -> "OK"
-      204 -> "No Content"
-      400 -> "Bad Request"
-      404 -> "Not Found"
-      else -> "Internal Server Error"
-    }
+    val statusText =
+            when (response.status) {
+              200 -> "OK"
+              204 -> "No Content"
+              400 -> "Bad Request"
+              404 -> "Not Found"
+              else -> "Internal Server Error"
+            }
     output.write("HTTP/1.1 ${response.status} $statusText\r\n".toByteArray(StandardCharsets.UTF_8))
-    val headers = mutableMapOf(
-      "Access-Control-Allow-Origin" to "*",
-      "Access-Control-Allow-Methods" to "GET,POST,PUT,OPTIONS",
-      "Access-Control-Allow-Headers" to "Content-Type, X-Password, X-C64U-Host",
-      "Connection" to "close",
-    )
+    val headers =
+            mutableMapOf(
+                    "Access-Control-Allow-Origin" to "*",
+                    "Access-Control-Allow-Methods" to "GET,POST,PUT,OPTIONS",
+                    "Access-Control-Allow-Headers" to "Content-Type, X-Password, X-C64U-Host",
+                    "Connection" to "close",
+            )
     headers.putAll(response.headers)
     headers["Content-Length"] = response.body.size.toString()
     headers.forEach { (name, value) ->

@@ -64,7 +64,7 @@ import { usePlaylistListItems } from "@/pages/playFiles/hooks/usePlaylistListIte
 import { useSonglengths } from "@/pages/playFiles/hooks/useSonglengths";
 import { usePlaybackPersistence } from "@/pages/playFiles/hooks/usePlaybackPersistence";
 import { usePlaylistManager } from "@/pages/playFiles/hooks/usePlaylistManager";
-import { useVolumeOverride } from "@/pages/playFiles/hooks/useVolumeOverride";
+import { usePlayFilesVolumeBindings } from "@/pages/playFiles/hooks/usePlayFilesVolumeBindings";
 import { useLocalEntries } from "@/pages/playFiles/hooks/useLocalEntries";
 import { usePlaybackController } from "@/pages/playFiles/hooks/usePlaybackController";
 import { usePlaybackResumeTriggers } from "@/pages/playFiles/hooks/usePlaybackResumeTriggers";
@@ -174,6 +174,7 @@ export default function PlayFilesPage() {
   const hvscControlsEnabled = isLoaded && flags.hvsc_enabled;
 
   const {
+    volumeSliderPreviewIntervalMs,
     volumeState,
     dispatchVolume,
     volumeSteps,
@@ -193,7 +194,7 @@ export default function PlayFilesPage() {
     handleToggleMute,
     resumingFromPauseRef,
     ensureUnmuted,
-  } = useVolumeOverride({ isPlaying, isPaused });
+  } = usePlayFilesVolumeBindings({ isPlaying, isPaused });
   const volumeIndex = volumeState.index;
   const volumeMuted = volumeState.muted;
 
@@ -1065,6 +1066,7 @@ export default function PlayFilesPage() {
                 onVolumeChange={handleVolumeLocalChange}
                 onVolumeChangeAsync={handleVolumeAsyncChange}
                 onVolumeCommit={(value) => void handleVolumeCommit(value)}
+                previewIntervalMs={volumeSliderPreviewIntervalMs}
                 volumeLabel={volumeLabel}
                 volumeValueFormatter={(value) => volumeSteps[Math.round(value)]?.label ?? "—"}
               />
