@@ -1,190 +1,201 @@
-# Production Readiness Audit Plan
+# Review 6 Rollout Execution Plan
 
 ## Objective
 
-Produce an evidence-based production readiness audit for the full repository and write it to `doc/research/review-6/review-6.md`.
+Implement and verify every task in `doc/research/review-6/review-6-rollout-plan.md`.
 
-## Execution Phases
+## Execution Model
 
-- [x] Phase 0a: initial repository discovery and audit-plan setup
-- [x] Phase 0b: mandatory documentation ingestion
-- [x] Phase 1: repository structure and subsystem discovery
-- [x] Phase 2: production code audit
-- [x] Phase 3: test infrastructure audit
-- [x] Phase 4: build and deployment audit
-- [x] Phase 5: security and dependency audit
-- [x] Phase 6: documentation accuracy audit
-- [x] Phase 7: production readiness verdict and final report
-- [x] Phase 8: validation commands and final plan closeout
+- Authoritative tracker: this file
+- Workflow: read -> plan -> implement -> test -> verify -> record -> continue
+- Phase discipline: do not mark a phase complete until its exit criteria are verified
 
-## High-Level Repository Inventory
+## Phase Status
 
-- Application targets: Web, Android, iOS via React + Vite + Capacitor
-- Shared frontend/runtime code: `src/`
-- Android native layer: `android/`
-- iOS native layer: `ios/`
-- Web server runtime: `web/server/`
-- Primary test suites: `tests/`, `android/app/src/test/`, `ios/native-tests/`, `agents/tests/`, `c64scope/tests/`
-- CI/CD and automation: `.github/workflows/`, `build`, `ci/`
-- Documentation roots: `README.md`, `doc/`, `docs/`, `ci/telemetry/README.md`, `agents/README.md`, `c64scope/README.md`, `tests/**/README.md`
+- [ ] Phase 0 - Baseline Alignment
+- [ ] Phase 1 - Web Rollout Safety
+- [ ] Phase 2 - Release Metadata and Documentation Hygiene
+- [ ] Phase 3 - Dependency and Platform Security Hygiene
+- [ ] Phase 4 - Playlist Persistence Hardening
+- [ ] Phase 5 - Maintainability Hardening
+- [ ] Phase 6 - Coverage Closeout
+- [ ] Final verification and rollout plan closeout
 
-## Mandatory Documentation Ingestion Checklist
+## Phase 0 - Baseline Alignment
 
-Status: completed on 2026-03-13
+Implementation targets:
 
-All files listed in the required pre-read set below were read during Phase 0b using direct file reads plus section-by-section digests for large schemas, manifests, and repeated prompt documents.
+- `AGENTS.md`
+- `README.md`
+- `doc/research/review-6/review-6-rollout-plan.md`
 
-### Required pre-read set
+Tasks:
 
-These files must be read before the main code audit proceeds.
+- [ ] Remove stale Android release-signing TODO wording from `AGENTS.md`
+- [ ] State the iOS sideload-only release scope explicitly in `README.md`
+- [ ] State that Android Play upload is already operational in `README.md`
+- [ ] Record the device transport boundary (HTTP/FTP) in one canonical location and reference it nearby
+- [ ] Record that GitHub Actions version-tag usage is an intentional contributor-facing policy
 
-- [ ] `doc/architecture.md`
-- [ ] `doc/code-coverage.md`
-- [ ] `doc/db.md`
-- [ ] `doc/developer.md`
-- [ ] `doc/features-by-page.md`
-- [ ] `doc/index.md`
-- [ ] `doc/sid-file-format-spec.md`
-- [ ] `doc/ux-guidelines.md`
-- [ ] `doc/ux-interactions.md`
-- [ ] `doc/c64/c64u-config.yaml`
-- [ ] `doc/c64/c64u-ftp.md`
-- [ ] `doc/c64/c64u-openapi-excerpt.yaml`
-- [ ] `doc/c64/c64u-openapi.yaml`
-- [ ] `doc/c64/c64u-rest-api.md`
-- [ ] `doc/c64/c64u-stream-spec.md`
-- [ ] `doc/c64/devices/c64u/3.12a/c64u-config.yaml`
-- [ ] `doc/c64/devices/c64u/3.14a/c64u-config.yaml`
-- [ ] `doc/c64/devices/c64u/3.14d/c64u-config.yaml`
-- [ ] `doc/diagnostics/action-summary-spec.md`
-- [ ] `doc/diagnostics/trace-forensic-analysis.md`
-- [ ] `doc/diagnostics/tracing-spec.md`
-- [ ] `doc/testing/agentic-tests/agentic-action-model.md`
-- [ ] `doc/testing/agentic-tests/agentic-android-runtime-contract.md`
-- [ ] `doc/testing/agentic-tests/agentic-controller-contract.md`
-- [ ] `doc/testing/agentic-tests/agentic-coverage-matrix.md`
-- [ ] `doc/testing/agentic-tests/agentic-feature-surface.md`
-- [ ] `doc/testing/agentic-tests/agentic-infrastructure-reuse.md`
-- [ ] `doc/testing/agentic-tests/agentic-observability-model.md`
-- [ ] `doc/testing/agentic-tests/agentic-open-questions.md`
-- [ ] `doc/testing/agentic-tests/agentic-oracle-catalog.md`
-- [ ] `doc/testing/agentic-tests/agentic-safety-policy.md`
-- [ ] `doc/testing/agentic-tests/agentic-test-architecture.md`
-- [ ] `doc/testing/agentic-tests/agentic-test-implementation-plan.md`
-- [ ] `doc/testing/agentic-tests/agentic-test-review.md`
-- [ ] `doc/testing/agentic-tests/c64scope-delivery-prompt.md`
-- [ ] `doc/testing/agentic-tests/c64scope-spec.md`
-- [ ] `doc/testing/agentic-tests/full-app-coverage/README.md`
-- [ ] `doc/testing/agentic-tests/full-app-coverage/feature-inventory.md`
-- [ ] `doc/testing/agentic-tests/full-app-coverage/feature-status-matrix.md`
-- [ ] `doc/testing/agentic-tests/full-app-coverage/feature-test-catalog.md`
-- [ ] `doc/testing/agentic-tests/full-app-coverage/iteration-log.md`
-- [ ] `doc/testing/agentic-tests/full-app-coverage/prompts/F001-app-shell-and-launch.md`
-- [ ] `doc/testing/agentic-tests/full-app-coverage/prompts/F002-tab-navigation.md`
-- [ ] `doc/testing/agentic-tests/full-app-coverage/prompts/F003-home-machine-controls.md`
-- [ ] `doc/testing/agentic-tests/full-app-coverage/prompts/F004-home-quick-config-and-led-sid.md`
-- [ ] `doc/testing/agentic-tests/full-app-coverage/prompts/F005-home-ram-workflows.md`
-- [ ] `doc/testing/agentic-tests/full-app-coverage/prompts/F006-home-config-snapshots.md`
-- [ ] `doc/testing/agentic-tests/full-app-coverage/prompts/F007-disks-library-management.md`
-- [ ] `doc/testing/agentic-tests/full-app-coverage/prompts/F008-disks-mount-eject.md`
-- [ ] `doc/testing/agentic-tests/full-app-coverage/prompts/F009-disks-drive-and-softiec.md`
-- [ ] `doc/testing/agentic-tests/full-app-coverage/prompts/F010-play-source-browsing.md`
-- [ ] `doc/testing/agentic-tests/full-app-coverage/prompts/F011-playlist-lifecycle.md`
-- [ ] `doc/testing/agentic-tests/full-app-coverage/prompts/F012-playback-transport.md`
-- [ ] `doc/testing/agentic-tests/full-app-coverage/prompts/F013-playback-queue-and-volume.md`
-- [ ] `doc/testing/agentic-tests/full-app-coverage/prompts/F014-songlength-duration-subsong.md`
-- [ ] `doc/testing/agentic-tests/full-app-coverage/prompts/F015-hvsc-download-ingest.md`
-- [ ] `doc/testing/agentic-tests/full-app-coverage/prompts/F016-hvsc-cache-reuse.md`
-- [ ] `doc/testing/agentic-tests/full-app-coverage/prompts/F017-lock-screen-autoadvance.md`
-- [ ] `doc/testing/agentic-tests/full-app-coverage/prompts/F018-config-browse-search.md`
-- [ ] `doc/testing/agentic-tests/full-app-coverage/prompts/F019-config-edit-and-audio-mixer.md`
-- [ ] `doc/testing/agentic-tests/full-app-coverage/prompts/F020-settings-connection-preferences.md`
-- [ ] `doc/testing/agentic-tests/full-app-coverage/prompts/F021-settings-diagnostics-safety.md`
-- [ ] `doc/testing/agentic-tests/full-app-coverage/prompts/F022-docs-and-licenses.md`
-- [ ] `doc/testing/agentic-tests/full-app-coverage/prompts/F023-persistence-and-recovery.md`
-- [ ] `doc/testing/agentic-tests/full-app-coverage/runs/README.md`
-- [ ] `doc/testing/agentic-tests/full-app-coverage/runs/fac-20260308T103247Z-mcp-probe.json`
-- [ ] `doc/testing/agentic-tests/full-app-coverage/runs/fac-20260308T1035-execution-summary.md`
-- [ ] `doc/testing/agentic-tests/full-app-coverage/runs/fac-20260308T110559Z-executor-manifest.json`
-- [ ] `doc/testing/agentic-tests/full-app-coverage/runs/fac-20260308T110559Z-executor-manifest.md`
-- [ ] `doc/testing/agentic-tests/full-app-coverage/runs/fac-20260308T111428Z-executor-manifest.json`
-- [ ] `doc/testing/agentic-tests/full-app-coverage/runs/fac-20260308T111428Z-executor-manifest.md`
-- [ ] `doc/testing/agentic-tests/full-app-coverage/runs/fac-20260308T113247Z-executor-manifest.json`
-- [ ] `doc/testing/agentic-tests/full-app-coverage/runs/fac-20260308T113247Z-executor-manifest.md`
-- [ ] `doc/testing/agentic-tests/full-app-coverage/runs/fac-20260308T113632Z-executor-manifest.json`
-- [ ] `doc/testing/agentic-tests/full-app-coverage/runs/fac-20260308T113632Z-executor-manifest.md`
-- [ ] `doc/testing/agentic-tests/full-app-coverage/tool-gap-analysis.md`
-- [ ] `doc/testing/agentic-tests/gap-analysis/research1/README.md`
-- [ ] `doc/testing/agentic-tests/gap-analysis/research1/coverage-matrix.md`
-- [ ] `doc/testing/agentic-tests/gap-analysis/research1/failure-modes.md`
-- [ ] `doc/testing/agentic-tests/gap-analysis/research1/inventory.md`
-- [ ] `doc/testing/agentic-tests/gap-analysis/research1/remediation-plan.md`
-- [ ] `doc/testing/agentic-tests/gap-analysis/research1/root-causes.md`
-- [ ] `doc/testing/android-agentic-handover-20260310.md`
-- [ ] `doc/testing/android-emulator-test-structure.md`
-- [ ] `doc/testing/chaos-fuzz.md`
-- [ ] `doc/testing/contract-breakpoint-stress-prompt.md`
-- [ ] `doc/testing/contract-test.md`
-- [ ] `doc/testing/dual-resolution.md`
-- [ ] `doc/testing/fuzz-iteration-prompt.md`
-- [ ] `doc/testing/fuzz-results/fuzz-results-1/README.md`
-- [ ] `doc/testing/fuzz-results/fuzz-results-1/fuzz-issue-report.json`
-- [ ] `doc/testing/investigations/interactions1/verification-notes.md`
-- [ ] `doc/testing/investigations/reliability1/analysis.md`
-- [ ] `doc/testing/investigations/reliability1/convergence-report.md`
-- [ ] `doc/testing/investigations/reliability1/convergence-status.json`
-- [ ] `doc/testing/investigations/reliability1/execution-log.md`
-- [ ] `doc/testing/investigations/reliability1/plan.md`
-- [ ] `doc/testing/investigations/reliability1/reliability-remediation-plan.md`
-- [ ] `doc/testing/investigations/reliability1/work-log.md`
-- [ ] `doc/testing/investigations/reliability2/analysis.md`
-- [ ] `doc/testing/investigations/reliability2/convergence-report.md`
-- [ ] `doc/testing/investigations/reliability2/execution-log.md`
-- [ ] `doc/testing/investigations/reliability2/plan.md`
-- [ ] `doc/testing/maestro.md`
-- [ ] `doc/testing/physical-device-matrix.md`
-- [ ] `doc/testing/playwright-test-expansion-results.md`
-- [ ] `doc/testing/playwright-ui-audit.md`
-- [ ] `doc/testing/testing-extension-research.md`
-- [ ] `doc/testing/testing-infrastructure-review.md`
-- [ ] `doc/testing/viewport-finalization-summary.md`
+Verification:
 
-### Additional `doc/` inventory to cover during the audit
+- [ ] Search docs for stale Android publishing TODO wording
+- [ ] Confirm one canonical rollout-boundary section exists and nearby docs point to the current state
 
-- `doc/internals/`: 5 text documents, 1 image asset
-- `doc/research/`: 503 text documents plus binary screenshots and artifacts
-- `doc/img/`: binary reference images only
+## Phase 1 - Web Rollout Safety
 
-## Documented Expectations To Validate
+Implementation targets:
 
-- Shared-runtime architecture is intentional: React + Vite + Capacitor provides one TypeScript codebase for web, Android, and iOS, with native bridges only where platform capabilities require them.
-- The device contract is explicit: REST API version `0.1` over HTTP, optional `X-Password` authentication, FTP on port `21`, and UDP data streams with a TCP control socket for stream setup.
-- Playback completion is documented as duration-driven, not device-state-driven: there is no documented authoritative runner-finished endpoint, so JS `dueAtMs` plus Android foreground-service watchdog behavior is the normative design.
-- Tracing is specified as an always-on rolling buffer with deterministic IDs, correlation ownership, capture-time redaction, golden-trace comparison, and action-summary derivation that must not repair tracing mistakes heuristically.
-- UX rules are strong and normative: Local, C64U, and HVSC sources must share the same browse mechanics; playlist rows must render canonical metadata rather than source-specific UI labels; large playlists are intended to be query-driven and DB-backed at scale.
-- Testing expectations are aggressive: 90% merged line/branch coverage in CI, Playwright evidence validation, Maestro flow conventions, Android physical-device validation, contract testing for 48 REST endpoints and 26 FTP commands, fuzz reporting, and agentic full-app coverage based on app-first evidence collection.
-- Existing documentation already records known risk areas: REST polling storms, reliability regressions, missing iOS parity, large-file hotspots, and multiple prior production-readiness reviews. The audit needs to verify which of those are now fixed versus still present.
+- `public/sw.js`
+- `src/lib/startup/serviceWorkerRegistration.ts`
+- `tests/unit/startup/serviceWorkerRegistration.test.ts`
+- web deployment documentation in `README.md` and/or `doc/`
 
-## Execution Log
+Tasks:
 
-- 2026-03-13: Replaced a stale prior-task `PLANS.md` with the audit tracker required for review 6.
-- 2026-03-13: Completed repository inventory and identified 110 files in the explicit mandatory pre-read set.
-- 2026-03-13: Identified additional `doc/` subtrees for later documentation-accuracy analysis: `doc/internals`, `doc/research`, and `doc/img`.
-- 2026-03-13: Completed the mandatory pre-read of `doc/` root text docs plus recursive reads of `doc/c64`, `doc/diagnostics`, and `doc/testing`.
-- 2026-03-13: Ingested `doc/internals` and the top-level research review documents to seed later documentation-drift checks.
-- 2026-03-13: Completed the full repository audit and wrote `doc/research/review-6/review-6.md`.
-- 2026-03-13: Ran `npm run test:coverage` successfully and confirmed global branch coverage above the 90% threshold.
-- 2026-03-13: Incorporated operator scope clarifications into the final review: iOS paid signing out of scope, Android Play upload operational, C64U HTTP/FTP transport accepted as device-constrained, and GitHub Actions version-tag usage accepted as project policy.
-- 2026-03-13: Added the follow-up rollout tracker at `doc/research/review-6/review-6-rollout-plan.md`.
+- [ ] Replace fixed service-worker cache names with build-versioned cache names
+- [ ] Stop cache-first handling for `/` and `/index.html`
+- [ ] Add deterministic regression coverage for shell invalidation on deployment
+- [ ] Add deterministic regression coverage for activation-time cache eviction
+- [ ] Document deploy, hard-refresh, and rollback behavior for operators
 
-## Findings Backlog
+Verification:
 
-- R6-04: web service-worker cache invalidation and rollout safety
-- R6-06: dependency audit backlog
-- R6-07: version-source drift
-- R6-08: playlist persistence/query scaling and recovery
-- R6-09: TypeScript strictness and large-file modularity
-- R6-10: Android backup policy
-- R6-11: documentation contradictions and stale rollout notes
-- R6-12: web-server coverage gate gap
-- R6-13: silent Gradle exception handling
+- [ ] Run targeted service-worker tests
+- [ ] Confirm shell requests bypass stale cache after activation
+
+## Phase 2 - Release Metadata and Documentation Hygiene
+
+Implementation targets:
+
+- `package.json`
+- `vite.config.ts`
+- `.github/workflows/web.yaml`
+- `README.md`
+- `tests/contract/README.md`
+- `docs/privacy-policy.md`
+
+Tasks:
+
+- [ ] Choose one canonical app version source and enforce it in build metadata
+- [ ] Remove mismatch-tolerant publish behavior from `.github/workflows/web.yaml`
+- [ ] Update README artifact examples to the current naming convention
+- [ ] Update contract-test runtime documentation to Node 24
+- [ ] Remove Sentry from runtime, dependencies, and current docs
+- [ ] Align the privacy policy with the no-crash-reporting runtime behavior
+
+Verification:
+
+- [ ] Run targeted tests for build/version helpers if changed
+- [ ] Validate workflow version check logic by inspection and lint/build usage
+
+## Phase 3 - Dependency and Platform Security Hygiene
+
+Implementation targets:
+
+- `package.json`
+- `package-lock.json`
+- Android manifest and backup policy XML files
+- rollout worklog in this file
+
+Tasks:
+
+- [ ] Triage `npm audit` findings into upgrade, replace, or accepted-risk buckets
+- [ ] Upgrade or replace vulnerable direct dependencies, starting with `@capacitor/cli`, `ftp-srv`, `ajv`, and `jsdom`
+- [ ] Refresh overrides if still required after upgrades
+- [ ] Capture post-remediation `npm audit` results in the worklog
+- [ ] Make Android backup posture intentional and implement it in manifest/XML rules
+
+Verification:
+
+- [ ] Run `npm audit` after dependency changes
+- [ ] Build/test after dependency changes
+- [ ] Validate Android manifest/resources still build
+
+## Phase 4 - Playlist Persistence Hardening
+
+Implementation targets:
+
+- `src/lib/playlistRepository/**`
+- playlist persistence consumers under `src/pages/playFiles/**`
+- `doc/db.md`
+- playlist unit tests
+
+Tasks:
+
+- [ ] Define the persisted playlist query model and migration strategy in code/docs
+- [ ] Move filtering, sorting, and pagination into repository-backed indexed/queryable structures
+- [ ] Preserve recovery artifacts for schema mismatch and parse/migration failures
+- [ ] Add deterministic regression tests for corruption and migration recovery
+- [ ] Add deterministic regression tests for large playlist query behavior
+
+Verification:
+
+- [ ] Run targeted playlist repository tests
+- [ ] Confirm large playlist queries no longer depend on full scan/sort of all rows at query time
+
+## Phase 5 - Maintainability Hardening
+
+Implementation targets:
+
+- `src/lib/c64api.ts`
+- `src/pages/SettingsPage.tsx`
+- `src/pages/PlayFilesPage.tsx`
+- `src/components/disks/HomeDiskManager.tsx`
+- `src/lib/hvsc/hvscIngestionRuntime.ts`
+- `tsconfig.json`
+- `tsconfig.app.json`
+- `android/app/build.gradle`
+
+Tasks:
+
+- [ ] Define and record the extraction order for hotspot files
+- [ ] Split `src/lib/c64api.ts` into request/domain modules
+- [ ] Split `src/pages/SettingsPage.tsx` by settings area
+- [ ] Split `src/pages/PlayFilesPage.tsx` by browsing, playlist, and playback concerns
+- [ ] Split `src/components/disks/HomeDiskManager.tsx` by collection, dialog, and mount-control concerns
+- [ ] Split `src/lib/hvsc/hvscIngestionRuntime.ts` by ingestion stage and runtime/persistence concerns
+- [ ] Re-enable a documented subset of stricter TypeScript checks without breaking the build
+- [ ] Replace silent Gradle catches with explicit logging or contextual failure
+
+Verification:
+
+- [ ] Run TypeScript/lint/build validation after modularization
+- [ ] Confirm hotspot files are materially smaller than baseline
+- [ ] Confirm Gradle version derivation no longer swallows failures silently
+
+## Phase 6 - Coverage Closeout
+
+Implementation targets:
+
+- `vitest.config.ts`
+- `scripts/collect-coverage.sh`
+- `scripts/check-coverage-threshold.mjs`
+- `codecov.yml`
+- rollout worklog in this file
+
+Tasks:
+
+- [ ] Include shipped `web/server/**` runtime in enforced coverage reporting or add an equivalent enforced server gate
+- [ ] Update coverage scripts and Codecov config to match the chosen gate
+- [ ] Record the resulting measured line and branch baseline in the worklog
+
+Verification:
+
+- [ ] Run `npm run test:coverage`
+- [ ] Run `npm run test:coverage:all`
+- [ ] Run `npm run lint`
+- [ ] Run `npm run build`
+
+## Execution Worklog
+
+| Date | Phase | Entry | Status |
+| --- | --- | --- | --- |
+| 2026-03-13 | Planning | Replaced the stale audit-only `PLANS.md` with the rollout execution tracker tied to phases 0-6, verification steps, and live completion markers. | done |
+| 2026-03-13 | Planning | Completed initial implementation discovery for docs, service worker, workflow versioning, Android backup config, playlist repository, coverage scripts, and hotspot files. | done |
+
+## Audit / Verification Notes
+
+- Pending: baseline `npm audit` triage and direct dependency upgrade plan
+- Pending: hotspot file size baseline capture for refactor closeout
+- Pending: full build/test/coverage closeout after all phases

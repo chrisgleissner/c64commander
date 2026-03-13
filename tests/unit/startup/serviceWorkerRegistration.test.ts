@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  getServiceWorkerScriptUrl,
   registerServiceWorker,
   registerServiceWorkerForEnvironment,
   shouldRegisterServiceWorker,
@@ -54,7 +55,7 @@ describe("serviceWorkerRegistration", () => {
     window.dispatchEvent(new Event("load"));
     await Promise.resolve();
 
-    expect(registerMock).toHaveBeenCalledWith("/sw.js");
+    expect(registerMock).toHaveBeenCalledWith("/sw.js?v=0.1.0-test-build");
     expect(vi.mocked(addErrorLog)).toHaveBeenCalledWith(
       "Service worker registration failed",
       expect.objectContaining({
@@ -71,5 +72,9 @@ describe("serviceWorkerRegistration", () => {
   it("registerServiceWorker delegates to ForEnvironment", () => {
     // In Vitest, import.meta.env.DEV is true, so returns false (dev mode skips SW)
     expect(registerServiceWorker()).toBe(false);
+  });
+
+  it("builds a versioned service worker script url", () => {
+    expect(getServiceWorkerScriptUrl()).toBe("/sw.js?v=0.1.0-test-build");
   });
 });

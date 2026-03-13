@@ -67,9 +67,16 @@ Because it gives you full control of your C64 Ultimate from any modern device:
 
 ## 🚀 Quick Start
 
+### Current Rollout Boundaries
+
+- Android Play upload is already operational for the supported release flow.
+- iOS distribution currently remains a sideload flow built around SideStore and signed IPA installation. App Store and TestFlight distribution are not part of the current rollout scope.
+- C64 Ultimate connectivity remains HTTP for REST and plain FTP for file operations because that is what current firmware supports.
+- GitHub Actions release tags are an intentional contributor policy. Keep release tags aligned with `package.json`.
+
 ### Install on Android
 
-1. Download the latest **APK** (e.g. `c64commander-0.5.0-android.apk`) from the [Releases](https://github.com/chrisgleissner/c64commander/releases) page.
+1. Download the latest **APK** (e.g. `c64commander-0.1.0-debug.apk` for debug builds or `c64commander-0.1.0.apk` for signed release builds) from the [Releases](https://github.com/chrisgleissner/c64commander/releases) page.
 2. Open the APK.
 3. Allow installs from unknown sources if prompted.
 4. Tap **Install** and launch C64 Commander.
@@ -77,7 +84,7 @@ Because it gives you full control of your C64 Ultimate from any modern device:
 ### Install on iOS
 
 1. Set up [SideStore](https://docs.sidestore.io/).
-2. Download the latest **IPA** (e.g. `c64commander-0.5.0-ios.ipa`) from the [Releases](https://github.com/chrisgleissner/c64commander/releases) page.
+2. Download the latest **IPA** (e.g. `c64commander-0.1.0-ios.ipa`) from the [Releases](https://github.com/chrisgleissner/c64commander/releases) page.
 3. In **SideStore → My Apps**, tap **+** and select the IPA.
 4. Launch C64 Commander.
 
@@ -298,6 +305,10 @@ Optional hardening you can apply in your environment:
 - `basic-ftp` is a runtime dependency because FTP list/read requests are executed by the web server process.
 
 #### Update to a newer version
+
+The web app shell is intentionally fetched from the network on each navigation, while hashed static assets roll forward with a build-specific service-worker cache. After deploying a new image, open the app once to let the new service worker activate. If a browser tab is still holding the old shell in memory, reload the tab.
+
+Rollback uses the same flow: redeploy the older image, open the app, and reload once so the browser activates the matching service worker and clears the newer asset cache.
 
 ```bash
 docker pull ghcr.io/chrisgleissner/c64commander:<version>

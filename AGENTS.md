@@ -45,8 +45,9 @@ This repository is **C64 Commander**, a React + Vite + Capacitor app for managin
 ## Release tag APKs
 
 - CI builds a debug APK for all runs.
-- Tag builds attempt a release APK only when signing secrets are present.
-- TODO: set `ANDROID_KEYSTORE_BASE64`, `KEYSTORE_STORE_PASSWORD`, `KEYSTORE_KEY_PASSWORD`, and `KEYSTORE_KEY_ALIAS` before enabling signed release distribution.
+- Android Play upload is already operational.
+- Tag builds still rely on signing secrets when a signed release artifact must be produced in CI.
+- GitHub Actions version tags are an intentional repository policy. Keep release tags aligned with `package.json`.
 
 ## MANDATORY: Prettier formatting
 

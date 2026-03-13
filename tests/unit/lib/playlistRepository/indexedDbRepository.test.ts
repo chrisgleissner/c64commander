@@ -66,7 +66,7 @@ const createFakeIndexedDb = (options: FakeIndexedDbOptions = {}) => {
         },
       }),
     }),
-    close: () => {},
+    close: () => { },
   };
 
   return {
@@ -257,7 +257,7 @@ describe("indexedDB playlist repository", () => {
       configurable: true,
       writable: true,
     });
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => { });
 
     const repository = getIndexedDbPlaylistDataRepository({
       preferDurableStorage: false,
@@ -307,7 +307,7 @@ describe("indexedDB playlist repository", () => {
       writable: true,
     });
 
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => { });
     const repository = getIndexedDbPlaylistDataRepository({
       preferDurableStorage: false,
     });
@@ -322,8 +322,9 @@ describe("indexedDB playlist repository", () => {
     expect(await repository.getPlaylistItems("playlist-default")).toEqual([]);
     expect(warn).toHaveBeenCalledWith(
       "Incompatible playlist repository schema in IndexedDB. Resetting repository state.",
-      expect.objectContaining({ expectedVersion: 1, foundVersion: 999 }),
+      expect.objectContaining({ expectedVersion: 2, foundVersion: 999 }),
     );
+    expect(localStorage.getItem("c64u_playlist_repo:indexeddb:recovery")).toContain("incompatible-schema");
   });
 
   it("propagates write failures from IndexedDB", async () => {
@@ -534,7 +535,7 @@ describe("indexedDB playlist repository", () => {
       configurable: true,
       writable: true,
     });
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => { });
     const repository = getIndexedDbPlaylistDataRepository({
       preferDurableStorage: false,
     });

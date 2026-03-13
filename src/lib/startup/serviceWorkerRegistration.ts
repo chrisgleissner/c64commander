@@ -1,6 +1,12 @@
 import { addErrorLog } from "@/lib/logging";
 import { isNativePlatform } from "@/lib/native/platform";
 
+export const getServiceWorkerScriptUrl = () => {
+  const buildId = typeof __SW_BUILD_ID__ !== "undefined" ? __SW_BUILD_ID__ : "";
+  if (!buildId) return "/sw.js";
+  return `/sw.js?v=${encodeURIComponent(buildId)}`;
+};
+
 export const shouldRegisterServiceWorker = () => {
   return shouldRegisterServiceWorkerForEnvironment(import.meta.env.DEV);
 };
@@ -20,7 +26,7 @@ export const registerServiceWorker = () => {
 export const registerServiceWorkerForEnvironment = (isDev: boolean) => {
   if (!shouldRegisterServiceWorkerForEnvironment(isDev)) return false;
   window.addEventListener("load", () => {
-    void navigator.serviceWorker.register("/sw.js").catch((error) => {
+    void navigator.serviceWorker.register(getServiceWorkerScriptUrl()).catch((error) => {
       const err = error as Error;
       addErrorLog("Service worker registration failed", {
         error: {

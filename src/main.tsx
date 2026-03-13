@@ -14,7 +14,6 @@ import { registerUserInteractionCapture } from "./lib/tracing/userInteractionCap
 import { registerTraceBridge } from "./lib/tracing/traceBridge";
 import { markStartupBootstrapComplete } from "./lib/startup/startupMilestones";
 import { initializeRuntimeMotionMode } from "./lib/startup/runtimeMotionBudget";
-import { initializeSentry } from "./lib/observability/sentry";
 import { registerServiceWorker } from "./lib/startup/serviceWorkerRegistration";
 import "./index.css";
 
@@ -76,7 +75,6 @@ const startDeferredStartupBootstrap = () => {
 };
 
 initializeRuntimeMotionMode();
-initializeSentry();
 registerServiceWorker();
 createRoot(document.getElementById("root")!).render(<App />);
 scheduleAfterFirstPaint(startDeferredStartupBootstrap);

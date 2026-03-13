@@ -36,44 +36,29 @@ const runGit = (args: string[], label: string, options: RunGitOptions = {}) => {
 
 const EXPECTED_GIT_DESCRIBE_NO_TAGS = /(?:No names found|cannot describe anything|no tag exactly matches)/i;
 
-const gitTagFromEnv = (process.env.GITHUB_REF_TYPE === "tag" && process.env.GITHUB_REF_NAME) || "";
-
 const resolveGitSha = () =>
   process.env.VITE_GIT_SHA ||
   process.env.GIT_SHA ||
   process.env.GITHUB_SHA ||
   runGit(["rev-parse", "HEAD"], "git rev-parse");
 
-const resolveExactGitTag = () =>
-  gitTagFromEnv ||
-  runGit(["describe", "--tags", "--exact-match"], "git describe --exact-match", {
-    suppressStderrPattern: EXPECTED_GIT_DESCRIBE_NO_TAGS,
-  });
+const sanitizeBuildToken = (value: string) => value.replace(/[^a-zA-Z0-9._-]+/g, "-");
 
-const resolveLatestGitTag = () =>
-  runGit(["describe", "--tags", "--abbrev=0"], "git describe --abbrev=0", {
-    suppressStderrPattern: EXPECTED_GIT_DESCRIBE_NO_TAGS,
-  });
+const resolveAppVersion = () => pkg.version || "";
 
-const resolveAppVersion = (gitShaValue: string) => {
-  const envVersion = process.env.VITE_APP_VERSION || process.env.VERSION_NAME || "";
+const resolveServiceWorkerBuildId = (appVersion: string, gitShaValue: string, buildTimeValue: string) => {
+  const envBuildId = process.env.VITE_SW_BUILD_ID || process.env.SW_BUILD_ID || "";
+  if (envBuildId) return sanitizeBuildToken(envBuildId);
+
   const gitShaShort = gitShaValue ? gitShaValue.slice(0, 8) : "";
-  const exactTag = resolveExactGitTag();
-  const latestTag = exactTag || resolveLatestGitTag();
-
-  if (latestTag) {
-    if (exactTag) return latestTag;
-    if (gitShaShort) return `${latestTag}-${gitShaShort}`;
-    return latestTag;
-  }
-
-  if (envVersion) return envVersion;
-  return pkg.version || "";
+  const buildTimeToken = buildTimeValue ? sanitizeBuildToken(buildTimeValue.replace(/[:]/g, "-")) : "";
+  return [appVersion, gitShaShort || buildTimeToken].filter(Boolean).join("-") || "dev";
 };
 
 const gitSha = resolveGitSha();
-const appVersion = resolveAppVersion(gitSha);
+const appVersion = resolveAppVersion();
 const buildTime = process.env.VITE_BUILD_TIME || new Date().toISOString();
+const serviceWorkerBuildId = resolveServiceWorkerBuildId(appVersion, gitSha, buildTime);
 const enableCoverageInstrumentation = ["1", "true"].includes((process.env.VITE_COVERAGE || "").toLowerCase());
 
 // https://vitejs.dev/config/
@@ -117,21 +102,22 @@ export default defineConfig(() => ({
     react(),
     ...(enableCoverageInstrumentation
       ? [
-          istanbul({
-            include: "src/**/*",
-            exclude: ["node_modules", "test/", "tests/", "playwright/"],
-            extension: [".js", ".ts", ".tsx"],
-            requireEnv: true,
-            envName: "VITE_COVERAGE",
-            forceBuildInstrument: true,
-          }),
-        ]
+        istanbul({
+          include: "src/**/*",
+          exclude: ["node_modules", "test/", "tests/", "playwright/"],
+          extension: [".js", ".ts", ".tsx"],
+          requireEnv: true,
+          envName: "VITE_COVERAGE",
+          forceBuildInstrument: true,
+        }),
+      ]
       : []),
   ],
   define: {
     __APP_VERSION__: JSON.stringify(appVersion),
     __GIT_SHA__: JSON.stringify(gitSha),
     __BUILD_TIME__: JSON.stringify(buildTime),
+    __SW_BUILD_ID__: JSON.stringify(serviceWorkerBuildId),
   },
   resolve: {
     alias: {

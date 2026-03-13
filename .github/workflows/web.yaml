@@ -287,9 +287,9 @@ jobs:
           fi
 
           PKG_VERSION="$(node -p "require('./package.json').version")"
-          if [ "$TAG" != "$PKG_VERSION" ] && [ "$TAG" != "${PKG_VERSION}-rc${TAG##*-rc}" ]; then
+          if [ "$TAG" != "$PKG_VERSION" ]; then
             echo "Tag/package version differ: tag=$TAG package.json=$PKG_VERSION"
-            echo "Continuing publish because tag format is valid."
+            exit 1
           fi
 
           echo "normalized_tag=$TAG" >> "$GITHUB_OUTPUT"

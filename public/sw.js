@@ -1,5 +1,18 @@
-const CACHE_NAME = 'c64commander-static-v1';
-const STATIC_ASSETS = ['/', '/index.html', '/manifest.webmanifest'];
+const CACHE_PREFIX = 'c64commander-static';
+const STATIC_ASSETS = ['/manifest.webmanifest'];
+
+const buildId = (() => {
+  try {
+    const url = new URL(self.location.href);
+    return url.searchParams.get('v') || 'dev';
+  } catch {
+    return 'dev';
+  }
+})();
+
+const CACHE_NAME = `${CACHE_PREFIX}-${buildId}`;
+
+const isShellRequest = (request, url) => request.mode === 'navigate' || url.pathname === '/' || url.pathname === '/index.html';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -17,7 +30,7 @@ self.addEventListener('activate', (event) => {
       .then((keys) =>
         Promise.all(
           keys
-            .filter((key) => key !== CACHE_NAME)
+            .filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME)
             .map((key) => caches.delete(key)),
         ),
       )
@@ -36,6 +49,11 @@ self.addEventListener('fetch', (event) => {
   const isApiRequest =
     url.pathname.startsWith('/api/') || url.pathname.startsWith('/auth/');
   if (isApiRequest) {
+    event.respondWith(fetch(request));
+    return;
+  }
+
+  if (isShellRequest(request, url)) {
     event.respondWith(fetch(request));
     return;
   }

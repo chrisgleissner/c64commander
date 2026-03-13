@@ -9,10 +9,6 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  readonly VITE_SENTRY_DSN?: string;
-  readonly VITE_SENTRY_TRACES_SAMPLE_RATE?: string;
-  readonly VITE_SENTRY_REPLAY_SESSION_SAMPLE_RATE?: string;
-  readonly VITE_SENTRY_REPLAY_ERROR_SAMPLE_RATE?: string;
 }
 
 interface ImportMeta {
@@ -22,6 +18,7 @@ interface ImportMeta {
 declare const __APP_VERSION__: string;
 declare const __GIT_SHA__: string;
 declare const __BUILD_TIME__: string;
+declare const __SW_BUILD_ID__: string;
 
 declare module "*.yaml?raw" {
   const content: string;

@@ -76,7 +76,8 @@ Tasks:
 - [ ] Update `.github/workflows/web.yaml` so version mismatches do not silently continue.
 - [ ] Update `README.md` artifact examples from `0.5.0` to the current naming convention.
 - [ ] Update `tests/contract/README.md` to the Node 24 requirement.
-- [ ] Update `docs/privacy-policy.md` so optional Sentry behavior is described accurately.
+- [ ] Remove Sentry from the runtime and dependency graph.
+- [ ] Update `docs/privacy-policy.md` so it states the app does not send crash reports or diagnostics to the developer.
 
 Exit criteria:
 
