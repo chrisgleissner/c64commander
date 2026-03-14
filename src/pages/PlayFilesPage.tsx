@@ -408,25 +408,6 @@ export default function PlayFilesPage() {
     }
   }, [browserOpen]);
 
-  useEffect(() => {
-    if (!isImportNavigationBlocked) return;
-    return registerNavigationGuard(() =>
-      window.confirm("Importing items will stop if you leave this page. Leave anyway?"),
-    );
-  }, [isImportNavigationBlocked]);
-
-  useEffect(() => {
-    if (!isImportNavigationBlocked) return;
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = "";
-    };
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-    };
-  }, [isImportNavigationBlocked]);
-
   useImportNavigationGuards(isImportNavigationBlocked);
 
   const resolvedDeviceId = useResolvedPlaybackDeviceId(deviceInfoId);
