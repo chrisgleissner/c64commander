@@ -120,7 +120,7 @@ describe("ConnectivityIndicator", () => {
     };
   };
 
-  it("renders real mode indicator and opens status pop-up with last-request line", () => {
+  it("renders real mode indicator and opens status pop-up with last-activity line", () => {
     connectionState = "REAL_CONNECTED";
     lastProbeAtMs = Date.now() - 2_000;
     lastProbeSucceededAtMs = Date.now() - 2_000;
@@ -138,7 +138,7 @@ describe("ConnectivityIndicator", () => {
     fireEvent.click(button);
     expect(getByTestId("connection-status-popover")).toBeTruthy();
     expect(getByTestId("connection-status-popover").textContent).toMatch(
-      /Last request:\s+(\d+s ago|\d+m \d+s ago|none yet|unknown)/,
+      /Last activity:\s+(\d+s ago|\d+m \d+s ago|none yet|unknown)/,
     );
     expect(discoverConnection).not.toHaveBeenCalled();
   });
@@ -260,7 +260,7 @@ describe("ConnectivityIndicator", () => {
     expect(getByRole("button", { name: "Change" })).toBeTruthy();
   });
 
-  it("uses a two-group popover structure with direct last request line", () => {
+  it("uses a two-group popover structure with direct last-activity line", () => {
     syncDeviceSnapshot();
     const { getByTestId } = render(<ConnectivityIndicator />);
     fireEvent.click(getByTestId("connectivity-indicator"));
@@ -269,11 +269,11 @@ describe("ConnectivityIndicator", () => {
     expect(popover.className).toContain("space-y-4");
     expect(popover.querySelector(".space-y-1")).toBeTruthy();
     expect(getByTestId("connection-diagnostics-section").className).toContain("space-y-1");
-    expect(popover.textContent).toContain("Last request:");
+    expect(popover.textContent).toContain("Last activity:");
     expect(popover.textContent).not.toContain("Communication:");
   });
 
-  it("formats last request as strict numeric Xs ago under 60 seconds", () => {
+  it("formats last activity as strict numeric Xs ago under 60 seconds", () => {
     vi.useFakeTimers();
     try {
       vi.setSystemTime(new Date("2024-01-01T00:00:00Z"));
@@ -285,13 +285,13 @@ describe("ConnectivityIndicator", () => {
 
       const { getByTestId } = render(<ConnectivityIndicator />);
       fireEvent.click(getByTestId("connectivity-indicator"));
-      expect(getByTestId("connection-status-popover").textContent).toMatch(/Last request:\s+3s ago/);
+      expect(getByTestId("connection-status-popover").textContent).toMatch(/Last activity:\s+3s ago/);
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it("formats last request as Xm Ys ago for 123 seconds", () => {
+  it("formats last activity as Xm Ys ago for 123 seconds", () => {
     vi.useFakeTimers();
     try {
       vi.setSystemTime(new Date("2024-01-01T00:00:00Z"));
@@ -303,7 +303,7 @@ describe("ConnectivityIndicator", () => {
 
       const { getByTestId } = render(<ConnectivityIndicator />);
       fireEvent.click(getByTestId("connectivity-indicator"));
-      expect(getByTestId("connection-status-popover").textContent).toMatch(/Last request:\s+2m 3s ago/);
+      expect(getByTestId("connection-status-popover").textContent).toMatch(/Last activity:\s+2m 3s ago/);
     } finally {
       vi.useRealTimers();
     }
@@ -322,13 +322,32 @@ describe("ConnectivityIndicator", () => {
 
       const { getByTestId } = render(<ConnectivityIndicator />);
       fireEvent.click(getByTestId("connectivity-indicator"));
-      expect(getByTestId("connection-status-popover").textContent).toMatch(/Last request:\s+4s ago/);
+      expect(getByTestId("connection-status-popover").textContent).toMatch(/Last activity:\s+4s ago/);
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it('never renders "just now" in last request', () => {
+  it("uses the freshest probe time as connection activity when no newer device request exists", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2024-01-01T00:00:00Z"));
+      connectionState = "REAL_CONNECTED";
+      lastProbeAtMs = Date.now() - 2_000;
+      lastProbeSucceededAtMs = lastProbeAtMs;
+      lastProbeFailedAtMs = null;
+      lastDeviceRequestAtMs = Date.now() - 12_000;
+      syncDeviceSnapshot();
+
+      const { getByTestId } = render(<ConnectivityIndicator />);
+      fireEvent.click(getByTestId("connectivity-indicator"));
+      expect(getByTestId("connection-status-popover").textContent).toMatch(/Last activity:\s+2s ago/);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('never renders "just now" in last activity', () => {
     vi.useFakeTimers();
     try {
       vi.setSystemTime(new Date("2024-01-01T00:00:00Z"));
@@ -341,7 +360,7 @@ describe("ConnectivityIndicator", () => {
       const { getByTestId } = render(<ConnectivityIndicator />);
       fireEvent.click(getByTestId("connectivity-indicator"));
       expect(getByTestId("connection-status-popover").textContent).not.toContain("just now");
-      expect(getByTestId("connection-status-popover").textContent).toMatch(/Last request:\s+0s ago/);
+      expect(getByTestId("connection-status-popover").textContent).toMatch(/Last activity:\s+0s ago/);
     } finally {
       vi.useRealTimers();
     }
@@ -354,12 +373,12 @@ describe("ConnectivityIndicator", () => {
     expect(getByTestId("connection-status-close")).toBeTruthy();
   });
 
-  it("provides data-testid on status, host, and last-request rows", () => {
+  it("provides data-testid on status, host, and last-activity rows", () => {
     syncDeviceSnapshot();
     const { getByTestId } = render(<ConnectivityIndicator />);
     fireEvent.click(getByTestId("connectivity-indicator"));
     expect(getByTestId("connection-status-row-status").textContent).toContain("Status:");
     expect(getByTestId("connection-status-row-host").textContent).toContain("Host:");
-    expect(getByTestId("connection-status-row-last-request").textContent).toContain("Last request:");
+    expect(getByTestId("connection-status-row-last-activity").textContent).toContain("Last activity:");
   });
 });

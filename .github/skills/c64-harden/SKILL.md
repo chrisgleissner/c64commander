@@ -1,9 +1,9 @@
----
 name: c64-harden
-description: Production hardening workflow for C64 Commander covering CI integrity, Docker images, Node runtime, artifact consistency, and release stability.
+description: Use when hardening C64 Commander for production across CI integrity, Docker images, Node runtime, artifact consistency, and release stability.
 argument-hint: (optional) scope such as docker, ci, node, artifacts
-user-invokable: true
+user-invocable: true
 disable-model-invocation: true
+
 ---
 
 # Skill: C64 Production Hardening
@@ -22,6 +22,8 @@ Ensure the repository is production-grade across:
 ---
 
 ## Execution Workflow
+
+Before making changes, record the current changed-file baseline and avoid unrelated edits.
 
 ### Step 1 - CI Integrity
 
@@ -94,4 +96,4 @@ All must match.
 - Docker builds reproducible.
 - Multi-arch validated.
 - Version alignment verified.
-- Clean working tree.
+- Unrelated worktree changes remain untouched.

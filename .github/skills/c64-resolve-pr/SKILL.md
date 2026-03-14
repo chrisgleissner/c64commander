@@ -1,24 +1,23 @@
----
 name: c64-resolve-pr
-description: Fetch all unresolved pull request review comments for the current branch, validate them, implement confirmed fixes, commit and push changes, and resolve each conversation using the GitHub CLI.
+description: Use when triaging unresolved pull request review comments on the current branch, validating them, and preparing or applying confirmed fixes; only perform remote GitHub mutations when explicitly authorized.
 argument-hint: (optional) Additional constraints or scope instructions
-user-invokable: true
+user-invocable: true
 disable-model-invocation: true
+
 ---
 
 # Skill: PR Review Resolution Workflow
 
 ## Purpose
 
-This skill processes all unresolved review comments on the current pull request and brings the PR to a fully resolved state.
+This skill processes all unresolved review comments on the current pull request and drives them to a validated local resolution state, with remote GitHub resolution performed only when explicitly authorized.
 
 It performs:
 
 - Comment retrieval via `gh`
 - Technical validation of each comment
 - Implementation of confirmed fixes
-- Atomic commits and push
-- Review reply and conversation resolution via `gh`
+- Optional commit, push, review reply, and conversation resolution when the invoking task explicitly authorizes remote GitHub mutations
 
 This skill is designed for structured, production-grade resolution workflows.
 
@@ -28,7 +27,7 @@ This skill is designed for structured, production-grade resolution workflows.
 
 - The current branch has exactly one open pull request.
 - `gh` CLI is installed and authenticated.
-- The working tree is clean.
+- Record the current changed-file baseline and avoid unrelated edits.
 - Tests can be executed locally.
 
 If any precondition fails, stop and report.
@@ -91,10 +90,14 @@ If the comment identifies a real issue:
 
 Then:
 
-- Create an atomic commit specific to that issue.
-- Push to the current branch.
-- Post a reply to the review thread explaining the fix.
-- Resolve the conversation using `gh`.
+- If the task explicitly authorizes remote mutations:
+  - Create an atomic commit specific to that issue.
+  - Push to the current branch.
+  - Post a reply to the review thread explaining the fix.
+  - Resolve the conversation using `gh`.
+- Otherwise:
+  - Leave changes local.
+  - Prepare the exact reply text and resolution rationale for the user.
 
 ---
 
@@ -107,17 +110,18 @@ If after careful analysis the issue is not valid:
   - Reference exact code
   - Provide reasoning
   - Be concise and evidence-based
-- Post the explanation using `gh`.
-- Resolve the thread.
+- If the task explicitly authorizes remote mutations, post the explanation using `gh` and resolve the thread.
+- Otherwise, prepare the exact response text for the user without mutating GitHub state.
 
 ---
 
 ## Commit Rules
 
+- Only apply when the task explicitly authorizes commits and pushes.
 - One logical issue per commit.
 - Clear commit message referencing the PR number.
 - No batching of unrelated fixes.
-- Ensure working tree is clean after each push.
+- Preserve unrelated worktree changes.
 
 ---
 
@@ -134,11 +138,11 @@ If after careful analysis the issue is not valid:
 
 The workflow is complete only when:
 
-- All review threads are resolved.
-- `gh pr view` reports zero unresolved conversations.
-- All changes are committed and pushed.
-- The working tree is clean.
+- Every unresolved thread has been analyzed.
+- Confirmed fixes are implemented and validated locally.
+- If remote GitHub mutations were explicitly authorized, all review threads are resolved and `gh pr view` reports zero unresolved conversations.
 - Tests pass.
+- Unrelated worktree changes remain untouched.
 
 Continue until all threads are processed.
 

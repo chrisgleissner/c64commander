@@ -1,5 +1,5 @@
 ---
-description: Execute real-hardware autonomous tests for C64 Commander
+description: Run autonomous real-hardware Android tests for C64 Commander using droidmind, c64bridge, and c64scope with evidence-backed outcomes.
 ---
 
 ROLE

@@ -35,7 +35,7 @@ All coverage reports are aggregated and submitted to [Codecov](https://codecov.i
 **Coverage gate**:
 
 - `vitest.config.ts` intentionally does **not** enforce internal thresholds.
-- CI enforces **90% line coverage** and **90% branch coverage** through `scripts/check-coverage-threshold.mjs`.
+- CI enforces **91% line coverage** and **91% branch coverage** through `scripts/check-coverage-threshold.mjs`.
 - The default gate input is `coverage/lcov-merged.info`, with fallback to `coverage/lcov.info` when the merged file is not present.
 
 ### Kotlin Coverage (Jacoco)
@@ -110,7 +110,7 @@ The Android workflow (`.github/workflows/android.yaml`) currently:
 3. runs Playwright to produce browser coverage
 4. merges LCOV into `coverage/lcov-merged.info`
 5. validates artifacts with `scripts/verify-coverage-artifacts.mjs`
-6. enforces the 90% line/branch gate with `scripts/check-coverage-threshold.mjs`
+6. enforces the 91% line/branch gate with `scripts/check-coverage-threshold.mjs`
 7. uploads merged web LCOV, Android JaCoCo XML, and Python agent coverage XML to Codecov
 
 The iOS workflow (`.github/workflows/ios.yaml`) exports Swift coverage to `ios/native-tests/swift-lcov.info` and uploads it to Codecov under the `swift` flag.
@@ -147,7 +147,7 @@ Codecov automatically:
 
 ## Current enforcement summary
 
-- Web coverage gate: **90% lines / 90% branches** on merged LCOV
+- Web coverage gate: **91% lines / 91% branches** on merged LCOV
 - Python agent gate: branch coverage is enforced in CI via `pytest --cov-branch`
 - Android and iOS native coverage are uploaded for visibility and review
 - Playwright coverage contributes to the merged web artifact rather than using a separate threshold file

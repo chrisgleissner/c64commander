@@ -61,7 +61,7 @@ test.describe("Connection Status pop-up layout", () => {
     });
   };
 
-  test("row heights are equal for Status, Host and Last request", async ({
+  test("row heights are equal for Status, Host and Last activity", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
@@ -79,20 +79,20 @@ test.describe("Connection Status pop-up layout", () => {
 
     const statusBox = await popover.getByTestId("connection-status-row-status").boundingBox();
     const hostBox = await popover.getByTestId("connection-status-row-host").boundingBox();
-    const lastRequestBox = await popover.getByTestId("connection-status-row-last-request").boundingBox();
+    const lastActivityBox = await popover.getByTestId("connection-status-row-last-activity").boundingBox();
 
     expect(statusBox).toBeTruthy();
     expect(hostBox).toBeTruthy();
-    expect(lastRequestBox).toBeTruthy();
+    expect(lastActivityBox).toBeTruthy();
 
     // Row heights must be equal within 4px tolerance.
     expect(Math.abs(statusBox!.height - hostBox!.height)).toBeLessThanOrEqual(4);
-    expect(Math.abs(statusBox!.height - lastRequestBox!.height)).toBeLessThanOrEqual(4);
+    expect(Math.abs(statusBox!.height - lastActivityBox!.height)).toBeLessThanOrEqual(4);
 
-    // Vertical gap between Status→Host and Host→Last request must be equal within 4px.
+    // Vertical gap between Status→Host and Host→Last activity must be equal within 4px.
     const gapStatusToHost = hostBox!.y - (statusBox!.y + statusBox!.height);
-    const gapHostToLastRequest = lastRequestBox!.y - (hostBox!.y + hostBox!.height);
-    expect(Math.abs(gapStatusToHost - gapHostToLastRequest)).toBeLessThanOrEqual(4);
+    const gapHostToLastActivity = lastActivityBox!.y - (hostBox!.y + hostBox!.height);
+    expect(Math.abs(gapStatusToHost - gapHostToLastActivity)).toBeLessThanOrEqual(4);
 
     await snap(page, testInfo, "connection-status-layout-rhythm");
   });
@@ -149,21 +149,21 @@ test.describe("Connection Status pop-up layout", () => {
 
     const statusBox = await popover.getByTestId("connection-status-row-status").boundingBox();
     const hostBox = await popover.getByTestId("connection-status-row-host").boundingBox();
-    const lastRequestBox = await popover.getByTestId("connection-status-row-last-request").boundingBox();
+    const lastActivityBox = await popover.getByTestId("connection-status-row-last-activity").boundingBox();
     const restBox = await popover.getByTestId("connection-diagnostics-row-rest").boundingBox();
 
     expect(statusBox).not.toBeNull();
     expect(hostBox).not.toBeNull();
-    expect(lastRequestBox).not.toBeNull();
+    expect(lastActivityBox).not.toBeNull();
     expect(restBox).not.toBeNull();
 
     // All rows must share the same left offset within 5px.
     expect(Math.abs(statusBox!.x - hostBox!.x)).toBeLessThanOrEqual(5);
-    expect(Math.abs(statusBox!.x - lastRequestBox!.x)).toBeLessThanOrEqual(5);
+    expect(Math.abs(statusBox!.x - lastActivityBox!.x)).toBeLessThanOrEqual(5);
     expect(Math.abs(statusBox!.x - restBox!.x)).toBeLessThanOrEqual(5);
   });
 
-  test("Last request uses strict numeric format: Xs ago for under 60s", async ({
+  test("Last activity uses strict numeric format: Xs ago for under 60s", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
@@ -178,7 +178,7 @@ test.describe("Connection Status pop-up layout", () => {
     await expect(popover).toBeVisible();
 
     // Must match numeric format; must NOT contain "just now" or "Communication".
-    await expect(popover).toContainText(/Last request:\s+(\d+s ago|\d+m \d+s ago|none yet|unknown)/i);
+    await expect(popover).toContainText(/Last activity:\s+(\d+s ago|\d+m \d+s ago|none yet|unknown)/i);
     await expect(popover).not.toContainText("just now");
     await expect(popover).not.toContainText("Communication");
   });
@@ -259,16 +259,16 @@ test.describe("Connection Status pop-up layout", () => {
 
     const statusBox = await popover.getByTestId("connection-status-row-status").boundingBox();
     const hostBox = await popover.getByTestId("connection-status-row-host").boundingBox();
-    const lastRequestBox = await popover.getByTestId("connection-status-row-last-request").boundingBox();
+    const lastActivityBox = await popover.getByTestId("connection-status-row-last-activity").boundingBox();
     const diagnosticsSectionBox = await popover.getByTestId("connection-diagnostics-section").boundingBox();
 
     expect(statusBox).not.toBeNull();
     expect(hostBox).not.toBeNull();
-    expect(lastRequestBox).not.toBeNull();
+    expect(lastActivityBox).not.toBeNull();
     expect(diagnosticsSectionBox).not.toBeNull();
 
     const intraGroupGap = hostBox!.y - (statusBox!.y + statusBox!.height);
-    const interGroupGap = diagnosticsSectionBox!.y - (lastRequestBox!.y + lastRequestBox!.height);
+    const interGroupGap = diagnosticsSectionBox!.y - (lastActivityBox!.y + lastActivityBox!.height);
 
     // Inter-group spacing must be strictly larger than intra-group spacing.
     expect(interGroupGap).toBeGreaterThan(intraGroupGap);

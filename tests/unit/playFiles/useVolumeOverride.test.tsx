@@ -195,6 +195,66 @@ describe("useVolumeOverride", () => {
     );
   });
 
+  it("continues sending preview writes during drag before commit when changes exceed the preview interval", async () => {
+    let nowMs = 1_000;
+    vi.spyOn(Date, "now").mockImplementation(() => nowMs);
+    audioMixerItemsRef.current = [
+      {
+        name: "SID 1",
+        value: "0",
+        options: ["0", "5", "10"],
+      },
+    ];
+    buildSidVolumeStepsMock.mockReturnValue([
+      { option: "0", label: "0", numeric: 0 },
+      { option: "5", label: "5", numeric: 5 },
+      { option: "10", label: "10", numeric: 10 },
+    ]);
+
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: false, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.volumeState.index).toBe(0);
+    });
+
+    act(() => {
+      result.current.handleVolumeLocalChange([1]);
+      result.current.handleVolumeAsyncChange(1);
+    });
+
+    await waitFor(() => {
+      expect(mutateAsyncMock).toHaveBeenCalledTimes(1);
+    });
+
+    nowMs += 250;
+
+    act(() => {
+      result.current.handleVolumeLocalChange([2]);
+      result.current.handleVolumeAsyncChange(2);
+    });
+
+    await waitFor(() => {
+      expect(mutateAsyncMock).toHaveBeenCalledTimes(2);
+    });
+
+    expect(mutateAsyncMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        category: "Audio Mixer",
+        updates: { "SID 1": "5" },
+      }),
+    );
+    expect(mutateAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        category: "Audio Mixer",
+        updates: { "SID 1": "10" },
+      }),
+    );
+  });
+
   it("short-circuits commits when the device already matches the requested index", async () => {
     audioMixerItemsRef.current = defaultMixerItems("5");
 

@@ -1,10 +1,10 @@
 ---
-description: Remediate issues from the latest production audit and create a new review
+description: Remediate the latest production audit findings while keeping remediation history and unresolved carry-forward items ready for the next review cycle.
 ---
 
 # Production Audit Remediation
 
-Remediate issues identified in the **most recent production audit** and record the remediation results in a **new review folder**.
+Remediate issues identified in the **most recent production audit**.
 
 Audit reports are stored under:
 
@@ -20,6 +20,10 @@ doc/research/review-5/
 doc/research/review-6/
 doc/research/review-7/
 
+The audit report itself must **never be modified**.
+
+All remediation results must be recorded in a separate remediation log and reflected in the carry-forward file.
+
 ---
 
 # Review Discovery
@@ -29,40 +33,43 @@ First determine the latest review.
 1. Enumerate folders matching `doc/research/review-*`.
 2. Extract the numeric suffix from each folder name.
 3. Determine the **highest numeric review number**.
-4. Treat this as the **source review**.
+4. Treat this folder as the **source review folder**.
 
-The source audit report is located at:
+Example:
+
+doc/research/review-7/
+
+The audit report is located at:
 
 doc/research/review-<highest>/review-<highest>.md
 
 ---
 
-# Create New Review Folder
+## Remediation Artifacts
 
-Create a new review folder representing the remediation pass.
+Do NOT create a new review folder.
 
-The new review number must be:
+Instead create or update the remediation log:
 
-highest + 1
+doc/research/review-<highest>/remediation-log.md
 
-Example:
+This file records **all fixes implemented after the audit**.
 
-latest review = review-7
-new review = review-8
+If the file already exists, append a new remediation entry.
 
-Create:
+Also create or update:
 
-doc/research/review-<highest+1>/
+doc/research/review-<highest>/carry-forward.md
 
-The remediation report must be written to:
-
-doc/research/review-<highest+1>/review-<highest+1>.md
+This file is the durable list of unresolved, blocked, deferred, and resolved items for the current review cycle.
 
 ---
 
-# Preparation
+## Preparation
 
 Read the source audit report.
+
+Read the existing `carry-forward.md` and `remediation-log.md` when present.
 
 Identify actionable items from the following sections:
 
@@ -77,11 +84,14 @@ Identify actionable items from the following sections:
 Extract concrete remediation tasks.
 
 Do not assume the audit is perfectly accurate.
-Confirm each finding against the repository before implementing fixes.
+
+Confirm each finding against the repository before implementing changes.
+
+If the carry-forward file already contains unresolved items, treat them as mandatory inputs even when they are not repeated verbatim in the latest chat request.
 
 ---
 
-# Fix Strategy
+## Fix Strategy
 
 For each confirmed issue:
 
@@ -98,7 +108,26 @@ Prefer minimal, well-scoped fixes.
 
 ---
 
-# Areas That May Require Fixes
+## Carry-Forward Rules
+
+`carry-forward.md` must survive every remediation pass.
+
+For every item attempted in this run:
+
+- keep its stable item ID when one already exists
+- update its status to `resolved`, `open`, `blocked`, or `deferred`
+- record concise evidence of the current state
+- record the next action when the item is not resolved
+
+If you discover a new issue while fixing an existing finding, add it to `carry-forward.md` instead of burying it in prose.
+
+Never remove an unresolved item without explicitly marking how it was closed or why it no longer applies.
+
+If all items are resolved, leave `carry-forward.md` in place and state that no open items remain.
+
+---
+
+## Areas That May Require Fixes
 
 Typical areas include:
 
@@ -115,23 +144,23 @@ Prioritize issues listed under **Required Fixes**.
 
 ---
 
-# Implementation Process
+## Implementation Process
 
 Execute remediation in this order:
 
 1. Determine the latest review folder.
-2. Create the next review folder.
-3. Parse the source review document.
-4. Build a remediation checklist.
-5. Implement fixes sequentially.
-6. Update tests where coverage is missing.
-7. Update documentation where necessary.
+2. Read the audit report.
+3. Extract remediation tasks from both the review report and any existing open carry-forward items.
+4. Implement fixes sequentially.
+5. Update tests where coverage is missing.
+6. Update documentation where necessary.
+7. Update `remediation-log.md` and `carry-forward.md` before finishing.
 
 If multiple issues affect the same subsystem, consolidate fixes coherently.
 
 ---
 
-# Documentation Updates
+## Documentation Updates
 
 If documentation drift is identified:
 
@@ -141,11 +170,11 @@ Update:
 - relevant files under `doc/`
 - in-app documentation pages where applicable
 
-Ensure documentation matches actual implementation.
+Ensure documentation matches the current implementation.
 
 ---
 
-# Testing Expectations
+## Testing Expectations
 
 When implementing fixes:
 
@@ -161,19 +190,28 @@ Example areas:
 
 ---
 
-# Output
+## Output
 
-Write a remediation report to:
+Append a remediation entry to:
 
-doc/research/review-<highest+1>/review-<highest+1>.md
+doc/research/review-<highest>/remediation-log.md
 
-Include:
+Each entry must contain:
 
-- Summary of issues addressed
+- Timestamp
+- Issues addressed
 - Fixes implemented
 - Files modified
 - Tests added or updated
 - Documentation changes
-- Remaining unresolved issues (if any)
+- Remaining unresolved issues
 
-The repository should be left in a **more production-ready state** than before remediation.
+Update `doc/research/review-<highest>/carry-forward.md` in the same run.
+
+Remaining unresolved issues must be clearly listed there so future remediation passes and the next review cycle can inherit them automatically.
+
+---
+
+## Goal
+
+The repository should be left in a **more production-ready state** than before remediation while maintaining a clear historical audit trail.

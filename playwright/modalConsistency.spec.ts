@@ -47,7 +47,7 @@ test.describe("Modal close-button consistency", () => {
     }
   });
 
-  test("Connection Status dialog content regression: has Last request with numeric format", async ({
+  test("Connection Status dialog content regression: has Last activity with numeric format", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
@@ -64,7 +64,7 @@ test.describe("Modal close-button consistency", () => {
     await expect(dialog).toBeVisible();
     // Ensures the time is shown in numeric format (e.g. "5s ago", "2m 3s ago") rather than
     // text like "just now" that was removed in a previous fix.
-    await expect(dialog).toContainText(/Last request:\s+(\d+s ago|\d+m \d+s ago|none yet|unknown)/i);
+    await expect(dialog).toContainText(/Last activity:\s+(\d+s ago|\d+m \d+s ago|none yet|unknown)/i);
     await expect(dialog).not.toContainText("just now");
     await expect(dialog).not.toContainText("Communication");
   });

@@ -60,7 +60,7 @@ export function ConnectivityIndicator({ className }: Props) {
       : lastAttemptSucceeded === false && lastSuccessAt !== null
         ? "Offline"
         : "Not yet connected";
-  const lastRequest = lastObservedRequestAt !== null ? formatRelative(lastObservedRequestAt) : "none yet";
+  const lastActivity = lastObservedRequestAt !== null ? formatRelative(lastObservedRequestAt) : "none yet";
 
   const label = isDemoMode ? "C64U Demo" : "C64U";
   const showRetryNow = status === "Offline" || status === "Not yet connected";
@@ -175,8 +175,8 @@ export function ConnectivityIndicator({ className }: Props) {
                 {hostError}
               </p>
             ) : null}
-            <p data-testid="connection-status-row-last-request" className="min-h-5">
-              <span className="font-medium">Last request:</span> {lastRequest}
+            <p data-testid="connection-status-row-last-activity" className="min-h-5">
+              <span className="font-medium">Last activity:</span> {lastActivity}
             </p>
           </div>
           <div className="space-y-1 text-sm" data-testid="connection-diagnostics-section">

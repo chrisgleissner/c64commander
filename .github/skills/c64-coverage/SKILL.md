@@ -1,9 +1,9 @@
----
 name: c64-coverage
-description: Raise Codecov-reported test coverage for C64 Commander to a defined target without duplicating tests or degrading signal quality.
+description: Use when raising C64 Commander test coverage to a defined target without duplicating tests, weakening assertions, or degrading signal quality.
 argument-hint: target-percentage
-user-invokable: true
+user-invocable: true
 disable-model-invocation: true
+
 ---
 
 # Skill: C64 Coverage Hardening
@@ -18,12 +18,14 @@ Coverage must be meaningful, non-duplicative, and aligned with the project’s A
 
 ## Preconditions
 
-- Working tree is clean.
+- Record the current changed-file baseline and avoid unrelated edits.
 - CI pipeline is functional.
 - Coverage is reported to Codecov.
 - Tests can be executed locally.
 
-If any precondition fails, stop and report.
+If Codecov data is unavailable, continue with local coverage evidence and report that limitation.
+
+If any required local validation cannot run, stop and report.
 
 ---
 
@@ -88,4 +90,4 @@ Rules:
 - Coverage ≥ target.
 - All tests pass.
 - No duplicate or artificial coverage patterns introduced.
-- Clean working tree.
+- Unrelated worktree changes remain untouched.
