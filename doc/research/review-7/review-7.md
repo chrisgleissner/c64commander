@@ -2,195 +2,272 @@
 
 ## Executive Summary
 
-This review found that C64 Commander has a materially stronger production posture than a typical multi-runtime hobby application. The repository shows deliberate investment in CI, screenshots, E2E coverage, diagnostics, auxiliary test systems, and platform-specific validation. The broad conclusion is:
+The repository shows a deliberate production-hardening posture across runtime code, diagnostics, CI, and test breadth. The strongest evidence is in the guarded REST lane in `src/lib/deviceInteraction/deviceInteractionManager.ts`, the structured trace/log/export stack under `src/lib/tracing/` and `src/lib/diagnostics/`, and the Android workflow’s merged coverage and evidence gates in `.github/workflows/android.yaml`.
 
-- Web and Android surfaces are close to production-ready and, based on current evidence, can be treated as operationally credible release targets.
-- iOS is materially less mature and should not be represented as equally production-ready without qualification.
-- The most concrete code-level issue identified in this pass is a silent catch in `web/server/src/staticAssets.ts` that violates repository exception-handling rules and should be fixed before claiming full hardening compliance.
+The audit did not find a single blocking architecture flaw in the shared TypeScript runtime. The most important issues are seam and governance issues:
 
-The key non-blocking concerns are mostly about observability clarity rather than obvious correctness failures: slider propagation semantics need a dedicated regression guard, and connection freshness/status wording can mislead operators during quiet but healthy sessions.
+- Slider propagation during drag exists and is intentional, but the repository still lacks a narrow regression proof that the full stack continues emitting downstream device updates while the drag is in progress.
+- Connection freshness is surfaced with misleading wording. `src/components/ConnectivityIndicator.tsx` combines probe activity and device request activity, then labels the result `Last request`, while `src/components/ConnectionController.tsx` only schedules background rediscovery when the app is in demo or offline states.
+- Coverage enforcement is inconsistent across repo surfaces. CI and `scripts/check-coverage-threshold.mjs` enforce 91% line and branch coverage, but `doc/code-coverage.md` still documents 90%, and the local `./build --coverage` path still invokes the threshold script with `COVERAGE_MIN=90`.
+- Android and web are materially better hardened than iOS. iOS has active CI and native validation, but its FTP bridge surface is thinner, less observable, and less directly tested than Android.
 
-## Scope
-
-This audit covered:
-
-- Repository inventory and subsystem grouping
-- Documentation consistency across `README.md`, `doc/**`, `docs/**`, and in-app docs
-- App/runtime architecture and route topology
-- Runtime interaction questions raised by maintainers, especially slider propagation and connection freshness
-- CI workflow posture, coverage enforcement, screenshots, and E2E validation
-- Web server/session hardening
-- Android/iOS platform posture
-- Test breadth across app, Playwright, Maestro, agents, and c64scope
-
-This review respected the user-requested non-goals:
-
-- HTTP/FTP usage itself was not flagged as a defect
-- rollout strategy was not treated as a defect area
-- GitHub Actions hash pinning was not treated as a finding
-- already-resolved Review 6 items were not re-raised as new defects
-
-Note on plan tracking:
-
-- During this audit, `PLANS.md` was concurrently replaced with unrelated implementation work. That file was preserved instead of being overwritten again. Review-7 progress is therefore reflected primarily in the generated artifacts under `doc/research/review-7/artifacts/`.
-
-## Repository Inventory
-
-The repository is not a single web application. It is a multi-runtime suite with the following major surfaces:
-
-- `src/`: React + Vite application
-- `web/server/`: self-hosted web runtime and auth/session surface
-- `android/`: native Android packaging and plugin layer
-- `ios/`: native iOS packaging and native validation surface
-- `playwright/`, `.maestro/`, `tests/`: browser and mobile validation layers
-- `agents/`: Python agent/test subsystem
-- `c64scope/`: MCP-based hardware evidence and validation subsystem
-
-The inventory and subsystem counts are documented in `artifacts/repo-inventory.md`.
+Based on current repository evidence, Android and self-hosted web appear conditionally production-ready for trusted-LAN deployment. Uniform all-platform production readiness is not yet demonstrated.
 
 ## Architecture Analysis
 
-The architecture is coherent and intentionally partitioned. Major user-facing flows are route-driven and lazy-loaded from `src/App.tsx`, with separate feature pages for Home, Play Files, Disks, Settings, Docs, and supporting flows. The repository also treats diagnostics, testing, and operator documentation as first-class surfaces rather than incidental support material.
+The runtime is a shared React 18 + Vite + Capacitor application with route-level lazy loading in `src/App.tsx` and deferred bootstrap work in `src/main.tsx`. Major state and control planes are separated as follows:
 
-The main architectural risk is not disorder. It is seam complexity. Shared TypeScript modules influence:
+- UI and routing: `src/pages/`, `src/components/`, `src/App.tsx`
+- Query-backed device data: `src/hooks/useC64Connection.ts` and related hooks
+- Device transport: `src/lib/c64api.ts`, `src/lib/deviceInteraction/`, `src/lib/ftp/`, `src/lib/native/`
+- Connection lifecycle: `src/lib/connection/connectionManager.ts`, `src/components/ConnectionController.tsx`
+- Diagnostics and tracing: `src/lib/logging.ts`, `src/lib/tracing/`, `src/lib/diagnostics/`
+- Native integration: `android/app/src/main/java/uk/gleissner/c64commander/`, `ios/App/App/`
+- Web deployment runtime: `web/server/src/`
 
-- browser UX
-- Node web-server behavior
-- Android/iOS packaging assumptions
-- Playwright evidence capture
-- Maestro mobile flows
-- c64scope and agent tooling
+State ownership is mostly explicit:
 
-That means regressions are more likely to occur at runtime boundaries than within isolated leaf components.
+- Connection lifecycle state lives in `src/lib/connection/connectionManager.ts` and is consumed through `useConnectionState` and `useC64Connection`.
+- Device-request state lives in `src/lib/deviceInteraction/deviceStateStore.ts`.
+- Diagnostics buffers live locally in logs and trace session stores and are projected into action summaries.
+- Playback state and volume override behavior are layered in `src/pages/playFiles/` hooks and reducers rather than mixed into the core transport code.
+
+The main architectural risk is not lack of structure. It is the number of runtime boundaries: browser, web-server proxy, Android native plugins, iOS native plugins, Playwright probes, Maestro flows, Python agents, and c64scope all depend on overlapping contracts.
+
+Critical dependency sketch:
+
+- App startup and route availability depend on `src/main.tsx`, `src/App.tsx`, `src/components/ConnectionController.tsx`
+- Live device control depends on `src/lib/c64api.ts`, `src/lib/deviceInteraction/deviceInteractionManager.ts`, `src/lib/connection/connectionManager.ts`
+- Diagnostics credibility depends on `src/lib/tracing/traceSession.ts`, `src/lib/diagnostics/actionSummaries.ts`, `src/lib/diagnostics/diagnosticsExport.ts`
+- Web deployment depends on `web/server/src/index.ts`, `web/server/src/staticAssets.ts`, `web/server/src/hostValidation.ts`
 
 ## Subsystem Deep Dives
 
-### Runtime interaction model
+### UI Event Propagation
 
-The maintainer question about slider propagation was investigated directly. The evidence in `src/components/ui/slider.tsx` and `src/lib/ui/sliderBehavior.ts` shows that slider updates are already propagated continuously during drag through a coalesced async queue. The queue defaults to 120 ms throttling, and downstream write serialization can add further delay. The concern is therefore not that sliders are release-only; the concern is that downstream pacing can still create perceived lag.
+The maintainer signal about slider propagation is supported by code evidence. The UI slider wrapper and slider behavior utilities expose continuous drag handling, not release-only handling:
 
-### Connection liveness and freshness
+- `src/components/ui/slider.tsx` exposes `onValueChange`, `onValueChangeAsync`, and commit callbacks.
+- `src/lib/ui/sliderBehavior.ts` provides the throttled async queue used during movement.
+- `src/lib/ui/sliderDeviceAdapter.ts` updates local UI synchronously and coalesces device writes via microtask scheduling.
+- `src/pages/playFiles/hooks/useVolumeOverride.ts` and `src/pages/playFiles/components/VolumeControls.tsx` add higher-level preview and commit semantics for playback volume.
 
-The connection manager records probe timestamps correctly, and the device state store records request timestamps correctly. The operator-facing issue is that the connectivity indicator merges these timestamp domains and labels the result as `Last request`, even though it is really a last-observed-activity value. In addition, background rediscovery is scheduled only while in demo or offline states, not during quiet real-device sessions. Large freshness values are therefore expected under the current design and can look worse than they are.
+This means the drag pipeline is intentionally incremental. The remaining risk is proof, not implementation intent. The existing tests cover slider utilities and volume behavior, but the repository still lacks a deterministic test that asserts repeated downstream device writes occur before pointer release after all pacing layers are applied.
 
-### Web server
+### Device Communication
 
-The web server posture is strong in several areas: session token generation is server-side and random, cookies are hardened with `HttpOnly` and `SameSite=Lax`, and login failure tracking exists. The main hardening defect found in this pass is a silent catch in static asset path decoding that returns a 400 response without logging or enriching the exception.
+REST communication is comparatively mature:
 
-### Android and iOS
+- `src/lib/c64api.ts` centralizes base URL, password, request IDs, timeouts, retryable SID upload handling, read dedupe, and malformed-response handling.
+- `src/lib/deviceInteraction/deviceInteractionManager.ts` serializes REST writes through a single lane, applies cooldowns for machine control and config mutation, maintains cache and circuit-breaker state, and records device-guard trace events.
+- `src/lib/query/c64PollingGovernance.ts` centralizes minimum refresh pacing and background rediscovery backoff.
 
-Android appears materially more release-ready than iOS based on current evidence. Android has stronger CI gating and stronger native testing posture. iOS does have active CI and Swift native-test infrastructure, but the repository's own parity documentation still records meaningful readiness gaps, and the overall release posture is clearly weaker than Android.
+FTP handling is platform-dependent:
+
+- Web: `src/lib/native/ftpClient.web.ts` uses a 5-second request timeout and up to 3 retry attempts against the web bridge.
+- Android: `android/app/src/main/java/uk/gleissner/c64commander/FtpClientPlugin.kt` runs on a single-thread executor, but it does apply connect, socket, and data timeouts and logs failures.
+- iOS: `ios/App/App/IOSFtp.swift` uses a serial queue and an internal 30-second deadline in its stream loops.
+
+The cross-platform contract is uneven. `src/lib/native/ftpClient.ts` defines `timeoutMs` and `traceContext` options, Android consumes timeout information and trace context, but the iOS bridge ignores both request-level timeout configuration and trace context input. That is a real platform drift risk for observability and tuning.
+
+Write consistency is guarded better on REST than on FTP. REST writes are single-lane and invalidation-aware. FTP operations are per-platform and do not share the same central guardrail layer.
+
+### Connection Liveness
+
+Connection lifecycle handling is explicit and understandable:
+
+- `src/lib/connection/connectionManager.ts` owns the connection state machine and distinguishes startup, manual, settings-triggered, and background discovery.
+- `src/components/ConnectionController.tsx` schedules background rediscovery only when the state is `DEMO_ACTIVE` or `OFFLINE_NO_DEMO`.
+- `src/hooks/useC64Connection.ts` only fetches `/v1/info` while connected or in demo mode and rate-limits forced refreshes.
+
+The liveness signal is therefore asymmetric:
+
+- On startup/manual/settings changes, the app actively probes until it decides real, demo, or offline.
+- Once a real device is connected, there is no standing background probe loop to keep a freshness clock current.
+
+That matters because `src/components/ConnectivityIndicator.tsx` computes `lastObservedRequestAt` from both `deviceState.lastRequestAtMs` and `snapshot.lastProbeAtMs`, then labels it `Last request`. The value is not strictly a last request, and quiet but healthy connected sessions will naturally show old timestamps because background probing stops in that state.
+
+The code is internally consistent, but the UI wording is misleading for operators.
+
+### Diagnostics and Tracing
+
+Diagnostics are one of the strongest subsystems in the repository:
+
+- `src/lib/tracing/traceSession.ts` defines append-only trace storage and event capture.
+- `doc/diagnostics/tracing-spec.md` is specific and aligned with the implementation goals.
+- `src/lib/diagnostics/actionSummaries.ts` projects traces into operator-facing summaries instead of treating summaries as the source of truth.
+- `src/lib/diagnostics/diagnosticsExport.ts` exports zipped JSON payloads by tab or as a combined bundle.
+- `src/lib/diagnostics/webServerLogs.ts` polls web-server logs into the app every 5 seconds.
+
+Diagnostics remain usable in degraded device/network situations because they are stored and exported locally from app-side state. The main gap is not exportability; it is semantic precision in what the connection UI claims about freshness.
+
+### Platform Integrations
+
+Platform integration coverage is uneven but transparent:
+
+- Android has multiple plugin tests under `android/app/src/test/java/uk/gleissner/c64commander/`, including `FtpClientPluginTest.kt`, diagnostics bridge tests, secure storage tests, and background execution tests.
+- iOS native validation exists under `ios/native-tests/`, but the tests cover host validation, path sanitization, and FTP path resolution rather than the live `FtpClientPlugin` behavior in `ios/App/App/IOSFtp.swift`.
+- The web server enforces host validation and session handling in `web/server/src/index.ts` and `web/server/src/hostValidation.ts`.
+
+The biggest platform-specific production risk is therefore not Android. It is iOS parity around FTP behavior, tuning, and observability.
 
 ## Documentation Consistency Audit
 
-Documentation quality is above average, but drift is real. The external docs, internal docs, and in-app docs broadly align in structure, yet Review 7 found contradictions and omissions including:
+The canonical docs are generally useful and current, especially `README.md`, `doc/architecture.md`, `doc/developer.md`, `doc/c64/c64u-rest-api.md`, and `doc/c64/c64u-ftp.md`. The following consistency issues were verified:
 
-- feature references that are documented but not fully reflected in in-app docs
-- coverage/gating explanations that have drifted from current implementation
-- duplicated operator guidance across doc surfaces that is prone to divergence
+1. Coverage thresholds are documented inconsistently.
+	- `doc/code-coverage.md` still states 90% line and branch enforcement.
+	- `doc/developer.md`, `.github/workflows/android.yaml`, `scripts/check-coverage-threshold.mjs`, and `scripts/collect-coverage.sh` enforce or document 91%.
+	- The local `build` helper still runs coverage enforcement with `COVERAGE_MIN=90`.
 
-The complete cross-map is in `artifacts/documentation-crossmap.md`.
+2. Trusted-LAN and insecure-transport assumptions are documented consistently.
+	- `README.md` explicitly states that REST remains HTTP and file operations remain plain FTP because of firmware behavior.
+	- `README.md` also correctly warns against exposing the web deployment directly to the public internet.
+
+3. Platform rollout language is mostly aligned, but parity should not be overstated.
+	- `README.md` clearly scopes iOS to SideStore/sideload distribution.
+	- The repo evidence still shows Android receiving stronger native test coverage and stronger operational gates.
+
+4. Historical research documents remain present and useful, but they contain stale threshold values and prior-state conclusions.
+	- This is acceptable as history, but it increases the need to keep canonical docs precise.
+
+The most concrete documentation fix is to reconcile the 90/91 coverage story across `doc/code-coverage.md`, `build`, and any related prompts or helper docs.
 
 ## Test Coverage Evaluation
 
-The test posture is strong and unusually broad. The repository includes:
+The repository has unusually broad test coverage for its size and runtime count.
 
-- Vitest browser and node projects
-- Playwright E2E and screenshot coverage
-- Maestro mobile flows
-- Android native tests
-- iOS Swift native validation tests
-- agent tests with their own branch coverage floor
-- c64scope tests with their own hard thresholds
+Observed suites include:
 
-The important limitation is specificity. High aggregate coverage does not by itself prove the exact edge conditions that prompted this audit. Review 7 did not find direct regression proof for:
+- 247 `tests/**/*.test.ts` files surfaced from the workspace search, covering connection, c64api, device interaction, tracing, diagnostics, HVSC, startup, web server, and more.
+- 34 in-source `.test.ts` files and 5 in-source `.test.tsx` files.
+- 41 Playwright specs under `playwright/`.
+- 16 Android JVM test files under `android/app/src/test/java/uk/gleissner/c64commander/`.
+- 3 iOS native validation test files under `ios/native-tests/Tests/NativeValidationTests/`.
+- 9 Python agent tests under `agents/tests/`.
 
-- repeated slider-to-device writes during drag before release
-- intended freshness semantics for long quiet connected sessions
+High-risk flows with explicit regression evidence:
 
-Those should be added as narrow deterministic regression tests.
+- Connection state machine: `tests/unit/connection/connectionManager.test.ts`
+- Hook-level connection behavior: `tests/unit/hooks/useC64Connection.test.ts`
+- REST API client behavior: `tests/unit/c64api.test.ts`, `tests/unit/c64api.branches.test.ts`, `tests/unit/c64apiSidUpload.test.ts`
+- Device interaction scheduling and circuit behavior: `tests/unit/lib/deviceInteraction/deviceInteractionManager.test.ts`
+- Slider and pacing primitives: `tests/unit/ui/sliderDeviceAdapter.test.ts`, `tests/unit/lib/ui/sliderBehavior.test.ts`, `src/components/ui/slider.test.tsx`
+- Playback/volume flows: `playwright/audioMixer.spec.ts`, `playwright/playback.spec.ts`, `playwright/playback.part2.spec.ts`
+- Diagnostics export and summaries: `tests/unit/lib/diagnostics/diagnosticsExport.test.ts`, `tests/unit/diagnostics/actionSummariesGolden.test.ts`, `playwright/homeDiagnosticsOverlay.spec.ts`
+- Web server behavior: `tests/unit/web/webServer.test.ts`
+
+Blind spots that still matter:
+
+1. No narrow regression asserts that a drag gesture continues to produce downstream device writes before commit across the full pacing stack.
+2. No narrow regression locks in the intended meaning of connection freshness during long-idle but healthy real-device sessions.
+3. iOS FTP plugin behavior is not covered by equivalent native tests, despite Android having direct plugin tests.
+
+Coverage enforcement posture is strong but inconsistent:
+
+- CI and the threshold script enforce 91% lines and 91% branches.
+- `scripts/collect-coverage.sh` uses 91/91.
+- The local `build` helper still uses 90 for coverage mode.
+
+That inconsistency weakens confidence in local reproduction of CI outcomes.
 
 ## CI/CD Evaluation
 
-CI is materially stronger than average for a repository of this size. It includes:
+CI/CD is materially stronger than average and covers the major surfaces:
 
-- multi-arch web container build/test flows
-- Docker smoke checks with health endpoints
-- screenshot regeneration
-- sharded Playwright E2E
-- compliance/notices drift checks
-- coverage-build reuse across downstream jobs
-- c64scope and auxiliary coverage enforcement
+- `.github/workflows/android.yaml` runs notice drift checks, unit coverage, screenshot generation, sharded Playwright runs, merged LCOV verification, 91% coverage enforcement, Android tests, and artifact uploads.
+- `.github/workflows/web.yaml` builds and tests multi-arch Docker images, runs health checks, runs a focused web-platform Playwright auth test, and publishes GHCR images on tags.
+- `.github/workflows/ios.yaml` builds the prepared iOS workspace, runs Swift native tests, exports Swift lcov, and supports a rollout-stage model where iOS jobs are informative by default and become blocking later.
+- `.github/workflows/fuzz.yaml` runs scheduled and manual fuzz jobs with telemetry capture.
 
-The main CI weakness is not lack of automation. It is distributed gate ownership. Important web-facing gates live across multiple workflows, and iOS remains less authoritative than Android in release gating.
+Strengths:
+
+- Playwright evidence validation is explicit.
+- Coverage artifacts are merged and verified before threshold enforcement.
+- Web Docker smoke tests include health endpoint validation.
+- Release tag format and package version alignment are enforced in web publish.
+
+Weaknesses:
+
+1. Coverage threshold governance is split between CI, scripts, docs, and the local build helper, and they do not currently agree.
+2. iOS gating is intentionally softer than Android because rollout stage A is informative by default.
+3. No dedicated repository-local workflow was found for dependency vulnerability scanning or secret scanning.
 
 ## Security Evaluation
 
-Within the user-requested audit boundaries, no immediate high-severity web-session design defect was found. The most meaningful positive signals were:
+Security posture is appropriate for the documented trusted-LAN model, with important limitations that are mostly explicit.
 
-- cryptographically random session tokens
-- hardened auth-cookie flags
-- login failure blocking
-- explicit host validation and header policy in the web runtime
+Positive controls confirmed in code:
 
-The one code-level hardening defect found in this pass is the silent catch in `web/server/src/staticAssets.ts`.
+- Native password storage goes through `src/lib/secureStorage.ts` and platform secure-storage plugins; local storage only keeps a presence flag.
+- The web runtime uses authenticated sessions and login throttling in `web/server/src/index.ts`.
+- `web/server/src/hostValidation.ts` rejects malformed hosts and constrains insecure-trust logic to local/private/trusted hosts by default.
+- The README clearly warns that the product follows the firmware’s HTTP and plain-FTP model and should not be exposed directly to the public internet.
+
+Material risks confirmed in code:
+
+1. Web deployment persists the network password in `/config/web-config.json` through `web/server/src/index.ts`. This is convenient and documented, but it is still plaintext secret-at-rest in the mounted config volume.
+2. The product does not add transport-layer encryption over the firmware’s REST and FTP protocols. This is documented and acceptable only within the trusted-LAN boundary.
+3. The optional secure-cookie flag on web sessions depends on environment (`WEB_COOKIE_SECURE` or production mode), so reverse-proxy deployment discipline matters.
+
+No silent-exception defect was found in the current `web/server/src/staticAssets.ts`; non-`ENOENT` failures are logged before returning a 500.
 
 ## Production Risk Assessment
 
-### Highest-risk findings
+| Risk | Evidence | Severity | Likelihood | Detectability | Assessment |
+| --- | --- | --- | --- | --- | --- |
+| Connection freshness wording is misleading | `src/components/ConnectivityIndicator.tsx`, `src/components/ConnectionController.tsx` | Medium | High | Medium | Quiet healthy sessions can look stale because the UI label and sampling model do not match. |
+| Coverage governance is inconsistent | `doc/code-coverage.md`, `doc/developer.md`, `scripts/check-coverage-threshold.mjs`, `build`, `.github/workflows/android.yaml` | Medium | High | High | Local reproduction can disagree with CI because thresholds are not uniformly configured. |
+| Slider drag semantics lack end-to-end regression proof | `src/lib/ui/sliderBehavior.ts`, `src/lib/ui/sliderDeviceAdapter.ts`, `src/pages/playFiles/hooks/useVolumeOverride.ts`, current tests | Medium | Medium | Medium | The implementation exists, but a future pacing change could regress it without a focused test. |
+| iOS FTP bridge parity is weaker than Android | `ios/App/App/IOSFtp.swift`, Android plugin tests, iOS native-tests inventory | Medium | Medium | Medium | iOS ignores timeout/trace options from the shared contract and lacks equivalent direct plugin tests. |
+| Web password is stored plaintext in config volume | `web/server/src/index.ts`, `README.md` | Medium | Medium | High | Acceptable only when the trusted-LAN and host-disk assumptions are enforced operationally. |
 
-1. `web/server/src/staticAssets.ts` contains a silent catch that violates the repository's own exception-handling rule.
-2. Connection freshness/status wording can mislead operators, especially during quiet healthy sessions.
-3. iOS should not be treated as equally production-ready with Android.
+Single points of failure worth noting:
 
-### Medium-risk findings
+- `src/lib/c64api.ts` and `src/lib/deviceInteraction/deviceInteractionManager.ts` are central to almost every live-device flow.
+- `src/lib/connection/connectionManager.ts` is the single authority for demo/real/offline selection.
+- `web/server/src/index.ts` is the single deployment gateway for the self-hosted web product.
 
-1. Slider behavior is continuous at the UI layer, but downstream pacing still lacks end-to-end regression proof.
-2. Documentation drift is meaningful enough to create operator or contributor confusion.
-3. Cross-runtime seam complexity remains a real source of production risk.
+## Required Fixes
 
-### Low-risk findings
+1. Align coverage enforcement everywhere.
+	- Update `doc/code-coverage.md` to 91%.
+	- Update `build` coverage mode to use the same 91/91 gate as CI and `scripts/check-coverage-threshold.mjs`.
 
-1. Aggregate coverage enforcement is strong.
-2. CI breadth is strong.
-3. Auxiliary subsystems such as agents and c64scope show solid quality posture.
+2. Fix connection freshness signaling.
+	- Either rename `Last request` to reflect last observed activity, or split it into separate probe and request freshness fields.
+	- If real-device freshness is intended to be an active health signal, add a real-connected background probe policy instead of relying on demo/offline-only rediscovery.
 
-## Required Fixes Before Production
+3. Add deterministic regression coverage for slider drag propagation.
+	- Add a focused test that proves downstream device updates continue during drag before `onValueCommit`.
 
-### 1. Fix the silent catch in `web/server/src/staticAssets.ts`
+4. Bring iOS FTP behavior closer to the shared contract.
+	- Either honor `timeoutMs` and `traceContext` on iOS or narrow the shared interface so the contract matches reality.
+	- Add direct native tests for the iOS FTP plugin behavior.
 
-Current behavior returns a client error but discards the exception context. This should be logged or rethrown with context to comply with repository hardening rules.
+## Recommendations
 
-### 2. Make release statements platform-qualified
+Immediate:
 
-It is acceptable to treat Android/web as production-capable based on current evidence. It is not accurate to state the entire repository is uniformly production-ready across all platforms without qualification, because iOS remains a weaker readiness surface.
+1. Reconcile the 90/91 coverage mismatch across docs, scripts, and the local build helper.
+2. Correct the connection status wording and decide whether quiet connected sessions should continue to receive background probe freshness.
+3. Add one regression test for drag-time slider propagation and one for quiet-session freshness semantics.
 
-## Recommended Improvements
+Short-term:
 
-1. Rename or split the connectivity freshness display so it distinguishes request freshness from probe freshness.
-2. Add a deterministic regression test for repeated slider writes during drag.
-3. Add a deterministic regression test for long-idle connection freshness semantics.
-4. Continue reducing duplication and drift across external docs and in-app docs.
-5. Continue raising iOS maturity toward Android rather than presenting current parity.
+1. Add direct iOS FTP plugin tests comparable to `FtpClientPluginTest.kt` on Android.
+2. Add explicit documentation for the secret-at-rest implications of `/config/web-config.json` in web deployments.
+3. Consider adding a repo-local dependency/security scanning workflow if that gate is expected for production claims.
 
-## Final Production Readiness Verdict
+Longer-term:
 
-### Repository-level verdict
+1. Continue converging platform behavior so timeout, trace, and diagnostics contracts are identical across Android, iOS, and web.
+2. Keep canonical docs limited and current, with historical threshold values clearly isolated in research artifacts.
 
-Conditionally ready for production, with platform qualification.
+## Final Verdict
 
-### Web verdict
+The repository is substantially hardened and demonstrably more production-oriented than a typical multi-runtime side project. Android and self-hosted web are the strongest surfaces and can reasonably be treated as conditionally production-ready for trusted-LAN deployment.
 
-Near-ready, with one small but concrete hardening fix required in static asset exception handling.
+The remaining blockers are not fundamental architecture defects. They are hardening gaps at the seams: connection freshness semantics, coverage-governance drift, missing drag-time slider regression proof, and iOS parity on FTP behavior and testing.
 
-### Android verdict
-
-Production-ready based on current evidence and substantially stronger than the other runtime surfaces.
-
-### iOS verdict
-
-Not equivalently production-ready. iOS should be treated as a weaker release surface until its remaining maturity gaps are explicitly closed.
-
-### Bottom line
-
-If the silent catch in the web server is fixed and release messaging remains platform-qualified, Review 7 supports shipping the stronger repository surfaces. The evidence does not support claiming uniform all-platform production readiness without qualification.
+Final verdict: conditionally ready for production on Android and trusted-LAN web deployments after the required fixes above are addressed. A uniform all-platform production-ready claim is not yet supported by the current repository evidence.
