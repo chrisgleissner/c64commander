@@ -918,6 +918,38 @@ describe("connectionManager", () => {
     expect(getConnectionSnapshot().demoInterstitialVisible).toBe(false);
   });
 
+  it("keeps demo active after the user explicitly pins demo mode before background rediscovery succeeds", async () => {
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager, pinDemoModeByUserChoice } =
+      await import("../../../src/lib/connection/connectionManager");
+
+    localStorage.setItem("c64u_device_host", "127.0.0.1:9999");
+    localStorage.removeItem("c64u_has_password");
+
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
+
+    await initializeConnectionManager();
+    void discoverConnection("startup");
+    await vi.advanceTimersByTimeAsync(800);
+    expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
+
+    pinDemoModeByUserChoice();
+    expect(getConnectionSnapshot().demoInterstitialVisible).toBe(false);
+
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ product: "C64 Ultimate", errors: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    await discoverConnection("background");
+    await vi.advanceTimersByTimeAsync(50);
+
+    expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
+    expect(getConnectionSnapshot().demoInterstitialVisible).toBe(false);
+  });
+
   it("normalizeUrl returns original value when given an invalid URL", async () => {
     const addLogSpy = vi.spyOn(logging, "addLog");
     const { probeOnce } = await import("../../../src/lib/connection/connectionManager");
@@ -1307,5 +1339,52 @@ describe("connectionManager", () => {
     // controller=null (timeoutMs=0), outerSignal is set → covers
     // `controller ? {...} : outerSignal ? { signal: outerSignal } : {}` TRUE for outerSignal (line 133)
     await expect(probeOnce({ timeoutMs: 0, signal: outerAbort.signal })).resolves.toBe(true);
+  });
+
+  it("test-probe mode avoids starting the demo server when no mock override is present", async () => {
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager, isRealDeviceStickyLockEnabled } =
+      await import("../../../src/lib/connection/connectionManager");
+
+    localStorage.setItem("c64u_device_host", "127.0.0.1:9999");
+    localStorage.removeItem("c64u_has_password");
+    (window as Window & { __c64uTestProbeEnabled?: boolean; __c64uExpectedBaseUrl?: string }).__c64uTestProbeEnabled =
+      true;
+    (window as Window & { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl = "http://127.0.0.1:9999/";
+
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ product: "C64 Ultimate", errors: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    await initializeConnectionManager();
+    void discoverConnection("startup");
+    await vi.advanceTimersByTimeAsync(800);
+
+    expect(startMockServer).not.toHaveBeenCalled();
+    expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
+    expect(isRealDeviceStickyLockEnabled()).toBe(false);
+
+    delete (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled;
+    delete (window as Window & { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl;
+  });
+
+  it("pinDemoModeByUserChoice tolerates a missing sessionStorage object", async () => {
+    const originalSessionStorage = globalThis.sessionStorage;
+    // @ts-expect-error intentionally removing browser storage for branch coverage
+    delete globalThis.sessionStorage;
+
+    const { getConnectionSnapshot, pinDemoModeByUserChoice } =
+      await import("../../../src/lib/connection/connectionManager");
+
+    expect(() => pinDemoModeByUserChoice()).not.toThrow();
+    expect(getConnectionSnapshot().demoInterstitialVisible).toBe(false);
+
+    Object.defineProperty(globalThis, "sessionStorage", {
+      value: originalSessionStorage,
+      configurable: true,
+      writable: true,
+    });
   });
 });

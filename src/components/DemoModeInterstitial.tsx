@@ -19,7 +19,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useConnectionState } from "@/hooks/useConnectionState";
-import { dismissDemoInterstitial, discoverConnection } from "@/lib/connection/connectionManager";
+import {
+  dismissDemoInterstitial,
+  discoverConnection,
+  pinDemoModeByUserChoice,
+} from "@/lib/connection/connectionManager";
 import { resolveDeviceHostFromStorage } from "@/lib/c64api";
 import { saveConfiguredHostAndRetry } from "@/lib/connection/hostEdit";
 
@@ -105,7 +109,7 @@ export function DemoModeInterstitial() {
             <Button
               variant="default"
               onClick={() => {
-                dismissDemoInterstitial();
+                pinDemoModeByUserChoice();
               }}
             >
               Continue in Demo Mode

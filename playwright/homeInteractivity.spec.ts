@@ -284,6 +284,47 @@ test.describe("Home interactions", () => {
     expect(afterPath).toBe(beforePath);
   });
 
+  test("lighting summaries use updated labels and control order", async ({ page }: { page: Page }) => {
+    await page.goto("/");
+    await waitForConnected(page);
+
+    await expect(page.getByTestId("home-lighting-group")).toContainText("LED LIGHTING");
+
+    const caseLight = page.getByTestId("home-led-summary");
+    const caseLightLabels = await caseLight.locator(".text-muted-foreground").allTextContents();
+    expect(caseLightLabels).toEqual(["Mode", "Pattern", "Color", "Brightness", "Tint", "SID Select"]);
+
+    const keyboardLight = page.getByTestId("home-keyboard-lighting-summary");
+    const keyboardLightLabels = await keyboardLight.locator(".text-muted-foreground").allTextContents();
+    expect(keyboardLightLabels).toEqual(["Mode", "Pattern", "Color", "Brightness", "Tint", "SID Select"]);
+
+    await expect(page.getByTestId("home-led-pattern")).toHaveText(/Single Color/);
+    await expect(page.getByTestId("home-keyboard-lighting-pattern")).toHaveText(/Single Color/);
+  });
+
+  test("lighting pattern keeps the user-facing label while sending the raw API value", async ({ page }: { page: Page }) => {
+    await page.goto("/");
+    await waitForConnected(page);
+
+    await page.getByTestId("home-led-pattern").click();
+    await page.getByRole("option", { name: /^Outward$/ }).click();
+
+    await page.getByTestId("home-led-pattern").click();
+    await page.getByRole("option", { name: /^Single Color$/ }).click();
+
+    await expect(page.getByTestId("home-led-pattern")).toHaveText(/Single Color/);
+    await expect
+      .poll(() =>
+        hasRequest(
+          server.requests,
+          (req) =>
+            req.method === "PUT" &&
+            req.url.includes("/v1/configs/LED%20Strip%20Settings/LedStrip%20Pattern?value=SingleColor"),
+        ),
+      )
+      .toBe(true);
+  });
+
   test("stateless actions clear focus after click", async ({ page }: { page: Page }) => {
     await page.goto("/");
     await waitForConnected(page);

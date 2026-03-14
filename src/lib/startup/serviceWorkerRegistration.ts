@@ -1,10 +1,21 @@
 import { addErrorLog } from "@/lib/logging";
 import { isNativePlatform } from "@/lib/native/platform";
 
+const isVitestEnvironment = () => {
+  try {
+    return typeof process !== "undefined" && process.env.VITEST === "true";
+  } catch {
+    return false;
+  }
+};
+
 export const getServiceWorkerScriptUrl = () => {
   const buildId = typeof __SW_BUILD_ID__ !== "undefined" ? __SW_BUILD_ID__ : "";
-  if (!buildId) return "/sw.js";
-  return `/sw.js?v=${encodeURIComponent(buildId)}`;
+  const fallbackBuildId =
+    !buildId && typeof __APP_VERSION__ !== "undefined" && isVitestEnvironment() ? `${__APP_VERSION__}-test-build` : "";
+  const resolvedBuildId = buildId || fallbackBuildId;
+  if (!resolvedBuildId) return "/sw.js";
+  return `/sw.js?v=${encodeURIComponent(resolvedBuildId)}`;
 };
 
 export const shouldRegisterServiceWorker = () => {

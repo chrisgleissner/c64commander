@@ -5,19 +5,30 @@ export const DRIVE_A_HOME_ITEMS = ["Drive", "Drive Bus ID", "Drive Type"] as con
 export const DRIVE_B_HOME_ITEMS = ["Drive", "Drive Bus ID", "Drive Type"] as const;
 export const U64_HOME_ITEMS = [
   "System Mode",
+  "HDMI Scan Resolution",
   "Turbo Control",
   "CPU Speed",
+  "Badline Timing",
+  "SuperCPU Detect (D0BC)",
   "Analog Video Mode",
   "Digital Video Mode",
   "HDMI Scan lines",
+  "Serial Bus Mode",
+  "Joystick Swapper",
+  "UserPort Power Enable",
 ] as const;
-export const LED_STRIP_HOME_ITEMS = [
+export const C64_CARTRIDGE_HOME_ITEMS = ["Cartridge Preference"] as const;
+export const USER_INTERFACE_HOME_ITEMS = ["Interface Type", "Navigation Style", "Color Scheme"] as const;
+export const LIGHTING_HOME_ITEMS = [
   "LedStrip Mode",
+  "LedStrip Pattern",
   "Fixed Color",
   "Strip Intensity",
   "LedStrip SID Select",
   "Color tint",
 ] as const;
+export const LED_STRIP_HOME_ITEMS = LIGHTING_HOME_ITEMS;
+export const KEYBOARD_LIGHTING_HOME_ITEMS = LIGHTING_HOME_ITEMS;
 export const SID_AUDIO_ITEMS = [
   "Vol Socket 1",
   "Vol Socket 2",

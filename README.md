@@ -20,6 +20,7 @@ C64 Commander lets you control and manage a C64 Ultimate from Android, iOS, or a
   - [📑 Contents](#-contents)
   - [✨ Why C64 Commander?](#-why-c64-commander)
   - [🚀 Quick Start](#-quick-start)
+    - [Current Rollout Boundaries](#current-rollout-boundaries)
     - [Install on Android](#install-on-android)
     - [Install on iOS](#install-on-ios)
     - [Install for Web Access](#install-for-web-access)
@@ -147,12 +148,12 @@ Your everyday dashboard: quick access to the controls you touch most often.
   <tr>
     <td><img src="doc/img/app/home/00-overview-light.png" alt="Home overview (Light)" width="360"/></td>
     <td><img src="doc/img/app/home/01-overview-dark.png" alt="Home overview (Dark)" width="360"/></td>
-    <td><img src="doc/img/app/home/sections/03-quick-config.png" alt="Home quick config" width="360"/></td>
+    <td><img src="doc/img/app/home/sections/02-quick-config-to-keyboard-light.png" alt="Home sections from quick config through keyboard light" width="360"/></td>
   </tr>
   <tr>
-    <td><img src="doc/img/app/home/sections/04-drives.png" alt="Home drives" width="360"/></td>
-    <td><img src="doc/img/app/home/sections/06-sid.png" alt="Home SID" width="360"/></td>
-    <td><img src="doc/img/app/home/sections/07-streams.png" alt="Home streams" width="360"/></td>
+    <td><img src="doc/img/app/home/sections/03-quick-config-to-printers.png" alt="Home sections from quick config through printers" width="360"/></td>
+    <td><img src="doc/img/app/home/sections/04-printers-to-sid.png" alt="Home sections from printers through SID" width="360"/></td>
+    <td><img src="doc/img/app/home/sections/05-sid-to-config.png" alt="Home sections from SID through config" width="360"/></td>
   </tr>
   <tr>
     <td><img src="doc/img/app/home/02-connection-status-popover.png" alt="Connection Status pop-up" width="360"/></td>

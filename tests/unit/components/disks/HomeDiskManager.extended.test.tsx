@@ -118,6 +118,115 @@ vi.mock("@/components/itemSelection/ItemSelectionDialog", () => ({
         >
           Import Root
         </button>
+
+        <button
+          onClick={() => {
+            const mockSource = {
+              id: "mock-source-auto",
+              rootPath: "/mock",
+              type: "local",
+              listFilesRecursive: vi.fn().mockResolvedValue([
+                {
+                  type: "file",
+                  path: "/nested/auto.d64",
+                  name: "auto.d64",
+                },
+              ]),
+              listEntries: vi.fn().mockResolvedValue([]),
+            };
+            onOpenChange(false);
+            props.onAutoConfirmStart?.();
+            onConfirm(mockSource, [{ type: "dir", name: "Nested", path: "/nested" }]);
+          }}
+        >
+          Auto Import Directory
+        </button>
+
+        <button
+          onClick={() => {
+            const mockSource = {
+              id: "mock-source-fail",
+              rootPath: "/mock",
+              type: "local",
+              listFilesRecursive: vi.fn().mockRejectedValue(new Error("Recursive scan failed")),
+              listEntries: vi.fn().mockResolvedValue([]),
+            };
+            onConfirm(mockSource, [{ type: "dir", name: "Broken", path: "/broken" }]);
+          }}
+        >
+          Import Broken Directory
+        </button>
+
+        <button
+          onClick={() => {
+            const mockSource = {
+              id: "mock-source-metadata-fail",
+              rootPath: "/mock",
+              type: "local",
+              listEntries: vi.fn().mockRejectedValue(new Error("listing failed")),
+            };
+            onConfirm(mockSource, [{ type: "file", name: "manual-name.d64", path: "/manual-name.d64" }]);
+          }}
+        >
+          Import Metadata Failure
+        </button>
+
+        <button
+          onClick={() => {
+            const mockSource = {
+              id: "mock-source-slow",
+              rootPath: "/mock",
+              type: "local",
+              listFilesRecursive: vi.fn().mockImplementation(
+                (_path: string, options?: { signal?: AbortSignal }) =>
+                  new Promise((resolve, reject) => {
+                    options?.signal?.addEventListener(
+                      "abort",
+                      () => reject(new DOMException("Aborted", "AbortError")),
+                      { once: true },
+                    );
+                    setTimeout(
+                      () =>
+                        resolve([
+                          {
+                            type: "file",
+                            path: "/nested/slow.d64",
+                            name: "slow.d64",
+                          },
+                        ]),
+                      50,
+                    );
+                  }),
+              ),
+              listEntries: vi.fn().mockResolvedValue([]),
+            };
+            onConfirm(mockSource, [{ type: "dir", name: "Slow", path: "/slow" }]);
+          }}
+        >
+          Import Slow Directory
+        </button>
+
+        <button
+          onClick={() => {
+            const mockSource = {
+              id: "mock-source-closed",
+              rootPath: "/mock",
+              type: "local",
+              listFilesRecursive: vi.fn().mockResolvedValue([
+                {
+                  type: "file",
+                  path: "/nested/closed.d64",
+                  name: "closed.d64",
+                },
+              ]),
+              listEntries: vi.fn().mockResolvedValue([]),
+            };
+            onOpenChange(false);
+            onConfirm(mockSource, [{ type: "dir", name: "Closed", path: "/nested" }]);
+          }}
+        >
+          Import After Close
+        </button>
       </div>
     );
   },
@@ -549,6 +658,150 @@ describe("HomeDiskManager Extended", () => {
         expect.anything(),
       );
     });
+  });
+
+  it("reports a warning when uploaded files do not contain disk images", async () => {
+    const { reportUserError } = await import("@/lib/uiErrors");
+    const { container } = render(<HomeDiskManager />);
+    const input = container.querySelector('input[type="file"]');
+    expect(input).toBeInTheDocument();
+
+    const file = new File(["notes"], "notes.txt", {
+      type: "text/plain",
+      lastModified: 12345,
+    });
+    Object.defineProperty(file, "webkitRelativePath", { value: "" });
+
+    mockAddSourceFromFiles.mockReturnValue({
+      id: "upload-source",
+      type: "local",
+    });
+
+    fireEvent.change(input!, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(reportUserError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "No disks found",
+        }),
+      );
+    });
+  });
+
+  it("stops hidden file upload when no local source could be created", async () => {
+    const { container } = render(<HomeDiskManager />);
+    const input = container.querySelector('input[type="file"]');
+    expect(input).toBeInTheDocument();
+
+    const file = new File(["disk"], "upload.d64", {
+      type: "application/octet-stream",
+      lastModified: 12345,
+    });
+    Object.defineProperty(file, "webkitRelativePath", { value: "" });
+
+    mockAddSourceFromFiles.mockReturnValue(null);
+
+    fireEvent.change(input!, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(mockAddSourceFromFiles).toHaveBeenCalled();
+    });
+    expect(useDiskLibraryMock.addDisks).not.toHaveBeenCalled();
+  });
+
+  it("handles add-source picker cancellation", async () => {
+    mockAddSourceFromPicker.mockResolvedValueOnce(null);
+
+    renderComponent();
+
+    fireEvent.click(screen.getByText(/Add.*disks/i));
+    fireEvent.click(within(screen.getByTestId("item-selection-dialog")).getByText("Add Source"));
+
+    await waitFor(() => {
+      expect(mockAddSourceFromPicker).toHaveBeenCalled();
+    });
+    expect(useDiskLibraryMock.addDisks).not.toHaveBeenCalled();
+  });
+
+  it("handles auto-confirm directory import after the browser closes", async () => {
+    render(<HomeDiskManager />);
+    fireEvent.click(screen.getByText(/Add.*disks/i));
+    fireEvent.click(screen.getByText("Auto Import Directory"));
+
+    await waitFor(() => {
+      expect(useDiskLibraryMock.addDisks).toHaveBeenCalledWith(
+        expect.arrayContaining([expect.objectContaining({ path: "/nested/auto.d64" })]),
+        expect.anything(),
+      );
+    });
+  });
+
+  it("reports scan failures from the Add Items dialog", async () => {
+    const { reportUserError } = await import("@/lib/uiErrors");
+
+    render(<HomeDiskManager />);
+    fireEvent.click(screen.getByText(/Add.*disks/i));
+    fireEvent.click(screen.getByText("Import Broken Directory"));
+
+    await waitFor(() => {
+      expect(reportUserError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Add items failed",
+          description: "Recursive scan failed",
+        }),
+      );
+    });
+  });
+
+  it("falls back to selection metadata when entry lookup fails", async () => {
+    render(<HomeDiskManager />);
+    fireEvent.click(screen.getByText(/Add.*disks/i));
+    fireEvent.click(screen.getByText("Import Metadata Failure"));
+
+    await waitFor(() => {
+      expect(useDiskLibraryMock.addDisks).toHaveBeenCalledWith(
+        expect.arrayContaining([expect.objectContaining({ path: "/manual-name.d64", group: "manual-name.d64" })]),
+        expect.anything(),
+      );
+    });
+  });
+
+  it("cancels an in-flight directory scan without adding disks", async () => {
+    render(<HomeDiskManager />);
+    fireEvent.click(screen.getByText(/Add.*disks/i));
+    fireEvent.click(screen.getByText("Import Slow Directory"));
+    fireEvent.click(screen.getByText("Cancel Scan"));
+
+    await waitFor(() => {
+      expect(useDiskLibraryMock.addDisks).not.toHaveBeenCalledWith(
+        expect.arrayContaining([expect.objectContaining({ path: "/nested/slow.d64" })]),
+        expect.anything(),
+      );
+    });
+  });
+
+  it("continues importing after the dialog closes before confirmation", async () => {
+    render(<HomeDiskManager />);
+    fireEvent.click(screen.getByText(/Add.*disks/i));
+    fireEvent.click(screen.getByText("Import After Close"));
+
+    await waitFor(() => {
+      expect(useDiskLibraryMock.addDisks).toHaveBeenCalledWith(
+        expect.arrayContaining([expect.objectContaining({ path: "/nested/closed.d64" })]),
+        expect.anything(),
+      );
+    });
+  });
+
+  it("ignores empty hidden file input changes", async () => {
+    const { container } = render(<HomeDiskManager />);
+    const input = container.querySelector('input[type="file"]');
+    expect(input).toBeInTheDocument();
+
+    fireEvent.change(input!, { target: { files: [] } });
+
+    expect(mockAddSourceFromFiles).not.toHaveBeenCalled();
+    expect(useDiskLibraryMock.addDisks).not.toHaveBeenCalled();
   });
 
   it("handles closing dialogs correctly", async () => {

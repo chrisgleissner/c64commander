@@ -4,6 +4,30 @@
       "value": "PAL",
       "options": ["PAL", "NTSC", "PAL-60", "NTSC-50", "PAL-60/L", "NTSC-50/L"]
     },
+    "HDMI Scan Resolution": {
+      "value": "SD (480p/576p)",
+      "options": ["SD (480p/576p)", "HD (720p)", "FullHD (1080p)", "PC 800 x 600", "PC 1024 x 768", "PC 1280 x 1024"]
+    },
+    "CPU Speed": {
+      "value": "1",
+      "options": ["1", "2", "3", "4", "6", "8", "10", "12", "14", "16", "20", "24", "32", "40", "48", "64"]
+    },
+    "Turbo Control": {
+      "value": "Off",
+      "options": ["Off", "Manual", "C64U Turbo Registers", "TurboEnable Bit"]
+    },
+    "Badline Timing": {
+      "value": "Enabled",
+      "options": ["Disabled", "Enabled"]
+    },
+    "SuperCPU Detect (D0BC)": {
+      "value": "Disabled",
+      "options": ["Disabled", "Enabled"]
+    },
+    "Analog Video Mode": {
+      "value": "CVBS + SVideo",
+      "options": ["CVBS + SVideo", "RGB"]
+    },
     "Digital Video Mode": {
       "value": "Auto",
       "options": ["Auto", "HDMI", "DVI"]
@@ -11,6 +35,38 @@
     "HDMI Scan lines": {
       "value": "Enabled",
       "options": ["Disabled", "Enabled"]
+    },
+    "Serial Bus Mode": {
+      "value": "All Connected",
+      "options": ["All Connected", "C64U <-> Internal", "Ext. <-> Int.", "C64U <-> External"]
+    },
+    "Joystick Swapper": {
+      "value": "Normal",
+      "options": ["Normal", "Swapped", "WASD Port 2", "WASD Port 1"]
+    },
+    "UserPort Power Enable": {
+      "value": "Enabled",
+      "options": ["Disabled", "Enabled"]
+    }
+  },
+  "C64 and Cartridge Settings": {
+    "Cartridge Preference": {
+      "value": "Auto",
+      "options": ["Auto", "Internal", "External", "Manual"]
+    }
+  },
+  "User Interface Settings": {
+    "Interface Type": {
+      "value": "Overlay on HDMI",
+      "options": ["Freeze", "Overlay on HDMI"]
+    },
+    "Navigation Style": {
+      "value": "WASD Cursors",
+      "options": ["Quick Search", "WASD Cursors"]
+    },
+    "Color Scheme": {
+      "value": "Commodore Blue",
+      "options": ["Commodore Blue", "Ultimate Black", "Commodore 1", "Commodore 2", "Commodore 3"]
     }
   },
   "Audio Mixer": {

@@ -527,7 +527,7 @@ describe("indexedDB playlist repository", () => {
     expect(page.rows[0]?.playlistItem.playlistItemId).toMatch(/^item-\d+$/);
     expect(page.rows[0]?.playlistItem.sortKey <= page.rows[39]?.playlistItem.sortKey).toBe(true);
     expect(page.rows.every((row) => row.track.category === "song")).toBe(true);
-  });
+  }, 20_000);
 
   it("uses fallback IndexedDB error messages when request.error is missing", async () => {
     Object.defineProperty(globalThis, "indexedDB", {

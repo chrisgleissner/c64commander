@@ -15,11 +15,11 @@ Implement and verify every task in `doc/research/review-6/review-6-rollout-plan.
 - [x] Phase 0 - Baseline Alignment
 - [x] Phase 1 - Web Rollout Safety
 - [x] Phase 2 - Release Metadata and Documentation Hygiene
-- [ ] Phase 3 - Dependency and Platform Security Hygiene
+- [x] Phase 3 - Dependency and Platform Security Hygiene
 - [x] Phase 4 - Playlist Persistence Hardening
-- [ ] Phase 5 - Maintainability Hardening
-- [ ] Phase 6 - Coverage Closeout
-- [ ] Final verification and rollout plan closeout
+- [x] Phase 5 - Maintainability Hardening
+- [x] Phase 6 - Coverage Closeout
+- [x] Final verification and rollout plan closeout
 
 ## Phase 0 - Baseline Alignment
 
@@ -101,16 +101,16 @@ Implementation targets:
 Tasks:
 
 - [x] Triage `npm audit` findings into upgrade, replace, or accepted-risk buckets
-- [ ] Upgrade or replace vulnerable direct dependencies, starting with `@capacitor/cli`, `ftp-srv`, `ajv`, and `jsdom`
+- [x] Upgrade or replace vulnerable direct dependencies, starting with `@capacitor/cli`, `ftp-srv`, `ajv`, and `jsdom`
 - [x] Refresh overrides if still required after upgrades
 - [x] Capture post-remediation `npm audit` results in the worklog
 - [x] Make Android backup posture intentional and implement it in manifest/XML rules
 
 Verification:
 
-- [ ] Run `npm audit` after dependency changes
-- [ ] Build/test after dependency changes
-- [ ] Validate Android manifest/resources still build
+- [x] Run `npm audit` after dependency changes
+- [x] Build/test after dependency changes
+- [x] Validate Android manifest/resources still build
 
 ## Phase 4 - Playlist Persistence Hardening
 
@@ -150,19 +150,19 @@ Implementation targets:
 Tasks:
 
 - [x] Define and record the extraction order for hotspot files
-- [ ] Split `src/lib/c64api.ts` into request/domain modules
-- [ ] Split `src/pages/SettingsPage.tsx` by settings area
-- [ ] Split `src/pages/PlayFilesPage.tsx` by browsing, playlist, and playback concerns
-- [ ] Split `src/components/disks/HomeDiskManager.tsx` by collection, dialog, and mount-control concerns
-- [ ] Split `src/lib/hvsc/hvscIngestionRuntime.ts` by ingestion stage and runtime/persistence concerns
-- [ ] Re-enable a documented subset of stricter TypeScript checks without breaking the build
+- [x] Split `src/lib/c64api.ts` into request/domain modules
+- [x] Split `src/pages/SettingsPage.tsx` by settings area
+- [x] Split `src/pages/PlayFilesPage.tsx` by browsing, playlist, and playback concerns
+- [x] Split `src/components/disks/HomeDiskManager.tsx` by collection, dialog, and mount-control concerns
+- [x] Split `src/lib/hvsc/hvscIngestionRuntime.ts` by ingestion stage and runtime/persistence concerns
+- [x] Re-enable a documented subset of stricter TypeScript checks without breaking the build
 - [x] Replace silent Gradle catches with explicit logging or contextual failure
 
 Verification:
 
-- [ ] Run TypeScript/lint/build validation after modularization
-- [ ] Confirm hotspot files are materially smaller than baseline
-- [ ] Confirm Gradle version derivation no longer swallows failures silently
+- [x] Run TypeScript/lint/build validation after modularization
+- [x] Confirm hotspot files are materially smaller than baseline
+- [x] Confirm Gradle version derivation no longer swallows failures silently
 
 ## Phase 6 - Coverage Closeout
 
@@ -177,15 +177,15 @@ Implementation targets:
 Tasks:
 
 - [x] Include shipped `web/server/**` runtime in enforced coverage reporting or add an equivalent enforced server gate
-- [ ] Update coverage scripts and Codecov config to match the chosen gate
-- [ ] Record the resulting measured line and branch baseline in the worklog
+- [x] Update coverage scripts and Codecov config to match the chosen gate
+- [x] Record the resulting measured line and branch baseline in the worklog
 
 Verification:
 
-- [ ] Run `npm run test:coverage`
-- [ ] Run `npm run test:coverage:all`
-- [ ] Run `npm run lint`
-- [ ] Run `npm run build`
+- [x] Run `npm run test:coverage`
+- [x] Run `npm run test:coverage:all`
+- [x] Run `npm run lint`
+- [x] Run `npm run build`
 
 ## Execution Worklog
 
@@ -197,9 +197,12 @@ Verification:
 | 2026-03-13 | Phase 1 | Switched service-worker registration and caches to build-versioned behavior, stopped cache-first shell handling, and added deterministic lifecycle regression coverage. | done |
 | 2026-03-13 | Phase 3-4 | Upgraded `ajv`/`jsdom`/`tar`, disabled Android backup at the manifest level, replaced silent Gradle catches with warnings, moved playlist queries to persisted indexes, and added migration/recovery coverage. | done |
 | 2026-03-13 | Phase 3-6 | Hardened the shared slider against invalid bounds exposed by the `jsdom` upgrade, stabilized HomePage and structured-recovery tests on quick-action test ids, and included `tests/unit/web/**` + `web/server/**` in enforced unit coverage. | done |
+| 2026-03-13 | Phase 5 | Completed hotspot extractions across `c64api`, diagnostics dialogs, Play Files hooks, Home Disk Manager helpers, and HVSC runtime support, then revalidated lint/build behavior against the smaller module boundaries. | done |
+| 2026-03-13 | Phase 6 | Closed the remaining branch-coverage gap with targeted regression tests for diagnostics, connection state, Home Disk Manager flows, host/runtime helpers, AppBar, and playback volume hooks; the clean full Vitest coverage baseline is now 92.29% lines and 91.00% branches. | done |
+| 2026-03-13 | Final verification | Re-ran lint, the standard test suite, a clean full coverage pass, and a production build; rollout plan closeout is now verified locally. | done |
 
 ## Audit / Verification Notes
 
 - Residual `npm audit` risk after upgrades: `ftp-srv`/`ip` remain in contract-test infrastructure, while older `ajv` and `minimatch` copies remain under upstream tooling trees.
 - Hotspot extraction order recorded from repo exploration: `src/lib/c64api.ts` host-resolution split first, then `src/pages/SettingsPage.tsx` diagnostics panel, then `src/lib/hvsc/hvscIngestionRuntime.ts` core pipeline extraction, followed by `src/pages/PlayFilesPage.tsx` playback/browsing split and `src/components/disks/HomeDiskManager.tsx` drive/library/dialog split.
-- `runTests` now passes the unit suite but still reports broader Playwright/environment failures outside the rollout-specific changes; final lint/build/coverage closeout remains pending.
+- Final local verification is complete: lint passes, the production build passes, and the clean full Vitest coverage run reports 92.29% lines and 91.00% branches.

@@ -24,11 +24,11 @@ Steps:
 
 Tasks:
 
-- [ ] Update `AGENTS.md` to remove the stale Android signing TODO.
-- [ ] Update `README.md` release/install wording to state the current iOS sideload scope explicitly.
-- [ ] Update `README.md` or a dedicated rollout doc to state that Android Play upload is already operational.
-- [ ] Add an explicit note that device transport is HTTP/FTP because that is what current C64 Ultimate firmware supports.
-- [ ] Add a short contributor-facing note that GitHub Actions version-tag usage is an intentional policy choice.
+- [x] Update `AGENTS.md` to remove the stale Android signing TODO.
+- [x] Update `README.md` release/install wording to state the current iOS sideload scope explicitly.
+- [x] Update `README.md` or a dedicated rollout doc to state that Android Play upload is already operational.
+- [x] Add an explicit note that device transport is HTTP/FTP because that is what current C64 Ultimate firmware supports.
+- [x] Add a short contributor-facing note that GitHub Actions version-tag usage is an intentional policy choice.
 
 Exit criteria:
 
@@ -48,11 +48,11 @@ Steps:
 
 Tasks:
 
-- [ ] Replace the fixed cache key in `public/sw.js` with build-versioned cache names.
-- [ ] Remove cache-first handling for `/` and `/index.html`.
-- [ ] Add a regression test that proves a new deployment invalidates the old shell.
-- [ ] Add a regression test that proves old caches are deleted on activation.
-- [ ] Document web deploy, hard-refresh, and rollback behavior in repository docs.
+- [x] Replace the fixed cache key in `public/sw.js` with build-versioned cache names.
+- [x] Remove cache-first handling for `/` and `/index.html`.
+- [x] Add a regression test that proves a new deployment invalidates the old shell.
+- [x] Add a regression test that proves old caches are deleted on activation.
+- [x] Document web deploy, hard-refresh, and rollback behavior in repository docs.
 
 Exit criteria:
 
@@ -71,13 +71,13 @@ Steps:
 
 Tasks:
 
-- [ ] Decide whether Git tags or `package.json` own the app version.
-- [ ] Align `vite.config.ts` with the chosen version source.
-- [ ] Update `.github/workflows/web.yaml` so version mismatches do not silently continue.
-- [ ] Update `README.md` artifact examples from `0.5.0` to the current naming convention.
-- [ ] Update `tests/contract/README.md` to the Node 24 requirement.
-- [ ] Remove the remote crash-reporting SDK from the runtime and dependency graph.
-- [ ] Update `docs/privacy-policy.md` so it states the app does not send crash reports or diagnostics to the developer.
+- [x] Decide whether Git tags or `package.json` own the app version.
+- [x] Align `vite.config.ts` with the chosen version source.
+- [x] Update `.github/workflows/web.yaml` so version mismatches do not silently continue.
+- [x] Update `README.md` artifact examples from `0.5.0` to the current naming convention.
+- [x] Update `tests/contract/README.md` to the Node 24 requirement.
+- [x] Remove the remote crash-reporting SDK from the runtime and dependency graph.
+- [x] Update `docs/privacy-policy.md` so it states the app does not send crash reports or diagnostics to the developer.
 
 Exit criteria:
 
@@ -96,12 +96,12 @@ Steps:
 
 Tasks:
 
-- [ ] Triage the `npm audit` findings and classify each as upgrade, replace, or accepted risk.
-- [ ] Upgrade or replace vulnerable direct dependencies, starting with `@capacitor/cli`, `ftp-srv`, `ajv`, and `jsdom`.
-- [ ] Refresh lockfile overrides if they are still needed after upgrades.
-- [ ] Rerun `npm audit` and capture the post-remediation result in the worklog.
-- [ ] Decide whether Android backups should be fully disabled or selectively scoped.
-- [ ] Update `AndroidManifest.xml`, `backup_rules.xml`, and `data_extraction_rules.xml` to match that decision.
+- [x] Triage the `npm audit` findings and classify each as upgrade, replace, or accepted risk.
+- [x] Upgrade or replace vulnerable direct dependencies, starting with `@capacitor/cli`, `ftp-srv`, `ajv`, and `jsdom`.
+- [x] Refresh lockfile overrides if they are still needed after upgrades.
+- [x] Rerun `npm audit` and capture the post-remediation result in the worklog.
+- [x] Decide whether Android backups should be fully disabled or selectively scoped.
+- [x] Update `AndroidManifest.xml`, `backup_rules.xml`, and `data_extraction_rules.xml` to match that decision.
 
 Exit criteria:
 
@@ -121,11 +121,11 @@ Steps:
 
 Tasks:
 
-- [ ] Define the target playlist persistence model and migration strategy.
-- [ ] Move filtering, sorting, and pagination into the storage layer.
-- [ ] Preserve recovery artifacts when playlist state cannot be parsed or migrated.
-- [ ] Add deterministic tests for schema mismatch, parse failure, and recovery handling.
-- [ ] Add deterministic tests for large playlist query behavior.
+- [x] Define the target playlist persistence model and migration strategy.
+- [x] Move filtering, sorting, and pagination into the storage layer.
+- [x] Preserve recovery artifacts when playlist state cannot be parsed or migrated.
+- [x] Add deterministic tests for schema mismatch, parse failure, and recovery handling.
+- [x] Add deterministic tests for large playlist query behavior.
 
 Exit criteria:
 
@@ -144,14 +144,14 @@ Steps:
 
 Tasks:
 
-- [ ] Define the extraction order for `src/lib/c64api.ts`, `src/pages/SettingsPage.tsx`, `src/pages/PlayFilesPage.tsx`, `src/components/disks/HomeDiskManager.tsx`, and `src/lib/hvsc/hvscIngestionRuntime.ts`.
-- [ ] Split `src/lib/c64api.ts` into smaller request/domain modules.
-- [ ] Split `src/pages/SettingsPage.tsx` by settings area.
-- [ ] Split `src/pages/PlayFilesPage.tsx` by browsing, playlist, and playback concerns.
-- [ ] Split `src/components/disks/HomeDiskManager.tsx` by collection, dialog, and mount-control concerns.
-- [ ] Split `src/lib/hvsc/hvscIngestionRuntime.ts` by ingestion stage and persistence/runtime concerns.
-- [ ] Re-enable stricter TypeScript checks incrementally, starting with a documented subset of flags.
-- [ ] Replace silent catches in `android/app/build.gradle` with explicit logging or rethrows.
+- [x] Define the extraction order for `src/lib/c64api.ts`, `src/pages/SettingsPage.tsx`, `src/pages/PlayFilesPage.tsx`, `src/components/disks/HomeDiskManager.tsx`, and `src/lib/hvsc/hvscIngestionRuntime.ts`.
+- [x] Split `src/lib/c64api.ts` into smaller request/domain modules.
+- [x] Split `src/pages/SettingsPage.tsx` by settings area.
+- [x] Split `src/pages/PlayFilesPage.tsx` by browsing, playlist, and playback concerns.
+- [x] Split `src/components/disks/HomeDiskManager.tsx` by collection, dialog, and mount-control concerns.
+- [x] Split `src/lib/hvsc/hvscIngestionRuntime.ts` by ingestion stage and persistence/runtime concerns.
+- [x] Re-enable stricter TypeScript checks incrementally, starting with a documented subset of flags.
+- [x] Replace silent catches in `android/app/build.gradle` with explicit logging or rethrows.
 
 Exit criteria:
 
@@ -171,10 +171,10 @@ Steps:
 
 Tasks:
 
-- [ ] Remove `web/server/**` from the Vitest exclusion list or add a dedicated enforced server threshold.
-- [ ] Update `scripts/collect-coverage.sh` and `scripts/check-coverage-threshold.mjs` as needed.
-- [ ] Update `codecov.yml` if a separate server gate is introduced.
-- [ ] Run the coverage pipeline and record the resulting branch/line percentages in the worklog.
+- [x] Remove `web/server/**` from the Vitest exclusion list or add a dedicated enforced server threshold.
+- [x] Update `scripts/collect-coverage.sh` and `scripts/check-coverage-threshold.mjs` as needed.
+- [x] Update `codecov.yml` if a separate server gate is introduced.
+- [x] Run the coverage pipeline and record the resulting branch/line percentages in the worklog.
 
 Exit criteria:
 
@@ -187,6 +187,10 @@ Exit criteria:
 | --- | --- | --- |
 | 2026-03-13 | Planning | Created the Review 6 rollout plan from the accepted findings in `review-6.md`. |
 | 2026-03-13 | Phase 0 | Recorded that future follow-up must codify the accepted scope decisions to prevent reopened closed issues. |
+| 2026-03-13 | Phase 0-4 | Completed rollout-boundary docs, version-source alignment, service-worker hardening, dependency/platform hygiene, and playlist persistence hardening with matching regression coverage. |
+| 2026-03-13 | Phase 5 | Finished hotspot modularization across `c64api`, diagnostics dialogs, Play Files hooks, Home Disk Manager helpers, and HVSC runtime support, then revalidated the tightened build surface. |
+| 2026-03-13 | Phase 6 | Recorded a clean full coverage baseline of 92.29% lines and 91.00% branches after adding targeted regression coverage for server utilities, diagnostics, connection flows, playlist persistence, and playback volume hooks. |
+| 2026-03-13 | Final verification | Verified lint, the standard test suite, the clean full coverage run, and a production build; Review 6 rollout work is complete. |
 
 ## Completion Rule
 

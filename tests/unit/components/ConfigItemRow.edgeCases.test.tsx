@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { useState } from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi, beforeEach } from "vitest";
@@ -141,6 +142,37 @@ describe("ConfigItemRow — slider edge cases", () => {
     // disabled slider should not call onValueChange
     expect(screen.getByLabelText("Vol Main slider")).toBeTruthy();
     expect(onValueChange).not.toHaveBeenCalled();
+  });
+
+  it("allows CPU Speed sliders to reach the new 64x maximum option", async () => {
+    const onValueChange = vi.fn();
+
+    const CpuSpeedHarness = () => {
+      const [value, setValue] = useState("1");
+      return (
+        <ConfigItemRow
+          name="CPU Speed"
+          value={value}
+          options={["1", "2", "3", "4", "6", "8", "10", "12", "14", "16", "20", "24", "32", "40", "48", "64"]}
+          onValueChange={(nextValue) => {
+            const resolved = String(nextValue);
+            onValueChange(resolved);
+            setValue(resolved);
+          }}
+          valueTestId="cpu-speed-value"
+        />
+      );
+    };
+
+    renderWithQuery(<CpuSpeedHarness />);
+
+    const slider = screen.getByLabelText("CPU Speed slider");
+    for (let step = 0; step < 15; step += 1) {
+      fireEvent.keyDown(slider, { key: "ArrowRight" });
+    }
+
+    await waitFor(() => expect(screen.getByTestId("cpu-speed-value")).toHaveTextContent("64"));
+    expect(onValueChange).toHaveBeenLastCalledWith("64");
   });
 });
 

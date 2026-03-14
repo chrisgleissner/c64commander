@@ -30,6 +30,7 @@ import {
 } from "./testArtifacts";
 import { disableTraceAssertions } from "./traceUtils";
 import { registerScreenshotSections, sanitizeSegment } from "./screenshotCatalog";
+import { planHomeScreenshotSlices } from "./homeScreenshotLayout";
 import { installFixedClock, installListPreviewLimit, installStableStorage, seedDiagnosticsTraces } from "./visualSeeds";
 
 const SCREENSHOT_ROOT = path.resolve("doc/img/app");
@@ -322,6 +323,55 @@ const captureLabeledSections = async (page: Page, testInfo: TestInfo, pageId: st
   }
 };
 
+const captureHomeSections = async (page: Page, testInfo: TestInfo) => {
+  const layout = await page.evaluate(() => {
+    const sections = Array.from(document.querySelectorAll("main [data-section-label]"))
+      .map((node) => {
+        const label = node.getAttribute("data-section-label")?.trim() ?? "";
+        const rect = node.getBoundingClientRect();
+        return {
+          label,
+          top: rect.top + window.scrollY,
+          bottom: rect.bottom + window.scrollY,
+        };
+      })
+      .filter((section) => section.label.length > 0 && section.bottom > section.top);
+
+    const rootStyle = getComputedStyle(document.documentElement);
+    const main = document.querySelector("main");
+    const mainStyle = main ? getComputedStyle(main) : null;
+    const appBarHeight = Number.parseFloat(rootStyle.getPropertyValue("--app-bar-height")) || 0;
+    const bottomInset = Number.parseFloat(mainStyle?.paddingBottom ?? "0") || 0;
+    const maxScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+
+    return {
+      sections,
+      viewportHeight: window.innerHeight,
+      topInset: appBarHeight,
+      bottomInset,
+      maxScroll,
+    };
+  });
+
+  const slices = planHomeScreenshotSlices({
+    sections: layout.sections.map((section) => ({
+      slug: sanitizeSegment(section.label),
+      top: section.top,
+      bottom: section.bottom,
+    })),
+    viewportHeight: layout.viewportHeight,
+    topInset: layout.topInset,
+    bottomInset: layout.bottomInset,
+    maxScroll: layout.maxScroll,
+  });
+
+  for (let index = 0; index < slices.length; index += 1) {
+    const slice = slices[index];
+    await page.evaluate((value) => window.scrollTo(0, value), slice.scrollTop);
+    await captureScreenshot(page, testInfo, `home/sections/${String(index + 1).padStart(2, "0")}-${slice.slug}.png`);
+  }
+};
+
 const waitForConnected = async (page: Page) => {
   await expect(page.getByTestId("connectivity-indicator")).toHaveAttribute("data-connection-state", "REAL_CONNECTED", {
     timeout: 10000,
@@ -386,7 +436,7 @@ test.describe("App screenshots", () => {
     await expect(connectionPopover).not.toContainText("Communication");
     await captureScreenshot(page, testInfo, "home/02-connection-status-popover.png");
     await page.keyboard.press("Escape");
-    await captureLabeledSections(page, testInfo, "home");
+    await captureHomeSections(page, testInfo);
 
     await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
     await page.evaluate(() => window.scrollTo(0, 0));
@@ -638,7 +688,7 @@ test.describe("App screenshots", () => {
 
   test(
     "capture configuration screenshots",
-    { tag: "@screenshots" },
+    { tag: "@screenshots", timeout: 180000 },
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
       allowVisualOverflow(testInfo, "Audio mixer controls overflow on narrow screenshot viewport.");
       await page.goto("/config");

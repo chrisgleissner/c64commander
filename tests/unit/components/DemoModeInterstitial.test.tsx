@@ -12,6 +12,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 let demoInterstitialVisible = true;
 
 const dismissDemoInterstitial = vi.fn();
+const pinDemoModeByUserChoice = vi.fn();
 const discoverConnection = vi.fn();
 const updateC64APIConfig = vi.fn();
 const buildBaseUrlFromDeviceHost = vi.fn((host: string) => `http://${host}`);
@@ -28,6 +29,7 @@ vi.mock("@/hooks/useConnectionState", () => ({
 
 vi.mock("@/lib/connection/connectionManager", () => ({
   dismissDemoInterstitial: (...args: unknown[]) => dismissDemoInterstitial(...args),
+  pinDemoModeByUserChoice: (...args: unknown[]) => pinDemoModeByUserChoice(...args),
   discoverConnection: (...args: unknown[]) => discoverConnection(...args),
 }));
 
@@ -55,6 +57,7 @@ describe("DemoModeInterstitial", () => {
       deviceHost: "mydevice.local",
     });
     dismissDemoInterstitial.mockReset();
+    pinDemoModeByUserChoice.mockReset();
     discoverConnection.mockReset();
     updateC64APIConfig.mockReset();
     buildBaseUrlFromDeviceHost.mockImplementation((host: string) => `http://${host}`);
@@ -99,7 +102,8 @@ describe("DemoModeInterstitial", () => {
   it("Continue in Demo Mode dismisses without retrying", () => {
     render(<DemoModeInterstitial />);
     fireEvent.click(screen.getByRole("button", { name: /Continue in Demo Mode/i }));
-    expect(dismissDemoInterstitial).toHaveBeenCalled();
+    expect(pinDemoModeByUserChoice).toHaveBeenCalled();
+    expect(dismissDemoInterstitial).not.toHaveBeenCalled();
     expect(discoverConnection).not.toHaveBeenCalled();
     expect(updateC64APIConfig).not.toHaveBeenCalled();
   });

@@ -23,7 +23,10 @@ const {
   driveASettingsPayloadRef,
   driveBSettingsPayloadRef,
   u64SettingsPayloadRef,
+  c64CartridgePayloadRef,
   ledStripPayloadRef,
+  userInterfacePayloadRef,
+  keyboardLightingPayloadRef,
   statusPayloadRef,
   drivesPayloadRef,
   machineControlPayloadRef,
@@ -65,7 +68,16 @@ const {
   u64SettingsPayloadRef: {
     current: undefined as Record<string, unknown> | undefined,
   },
+  c64CartridgePayloadRef: {
+    current: undefined as Record<string, unknown> | undefined,
+  },
   ledStripPayloadRef: {
+    current: undefined as Record<string, unknown> | undefined,
+  },
+  userInterfacePayloadRef: {
+    current: undefined as Record<string, unknown> | undefined,
+  },
+  keyboardLightingPayloadRef: {
     current: undefined as Record<string, unknown> | undefined,
   },
   statusPayloadRef: {
@@ -160,6 +172,261 @@ const renderWithRouter = (ui: JSX.Element) =>
 
 const renderHomePage = () => renderWithRouter(<HomePage />);
 
+const HDMI_RESOLUTION_OPTIONS = [
+  "SD (480p/576p)",
+  "HD (720p)",
+  "FullHD (1080p)",
+  "PC 800 x 600",
+  "PC 1024 x 768",
+  "PC 1280 x 1024",
+];
+
+const JOYSTICK_SWAPPER_OPTIONS = ["Normal", "Swapped", "WASD Port 2", "WASD Port 1"];
+const SERIAL_BUS_MODE_OPTIONS = ["All Connected", "C64U <-> Internal", "Ext. <-> Int.", "C64U <-> External"];
+const CARTRIDGE_PREFERENCE_OPTIONS = ["Auto", "Internal", "External", "Manual"];
+
+const CPU_SPEED_OPTIONS = ["1", "2", "3", "4", "6", "8", "10", "12", "14", "16", "20", "24", "32", "40", "48", "64"];
+
+const COLOR_SCHEME_OPTIONS = ["Commodore Blue", "Ultimate Black", "Commodore 1", "Commodore 2", "Commodore 3"];
+
+const buildLightingPayload = ({
+  mode = "Fixed Color",
+  modeOptions = ["Off", "Fixed Color", "Rainbow"],
+  pattern = "SingleColor",
+  patternOptions = ["SingleColor", "Outward"],
+  fixedColor = "Red",
+  fixedColorOptions = ["Red", "Green", "Blue"],
+  intensity = "15",
+  sidSelect = "SID 1",
+  sidSelectOptions = ["SID 1", "SID 2"],
+  tint = "Pure",
+  tintOptions = ["Pure", "Warm"],
+}: {
+  fixedColor?: string;
+  fixedColorOptions?: string[];
+  intensity?: string;
+  mode?: string;
+  modeOptions?: string[];
+  pattern?: string;
+  patternOptions?: string[];
+  sidSelect?: string;
+  sidSelectOptions?: string[];
+  tint?: string;
+  tintOptions?: string[];
+} = {}) => ({
+  items: {
+    "LedStrip Mode": {
+      selected: mode,
+      options: modeOptions,
+    },
+    "LedStrip Pattern": {
+      selected: pattern,
+      options: patternOptions,
+    },
+    "Fixed Color": {
+      selected: fixedColor,
+      options: fixedColorOptions,
+    },
+    "Strip Intensity": {
+      selected: intensity,
+      min: 0,
+      max: 31,
+    },
+    "LedStrip SID Select": {
+      selected: sidSelect,
+      options: sidSelectOptions,
+    },
+    "Color tint": {
+      selected: tint,
+      options: tintOptions,
+    },
+  },
+});
+
+const buildU64SettingsPayload = ({
+  analogVideoMode = "CVBS + SVideo",
+  analogVideoModeOptions = ["CVBS + SVideo", "RGB"],
+  badlineTiming = "Enabled",
+  badlineTimingOptions = ["Disabled", "Enabled"],
+  cpuSpeed = "1",
+  cpuSpeedOptions = CPU_SPEED_OPTIONS,
+  digitalVideoMode = "Auto",
+  digitalVideoModeOptions = ["Auto", "HDMI", "DVI"],
+  hdmiResolution = "SD (480p/576p)",
+  hdmiResolutionOptions = HDMI_RESOLUTION_OPTIONS,
+  hdmiScanLines = "Disabled",
+  hdmiScanLinesOptions = ["Disabled", "Enabled"],
+  joystickSwapper = "Normal",
+  joystickSwapperOptions = JOYSTICK_SWAPPER_OPTIONS,
+  serialBusMode = "All Connected",
+  serialBusModeOptions = SERIAL_BUS_MODE_OPTIONS,
+  superCpuDetect = "Disabled",
+  superCpuDetectOptions = ["Disabled", "Enabled"],
+  systemMode = "PAL",
+  systemModeOptions = ["PAL", "NTSC"],
+  turboControl = "Off",
+  turboControlOptions = ["Off", "Manual", "C64U Turbo Registers", "TurboEnable Bit"],
+  userPortPower = "Enabled",
+  userPortPowerOptions = ["Disabled", "Enabled"],
+}: {
+  analogVideoMode?: string;
+  analogVideoModeOptions?: string[];
+  badlineTiming?: string;
+  badlineTimingOptions?: string[];
+  cpuSpeed?: string;
+  cpuSpeedOptions?: string[];
+  digitalVideoMode?: string;
+  digitalVideoModeOptions?: string[];
+  hdmiResolution?: string;
+  hdmiResolutionOptions?: string[];
+  hdmiScanLines?: string;
+  hdmiScanLinesOptions?: string[];
+  joystickSwapper?: string;
+  joystickSwapperOptions?: string[];
+  serialBusMode?: string;
+  serialBusModeOptions?: string[];
+  superCpuDetect?: string;
+  superCpuDetectOptions?: string[];
+  systemMode?: string;
+  systemModeOptions?: string[];
+  turboControl?: string;
+  turboControlOptions?: string[];
+  userPortPower?: string;
+  userPortPowerOptions?: string[];
+} = {}) => ({
+  "U64 Specific Settings": {
+    items: {
+      "CPU Speed": { selected: cpuSpeed, options: cpuSpeedOptions },
+      "System Mode": { selected: systemMode, options: systemModeOptions },
+      "HDMI Scan Resolution": { selected: hdmiResolution, options: hdmiResolutionOptions },
+      "Turbo Control": { selected: turboControl, options: turboControlOptions },
+      "Badline Timing": { selected: badlineTiming, options: badlineTimingOptions },
+      "SuperCPU Detect (D0BC)": { selected: superCpuDetect, options: superCpuDetectOptions },
+      "Analog Video Mode": { selected: analogVideoMode, options: analogVideoModeOptions },
+      "Digital Video Mode": { selected: digitalVideoMode, options: digitalVideoModeOptions },
+      "Serial Bus Mode": { selected: serialBusMode, options: serialBusModeOptions },
+      "HDMI Scan lines": {
+        selected: hdmiScanLines,
+        options: hdmiScanLinesOptions,
+      },
+      "Joystick Swapper": {
+        selected: joystickSwapper,
+        options: joystickSwapperOptions,
+      },
+      "UserPort Power Enable": {
+        selected: userPortPower,
+        options: userPortPowerOptions,
+      },
+    },
+  },
+});
+
+const buildCartridgeSettingsPayload = ({
+  cartridgePreference = "Auto",
+  cartridgePreferenceOptions = CARTRIDGE_PREFERENCE_OPTIONS,
+}: {
+  cartridgePreference?: string;
+  cartridgePreferenceOptions?: string[];
+} = {}) => ({
+  "C64 and Cartridge Settings": {
+    items: {
+      "Cartridge Preference": {
+        selected: cartridgePreference,
+        options: cartridgePreferenceOptions,
+      },
+    },
+  },
+});
+
+const buildUserInterfacePayload = ({
+  colorScheme = "Commodore Blue",
+  colorSchemeOptions = COLOR_SCHEME_OPTIONS,
+  interfaceType = "Overlay on HDMI",
+  interfaceTypeOptions = ["Freeze", "Overlay on HDMI"],
+  navigationStyle = "WASD Cursors",
+  navigationStyleOptions = ["Quick Search", "WASD Cursors"],
+}: {
+  colorScheme?: string;
+  colorSchemeOptions?: string[];
+  interfaceType?: string;
+  interfaceTypeOptions?: string[];
+  navigationStyle?: string;
+  navigationStyleOptions?: string[];
+} = {}) => ({
+  "User Interface Settings": {
+    items: {
+      "Interface Type": {
+        selected: interfaceType,
+        options: interfaceTypeOptions,
+      },
+      "Navigation Style": {
+        selected: navigationStyle,
+        options: navigationStyleOptions,
+      },
+      "Color Scheme": {
+        selected: colorScheme,
+        options: colorSchemeOptions,
+      },
+    },
+  },
+});
+
+const expectLightingControls = (prefix: string, title: string) => {
+  const section = screen.getByTestId(`${prefix}-summary`);
+  expect(within(section).getByText(title)).toBeTruthy();
+  expect(screen.getByTestId(`${prefix}-mode`)).toBeTruthy();
+  expect(screen.getByTestId(`${prefix}-pattern`)).toBeTruthy();
+  expect(screen.getByTestId(`${prefix}-color`)).toBeTruthy();
+  expect(screen.getByTestId(`${prefix}-color-slider`)).toBeTruthy();
+  expect(screen.getByTestId(`${prefix}-intensity-slider`)).toBeTruthy();
+  expect(screen.getByTestId(`${prefix}-intensity-value`)).toBeTruthy();
+  expect(screen.getByTestId(`${prefix}-sid-select`)).toBeTruthy();
+  expect(screen.getByTestId(`${prefix}-tint`)).toBeTruthy();
+
+  const labels = Array.from(section.querySelectorAll(".text-muted-foreground")).map((node) => node.textContent);
+  expect(labels).toEqual(["Mode", "Pattern", "Color", "Brightness", "Tint", "SID Select"]);
+};
+
+const expectUserInterfaceControls = (prefix: string) => {
+  const section = screen.getByTestId(`${prefix}-summary`);
+  expect(within(section).getByText("User Interface")).toBeTruthy();
+  expect(screen.getByTestId(`${prefix}-overlay`)).toBeTruthy();
+  expect(screen.getByTestId(`${prefix}-wasd-cursors`)).toBeTruthy();
+  expect(screen.getByTestId(`${prefix}-color-scheme`)).toBeTruthy();
+};
+
+const expectCpuControls = () => {
+  const section = screen.getByTestId("home-cpu-summary");
+  expect(within(section).getByText("CPU")).toBeTruthy();
+  expect(screen.getByTestId("home-cpu-turbo-control")).toBeTruthy();
+  expect(screen.getByTestId("home-cpu-speed-slider")).toBeTruthy();
+  expect(screen.getByTestId("home-cpu-speed-value")).toBeTruthy();
+  expect(within(section).getByText("CPU Speed").className).toContain("text-muted-foreground");
+  expect(screen.getByTestId("home-cpu-speed-value").className).toContain("text-foreground");
+  expect(screen.getByTestId("home-cpu-badline-timing")).toBeTruthy();
+  expect(screen.getByTestId("home-cpu-supercpu-detect")).toBeTruthy();
+};
+
+const expectVideoControls = () => {
+  const section = screen.getByTestId("home-video-summary");
+  expect(within(section).getByText("Video")).toBeTruthy();
+  expect(screen.getByTestId("home-video-mode")).toBeTruthy();
+  expect(screen.getByTestId("home-video-hdmi-resolution")).toBeTruthy();
+  expect(screen.getByTestId("home-video-scanlines")).toBeTruthy();
+  expect(screen.getByTestId("home-video-analog")).toBeTruthy();
+  expect(screen.getByTestId("home-video-digital")).toBeTruthy();
+};
+
+const expectPortsControls = () => {
+  const section = screen.getByTestId("home-ports-summary");
+  expect(within(section).getByText("Ports")).toBeTruthy();
+  expect(within(section).getByText("Joystick Input")).toBeTruthy();
+  expect(screen.getByTestId("home-joystick-swapper")).toBeTruthy();
+  expect(screen.getByTestId("home-serial-bus-mode")).toBeTruthy();
+  expect(screen.getByTestId("home-cartridge-preference")).toBeTruthy();
+  expect(screen.getByTestId("home-user-port-power")).toBeTruthy();
+};
+
 vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => queryClientMockRef.current,
 }));
@@ -195,8 +462,17 @@ vi.mock("@/hooks/useC64Connection", () => ({
     if (category === "U64 Specific Settings") {
       return { data: u64SettingsPayloadRef.current };
     }
+    if (category === "C64 and Cartridge Settings") {
+      return { data: c64CartridgePayloadRef.current };
+    }
     if (category === "LED Strip Settings") {
       return { data: ledStripPayloadRef.current };
+    }
+    if (category === "User Interface Settings") {
+      return { data: userInterfacePayloadRef.current };
+    }
+    if (category === "Keyboard Lighting") {
+      return { data: keyboardLightingPayloadRef.current };
     }
     return { data: null };
   },
@@ -241,7 +517,7 @@ vi.mock("@/hooks/useDiagnosticsActivity", () => ({
 
 vi.mock("@/lib/diagnostics/diagnosticsOverlayState", () => ({
   isDiagnosticsOverlayActive: () => false,
-  subscribeDiagnosticsOverlay: () => () => { },
+  subscribeDiagnosticsOverlay: () => () => {},
   shouldSuppressDiagnosticsSideEffects: () => false,
 }));
 
@@ -267,7 +543,10 @@ beforeEach(() => {
   driveASettingsPayloadRef.current = undefined;
   driveBSettingsPayloadRef.current = undefined;
   u64SettingsPayloadRef.current = undefined;
+  c64CartridgePayloadRef.current = undefined;
   ledStripPayloadRef.current = undefined;
+  userInterfacePayloadRef.current = undefined;
+  keyboardLightingPayloadRef.current = undefined;
   c64ApiMockRef.current = {
     setConfigValue: vi.fn().mockResolvedValue({}),
     resetDrive: vi.fn().mockResolvedValue({}),
@@ -664,7 +943,7 @@ describe("HomePage SID status", () => {
     expect(screen.getByText(/unable to connect to c64u/i)).toBeTruthy();
   });
 
-  it("renders device info and drive summaries", () => {
+  it("renders device info and the inline RAM folder picker", () => {
     statusPayloadRef.current = {
       isConnected: true,
       isConnecting: false,
@@ -694,7 +973,10 @@ describe("HomePage SID status", () => {
     expect(screen.getByTestId("home-system-firmware").textContent).toContain("1.0.0");
     expect(screen.getByTestId("home-system-git").textContent).toContain("deadbeef");
     expect(screen.getByTestId("home-system-build-time").textContent).toContain("2024-03-20 12:34:00 UTC");
-    expect(screen.getByTestId("home-drive-summary").textContent).toContain("disk.d64");
+    expect(screen.getByText("Quick Actions")).toBeTruthy();
+    expect(screen.queryByTestId("home-drive-summary")).toBeNull();
+    expect(screen.getByTestId("home-ram-folder-row").textContent).toContain("RAM Folder:");
+    expect(screen.getByTestId("ram-dump-folder-trigger").textContent).toContain("...");
   });
 
   it('shows "No disk" on Home when drive A has no mounted image', () => {
@@ -840,29 +1122,27 @@ describe("HomePage SID status", () => {
     expect(appConfigStatePayloadRef.current.deleteAppConfig).toHaveBeenCalledWith("config-a");
   }, 30000);
 
-  it("renders Quick Config section with config data and handles CPU speed change", async () => {
-    u64SettingsPayloadRef.current = {
-      "U64 Specific Settings": {
-        items: {
-          "CPU Speed": { selected: "1", options: ["1", "2", "4"] },
-          "System Mode": { selected: "PAL", options: ["PAL", "NTSC"] },
-          "Turbo Control": { selected: "Off", options: ["Off", "Manual"] },
-          "HDMI Scan lines": {
-            selected: "Disabled",
-            options: ["Disabled", "Enabled"],
-          },
-          "Joystick Swapper": {
-            selected: "Normal",
-            options: ["Normal", "Swapped"],
-          },
-        },
-      },
-    };
+  it("renders CPU, Ports, and Video cards with the expected controls in page order", async () => {
+    u64SettingsPayloadRef.current = buildU64SettingsPayload();
+    c64CartridgePayloadRef.current = buildCartridgeSettingsPayload();
+    userInterfacePayloadRef.current = buildUserInterfacePayload();
 
     renderHomePage();
 
     const quickConfig = screen.getByTestId("home-quick-config");
     expect(within(quickConfig).getByTestId("home-cpu-speed-value").textContent).toBe("1");
+    expectCpuControls();
+    expectVideoControls();
+    expectPortsControls();
+
+    const cpuCard = within(quickConfig).getByTestId("home-cpu-summary");
+    const portsCard = within(quickConfig).getByTestId("home-ports-summary");
+    const videoCard = within(quickConfig).getByTestId("home-video-summary");
+    expect(cpuCard.getAttribute("data-section-label")).toBe("CPU");
+    expect(portsCard.getAttribute("data-section-label")).toBe("Ports");
+    expect(videoCard.getAttribute("data-section-label")).toBe("Video");
+    expect(cpuCard.compareDocumentPosition(portsCard) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+    expect(portsCard.compareDocumentPosition(videoCard) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
 
     const slider = screen.getByTestId("home-cpu-speed-slider");
     const thumb = slider.querySelector('[role="slider"]');
@@ -874,33 +1154,53 @@ describe("HomePage SID status", () => {
     );
   });
 
-  it("renders LED settings when LED config data is populated and handles mode change", async () => {
+  it("renders the quick actions RAM folder row and LED lighting cards in order", async () => {
+    userInterfacePayloadRef.current = buildUserInterfacePayload();
     ledStripPayloadRef.current = {
-      "LED Strip Settings": {
-        items: {
-          "LedStrip Mode": {
-            selected: "Fixed Color",
-            options: ["Off", "Fixed Color", "Rainbow"],
-          },
-          "Fixed Color": { selected: "Red", options: ["Red", "Green", "Blue"] },
-          "Strip Intensity": { selected: "15", min: 0, max: 31 },
-          "LedStrip SID Select": {
-            selected: "SID 1",
-            options: ["SID 1", "SID 2"],
-          },
-          "Color tint": { selected: "Pure", options: ["Pure", "Warm"] },
-        },
-      },
+      "LED Strip Settings": buildLightingPayload(),
+    };
+    keyboardLightingPayloadRef.current = {
+      "Keyboard Lighting": buildLightingPayload({
+        fixedColor: "Magenta",
+        fixedColorOptions: ["Magenta", "Fuchsia", "White"],
+        intensity: "8",
+        pattern: "Single Color",
+        patternOptions: ["Single Color", "Circular"],
+      }),
     };
 
     renderHomePage();
 
-    const ledSection = screen.getByTestId("home-led-summary");
-    expect(within(ledSection).getByText("LED")).toBeTruthy();
-    expect(screen.getByTestId("home-led-mode")).toBeTruthy();
-    expect(screen.getByTestId("home-led-color")).toBeTruthy();
-    expect(screen.getByTestId("home-led-intensity-slider")).toBeTruthy();
-    expect(screen.getByTestId("home-led-intensity-value")).toBeTruthy();
+    expectUserInterfaceControls("home-user-interface");
+    expect(within(screen.getByTestId("home-lighting-group")).getByText("LED LIGHTING")).toBeTruthy();
+    expectLightingControls("home-led", "Case Light");
+    expectLightingControls("home-keyboard-lighting", "Keyboard Light");
+    expect(screen.getByTestId("home-led-pattern")).toHaveTextContent("Single Color");
+    expect(screen.getByTestId("home-keyboard-lighting-pattern")).toHaveTextContent("Single Color");
+
+    const machineSection = screen.getByTestId("home-machine-controls").closest('[data-section-label="Quick Actions"]');
+    const ramFolderRow = screen.getByTestId("home-ram-folder-row");
+    expect(machineSection).toBeTruthy();
+    expect(machineSection?.contains(ramFolderRow)).toBe(true);
+    expect(
+      screen.getByTestId("home-machine-controls").compareDocumentPosition(screen.getByTestId("home-machine-footer")) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
+
+    const cardColumn = screen.getByTestId("home-secondary-cards");
+    const userInterfaceCard = within(cardColumn).getByTestId("home-user-interface-summary");
+    const lightingGroup = within(cardColumn).getByTestId("home-lighting-group");
+    const caseLightingCard = within(cardColumn).getByTestId("home-led-summary");
+    const keyboardLightingCard = within(cardColumn).getByTestId("home-keyboard-lighting-summary");
+    expect(userInterfaceCard.getAttribute("data-section-label")).toBe("User Interface");
+    expect(caseLightingCard.getAttribute("data-section-label")).toBe("Case Light");
+    expect(keyboardLightingCard.getAttribute("data-section-label")).toBe("Keyboard Light");
+    expect(screen.queryByTestId("home-ram-dump-folder")).toBeNull();
+    expect(userInterfaceCard.compareDocumentPosition(lightingGroup) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+    expect(lightingGroup.compareDocumentPosition(caseLightingCard) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+    expect(caseLightingCard.compareDocumentPosition(keyboardLightingCard) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(
+      0,
+    );
 
     const ledModeSelect = screen.getByTestId("home-led-mode");
     fireEvent.click(ledModeSelect);
@@ -910,63 +1210,124 @@ describe("HomePage SID status", () => {
     });
   });
 
-  it("updates quick-config and LED controls across select, checkbox, and slider interactions", async () => {
-    u64SettingsPayloadRef.current = {
-      "U64 Specific Settings": {
-        items: {
-          "CPU Speed": { selected: "1", options: ["1", "2", "4"] },
-          "System Mode": { selected: "PAL", options: ["PAL", "NTSC"] },
-          "Analog Video Mode": { selected: "PAL", options: ["PAL", "NTSC"] },
-          "Digital Video Mode": {
-            selected: "1080p",
-            options: ["1080p", "720p"],
-          },
-          "HDMI Scan lines": {
-            selected: "Disabled",
-            options: ["Disabled", "Enabled"],
-          },
-          "Joystick Swapper": {
-            selected: "Normal",
-            options: ["Normal", "Swapped"],
-          },
-        },
-      },
-    };
-
+  it("shows Single Color for lighting patterns while sending the raw API value", async () => {
     ledStripPayloadRef.current = {
-      "LED Strip Settings": {
-        items: {
-          "LedStrip Mode": {
-            selected: "Fixed Color",
-            options: ["Off", "Fixed Color", "Rainbow"],
-          },
-          "Fixed Color": { selected: "Red", options: ["Red", "Green", "Blue"] },
-          "Strip Intensity": { selected: "10", min: 0, max: 31 },
-          "LedStrip SID Select": {
-            selected: "SID 1",
-            options: ["SID 1", "SID 2"],
-          },
-          "Color tint": { selected: "Pure", options: ["Pure", "Warm"] },
-        },
-      },
+      "LED Strip Settings": buildLightingPayload({
+        pattern: "Outward",
+        patternOptions: ["SingleColor", "Outward"],
+      }),
+    };
+    keyboardLightingPayloadRef.current = {
+      "Keyboard Lighting": buildLightingPayload({
+        pattern: "Single Color",
+        patternOptions: ["Single Color", "Circular"],
+      }),
     };
 
     renderHomePage();
+
+    fireEvent.click(screen.getByTestId("home-led-pattern"));
+    fireEvent.click(await screen.findByRole("option", { name: /^Single Color$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("home-led-pattern")).toHaveTextContent("Single Color");
+      expect(screen.getByTestId("home-keyboard-lighting-pattern")).toHaveTextContent("Single Color");
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
+        "LED Strip Settings",
+        "LedStrip Pattern",
+        "SingleColor",
+      );
+    });
+  });
+
+  it("updates CPU, Video, Ports, user interface, and lighting controls from the Home page", async () => {
+    u64SettingsPayloadRef.current = buildU64SettingsPayload({
+      analogVideoMode: "CVBS + SVideo",
+      analogVideoModeOptions: ["CVBS + SVideo", "RGB"],
+      badlineTiming: "Enabled",
+      cpuSpeed: "1",
+      digitalVideoMode: "Auto",
+      digitalVideoModeOptions: ["Auto", "HDMI", "DVI"],
+      hdmiResolution: "SD (480p/576p)",
+      joystickSwapper: "Normal",
+      serialBusMode: "All Connected",
+      superCpuDetect: "Disabled",
+      systemMode: "PAL",
+      turboControl: "Off",
+      userPortPower: "Enabled",
+    });
+    c64CartridgePayloadRef.current = buildCartridgeSettingsPayload({
+      cartridgePreference: "Auto",
+    });
+    userInterfacePayloadRef.current = buildUserInterfacePayload({
+      colorScheme: "Commodore Blue",
+      interfaceType: "Overlay on HDMI",
+      navigationStyle: "WASD Cursors",
+    });
+
+    ledStripPayloadRef.current = {
+      "LED Strip Settings": buildLightingPayload({
+        intensity: "10",
+      }),
+    };
+    keyboardLightingPayloadRef.current = {
+      "Keyboard Lighting": buildLightingPayload({
+        fixedColor: "Magenta",
+        fixedColorOptions: ["Magenta", "Fuchsia", "White"],
+        intensity: "8",
+        pattern: "Single Color",
+        patternOptions: ["Single Color", "Circular"],
+      }),
+    };
+
+    renderHomePage();
+
+    fireEvent.click(screen.getByTestId("home-cpu-turbo-control"));
+    fireEvent.click(await screen.findByRole("option", { name: /C64U Turbo Registers/i }));
+
+    const cpuSliderThumb = screen.getByTestId("home-cpu-speed-slider").querySelector('[role="slider"]');
+    expect(cpuSliderThumb).toBeTruthy();
+    fireEvent.keyDown(cpuSliderThumb!, { key: "ArrowRight" });
+
+    fireEvent.click(screen.getByTestId("home-cpu-badline-timing"));
+    fireEvent.click(screen.getByTestId("home-cpu-supercpu-detect"));
 
     fireEvent.click(screen.getByTestId("home-video-mode"));
     fireEvent.click(await screen.findByRole("option", { name: /NTSC/i }));
 
     fireEvent.click(screen.getByTestId("home-video-analog"));
-    fireEvent.click(await screen.findByRole("option", { name: /NTSC/i }));
+    fireEvent.click(await screen.findByRole("option", { name: /^RGB$/i }));
+
+    fireEvent.click(screen.getByTestId("home-video-hdmi-resolution"));
+    fireEvent.click(await screen.findByRole("option", { name: /FullHD \(1080p\)/i }));
 
     fireEvent.click(screen.getByTestId("home-video-digital"));
-    fireEvent.click(await screen.findByRole("option", { name: /720p/i }));
+    fireEvent.click(await screen.findByRole("option", { name: /^DVI$/i }));
 
     fireEvent.click(screen.getByTestId("home-video-scanlines"));
-    fireEvent.click(screen.getByTestId("home-joystick-swap"));
+
+    fireEvent.click(screen.getByTestId("home-joystick-swapper"));
+    fireEvent.click(await screen.findByRole("option", { name: /WASD Port 2/i }));
+
+    fireEvent.click(screen.getByTestId("home-serial-bus-mode"));
+    fireEvent.click(await screen.findByRole("option", { name: /C64U <-> External/i }));
+
+    fireEvent.click(screen.getByTestId("home-cartridge-preference"));
+    fireEvent.click(await screen.findByRole("option", { name: /^Manual$/i }));
+
+    fireEvent.click(screen.getByTestId("home-user-port-power"));
+
+    fireEvent.click(screen.getByTestId("home-user-interface-overlay"));
+    fireEvent.click(screen.getByTestId("home-user-interface-wasd-cursors"));
+
+    fireEvent.click(screen.getByTestId("home-user-interface-color-scheme"));
+    fireEvent.click(await screen.findByRole("option", { name: /Ultimate Black/i }));
 
     fireEvent.click(screen.getByTestId("home-led-mode"));
     fireEvent.click(await screen.findByRole("option", { name: /Rainbow/i }));
+
+    fireEvent.click(screen.getByTestId("home-led-pattern"));
+    fireEvent.click(await screen.findByRole("option", { name: /Outward/i }));
 
     fireEvent.click(screen.getByTestId("home-led-color"));
     fireEvent.click(await screen.findByRole("option", { name: /Green/i }));
@@ -979,22 +1340,74 @@ describe("HomePage SID status", () => {
 
     const colorSliderThumb = screen.getByTestId("home-led-color-slider").querySelector('[role="slider"]');
     const intensitySliderThumb = screen.getByTestId("home-led-intensity-slider").querySelector('[role="slider"]');
+    const keyboardColorSliderThumb = screen
+      .getByTestId("home-keyboard-lighting-color-slider")
+      .querySelector('[role="slider"]');
+    const keyboardIntensitySliderThumb = screen
+      .getByTestId("home-keyboard-lighting-intensity-slider")
+      .querySelector('[role="slider"]');
     expect(colorSliderThumb).toBeTruthy();
     expect(intensitySliderThumb).toBeTruthy();
+    expect(keyboardColorSliderThumb).toBeTruthy();
+    expect(keyboardIntensitySliderThumb).toBeTruthy();
     fireEvent.keyDown(colorSliderThumb!, { key: "ArrowRight" });
     fireEvent.keyDown(intensitySliderThumb!, { key: "ArrowRight" });
 
+    fireEvent.click(screen.getByTestId("home-keyboard-lighting-mode"));
+    fireEvent.click(await screen.findByRole("option", { name: /Rainbow/i }));
+
+    fireEvent.click(screen.getByTestId("home-keyboard-lighting-pattern"));
+    fireEvent.click(await screen.findByRole("option", { name: /Circular/i }));
+
+    fireEvent.click(screen.getByTestId("home-keyboard-lighting-color"));
+    fireEvent.click(await screen.findByRole("option", { name: /Fuchsia/i }));
+
+    fireEvent.click(screen.getByTestId("home-keyboard-lighting-sid-select"));
+    fireEvent.click(await screen.findByRole("option", { name: /SID 2/i }));
+
+    fireEvent.click(screen.getByTestId("home-keyboard-lighting-tint"));
+    fireEvent.click(await screen.findByRole("option", { name: /Warm/i }));
+
+    fireEvent.keyDown(keyboardColorSliderThumb!, { key: "ArrowRight" });
+    fireEvent.keyDown(keyboardIntensitySliderThumb!, { key: "ArrowRight" });
+
     await waitFor(() => {
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
+        "U64 Specific Settings",
+        "Turbo Control",
+        "C64U Turbo Registers",
+      );
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith("U64 Specific Settings", "CPU Speed", "2");
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
+        "U64 Specific Settings",
+        "Turbo Control",
+        "Manual",
+      );
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
+        "U64 Specific Settings",
+        "Badline Timing",
+        "Disabled",
+      );
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
+        "U64 Specific Settings",
+        "SuperCPU Detect (D0BC)",
+        "Enabled",
+      );
       expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith("U64 Specific Settings", "System Mode", "NTSC");
       expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
         "U64 Specific Settings",
         "Analog Video Mode",
-        "NTSC",
+        "RGB",
+      );
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
+        "U64 Specific Settings",
+        "HDMI Scan Resolution",
+        "FullHD (1080p)",
       );
       expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
         "U64 Specific Settings",
         "Digital Video Mode",
-        "720p",
+        "DVI",
       );
       expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
         "U64 Specific Settings",
@@ -1004,12 +1417,47 @@ describe("HomePage SID status", () => {
       expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
         "U64 Specific Settings",
         "Joystick Swapper",
-        "Swapped",
+        "WASD Port 2",
+      );
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
+        "U64 Specific Settings",
+        "Serial Bus Mode",
+        "C64U <-> External",
+      );
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
+        "C64 and Cartridge Settings",
+        "Cartridge Preference",
+        "Manual",
+      );
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
+        "U64 Specific Settings",
+        "UserPort Power Enable",
+        "Disabled",
+      );
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
+        "User Interface Settings",
+        "Interface Type",
+        "Freeze",
+      );
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
+        "User Interface Settings",
+        "Navigation Style",
+        "Quick Search",
+      );
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
+        "User Interface Settings",
+        "Color Scheme",
+        "Ultimate Black",
       );
       expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
         "LED Strip Settings",
         "LedStrip Mode",
         "Rainbow",
+      );
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
+        "LED Strip Settings",
+        "LedStrip Pattern",
+        "Outward",
       );
       expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith("LED Strip Settings", "Fixed Color", "Green");
       expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
@@ -1018,8 +1466,25 @@ describe("HomePage SID status", () => {
         "SID 2",
       );
       expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith("LED Strip Settings", "Color tint", "Warm");
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
+        "Keyboard Lighting",
+        "LedStrip Mode",
+        "Rainbow",
+      );
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
+        "Keyboard Lighting",
+        "LedStrip Pattern",
+        "Circular",
+      );
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith("Keyboard Lighting", "Fixed Color", "Fuchsia");
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
+        "Keyboard Lighting",
+        "LedStrip SID Select",
+        "SID 2",
+      );
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith("Keyboard Lighting", "Color tint", "Warm");
     });
-  }, 30000);
+  }, 90000);
 
   it("handles save-to-app error path", async () => {
     const savedAt = new Date("2024-01-01T00:00:00.000Z").toISOString();

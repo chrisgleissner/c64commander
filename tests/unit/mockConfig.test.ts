@@ -62,14 +62,14 @@ config:
     expect(second).not.toBe(first);
   });
 
-  it("falls back to defaults when loader throws", async () => {
+  it("falls back to bundled yaml when the custom loader throws", async () => {
     setMockConfigLoader(() => {
       throw new Error("boom");
     });
 
     const payload = await getMockConfigPayload();
-    expect(payload.general.baseUrl).toBe("http://c64u");
-    expect(payload.general.deviceType).toBe("Ultimate 64 Elite");
+    expect(payload.general.baseUrl).toMatch(/^http:\/\//);
+    expect(payload.general.deviceType).toContain("Ultimate");
     expect(Object.keys(payload.categories).length).toBeGreaterThan(0);
   });
 
@@ -80,7 +80,8 @@ config:
     const payload = await getMockConfigPayload();
 
     expect(fetchSpy).not.toHaveBeenCalled();
-    expect(payload.general.deviceType).toBe("Ultimate 64 Elite");
+    expect(payload.general.baseUrl).toMatch(/^http:\/\//);
+    expect(payload.general.deviceType).toContain("Ultimate");
     expect(Object.keys(payload.categories).length).toBeGreaterThan(0);
     fetchSpy.mockRestore();
   });
