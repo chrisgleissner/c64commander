@@ -17,7 +17,7 @@ export const U64_HOME_ITEMS = [
   "Joystick Swapper",
   "UserPort Power Enable",
 ] as const;
-export const C64_CARTRIDGE_HOME_ITEMS = ["Cartridge Preference"] as const;
+export const C64_CARTRIDGE_HOME_ITEMS = ["Cartridge Preference", "RAM Expansion Unit", "REU Size"] as const;
 export const USER_INTERFACE_HOME_ITEMS = ["Interface Type", "Navigation Style", "Color Scheme"] as const;
 export const LIGHTING_HOME_ITEMS = [
   "LedStrip Mode",

@@ -1,208 +1,99 @@
-# Review 6 Rollout Execution Plan
+# Production Hardening Audit Plan
 
-## Objective
+This document defines the audit plan only. It does not contain audit findings or a review report.
 
-Implement and verify every task in `doc/research/review-6/review-6-rollout-plan.md`.
+## Phase 1: Repository Inventory
 
-## Execution Model
+- [ ] Catalog top-level apps, packages, services, scripts, and generated artifact directories.
+- [ ] Identify runtime entry points for web, Android, iOS, Playwright, agents, and supporting services.
+- [ ] Map critical source directories to responsibilities across UI, hooks, API, native bridges, and diagnostics.
+- [ ] List build, test, packaging, and release commands from package scripts and helper scripts.
+- [ ] Record external systems the repository depends on, including C64 Ultimate REST, FTP, Docker, Android, iOS, and GitHub Actions.
 
-- Authoritative tracker: this file
-- Workflow: read -> plan -> implement -> test -> verify -> record -> continue
-- Phase discipline: do not mark a phase complete until its exit criteria are verified
+## Phase 2: Documentation Audit
 
-## Phase Status
+- [ ] Review README, docs, and doc content for setup accuracy, production boundaries, and operational clarity.
+- [ ] Check that platform-specific instructions match the current Android, iOS, and web deployment flows.
+- [ ] Verify that diagnostics, security, networking, and troubleshooting documentation reflects current behavior.
+- [ ] Identify undocumented operational assumptions, manual steps, and recovery procedures.
+- [ ] Note stale, duplicated, or conflicting guidance between README, doc, docs, and in-repo prompts.
 
-- [x] Phase 0 - Baseline Alignment
-- [x] Phase 1 - Web Rollout Safety
-- [x] Phase 2 - Release Metadata and Documentation Hygiene
-- [x] Phase 3 - Dependency and Platform Security Hygiene
-- [x] Phase 4 - Playlist Persistence Hardening
-- [x] Phase 5 - Maintainability Hardening
-- [x] Phase 6 - Coverage Closeout
-- [x] Final verification and rollout plan closeout
+## Phase 3: Architecture Reconstruction
 
-## Phase 0 - Baseline Alignment
+- [ ] Reconstruct the high-level architecture from UI, hook, service, native bridge, and backend-facing modules.
+- [ ] Trace state ownership for connection status, configuration state, diagnostics state, and playback state.
+- [ ] Identify boundaries between React UI, domain logic, transport adapters, native integrations, and persistence.
+- [ ] Map how feature flags, app config, and environment-specific behavior are introduced and consumed.
+- [ ] Produce a dependency sketch of critical modules whose failure would block core product flows.
 
-Implementation targets:
+## Phase 4: Runtime Interaction Tracing
 
-- `AGENTS.md`
-- `README.md`
-- `doc/research/review-6/review-6-rollout-plan.md`
+- [ ] Trace startup flow from app launch to first usable screen across supported platforms.
+- [ ] Trace user actions that write device configuration from UI intent to transport request.
+- [ ] Trace async event propagation for polling, retries, throttling, and UI refresh paths.
+- [ ] Trace diagnostics and logging emission paths from runtime events to stored or displayed evidence.
+- [ ] Trace failure handling paths for timeouts, offline states, malformed responses, and partial device availability.
 
-Tasks:
+## Phase 5: Device Communication
 
-- [x] Remove stale Android release-signing TODO wording from `AGENTS.md`
-- [x] State the iOS sideload-only release scope explicitly in `README.md`
-- [x] State that Android Play upload is already operational in `README.md`
-- [x] Record the device transport boundary (HTTP/FTP) in one canonical location and reference it nearby
-- [x] Record that GitHub Actions version-tag usage is an intentional contributor-facing policy
+- [ ] Inventory all REST, FTP, and any other device-facing communication paths.
+- [ ] Verify request construction, response parsing, schema assumptions, and protocol-specific fallbacks.
+- [ ] Check timeout, retry, backoff, and cancellation behavior for device operations.
+- [ ] Identify write operations that could leave device state partially applied or inconsistent.
+- [ ] Review handling of hostname, IP, credentials, and local network assumptions in production scenarios.
 
-Verification:
+## Phase 6: Connection Management
 
-- [x] Search docs for stale Android publishing TODO wording
-- [x] Confirm one canonical rollout-boundary section exists and nearby docs point to the current state
+- [ ] Audit connection lifecycle handling for cold start, reconnect, disconnect, and device-switch scenarios.
+- [ ] Review polling cadence, concurrent request coordination, and stale request suppression.
+- [ ] Check UI signaling for connection health, degraded modes, and recovery guidance.
+- [ ] Verify how demo mode, cached state, and live device state are separated to avoid cross-contamination.
+- [ ] Identify race conditions between connection updates, config edits, and background refresh tasks.
 
-## Phase 1 - Web Rollout Safety
+## Phase 7: Diagnostics
 
-Implementation targets:
+- [ ] Inventory diagnostics surfaces, logs, traces, captures, and exported evidence paths.
+- [ ] Review diagnostic action safety, privacy impact, and failure visibility.
+- [ ] Check whether diagnostic tools remain usable when the device or network is degraded.
+- [ ] Verify that errors are logged or surfaced with enough context for production triage.
+- [ ] Identify gaps in observability for user-reported failures that cannot currently be reproduced locally.
 
-- `public/sw.js`
-- `src/lib/startup/serviceWorkerRegistration.ts`
-- `tests/unit/startup/serviceWorkerRegistration.test.ts`
-- web deployment documentation in `README.md` and/or `doc/`
+## Phase 8: Test Coverage
 
-Tasks:
+- [ ] Inventory unit, integration, Playwright, Android, and agent test suites and their intended responsibilities.
+- [ ] Map high-risk product flows to existing regression coverage and identify blind spots.
+- [ ] Review coverage thresholds, current branch coverage posture, and enforcement points in local and CI workflows.
+- [ ] Check whether device communication, failure handling, and recovery paths have deterministic tests.
+- [ ] Identify flaky, slow, environment-coupled, or redundant tests that weaken release confidence.
 
-- [x] Replace fixed service-worker cache names with build-versioned cache names
-- [x] Stop cache-first handling for `/` and `/index.html`
-- [x] Add deterministic regression coverage for shell invalidation on deployment
-- [x] Add deterministic regression coverage for activation-time cache eviction
-- [x] Document deploy, hard-refresh, and rollback behavior for operators
+## Phase 9: CI/CD
 
-Verification:
+- [ ] Review GitHub Actions and local helper scripts for build, test, release, and artifact publication flow.
+- [ ] Verify branch, tag, and release assumptions against documented release policy.
+- [ ] Check which validations gate merges versus which run only on release or platform-specific workflows.
+- [ ] Audit artifact retention, provenance, reproducibility, and failure reporting in CI.
+- [ ] Identify missing quality gates for formatting, security-sensitive changes, coverage, and platform packaging.
 
-- [x] Run targeted service-worker tests
-- [x] Confirm shell requests bypass stale cache after activation
+## Phase 10: Platform Integrations
 
-## Phase 2 - Release Metadata and Documentation Hygiene
+- [ ] Audit Capacitor, Android, iOS, web, and Docker integration points for configuration drift.
+- [ ] Review native bridge contracts and error propagation between TypeScript and platform code.
+- [ ] Check file-system, storage, permission, and media access behavior across supported platforms.
+- [ ] Verify web deployment assumptions for LAN hosting, port exposure, and persisted config storage.
+- [ ] Identify platform-specific production risks that are not covered by shared logic tests.
 
-Implementation targets:
+## Phase 11: Security and Reliability
 
-- `package.json`
-- `vite.config.ts`
-- `.github/workflows/web.yaml`
-- `README.md`
-- `tests/contract/README.md`
-- `docs/privacy-policy.md`
+- [ ] Review authentication, password handling, local storage, and secret exposure risks.
+- [ ] Inspect network trust assumptions, insecure transport exposure, and boundary protections for LAN deployment.
+- [ ] Audit exception handling, retry loops, fallback behavior, and crash-prone code paths.
+- [ ] Identify operations lacking idempotency, confirmation, rollback, or safe failure behavior.
+- [ ] Review third-party dependencies, patch files, and update practices for production maintenance risk.
 
-Tasks:
+## Phase 12: Production Risk
 
-- [x] Choose one canonical app version source and enforce it in build metadata
-- [x] Remove mismatch-tolerant publish behavior from `.github/workflows/web.yaml`
-- [x] Update README artifact examples to the current naming convention
-- [x] Update contract-test runtime documentation to Node 24
-- [x] Remove the remote crash-reporting SDK from runtime, dependencies, and current docs
-- [x] Align the privacy policy with the no-crash-reporting runtime behavior
-
-Verification:
-
-- [x] Run targeted tests for build/version helpers if changed
-- [x] Validate workflow version check logic by inspection and lint/build usage
-
-## Phase 3 - Dependency and Platform Security Hygiene
-
-Implementation targets:
-
-- `package.json`
-- `package-lock.json`
-- Android manifest and backup policy XML files
-- rollout worklog in this file
-
-Tasks:
-
-- [x] Triage `npm audit` findings into upgrade, replace, or accepted-risk buckets
-- [x] Upgrade or replace vulnerable direct dependencies, starting with `@capacitor/cli`, `ftp-srv`, `ajv`, and `jsdom`
-- [x] Refresh overrides if still required after upgrades
-- [x] Capture post-remediation `npm audit` results in the worklog
-- [x] Make Android backup posture intentional and implement it in manifest/XML rules
-
-Verification:
-
-- [x] Run `npm audit` after dependency changes
-- [x] Build/test after dependency changes
-- [x] Validate Android manifest/resources still build
-
-## Phase 4 - Playlist Persistence Hardening
-
-Implementation targets:
-
-- `src/lib/playlistRepository/**`
-- playlist persistence consumers under `src/pages/playFiles/**`
-- `doc/db.md`
-- playlist unit tests
-
-Tasks:
-
-- [x] Define the persisted playlist query model and migration strategy in code/docs
-- [x] Move filtering, sorting, and pagination into repository-backed indexed/queryable structures
-- [x] Preserve recovery artifacts for schema mismatch and parse/migration failures
-- [x] Add deterministic regression tests for corruption and migration recovery
-- [x] Add deterministic regression tests for large playlist query behavior
-
-Verification:
-
-- [x] Run targeted playlist repository tests
-- [x] Confirm large playlist queries no longer depend on full scan/sort of all rows at query time
-
-## Phase 5 - Maintainability Hardening
-
-Implementation targets:
-
-- `src/lib/c64api.ts`
-- `src/pages/SettingsPage.tsx`
-- `src/pages/PlayFilesPage.tsx`
-- `src/components/disks/HomeDiskManager.tsx`
-- `src/lib/hvsc/hvscIngestionRuntime.ts`
-- `tsconfig.json`
-- `tsconfig.app.json`
-- `android/app/build.gradle`
-
-Tasks:
-
-- [x] Define and record the extraction order for hotspot files
-- [x] Split `src/lib/c64api.ts` into request/domain modules
-- [x] Split `src/pages/SettingsPage.tsx` by settings area
-- [x] Split `src/pages/PlayFilesPage.tsx` by browsing, playlist, and playback concerns
-- [x] Split `src/components/disks/HomeDiskManager.tsx` by collection, dialog, and mount-control concerns
-- [x] Split `src/lib/hvsc/hvscIngestionRuntime.ts` by ingestion stage and runtime/persistence concerns
-- [x] Re-enable a documented subset of stricter TypeScript checks without breaking the build
-- [x] Replace silent Gradle catches with explicit logging or contextual failure
-
-Verification:
-
-- [x] Run TypeScript/lint/build validation after modularization
-- [x] Confirm hotspot files are materially smaller than baseline
-- [x] Confirm Gradle version derivation no longer swallows failures silently
-
-## Phase 6 - Coverage Closeout
-
-Implementation targets:
-
-- `vitest.config.ts`
-- `scripts/collect-coverage.sh`
-- `scripts/check-coverage-threshold.mjs`
-- `codecov.yml`
-- rollout worklog in this file
-
-Tasks:
-
-- [x] Include shipped `web/server/**` runtime in enforced coverage reporting or add an equivalent enforced server gate
-- [x] Update coverage scripts and Codecov config to match the chosen gate
-- [x] Record the resulting measured line and branch baseline in the worklog
-
-Verification:
-
-- [x] Run `npm run test:coverage`
-- [x] Run `npm run test:coverage:all`
-- [x] Run `npm run lint`
-- [x] Run `npm run build`
-
-## Execution Worklog
-
-| Date | Phase | Entry | Status |
-| --- | --- | --- | --- |
-| 2026-03-13 | Planning | Replaced the stale audit-only `PLANS.md` with the rollout execution tracker tied to phases 0-6, verification steps, and live completion markers. | done |
-| 2026-03-13 | Planning | Completed initial implementation discovery for docs, service worker, workflow versioning, Android backup config, playlist repository, coverage scripts, and hotspot files. | done |
-| 2026-03-13 | Phase 0-2 | Aligned rollout docs, made `package.json` the canonical app version source, removed mismatch-tolerant web publish behavior, and removed the remote crash-reporting SDK plus its privacy-policy contradictions. | done |
-| 2026-03-13 | Phase 1 | Switched service-worker registration and caches to build-versioned behavior, stopped cache-first shell handling, and added deterministic lifecycle regression coverage. | done |
-| 2026-03-13 | Phase 3-4 | Upgraded `ajv`/`jsdom`/`tar`, disabled Android backup at the manifest level, replaced silent Gradle catches with warnings, moved playlist queries to persisted indexes, and added migration/recovery coverage. | done |
-| 2026-03-13 | Phase 3-6 | Hardened the shared slider against invalid bounds exposed by the `jsdom` upgrade, stabilized HomePage and structured-recovery tests on quick-action test ids, and included `tests/unit/web/**` + `web/server/**` in enforced unit coverage. | done |
-| 2026-03-13 | Phase 5 | Completed hotspot extractions across `c64api`, diagnostics dialogs, Play Files hooks, Home Disk Manager helpers, and HVSC runtime support, then revalidated lint/build behavior against the smaller module boundaries. | done |
-| 2026-03-13 | Phase 6 | Closed the remaining branch-coverage gap with targeted regression tests for diagnostics, connection state, Home Disk Manager flows, host/runtime helpers, AppBar, and playback volume hooks; the clean full Vitest coverage baseline is now 92.29% lines and 91.00% branches. | done |
-| 2026-03-13 | Final verification | Re-ran lint, the standard test suite, a clean full coverage pass, and a production build; rollout plan closeout is now verified locally. | done |
-
-## Audit / Verification Notes
-
-- Residual `npm audit` risk after upgrades: `ftp-srv`/`ip` remain in contract-test infrastructure, while older `ajv` and `minimatch` copies remain under upstream tooling trees.
-- Hotspot extraction order recorded from repo exploration: `src/lib/c64api.ts` host-resolution split first, then `src/pages/SettingsPage.tsx` diagnostics panel, then `src/lib/hvsc/hvscIngestionRuntime.ts` core pipeline extraction, followed by `src/pages/PlayFilesPage.tsx` playback/browsing split and `src/components/disks/HomeDiskManager.tsx` drive/library/dialog split.
-- Final local verification is complete: lint passes, the production build passes, and the clean full Vitest coverage run reports 92.29% lines and 91.00% branches.
+- [ ] Rank the most critical user-facing and operational risks by severity, likelihood, and detectability.
+- [ ] Identify single points of failure across runtime, build, release, and device interaction paths.
+- [ ] Define which risks are acceptable, which require mitigation before release, and which need monitoring only.
+- [ ] Prepare a remediation backlog structure grouped by immediate, short-term, and longer-term hardening work.
+- [ ] Define the evidence package required for a final production hardening report after the audit is executed.

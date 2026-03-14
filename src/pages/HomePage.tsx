@@ -231,6 +231,20 @@ function HomePageContent() {
   const superCpuDetectValue = String(
     resolveConfigValue(u64Category, "U64 Specific Settings", "SuperCPU Detect (D0BC)", unavailableLabel),
   );
+  const ramExpansionOptions = readItemOptions(
+    c64CartridgeConfig,
+    "C64 and Cartridge Settings",
+    "RAM Expansion Unit",
+  ).map((value) => String(value));
+  const ramExpansionValue = String(
+    resolveConfigValue(c64CartridgeConfig, "C64 and Cartridge Settings", "RAM Expansion Unit", unavailableLabel),
+  );
+  const reuSizeOptions = readItemOptions(c64CartridgeConfig, "C64 and Cartridge Settings", "REU Size").map((value) =>
+    String(value),
+  );
+  const reuSizeValue = String(
+    resolveConfigValue(c64CartridgeConfig, "C64 and Cartridge Settings", "REU Size", unavailableLabel),
+  );
   const userPortPowerOptions = readItemOptions(u64Category, "U64 Specific Settings", "UserPort Power Enable").map(
     (value) => String(value),
   );
@@ -317,6 +331,8 @@ function HomePageContent() {
   const effectiveTurboControlOptions = turboControlOptions.length ? turboControlOptions : [turboControlValue];
   const effectiveBadlineTimingOptions = badlineTimingOptions.length ? badlineTimingOptions : [badlineTimingValue];
   const effectiveSuperCpuDetectOptions = superCpuDetectOptions.length ? superCpuDetectOptions : [superCpuDetectValue];
+  const effectiveRamExpansionOptions = ramExpansionOptions.length ? ramExpansionOptions : [ramExpansionValue];
+  const effectiveReuSizeOptions = reuSizeOptions.length ? reuSizeOptions : [reuSizeValue];
   const effectiveUserPortPowerOptions = userPortPowerOptions.length ? userPortPowerOptions : [userPortPowerValue];
 
   const displayedVideoModeValue = isActive ? videoModeValue : unavailableLabel;
@@ -329,6 +345,8 @@ function HomePageContent() {
   const displayedTurboControlValue = isActive ? turboControlValue : unavailableLabel;
   const displayedBadlineTimingValue = isActive ? badlineTimingValue : unavailableLabel;
   const displayedSuperCpuDetectValue = isActive ? superCpuDetectValue : unavailableLabel;
+  const displayedRamExpansionValue = isActive ? ramExpansionValue : unavailableLabel;
+  const displayedReuSizeValue = isActive ? reuSizeValue : unavailableLabel;
   const displayedUserPortPowerValue = isActive ? userPortPowerValue : unavailableLabel;
   const displayedVideoModeOptions = isActive ? effectiveVideoModeOptions : [unavailableLabel];
   const displayedAnalogVideoOptions = isActive ? effectiveAnalogVideoOptions : [unavailableLabel];
@@ -339,6 +357,8 @@ function HomePageContent() {
   const displayedTurboControlOptions = isActive ? effectiveTurboControlOptions : [unavailableLabel];
   const displayedBadlineTimingOptions = isActive ? effectiveBadlineTimingOptions : [unavailableLabel];
   const displayedSuperCpuDetectOptions = isActive ? effectiveSuperCpuDetectOptions : [unavailableLabel];
+  const displayedRamExpansionOptions = isActive ? effectiveRamExpansionOptions : [unavailableLabel];
+  const displayedReuSizeOptions = isActive ? effectiveReuSizeOptions : [unavailableLabel];
   const displayedUserPortPowerOptions = isActive ? effectiveUserPortPowerOptions : [unavailableLabel];
 
   const ramDumpFolderCard = (
@@ -380,6 +400,12 @@ function HomePageContent() {
   const cartridgePreferencePending = Boolean(
     configWritePending[buildConfigKey("C64 and Cartridge Settings", "Cartridge Preference")],
   );
+  const ramExpansionPending = Boolean(
+    configWritePending[buildConfigKey("C64 and Cartridge Settings", "RAM Expansion Unit")],
+  );
+  const reuSizePending = Boolean(configWritePending[buildConfigKey("C64 and Cartridge Settings", "REU Size")]);
+
+  const ramExpansionEnabled = normalizeOptionToken(ramExpansionValue) !== normalizeOptionToken("Disabled") && isActive;
 
   return (
     <div className="min-h-screen pb-24 pt-[var(--app-bar-height)]">
@@ -437,7 +463,7 @@ function HomePageContent() {
           <SectionHeader title="Quick Config" />
           <div className="grid gap-3 lg:grid-cols-2">
             <div className="space-y-3" data-testid="home-quick-config">
-              <SummaryConfigCard sectionLabel="CPU" title="CPU" testId="home-cpu-summary">
+              <SummaryConfigCard sectionLabel="CPU & RAM" title="CPU & RAM" testId="home-cpu-summary">
                 <SummaryConfigControlRow
                   controlType="select"
                   disabled={!isActive || turboControlPending}
@@ -516,6 +542,42 @@ function HomePageContent() {
                     )
                   }
                 />
+                <SummaryConfigControlRow
+                  disabled={!isActive || ramExpansionPending}
+                  label="RAM Expansion"
+                  options={displayedRamExpansionOptions}
+                  selectTriggerClassName={inlineSelectTriggerClass}
+                  testId="quickconfig-ram-expansion"
+                  value={displayedRamExpansionValue}
+                  onValueChange={(value) =>
+                    void updateConfigValue(
+                      "C64 and Cartridge Settings",
+                      "RAM Expansion Unit",
+                      value,
+                      "HOME_RAM_EXPANSION",
+                      "RAM expansion updated",
+                    )
+                  }
+                />
+                {ramExpansionEnabled && (
+                  <SummaryConfigControlRow
+                    disabled={!isActive || reuSizePending}
+                    label="RAM Size (REU)"
+                    options={displayedReuSizeOptions}
+                    selectTriggerClassName={inlineSelectTriggerClass}
+                    testId="quickconfig-ram-size"
+                    value={displayedReuSizeValue}
+                    onValueChange={(value) =>
+                      void updateConfigValue(
+                        "C64 and Cartridge Settings",
+                        "REU Size",
+                        value,
+                        "HOME_REU_SIZE",
+                        "RAM size updated",
+                      )
+                    }
+                  />
+                )}
               </SummaryConfigCard>
 
               <SummaryConfigCard sectionLabel="Ports" title="Ports" testId="home-ports-summary">
