@@ -1,9 +1,9 @@
----
 name: c64-parity
-description: Audit/enforce feature/behavior parity across Android/iOS/Web routes in C64 Commander.
+description: Use when auditing or enforcing feature and behavior parity across Android, iOS, and Web routes in C64 Commander.
 argument-hint: (optional) specific feature or module
-user-invokable: true
+user-invocable: true
 disable-model-invocation: true
+
 ---
 
 # Skill: C64 Platform Parity Audit
@@ -21,6 +21,8 @@ Android remains the reference implementation.
 ---
 
 ## Execution Workflow
+
+Before changing anything, record the current changed-file baseline and avoid unrelated edits.
 
 ### Step 1 - Inventory Features
 
@@ -86,4 +88,4 @@ If missing or inconsistent:
 - No unintended platform drift.
 - Platform-specific behavior explicitly justified.
 - Tests updated where required.
-- Clean working tree.
+- Unrelated worktree changes remain untouched.

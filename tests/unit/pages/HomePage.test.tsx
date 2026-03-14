@@ -184,6 +184,8 @@ const HDMI_RESOLUTION_OPTIONS = [
 const JOYSTICK_SWAPPER_OPTIONS = ["Normal", "Swapped", "WASD Port 2", "WASD Port 1"];
 const SERIAL_BUS_MODE_OPTIONS = ["All Connected", "C64U <-> Internal", "Ext. <-> Int.", "C64U <-> External"];
 const CARTRIDGE_PREFERENCE_OPTIONS = ["Auto", "Internal", "External", "Manual"];
+const RAM_EXPANSION_OPTIONS = ["Disabled", "Enabled", "GeoRAM Mode"];
+const REU_SIZE_OPTIONS = ["128 KB", "256 KB", "512 KB", "1 MB", "2 MB", "4 MB", "8 MB", "16 MB"];
 
 const CPU_SPEED_OPTIONS = ["1", "2", "3", "4", "6", "8", "10", "12", "14", "16", "20", "24", "32", "40", "48", "64"];
 
@@ -324,15 +326,31 @@ const buildU64SettingsPayload = ({
 const buildCartridgeSettingsPayload = ({
   cartridgePreference = "Auto",
   cartridgePreferenceOptions = CARTRIDGE_PREFERENCE_OPTIONS,
+  ramExpansionUnit = "Disabled",
+  ramExpansionUnitOptions = RAM_EXPANSION_OPTIONS,
+  reuSize = "512 KB",
+  reuSizeOptions = REU_SIZE_OPTIONS,
 }: {
   cartridgePreference?: string;
   cartridgePreferenceOptions?: string[];
+  ramExpansionUnit?: string;
+  ramExpansionUnitOptions?: string[];
+  reuSize?: string;
+  reuSizeOptions?: string[];
 } = {}) => ({
   "C64 and Cartridge Settings": {
     items: {
       "Cartridge Preference": {
         selected: cartridgePreference,
         options: cartridgePreferenceOptions,
+      },
+      "RAM Expansion Unit": {
+        selected: ramExpansionUnit,
+        options: ramExpansionUnitOptions,
+      },
+      "REU Size": {
+        selected: reuSize,
+        options: reuSizeOptions,
       },
     },
   },
@@ -397,7 +415,7 @@ const expectUserInterfaceControls = (prefix: string) => {
 
 const expectCpuControls = () => {
   const section = screen.getByTestId("home-cpu-summary");
-  expect(within(section).getByText("CPU")).toBeTruthy();
+  expect(within(section).getByText("CPU & RAM")).toBeTruthy();
   expect(screen.getByTestId("home-cpu-turbo-control")).toBeTruthy();
   expect(screen.getByTestId("home-cpu-speed-slider")).toBeTruthy();
   expect(screen.getByTestId("home-cpu-speed-value")).toBeTruthy();
@@ -405,6 +423,18 @@ const expectCpuControls = () => {
   expect(screen.getByTestId("home-cpu-speed-value").className).toContain("text-foreground");
   expect(screen.getByTestId("home-cpu-badline-timing")).toBeTruthy();
   expect(screen.getByTestId("home-cpu-supercpu-detect")).toBeTruthy();
+  expect(screen.getByTestId("quickconfig-ram-expansion")).toBeTruthy();
+  expect(screen.getByTestId("quickconfig-ram-size")).toBeTruthy();
+
+  const labels = Array.from(section.querySelectorAll(".text-muted-foreground")).map((node) => node.textContent);
+  expect(labels).toEqual([
+    "Turbo Control",
+    "CPU Speed",
+    "Badline Timing",
+    "SuperCPU Detect",
+    "RAM Expansion",
+    "RAM Size (REU)",
+  ]);
 };
 
 const expectVideoControls = () => {
@@ -1124,7 +1154,10 @@ describe("HomePage SID status", () => {
 
   it("renders CPU, Ports, and Video cards with the expected controls in page order", async () => {
     u64SettingsPayloadRef.current = buildU64SettingsPayload();
-    c64CartridgePayloadRef.current = buildCartridgeSettingsPayload();
+    c64CartridgePayloadRef.current = buildCartridgeSettingsPayload({
+      ramExpansionUnit: "Enabled",
+      reuSize: "512 KB",
+    });
     userInterfacePayloadRef.current = buildUserInterfacePayload();
 
     renderHomePage();
@@ -1138,7 +1171,7 @@ describe("HomePage SID status", () => {
     const cpuCard = within(quickConfig).getByTestId("home-cpu-summary");
     const portsCard = within(quickConfig).getByTestId("home-ports-summary");
     const videoCard = within(quickConfig).getByTestId("home-video-summary");
-    expect(cpuCard.getAttribute("data-section-label")).toBe("CPU");
+    expect(cpuCard.getAttribute("data-section-label")).toBe("CPU & RAM");
     expect(portsCard.getAttribute("data-section-label")).toBe("Ports");
     expect(videoCard.getAttribute("data-section-label")).toBe("Video");
     expect(cpuCard.compareDocumentPosition(portsCard) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
@@ -1152,6 +1185,72 @@ describe("HomePage SID status", () => {
     await waitFor(() =>
       expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith("U64 Specific Settings", "CPU Speed", "2"),
     );
+  });
+
+  it("shows RAM Size (REU) only for REU-capable RAM expansion modes", () => {
+    c64CartridgePayloadRef.current = buildCartridgeSettingsPayload({
+      ramExpansionUnit: "Disabled",
+      reuSize: "512 KB",
+    });
+
+    const { rerender } = renderHomePage();
+
+    expect(screen.getByTestId("quickconfig-ram-expansion")).toBeTruthy();
+    expect(screen.queryByTestId("quickconfig-ram-size")).toBeNull();
+
+    c64CartridgePayloadRef.current = buildCartridgeSettingsPayload({
+      ramExpansionUnit: "Enabled",
+      reuSize: "2 MB",
+    });
+
+    rerender(
+      <RouterProvider
+        router={buildRouter(<HomePage />)}
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId("quickconfig-ram-size")).toBeTruthy();
+    expect(screen.getByTestId("quickconfig-ram-size")).toHaveTextContent("2 MB");
+
+    c64CartridgePayloadRef.current = buildCartridgeSettingsPayload({
+      ramExpansionUnit: "GeoRAM Mode",
+      reuSize: "2 MB",
+    });
+
+    rerender(
+      <RouterProvider
+        router={buildRouter(<HomePage />)}
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      />,
+    );
+
+    expect(screen.queryByTestId("quickconfig-ram-size")).toBeNull();
+
+    const unavailableRamExpansionPayload = buildCartridgeSettingsPayload({
+      reuSize: "2 MB",
+    });
+    delete unavailableRamExpansionPayload["C64 and Cartridge Settings"].items["RAM Expansion Unit"];
+    c64CartridgePayloadRef.current = unavailableRamExpansionPayload;
+
+    rerender(
+      <RouterProvider
+        router={buildRouter(<HomePage />)}
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId("quickconfig-ram-expansion")).toHaveTextContent("Not available");
+    expect(screen.queryByTestId("quickconfig-ram-size")).toBeNull();
   });
 
   it("renders the quick actions RAM folder row and LED lighting cards in order", async () => {
@@ -1258,6 +1357,8 @@ describe("HomePage SID status", () => {
     });
     c64CartridgePayloadRef.current = buildCartridgeSettingsPayload({
       cartridgePreference: "Auto",
+      ramExpansionUnit: "Enabled",
+      reuSize: "512 KB",
     });
     userInterfacePayloadRef.current = buildUserInterfacePayload({
       colorScheme: "Commodore Blue",
@@ -1314,6 +1415,14 @@ describe("HomePage SID status", () => {
 
     fireEvent.click(screen.getByTestId("home-cartridge-preference"));
     fireEvent.click(await screen.findByRole("option", { name: /^Manual$/i }));
+
+    fireEvent.click(screen.getByTestId("quickconfig-ram-size"));
+    fireEvent.click(await screen.findByRole("option", { name: /^2 MB$/i }));
+
+    fireEvent.click(screen.getByTestId("quickconfig-ram-expansion"));
+    fireEvent.click(await screen.findByRole("option", { name: /^GeoRAM Mode$/i }));
+
+    expect(screen.queryByTestId("quickconfig-ram-size")).toBeNull();
 
     fireEvent.click(screen.getByTestId("home-user-port-power"));
 
@@ -1428,6 +1537,16 @@ describe("HomePage SID status", () => {
         "C64 and Cartridge Settings",
         "Cartridge Preference",
         "Manual",
+      );
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
+        "C64 and Cartridge Settings",
+        "RAM Expansion Unit",
+        "GeoRAM Mode",
+      );
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
+        "C64 and Cartridge Settings",
+        "REU Size",
+        "2 MB",
       );
       expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
         "U64 Specific Settings",

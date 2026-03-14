@@ -151,7 +151,7 @@ Repeat Steps 1–3 until all of the following are true:
   known false positive with an open classifier fix tracked in PLANS.md.
 - Every UNCERTAIN entry has been triaged and either resolved, reclassified, or documented
   with explicit reasoning.
-- `npm run test:coverage` passes with global branch coverage ≥ 90%.
+- `npm run test:coverage` passes with global branch coverage ≥ 91%.
 
 ---
 
@@ -179,7 +179,7 @@ Before declaring work complete:
 - [ ] All UNCERTAIN entries are triaged with decision recorded.
 - [ ] `npm run lint` passes.
 - [ ] `npm run test` passes (all tests green).
-- [ ] `npm run test:coverage` shows ≥ 90% branch coverage.
+- [ ] `npm run test:coverage` shows ≥ 91% branch coverage.
 - [ ] `npm run build` succeeds.
 - [ ] PLANS.md updated with outcome section noting the final fuzz run result and any
       classifier rules added.

@@ -430,8 +430,8 @@ test.describe("App screenshots", () => {
     await page.getByTestId("connectivity-indicator").click();
     const connectionPopover = page.getByTestId("connection-status-popover");
     await expect(connectionPopover).toBeVisible();
-    await expect(connectionPopover).toContainText("Last request:");
-    await expect(connectionPopover).toContainText(/Last request:\s+(\d+s ago|\d+m \d+s ago)/i);
+    await expect(connectionPopover).toContainText("Last activity:");
+    await expect(connectionPopover).toContainText(/Last activity:\s+(\d+s ago|\d+m \d+s ago)/i);
     await expect(connectionPopover).not.toContainText("just now");
     await expect(connectionPopover).not.toContainText("Communication");
     await captureScreenshot(page, testInfo, "home/02-connection-status-popover.png");

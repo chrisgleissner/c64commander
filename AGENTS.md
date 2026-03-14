@@ -2,20 +2,103 @@
 
 This repository is **C64 Commander**, a React + Vite + Capacitor app for managing and controlling a C64 Ultimate device.
 
+This file is an orientation and execution guide.
+
+## Rule precedence
+
+1. **Primary rules and conventions**: `.github/copilot-instructions.md`
+2. **This file**: `AGENTS.md`
+3. **Task-specific user prompt**
+
+If instructions conflict, follow `.github/copilot-instructions.md` unless the task explicitly states a narrower requirement that does not violate it.
+
 ## Quick orientation
 
 1. Start with `README.md` for overview, local build steps, and Android notes.
-2. REST API details live in `doc/c64/c64u-openapi.yaml`
+2. REST API details live in `doc/c64/c64u-openapi.yaml`.
 3. Read the UX design in `doc/ux-guidelines.md` before any UX work.
 4. Read `doc/testing/maestro.md` before authoring or editing any Maestro flows.
 5. UI routes live in `src/pages/` and navigation in `src/components/TabBar.tsx`.
-6. Networking + data hooks are in `src/lib/c64api.ts` and `src/hooks/`.
+6. Networking and data hooks are in `src/lib/c64api.ts` and `src/hooks/`.
 7. Song sources live in `src/lib/sources/` and the HVSC module lives in `src/lib/hvsc/`.
-8. Use `.github/copilot-instructions.md` for mandatory workflows (it overrides this file on conflicts).
+8. Use `.github/copilot-instructions.md` for mandatory workflows. It overrides this file on conflicts.
+
+## Required execution model
+
+Follow this sequence unless the task explicitly requires something narrower.
+
+### Phase 1 - Read before acting
+
+Read the smallest relevant set first:
+
+1. `README.md`
+2. `.github/copilot-instructions.md`
+3. `doc/ux-guidelines.md` for UI work
+4. `doc/testing/maestro.md` for Maestro work
+5. additional files directly relevant to the touched area
+
+Do not start making changes before you understand the touched subsystem and validation expectations.
+
+### Phase 2 - Classify the change
+
+Before building, testing, or regenerating screenshots, classify the task using the rules from `.github/copilot-instructions.md`:
+
+- `DOC_ONLY`
+- `CODE_CHANGE`
+- `UI_CHANGE`
+- `DOC_PLUS_CODE`
+
+This classification is mandatory because it controls:
+
+- whether a build is needed
+- which test suites are needed
+- whether screenshots must be regenerated
+- which docs must be updated
+
+### Phase 3 - Map impact before editing
+
+Identify exactly which surfaces are affected:
+
+- source files
+- tests
+- docs
+- screenshot folders under `doc/img/`
+- runtime platforms: web, Android, iOS CI-only
+
+Prefer a minimal, explicit impact map over broad speculative edits.
+
+### Phase 4 - Implement with minimal scope
+
+Make the smallest coherent change that fully satisfies the task.
+
+Rules:
+
+- keep repository conventions
+- avoid speculative abstraction
+- do not widen scope without a concrete reason
+- preserve determinism and diagnosability
+- add regression tests for bug fixes
+
+### Phase 5 - Validate honestly
+
+Run the smallest validation set that the change classification requires.
+
+- `DOC_ONLY` does **not** require builds or tests unless the task explicitly says otherwise.
+- `CODE_CHANGE` requires targeted code validation.
+- `UI_CHANGE` requires targeted code validation plus the smallest honest UI validation and screenshot refresh only where needed.
+
+### Phase 6 - Report precisely
+
+At completion, summarize:
+
+- what changed
+- which tests/builds were run
+- which screenshot files or folders were updated, if any
+- why broader validation or screenshot refresh was not needed, when relevant
 
 ## Source of truth
 
-- **Primary rules & conventions**: `.github/copilot-instructions.md`
+- **Primary rules and conventions**: `.github/copilot-instructions.md`
 - **REST API docs**: `doc/c64/c64u-openapi.yaml`
 - **App entry**: `src/main.tsx`, `src/App.tsx`
 - **UI**: `src/pages/`, `src/components/`, `src/components/ui/`
@@ -26,21 +109,63 @@ This repository is **C64 Commander**, a React + Vite + Capacitor app for managin
 
 ## Architecture map
 
-- **UI**: `src/pages/`, `src/components/`
+- **UI**: `src/pages/`, `src/components/`, `src/components/ui/`
 - **Hooks + data fetching**: `src/hooks/`, `src/lib/c64api.ts`
+- **Config state and mapping**: `src/hooks/useAppConfigState.ts`, `src/lib/config/`
 - **Song sources**: `src/lib/sources/` (local FS + HVSC)
 - **HVSC ingestion + metadata**: `src/lib/hvsc/` (service/types/native bridge)
 - **Native bridges**: `src/lib/native/`, `src/lib/hvsc/native/`
+- **Android HVSC engine**: `android/app/src/main/java/com/c64/commander/hvsc/`
 - **SID playback utilities**: `src/lib/sid/`
+
+## Build, test, and screenshot decision rules
+
+This section exists to make agent behavior explicit.
+
+### When no build is required
+
+A build is not required when the task is truly `DOC_ONLY`, for example:
+
+- only Markdown files changed
+- only textual documentation changed
+- only comments changed
+- only non-executable prose or guidance files changed
+
+In those cases, do not run builds for ceremony.
+
+### When a build is required
+
+A build is required when the task affects executable behavior or build outputs, for example:
+
+- application code
+- tests
+- configuration that can affect runtime or build behavior
+- assets that are packaged into the app
+- generated outputs that are required to stay in sync
+
+### When screenshots must be regenerated
+
+Regenerate screenshots only when visible documented UI changed.
+
+### When screenshots must not be regenerated
+
+Do not regenerate screenshots when the visible documented UI is unchanged, even if internal code changed.
+
+### Minimal screenshot rule
+
+If a task changes only one page or one documented state, update only the corresponding screenshot files or folders under `doc/img/`.
+
+Never refresh the entire screenshot corpus unless explicitly required by the task.
 
 ## Tests and fixtures
 
 - **Unit**: `npm run test` (Vitest) with specs in `src/**` and `test/`
+- **Coverage**: `npm run test:coverage`
 - **E2E**: `npm run test:e2e` with specs in `playwright/` and fixtures in `playwright/fixtures/`
 - **Android JVM**: `cd android && ./gradlew test` with tests in `android/app/src/test/java/com/c64/commander/hvsc/`
 - **Android fixtures**: `android/app/src/test/fixtures/hvsc/`
 - **Python agents**: `npm run test:agents` (pytest) with specs in `agents/tests/`; requires ≥90% branch coverage
-- **Maestro**: Read `doc/testing/maestro.md` before creating or updating flows under `.maestro/`
+- **Maestro**: read `doc/testing/maestro.md` before creating or updating flows under `.maestro/`
 
 ## Release tag APKs
 
@@ -49,46 +174,45 @@ This repository is **C64 Commander**, a React + Vite + Capacitor app for managin
 - Tag builds still rely on signing secrets when a signed release artifact must be produced in CI.
 - GitHub Actions version tags are an intentional repository policy. Keep release tags aligned with `package.json`.
 
-## MANDATORY: Prettier formatting
+## Mandatory formatting and style reminders
+
+### Prettier formatting
 
 All TypeScript, TSX, and JSON files must be formatted with Prettier before committing.
 
 - Config: `.prettierrc.json` (`singleQuote: true`; all other options are Prettier v3 defaults).
 - **Check**: `npm run format:check:ts` (also runs as part of `npm run lint`).
 - **Fix**: `npm run format:ts` (or `npx prettier --write .`).
-- Every code change you write must already be Prettier-compliant — do not rely on a post-hoc format pass.
+- Every code change must already be Prettier-compliant when written.
 - YAML files are checked separately via `npm run format:check:yaml`.
 
-## MANDATORY: Code Style
+### Code style
 
-- **DRY**: Avoid duplication. Extract shared logic into well-defined functions, modules, or utilities.
-- **KISS**: Prefer simple, explicit solutions. Do not introduce abstractions or indirection unless they provide clear, measurable value.
-- **Modularity**: Structure code into cohesive files and modules with a single, well-defined responsibility and minimal coupling.
-- **File Size Limits**: Keep source files under 1000 lines. If a file approaches this limit, refactor by splitting it into smaller, logically coherent units.
-- **Readability First**: Code must be self-explanatory. Prefer clear naming over comments. Use comments only for intent, rationale, and non-obvious decisions.
-- **Explicitness**: Avoid hidden or implicit behavior. Configuration, defaults, and assumptions must be explicit and discoverable.
-- **Fail Fast**: Validate inputs early and fail deterministically. Do not silently ignore errors or rely on undefined behavior.
-- **Determinism**: Ensure logic is deterministic and reproducible. Avoid hidden state, time-dependent behavior, and implicit global dependencies unless explicitly required.
-- **Testability**: Structure code to support unit and integration testing without excessive mocking or complex setup.
-- **No Dead Code**: Do not leave unused code paths, commented-out blocks, or speculative implementations.
-- **Consistency**: Follow existing project conventions for naming, formatting, and structure. Do not introduce new patterns without clear justification.
-- **Minimal Dependencies**: Introduce third-party libraries only when clearly justified. Prefer standard library solutions where reasonable.
-- **No Over-Abstraction**: Do not create abstractions for hypothetical future use. Every abstraction must serve a concrete, current need.
-- **Single Responsibility**: Functions and classes must have one clear responsibility and a well-defined scope.
-- **Stable Public Surfaces**: Public APIs must be minimal, intentional, and documented. Breaking changes require explicit versioning.
+- **DRY**: avoid duplication. Extract shared logic only when it improves clarity and current maintainability.
+- **KISS**: prefer simple, explicit solutions.
+- **Modularity**: keep files cohesive and responsibilities clear.
+- **Readability first**: prefer clear naming over commentary.
+- **Explicitness**: make configuration, defaults, and assumptions discoverable.
+- **Fail fast**: validate inputs early and surface failures with context.
+- **Determinism**: avoid hidden state and non-reproducible behavior unless explicitly required.
+- **Testability**: structure code for unit and integration testing without excessive mocking.
+- **No dead code**: do not leave unused code paths or speculative scaffolding.
+- **Consistency**: follow existing project conventions.
+- **Minimal dependencies**: add third-party libraries only when clearly justified.
+- **Stable public surfaces**: keep public APIs minimal and intentional.
 
-## MANDATORY: Exception Handling (SHOWSTOPPER)
+## Mandatory exception handling (SHOWSTOPPER)
 
-It is absolutely forbidden to catch an exception silently.
+It is forbidden to catch an exception silently.
 
-Whenever an exception is caught, you must do **one** of the following:
+Whenever an exception is caught, do one of the following:
 
 1. **Rethrow it**, enriched with context:
-   - What operation was being performed
-   - Relevant identifiers, paths, or inputs
+   - what operation was being performed
+   - relevant identifiers, paths, or inputs
 2. **Log it** at WARN or ERROR level:
-   - Full stack trace
-   - Context explaining what failed and why
+   - full stack trace
+   - context explaining what failed and why
 
 Unacceptable patterns include:
 
@@ -96,45 +220,47 @@ Unacceptable patterns include:
 - `catch (e) { /* ignore */ }`
 - `catch (e) { return null; }` without logging or rethrowing
 
-Violine this rule is a release blocker.
+Violating this rule is a release blocker.
 
-## MANDATORY: Error investigation
+## Mandatory error investigation
 
 - Always investigate errors, warnings, and assertion failures.
 - Fix root causes. Do not skip tests or suppress warnings.
 - Keep the repository buildable. If changes break builds, fix them before declaring work complete.
 - Exceptions must never be ignored; log them or let them bubble up.
 
-## MANDATORY: Bug-fix regression coverage
+## Mandatory bug-fix regression coverage
 
 - Every bug fix must add or update a dedicated regression test that fails before the fix and passes after it.
-- The regression test must target the specific edge condition, acceptance criterion, or failure mode being fixed instead of only broad happy-path behavior.
-- Test names must describe the locked-in behavior precisely so future reviewers can tell which bug is being prevented from regressing.
+- The regression test must target the specific edge condition, acceptance criterion, or failure mode being fixed.
+- Test names must describe the locked-in behavior precisely.
 - If a fix spans multiple layers, add the narrowest deterministic test at each affected layer instead of relying on a single broad integration test.
 
-## MANDATORY: Coverage gate before completion
+## Mandatory coverage gate before completion
 
 - For any plan/task that includes code changes, run `npm run test:coverage` before declaring completion.
-- The run must satisfy a safety margin of at least **91% branch coverage** (global), aligned with CI threshold enforcement.
-- If branch coverage is below 91%, continue adding meaningful tests until it is >= 91%.
-- For changes under `agents/`, also run `npm run test:agents` and confirm ≥90% branch coverage.
+- The run must satisfy a safety margin of at least **91% branch coverage** globally.
+- If branch coverage is below 91%, continue adding meaningful tests until it is `>= 91%`.
+- For changes under `agents/`, also run `npm run test:agents` and confirm `>= 90%` branch coverage.
 
-## MANDATORY: Concurrent changes
+## Mandatory handling of concurrent changes
 
-- If unexpected changes appear in the worktree, keep them as-is and continue. They are created by a concurrently running LLM.
+- If unexpected changes appear in the worktree, keep them as-is and continue.
+- Assume they may have been created by a concurrently running LLM unless the task explicitly proves otherwise.
 
 ## Output wording rules
 
 - Keep wording short.
 - Describe only the current state of documents when changing them.
+- Do not claim builds, tests, or screenshot refreshes you did not actually perform.
 
-## Golden Trace Stewardship
+## Golden trace stewardship
 
 When modifying Playwright tests, REST routing, or tracing logic:
 
 1. Detect changes that affect trace semantics (order, payloads, endpoints, or normalization).
 2. If trace semantics change, re-run golden trace recording locally.
-3. Commit updated golden traces under playwright/fixtures/traces/golden.
+3. Commit updated golden traces under `playwright/fixtures/traces/golden`.
 4. Never weaken trace assertions to make tests pass; fix the root cause instead.
 
 ## Fast path (before a PR)
@@ -150,7 +276,9 @@ When modifying Playwright tests, REST routing, or tracing logic:
 npm install
 ```
 
-### Build & test (web)
+### Build and test (web)
+
+Use the subset that matches the task. Typical baseline for executable changes:
 
 ```bash
 npm run test
@@ -158,7 +286,7 @@ npm run lint
 npm run build
 ```
 
-### Build & sync Android (local)
+### Build and sync Android (local)
 
 ```bash
 npm run cap:build
@@ -174,9 +302,11 @@ Set `JAVA_HOME` to a valid JDK install and avoid hardcoded system paths.
 
 ## What to optimize for
 
-- Responsive UI and clear feedback.
-- Stable network interactions with the C64U.
-- Test reliability and clean error reporting.
+- responsive UI and clear feedback
+- stable network interactions with the C64U
+- test reliability and clean error reporting
+- minimal, accurately scoped changes
+- disciplined screenshot maintenance
 
 ## Exploratory investigations
 
@@ -185,4 +315,5 @@ Set `JAVA_HOME` to a valid JDK install and avoid hardcoded system paths.
 
 ## Modularization guardrails
 
-- If a file grows beyond ~600 lines or mixes concerns, split it.
+- If a file grows beyond about 600 lines or mixes concerns, split it.
+- If a file approaches 1000 lines, refactoring is expected unless there is a strong documented reason not to.
