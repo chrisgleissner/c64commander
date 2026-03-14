@@ -48,10 +48,23 @@ type SliderProps = React.ComponentPropsWithoutRef<typeof SliderPrimitive.Root> &
   asyncThrottleMs?: number;
 };
 
+const normalizeSliderValue = (value: number, min: number, max: number) =>
+  Number.isFinite(value) ? clampSliderValue(value, min, max) : min;
+
+const normalizeSliderMidpoint = (midpoint: SliderProps["midpoint"], min: number, max: number) => {
+  if (!midpoint || !Number.isFinite(midpoint.value)) return undefined;
+  return {
+    ...midpoint,
+    value: normalizeSliderValue(midpoint.value, min, max),
+  };
+};
+
 const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, SliderProps>(
   (
     {
       className,
+      value,
+      defaultValue,
       onValueChange,
       onValueCommit,
       onValueChangeAsync,
@@ -73,8 +86,9 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
     },
     ref,
   ) => {
-    const min = props.min ?? 0;
-    const max = props.max ?? 100;
+    const min = Number.isFinite(props.min) ? props.min : 0;
+    const resolvedMax = Number.isFinite(props.max) ? Math.max(props.max, min) : Math.max(min, 100);
+    const max = resolvedMax <= min ? min + 1 : resolvedMax;
     const step = props.step;
     const [dragValue, setDragValue] = React.useState<number | null>(null);
     const [popupState, setPopupState] = React.useState<SliderPopupState>("Hidden");
@@ -86,6 +100,16 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
     const lastValueRef = React.useRef<number | null>(null);
     const lastHapticAtRef = React.useRef<number | null>(null);
     const asyncQueueRef = React.useRef<SliderAsyncQueue | null>(null);
+
+    const normalizedMidpoint = React.useMemo(() => normalizeSliderMidpoint(midpoint, min, max), [max, midpoint, min]);
+    const normalizedValue = React.useMemo(
+      () => value?.map((entry) => normalizeSliderValue(entry, min, max)),
+      [max, min, value],
+    );
+    const normalizedDefaultValue = React.useMemo(
+      () => defaultValue?.map((entry) => normalizeSliderValue(entry, min, max)),
+      [defaultValue, max, min],
+    );
 
     const clearPopupCloseTimer = React.useCallback(() => {
       if (popupCloseTimerRef.current === null) return;
@@ -181,18 +205,18 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
 
     const resolveValue = React.useCallback(
       (rawValue: number) => {
-        const clamped = clampSliderValue(rawValue, min, max);
-        if (!midpoint || midpoint.cling === false) return clamped;
+        const clamped = normalizeSliderValue(rawValue, min, max);
+        if (!normalizedMidpoint || normalizedMidpoint.cling === false) return clamped;
         return resolveMidpointSnap({
           value: clamped,
           min,
           max,
-          midpoint: midpoint.value,
-          snapRange: midpoint.snapRange,
+          midpoint: normalizedMidpoint.value,
+          snapRange: normalizedMidpoint.snapRange,
           step,
         });
       },
-      [max, min, midpoint, step],
+      [max, min, normalizedMidpoint, step],
     );
 
     const handlePointerDown = React.useCallback(
@@ -225,13 +249,13 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
         const nextValue = resolveValue(rawValue);
         setDragValue(nextValue);
         registerPopupInteraction("interaction-update");
-        if (midpoint?.haptics !== false && midpoint) {
+        if (normalizedMidpoint && normalizedMidpoint.haptics !== false) {
           const now = Date.now();
           if (
             shouldTriggerMidpointHaptic({
               previous: lastValueRef.current,
               next: nextValue,
-              midpoint: midpoint.value,
+              midpoint: normalizedMidpoint.value,
               nowMs: now,
               lastTriggerMs: lastHapticAtRef.current,
             })
@@ -244,7 +268,7 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
         onValueChange?.([nextValue]);
         asyncQueueRef.current?.schedule(nextValue);
       },
-      [midpoint, min, onValueChange, registerPopupInteraction, resolveValue],
+      [min, normalizedMidpoint, onValueChange, registerPopupInteraction, resolveValue],
     );
 
     const handleValueCommit = React.useCallback(
@@ -269,11 +293,12 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
       [handleValueCommit, props],
     );
 
-    const currentValue = props.value?.[0] ?? dragValue ?? props.defaultValue?.[0] ?? min;
-    const displayValue = dragValue ?? currentValue;
+    const fallbackValue = normalizedDefaultValue?.[0] ?? min;
+    const currentValue = normalizedValue?.[0] ?? normalizeSliderValue(dragValue ?? fallbackValue, min, max);
+    const displayValue = normalizeSliderValue(dragValue ?? currentValue, min, max);
     const formattedValue = valueFormatter ? valueFormatter(displayValue) : `${displayValue}`;
     const showValue = showValueOnDrag && popupState !== "Hidden";
-    const midpointPercent = midpoint ? resolveMidpointPercent(midpoint.value, min, max) : null;
+    const midpointPercent = normalizedMidpoint ? resolveMidpointPercent(normalizedMidpoint.value, min, max) : null;
 
     return (
       <SliderPrimitive.Root
@@ -285,13 +310,17 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
         onPointerCancel={handlePointerCancel}
         className={cn("relative flex w-full touch-none select-none items-center", className)}
         {...props}
+        min={min}
+        max={max}
+        value={normalizedValue}
+        defaultValue={normalizedDefaultValue}
       >
         <SliderPrimitive.Track
           className={cn("relative h-2 w-full grow overflow-hidden rounded-full bg-secondary", trackClassName)}
           style={trackStyle}
         >
           <SliderPrimitive.Range className={cn("absolute h-full bg-primary", rangeClassName)} style={rangeStyle} />
-          {midpoint && midpoint.notch !== false && midpointPercent !== null ? (
+          {normalizedMidpoint && normalizedMidpoint.notch !== false && midpointPercent !== null ? (
             <span
               aria-hidden="true"
               className="absolute top-1/2 h-3 w-0.5 -translate-y-1/2 bg-foreground/40"

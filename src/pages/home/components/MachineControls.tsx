@@ -1,8 +1,8 @@
+import { ReactNode } from "react";
 import { motion } from "framer-motion";
 import { RotateCcw, Power, PowerOff, Pause, Menu, Upload, Play, Download } from "lucide-react";
 import { SectionHeader } from "@/components/SectionHeader";
 import { QuickActionCard } from "@/components/QuickActionCard";
-import { ResponsivePathText } from "@/components/ResponsivePathText";
 
 export interface MachineControlsProps {
   status: { isConnected: boolean; isConnecting: boolean };
@@ -23,12 +23,7 @@ export interface MachineControlsProps {
   onRebootClearMemory: () => void;
   onPowerOff: () => void;
   onAction: (fn: () => Promise<void>, label: string) => void;
-  driveSummaryItems: Array<{
-    key: string;
-    label: string;
-    mountedLabel: string;
-    isMounted: boolean;
-  }>;
+  footer?: ReactNode;
 }
 
 export function MachineControls({
@@ -45,7 +40,7 @@ export function MachineControls({
   onRebootClearMemory,
   onPowerOff,
   onAction,
-  driveSummaryItems,
+  footer,
 }: MachineControlsProps) {
   return (
     <motion.div
@@ -53,28 +48,12 @@ export function MachineControls({
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.2 }}
       className="space-y-2"
-      data-section-label="Machine"
+      data-section-label="Quick Actions"
     >
-      <SectionHeader title="Machine">
+      <SectionHeader title="Quick Actions">
         {machineTaskBusy && <span className="ml-2 text-xs text-muted-foreground">Working…</span>}
       </SectionHeader>
       <div className="space-y-2">
-        <div
-          className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground"
-          data-testid="home-drive-summary"
-        >
-          {driveSummaryItems.map((entry) => (
-            <span key={entry.key} className="flex min-w-0 items-center gap-1">
-              <span className="font-semibold text-foreground whitespace-nowrap">{entry.label}:</span>
-              <ResponsivePathText
-                path={entry.mountedLabel}
-                mode="filename-fallback"
-                className={entry.isMounted ? "text-foreground truncate" : "text-muted-foreground truncate"}
-                dataTestId={`home-drive-summary-label-${entry.key}`}
-              />
-            </span>
-          ))}
-        </div>
         <div className="grid grid-cols-4 gap-2" data-testid="home-machine-controls">
           <QuickActionCard
             icon={RotateCcw}
@@ -160,6 +139,7 @@ export function MachineControls({
             loading={controls.powerOff.isPending}
           />
         </div>
+        {footer ? <div data-testid="home-machine-footer">{footer}</div> : null}
       </div>
     </motion.div>
   );

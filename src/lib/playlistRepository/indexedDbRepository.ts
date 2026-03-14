@@ -2,36 +2,39 @@ import type {
   PlaylistItemRecord,
   PlaylistQueryOptions,
   PlaylistQueryResult,
-  PlaylistQueryRow,
   PlaylistSessionRecord,
   RandomPlaySession,
   TrackRecord,
 } from "./types";
 import type { PlaylistDataRepository } from "./repository";
+import { buildPlaylistQueryIndex, queryPlaylistIndex, type PersistedPlaylistQueryIndex } from "./queryIndex";
 
 type Options = {
   preferDurableStorage: boolean;
 };
 
 type PersistedState = {
-  version: 1;
+  version: 2;
   tracks: Record<string, TrackRecord>;
   playlistItemsByPlaylistId: Record<string, PlaylistItemRecord[]>;
   sessionsByPlaylistId: Record<string, PlaylistSessionRecord>;
   randomSessionsByPlaylistId: Record<string, RandomPlaySession>;
+  queryIndexesByPlaylistId: Record<string, PersistedPlaylistQueryIndex>;
 };
 
 const DB_NAME = "c64u-playlist-repository";
 const DB_VERSION = 1;
 const STORE = "state";
 const STATE_KEY = "playlist-repository-state";
+const INDEXEDDB_RECOVERY_STORAGE_KEY = "c64u_playlist_repo:indexeddb:recovery";
 
 const defaultState = (): PersistedState => ({
-  version: 1,
+  version: 2,
   tracks: {},
   playlistItemsByPlaylistId: {},
   sessionsByPlaylistId: {},
   randomSessionsByPlaylistId: {},
+  queryIndexesByPlaylistId: {},
 });
 
 const stableHash = (value: string) => {
@@ -57,18 +60,53 @@ const seededShuffle = <T>(items: T[], seed: number) => {
   return next;
 };
 
-const normalizeQuery = (value?: string) => value?.trim().toLowerCase() ?? "";
+const writeRecoveryArtifact = (reason: string, raw: unknown, extra: Record<string, unknown> = {}) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(
+    INDEXEDDB_RECOVERY_STORAGE_KEY,
+    JSON.stringify({
+      reason,
+      raw,
+      createdAt: new Date().toISOString(),
+      ...extra,
+    }),
+  );
+};
 
-const rowSearchText = (row: PlaylistQueryRow) => {
-  const parts = [
-    row.track.title,
-    row.track.author ?? "",
-    row.track.released ?? "",
-    row.track.path,
-    row.track.sourceLocator,
-    row.track.category ?? "",
-  ];
-  return parts.join(" ").toLowerCase();
+const rebuildPlaylistIndex = (state: PersistedState, playlistId: string) => {
+  state.queryIndexesByPlaylistId[playlistId] = buildPlaylistQueryIndex(
+    state.playlistItemsByPlaylistId[playlistId] ?? [],
+    state.tracks,
+  );
+};
+
+const rebuildPlaylistIndexesForTracks = (state: PersistedState, trackIds: string[]) => {
+  const affectedTrackIds = new Set(trackIds);
+  Object.entries(state.playlistItemsByPlaylistId).forEach(([playlistId, items]) => {
+    if (items.some((item) => affectedTrackIds.has(item.trackId))) {
+      rebuildPlaylistIndex(state, playlistId);
+    }
+  });
+};
+
+const migrateState = (state: Record<string, unknown>) => {
+  const next: PersistedState = {
+    version: 2,
+    tracks: (state.tracks as Record<string, TrackRecord> | null | undefined) ?? {},
+    playlistItemsByPlaylistId:
+      (state.playlistItemsByPlaylistId as Record<string, PlaylistItemRecord[]> | null | undefined) ?? {},
+    sessionsByPlaylistId:
+      (state.sessionsByPlaylistId as Record<string, PlaylistSessionRecord> | null | undefined) ?? {},
+    randomSessionsByPlaylistId:
+      (state.randomSessionsByPlaylistId as Record<string, RandomPlaySession> | null | undefined) ?? {},
+    queryIndexesByPlaylistId: {},
+  };
+
+  Object.keys(next.playlistItemsByPlaylistId).forEach((playlistId) => {
+    rebuildPlaylistIndex(next, playlistId);
+  });
+
+  return next;
 };
 
 const openDb = (): Promise<IDBDatabase> =>
@@ -97,23 +135,24 @@ const loadState = async (): Promise<PersistedState> => {
     if (!state) {
       return defaultState();
     }
-    if (state.version == null) {
-      return defaultState();
-    }
-    if (state.version !== 1) {
+    if (typeof state !== "object") {
       console.warn("Incompatible playlist repository schema in IndexedDB. Resetting repository state.", {
-        expectedVersion: 1,
-        foundVersion: state.version,
+        expectedVersion: 2,
+        foundVersion: null,
       });
+      writeRecoveryArtifact("incompatible-schema", state, { foundVersion: null });
       return defaultState();
     }
-    return {
-      version: 1,
-      tracks: state.tracks ?? {},
-      playlistItemsByPlaylistId: state.playlistItemsByPlaylistId ?? {},
-      sessionsByPlaylistId: state.sessionsByPlaylistId ?? {},
-      randomSessionsByPlaylistId: state.randomSessionsByPlaylistId ?? {},
-    };
+    const version = (state as { version?: unknown }).version;
+    if (version !== 1 && version !== 2) {
+      console.warn("Incompatible playlist repository schema in IndexedDB. Resetting repository state.", {
+        expectedVersion: 2,
+        foundVersion: version,
+      });
+      writeRecoveryArtifact("incompatible-schema", state, { foundVersion: version });
+      return defaultState();
+    }
+    return migrateState(state as Record<string, unknown>);
   } catch (error) {
     console.warn("Failed to load playlist repository state from IndexedDB", {
       error,
@@ -161,6 +200,10 @@ class IndexedDbPlaylistDataRepository implements PlaylistDataRepository {
       tracks.forEach((track) => {
         state.tracks[track.trackId] = track;
       });
+      rebuildPlaylistIndexesForTracks(
+        state,
+        tracks.map((track) => track.trackId),
+      );
     });
   }
 
@@ -179,6 +222,7 @@ class IndexedDbPlaylistDataRepository implements PlaylistDataRepository {
       state.playlistItemsByPlaylistId[playlistId] = [...items].sort((left, right) =>
         left.sortKey.localeCompare(right.sortKey),
       );
+      rebuildPlaylistIndex(state, playlistId);
     });
   }
 
@@ -202,49 +246,8 @@ class IndexedDbPlaylistDataRepository implements PlaylistDataRepository {
 
   async queryPlaylist(options: PlaylistQueryOptions): Promise<PlaylistQueryResult> {
     const state = await this.statePromise;
-    const playlistItems = [...(state.playlistItemsByPlaylistId[options.playlistId] ?? [])].sort((left, right) =>
-      left.sortKey.localeCompare(right.sortKey),
-    );
-
-    const rows: PlaylistQueryRow[] = playlistItems
-      .map((playlistItem) => {
-        const track = state.tracks[playlistItem.trackId];
-        if (!track) return null;
-        return { playlistItem, track };
-      })
-      .filter((row): row is PlaylistQueryRow => Boolean(row));
-
-    const query = normalizeQuery(options.query);
-    const categoryFilter = options.categoryFilter?.length ? new Set(options.categoryFilter) : null;
-
-    const withFilter = rows.filter((row) => {
-      if (categoryFilter) {
-        const category = row.track.category ?? null;
-        if (!category || !categoryFilter.has(category)) return false;
-      }
-      if (!query) return true;
-      return rowSearchText(row).includes(query);
-    });
-
-    const withSort = [...withFilter].sort((left, right) => {
-      const sort = options.sort ?? "playlist-position";
-      if (sort === "title") {
-        const titleDiff = left.track.title.localeCompare(right.track.title);
-        if (titleDiff !== 0) return titleDiff;
-      }
-      if (sort === "path") {
-        const pathDiff = left.track.path.localeCompare(right.track.path);
-        if (pathDiff !== 0) return pathDiff;
-      }
-      return left.playlistItem.sortKey.localeCompare(right.playlistItem.sortKey);
-    });
-
-    const offset = Math.max(0, options.offset);
-    const limit = Math.max(1, options.limit);
-    return {
-      rows: withSort.slice(offset, offset + limit),
-      totalMatchCount: withSort.length,
-    };
+    const index = state.queryIndexesByPlaylistId[options.playlistId] ?? buildPlaylistQueryIndex([], {});
+    return queryPlaylistIndex(index, options);
   }
 
   async createSession(playlistId: string, orderedPlaylistItemIds: string[], seed?: number): Promise<RandomPlaySession> {

@@ -20,6 +20,7 @@ C64 Commander lets you control and manage a C64 Ultimate from Android, iOS, or a
   - [📑 Contents](#-contents)
   - [✨ Why C64 Commander?](#-why-c64-commander)
   - [🚀 Quick Start](#-quick-start)
+    - [Current Rollout Boundaries](#current-rollout-boundaries)
     - [Install on Android](#install-on-android)
     - [Install on iOS](#install-on-ios)
     - [Install for Web Access](#install-for-web-access)
@@ -67,9 +68,16 @@ Because it gives you full control of your C64 Ultimate from any modern device:
 
 ## 🚀 Quick Start
 
+### Current Rollout Boundaries
+
+- Android Play upload is already operational for the supported release flow.
+- iOS distribution currently remains a sideload flow built around SideStore and signed IPA installation. App Store and TestFlight distribution are not part of the current rollout scope.
+- C64 Ultimate connectivity remains HTTP for REST and plain FTP for file operations because that is what current firmware supports.
+- GitHub Actions release tags are an intentional contributor policy. Keep release tags aligned with `package.json`.
+
 ### Install on Android
 
-1. Download the latest **APK** (e.g. `c64commander-0.5.0-android.apk`) from the [Releases](https://github.com/chrisgleissner/c64commander/releases) page.
+1. Download the latest **APK** (e.g. `c64commander-0.1.0-debug.apk` for debug builds or `c64commander-0.1.0.apk` for signed release builds) from the [Releases](https://github.com/chrisgleissner/c64commander/releases) page.
 2. Open the APK.
 3. Allow installs from unknown sources if prompted.
 4. Tap **Install** and launch C64 Commander.
@@ -77,7 +85,7 @@ Because it gives you full control of your C64 Ultimate from any modern device:
 ### Install on iOS
 
 1. Set up [SideStore](https://docs.sidestore.io/).
-2. Download the latest **IPA** (e.g. `c64commander-0.5.0-ios.ipa`) from the [Releases](https://github.com/chrisgleissner/c64commander/releases) page.
+2. Download the latest **IPA** (e.g. `c64commander-0.1.0-ios.ipa`) from the [Releases](https://github.com/chrisgleissner/c64commander/releases) page.
 3. In **SideStore → My Apps**, tap **+** and select the IPA.
 4. Launch C64 Commander.
 
@@ -140,12 +148,12 @@ Your everyday dashboard: quick access to the controls you touch most often.
   <tr>
     <td><img src="doc/img/app/home/00-overview-light.png" alt="Home overview (Light)" width="360"/></td>
     <td><img src="doc/img/app/home/01-overview-dark.png" alt="Home overview (Dark)" width="360"/></td>
-    <td><img src="doc/img/app/home/sections/03-quick-config.png" alt="Home quick config" width="360"/></td>
+    <td><img src="doc/img/app/home/sections/02-quick-config-to-keyboard-light.png" alt="Home sections from quick config through keyboard light" width="360"/></td>
   </tr>
   <tr>
-    <td><img src="doc/img/app/home/sections/04-drives.png" alt="Home drives" width="360"/></td>
-    <td><img src="doc/img/app/home/sections/06-sid.png" alt="Home SID" width="360"/></td>
-    <td><img src="doc/img/app/home/sections/07-streams.png" alt="Home streams" width="360"/></td>
+    <td><img src="doc/img/app/home/sections/03-quick-config-to-printers.png" alt="Home sections from quick config through printers" width="360"/></td>
+    <td><img src="doc/img/app/home/sections/04-printers-to-sid.png" alt="Home sections from printers through SID" width="360"/></td>
+    <td><img src="doc/img/app/home/sections/05-sid-to-config.png" alt="Home sections from SID through config" width="360"/></td>
   </tr>
   <tr>
     <td><img src="doc/img/app/home/02-connection-status-popover.png" alt="Connection Status pop-up" width="360"/></td>
@@ -301,6 +309,10 @@ Optional hardening you can apply in your environment:
 - `basic-ftp` is a runtime dependency because FTP list/read requests are executed by the web server process.
 
 #### Update to a newer version
+
+The web app shell is intentionally fetched from the network on each navigation, while hashed static assets roll forward with a build-specific service-worker cache. After deploying a new image, open the app once to let the new service worker activate. If a browser tab is still holding the old shell in memory, reload the tab.
+
+Rollback uses the same flow: redeploy the older image, open the app, and reload once so the browser activates the matching service worker and clears the newer asset cache.
 
 ```bash
 docker pull ghcr.io/chrisgleissner/c64commander:<version>

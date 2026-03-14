@@ -25,6 +25,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, act } from "@testing-library/react";
 import { HomeDiskManager } from "@/components/disks/HomeDiskManager";
 
+const dialogMockState = {
+  addItemsSource: null as any,
+  addItemsSelections: [] as any[],
+  softIecSource: null as any,
+  softIecSelections: [] as any[],
+};
+
 // ── Minimal child component stubs ──────────────────────────────────────────────
 vi.mock("@/components/lists/SelectableActionList", () => ({
   SelectableActionList: ({ items, headerActions }: any) => (
@@ -48,10 +55,31 @@ vi.mock("@/components/lists/SelectableActionList", () => ({
 }));
 
 vi.mock("@/components/itemSelection/ItemSelectionDialog", () => ({
-  ItemSelectionDialog: ({ open, onClose }: any) =>
+  ItemSelectionDialog: ({ open, onClose, onOpenChange, onConfirm, onAutoConfirmStart, title }: any) =>
     open ? (
       <div data-testid="item-selection-dialog">
         <button onClick={onClose}>Close</button>
+        {title === "Add items" ? (
+          <>
+            <button onClick={() => void onConfirm(dialogMockState.addItemsSource, dialogMockState.addItemsSelections)}>
+              Confirm Add Items
+            </button>
+            <button
+              onClick={() => {
+                onOpenChange(false);
+                onAutoConfirmStart?.();
+                void onConfirm(dialogMockState.addItemsSource, dialogMockState.addItemsSelections);
+              }}
+            >
+              Auto Confirm Add Items
+            </button>
+          </>
+        ) : null}
+        {title === "Soft IEC Default Path" ? (
+          <button onClick={() => void onConfirm(dialogMockState.softIecSource, dialogMockState.softIecSelections)}>
+            Confirm Soft IEC Directory
+          </button>
+        ) : null}
       </div>
     ) : null,
 }));
@@ -80,6 +108,12 @@ const useDiskLibraryMock = {
   bulkRemoveDisks: vi.fn(),
 };
 
+const localSourcesMock = {
+  sources: [] as any[],
+  addSourceFromPicker: vi.fn(),
+  addSourceFromFiles: vi.fn(),
+};
+
 vi.mock("@/hooks/useDiskLibrary", () => ({
   useDiskLibrary: () => useDiskLibraryMock,
 }));
@@ -104,11 +138,7 @@ vi.mock("@/hooks/useC64Connection", () => ({
 }));
 
 vi.mock("@/hooks/useLocalSources", () => ({
-  useLocalSources: () => ({
-    sources: [],
-    addSourceFromPicker: vi.fn(),
-    addSourceFromFiles: vi.fn(),
-  }),
+  useLocalSources: () => localSourcesMock,
 }));
 vi.mock("@/hooks/useListPreviewLimit", () => ({
   useListPreviewLimit: () => ({ limit: 100 }),
@@ -118,15 +148,7 @@ vi.mock("@/hooks/useActionTrace", () => ({
 }));
 
 vi.mock("@/lib/c64api", () => ({
-  getC64API: () => ({
-    mountDisk: vi.fn().mockResolvedValue(undefined),
-    mountDrive: vi.fn().mockResolvedValue(undefined),
-    driveCommand: vi.fn().mockResolvedValue(undefined),
-    mountDriveUpload: vi.fn().mockResolvedValue(undefined),
-    unmountDrive: vi.fn().mockResolvedValue(undefined),
-    getBaseUrl: () => "http://test-device",
-    getDeviceHost: () => "test-device",
-  }),
+  getC64API: () => apiMock,
 }));
 
 vi.mock("@/components/ui/dialog", () => ({
@@ -151,11 +173,26 @@ vi.mock("@/components/ui/input", () => ({
 vi.mock("@/hooks/use-toast", () => ({
   toast: vi.fn(),
 }));
+vi.mock("@/lib/uiErrors", () => ({
+  reportUserError: vi.fn(),
+}));
 
 const { getPlatformMock, isNativePlatformMock } = vi.hoisted(() => ({
   getPlatformMock: vi.fn(() => "web"),
   isNativePlatformMock: vi.fn(() => false),
 }));
+
+const apiMock = {
+  mountDisk: vi.fn().mockResolvedValue(undefined),
+  mountDrive: vi.fn().mockResolvedValue(undefined),
+  driveCommand: vi.fn().mockResolvedValue(undefined),
+  mountDriveUpload: vi.fn().mockResolvedValue(undefined),
+  unmountDrive: vi.fn().mockResolvedValue(undefined),
+  setConfigValue: vi.fn().mockResolvedValue(undefined),
+  resetDrive: vi.fn().mockResolvedValue(undefined),
+  getBaseUrl: () => "http://test-device",
+  getDeviceHost: () => "test-device",
+};
 
 vi.mock("@/lib/native/platform", () => ({
   getPlatform: () => getPlatformMock(),
@@ -184,6 +221,25 @@ describe("HomeDiskManager targeted branch coverage", () => {
     };
     useDiskLibraryMock.disks = [];
     useDiskLibraryMock.runtimeFiles = {};
+    localSourcesMock.sources = [];
+    dialogMockState.addItemsSource = null;
+    dialogMockState.addItemsSelections = [];
+    dialogMockState.softIecSource = null;
+    dialogMockState.softIecSelections = [];
+    Object.values(apiMock).forEach((value) => {
+      if (typeof value === "function" && "mockClear" in value) {
+        value.mockClear();
+      }
+    });
+  });
+
+  const createDialogSource = (overrides: Record<string, unknown> = {}) => ({
+    id: "source-1",
+    type: "ultimate",
+    rootPath: "/",
+    listEntries: vi.fn().mockResolvedValue([]),
+    listFilesRecursive: vi.fn().mockResolvedValue([]),
+    ...overrides,
   });
 
   // ── getStatusMessageColorClass: message === 'OK' (TRUE branch) ─────────────
@@ -681,5 +737,141 @@ describe("HomeDiskManager targeted branch coverage", () => {
     };
     renderComponent();
     expect(document.body).toBeTruthy();
+  });
+
+  it("shows a no-disks warning when scanned selections contain no disk images", async () => {
+    const { reportUserError } = await import("@/lib/uiErrors");
+    dialogMockState.addItemsSource = createDialogSource({
+      listFilesRecursive: vi.fn().mockResolvedValue([{ type: "file", path: "/docs/readme.txt", name: "readme.txt" }]),
+    });
+    dialogMockState.addItemsSelections = [{ type: "dir", path: "/docs", name: "docs" }];
+
+    renderComponent();
+    act(() => {
+      screen.getByRole("button", { name: "Add disks" }).click();
+    });
+    act(() => {
+      screen.getByRole("button", { name: "Confirm Add Items" }).click();
+    });
+
+    await waitFor(() => {
+      expect(reportUserError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operation: "DISK_IMPORT",
+          title: "No disks found",
+        }),
+      );
+    });
+  });
+
+  it("adds disk images from scanned selections", async () => {
+    const { toast } = await import("@/hooks/use-toast");
+    dialogMockState.addItemsSource = createDialogSource({
+      listFilesRecursive: vi.fn().mockResolvedValue([
+        { type: "file", path: "/games/demo.d64", name: "demo.d64", sizeBytes: 1024 },
+        { type: "file", path: "/games/readme.txt", name: "readme.txt" },
+      ]),
+    });
+    dialogMockState.addItemsSelections = [{ type: "dir", path: "/games", name: "games" }];
+
+    renderComponent();
+    act(() => {
+      screen.getByRole("button", { name: "Add disks" }).click();
+    });
+    act(() => {
+      screen.getByRole("button", { name: "Confirm Add Items" }).click();
+    });
+
+    await waitFor(() => {
+      expect(useDiskLibraryMock.addDisks).toHaveBeenCalledWith(
+        expect.arrayContaining([expect.objectContaining({ path: "/games/demo.d64", location: "ultimate" })]),
+        expect.any(Object),
+      );
+      expect(toast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Items added",
+        }),
+      );
+    });
+  });
+
+  it("supports auto-confirm add flow after closing the browser first", async () => {
+    dialogMockState.addItemsSource = createDialogSource({
+      listFilesRecursive: vi.fn().mockResolvedValue([{ type: "file", path: "/games/demo.d64", name: "demo.d64" }]),
+    });
+    dialogMockState.addItemsSelections = [{ type: "dir", path: "/games", name: "games" }];
+
+    renderComponent();
+    act(() => {
+      screen.getByRole("button", { name: "Add disks" }).click();
+    });
+    act(() => {
+      screen.getByRole("button", { name: "Auto Confirm Add Items" }).click();
+    });
+
+    await waitFor(() => {
+      expect(useDiskLibraryMock.addDisks).toHaveBeenCalled();
+    });
+  });
+
+  it("rejects non-ultimate Soft IEC directory sources", async () => {
+    const { reportUserError } = await import("@/lib/uiErrors");
+    dialogMockState.softIecSource = createDialogSource({ type: "local" });
+    dialogMockState.softIecSelections = [{ type: "dir", path: "/games", name: "games" }];
+
+    renderComponent();
+    act(() => {
+      screen.getByTestId("drive-mount-toggle-soft-iec").click();
+    });
+    act(() => {
+      screen.getByRole("button", { name: "Confirm Soft IEC Directory" }).click();
+    });
+
+    await waitFor(() => {
+      expect(reportUserError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Unsupported source",
+        }),
+      );
+    });
+  });
+
+  it("rejects Soft IEC selections that do not contain a directory", async () => {
+    const { reportUserError } = await import("@/lib/uiErrors");
+    dialogMockState.softIecSource = createDialogSource();
+    dialogMockState.softIecSelections = [{ type: "file", path: "/games/demo.d64", name: "demo.d64" }];
+
+    renderComponent();
+    act(() => {
+      screen.getByTestId("drive-mount-toggle-soft-iec").click();
+    });
+    act(() => {
+      screen.getByRole("button", { name: "Confirm Soft IEC Directory" }).click();
+    });
+
+    await waitFor(() => {
+      expect(reportUserError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Select directory",
+        }),
+      );
+    });
+  });
+
+  it("updates the Soft IEC default path from an ultimate directory selection", async () => {
+    dialogMockState.softIecSource = createDialogSource();
+    dialogMockState.softIecSelections = [{ type: "dir", path: "/games", name: "games" }];
+
+    renderComponent();
+    act(() => {
+      screen.getByTestId("drive-mount-toggle-soft-iec").click();
+    });
+    act(() => {
+      screen.getByRole("button", { name: "Confirm Soft IEC Directory" }).click();
+    });
+
+    await waitFor(() => {
+      expect(apiMock.setConfigValue).toHaveBeenCalledWith("SoftIEC Drive Settings", "Default Path", "/games/");
+    });
   });
 });

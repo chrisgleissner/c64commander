@@ -18,7 +18,7 @@ const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
 };
 
-test.describe("Home RAM dump folder display", () => {
+test.describe("Home quick actions RAM folder display", () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
   test.beforeEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
@@ -46,11 +46,19 @@ test.describe("Home RAM dump folder display", () => {
     }
   });
 
-  test("shows derived SAF display path @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test("shows inline RAM folder trigger and hides drive summary @layout", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/");
     await snap(page, testInfo, "home-open");
 
     await expect(page.getByTestId("home-quick-config")).toBeVisible();
+    await expect(page.getByText("Quick Actions")).toBeVisible();
+    await expect(page.getByTestId("home-drive-summary")).toHaveCount(0);
+
+    const trigger = page.getByTestId("ram-dump-folder-trigger");
+    await expect(page.getByTestId("home-ram-folder-row")).toContainText("RAM Folder:");
+    await expect(trigger).toHaveText("c64");
 
     await page.evaluate(() => {
       const folder = {
@@ -62,10 +70,16 @@ test.describe("Home RAM dump folder display", () => {
       window.dispatchEvent(new CustomEvent("c64u-ram-dump-folder-updated", { detail: folder }));
     });
 
-    const label = page.getByTestId("ram-dump-folder-value");
-
-    await expect(label).toHaveText("c64");
-    await expect(page.getByText("Internal storage/Download/c64")).toBeVisible();
+    await expect(trigger).toHaveText("c64");
     await snap(page, testInfo, "ram-dump-folder");
+  });
+
+  test("shows ellipsis before a RAM folder is configured @layout", async ({ page }: { page: Page }) => {
+    await page.addInitScript(() => {
+      localStorage.removeItem("c64u_ram_dump_folder:v1");
+    });
+    await page.goto("/");
+
+    await expect(page.getByTestId("ram-dump-folder-trigger")).toHaveText("...");
   });
 });

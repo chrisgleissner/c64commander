@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <data-extraction-rules>
     <cloud-backup>
+        <!-- Backups are disabled in AndroidManifest.xml. Keep explicit exclusions mirrored here. -->
         <exclude domain="sharedpref" path="c64_secure_storage.xml" />
         <exclude domain="root" path="app_webview/" />
         <exclude domain="database" path="*" />

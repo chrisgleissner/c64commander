@@ -208,6 +208,22 @@ const hasStoredPasswordFlagMock = hasStoredPasswordFlag as unknown as ReturnType
 const getCachedPasswordMock = getCachedPassword as unknown as ReturnType<typeof vi.fn>;
 const loadStoredPasswordMock = loadStoredPassword as unknown as ReturnType<typeof vi.fn>;
 
+const withNoPerformance = async (run: () => Promise<void>) => {
+  const original = globalThis.performance;
+  Object.defineProperty(globalThis, "performance", {
+    value: undefined,
+    configurable: true,
+  });
+  try {
+    await run();
+  } finally {
+    Object.defineProperty(globalThis, "performance", {
+      value: original,
+      configurable: true,
+    });
+  }
+};
+
 describe("c64api branches", () => {
   beforeAll(() => {
     if (typeof process !== "undefined") {
@@ -1390,5 +1406,138 @@ describe("c64api branches", () => {
     const result = await api.mountDriveUpload("a", new Blob(["data"]));
     expect(result).toEqual({ errors: [] });
     expect(addLogMock).toHaveBeenCalledWith("warn", expect.stringMatching(/non-JSON/i), expect.anything());
+  });
+
+  it("fetchWithTimeout covers non-timeout fallback paths without performance or headers", async () => {
+    const fetchMock = getFetchMock();
+    fetchMock.mockResolvedValue(new Response("{}", { status: 200, headers: { "content-type": "application/json" } }));
+
+    await withNoPerformance(async () => {
+      const api = new C64API("http://c64u");
+      const response = await (api as any).fetchWithTimeout(
+        "http://c64u/v1/info",
+        {
+          method: "GET",
+          headers: undefined,
+          __c64uTraceSuppressed: true,
+        },
+        undefined,
+      );
+      expect(response.status).toBe(200);
+    });
+  });
+
+  it("fetchWithTimeout reports rejected requests without timeout fallback instrumentation", async () => {
+    const fetchMock = getFetchMock();
+    fetchMock.mockRejectedValueOnce(new Error("failed to fetch"));
+
+    await withNoPerformance(async () => {
+      const api = new C64API("http://c64u");
+      await expect(
+        (api as any).fetchWithTimeout(
+          "http://c64u/v1/info",
+          {
+            method: "GET",
+            headers: undefined,
+            __c64uTraceSuppressed: true,
+          },
+          undefined,
+        ),
+      ).rejects.toThrow("Host unreachable");
+    });
+  });
+
+  it("mountDriveUpload falls back to Response(arrayLike) and null size metadata", async () => {
+    const fetchMock = getFetchMock();
+    fetchMock.mockResolvedValue(new Response("", { status: 200 }));
+
+    await withNoPerformance(async () => {
+      const api = new C64API("http://c64u");
+      const payload = new Uint8Array([1, 2, 3]) as unknown as Blob;
+      const result = await api.mountDriveUpload("a", payload);
+      expect(result).toEqual({ errors: [] });
+    });
+  });
+
+  it("playModUpload and runPrgUpload cover upload fallbacks without performance", async () => {
+    const fetchMock = getFetchMock();
+    fetchMock.mockResolvedValue(new Response("", { status: 200 }));
+
+    await withNoPerformance(async () => {
+      const api = new C64API("http://c64u");
+      expect(await api.playModUpload(new Uint8Array([4, 5]) as unknown as Blob)).toEqual({ errors: [] });
+      expect(await api.runPrgUpload(new Uint8Array([6, 7]) as unknown as Blob)).toEqual({ errors: [] });
+    });
+  });
+
+  it("playSidUpload, loadPrgUpload, and runCartridgeUpload cover remaining upload fallbacks", async () => {
+    const fetchMock = getFetchMock();
+    fetchMock.mockResolvedValue(new Response("", { status: 200 }));
+
+    await withNoPerformance(async () => {
+      const api = new C64API("http://c64u");
+      expect(await api.playSidUpload(new Blob(["sid"]))).toEqual({ errors: [] });
+      expect(await api.loadPrgUpload(new Uint8Array([8, 9]) as unknown as Blob)).toEqual({ errors: [] });
+      expect(await api.runCartridgeUpload(new Uint8Array([10, 11]) as unknown as Blob)).toEqual({ errors: [] });
+    });
+  });
+
+  it("prunes stale and oversized request-budget values", () => {
+    const api = new C64API("http://c64u");
+    const runtime = api as any;
+
+    runtime.readRequestBudget.set("stale", {
+      recordedAtMs: Date.now() - 10_000,
+      value: { stale: true },
+    });
+    expect(runtime.getReadRequestBudgetValue("stale", Date.now())).toBeNull();
+
+    const huge = "x".repeat(70 * 1024);
+    runtime.saveReadRequestBudgetValue("oversized", { huge });
+    expect(runtime.readRequestBudget.has("oversized")).toBe(false);
+  });
+
+  it("evicts oldest request-budget entries beyond the size cap", () => {
+    const api = new C64API("http://c64u");
+    const runtime = api as any;
+    for (let index = 0; index < 260; index += 1) {
+      runtime.saveReadRequestBudgetValue(`key-${index}`, { index });
+    }
+    expect(runtime.readRequestBudget.size).toBeLessThanOrEqual(256);
+    expect(runtime.readRequestBudget.has("key-0")).toBe(false);
+    expect(runtime.readRequestBudget.has("key-259")).toBe(true);
+  });
+
+  it("loads a stored password into the singleton API when only the flag exists", async () => {
+    vi.resetModules();
+    hasStoredPasswordFlagMock.mockReturnValue(true);
+    getCachedPasswordMock.mockReturnValue(null);
+    loadStoredPasswordMock.mockResolvedValue("stored-secret");
+
+    const { getC64API } = await import("@/lib/c64api");
+    const api = getC64API();
+    await Promise.resolve();
+
+    expect(loadStoredPasswordMock).toHaveBeenCalled();
+    expect(api.getPassword()).toBe("stored-secret");
+  });
+
+  it("getConfigItems ignores fallback item payload errors entries", async () => {
+    const api = new C64API("http://c64u");
+    const getCategorySpy = vi.spyOn(api, "getCategory").mockRejectedValueOnce(new Error("category failed"));
+    const getConfigItemSpy = vi.spyOn(api, "getConfigItem").mockResolvedValue({
+      "Drive A Settings": {
+        items: {
+          errors: ["ignored"],
+          "Drive Bus ID": { value: "8" },
+        },
+      },
+      errors: [],
+    } as any);
+
+    const response = await api.getConfigItems("Drive A Settings", ["Drive Bus ID"]);
+    expect(response["Drive A Settings"].items).toEqual({ "Drive Bus ID": { value: "8" } });
+    expect(getCategorySpy).toHaveBeenCalled();
+    expect(getConfigItemSpy).toHaveBeenCalled();
   });
 });

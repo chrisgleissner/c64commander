@@ -24,13 +24,32 @@ import { runWithImplicitAction } from "@/lib/tracing/actionTrace";
 import { recordRestRequest, recordRestResponse, recordTraceError } from "@/lib/tracing/traceSession";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
 import { withRestInteraction, type InteractionIntent } from "@/lib/deviceInteraction/deviceInteractionManager";
-import { getDeviceStateSnapshot } from "@/lib/deviceInteraction/deviceStateStore";
-import { canonicalizeRestPath } from "@/lib/deviceInteraction/restRequestIdentity";
-
-const DEFAULT_BASE_URL = "http://c64u";
-const DEFAULT_DEVICE_HOST = "c64u";
-const DEFAULT_PROXY_URL = "http://127.0.0.1:8787";
-const WEB_PROXY_PATH = "/api/rest";
+import {
+  DEFAULT_BASE_URL,
+  DEFAULT_DEVICE_HOST,
+  DEFAULT_PROXY_URL,
+  WEB_PROXY_PATH,
+  buildBaseUrlFromDeviceHost,
+  getDeviceHostFromBaseUrl,
+  isLocalProxy,
+  normalizeDeviceHost,
+  resolveDeviceHostFromStorage,
+  resolvePlatformApiBaseUrl,
+  resolvePreferredDeviceHost,
+} from "@/lib/c64api/hostConfig";
+import {
+  awaitPromiseWithAbortSignal,
+  buildReadRequestDedupeKey,
+  cloneBudgetValue,
+  createAbortError,
+  estimateBudgetValueBytes,
+  extractRequestBody,
+  getIdleContext,
+  normalizeUrlPath,
+  readResponseBody,
+  wait,
+  waitWithAbortSignal,
+} from "@/lib/c64api/requestRuntime";
 const CONTROL_REQUEST_TIMEOUT_MS = 3000;
 const UPLOAD_REQUEST_TIMEOUT_MS = 5000;
 const PLAYBACK_REQUEST_TIMEOUT_MS = 5000;
@@ -67,343 +86,10 @@ const isSidUploadTransientFailure = (error: unknown) => {
   return status !== null && SID_UPLOAD_RETRYABLE_HTTP_STATUS.has(status);
 };
 
-const normalizeUrlPath = (url: string) => {
-  try {
-    const parsed = new URL(url);
-    return canonicalizeRestPath(`${parsed.pathname}${parsed.search}`, parsed.origin);
-  } catch (error) {
-    addLog("warn", "Failed to normalize API URL path", {
-      url,
-      error: (error as Error).message,
-    });
-    return url;
-  }
-};
-
 let requestSequence = 0;
 const buildRequestId = () => {
   requestSequence = (requestSequence + 1) % 1_000_000;
   return `c64req-${Date.now().toString(36)}-${requestSequence.toString(36)}`;
-};
-
-const wait = (ms: number) =>
-  new Promise<void>((resolve) => {
-    setTimeout(resolve, ms);
-  });
-
-const createAbortError = () => {
-  const error = new Error("The operation was aborted");
-  (error as { name: string }).name = "AbortError";
-  return error;
-};
-
-const waitWithAbortSignal = async (ms: number, signal?: AbortSignal) => {
-  if (!signal) {
-    await wait(ms);
-    return;
-  }
-
-  await new Promise<void>((resolve, reject) => {
-    if (signal.aborted) {
-      reject(createAbortError());
-      return;
-    }
-
-    const onAbort = () => {
-      clearTimeout(timeoutId);
-      reject(createAbortError());
-    };
-
-    const timeoutId = setTimeout(() => {
-      signal.removeEventListener("abort", onAbort);
-      resolve();
-    }, ms);
-
-    signal.addEventListener("abort", onAbort, { once: true });
-  });
-};
-
-const awaitPromiseWithAbortSignal = <T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> => {
-  if (!signal) return promise;
-  if (signal.aborted) {
-    return Promise.reject(createAbortError());
-  }
-  return new Promise<T>((resolve, reject) => {
-    const onAbort = () => {
-      signal.removeEventListener("abort", onAbort);
-      reject(createAbortError());
-    };
-    signal.addEventListener("abort", onAbort, { once: true });
-    promise
-      .then((value) => {
-        signal.removeEventListener("abort", onAbort);
-        resolve(value);
-      })
-      .catch((error) => {
-        signal.removeEventListener("abort", onAbort);
-        reject(error);
-      });
-  });
-};
-
-const buildReadRequestDedupeKey = (
-  method: string,
-  url: string,
-  headers: Record<string, string>,
-  body: RequestInit["body"],
-) => {
-  if (!DEDUPEABLE_READ_METHODS.has(method)) return null;
-  if (body !== undefined && body !== null) return null;
-  const normalizedUrl = normalizeUrlPath(url);
-  const headerKey = Object.entries(headers)
-    .map(([name, value]) => [name.toLowerCase(), String(value)] as const)
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([name, value]) => `${name}:${value}`)
-    .join("|");
-  return `${method} ${normalizedUrl} ${headerKey}`;
-};
-
-const cloneBudgetValue = <T>(value: T): T => {
-  if (typeof structuredClone !== "function") return value;
-  try {
-    return structuredClone(value);
-  } catch (error) {
-    addLog("warn", "Failed to clone request budget value", {
-      error: (error as Error).message,
-    });
-    return value;
-  }
-};
-
-const estimateBudgetValueBytes = (value: unknown): number | null => {
-  if (value === null || value === undefined) return 0;
-  if (typeof value === "string") return value.length;
-  if (typeof value === "number" || typeof value === "boolean") return String(value).length;
-  if (value instanceof ArrayBuffer) return value.byteLength;
-  if (ArrayBuffer.isView(value)) return value.byteLength;
-  try {
-    return JSON.stringify(value).length;
-  } catch (error) {
-    addLog("warn", "Failed to estimate request budget value size", {
-      error: (error as Error).message,
-    });
-    return null;
-  }
-};
-
-const getIdleContext = () => {
-  const snapshot = getDeviceStateSnapshot();
-  const now = Date.now();
-  const idleMs = snapshot.lastSuccessAtMs !== null ? Math.max(0, now - snapshot.lastSuccessAtMs) : null;
-  return {
-    deviceState: snapshot.state,
-    idleMs,
-    wasIdle: idleMs !== null && idleMs >= IDLE_RECOVERY_THRESHOLD_MS,
-  };
-};
-
-const extractRequestBody = (body: unknown) => {
-  if (!body) return null;
-  if (typeof body === "string") {
-    try {
-      return JSON.parse(body);
-    } catch (error) {
-      addLog("warn", "Failed to parse request body JSON", {
-        error: (error as Error).message,
-      });
-      return body;
-    }
-  }
-  if (typeof FormData !== "undefined" && body instanceof FormData) {
-    // Provide structured summary of FormData for diagnostics
-    const fields: Array<{
-      name: string;
-      type: "file" | "text";
-      fileName?: string;
-      sizeBytes?: number;
-      mimeType?: string;
-    }> = [];
-    body.forEach((value, name) => {
-      if (value instanceof File) {
-        fields.push({
-          name,
-          type: "file",
-          fileName: value.name,
-          sizeBytes: value.size,
-          mimeType: value.type || undefined,
-        });
-      } else if (typeof Blob !== "undefined" && value instanceof Blob) {
-        fields.push({
-          name,
-          type: "file",
-          sizeBytes: value.size,
-          mimeType: value.type || undefined,
-        });
-      } else {
-        fields.push({
-          name,
-          type: "text",
-        });
-      }
-    });
-    return { type: "form-data", fields };
-  }
-  if (typeof Blob !== "undefined" && body instanceof Blob) {
-    return {
-      type: "blob",
-      sizeBytes: body.size,
-      mimeType: body.type || null,
-      source: "blob",
-    };
-  }
-  if (body instanceof ArrayBuffer) {
-    return { type: "array-buffer", sizeBytes: body.byteLength };
-  }
-  if (ArrayBuffer.isView(body)) {
-    return { type: "array-buffer-view", sizeBytes: body.byteLength };
-  }
-  return body as unknown;
-};
-
-const readResponseBody = async (response: Response) => {
-  const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
-  if (!contentType.includes("application/json")) return null;
-  try {
-    return await response.clone().json();
-  } catch (error) {
-    addLog("warn", "Failed to parse API response JSON", {
-      error: (error as Error).message,
-    });
-    return null;
-  }
-};
-
-const sanitizeHostInput = (input?: string) => {
-  const raw = input?.trim() ?? "";
-  if (!raw) return "";
-  if (/^[a-z]+:\/\//i.test(raw)) {
-    try {
-      const url = new URL(raw);
-      return url.host || url.hostname || "";
-    } catch (error) {
-      addLog("warn", "Failed to parse host from URL input", {
-        input: raw,
-        error: (error as Error).message,
-      });
-      return "";
-    }
-  }
-  return raw.split("/")[0] ?? "";
-};
-
-export const normalizeDeviceHost = (input?: string) => {
-  const sanitized = sanitizeHostInput(input);
-  return sanitized || DEFAULT_DEVICE_HOST;
-};
-
-export const getDeviceHostFromBaseUrl = (baseUrl?: string) => {
-  if (!baseUrl) return DEFAULT_DEVICE_HOST;
-  try {
-    const url = new URL(baseUrl);
-    return url.host || DEFAULT_DEVICE_HOST;
-  } catch (error) {
-    addLog("warn", "Failed to parse device host from base URL", {
-      baseUrl,
-      error: (error as Error).message,
-    });
-    return normalizeDeviceHost(baseUrl);
-  }
-};
-
-export const buildBaseUrlFromDeviceHost = (deviceHost?: string) => `http://${normalizeDeviceHost(deviceHost)}`;
-
-const resolvePlatformApiBaseUrl = (deviceHost: string, baseUrl?: string) => {
-  if (import.meta.env.VITE_WEB_PLATFORM === "1" && typeof window !== "undefined") {
-    return `${window.location.origin.replace(/\/$/, "")}${WEB_PROXY_PATH}`;
-  }
-  if (baseUrl) {
-    return baseUrl.replace(/\/$/, "");
-  }
-  return buildBaseUrlFromDeviceHost(deviceHost);
-};
-
-export const resolveDeviceHostFromStorage = () => {
-  if (typeof localStorage === "undefined") return DEFAULT_DEVICE_HOST;
-  const storedDeviceHost = localStorage.getItem("c64u_device_host");
-  const normalizedStoredHost = normalizeDeviceHost(storedDeviceHost);
-  if (storedDeviceHost) {
-    localStorage.removeItem("c64u_base_url");
-    return normalizedStoredHost;
-  }
-  const legacyBaseUrl = localStorage.getItem("c64u_base_url");
-  if (legacyBaseUrl) {
-    const migratedHost = normalizeDeviceHost(getDeviceHostFromBaseUrl(legacyBaseUrl));
-    localStorage.setItem("c64u_device_host", migratedHost);
-    localStorage.removeItem("c64u_base_url");
-    return migratedHost;
-  }
-  localStorage.removeItem("c64u_base_url");
-  return normalizedStoredHost;
-};
-
-const isLocalProxy = (baseUrl: string) => {
-  try {
-    const url = new URL(baseUrl);
-    return url.hostname === "127.0.0.1" || url.hostname === "localhost";
-  } catch (error) {
-    addLog("warn", "Failed to parse base URL for proxy detection", {
-      baseUrl,
-      error: (error as Error).message,
-    });
-    return false;
-  }
-};
-
-const isLocalDeviceHost = (host: string) => {
-  let normalized = host.trim().toLowerCase();
-  if (!normalized) return false;
-  if (normalized.startsWith("[")) {
-    const closingBracketIndex = normalized.indexOf("]");
-    if (closingBracketIndex !== -1) {
-      normalized = normalized.slice(1, closingBracketIndex);
-    }
-  } else {
-    const colonIndex = normalized.indexOf(":");
-    if (colonIndex !== -1) {
-      normalized = normalized.slice(0, colonIndex);
-    }
-  }
-  return normalized === "localhost" || normalized === "127.0.0.1";
-};
-
-const resolvePreferredDeviceHost = (baseUrl: string, deviceHost?: string) => {
-  const explicitHost = deviceHost ? normalizeDeviceHost(deviceHost) : null;
-  const derivedHost = normalizeDeviceHost(explicitHost ?? getDeviceHostFromBaseUrl(baseUrl));
-  const storedHost = resolveDeviceHostFromStorage();
-  if (!explicitHost && derivedHost === DEFAULT_DEVICE_HOST && storedHost !== DEFAULT_DEVICE_HOST) {
-    addLog("info", "Using stored device host instead of default hostname", {
-      baseUrl,
-      derivedHost,
-      storedHost,
-    });
-    return storedHost;
-  }
-  const isLikelyFallbackOrigin = (() => {
-    if (typeof window === "undefined") return false;
-    const origin = window.location?.origin;
-    return Boolean(origin && (baseUrl === origin || baseUrl.startsWith(`${origin}/`)));
-  })();
-  if (!explicitHost && isLocalDeviceHost(derivedHost) && isLikelyFallbackOrigin) {
-    if (!isLocalDeviceHost(storedHost)) {
-      addLog("warn", "Ignoring localhost base URL in favor of stored host", {
-        baseUrl,
-        derivedHost,
-        storedHost,
-      });
-      return storedHost;
-    }
-  }
-  return derivedHost;
 };
 
 let lastDeviceHost: string | null = null;
@@ -2030,3 +1716,5 @@ export const C64_DEFAULTS = {
   DEFAULT_DEVICE_HOST,
   DEFAULT_PROXY_URL,
 };
+
+export { buildBaseUrlFromDeviceHost, getDeviceHostFromBaseUrl, normalizeDeviceHost, resolveDeviceHostFromStorage };

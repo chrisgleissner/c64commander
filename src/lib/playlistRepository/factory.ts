@@ -10,9 +10,9 @@ const canUseIndexedDb = () => typeof indexedDB !== "undefined";
 export const getPlaylistDataRepository = (): PlaylistDataRepository => {
   if (repository) return repository;
 
-  if (isNativePlatform() && canUseIndexedDb()) {
+  if (canUseIndexedDb()) {
     repository = getIndexedDbPlaylistDataRepository({
-      preferDurableStorage: true,
+      preferDurableStorage: isNativePlatform(),
     });
     return repository;
   }

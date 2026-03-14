@@ -61,7 +61,7 @@ describe("playlist repository factory", () => {
     expect(repository).toEqual({ id: "local" });
   });
 
-  it("falls back to localStorage repository on non-native platforms and caches instance until reset", () => {
+  it("uses IndexedDB repository on web platforms when indexedDB is available and caches instance until reset", () => {
     vi.mocked(isNativePlatform).mockReturnValue(false);
     Object.defineProperty(globalThis, "indexedDB", {
       value: {},
@@ -73,11 +73,14 @@ describe("playlist repository factory", () => {
     const second = getPlaylistDataRepository();
 
     expect(first).toBe(second);
-    expect(getLocalStoragePlaylistDataRepository).toHaveBeenCalledTimes(1);
+    expect(getIndexedDbPlaylistDataRepository).toHaveBeenCalledWith({
+      preferDurableStorage: false,
+    });
+    expect(getLocalStoragePlaylistDataRepository).not.toHaveBeenCalled();
 
     resetPlaylistDataRepositoryForTests();
     const third = getPlaylistDataRepository();
-    expect(third).toEqual({ id: "local" });
-    expect(getLocalStoragePlaylistDataRepository).toHaveBeenCalledTimes(2);
+    expect(third).toEqual({ id: "indexeddb" });
+    expect(getIndexedDbPlaylistDataRepository).toHaveBeenCalledTimes(2);
   });
 });

@@ -1,50 +1,208 @@
-# Plan: Diagnostics Export And Volume Control Hardening
+# Review 6 Rollout Execution Plan
 
-## Scope
+## Objective
 
-- Verify and harden diagnostics Share All UX, export naming, and ZIP contents.
-- Replace simplistic mock timing with a shared realistic single-threaded timing core reused by the external mock server and in-app demo mode.
-- Expand volume slider, mute/unmute, Playwright, and Maestro coverage with deterministic rate-limiting assertions.
-- Add a configurable volume slider preview interval setting and wire it into runtime behaviour.
-- Retake diagnostics screenshots, update docs, and complete full validation.
+Implement and verify every task in `doc/research/review-6/review-6-rollout-plan.md`.
 
-## Execution Plan
+## Execution Model
 
-### 1. Baseline Investigation
+- Authoritative tracker: this file
+- Workflow: read -> plan -> implement -> test -> verify -> record -> continue
+- Phase discipline: do not mark a phase complete until its exit criteria are verified
 
-- [done] Inspect current diagnostics export, Play page volume control, mock server, demo mode, and existing automated coverage.
-- [done] Measure relevant C64U REST endpoint latency against the physical device and derive a bounded reproducible timing profile.
-- [done] Identify current screenshot generation and documentation references for diagnostics overlay.
+## Phase Status
 
-### 2. Shared Timing Implementation
+- [x] Phase 0 - Baseline Alignment
+- [x] Phase 1 - Web Rollout Safety
+- [x] Phase 2 - Release Metadata and Documentation Hygiene
+- [x] Phase 3 - Dependency and Platform Security Hygiene
+- [x] Phase 4 - Playlist Persistence Hardening
+- [x] Phase 5 - Maintainability Hardening
+- [x] Phase 6 - Coverage Closeout
+- [x] Final verification and rollout plan closeout
 
-- [done] Introduce one shared timing and single-threaded request scheduling core.
-- [done] Reuse that core in the external mock server used by Playwright and in the in-app demo/mock server used by demo mode.
-- [done] Add deterministic tests proving both modes share timing, queueing, and jitter semantics.
+## Phase 0 - Baseline Alignment
 
-### 3. Diagnostics Export Hardening
+Implementation targets:
 
-- [done] Verify export helpers around timestamp generation, ZIP assembly, and deterministic naming against the current implementation.
-- [done] Extend unit, integration, and UI tests for per-tab export and Share All export.
-- [done] Retake diagnostics screenshots showing Share All, Clear All, per-tab Share buttons, and populated tabs.
+- `AGENTS.md`
+- `README.md`
+- `doc/research/review-6/review-6-rollout-plan.md`
 
-### 4. Volume Control Hardening
+Tasks:
 
-- [done] Add configurable slider preview propagation interval setting with validation and persistence.
-- [done] Ensure slider preview writes are coalesced and rate-limited using the configured interval.
-- [done] Expand mute/unmute and slider behaviour tests across unit, Playwright, and Maestro layers.
+- [x] Remove stale Android release-signing TODO wording from `AGENTS.md`
+- [x] State the iOS sideload-only release scope explicitly in `README.md`
+- [x] State that Android Play upload is already operational in `README.md`
+- [x] Record the device transport boundary (HTTP/FTP) in one canonical location and reference it nearby
+- [x] Record that GitHub Actions version-tag usage is an intentional contributor-facing policy
 
-### 5. Documentation And Validation
+Verification:
 
-- [done] Update developer and user documentation for Share All export, export file naming, preview interval, and shared mock/demo timing architecture.
-- [done] Run targeted tests, Playwright screenshots, Playwright suites, Maestro flows, coverage, lint, build, and ./build.
-- [done] Confirm final artifacts and summarize evidence for all required deliverables.
+- [x] Search docs for stale Android publishing TODO wording
+- [x] Confirm one canonical rollout-boundary section exists and nearby docs point to the current state
 
-## Notes
+## Phase 1 - Web Rollout Safety
 
-- Keep this file current as work progresses.
-- Do not weaken assertions; add deterministic clocks, seeds, and request-trace checks where needed.
-- Shared mock timing profile, diagnostics screenshot refresh, lint, targeted tests, full coverage, and direct build validation completed.
-- Physical-device latency measurement against a live C64U was completed on 2026-03-12 against hostname `c64u`, and the shared timing profile was recalibrated from those safe REST probes.
-- Follow-up timing investigation established that drive-mount latency is route-specific and synchronous: five rebooted live samples for `PUT /v1/drives/b:mount` measured about `753`-`766` ms, and observable `/v1/drives` state completion matched HTTP response timing.
-- Final validation is green: targeted Android playback throttling proof passes, fresh lint/build pass, `npm run test:coverage` passes at 90.92% branch coverage, and `./build` completes successfully.
+Implementation targets:
+
+- `public/sw.js`
+- `src/lib/startup/serviceWorkerRegistration.ts`
+- `tests/unit/startup/serviceWorkerRegistration.test.ts`
+- web deployment documentation in `README.md` and/or `doc/`
+
+Tasks:
+
+- [x] Replace fixed service-worker cache names with build-versioned cache names
+- [x] Stop cache-first handling for `/` and `/index.html`
+- [x] Add deterministic regression coverage for shell invalidation on deployment
+- [x] Add deterministic regression coverage for activation-time cache eviction
+- [x] Document deploy, hard-refresh, and rollback behavior for operators
+
+Verification:
+
+- [x] Run targeted service-worker tests
+- [x] Confirm shell requests bypass stale cache after activation
+
+## Phase 2 - Release Metadata and Documentation Hygiene
+
+Implementation targets:
+
+- `package.json`
+- `vite.config.ts`
+- `.github/workflows/web.yaml`
+- `README.md`
+- `tests/contract/README.md`
+- `docs/privacy-policy.md`
+
+Tasks:
+
+- [x] Choose one canonical app version source and enforce it in build metadata
+- [x] Remove mismatch-tolerant publish behavior from `.github/workflows/web.yaml`
+- [x] Update README artifact examples to the current naming convention
+- [x] Update contract-test runtime documentation to Node 24
+- [x] Remove the remote crash-reporting SDK from runtime, dependencies, and current docs
+- [x] Align the privacy policy with the no-crash-reporting runtime behavior
+
+Verification:
+
+- [x] Run targeted tests for build/version helpers if changed
+- [x] Validate workflow version check logic by inspection and lint/build usage
+
+## Phase 3 - Dependency and Platform Security Hygiene
+
+Implementation targets:
+
+- `package.json`
+- `package-lock.json`
+- Android manifest and backup policy XML files
+- rollout worklog in this file
+
+Tasks:
+
+- [x] Triage `npm audit` findings into upgrade, replace, or accepted-risk buckets
+- [x] Upgrade or replace vulnerable direct dependencies, starting with `@capacitor/cli`, `ftp-srv`, `ajv`, and `jsdom`
+- [x] Refresh overrides if still required after upgrades
+- [x] Capture post-remediation `npm audit` results in the worklog
+- [x] Make Android backup posture intentional and implement it in manifest/XML rules
+
+Verification:
+
+- [x] Run `npm audit` after dependency changes
+- [x] Build/test after dependency changes
+- [x] Validate Android manifest/resources still build
+
+## Phase 4 - Playlist Persistence Hardening
+
+Implementation targets:
+
+- `src/lib/playlistRepository/**`
+- playlist persistence consumers under `src/pages/playFiles/**`
+- `doc/db.md`
+- playlist unit tests
+
+Tasks:
+
+- [x] Define the persisted playlist query model and migration strategy in code/docs
+- [x] Move filtering, sorting, and pagination into repository-backed indexed/queryable structures
+- [x] Preserve recovery artifacts for schema mismatch and parse/migration failures
+- [x] Add deterministic regression tests for corruption and migration recovery
+- [x] Add deterministic regression tests for large playlist query behavior
+
+Verification:
+
+- [x] Run targeted playlist repository tests
+- [x] Confirm large playlist queries no longer depend on full scan/sort of all rows at query time
+
+## Phase 5 - Maintainability Hardening
+
+Implementation targets:
+
+- `src/lib/c64api.ts`
+- `src/pages/SettingsPage.tsx`
+- `src/pages/PlayFilesPage.tsx`
+- `src/components/disks/HomeDiskManager.tsx`
+- `src/lib/hvsc/hvscIngestionRuntime.ts`
+- `tsconfig.json`
+- `tsconfig.app.json`
+- `android/app/build.gradle`
+
+Tasks:
+
+- [x] Define and record the extraction order for hotspot files
+- [x] Split `src/lib/c64api.ts` into request/domain modules
+- [x] Split `src/pages/SettingsPage.tsx` by settings area
+- [x] Split `src/pages/PlayFilesPage.tsx` by browsing, playlist, and playback concerns
+- [x] Split `src/components/disks/HomeDiskManager.tsx` by collection, dialog, and mount-control concerns
+- [x] Split `src/lib/hvsc/hvscIngestionRuntime.ts` by ingestion stage and runtime/persistence concerns
+- [x] Re-enable a documented subset of stricter TypeScript checks without breaking the build
+- [x] Replace silent Gradle catches with explicit logging or contextual failure
+
+Verification:
+
+- [x] Run TypeScript/lint/build validation after modularization
+- [x] Confirm hotspot files are materially smaller than baseline
+- [x] Confirm Gradle version derivation no longer swallows failures silently
+
+## Phase 6 - Coverage Closeout
+
+Implementation targets:
+
+- `vitest.config.ts`
+- `scripts/collect-coverage.sh`
+- `scripts/check-coverage-threshold.mjs`
+- `codecov.yml`
+- rollout worklog in this file
+
+Tasks:
+
+- [x] Include shipped `web/server/**` runtime in enforced coverage reporting or add an equivalent enforced server gate
+- [x] Update coverage scripts and Codecov config to match the chosen gate
+- [x] Record the resulting measured line and branch baseline in the worklog
+
+Verification:
+
+- [x] Run `npm run test:coverage`
+- [x] Run `npm run test:coverage:all`
+- [x] Run `npm run lint`
+- [x] Run `npm run build`
+
+## Execution Worklog
+
+| Date | Phase | Entry | Status |
+| --- | --- | --- | --- |
+| 2026-03-13 | Planning | Replaced the stale audit-only `PLANS.md` with the rollout execution tracker tied to phases 0-6, verification steps, and live completion markers. | done |
+| 2026-03-13 | Planning | Completed initial implementation discovery for docs, service worker, workflow versioning, Android backup config, playlist repository, coverage scripts, and hotspot files. | done |
+| 2026-03-13 | Phase 0-2 | Aligned rollout docs, made `package.json` the canonical app version source, removed mismatch-tolerant web publish behavior, and removed the remote crash-reporting SDK plus its privacy-policy contradictions. | done |
+| 2026-03-13 | Phase 1 | Switched service-worker registration and caches to build-versioned behavior, stopped cache-first shell handling, and added deterministic lifecycle regression coverage. | done |
+| 2026-03-13 | Phase 3-4 | Upgraded `ajv`/`jsdom`/`tar`, disabled Android backup at the manifest level, replaced silent Gradle catches with warnings, moved playlist queries to persisted indexes, and added migration/recovery coverage. | done |
+| 2026-03-13 | Phase 3-6 | Hardened the shared slider against invalid bounds exposed by the `jsdom` upgrade, stabilized HomePage and structured-recovery tests on quick-action test ids, and included `tests/unit/web/**` + `web/server/**` in enforced unit coverage. | done |
+| 2026-03-13 | Phase 5 | Completed hotspot extractions across `c64api`, diagnostics dialogs, Play Files hooks, Home Disk Manager helpers, and HVSC runtime support, then revalidated lint/build behavior against the smaller module boundaries. | done |
+| 2026-03-13 | Phase 6 | Closed the remaining branch-coverage gap with targeted regression tests for diagnostics, connection state, Home Disk Manager flows, host/runtime helpers, AppBar, and playback volume hooks; the clean full Vitest coverage baseline is now 92.29% lines and 91.00% branches. | done |
+| 2026-03-13 | Final verification | Re-ran lint, the standard test suite, a clean full coverage pass, and a production build; rollout plan closeout is now verified locally. | done |
+
+## Audit / Verification Notes
+
+- Residual `npm audit` risk after upgrades: `ftp-srv`/`ip` remain in contract-test infrastructure, while older `ajv` and `minimatch` copies remain under upstream tooling trees.
+- Hotspot extraction order recorded from repo exploration: `src/lib/c64api.ts` host-resolution split first, then `src/pages/SettingsPage.tsx` diagnostics panel, then `src/lib/hvsc/hvscIngestionRuntime.ts` core pipeline extraction, followed by `src/pages/PlayFilesPage.tsx` playback/browsing split and `src/components/disks/HomeDiskManager.tsx` drive/library/dialog split.
+- Final local verification is complete: lint passes, the production build passes, and the clean full Vitest coverage run reports 92.29% lines and 91.00% branches.

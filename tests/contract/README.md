@@ -5,7 +5,7 @@ It is designed for SAFE and STRESS runs and writes reproducible artifacts under 
 
 ## Requirements
 
-- Node.js 18+
+- Node.js 24.x
 - A reachable C64U device on the local network
 
 ## Build + Run

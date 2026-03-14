@@ -360,7 +360,7 @@ export const appFirstHomeSurface: ValidationCase = {
       route: "/",
       featureArea: "Home",
       screenshotName: "af-home-surface.png",
-      markers: ["HOME", "MACHINE", "Reset", "Reboot", "Save RAM", "QUICK CONFIG"],
+      markers: ["HOME", "QUICK ACTIONS", "Reset", "Reboot", "Save RAM", "QUICK CONFIG"],
       stepId: "step-01",
       action: "validate_home_surface_markers",
     });

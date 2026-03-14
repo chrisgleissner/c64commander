@@ -46,7 +46,7 @@ test.describe("Fuzz structured recovery", () => {
       "data-connection-state",
       /(REAL_CONNECTED|DEMO_ACTIVE)/,
     );
-    await page.getByText("To App").click();
+    await page.getByTestId("home-config-save-app").click();
     await expect(page.getByRole("dialog")).toBeVisible();
 
     const dialog = page.getByRole("dialog");

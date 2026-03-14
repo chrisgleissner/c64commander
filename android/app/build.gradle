@@ -24,7 +24,9 @@ def resolveAppVersionName = { ->
     try {
         def tag = "git describe --tags --exact-match".execute(null, rootDir).text.trim()
         if (tag) return tag
-    } catch (Exception ignored) {}
+    } catch (Exception error) {
+        logger.warn("Failed to derive Android versionName from git tag; falling back to package.json version", error)
+    }
     def pkgFile = rootProject.file("../package.json")
     if (pkgFile.exists()) {
         def pkg = new JsonSlurper().parse(pkgFile)
@@ -41,7 +43,9 @@ def resolveAppVersionCode = { ->
     try {
         def commitCount = "git rev-list --count HEAD".execute(null, rootDir).text.trim()
         if (commitCount) return 1000 + commitCount.toInteger()
-    } catch (Exception ignored) {}
+    } catch (Exception error) {
+        logger.warn("Failed to derive Android versionCode from git commit count; falling back to default versionCode", error)
+    }
     return 2
 }
 

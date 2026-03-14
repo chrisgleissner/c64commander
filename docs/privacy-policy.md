@@ -4,7 +4,7 @@
 
 ## Overview
 
-C64 Commander does not collect, transmit, or share personal data. All functionality operates locally on your device and communicates only with devices or servers explicitly required to provide the app’s features.
+C64 Commander does not collect, transmit, or share personal data. All core functionality operates locally on your device and communicates only with devices or servers explicitly required to provide the app’s features.
 
 The app does not operate any backend services and does not send data to servers operated by the app developer.
 
@@ -15,7 +15,7 @@ C64 Commander stores a limited amount of data **locally on your device only**, s
 This may include:
 
 - **Device connection settings**, such as the network address of your C64 Ultimate.
-- **Optional device access credentials**, such as a password you enter to access your C64 Ultimate.  
+- **Optional device access credentials**, such as a password you enter to access your C64 Ultimate.
   These credentials are stored locally using the platform’s secure storage mechanisms.
 - **Diagnostic and application logs**, used for local troubleshooting and debugging.
 
@@ -41,15 +41,21 @@ C64 Commander does **not** collect or use:
 
 C64 Commander performs network communication only for the following purposes:
 
-- **Local device communication:**  
+- **Local device communication:**
   The app communicates with a C64 Ultimate device configured by the user, typically over the local network. This communication is required to read device state, update settings, and transfer files for playback.
 
-- **Optional content download:**  
+- **Optional content download:**
   At the user’s request, the app may download the High Voltage SID Collection (HVSC) from its official public site at <https://www.hvsc.c64.org/>. This process retrieves **SID music files**, which are data files containing music composed for the Commodore 64’s SID sound chip and contain no personal information.
 
   The downloaded files are stored locally on the user’s device, and no personal data or identifiers are transmitted as part of this process.
 
 No other external network communication is performed.
+
+## Platform telemetry
+
+C64 Commander itself does not transmit crash reports or diagnostics to the developer.
+
+On Android, Google Play and Android system services may still collect crash diagnostics through system-level telemetry when users enable diagnostic sharing on their device or in Google Play.
 
 ## Third-party software
 
@@ -65,5 +71,5 @@ If this privacy policy is updated, the revised version will be published with th
 
 ## Contact
 
-Email: <apps@gleissner.uk>  
+Email: <apps@gleissner.uk>
 Support: <https://github.com/chrisgleissner/c64commander/issues>

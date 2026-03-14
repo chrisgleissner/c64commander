@@ -210,8 +210,10 @@ let activeDiscovery: { abort: AbortController; cancel: () => void } | null = nul
 let demoInterstitialShownThisSession = false;
 let demoServerStartedThisSession = false;
 const DEMO_INTERSTITIAL_SESSION_KEY = "c64u_demo_interstitial_shown";
+const DEMO_MODE_PINNED_SESSION_KEY = "c64u_demo_mode_pinned";
 let stickyRealDeviceLock = false;
 let discoveryRunToken = 0;
+let demoModePinnedByUser = false;
 
 const emit = () => {
   listeners.forEach((listener) => listener());
@@ -252,6 +254,33 @@ export function dismissDemoInterstitial() {
     }
   }
   setSnapshot({ demoInterstitialVisible: false });
+}
+
+const persistDemoModePinnedState = (pinned: boolean) => {
+  if (typeof sessionStorage === "undefined") return;
+  try {
+    if (pinned) {
+      sessionStorage.setItem(DEMO_MODE_PINNED_SESSION_KEY, "1");
+    } else {
+      sessionStorage.removeItem(DEMO_MODE_PINNED_SESSION_KEY);
+    }
+  } catch (error) {
+    addLog("warn", "Failed to persist demo mode pin state", {
+      error: (error as Error).message,
+      pinned,
+    });
+  }
+};
+
+const clearPinnedDemoMode = () => {
+  demoModePinnedByUser = false;
+  persistDemoModePinnedState(false);
+};
+
+export function pinDemoModeByUserChoice() {
+  demoModePinnedByUser = true;
+  persistDemoModePinnedState(true);
+  dismissDemoInterstitial();
 }
 
 const cancelActiveDiscovery = () => {
@@ -303,6 +332,7 @@ const logDiscoveryDecision = (
 };
 
 const transitionToRealConnected = async (trigger: DiscoveryTrigger) => {
+  clearPinnedDemoMode();
   cancelActiveDiscovery();
   dismissDemoInterstitial();
   resetInteractionState("transition-real-connected");
@@ -319,6 +349,7 @@ const transitionToRealConnected = async (trigger: DiscoveryTrigger) => {
 };
 
 const transitionToOfflineNoDemo = async (trigger: DiscoveryTrigger) => {
+  clearPinnedDemoMode();
   cancelActiveDiscovery();
   dismissDemoInterstitial();
   resetInteractionState("transition-offline");
@@ -477,6 +508,9 @@ const handleProbeOutcome = async (
  * - Settings-triggered rediscovery
  */
 export async function discoverConnection(trigger: DiscoveryTrigger): Promise<void> {
+  if (trigger !== "background") {
+    clearPinnedDemoMode();
+  }
   const discoveryRun = beginDiscoveryRun(trigger);
 
   if (trigger === "background") {
@@ -545,6 +579,10 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
         addLog("info", "Discovery probe succeeded", { trigger });
         if (isSmokeModeEnabled()) {
           console.info("C64U_PROBE_OK", JSON.stringify({ trigger }));
+        }
+        if (snapshot.state === "DEMO_ACTIVE" && demoModePinnedByUser) {
+          addLog("info", "Real device detected during pinned demo mode", { trigger });
+          return;
         }
         if (snapshot.state === "DEMO_ACTIVE") {
           addLog("info", "Real device detected during demo mode", { trigger });
@@ -646,6 +684,7 @@ export async function initializeConnectionManager() {
   applyFuzzModeDefaults();
   await initializeSmokeMode();
   demoInterstitialShownThisSession = sessionStorage.getItem(DEMO_INTERSTITIAL_SESSION_KEY) === "1";
+  demoModePinnedByUser = sessionStorage.getItem(DEMO_MODE_PINNED_SESSION_KEY) === "1";
   stickyRealDeviceLock = false;
   setSnapshot({
     state: "UNKNOWN",

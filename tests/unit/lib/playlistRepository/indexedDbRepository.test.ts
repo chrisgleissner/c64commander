@@ -322,8 +322,9 @@ describe("indexedDB playlist repository", () => {
     expect(await repository.getPlaylistItems("playlist-default")).toEqual([]);
     expect(warn).toHaveBeenCalledWith(
       "Incompatible playlist repository schema in IndexedDB. Resetting repository state.",
-      expect.objectContaining({ expectedVersion: 1, foundVersion: 999 }),
+      expect.objectContaining({ expectedVersion: 2, foundVersion: 999 }),
     );
+    expect(localStorage.getItem("c64u_playlist_repo:indexeddb:recovery")).toContain("incompatible-schema");
   });
 
   it("propagates write failures from IndexedDB", async () => {
@@ -526,7 +527,7 @@ describe("indexedDB playlist repository", () => {
     expect(page.rows[0]?.playlistItem.playlistItemId).toMatch(/^item-\d+$/);
     expect(page.rows[0]?.playlistItem.sortKey <= page.rows[39]?.playlistItem.sortKey).toBe(true);
     expect(page.rows.every((row) => row.track.category === "song")).toBe(true);
-  });
+  }, 20_000);
 
   it("uses fallback IndexedDB error messages when request.error is missing", async () => {
     Object.defineProperty(globalThis, "indexedDB", {

@@ -25,7 +25,6 @@ import { toast } from "@/hooks/use-toast";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { reportUserError } from "@/lib/uiErrors";
 import { getC64API } from "@/lib/c64api";
-import { registerNavigationGuard } from "@/lib/navigation/navigationGuards";
 import type { TraceSourceKind } from "@/lib/tracing/types";
 import { discoverConnection, getConnectionSnapshot } from "@/lib/connection/connectionManager";
 import { getParentPath } from "@/lib/playback/localFileBrowser";
@@ -66,8 +65,11 @@ import { usePlaybackPersistence } from "@/pages/playFiles/hooks/usePlaybackPersi
 import { usePlaylistManager } from "@/pages/playFiles/hooks/usePlaylistManager";
 import { usePlayFilesVolumeBindings } from "@/pages/playFiles/hooks/usePlayFilesVolumeBindings";
 import { useLocalEntries } from "@/pages/playFiles/hooks/useLocalEntries";
+import { useAddItemsOverlayState } from "@/pages/playFiles/hooks/useAddItemsOverlayState";
+import { useImportNavigationGuards } from "@/pages/playFiles/hooks/useImportNavigationGuards";
 import { usePlaybackController } from "@/pages/playFiles/hooks/usePlaybackController";
 import { usePlaybackResumeTriggers } from "@/pages/playFiles/hooks/usePlaybackResumeTriggers";
+import { useResolvedPlaybackDeviceId } from "@/pages/playFiles/hooks/useResolvedPlaybackDeviceId";
 import { setPlaybackTraceSnapshot } from "@/pages/playFiles/playbackTraceStore";
 import { getPlaylistDataRepository } from "@/lib/playlistRepository";
 import type { PlaylistItemRecord, TrackRecord } from "@/lib/playlistRepository";
@@ -78,7 +80,6 @@ import {
   CATEGORY_OPTIONS,
   DEFAULT_SONG_DURATION_MS,
   DURATION_SLIDER_STEPS,
-  LAST_DEVICE_ID_KEY,
   PLAYBACK_SESSION_KEY,
   PLAYLIST_STORAGE_PREFIX,
   buildPlaylistStorageKey,
@@ -159,13 +160,19 @@ export default function PlayFilesPage() {
     total: null,
     message: null,
   });
-  const [showAddItemsOverlay, setShowAddItemsOverlay] = useState(false);
-  const [isAddingItems, setIsAddingItems] = useState(false);
-  const isImportNavigationBlocked = isAddingItems || addItemsProgress.status === "scanning";
+  const {
+    addItemsOverlayActiveRef,
+    addItemsOverlayStartedAtRef,
+    addItemsSurface,
+    handleAutoConfirmStart,
+    isAddingItems,
+    isImportNavigationBlocked,
+    setAddItemsSurface,
+    setIsAddingItems,
+    setShowAddItemsOverlay,
+    showAddItemsOverlay,
+  } = useAddItemsOverlayState({ browserOpen, addItemsProgressStatus: addItemsProgress.status });
   const [queryFilteredPlaylist, setQueryFilteredPlaylist] = useState<PlaylistItem[]>([]);
-  const addItemsOverlayStartedAtRef = useRef<number | null>(null);
-  const addItemsOverlayActiveRef = useRef(false);
-  const [addItemsSurface, setAddItemsSurface] = useState<"dialog" | "page">("dialog");
   const { limit: listPreviewLimit } = useListPreviewLimit();
   const isAndroid = getPlatform() === "android" && isNativePlatform();
   const trace = useActionTrace("PlayFilesPage");
@@ -401,52 +408,10 @@ export default function PlayFilesPage() {
     }
   }, [browserOpen]);
 
-  useEffect(() => {
-    if (!isImportNavigationBlocked) return;
-    return registerNavigationGuard(() =>
-      window.confirm("Importing items will stop if you leave this page. Leave anyway?"),
-    );
-  }, [isImportNavigationBlocked]);
+  useImportNavigationGuards(isImportNavigationBlocked);
 
-  useEffect(() => {
-    if (!isImportNavigationBlocked) return;
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = "";
-    };
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-    };
-  }, [isImportNavigationBlocked]);
-
-  const [lastKnownDeviceId, setLastKnownDeviceId] = useState<string | null>(() => {
-    if (typeof localStorage === "undefined") return null;
-    return localStorage.getItem(LAST_DEVICE_ID_KEY);
-  });
-
-  useEffect(() => {
-    if (!deviceInfoId || typeof localStorage === "undefined") return;
-    setLastKnownDeviceId(deviceInfoId);
-    try {
-      localStorage.setItem(LAST_DEVICE_ID_KEY, deviceInfoId);
-    } catch (error) {
-      addErrorLog("Failed to persist last known device id", {
-        error: (error as Error).message,
-      });
-    }
-  }, [deviceInfoId]);
-
-  const resolvedDeviceId = deviceInfoId || lastKnownDeviceId || "default";
+  const resolvedDeviceId = useResolvedPlaybackDeviceId(deviceInfoId);
   const playlistStorageKey = useMemo(() => buildPlaylistStorageKey(resolvedDeviceId), [resolvedDeviceId]);
-
-  const handleAutoConfirmStart = useCallback(() => {
-    setAddItemsSurface("page");
-    setIsAddingItems(true);
-    setShowAddItemsOverlay(true);
-    addItemsOverlayStartedAtRef.current = Date.now();
-    addItemsOverlayActiveRef.current = true;
-  }, []);
 
   useEffect(() => {
     if (browserOpen) return;
@@ -459,22 +424,6 @@ export default function PlayFilesPage() {
       message: null,
     });
   }, [addItemsProgress.status, browserOpen]);
-
-  useEffect(() => {
-    if (browserOpen) return;
-    if (addItemsProgress.status !== "scanning") return;
-    if (addItemsSurface !== "page") {
-      setAddItemsSurface("page");
-    }
-  }, [addItemsProgress.status, addItemsSurface, browserOpen]);
-
-  useEffect(() => {
-    if (addItemsProgress.status === "scanning") return;
-    if (addItemsSurface === "page" && isAddingItems) return;
-    if (addItemsSurface !== "dialog") {
-      setAddItemsSurface("dialog");
-    }
-  }, [addItemsProgress.status, addItemsSurface, isAddingItems]);
 
   const sourceGroups: SourceGroup[] = useMemo(() => {
     const ultimateSource = createUltimateSourceLocation();

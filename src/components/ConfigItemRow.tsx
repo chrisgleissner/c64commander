@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 interface ConfigItemRowProps {
   name: string;
   label?: string;
+  labelClassName?: string;
   category?: string;
   value: string | number;
   options?: string[];
@@ -37,6 +38,7 @@ interface ConfigItemRowProps {
   valueTestId?: string;
   sliderTestId?: string;
   formatOptionLabel?: (value: string) => string;
+  valueClassName?: string;
 }
 
 type ConfigItemLayoutMode = "horizontal" | "vertical";
@@ -103,7 +105,9 @@ export function ConfigItemRow({
   valueTestId,
   sliderTestId,
   label,
+  labelClassName,
   formatOptionLabel,
+  valueClassName,
 }: ConfigItemRowProps) {
   const [inputValue, setInputValue] = useState(() => String(value));
   const [isTextEditing, setIsTextEditing] = useState(false);
@@ -223,9 +227,10 @@ export function ConfigItemRow({
 
   const labelBlockClassName = cn("flex flex-col", layout === "horizontal" ? "shrink-0 pr-4" : "w-full");
 
-  const labelClassName = cn(
+  const resolvedLabelClassName = cn(
     "text-sm font-medium block",
     layout === "horizontal" ? "whitespace-nowrap" : "break-words w-full",
+    labelClassName,
   );
 
   const displayValue = inputValue;
@@ -322,7 +327,7 @@ export function ConfigItemRow({
     return (
       <div ref={containerRef} className={rowClassName} data-testid="config-item-layout" data-layout={layout}>
         <div className={labelBlockClassName}>
-          <span ref={labelRef} className={labelClassName} data-testid="config-item-label">
+          <span ref={labelRef} className={resolvedLabelClassName} data-testid="config-item-label">
             {displayLabel}
           </span>
           <span className="text-xs text-muted-foreground">
@@ -362,7 +367,7 @@ export function ConfigItemRow({
     return (
       <div ref={containerRef} className={rowClassName} data-testid="config-item-layout" data-layout={layout}>
         <div className={labelBlockClassName}>
-          <span ref={labelRef} className={labelClassName} data-testid="config-item-label">
+          <span ref={labelRef} className={resolvedLabelClassName} data-testid="config-item-label">
             {displayLabel}
           </span>
         </div>
@@ -417,10 +422,10 @@ export function ConfigItemRow({
     return (
       <div ref={containerRef} className={rowClassName} data-testid="config-item-layout" data-layout={layout}>
         <div className={labelBlockClassName}>
-          <span ref={labelRef} className={labelClassName} data-testid="config-item-label">
+          <span ref={labelRef} className={resolvedLabelClassName} data-testid="config-item-label">
             {displayLabel}
           </span>
-          <span className="text-xs text-muted-foreground font-semibold" data-testid={valueTestId}>
+          <span className={cn("text-xs text-muted-foreground font-semibold", valueClassName)} data-testid={valueTestId}>
             {currentLabel}
           </span>
         </div>
@@ -485,7 +490,7 @@ export function ConfigItemRow({
   return (
     <div ref={containerRef} className={rowClassName} data-testid="config-item-layout" data-layout={layout}>
       <div className={labelBlockClassName}>
-        <span ref={labelRef} className={labelClassName} data-testid="config-item-label">
+        <span ref={labelRef} className={resolvedLabelClassName} data-testid="config-item-label">
           {displayLabel}
         </span>
       </div>

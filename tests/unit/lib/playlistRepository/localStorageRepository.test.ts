@@ -61,6 +61,8 @@ describe("localStorage playlist repository", () => {
         error: expect.any(String),
       }),
     );
+    expect(localStorage.getItem("c64u_playlist_repo:v1:backup")).toBe("{bad json");
+    expect(localStorage.getItem("c64u_playlist_repo:v1:recovery")).toContain("parse-failure");
 
     localStorage.setItem("c64u_playlist_repo:v1", JSON.stringify({ version: 999, tracks: {} }));
     repository = getLocalStoragePlaylistDataRepository();
@@ -81,6 +83,7 @@ describe("localStorage playlist repository", () => {
       }),
     );
     expect(localStorage.getItem("c64u_playlist_repo:v1:backup")).toContain('"version":999');
+    expect(localStorage.getItem("c64u_playlist_repo:v1:recovery")).toContain("incompatible-schema");
   });
 
   it("persists tracks and playlist rows and supports deterministic query paging", async () => {
@@ -442,7 +445,7 @@ describe("localStorage playlist repository", () => {
   });
 
   it("recovers from partial valid state missing optional fields", async () => {
-    // Store state with version=1 but missing tracks/playlistItems/sessions
+    // Store a legacy state with version=1 but missing optional fields.
     localStorage.setItem("c64u_playlist_repo:v1", JSON.stringify({ version: 1 }));
     const repository = getLocalStoragePlaylistDataRepository();
     const result = await repository.queryPlaylist({

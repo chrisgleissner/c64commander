@@ -15,7 +15,7 @@ The core app controls a C64 Ultimate over REST and FTP, keeps app-local state in
 - **UI primitives**: Tailwind CSS, Radix UI, shadcn-style component patterns, Framer Motion
 - **Core domain modules**: `src/lib/c64api.ts`, `src/lib/playback/`, `src/lib/hvsc/`, `src/lib/disks/`, `src/lib/config/`, `src/lib/sourceNavigation/`
 - **Native implementations**: Android Kotlin/Java plugins under `android/app/src/main/java/uk/gleissner/c64commander/`
-- **Observability**: `src/lib/logging.ts`, `src/lib/diagnostics/`, `src/lib/tracing/`, optional Sentry via `VITE_SENTRY_DSN`
+- **Observability**: `src/lib/logging.ts`, `src/lib/diagnostics/`, `src/lib/tracing/`
 
 ## Stack and Layers
 
@@ -49,7 +49,7 @@ flowchart TD
 | Local app state | localStorage/sessionStorage-backed stores plus repository abstractions under `src/lib/playlistRepository/`, `src/lib/disks/`, and config stores |
 | Secure secrets | `src/lib/secureStorage.ts` with native secure-storage bridge; local storage only tracks password presence metadata |
 | Diagnostics and traces | Structured logs via `src/lib/logging.ts` and diagnostics/tracing modules under `src/lib/diagnostics/` and `src/lib/tracing/` |
-| Optional crash reporting | Sentry when `VITE_SENTRY_DSN` is configured |
+| Crash visibility | In-app diagnostics plus platform-level telemetry such as Android Vitals when the distribution channel provides it |
 
 ## Playback flow (Play page)
 
@@ -207,5 +207,4 @@ TypeScript remains the business-logic source of truth via repository interfaces;
 ## Crash reporting
 
 - **Android production crashes** are surfaced via **Google Play Console** (Android Vitals) once distributed through Play.
-- **Optional remote crash reporting** is available via Sentry when `VITE_SENTRY_DSN` is configured at build/runtime.
 - **In-app diagnostics** are available in Settings, allowing users to share logs via email without sending automatic crash traces to external services.
