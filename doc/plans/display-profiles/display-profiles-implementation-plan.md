@@ -55,38 +55,38 @@ This is MANDATORY reading before any work is done:
 
 ## Phase 5 — Modal Compliance
 
-- [ ] Introduce a shared modal-presentation helper that maps surface type and display profile to centered, full-screen, or large-dialog behavior.
-- [ ] Update the shared `Dialog` and `AlertDialog` usage patterns to consume the modal-presentation helper instead of hard-coded widths.
-- [ ] Standardize footer behavior so primary actions remain visible with keyboard open and safe-area padding applied.
-- [ ] Audit all dialogs and overlays used by Home, Play, Disks, Settings, Config, Diagnostics, and connectivity surfaces.
-- [ ] Add regression tests for Compact full-screen promotion and viewport-safe modal geometry.
+- [x] Introduce a shared modal-presentation helper that maps surface type and display profile to centered, full-screen, or large-dialog behavior.
+- [x] Update the shared `Dialog` and `AlertDialog` usage patterns to consume the modal-presentation helper instead of hard-coded widths.
+- [x] Standardize footer behavior so primary actions remain visible with keyboard open and safe-area padding applied.
+- [x] Audit all dialogs and overlays used by Home, Play, Disks, Settings, Config, Diagnostics, and connectivity surfaces.
+- [x] Add regression tests for Compact full-screen promotion and viewport-safe modal geometry.
 
 ## Phase 6 — Screenshot System
 
-- [ ] Define screenshot naming and folder rules that treat Medium as the default documentation profile.
-- [ ] Add explicit Compact and Expanded screenshot generation only for surfaces whose visible behavior differs from Medium.
-- [ ] Update `playwright/screenshots.spec.ts` and screenshot catalog metadata so profile-specific captures are deterministic.
-- [ ] Map each profile-specific screenshot to its corresponding `doc/img/app/` destination before regenerating assets.
-- [ ] Update documentation references and captions so profile-specific screenshots are not confused with state-specific screenshots.
+- [x] Define screenshot naming and folder rules that treat Medium as the default documentation profile.
+- [x] Add explicit Compact and Expanded screenshot generation only for surfaces whose visible behavior differs from Medium.
+- [x] Update `playwright/screenshots.spec.ts` and screenshot catalog metadata so profile-specific captures are deterministic.
+- [x] Map each profile-specific screenshot to its corresponding `doc/img/app/` destination before regenerating assets.
+- [x] Update documentation references and captions so profile-specific screenshots are not confused with state-specific screenshots.
 
 ## Phase 7 — Test Coverage
 
-- [ ] Add resolver unit tests for all threshold boundaries.
-- [ ] Add component tests for action-grid, layout-boundary, and modal-presentation helpers.
-- [ ] Add Playwright display-profile tests for Compact `360 x 640`, Medium `393 x 727`, and Expanded `800 x 1280`.
-- [ ] Add CTA reachability assertions tied to the UX interactions inventory for the highest-value CTA surfaces.
-- [ ] Add modal tests for Compact full-screen behavior, footer visibility, and keyboard-safe layouts.
-- [ ] Add state-persistence tests proving profile changes do not discard selection, filter, or in-progress edit state.
+- [x] Add resolver unit tests for all threshold boundaries.
+- [x] Add component tests for action-grid, layout-boundary, and modal-presentation helpers.
+- [x] Add Playwright display-profile tests for Compact `360 x 640`, Medium `393 x 727`, and Expanded `800 x 1280`.
+- [x] Add CTA reachability assertions tied to the UX interactions inventory for the highest-value CTA surfaces.
+- [x] Add modal tests for Compact full-screen behavior, footer visibility, and keyboard-safe layouts.
+- [x] Add state-persistence tests proving profile changes do not discard selection, filter, or in-progress edit state.
 
 ## Phase 8 — Verification
 
-- [ ] Verify no horizontal overflow on Home, Play, Disks, Config, Settings, selection browser, diagnostics, and major dialogs across all three profiles.
-- [ ] Verify source chooser order remains `Local`, `C64U`, `HVSC` across all profiles.
-- [ ] Verify selection views remain scoped to one source and do not gain playback or mounting actions.
-- [ ] Verify playlist and disk list virtualization still holds after profile-aware changes.
-- [ ] Verify primary CTAs remain reachable at increased text size and browser zoom.
-- [ ] Verify screenshots and tests cover every intentionally different Compact or Expanded surface.
-- [ ] Run the smallest honest validation set for the touched layers, including `npm run lint`, `npm run test`, `npm run test:coverage`, `npm run build`, and targeted Playwright coverage for profile-specific UI work.
+- [x] Verify no horizontal overflow on Home, Play, Disks, Config, Settings, selection browser, diagnostics, and major dialogs across all three profiles.
+- [x] Verify source chooser order remains `Local`, `C64U`, `HVSC` across all profiles.
+- [x] Verify selection views remain scoped to one source and do not gain playback or mounting actions.
+- [x] Verify playlist and disk list virtualization still holds after profile-aware changes.
+- [x] Verify primary CTAs remain reachable at increased text size and browser zoom.
+- [x] Verify screenshots and tests cover every intentionally different Compact or Expanded surface.
+- [x] Run the smallest honest validation set for the touched layers, including `npm run lint`, `npm run test`, `npm run test:coverage`, `npm run build`, and targeted Playwright coverage for profile-specific UI work.
 
 ## Execution Notes
 

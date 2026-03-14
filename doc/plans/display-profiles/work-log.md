@@ -53,3 +53,12 @@
 
 - Added a display-profile follow-up todo to ensure Expanded scales typography and control chrome above Medium instead of only widening layouts.
 - This follow-up was triggered by screenshot review of the Config page where the Expanded profile looked visually smaller than intended relative to Medium.
+
+## 2026-03-14T23:59:00Z
+
+### Verification and closure
+
+- Increased Expanded root UI scale and rebalanced expanded action-grid minimums so larger screens gain larger typography and controls without introducing horizontal overflow.
+- Updated compact full-screen modal geometry to keep a minimal inset from the viewport edges and aligned modal/layout tests to that shared contract.
+- Regenerated the full documentation screenshot set, including profile-specific images under `doc/img/app/**/profiles/`.
+- Validation completed with `npm run lint`, `npm run test:coverage` (`All files` branch coverage `91.01%`), `npm run build`, `playwright/displayProfiles.spec.ts`, full `npm run screenshots`, `npm run test:e2e`, `npm run validate:evidence`, and `npm run validate:traces`.
