@@ -4,10 +4,10 @@
 
 ### Task classification
 
-- Classified as `DOC_ONLY` for this repository change set because the work produced planning and analysis artifacts only.
-- No code, test, build, or screenshot regeneration work was performed in this task.
+- Initial planning started as a `DOC_ONLY` iteration focused on gap analysis and implementation planning.
+- The repository change set later expanded into `DOC_PLUS_CODE` work once the display-profile infrastructure, UI refactors, tests, and screenshots were implemented.
 
-### Research scope completed
+### Research scope completed for the initial planning pass
 
 - Reviewed `doc/display-profiles.md`, `doc/ux-guidelines.md`, `doc/ux-interactions.md`, `README.md`, `AGENTS.md`, and the repository instructions.
 - Reviewed the current viewport and screenshot guidance in `doc/testing/dual-resolution.md` and `doc/testing/viewport-finalization-summary.md`.
@@ -36,7 +36,7 @@
 - The test suite already has useful phone/tablet infrastructure, which reduces implementation risk, but the current project naming is device-oriented rather than profile-oriented.
 - The repository has several modal surfaces with their own width overrides, which will slow convergence unless modal policy is centralized first.
 
-### Deliverables produced
+### Deliverables produced during the planning pass
 
 - `doc/plans/display-profiles/display-profiles-gap-analysis.md`
 - `doc/plans/display-profiles/display-profiles-implementation-plan.md`

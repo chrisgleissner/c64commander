@@ -277,7 +277,7 @@ Examples:
 - `doc/img/app/play/import/profiles/expanded/02-c64u-file-picker.png` for an Expanded selection-browser surface.
 - New shared components must declare how they behave in Compact, Medium, and Expanded before they are considered complete.
 
-## 16. Summary
+## 17. Summary
 
 C64 Commander supports three display profiles:
 

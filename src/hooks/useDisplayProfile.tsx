@@ -37,6 +37,27 @@ const defaultContextValue: DisplayProfileContextValue = {
 
 const DisplayProfileContext = React.createContext<DisplayProfileContextValue>(defaultContextValue);
 
+const DISPLAY_PROFILE_ROOT_STYLE_PROPERTIES = [
+  "--display-profile-root-font-size",
+  "--display-profile-page-max-width",
+  "--display-profile-reading-max-width",
+  "--display-profile-page-padding-x",
+  "--display-profile-page-padding-y",
+  "--display-profile-section-gap",
+  "--display-profile-panel-gap",
+  "--display-profile-action-grid-gap",
+  "--display-profile-action-grid-min",
+  "--display-profile-modal-max-width",
+  "--display-profile-modal-inset",
+  "--display-profile-viewport-width",
+  "--display-profile-viewport-height",
+] as const;
+
+type RootSnapshot = {
+  displayProfile: string | undefined;
+  styleValues: Map<(typeof DISPLAY_PROFILE_ROOT_STYLE_PROPERTIES)[number], string>;
+};
+
 const readViewportWidth = () => {
   if (typeof window === "undefined") return 0;
   return Math.max(0, Math.round(window.innerWidth || 0));
@@ -77,12 +98,42 @@ const applyViewportTokens = () => {
   root.style.setProperty("--display-profile-viewport-height", `${readViewportHeight()}px`);
 };
 
+const snapshotRootState = (): RootSnapshot | null => {
+  if (typeof document === "undefined") return null;
+  const root = document.documentElement;
+  return {
+    displayProfile: root.dataset.displayProfile,
+    styleValues: new Map(
+      DISPLAY_PROFILE_ROOT_STYLE_PROPERTIES.map((property) => [property, root.style.getPropertyValue(property)]),
+    ),
+  };
+};
+
+const restoreRootState = (snapshot: RootSnapshot | null) => {
+  if (!snapshot || typeof document === "undefined") return;
+  const root = document.documentElement;
+  if (snapshot.displayProfile === undefined) {
+    delete root.dataset.displayProfile;
+  } else {
+    root.dataset.displayProfile = snapshot.displayProfile;
+  }
+  for (const property of DISPLAY_PROFILE_ROOT_STYLE_PROPERTIES) {
+    const value = snapshot.styleValues.get(property) ?? "";
+    if (value) {
+      root.style.setProperty(property, value);
+    } else {
+      root.style.removeProperty(property);
+    }
+  }
+};
+
 export function DisplayProfileProvider({ children }: { children: React.ReactNode }) {
   const [override, setOverrideState] = React.useState<DisplayProfileOverride>(() => getDisplayProfileOverride());
   const [viewportWidth, setViewportWidth] = React.useState(() => readViewportWidth());
 
   React.useEffect(() => {
     if (typeof window === "undefined") return undefined;
+    const rootSnapshot = snapshotRootState();
     const handleResize = () => {
       setViewportWidth(readViewportWidth());
       applyViewportTokens();
@@ -107,6 +158,7 @@ export function DisplayProfileProvider({ children }: { children: React.ReactNode
       window.removeEventListener("orientationchange", handleResize);
       window.removeEventListener("c64u-ui-preferences-changed", handlePreferences as EventListener);
       window.removeEventListener("storage", handleStorage);
+      restoreRootState(rootSnapshot);
     };
   }, []);
 

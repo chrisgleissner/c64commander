@@ -124,6 +124,29 @@ describe("DisplayProfileProvider", () => {
     expect(screen.getByTestId("profile")).toHaveTextContent("compact");
   });
 
+  it("ignores preference change events that do not carry a display-profile override", () => {
+    localStorage.clear();
+    setViewportWidth(320);
+    setViewportHeight(640);
+
+    render(
+      <DisplayProfileProvider>
+        <Consumer />
+      </DisplayProfileProvider>,
+    );
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent("c64u-ui-preferences-changed", {
+          detail: { listPreviewLimit: 20 },
+        }),
+      );
+    });
+
+    expect(screen.getByTestId("override")).toHaveTextContent("auto");
+    expect(screen.getByTestId("profile")).toHaveTextContent("compact");
+  });
+
   it("refreshes the override when storage is cleared and ignores non-local storage events", () => {
     localStorage.clear();
     setViewportWidth(320);
@@ -167,5 +190,55 @@ describe("DisplayProfileProvider", () => {
 
     expect(screen.getByTestId("override")).toHaveTextContent("auto");
     expect(screen.getByTestId("profile")).toHaveTextContent("compact");
+  });
+
+  it("restores the previous root dataset and CSS variables on unmount", () => {
+    localStorage.clear();
+    setViewportWidth(320);
+    setViewportHeight(640);
+    document.documentElement.dataset.displayProfile = "expanded";
+    document.documentElement.style.setProperty("--display-profile-root-font-size", "19px");
+    document.documentElement.style.setProperty("--display-profile-viewport-width", "999px");
+
+    const { unmount } = render(
+      <DisplayProfileProvider>
+        <Consumer />
+      </DisplayProfileProvider>,
+    );
+
+    expect(document.documentElement.dataset.displayProfile).toBe("compact");
+    expect(document.documentElement.style.getPropertyValue("--display-profile-root-font-size")).toBe("16px");
+    expect(document.documentElement.style.getPropertyValue("--display-profile-viewport-width")).toBe("320px");
+
+    unmount();
+
+    expect(document.documentElement.dataset.displayProfile).toBe("expanded");
+    expect(document.documentElement.style.getPropertyValue("--display-profile-root-font-size")).toBe("19px");
+    expect(document.documentElement.style.getPropertyValue("--display-profile-viewport-width")).toBe("999px");
+  });
+
+  it("removes provider-owned root state on unmount when no previous values existed", () => {
+    localStorage.clear();
+    setViewportWidth(320);
+    setViewportHeight(640);
+    delete document.documentElement.dataset.displayProfile;
+    document.documentElement.style.removeProperty("--display-profile-root-font-size");
+    document.documentElement.style.removeProperty("--display-profile-viewport-width");
+
+    const { unmount } = render(
+      <DisplayProfileProvider>
+        <Consumer />
+      </DisplayProfileProvider>,
+    );
+
+    expect(document.documentElement.dataset.displayProfile).toBe("compact");
+    expect(document.documentElement.style.getPropertyValue("--display-profile-root-font-size")).toBe("16px");
+    expect(document.documentElement.style.getPropertyValue("--display-profile-viewport-width")).toBe("320px");
+
+    unmount();
+
+    expect(document.documentElement.dataset.displayProfile).toBeUndefined();
+    expect(document.documentElement.style.getPropertyValue("--display-profile-root-font-size")).toBe("");
+    expect(document.documentElement.style.getPropertyValue("--display-profile-viewport-width")).toBe("");
   });
 });

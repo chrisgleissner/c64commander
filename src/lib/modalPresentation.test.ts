@@ -19,4 +19,24 @@ describe("modalPresentation", () => {
     expect(resolveModalPresentation("medium", "selection-browser").footerClassName).toContain("sticky");
     expect(resolveModalPresentation("medium", "confirmation").footerClassName).toBe("");
   });
+
+  it("keeps popovers centered and switches command palettes between compact and centered modes", () => {
+    expect(resolveModalPresentation("medium", "popover")).toMatchObject({
+      mode: "centered",
+      footerClassName: "",
+    });
+    expect(resolveModalPresentation("compact", "secondary-editor")).toMatchObject({
+      mode: "fullscreen",
+    });
+    expect(resolveModalPresentation("compact", "command-palette")).toMatchObject({
+      mode: "fullscreen",
+    });
+    expect(resolveModalPresentation("expanded", "command-palette")).toMatchObject({
+      mode: "centered",
+    });
+    expect(resolveModalPresentation("medium", "default")).toMatchObject({
+      mode: "centered",
+      footerClassName: "",
+    });
+  });
 });

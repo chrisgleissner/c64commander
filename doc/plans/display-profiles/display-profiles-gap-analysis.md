@@ -1,8 +1,8 @@
 # Display Profiles Gap Analysis
 
-## 1 Current Architecture Summary
+## 1 Baseline Architecture Summary
 
-The repository does not yet have a centralized display-profile system.
+This baseline analysis captures the repository state before the display-profile implementation landed.
 
 - The only shared viewport helper is `src/hooks/use-mobile.tsx`, which exposes a binary `window.innerWidth < 768` check. That threshold conflicts with the specification thresholds of Compact `<= 360`, Medium `361-599`, and Expanded `>= 600`.
 - Responsive behavior is currently expressed through scattered Tailwind breakpoint classes such as `sm:`, `md:`, and `lg:` in page and component markup.
@@ -10,7 +10,7 @@ The repository does not yet have a centralized display-profile system.
 - The shared dialog primitives in `src/components/ui/dialog.tsx` and `src/components/ui/alert-dialog.tsx` enforce viewport-safe centered modals, but they do not have profile-aware presentation modes such as Compact full-screen promotion.
 - Playwright already has dual-resolution infrastructure and horizontal-overflow checks through `playwright.config.ts`, `playwright/layoutOverflow.spec.ts`, `playwright/viewportValidation.ts`, and `doc/testing/dual-resolution.md`. That provides a starting point for verification, but it validates viewport behavior rather than an explicit display-profile contract.
 
-Overall status:
+Baseline status:
 
 - Medium has the strongest implicit support because most surfaces were built around a standard single-column phone baseline.
 - Compact support is partial and defensive rather than intentional.

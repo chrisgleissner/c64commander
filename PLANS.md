@@ -100,7 +100,7 @@ This document defines the audit plan only. It does not contain audit findings or
 
 ## Display Profiles Readiness Analysis
 
-- [x] Classify the task as `DOC_ONLY` and limit validation scope to documentation accuracy and consistency.
+- [x] Reclassify the display-profiles work as `DOC_PLUS_CODE` once implementation started so validation scope covered the UI, tests, and build outputs touched by the feature.
 - [x] Review the display-profile specification, UX guidelines, UX interactions inventory, README, AGENTS, and relevant material under `doc/`, `doc/c64/`, `doc/diagnostics/`, and `doc/testing/`.
 - [x] Audit the current page shells, shared components, modal primitives, screenshot generation flow, and Playwright layout coverage for display-profile readiness.
 - [x] Produce `doc/plans/display-profiles/display-profiles-gap-analysis.md`.

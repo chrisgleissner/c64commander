@@ -14,6 +14,7 @@ export function PageContainer({ children, className, size = "default", as = "mai
   const { tokens } = useDisplayProfile();
   const Component = as;
   const style: CSSProperties = {
+    width: size === "full" ? "100%" : undefined,
     maxWidth: size === "full" ? "100%" : size === "reading" ? tokens.readingMaxWidth : tokens.pageMaxWidth,
   };
 
@@ -63,7 +64,6 @@ type ProfileSplitSectionProps = {
   children: ReactNode;
   className?: string;
   minColumnWidth?: string;
-  expandedColumns?: 2 | 3;
   testId?: string;
 };
 
@@ -71,7 +71,6 @@ export function ProfileSplitSection({
   children,
   className,
   minColumnWidth = "18rem",
-  expandedColumns = 2,
   testId,
 }: ProfileSplitSectionProps) {
   const { profile } = useDisplayProfile();
