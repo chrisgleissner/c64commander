@@ -42,6 +42,16 @@ const readViewportWidth = () => {
   return Math.max(0, Math.round(window.innerWidth || 0));
 };
 
+const readViewportHeight = () => {
+  if (typeof window === "undefined") return 0;
+  return Math.max(0, Math.round(window.innerHeight || 0));
+};
+
+const shouldRefreshOverrideFromStorage = (event: StorageEvent) => {
+  if (event.storageArea !== localStorage) return false;
+  return event.key === null || event.key === "c64u_display_profile_override";
+};
+
 const applyProfileTokens = (profile: DisplayProfile) => {
   if (typeof document === "undefined") return;
   const tokens = getDisplayProfileLayoutTokens(profile);
@@ -60,6 +70,13 @@ const applyProfileTokens = (profile: DisplayProfile) => {
   root.style.setProperty("--display-profile-modal-inset", tokens.modalInset);
 };
 
+const applyViewportTokens = () => {
+  if (typeof document === "undefined") return;
+  const root = document.documentElement;
+  root.style.setProperty("--display-profile-viewport-width", `${readViewportWidth()}px`);
+  root.style.setProperty("--display-profile-viewport-height", `${readViewportHeight()}px`);
+};
+
 export function DisplayProfileProvider({ children }: { children: React.ReactNode }) {
   const [override, setOverrideState] = React.useState<DisplayProfileOverride>(() => getDisplayProfileOverride());
   const [viewportWidth, setViewportWidth] = React.useState(() => readViewportWidth());
@@ -68,6 +85,7 @@ export function DisplayProfileProvider({ children }: { children: React.ReactNode
     if (typeof window === "undefined") return undefined;
     const handleResize = () => {
       setViewportWidth(readViewportWidth());
+      applyViewportTokens();
     };
     const handlePreferences = (event: Event) => {
       const detail = (event as CustomEvent<{ displayProfileOverride?: DisplayProfileOverride }>).detail;
@@ -75,14 +93,20 @@ export function DisplayProfileProvider({ children }: { children: React.ReactNode
         setOverrideState(detail.displayProfileOverride);
       }
     };
+    const handleStorage = (event: StorageEvent) => {
+      if (!shouldRefreshOverrideFromStorage(event)) return;
+      setOverrideState(getDisplayProfileOverride());
+    };
     window.addEventListener("resize", handleResize, { passive: true });
     window.addEventListener("orientationchange", handleResize);
     window.addEventListener("c64u-ui-preferences-changed", handlePreferences as EventListener);
+    window.addEventListener("storage", handleStorage);
     handleResize();
     return () => {
       window.removeEventListener("resize", handleResize);
       window.removeEventListener("orientationchange", handleResize);
       window.removeEventListener("c64u-ui-preferences-changed", handlePreferences as EventListener);
+      window.removeEventListener("storage", handleStorage);
     };
   }, []);
 

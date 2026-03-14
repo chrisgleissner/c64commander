@@ -303,8 +303,8 @@ export const ItemSelectionDialog = ({
             : "max-w-md",
         )}
       >
-        <div className={cn("flex min-h-0 flex-col", source && "h-full")}>
-          <DialogHeader className="border-b border-border px-6 pb-3 pt-6">
+        <div className={cn("flex min-h-0 flex-col overflow-hidden", source && "h-full")}>
+          <DialogHeader className="shrink-0 border-b border-border px-6 pb-3 pt-6">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <DialogTitle className="text-xl">{title}</DialogTitle>
@@ -437,7 +437,7 @@ export const ItemSelectionDialog = ({
             )}
           </div>
 
-          <DialogFooter className="flex flex-col gap-2 border-t border-border px-6 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:flex-row sm:items-center sm:justify-between">
+          <DialogFooter className="shrink-0 flex flex-col gap-2 border-t border-border px-6 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:flex-row sm:items-center sm:justify-between">
             {showProgressFooter && progress && progress.status !== "idle" && (
               <div className="text-xs text-muted-foreground" data-testid="add-items-progress">
                 <span>

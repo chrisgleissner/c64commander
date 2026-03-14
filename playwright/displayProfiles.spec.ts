@@ -77,6 +77,36 @@ const expectDialogPresentationMode = async (
   await expect(dialog).toHaveClass(/left-\[50%\]/);
 };
 
+const expectLocatorWithinViewport = async (
+  page: Page,
+  locator: ReturnType<Page["getByRole"]> | ReturnType<Page["getByTestId"]>,
+) => {
+  const box = await locator.boundingBox();
+  const viewport = page.viewportSize();
+  expect(box).not.toBeNull();
+  expect(viewport).not.toBeNull();
+  if (box && viewport) {
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.y).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
+    expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
+  }
+};
+
+const scaleRootTextSize = async (page: Page, scale: number) => {
+  await page.evaluate((nextScale) => {
+    const root = document.documentElement;
+    const current = Number.parseFloat(getComputedStyle(root).fontSize);
+    root.style.fontSize = `${current * nextScale}px`;
+  }, scale);
+};
+
+const setBrowserZoom = async (page: Page, scale: number) => {
+  const session = await page.context().newCDPSession(page);
+  await session.send("Emulation.setPageScaleFactor", { pageScaleFactor: scale });
+  return session;
+};
+
 test.describe("display profiles", () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
@@ -258,6 +288,84 @@ test.describe("display profiles", () => {
       expect(settingsOverflow).toBe(true);
       await page.keyboard.press("Escape");
     }
+  });
+
+  test("compact diagnostics CTA layout remains reachable when text size increases", async ({
+    page,
+  }: {
+    page: Page;
+  }) => {
+    await page.goto("/settings", { waitUntil: "domcontentloaded" });
+    await applyDisplayProfileViewport(page, "compact");
+
+    await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
+    const diagnosticsDialog = page.getByRole("dialog", { name: "Diagnostics" });
+    await expect(diagnosticsDialog).toBeVisible();
+
+    await scaleRootTextSize(page, 1.5);
+
+    const shareAllButton = diagnosticsDialog.getByRole("button", { name: "Share All", exact: true });
+    const clearAllButton = diagnosticsDialog.getByRole("button", { name: "Clear All", exact: true });
+    await expect(shareAllButton).toBeVisible();
+    await expect(clearAllButton).toBeVisible();
+    await expectLocatorWithinViewport(page, diagnosticsDialog);
+    await expectLocatorWithinViewport(page, shareAllButton);
+    await expectLocatorWithinViewport(page, clearAllButton);
+
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
+    expect(overflow).toBe(true);
+  });
+
+  test("compact diagnostics CTA layout remains reachable after reduced viewport height", async ({
+    page,
+  }: {
+    page: Page;
+  }) => {
+    await page.goto("/settings", { waitUntil: "domcontentloaded" });
+    await applyDisplayProfileViewport(page, "compact");
+
+    await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
+    const diagnosticsDialog = page.getByRole("dialog", { name: "Diagnostics" });
+    await expect(diagnosticsDialog).toBeVisible();
+
+    await page.setViewportSize({ width: 360, height: 420 });
+    await expect
+      .poll(() => page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight })))
+      .toEqual({ width: 360, height: 420 });
+
+    const shareAllButton = diagnosticsDialog.getByRole("button", { name: "Share All", exact: true });
+    const clearAllButton = diagnosticsDialog.getByRole("button", { name: "Clear All", exact: true });
+    await expect(shareAllButton).toBeVisible();
+    await expect(clearAllButton).toBeVisible();
+    await expectLocatorWithinViewport(page, shareAllButton);
+    await expectLocatorWithinViewport(page, clearAllButton);
+  });
+
+  test("compact diagnostics CTA layout remains reachable under browser zoom on web", async ({
+    page,
+  }: {
+    page: Page;
+  }, testInfo: TestInfo) => {
+    if (testInfo.project.name !== "web") {
+      test.skip(true, "Browser zoom proof only runs on the Chromium web project");
+    }
+
+    await page.goto("/settings", { waitUntil: "domcontentloaded" });
+    await applyDisplayProfileViewport(page, "compact");
+
+    const session = await setBrowserZoom(page, 1.5);
+    await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
+    const diagnosticsDialog = page.getByRole("dialog", { name: "Diagnostics" });
+    await expect(diagnosticsDialog).toBeVisible();
+
+    const shareAllButton = diagnosticsDialog.getByRole("button", { name: "Share All", exact: true });
+    const clearAllButton = diagnosticsDialog.getByRole("button", { name: "Clear All", exact: true });
+    await expect(shareAllButton).toBeVisible();
+    await expect(clearAllButton).toBeVisible();
+    await expectLocatorWithinViewport(page, shareAllButton);
+    await expectLocatorWithinViewport(page, clearAllButton);
+
+    await session.send("Emulation.setPageScaleFactor", { pageScaleFactor: 1 });
   });
 
   test("core pages avoid horizontal overflow across the compact medium and expanded matrix", async ({

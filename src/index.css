@@ -5,6 +5,8 @@
 :root {
   --c64-motion-duration-scale: 1;
   --modal-backdrop-duration: 150ms;
+  --display-profile-viewport-width: 100vw;
+  --display-profile-viewport-height: 100dvh;
   --display-profile-root-font-size: 16px;
   --display-profile-page-max-width: 960px;
   --display-profile-reading-max-width: 960px;

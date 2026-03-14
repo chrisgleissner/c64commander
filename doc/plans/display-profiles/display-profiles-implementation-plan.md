@@ -75,7 +75,8 @@ This is MANDATORY reading before any work is done:
 - [x] Add component tests for action-grid, layout-boundary, and modal-presentation helpers.
 - [x] Add Playwright display-profile tests for Compact `360 x 640`, Medium `393 x 727`, and Expanded `800 x 1280`.
 - [x] Add CTA reachability assertions tied to the UX interactions inventory for the highest-value CTA surfaces.
-- [x] Add modal tests for Compact full-screen behavior, footer visibility, and keyboard-safe layouts.
+- [x] Add modal tests for Compact full-screen behavior and footer visibility.
+- [ ] Add deterministic keyboard-safe layout coverage for Compact full-screen dialogs under live reduced-height or visual-viewport conditions.
 - [x] Add state-persistence tests proving profile changes do not discard selection, filter, or in-progress edit state.
 
 ## Phase 8 — Verification
@@ -84,7 +85,8 @@ This is MANDATORY reading before any work is done:
 - [x] Verify source chooser order remains `Local`, `C64U`, `HVSC` across all profiles.
 - [x] Verify selection views remain scoped to one source and do not gain playback or mounting actions.
 - [x] Verify playlist and disk list virtualization still holds after profile-aware changes.
-- [x] Verify primary CTAs remain reachable at increased text size and browser zoom.
+- [x] Verify primary CTAs remain reachable at increased text size.
+- [ ] Verify primary CTAs remain reachable under live keyboard-open viewport reduction.
 - [x] Verify screenshots and tests cover every intentionally different Compact or Expanded surface.
 - [x] Run the smallest honest validation set for the touched layers, including `npm run lint`, `npm run test`, `npm run test:coverage`, `npm run build`, and targeted Playwright coverage for profile-specific UI work.
 

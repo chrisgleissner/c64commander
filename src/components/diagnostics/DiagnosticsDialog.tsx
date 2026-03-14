@@ -161,12 +161,12 @@ export function DiagnosticsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent surface="secondary-editor" className="overflow-hidden">
-        <DialogHeader>
+      <DialogContent surface="secondary-editor" className="flex min-h-0 flex-col overflow-hidden">
+        <DialogHeader className="shrink-0">
           <DialogTitle>Diagnostics</DialogTitle>
           <DialogDescription>Review warnings/errors, logs, traces, and action summaries.</DialogDescription>
         </DialogHeader>
-        <div className="flex flex-wrap gap-2">
+        <div className="shrink-0 flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={() => void onShareAll()}>
             Share All
           </Button>
@@ -192,7 +192,7 @@ export function DiagnosticsDialog({
             </AlertDialogContent>
           </AlertDialog>
         </div>
-        <div className="relative">
+        <div className="relative shrink-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
           <Input
             type="text"
@@ -217,9 +217,9 @@ export function DiagnosticsDialog({
         <Tabs
           value={diagnosticsTab}
           onValueChange={(value) => onDiagnosticsTabChange(value as DiagnosticsTabKey)}
-          className="space-y-3"
+          className="flex min-h-0 flex-1 flex-col space-y-3"
         >
-          <TabsList className="grid grid-cols-4 w-full">
+          <TabsList className="grid w-full shrink-0 grid-cols-4">
             <TabsTrigger value="error-logs" className={diagnosticsTabTriggerClass}>
               Errors
             </TabsTrigger>
@@ -233,10 +233,7 @@ export function DiagnosticsDialog({
               Actions
             </TabsTrigger>
           </TabsList>
-          <TabsContent
-            value="error-logs"
-            className="space-y-3 max-h-[calc(100dvh-23rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-auto pr-2"
-          >
+          <TabsContent value="error-logs" className="mt-0 flex-1 min-h-0 overflow-auto pr-2 space-y-3">
             <div className="flex items-center justify-between gap-2">
               <p className="text-xs text-muted-foreground">Total warnings/errors: {errorLogs.length}</p>
               <Button
@@ -272,10 +269,7 @@ export function DiagnosticsDialog({
               ))
             )}
           </TabsContent>
-          <TabsContent
-            value="logs"
-            className="space-y-3 max-h-[calc(100dvh-23rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-auto pr-2"
-          >
+          <TabsContent value="logs" className="mt-0 flex-1 min-h-0 overflow-auto pr-2 space-y-3">
             <div className="flex items-center justify-between gap-2">
               <p className="text-xs text-muted-foreground">Total logs: {logs.length}</p>
               <Button
@@ -311,10 +305,7 @@ export function DiagnosticsDialog({
               ))
             )}
           </TabsContent>
-          <TabsContent
-            value="traces"
-            className="space-y-3 max-h-[calc(100dvh-23rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-auto pr-2"
-          >
+          <TabsContent value="traces" className="mt-0 flex-1 min-h-0 overflow-auto pr-2 space-y-3">
             <div className="flex items-center justify-between gap-2">
               <p className="text-xs text-muted-foreground">Total traces: {traceEvents.length}</p>
               <Button
@@ -355,10 +346,7 @@ export function DiagnosticsDialog({
               </>
             )}
           </TabsContent>
-          <TabsContent
-            value="actions"
-            className="space-y-3 max-h-[calc(100dvh-23rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-auto pr-2"
-          >
+          <TabsContent value="actions" className="mt-0 flex-1 min-h-0 overflow-auto pr-2 space-y-3">
             <div className="flex items-center justify-between gap-2">
               <p className="text-xs text-muted-foreground">Total action summaries: {actionSummaries.length}</p>
               <Button

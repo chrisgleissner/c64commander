@@ -11,6 +11,14 @@ const setViewportWidth = (width: number) => {
   });
 };
 
+const setViewportHeight = (height: number) => {
+  Object.defineProperty(window, "innerHeight", {
+    configurable: true,
+    writable: true,
+    value: height,
+  });
+};
+
 const Consumer = () => {
   const { profile, autoProfile, override } = useDisplayProfile();
   const { setOverride } = useDisplayProfilePreference();
@@ -30,6 +38,7 @@ describe("DisplayProfileProvider", () => {
   it("tracks automatic viewport changes and persists manual overrides", () => {
     localStorage.clear();
     setViewportWidth(320);
+    setViewportHeight(640);
 
     render(
       <DisplayProfileProvider>
@@ -41,6 +50,7 @@ describe("DisplayProfileProvider", () => {
     expect(screen.getByTestId("profile")).toHaveTextContent("compact");
     expect(document.documentElement.dataset.displayProfile).toBe("compact");
     expect(document.documentElement.style.getPropertyValue("--display-profile-root-font-size")).toBe("16px");
+    expect(document.documentElement.style.getPropertyValue("--display-profile-viewport-width")).toBe("320px");
 
     fireEvent.click(screen.getByRole("button", { name: "Force expanded" }));
 
@@ -57,5 +67,105 @@ describe("DisplayProfileProvider", () => {
 
     expect(screen.getByTestId("auto-profile")).toHaveTextContent("expanded");
     expect(screen.getByTestId("profile")).toHaveTextContent("expanded");
+    expect(document.documentElement.style.getPropertyValue("--display-profile-viewport-width")).toBe("700px");
+  });
+
+  it("refreshes the override when localStorage changes arrive through a storage event", () => {
+    localStorage.clear();
+    setViewportWidth(320);
+    setViewportHeight(640);
+
+    render(
+      <DisplayProfileProvider>
+        <Consumer />
+      </DisplayProfileProvider>,
+    );
+
+    expect(screen.getByTestId("profile")).toHaveTextContent("compact");
+    localStorage.setItem("c64u_display_profile_override", "expanded");
+
+    act(() => {
+      window.dispatchEvent(
+        new StorageEvent("storage", {
+          key: "c64u_display_profile_override",
+          newValue: "expanded",
+          storageArea: window.localStorage,
+        }),
+      );
+    });
+
+    expect(screen.getByTestId("override")).toHaveTextContent("expanded");
+    expect(screen.getByTestId("profile")).toHaveTextContent("expanded");
+    expect(document.documentElement.dataset.displayProfile).toBe("expanded");
+  });
+
+  it("ignores unrelated storage changes", () => {
+    localStorage.clear();
+    setViewportWidth(320);
+    setViewportHeight(640);
+
+    render(
+      <DisplayProfileProvider>
+        <Consumer />
+      </DisplayProfileProvider>,
+    );
+
+    act(() => {
+      window.dispatchEvent(
+        new StorageEvent("storage", {
+          key: "c64u_list_preview_limit",
+          newValue: "20",
+          storageArea: window.localStorage,
+        }),
+      );
+    });
+
+    expect(screen.getByTestId("override")).toHaveTextContent("auto");
+    expect(screen.getByTestId("profile")).toHaveTextContent("compact");
+  });
+
+  it("refreshes the override when storage is cleared and ignores non-local storage events", () => {
+    localStorage.clear();
+    setViewportWidth(320);
+    setViewportHeight(640);
+    localStorage.setItem("c64u_display_profile_override", "expanded");
+
+    render(
+      <DisplayProfileProvider>
+        <Consumer />
+      </DisplayProfileProvider>,
+    );
+
+    expect(screen.getByTestId("override")).toHaveTextContent("expanded");
+    expect(screen.getByTestId("profile")).toHaveTextContent("expanded");
+
+    localStorage.removeItem("c64u_display_profile_override");
+
+    act(() => {
+      window.dispatchEvent(
+        new StorageEvent("storage", {
+          key: null,
+          storageArea: window.localStorage,
+        }),
+      );
+    });
+
+    expect(screen.getByTestId("override")).toHaveTextContent("auto");
+    expect(screen.getByTestId("profile")).toHaveTextContent("compact");
+
+    localStorage.setItem("c64u_display_profile_override", "expanded");
+
+    act(() => {
+      window.dispatchEvent(
+        new StorageEvent("storage", {
+          key: "c64u_display_profile_override",
+          newValue: "expanded",
+          storageArea: window.sessionStorage,
+        }),
+      );
+    });
+
+    expect(screen.getByTestId("override")).toHaveTextContent("auto");
+    expect(screen.getByTestId("profile")).toHaveTextContent("compact");
   });
 });
