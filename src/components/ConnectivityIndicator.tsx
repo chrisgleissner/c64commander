@@ -114,6 +114,7 @@ export function ConnectivityIndicator({ className }: Props) {
         ) : null}
       </button>
       <DialogContent
+        surface="popover"
         className="w-80 p-0"
         closeTestId="connection-status-close"
         onOpenAutoFocus={(event) => {

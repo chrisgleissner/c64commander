@@ -5,6 +5,19 @@
 :root {
   --c64-motion-duration-scale: 1;
   --modal-backdrop-duration: 150ms;
+  --display-profile-viewport-width: 100vw;
+  --display-profile-viewport-height: 100dvh;
+  --display-profile-root-font-size: 16px;
+  --display-profile-page-max-width: 960px;
+  --display-profile-reading-max-width: 960px;
+  --display-profile-page-padding-x: 1rem;
+  --display-profile-page-padding-y: 1.25rem;
+  --display-profile-section-gap: 1.25rem;
+  --display-profile-panel-gap: 1rem;
+  --display-profile-action-grid-gap: 0.75rem;
+  --display-profile-action-grid-min: 9.5rem;
+  --display-profile-modal-max-width: 48rem;
+  --display-profile-modal-inset: 1rem;
 }
 
 :root[data-c64-motion-mode='reduced'] {
@@ -22,6 +35,10 @@
 /* C64 Ultimate Controller - Design System */
 
 @layer base {
+  html {
+    font-size: var(--display-profile-root-font-size);
+  }
+
   :root {
     /* C64-inspired color palette with modern touches */
     --background: 220 20% 97%;
@@ -231,8 +248,7 @@ button:focus-visible,
 
   body {
     @apply bg-background text-foreground font-sans antialiased overflow-x-hidden;
-    padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom)
-      env(safe-area-inset-left);
+    padding: 0 0 env(safe-area-inset-bottom) 0;
   }
 
   :where(p, span, a, button, label, li, td, th) {
@@ -306,6 +322,50 @@ button:focus-visible,
            bg-card border border-border rounded-xl
            hover:border-primary hover:bg-primary/5
            active:scale-95 transition-all duration-150;
+  }
+
+  .app-shell-container {
+    box-sizing: border-box;
+    width: min(100%, var(--display-profile-page-max-width));
+    margin-inline: auto;
+    padding-left: calc(var(--display-profile-page-padding-x) + env(safe-area-inset-left));
+    padding-right: calc(var(--display-profile-page-padding-x) + env(safe-area-inset-right));
+  }
+
+  .page-shell {
+    box-sizing: border-box;
+    width: min(100%, var(--display-profile-page-max-width));
+    margin-inline: auto;
+    padding-top: var(--display-profile-page-padding-y);
+    padding-bottom: var(--display-profile-page-padding-y);
+    padding-left: calc(var(--display-profile-page-padding-x) + env(safe-area-inset-left));
+    padding-right: calc(var(--display-profile-page-padding-x) + env(safe-area-inset-right));
+  }
+
+  .page-stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--display-profile-section-gap);
+  }
+
+  .profile-action-grid {
+    display: grid;
+    gap: var(--display-profile-action-grid-gap);
+    align-items: stretch;
+  }
+
+  .profile-split-section {
+    display: grid;
+    gap: var(--display-profile-panel-gap);
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .profile-card {
+    @apply bg-card border border-border rounded-xl p-4;
+  }
+
+  .profile-card-compact {
+    @apply p-3;
   }
 
   /* Settings row */

@@ -736,7 +736,7 @@ export default function MusicPlayerPage() {
   return (
     <div className="min-h-screen pb-24">
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-lg border-b border-border">
-        <div className="container py-4">
+        <div className="app-shell-container py-4">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-primary/10">
               <Music className="h-5 w-5 text-primary" />
@@ -749,7 +749,7 @@ export default function MusicPlayerPage() {
         </div>
       </header>
 
-      <main className="container py-6 space-y-6">
+      <main className="app-shell-container py-6 space-y-6">
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}

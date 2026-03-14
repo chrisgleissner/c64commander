@@ -290,7 +290,7 @@ export default function DocsPage() {
     <div className="min-h-screen pb-24 pt-[var(--app-bar-height)]">
       <AppBar title="Docs" subtitle="How to use this app" />
 
-      <main className="container py-6 space-y-4">
+      <main className="app-shell-container py-6 space-y-4">
         {docSections.map((section, index) => (
           <motion.div
             key={section.id}

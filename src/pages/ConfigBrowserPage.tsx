@@ -29,6 +29,7 @@ import { buildSoloRoutingUpdates, isSidVolumeName, soloReducer } from "@/lib/con
 import { normalizeConfigItem, type NormalizedConfigItem } from "@/lib/config/normalizeConfigItem";
 import { AppBar } from "@/components/AppBar";
 import { updateHasChanges } from "@/lib/config/appConfigStore";
+import { PageContainer, PageStack } from "@/components/layout/PageContainer";
 
 type ConfigListItem = {
   name: string;
@@ -610,37 +611,39 @@ export default function ConfigBrowserPage() {
         </div>
       </AppBar>
 
-      <main className="container py-4 space-y-3">
-        {!status.isConnected ? (
-          <div className="bg-destructive/10 border border-destructive/20 rounded-xl p-4 text-center">
-            <p className="text-sm text-destructive font-medium">Not connected</p>
-            <p className="text-xs text-muted-foreground mt-1">Configure connection in Settings</p>
-          </div>
-        ) : isLoading ? (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          </div>
-        ) : filteredCategories.length === 0 ? (
-          <div className="py-8 text-center text-sm text-muted-foreground">
-            {searchQuery ? "No categories match your search" : "No categories available"}
-          </div>
-        ) : (
-          filteredCategories.map((category, index) => (
-            <motion.div
-              key={category}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.03 }}
-            >
-              <CategorySection
-                categoryName={category}
-                onOpenChange={(isOpen) => setConfigExpanded(category, isOpen)}
-                markChanged={markChanged}
-              />
-            </motion.div>
-          ))
-        )}
-      </main>
+      <PageContainer size="reading">
+        <PageStack className="gap-3">
+          {!status.isConnected ? (
+            <div className="bg-destructive/10 border border-destructive/20 rounded-xl p-4 text-center">
+              <p className="text-sm text-destructive font-medium">Not connected</p>
+              <p className="text-xs text-muted-foreground mt-1">Configure connection in Settings</p>
+            </div>
+          ) : isLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : filteredCategories.length === 0 ? (
+            <div className="py-8 text-center text-sm text-muted-foreground">
+              {searchQuery ? "No categories match your search" : "No categories available"}
+            </div>
+          ) : (
+            filteredCategories.map((category, index) => (
+              <motion.div
+                key={category}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.03 }}
+              >
+                <CategorySection
+                  categoryName={category}
+                  onOpenChange={(isOpen) => setConfigExpanded(category, isOpen)}
+                  markChanged={markChanged}
+                />
+              </motion.div>
+            ))
+          )}
+        </PageStack>
+      </PageContainer>
     </div>
   );
 }

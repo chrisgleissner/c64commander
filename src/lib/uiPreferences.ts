@@ -6,7 +6,10 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { type DisplayProfileOverride, isDisplayProfileOverride } from "@/lib/displayProfiles";
+
 const LIST_PREVIEW_LIMIT_KEY = "c64u_list_preview_limit";
+const DISPLAY_PROFILE_OVERRIDE_KEY = "c64u_display_profile_override";
 
 export const DEFAULT_LIST_PREVIEW_LIMIT = 50;
 export const MIN_LIST_PREVIEW_LIMIT = 1;
@@ -36,3 +39,19 @@ export const setListPreviewLimit = (value: number) => {
 };
 
 export const clampListPreviewLimit = clampLimit;
+
+export const getDisplayProfileOverride = (): DisplayProfileOverride => {
+  if (typeof localStorage === "undefined") return "auto";
+  const raw = localStorage.getItem(DISPLAY_PROFILE_OVERRIDE_KEY);
+  return isDisplayProfileOverride(raw) ? raw : "auto";
+};
+
+export const setDisplayProfileOverride = (value: DisplayProfileOverride) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(DISPLAY_PROFILE_OVERRIDE_KEY, value);
+  window.dispatchEvent(
+    new CustomEvent("c64u-ui-preferences-changed", {
+      detail: { displayProfileOverride: value },
+    }),
+  );
+};

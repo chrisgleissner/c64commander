@@ -29,6 +29,11 @@ import {
   startStrictUiMonitoring,
 } from "./testArtifacts";
 import { disableTraceAssertions } from "./traceUtils";
+import {
+  DISPLAY_PROFILE_VIEWPORT_SEQUENCE,
+  DISPLAY_PROFILE_VIEWPORTS,
+  type DisplayProfileViewportId,
+} from "./displayProfileViewports";
 import { registerScreenshotSections, sanitizeSegment } from "./screenshotCatalog";
 import { planHomeScreenshotSlices } from "./homeScreenshotLayout";
 import { installFixedClock, installListPreviewLimit, installStableStorage, seedDiagnosticsTraces } from "./visualSeeds";
@@ -40,6 +45,8 @@ const screenshotPath = (relativePath: string) => path.resolve(SCREENSHOT_ROOT, r
 
 const screenshotLabel = (relativePath: string) => relativePath.replace(/\.[^.]+$/, "").replace(/[\\/]/g, "-");
 const screenshotRepoPath = (relativePath: string) => path.posix.join("doc/img/app", relativePath);
+const profileScreenshotPath = (pageId: string, profileId: DisplayProfileViewportId, fileName: string) =>
+  `${pageId}/profiles/${profileId}/${fileName}`;
 
 const ensureScreenshotDir = async (filePath: string) => {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
@@ -164,6 +171,23 @@ const waitForStableRender = async (page: Page) => {
   await page.waitForFunction(() => (document as any).fonts?.ready ?? true);
   await page.evaluate(() => new Promise(requestAnimationFrame));
   await page.evaluate(() => new Promise(requestAnimationFrame));
+};
+
+const applyDisplayProfileViewport = async (page: Page, profileId: DisplayProfileViewportId) => {
+  const profile = DISPLAY_PROFILE_VIEWPORTS[profileId];
+  await page.setViewportSize(profile.viewport);
+  await page.evaluate((override) => {
+    localStorage.setItem("c64u_display_profile_override", override);
+    window.dispatchEvent(
+      new CustomEvent("c64u-ui-preferences-changed", {
+        detail: { displayProfileOverride: override },
+      }),
+    );
+  }, profile.override);
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.dataset.displayProfile))
+    .toBe(profile.expectedProfile);
+  await waitForStableRender(page);
 };
 
 const waitForOverlaysToClear = async (page: Page) => {
@@ -407,7 +431,7 @@ test.describe("App screenshots", () => {
     });
     await seedUiMocks(page, server.baseUrl);
     await installStableStorage(page);
-    await page.setViewportSize({ width: 360, height: 800 });
+    await page.setViewportSize(DISPLAY_PROFILE_VIEWPORTS.medium.viewport);
     await page.emulateMedia({ reducedMotion: "reduce", colorScheme: "light" });
   });
 
@@ -446,6 +470,20 @@ test.describe("App screenshots", () => {
       reducedMotion: "reduce",
     });
   });
+
+  test(
+    "capture home profile screenshots",
+    { tag: "@screenshots" },
+    async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      for (const profileId of DISPLAY_PROFILE_VIEWPORT_SEQUENCE) {
+        await page.goto("/");
+        await waitForConnected(page);
+        await applyDisplayProfileViewport(page, profileId);
+        await page.evaluate(() => window.scrollTo(0, 0));
+        await captureScreenshot(page, testInfo, profileScreenshotPath("home", profileId, "01-overview.png"));
+      }
+    },
+  );
 
   test(
     "capture home interaction screenshots",
@@ -687,9 +725,30 @@ test.describe("App screenshots", () => {
   });
 
   test(
-    "capture configuration screenshots",
-    { tag: "@screenshots", timeout: 180000 },
+    "capture disks profile screenshots",
+    { tag: "@screenshots" },
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      await installListPreviewLimit(page, 3);
+      for (const profileId of DISPLAY_PROFILE_VIEWPORT_SEQUENCE) {
+        await page.goto("/disks");
+        await applyDisplayProfileViewport(page, profileId);
+        await expect(page.getByRole("heading", { name: "Disks", level: 1 })).toBeVisible();
+        await captureScreenshot(page, testInfo, profileScreenshotPath("disks", profileId, "01-overview.png"));
+
+        await page.getByRole("button", { name: "View all" }).click();
+        await expect(page.getByTestId("action-list-view-all")).toBeVisible();
+        await captureScreenshot(page, testInfo, profileScreenshotPath("disks", profileId, "02-view-all.png"));
+        await page.keyboard.press("Escape");
+      }
+    },
+  );
+
+  test(
+    "capture configuration screenshots",
+    { tag: "@screenshots" },
+    async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      test.slow();
+      testInfo.setTimeout(240000);
       allowVisualOverflow(testInfo, "Audio mixer controls overflow on narrow screenshot viewport.");
       await page.goto("/config");
       await expect(page.getByRole("heading", { name: "Config" })).toBeVisible();
@@ -698,6 +757,21 @@ test.describe("App screenshots", () => {
       await page.evaluate(() => window.scrollTo(0, 0));
       await captureScreenshot(page, testInfo, "config/01-categories.png");
       await captureConfigSections(page, testInfo);
+    },
+  );
+
+  test(
+    "capture configuration profile screenshots",
+    { tag: "@screenshots" },
+    async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      test.slow();
+      testInfo.setTimeout(240000);
+      for (const profileId of DISPLAY_PROFILE_VIEWPORT_SEQUENCE) {
+        await page.goto("/config");
+        await applyDisplayProfileViewport(page, profileId);
+        await expect(page.getByRole("heading", { name: "Config" })).toBeVisible();
+        await captureScreenshot(page, testInfo, profileScreenshotPath("config", profileId, "01-overview.png"));
+      }
     },
   );
 
@@ -721,6 +795,25 @@ test.describe("App screenshots", () => {
 
     await expect(page.getByTestId("hvsc-controls")).toBeVisible();
   });
+
+  test(
+    "capture play profile screenshots",
+    { tag: "@screenshots" },
+    async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      await installListPreviewLimit(page, 3);
+      for (const profileId of DISPLAY_PROFILE_VIEWPORT_SEQUENCE) {
+        await page.goto("/play");
+        await applyDisplayProfileViewport(page, profileId);
+        await expect(page.getByRole("heading", { name: "Play Files" })).toBeVisible();
+        await captureScreenshot(page, testInfo, profileScreenshotPath("play", profileId, "01-overview.png"));
+
+        await page.getByRole("button", { name: "View all" }).click();
+        await expect(page.getByTestId("action-list-view-all")).toBeVisible();
+        await captureScreenshot(page, testInfo, profileScreenshotPath("play", profileId, "02-view-all.png"));
+        await page.keyboard.press("Escape");
+      }
+    },
+  );
 
   test(
     "capture import flow screenshots",
@@ -755,6 +848,39 @@ test.describe("App screenshots", () => {
   );
 
   test(
+    "capture import flow profile screenshots",
+    { tag: "@screenshots" },
+    async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      await page.addInitScript(() => {
+        (window as Window & { __c64uDisableLocalAutoConfirm?: boolean }).__c64uDisableLocalAutoConfirm = true;
+      });
+
+      for (const profileId of DISPLAY_PROFILE_VIEWPORT_SEQUENCE) {
+        await page.goto("/play");
+        await applyDisplayProfileViewport(page, profileId);
+
+        await page.getByRole("button", { name: /Add items|Add more items/i }).click();
+        const dialog = page.getByRole("dialog");
+        await expect(dialog.getByTestId("import-selection-interstitial")).toBeVisible();
+        await captureScreenshot(
+          page,
+          testInfo,
+          profileScreenshotPath("play/import", profileId, "01-import-interstitial.png"),
+        );
+
+        await dialog.getByTestId("import-option-c64u").click();
+        await expect(dialog.getByTestId("c64u-file-picker")).toBeVisible();
+        await captureScreenshot(
+          page,
+          testInfo,
+          profileScreenshotPath("play/import", profileId, "02-c64u-file-picker.png"),
+        );
+        await dialog.getByRole("button", { name: "Cancel" }).click();
+      }
+    },
+  );
+
+  test(
     "capture settings screenshots",
     { tag: "@screenshots" },
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
@@ -764,6 +890,19 @@ test.describe("App screenshots", () => {
       await page.evaluate(() => window.scrollTo(0, 0));
       await captureScreenshot(page, testInfo, "settings/01-overview.png");
       await capturePageSections(page, testInfo, "settings");
+    },
+  );
+
+  test(
+    "capture settings profile screenshots",
+    { tag: "@screenshots" },
+    async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      for (const profileId of DISPLAY_PROFILE_VIEWPORT_SEQUENCE) {
+        await page.goto("/settings");
+        await applyDisplayProfileViewport(page, profileId);
+        await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+        await captureScreenshot(page, testInfo, profileScreenshotPath("settings", profileId, "01-overview.png"));
+      }
     },
   );
 
@@ -831,6 +970,23 @@ test.describe("App screenshots", () => {
 
       await page.keyboard.press("Escape");
       await expect(dialog).toBeHidden();
+    },
+  );
+
+  test(
+    "capture diagnostics profile screenshots",
+    { tag: "@screenshots" },
+    async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      for (const profileId of DISPLAY_PROFILE_VIEWPORT_SEQUENCE) {
+        await page.goto("/settings");
+        await applyDisplayProfileViewport(page, profileId);
+        await seedDiagnosticsTraces(page);
+        await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
+        const dialog = page.getByRole("dialog", { name: "Diagnostics" });
+        await expect(dialog).toBeVisible();
+        await captureScreenshot(page, testInfo, profileScreenshotPath("diagnostics", profileId, "01-overview.png"));
+        await page.keyboard.press("Escape");
+      }
     },
   );
 

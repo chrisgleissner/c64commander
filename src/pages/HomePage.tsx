@@ -56,6 +56,7 @@ import { buildConfigKey, readItemOptions, resolveTurboControlValue } from "./hom
 
 import { SectionHeader } from "@/components/SectionHeader";
 import { cn } from "@/lib/utils";
+import { PageContainer, PageStack, ProfileActionGrid, ProfileSplitSection } from "@/components/layout/PageContainer";
 
 export default function HomePage() {
   return (
@@ -434,489 +435,491 @@ function HomePageContent() {
         }
       />
 
-      <main className="container py-5 space-y-4">
-        {/* System Info */}
-        <SystemInfo />
+      <PageContainer>
+        <PageStack className="gap-4">
+          {/* System Info */}
+          <SystemInfo />
 
-        {/* Machine */}
-        <MachineControls
-          status={status}
-          machineTaskBusy={machineTaskBusy}
-          machineExecutionState={machineExecutionState}
-          setMachineExecutionState={setMachineExecutionState}
-          controls={controls}
-          pauseResumePending={pauseResumePending}
-          machineTaskId={machineTaskId}
-          onPauseResume={handlePauseResume}
-          onSaveRam={() => setSaveRamDialogOpen(true)}
-          onLoadRam={() => setSnapshotManagerOpen(true)}
-          onRebootClearMemory={handleRebootClearMemory}
-          onPowerOff={handlePowerOff}
-          onAction={handleAction}
-          footer={ramDumpFolderCard}
-        />
+          {/* Machine */}
+          <MachineControls
+            status={status}
+            machineTaskBusy={machineTaskBusy}
+            machineExecutionState={machineExecutionState}
+            setMachineExecutionState={setMachineExecutionState}
+            controls={controls}
+            pauseResumePending={pauseResumePending}
+            machineTaskId={machineTaskId}
+            onPauseResume={handlePauseResume}
+            onSaveRam={() => setSaveRamDialogOpen(true)}
+            onLoadRam={() => setSnapshotManagerOpen(true)}
+            onRebootClearMemory={handleRebootClearMemory}
+            onPowerOff={handlePowerOff}
+            onAction={handleAction}
+            footer={ramDumpFolderCard}
+          />
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.25 }}
-          className="space-y-2"
-          data-section-label="Quick Config"
-        >
-          <SectionHeader title="Quick Config" />
-          <div className="grid gap-3 lg:grid-cols-2">
-            <div className="space-y-3" data-testid="home-quick-config">
-              <SummaryConfigCard sectionLabel="CPU & RAM" title="CPU & RAM" testId="home-cpu-summary">
-                <SummaryConfigControlRow
-                  controlType="select"
-                  disabled={!isActive || turboControlPending}
-                  label="Turbo Control"
-                  options={displayedTurboControlOptions}
-                  selectTriggerClassName={inlineSelectTriggerClass}
-                  testId="home-cpu-turbo-control"
-                  value={displayedTurboControlValue}
-                  onValueChange={(value) =>
-                    void updateConfigValue(
-                      "U64 Specific Settings",
-                      "Turbo Control",
-                      value,
-                      "HOME_TURBO_CONTROL",
-                      "Turbo control updated",
-                    )
-                  }
-                />
-                <div className="space-y-2 py-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-muted-foreground">CPU Speed</span>
-                    <span className="text-xs font-semibold text-foreground" data-testid="home-cpu-speed-value">
-                      {cpuSpeedValue}
-                    </span>
-                  </div>
-                  <Slider
-                    value={[cpuSpeedDisplayIndex]}
-                    min={0}
-                    max={Math.max(cpuSpeedSliderOptions.length - 1, 0)}
-                    step={1}
-                    disabled={!isActive || cpuSpeedPending || cpuSpeedSliderOptions.length <= 1}
-                    onValueChange={(values) => {
-                      setCpuSpeedDraftIndex(values[0] ?? 0);
-                    }}
-                    onValueCommit={(values) => {
-                      const nextIndex = values[0] ?? 0;
-                      const nextValue = resolveCpuSpeedOption(nextIndex);
-                      setCpuSpeedDraftIndex(null);
-                      void handleCpuSpeedChange(String(nextValue));
-                    }}
-                    valueFormatter={(index) => resolveCpuSpeedOption(index)}
-                    data-testid="home-cpu-speed-slider"
-                  />
-                </div>
-                <SummaryConfigControlRow
-                  disabled={!isActive || badlineTimingPending}
-                  label="Badline Timing"
-                  options={displayedBadlineTimingOptions}
-                  selectTriggerClassName={inlineSelectTriggerClass}
-                  testId="home-cpu-badline-timing"
-                  value={displayedBadlineTimingValue}
-                  onValueChange={(value) =>
-                    void updateConfigValue(
-                      "U64 Specific Settings",
-                      "Badline Timing",
-                      value,
-                      "HOME_BADLINE_TIMING",
-                      "Badline timing updated",
-                    )
-                  }
-                />
-                <SummaryConfigControlRow
-                  disabled={!isActive || superCpuDetectPending}
-                  label="SuperCPU Detect"
-                  options={displayedSuperCpuDetectOptions}
-                  selectTriggerClassName={inlineSelectTriggerClass}
-                  testId="home-cpu-supercpu-detect"
-                  value={displayedSuperCpuDetectValue}
-                  onValueChange={(value) =>
-                    void updateConfigValue(
-                      "U64 Specific Settings",
-                      "SuperCPU Detect (D0BC)",
-                      value,
-                      "HOME_SUPERCPU_DETECT",
-                      "SuperCPU detect updated",
-                    )
-                  }
-                />
-                <SummaryConfigControlRow
-                  disabled={!isActive || ramExpansionPending}
-                  label="RAM Expansion"
-                  options={displayedRamExpansionOptions}
-                  selectTriggerClassName={inlineSelectTriggerClass}
-                  testId="quickconfig-ram-expansion"
-                  value={displayedRamExpansionValue}
-                  onValueChange={(value) =>
-                    void updateConfigValue(
-                      "C64 and Cartridge Settings",
-                      "RAM Expansion Unit",
-                      value,
-                      "HOME_RAM_EXPANSION",
-                      "RAM expansion updated",
-                    )
-                  }
-                />
-                {reuSizeVisible && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.25 }}
+            className="space-y-2"
+            data-section-label="Quick Config"
+          >
+            <SectionHeader title="Quick Config" />
+            <ProfileSplitSection minColumnWidth="20rem" testId="home-quick-config-layout">
+              <div className="space-y-3" data-testid="home-quick-config">
+                <SummaryConfigCard sectionLabel="CPU & RAM" title="CPU & RAM" testId="home-cpu-summary">
                   <SummaryConfigControlRow
-                    disabled={!isActive || reuSizePending}
-                    label="RAM Size (REU)"
-                    options={displayedReuSizeOptions}
+                    controlType="select"
+                    disabled={!isActive || turboControlPending}
+                    label="Turbo Control"
+                    options={displayedTurboControlOptions}
                     selectTriggerClassName={inlineSelectTriggerClass}
-                    testId="quickconfig-ram-size"
-                    value={displayedReuSizeValue}
+                    testId="home-cpu-turbo-control"
+                    value={displayedTurboControlValue}
                     onValueChange={(value) =>
                       void updateConfigValue(
-                        "C64 and Cartridge Settings",
-                        "REU Size",
+                        "U64 Specific Settings",
+                        "Turbo Control",
                         value,
-                        "HOME_REU_SIZE",
-                        "RAM size updated",
+                        "HOME_TURBO_CONTROL",
+                        "Turbo control updated",
                       )
                     }
                   />
-                )}
-              </SummaryConfigCard>
+                  <div className="space-y-2 py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-muted-foreground">CPU Speed</span>
+                      <span className="text-xs font-semibold text-foreground" data-testid="home-cpu-speed-value">
+                        {cpuSpeedValue}
+                      </span>
+                    </div>
+                    <Slider
+                      value={[cpuSpeedDisplayIndex]}
+                      min={0}
+                      max={Math.max(cpuSpeedSliderOptions.length - 1, 0)}
+                      step={1}
+                      disabled={!isActive || cpuSpeedPending || cpuSpeedSliderOptions.length <= 1}
+                      onValueChange={(values) => {
+                        setCpuSpeedDraftIndex(values[0] ?? 0);
+                      }}
+                      onValueCommit={(values) => {
+                        const nextIndex = values[0] ?? 0;
+                        const nextValue = resolveCpuSpeedOption(nextIndex);
+                        setCpuSpeedDraftIndex(null);
+                        void handleCpuSpeedChange(String(nextValue));
+                      }}
+                      valueFormatter={(index) => resolveCpuSpeedOption(index)}
+                      data-testid="home-cpu-speed-slider"
+                    />
+                  </div>
+                  <SummaryConfigControlRow
+                    disabled={!isActive || badlineTimingPending}
+                    label="Badline Timing"
+                    options={displayedBadlineTimingOptions}
+                    selectTriggerClassName={inlineSelectTriggerClass}
+                    testId="home-cpu-badline-timing"
+                    value={displayedBadlineTimingValue}
+                    onValueChange={(value) =>
+                      void updateConfigValue(
+                        "U64 Specific Settings",
+                        "Badline Timing",
+                        value,
+                        "HOME_BADLINE_TIMING",
+                        "Badline timing updated",
+                      )
+                    }
+                  />
+                  <SummaryConfigControlRow
+                    disabled={!isActive || superCpuDetectPending}
+                    label="SuperCPU Detect"
+                    options={displayedSuperCpuDetectOptions}
+                    selectTriggerClassName={inlineSelectTriggerClass}
+                    testId="home-cpu-supercpu-detect"
+                    value={displayedSuperCpuDetectValue}
+                    onValueChange={(value) =>
+                      void updateConfigValue(
+                        "U64 Specific Settings",
+                        "SuperCPU Detect (D0BC)",
+                        value,
+                        "HOME_SUPERCPU_DETECT",
+                        "SuperCPU detect updated",
+                      )
+                    }
+                  />
+                  <SummaryConfigControlRow
+                    disabled={!isActive || ramExpansionPending}
+                    label="RAM Expansion"
+                    options={displayedRamExpansionOptions}
+                    selectTriggerClassName={inlineSelectTriggerClass}
+                    testId="quickconfig-ram-expansion"
+                    value={displayedRamExpansionValue}
+                    onValueChange={(value) =>
+                      void updateConfigValue(
+                        "C64 and Cartridge Settings",
+                        "RAM Expansion Unit",
+                        value,
+                        "HOME_RAM_EXPANSION",
+                        "RAM expansion updated",
+                      )
+                    }
+                  />
+                  {reuSizeVisible && (
+                    <SummaryConfigControlRow
+                      disabled={!isActive || reuSizePending}
+                      label="RAM Size (REU)"
+                      options={displayedReuSizeOptions}
+                      selectTriggerClassName={inlineSelectTriggerClass}
+                      testId="quickconfig-ram-size"
+                      value={displayedReuSizeValue}
+                      onValueChange={(value) =>
+                        void updateConfigValue(
+                          "C64 and Cartridge Settings",
+                          "REU Size",
+                          value,
+                          "HOME_REU_SIZE",
+                          "RAM size updated",
+                        )
+                      }
+                    />
+                  )}
+                </SummaryConfigCard>
 
-              <SummaryConfigCard sectionLabel="Ports" title="Ports" testId="home-ports-summary">
-                <SummaryConfigControlRow
-                  controlType="select"
-                  disabled={!isActive || joystickSwapPending}
-                  label="Joystick Input"
-                  options={isActive ? effectiveJoystickSwapOptions : [unavailableLabel]}
-                  selectTriggerClassName={inlineSelectTriggerClass}
-                  testId="home-joystick-swapper"
-                  value={displayedJoystickSwapValue}
-                  onValueChange={(value) =>
-                    void updateConfigValue(
-                      "U64 Specific Settings",
-                      "Joystick Swapper",
-                      value,
-                      "HOME_JOYSTICK_SWAPPER",
-                      "Joystick input updated",
-                    )
-                  }
-                />
-                <SummaryConfigControlRow
-                  controlType="select"
-                  disabled={!isActive || serialBusModePending}
-                  label="Serial Bus Mode"
-                  options={displayedSerialBusModeOptions}
-                  selectTriggerClassName={inlineSelectTriggerClass}
-                  testId="home-serial-bus-mode"
-                  value={displayedSerialBusModeValue}
-                  onValueChange={(value) =>
-                    void updateConfigValue(
-                      "U64 Specific Settings",
-                      "Serial Bus Mode",
-                      value,
-                      "HOME_SERIAL_BUS_MODE",
-                      "Serial bus mode updated",
-                    )
-                  }
-                />
-                <SummaryConfigControlRow
-                  controlType="select"
-                  disabled={!isActive || cartridgePreferencePending}
-                  label="Cartridge Preference"
-                  options={displayedCartridgePreferenceOptions}
-                  selectTriggerClassName={inlineSelectTriggerClass}
-                  testId="home-cartridge-preference"
-                  value={displayedCartridgePreferenceValue}
-                  onValueChange={(value) =>
-                    void updateConfigValue(
-                      "C64 and Cartridge Settings",
-                      "Cartridge Preference",
-                      value,
-                      "HOME_CARTRIDGE_PREFERENCE",
-                      "Cartridge preference updated",
-                    )
-                  }
-                />
-                <SummaryConfigControlRow
-                  controlType="checkbox"
-                  disabled={!isActive || userPortPowerPending}
-                  label="User Port Power"
-                  options={displayedUserPortPowerOptions}
-                  selectTriggerClassName={inlineSelectTriggerClass}
-                  testId="home-user-port-power"
-                  value={displayedUserPortPowerValue}
-                  onValueChange={(value) =>
-                    void updateConfigValue(
-                      "U64 Specific Settings",
-                      "UserPort Power Enable",
-                      value,
-                      "HOME_USER_PORT_POWER",
-                      "User port power updated",
-                    )
-                  }
-                />
-              </SummaryConfigCard>
+                <SummaryConfigCard sectionLabel="Ports" title="Ports" testId="home-ports-summary">
+                  <SummaryConfigControlRow
+                    controlType="select"
+                    disabled={!isActive || joystickSwapPending}
+                    label="Joystick Input"
+                    options={isActive ? effectiveJoystickSwapOptions : [unavailableLabel]}
+                    selectTriggerClassName={inlineSelectTriggerClass}
+                    testId="home-joystick-swapper"
+                    value={displayedJoystickSwapValue}
+                    onValueChange={(value) =>
+                      void updateConfigValue(
+                        "U64 Specific Settings",
+                        "Joystick Swapper",
+                        value,
+                        "HOME_JOYSTICK_SWAPPER",
+                        "Joystick input updated",
+                      )
+                    }
+                  />
+                  <SummaryConfigControlRow
+                    controlType="select"
+                    disabled={!isActive || serialBusModePending}
+                    label="Serial Bus Mode"
+                    options={displayedSerialBusModeOptions}
+                    selectTriggerClassName={inlineSelectTriggerClass}
+                    testId="home-serial-bus-mode"
+                    value={displayedSerialBusModeValue}
+                    onValueChange={(value) =>
+                      void updateConfigValue(
+                        "U64 Specific Settings",
+                        "Serial Bus Mode",
+                        value,
+                        "HOME_SERIAL_BUS_MODE",
+                        "Serial bus mode updated",
+                      )
+                    }
+                  />
+                  <SummaryConfigControlRow
+                    controlType="select"
+                    disabled={!isActive || cartridgePreferencePending}
+                    label="Cartridge Preference"
+                    options={displayedCartridgePreferenceOptions}
+                    selectTriggerClassName={inlineSelectTriggerClass}
+                    testId="home-cartridge-preference"
+                    value={displayedCartridgePreferenceValue}
+                    onValueChange={(value) =>
+                      void updateConfigValue(
+                        "C64 and Cartridge Settings",
+                        "Cartridge Preference",
+                        value,
+                        "HOME_CARTRIDGE_PREFERENCE",
+                        "Cartridge preference updated",
+                      )
+                    }
+                  />
+                  <SummaryConfigControlRow
+                    controlType="checkbox"
+                    disabled={!isActive || userPortPowerPending}
+                    label="User Port Power"
+                    options={displayedUserPortPowerOptions}
+                    selectTriggerClassName={inlineSelectTriggerClass}
+                    testId="home-user-port-power"
+                    value={displayedUserPortPowerValue}
+                    onValueChange={(value) =>
+                      void updateConfigValue(
+                        "U64 Specific Settings",
+                        "UserPort Power Enable",
+                        value,
+                        "HOME_USER_PORT_POWER",
+                        "User port power updated",
+                      )
+                    }
+                  />
+                </SummaryConfigCard>
 
-              <SummaryConfigCard sectionLabel="Video" title="Video" testId="home-video-summary">
-                <SummaryConfigControlRow
-                  controlType="select"
-                  disabled={!isActive || videoModePending}
-                  label="Video Mode"
-                  options={displayedVideoModeOptions}
-                  selectTriggerClassName={inlineSelectTriggerClass}
-                  testId="home-video-mode"
-                  value={displayedVideoModeValue}
-                  onValueChange={(value) =>
-                    void updateConfigValue(
-                      "U64 Specific Settings",
-                      "System Mode",
-                      value,
-                      "HOME_VIDEO_MODE",
-                      "Video mode updated",
-                    )
-                  }
-                />
-                <SummaryConfigControlRow
-                  controlType="select"
-                  disabled={!isActive || hdmiResolutionPending}
-                  label="HDMI Resolution"
-                  options={displayedHdmiResolutionOptions}
-                  selectTriggerClassName={inlineSelectTriggerClass}
-                  testId="home-video-hdmi-resolution"
-                  value={displayedHdmiResolutionValue}
-                  onValueChange={(value) =>
-                    void updateConfigValue(
-                      "U64 Specific Settings",
-                      "HDMI Scan Resolution",
-                      value,
-                      "HOME_HDMI_RESOLUTION",
-                      "HDMI resolution updated",
-                    )
-                  }
-                />
-                <SummaryConfigControlRow
-                  controlType="checkbox"
-                  disabled={!isActive || hdmiScanPending}
-                  label="HDMI Scan Lines"
-                  options={isActive ? effectiveHdmiScanOptions : [unavailableLabel]}
-                  selectTriggerClassName={inlineSelectTriggerClass}
-                  testId="home-video-scanlines"
-                  value={isActive ? hdmiScanValue : unavailableLabel}
-                  onValueChange={(value) =>
-                    void updateConfigValue(
-                      "U64 Specific Settings",
-                      "HDMI Scan lines",
-                      value,
-                      "HOME_HDMI_SCAN",
-                      "HDMI scan lines updated",
-                    )
-                  }
-                />
-                <SummaryConfigControlRow
-                  controlType="select"
-                  disabled={!isActive || analogVideoPending}
-                  label="Analog"
-                  options={displayedAnalogVideoOptions}
-                  selectTriggerClassName={inlineSelectTriggerClass}
-                  testId="home-video-analog"
-                  value={displayedAnalogVideoValue}
-                  onValueChange={(value) =>
-                    void updateConfigValue(
-                      "U64 Specific Settings",
-                      "Analog Video Mode",
-                      value,
-                      "HOME_ANALOG_VIDEO_MODE",
-                      "Analog video mode updated",
-                    )
-                  }
-                />
-                <SummaryConfigControlRow
-                  controlType="select"
-                  disabled={!isActive || digitalVideoPending}
-                  label="Digital"
-                  options={displayedDigitalVideoOptions}
-                  selectTriggerClassName={inlineSelectTriggerClass}
-                  testId="home-video-digital"
-                  value={displayedDigitalVideoValue}
-                  onValueChange={(value) =>
-                    void updateConfigValue(
-                      "U64 Specific Settings",
-                      "Digital Video Mode",
-                      value,
-                      "HOME_DIGITAL_VIDEO_MODE",
-                      "Digital video mode updated",
-                    )
-                  }
-                />
-              </SummaryConfigCard>
-            </div>
-
-            <div className="space-y-3" data-testid="home-secondary-cards">
-              <UserInterfaceSummaryCard
-                category="User Interface Settings"
-                config={userInterfaceConfig}
-                isActive={isActive}
-                selectTriggerClassName={inlineSelectTriggerClass}
-                testIdPrefix="home-user-interface"
-              />
-              <div data-testid="home-lighting-group">
-                <SectionHeader title="LED LIGHTING" className="pt-1" />
+                <SummaryConfigCard sectionLabel="Video" title="Video" testId="home-video-summary">
+                  <SummaryConfigControlRow
+                    controlType="select"
+                    disabled={!isActive || videoModePending}
+                    label="Video Mode"
+                    options={displayedVideoModeOptions}
+                    selectTriggerClassName={inlineSelectTriggerClass}
+                    testId="home-video-mode"
+                    value={displayedVideoModeValue}
+                    onValueChange={(value) =>
+                      void updateConfigValue(
+                        "U64 Specific Settings",
+                        "System Mode",
+                        value,
+                        "HOME_VIDEO_MODE",
+                        "Video mode updated",
+                      )
+                    }
+                  />
+                  <SummaryConfigControlRow
+                    controlType="select"
+                    disabled={!isActive || hdmiResolutionPending}
+                    label="HDMI Resolution"
+                    options={displayedHdmiResolutionOptions}
+                    selectTriggerClassName={inlineSelectTriggerClass}
+                    testId="home-video-hdmi-resolution"
+                    value={displayedHdmiResolutionValue}
+                    onValueChange={(value) =>
+                      void updateConfigValue(
+                        "U64 Specific Settings",
+                        "HDMI Scan Resolution",
+                        value,
+                        "HOME_HDMI_RESOLUTION",
+                        "HDMI resolution updated",
+                      )
+                    }
+                  />
+                  <SummaryConfigControlRow
+                    controlType="checkbox"
+                    disabled={!isActive || hdmiScanPending}
+                    label="HDMI Scan Lines"
+                    options={isActive ? effectiveHdmiScanOptions : [unavailableLabel]}
+                    selectTriggerClassName={inlineSelectTriggerClass}
+                    testId="home-video-scanlines"
+                    value={isActive ? hdmiScanValue : unavailableLabel}
+                    onValueChange={(value) =>
+                      void updateConfigValue(
+                        "U64 Specific Settings",
+                        "HDMI Scan lines",
+                        value,
+                        "HOME_HDMI_SCAN",
+                        "HDMI scan lines updated",
+                      )
+                    }
+                  />
+                  <SummaryConfigControlRow
+                    controlType="select"
+                    disabled={!isActive || analogVideoPending}
+                    label="Analog"
+                    options={displayedAnalogVideoOptions}
+                    selectTriggerClassName={inlineSelectTriggerClass}
+                    testId="home-video-analog"
+                    value={displayedAnalogVideoValue}
+                    onValueChange={(value) =>
+                      void updateConfigValue(
+                        "U64 Specific Settings",
+                        "Analog Video Mode",
+                        value,
+                        "HOME_ANALOG_VIDEO_MODE",
+                        "Analog video mode updated",
+                      )
+                    }
+                  />
+                  <SummaryConfigControlRow
+                    controlType="select"
+                    disabled={!isActive || digitalVideoPending}
+                    label="Digital"
+                    options={displayedDigitalVideoOptions}
+                    selectTriggerClassName={inlineSelectTriggerClass}
+                    testId="home-video-digital"
+                    value={displayedDigitalVideoValue}
+                    onValueChange={(value) =>
+                      void updateConfigValue(
+                        "U64 Specific Settings",
+                        "Digital Video Mode",
+                        value,
+                        "HOME_DIGITAL_VIDEO_MODE",
+                        "Digital video mode updated",
+                      )
+                    }
+                  />
+                </SummaryConfigCard>
               </div>
-              <LightingSummaryCard
-                category="LED Strip Settings"
-                config={ledStripConfig}
-                isActive={isActive}
-                operationPrefix="HOME_LED"
-                sectionLabel="Case Light"
-                selectTriggerClassName={inlineSelectTriggerClass}
-                successLabel="Case light"
-                testIdPrefix="home-led"
-              />
-              <LightingSummaryCard
-                category="Keyboard Lighting"
-                config={keyboardLightingConfig}
-                isActive={isActive}
-                operationPrefix="HOME_KEYBOARD_LIGHTING"
-                sectionLabel="Keyboard Light"
-                selectTriggerClassName={inlineSelectTriggerClass}
-                successLabel="Keyboard light"
-                testIdPrefix="home-keyboard-lighting"
-              />
-            </div>
-          </div>
-        </motion.div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="space-y-3"
-          data-section-label="Drives"
-        >
-          <DriveManager
-            isConnected={isActive}
-            handleAction={handleAction}
-            machineTaskBusy={machineTaskBusy}
-            machineTaskId={machineTaskId}
-            onResetDrives={handleResetDrives}
-          />
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.34 }}
-          className="space-y-3"
-          data-section-label="Printers"
-        >
-          <PrinterManager
-            isConnected={isActive}
-            machineTaskBusy={machineTaskBusy}
-            machineTaskId={machineTaskId}
-            onResetPrinter={handleResetPrinter}
-          />
-        </motion.div>
-
-        <AudioMixer isConnected={isActive} machineTaskBusy={machineTaskBusy} runMachineTask={runMachineTask} />
-
-        <StreamStatus isConnected={isActive} />
-
-        {/* Config Actions */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="space-y-3"
-          data-section-label="Config"
-        >
-          <SectionHeader title="Config">
-            {isApplying && <span className="ml-2 text-xs text-muted-foreground">Applying…</span>}
-          </SectionHeader>
-          <div className="grid grid-cols-4 gap-2">
-            <QuickActionCard
-              icon={Save}
-              label="Save"
-              description="To flash"
-              variant="success"
-              compact
-              onClick={() => handleAction(() => controls.saveConfig.mutateAsync(), "Config saved to flash")}
-              disabled={!isActive || machineTaskBusy}
-              loading={controls.saveConfig.isPending}
-            />
-            <QuickActionCard
-              icon={RefreshCw}
-              label="Load"
-              description="From flash"
-              compact
-              onClick={() => handleAction(() => controls.loadConfig.mutateAsync(), "Config loaded from flash")}
-              disabled={!isActive || machineTaskBusy}
-              loading={controls.loadConfig.isPending}
-            />
-            <QuickActionCard
-              icon={Trash2}
-              label="Reset"
-              description="To default"
-              variant="danger"
-              compact
-              onClick={() => handleAction(() => controls.resetConfig.mutateAsync(), "Config reset to defaults")}
-              disabled={!isActive || machineTaskBusy}
-              loading={controls.resetConfig.isPending}
-            />
-            <QuickActionCard
-              icon={Upload}
-              label="Save"
-              description="To App"
-              variant="success"
-              compact
-              dataTestId="home-config-save-app"
-              onClick={() => setSaveDialogOpen(true)}
-              disabled={!isActive || isSaving || machineTaskBusy}
-              loading={isSaving}
-            />
-            <QuickActionCard
-              icon={Download}
-              label="Load"
-              description="From App"
-              compact
-              dataTestId="home-config-load-app"
-              onClick={() => setLoadDialogOpen(true)}
-              disabled={!isActive || appConfigs.length === 0 || machineTaskBusy}
-            />
-            <QuickActionCard
-              icon={RotateCcw}
-              label="Revert"
-              description="Changes"
-              compact
-              dataTestId="home-config-revert-changes"
-              onClick={() => handleAction(() => revertToInitial(), "Config reverted")}
-              disabled={!isActive || isApplying || !hasChanges || machineTaskBusy}
-              loading={isApplying}
-            />
-            <QuickActionCard
-              icon={FolderOpen}
-              label="Manage"
-              description="App Configs"
-              compact
-              dataTestId="home-config-manage-app"
-              onClick={() => setManageDialogOpen(true)}
-              disabled={!isActive || appConfigs.length === 0 || machineTaskBusy}
-            />
-          </div>
-        </motion.div>
-
-        {/* Offline Message */}
-        {!isActive && !status.isConnecting && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="bg-destructive/10 border border-destructive/20 rounded-xl p-4 text-center"
-          >
-            <p className="text-sm text-destructive font-medium">Unable to connect to C64U</p>
-            <p className="text-xs text-muted-foreground mt-1">Check your connection settings</p>
+              <div className="space-y-3" data-testid="home-secondary-cards">
+                <UserInterfaceSummaryCard
+                  category="User Interface Settings"
+                  config={userInterfaceConfig}
+                  isActive={isActive}
+                  selectTriggerClassName={inlineSelectTriggerClass}
+                  testIdPrefix="home-user-interface"
+                />
+                <div data-testid="home-lighting-group">
+                  <SectionHeader title="LED LIGHTING" className="pt-1" />
+                </div>
+                <LightingSummaryCard
+                  category="LED Strip Settings"
+                  config={ledStripConfig}
+                  isActive={isActive}
+                  operationPrefix="HOME_LED"
+                  sectionLabel="Case Light"
+                  selectTriggerClassName={inlineSelectTriggerClass}
+                  successLabel="Case light"
+                  testIdPrefix="home-led"
+                />
+                <LightingSummaryCard
+                  category="Keyboard Lighting"
+                  config={keyboardLightingConfig}
+                  isActive={isActive}
+                  operationPrefix="HOME_KEYBOARD_LIGHTING"
+                  sectionLabel="Keyboard Light"
+                  selectTriggerClassName={inlineSelectTriggerClass}
+                  successLabel="Keyboard light"
+                  testIdPrefix="home-keyboard-lighting"
+                />
+              </div>
+            </ProfileSplitSection>
           </motion.div>
-        )}
-      </main>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="space-y-3"
+            data-section-label="Drives"
+          >
+            <DriveManager
+              isConnected={isActive}
+              handleAction={handleAction}
+              machineTaskBusy={machineTaskBusy}
+              machineTaskId={machineTaskId}
+              onResetDrives={handleResetDrives}
+            />
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.34 }}
+            className="space-y-3"
+            data-section-label="Printers"
+          >
+            <PrinterManager
+              isConnected={isActive}
+              machineTaskBusy={machineTaskBusy}
+              machineTaskId={machineTaskId}
+              onResetPrinter={handleResetPrinter}
+            />
+          </motion.div>
+
+          <AudioMixer isConnected={isActive} machineTaskBusy={machineTaskBusy} runMachineTask={runMachineTask} />
+
+          <StreamStatus isConnected={isActive} />
+
+          {/* Config Actions */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            className="space-y-3"
+            data-section-label="Config"
+          >
+            <SectionHeader title="Config">
+              {isApplying && <span className="ml-2 text-xs text-muted-foreground">Applying…</span>}
+            </SectionHeader>
+            <ProfileActionGrid compactColumns={2} mediumColumns={4} expandedColumns={4}>
+              <QuickActionCard
+                icon={Save}
+                label="Save"
+                description="To flash"
+                variant="success"
+                compact
+                onClick={() => handleAction(() => controls.saveConfig.mutateAsync(), "Config saved to flash")}
+                disabled={!isActive || machineTaskBusy}
+                loading={controls.saveConfig.isPending}
+              />
+              <QuickActionCard
+                icon={RefreshCw}
+                label="Load"
+                description="From flash"
+                compact
+                onClick={() => handleAction(() => controls.loadConfig.mutateAsync(), "Config loaded from flash")}
+                disabled={!isActive || machineTaskBusy}
+                loading={controls.loadConfig.isPending}
+              />
+              <QuickActionCard
+                icon={Trash2}
+                label="Reset"
+                description="To default"
+                variant="danger"
+                compact
+                onClick={() => handleAction(() => controls.resetConfig.mutateAsync(), "Config reset to defaults")}
+                disabled={!isActive || machineTaskBusy}
+                loading={controls.resetConfig.isPending}
+              />
+              <QuickActionCard
+                icon={Upload}
+                label="Save"
+                description="To App"
+                variant="success"
+                compact
+                dataTestId="home-config-save-app"
+                onClick={() => setSaveDialogOpen(true)}
+                disabled={!isActive || isSaving || machineTaskBusy}
+                loading={isSaving}
+              />
+              <QuickActionCard
+                icon={Download}
+                label="Load"
+                description="From App"
+                compact
+                dataTestId="home-config-load-app"
+                onClick={() => setLoadDialogOpen(true)}
+                disabled={!isActive || appConfigs.length === 0 || machineTaskBusy}
+              />
+              <QuickActionCard
+                icon={RotateCcw}
+                label="Revert"
+                description="Changes"
+                compact
+                dataTestId="home-config-revert-changes"
+                onClick={() => handleAction(() => revertToInitial(), "Config reverted")}
+                disabled={!isActive || isApplying || !hasChanges || machineTaskBusy}
+                loading={isApplying}
+              />
+              <QuickActionCard
+                icon={FolderOpen}
+                label="Manage"
+                description="App Configs"
+                compact
+                dataTestId="home-config-manage-app"
+                onClick={() => setManageDialogOpen(true)}
+                disabled={!isActive || appConfigs.length === 0 || machineTaskBusy}
+              />
+            </ProfileActionGrid>
+          </motion.div>
+
+          {/* Offline Message */}
+          {!isActive && !status.isConnecting && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="bg-destructive/10 border border-destructive/20 rounded-xl p-4 text-center"
+            >
+              <p className="text-sm text-destructive font-medium">Unable to connect to C64U</p>
+              <p className="text-xs text-muted-foreground mt-1">Check your connection settings</p>
+            </motion.div>
+          )}
+        </PageStack>
+      </PageContainer>
 
       <PowerOffDialog
         open={powerOffDialogOpen}

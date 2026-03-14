@@ -593,7 +593,7 @@ const checkHorizontalOverflow = async (page: Page, testInfo: TestInfo) => {
       const isToastElement = (element: Element) =>
         Boolean(
           element.closest(
-            '[data-sonner-toast], [data-sonner-toaster], .toaster, .toast, [role="status"], [data-state="open"].destructive',
+            '[data-sonner-toast], [data-sonner-toaster], .toaster, .toast, [role="status"], [data-state="open"].destructive, [aria-label="Notifications (F8)"], [data-radix-toast-viewport]',
           ),
         );
 

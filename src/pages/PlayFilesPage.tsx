@@ -58,6 +58,7 @@ import { PlaybackControlsCard } from "@/pages/playFiles/components/PlaybackContr
 import { PlaybackSettingsPanel } from "@/pages/playFiles/components/PlaybackSettingsPanel";
 import { PlaylistPanel } from "@/pages/playFiles/components/PlaylistPanel";
 import { HvscManager } from "@/pages/playFiles/components/HvscManager";
+import { PageContainer, PageStack, ProfileSplitSection } from "@/components/layout/PageContainer";
 import { useHvscLibrary } from "@/pages/playFiles/hooks/useHvscLibrary";
 import { usePlaylistListItems } from "@/pages/playFiles/hooks/usePlaylistListItems";
 import { useSonglengths } from "@/pages/playFiles/hooks/useSonglengths";
@@ -947,229 +948,233 @@ export default function PlayFilesPage() {
               : "Offline"
         }
       />
-      <main className="container max-w-3xl mx-auto px-4 py-6 pb-24 space-y-6">
-        <div
-          className="bg-card border border-border rounded-xl p-4 space-y-4"
-          data-section-label="Playback controls"
-          data-testid="play-section-playback"
-        >
-          <PlaybackControlsCard
-            hasCurrentItem={Boolean(currentItem)}
-            currentItemIcon={
-              currentItem ? (
-                <FileOriginIcon
-                  origin={
-                    currentItem.request.source === "ultimate"
-                      ? "ultimate"
-                      : currentItem.request.source === "hvsc"
-                        ? "hvsc"
-                        : "local"
+      <PageContainer>
+        <PageStack>
+          <ProfileSplitSection minColumnWidth="22rem" testId="play-primary-layout">
+            <div
+              className="bg-card border border-border rounded-xl p-4 space-y-4"
+              data-section-label="Playback controls"
+              data-testid="play-section-playback"
+            >
+              <PlaybackControlsCard
+                hasCurrentItem={Boolean(currentItem)}
+                currentItemIcon={
+                  currentItem ? (
+                    <FileOriginIcon
+                      origin={
+                        currentItem.request.source === "ultimate"
+                          ? "ultimate"
+                          : currentItem.request.source === "hvsc"
+                            ? "hvsc"
+                            : "local"
+                      }
+                      className="h-3.5 w-3.5 shrink-0 opacity-70"
+                    />
+                  ) : undefined
+                }
+                currentItemLabel={currentItem?.label ?? null}
+                currentDurationLabel={currentDurationLabel}
+                subsongLabel={
+                  knownSubsongCount && knownSubsongCount > 1 ? `Subsong ${clampedSongNr}/${subsongCount}` : null
+                }
+                canTransport={canTransport}
+                hasPrev={hasPrev}
+                hasNext={hasNext}
+                isPlaying={isPlaying}
+                isPaused={isPaused}
+                hasPlaylist={hasPlaylist}
+                isPlaylistLoading={isPlaylistLoading}
+                canPause={canPause}
+                onPrevious={() => void handlePrevious()}
+                onPlay={() => void handlePlay()}
+                onStop={() => void handleStop()}
+                onPauseResume={() => void handlePauseResume()}
+                onNext={() => void handleNext()}
+                progressPercent={progressPercent}
+                elapsedLabel={formatTime(elapsedMs)}
+                remainingLabel={remainingLabel}
+                totalLabel={formatTime(playlistTotals.total)}
+                remainingTotalLabel={formatTime(playlistTotals.remaining)}
+                volumeControls={
+                  <VolumeControls
+                    volumeMuted={volumeMuted}
+                    canControlVolume={canControlVolume}
+                    isPending={updateConfigBatch.isPending}
+                    onToggleMute={() => {
+                      void handleToggleMute().catch((error) => {
+                        addErrorLog("Mute toggle failed", {
+                          error: (error as Error).message,
+                        });
+                        reportUserError({
+                          operation: "PLAYBACK_MUTE_TOGGLE",
+                          title: "Mute toggle failed",
+                          description: (error as Error).message,
+                          error,
+                        });
+                      });
+                    }}
+                    volumeStepsCount={volumeSteps.length}
+                    volumeIndex={volumeIndex}
+                    onVolumeChange={handleVolumeLocalChange}
+                    onVolumeChangeAsync={handleVolumeAsyncChange}
+                    onVolumeCommit={(value) => void handleVolumeCommit(value)}
+                    previewIntervalMs={volumeSliderPreviewIntervalMs}
+                    volumeLabel={volumeLabel}
+                    volumeValueFormatter={(value) => volumeSteps[Math.round(value)]?.label ?? "—"}
+                  />
+                }
+                recurseFolders={recurseFolders}
+                onRecurseChange={(value) => setRecurseFolders(Boolean(value))}
+                shuffleEnabled={shuffleEnabled}
+                onShuffleChange={(value) => setShuffleEnabled(Boolean(value))}
+                repeatEnabled={repeatEnabled}
+                onRepeatChange={(value) => setRepeatEnabled(Boolean(value))}
+                onReshuffle={handleReshuffle}
+                reshuffleActive={reshuffleActive}
+                reshuffleDisabled={!shuffleEnabled || playlist.length < 2}
+              />
+              <PlaybackSettingsPanel
+                durationSliderMax={DURATION_SLIDER_STEPS}
+                durationSliderValue={durationSecondsToSlider(durationSeconds)}
+                durationInput={durationInput}
+                onDurationSliderChange={handleDurationSliderChange}
+                onDurationInputChange={handleDurationInputChange}
+                onDurationInputBlur={handleDurationInputBlur}
+                onChooseSonglengthsFile={async () => {
+                  if (!isAndroid) {
+                    songlengthsInputRef.current?.click();
+                    return;
                   }
-                  className="h-3.5 w-3.5 shrink-0 opacity-70"
-                />
-              ) : undefined
-            }
-            currentItemLabel={currentItem?.label ?? null}
-            currentDurationLabel={currentDurationLabel}
-            subsongLabel={
-              knownSubsongCount && knownSubsongCount > 1 ? `Subsong ${clampedSongNr}/${subsongCount}` : null
-            }
-            canTransport={canTransport}
-            hasPrev={hasPrev}
-            hasNext={hasNext}
-            isPlaying={isPlaying}
-            isPaused={isPaused}
-            hasPlaylist={hasPlaylist}
-            isPlaylistLoading={isPlaylistLoading}
-            canPause={canPause}
-            onPrevious={() => void handlePrevious()}
-            onPlay={() => void handlePlay()}
-            onStop={() => void handleStop()}
-            onPauseResume={() => void handlePauseResume()}
-            onNext={() => void handleNext()}
-            progressPercent={progressPercent}
-            elapsedLabel={formatTime(elapsedMs)}
-            remainingLabel={remainingLabel}
-            totalLabel={formatTime(playlistTotals.total)}
-            remainingTotalLabel={formatTime(playlistTotals.remaining)}
-            volumeControls={
-              <VolumeControls
-                volumeMuted={volumeMuted}
-                canControlVolume={canControlVolume}
-                isPending={updateConfigBatch.isPending}
-                onToggleMute={() => {
-                  void handleToggleMute().catch((error) => {
-                    addErrorLog("Mute toggle failed", {
-                      error: (error as Error).message,
+                  try {
+                    const result = await FolderPicker.pickFile({
+                      mimeTypes: ["text/plain", "application/octet-stream"],
                     });
+                    if (!result?.uri || !result?.permissionPersisted) {
+                      throw new Error("Songlengths file access was not granted.");
+                    }
+                    handleSonglengthsPicked({
+                      path: normalizeSourcePath(`/${result.name ?? "songlengths.md5"}`),
+                      uri: result.uri,
+                      name: result.name ?? "songlengths.md5",
+                      sizeBytes: result.sizeBytes ?? null,
+                      modifiedAt: result.modifiedAt ?? null,
+                    });
+                  } catch (error) {
                     reportUserError({
-                      operation: "PLAYBACK_MUTE_TOGGLE",
-                      title: "Mute toggle failed",
+                      operation: "SONGLENGTHS_PICK",
+                      title: "Songlengths file selection failed",
                       description: (error as Error).message,
                       error,
                     });
-                  });
+                  }
                 }}
-                volumeStepsCount={volumeSteps.length}
-                volumeIndex={volumeIndex}
-                onVolumeChange={handleVolumeLocalChange}
-                onVolumeChangeAsync={handleVolumeAsyncChange}
-                onVolumeCommit={(value) => void handleVolumeCommit(value)}
-                previewIntervalMs={volumeSliderPreviewIntervalMs}
-                volumeLabel={volumeLabel}
-                volumeValueFormatter={(value) => volumeSteps[Math.round(value)]?.label ?? "—"}
+                activeSonglengthsPath={activeSonglengthsPath}
+                songlengthsName={songlengthsSummary.fileName}
+                songlengthsSizeLabel={songlengthsSummary.sizeLabel}
+                songlengthsEntryCount={songlengthsSummary.entryCount}
+                songlengthsError={songlengthsSummary.error}
+                songSelectorVisible={songSelectorVisible}
+                songPickerOpen={songPickerOpen}
+                onSongPickerPointerDown={() => setSongPickerOpen(true)}
+                onSongPickerClick={() => {
+                  setSongNrInput(String(clampedSongNr));
+                  setSongPickerOpen(true);
+                }}
+                clampedSongNr={clampedSongNr}
+                subsongCount={subsongCount}
+                onSelectSong={(value) => void handleSongSelection(value)}
+                onCloseSongPicker={() => setSongPickerOpen(false)}
               />
-            }
-            recurseFolders={recurseFolders}
-            onRecurseChange={(value) => setRecurseFolders(Boolean(value))}
-            shuffleEnabled={shuffleEnabled}
-            onShuffleChange={(value) => setShuffleEnabled(Boolean(value))}
-            repeatEnabled={repeatEnabled}
-            onRepeatChange={(value) => setRepeatEnabled(Boolean(value))}
-            onReshuffle={handleReshuffle}
-            reshuffleActive={reshuffleActive}
-            reshuffleDisabled={!shuffleEnabled || playlist.length < 2}
+            </div>
+
+            <div data-section-label="Playlist" data-testid="play-section-playlist">
+              <PlaylistPanel
+                items={playlistListItems}
+                selectedCount={selectedPlaylistCount}
+                allSelected={allPlaylistSelected}
+                onToggleSelectAll={toggleSelectAllPlaylist}
+                onRemoveSelected={handleRemoveSelectedPlaylist}
+                maxVisible={listPreviewLimit}
+                categoryOptions={CATEGORY_OPTIONS}
+                playlistTypeFilters={playlistTypeFilters}
+                onToggleFilter={togglePlaylistTypeFilter}
+                formatCategory={formatPlayCategory}
+                hasPlaylist={hasPlaylist}
+                onAddItems={() => setBrowserOpen(true)}
+                onClearPlaylist={() => removePlaylistItemsById(new Set(playlistIds))}
+              />
+            </div>
+          </ProfileSplitSection>
+
+          <input
+            ref={localSourceInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={wrapUserEvent(
+              (event) => {
+                const selected = event.currentTarget.files ? Array.from(event.currentTarget.files) : [];
+                handleLocalSourceInput(selected.length ? selected : null);
+                event.currentTarget.value = "";
+              },
+              "upload",
+              "PlayFilesPage",
+              { type: "file" },
+              "LocalInput",
+            )}
           />
-          <PlaybackSettingsPanel
-            durationSliderMax={DURATION_SLIDER_STEPS}
-            durationSliderValue={durationSecondsToSlider(durationSeconds)}
-            durationInput={durationInput}
-            onDurationSliderChange={handleDurationSliderChange}
-            onDurationInputChange={handleDurationInputChange}
-            onDurationInputBlur={handleDurationInputBlur}
-            onChooseSonglengthsFile={async () => {
-              if (!isAndroid) {
-                songlengthsInputRef.current?.click();
-                return;
-              }
-              try {
-                const result = await FolderPicker.pickFile({
-                  mimeTypes: ["text/plain", "application/octet-stream"],
-                });
-                if (!result?.uri || !result?.permissionPersisted) {
-                  throw new Error("Songlengths file access was not granted.");
-                }
-                handleSonglengthsPicked({
-                  path: normalizeSourcePath(`/${result.name ?? "songlengths.md5"}`),
-                  uri: result.uri,
-                  name: result.name ?? "songlengths.md5",
-                  sizeBytes: result.sizeBytes ?? null,
-                  modifiedAt: result.modifiedAt ?? null,
-                });
-              } catch (error) {
-                reportUserError({
-                  operation: "SONGLENGTHS_PICK",
-                  title: "Songlengths file selection failed",
-                  description: (error as Error).message,
-                  error,
-                });
-              }
-            }}
-            activeSonglengthsPath={activeSonglengthsPath}
-            songlengthsName={songlengthsSummary.fileName}
-            songlengthsSizeLabel={songlengthsSummary.sizeLabel}
-            songlengthsEntryCount={songlengthsSummary.entryCount}
-            songlengthsError={songlengthsSummary.error}
-            songSelectorVisible={songSelectorVisible}
-            songPickerOpen={songPickerOpen}
-            onSongPickerPointerDown={() => setSongPickerOpen(true)}
-            onSongPickerClick={() => {
-              setSongNrInput(String(clampedSongNr));
-              setSongPickerOpen(true);
-            }}
-            clampedSongNr={clampedSongNr}
-            subsongCount={subsongCount}
-            onSelectSong={(value) => void handleSongSelection(value)}
-            onCloseSongPicker={() => setSongPickerOpen(false)}
+
+          <input
+            ref={songlengthsInputRef}
+            type="file"
+            accept=".md5,.MD5,.txt,.TXT,text/plain,application/octet-stream"
+            className="hidden"
+            onChange={wrapUserEvent(
+              (event) => {
+                handleSonglengthsInput(event.target.files);
+                event.currentTarget.value = "";
+              },
+              "upload",
+              "PlayFilesPage",
+              { type: "file" },
+              "SonglengthsInput",
+            )}
           />
-        </div>
 
-        <div data-section-label="Playlist" data-testid="play-section-playlist">
-          <PlaylistPanel
-            items={playlistListItems}
-            selectedCount={selectedPlaylistCount}
-            allSelected={allPlaylistSelected}
-            onToggleSelectAll={toggleSelectAllPlaylist}
-            onRemoveSelected={handleRemoveSelectedPlaylist}
-            maxVisible={listPreviewLimit}
-            categoryOptions={CATEGORY_OPTIONS}
-            playlistTypeFilters={playlistTypeFilters}
-            onToggleFilter={togglePlaylistTypeFilter}
-            formatCategory={formatPlayCategory}
-            hasPlaylist={hasPlaylist}
-            onAddItems={() => setBrowserOpen(true)}
-            onClearPlaylist={() => removePlaylistItemsById(new Set(playlistIds))}
-          />
-        </div>
-
-        <input
-          ref={localSourceInputRef}
-          type="file"
-          multiple
-          className="hidden"
-          onChange={wrapUserEvent(
-            (event) => {
-              const selected = event.currentTarget.files ? Array.from(event.currentTarget.files) : [];
-              handleLocalSourceInput(selected.length ? selected : null);
-              event.currentTarget.value = "";
-            },
-            "upload",
-            "PlayFilesPage",
-            { type: "file" },
-            "LocalInput",
-          )}
-        />
-
-        <input
-          ref={songlengthsInputRef}
-          type="file"
-          accept=".md5,.MD5,.txt,.TXT,text/plain,application/octet-stream"
-          className="hidden"
-          onChange={wrapUserEvent(
-            (event) => {
-              handleSonglengthsInput(event.target.files);
-              event.currentTarget.value = "";
-            },
-            "upload",
-            "PlayFilesPage",
-            { type: "file" },
-            "SonglengthsInput",
-          )}
-        />
-
-        <ItemSelectionDialog
-          open={browserOpen}
-          onOpenChange={setBrowserOpen}
-          title="Add items"
-          confirmLabel="Add to playlist"
-          sourceGroups={sourceGroups}
-          onAddLocalSource={async () => (await addSourceFromPicker(localSourceInputRef.current))?.id ?? null}
-          onConfirm={handleAddFileSelections}
-          filterEntry={(entry) => entry.type === "dir" || isSupportedPlayFile(entry.path)}
-          allowFolderSelection
-          isConfirming={isAddingItems}
-          progress={addItemsProgress}
-          showProgressFooter={addItemsSurface === "dialog"}
-          autoConfirmCloseBefore={isAndroid}
-          onAutoConfirmStart={handleAutoConfirmStart}
-          autoConfirmLocalSource
-        />
-
-        {!browserOpen ? (
-          <AddItemsProgressOverlay
+          <ItemSelectionDialog
+            open={browserOpen}
+            onOpenChange={setBrowserOpen}
+            title="Add items"
+            confirmLabel="Add to playlist"
+            sourceGroups={sourceGroups}
+            onAddLocalSource={async () => (await addSourceFromPicker(localSourceInputRef.current))?.id ?? null}
+            onConfirm={handleAddFileSelections}
+            filterEntry={(entry) => entry.type === "dir" || isSupportedPlayFile(entry.path)}
+            allowFolderSelection
+            isConfirming={isAddingItems}
             progress={addItemsProgress}
-            title="Adding items"
-            testId="add-items-overlay"
-            visible={showAddItemsOverlay || addItemsProgress.status === "scanning"}
+            showProgressFooter={addItemsSurface === "dialog"}
+            autoConfirmCloseBefore={isAndroid}
+            onAutoConfirmStart={handleAutoConfirmStart}
+            autoConfirmLocalSource
           />
-        ) : null}
 
-        {hvscControlsEnabled && (
-          <div data-section-label="HVSC" data-testid="play-section-hvsc">
-            <HvscManager hvscControlsEnabled={true} />
-          </div>
-        )}
-      </main>
+          {!browserOpen ? (
+            <AddItemsProgressOverlay
+              progress={addItemsProgress}
+              title="Adding items"
+              testId="add-items-overlay"
+              visible={showAddItemsOverlay || addItemsProgress.status === "scanning"}
+            />
+          ) : null}
+
+          {hvscControlsEnabled && (
+            <div data-section-label="HVSC" data-testid="play-section-hvsc">
+              <HvscManager hvscControlsEnabled={true} />
+            </div>
+          )}
+        </PageStack>
+      </PageContainer>
     </div>
   );
 }

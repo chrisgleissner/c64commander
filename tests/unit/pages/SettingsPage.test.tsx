@@ -271,6 +271,7 @@ afterEach(() => {
 });
 
 beforeEach(() => {
+  localStorage.clear();
   connectionPayloadRef.current = {
     status: {
       state: "OFFLINE_NO_DEMO",
@@ -343,8 +344,8 @@ describe("SettingsPage", () => {
     expect(aboutIndex).toBeGreaterThan(deviceSafetyIndex);
     expect(aboutIndex).toBe(headings.length - 1);
 
-    const connectionSection = screen.getByRole("heading", { name: "Connection" }).closest(".bg-card");
-    const deviceSafetySection = screen.getByRole("heading", { name: "Device Safety" }).closest(".bg-card");
+    const connectionSection = screen.getByRole("heading", { name: "Connection" }).closest(".rounded-xl");
+    const deviceSafetySection = screen.getByRole("heading", { name: "Device Safety" }).closest(".rounded-xl");
 
     expect(connectionSection).toBeTruthy();
     expect(deviceSafetySection).toBeTruthy();

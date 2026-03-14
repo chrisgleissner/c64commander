@@ -29,6 +29,7 @@ import { SOURCE_EXPLANATIONS, SOURCE_LABELS } from "@/lib/sourceNavigation/sourc
 import type { AddItemsProgressState } from "./AddItemsProgressOverlay";
 import { useSourceNavigator } from "@/lib/sourceNavigation/useSourceNavigator";
 import { ItemSelectionView } from "./ItemSelectionView";
+import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 
 const isLocalAutoConfirmDisabled = () =>
   typeof window !== "undefined" &&
@@ -76,6 +77,7 @@ export const ItemSelectionDialog = ({
   onAutoConfirmStart,
   onCancelScan,
 }: ItemSelectionDialogProps) => {
+  const { profile } = useDisplayProfile();
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
   const [selection, setSelection] = useState<Map<string, SourceEntry>>(new Map());
   const [filterText, setFilterText] = useState("");
@@ -289,15 +291,20 @@ export const ItemSelectionDialog = ({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
+        surface={source ? "selection-browser" : "default"}
         showClose={false}
         onOpenAutoFocus={(e) => e.preventDefault()}
         className={cn(
-          "w-[calc(100%-2rem)] p-0 overflow-hidden shadow-2xl sm:rounded-2xl",
-          source ? "max-w-3xl h-[min(80vh,calc(100dvh-6rem))] max-h-[calc(100dvh-6rem)]" : "max-w-md",
+          "p-0 overflow-hidden shadow-2xl",
+          source
+            ? profile === "compact"
+              ? ""
+              : "h-[min(80vh,calc(100dvh-4rem))] max-h-[calc(100dvh-4rem)] sm:rounded-2xl"
+            : "max-w-md",
         )}
       >
-        <div className={cn("flex min-h-0 flex-col", source && "h-full")}>
-          <DialogHeader className="border-b border-border px-6 pb-3 pt-6">
+        <div className={cn("flex min-h-0 flex-col overflow-hidden", source && "h-full")}>
+          <DialogHeader className="shrink-0 border-b border-border px-6 pb-3 pt-6">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <DialogTitle className="text-xl">{title}</DialogTitle>
@@ -430,7 +437,7 @@ export const ItemSelectionDialog = ({
             )}
           </div>
 
-          <DialogFooter className="flex flex-col gap-2 border-t border-border px-6 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:flex-row sm:items-center sm:justify-between">
+          <DialogFooter className="shrink-0 flex flex-col gap-2 border-t border-border px-6 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:flex-row sm:items-center sm:justify-between">
             {showProgressFooter && progress && progress.status !== "idle" && (
               <div className="text-xs text-muted-foreground" data-testid="add-items-progress">
                 <span>

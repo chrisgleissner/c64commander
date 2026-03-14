@@ -34,6 +34,7 @@ import { installConsoleDiagnosticsBridge } from "@/lib/diagnostics/logger";
 import { invalidateForVisibilityResume } from "@/lib/query/c64QueryInvalidation";
 import { useNavigationGuardBlocker } from "@/lib/navigation/navigationGuards";
 import { t } from "@/lib/i18n";
+import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
 
 const HomePage = lazy(() => import("./pages/HomePage"));
 const ConfigBrowserPage = lazy(() => import("./pages/ConfigBrowserPage"));
@@ -127,25 +128,27 @@ const AppRoutes = () => {
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <FeatureFlagsProvider>
-          <RefreshControlProvider>
-            {shouldEnableCoverageProbe() ? (
-              <SidPlayerProvider>
+      <DisplayProfileProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <FeatureFlagsProvider>
+            <RefreshControlProvider>
+              {shouldEnableCoverageProbe() ? (
+                <SidPlayerProvider>
+                  <AppErrorBoundary>
+                    <AppRoutes />
+                  </AppErrorBoundary>
+                </SidPlayerProvider>
+              ) : (
                 <AppErrorBoundary>
                   <AppRoutes />
                 </AppErrorBoundary>
-              </SidPlayerProvider>
-            ) : (
-              <AppErrorBoundary>
-                <AppRoutes />
-              </AppErrorBoundary>
-            )}
-          </RefreshControlProvider>
-        </FeatureFlagsProvider>
-      </TooltipProvider>
+              )}
+            </RefreshControlProvider>
+          </FeatureFlagsProvider>
+        </TooltipProvider>
+      </DisplayProfileProvider>
     </ThemeProvider>
   </QueryClientProvider>
 );
