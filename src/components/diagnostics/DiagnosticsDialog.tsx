@@ -161,7 +161,7 @@ export function DiagnosticsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[calc(100dvh-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-hidden">
+      <DialogContent surface="secondary-editor" className="overflow-hidden">
         <DialogHeader>
           <DialogTitle>Diagnostics</DialogTitle>
           <DialogDescription>Review warnings/errors, logs, traces, and action summaries.</DialogDescription>
@@ -176,7 +176,7 @@ export function DiagnosticsDialog({
                 Clear All
               </Button>
             </AlertDialogTrigger>
-            <AlertDialogContent>
+            <AlertDialogContent surface="confirmation">
               <AlertDialogHeader>
                 <AlertDialogTitle>Clear diagnostics</AlertDialogTitle>
                 <AlertDialogDescription>

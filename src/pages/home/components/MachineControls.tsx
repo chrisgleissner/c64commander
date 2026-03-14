@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { RotateCcw, Power, PowerOff, Pause, Menu, Upload, Play, Download } from "lucide-react";
 import { SectionHeader } from "@/components/SectionHeader";
 import { QuickActionCard } from "@/components/QuickActionCard";
+import { ProfileActionGrid } from "@/components/layout/PageContainer";
 
 export interface MachineControlsProps {
   status: { isConnected: boolean; isConnecting: boolean };
@@ -54,7 +55,7 @@ export function MachineControls({
         {machineTaskBusy && <span className="ml-2 text-xs text-muted-foreground">Working…</span>}
       </SectionHeader>
       <div className="space-y-2">
-        <div className="grid grid-cols-4 gap-2" data-testid="home-machine-controls">
+        <ProfileActionGrid compactColumns={2} mediumColumns={4} expandedColumns={4} testId="home-machine-controls">
           <QuickActionCard
             icon={RotateCcw}
             label="Reset"
@@ -138,7 +139,7 @@ export function MachineControls({
             disabled={!status.isConnected || machineTaskBusy}
             loading={controls.powerOff.isPending}
           />
-        </div>
+        </ProfileActionGrid>
         {footer ? <div data-testid="home-machine-footer">{footer}</div> : null}
       </div>
     </motion.div>

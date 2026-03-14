@@ -593,12 +593,10 @@ test.describe("Disk management", () => {
     expect(dialogBox).not.toBeNull();
     expect(viewport).not.toBeNull();
     if (dialogBox && viewport) {
-      const heightRatio = dialogBox.height / viewport.height;
-      const widthRatio = dialogBox.width / viewport.width;
-      expect(heightRatio).toBeLessThan(0.9);
-      expect(widthRatio).toBeLessThan(0.92);
-      expect(dialogBox.y).toBeGreaterThan(viewport.height * 0.05);
-      expect(dialogBox.y + dialogBox.height).toBeLessThan(viewport.height * 0.98);
+      expect(dialogBox.x).toBeGreaterThanOrEqual(6);
+      expect(dialogBox.y).toBeGreaterThanOrEqual(6);
+      expect(dialogBox.x + dialogBox.width).toBeLessThanOrEqual(viewport.width - 6);
+      expect(dialogBox.y + dialogBox.height).toBeLessThanOrEqual(viewport.height - 6);
     }
 
     const scrollArea = page.locator('[data-virtuoso-scroller="true"]');

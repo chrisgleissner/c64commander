@@ -66,6 +66,8 @@ import { getPlatform, isNativePlatform } from "@/lib/native/platform";
 import { redactTreeUri } from "@/lib/native/safUtils";
 import { normalizeConfigItem } from "@/lib/config/normalizeConfigItem";
 import { formatDiskDosStatus } from "@/lib/disks/dosStatusFormatter";
+import { useDisplayProfile } from "@/hooks/useDisplayProfile";
+import { ProfileSplitSection } from "@/components/layout/PageContainer";
 import {
   buildBusIdOptions,
   buildTypeOptions,
@@ -108,6 +110,7 @@ import {
 } from "@/components/disks/HomeDiskManagerSupport";
 
 export const HomeDiskManager = () => {
+  const { profile } = useDisplayProfile();
   const { status } = useC64Connection();
   const { data: drivesData } = useC64Drives();
   const uniqueId = status.deviceInfo?.unique_id || null;
@@ -1272,421 +1275,448 @@ export const HomeDiskManager = () => {
 
   return (
     <div className="space-y-6">
-      <section className="space-y-3">
-        <h3 className="category-header">
-          <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-          Drives
-        </h3>
-        <div className="grid gap-3">
-          {driveRows.map(
-            ({
-              key,
-              driveLabel,
-              mounted,
-              mountedDisk,
-              canRotate,
-              mountedLabel,
-              busId,
-              busOptions,
-              driveType,
-              driveTypeOptions,
-              powerEnabled,
-              hasPowerState,
-              powerLabel,
-              powerTarget,
-              powerPending,
-              configPending,
-              resetPending,
-              formattedStatus,
-            }) => (
-              <div key={key} className="config-card space-y-2" data-testid={`drive-card-${key}`}>
-                <div className="flex min-w-0 items-baseline justify-between gap-2">
-                  <span className="truncate text-sm font-semibold">{driveLabel}</span>
-                  <div className="flex shrink-0 items-center gap-1.5">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className={cn(ROW1_CONTROL_CLASS, getOnOffButtonClass(powerEnabled))}
-                      onClick={() => void handleToggleDrivePower(key, driveLabel, powerTarget, key)}
-                      disabled={!status.isConnected || !hasPowerState || powerPending || configPending}
-                      data-testid={`drive-status-toggle-${key}`}
-                    >
-                      {powerEnabled ? "ON" : "OFF"}
-                    </Button>
-                    <Button
-                      variant={mounted ? "secondary" : "outline"}
-                      size="sm"
-                      className={ROW1_CONTROL_CLASS}
-                      onClick={() => {
-                        if (mounted) {
-                          void handleEject(key);
-                        } else {
-                          setActiveDrive(key);
-                        }
-                      }}
-                      disabled={!status.isConnected || configPending}
-                      data-testid={`drive-mount-toggle-${key}`}
-                      aria-label={`${driveLabel} ${mounted ? "Eject disk" : "Mount disk"}`}
-                    >
-                      <Disc className={cn("h-4 w-4", mounted ? "text-success" : "text-muted-foreground")} />
-                    </Button>
+      <ProfileSplitSection minColumnWidth="22rem" testId="disks-primary-layout">
+        <section className="space-y-3">
+          <h3 className="category-header">
+            <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+            Drives
+          </h3>
+          <div className="grid gap-3">
+            {driveRows.map(
+              ({
+                key,
+                driveLabel,
+                mounted,
+                mountedDisk,
+                canRotate,
+                mountedLabel,
+                busId,
+                busOptions,
+                driveType,
+                driveTypeOptions,
+                powerEnabled,
+                hasPowerState,
+                powerLabel,
+                powerTarget,
+                powerPending,
+                configPending,
+                resetPending,
+                formattedStatus,
+              }) => (
+                <div key={key} className="config-card space-y-2" data-testid={`drive-card-${key}`}>
+                  <div className="flex min-w-0 items-baseline justify-between gap-2">
+                    <span className="truncate text-sm font-semibold">{driveLabel}</span>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className={cn(ROW1_CONTROL_CLASS, getOnOffButtonClass(powerEnabled))}
+                        onClick={() => void handleToggleDrivePower(key, driveLabel, powerTarget, key)}
+                        disabled={!status.isConnected || !hasPowerState || powerPending || configPending}
+                        data-testid={`drive-status-toggle-${key}`}
+                      >
+                        {powerEnabled ? "ON" : "OFF"}
+                      </Button>
+                      <Button
+                        variant={mounted ? "secondary" : "outline"}
+                        size="sm"
+                        className={ROW1_CONTROL_CLASS}
+                        onClick={() => {
+                          if (mounted) {
+                            void handleEject(key);
+                          } else {
+                            setActiveDrive(key);
+                          }
+                        }}
+                        disabled={!status.isConnected || configPending}
+                        data-testid={`drive-mount-toggle-${key}`}
+                        aria-label={`${driveLabel} ${mounted ? "Eject disk" : "Mount disk"}`}
+                      >
+                        <Disc className={cn("h-4 w-4", mounted ? "text-success" : "text-muted-foreground")} />
+                      </Button>
+                    </div>
                   </div>
-                </div>
 
-                <div className="flex min-w-0 items-center gap-1 overflow-hidden whitespace-nowrap text-xs text-muted-foreground">
-                  <span className="shrink-0">Bus ID</span>
-                  <Select
-                    value={String(busId)}
-                    onValueChange={(value) =>
-                      void handleDriveConfigUpdate(
-                        key,
-                        DRIVE_BUS_ID_ITEM,
-                        Number(value),
-                        "Drive Bus ID updated",
-                        `${driveLabel} now uses device #${value}.`,
+                  <div
+                    className={cn(
+                      "min-w-0 overflow-hidden text-xs text-muted-foreground",
+                      profile === "compact"
+                        ? "grid gap-2 whitespace-normal"
+                        : "flex items-center gap-1 whitespace-nowrap",
+                    )}
+                  >
+                    <span className="shrink-0">Bus ID</span>
+                    <Select
+                      value={String(busId)}
+                      onValueChange={(value) =>
+                        void handleDriveConfigUpdate(
+                          key,
+                          DRIVE_BUS_ID_ITEM,
+                          Number(value),
+                          "Drive Bus ID updated",
+                          `${driveLabel} now uses device #${value}.`,
+                        )
+                      }
+                      disabled={!status.isConnected || configPending}
+                    >
+                      <SelectTrigger
+                        className={cn(INLINE_META_SELECT_CLASS, "w-[76px] min-w-[76px]")}
+                        aria-label={`${driveLabel} Bus ID`}
+                        data-testid={`drive-bus-select-${key}`}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {busOptions.map((option) => (
+                          <SelectItem key={option} value={option}>
+                            #{option}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {profile === "compact" ? null : (
+                      <span className="shrink-0 text-muted-foreground/70" aria-hidden="true">
+                        •
+                      </span>
+                    )}
+                    <span className="shrink-0">Drive Type</span>
+                    <Select
+                      value={driveType}
+                      onValueChange={(value) =>
+                        void handleDriveConfigUpdate(
+                          key,
+                          DRIVE_TYPE_ITEM,
+                          value,
+                          "Drive Type updated",
+                          `${driveLabel} switched to ${value} mode.`,
+                        )
+                      }
+                      disabled={!status.isConnected || configPending}
+                    >
+                      <SelectTrigger
+                        className={cn(INLINE_META_SELECT_CLASS, "w-[80px] min-w-[80px]")}
+                        aria-label={`${driveLabel} Drive Type`}
+                        data-testid={`drive-type-select-${key}`}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {driveTypeOptions.map((option) => (
+                          <SelectItem key={option} value={option}>
+                            {option}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div
+                    className={cn(
+                      "min-w-0 justify-between gap-2",
+                      profile === "compact" ? "grid" : "flex items-center",
+                    )}
+                  >
+                    <div className={cn("min-w-0 items-center gap-1.5", profile === "compact" ? "grid" : "flex")}>
+                      <ResponsivePathText
+                        path={mountedLabel}
+                        mode="start-and-filename"
+                        className="min-w-0 flex-1 text-xs text-muted-foreground"
+                        dataTestId={`drive-mounted-label-${key}`}
+                      />
+                      {mountedDisk?.group ? (
+                        <span
+                          className={cn(
+                            "h-2 w-2 shrink-0 rounded-full border",
+                            pickDiskGroupColor(mountedDisk.group).chip,
+                          )}
+                          aria-hidden="true"
+                        />
+                      ) : null}
+                      {mountedDisk?.group ? (
+                        <span className={cn(pickDiskGroupColor(mountedDisk.group).text, "truncate text-[11px]")}>
+                          {mountedDisk.group}
+                        </span>
+                      ) : null}
+                      {canRotate ? (
+                        <div className="flex shrink-0 items-center gap-0.5">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0"
+                            onClick={() => void handleRotate(key, -1)}
+                            disabled={!status.isConnected || configPending}
+                            aria-label={`${driveLabel} previous disk`}
+                          >
+                            <ArrowRightLeft className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0"
+                            onClick={() => void handleRotate(key, 1)}
+                            disabled={!status.isConnected || configPending}
+                            aria-label={`${driveLabel} next disk`}
+                          >
+                            <ArrowLeftRight className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ) : null}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 w-8 p-0"
+                        onClick={() => void handleResetDrive(key, driveLabel, key)}
+                        disabled={!status.isConnected || resetPending || configPending}
+                        aria-label={`Reset ${driveLabel}`}
+                        data-testid={`drive-reset-${key}`}
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="default"
+                        size="sm"
+                        className="h-8 px-3 text-xs"
+                        onClick={() => void handleToggleDrivePower(key, driveLabel, powerTarget, key)}
+                        disabled={!status.isConnected || !hasPowerState || powerPending || configPending}
+                        data-testid={`drive-power-toggle-${key}`}
+                      >
+                        {powerLabel}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {formattedStatus ? (
+                    <div className="space-y-0.5" data-testid={`drive-status-${key}`}>
+                      {formattedStatus.message ? (
+                        <p
+                          className={cn("text-xs", getStatusMessageColorClass(formattedStatus))}
+                          data-testid={`drive-status-message-${key}`}
+                        >
+                          {formattedStatus.message}
+                        </p>
+                      ) : null}
+                      {formattedStatus.raw ? (
+                        <p
+                          className="text-xs text-muted-foreground whitespace-pre-wrap"
+                          data-testid={`drive-status-raw-${key}`}
+                        >
+                          {formattedStatus.raw}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <div className="space-y-0.5" data-testid={`drive-status-${key}`}>
+                      <p className="text-xs text-success" data-testid={`drive-status-message-${key}`}>
+                        OK
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ),
+            )}
+
+            <div className="config-card space-y-2" data-testid="drive-soft-iec-row">
+              <div className="flex min-w-0 items-baseline justify-between gap-2">
+                <span className="truncate text-sm font-semibold">Soft IEC Drive</span>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={cn(ROW1_CONTROL_CLASS, getOnOffButtonClass(softIecPowerEnabled))}
+                    onClick={() =>
+                      void handleSoftIecConfigUpdate(
+                        "IEC Drive",
+                        softIecPowerEnabled ? "Disabled" : "Enabled",
+                        softIecPowerEnabled ? "Soft IEC disabled" : "Soft IEC enabled",
+                        softIecPowerEnabled ? "Soft IEC drive turned off." : "Soft IEC drive turned on.",
                       )
                     }
-                    disabled={!status.isConnected || configPending}
+                    disabled={!status.isConnected || !softIecHasPowerState || softIecConfigPending}
+                    data-testid="drive-status-toggle-soft-iec"
                   >
-                    <SelectTrigger
-                      className={cn(INLINE_META_SELECT_CLASS, "w-[76px] min-w-[76px]")}
-                      aria-label={`${driveLabel} Bus ID`}
-                      data-testid={`drive-bus-select-${key}`}
-                    >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {busOptions.map((option) => (
-                        <SelectItem key={option} value={option}>
-                          #{option}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    {softIecPowerEnabled ? "ON" : "OFF"}
+                  </Button>
+                  <Button
+                    variant={softIecMounted ? "secondary" : "outline"}
+                    size="sm"
+                    className={ROW1_CONTROL_CLASS}
+                    onClick={() => setSoftIecDirectoryBrowserOpen(true)}
+                    disabled={!status.isConnected || softIecConfigPending}
+                    data-testid="drive-mount-toggle-soft-iec"
+                    aria-label="Soft IEC Drive select directory"
+                  >
+                    <Disc className={cn("h-4 w-4", softIecMounted ? "text-success" : "text-muted-foreground")} />
+                  </Button>
+                </div>
+              </div>
+
+              <div
+                className={cn(
+                  "min-w-0 overflow-hidden text-xs text-muted-foreground",
+                  profile === "compact" ? "grid gap-2 whitespace-normal" : "flex items-center gap-1 whitespace-nowrap",
+                )}
+              >
+                <span className="shrink-0">Bus ID</span>
+                <Select
+                  value={String(softIecBusId)}
+                  onValueChange={(value) =>
+                    void handleSoftIecConfigUpdate(
+                      "Soft Drive Bus ID",
+                      Number(value),
+                      "Soft IEC bus ID updated",
+                      `Soft IEC now uses device #${value}.`,
+                    )
+                  }
+                  disabled={!status.isConnected || softIecConfigPending}
+                >
+                  <SelectTrigger
+                    className={cn(INLINE_META_SELECT_CLASS, "w-[76px] min-w-[76px]")}
+                    data-testid="drive-bus-select-soft-iec"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {softIecBusOptions.map((option) => (
+                      <SelectItem key={option} value={option}>
+                        #{option}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {profile === "compact" ? null : (
                   <span className="shrink-0 text-muted-foreground/70" aria-hidden="true">
                     •
                   </span>
-                  <span className="shrink-0">Drive Type</span>
-                  <Select
-                    value={driveType}
-                    onValueChange={(value) =>
-                      void handleDriveConfigUpdate(
-                        key,
-                        DRIVE_TYPE_ITEM,
-                        value,
-                        "Drive Type updated",
-                        `${driveLabel} switched to ${value} mode.`,
-                      )
-                    }
-                    disabled={!status.isConnected || configPending}
-                  >
-                    <SelectTrigger
-                      className={cn(INLINE_META_SELECT_CLASS, "w-[80px] min-w-[80px]")}
-                      aria-label={`${driveLabel} Drive Type`}
-                      data-testid={`drive-type-select-${key}`}
-                    >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {driveTypeOptions.map((option) => (
-                        <SelectItem key={option} value={option}>
-                          {option}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="flex min-w-0 items-center justify-between gap-2">
-                  <div className="flex min-w-0 items-center gap-1.5">
-                    <ResponsivePathText
-                      path={mountedLabel}
-                      mode="start-and-filename"
-                      className="min-w-0 flex-1 text-xs text-muted-foreground"
-                      dataTestId={`drive-mounted-label-${key}`}
-                    />
-                    {mountedDisk?.group ? (
-                      <span
-                        className={cn(
-                          "h-2 w-2 shrink-0 rounded-full border",
-                          pickDiskGroupColor(mountedDisk.group).chip,
-                        )}
-                        aria-hidden="true"
-                      />
-                    ) : null}
-                    {mountedDisk?.group ? (
-                      <span className={cn(pickDiskGroupColor(mountedDisk.group).text, "truncate text-[11px]")}>
-                        {mountedDisk.group}
-                      </span>
-                    ) : null}
-                    {canRotate ? (
-                      <div className="flex shrink-0 items-center gap-0.5">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0"
-                          onClick={() => void handleRotate(key, -1)}
-                          disabled={!status.isConnected || configPending}
-                          aria-label={`${driveLabel} previous disk`}
-                        >
-                          <ArrowRightLeft className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0"
-                          onClick={() => void handleRotate(key, 1)}
-                          disabled={!status.isConnected || configPending}
-                          aria-label={`${driveLabel} next disk`}
-                        >
-                          <ArrowLeftRight className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    ) : null}
-                  </div>
-                  <div className="flex shrink-0 items-center gap-1.5">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 w-8 p-0"
-                      onClick={() => void handleResetDrive(key, driveLabel, key)}
-                      disabled={!status.isConnected || resetPending || configPending}
-                      aria-label={`Reset ${driveLabel}`}
-                      data-testid={`drive-reset-${key}`}
-                    >
-                      <RotateCcw className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      variant="default"
-                      size="sm"
-                      className="h-8 px-3 text-xs"
-                      onClick={() => void handleToggleDrivePower(key, driveLabel, powerTarget, key)}
-                      disabled={!status.isConnected || !hasPowerState || powerPending || configPending}
-                      data-testid={`drive-power-toggle-${key}`}
-                    >
-                      {powerLabel}
-                    </Button>
-                  </div>
-                </div>
-
-                {formattedStatus ? (
-                  <div className="space-y-0.5" data-testid={`drive-status-${key}`}>
-                    {formattedStatus.message ? (
-                      <p
-                        className={cn("text-xs", getStatusMessageColorClass(formattedStatus))}
-                        data-testid={`drive-status-message-${key}`}
-                      >
-                        {formattedStatus.message}
-                      </p>
-                    ) : null}
-                    {formattedStatus.raw ? (
-                      <p
-                        className="text-xs text-muted-foreground whitespace-pre-wrap"
-                        data-testid={`drive-status-raw-${key}`}
-                      >
-                        {formattedStatus.raw}
-                      </p>
-                    ) : null}
-                  </div>
-                ) : (
-                  <div className="space-y-0.5" data-testid={`drive-status-${key}`}>
-                    <p className="text-xs text-success" data-testid={`drive-status-message-${key}`}>
-                      OK
-                    </p>
-                  </div>
                 )}
-              </div>
-            ),
-          )}
-
-          <div className="config-card space-y-2" data-testid="drive-soft-iec-row">
-            <div className="flex min-w-0 items-baseline justify-between gap-2">
-              <span className="truncate text-sm font-semibold">Soft IEC Drive</span>
-              <div className="flex shrink-0 items-center gap-1.5">
+                <span className="shrink-0">Default Path</span>
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
-                  className={cn(ROW1_CONTROL_CLASS, getOnOffButtonClass(softIecPowerEnabled))}
-                  onClick={() =>
-                    void handleSoftIecConfigUpdate(
-                      "IEC Drive",
-                      softIecPowerEnabled ? "Disabled" : "Enabled",
-                      softIecPowerEnabled ? "Soft IEC disabled" : "Soft IEC enabled",
-                      softIecPowerEnabled ? "Soft IEC drive turned off." : "Soft IEC drive turned on.",
-                    )
-                  }
-                  disabled={!status.isConnected || !softIecHasPowerState || softIecConfigPending}
-                  data-testid="drive-status-toggle-soft-iec"
-                >
-                  {softIecPowerEnabled ? "ON" : "OFF"}
-                </Button>
-                <Button
-                  variant={softIecMounted ? "secondary" : "outline"}
-                  size="sm"
-                  className={ROW1_CONTROL_CLASS}
+                  className="h-7 min-w-0 max-w-full justify-start px-1.5 text-xs font-medium"
                   onClick={() => setSoftIecDirectoryBrowserOpen(true)}
                   disabled={!status.isConnected || softIecConfigPending}
-                  data-testid="drive-mount-toggle-soft-iec"
-                  aria-label="Soft IEC Drive select directory"
+                  data-testid="drive-default-path-select-soft-iec"
+                  aria-label="Select directory for Soft IEC Default Path"
                 >
-                  <Disc className={cn("h-4 w-4", softIecMounted ? "text-success" : "text-muted-foreground")} />
+                  <span className="truncate">Select directory ({softIecDefaultPath})</span>
                 </Button>
               </div>
-            </div>
 
-            <div className="flex min-w-0 items-center gap-1 overflow-hidden whitespace-nowrap text-xs text-muted-foreground">
-              <span className="shrink-0">Bus ID</span>
-              <Select
-                value={String(softIecBusId)}
-                onValueChange={(value) =>
-                  void handleSoftIecConfigUpdate(
-                    "Soft Drive Bus ID",
-                    Number(value),
-                    "Soft IEC bus ID updated",
-                    `Soft IEC now uses device #${value}.`,
-                  )
-                }
-                disabled={!status.isConnected || softIecConfigPending}
+              <div
+                className={cn("min-w-0 justify-between gap-2", profile === "compact" ? "grid" : "flex items-center")}
               >
-                <SelectTrigger
-                  className={cn(INLINE_META_SELECT_CLASS, "w-[76px] min-w-[76px]")}
-                  data-testid="drive-bus-select-soft-iec"
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {softIecBusOptions.map((option) => (
-                    <SelectItem key={option} value={option}>
-                      #{option}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <span className="shrink-0 text-muted-foreground/70" aria-hidden="true">
-                •
-              </span>
-              <span className="shrink-0">Default Path</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 min-w-0 max-w-full justify-start px-1.5 text-xs font-medium"
-                onClick={() => setSoftIecDirectoryBrowserOpen(true)}
-                disabled={!status.isConnected || softIecConfigPending}
-                data-testid="drive-default-path-select-soft-iec"
-                aria-label="Select directory for Soft IEC Default Path"
-              >
-                <span className="truncate">Select directory ({softIecDefaultPath})</span>
-              </Button>
-            </div>
-
-            <div className="flex min-w-0 items-center justify-between gap-2">
-              <ResponsivePathText
-                path={softIecMountedLabel}
-                mode="start-and-filename"
-                className="min-w-0 flex-1 truncate text-xs text-muted-foreground"
-                dataTestId="drive-mounted-label-soft-iec"
-              />
-              <div className="flex shrink-0 items-center gap-1.5">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 w-8 p-0"
-                  onClick={() => void handleResetDrive(softIecEndpointKey, "Soft IEC Drive", "softiec")}
-                  disabled={!status.isConnected || softIecResetPending || softIecConfigPending}
-                  aria-label="Reset Soft IEC Drive"
-                  data-testid="drive-reset-soft-iec"
-                >
-                  <RotateCcw className="h-3.5 w-3.5" />
-                </Button>
-                <Button
-                  variant="default"
-                  size="sm"
-                  className="h-8 px-3 text-xs"
-                  onClick={() =>
-                    void handleToggleDrivePower(softIecEndpointKey, "Soft IEC Drive", softIecPowerTarget, "softiec")
-                  }
-                  disabled={!status.isConnected || !softIecHasPowerState || softIecPowerPending || softIecConfigPending}
-                  data-testid="drive-power-toggle-soft-iec"
-                >
-                  {softIecPowerLabel}
-                </Button>
-              </div>
-            </div>
-
-            {softIecFormattedStatus ? (
-              <div className="space-y-0.5" data-testid="drive-status-soft-iec">
-                {softIecFormattedStatus.message ? (
-                  <p
-                    className={cn("text-xs", getStatusMessageColorClass(softIecFormattedStatus))}
-                    data-testid="drive-status-message-soft-iec"
+                <ResponsivePathText
+                  path={softIecMountedLabel}
+                  mode="start-and-filename"
+                  className="min-w-0 flex-1 truncate text-xs text-muted-foreground"
+                  dataTestId="drive-mounted-label-soft-iec"
+                />
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 w-8 p-0"
+                    onClick={() => void handleResetDrive(softIecEndpointKey, "Soft IEC Drive", "softiec")}
+                    disabled={!status.isConnected || softIecResetPending || softIecConfigPending}
+                    aria-label="Reset Soft IEC Drive"
+                    data-testid="drive-reset-soft-iec"
                   >
-                    {softIecFormattedStatus.message}
-                  </p>
-                ) : null}
-                {softIecFormattedStatus.raw ? (
-                  <p
-                    className="text-xs text-muted-foreground whitespace-pre-wrap"
-                    data-testid="drive-status-raw-soft-iec"
+                    <RotateCcw className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="h-8 px-3 text-xs"
+                    onClick={() =>
+                      void handleToggleDrivePower(softIecEndpointKey, "Soft IEC Drive", softIecPowerTarget, "softiec")
+                    }
+                    disabled={
+                      !status.isConnected || !softIecHasPowerState || softIecPowerPending || softIecConfigPending
+                    }
+                    data-testid="drive-power-toggle-soft-iec"
                   >
-                    {softIecFormattedStatus.raw}
+                    {softIecPowerLabel}
+                  </Button>
+                </div>
+              </div>
+
+              {softIecFormattedStatus ? (
+                <div className="space-y-0.5" data-testid="drive-status-soft-iec">
+                  {softIecFormattedStatus.message ? (
+                    <p
+                      className={cn("text-xs", getStatusMessageColorClass(softIecFormattedStatus))}
+                      data-testid="drive-status-message-soft-iec"
+                    >
+                      {softIecFormattedStatus.message}
+                    </p>
+                  ) : null}
+                  {softIecFormattedStatus.raw ? (
+                    <p
+                      className="text-xs text-muted-foreground whitespace-pre-wrap"
+                      data-testid="drive-status-raw-soft-iec"
+                    >
+                      {softIecFormattedStatus.raw}
+                    </p>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="space-y-0.5" data-testid="drive-status-soft-iec">
+                  <p className="text-xs text-success" data-testid="drive-status-message-soft-iec">
+                    OK
                   </p>
-                ) : null}
-              </div>
-            ) : (
-              <div className="space-y-0.5" data-testid="drive-status-soft-iec">
-                <p className="text-xs text-success" data-testid="drive-status-message-soft-iec">
-                  OK
-                </p>
-              </div>
-            )}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <section className="space-y-3">
-        <h3 className="category-header">
-          <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-          Disks
-        </h3>
+        <section className="space-y-3">
+          <h3 className="category-header">
+            <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+            Disks
+          </h3>
 
-        <div className="bg-card border border-border rounded-xl p-4 space-y-4">
-          <SelectableActionList
-            title="Disk list"
-            selectionLabel="items"
-            items={buildDiskListItems(sortedDisks, {
-              onMount: (entry) => {
-                if (!status.isConnected) {
-                  reportUserError({
-                    operation: "DISK_MOUNT",
-                    title: "Offline",
-                    description: "Connect to mount disks.",
-                  });
-                  return;
-                }
-                setActiveDisk(entry);
-              },
-            })}
-            emptyLabel="No disks in the collection yet."
-            selectAllLabel="Select all"
-            deselectAllLabel="Deselect all"
-            removeSelectedLabel={selectedCount ? "Remove selected items" : undefined}
-            selectedCount={selectedCount}
-            allSelected={allSelected}
-            onToggleSelectAll={toggleSelectAll}
-            onRemoveSelected={() => setBulkDeleteOpen(true)}
-            maxVisible={listPreviewLimit}
-            viewAllTitle="All disks"
-            filterPlaceholder="Filter disks..."
-            listTestId="disk-list"
-            rowTestId="disk-row"
-            headerActions={
-              <Button variant="outline" size="sm" onClick={() => setBrowserOpen(true)}>
-                {diskLibrary.disks.length ? "Add more disks" : "Add disks"}
-              </Button>
-            }
-          />
-        </div>
-      </section>
+          <div className="bg-card border border-border rounded-xl p-4 space-y-4">
+            <SelectableActionList
+              title="Disk list"
+              selectionLabel="items"
+              items={buildDiskListItems(sortedDisks, {
+                onMount: (entry) => {
+                  if (!status.isConnected) {
+                    reportUserError({
+                      operation: "DISK_MOUNT",
+                      title: "Offline",
+                      description: "Connect to mount disks.",
+                    });
+                    return;
+                  }
+                  setActiveDisk(entry);
+                },
+              })}
+              emptyLabel="No disks in the collection yet."
+              selectAllLabel="Select all"
+              deselectAllLabel="Deselect all"
+              removeSelectedLabel={selectedCount ? "Remove selected items" : undefined}
+              selectedCount={selectedCount}
+              allSelected={allSelected}
+              onToggleSelectAll={toggleSelectAll}
+              onRemoveSelected={() => setBulkDeleteOpen(true)}
+              maxVisible={listPreviewLimit}
+              viewAllTitle="All disks"
+              filterPlaceholder="Filter disks..."
+              listTestId="disk-list"
+              rowTestId="disk-row"
+              headerActions={
+                <Button variant="outline" size="sm" onClick={() => setBrowserOpen(true)}>
+                  {diskLibrary.disks.length ? "Add more disks" : "Add disks"}
+                </Button>
+              }
+            />
+          </div>
+        </section>
+      </ProfileSplitSection>
 
       <input
         ref={localSourceInputRef}

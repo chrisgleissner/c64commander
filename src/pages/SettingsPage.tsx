@@ -100,6 +100,9 @@ import { redactTreeUri } from "@/lib/native/safUtils";
 import { discoverConnection } from "@/lib/connection/connectionManager";
 import { useConnectionState } from "@/hooks/useConnectionState";
 import { useNavigate } from "react-router-dom";
+import { DISPLAY_PROFILE_OVERRIDE_LABELS, DISPLAY_PROFILE_OVERRIDE_SEQUENCE } from "@/lib/displayProfiles";
+import { useDisplayProfilePreference } from "@/hooks/useDisplayProfile";
+import { PageContainer, PageStack, ProfileSplitSection } from "@/components/layout/PageContainer";
 
 type Theme = "light" | "dark" | "system";
 
@@ -111,6 +114,11 @@ export default function SettingsPage() {
   const { isDeveloperModeEnabled, enableDeveloperMode } = useDeveloperMode();
   const { value: isHvscEnabled, setValue: setHvscEnabled } = useFeatureFlag("hvsc_enabled");
   const { limit: listPreviewLimit, setLimit: setListPreviewLimit } = useListPreviewLimit();
+  const {
+    override: displayProfileOverride,
+    autoProfile,
+    setOverride: setDisplayProfileOverride,
+  } = useDisplayProfilePreference();
   const trace = useActionTrace("SettingsPage");
   const buildInfo = getBuildInfo();
   const buildInfoRows = getBuildInfoRows(buildInfo);
@@ -453,6 +461,11 @@ export default function SettingsPage() {
     { value: "system", icon: Monitor, label: "System" },
   ];
 
+  const displayProfileOptions = DISPLAY_PROFILE_OVERRIDE_SEQUENCE.map((value) => ({
+    value,
+    label: DISPLAY_PROFILE_OVERRIDE_LABELS[value],
+  }));
+
   const commitListPreviewLimit = () => {
     const parsed = Number(listPreviewInput);
     const clamped = clampListPreviewLimit(parsed);
@@ -575,988 +588,1023 @@ export default function SettingsPage() {
     <div className="min-h-screen pb-24 pt-[var(--app-bar-height)]">
       <AppBar title="Settings" subtitle="Connection & appearance" />
 
-      <main className="container py-6 space-y-6">
-        {/* 1. Appearance */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.02 }}
-          className="bg-card border border-border rounded-xl p-4 space-y-4"
-        >
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <Monitor className="h-5 w-5 text-primary" />
-            </div>
-            <h2 className="font-medium">Appearance</h2>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2">
-            {themeOptions.map((option) => {
-              const Icon = option.icon;
-              const isActive = theme === option.value;
-
-              return (
-                <button
-                  key={option.value}
-                  onClick={wrapUserEvent(
-                    () => setTheme(option.value),
-                    "select",
-                    "ThemeSelector",
-                    { title: option.label },
-                    "ThemeOption",
-                  )}
-                  className={`flex flex-col items-center gap-2 rounded-lg border p-4 transition-colors ${isActive ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground"}`}
-                >
-                  <Icon className={`h-6 w-6 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
-                  <span className={`text-sm ${isActive ? "font-medium" : ""}`}>{option.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </motion.div>
-
-        {/* 2. Connection Settings */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-card border border-border rounded-xl p-4 space-y-4"
-        >
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <Wifi className="h-5 w-5 text-primary" />
-            </div>
-            <h2 className="font-medium">Connection</h2>
-          </div>
-
-          <div className="space-y-3">
-            <div className="space-y-2">
-              <Label htmlFor="deviceHost" className="text-sm">
-                C64U Hostname / IP
-              </Label>
-              <Input
-                id="deviceHost"
-                value={deviceHostInput}
-                onChange={(e) => setDeviceHostInput(e.target.value)}
-                placeholder={C64_DEFAULTS.DEFAULT_DEVICE_HOST}
-                className="font-sans"
-              />
-              <p className="text-xs text-muted-foreground">Hostname or IP from the C64 menu.</p>
-              <p className="text-xs text-muted-foreground">
-                Currently using: <span className="font-sans break-all">{runtimeDeviceHost}</span>
-                {isDemoActive ? " (Demo mock)" : ""}
-              </p>
-              {isDemoActive ? (
-                <p className="text-xs text-muted-foreground">
-                  {lastProbeSucceededAtMs
-                    ? "Real device detected during probe."
-                    : lastProbeFailedAtMs
-                      ? "No real device detected in recent probe."
-                      : "Waiting for initial probe."}
-                </p>
-              ) : null}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="password" className="text-sm flex items-center gap-1">
-                <Lock className="h-3 w-3" />
-                Network Password
-              </Label>
-              <Input
-                id="password"
-                type="password"
-                value={passwordInput}
-                onChange={(e) => setPasswordInput(e.target.value)}
-                placeholder="Optional"
-                className="font-sans"
-              />
-              <p className="text-xs text-muted-foreground">Network password from the C64 manual, if defined</p>
-            </div>
-          </div>
-
-          <div className="space-y-4 rounded-lg border border-border/70 p-3">
-            <div className="flex items-start justify-between gap-3 min-w-0">
-              <div className="space-y-1 min-w-0">
-                <Label htmlFor="auto-demo-mode" className="font-medium">
-                  Automatic Demo Mode
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  When no hardware is found during discovery, automatically offer Demo Mode for this session.
-                </p>
-              </div>
-              <Checkbox
-                id="auto-demo-mode"
-                checked={automaticDemoModeEnabled}
-                onCheckedChange={(checked) => {
-                  const enabled = checked === true;
-                  setAutomaticDemoModeEnabled(enabled);
-                  saveAutomaticDemoModeEnabled(enabled);
-                }}
-              />
-            </div>
-          </div>
-
-          <div className="flex gap-2 pt-2">
-            <Button onClick={handleSaveConnection} disabled={isSaving} className="flex-1">
-              {isSaving ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : null}
-              Save & Connect
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => void discoverConnection("manual")}
-              disabled={status.isConnecting}
-              aria-label="Refresh connection"
+      <PageContainer size="reading">
+        <PageStack>
+          <ProfileSplitSection minColumnWidth="20rem" testId="settings-top-layout">
+            {/* 1. Appearance */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.02 }}
+              className="profile-card bg-card border border-border rounded-xl p-4 space-y-4"
             >
-              <RefreshCw className={`h-4 w-4 ${status.isConnecting ? "animate-spin" : ""}`} />
-            </Button>
-          </div>
-
-          {/* Connection Status */}
-          <div
-            className={`break-words rounded-lg p-3 text-sm ${status.isConnected ? "bg-success/10 text-success" : isDemoActive ? "bg-primary/10 text-primary" : status.isConnecting ? "bg-muted text-muted-foreground" : "bg-destructive/10 text-destructive"}`}
-          >
-            {status.isConnecting
-              ? "Connecting..."
-              : status.isConnected
-                ? `Connected to ${baseUrl}`
-                : isDemoActive
-                  ? `Demo mode — ${baseUrl}`
-                  : status.error || "Not connected"}
-          </div>
-        </motion.div>
-
-        {/* 3. Diagnostics */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.05 }}
-          className="bg-card border border-border rounded-xl p-4 space-y-4"
-        >
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <FileText className="h-5 w-5 text-primary" />
-            </div>
-            <h2 className="font-medium">Diagnostics</h2>
-          </div>
-
-          <div className="space-y-4">
-            <Button
-              variant="outline"
-              onClick={() => setDiagnosticsDialogOpen(true)}
-              id="diagnostics-open-dialog"
-              data-diagnostics-open-trigger="true"
-              data-testid="diagnostics-open-dialog"
-            >
-              <FileText className="h-4 w-4 mr-2" />
-              Diagnostics
-            </Button>
-
-            <div className="flex items-start justify-between gap-3 min-w-0">
-              <div className="space-y-1 min-w-0">
-                <Label htmlFor="debug-logging" className="font-medium">
-                  Enable Debug Logging
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  Emits all debug-level logs for diagnostics, including SAF and REST events.
-                </p>
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <Monitor className="h-5 w-5 text-primary" />
+                </div>
+                <h2 className="font-medium">Appearance</h2>
               </div>
-              <Checkbox
-                id="debug-logging"
-                checked={debugLoggingEnabled}
-                onCheckedChange={(checked) => {
-                  const enabled = checked === true;
-                  setDebugLoggingEnabled(enabled);
-                  saveDebugLoggingEnabled(enabled);
-                }}
-              />
-            </div>
 
-            {debugLoggingEnabled && isAndroid ? (
+              <div className="grid grid-cols-3 gap-2">
+                {themeOptions.map((option) => {
+                  const Icon = option.icon;
+                  const isActive = theme === option.value;
+
+                  return (
+                    <button
+                      key={option.value}
+                      onClick={wrapUserEvent(
+                        () => setTheme(option.value),
+                        "select",
+                        "ThemeSelector",
+                        { title: option.label },
+                        "ThemeOption",
+                      )}
+                      className={`flex flex-col items-center gap-2 rounded-lg border p-4 transition-colors ${isActive ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground"}`}
+                    >
+                      <Icon className={`h-6 w-6 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
+                      <span className={`text-sm ${isActive ? "font-medium" : ""}`}>{option.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
               <div className="space-y-2 rounded-lg border border-border/70 p-3">
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold">SAF diagnostics</p>
-                  <p className="text-xs text-muted-foreground">
-                    Manual checks for persisted SAF permissions and enumeration.
-                  </p>
+                <Label className="text-sm font-medium">Display profile</Label>
+                <div className="grid grid-cols-2 gap-2" data-testid="settings-display-profile-override">
+                  {displayProfileOptions.map((option) => {
+                    const isActive = displayProfileOverride === option.value;
+                    return (
+                      <Button
+                        key={option.value}
+                        type="button"
+                        variant={isActive ? "default" : "outline"}
+                        className="h-auto justify-start whitespace-normal px-3 py-2 text-left"
+                        onClick={() => setDisplayProfileOverride(option.value)}
+                      >
+                        {option.label}
+                      </Button>
+                    );
+                  })}
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button variant="outline" size="sm" onClick={() => void refreshSafPermissions()} disabled={safBusy}>
-                    List persisted URIs
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => void enumerateSafRoot()}
-                    disabled={safBusy || safUris.length === 0}
-                  >
-                    Enumerate first root
-                  </Button>
-                </div>
-                {safError ? <p className="text-xs text-destructive">{safError}</p> : null}
-                {safUris.length ? (
-                  <div className="text-xs text-muted-foreground break-words min-w-0">
-                    Persisted:{" "}
-                    {safUris
-                      .map((entry) => redactTreeUri(entry.uri))
-                      .filter(Boolean)
-                      .join(", ")}
-                  </div>
-                ) : null}
-                {safEntries.length ? (
-                  <div className="max-h-28 overflow-auto whitespace-pre-line break-words min-w-0 text-xs text-muted-foreground">
-                    {safEntries.map((entry) => `${entry.type.toUpperCase()}: ${entry.path}`).join("\n")}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-
-            <div className="space-y-2 rounded-lg border border-border/70 p-3">
-              <div className="space-y-1">
-                <p className="text-sm font-semibold">Settings transfer</p>
                 <p className="text-xs text-muted-foreground">
-                  Export or import non-sensitive settings (connection timing, safety presets, and diagnostics).
+                  Auto currently resolves to {DISPLAY_PROFILE_OVERRIDE_LABELS[autoProfile]}. Use an override to preview
+                  or lock a profile explicitly.
                 </p>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <Button variant="outline" size="sm" onClick={handleExportSettings}>
-                  Export settings
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => settingsFileInputRef.current?.click()}>
-                  Import settings
-                </Button>
-              </div>
-              <input
-                ref={settingsFileInputRef}
-                type="file"
-                accept="application/json"
-                className="hidden"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  void handleImportSettings(file);
-                  if (event.currentTarget) {
-                    event.currentTarget.value = "";
-                  }
-                }}
-              />
-            </div>
-          </div>
-        </motion.div>
+            </motion.div>
 
-        {/* 4. Play and Disk */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15 }}
-          className="bg-card border border-border rounded-xl p-4 space-y-4"
-        >
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <Play className="h-5 w-5 text-primary" />
-            </div>
-            <h2 className="font-medium">Play and Disk</h2>
-          </div>
-
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="listPreviewLimit" className="text-sm">
-                List preview limit
-              </Label>
-              <Input
-                id="listPreviewLimit"
-                type="number"
-                min={1}
-                max={200}
-                value={listPreviewInput}
-                onChange={(event) => setListPreviewInput(event.target.value)}
-                onBlur={commitListPreviewLimit}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    commitListPreviewLimit();
-                  }
-                }}
-              />
-              <p className="text-xs text-muted-foreground">
-                Controls how many playlist or disk items are shown before opening View all. Default is 50.
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="volume-slider-preview-interval" className="text-sm">
-                Volume slider preview interval (milliseconds)
-              </Label>
-              <Input
-                id="volume-slider-preview-interval"
-                type="number"
-                min={100}
-                max={500}
-                step={10}
-                value={volumeSliderPreviewIntervalMs}
-                onChange={(event) => {
-                  const parsed = Number(event.target.value);
-                  if (Number.isFinite(parsed)) {
-                    setVolumeSliderPreviewIntervalMs(clampVolumeSliderPreviewIntervalMs(parsed));
-                  }
-                }}
-                onBlur={() => saveVolumeSliderPreviewIntervalMs(volumeSliderPreviewIntervalMs)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") saveVolumeSliderPreviewIntervalMs(volumeSliderPreviewIntervalMs);
-                }}
-              />
-              <p className="text-xs text-muted-foreground">
-                Controls how often drag previews are sent while the playback volume slider is moving. Default 200 ms.
-                Range 100–500 ms.
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="disk-autostart-mode" className="text-sm">
-                Disk first-PRG load
-              </Label>
-              <Select
-                value={diskAutostartMode}
-                onValueChange={(value) => {
-                  const mode = value as DiskAutostartMode;
-                  setDiskAutostartMode(mode);
-                  saveDiskAutostartMode(mode);
-                }}
-              >
-                <SelectTrigger id="disk-autostart-mode">
-                  <SelectValue placeholder="Select load mode" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="kernal">Classic KERNAL load (LOAD"*",8,1)</SelectItem>
-                  <SelectItem value="dma">DMA (Direct Memory Access)</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Classic KERNAL load mounts the disk and uses LOAD"*",8,1 then RUN. DMA (Direct Memory Access) extracts
-                the first PRG from a D64/D71/D81 image and writes it directly to C64 memory for faster starts. Some
-                loaders may not like DMA.
-              </p>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* 5. Config */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="bg-card border border-border rounded-xl p-4 space-y-4"
-        >
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <Cpu className="h-5 w-5 text-primary" />
-            </div>
-            <h2 className="font-medium">Config</h2>
-          </div>
-
-          <div className="space-y-4">
-            <div className="flex items-start justify-between gap-3 min-w-0">
-              <div className="space-y-1 min-w-0">
-                <Label htmlFor="auto-demo-mode" className="font-medium">
-                  Automatic Demo Mode
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  When no hardware is found during discovery, automatically offer Demo Mode for this session.
-                </p>
-              </div>
-              <Checkbox
-                id="auto-demo-mode"
-                checked={automaticDemoModeEnabled}
-                onCheckedChange={(checked) => {
-                  const enabled = checked === true;
-                  setAutomaticDemoModeEnabled(enabled);
-                  saveAutomaticDemoModeEnabled(enabled);
-                }}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="startup-discovery-window" className="font-medium">
-                Startup Discovery Window (seconds)
-              </Label>
-              <Input
-                id="startup-discovery-window"
-                type="number"
-                min={0.5}
-                max={15}
-                step={0.1}
-                value={startupDiscoveryWindowInput}
-                onChange={(event) => setStartupDiscoveryWindowInput(event.target.value)}
-                onBlur={commitStartupDiscoveryWindow}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") commitStartupDiscoveryWindow();
-                }}
-              />
-              <p className="text-xs text-muted-foreground">Default 3s. Range 0.5s–15s.</p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="background-rediscovery-interval" className="font-medium">
-                Background Rediscovery Interval (seconds)
-              </Label>
-              <Input
-                id="background-rediscovery-interval"
-                type="number"
-                min={1}
-                max={60}
-                step={0.1}
-                value={backgroundRediscoveryIntervalInput}
-                onChange={(event) => setBackgroundRediscoveryIntervalInput(event.target.value)}
-                onBlur={commitBackgroundRediscoveryInterval}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") commitBackgroundRediscoveryInterval();
-                }}
-              />
-              <p className="text-xs text-muted-foreground">Default 5s. Range 1s–60s.</p>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* 6. HVSC */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.25 }}
-          className="bg-card border border-border rounded-xl p-4 space-y-4"
-        >
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <Cpu className="h-5 w-5 text-primary" />
-            </div>
-            <h2 className="font-medium">HVSC</h2>
-          </div>
-          <div className="space-y-3 text-sm">
-            <div className="flex items-start justify-between gap-3 min-w-0">
-              <div
-                className="space-y-1 min-w-0 cursor-pointer"
-                role="button"
-                tabIndex={0}
-                onClick={() => {
-                  setHvscEnabledAndPersist(!isHvscEnabled);
-                }}
-                onKeyDown={(event) => {
-                  if (event.key !== "Enter" && event.key !== " ") return;
-                  event.preventDefault();
-                  setHvscEnabledAndPersist(!isHvscEnabled);
-                }}
-              >
-                <Label htmlFor="hvsc-flag" className="font-medium">
-                  Enable HVSC downloads
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  Shows HVSC download and ingest controls on the Play page.
-                </p>
-              </div>
-              <Checkbox
-                id="hvsc-flag"
-                aria-label="Enable HVSC downloads"
-                data-testid="hvsc-toggle"
-                checked={isHvscEnabled}
-                onCheckedChange={(checked) => {
-                  setHvscEnabledAndPersist(checked === true);
-                }}
-              />
-            </div>
-            {isDeveloperModeEnabled ? (
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">HVSC base URL override</Label>
-                <Input
-                  value={hvscBaseUrlInput}
-                  onChange={(event) => setHvscBaseUrlInput(event.target.value)}
-                  onBlur={commitHvscBaseUrl}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") commitHvscBaseUrl();
-                  }}
-                  placeholder={hvscBaseUrlPreview}
-                  data-testid="hvsc-base-url"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Leave blank to use the default HVSC mirror. Current base URL: {hvscBaseUrlPreview}
-                </p>
-              </div>
-            ) : null}
-          </div>
-        </motion.div>
-
-        {/* 7. Device Safety */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.35 }}
-          className="bg-card border border-border rounded-xl p-4 space-y-4"
-        >
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <Cpu className="h-5 w-5 text-primary" />
-            </div>
-            <h2 className="font-medium">Device Safety</h2>
-          </div>
-
-          <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
-            Relaxed safety mode may affect hardware stability.
-          </div>
-
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Safety Mode</Label>
-            <Select
-              value={deviceSafetyMode}
-              onValueChange={(value) => commitDeviceSafetyMode(value as DeviceSafetyMode)}
+            {/* 2. Connection Settings */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="profile-card bg-card border border-border rounded-xl p-4 space-y-4"
             >
-              <SelectTrigger>
-                <SelectValue placeholder="Select safety mode" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="RELAXED">Relaxed (lighter throttling, higher risk)</SelectItem>
-                <SelectItem value="BALANCED">Balanced (recommended)</SelectItem>
-                <SelectItem value="CONSERVATIVE">Conservative (maximum safety)</SelectItem>
-                <SelectItem value="TROUBLESHOOTING">Troubleshooting (low concurrency, extra logging)</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              Mode presets adjust throttling, caching, cooldowns, and backoff behavior. Troubleshooting mode also
-              enables debug logging for richer diagnostics.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-border/70 p-3 space-y-4">
-            <div className="space-y-1">
-              <Label className="font-medium">Network timing</Label>
-              <p className="text-xs text-muted-foreground">
-                Tune discovery timing to reduce connection churn or speed up detection.
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="startup-discovery-window" className="font-medium">
-                Startup Discovery Window (seconds)
-              </Label>
-              <Input
-                id="startup-discovery-window"
-                type="number"
-                min={0.5}
-                max={15}
-                step={0.1}
-                value={startupDiscoveryWindowInput}
-                onChange={(event) => setStartupDiscoveryWindowInput(event.target.value)}
-                onBlur={commitStartupDiscoveryWindow}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") commitStartupDiscoveryWindow();
-                }}
-              />
-              <p className="text-xs text-muted-foreground">Default 3s. Range 0.5s–15s.</p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="background-rediscovery-interval" className="font-medium">
-                Background Rediscovery Interval (seconds)
-              </Label>
-              <Input
-                id="background-rediscovery-interval"
-                type="number"
-                min={1}
-                max={60}
-                step={0.1}
-                value={backgroundRediscoveryIntervalInput}
-                onChange={(event) => setBackgroundRediscoveryIntervalInput(event.target.value)}
-                onBlur={commitBackgroundRediscoveryInterval}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") commitBackgroundRediscoveryInterval();
-                }}
-              />
-              <p className="text-xs text-muted-foreground">Default 5s. Range 1s–60s.</p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="probe-timeout" className="font-medium">
-                Discovery Probe Timeout (seconds)
-              </Label>
-              <Input
-                id="probe-timeout"
-                type="number"
-                min={0.5}
-                max={10}
-                step={0.1}
-                value={probeTimeoutInput}
-                onChange={(event) => setProbeTimeoutInput(event.target.value)}
-                onBlur={commitProbeTimeout}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") commitProbeTimeout();
-                }}
-              />
-              <p className="text-xs text-muted-foreground">Default 2.5s. Range 0.5s–10s.</p>
-            </div>
-          </div>
-
-          <div className="rounded-lg border border-border/70 p-3 space-y-4">
-            <div className="space-y-2">
-              <Label className="font-medium">Advanced Controls</Label>
-              <p className="text-xs text-muted-foreground">Fine-tuned device protection changes apply immediately.</p>
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => {
-                  resetDeviceSafetyOverrides();
-                  refreshDeviceSafetyState();
-                }}
-              >
-                Reset to mode defaults
-              </Button>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="config-write-interval" className="text-sm">
-                Config write spacing (ms)
-              </Label>
-              <Input
-                id="config-write-interval"
-                type="number"
-                min={0}
-                max={2000}
-                step={100}
-                value={configWriteIntervalMs}
-                onChange={(event) => {
-                  const parsed = Number(event.target.value);
-                  if (Number.isFinite(parsed)) {
-                    setConfigWriteIntervalMs(clampConfigWriteIntervalMs(parsed));
-                  }
-                }}
-                onBlur={() => saveConfigWriteIntervalMs(configWriteIntervalMs)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") saveConfigWriteIntervalMs(configWriteIntervalMs);
-                }}
-              />
-              <p className="text-xs text-muted-foreground">
-                Minimum delay between consecutive config write calls. Default 500 ms.
-              </p>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="ftp-concurrency" className="text-sm">
-                  FTP max concurrency
-                </Label>
-                <Input
-                  id="ftp-concurrency"
-                  type="number"
-                  min={1}
-                  max={4}
-                  step={1}
-                  value={ftpConcurrencyInput}
-                  onChange={(event) => setFtpConcurrencyInput(event.target.value)}
-                  onBlur={() =>
-                    commitDeviceSafetyNumber(
-                      ftpConcurrencyInput,
-                      saveFtpMaxConcurrency,
-                      deviceSafetyConfig.ftpMaxConcurrency,
-                    )
-                  }
-                />
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <Wifi className="h-5 w-5 text-primary" />
+                </div>
+                <h2 className="font-medium">Connection</h2>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="info-cache" className="text-sm">
-                  Info cache window (ms)
-                </Label>
-                <Input
-                  id="info-cache"
-                  type="number"
-                  min={0}
-                  max={5000}
-                  step={50}
-                  value={infoCacheInput}
-                  onChange={(event) => setInfoCacheInput(event.target.value)}
-                  onBlur={() =>
-                    commitDeviceSafetyNumber(infoCacheInput, saveInfoCacheMs, deviceSafetyConfig.infoCacheMs)
-                  }
-                />
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label htmlFor="deviceHost" className="text-sm">
+                    C64U Hostname / IP
+                  </Label>
+                  <Input
+                    id="deviceHost"
+                    value={deviceHostInput}
+                    onChange={(e) => setDeviceHostInput(e.target.value)}
+                    placeholder={C64_DEFAULTS.DEFAULT_DEVICE_HOST}
+                    className="font-sans"
+                  />
+                  <p className="text-xs text-muted-foreground">Hostname or IP from the C64 menu.</p>
+                  <p className="text-xs text-muted-foreground">
+                    Currently using: <span className="font-sans break-all">{runtimeDeviceHost}</span>
+                    {isDemoActive ? " (Demo mock)" : ""}
+                  </p>
+                  {isDemoActive ? (
+                    <p className="text-xs text-muted-foreground">
+                      {lastProbeSucceededAtMs
+                        ? "Real device detected during probe."
+                        : lastProbeFailedAtMs
+                          ? "No real device detected in recent probe."
+                          : "Waiting for initial probe."}
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="password" className="text-sm flex items-center gap-1">
+                    <Lock className="h-3 w-3" />
+                    Network Password
+                  </Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    value={passwordInput}
+                    onChange={(e) => setPasswordInput(e.target.value)}
+                    placeholder="Optional"
+                    className="font-sans"
+                  />
+                  <p className="text-xs text-muted-foreground">Network password from the C64 manual, if defined</p>
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="configs-cache" className="text-sm">
-                  Configs cache window (ms)
-                </Label>
-                <Input
-                  id="configs-cache"
-                  type="number"
-                  min={0}
-                  max={10000}
-                  step={50}
-                  value={configsCacheInput}
-                  onChange={(event) => setConfigsCacheInput(event.target.value)}
-                  onBlur={() =>
-                    commitDeviceSafetyNumber(configsCacheInput, saveConfigsCacheMs, deviceSafetyConfig.configsCacheMs)
-                  }
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="configs-cooldown" className="text-sm">
-                  Configs cooldown (ms)
-                </Label>
-                <Input
-                  id="configs-cooldown"
-                  type="number"
-                  min={0}
-                  max={10000}
-                  step={50}
-                  value={configsCooldownInput}
-                  onChange={(event) => setConfigsCooldownInput(event.target.value)}
-                  onBlur={() =>
-                    commitDeviceSafetyNumber(
-                      configsCooldownInput,
-                      saveConfigsCooldownMs,
-                      deviceSafetyConfig.configsCooldownMs,
-                    )
-                  }
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="drives-cooldown" className="text-sm">
-                  Drives cooldown (ms)
-                </Label>
-                <Input
-                  id="drives-cooldown"
-                  type="number"
-                  min={0}
-                  max={10000}
-                  step={50}
-                  value={drivesCooldownInput}
-                  onChange={(event) => setDrivesCooldownInput(event.target.value)}
-                  onBlur={() =>
-                    commitDeviceSafetyNumber(
-                      drivesCooldownInput,
-                      saveDrivesCooldownMs,
-                      deviceSafetyConfig.drivesCooldownMs,
-                    )
-                  }
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="ftp-cooldown" className="text-sm">
-                  FTP list cooldown (ms)
-                </Label>
-                <Input
-                  id="ftp-cooldown"
-                  type="number"
-                  min={0}
-                  max={10000}
-                  step={50}
-                  value={ftpCooldownInput}
-                  onChange={(event) => setFtpCooldownInput(event.target.value)}
-                  onBlur={() =>
-                    commitDeviceSafetyNumber(
-                      ftpCooldownInput,
-                      saveFtpListCooldownMs,
-                      deviceSafetyConfig.ftpListCooldownMs,
-                    )
-                  }
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="backoff-base" className="text-sm">
-                  Backoff base (ms)
-                </Label>
-                <Input
-                  id="backoff-base"
-                  type="number"
-                  min={0}
-                  max={10000}
-                  step={50}
-                  value={backoffBaseInput}
-                  onChange={(event) => setBackoffBaseInput(event.target.value)}
-                  onBlur={() =>
-                    commitDeviceSafetyNumber(backoffBaseInput, saveBackoffBaseMs, deviceSafetyConfig.backoffBaseMs)
-                  }
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="backoff-max" className="text-sm">
-                  Backoff max (ms)
-                </Label>
-                <Input
-                  id="backoff-max"
-                  type="number"
-                  min={0}
-                  max={20000}
-                  step={50}
-                  value={backoffMaxInput}
-                  onChange={(event) => setBackoffMaxInput(event.target.value)}
-                  onBlur={() =>
-                    commitDeviceSafetyNumber(backoffMaxInput, saveBackoffMaxMs, deviceSafetyConfig.backoffMaxMs)
-                  }
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="backoff-factor" className="text-sm">
-                  Backoff factor
-                </Label>
-                <Input
-                  id="backoff-factor"
-                  type="number"
-                  min={1}
-                  max={3}
-                  step={0.1}
-                  value={backoffFactorInput}
-                  onChange={(event) => setBackoffFactorInput(event.target.value)}
-                  onBlur={() =>
-                    commitDeviceSafetyNumber(backoffFactorInput, saveBackoffFactor, deviceSafetyConfig.backoffFactor)
-                  }
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="circuit-threshold" className="text-sm">
-                  Circuit breaker threshold
-                </Label>
-                <Input
-                  id="circuit-threshold"
-                  type="number"
-                  min={0}
-                  max={10}
-                  step={1}
-                  value={circuitThresholdInput}
-                  onChange={(event) => setCircuitThresholdInput(event.target.value)}
-                  onBlur={() =>
-                    commitDeviceSafetyNumber(
-                      circuitThresholdInput,
-                      saveCircuitBreakerThreshold,
-                      deviceSafetyConfig.circuitBreakerThreshold,
-                    )
-                  }
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="circuit-cooldown" className="text-sm">
-                  Circuit breaker cooldown (ms)
-                </Label>
-                <Input
-                  id="circuit-cooldown"
-                  type="number"
-                  min={0}
-                  max={20000}
-                  step={100}
-                  value={circuitCooldownInput}
-                  onChange={(event) => setCircuitCooldownInput(event.target.value)}
-                  onBlur={() =>
-                    commitDeviceSafetyNumber(
-                      circuitCooldownInput,
-                      saveCircuitBreakerCooldownMs,
-                      deviceSafetyConfig.circuitBreakerCooldownMs,
-                    )
-                  }
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="probe-interval" className="text-sm">
-                  Discovery probe interval (ms)
-                </Label>
-                <Input
-                  id="probe-interval"
-                  type="number"
-                  min={200}
-                  max={2000}
-                  step={50}
-                  value={probeIntervalInput}
-                  onChange={(event) => setProbeIntervalInput(event.target.value)}
-                  onBlur={() =>
-                    commitDeviceSafetyNumber(
-                      probeIntervalInput,
-                      saveDiscoveryProbeIntervalMs,
-                      deviceSafetyConfig.discoveryProbeIntervalMs,
-                    )
-                  }
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-sm">Allow user override when circuit is open</Label>
-                <div className="flex items-center justify-between gap-3 rounded-md border border-border/70 p-2">
-                  <span className="text-xs text-muted-foreground">
-                    User-triggered actions can bypass circuit breaker.
-                  </span>
+              <div className="space-y-4 rounded-lg border border-border/70 p-3">
+                <div className="flex items-start justify-between gap-3 min-w-0">
+                  <div className="space-y-1 min-w-0">
+                    <Label htmlFor="auto-demo-mode" className="font-medium">
+                      Automatic Demo Mode
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      When no hardware is found during discovery, automatically offer Demo Mode for this session.
+                    </p>
+                  </div>
                   <Checkbox
-                    checked={allowCircuitOverride}
+                    id="auto-demo-mode"
+                    checked={automaticDemoModeEnabled}
                     onCheckedChange={(checked) => {
                       const enabled = checked === true;
-                      setAllowCircuitOverride(enabled);
-                      saveAllowUserOverrideCircuit(enabled);
-                      refreshDeviceSafetyState();
+                      setAutomaticDemoModeEnabled(enabled);
+                      saveAutomaticDemoModeEnabled(enabled);
                     }}
                   />
                 </div>
               </div>
-            </div>
-          </div>
-        </motion.div>
 
-        {/* Last. About */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="bg-card border border-border rounded-xl p-4 space-y-4 cursor-pointer"
-          onClick={handleDeveloperTap}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") {
-              handleDeveloperTap();
-            }
-          }}
-        >
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <Info className="h-5 w-5 text-primary" />
-            </div>
-            <h2 className="font-medium">About</h2>
-          </div>
-
-          <div className="space-y-2 text-sm">
-            {buildInfoRows.map((row) => (
-              <div key={row.testId} className="flex items-start justify-between gap-3">
-                <span className="text-muted-foreground">{row.label}</span>
-                <span className="font-semibold text-right break-words" data-testid={row.testId}>
-                  {row.value}
-                </span>
+              <div className="flex gap-2 pt-2">
+                <Button onClick={handleSaveConnection} disabled={isSaving} className="flex-1">
+                  {isSaving ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : null}
+                  Save & Connect
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => void discoverConnection("manual")}
+                  disabled={status.isConnecting}
+                  aria-label="Refresh connection"
+                >
+                  <RefreshCw className={`h-4 w-4 ${status.isConnecting ? "animate-spin" : ""}`} />
+                </Button>
               </div>
-            ))}
-            <div className="flex items-start justify-between gap-3">
-              <span className="text-muted-foreground">REST API</span>
-              <span className="font-semibold">v0.1</span>
+
+              {/* Connection Status */}
+              <div
+                className={`break-words rounded-lg p-3 text-sm ${status.isConnected ? "bg-success/10 text-success" : isDemoActive ? "bg-primary/10 text-primary" : status.isConnecting ? "bg-muted text-muted-foreground" : "bg-destructive/10 text-destructive"}`}
+              >
+                {status.isConnecting
+                  ? "Connecting..."
+                  : status.isConnected
+                    ? `Connected to ${baseUrl}`
+                    : isDemoActive
+                      ? `Demo mode — ${baseUrl}`
+                      : status.error || "Not connected"}
+              </div>
+            </motion.div>
+          </ProfileSplitSection>
+
+          <ProfileSplitSection minColumnWidth="20rem" testId="settings-middle-layout">
+            {/* 3. Diagnostics */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.05 }}
+              className="profile-card bg-card border border-border rounded-xl p-4 space-y-4"
+            >
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <FileText className="h-5 w-5 text-primary" />
+                </div>
+                <h2 className="font-medium">Diagnostics</h2>
+              </div>
+
+              <div className="space-y-4">
+                <Button
+                  variant="outline"
+                  onClick={() => setDiagnosticsDialogOpen(true)}
+                  id="diagnostics-open-dialog"
+                  data-diagnostics-open-trigger="true"
+                  data-testid="diagnostics-open-dialog"
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  Diagnostics
+                </Button>
+
+                <div className="flex items-start justify-between gap-3 min-w-0">
+                  <div className="space-y-1 min-w-0">
+                    <Label htmlFor="debug-logging" className="font-medium">
+                      Enable Debug Logging
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Emits all debug-level logs for diagnostics, including SAF and REST events.
+                    </p>
+                  </div>
+                  <Checkbox
+                    id="debug-logging"
+                    checked={debugLoggingEnabled}
+                    onCheckedChange={(checked) => {
+                      const enabled = checked === true;
+                      setDebugLoggingEnabled(enabled);
+                      saveDebugLoggingEnabled(enabled);
+                    }}
+                  />
+                </div>
+
+                {debugLoggingEnabled && isAndroid ? (
+                  <div className="space-y-2 rounded-lg border border-border/70 p-3">
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold">SAF diagnostics</p>
+                      <p className="text-xs text-muted-foreground">
+                        Manual checks for persisted SAF permissions and enumeration.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void refreshSafPermissions()}
+                        disabled={safBusy}
+                      >
+                        List persisted URIs
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void enumerateSafRoot()}
+                        disabled={safBusy || safUris.length === 0}
+                      >
+                        Enumerate first root
+                      </Button>
+                    </div>
+                    {safError ? <p className="text-xs text-destructive">{safError}</p> : null}
+                    {safUris.length ? (
+                      <div className="text-xs text-muted-foreground break-words min-w-0">
+                        Persisted:{" "}
+                        {safUris
+                          .map((entry) => redactTreeUri(entry.uri))
+                          .filter(Boolean)
+                          .join(", ")}
+                      </div>
+                    ) : null}
+                    {safEntries.length ? (
+                      <div className="max-h-28 overflow-auto whitespace-pre-line break-words min-w-0 text-xs text-muted-foreground">
+                        {safEntries.map((entry) => `${entry.type.toUpperCase()}: ${entry.path}`).join("\n")}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                <div className="space-y-2 rounded-lg border border-border/70 p-3">
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold">Settings transfer</p>
+                    <p className="text-xs text-muted-foreground">
+                      Export or import non-sensitive settings (connection timing, safety presets, and diagnostics).
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="outline" size="sm" onClick={handleExportSettings}>
+                      Export settings
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => settingsFileInputRef.current?.click()}>
+                      Import settings
+                    </Button>
+                  </div>
+                  <input
+                    ref={settingsFileInputRef}
+                    type="file"
+                    accept="application/json"
+                    className="hidden"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      void handleImportSettings(file);
+                      if (event.currentTarget) {
+                        event.currentTarget.value = "";
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+            </motion.div>
+
+            {/* 4. Play and Disk */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.15 }}
+              className="profile-card bg-card border border-border rounded-xl p-4 space-y-4"
+            >
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <Play className="h-5 w-5 text-primary" />
+                </div>
+                <h2 className="font-medium">Play and Disk</h2>
+              </div>
+
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="listPreviewLimit" className="text-sm">
+                    List preview limit
+                  </Label>
+                  <Input
+                    id="listPreviewLimit"
+                    type="number"
+                    min={1}
+                    max={200}
+                    value={listPreviewInput}
+                    onChange={(event) => setListPreviewInput(event.target.value)}
+                    onBlur={commitListPreviewLimit}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        commitListPreviewLimit();
+                      }
+                    }}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Controls how many playlist or disk items are shown before opening View all. Default is 50.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="volume-slider-preview-interval" className="text-sm">
+                    Volume slider preview interval (milliseconds)
+                  </Label>
+                  <Input
+                    id="volume-slider-preview-interval"
+                    type="number"
+                    min={100}
+                    max={500}
+                    step={10}
+                    value={volumeSliderPreviewIntervalMs}
+                    onChange={(event) => {
+                      const parsed = Number(event.target.value);
+                      if (Number.isFinite(parsed)) {
+                        setVolumeSliderPreviewIntervalMs(clampVolumeSliderPreviewIntervalMs(parsed));
+                      }
+                    }}
+                    onBlur={() => saveVolumeSliderPreviewIntervalMs(volumeSliderPreviewIntervalMs)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") saveVolumeSliderPreviewIntervalMs(volumeSliderPreviewIntervalMs);
+                    }}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Controls how often drag previews are sent while the playback volume slider is moving. Default 200
+                    ms. Range 100–500 ms.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="disk-autostart-mode" className="text-sm">
+                    Disk first-PRG load
+                  </Label>
+                  <Select
+                    value={diskAutostartMode}
+                    onValueChange={(value) => {
+                      const mode = value as DiskAutostartMode;
+                      setDiskAutostartMode(mode);
+                      saveDiskAutostartMode(mode);
+                    }}
+                  >
+                    <SelectTrigger id="disk-autostart-mode">
+                      <SelectValue placeholder="Select load mode" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="kernal">Classic KERNAL load (LOAD"*",8,1)</SelectItem>
+                      <SelectItem value="dma">DMA (Direct Memory Access)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Classic KERNAL load mounts the disk and uses LOAD"*",8,1 then RUN. DMA (Direct Memory Access)
+                    extracts the first PRG from a D64/D71/D81 image and writes it directly to C64 memory for faster
+                    starts. Some loaders may not like DMA.
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          </ProfileSplitSection>
+
+          {/* 5. Config */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="bg-card border border-border rounded-xl p-4 space-y-4"
+          >
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Cpu className="h-5 w-5 text-primary" />
+              </div>
+              <h2 className="font-medium">Config</h2>
             </div>
-            {isDeveloperModeEnabled ? (
-              <div className="text-xs font-semibold text-success">Developer mode enabled</div>
-            ) : null}
-          </div>
 
-          <a
-            href="https://1541u-documentation.readthedocs.io/en/latest/api/api_calls.html"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 text-sm text-primary hover:underline"
-          >
-            <ExternalLink className="h-4 w-4" />
-            Ultimate REST API Documentation
-          </a>
+            <div className="space-y-4">
+              <div className="flex items-start justify-between gap-3 min-w-0">
+                <div className="space-y-1 min-w-0">
+                  <Label htmlFor="auto-demo-mode" className="font-medium">
+                    Automatic Demo Mode
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    When no hardware is found during discovery, automatically offer Demo Mode for this session.
+                  </p>
+                </div>
+                <Checkbox
+                  id="auto-demo-mode"
+                  checked={automaticDemoModeEnabled}
+                  onCheckedChange={(checked) => {
+                    const enabled = checked === true;
+                    setAutomaticDemoModeEnabled(enabled);
+                    saveAutomaticDemoModeEnabled(enabled);
+                  }}
+                />
+              </div>
 
-          <button
-            type="button"
-            className="flex items-center gap-2 text-sm text-primary hover:underline"
-            onClick={() => navigate("/settings/open-source-licenses")}
+              <div className="space-y-2">
+                <Label htmlFor="startup-discovery-window" className="font-medium">
+                  Startup Discovery Window (seconds)
+                </Label>
+                <Input
+                  id="startup-discovery-window"
+                  type="number"
+                  min={0.5}
+                  max={15}
+                  step={0.1}
+                  value={startupDiscoveryWindowInput}
+                  onChange={(event) => setStartupDiscoveryWindowInput(event.target.value)}
+                  onBlur={commitStartupDiscoveryWindow}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") commitStartupDiscoveryWindow();
+                  }}
+                />
+                <p className="text-xs text-muted-foreground">Default 3s. Range 0.5s–15s.</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="background-rediscovery-interval" className="font-medium">
+                  Background Rediscovery Interval (seconds)
+                </Label>
+                <Input
+                  id="background-rediscovery-interval"
+                  type="number"
+                  min={1}
+                  max={60}
+                  step={0.1}
+                  value={backgroundRediscoveryIntervalInput}
+                  onChange={(event) => setBackgroundRediscoveryIntervalInput(event.target.value)}
+                  onBlur={commitBackgroundRediscoveryInterval}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") commitBackgroundRediscoveryInterval();
+                  }}
+                />
+                <p className="text-xs text-muted-foreground">Default 5s. Range 1s–60s.</p>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* 6. HVSC */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.25 }}
+            className="bg-card border border-border rounded-xl p-4 space-y-4"
           >
-            <FileText className="h-4 w-4" />
-            Open Source Licenses
-          </button>
-        </motion.div>
-      </main>
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Cpu className="h-5 w-5 text-primary" />
+              </div>
+              <h2 className="font-medium">HVSC</h2>
+            </div>
+            <div className="space-y-3 text-sm">
+              <div className="flex items-start justify-between gap-3 min-w-0">
+                <div
+                  className="space-y-1 min-w-0 cursor-pointer"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => {
+                    setHvscEnabledAndPersist(!isHvscEnabled);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter" && event.key !== " ") return;
+                    event.preventDefault();
+                    setHvscEnabledAndPersist(!isHvscEnabled);
+                  }}
+                >
+                  <Label htmlFor="hvsc-flag" className="font-medium">
+                    Enable HVSC downloads
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Shows HVSC download and ingest controls on the Play page.
+                  </p>
+                </div>
+                <Checkbox
+                  id="hvsc-flag"
+                  aria-label="Enable HVSC downloads"
+                  data-testid="hvsc-toggle"
+                  checked={isHvscEnabled}
+                  onCheckedChange={(checked) => {
+                    setHvscEnabledAndPersist(checked === true);
+                  }}
+                />
+              </div>
+              {isDeveloperModeEnabled ? (
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">HVSC base URL override</Label>
+                  <Input
+                    value={hvscBaseUrlInput}
+                    onChange={(event) => setHvscBaseUrlInput(event.target.value)}
+                    onBlur={commitHvscBaseUrl}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") commitHvscBaseUrl();
+                    }}
+                    placeholder={hvscBaseUrlPreview}
+                    data-testid="hvsc-base-url"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Leave blank to use the default HVSC mirror. Current base URL: {hvscBaseUrlPreview}
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          </motion.div>
+
+          {/* 7. Device Safety */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.35 }}
+            className="bg-card border border-border rounded-xl p-4 space-y-4"
+          >
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Cpu className="h-5 w-5 text-primary" />
+              </div>
+              <h2 className="font-medium">Device Safety</h2>
+            </div>
+
+            <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+              Relaxed safety mode may affect hardware stability.
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Safety Mode</Label>
+              <Select
+                value={deviceSafetyMode}
+                onValueChange={(value) => commitDeviceSafetyMode(value as DeviceSafetyMode)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select safety mode" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="RELAXED">Relaxed (lighter throttling, higher risk)</SelectItem>
+                  <SelectItem value="BALANCED">Balanced (recommended)</SelectItem>
+                  <SelectItem value="CONSERVATIVE">Conservative (maximum safety)</SelectItem>
+                  <SelectItem value="TROUBLESHOOTING">Troubleshooting (low concurrency, extra logging)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Mode presets adjust throttling, caching, cooldowns, and backoff behavior. Troubleshooting mode also
+                enables debug logging for richer diagnostics.
+              </p>
+            </div>
+
+            <div className="rounded-lg border border-border/70 p-3 space-y-4">
+              <div className="space-y-1">
+                <Label className="font-medium">Network timing</Label>
+                <p className="text-xs text-muted-foreground">
+                  Tune discovery timing to reduce connection churn or speed up detection.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="startup-discovery-window" className="font-medium">
+                  Startup Discovery Window (seconds)
+                </Label>
+                <Input
+                  id="startup-discovery-window"
+                  type="number"
+                  min={0.5}
+                  max={15}
+                  step={0.1}
+                  value={startupDiscoveryWindowInput}
+                  onChange={(event) => setStartupDiscoveryWindowInput(event.target.value)}
+                  onBlur={commitStartupDiscoveryWindow}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") commitStartupDiscoveryWindow();
+                  }}
+                />
+                <p className="text-xs text-muted-foreground">Default 3s. Range 0.5s–15s.</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="background-rediscovery-interval" className="font-medium">
+                  Background Rediscovery Interval (seconds)
+                </Label>
+                <Input
+                  id="background-rediscovery-interval"
+                  type="number"
+                  min={1}
+                  max={60}
+                  step={0.1}
+                  value={backgroundRediscoveryIntervalInput}
+                  onChange={(event) => setBackgroundRediscoveryIntervalInput(event.target.value)}
+                  onBlur={commitBackgroundRediscoveryInterval}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") commitBackgroundRediscoveryInterval();
+                  }}
+                />
+                <p className="text-xs text-muted-foreground">Default 5s. Range 1s–60s.</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="probe-timeout" className="font-medium">
+                  Discovery Probe Timeout (seconds)
+                </Label>
+                <Input
+                  id="probe-timeout"
+                  type="number"
+                  min={0.5}
+                  max={10}
+                  step={0.1}
+                  value={probeTimeoutInput}
+                  onChange={(event) => setProbeTimeoutInput(event.target.value)}
+                  onBlur={commitProbeTimeout}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") commitProbeTimeout();
+                  }}
+                />
+                <p className="text-xs text-muted-foreground">Default 2.5s. Range 0.5s–10s.</p>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-border/70 p-3 space-y-4">
+              <div className="space-y-2">
+                <Label className="font-medium">Advanced Controls</Label>
+                <p className="text-xs text-muted-foreground">Fine-tuned device protection changes apply immediately.</p>
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => {
+                    resetDeviceSafetyOverrides();
+                    refreshDeviceSafetyState();
+                  }}
+                >
+                  Reset to mode defaults
+                </Button>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="config-write-interval" className="text-sm">
+                  Config write spacing (ms)
+                </Label>
+                <Input
+                  id="config-write-interval"
+                  type="number"
+                  min={0}
+                  max={2000}
+                  step={100}
+                  value={configWriteIntervalMs}
+                  onChange={(event) => {
+                    const parsed = Number(event.target.value);
+                    if (Number.isFinite(parsed)) {
+                      setConfigWriteIntervalMs(clampConfigWriteIntervalMs(parsed));
+                    }
+                  }}
+                  onBlur={() => saveConfigWriteIntervalMs(configWriteIntervalMs)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") saveConfigWriteIntervalMs(configWriteIntervalMs);
+                  }}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Minimum delay between consecutive config write calls. Default 500 ms.
+                </p>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="ftp-concurrency" className="text-sm">
+                    FTP max concurrency
+                  </Label>
+                  <Input
+                    id="ftp-concurrency"
+                    type="number"
+                    min={1}
+                    max={4}
+                    step={1}
+                    value={ftpConcurrencyInput}
+                    onChange={(event) => setFtpConcurrencyInput(event.target.value)}
+                    onBlur={() =>
+                      commitDeviceSafetyNumber(
+                        ftpConcurrencyInput,
+                        saveFtpMaxConcurrency,
+                        deviceSafetyConfig.ftpMaxConcurrency,
+                      )
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="info-cache" className="text-sm">
+                    Info cache window (ms)
+                  </Label>
+                  <Input
+                    id="info-cache"
+                    type="number"
+                    min={0}
+                    max={5000}
+                    step={50}
+                    value={infoCacheInput}
+                    onChange={(event) => setInfoCacheInput(event.target.value)}
+                    onBlur={() =>
+                      commitDeviceSafetyNumber(infoCacheInput, saveInfoCacheMs, deviceSafetyConfig.infoCacheMs)
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="configs-cache" className="text-sm">
+                    Configs cache window (ms)
+                  </Label>
+                  <Input
+                    id="configs-cache"
+                    type="number"
+                    min={0}
+                    max={10000}
+                    step={50}
+                    value={configsCacheInput}
+                    onChange={(event) => setConfigsCacheInput(event.target.value)}
+                    onBlur={() =>
+                      commitDeviceSafetyNumber(configsCacheInput, saveConfigsCacheMs, deviceSafetyConfig.configsCacheMs)
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="configs-cooldown" className="text-sm">
+                    Configs cooldown (ms)
+                  </Label>
+                  <Input
+                    id="configs-cooldown"
+                    type="number"
+                    min={0}
+                    max={10000}
+                    step={50}
+                    value={configsCooldownInput}
+                    onChange={(event) => setConfigsCooldownInput(event.target.value)}
+                    onBlur={() =>
+                      commitDeviceSafetyNumber(
+                        configsCooldownInput,
+                        saveConfigsCooldownMs,
+                        deviceSafetyConfig.configsCooldownMs,
+                      )
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="drives-cooldown" className="text-sm">
+                    Drives cooldown (ms)
+                  </Label>
+                  <Input
+                    id="drives-cooldown"
+                    type="number"
+                    min={0}
+                    max={10000}
+                    step={50}
+                    value={drivesCooldownInput}
+                    onChange={(event) => setDrivesCooldownInput(event.target.value)}
+                    onBlur={() =>
+                      commitDeviceSafetyNumber(
+                        drivesCooldownInput,
+                        saveDrivesCooldownMs,
+                        deviceSafetyConfig.drivesCooldownMs,
+                      )
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="ftp-cooldown" className="text-sm">
+                    FTP list cooldown (ms)
+                  </Label>
+                  <Input
+                    id="ftp-cooldown"
+                    type="number"
+                    min={0}
+                    max={10000}
+                    step={50}
+                    value={ftpCooldownInput}
+                    onChange={(event) => setFtpCooldownInput(event.target.value)}
+                    onBlur={() =>
+                      commitDeviceSafetyNumber(
+                        ftpCooldownInput,
+                        saveFtpListCooldownMs,
+                        deviceSafetyConfig.ftpListCooldownMs,
+                      )
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="backoff-base" className="text-sm">
+                    Backoff base (ms)
+                  </Label>
+                  <Input
+                    id="backoff-base"
+                    type="number"
+                    min={0}
+                    max={10000}
+                    step={50}
+                    value={backoffBaseInput}
+                    onChange={(event) => setBackoffBaseInput(event.target.value)}
+                    onBlur={() =>
+                      commitDeviceSafetyNumber(backoffBaseInput, saveBackoffBaseMs, deviceSafetyConfig.backoffBaseMs)
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="backoff-max" className="text-sm">
+                    Backoff max (ms)
+                  </Label>
+                  <Input
+                    id="backoff-max"
+                    type="number"
+                    min={0}
+                    max={20000}
+                    step={50}
+                    value={backoffMaxInput}
+                    onChange={(event) => setBackoffMaxInput(event.target.value)}
+                    onBlur={() =>
+                      commitDeviceSafetyNumber(backoffMaxInput, saveBackoffMaxMs, deviceSafetyConfig.backoffMaxMs)
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="backoff-factor" className="text-sm">
+                    Backoff factor
+                  </Label>
+                  <Input
+                    id="backoff-factor"
+                    type="number"
+                    min={1}
+                    max={3}
+                    step={0.1}
+                    value={backoffFactorInput}
+                    onChange={(event) => setBackoffFactorInput(event.target.value)}
+                    onBlur={() =>
+                      commitDeviceSafetyNumber(backoffFactorInput, saveBackoffFactor, deviceSafetyConfig.backoffFactor)
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="circuit-threshold" className="text-sm">
+                    Circuit breaker threshold
+                  </Label>
+                  <Input
+                    id="circuit-threshold"
+                    type="number"
+                    min={0}
+                    max={10}
+                    step={1}
+                    value={circuitThresholdInput}
+                    onChange={(event) => setCircuitThresholdInput(event.target.value)}
+                    onBlur={() =>
+                      commitDeviceSafetyNumber(
+                        circuitThresholdInput,
+                        saveCircuitBreakerThreshold,
+                        deviceSafetyConfig.circuitBreakerThreshold,
+                      )
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="circuit-cooldown" className="text-sm">
+                    Circuit breaker cooldown (ms)
+                  </Label>
+                  <Input
+                    id="circuit-cooldown"
+                    type="number"
+                    min={0}
+                    max={20000}
+                    step={100}
+                    value={circuitCooldownInput}
+                    onChange={(event) => setCircuitCooldownInput(event.target.value)}
+                    onBlur={() =>
+                      commitDeviceSafetyNumber(
+                        circuitCooldownInput,
+                        saveCircuitBreakerCooldownMs,
+                        deviceSafetyConfig.circuitBreakerCooldownMs,
+                      )
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="probe-interval" className="text-sm">
+                    Discovery probe interval (ms)
+                  </Label>
+                  <Input
+                    id="probe-interval"
+                    type="number"
+                    min={200}
+                    max={2000}
+                    step={50}
+                    value={probeIntervalInput}
+                    onChange={(event) => setProbeIntervalInput(event.target.value)}
+                    onBlur={() =>
+                      commitDeviceSafetyNumber(
+                        probeIntervalInput,
+                        saveDiscoveryProbeIntervalMs,
+                        deviceSafetyConfig.discoveryProbeIntervalMs,
+                      )
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-sm">Allow user override when circuit is open</Label>
+                  <div className="flex items-center justify-between gap-3 rounded-md border border-border/70 p-2">
+                    <span className="text-xs text-muted-foreground">
+                      User-triggered actions can bypass circuit breaker.
+                    </span>
+                    <Checkbox
+                      checked={allowCircuitOverride}
+                      onCheckedChange={(checked) => {
+                        const enabled = checked === true;
+                        setAllowCircuitOverride(enabled);
+                        saveAllowUserOverrideCircuit(enabled);
+                        refreshDeviceSafetyState();
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Last. About */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            className="bg-card border border-border rounded-xl p-4 space-y-4 cursor-pointer"
+            onClick={handleDeveloperTap}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                handleDeveloperTap();
+              }
+            }}
+          >
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Info className="h-5 w-5 text-primary" />
+              </div>
+              <h2 className="font-medium">About</h2>
+            </div>
+
+            <div className="space-y-2 text-sm">
+              {buildInfoRows.map((row) => (
+                <div key={row.testId} className="flex items-start justify-between gap-3">
+                  <span className="text-muted-foreground">{row.label}</span>
+                  <span className="font-semibold text-right break-words" data-testid={row.testId}>
+                    {row.value}
+                  </span>
+                </div>
+              ))}
+              <div className="flex items-start justify-between gap-3">
+                <span className="text-muted-foreground">REST API</span>
+                <span className="font-semibold">v0.1</span>
+              </div>
+              {isDeveloperModeEnabled ? (
+                <div className="text-xs font-semibold text-success">Developer mode enabled</div>
+              ) : null}
+            </div>
+
+            <a
+              href="https://1541u-documentation.readthedocs.io/en/latest/api/api_calls.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 text-sm text-primary hover:underline"
+            >
+              <ExternalLink className="h-4 w-4" />
+              Ultimate REST API Documentation
+            </a>
+
+            <button
+              type="button"
+              className="flex items-center gap-2 text-sm text-primary hover:underline"
+              onClick={() => navigate("/settings/open-source-licenses")}
+            >
+              <FileText className="h-4 w-4" />
+              Open Source Licenses
+            </button>
+          </motion.div>
+        </PageStack>
+      </PageContainer>
 
       <Dialog open={relaxedWarningOpen} onOpenChange={(open) => !open && handleCancelRelaxedMode()}>
         <DialogContent>

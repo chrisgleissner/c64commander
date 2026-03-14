@@ -25,6 +25,7 @@ import { PathWrap } from "@/components/PathWrap";
 import { AlphabetScrollbar } from "./AlphabetScrollbar";
 import { cn } from "@/lib/utils";
 import { wrapUserEvent } from "@/lib/tracing/userTrace";
+import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 
 export type ActionListMenuItem =
   | { type: "label"; label: string }
@@ -294,6 +295,7 @@ export const SelectableActionList = ({
   showSelectionControls = true,
   selectionLabel,
 }: SelectableActionListProps) => {
+  const { profile } = useDisplayProfile();
   const [viewAllOpen, setViewAllOpen] = useState(false);
   const [filterText, setFilterText] = useState("");
   const [viewAllFilterText, setViewAllFilterText] = useState("");
@@ -461,7 +463,15 @@ export const SelectableActionList = ({
 
       {viewAllTitle && (
         <Dialog open={viewAllOpen} onOpenChange={setViewAllOpen}>
-          <DialogContent className="mx-auto w-[min(92vw,32rem)] max-w-[min(92vw,32rem)] sm:w-full sm:max-w-[36rem] h-[min(70vh,calc(100dvh-10rem))] max-h-[calc(100dvh-10rem)] p-0 overflow-hidden">
+          <DialogContent
+            surface="list-browser"
+            className={cn(
+              "mx-auto p-0 overflow-hidden",
+              profile === "compact"
+                ? ""
+                : "h-[min(70vh,calc(100dvh-4rem))] max-h-[calc(100dvh-4rem)] sm:w-full sm:max-w-[36rem]",
+            )}
+          >
             <div className="flex h-full min-h-0 flex-col min-w-0 relative" data-testid="action-list-view-all">
               <DialogHeader className="border-b border-border px-6 pb-3 pt-6 space-y-3">
                 <div>

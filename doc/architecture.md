@@ -17,6 +17,20 @@ The core app controls a C64 Ultimate over REST and FTP, keeps app-local state in
 - **Native implementations**: Android Kotlin/Java plugins under `android/app/src/main/java/uk/gleissner/c64commander/`
 - **Observability**: `src/lib/logging.ts`, `src/lib/diagnostics/`, `src/lib/tracing/`
 
+## Display profile resolution
+
+Display-profile resolution is centralized in `src/lib/displayProfiles.ts` and exposed to the UI through `src/hooks/useDisplayProfile.tsx`.
+
+- Viewport width in CSS pixels resolves to one of three internal profiles: `compact`, `medium`, or `expanded`.
+- A persisted user override may replace the automatic profile with `Auto`, `Small display`, `Standard display`, or `Large display` from Settings.
+- Shared layout boundaries such as page containers, action grids, split sections, and profile-sensitive dialogs consume the resolved profile instead of performing ad hoc breakpoint checks.
+
+This profile layer sits above the existing viewport-validation infrastructure rather than replacing it.
+
+- Playwright dual-resolution and overflow checks still validate concrete viewport behavior.
+- The display-profile resolver gives those viewport tests a stable semantic target, so Compact, Medium, and Expanded behavior can be asserted directly without scattering width heuristics throughout feature code.
+- Screenshot and layout validation remain viewport-driven, while profile-aware tests verify that the correct layout mode is selected and preserved when overrides are used.
+
 ## Stack and Layers
 
 - **UI**: React pages in [src/pages](../src/pages) with shared components in [src/components](../src/components).
@@ -41,15 +55,15 @@ flowchart TD
 
 ## External systems and persistence
 
-| Concern | Current implementation |
-| --- | --- |
-| C64U control plane | REST API via `src/lib/c64api.ts`, documented in `doc/c64/c64u-openapi.yaml` and `doc/c64/c64u-rest-api.md` |
-| C64U file access | FTP via `src/lib/ftp/ftpClient.ts` and `src/lib/native/ftpClient.ts`; Android native implementation in `FtpClientPlugin.kt` |
-| HVSC acquisition | Release discovery and download via `src/lib/hvsc/hvscReleaseService.ts`; extraction/indexing in `src/lib/hvsc/` |
-| Local app state | localStorage/sessionStorage-backed stores plus repository abstractions under `src/lib/playlistRepository/`, `src/lib/disks/`, and config stores |
-| Secure secrets | `src/lib/secureStorage.ts` with native secure-storage bridge; local storage only tracks password presence metadata |
-| Diagnostics and traces | Structured logs via `src/lib/logging.ts` and diagnostics/tracing modules under `src/lib/diagnostics/` and `src/lib/tracing/` |
-| Crash visibility | In-app diagnostics plus platform-level telemetry such as Android Vitals when the distribution channel provides it |
+| Concern                | Current implementation                                                                                                                          |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| C64U control plane     | REST API via `src/lib/c64api.ts`, documented in `doc/c64/c64u-openapi.yaml` and `doc/c64/c64u-rest-api.md`                                      |
+| C64U file access       | FTP via `src/lib/ftp/ftpClient.ts` and `src/lib/native/ftpClient.ts`; Android native implementation in `FtpClientPlugin.kt`                     |
+| HVSC acquisition       | Release discovery and download via `src/lib/hvsc/hvscReleaseService.ts`; extraction/indexing in `src/lib/hvsc/`                                 |
+| Local app state        | localStorage/sessionStorage-backed stores plus repository abstractions under `src/lib/playlistRepository/`, `src/lib/disks/`, and config stores |
+| Secure secrets         | `src/lib/secureStorage.ts` with native secure-storage bridge; local storage only tracks password presence metadata                              |
+| Diagnostics and traces | Structured logs via `src/lib/logging.ts` and diagnostics/tracing modules under `src/lib/diagnostics/` and `src/lib/tracing/`                    |
+| Crash visibility       | In-app diagnostics plus platform-level telemetry such as Android Vitals when the distribution channel provides it                               |
 
 ## Playback flow (Play page)
 

@@ -26,7 +26,7 @@ export function TabBar() {
   const tabs = baseTabs;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50">
+    <div className="fixed bottom-0 left-0 z-50 w-screen max-w-screen">
       <nav className="tab-bar">
         {tabs.map((tab) => {
           const isActive = location.pathname === tab.path;

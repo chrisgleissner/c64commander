@@ -10,6 +10,8 @@ import { useEffect, useState, type MouseEvent, type SyntheticEvent } from "react
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useDisplayProfile } from "@/hooks/useDisplayProfile";
+import { cn } from "@/lib/utils";
 import { Trash2 } from "lucide-react";
 import type { SnapshotStorageEntry, SnapshotType } from "@/lib/snapshot/snapshotTypes";
 import { SNAPSHOT_TYPE_LIST } from "@/lib/snapshot/snapshotTypes";
@@ -178,6 +180,7 @@ export function SnapshotManagerDialog({
   onDelete,
   onUpdateLabel,
 }: SnapshotManagerDialogProps) {
+  const { profile } = useDisplayProfile();
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<SnapshotTypeFilter>("all");
 
@@ -194,7 +197,11 @@ export function SnapshotManagerDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
-        className="max-w-md h-[min(85vh,calc(100dvh-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom)))] max-h-[calc(100dvh-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-hidden p-0"
+        surface="list-browser"
+        className={cn(
+          "overflow-hidden p-0",
+          profile === "compact" ? "" : "max-w-md h-[min(85vh,calc(100dvh-4rem))] max-h-[calc(100dvh-4rem)]",
+        )}
         data-testid="snapshot-manager-dialog"
       >
         <div className="flex h-full min-h-0 flex-col">
