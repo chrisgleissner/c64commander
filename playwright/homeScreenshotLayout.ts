@@ -34,7 +34,9 @@ export const planHomeScreenshotSlices = ({
   overlap = 24,
 }: PlanHomeScreenshotSlicesOptions): HomeScreenshotSlice[] => {
   const orderedSections = sections
-    .filter((section) => Number.isFinite(section.top) && Number.isFinite(section.bottom) && section.bottom > section.top)
+    .filter(
+      (section) => Number.isFinite(section.top) && Number.isFinite(section.bottom) && section.bottom > section.top,
+    )
     .sort((left, right) => left.top - right.top);
 
   if (orderedSections.length === 0) return [];
@@ -62,9 +64,7 @@ export const planHomeScreenshotSlices = ({
     if (sectionSlugs.length === 0) break;
 
     const baseSlug =
-      sectionSlugs.length === 1
-        ? sectionSlugs[0]
-        : `${sectionSlugs[0]}-to-${sectionSlugs[sectionSlugs.length - 1]}`;
+      sectionSlugs.length === 1 ? sectionSlugs[0] : `${sectionSlugs[0]}-to-${sectionSlugs[sectionSlugs.length - 1]}`;
     const nextCount = (seenSlugs.get(baseSlug) ?? 0) + 1;
     seenSlugs.set(baseSlug, nextCount);
 

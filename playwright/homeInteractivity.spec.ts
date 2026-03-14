@@ -302,7 +302,11 @@ test.describe("Home interactions", () => {
     await expect(page.getByTestId("home-keyboard-lighting-pattern")).toHaveText(/Single Color/);
   });
 
-  test("lighting pattern keeps the user-facing label while sending the raw API value", async ({ page }: { page: Page }) => {
+  test("lighting pattern keeps the user-facing label while sending the raw API value", async ({
+    page,
+  }: {
+    page: Page;
+  }) => {
     await page.goto("/");
     await waitForConnected(page);
 

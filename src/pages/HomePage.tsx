@@ -303,9 +303,13 @@ function HomePageContent() {
     : [cartridgePreferenceValue];
   const effectiveCpuSpeedOptions = cpuSpeedOptions.length ? cpuSpeedOptions : [cpuSpeedValue];
   const cpuSpeedSliderOptions = effectiveCpuSpeedOptions;
-  const cpuSpeedSliderIndex = Math.max(0, cpuSpeedSliderOptions.findIndex((option) => option === cpuSpeedValue));
+  const cpuSpeedSliderIndex = Math.max(
+    0,
+    cpuSpeedSliderOptions.findIndex((option) => option === cpuSpeedValue),
+  );
   const cpuSpeedDisplayIndex = cpuSpeedDraftIndex ?? cpuSpeedSliderIndex;
-  const resolveCpuSpeedOption = (index: number) => cpuSpeedSliderOptions[Math.round(index)] ?? cpuSpeedSliderOptions[0] ?? "1";
+  const resolveCpuSpeedOption = (index: number) =>
+    cpuSpeedSliderOptions[Math.round(index)] ?? cpuSpeedSliderOptions[0] ?? "1";
 
   useEffect(() => {
     setCpuSpeedDraftIndex(null);

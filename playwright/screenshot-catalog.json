@@ -1,8 +1,5 @@
 {
-  "disks": [
-    "drives",
-    "disks"
-  ],
+  "disks": ["drives", "disks"],
   "config": [
     "audio-mixer",
     "sid-sockets-configuration",
@@ -33,12 +30,7 @@
     "printers-to-sid",
     "sid-to-config"
   ],
-  "play": [
-    "playback-controls",
-    "playlist",
-    "hvsc-library",
-    "hvsc"
-  ],
+  "play": ["playback-controls", "playlist", "hvsc-library", "hvsc"],
   "settings": [
     "appearance",
     "connection",
