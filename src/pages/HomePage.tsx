@@ -405,7 +405,10 @@ function HomePageContent() {
   );
   const reuSizePending = Boolean(configWritePending[buildConfigKey("C64 and Cartridge Settings", "REU Size")]);
 
-  const ramExpansionEnabled = normalizeOptionToken(ramExpansionValue) !== normalizeOptionToken("Disabled") && isActive;
+  const ramExpansionModeToken = normalizeOptionToken(ramExpansionValue);
+  const ramExpansionAvailable =
+    ramExpansionOptions.length > 0 && ramExpansionModeToken !== normalizeOptionToken(unavailableLabel);
+  const reuSizeVisible = isActive && ramExpansionAvailable && ramExpansionModeToken === normalizeOptionToken("Enabled");
 
   return (
     <div className="min-h-screen pb-24 pt-[var(--app-bar-height)]">
@@ -559,7 +562,7 @@ function HomePageContent() {
                     )
                   }
                 />
-                {ramExpansionEnabled && (
+                {reuSizeVisible && (
                   <SummaryConfigControlRow
                     disabled={!isActive || reuSizePending}
                     label="RAM Size (REU)"

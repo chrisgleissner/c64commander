@@ -1187,7 +1187,7 @@ describe("HomePage SID status", () => {
     );
   });
 
-  it("hides RAM Size (REU) when RAM Expansion is disabled and shows it for enabled modes", () => {
+  it("shows RAM Size (REU) only for REU-capable RAM expansion modes", () => {
     c64CartridgePayloadRef.current = buildCartridgeSettingsPayload({
       ramExpansionUnit: "Disabled",
       reuSize: "512 KB",
@@ -1197,6 +1197,24 @@ describe("HomePage SID status", () => {
 
     expect(screen.getByTestId("quickconfig-ram-expansion")).toBeTruthy();
     expect(screen.queryByTestId("quickconfig-ram-size")).toBeNull();
+
+    c64CartridgePayloadRef.current = buildCartridgeSettingsPayload({
+      ramExpansionUnit: "Enabled",
+      reuSize: "2 MB",
+    });
+
+    rerender(
+      <RouterProvider
+        router={buildRouter(<HomePage />)}
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId("quickconfig-ram-size")).toBeTruthy();
+    expect(screen.getByTestId("quickconfig-ram-size")).toHaveTextContent("2 MB");
 
     c64CartridgePayloadRef.current = buildCartridgeSettingsPayload({
       ramExpansionUnit: "GeoRAM Mode",
@@ -1213,8 +1231,26 @@ describe("HomePage SID status", () => {
       />,
     );
 
-    expect(screen.getByTestId("quickconfig-ram-size")).toBeTruthy();
-    expect(screen.getByTestId("quickconfig-ram-size")).toHaveTextContent("2 MB");
+    expect(screen.queryByTestId("quickconfig-ram-size")).toBeNull();
+
+    const unavailableRamExpansionPayload = buildCartridgeSettingsPayload({
+      reuSize: "2 MB",
+    });
+    delete unavailableRamExpansionPayload["C64 and Cartridge Settings"].items["RAM Expansion Unit"];
+    c64CartridgePayloadRef.current = unavailableRamExpansionPayload;
+
+    rerender(
+      <RouterProvider
+        router={buildRouter(<HomePage />)}
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId("quickconfig-ram-expansion")).toHaveTextContent("Not available");
+    expect(screen.queryByTestId("quickconfig-ram-size")).toBeNull();
   });
 
   it("renders the quick actions RAM folder row and LED lighting cards in order", async () => {
@@ -1380,11 +1416,13 @@ describe("HomePage SID status", () => {
     fireEvent.click(screen.getByTestId("home-cartridge-preference"));
     fireEvent.click(await screen.findByRole("option", { name: /^Manual$/i }));
 
+    fireEvent.click(screen.getByTestId("quickconfig-ram-size"));
+    fireEvent.click(await screen.findByRole("option", { name: /^2 MB$/i }));
+
     fireEvent.click(screen.getByTestId("quickconfig-ram-expansion"));
     fireEvent.click(await screen.findByRole("option", { name: /^GeoRAM Mode$/i }));
 
-    fireEvent.click(screen.getByTestId("quickconfig-ram-size"));
-    fireEvent.click(await screen.findByRole("option", { name: /^2 MB$/i }));
+    expect(screen.queryByTestId("quickconfig-ram-size")).toBeNull();
 
     fireEvent.click(screen.getByTestId("home-user-port-power"));
 
