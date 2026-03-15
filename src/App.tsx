@@ -92,6 +92,27 @@ const RouteLoadingFallback = () => (
   </div>
 );
 
+const PersistentPlayFilesRoute = () => {
+  const location = useLocation();
+  const [hasVisitedPlay, setHasVisitedPlay] = useState(location.pathname === "/play");
+
+  useEffect(() => {
+    if (location.pathname === "/play") {
+      setHasVisitedPlay(true);
+    }
+  }, [location.pathname]);
+
+  if (!hasVisitedPlay) return null;
+
+  const isVisible = location.pathname === "/play";
+
+  return (
+    <div className={isVisible ? "contents" : "hidden"} data-testid="persistent-play-files-route" aria-hidden={!isVisible}>
+      <PlayFilesPage />
+    </div>
+  );
+};
+
 const AppRoutes = () => {
   const coverageProbeEnabled = shouldEnableCoverageProbe();
   return (
@@ -108,11 +129,12 @@ const AppRoutes = () => {
       <DemoModeInterstitial />
       {coverageProbeEnabled && <TestHeartbeat />}
       <Suspense fallback={<RouteLoadingFallback />}>
+        <PersistentPlayFilesRoute />
         <Routes>
           {coverageProbeEnabled ? <Route path="/__coverage__" element={<CoverageProbePage />} /> : null}
           <Route path="/" element={<HomePage />} />
           <Route path="/config" element={<ConfigBrowserPage />} />
-          <Route path="/play" element={<PlayFilesPage />} />
+          <Route path="/play" element={null} />
           <Route path="/disks" element={<DisksPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/settings/open-source-licenses" element={<OpenSourceLicensesPage />} />

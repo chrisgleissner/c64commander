@@ -8,13 +8,14 @@
 
 import { useEffect, useState } from "react";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  AppDialog,
+  AppDialogBody,
+  AppDialogContent,
+  AppDialogDescription,
+  AppDialogFooter,
+  AppDialogHeader,
+  AppDialogTitle,
+} from "@/components/ui/app-surface";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Trash2 } from "lucide-react";
@@ -126,80 +127,82 @@ export function SaveRamDialog({ open, onOpenChange, onSave, isSaving }: SaveRamD
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent data-testid="save-ram-dialog">
-        <DialogHeader>
-          <DialogTitle>Save RAM</DialogTitle>
-          <DialogDescription>
+    <AppDialog open={open} onOpenChange={handleClose}>
+      <AppDialogContent data-testid="save-ram-dialog">
+        <AppDialogHeader>
+          <AppDialogTitle>Save RAM</AppDialogTitle>
+          <AppDialogDescription>
             Choose the memory region to snapshot.
             {showCustom && " Enter one or more hex ranges."}
-          </DialogDescription>
-        </DialogHeader>
+          </AppDialogDescription>
+        </AppDialogHeader>
 
-        {!showCustom ? (
-          <div className="space-y-2" data-testid="save-ram-type-list">
-            {SNAPSHOT_TYPE_LIST.map((config) => (
-              <button
-                key={config.type}
-                data-testid={`save-ram-type-${config.type}`}
-                className="w-full text-left rounded-lg border border-border bg-card hover:bg-accent hover:text-accent-foreground px-4 py-3 transition-colors disabled:opacity-50"
-                onClick={() => void handleTypeSelect(config.type)}
-                disabled={isSaving}
-              >
-                <div className="font-semibold text-sm">{config.label}</div>
-                {config.type !== "custom" && (
-                  <div className="text-xs text-muted-foreground mt-0.5">{config.rangeDisplay}</div>
-                )}
-              </button>
-            ))}
-          </div>
-        ) : (
-          <div className="space-y-3" data-testid="save-ram-custom-form">
-            <div className="space-y-2">
-              {customRanges.map((range, index) => (
-                <div key={`custom-range-${index}`} className="flex items-center gap-2">
-                  <HexAddressInput
-                    placeholder="Start"
-                    value={range.start}
-                    onChange={(value) => updateRange(index, "start", value)}
-                    testId={buildRangeTestId("save-ram-custom-start", index)}
-                  />
-                  <span className="text-muted-foreground">–</span>
-                  <HexAddressInput
-                    placeholder="End"
-                    value={range.end}
-                    onChange={(value) => updateRange(index, "end", value)}
-                    testId={buildRangeTestId("save-ram-custom-end", index)}
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 shrink-0 text-destructive hover:text-destructive"
-                    onClick={() => deleteRange(index)}
-                    aria-label={`Delete range ${index + 1}`}
-                    data-testid={`save-ram-custom-delete-range-${index}`}
-                    disabled={isSaving}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
+        <AppDialogBody>
+          {!showCustom ? (
+            <div className="space-y-2" data-testid="save-ram-type-list">
+              {SNAPSHOT_TYPE_LIST.map((config) => (
+                <button
+                  key={config.type}
+                  data-testid={`save-ram-type-${config.type}`}
+                  className="w-full text-left rounded-lg border border-border bg-card hover:bg-accent hover:text-accent-foreground px-4 py-3 transition-colors disabled:opacity-50"
+                  onClick={() => void handleTypeSelect(config.type)}
+                  disabled={isSaving}
+                >
+                  <div className="font-semibold text-sm">{config.label}</div>
+                  {config.type !== "custom" && (
+                    <div className="text-xs text-muted-foreground mt-0.5">{config.rangeDisplay}</div>
+                  )}
+                </button>
               ))}
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              onClick={addRange}
-              disabled={isSaving}
-              data-testid="save-ram-custom-add-range"
-            >
-              Add Range
-            </Button>
-          </div>
-        )}
+          ) : (
+            <div className="space-y-3" data-testid="save-ram-custom-form">
+              <div className="space-y-2">
+                {customRanges.map((range, index) => (
+                  <div key={`custom-range-${index}`} className="flex items-center gap-2">
+                    <HexAddressInput
+                      placeholder="Start"
+                      value={range.start}
+                      onChange={(value) => updateRange(index, "start", value)}
+                      testId={buildRangeTestId("save-ram-custom-start", index)}
+                    />
+                    <span className="text-muted-foreground">–</span>
+                    <HexAddressInput
+                      placeholder="End"
+                      value={range.end}
+                      onChange={(value) => updateRange(index, "end", value)}
+                      testId={buildRangeTestId("save-ram-custom-end", index)}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 shrink-0 text-destructive hover:text-destructive"
+                      onClick={() => deleteRange(index)}
+                      aria-label={`Delete range ${index + 1}`}
+                      data-testid={`save-ram-custom-delete-range-${index}`}
+                      disabled={isSaving}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={addRange}
+                disabled={isSaving}
+                data-testid="save-ram-custom-add-range"
+              >
+                Add Range
+              </Button>
+            </div>
+          )}
+        </AppDialogBody>
 
-        <DialogFooter>
+        <AppDialogFooter>
           {showCustom ? (
             <>
               <Button variant="outline" onClick={() => setShowCustom(false)} disabled={isSaving}>
@@ -214,8 +217,8 @@ export function SaveRamDialog({ open, onOpenChange, onSave, isSaving }: SaveRamD
               Cancel
             </Button>
           )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </AppDialogFooter>
+      </AppDialogContent>
+    </AppDialog>
   );
 }

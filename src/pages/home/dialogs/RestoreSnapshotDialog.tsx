@@ -7,13 +7,14 @@
  */
 
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  AppDialog,
+  AppDialogBody,
+  AppDialogContent,
+  AppDialogDescription,
+  AppDialogFooter,
+  AppDialogHeader,
+  AppDialogTitle,
+} from "@/components/ui/app-surface";
 import { Button } from "@/components/ui/button";
 import type { SnapshotStorageEntry } from "@/lib/snapshot/snapshotTypes";
 import { SNAPSHOT_TYPE_LIST } from "@/lib/snapshot/snapshotTypes";
@@ -42,29 +43,31 @@ export function RestoreSnapshotDialog({
   const createdAt = snapshot.metadata.created_at;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent data-testid="restore-snapshot-dialog">
-        <DialogHeader>
-          <DialogTitle>Restore Snapshot</DialogTitle>
-          <DialogDescription>This will overwrite the corresponding C64 memory regions.</DialogDescription>
-        </DialogHeader>
+    <AppDialog open={open} onOpenChange={onOpenChange}>
+      <AppDialogContent data-testid="restore-snapshot-dialog">
+        <AppDialogHeader>
+          <AppDialogTitle>Restore Snapshot</AppDialogTitle>
+          <AppDialogDescription>This will overwrite the corresponding C64 memory regions.</AppDialogDescription>
+        </AppDialogHeader>
 
-        <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-1 text-sm">
-          <div className="font-semibold">{typeLabel}</div>
-          <div className="text-muted-foreground text-xs">{ranges}</div>
-          {label && <div className="text-foreground">{label}</div>}
-          <div className="text-muted-foreground text-xs">{createdAt}</div>
-        </div>
+        <AppDialogBody>
+          <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-1 text-sm">
+            <div className="font-semibold">{typeLabel}</div>
+            <div className="text-muted-foreground text-xs">{ranges}</div>
+            {label && <div className="text-foreground">{label}</div>}
+            <div className="text-muted-foreground text-xs">{createdAt}</div>
+          </div>
+        </AppDialogBody>
 
-        <DialogFooter>
+        <AppDialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
             Cancel
           </Button>
           <Button onClick={onConfirm} disabled={isPending} data-testid="restore-snapshot-confirm">
             {isPending ? "Restoring…" : "Restore"}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </AppDialogFooter>
+      </AppDialogContent>
+    </AppDialog>
   );
 }

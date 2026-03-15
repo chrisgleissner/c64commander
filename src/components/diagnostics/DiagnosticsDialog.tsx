@@ -21,7 +21,13 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AppSheet,
+  AppSheetContent,
+  AppSheetDescription,
+  AppSheetHeader,
+  AppSheetTitle,
+} from "@/components/ui/app-surface";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDiagnosticsTimestamp } from "@/lib/diagnostics/timeFormat";
 import { getTraceTitle } from "@/lib/tracing/traceFormatter";
@@ -164,17 +170,14 @@ export function DiagnosticsDialog({
   }, [actionSummaries, diagnosticsFilters]);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent surface="secondary-editor" className="flex min-h-0 flex-col overflow-hidden">
-        <DialogHeader
-          className={cn(
-            "shrink-0 border-b border-border",
-            isCompact ? "space-y-1 px-3 pb-2 pt-3" : "space-y-1.5 px-4 pb-2 pt-4",
-          )}
+    <AppSheet open={open} onOpenChange={onOpenChange}>
+      <AppSheetContent className="flex min-h-0 flex-col overflow-hidden" data-testid="diagnostics-sheet">
+        <AppSheetHeader
+          className={cn("shrink-0", isCompact ? "space-y-1 px-3 pb-2 pt-3" : "space-y-1.5 px-4 pb-2 pt-4")}
         >
-          <DialogTitle>Diagnostics</DialogTitle>
-          <DialogDescription>Review warnings/errors, logs, traces, and action summaries.</DialogDescription>
-        </DialogHeader>
+          <AppSheetTitle>Diagnostics</AppSheetTitle>
+          <AppSheetDescription>Review warnings/errors, logs, traces, and action summaries.</AppSheetDescription>
+        </AppSheetHeader>
         <div
           className={cn("shrink-0 flex flex-wrap gap-2 border-b border-border", isCompact ? "px-3 py-2" : "px-4 py-2")}
         >
@@ -397,7 +400,7 @@ export function DiagnosticsDialog({
             </TabsContent>
           </Tabs>
         </div>
-      </DialogContent>
-    </Dialog>
+      </AppSheetContent>
+    </AppSheet>
   );
 }

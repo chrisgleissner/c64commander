@@ -64,8 +64,22 @@ const seedDiskLibrary = async (page: Page, disks: SeedDisk[]) => {
 
 const expectDialogPresentationMode = async (
   dialog: ReturnType<Page["getByRole"]>,
-  expectedMode: "fullscreen" | "centered" | "large",
+  expectedMode: "fullscreen" | "centered" | "large" | "sheet" | "modal",
 ) => {
+  if (expectedMode === "sheet") {
+    await expect(dialog).toHaveAttribute("data-app-surface", "sheet");
+    await expect(dialog).toHaveAttribute("data-sheet-presentation", "sheet");
+    await expect(dialog).toHaveClass(/rounded-t-\[28px\]/);
+    return;
+  }
+
+  if (expectedMode === "modal") {
+    await expect(dialog).toHaveAttribute("data-app-surface", "sheet");
+    await expect(dialog).toHaveAttribute("data-sheet-presentation", "modal");
+    await expect(dialog).toHaveClass(/left-1\/2/);
+    return;
+  }
+
   if (expectedMode === "fullscreen") {
     await expect(dialog).toHaveClass(/inset-\[var\(--display-profile-modal-inset\)\]/);
     await expect(dialog).toHaveClass(/rounded-lg/);
@@ -370,7 +384,7 @@ test.describe("display profiles", () => {
       await page.getByRole("button", { name: "View all" }).click();
       const listDialog = page.getByRole("dialog");
       await expect(listDialog.getByTestId("action-list-view-all")).toBeVisible();
-      await expectDialogPresentationMode(listDialog, profileId === "compact" ? "fullscreen" : "large");
+      await expectDialogPresentationMode(listDialog, profileId === "expanded" ? "modal" : "sheet");
       await expect(page.getByTestId("view-all-filter-input")).toBeVisible();
       await expect(page.getByTestId("disk-row").first()).toBeVisible();
       const diskOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
@@ -382,7 +396,7 @@ test.describe("display profiles", () => {
       await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
       const diagnosticsDialog = page.getByRole("dialog", { name: "Diagnostics" });
       await expect(diagnosticsDialog).toBeVisible();
-      await expectDialogPresentationMode(diagnosticsDialog, profileId === "compact" ? "fullscreen" : "centered");
+      await expectDialogPresentationMode(diagnosticsDialog, profileId === "expanded" ? "modal" : "sheet");
       await expect(diagnosticsDialog.getByRole("button", { name: "Share All" })).toBeVisible();
       await expect(diagnosticsDialog.getByRole("button", { name: "Clear All" })).toBeVisible();
       const settingsOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);

@@ -7,21 +7,27 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { FolderPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  AppDialog,
+  AppDialogBody,
+  AppDialogContent,
+  AppDialogDescription,
+  AppDialogFooter,
+  AppDialogHeader,
+  AppDialogTitle,
+  AppSheet,
+  AppSheetBody,
+  AppSheetContent,
+  AppSheetDescription,
+  AppSheetFooter,
+  AppSheetHeader,
+  AppSheetTitle,
+  AppSurfaceClose,
+} from "@/components/ui/app-surface";
 import { ModalCloseButton } from "@/components/ui/modal-close-button";
 import { Input } from "@/components/ui/input";
 import { FileOriginIcon } from "@/components/FileOriginIcon";
-import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { reportUserError } from "@/lib/uiErrors";
 import type { SourceEntry, SelectedItem, SourceLocation } from "@/lib/sourceNavigation/types";
@@ -289,8 +295,6 @@ export const ItemSelectionDialog = ({
   };
 
   const interstitialGridClassName = profile === "compact" ? "grid-cols-1" : "grid-cols-2";
-  const browserDialogClassName =
-    profile === "compact" ? "" : "h-[min(80vh,calc(100dvh-4rem))] max-h-[calc(100dvh-4rem)] rounded-2xl";
   const footerLayoutClassName = profile === "compact" ? "flex-col" : "flex-row items-center justify-between";
   const footerActionsClassName = profile === "compact" ? "flex-row flex-wrap" : "flex-row ml-auto";
   const footerPaddingClassName =
@@ -301,166 +305,190 @@ export const ItemSelectionDialog = ({
   const bodyPaddingClassName = profile === "compact" ? "px-3 py-1.5" : "px-6 py-4";
   const sourceContentClassName = profile === "compact" ? "space-y-2" : "space-y-3";
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        surface={source ? "selection-browser" : "default"}
-        showClose={false}
-        onOpenAutoFocus={(e) => e.preventDefault()}
-        className={cn("p-0 overflow-hidden shadow-2xl", source ? browserDialogClassName : "max-w-md")}
-      >
-        <div className={cn("flex min-h-0 flex-col overflow-hidden", source && "h-full")}>
-          <DialogHeader className={cn("shrink-0 border-b border-border", headerPaddingClassName)}>
+  if (!source) {
+    return (
+      <AppDialog open={open} onOpenChange={onOpenChange}>
+        <AppDialogContent showClose={false} onOpenAutoFocus={(e) => e.preventDefault()} className="max-w-md">
+          <AppDialogHeader className={cn(headerPaddingClassName, "pr-12")}>
             <div className="flex items-start justify-between gap-4">
               <div>
-                <DialogTitle className="text-xl">{title}</DialogTitle>
-                <DialogDescription className={cn("text-sm text-muted-foreground", profile === "compact" && "hidden")}>
-                  Select items from the chosen source to add.
-                </DialogDescription>
-              </div>
-              <DialogClose asChild>
-                {/* `static` overrides ModalCloseButton's default absolute positioning because this
-                    close button sits inside a flex header row (in-flow layout), not over the content. */}
-                <ModalCloseButton className="static h-8 w-8 shrink-0" aria-label="Close" />
-              </DialogClose>
-            </div>
-          </DialogHeader>
-
-          <div className={cn("flex-1 min-h-0 overflow-y-auto", bodyPaddingClassName)} data-testid="add-items-scroll">
-            {!source && (
-              <div className="space-y-5">
-                <p className="text-lg font-semibold text-foreground">Choose source</p>
-                <div
-                  className={cn("grid gap-2", interstitialGridClassName)}
-                  data-testid="import-selection-interstitial"
+                <AppDialogTitle className="text-xl">{title}</AppDialogTitle>
+                <AppDialogDescription
+                  className={cn("text-sm text-muted-foreground", profile === "compact" && "hidden")}
                 >
-                  <Button
-                    variant="outline"
-                    className="justify-start min-w-0"
-                    onClick={() => void handleAddLocalSource()}
-                    disabled={pendingLocalSource}
-                    aria-busy={pendingLocalSource}
-                    id="import-option-local"
-                    data-testid="import-option-local"
-                    aria-label="Add file / folder from Local"
-                  >
-                    {/* aria-hidden ensures WKWebView treats the button as a leaf accessible element
-                        so Maestro matches the button's aria-label instead of child text nodes */}
-                    <span className="inline-flex items-center justify-start min-w-0" aria-hidden="true">
-                      <FileOriginIcon origin="local" className="h-4 w-4 mr-1" />
-                      <span className="flex flex-col items-start truncate">
-                        <span className="truncate font-medium">{SOURCE_LABELS.local}</span>
-                        <span className="text-[11px] text-muted-foreground">{SOURCE_EXPLANATIONS.local}</span>
-                      </span>
+                  Select items from the chosen source to add.
+                </AppDialogDescription>
+              </div>
+              <AppSurfaceClose asChild>
+                <ModalCloseButton className="static h-8 w-8 shrink-0" aria-label="Close" />
+              </AppSurfaceClose>
+            </div>
+          </AppDialogHeader>
+          <AppDialogBody className={bodyPaddingClassName}>
+            <div className="space-y-5">
+              <p className="text-lg font-semibold text-foreground">Choose source</p>
+              <div className={cn("grid gap-2", interstitialGridClassName)} data-testid="import-selection-interstitial">
+                <Button
+                  variant="outline"
+                  className="justify-start min-w-0"
+                  onClick={() => void handleAddLocalSource()}
+                  disabled={pendingLocalSource}
+                  aria-busy={pendingLocalSource}
+                  id="import-option-local"
+                  data-testid="import-option-local"
+                  aria-label="Add file / folder from Local"
+                >
+                  <span className="inline-flex items-center justify-start min-w-0" aria-hidden="true">
+                    <FileOriginIcon origin="local" className="h-4 w-4 mr-1" />
+                    <span className="flex flex-col items-start truncate">
+                      <span className="truncate font-medium">{SOURCE_LABELS.local}</span>
+                      <span className="text-[11px] text-muted-foreground">{SOURCE_EXPLANATIONS.local}</span>
                     </span>
-                  </Button>
+                  </span>
+                </Button>
+                <Button
+                  variant="outline"
+                  className="justify-start min-w-0"
+                  onClick={() => {
+                    if (!c64UltimateSource) return;
+                    setPendingLocalSource(false);
+                    setSelectedSourceId(c64UltimateSource.id);
+                  }}
+                  disabled={!c64UltimateSource?.isAvailable}
+                  id="import-option-c64u"
+                  data-testid="import-option-c64u"
+                  aria-label="Add file / folder from C64U"
+                >
+                  <span className="inline-flex items-center justify-start min-w-0" aria-hidden="true">
+                    <FileOriginIcon origin="ultimate" className="h-4 w-4 mr-1" />
+                    <span className="flex flex-col items-start truncate">
+                      <span className="truncate font-medium">{SOURCE_LABELS.c64u}</span>
+                      <span className="text-[11px] text-muted-foreground">{SOURCE_EXPLANATIONS.c64u}</span>
+                    </span>
+                  </span>
+                </Button>
+                {hvscSource ? (
                   <Button
                     variant="outline"
                     className="justify-start min-w-0"
                     onClick={() => {
-                      if (!c64UltimateSource) return;
+                      if (!hvscSource.isAvailable) return;
                       setPendingLocalSource(false);
-                      setSelectedSourceId(c64UltimateSource.id);
+                      setSelectedSourceId(hvscSource.id);
                     }}
-                    disabled={!c64UltimateSource?.isAvailable}
-                    id="import-option-c64u"
-                    data-testid="import-option-c64u"
-                    aria-label="Add file / folder from C64U"
+                    disabled={!hvscSource.isAvailable}
+                    id="import-option-hvsc"
+                    data-testid="import-option-hvsc"
+                    aria-label="Add file / folder from HVSC"
                   >
                     <span className="inline-flex items-center justify-start min-w-0" aria-hidden="true">
-                      <FileOriginIcon origin="ultimate" className="h-4 w-4 mr-1" />
+                      <FileOriginIcon origin="hvsc" className="h-4 w-4 mr-1" />
                       <span className="flex flex-col items-start truncate">
-                        <span className="truncate font-medium">{SOURCE_LABELS.c64u}</span>
-                        <span className="text-[11px] text-muted-foreground">{SOURCE_EXPLANATIONS.c64u}</span>
+                        <span className="truncate font-medium">{SOURCE_LABELS.hvsc}</span>
+                        <span className="text-[11px] text-muted-foreground">{SOURCE_EXPLANATIONS.hvsc}</span>
                       </span>
                     </span>
                   </Button>
-                  {hvscSource ? (
-                    <Button
-                      variant="outline"
-                      className="justify-start min-w-0"
-                      onClick={() => {
-                        if (!hvscSource.isAvailable) return;
-                        setPendingLocalSource(false);
-                        setSelectedSourceId(hvscSource.id);
-                      }}
-                      disabled={!hvscSource.isAvailable}
-                      id="import-option-hvsc"
-                      data-testid="import-option-hvsc"
-                      aria-label="Add file / folder from HVSC"
-                    >
-                      <span className="inline-flex items-center justify-start min-w-0" aria-hidden="true">
-                        <FileOriginIcon origin="hvsc" className="h-4 w-4 mr-1" />
-                        <span className="flex flex-col items-start truncate">
-                          <span className="truncate font-medium">{SOURCE_LABELS.hvsc}</span>
-                          <span className="text-[11px] text-muted-foreground">{SOURCE_EXPLANATIONS.hvsc}</span>
-                        </span>
-                      </span>
-                    </Button>
-                  ) : null}
-                </div>
+                ) : null}
               </div>
-            )}
+            </div>
+          </AppDialogBody>
+          <AppDialogFooter>
+            <Button
+              variant="outline"
+              size={profile === "compact" ? "sm" : "default"}
+              onClick={() => onOpenChange(false)}
+            >
+              Cancel
+            </Button>
+          </AppDialogFooter>
+        </AppDialogContent>
+      </AppDialog>
+    );
+  }
 
-            {source && (
-              <div
-                className={sourceContentClassName}
-                data-testid={
-                  source.type === "ultimate"
-                    ? "c64u-file-picker"
-                    : source.type === "local"
-                      ? "local-file-picker"
-                      : "source-file-picker"
-                }
-              >
-                <div className={cn("flex items-center justify-between gap-2", profile === "compact" && "text-sm")}>
-                  <div>
-                    <p className="text-base font-semibold">Select items</p>
-                    <p className="text-xs text-muted-foreground" data-testid="add-items-selection-count">
-                      {selection.size} selected
-                    </p>
-                  </div>
-                  {profile === "compact" ? (
-                    <Button
-                      variant="default"
-                      size="sm"
-                      onClick={handleConfirm}
-                      disabled={isConfirming || autoConfirming || selection.size === 0}
-                      data-testid="add-items-confirm"
-                      className="shrink-0"
-                    >
-                      {confirmLabel}
-                    </Button>
-                  ) : null}
-                </div>
-
-                <Input
-                  placeholder="Filter files…"
-                  value={filterText}
-                  onChange={(event) => setFilterText(event.target.value)}
-                  data-testid="add-items-filter"
-                />
-
-                <ItemSelectionView
-                  path={browser.path}
-                  rootPath={source.rootPath}
-                  entries={visibleEntries}
-                  isLoading={browser.isLoading}
-                  showLoadingIndicator={browser.showLoadingIndicator}
-                  selection={selection}
-                  onToggleSelect={toggleSelection}
-                  onOpen={browser.navigateTo}
-                  onNavigateUp={browser.navigateUp}
-                  onNavigateRoot={browser.navigateRoot}
-                  onRefresh={browser.refresh}
-                  showFolderSelect={allowFolderSelection}
-                  emptyLabel="No matching items in this folder."
-                />
+  return (
+    <AppSheet open={open} onOpenChange={onOpenChange}>
+      <AppSheetContent
+        showClose={false}
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        className="p-0 overflow-hidden shadow-2xl"
+      >
+        <div className="flex h-full min-h-0 flex-col overflow-hidden">
+          <AppSheetHeader className={cn(headerPaddingClassName, "pr-12")}>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <AppSheetTitle className="text-xl">{title}</AppSheetTitle>
+                <AppSheetDescription className={cn("text-sm text-muted-foreground", profile === "compact" && "hidden")}>
+                  Select items from the chosen source to add.
+                </AppSheetDescription>
               </div>
-            )}
+              <AppSurfaceClose asChild>
+                <ModalCloseButton className="static h-8 w-8 shrink-0" aria-label="Close" />
+              </AppSurfaceClose>
+            </div>
+          </AppSheetHeader>
+
+          <div className={cn("shrink-0 space-y-3 border-b border-border", bodyPaddingClassName)}>
+            <div className={cn("flex items-center justify-between gap-2", profile === "compact" && "text-sm")}>
+              <div>
+                <p className="text-base font-semibold">Select items</p>
+                <p className="text-xs text-muted-foreground" data-testid="add-items-selection-count">
+                  {selection.size} selected
+                </p>
+              </div>
+              {profile === "compact" ? (
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={handleConfirm}
+                  disabled={isConfirming || autoConfirming || selection.size === 0}
+                  data-testid="add-items-confirm"
+                  className="shrink-0"
+                >
+                  {confirmLabel}
+                </Button>
+              ) : null}
+            </div>
+
+            <Input
+              placeholder="Filter files…"
+              value={filterText}
+              onChange={(event) => setFilterText(event.target.value)}
+              data-testid="add-items-filter"
+            />
           </div>
 
-          <DialogFooter
+          <AppSheetBody className={bodyPaddingClassName} data-testid="add-items-scroll">
+            <div
+              className={sourceContentClassName}
+              data-testid={
+                source.type === "ultimate"
+                  ? "c64u-file-picker"
+                  : source.type === "local"
+                    ? "local-file-picker"
+                    : "source-file-picker"
+              }
+            >
+              <ItemSelectionView
+                path={browser.path}
+                rootPath={source.rootPath}
+                entries={visibleEntries}
+                isLoading={browser.isLoading}
+                showLoadingIndicator={browser.showLoadingIndicator}
+                selection={selection}
+                onToggleSelect={toggleSelection}
+                onOpen={browser.navigateTo}
+                onNavigateUp={browser.navigateUp}
+                onNavigateRoot={browser.navigateRoot}
+                onRefresh={browser.refresh}
+                showFolderSelect={allowFolderSelection}
+                emptyLabel="No matching items in this folder."
+              />
+            </div>
+          </AppSheetBody>
+
+          <AppSheetFooter
             className={cn("shrink-0 gap-2 border-t border-border", footerPaddingClassName, footerLayoutClassName)}
           >
             {showProgressFooter && progress && progress.status !== "idle" && (
@@ -497,9 +525,9 @@ export const ItemSelectionDialog = ({
                 </Button>
               )}
             </div>
-          </DialogFooter>
+          </AppSheetFooter>
         </div>
-      </DialogContent>
-    </Dialog>
+      </AppSheetContent>
+    </AppSheet>
   );
 };

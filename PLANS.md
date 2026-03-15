@@ -1,88 +1,76 @@
-# Review 9 Remediation Plan
+# Surface System Execution Plan
 
 Classification: `UI_CHANGE`
 
-Scope: resolve every outstanding Review 9 display-profile issue still present in the repository, keep the review-9 remediation record current while implementing, regenerate affected screenshots, validate the changed UI and tests, then commit, push, and confirm CI passes.
+## Task List
 
-## Required Reading
+### Phase 1 - Planning
 
-- [ ] Read `.github/copilot-instructions.md` before editing.
-- [ ] Read `AGENTS.md` before editing.
-- [ ] Read `doc/display-profiles.md` before editing profile-sensitive surfaces.
-- [ ] Read `doc/ux-guidelines.md` before changing visible UI.
-- [ ] Read `doc/ux-interactions.md` before changing or adding CTA coverage.
-- [ ] Read `doc/architecture.md` before changing shared layout boundaries.
-- [ ] Read every document in `doc/research/review-9/` before changing code or docs.
+- [x] Design AppSheet architecture.
+- [x] Design AppDialog architecture.
+- [x] Identify all dialogs and sheets to migrate.
+- [x] Design responsive surface selection rules.
+- [x] Define screenshot regeneration scope using the existing `doc/img/` hierarchy.
+- [x] Define CI and local verification scope.
+- [x] Create a risk register.
 
-## Work Log Requirement
+### Phase 2 - Core Architecture
 
-- [ ] Maintain `doc/research/review-9/remediation-log.md` throughout the implementation.
-- [ ] Record every meaningful implementation batch, validation result, screenshot regeneration step, commit, push, and CI result.
+- [x] Implement reusable `AppSheet` component.
+- [x] Implement reusable `AppDialog` component.
+- [x] Verify rendering rules across Compact, Medium, and Expanded profiles.
 
-## Issue Inventory
+### Phase 3 - Dialog Migration
 
-### Open Review 9 Issues
+- [x] Migrate the diagnostics viewer to `AppSheet`.
+- [x] Migrate the playlist browser and Add items flow to `AppSheet` and `AppDialog`.
+- [ ] Migrate the disk browser surfaces to `AppSheet` and `AppDialog`.
+- [ ] Migrate the filesystem browser surfaces to `AppSheet` and `AppDialog`.
+- [x] Migrate the RAM snapshot browser to `AppSheet`.
+- [x] Migrate the file source selector to `AppDialog`.
+- [x] Migrate the RAM snapshot save dialog to `AppDialog`.
 
-- [ ] Tighten Compact outer spacing by reducing Compact page padding 50% without regressing safe-area handling.
-- [ ] Preserve a small visible outer inset around Compact diagnostics dialogs so the modal frame and title are not clipped.
-- [ ] Capture the full Home page for Compact, Medium, and Expanded profile screenshots instead of viewport-only overviews.
-- [ ] Keep Play transport metadata and controls stacked, left-aligned, and full-width in Expanded screenshots.
-- [ ] Resolve the remaining documentation and typing review comments in `PLANS.md`, `ItemSelectionDialog.tsx`, `work-log.md`, and `review-9.md`.
+### Phase 4 - Responsive Validation
 
-## Phase 1 - Issue Revalidation And Planning
+- [x] Validate Compact bottom-sheet behavior.
+- [x] Validate Medium bottom-sheet behavior.
+- [x] Validate Expanded centered-modal behavior.
+- [x] Validate sticky header, filter, tabs, and isolated scroll regions.
 
-- [ ] Re-read the live Review 9 documents and reconcile stale findings against the current codebase.
-- [ ] Update this plan as implementation decisions narrow or expand the affected surface.
-- [ ] Log the issue inventory and chosen remediation strategy in `doc/research/review-9/remediation-log.md`.
+### Phase 5 - Screenshot Regeneration
 
-## Phase 2 - Profile Branching Cleanup
+- [x] Regenerate only the affected screenshots under `doc/img/`.
+- [x] Preserve filenames and overwrite existing screenshots in place.
+- [x] Verify screenshot paths and naming conventions remain unchanged.
 
-- [x] Refactor `src/components/lists/SelectableActionList.tsx` to remove remaining raw breakpoint layout rules.
-- [x] Refactor `src/pages/home/components/DriveManager.tsx` to use profile-aware column rules.
-- [x] Refactor `src/pages/home/DriveCard.tsx` to guarantee Compact-safe metadata stacking via display-profile context.
-- [x] Refactor `src/pages/home/components/StreamStatus.tsx` to replace raw breakpoint editor layout with profile-aware layout.
-- [x] Refactor `src/pages/home/dialogs/SnapshotManagerDialog.tsx` to replace raw breakpoint editor layout with profile-aware layout.
-- [ ] Refine `src/pages/playFiles/components/PlaybackControlsCard.tsx` so Expanded keeps the transport stack full-width and left-aligned.
-- [x] Refactor `src/pages/playFiles/components/VolumeControls.tsx` to replace raw width branching with profile-aware layout.
-- [x] Refactor the remaining Settings advanced-controls grid in `src/pages/SettingsPage.tsx` to use display-profile-aware layout.
+### Phase 6 - Test Validation
 
-## Phase 3 - Shared Contract Normalization
+- [x] Add or update focused regression tests for the migrated surfaces.
+- [x] Run targeted unit tests.
+- [x] Run targeted Playwright UI validation.
+- [x] Run `npm run lint`.
+- [x] Run `npm run test:coverage` and confirm global branch coverage is at least 91%.
+- [x] Run `npm run build`.
 
-- [x] Move quick-action density selection into `src/components/layout/PageContainer.tsx` or another shared profile-aware boundary.
-- [x] Update `src/components/QuickActionCard.tsx` to consume shared profile-aware density instead of a caller-owned `compact` prop.
-- [x] Update all `QuickActionCard` call sites to remove the obsolete prop contract.
-- [x] Refactor `src/components/ConfigItemRow.tsx` to consume display-profile context directly while preserving justified measurement fallbacks.
-- [ ] Add or update focused regression tests for the remaining Compact spacing and Expanded transport regressions.
+### Phase 7 - CI Convergence
 
-## Phase 4 - Verification And Guardrails
+- [x] Confirm local validation is green.
+- [ ] Record CI-ready status and any remaining blockers.
 
-- [x] Audit existing Playwright coverage for Add disks, Shuffle, Reshuffle, Recurse folders, Home quick actions, System theme, and Test connection.
-- [x] Add missing deterministic Playwright coverage for any still-uncovered flows.
-- [x] Add a repository-enforced guardrail against raw breakpoint logic in the audited display-profile surfaces.
-- [x] Update `doc/ux-interactions.md` so the coverage inventory matches the post-remediation reality.
+## Risk Register
 
-## Phase 5 - Screenshot And Documentation Cleanup
+- Sticky regions inside Radix dialogs may need a single shared scroll container to avoid clipped headers and duplicated scrollbars.
+- Compact keyboard behavior can hide confirm CTAs unless sheet height and footer padding account for safe areas and viewport changes.
+- Existing screenshot flows already target `doc/img/`; edits must keep capture paths unchanged and only rerun the affected cases.
+- Existing modal tests assert current `Dialog` attributes; introducing `AppSheet` and `AppDialog` must preserve accessible roles and deterministic selectors.
 
-- [x] Rename diagnostics screenshot outputs and README references to remove legacy `*-expanded.png` naming outside profile folders.
-- [ ] Regenerate the affected screenshots under `doc/img/`, including the Compact diagnostics modal, Home profile full-page captures, and Play Expanded overview.
-- [x] Update `doc/research/review-9/carry-forward.md` to reflect the resolved and remaining status after implementation.
-- [ ] Reconcile `doc/research/review-9/work-log.md` and `doc/research/review-9/review-9.md` with the implementation work already completed on this branch.
+## Worklog
 
-## Phase 6 - Validation, Commit, Push, CI
-
-- [ ] Run targeted unit and Playwright regression validation while implementing.
-- [ ] Run `npm run lint`.
-- [ ] Run `npm run test:coverage` and confirm global branch coverage is at least 91%.
-- [ ] Run the required E2E validation for the changed surfaces.
-- [ ] Run the screenshot regeneration flow.
-- [ ] Run `npm run build`.
-- [ ] Commit the completed remediation work.
-- [ ] Push the branch.
-- [ ] Confirm the pushed CI run passes.
-
-## Progress
-
-- Status: In progress. Core Review 9 remediation is implemented; final compact/layout polish, screenshot refresh, and validation remain.
-- Started: 2026-03-15
-- Work log: `doc/research/review-9/remediation-log.md`
-- Last updated: 2026-03-15
+- 2026-03-15 00:00 UTC: Replaced the stale review-specific plan with the surface-system execution plan. Confirmed the repository already writes screenshots directly into `doc/img/`, so the implementation must preserve that hierarchy and only refresh affected files in place.
+- 2026-03-15 00:00 UTC: Audited the current surface layer. The repo has a profile-aware modal presentation helper in `src/lib/modalPresentation.ts` and several `Dialog`-based flows, but no explicit `AppSheet` or `AppDialog` components yet.
+- 2026-03-15 00:00 UTC: Identified the first concrete migration targets already in use on current routes: diagnostics (`src/components/diagnostics/DiagnosticsDialog.tsx`), Add items (`src/components/itemSelection/ItemSelectionDialog.tsx`), and Home RAM dialogs (`src/pages/home/dialogs/*.tsx`).
+- 2026-03-15 00:00 UTC: Added the shared surface layer in `src/components/ui/app-surface.tsx` with `AppSheet` for task surfaces and `AppDialog` for compact decision dialogs, plus focused regression coverage in `src/components/ui/app-surface.test.tsx`.
+- 2026-03-15 00:00 UTC: Migrated diagnostics, Add items source selection and browser flow, Save RAM, Snapshot Manager, and Restore Snapshot onto the new surface primitives while keeping headers, filters, and controls outside the scrolling body regions.
+- 2026-03-15 00:00 UTC: Updated profile-aware tests and Playwright assertions so Compact and Medium expect bottom-sheet task surfaces while Expanded expects centered modal presentation for `AppSheet`.
+- 2026-03-15 00:00 UTC: Regenerated only the affected screenshots in place under the existing `doc/img/app/diagnostics`, `doc/img/app/home/dialogs`, and `doc/img/app/play/import` paths, preserving filenames and folder structure.
+- 2026-03-15 00:00 UTC: Completed local validation with targeted unit tests, targeted Playwright surface checks, `npm run lint`, `npm run test:coverage` with 91.03% global branch coverage, and `npm run build`. CI was not run in this workspace.

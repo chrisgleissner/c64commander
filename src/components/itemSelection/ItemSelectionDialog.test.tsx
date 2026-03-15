@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ItemSelectionDialog, type SourceGroup } from "@/components/itemSelection/ItemSelectionDialog";
 import { DisplayProfileProvider, useDisplayProfilePreference } from "@/hooks/useDisplayProfile";
@@ -67,7 +67,11 @@ const Harness = () => {
 };
 
 describe("ItemSelectionDialog display profiles", () => {
-  it("promotes to full-screen on compact and preserves selection/filter state when the profile changes", () => {
+  beforeEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("promotes the browser to a sheet on compact and preserves selection/filter state when the profile changes", () => {
     localStorage.clear();
     setViewportWidth(360);
 
@@ -80,8 +84,9 @@ describe("ItemSelectionDialog display profiles", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add file / folder from C64U" }));
 
     const dialog = screen.getByRole("dialog");
-    expect(dialog.className).toContain("inset-2");
-    expect(dialog.className).not.toContain("w-screen");
+    expect(dialog).toHaveAttribute("data-app-surface", "sheet");
+    expect(dialog).toHaveAttribute("data-sheet-presentation", "sheet");
+    expect(screen.getByTestId("add-items-filter").closest('[data-testid="add-items-scroll"]')).toBeNull();
 
     const filterInput = screen.getByPlaceholderText("Filter files…");
     fireEvent.change(filterInput, { target: { value: "Alpha" } });
@@ -93,6 +98,29 @@ describe("ItemSelectionDialog display profiles", () => {
 
     expect(screen.getByPlaceholderText("Filter files…")).toHaveValue("Alpha");
     expect(screen.getByLabelText("Select Alpha.sid")).toHaveAttribute("data-state", "checked");
-    expect(screen.getByRole("dialog").className).not.toContain("inset-[var(--display-profile-modal-inset)]");
+    expect(screen.getByRole("dialog")).toHaveAttribute("data-sheet-presentation", "modal");
+  });
+
+  it("keeps the source selector as a compact decision dialog before a source is chosen", () => {
+    localStorage.clear();
+    setViewportWidth(360);
+
+    render(
+      <DisplayProfileProvider>
+        <ItemSelectionDialog
+          open
+          onOpenChange={() => undefined}
+          title="Add items"
+          confirmLabel="Add to playlist"
+          sourceGroups={sourceGroups}
+          onAddLocalSource={async () => null}
+          onConfirm={async () => true}
+        />
+      </DisplayProfileProvider>,
+    );
+
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveAttribute("data-app-surface", "dialog");
+    expect(screen.getByTestId("import-selection-interstitial")).toBeVisible();
   });
 });

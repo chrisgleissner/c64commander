@@ -490,8 +490,8 @@ test.describe("Playback file browser", () => {
     );
 
     const mixer = server.getState()["Audio Mixer"];
-    expect(mixer["Vol Socket 1"].value).toBe("OFF");
-    expect(mixer["Vol UltiSid 1"].value).toBe("OFF");
+    expect(mixer["Vol Socket 1"].value).toBe("-42 dB");
+    expect(mixer["Vol UltiSid 1"].value).toBe("-42 dB");
     expect(mixer["Vol Socket 2"].value).toBe("-6 dB");
     expect(mixer["Vol UltiSid 2"].value).toBe("+1 dB");
     await snap(page, testInfo, "volume-mute-enabled-only");
@@ -1144,6 +1144,39 @@ test.describe("Playback file browser", () => {
     await page.waitForTimeout(2000);
     expect(server.sidplayRequests.length).toBe(2);
     await snap(page, testInfo, "auto-advance-single-shot");
+  });
+
+  test("auto-advance continues after navigating away from the play page", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
+    await seedPlaylistStorage(page, [
+      {
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/track-1.sid",
+        name: "track-1.sid",
+        durationMs: 1200,
+      },
+      {
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/track-2.sid",
+        name: "track-2.sid",
+        durationMs: 20000,
+      },
+    ]);
+
+    await page.goto("/play");
+    await page.getByTestId("playlist-play").click();
+    await expect.poll(() => server.sidplayRequests.length).toBe(1);
+    await expect(page.getByTestId("playback-current-track")).toContainText("track-1.sid");
+
+    await page.getByTestId("tab-settings").click();
+    await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+
+    await expect.poll(() => server.sidplayRequests.length).toBe(2);
+
+    await page.getByTestId("tab-play").click();
+    await expect(page.getByTestId("playback-current-track")).toContainText("track-2.sid");
+    await snap(page, testInfo, "auto-advance-after-navigation");
   });
 
   test("user next cancels old-track auto-advance and transitions immediately", async ({

@@ -63,7 +63,7 @@ describe("SelectableActionList", () => {
     expect(card).toHaveClass("p-3");
   });
 
-  it("keeps section headers while filtering and preserves the expanded view-all layout", () => {
+  it("keeps section headers while filtering and uses the shared expanded view-all modal", () => {
     localStorage.clear();
     setViewportWidth(1280);
 
@@ -116,7 +116,9 @@ describe("SelectableActionList", () => {
     fireEvent.click(screen.getByRole("button", { name: "View all" }));
 
     expect(screen.getByText("All files")).toBeVisible();
-    expect(screen.getByRole("dialog")).toHaveClass("max-w-[42rem]");
+    expect(screen.getByRole("dialog")).toHaveAttribute("data-app-surface", "sheet");
+    expect(screen.getByRole("dialog")).toHaveAttribute("data-sheet-presentation", "modal");
+    expect(screen.getByRole("dialog")).toHaveClass("rounded-[28px]");
 
     fireEvent.change(screen.getByTestId("view-all-filter-input"), { target: { value: "archive" } });
 
