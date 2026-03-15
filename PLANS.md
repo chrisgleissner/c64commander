@@ -24,11 +24,14 @@ Classification: `UI_CHANGE`
 
 - [x] Migrate the diagnostics viewer to `AppSheet`.
 - [x] Migrate the playlist browser and Add items flow to `AppSheet` and `AppDialog`.
-- [ ] Migrate the disk browser surfaces to `AppSheet` and `AppDialog`.
-- [ ] Migrate the filesystem browser surfaces to `AppSheet` and `AppDialog`.
 - [x] Migrate the RAM snapshot browser to `AppSheet`.
 - [x] Migrate the file source selector to `AppDialog`.
 - [x] Migrate the RAM snapshot save dialog to `AppDialog`.
+
+### Deferred Follow-Up - Not Part Of This PR
+
+- [ ] Migrate the disk browser surfaces to `AppSheet` and `AppDialog` in a separate follow-up.
+- [ ] Migrate the filesystem browser surfaces to `AppSheet` and `AppDialog` in a separate follow-up.
 
 ### Phase 4 - Responsive Validation
 
@@ -73,4 +76,4 @@ Classification: `UI_CHANGE`
 - 2026-03-15 00:00 UTC: Migrated diagnostics, Add items source selection and browser flow, Save RAM, Snapshot Manager, and Restore Snapshot onto the new surface primitives while keeping headers, filters, and controls outside the scrolling body regions.
 - 2026-03-15 00:00 UTC: Updated profile-aware tests and Playwright assertions so Compact and Medium expect bottom-sheet task surfaces while Expanded expects centered modal presentation for `AppSheet`.
 - 2026-03-15 00:00 UTC: Regenerated only the affected screenshots in place under the existing `doc/img/app/diagnostics`, `doc/img/app/home/dialogs`, and `doc/img/app/play/import` paths, preserving filenames and folder structure.
-- 2026-03-15 00:00 UTC: Completed local validation with targeted unit tests, targeted Playwright surface checks, `npm run lint`, `npm run test:coverage` with 91.03% global branch coverage, and `npm run build`. CI was not run in this workspace.
+- 2026-03-15 00:00 UTC: Completed local validation with targeted Playwright surface checks for the migrated list-browser flows, `npm run lint`, `npm run test:coverage` (reporting 90.80% global branch coverage in the current local run), and `npm run build`. CI convergence remains pending on the updated branch head.
