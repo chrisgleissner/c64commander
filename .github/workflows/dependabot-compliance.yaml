@@ -10,7 +10,7 @@ permissions:
 jobs:
   refresh-notices:
     name: Dependabot | Refresh notices
-    if: github.actor == 'dependabot[bot]'
+    if: github.actor == 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
 
     steps:
