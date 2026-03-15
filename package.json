@@ -172,7 +172,7 @@
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",
     "ftp-srv": "4.6.3",
-    "globals": "^15.15.0",
+    "globals": "^17.4.0",
     "jsdom": "^28.1.0",
     "lcov-result-merger": "^5.0.1",
     "nextcov": "^1.1.0",
