@@ -193,7 +193,7 @@ const docSections: DocSection[] = [
             <strong>Connection</strong> stores host/IP and password.
           </li>
           <li>
-            <strong>Appearance</strong> switches between light, dark, and system themes.
+            <strong>Appearance</strong> switches between auto, light, and dark themes.
           </li>
           <li>
             <strong>Play</strong> options include playlist preview limits and HVSC enablement.

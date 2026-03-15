@@ -219,7 +219,13 @@ export function SnapshotManagerDialog({
             </AppSheetDescription>
           </AppSheetHeader>
 
-          <div className={compact ? "shrink-0 space-y-2 border-b border-border px-4 py-3" : "shrink-0 space-y-3 border-b border-border px-6 py-4"}>
+          <div
+            className={
+              compact
+                ? "shrink-0 space-y-2 border-b border-border px-4 py-3"
+                : "shrink-0 space-y-3 border-b border-border px-6 py-4"
+            }
+          >
             <Input
               placeholder="Filter snapshots…"
               value={query}

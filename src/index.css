@@ -21,7 +21,7 @@
   --display-profile-modal-inset: 1rem;
 }
 
-:root[data-c64-motion-mode='reduced'] {
+:root[data-c64-motion-mode="reduced"] {
   --c64-motion-duration-scale: 0;
   --modal-backdrop-duration: 0ms;
 }
@@ -221,20 +221,20 @@ button:focus-visible,
 :where(
   button,
   a[href],
-  [role='button'],
-  [role='link'],
-  [role='tab'],
-  [role='menuitem'],
-  [role='checkbox'],
-  [role='switch'],
-  [role='option'],
-  [tabindex]:not([tabindex='-1'])
+  [role="button"],
+  [role="link"],
+  [role="tab"],
+  [role="menuitem"],
+  [role="checkbox"],
+  [role="switch"],
+  [role="option"],
+  [tabindex]:not([tabindex="-1"])
 ) {
   -webkit-tap-highlight-color: transparent;
 }
 
-[data-c64-tap-flash='true'],
-[data-c64-persistent-active='true'] {
+[data-c64-tap-flash="true"],
+[data-c64-persistent-active="true"] {
   border-color: hsl(var(--ring) / 0.65);
   box-shadow:
     0 0 0 2px hsl(var(--ring) / 0.2),
@@ -261,18 +261,43 @@ button:focus-visible,
     min-width: 0;
   }
 
-  :root[data-display-profile='compact'] :where([class~='text-xs'], [class~='text-[11px]']) {
-    font-size: 0.8125rem;
+  :root[data-display-profile="compact"] :where([class~="text-[11px]"]) {
+    font-size: 0.9rem;
     line-height: 1.2rem;
+  }
+
+  :root[data-display-profile="compact"] :where([class~="text-xs"]) {
+    font-size: 1rem;
+    line-height: 1.35rem;
+  }
+
+  :root[data-display-profile="compact"] :where([class~="text-sm"]) {
+    font-size: 1.125rem;
+    line-height: 1.55rem;
+  }
+
+  :root[data-display-profile="compact"] :where([class~="text-base"]) {
+    font-size: 1.3125rem;
+    line-height: 1.75rem;
+  }
+
+  :root[data-display-profile="compact"] :where([class~="text-lg"]) {
+    font-size: 1.5rem;
+    line-height: 1.95rem;
+  }
+
+  :root[data-display-profile="compact"] :where(.c64-header[class~="text-xl"]) {
+    font-size: 1.1765rem;
+    line-height: 1.5rem;
   }
 
   /* Custom font families */
   .font-mono {
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
   }
 
   .font-sans {
-    font-family: 'Inter', 'Arial', ui-sans-serif, system-ui, sans-serif;
+    font-family: "Inter", "Arial", ui-sans-serif, system-ui, sans-serif;
   }
 }
 
@@ -410,13 +435,7 @@ button:focus-visible,
   /* Scrollable area with fade */
   .scroll-fade {
     @apply relative;
-    mask-image: linear-gradient(
-      to bottom,
-      transparent,
-      black 1rem,
-      black calc(100% - 1rem),
-      transparent
-    );
+    mask-image: linear-gradient(to bottom, transparent, black 1rem, black calc(100% - 1rem), transparent);
   }
 }
 

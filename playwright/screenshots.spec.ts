@@ -812,8 +812,10 @@ test.describe("App screenshots", () => {
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
       await installListPreviewLimit(page, 3);
       for (const profileId of DISPLAY_PROFILE_VIEWPORT_SEQUENCE) {
-        await page.goto("/play");
+        await page.goto("/", { waitUntil: "domcontentloaded" });
         await applyDisplayProfileViewport(page, profileId);
+        await page.getByTestId("tab-play").click();
+        await expect(page).toHaveURL(/\/play$/);
         await expect(page.getByRole("heading", { name: "Play Files" })).toBeVisible();
         await captureScreenshot(page, testInfo, profileScreenshotPath("play", profileId, "01-overview.png"));
 
@@ -1014,6 +1016,16 @@ test.describe("App screenshots", () => {
       page.getByText("External Resources", { exact: true }),
       "docs/external/01-external-resources.png",
     );
+
+    for (const profileId of DISPLAY_PROFILE_VIEWPORT_SEQUENCE) {
+      await page.goto("/docs");
+      await applyDisplayProfileViewport(page, profileId);
+      await expect(page.getByRole("heading", { name: "Docs" })).toBeVisible();
+      await page.getByRole("button", { name: "Play Files" }).click();
+      await page.waitForTimeout(150);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await captureScreenshot(page, testInfo, profileScreenshotPath("docs", profileId, "01-overview.png"));
+    }
   });
 
   test(

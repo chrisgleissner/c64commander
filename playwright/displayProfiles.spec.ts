@@ -306,6 +306,60 @@ test.describe("display profiles", () => {
     await expect(page.getByTestId("play-primary-layout")).toHaveAttribute("data-profile", "expanded");
   });
 
+  test("compact profile keeps header top inset no larger than the side inset and enlarges body text", async ({
+    page,
+  }: {
+    page: Page;
+  }) => {
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await applyDisplayProfileViewport(page, "medium");
+    await expect(page.getByTestId("home-machine-controls")).toBeVisible();
+
+    const mediumSizing = await page.evaluate(() => {
+      const bodyText = document.querySelector('[data-testid="home-cpu-speed-value"]');
+      const title = document.querySelector('[data-testid="home-header-title"]');
+      if (!(bodyText instanceof HTMLElement) || !(title instanceof HTMLElement)) {
+        throw new Error("Expected home header and CPU speed value to be rendered.");
+      }
+
+      return {
+        bodyFontSize: Number.parseFloat(getComputedStyle(bodyText).fontSize),
+        headerFontSize: Number.parseFloat(getComputedStyle(title).fontSize),
+      };
+    });
+
+    await applyDisplayProfileViewport(page, "compact");
+
+    const compactSizing = await page.evaluate(() => {
+      const shell = document.querySelector("header .app-shell-container");
+      const bodyText = document.querySelector('[data-testid="home-cpu-speed-value"]');
+      const title = document.querySelector('[data-testid="home-header-title"]');
+      const header = document.querySelector("header");
+      if (
+        !(shell instanceof HTMLElement) ||
+        !(bodyText instanceof HTMLElement) ||
+        !(title instanceof HTMLElement) ||
+        !(header instanceof HTMLElement)
+      ) {
+        throw new Error("Expected compact header shell and home text to be rendered.");
+      }
+
+      const shellStyle = getComputedStyle(shell);
+      return {
+        bodyFontSize: Number.parseFloat(getComputedStyle(bodyText).fontSize),
+        headerFontSize: Number.parseFloat(getComputedStyle(title).fontSize),
+        paddingTop: Number.parseFloat(shellStyle.paddingTop),
+        paddingLeft: Number.parseFloat(shellStyle.paddingLeft),
+        headerClasses: header.className,
+      };
+    });
+
+    expect(compactSizing.paddingTop).toBeLessThanOrEqual(compactSizing.paddingLeft);
+    expect(compactSizing.headerClasses.includes("pt-safe")).toBe(false);
+    expect(compactSizing.bodyFontSize).toBeGreaterThan(mediumSizing.bodyFontSize * 1.25);
+    expect(Math.abs(compactSizing.headerFontSize - mediumSizing.headerFontSize)).toBeLessThan(0.1);
+  });
+
   test("expanded override on a phone viewport keeps the shell inside the viewport", async ({
     page,
   }: {

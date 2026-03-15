@@ -95,6 +95,7 @@ export type SelectableActionListProps = {
   rowTestId?: string;
   headerActions?: React.ReactNode;
   filterHeader?: React.ReactNode;
+  viewAllFilterHeader?: React.ReactNode;
   filterPlaceholder?: string;
   showSelectionControls?: boolean;
   selectionLabel?: string;
@@ -298,6 +299,7 @@ export const SelectableActionList = ({
   rowTestId,
   headerActions,
   filterHeader,
+  viewAllFilterHeader,
   filterPlaceholder = "Filter files...",
   showSelectionControls = true,
   selectionLabel,
@@ -510,8 +512,10 @@ export const SelectableActionList = ({
                     </Button>
                   )}
                 </div>
-                {filterHeader ? (
-                  <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2">{filterHeader}</div>
+                {(viewAllFilterHeader ?? filterHeader) ? (
+                  <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2">
+                    {viewAllFilterHeader ?? filterHeader}
+                  </div>
                 ) : null}
               </AppSheetHeader>
               <AppSheetBody className={cn("flex flex-col", isCompact ? "px-3 py-3" : "px-6 py-4")}>

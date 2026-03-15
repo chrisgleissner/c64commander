@@ -66,6 +66,51 @@ const Harness = () => {
   );
 };
 
+const MediumHarness = () => {
+  const { setOverride } = useDisplayProfilePreference();
+
+  return (
+    <>
+      <button type="button" onClick={() => setOverride("medium")}>
+        Medium override
+      </button>
+      <ItemSelectionDialog
+        open
+        onOpenChange={() => undefined}
+        title="Add items"
+        confirmLabel="Add to playlist"
+        sourceGroups={[
+          {
+            label: "Sources",
+            sources: [
+              {
+                id: "ultimate-1",
+                type: "ultimate",
+                name: "C64U",
+                rootPath: "/music",
+                isAvailable: true,
+                listEntries: async () => [],
+                listFilesRecursive: async () => [],
+              },
+              {
+                id: "hvsc-1",
+                type: "hvsc",
+                name: "HVSC",
+                rootPath: "/hvsc",
+                isAvailable: true,
+                listEntries: async () => [],
+                listFilesRecursive: async () => [],
+              },
+            ],
+          },
+        ]}
+        onAddLocalSource={async () => null}
+        onConfirm={async () => true}
+      />
+    </>
+  );
+};
+
 describe("ItemSelectionDialog display profiles", () => {
   beforeEach(() => {
     vi.useRealTimers();
@@ -122,5 +167,27 @@ describe("ItemSelectionDialog display profiles", () => {
     const dialog = screen.getByRole("dialog");
     expect(dialog).toHaveAttribute("data-app-surface", "dialog");
     expect(screen.getByTestId("import-selection-interstitial")).toBeVisible();
+  });
+
+  it("stacks medium interstitial source buttons with equal full width", () => {
+    localStorage.clear();
+    setViewportWidth(768);
+
+    render(
+      <DisplayProfileProvider>
+        <MediumHarness />
+      </DisplayProfileProvider>,
+    );
+
+    act(() => {
+      fireEvent.click(screen.getByText("Medium override"));
+    });
+
+    const interstitial = screen.getByTestId("import-selection-interstitial");
+    expect(interstitial.className).toContain("grid-cols-1");
+    expect(screen.getByTestId("import-option-local").className).toContain("w-full");
+    expect(screen.getByTestId("import-option-c64u").className).toContain("w-full");
+    expect(screen.getByTestId("import-option-hvsc").className).toContain("w-full");
+    expect(screen.getByText("High Voltage SID Collection").className).toContain("whitespace-normal");
   });
 });

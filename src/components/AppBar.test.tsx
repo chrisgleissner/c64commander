@@ -45,7 +45,7 @@ const setViewportWidth = (width: number) => {
 };
 
 describe("AppBar", () => {
-  it("keeps safe-area top padding while preserving compact shell insets", () => {
+  it("caps compact top padding to the horizontal shell inset", () => {
     localStorage.clear();
     setViewportWidth(360);
 
@@ -58,7 +58,7 @@ describe("AppBar", () => {
     const header = container.querySelector("header");
     const shell = container.querySelector(".app-shell-container");
 
-    expect(header?.className).toContain("pt-safe");
+    expect(header?.className).not.toContain("pt-safe");
     expect(shell).toHaveStyle({ paddingTop: "0.5rem", paddingBottom: "0.5rem" });
     expect(screen.getByRole("heading", { name: "Home" })).toBeVisible();
   });

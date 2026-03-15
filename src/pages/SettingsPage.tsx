@@ -457,9 +457,9 @@ export default function SettingsPage() {
     icon: React.ElementType;
     label: string;
   }[] = [
+    { value: "system", icon: Monitor, label: "Auto" },
     { value: "light", icon: Sun, label: "Light" },
     { value: "dark", icon: Moon, label: "Dark" },
-    { value: "system", icon: Monitor, label: "System" },
   ];
 
   const displayProfileOptions = DISPLAY_PROFILE_OVERRIDE_SEQUENCE.map((value) => ({

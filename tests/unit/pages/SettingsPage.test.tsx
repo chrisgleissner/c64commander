@@ -433,6 +433,18 @@ describe("SettingsPage", () => {
     expect(mockSetTheme).toHaveBeenCalledWith("dark");
   });
 
+  it("shows appearance theme options in auto light dark order", () => {
+    renderSettingsPage();
+
+    const appearanceSection = screen.getByRole("heading", { name: "Appearance" }).closest(".rounded-xl");
+    expect(appearanceSection).toBeTruthy();
+    if (!appearanceSection) return;
+
+    const buttons = within(appearanceSection).getAllByRole("button");
+    const themeLabels = buttons.slice(0, 3).map((button) => button.textContent?.trim() ?? "");
+    expect(themeLabels).toEqual(["Auto", "Light", "Dark"]);
+  });
+
   it("shows persisted SAF URIs after refresh", async () => {
     vi.mocked(FolderPicker.getPersistedUris).mockResolvedValue({
       uris: [{ uri: "content://example" }],

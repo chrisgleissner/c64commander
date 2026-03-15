@@ -294,7 +294,10 @@ export const ItemSelectionDialog = ({
     }
   };
 
-  const interstitialGridClassName = profile === "compact" ? "grid-cols-1" : "grid-cols-2";
+  const interstitialGridClassName = profile === "expanded" ? "grid-cols-2" : "grid-cols-1";
+  const interstitialButtonClassName = cn("justify-start min-w-0", profile === "medium" && "w-full min-h-16 px-4 py-3");
+  const interstitialLabelClassName = cn("flex flex-col items-start truncate", profile === "medium" && "w-full");
+  const interstitialTextClassName = cn(profile === "medium" && "whitespace-normal break-words text-left leading-snug");
   const footerLayoutClassName = profile === "compact" ? "flex-col" : "flex-row items-center justify-between";
   const footerActionsClassName = profile === "compact" ? "flex-row flex-wrap" : "flex-row ml-auto";
   const footerPaddingClassName =
@@ -330,7 +333,7 @@ export const ItemSelectionDialog = ({
               <div className={cn("grid gap-2", interstitialGridClassName)} data-testid="import-selection-interstitial">
                 <Button
                   variant="outline"
-                  className="justify-start min-w-0"
+                  className={interstitialButtonClassName}
                   onClick={() => void handleAddLocalSource()}
                   disabled={pendingLocalSource}
                   aria-busy={pendingLocalSource}
@@ -338,17 +341,21 @@ export const ItemSelectionDialog = ({
                   data-testid="import-option-local"
                   aria-label="Add file / folder from Local"
                 >
-                  <span className="inline-flex items-center justify-start min-w-0" aria-hidden="true">
+                  <span className="inline-flex items-center justify-start min-w-0 w-full" aria-hidden="true">
                     <FileOriginIcon origin="local" className="h-4 w-4 mr-1" />
-                    <span className="flex flex-col items-start truncate">
-                      <span className="truncate font-medium">{SOURCE_LABELS.local}</span>
-                      <span className="text-[11px] text-muted-foreground">{SOURCE_EXPLANATIONS.local}</span>
+                    <span className={interstitialLabelClassName}>
+                      <span className={cn("truncate font-medium", interstitialTextClassName)}>
+                        {SOURCE_LABELS.local}
+                      </span>
+                      <span className={cn("text-[11px] text-muted-foreground", interstitialTextClassName)}>
+                        {SOURCE_EXPLANATIONS.local}
+                      </span>
                     </span>
                   </span>
                 </Button>
                 <Button
                   variant="outline"
-                  className="justify-start min-w-0"
+                  className={interstitialButtonClassName}
                   onClick={() => {
                     if (!c64UltimateSource) return;
                     setPendingLocalSource(false);
@@ -359,18 +366,22 @@ export const ItemSelectionDialog = ({
                   data-testid="import-option-c64u"
                   aria-label="Add file / folder from C64U"
                 >
-                  <span className="inline-flex items-center justify-start min-w-0" aria-hidden="true">
+                  <span className="inline-flex items-center justify-start min-w-0 w-full" aria-hidden="true">
                     <FileOriginIcon origin="ultimate" className="h-4 w-4 mr-1" />
-                    <span className="flex flex-col items-start truncate">
-                      <span className="truncate font-medium">{SOURCE_LABELS.c64u}</span>
-                      <span className="text-[11px] text-muted-foreground">{SOURCE_EXPLANATIONS.c64u}</span>
+                    <span className={interstitialLabelClassName}>
+                      <span className={cn("truncate font-medium", interstitialTextClassName)}>
+                        {SOURCE_LABELS.c64u}
+                      </span>
+                      <span className={cn("text-[11px] text-muted-foreground", interstitialTextClassName)}>
+                        {SOURCE_EXPLANATIONS.c64u}
+                      </span>
                     </span>
                   </span>
                 </Button>
                 {hvscSource ? (
                   <Button
                     variant="outline"
-                    className="justify-start min-w-0"
+                    className={interstitialButtonClassName}
                     onClick={() => {
                       if (!hvscSource.isAvailable) return;
                       setPendingLocalSource(false);
@@ -381,11 +392,15 @@ export const ItemSelectionDialog = ({
                     data-testid="import-option-hvsc"
                     aria-label="Add file / folder from HVSC"
                   >
-                    <span className="inline-flex items-center justify-start min-w-0" aria-hidden="true">
+                    <span className="inline-flex items-center justify-start min-w-0 w-full" aria-hidden="true">
                       <FileOriginIcon origin="hvsc" className="h-4 w-4 mr-1" />
-                      <span className="flex flex-col items-start truncate">
-                        <span className="truncate font-medium">{SOURCE_LABELS.hvsc}</span>
-                        <span className="text-[11px] text-muted-foreground">{SOURCE_EXPLANATIONS.hvsc}</span>
+                      <span className={interstitialLabelClassName}>
+                        <span className={cn("truncate font-medium", interstitialTextClassName)}>
+                          {SOURCE_LABELS.hvsc}
+                        </span>
+                        <span className={cn("text-[11px] text-muted-foreground", interstitialTextClassName)}>
+                          {SOURCE_EXPLANATIONS.hvsc}
+                        </span>
                       </span>
                     </span>
                   </Button>
