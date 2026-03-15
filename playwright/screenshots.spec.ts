@@ -196,7 +196,14 @@ const waitForOverlaysToClear = async (page: Page) => {
   await expect(openToasts).toHaveCount(0, { timeout: 10000 });
 };
 
-const captureScreenshot = async (page: Page, testInfo: TestInfo, relativePath: string) => {
+const captureScreenshot = async (
+  page: Page,
+  testInfo: TestInfo,
+  relativePath: string,
+  options?: {
+    fullPage?: boolean;
+  },
+) => {
   const filePath = screenshotPath(relativePath);
   await ensureScreenshotDir(filePath);
   await waitForStableRender(page);
@@ -204,6 +211,7 @@ const captureScreenshot = async (page: Page, testInfo: TestInfo, relativePath: s
   const screenshotBuffer = await page.screenshot({
     animations: "disabled",
     caret: "hide",
+    fullPage: options?.fullPage ?? false,
   });
   if (await hasPixelDiffAgainstExisting(filePath, screenshotBuffer)) {
     if (await matchesTrackedScreenshotAtAnotherPath(relativePath, screenshotBuffer)) {
@@ -480,7 +488,9 @@ test.describe("App screenshots", () => {
         await waitForConnected(page);
         await applyDisplayProfileViewport(page, profileId);
         await page.evaluate(() => window.scrollTo(0, 0));
-        await captureScreenshot(page, testInfo, profileScreenshotPath("home", profileId, "01-overview.png"));
+        await captureScreenshot(page, testInfo, profileScreenshotPath("home", profileId, "01-overview.png"), {
+          fullPage: true,
+        });
       }
     },
   );
@@ -938,7 +948,7 @@ test.describe("App screenshots", () => {
       await expect(actionSummary).toBeVisible();
       await actionSummary.locator("summary").click();
       await expect(actionSummary).toHaveJSProperty("open", true);
-      await captureScreenshot(page, testInfo, "diagnostics/01-actions-expanded.png");
+      await captureScreenshot(page, testInfo, "diagnostics/01-actions-detail.png");
 
       const tracesTab = dialog.getByRole("tab", { name: "Traces" });
       await tracesTab.click();
@@ -946,7 +956,7 @@ test.describe("App screenshots", () => {
       await expect(traceItem).toBeVisible();
       await traceItem.locator("summary").click();
       await expect(traceItem).toHaveJSProperty("open", true);
-      await captureScreenshot(page, testInfo, "diagnostics/02-traces-expanded.png");
+      await captureScreenshot(page, testInfo, "diagnostics/02-traces-detail.png");
 
       const logsTab = dialog.getByRole("tab", { name: "Logs" });
       await logsTab.click();
@@ -956,7 +966,7 @@ test.describe("App screenshots", () => {
       await expect(logEntry).toBeVisible();
       await logEntry.locator("summary").click();
       await expect(logEntry).toHaveJSProperty("open", true);
-      await captureScreenshot(page, testInfo, "diagnostics/03-logs-expanded.png");
+      await captureScreenshot(page, testInfo, "diagnostics/03-logs-detail.png");
 
       const errorsTab = dialog.getByRole("tab", { name: "Errors" });
       await errorsTab.click();
@@ -966,7 +976,7 @@ test.describe("App screenshots", () => {
       await expect(errorEntry).toBeVisible();
       await errorEntry.locator("summary").click();
       await expect(errorEntry).toHaveJSProperty("open", true);
-      await captureScreenshot(page, testInfo, "diagnostics/04-errors-expanded.png");
+      await captureScreenshot(page, testInfo, "diagnostics/04-errors-detail.png");
 
       await page.keyboard.press("Escape");
       await expect(dialog).toBeHidden();

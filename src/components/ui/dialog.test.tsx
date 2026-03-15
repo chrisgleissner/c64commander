@@ -41,7 +41,7 @@ describe("profile-aware dialog surfaces", () => {
 
     const dialog = screen.getByRole("dialog");
     expect(dialog).toHaveAttribute("data-modal-presentation", "fullscreen");
-    expect(dialog.className).toContain("inset-[var(--display-profile-modal-inset)]");
+    expect(dialog.className).toContain("inset-2");
     expect(screen.getByText("Confirm").parentElement).toHaveClass("sticky");
   });
 

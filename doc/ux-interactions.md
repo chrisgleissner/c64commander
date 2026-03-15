@@ -4,7 +4,7 @@
 
 This document provides a comprehensive inventory of all user-facing interactions (CTAs - Call To Actions) and multi-step user flows in C64 Commander. Each interaction is classified by importance and mapped to test coverage.
 
-**Last Updated**: 2026-01-21
+**Last Updated**: 2026-03-15
 **Total CTAs Documented**: TBD
 **Test Coverage Target**: 100%
 
@@ -39,9 +39,9 @@ This document provides a comprehensive inventory of all user-facing interactions
 | Button      | "Pause" / "Resume"              | Pause/resume playback         | **CRITICAL** | ✅ FULL       | playback.spec.ts:359             | Transport control                   |
 | Button      | "Prev"                          | Previous track                | **HIGH**     | ✅ FULL       | playback.spec.ts:328             | Transport control                   |
 | Button      | "Next"                          | Next track                    | **HIGH**     | ✅ FULL       | playback.spec.ts:328             | Transport control                   |
-| Checkbox    | "Shuffle"                       | Enable shuffle mode           | **MEDIUM**   | ❌ NONE       | -                                | Playlist option                     |
+| Checkbox    | "Shuffle"                       | Enable shuffle mode           | **MEDIUM**   | ✅ FULL       | playlistControls.spec.ts:85      | Playlist option                     |
 | Checkbox    | "Repeat"                        | Enable repeat mode            | **MEDIUM**   | ✅ FULL       | playlistControls.spec.ts:107     | Playlist option                     |
-| Button      | "Reshuffle"                     | Re-randomize playlist         | **LOW**      | ❌ NONE       | -                                | Requires shuffle enabled            |
+| Button      | "Reshuffle"                     | Re-randomize playlist         | **LOW**      | ✅ FULL       | playlistControls.spec.ts:113     | Requires shuffle enabled            |
 | Button      | "Select all"                    | Select all playlist items     | **HIGH**     | ✅ FULL       | playback.spec.ts:407             | Bulk action                         |
 | Button      | "Deselect all"                  | Clear selection               | **HIGH**     | ✅ FULL       | uxInteractions.spec.ts:173       | Bulk action                         |
 | Button      | "Remove selected"               | Delete selected from playlist | **HIGH**     | ✅ FULL       | playback.spec.ts:407             | Destructive bulk action             |
@@ -55,18 +55,18 @@ This document provides a comprehensive inventory of all user-facing interactions
 
 ### 1.2 Item Selection Dialog (Source Selection)
 
-| CTA      | Label                     | Purpose                     | Importance   | Test Coverage | Test File                  | Notes               |
-| -------- | ------------------------- | --------------------------- | ------------ | ------------- | -------------------------- | ------------------- |
-| Button   | "Local" / "Local Files"   | Select local file source    | **CRITICAL** | ✅ FULL       | uxInteractions.spec.ts:30  | Source selection    |
-| Button   | "C64 Ultimate" / "C64U"   | Select C64U FTP source      | **CRITICAL** | ✅ FULL       | uxInteractions.spec.ts:79  | Source selection    |
-| Button   | "Add folder"              | Pick Android folder         | **HIGH**     | ❌ NONE       | -                          | Native picker       |
-| Button   | "Up" / "Back"             | Navigate up one level       | **HIGH**     | ✅ FULL       | uxInteractions.spec.ts:114 | Navigation          |
-| Button   | "Root"                    | Jump to source root         | **MEDIUM**   | ⚠️ PARTIAL    | uxInteractions.spec.ts:584 | Quick navigation    |
-| Button   | "Select all" (in browser) | Select all files in view    | **MEDIUM**   | ✅ FULL       | uxInteractions.spec.ts:173 | Bulk selection      |
-| Button   | "Add selected"            | Confirm and add to playlist | **CRITICAL** | ✅ FULL       | ui.spec.ts:174             | Confirmation        |
-| Checkbox | "Recurse folders"         | Include subfolders          | **MEDIUM**   | ❌ NONE       | -                          | Option toggle       |
-| Dropdown | File type filter          | Filter by PRG/SID/etc       | **MEDIUM**   | ❌ NONE       | -                          | Filter control      |
-| Checkbox | File/folder checkbox      | Select for addition         | **HIGH**     | ✅ FULL       | uxInteractions.spec.ts:173 | Selection mechanism |
+| CTA      | Label                     | Purpose                     | Importance   | Test Coverage | Test File                    | Notes               |
+| -------- | ------------------------- | --------------------------- | ------------ | ------------- | ---------------------------- | ------------------- |
+| Button   | "Local" / "Local Files"   | Select local file source    | **CRITICAL** | ✅ FULL       | uxInteractions.spec.ts:30    | Source selection    |
+| Button   | "C64 Ultimate" / "C64U"   | Select C64U FTP source      | **CRITICAL** | ✅ FULL       | uxInteractions.spec.ts:79    | Source selection    |
+| Button   | "Add folder"              | Pick Android folder         | **HIGH**     | ❌ NONE       | -                            | Native picker       |
+| Button   | "Up" / "Back"             | Navigate up one level       | **HIGH**     | ✅ FULL       | uxInteractions.spec.ts:114   | Navigation          |
+| Button   | "Root"                    | Jump to source root         | **MEDIUM**   | ⚠️ PARTIAL    | uxInteractions.spec.ts:584   | Quick navigation    |
+| Button   | "Select all" (in browser) | Select all files in view    | **MEDIUM**   | ✅ FULL       | uxInteractions.spec.ts:173   | Bulk selection      |
+| Button   | "Add selected"            | Confirm and add to playlist | **CRITICAL** | ✅ FULL       | ui.spec.ts:174               | Confirmation        |
+| Checkbox | "Recurse folders"         | Include subfolders          | **MEDIUM**   | ✅ FULL       | playlistControls.spec.ts:181 | Option toggle       |
+| Dropdown | File type filter          | Filter by PRG/SID/etc       | **MEDIUM**   | ❌ NONE       | -                            | Filter control      |
+| Checkbox | File/folder checkbox      | Select for addition         | **HIGH**     | ✅ FULL       | uxInteractions.spec.ts:173   | Selection mechanism |
 
 ### 1.3 HVSC-Specific Features
 
@@ -84,15 +84,15 @@ This document provides a comprehensive inventory of all user-facing interactions
 
 ### 2.1 Drive Control CTAs
 
-| CTA          | Label                 | Purpose                          | Importance   | Test Coverage | Test File                  | Notes                 |
-| ------------ | --------------------- | -------------------------------- | ------------ | ------------- | -------------------------- | --------------------- |
-| Button       | "Mount"               | Mount disk to active drive       | **CRITICAL** | ✅ FULL       | diskManagement.spec.ts:232 | Core disk operation   |
-| Button       | "Eject"               | Unmount disk from drive          | **CRITICAL** | ✅ FULL       | diskManagement.spec.ts:232 | Core disk operation   |
-| Button       | "◀ Prev"              | Rotate to previous disk in group | **HIGH**     | ✅ FULL       | diskManagement.spec.ts:232 | Multi-disk navigation |
-| Button       | "Next ▶"              | Rotate to next disk in group     | **HIGH**     | ✅ FULL       | diskManagement.spec.ts:232 | Multi-disk navigation |
-| Radio/Button | "Drive A" / "Drive B" | Select active drive              | **HIGH**     | ✅ FULL       | diskManagement.spec.ts:232 | Drive selection       |
-| Toggle       | Drive enable/disable  | Turn drive on/off                | **MEDIUM**   | ❌ NONE       | -                          | Drive configuration   |
-| Button       | "Add disks"           | Open disk browser                | **CRITICAL** | ⚠️ PARTIAL    | uxInteractions.spec.ts:618 | Primary acquisition   |
+| CTA          | Label                 | Purpose                          | Importance   | Test Coverage | Test File                     | Notes                 |
+| ------------ | --------------------- | -------------------------------- | ------------ | ------------- | ----------------------------- | --------------------- |
+| Button       | "Mount"               | Mount disk to active drive       | **CRITICAL** | ✅ FULL       | diskManagement.spec.ts:232    | Core disk operation   |
+| Button       | "Eject"               | Unmount disk from drive          | **CRITICAL** | ✅ FULL       | diskManagement.spec.ts:232    | Core disk operation   |
+| Button       | "◀ Prev"              | Rotate to previous disk in group | **HIGH**     | ✅ FULL       | diskManagement.spec.ts:232    | Multi-disk navigation |
+| Button       | "Next ▶"              | Rotate to next disk in group     | **HIGH**     | ✅ FULL       | diskManagement.spec.ts:232    | Multi-disk navigation |
+| Radio/Button | "Drive A" / "Drive B" | Select active drive              | **HIGH**     | ✅ FULL       | diskManagement.spec.ts:232    | Drive selection       |
+| Toggle       | Drive enable/disable  | Turn drive on/off                | **MEDIUM**   | ❌ NONE       | -                             | Drive configuration   |
+| Button       | "Add disks"           | Open disk browser                | **CRITICAL** | ✅ FULL       | itemSelection.spec.ts:434,505 | Primary acquisition   |
 
 ### 2.2 Disk Library Management
 
@@ -112,11 +112,11 @@ This document provides a comprehensive inventory of all user-facing interactions
 
 | CTA      | Label                      | Purpose                    | Importance   | Test Coverage | Test File                 | Notes               |
 | -------- | -------------------------- | -------------------------- | ------------ | ------------- | ------------------------- | ------------------- |
-| Button   | "Local"                    | Select local disk source   | **CRITICAL** | ⚠️ PARTIAL    | uxInteractions.spec.ts:30 | Source selection    |
-| Button   | "C64 Ultimate"             | Select C64U FTP source     | **CRITICAL** | ⚠️ PARTIAL    | uxInteractions.spec.ts:79 | Source selection    |
-| Button   | "Add selected"             | Confirm and add to library | **CRITICAL** | ❌ NONE       | -                         | Confirmation        |
+| Button   | "Local"                    | Select local disk source   | **CRITICAL** | ✅ FULL       | itemSelection.spec.ts:505 | Source selection    |
+| Button   | "C64 Ultimate"             | Select C64U FTP source     | **CRITICAL** | ✅ FULL       | itemSelection.spec.ts:434 | Source selection    |
+| Button   | "Add selected"             | Confirm and add to library | **CRITICAL** | ✅ FULL       | itemSelection.spec.ts:434 | Confirmation        |
 | Checkbox | File filter (D64/D71/etc)  | Filter disk formats        | **MEDIUM**   | ❌ NONE       | -                         | File type filter    |
-| Checkbox | Disk checkbox (in browser) | Select disk                | **HIGH**     | ❌ NONE       | -                         | Selection mechanism |
+| Checkbox | Disk checkbox (in browser) | Select disk                | **HIGH**     | ✅ FULL       | itemSelection.spec.ts:434 | Selection mechanism |
 
 ---
 
@@ -124,13 +124,13 @@ This document provides a comprehensive inventory of all user-facing interactions
 
 ### 3.1 Quick Actions
 
-| CTA             | Label       | Purpose          | Importance | Test Coverage | Test File | Notes                         |
-| --------------- | ----------- | ---------------- | ---------- | ------------- | --------- | ----------------------------- |
-| QuickActionCard | "Reset"     | Hard reset C64   | **HIGH**   | ❌ NONE       | -         | Machine control               |
-| QuickActionCard | "Menu"      | Toggle C64U menu | **HIGH**   | ❌ NONE       | -         | Machine control               |
-| QuickActionCard | "Pause"     | Pause emulation  | **MEDIUM** | ❌ NONE       | -         | Machine control               |
-| QuickActionCard | "Resume"    | Resume emulation | **MEDIUM** | ❌ NONE       | -         | Machine control               |
-| QuickActionCard | "Power Off" | Power down C64   | **LOW**    | ❌ NONE       | -         | Machine control - destructive |
+| CTA             | Label       | Purpose          | Importance | Test Coverage | Test File                     | Notes                         |
+| --------------- | ----------- | ---------------- | ---------- | ------------- | ----------------------------- | ----------------------------- |
+| QuickActionCard | "Reset"     | Hard reset C64   | **HIGH**   | ✅ FULL       | homeInteractivity.spec.ts:120 | Machine control               |
+| QuickActionCard | "Menu"      | Toggle C64U menu | **HIGH**   | ✅ FULL       | homeInteractivity.spec.ts:120 | Machine control               |
+| QuickActionCard | "Pause"     | Pause emulation  | **MEDIUM** | ✅ FULL       | homeInteractivity.spec.ts:120 | Machine control               |
+| QuickActionCard | "Resume"    | Resume emulation | **MEDIUM** | ✅ FULL       | homeInteractivity.spec.ts:120 | Machine control               |
+| QuickActionCard | "Power Off" | Power down C64   | **LOW**    | ✅ FULL       | homeInteractivity.spec.ts:120 | Machine control - destructive |
 
 ### 3.2 Configuration Management
 
@@ -168,7 +168,7 @@ This document provides a comprehensive inventory of all user-facing interactions
 | ------ | --------------------- | --------------------- | ------------ | ------------- | ------------------------------ | ------------------- |
 | Input  | IP address / hostname | Set C64U address      | **CRITICAL** | ⚠️ PARTIAL    | settingsConnection.spec.ts     | Core configuration  |
 | Input  | Port number           | Set C64U port         | **HIGH**     | ⚠️ PARTIAL    | settingsConnection.spec.ts     | Core configuration  |
-| Button | "Test connection"     | Verify connectivity   | **HIGH**     | ❌ NONE       | -                              | Validation          |
+| Button | "Refresh connection"  | Verify connectivity   | **HIGH**     | ✅ FULL       | settingsConnection.spec.ts:194 | Validation          |
 | Toggle | "Auto-connect"        | Connect on app launch | **MEDIUM**   | ❌ NONE       | -                              | Convenience feature |
 | Toggle | "Mock mode"           | Use mock server       | **LOW**      | ✅ FULL       | settingsConnection.spec.ts:130 | Development only    |
 
@@ -178,7 +178,7 @@ This document provides a comprehensive inventory of all user-facing interactions
 | ----- | -------------- | ---------------------- | ---------- | ------------- | ------------------------------ | ---------- |
 | Radio | "Light theme"  | Set light color scheme | **MEDIUM** | ✅ FULL       | settingsConnection.spec.ts:97  | Appearance |
 | Radio | "Dark theme"   | Set dark color scheme  | **MEDIUM** | ✅ FULL       | settingsConnection.spec.ts:114 | Appearance |
-| Radio | "System theme" | Follow OS theme        | **MEDIUM** | ❌ NONE       | -                              | Appearance |
+| Radio | "System theme" | Follow OS theme        | **MEDIUM** | ✅ FULL       | settingsConnection.spec.ts:174 | Appearance |
 
 ### 4.3 Diagnostics
 
@@ -237,13 +237,13 @@ This document provides a comprehensive inventory of all user-facing interactions
 
 ### 7.1 CRITICAL Flows
 
-| Flow                            | Steps                                                                                                             | Importance   | Test Coverage | Test File                  | Notes               |
-| ------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------ | ------------- | -------------------------- | ------------------- |
-| **Add local files to playlist** | 1. Click "Add items"<br>2. Select "Local"<br>3. Navigate folders<br>4. Select files<br>5. Click "Add selected"    | **CRITICAL** | ✅ FULL       | playback.spec.ts:258       | Core acquisition    |
-| **Add C64U files to playlist**  | 1. Click "Add items"<br>2. Select "C64 Ultimate"<br>3. Navigate FTP<br>4. Select files<br>5. Click "Add selected" | **CRITICAL** | ✅ FULL       | playback.spec.ts:166       | Core acquisition    |
-| **Play a song**                 | 1. Add items to playlist<br>2. Click "Play"                                                                       | **CRITICAL** | ✅ FULL       | playback.spec.ts:359       | Core playback       |
-| **Mount a disk**                | 1. Navigate to Disks<br>2. Select drive<br>3. Click disk<br>4. Click "Mount"                                      | **CRITICAL** | ✅ FULL       | diskManagement.spec.ts:232 | Core disk operation |
-| **Add disks to library**        | 1. Click "Add disks"<br>2. Select source<br>3. Browse and select<br>4. Click "Add selected"                       | **CRITICAL** | ❌ NONE       | -                          | Core acquisition    |
+| Flow                            | Steps                                                                                                             | Importance   | Test Coverage | Test File                     | Notes               |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------ | ------------- | ----------------------------- | ------------------- |
+| **Add local files to playlist** | 1. Click "Add items"<br>2. Select "Local"<br>3. Navigate folders<br>4. Select files<br>5. Click "Add selected"    | **CRITICAL** | ✅ FULL       | playback.spec.ts:258          | Core acquisition    |
+| **Add C64U files to playlist**  | 1. Click "Add items"<br>2. Select "C64 Ultimate"<br>3. Navigate FTP<br>4. Select files<br>5. Click "Add selected" | **CRITICAL** | ✅ FULL       | playback.spec.ts:166          | Core acquisition    |
+| **Play a song**                 | 1. Add items to playlist<br>2. Click "Play"                                                                       | **CRITICAL** | ✅ FULL       | playback.spec.ts:359          | Core playback       |
+| **Mount a disk**                | 1. Navigate to Disks<br>2. Select drive<br>3. Click disk<br>4. Click "Mount"                                      | **CRITICAL** | ✅ FULL       | diskManagement.spec.ts:232    | Core disk operation |
+| **Add disks to library**        | 1. Click "Add disks"<br>2. Select source<br>3. Browse and select<br>4. Click "Add selected"                       | **CRITICAL** | ✅ FULL       | itemSelection.spec.ts:434,505 | Core acquisition    |
 
 ### 7.2 HIGH Priority Flows
 
@@ -264,7 +264,7 @@ This document provides a comprehensive inventory of all user-facing interactions
 | **Select SID subsong**       | 1. Click item menu "..."<br>2. Select "Choose subsong"<br>3. Enter song number<br>4. Confirm | **MEDIUM** | ✅ FULL       | playlistControls.spec.ts:229      | SID-specific           |
 | **Rotate multi-disk group**  | 1. Mount disk from group<br>2. Click "Next"/"Prev"<br>3. New disk auto-mounts                | **MEDIUM** | ✅ FULL       | diskManagement.spec.ts:232        | Multi-disk convenience |
 | **Rename disk**              | 1. Click disk menu "..."<br>2. Select "Rename"<br>3. Enter new name<br>4. Confirm            | **MEDIUM** | ✅ FULL       | diskManagement.spec.ts:307        | Library organization   |
-| **Enable shuffle**           | 1. Check "Shuffle"<br>2. Playlist reorders<br>3. Play to test                                | **MEDIUM** | ❌ NONE       | -                                 | Playback mode          |
+| **Enable shuffle**           | 1. Check "Shuffle"<br>2. Playlist reorders<br>3. Play to test                                | **MEDIUM** | ✅ FULL       | playlistControls.spec.ts:85,113   | Playback mode          |
 | **Change theme**             | 1. Navigate to Settings<br>2. Select theme<br>3. UI updates                                  | **MEDIUM** | ✅ FULL       | settingsConnection.spec.ts:97,114 | Appearance             |
 
 ### 7.4 LOW Priority Flows
@@ -323,29 +323,21 @@ This document provides a comprehensive inventory of all user-facing interactions
 
 #### CRITICAL (Missing Coverage)
 
-1. ❌ Add disks to library flow (end-to-end)
+1. None currently identified.
 
 #### HIGH (Missing Coverage)
 
-1. ❌ Shuffle mode enable/disable
-2. ❌ Quick action cards on Home page (Reset, Menu, Pause, Resume, Power Off)
-3. ❌ Drive status card navigation
-4. ❌ Android folder picker flow
-5. ❌ Disk browser source selection
+1. ❌ Drive status card navigation
+2. ❌ Android folder picker flow
 
 #### MEDIUM (Missing Coverage)
 
-1. ❌ Reshuffle button
-2. ❌ Recurse folders toggle
-3. ❌ File type filter dropdown
-4. ❌ HVSC installation cancel
-5. ❌ Drive enable/disable toggle
-6. ❌ Set disk group flow
-7. ❌ Add selected disks confirmation
-8. ❌ System theme selection
-9. ❌ Test connection button
-10. ❌ Auto-connect toggle
-11. ❌ View logs expansion
+1. ❌ File type filter dropdown
+2. ❌ HVSC installation cancel
+3. ❌ Drive enable/disable toggle
+4. ❌ Set disk group flow
+5. ❌ Auto-connect toggle
+6. ❌ View logs expansion
 
 ---
 
@@ -353,23 +345,23 @@ This document provides a comprehensive inventory of all user-facing interactions
 
 ### Phase 1: CRITICAL Gaps (Target: 100%)
 
-- [ ] Add disks to library E2E flow
+- [x] Add disks to library E2E flow
 
 ### Phase 2: HIGH Gaps (Target: 95%+)
 
-- [ ] Shuffle mode tests
-- [ ] Home page quick actions
+- [x] Shuffle mode tests
+- [x] Home page quick actions
 - [ ] Drive navigation from Home
 - [ ] Disk browser source selection
 
 ### Phase 3: MEDIUM Gaps (Target: 80%+)
 
-- [ ] Playlist options (reshuffle, recurse)
+- [x] Playlist options (reshuffle, recurse)
 - [ ] Filter controls
 - [ ] HVSC edge cases
 - [ ] Drive configuration
 - [ ] Disk organization (groups)
-- [ ] Settings appearance options
+- [x] Settings appearance options
 
 ### Phase 4: LOW Priority (Target: 50%+)
 

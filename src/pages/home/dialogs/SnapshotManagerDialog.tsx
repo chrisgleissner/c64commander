@@ -46,6 +46,7 @@ function SnapshotRow({
   onDelete: (id: string) => void;
   onUpdateLabel: (id: string, label: string) => void;
 }) {
+  const { profile } = useDisplayProfile();
   const typeConfig = SNAPSHOT_TYPE_LIST.find((c) => c.type === snapshot.snapshotType);
   const typeLabel = typeConfig?.label ?? snapshot.snapshotType;
   const ranges = snapshot.metadata.display_ranges.join(", ");
@@ -109,7 +110,13 @@ function SnapshotRow({
             className="rounded-md border border-border/60 bg-background p-2.5"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="grid grid-cols-1 gap-2 text-[11px] md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-end">
+            <div
+              className={
+                profile === "expanded"
+                  ? "grid grid-cols-[minmax(0,1fr)_auto_auto] items-end gap-2 text-[11px]"
+                  : "grid grid-cols-1 gap-2 text-[11px]"
+              }
+            >
               <div className="space-y-1">
                 <label htmlFor={`snapshot-comment-${snapshot.id}`} className="text-muted-foreground">
                   Comment

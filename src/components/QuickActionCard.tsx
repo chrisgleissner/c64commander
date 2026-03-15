@@ -7,6 +7,8 @@
  */
 
 import { LucideIcon } from "lucide-react";
+import { useDisplayProfile } from "@/hooks/useDisplayProfile";
+import { useProfileActionGridDensity } from "@/components/layout/PageContainer";
 import { cn } from "@/lib/utils";
 import { handlePointerButtonClick } from "@/lib/ui/buttonInteraction";
 
@@ -18,7 +20,6 @@ interface QuickActionCardProps {
   variant?: "default" | "danger" | "success";
   disabled?: boolean;
   loading?: boolean;
-  compact?: boolean;
   className?: string;
   dataTestId?: string;
 }
@@ -31,10 +32,12 @@ export function QuickActionCard({
   variant = "default",
   disabled = false,
   loading = false,
-  compact = false,
   className,
   dataTestId,
 }: QuickActionCardProps) {
+  const { profile } = useDisplayProfile();
+  const density = useProfileActionGridDensity();
+  const compact = density === "compact" || (density === "adaptive" && profile === "compact");
   const variantClasses = {
     default: "hover:border-primary hover:bg-primary/5",
     danger: "hover:border-destructive hover:bg-destructive/5",

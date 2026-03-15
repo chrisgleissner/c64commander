@@ -4,8 +4,8 @@
 
 ### Classification
 
-- Audit classification: `DOC_ONLY`.
-- Scope: verification and investigation only; no product code or test implementation changes were made in this audit pass.
+- Audit classification: `UI_CHANGE`.
+- Scope: the branch started as an audit, then continued into product code, test, screenshot, and documentation remediation for the Review 9 findings.
 
 ### Investigation Steps
 
@@ -92,3 +92,14 @@
 - Shared component inventory was completed for the high-value profile-sensitive surfaces.
 - Compact, Medium, and Expanded behavior were assessed.
 - Modal behavior, CTA reachability evidence, screenshot coverage, and test coverage gaps were documented in `doc/research/review-9/review-9.md`.
+
+## 2026-03-15
+
+### Remediation Summary
+
+- Replaced the remaining audited raw-breakpoint layout debt across the targeted Home, Play, Settings, and shared list surfaces with profile-aware layout logic.
+- Moved quick-action density selection behind shared profile-aware context and updated `QuickActionCard` call sites and tests to the new contract.
+- Reconciled the UX inventory with the existing and newly added Playwright coverage for Add disks, Shuffle, Reshuffle, Recurse folders, Home quick actions, Refresh connection, and System theme.
+- Added a raw-breakpoint guardrail plus focused regressions for profile overflow and shared quick-action behavior.
+- Renamed diagnostics detail screenshots away from legacy `*-expanded.png` naming and regenerated the canonical screenshot set.
+- Continued with follow-up polish for Compact spacing, Home full-page profile captures, and the Play Expanded transport layout.

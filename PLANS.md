@@ -1,149 +1,88 @@
-# Display Profiles Audit Plan
+# Review 9 Remediation Plan
 
-Classification: `DOC_ONLY`
+Classification: `UI_CHANGE`
 
-Scope: rigorous UX and frontend architecture audit of the current display-profile system, with evidence limited to repository documentation, source code, tests, and screenshot infrastructure.
+Scope: resolve every outstanding Review 9 display-profile issue still present in the repository, keep the review-9 remediation record current while implementing, regenerate affected screenshots, validate the changed UI and tests, then commit, push, and confirm CI passes.
+
+## Required Reading
+
+- [ ] Read `.github/copilot-instructions.md` before editing.
+- [ ] Read `AGENTS.md` before editing.
+- [ ] Read `doc/display-profiles.md` before editing profile-sensitive surfaces.
+- [ ] Read `doc/ux-guidelines.md` before changing visible UI.
+- [ ] Read `doc/ux-interactions.md` before changing or adding CTA coverage.
+- [ ] Read `doc/architecture.md` before changing shared layout boundaries.
+- [ ] Read every document in `doc/research/review-9/` before changing code or docs.
+
+## Work Log Requirement
+
+- [ ] Maintain `doc/research/review-9/remediation-log.md` throughout the implementation.
+- [ ] Record every meaningful implementation batch, validation result, screenshot regeneration step, commit, push, and CI result.
+
+## Issue Inventory
+
+### Open Review 9 Issues
+
+- [ ] Tighten Compact outer spacing by reducing Compact page padding 50% without regressing safe-area handling.
+- [ ] Preserve a small visible outer inset around Compact diagnostics dialogs so the modal frame and title are not clipped.
+- [ ] Capture the full Home page for Compact, Medium, and Expanded profile screenshots instead of viewport-only overviews.
+- [ ] Keep Play transport metadata and controls stacked, left-aligned, and full-width in Expanded screenshots.
+- [ ] Resolve the remaining documentation and typing review comments in `PLANS.md`, `ItemSelectionDialog.tsx`, `work-log.md`, and `review-9.md`.
+
+## Phase 1 - Issue Revalidation And Planning
+
+- [ ] Re-read the live Review 9 documents and reconcile stale findings against the current codebase.
+- [ ] Update this plan as implementation decisions narrow or expand the affected surface.
+- [ ] Log the issue inventory and chosen remediation strategy in `doc/research/review-9/remediation-log.md`.
+
+## Phase 2 - Profile Branching Cleanup
+
+- [x] Refactor `src/components/lists/SelectableActionList.tsx` to remove remaining raw breakpoint layout rules.
+- [x] Refactor `src/pages/home/components/DriveManager.tsx` to use profile-aware column rules.
+- [x] Refactor `src/pages/home/DriveCard.tsx` to guarantee Compact-safe metadata stacking via display-profile context.
+- [x] Refactor `src/pages/home/components/StreamStatus.tsx` to replace raw breakpoint editor layout with profile-aware layout.
+- [x] Refactor `src/pages/home/dialogs/SnapshotManagerDialog.tsx` to replace raw breakpoint editor layout with profile-aware layout.
+- [ ] Refine `src/pages/playFiles/components/PlaybackControlsCard.tsx` so Expanded keeps the transport stack full-width and left-aligned.
+- [x] Refactor `src/pages/playFiles/components/VolumeControls.tsx` to replace raw width branching with profile-aware layout.
+- [x] Refactor the remaining Settings advanced-controls grid in `src/pages/SettingsPage.tsx` to use display-profile-aware layout.
+
+## Phase 3 - Shared Contract Normalization
+
+- [x] Move quick-action density selection into `src/components/layout/PageContainer.tsx` or another shared profile-aware boundary.
+- [x] Update `src/components/QuickActionCard.tsx` to consume shared profile-aware density instead of a caller-owned `compact` prop.
+- [x] Update all `QuickActionCard` call sites to remove the obsolete prop contract.
+- [x] Refactor `src/components/ConfigItemRow.tsx` to consume display-profile context directly while preserving justified measurement fallbacks.
+- [ ] Add or update focused regression tests for the remaining Compact spacing and Expanded transport regressions.
+
+## Phase 4 - Verification And Guardrails
+
+- [x] Audit existing Playwright coverage for Add disks, Shuffle, Reshuffle, Recurse folders, Home quick actions, System theme, and Test connection.
+- [x] Add missing deterministic Playwright coverage for any still-uncovered flows.
+- [x] Add a repository-enforced guardrail against raw breakpoint logic in the audited display-profile surfaces.
+- [x] Update `doc/ux-interactions.md` so the coverage inventory matches the post-remediation reality.
+
+## Phase 5 - Screenshot And Documentation Cleanup
+
+- [x] Rename diagnostics screenshot outputs and README references to remove legacy `*-expanded.png` naming outside profile folders.
+- [ ] Regenerate the affected screenshots under `doc/img/`, including the Compact diagnostics modal, Home profile full-page captures, and Play Expanded overview.
+- [x] Update `doc/research/review-9/carry-forward.md` to reflect the resolved and remaining status after implementation.
+- [ ] Reconcile `doc/research/review-9/work-log.md` and `doc/research/review-9/review-9.md` with the implementation work already completed on this branch.
+
+## Phase 6 - Validation, Commit, Push, CI
+
+- [ ] Run targeted unit and Playwright regression validation while implementing.
+- [ ] Run `npm run lint`.
+- [ ] Run `npm run test:coverage` and confirm global branch coverage is at least 91%.
+- [ ] Run the required E2E validation for the changed surfaces.
+- [ ] Run the screenshot regeneration flow.
+- [ ] Run `npm run build`.
+- [ ] Commit the completed remediation work.
+- [ ] Push the branch.
+- [ ] Confirm the pushed CI run passes.
 
 ## Progress
 
-- Status: In progress
-- Status: Complete
+- Status: In progress. Core Review 9 remediation is implemented; final compact/layout polish, screenshot refresh, and validation remain.
 - Started: 2026-03-15
-- Convergence pass 1: complete
-- Convergence pass 2: complete
-
-## Phases And Tasks
-
-### Phase 1 - Control Documents
-
-- [x] Read `doc/display-profiles.md`.
-- [x] Read `doc/ux-guidelines.md`.
-- [x] Read `doc/ux-interactions.md`.
-- [x] Read `doc/architecture.md`.
-- [x] Review prior display-profile planning and review artifacts for implemented-vs-planned boundary.
-- [x] Initialize `doc/research/review-9/worklog.md`.
-- [x] Initialize `doc/research/review-9/display-profiles-review.md`.
-
-### Phase 2 - Implementation Inventory
-
-- [x] Inspect display-profile definitions and tokens.
-- [x] Inspect profile selection, override persistence, and root token application.
-- [x] Inspect modal presentation policy.
-- [x] Inspect page-shell and shared layout containers.
-- [x] Inspect remaining viewport-responsive helpers that may bypass profile context.
-
-### Phase 3 - Surface Audit
-
-- [x] Audit Home surfaces for compact usability and medium/expanded stability.
-- [x] Audit Play surfaces for list density, CTA reachability, and scroll behavior.
-- [x] Audit Disks surfaces for drive controls, list density, and overflow handling.
-- [x] Audit Config surfaces for typography, row wrapping, inline editors, and touch targets.
-- [x] Audit Settings surfaces for override UX and compact dialog behavior.
-
-### Phase 4 - Shared Component Audit
-
-- [x] Audit `SelectableActionList`.
-- [x] Audit `ItemSelectionDialog`.
-- [x] Audit `QuickActionCard`.
-- [x] Audit `ConfigItemRow`.
-- [x] Audit dialog primitives and presentation wrappers.
-- [x] Audit page headers, app shell, and action clusters.
-
-### Phase 5 - Verification Audit
-
-- [x] Inspect unit tests for resolver, provider, and modal policy.
-- [x] Inspect Playwright coverage for compact, medium, expanded, overflow, and CTA reachability.
-- [x] Inspect screenshot generation and profile-specific visual evidence.
-- [x] Check documentation-to-implementation consistency.
-- [x] Record regression-risk assessment for medium and expanded profiles.
-
-### Phase 6 - Convergence
-
-- [x] Verification pass 1: confirm every implementation file in scope was inspected.
-- [x] Verification pass 2: confirm every required documentation file and validation file was inspected.
-- [x] Finalize findings, severity, evidence, remediation, and follow-up tasks.
-- [x] Mark all plan tasks complete.
-
-## Files To Inspect
-
-### Required Documentation
-
-- `doc/display-profiles.md`
-- `doc/ux-guidelines.md`
-- `doc/ux-interactions.md`
-- `doc/architecture.md`
-- `doc/plans/display-profiles/display-profiles-gap-analysis.md`
-- `doc/plans/display-profiles/display-profiles-implementation-plan.md`
-- `doc/plans/display-profiles/work-log.md`
-
-### Core Implementation
-
-- `src/lib/displayProfiles.ts`
-- `src/hooks/useDisplayProfile.tsx`
-- `src/lib/uiPreferences.ts`
-- `src/lib/modalPresentation.ts`
-- `src/App.tsx`
-- `src/index.css`
-
-### Profile-Aware Surfaces And Shared Components
-
-- `src/components/layout/PageContainer.tsx`
-- `src/components/SelectableActionList.tsx`
-- `src/components/itemSelection/ItemSelectionDialog.tsx`
-- `src/components/QuickActionCard.tsx`
-- `src/components/ConfigItemRow.tsx`
-- `src/components/ui/dialog.tsx`
-- `src/components/ui/alert-dialog.tsx`
-- `src/components/AppBar.tsx`
-- `src/components/DriveManager.tsx`
-- `src/pages/home/components/DriveManager.tsx`
-- `src/pages/home/components/StreamStatus.tsx`
-- `src/pages/home/dialogs/SnapshotManagerDialog.tsx`
-
-### Routed Pages
-
-- `src/pages/HomePage.tsx`
-- `src/pages/PlayFilesPage.tsx`
-- `src/pages/DisksPage.tsx`
-- `src/pages/ConfigBrowserPage.tsx`
-- `src/pages/SettingsPage.tsx`
-
-### Responsive Debt / Alternate Heuristics
-
-- `src/components/ui/sidebar.tsx`
-- any file using `ResizeObserver`, width measurement, or ad hoc viewport checks on audited surfaces
-
-### Tests And Visual Validation
-
-- `src/lib/displayProfiles.test.ts`
-- `src/hooks/useDisplayProfile.test.tsx`
-- `src/lib/modalPresentation.test.ts`
-- `playwright/displayProfileViewports.ts`
-- `playwright/displayProfiles.spec.ts`
-- relevant viewport/overflow Playwright specs touching audited surfaces
-- screenshot assets under `doc/img/` that are profile-specific
-
-## Verification Passes
-
-### Pass 1 Checklist
-
-- [x] Every profile-definition and profile-consumer file reviewed.
-- [x] Every major routed surface reviewed.
-- [x] Every shared component named in `doc/display-profiles.md` reviewed.
-
-### Pass 2 Checklist
-
-- [x] Required docs rechecked against implementation evidence.
-- [x] Test and screenshot evidence rechecked against findings.
-- [x] No additional uncited issues remain in mapped scope.
-
-## Open Questions
-
-- None.
-
-## Progress Log
-
-- 2026-03-15: Established `DOC_ONLY` audit classification, reviewed the mandatory display-profile and UX source-of-truth documents, and mapped the initial implementation surface for display-profile resolution, profile-aware layouts, and validation files.
-- 2026-03-15: Completed the implementation inventory across `src/lib/displayProfiles.ts`, `src/hooks/useDisplayProfile.tsx`, `src/lib/modalPresentation.ts`, `src/index.css`, shared layout containers, routed page shells, and key profile-sensitive components.
-- 2026-03-15: Completed the first validation inventory across resolver/provider/modal unit tests, `playwright/displayProfiles.spec.ts`, `playwright/screenshots.spec.ts`, and the generated `doc/img/app/**/profiles/` screenshot tree.
-- 2026-03-15: Rechecked README and source-of-truth docs against the current implementation, finalized the audit report, and completed both required convergence passes.
+- Work log: `doc/research/review-9/remediation-log.md`
+- Last updated: 2026-03-15

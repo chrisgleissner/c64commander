@@ -25,6 +25,9 @@ describe("displayProfiles", () => {
     expect(getDisplayProfileLayoutTokens("compact")).toMatchObject({
       actionGridColumns: 2,
       isCompactDialog: true,
+      modalInset: "1rem",
+      pagePaddingX: "0.5rem",
+      pagePaddingY: "0.5rem",
       rootFontSize: "16px",
     });
     expect(getDisplayProfileLayoutTokens("medium")).toMatchObject({

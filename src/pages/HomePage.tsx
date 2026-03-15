@@ -835,13 +835,12 @@ function HomePageContent() {
             <SectionHeader title="Config">
               {isApplying && <span className="ml-2 text-xs text-muted-foreground">Applying…</span>}
             </SectionHeader>
-            <ProfileActionGrid compactColumns={2} mediumColumns={4} expandedColumns={4}>
+            <ProfileActionGrid compactColumns={2} mediumColumns={4} expandedColumns={4} cardDensity="compact">
               <QuickActionCard
                 icon={Save}
                 label="Save"
                 description="To flash"
                 variant="success"
-                compact
                 onClick={() => handleAction(() => controls.saveConfig.mutateAsync(), "Config saved to flash")}
                 disabled={!isActive || machineTaskBusy}
                 loading={controls.saveConfig.isPending}
@@ -850,7 +849,6 @@ function HomePageContent() {
                 icon={RefreshCw}
                 label="Load"
                 description="From flash"
-                compact
                 onClick={() => handleAction(() => controls.loadConfig.mutateAsync(), "Config loaded from flash")}
                 disabled={!isActive || machineTaskBusy}
                 loading={controls.loadConfig.isPending}
@@ -860,7 +858,6 @@ function HomePageContent() {
                 label="Reset"
                 description="To default"
                 variant="danger"
-                compact
                 onClick={() => handleAction(() => controls.resetConfig.mutateAsync(), "Config reset to defaults")}
                 disabled={!isActive || machineTaskBusy}
                 loading={controls.resetConfig.isPending}
@@ -870,7 +867,6 @@ function HomePageContent() {
                 label="Save"
                 description="To App"
                 variant="success"
-                compact
                 dataTestId="home-config-save-app"
                 onClick={() => setSaveDialogOpen(true)}
                 disabled={!isActive || isSaving || machineTaskBusy}
@@ -880,7 +876,6 @@ function HomePageContent() {
                 icon={Download}
                 label="Load"
                 description="From App"
-                compact
                 dataTestId="home-config-load-app"
                 onClick={() => setLoadDialogOpen(true)}
                 disabled={!isActive || appConfigs.length === 0 || machineTaskBusy}
@@ -889,7 +884,6 @@ function HomePageContent() {
                 icon={RotateCcw}
                 label="Revert"
                 description="Changes"
-                compact
                 dataTestId="home-config-revert-changes"
                 onClick={() => handleAction(() => revertToInitial(), "Config reverted")}
                 disabled={!isActive || isApplying || !hasChanges || machineTaskBusy}
@@ -899,7 +893,6 @@ function HomePageContent() {
                 icon={FolderOpen}
                 label="Manage"
                 description="App Configs"
-                compact
                 dataTestId="home-config-manage-app"
                 onClick={() => setManageDialogOpen(true)}
                 disabled={!isActive || appConfigs.length === 0 || machineTaskBusy}

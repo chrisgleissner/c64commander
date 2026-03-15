@@ -101,12 +101,13 @@ import { discoverConnection } from "@/lib/connection/connectionManager";
 import { useConnectionState } from "@/hooks/useConnectionState";
 import { useNavigate } from "react-router-dom";
 import { DISPLAY_PROFILE_OVERRIDE_LABELS, DISPLAY_PROFILE_OVERRIDE_SEQUENCE } from "@/lib/displayProfiles";
-import { useDisplayProfilePreference } from "@/hooks/useDisplayProfile";
+import { useDisplayProfile, useDisplayProfilePreference } from "@/hooks/useDisplayProfile";
 import { PageContainer, PageStack, ProfileSplitSection } from "@/components/layout/PageContainer";
 
 type Theme = "light" | "dark" | "system";
 
 export default function SettingsPage() {
+  const { profile } = useDisplayProfile();
   const navigate = useNavigate();
   const { status, baseUrl, runtimeBaseUrl, password, deviceHost, updateConfig, refetch } = useC64Connection();
   const connectionSnapshot = useConnectionState();
@@ -1278,7 +1279,7 @@ export default function SettingsPage() {
                 </p>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className={profile === "expanded" ? "grid gap-4 grid-cols-2" : "grid gap-4 grid-cols-1"}>
                 <div className="space-y-2">
                   <Label htmlFor="ftp-concurrency" className="text-sm">
                     FTP max concurrency

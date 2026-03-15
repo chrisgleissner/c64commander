@@ -14,6 +14,7 @@ import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { emitUiTraceMarker } from "@/lib/tracing/userTrace";
 import { useC64ConfigItem } from "@/hooks/useC64Connection";
+import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { getCheckboxMapping, inferControlKind } from "@/lib/config/controlType";
 import { cn } from "@/lib/utils";
 
@@ -46,12 +47,16 @@ type ConfigItemLayoutMode = "horizontal" | "vertical";
 const HORIZONTAL_GAP_PX = 12;
 const HORIZONTAL_LABEL_PADDING_PX = 16;
 
-const useAdaptiveLabelLayout = (label: string, widgetMinWidth: number) => {
+const useAdaptiveLabelLayout = (label: string, widgetMinWidth: number, profile: "compact" | "medium" | "expanded") => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const labelRef = useRef<HTMLSpanElement | null>(null);
   const [layout, setLayout] = useState<ConfigItemLayoutMode>("horizontal");
 
   const measureLayout = useCallback(() => {
+    if (profile === "compact") {
+      setLayout((prev) => (prev === "vertical" ? prev : "vertical"));
+      return;
+    }
     const container = containerRef.current;
     const labelEl = labelRef.current;
     if (!container || !labelEl) return;
@@ -64,7 +69,7 @@ const useAdaptiveLabelLayout = (label: string, widgetMinWidth: number) => {
     const nextLayout: ConfigItemLayoutMode =
       labelIsVertical || containerWidth < requiredWidth ? "vertical" : "horizontal";
     setLayout((prev) => (prev === nextLayout ? prev : nextLayout));
-  }, [widgetMinWidth]);
+  }, [profile, widgetMinWidth]);
 
   useLayoutEffect(() => {
     measureLayout();
@@ -217,7 +222,8 @@ export function ConfigItemRow({
   const displayLabel = label ?? name;
   const formatOption = (option: string) => (formatOptionLabel ? formatOptionLabel(option) : option);
 
-  const { layout, containerRef, labelRef } = useAdaptiveLabelLayout(displayLabel, widgetMinWidth);
+  const { profile } = useDisplayProfile();
+  const { layout, containerRef, labelRef } = useAdaptiveLabelLayout(displayLabel, widgetMinWidth, profile);
 
   const rowClassName = cn(
     "settings-row w-full",

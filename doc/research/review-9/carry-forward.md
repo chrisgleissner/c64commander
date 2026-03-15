@@ -33,25 +33,25 @@
 
 ### R9-005 - Remaining profile debt in Home and playback subcomponents
 
-- Status: open
-- Evidence: Review 9 findings remain valid for `src/pages/home/components/DriveManager.tsx`, `src/pages/home/components/StreamStatus.tsx`, `src/pages/home/DriveCard.tsx`, `src/pages/playFiles/components/PlaybackControlsCard.tsx`, and `src/pages/playFiles/components/VolumeControls.tsx`.
-- Next action: replace the remaining `md:` / `sm:` structural layout branches with display-profile-aware helpers and re-audit the Compact and Expanded behavior of those surfaces.
+- Status: resolved
+- Evidence: `src/pages/home/components/DriveManager.tsx`, `src/pages/home/components/StreamStatus.tsx`, `src/pages/home/DriveCard.tsx`, `src/pages/home/dialogs/SnapshotManagerDialog.tsx`, `src/pages/playFiles/components/PlaybackControlsCard.tsx`, `src/pages/playFiles/components/VolumeControls.tsx`, `src/components/lists/SelectableActionList.tsx`, and `src/pages/SettingsPage.tsx` now route the reviewed structural layout branches through display-profile-aware logic instead of raw `sm:` / `md:` breakpoints.
+- Next action: none.
 
 ### R9-006 - CTA coverage gaps outside current remediation scope
 
-- Status: open
-- Evidence: Review 9 still identifies missing or partial proof for Home machine quick actions, Add disks, Shuffle/Reshuffle, Recurse folders, and Test connection.
-- Next action: add deterministic Playwright coverage for those flows and update `doc/ux-interactions.md` to reflect the new coverage state.
+- Status: resolved
+- Evidence: `playwright/homeInteractivity.spec.ts`, `playwright/settingsConnection.spec.ts`, and `playwright/playlistControls.spec.ts` now cover Home machine quick actions, confirmed power off, System theme, Refresh connection, and Recurse folders; `doc/ux-interactions.md` was reconciled with the pre-existing Add disks, Shuffle, and Reshuffle coverage already present elsewhere in the suite.
+- Next action: none.
 
 ### R9-007 - Config row remains measurement-driven instead of profile-driven
 
-- Status: deferred
-- Evidence: `src/components/ConfigItemRow.tsx` still relies on `ResizeObserver` and measured adaptive layout instead of consuming the centralized display-profile context directly.
-- Next action: revisit only if the measurement-based approach starts diverging from profile tokens or causes Compact/Expanded regressions.
+- Status: resolved
+- Evidence: `src/components/ConfigItemRow.tsx` now consumes `useDisplayProfile()` directly and forces Compact rows to the vertical layout before falling back to measurement for non-Compact adaptation.
+- Next action: none.
 
 ## Open Item Count
 
-- Open: 2
-- Deferred: 1
+- Open: 0
+- Deferred: 0
 - Blocked: 0
-- Resolved: 4
+- Resolved: 7

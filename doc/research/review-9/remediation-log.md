@@ -1,5 +1,30 @@
 # Review 9 Remediation Log
 
+## 2026-03-15T12:00:00Z
+
+### Current remediation pass opened
+
+- Re-read the full `doc/research/review-9/` document set, including `review-9.md`, `display-profiles-review.md`, `carry-forward.md`, `remediation-log.md`, `work-log.md`, and `worklog.md`.
+- Confirmed that the previously resolved items remain resolved and that the live remaining work is still concentrated in:
+  - profile-sensitive Home / Play / Settings layout debt
+  - `QuickActionCard` caller-owned density contract
+  - `ConfigItemRow` measurement-only contract
+  - stale UX coverage inventory entries versus actual Playwright coverage
+  - missing Settings coverage for `System theme` and `Test connection`
+  - legacy diagnostics screenshot filenames using `expanded` outside profile folders
+  - lack of an automated guardrail against new raw breakpoint classes in the audited surfaces
+- Replaced `PLANS.md` with a multi-phase implementation plan that maps each outstanding Review 9 issue to concrete code, test, documentation, screenshot, validation, commit, push, and CI tasks.
+- Next step: implement the remaining profile-branching cleanup and shared-component contract changes before updating the test inventory.
+
+## 2026-03-15T13:30:00Z
+
+### Profile cleanup and coverage pass completed
+
+- Replaced the remaining reviewed `sm:` / `md:` structural branches in Home, Play, Settings, and the shared selection list with display-profile-aware logic.
+- Normalized `QuickActionCard` to consume shared profile/grid density context and updated `ConfigItemRow` so Compact layout is profile-driven before measurement fallback.
+- Added regression coverage for shared profile behavior and new Playwright proofs for Home machine quick actions, confirmed power off, System theme, Refresh connection, and Recurse folders.
+- Reconciled `doc/ux-interactions.md` with the current suite and renamed diagnostics screenshot outputs to avoid reusing `expanded` outside the profile-folder convention.
+
 ## 2026-03-15T00:00:00Z
 
 ### Issues addressed

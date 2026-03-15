@@ -292,6 +292,24 @@ test.describe("display profiles", () => {
     await expect(page.getByTestId("play-primary-layout")).toHaveAttribute("data-profile", "expanded");
   });
 
+  test("expanded override on a phone viewport keeps the shell inside the viewport", async ({
+    page,
+  }: {
+    page: Page;
+  }) => {
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await applyDisplayProfileViewport(page, "expanded");
+
+    await expect(page.getByTestId("home-machine-controls")).toHaveAttribute("data-profile", "expanded");
+
+    const hasHorizontalOverflow = await page.evaluate(() => {
+      const root = document.documentElement;
+      return root.scrollWidth > window.innerWidth + 1;
+    });
+
+    expect(hasHorizontalOverflow).toBe(false);
+  });
+
   test("source chooser order and scoped selection stay stable across all display profiles", async ({
     page,
   }: {

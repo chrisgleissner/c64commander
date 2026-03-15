@@ -296,6 +296,7 @@ export const SelectableActionList = ({
   selectionLabel,
 }: SelectableActionListProps) => {
   const { profile } = useDisplayProfile();
+  const isCompact = profile === "compact";
   const [viewAllOpen, setViewAllOpen] = useState(false);
   const [filterText, setFilterText] = useState("");
   const [viewAllFilterText, setViewAllFilterText] = useState("");
@@ -469,11 +470,18 @@ export const SelectableActionList = ({
               "mx-auto p-0 overflow-hidden",
               profile === "compact"
                 ? ""
-                : "h-[min(70vh,calc(100dvh-4rem))] max-h-[calc(100dvh-4rem)] sm:w-full sm:max-w-[36rem]",
+                : profile === "expanded"
+                  ? "h-[min(70vh,calc(100dvh-4rem))] max-h-[calc(100dvh-4rem)] max-w-[42rem]"
+                  : "h-[min(70vh,calc(100dvh-4rem))] max-h-[calc(100dvh-4rem)] max-w-[36rem]",
             )}
           >
             <div className="flex h-full min-h-0 flex-col min-w-0 relative" data-testid="action-list-view-all">
-              <DialogHeader className="border-b border-border px-6 pb-3 pt-6 space-y-3">
+              <DialogHeader
+                className={cn(
+                  "border-b border-border",
+                  isCompact ? "space-y-2 px-3 pb-2 pt-3" : "space-y-3 px-6 pb-3 pt-6",
+                )}
+              >
                 <div>
                   <DialogTitle>{viewAllTitle || title}</DialogTitle>
                   <DialogDescription>Review all items in this list.</DialogDescription>
@@ -504,8 +512,13 @@ export const SelectableActionList = ({
                   <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2">{filterHeader}</div>
                 ) : null}
               </DialogHeader>
-              <div className="flex-1 min-h-0 flex flex-col px-6 py-4">
-                <div className="bg-card border border-border rounded-xl p-4 overflow-hidden flex-1 h-full min-h-0 flex flex-col">
+              <div className={cn("flex-1 min-h-0 flex flex-col", isCompact ? "px-3 py-3" : "px-6 py-4")}>
+                <div
+                  className={cn(
+                    "bg-card border border-border rounded-xl overflow-hidden flex-1 h-full min-h-0 flex flex-col",
+                    isCompact ? "p-3" : "p-4",
+                  )}
+                >
                   {viewAllFilteredItems.length === 0 ? (
                     <p className="text-xs text-muted-foreground">{emptyLabel}</p>
                   ) : (

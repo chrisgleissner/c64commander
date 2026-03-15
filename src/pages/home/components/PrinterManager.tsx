@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { getOnOffButtonClass } from "@/lib/ui/buttonStyles";
+import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 
 interface PrinterManagerProps {
   isConnected: boolean;
@@ -24,6 +25,7 @@ interface PrinterManagerProps {
 }
 
 export function PrinterManager({ isConnected, machineTaskBusy, machineTaskId, onResetPrinter }: PrinterManagerProps) {
+  const { profile } = useDisplayProfile();
   const trace = useActionTrace("PrinterManager");
   const { updateConfigValue, resolveConfigValue, configWritePending } = useSharedConfigActions();
   const { refetchDrives, printerConfig, printerDevice } = usePrinterData(isConnected);
@@ -128,7 +130,12 @@ export function PrinterManager({ isConnected, machineTaskBusy, machineTaskId, on
               {printerEnabled ? "ON" : "OFF"}
             </Button>
           </div>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+          <div
+            className={cn(
+              "text-xs",
+              profile === "compact" ? "grid grid-cols-1 gap-y-1.5" : "grid grid-cols-2 gap-x-4 gap-y-1",
+            )}
+          >
             <div className="flex items-center justify-between gap-2">
               <span className="text-muted-foreground whitespace-nowrap">Bus ID</span>
               <Select

@@ -80,7 +80,7 @@ describe("ItemSelectionDialog display profiles", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add file / folder from C64U" }));
 
     const dialog = screen.getByRole("dialog");
-    expect(dialog.className).toContain("inset-[var(--display-profile-modal-inset)]");
+    expect(dialog.className).toContain("inset-2");
     expect(dialog.className).not.toContain("w-screen");
 
     const filterInput = screen.getByPlaceholderText("Filter files…");

@@ -52,6 +52,7 @@ export type ItemSelectionDialogProps = {
   allowFolderSelection?: boolean;
   isConfirming?: boolean;
   autoConfirmLocalSource?: boolean;
+  progress?: AddItemsProgressState;
   showProgressFooter?: boolean;
   autoConfirmCloseBefore?: boolean;
   onAutoConfirmStart?: (source: SourceLocation) => void;
@@ -294,10 +295,11 @@ export const ItemSelectionDialog = ({
   const footerActionsClassName = profile === "compact" ? "flex-row flex-wrap" : "flex-row ml-auto";
   const footerPaddingClassName =
     profile === "compact"
-      ? "px-4 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]"
+      ? "px-3 pt-1 pb-[calc(0.25rem+env(safe-area-inset-bottom))]"
       : "px-6 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))]";
-  const headerPaddingClassName = profile === "compact" ? "px-4 pb-2 pt-4" : "px-6 pb-3 pt-6";
-  const bodyPaddingClassName = profile === "compact" ? "px-4 py-3" : "px-6 py-4";
+  const headerPaddingClassName = profile === "compact" ? "px-3 pb-1 pt-2.5" : "px-6 pb-3 pt-6";
+  const bodyPaddingClassName = profile === "compact" ? "px-3 py-1.5" : "px-6 py-4";
+  const sourceContentClassName = profile === "compact" ? "space-y-2" : "space-y-3";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -402,7 +404,7 @@ export const ItemSelectionDialog = ({
 
             {source && (
               <div
-                className="space-y-3"
+                className={sourceContentClassName}
                 data-testid={
                   source.type === "ultimate"
                     ? "c64u-file-picker"
@@ -411,11 +413,25 @@ export const ItemSelectionDialog = ({
                       : "source-file-picker"
                 }
               >
-                <div>
-                  <p className="text-base font-semibold">Select items</p>
-                  <p className="text-xs text-muted-foreground" data-testid="add-items-selection-count">
-                    {selection.size} selected
-                  </p>
+                <div className={cn("flex items-center justify-between gap-2", profile === "compact" && "text-sm")}>
+                  <div>
+                    <p className="text-base font-semibold">Select items</p>
+                    <p className="text-xs text-muted-foreground" data-testid="add-items-selection-count">
+                      {selection.size} selected
+                    </p>
+                  </div>
+                  {profile === "compact" ? (
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={handleConfirm}
+                      disabled={isConfirming || autoConfirming || selection.size === 0}
+                      data-testid="add-items-confirm"
+                      className="shrink-0"
+                    >
+                      {confirmLabel}
+                    </Button>
+                  ) : null}
                 </div>
 
                 <Input
@@ -458,6 +474,7 @@ export const ItemSelectionDialog = ({
             <div className={cn("flex gap-2", footerActionsClassName)}>
               <Button
                 variant="outline"
+                size={profile === "compact" ? "sm" : "default"}
                 onClick={() => {
                   if (progress?.status === "scanning" && onCancelScan) {
                     onCancelScan();
@@ -468,9 +485,10 @@ export const ItemSelectionDialog = ({
               >
                 {progress?.status === "scanning" && onCancelScan ? "Cancel scan" : "Cancel"}
               </Button>
-              {source && (
+              {source && profile !== "compact" && (
                 <Button
                   variant="default"
+                  size={profile === "compact" ? "sm" : "default"}
                   onClick={handleConfirm}
                   disabled={isConfirming || autoConfirming || selection.size === 0}
                   data-testid="add-items-confirm"

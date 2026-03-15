@@ -46,15 +46,15 @@ export const getDisplayProfileLayoutTokens = (profile: DisplayProfile) => {
         rootFontSize: "16px",
         pageMaxWidth: "100%",
         readingMaxWidth: "100%",
-        pagePaddingX: "1rem",
-        pagePaddingY: "1rem",
+        pagePaddingX: "0.5rem",
+        pagePaddingY: "0.5rem",
         sectionGap: "1rem",
         panelGap: "0.875rem",
         actionGridColumns: 2,
         actionGridMinWidth: "0px",
         actionGridGap: "0.625rem",
         modalMaxWidth: "100vw",
-        modalInset: "0.5rem",
+        modalInset: "1rem",
         isCompactDialog: true,
       };
     case "expanded":

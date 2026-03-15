@@ -171,6 +171,43 @@ test.describe("Settings connection management", () => {
     await snap(page, testInfo, "dark-theme-applied");
   });
 
+  test("select system theme stores the preference and follows OS color scheme", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
+    await page.emulateMedia({ colorScheme: "dark" });
+    await page.goto("/settings");
+    await snap(page, testInfo, "settings-open");
+
+    const systemThemeButton = page.getByRole("button", { name: /System|system theme/i }).first();
+    await expect(systemThemeButton).toBeVisible();
+    await snap(page, testInfo, "system-button-visible");
+
+    await systemThemeButton.click();
+    await snap(page, testInfo, "system-selected");
+
+    await expect.poll(() => page.locator("html").getAttribute("class")).toContain("dark");
+    const storedTheme = await page.evaluate(() => localStorage.getItem("c64u_theme"));
+    expect(storedTheme).toBe("system");
+    await snap(page, testInfo, "system-theme-applied");
+  });
+
+  test("refresh connection triggers an explicit connectivity probe", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
+    enableTraceAssertions(testInfo);
+    await page.goto("/settings");
+    await snap(page, testInfo, "settings-open");
+
+    const refreshButton = page.getByRole("button", { name: "Refresh connection" });
+    await expect(refreshButton).toBeVisible();
+    await clearTraces(page);
+    await refreshButton.click();
+    await snap(page, testInfo, "refresh-clicked");
+
+    const { requestEvent } = await expectRestTraceSequence(page, testInfo, "/v1/info");
+    expect((requestEvent.data as { target?: string }).target).toBe("external-mock");
+  });
+
   test("automatic demo mode toggle is visible and persisted", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/settings");
     await snap(page, testInfo, "settings-open");

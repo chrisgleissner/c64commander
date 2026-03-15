@@ -82,139 +82,141 @@ export const PlaybackControlsCard = ({
   onReshuffle,
   reshuffleActive,
   reshuffleDisabled,
-}: PlaybackControlsCardProps) => (
-  <div className="flex flex-wrap items-start justify-between gap-3">
-    <div className="text-xs text-muted-foreground" data-testid="playback-current-track">
-      {hasCurrentItem ? (
-        <div className="flex flex-wrap items-center gap-1">
-          {currentItemIcon ? <span className="shrink-0">{currentItemIcon}</span> : null}
-          <span className="text-sm font-medium text-foreground">{currentItemLabel}</span>
-          {currentDurationLabel ? (
-            <span className="text-xs text-muted-foreground">({currentDurationLabel})</span>
-          ) : null}
-          {subsongLabel ? <span className="text-xs text-muted-foreground">{subsongLabel}</span> : null}
+}: PlaybackControlsCardProps) => {
+  return (
+    <div className="flex flex-col items-stretch gap-3" data-testid="playback-controls-layout">
+      <div className="w-full text-xs text-muted-foreground" data-testid="playback-current-track">
+        {hasCurrentItem ? (
+          <div className="flex flex-wrap items-center gap-1">
+            {currentItemIcon ? <span className="shrink-0">{currentItemIcon}</span> : null}
+            <span className="text-sm font-medium text-foreground">{currentItemLabel}</span>
+            {currentDurationLabel ? (
+              <span className="text-xs text-muted-foreground">({currentDurationLabel})</span>
+            ) : null}
+            {subsongLabel ? <span className="text-xs text-muted-foreground">{subsongLabel}</span> : null}
+          </div>
+        ) : (
+          "Select a playlist item to start"
+        )}
+      </div>
+      <div className="flex w-full flex-col gap-3" data-testid="playback-controls-stack">
+        <div className="grid grid-cols-4 gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={onPrevious}
+            disabled={!canTransport || !hasPrev}
+            id="playlist-prev"
+            data-testid="playlist-prev"
+            aria-label="Previous"
+            title="Previous"
+          >
+            <SkipBack className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={isPlaying ? "destructive" : "default"}
+            size="icon"
+            onClick={isPlaying ? onStop : onPlay}
+            disabled={!hasPlaylist || isPlaylistLoading}
+            data-c64-persistent-active={isPlaying && !isPaused ? "true" : undefined}
+            id="playlist-play"
+            data-testid="playlist-play"
+            aria-label={isPlaying ? "Stop" : "Play"}
+            title={isPlaying ? "Stop" : "Play"}
+          >
+            {isPlaying ? <Square className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={onPauseResume}
+            disabled={!canPause || isPlaylistLoading}
+            id="playlist-pause"
+            data-testid="playlist-pause"
+            aria-label={isPaused ? "Resume" : "Pause"}
+            title={isPaused ? "Resume" : "Pause"}
+          >
+            {isPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={onNext}
+            disabled={!canTransport || !hasNext}
+            id="playlist-next"
+            data-testid="playlist-next"
+            aria-label="Next"
+            title="Next"
+          >
+            <SkipForward className="h-4 w-4" />
+          </Button>
         </div>
-      ) : (
-        "Select a playlist item to start"
-      )}
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="shrink-0" data-testid="playback-elapsed">
+              {elapsedLabel}
+            </span>
+            <Progress value={progressPercent} className="flex-1 min-w-0" />
+            <span className="shrink-0" data-testid="playback-remaining">
+              {remainingLabel}
+            </span>
+          </div>
+          <div
+            className="flex items-center justify-between text-xs text-muted-foreground"
+            data-testid="playback-counters"
+          >
+            <span>Total: {totalLabel}</span>
+            <span>Remaining: {remainingTotalLabel}</span>
+          </div>
+        </div>
+        {volumeControls}
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2 text-xs">
+            <Checkbox
+              checked={recurseFolders}
+              onCheckedChange={(value) => onRecurseChange(Boolean(value))}
+              aria-label="Recurse"
+              data-testid="playback-recurse"
+            />
+            Recurse
+          </label>
+          <label className="flex items-center gap-2 text-xs">
+            <Checkbox
+              checked={shuffleEnabled}
+              onCheckedChange={(value) => onShuffleChange(Boolean(value))}
+              aria-label="Shuffle"
+              data-testid="playback-shuffle"
+            />
+            <span className="flex items-center gap-1">
+              <Shuffle className="h-3.5 w-3.5" /> Shuffle
+            </span>
+          </label>
+          <label className="flex items-center gap-2 text-xs">
+            <Checkbox
+              checked={repeatEnabled}
+              onCheckedChange={(value) => onRepeatChange(Boolean(value))}
+              aria-label="Repeat"
+              data-testid="playback-repeat"
+            />
+            <span className="flex items-center gap-1">
+              <Repeat className="h-3.5 w-3.5" /> Repeat
+            </span>
+          </label>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onReshuffle}
+            disabled={reshuffleDisabled}
+            id="playlist-reshuffle"
+            data-testid="playlist-reshuffle"
+            data-active={reshuffleActive ? "true" : "false"}
+            className={reshuffleActive ? "bg-accent text-accent-foreground" : undefined}
+          >
+            <Shuffle className="h-4 w-4 mr-1" />
+            Reshuffle
+          </Button>
+        </div>
+      </div>
     </div>
-    <div className="flex flex-col gap-3 w-full sm:w-auto">
-      <div className="grid grid-cols-4 gap-2">
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={onPrevious}
-          disabled={!canTransport || !hasPrev}
-          id="playlist-prev"
-          data-testid="playlist-prev"
-          aria-label="Previous"
-          title="Previous"
-        >
-          <SkipBack className="h-4 w-4" />
-        </Button>
-        <Button
-          variant={isPlaying ? "destructive" : "default"}
-          size="icon"
-          onClick={isPlaying ? onStop : onPlay}
-          disabled={!hasPlaylist || isPlaylistLoading}
-          data-c64-persistent-active={isPlaying && !isPaused ? "true" : undefined}
-          id="playlist-play"
-          data-testid="playlist-play"
-          aria-label={isPlaying ? "Stop" : "Play"}
-          title={isPlaying ? "Stop" : "Play"}
-        >
-          {isPlaying ? <Square className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-        </Button>
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={onPauseResume}
-          disabled={!canPause || isPlaylistLoading}
-          id="playlist-pause"
-          data-testid="playlist-pause"
-          aria-label={isPaused ? "Resume" : "Pause"}
-          title={isPaused ? "Resume" : "Pause"}
-        >
-          {isPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
-        </Button>
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={onNext}
-          disabled={!canTransport || !hasNext}
-          id="playlist-next"
-          data-testid="playlist-next"
-          aria-label="Next"
-          title="Next"
-        >
-          <SkipForward className="h-4 w-4" />
-        </Button>
-      </div>
-      <div className="space-y-2">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span className="shrink-0" data-testid="playback-elapsed">
-            {elapsedLabel}
-          </span>
-          <Progress value={progressPercent} className="flex-1 min-w-0" />
-          <span className="shrink-0" data-testid="playback-remaining">
-            {remainingLabel}
-          </span>
-        </div>
-        <div
-          className="flex items-center justify-between text-xs text-muted-foreground"
-          data-testid="playback-counters"
-        >
-          <span>Total: {totalLabel}</span>
-          <span>Remaining: {remainingTotalLabel}</span>
-        </div>
-      </div>
-      {volumeControls}
-      <div className="flex flex-wrap items-center gap-3">
-        <label className="flex items-center gap-2 text-xs">
-          <Checkbox
-            checked={recurseFolders}
-            onCheckedChange={(value) => onRecurseChange(Boolean(value))}
-            aria-label="Recurse"
-            data-testid="playback-recurse"
-          />
-          Recurse
-        </label>
-        <label className="flex items-center gap-2 text-xs">
-          <Checkbox
-            checked={shuffleEnabled}
-            onCheckedChange={(value) => onShuffleChange(Boolean(value))}
-            aria-label="Shuffle"
-            data-testid="playback-shuffle"
-          />
-          <span className="flex items-center gap-1">
-            <Shuffle className="h-3.5 w-3.5" /> Shuffle
-          </span>
-        </label>
-        <label className="flex items-center gap-2 text-xs">
-          <Checkbox
-            checked={repeatEnabled}
-            onCheckedChange={(value) => onRepeatChange(Boolean(value))}
-            aria-label="Repeat"
-            data-testid="playback-repeat"
-          />
-          <span className="flex items-center gap-1">
-            <Repeat className="h-3.5 w-3.5" /> Repeat
-          </span>
-        </label>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onReshuffle}
-          disabled={reshuffleDisabled}
-          id="playlist-reshuffle"
-          data-testid="playlist-reshuffle"
-          data-active={reshuffleActive ? "true" : "false"}
-          className={reshuffleActive ? "bg-accent text-accent-foreground" : undefined}
-        >
-          <Shuffle className="h-4 w-4 mr-1" />
-          Reshuffle
-        </Button>
-      </div>
-    </div>
-  </div>
-);
+  );
+};

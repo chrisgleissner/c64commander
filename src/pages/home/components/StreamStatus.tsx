@@ -6,12 +6,14 @@ import { useSharedConfigActions } from "../hooks/ConfigActionsContext";
 import { useStreamData } from "../hooks/useStreamData";
 import { buildConfigKey } from "@/pages/home/utils/HomeConfigUtils";
 import { buildStreamEndpointLabel } from "@/lib/config/homeStreams";
+import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 
 interface StreamStatusProps {
   isConnected: boolean;
 }
 
 export function StreamStatus({ isConnected }: StreamStatusProps) {
+  const { profile } = useDisplayProfile();
   const { configWritePending, updateConfigValue } = useSharedConfigActions();
 
   const {
@@ -99,7 +101,13 @@ export function StreamStatus({ isConnected }: StreamStatusProps) {
               </div>
               {activeStreamEditorKey === entry.key && (
                 <div className="mt-2 rounded-md border border-border/60 bg-background p-2.5">
-                  <div className="grid grid-cols-1 gap-2 text-[11px] md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-end">
+                  <div
+                    className={
+                      profile === "expanded"
+                        ? "grid grid-cols-[minmax(0,1fr)_auto_auto] items-end gap-2 text-[11px]"
+                        : "grid grid-cols-1 gap-2 text-[11px]"
+                    }
+                  >
                     <div className="space-y-1">
                       <label htmlFor={`home-stream-endpoint-${entry.key}`} className="text-muted-foreground">
                         IP:PORT

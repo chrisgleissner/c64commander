@@ -178,6 +178,30 @@ test.describe("Playlist controls and advanced features", () => {
     await snap(page, testInfo, "repeat-enabled");
   });
 
+  test("recurse folders checkbox toggles state @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto("/play");
+    await snap(page, testInfo, "play-open");
+
+    await addLocalFolder(page, path.resolve("playwright/fixtures/local-play"));
+    await snap(page, testInfo, "playlist-ready");
+
+    const recurseCheckbox = page.getByTestId("playback-recurse");
+    await recurseCheckbox.scrollIntoViewIfNeeded();
+    await expect(recurseCheckbox).toBeVisible();
+    const initiallyChecked = (await recurseCheckbox.getAttribute("aria-checked")) === "true";
+    await snap(page, testInfo, initiallyChecked ? "recurse-initial-on" : "recurse-initial-off");
+
+    await recurseCheckbox.click();
+    if (initiallyChecked) {
+      await expect(recurseCheckbox).not.toBeChecked();
+      await snap(page, testInfo, "recurse-toggled-off");
+      return;
+    }
+
+    await expect(recurseCheckbox).toBeChecked();
+    await snap(page, testInfo, "recurse-toggled-on");
+  });
+
   test("duration control syncs slider and input @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/play");
     await snap(page, testInfo, "play-open");

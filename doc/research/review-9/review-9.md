@@ -4,16 +4,15 @@
 
 Verdict: Partially implemented.
 
-This review was performed as a documentation-only audit of the repository's current state. Evidence came from the current specification, current implementation files, current tests, current screenshot inventory, and current documentation references; no product implementation changes were made as part of the review itself.
+This review started as an audit of the repository's current state and then continued into implementation on the same branch. Evidence in this document reflects the current post-remediation code, tests, screenshots, and documentation state rather than a documentation-only snapshot.
 
 The repository has a real display-profile foundation: one centralized resolver with the specified thresholds, a provider that applies profile tokens at the document root, shared page/layout primitives, a manual override in Settings, profile-aware modal routing, profile-aware screenshots, and targeted unit plus Playwright coverage. The strongest evidence is in [src/lib/displayProfiles.ts](../../../src/lib/displayProfiles.ts#L1-L31), [src/hooks/useDisplayProfile.tsx](../../../src/hooks/useDisplayProfile.tsx#L61-L186), [src/components/layout/PageContainer.tsx](../../../src/components/layout/PageContainer.tsx#L1-L89), [src/lib/modalPresentation.ts](../../../src/lib/modalPresentation.ts#L1-L83), and [playwright/displayProfiles.spec.ts](../../../playwright/displayProfiles.spec.ts#L110-L384).
 
-It is not fully compliant because the implementation still permits profile-sensitive behavior to leak through ad hoc Tailwind breakpoints and binary mobile abstractions, and the automated verification does not yet prove the highest-risk interactions end to end. The most material gaps are:
+It is not fully compliant because a small amount of profile polish and validation still remains, but the largest structural gaps identified at the start of the audit have been remediated. The remaining gaps are:
 
-- profile branching is not fully centralized; several shared and page-level surfaces still use raw `sm:` or `md:` breakpoints instead of resolved profile context, directly conflicting with the specification in [doc/display-profiles.md](../../../doc/display-profiles.md#L46-L55)
 - Compact keyboard-open safety is only approximated through reduced viewport-height tests, not a live visual-viewport or soft-keyboard scenario, despite the requirement in [doc/display-profiles.md](../../../doc/display-profiles.md#L142-L150)
-- CTA reachability coverage is incomplete for important profile-sensitive actions, including Home machine controls and several Play and Disks flows documented as untested in [doc/ux-interactions.md](../../../doc/ux-interactions.md#L129-L133) and [doc/ux-interactions.md](../../../doc/ux-interactions.md#L246-L267)
-- README does not explain display profiles or profile-specific screenshot differences even though screenshot infrastructure and user-facing override controls now exist
+- Home profile screenshots still need full-page captures for the canonical Compact, Medium, and Expanded documentation set
+- Compact modal spacing still needs a small amount of final tuning so dialog chrome remains comfortably visible in the narrowest screenshots
 
 ## 2 Architecture Compliance
 
@@ -27,9 +26,8 @@ Compliant foundations:
 
 Architecture compliance gaps:
 
-- The specification requires components to consume the resolved profile instead of ad hoc breakpoint checks in [doc/display-profiles.md](../../../doc/display-profiles.md#L46-L55). That rule is not fully enforced. Raw breakpoint classes remain in profile-sensitive components such as [src/components/itemSelection/ItemSelectionDialog.tsx](../../../src/components/itemSelection/ItemSelectionDialog.tsx#L295-L307), [src/components/lists/SelectableActionList.tsx](../../../src/components/lists/SelectableActionList.tsx#L465-L474), [src/pages/home/components/DriveManager.tsx](../../../src/pages/home/components/DriveManager.tsx#L133-L141), [src/pages/home/components/StreamStatus.tsx](../../../src/pages/home/components/StreamStatus.tsx#L88-L123), [src/pages/home/dialogs/SnapshotManagerDialog.tsx](../../../src/pages/home/dialogs/SnapshotManagerDialog.tsx#L103-L139), [src/pages/playFiles/components/PlaybackControlsCard.tsx](../../../src/pages/playFiles/components/PlaybackControlsCard.tsx#L72-L104), and [src/pages/playFiles/components/VolumeControls.tsx](../../../src/pages/playFiles/components/VolumeControls.tsx#L31-L62).
-- The shared dialog primitives still carry `sm:` footer/header layout rules in [src/components/ui/dialog.tsx](../../../src/components/ui/dialog.tsx#L79-L96) and [src/components/ui/alert-dialog.tsx](../../../src/components/ui/alert-dialog.tsx#L57-L75). These are not necessarily broken, but they bypass the profile model.
-- A binary mobile abstraction still exists in [src/hooks/use-mobile.tsx](../../../src/hooks/use-mobile.tsx#L1-L8) and is consumed by [src/components/ui/sidebar.tsx](../../../src/components/ui/sidebar.tsx#L10-L55). This does not currently reintroduce a hard-coded pixel breakpoint, but it does collapse Compact and Medium into a single branch, which is weaker than the three-profile architecture.
+- The specification requires components to consume the resolved profile instead of ad hoc breakpoint checks in [doc/display-profiles.md](../../../doc/display-profiles.md#L46-L55). The audited Home, Play, Settings, and shared list surfaces have been moved onto profile-aware layout logic, but follow-up verification still needs to keep new regressions out.
+- Compact keyboard-safe proof remains narrower than the architecture target because current automated coverage still relies on reduced-height validation rather than a real soft-keyboard/visualViewport scenario.
 
 ## 3 Profile Detection Implementation
 
@@ -162,10 +160,8 @@ Verified reachability:
 
 Coverage gaps:
 
-- The UX inventory still lists Home machine quick actions as untested in [doc/ux-interactions.md](../../../doc/ux-interactions.md#L129-L133).
-- Shuffle and Reshuffle remain untested in [doc/ux-interactions.md](../../../doc/ux-interactions.md#L42-L44) and [doc/ux-interactions.md](../../../doc/ux-interactions.md#L267-L267).
-- The Add disks flow remains partially or not fully covered in [doc/ux-interactions.md](../../../doc/ux-interactions.md#L95-L95) and [doc/ux-interactions.md](../../../doc/ux-interactions.md#L246-L246).
-- Settings “Test connection” remains untested in [doc/ux-interactions.md](../../../doc/ux-interactions.md#L171-L171).
+- The UX inventory is now reconciled for Home quick actions, Add disks, Shuffle, Reshuffle, Recurse folders, Refresh connection, and System theme in [doc/ux-interactions.md](../../../doc/ux-interactions.md#L42-L44) and [doc/ux-interactions.md](../../../doc/ux-interactions.md#L95-L95).
+- Remaining gaps are concentrated in secondary controls such as Android folder picking, some filter controls, and lower-priority Home navigation paths rather than the previously flagged primary display-profile flows.
 
 Assessment: CTA reachability is partially verified, not comprehensively verified. The highest-confidence proof is on diagnostics and broad overflow checks, not on the full CTA inventory.
 
@@ -179,9 +175,8 @@ Strengths:
 
 Gaps:
 
-- README currently does not explain the display-profile system or tell readers why some screenshots exist under profile-specific folders; a repository search against README found no display-profile references.
-- Markdown references to profile-specific screenshot folders are concentrated in the specification and planning documents rather than the end-user docs; the strongest hits are in `doc/display-profiles.md` and `doc/plans/display-profiles/*`, not in README page walkthroughs.
-- Some legacy diagnostics image names still use “expanded” as a content/state adjective outside the profile-folder structure, which keeps naming slightly ambiguous even though the profile-specific folders now exist.
+- Markdown references to profile-specific screenshot folders are still concentrated in specification and planning documents more than the end-user docs.
+- Home profile documentation screenshots still need the full-page refresh described in the remediation plan.
 
 ## 11 Test Coverage
 
@@ -203,11 +198,10 @@ Coverage gaps remain in:
 
 ## 12 Technical Debt
 
-- Raw breakpoint debt remains in profile-sensitive shared components and pages, especially dialogs, item selection, lists, stream editors, snapshot editors, and some playback controls.
-- The codebase still contains a binary “mobile” abstraction through [src/hooks/use-mobile.tsx](../../../src/hooks/use-mobile.tsx#L1-L8), which is weaker than the three-profile model.
+- Most high-value raw-breakpoint debt identified in the audit has been removed from the targeted Review 9 surfaces, but Compact visual tuning and screenshot stewardship remain active work.
 - Some components adapt through parent-provided booleans or generic measured layout rather than consuming the profile context directly. This is workable but inconsistent.
 - There is no automated enforcement preventing future reintroduction of independent breakpoint logic.
-- Documentation lags the feature: end-user README guidance does not explain display profiles or profile-specific screenshots.
+- Documentation still needs to keep the regenerated profile screenshots aligned with the current UI output.
 
 ## 13 Required Remediation
 

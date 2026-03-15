@@ -9,13 +9,24 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { Music } from "lucide-react";
+
+import { ProfileActionGrid } from "@/components/layout/PageContainer";
 import { QuickActionCard } from "@/components/QuickActionCard";
+import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
 
 vi.mock("@/lib/ui/buttonInteraction", () => ({
   handlePointerButtonClick: vi.fn(),
 }));
 
 describe("QuickActionCard", () => {
+  const setViewportWidth = (width: number) => {
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      writable: true,
+      value: width,
+    });
+  };
+
   const baseProps = {
     icon: Music,
     label: "Play",
@@ -29,10 +40,32 @@ describe("QuickActionCard", () => {
     expect(baseProps.onClick).toHaveBeenCalledTimes(1);
   });
 
-  it("applies compact class when compact prop is true", () => {
-    render(<QuickActionCard {...baseProps} compact />);
-    const btn = screen.getByRole("button");
-    expect(btn.className).toContain("gap-1.5");
+  it("uses compact density from the shared action-grid boundary on wide screens", () => {
+    localStorage.clear();
+    setViewportWidth(800);
+
+    render(
+      <DisplayProfileProvider>
+        <ProfileActionGrid cardDensity="compact">
+          <QuickActionCard {...baseProps} />
+        </ProfileActionGrid>
+      </DisplayProfileProvider>,
+    );
+
+    expect(screen.getByRole("button", { name: "Play" }).className).toContain("min-h-[86px]");
+  });
+
+  it("falls back to adaptive compact density on compact displays", () => {
+    localStorage.clear();
+    setViewportWidth(360);
+
+    render(
+      <DisplayProfileProvider>
+        <QuickActionCard {...baseProps} />
+      </DisplayProfileProvider>,
+    );
+
+    expect(screen.getByRole("button", { name: "Play" }).className).toContain("min-h-[86px]");
   });
 
   it("applies disabled styles when disabled", () => {

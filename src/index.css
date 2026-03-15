@@ -326,7 +326,8 @@ button:focus-visible,
 
   .app-shell-container {
     box-sizing: border-box;
-    width: min(100%, var(--display-profile-page-max-width));
+    width: 100%;
+    max-width: var(--display-profile-page-max-width);
     margin-inline: auto;
     padding-left: calc(var(--display-profile-page-padding-x) + env(safe-area-inset-left));
     padding-right: calc(var(--display-profile-page-padding-x) + env(safe-area-inset-right));
@@ -334,7 +335,8 @@ button:focus-visible,
 
   .page-shell {
     box-sizing: border-box;
-    width: min(100%, var(--display-profile-page-max-width));
+    width: 100%;
+    max-width: var(--display-profile-page-max-width);
     margin-inline: auto;
     padding-top: var(--display-profile-page-padding-y);
     padding-bottom: var(--display-profile-page-padding-y);
