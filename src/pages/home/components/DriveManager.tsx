@@ -11,6 +11,7 @@ import { SOURCE_LABELS } from "@/lib/sourceNavigation/sourceTerms";
 import { DRIVE_CONTROL_SPECS, DriveControlSpec } from "../constants";
 import { formatDiskDosStatus, type DiskDosStatus } from "@/lib/disks/dosStatusFormatter";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 
 import { buildBusIdOptions, buildTypeOptions } from "@/lib/drives/driveDevices";
 import { readItemOptions, buildConfigKey } from "../utils/HomeConfigUtils";
@@ -48,6 +49,7 @@ export function DriveManager({
   machineTaskId,
   onResetDrives,
 }: DriveManagerProps) {
+  const { profile } = useDisplayProfile();
   const api = getC64API();
   const trace = useActionTrace("DriveManager");
   const { updateConfigValue, resolveConfigValue, configWritePending } = useSharedConfigActions();
@@ -138,7 +140,16 @@ export function DriveManager({
         isResetting={machineTaskId === "reset-drives"}
         resetTestId="home-drives-reset"
       />
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-2" data-testid="home-drives-group">
+      <div
+        className={
+          profile === "expanded"
+            ? "grid grid-cols-3 gap-2"
+            : profile === "compact"
+              ? "grid grid-cols-1 gap-2"
+              : "grid grid-cols-2 gap-2"
+        }
+        data-testid="home-drives-group"
+      >
         {DRIVE_CONTROL_SPECS.map((spec) => {
           let category: Record<string, unknown> | undefined;
           let summary: { mountedLabel: string; isMounted: boolean } | undefined;

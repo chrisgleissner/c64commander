@@ -361,6 +361,7 @@ test.describe("Playback file browser (part 2)", () => {
     await muteButton.click();
     await expect(muteButton).toContainText("Unmute");
     await expect(muteButton).toHaveAttribute(PERSISTENT_ATTR, "true");
+    await expect.poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 2"].value).toBe("-42 dB");
     await expect.poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 1"].value).toBe("OFF");
     await snap(page, testInfo, "start-muted");
 
@@ -423,12 +424,12 @@ test.describe("Playback file browser (part 2)", () => {
     await expect
       .poll(() => {
         const audio = server.getState()["Audio Mixer"];
-        return [
-          audio["Vol UltiSid 1"].value,
-          audio["Vol UltiSid 2"].value,
-          audio["Vol Socket 1"].value,
-          audio["Vol Socket 2"].value,
-        ].every((value) => value === "OFF");
+        return (
+          audio["Vol UltiSid 1"].value === initialState["Vol UltiSid 1"].value &&
+          audio["Vol UltiSid 2"].value === "-42 dB" &&
+          audio["Vol Socket 1"].value === "-42 dB" &&
+          audio["Vol Socket 2"].value === "-42 dB"
+        );
       })
       .toBe(true);
     await snap(page, testInfo, "sid-muted");
@@ -1151,8 +1152,8 @@ test.describe("Playback file browser (part 2)", () => {
         muteUpdateCount,
     );
     await expect(slider).not.toHaveAttribute("data-disabled");
-    await expect.poll(() => server.getState()["Audio Mixer"]["Vol Socket 1"]?.value).toBe("OFF");
-    await expect.poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 2"]?.value).toBe("OFF");
+    await expect.poll(() => server.getState()["Audio Mixer"]["Vol Socket 1"]?.value).toBe("-42 dB");
+    await expect.poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 2"]?.value).toBe("-42 dB");
     const mutedState = server.getState()["Audio Mixer"];
     expect(mutedState["Vol Socket 2"]?.value).toBe(initialSocket2);
     expect(mutedState["Vol UltiSid 1"]?.value).toBe(initialUlti1);
@@ -1166,8 +1167,8 @@ test.describe("Playback file browser (part 2)", () => {
       await page.mouse.up();
     }
     const mutedStateAfterSlider = server.getState()["Audio Mixer"];
-    expect(mutedStateAfterSlider["Vol Socket 1"]?.value).toBe("OFF");
-    expect(mutedStateAfterSlider["Vol UltiSid 2"]?.value).toBe("OFF");
+    expect(mutedStateAfterSlider["Vol Socket 1"]?.value).toBe("-42 dB");
+    expect(mutedStateAfterSlider["Vol UltiSid 2"]?.value).toBe("-42 dB");
 
     const unmuteUpdateCount = server.requests.filter(
       (req) => req.method === "POST" && req.url.startsWith("/v1/configs"),
@@ -1178,8 +1179,8 @@ test.describe("Playback file browser (part 2)", () => {
         server.requests.filter((req) => req.method === "POST" && req.url.startsWith("/v1/configs")).length >
         unmuteUpdateCount,
     );
-    await expect.poll(() => server.getState()["Audio Mixer"]["Vol Socket 1"]?.value).not.toBe("OFF");
-    await expect.poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 2"]?.value).not.toBe("OFF");
+    await expect.poll(() => server.getState()["Audio Mixer"]["Vol Socket 1"]?.value).not.toBe("-42 dB");
+    await expect.poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 2"]?.value).not.toBe("-42 dB");
     const unmutedState = server.getState()["Audio Mixer"];
     const updatedTarget = unmutedState["Vol Socket 1"]?.value;
     expect(updatedTarget).toBeDefined();
@@ -1278,8 +1279,8 @@ test.describe("Playback file browser (part 2)", () => {
         server.requests.filter((req) => req.method === "POST" && req.url.startsWith("/v1/configs")).length >
         muteUpdateCount,
     );
-    await expect.poll(() => server.getState()["Audio Mixer"]["Vol Socket 1"]?.value).toBe("OFF");
-    await expect.poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 2"]?.value).toBe("OFF");
+    await expect.poll(() => server.getState()["Audio Mixer"]["Vol Socket 1"]?.value).toBe("-42 dB");
+    await expect.poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 2"]?.value).toBe("-42 dB");
 
     await page.request.post(`${server.baseUrl}/v1/configs`, {
       data: {
@@ -1300,7 +1301,7 @@ test.describe("Playback file browser (part 2)", () => {
         unmuteUpdateCount,
     );
 
-    await expect.poll(() => server.getState()["Audio Mixer"]["Vol Socket 1"]?.value).toBe("OFF");
+    await expect.poll(() => server.getState()["Audio Mixer"]["Vol Socket 1"]?.value).toBe("-42 dB");
     await expect.poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 2"]?.value).toBe("+6 dB");
     await snap(page, testInfo, "unmute-skips-disabled-sid");
   });

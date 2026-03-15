@@ -65,6 +65,9 @@ const getActiveProjects = () => {
 
 const outputDir = process.env.PLAYWRIGHT_OUTPUT_DIR || "test-results/playwright";
 const reportDir = process.env.PLAYWRIGHT_REPORT_DIR || "playwright-report";
+const traceMode = process.env.PLAYWRIGHT_TRACE_MODE || "on";
+const videoMode = process.env.PLAYWRIGHT_VIDEO_MODE || "on";
+const screenshotMode = process.env.PLAYWRIGHT_SCREENSHOT_MODE || "on";
 
 export default defineConfig({
   testDir: "./playwright",
@@ -80,9 +83,9 @@ export default defineConfig({
   projects: getActiveProjects(),
   use: {
     baseURL: `http://127.0.0.1:${serverPort}`,
-    trace: "on",
-    screenshot: "on",
-    video: "on",
+    trace: traceMode,
+    screenshot: screenshotMode,
+    video: videoMode,
     actionTimeout: 20000,
     navigationTimeout: 40000,
   },

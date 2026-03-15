@@ -43,6 +43,7 @@ const DISPLAY_PROFILE_ROOT_STYLE_PROPERTIES = [
   "--display-profile-reading-max-width",
   "--display-profile-page-padding-x",
   "--display-profile-page-padding-y",
+  "--display-profile-page-padding-top",
   "--display-profile-section-gap",
   "--display-profile-panel-gap",
   "--display-profile-action-grid-gap",
@@ -83,6 +84,7 @@ const applyProfileTokens = (profile: DisplayProfile) => {
   root.style.setProperty("--display-profile-reading-max-width", tokens.readingMaxWidth);
   root.style.setProperty("--display-profile-page-padding-x", tokens.pagePaddingX);
   root.style.setProperty("--display-profile-page-padding-y", tokens.pagePaddingY);
+  root.style.setProperty("--display-profile-page-padding-top", tokens.pagePaddingTop);
   root.style.setProperty("--display-profile-section-gap", tokens.sectionGap);
   root.style.setProperty("--display-profile-panel-gap", tokens.panelGap);
   root.style.setProperty("--display-profile-action-grid-gap", tokens.actionGridGap);

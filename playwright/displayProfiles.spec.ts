@@ -64,8 +64,22 @@ const seedDiskLibrary = async (page: Page, disks: SeedDisk[]) => {
 
 const expectDialogPresentationMode = async (
   dialog: ReturnType<Page["getByRole"]>,
-  expectedMode: "fullscreen" | "centered" | "large",
+  expectedMode: "fullscreen" | "centered" | "large" | "sheet" | "modal",
 ) => {
+  if (expectedMode === "sheet") {
+    await expect(dialog).toHaveAttribute("data-app-surface", "sheet");
+    await expect(dialog).toHaveAttribute("data-sheet-presentation", "sheet");
+    await expect(dialog).toHaveClass(/rounded-t-\[28px\]/);
+    return;
+  }
+
+  if (expectedMode === "modal") {
+    await expect(dialog).toHaveAttribute("data-app-surface", "sheet");
+    await expect(dialog).toHaveAttribute("data-sheet-presentation", "modal");
+    await expect(dialog).toHaveClass(/left-1\/2/);
+    return;
+  }
+
   if (expectedMode === "fullscreen") {
     await expect(dialog).toHaveClass(/inset-\[var\(--display-profile-modal-inset\)\]/);
     await expect(dialog).toHaveClass(/rounded-lg/);
@@ -99,6 +113,89 @@ const scaleRootTextSize = async (page: Page, scale: number) => {
     const current = Number.parseFloat(getComputedStyle(root).fontSize);
     root.style.fontSize = `${current * nextScale}px`;
   }, scale);
+};
+
+const expectViewportState = async (page: Page, width: number, height: number) => {
+  await expect
+    .poll(() =>
+      page.evaluate(() => ({
+        width: window.innerWidth,
+        height: window.innerHeight,
+        visualViewportHeight: window.visualViewport?.height ?? window.innerHeight,
+      })),
+    )
+    .toEqual({ width, height, visualViewportHeight: height });
+};
+
+const reduceViewportForKeyboard = async (page: Page, width = 360, height = 420) => {
+  await page.setViewportSize({ width, height });
+  await expectViewportState(page, width, height);
+};
+
+const seedSnapshots = async (page: Page, count = 3) => {
+  await page.addInitScript((total: number) => {
+    const buildBytesBase64 = (typeCode: number, timestampSeconds: number) => {
+      const HEADER_SIZE = 28;
+      const meta = JSON.stringify({
+        snapshot_type: typeCode === 0 ? "program" : typeCode === 1 ? "basic" : "screen",
+        display_ranges: typeCode === 0 ? ["$0000\u2013$00FF", "$0200\u2013$FFFF"] : ["$0000\u2013$FFFF"],
+        created_at: "2026-01-10 09:00:00",
+      });
+      const metaBytes = new TextEncoder().encode(meta);
+      const totalBytes = HEADER_SIZE + metaBytes.length;
+      const buf = new Uint8Array(totalBytes);
+      const view = new DataView(buf.buffer);
+      new TextEncoder().encode("C64SNAP\0").forEach((b, i) => {
+        buf[i] = b;
+      });
+      view.setUint16(8, 1, true);
+      view.setUint16(10, typeCode, true);
+      view.setUint32(12, timestampSeconds, true);
+      view.setUint16(16, 0, true);
+      view.setUint16(18, 0, true);
+      view.setUint32(20, HEADER_SIZE, true);
+      view.setUint32(24, metaBytes.length, true);
+      buf.set(metaBytes, HEADER_SIZE);
+      let binary = "";
+      for (let index = 0; index < buf.length; index += 1) {
+        binary += String.fromCharCode(buf[index]);
+      }
+      return btoa(binary);
+    };
+
+    const typeCodes = [0, 1, 2];
+    const snapshots = Array.from({ length: total }, (_, index) => {
+      const typeCode = typeCodes[index % typeCodes.length] ?? 0;
+      const timestamp = 1736499600 - index * 3600;
+      const snapshotType = typeCode === 0 ? "program" : typeCode === 1 ? "basic" : "screen";
+      return {
+        id: `snap-${index + 1}`,
+        filename: `c64-${snapshotType}-${index + 1}.c64snap`,
+        bytesBase64: buildBytesBase64(typeCode, timestamp),
+        createdAt: new Date(timestamp * 1000).toISOString(),
+        snapshotType,
+        metadata: {
+          snapshot_type: snapshotType,
+          display_ranges:
+            typeCode === 0
+              ? ["$0000\u2013$00FF", "$0200\u2013$FFFF"]
+              : typeCode === 1
+                ? ["$0801\u2013STREND"]
+                : ["VICBANK", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"],
+          created_at: new Date(timestamp * 1000).toISOString().slice(0, 19).replace("T", " "),
+          ...(index === 0 ? { label: "JupiterLander.crt" } : {}),
+        },
+      };
+    });
+
+    localStorage.setItem(
+      "c64u_snapshots:v1",
+      JSON.stringify({
+        version: 1,
+        snapshots,
+      }),
+    );
+  }, count);
 };
 
 const setBrowserZoom = async (page: Page, scale: number) => {
@@ -209,6 +306,78 @@ test.describe("display profiles", () => {
     await expect(page.getByTestId("play-primary-layout")).toHaveAttribute("data-profile", "expanded");
   });
 
+  test("compact profile keeps header top inset no larger than the side inset and enlarges body text", async ({
+    page,
+  }: {
+    page: Page;
+  }) => {
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await applyDisplayProfileViewport(page, "medium");
+    await expect(page.getByTestId("home-machine-controls")).toBeVisible();
+
+    const mediumSizing = await page.evaluate(() => {
+      const bodyText = document.querySelector('[data-testid="home-cpu-speed-value"]');
+      const title = document.querySelector('[data-testid="home-header-title"]');
+      if (!(bodyText instanceof HTMLElement) || !(title instanceof HTMLElement)) {
+        throw new Error("Expected home header and CPU speed value to be rendered.");
+      }
+
+      return {
+        bodyFontSize: Number.parseFloat(getComputedStyle(bodyText).fontSize),
+        headerFontSize: Number.parseFloat(getComputedStyle(title).fontSize),
+      };
+    });
+
+    await applyDisplayProfileViewport(page, "compact");
+
+    const compactSizing = await page.evaluate(() => {
+      const shell = document.querySelector("header .app-shell-container");
+      const bodyText = document.querySelector('[data-testid="home-cpu-speed-value"]');
+      const title = document.querySelector('[data-testid="home-header-title"]');
+      const header = document.querySelector("header");
+      if (
+        !(shell instanceof HTMLElement) ||
+        !(bodyText instanceof HTMLElement) ||
+        !(title instanceof HTMLElement) ||
+        !(header instanceof HTMLElement)
+      ) {
+        throw new Error("Expected compact header shell and home text to be rendered.");
+      }
+
+      const shellStyle = getComputedStyle(shell);
+      return {
+        bodyFontSize: Number.parseFloat(getComputedStyle(bodyText).fontSize),
+        headerFontSize: Number.parseFloat(getComputedStyle(title).fontSize),
+        paddingTop: Number.parseFloat(shellStyle.paddingTop),
+        paddingLeft: Number.parseFloat(shellStyle.paddingLeft),
+        headerClasses: header.className,
+      };
+    });
+
+    expect(compactSizing.paddingTop).toBeLessThanOrEqual(compactSizing.paddingLeft);
+    expect(compactSizing.headerClasses.includes("pt-safe")).toBe(false);
+    expect(compactSizing.bodyFontSize).toBeGreaterThan(mediumSizing.bodyFontSize * 1.25);
+    expect(Math.abs(compactSizing.headerFontSize - mediumSizing.headerFontSize)).toBeLessThan(0.1);
+  });
+
+  test("expanded override on a phone viewport keeps the shell inside the viewport", async ({
+    page,
+  }: {
+    page: Page;
+  }) => {
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await applyDisplayProfileViewport(page, "expanded");
+
+    await expect(page.getByTestId("home-machine-controls")).toHaveAttribute("data-profile", "expanded");
+
+    const hasHorizontalOverflow = await page.evaluate(() => {
+      const root = document.documentElement;
+      return root.scrollWidth > window.innerWidth + 1;
+    });
+
+    expect(hasHorizontalOverflow).toBe(false);
+  });
+
   test("source chooser order and scoped selection stay stable across all display profiles", async ({
     page,
   }: {
@@ -269,7 +438,7 @@ test.describe("display profiles", () => {
       await page.getByRole("button", { name: "View all" }).click();
       const listDialog = page.getByRole("dialog");
       await expect(listDialog.getByTestId("action-list-view-all")).toBeVisible();
-      await expectDialogPresentationMode(listDialog, profileId === "compact" ? "fullscreen" : "large");
+      await expectDialogPresentationMode(listDialog, profileId === "expanded" ? "modal" : "sheet");
       await expect(page.getByTestId("view-all-filter-input")).toBeVisible();
       await expect(page.getByTestId("disk-row").first()).toBeVisible();
       const diskOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
@@ -281,7 +450,7 @@ test.describe("display profiles", () => {
       await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
       const diagnosticsDialog = page.getByRole("dialog", { name: "Diagnostics" });
       await expect(diagnosticsDialog).toBeVisible();
-      await expectDialogPresentationMode(diagnosticsDialog, profileId === "compact" ? "fullscreen" : "centered");
+      await expectDialogPresentationMode(diagnosticsDialog, profileId === "expanded" ? "modal" : "sheet");
       await expect(diagnosticsDialog.getByRole("button", { name: "Share All" })).toBeVisible();
       await expect(diagnosticsDialog.getByRole("button", { name: "Clear All" })).toBeVisible();
       const settingsOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
@@ -339,6 +508,66 @@ test.describe("display profiles", () => {
     await expect(clearAllButton).toBeVisible();
     await expectLocatorWithinViewport(page, shareAllButton);
     await expectLocatorWithinViewport(page, clearAllButton);
+  });
+
+  test("compact selection browser keeps title input and confirm CTA visible during keyboard-height reduction", async ({
+    page,
+  }: {
+    page: Page;
+  }) => {
+    await page.goto("/play", { waitUntil: "domcontentloaded" });
+    await applyDisplayProfileViewport(page, "compact");
+
+    await page.getByRole("button", { name: /Add items|Add more items/i }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+
+    await dialog.getByTestId("import-option-hvsc").click();
+    await expect(dialog.getByTestId("source-file-picker")).toBeVisible();
+
+    const title = dialog.getByText("Add items", { exact: true });
+    const filterInput = dialog.getByTestId("add-items-filter");
+    await expect(filterInput).toBeVisible();
+    await filterInput.focus();
+    await expect(filterInput).toBeFocused();
+
+    await reduceViewportForKeyboard(page, 360, 450);
+
+    const confirmButton = dialog.getByTestId("add-items-confirm");
+    await expect(title).toBeVisible();
+    await expect(confirmButton).toBeVisible();
+    await expectLocatorWithinViewport(page, title);
+    await expectLocatorWithinViewport(page, filterInput);
+    await expectLocatorWithinViewport(page, confirmButton);
+  });
+
+  test("compact snapshot manager keeps title filter and primary row visible during keyboard-height reduction", async ({
+    page,
+  }: {
+    page: Page;
+  }) => {
+    await seedSnapshots(page);
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await applyDisplayProfileViewport(page, "compact");
+
+    await page.getByTestId("home-load-ram").click();
+    const dialog = page.getByTestId("snapshot-manager-dialog");
+    await expect(dialog).toBeVisible();
+
+    const title = dialog.getByText("Load RAM", { exact: true });
+    const filterInput = dialog.getByTestId("snapshot-filter-input");
+    const firstRow = page.getByTestId("snapshot-row").first();
+    await filterInput.focus();
+    await expect(filterInput).toBeFocused();
+
+    await reduceViewportForKeyboard(page);
+
+    await expect(title).toBeVisible();
+    await expect(filterInput).toBeVisible();
+    await expect(firstRow).toBeVisible();
+    await expectLocatorWithinViewport(page, title);
+    await expectLocatorWithinViewport(page, filterInput);
+    await expectLocatorWithinViewport(page, firstRow);
   });
 
   test("compact diagnostics CTA layout remains reachable under browser zoom on web", async ({

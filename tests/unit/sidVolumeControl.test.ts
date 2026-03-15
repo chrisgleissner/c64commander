@@ -8,6 +8,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  buildEnabledSidMutedToTargetUpdates,
   buildEnabledSidMuteUpdates,
   buildEnabledSidRestoreUpdates,
   buildEnabledSidUnmuteUpdates,
@@ -17,10 +18,10 @@ import {
   buildSidVolumeSteps,
   filterEnabledSidVolumeItems,
   isSidEnabledForName,
+  resolveSidMutedVolumeOption,
   type SidEnablement,
   type SidVolumeItem,
 } from "@/lib/config/sidVolumeControl";
-import { resolveAudioMixerMuteValue } from "@/lib/config/audioMixerSolo";
 
 describe("sid volume control helpers", () => {
   const options = ["OFF", "+6 dB", " 0 dB", "-6 dB"];
@@ -81,11 +82,10 @@ describe("sid volume control helpers", () => {
       ultiSid1: true,
       ultiSid2: false,
     };
-    const muteValue = resolveAudioMixerMuteValue(options);
     const muteUpdates = buildEnabledSidMuteUpdates(items, enablement);
     expect(muteUpdates).toEqual({
-      "Vol UltiSid 1": muteValue,
-      "Vol Socket 1": muteValue,
+      "Vol UltiSid 1": "-42 dB",
+      "Vol Socket 1": "-42 dB",
     });
 
     const snapshot = buildEnabledSidVolumeSnapshot(items, enablement);
@@ -137,6 +137,34 @@ describe("sid volume control helpers", () => {
     const noOffSteps = buildSidVolumeSteps([" +9 dB ", "n/a", "-3 dB"]);
     expect(noOffSteps.map((step) => step.option)).toEqual(["-3 dB", " +9 dB "]);
     expect(noOffSteps.every((step) => !step.isOff)).toBe(true);
+  });
+
+  it("prefers -42 dB as the explicit playback mute target when available", () => {
+    expect(resolveSidMutedVolumeOption(["OFF", "-42 dB", "-6 dB", "0 dB"])).toBe("-42 dB");
+  });
+
+  it("uses -42 dB as the playback mute target even when the device does not advertise it", () => {
+    expect(resolveSidMutedVolumeOption(["OFF", "-6 dB", "0 dB"])).toBe("-42 dB");
+  });
+
+  it("only unmutes entries that are currently at the playback mute target", () => {
+    const enablement: SidEnablement = {
+      socket1: true,
+      socket2: true,
+      ultiSid1: true,
+      ultiSid2: true,
+    };
+    const itemsWithExplicitMute: SidVolumeItem[] = [
+      { name: "Vol UltiSid 1", value: "-42 dB", options: ["OFF", "-42 dB", "-6 dB", "0 dB"] },
+      { name: "Vol UltiSid 2", value: "OFF", options: ["OFF", "-42 dB", "-6 dB", "0 dB"] },
+      { name: "Vol Socket 1", value: "-42 dB", options: ["OFF", "-42 dB", "-6 dB", "0 dB"] },
+      { name: "Vol Socket 2", value: "+6 dB", options: ["OFF", "-42 dB", "-6 dB", "0 dB", "+6 dB"] },
+    ];
+
+    expect(buildEnabledSidMutedToTargetUpdates(itemsWithExplicitMute, enablement, "+6 dB")).toEqual({
+      "Vol UltiSid 1": "+6 dB",
+      "Vol Socket 1": "+6 dB",
+    });
   });
 
   it("maps enablement from flat payload values and retains unknown names", () => {

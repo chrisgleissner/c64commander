@@ -7,6 +7,7 @@
  */
 
 import React from "react";
+import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
@@ -82,6 +83,7 @@ export function DriveCard({
   className,
   testIdSuffix,
 }: DriveCardProps) {
+  const { profile } = useDisplayProfile();
   const formatSelectOptionLabel = (value: string) => (value === "" ? "Default" : value);
 
   return (
@@ -121,7 +123,7 @@ export function DriveCard({
       )}
 
       {/* Row 2: Bus ID and Type */}
-      <div className="grid grid-cols-2 gap-2 text-xs">
+      <div className={cn("grid gap-2 text-xs", profile === "compact" ? "grid-cols-1" : "grid-cols-2")}>
         <div className="flex items-center gap-2">
           <span className="text-muted-foreground whitespace-nowrap">Bus ID</span>
           <Select value={busIdValue} onValueChange={onBusIdChange} disabled={!isConnected || busIdPending}>
@@ -137,7 +139,7 @@ export function DriveCard({
             </SelectContent>
           </Select>
         </div>
-        <div className="flex items-center gap-2 justify-end min-w-0">
+        <div className={cn("flex items-center gap-2 min-w-0", profile === "compact" ? "justify-start" : "justify-end")}>
           {typeValue !== undefined && (
             <>
               <span className="text-muted-foreground whitespace-nowrap">Type</span>

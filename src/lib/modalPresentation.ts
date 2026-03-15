@@ -27,6 +27,9 @@ const centeredBaseClass =
 const fullscreenBaseClass =
   "fixed inset-[var(--display-profile-modal-inset)] z-50 grid h-[calc(var(--display-profile-viewport-height)-2*var(--display-profile-modal-inset)-env(safe-area-inset-top)-env(safe-area-inset-bottom))] w-[calc(var(--display-profile-viewport-width)-2*var(--display-profile-modal-inset)-env(safe-area-inset-left)-env(safe-area-inset-right))] max-h-[calc(var(--display-profile-viewport-height)-2*var(--display-profile-modal-inset)-env(safe-area-inset-top)-env(safe-area-inset-bottom))] max-w-[calc(var(--display-profile-viewport-width)-2*var(--display-profile-modal-inset)-env(safe-area-inset-left)-env(safe-area-inset-right))] gap-0 overflow-hidden rounded-lg border bg-background p-0 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0";
 
+const selectionBrowserFullscreenClass =
+  "fixed inset-2 z-50 grid h-[calc(var(--display-profile-viewport-height)-1rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] w-[calc(var(--display-profile-viewport-width)-1rem-env(safe-area-inset-left)-env(safe-area-inset-right))] max-h-[calc(var(--display-profile-viewport-height)-1rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] max-w-[calc(var(--display-profile-viewport-width)-1rem-env(safe-area-inset-left)-env(safe-area-inset-right))] gap-0 overflow-hidden rounded-lg border bg-background p-0 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0";
+
 const stickyFooterClass =
   "sticky bottom-0 z-10 mt-auto border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 pb-[calc(1rem+env(safe-area-inset-bottom))]";
 
@@ -42,7 +45,7 @@ export const resolveModalPresentation = (profile: DisplayProfile, surface: Modal
       return {
         surface,
         mode: profile === "compact" ? "fullscreen" : "large",
-        contentClassName: profile === "compact" ? fullscreenBaseClass : largeDialogClass,
+        contentClassName: profile === "compact" ? selectionBrowserFullscreenClass : largeDialogClass,
         footerClassName: stickyFooterClass,
       };
     case "list-browser":

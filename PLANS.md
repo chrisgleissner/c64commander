@@ -1,108 +1,81 @@
-# Production Hardening Audit Plan
+# Surface System Execution Plan
 
-This document defines the audit plan only. It does not contain audit findings or a review report.
+Classification: `UI_CHANGE`
 
-## Phase 1: Repository Inventory
+## Task List
 
-- [x] Catalog top-level apps, packages, services, scripts, and generated artifact directories.
-- [x] Identify runtime entry points for web, Android, iOS, Playwright, agents, and supporting services.
-- [x] Map critical source directories to responsibilities across UI, hooks, API, native bridges, and diagnostics.
-- [x] List build, test, packaging, and release commands from package scripts and helper scripts.
-- [x] Record external systems the repository depends on, including C64 Ultimate REST, FTP, Docker, Android, iOS, and GitHub Actions.
+### Phase 1 - Planning
 
-## Phase 2: Documentation Audit
+- [x] Design AppSheet architecture.
+- [x] Design AppDialog architecture.
+- [x] Identify all dialogs and sheets to migrate.
+- [x] Design responsive surface selection rules.
+- [x] Define screenshot regeneration scope using the existing `doc/img/` hierarchy.
+- [x] Define CI and local verification scope.
+- [x] Create a risk register.
 
-- [x] Review README, docs, and doc content for setup accuracy, production boundaries, and operational clarity.
-- [x] Check that platform-specific instructions match the current Android, iOS, and web deployment flows.
-- [x] Verify that diagnostics, security, networking, and troubleshooting documentation reflects current behavior.
-- [x] Identify undocumented operational assumptions, manual steps, and recovery procedures.
-- [x] Note stale, duplicated, or conflicting guidance between README, doc, docs, and in-repo prompts.
+### Phase 2 - Core Architecture
 
-## Phase 3: Architecture Reconstruction
+- [x] Implement reusable `AppSheet` component.
+- [x] Implement reusable `AppDialog` component.
+- [x] Verify rendering rules across Compact, Medium, and Expanded profiles.
 
-- [x] Reconstruct the high-level architecture from UI, hook, service, native bridge, and backend-facing modules.
-- [x] Trace state ownership for connection status, configuration state, diagnostics state, and playback state.
-- [x] Identify boundaries between React UI, domain logic, transport adapters, native integrations, and persistence.
-- [x] Map how feature flags, app config, and environment-specific behavior are introduced and consumed.
-- [x] Produce a dependency sketch of critical modules whose failure would block core product flows.
+### Phase 3 - Dialog Migration
 
-## Phase 4: Runtime Interaction Tracing
+- [x] Migrate the diagnostics viewer to `AppSheet`.
+- [x] Migrate the playlist browser and Add items flow to `AppSheet` and `AppDialog`.
+- [x] Migrate the RAM snapshot browser to `AppSheet`.
+- [x] Migrate the file source selector to `AppDialog`.
+- [x] Migrate the RAM snapshot save dialog to `AppDialog`.
 
-- [x] Trace startup flow from app launch to first usable screen across supported platforms.
-- [x] Trace user actions that write device configuration from UI intent to transport request.
-- [x] Trace async event propagation for polling, retries, throttling, and UI refresh paths.
-- [x] Trace diagnostics and logging emission paths from runtime events to stored or displayed evidence.
-- [x] Trace failure handling paths for timeouts, offline states, malformed responses, and partial device availability.
+### Deferred Follow-Up - Not Part Of This PR
 
-## Phase 5: Device Communication
+- [ ] Migrate the disk browser surfaces to `AppSheet` and `AppDialog` in a separate follow-up.
+- [ ] Migrate the filesystem browser surfaces to `AppSheet` and `AppDialog` in a separate follow-up.
 
-- [x] Inventory all REST, FTP, and any other device-facing communication paths.
-- [x] Verify request construction, response parsing, schema assumptions, and protocol-specific fallbacks.
-- [x] Check timeout, retry, backoff, and cancellation behavior for device operations.
-- [x] Identify write operations that could leave device state partially applied or inconsistent.
-- [x] Review handling of hostname, IP, credentials, and local network assumptions in production scenarios.
+### Phase 4 - Responsive Validation
 
-## Phase 6: Connection Management
+- [x] Validate Compact bottom-sheet behavior.
+- [x] Validate Medium bottom-sheet behavior.
+- [x] Validate Expanded centered-modal behavior.
+- [x] Validate sticky header, filter, tabs, and isolated scroll regions.
 
-- [x] Audit connection lifecycle handling for cold start, reconnect, disconnect, and device-switch scenarios.
-- [x] Review polling cadence, concurrent request coordination, and stale request suppression.
-- [x] Check UI signaling for connection health, degraded modes, and recovery guidance.
-- [x] Verify how demo mode, cached state, and live device state are separated to avoid cross-contamination.
-- [x] Identify race conditions between connection updates, config edits, and background refresh tasks.
+### Phase 5 - Screenshot Regeneration
 
-## Phase 7: Diagnostics
+- [x] Regenerate only the affected screenshots under `doc/img/`.
+- [x] Preserve filenames and overwrite existing screenshots in place.
+- [x] Verify screenshot paths and naming conventions remain unchanged.
 
-- [x] Inventory diagnostics surfaces, logs, traces, captures, and exported evidence paths.
-- [x] Review diagnostic action safety, privacy impact, and failure visibility.
-- [x] Check whether diagnostic tools remain usable when the device or network is degraded.
-- [x] Verify that errors are logged or surfaced with enough context for production triage.
-- [x] Identify gaps in observability for user-reported failures that cannot currently be reproduced locally.
+### Phase 6 - Test Validation
 
-## Phase 8: Test Coverage
+- [x] Add or update focused regression tests for the migrated surfaces.
+- [x] Run targeted unit tests.
+- [x] Run targeted Playwright UI validation.
+- [x] Run `npm run lint`.
+- [x] Run `npm run test:coverage` and confirm global branch coverage is at least 91%.
+- [x] Run `npm run build`.
 
-- [x] Inventory unit, integration, Playwright, Android, and agent test suites and their intended responsibilities.
-- [x] Map high-risk product flows to existing regression coverage and identify blind spots.
-- [x] Review coverage thresholds, current branch coverage posture, and enforcement points in local and CI workflows.
-- [x] Check whether device communication, failure handling, and recovery paths have deterministic tests.
-- [x] Identify flaky, slow, environment-coupled, or redundant tests that weaken release confidence.
+### Phase 7 - CI Convergence
 
-## Phase 9: CI/CD
+- [x] Confirm local validation is green.
+- [ ] Record CI-ready status and any remaining blockers.
 
-- [x] Review GitHub Actions and local helper scripts for build, test, release, and artifact publication flow.
-- [x] Verify branch, tag, and release assumptions against documented release policy.
-- [x] Check which validations gate merges versus which run only on release or platform-specific workflows.
-- [x] Audit artifact retention, provenance, reproducibility, and failure reporting in CI.
-- [x] Identify missing quality gates for formatting, security-sensitive changes, coverage, and platform packaging.
+## Risk Register
 
-## Phase 10: Platform Integrations
+- Sticky regions inside Radix dialogs may need a single shared scroll container to avoid clipped headers and duplicated scrollbars.
+- Compact keyboard behavior can hide confirm CTAs unless sheet height and footer padding account for safe areas and viewport changes.
+- Existing screenshot flows already target `doc/img/`; edits must keep capture paths unchanged and only rerun the affected cases.
+- Existing modal tests assert current `Dialog` attributes; introducing `AppSheet` and `AppDialog` must preserve accessible roles and deterministic selectors.
 
-- [x] Audit Capacitor, Android, iOS, web, and Docker integration points for configuration drift.
-- [x] Review native bridge contracts and error propagation between TypeScript and platform code.
-- [x] Check file-system, storage, permission, and media access behavior across supported platforms.
-- [x] Verify web deployment assumptions for LAN hosting, port exposure, and persisted config storage.
-- [x] Identify platform-specific production risks that are not covered by shared logic tests.
+## Worklog
 
-## Phase 11: Security and Reliability
-
-- [x] Review authentication, password handling, local storage, and secret exposure risks.
-- [x] Inspect network trust assumptions, insecure transport exposure, and boundary protections for LAN deployment.
-- [x] Audit exception handling, retry loops, fallback behavior, and crash-prone code paths.
-- [x] Identify operations lacking idempotency, confirmation, rollback, or safe failure behavior.
-- [x] Review third-party dependencies, patch files, and update practices for production maintenance risk.
-
-## Phase 12: Production Risk
-
-- [x] Rank the most critical user-facing and operational risks by severity, likelihood, and detectability.
-- [x] Identify single points of failure across runtime, build, release, and device interaction paths.
-- [x] Define which risks are acceptable, which require mitigation before release, and which need monitoring only.
-- [x] Prepare a remediation backlog structure grouped by immediate, short-term, and longer-term hardening work.
-- [x] Define the evidence package required for a final production hardening report after the audit is executed.
-
-## Display Profiles Readiness Analysis
-
-- [x] Reclassify the display-profiles work as `DOC_PLUS_CODE` once implementation started so validation scope covered the UI, tests, and build outputs touched by the feature.
-- [x] Review the display-profile specification, UX guidelines, UX interactions inventory, README, AGENTS, and relevant material under `doc/`, `doc/c64/`, `doc/diagnostics/`, and `doc/testing/`.
-- [x] Audit the current page shells, shared components, modal primitives, screenshot generation flow, and Playwright layout coverage for display-profile readiness.
-- [x] Produce `doc/plans/display-profiles/display-profiles-gap-analysis.md`.
-- [x] Produce `doc/plans/display-profiles/display-profiles-implementation-plan.md`.
-- [x] Produce and maintain `doc/plans/display-profiles/work-log.md`.
+- 2026-03-15 00:00 UTC: Replaced the stale review-specific plan with the surface-system execution plan. Confirmed the repository already writes screenshots directly into `doc/img/`, so the implementation must preserve that hierarchy and only refresh affected files in place.
+- 2026-03-15 00:00 UTC: Audited the current surface layer. The repo has a profile-aware modal presentation helper in `src/lib/modalPresentation.ts` and several `Dialog`-based flows, but no explicit `AppSheet` or `AppDialog` components yet.
+- 2026-03-15 00:00 UTC: Identified the first concrete migration targets already in use on current routes: diagnostics (`src/components/diagnostics/DiagnosticsDialog.tsx`), Add items (`src/components/itemSelection/ItemSelectionDialog.tsx`), and Home RAM dialogs (`src/pages/home/dialogs/*.tsx`).
+- 2026-03-15 00:00 UTC: Added the shared surface layer in `src/components/ui/app-surface.tsx` with `AppSheet` for task surfaces and `AppDialog` for compact decision dialogs, plus focused regression coverage in `src/components/ui/app-surface.test.tsx`.
+- 2026-03-15 00:00 UTC: Migrated diagnostics, Add items source selection and browser flow, Save RAM, Snapshot Manager, and Restore Snapshot onto the new surface primitives while keeping headers, filters, and controls outside the scrolling body regions.
+- 2026-03-15 00:00 UTC: Updated profile-aware tests and Playwright assertions so Compact and Medium expect bottom-sheet task surfaces while Expanded expects centered modal presentation for `AppSheet`.
+- 2026-03-15 00:00 UTC: Regenerated only the affected screenshots in place under the existing `doc/img/app/diagnostics`, `doc/img/app/home/dialogs`, and `doc/img/app/play/import` paths, preserving filenames and folder structure.
+- 2026-03-15 00:00 UTC: Completed local validation with targeted Playwright surface checks for the migrated list-browser flows, `npm run lint`, `npm run test:coverage` (reporting 91.00% global branch coverage in the current local run), and `npm run build`. CI convergence remains pending on the updated branch head.
+- 2026-03-15 00:00 UTC: Added backlog follow-up requirements for this branch head: Compact page headers keep top inset no larger than side inset; Compact body typography increases without changing page header size; Compact Home `Vol` and `Pan` labels match the Compact `Filter` label size; Medium Add items interstitial stacks Local/C64U/HVSC buttons vertically at equal width with full HVSC label visibility; Settings appearance theme order is `Auto / Light / Dark`; Docs screenshots now include profile-specific captures under `doc/img/app/docs/profiles`.
+- 2026-03-15 00:00 UTC: Added two more backlog items to the branch head: Compact playlist view-all sheet shortens file-type filter labels to `SID`, `MOD`, `PRG`, `CRT`, and `Disks` without changing inline labels or other profiles; Docs profile screenshots always capture the page with the `Play Files` section expanded.

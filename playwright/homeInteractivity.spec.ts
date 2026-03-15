@@ -31,6 +31,19 @@ const waitForStreamsReady = async (page: Page) => {
   await expect(page.getByTestId("home-stream-endpoint-display-vic")).toHaveText(streamPattern);
 };
 
+const applyCompactDisplayProfile = async (page: Page) => {
+  await page.setViewportSize({ width: 360, height: 800 });
+  await page.evaluate(() => {
+    localStorage.setItem("c64u_display_profile_override", "compact");
+    window.dispatchEvent(
+      new CustomEvent("c64u-ui-preferences-changed", {
+        detail: { displayProfileOverride: "compact" },
+      }),
+    );
+  });
+  await expect.poll(() => page.evaluate(() => document.documentElement.dataset.displayProfile)).toBe("compact");
+};
+
 test.describe("Home interactions", () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
@@ -113,6 +126,52 @@ test.describe("Home interactions", () => {
             req.method === "PUT" &&
             req.url.includes("/v1/configs/SID%20Sockets%20Configuration/SID%20Socket%201?value=Disabled"),
         ),
+      )
+      .toBe(true);
+  });
+
+  test("machine quick actions issue the expected home control requests", async ({ page }: { page: Page }) => {
+    await page.goto("/");
+    await waitForConnected(page);
+
+    const machineControls = page.getByTestId("home-machine-controls");
+
+    await machineControls.getByRole("button", { name: "Reset", exact: true }).click();
+    await machineControls.getByRole("button", { name: "Reboot", exact: true }).click();
+    await machineControls.getByRole("button", { name: "Menu", exact: true }).click();
+
+    await machineControls.getByRole("button", { name: "Pause", exact: true }).click();
+    const resumeButton = machineControls.getByRole("button", { name: "Resume", exact: true });
+    await expect(resumeButton).toBeVisible();
+    await resumeButton.click();
+
+    await machineControls.getByRole("button", { name: "Power Off", exact: true }).click();
+    const powerOffDialog = page.getByRole("dialog", { name: "Confirm Power Off" });
+    await expect(powerOffDialog).toBeVisible();
+    await powerOffDialog.getByRole("button", { name: "Power Off", exact: true }).click();
+
+    await expect
+      .poll(() => hasRequest(server.requests, (req) => req.method === "PUT" && req.url.startsWith("/v1/machine:reset")))
+      .toBe(true);
+    await expect
+      .poll(() =>
+        hasRequest(server.requests, (req) => req.method === "PUT" && req.url.startsWith("/v1/machine:reboot")),
+      )
+      .toBe(true);
+    await expect
+      .poll(() => hasRequest(server.requests, (req) => req.method === "PUT" && req.url.startsWith("/v1/machine:menu")))
+      .toBe(true);
+    await expect
+      .poll(() => hasRequest(server.requests, (req) => req.method === "PUT" && req.url.startsWith("/v1/machine:pause")))
+      .toBe(true);
+    await expect
+      .poll(() =>
+        hasRequest(server.requests, (req) => req.method === "PUT" && req.url.startsWith("/v1/machine:resume")),
+      )
+      .toBe(true);
+    await expect
+      .poll(() =>
+        hasRequest(server.requests, (req) => req.method === "PUT" && req.url.startsWith("/v1/machine:poweroff")),
       )
       .toBe(true);
   });
@@ -327,6 +386,51 @@ test.describe("Home interactions", () => {
         ),
       )
       .toBe(true);
+  });
+
+  test("compact home stacks drives, printer controls, and SID sliders vertically", async ({ page }: { page: Page }) => {
+    await page.goto("/");
+    await applyCompactDisplayProfile(page);
+    await waitForConnected(page);
+
+    const driveA = page.getByTestId("home-drive-row-a");
+    const driveB = page.getByTestId("home-drive-row-b");
+    const printerBus = page.getByTestId("home-printer-bus");
+    const printerOutputType = page.getByTestId("home-printer-output-type");
+    const sidEntry = page.getByTestId("home-sid-entry-socket1");
+    const sidVolume = page.getByTestId("home-sid-volume-socket1");
+    const sidPan = page.getByTestId("home-sid-pan-socket1");
+
+    await driveA.scrollIntoViewIfNeeded();
+    await printerBus.scrollIntoViewIfNeeded();
+    await sidEntry.scrollIntoViewIfNeeded();
+
+    const [driveABox, driveBBox, printerBusBox, printerOutputTypeBox, sidEntryBox, sidVolumeBox, sidPanBox] =
+      await Promise.all([
+        driveA.boundingBox(),
+        driveB.boundingBox(),
+        printerBus.boundingBox(),
+        printerOutputType.boundingBox(),
+        sidEntry.boundingBox(),
+        sidVolume.boundingBox(),
+        sidPan.boundingBox(),
+      ]);
+
+    expect(driveABox).not.toBeNull();
+    expect(driveBBox).not.toBeNull();
+    expect(printerBusBox).not.toBeNull();
+    expect(printerOutputTypeBox).not.toBeNull();
+    expect(sidEntryBox).not.toBeNull();
+    expect(sidVolumeBox).not.toBeNull();
+    expect(sidPanBox).not.toBeNull();
+
+    if (driveABox && driveBBox && printerBusBox && printerOutputTypeBox && sidEntryBox && sidVolumeBox && sidPanBox) {
+      expect(driveBBox.y).toBeGreaterThanOrEqual(driveABox.y + driveABox.height - 1);
+      expect(printerOutputTypeBox.y).toBeGreaterThanOrEqual(printerBusBox.y + printerBusBox.height - 1);
+      expect(sidPanBox.y).toBeGreaterThanOrEqual(sidVolumeBox.y + sidVolumeBox.height - 1);
+      expect(sidVolumeBox.width).toBeGreaterThan(sidEntryBox.width * 0.55);
+      expect(sidPanBox.width).toBeGreaterThan(sidEntryBox.width * 0.55);
+    }
   });
 
   test("stateless actions clear focus after click", async ({ page }: { page: Page }) => {

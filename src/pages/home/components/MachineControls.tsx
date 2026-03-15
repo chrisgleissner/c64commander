@@ -55,11 +55,16 @@ export function MachineControls({
         {machineTaskBusy && <span className="ml-2 text-xs text-muted-foreground">Working…</span>}
       </SectionHeader>
       <div className="space-y-2">
-        <ProfileActionGrid compactColumns={2} mediumColumns={4} expandedColumns={4} testId="home-machine-controls">
+        <ProfileActionGrid
+          compactColumns={2}
+          mediumColumns={4}
+          expandedColumns={4}
+          cardDensity="compact"
+          testId="home-machine-controls"
+        >
           <QuickActionCard
             icon={RotateCcw}
             label="Reset"
-            compact
             variant="danger"
             className="border-destructive/40 bg-destructive/[0.04]"
             onClick={() =>
@@ -74,7 +79,6 @@ export function MachineControls({
           <QuickActionCard
             icon={Power}
             label="Reboot"
-            compact
             variant="danger"
             className="border-destructive/40 bg-destructive/[0.04]"
             onClick={() =>
@@ -89,7 +93,6 @@ export function MachineControls({
           <QuickActionCard
             icon={machineExecutionState === "paused" ? Play : Pause}
             label={machineExecutionState === "paused" ? "Resume" : "Pause"}
-            compact
             className={machineExecutionState === "paused" ? "border-primary/60 bg-primary/10" : undefined}
             onClick={() => void onPauseResume()}
             disabled={!status.isConnected || machineTaskBusy}
@@ -98,7 +101,6 @@ export function MachineControls({
           <QuickActionCard
             icon={Menu}
             label="Menu"
-            compact
             onClick={() => onAction(() => controls.menuButton.mutateAsync() as Promise<void>, "Menu toggled")}
             disabled={!status.isConnected || machineTaskBusy}
             loading={controls.menuButton.isPending}
@@ -106,7 +108,6 @@ export function MachineControls({
           <QuickActionCard
             icon={Download}
             label="Save RAM"
-            compact
             dataTestId="home-save-ram"
             onClick={() => void onSaveRam()}
             disabled={!status.isConnected || machineTaskBusy}
@@ -115,7 +116,6 @@ export function MachineControls({
           <QuickActionCard
             icon={Upload}
             label="Load RAM"
-            compact
             dataTestId="home-load-ram"
             onClick={() => void onLoadRam()}
             disabled={!status.isConnected || machineTaskBusy}
@@ -124,7 +124,6 @@ export function MachineControls({
           <QuickActionCard
             icon={RotateCcw}
             label="Reboot (Clear RAM)"
-            compact
             onClick={() => void onRebootClearMemory()}
             disabled={!status.isConnected || machineTaskBusy}
             loading={machineTaskId === "reboot-clear-memory"}
@@ -132,7 +131,6 @@ export function MachineControls({
           <QuickActionCard
             icon={PowerOff}
             label="Power Off"
-            compact
             variant="danger"
             className="border-destructive/30 bg-destructive/[0.03] opacity-80"
             onClick={() => void onPowerOff()}

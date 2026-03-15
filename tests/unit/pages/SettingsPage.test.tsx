@@ -10,6 +10,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { RouterProvider, createMemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import SettingsPage from "@/pages/SettingsPage";
+import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
 import { reportUserError } from "@/lib/uiErrors";
 import { FolderPicker } from "@/lib/native/folderPicker";
 import { discoverConnection } from "@/lib/connection/connectionManager";
@@ -171,6 +172,19 @@ const renderSettingsPage = () =>
         v7_relativeSplatPath: true,
       }}
     />,
+  );
+
+const renderSettingsPageWithDisplayProfileProvider = () =>
+  render(
+    <DisplayProfileProvider>
+      <RouterProvider
+        router={buildRouter(<SettingsPage />)}
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      />
+    </DisplayProfileProvider>,
   );
 
 vi.mock("@/lib/uiErrors", () => ({
@@ -431,6 +445,47 @@ describe("SettingsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /dark/i }));
 
     expect(mockSetTheme).toHaveBeenCalledWith("dark");
+  });
+
+  it("changes theme when selecting the auto option", () => {
+    renderSettingsPage();
+
+    const appearanceSection = screen.getByRole("heading", { name: "Appearance" }).closest(".rounded-xl");
+    expect(appearanceSection).toBeTruthy();
+    if (!appearanceSection) return;
+
+    fireEvent.click(within(appearanceSection).getAllByRole("button")[0]);
+
+    expect(mockSetTheme).toHaveBeenCalledWith("system");
+  });
+
+  it("shows appearance theme options in auto light dark order", () => {
+    renderSettingsPage();
+
+    const appearanceSection = screen.getByRole("heading", { name: "Appearance" }).closest(".rounded-xl");
+    expect(appearanceSection).toBeTruthy();
+    if (!appearanceSection) return;
+
+    const buttons = within(appearanceSection).getAllByRole("button");
+    const themeLabels = buttons.slice(0, 3).map((button) => button.textContent?.trim() ?? "");
+    expect(themeLabels).toEqual(["Auto", "Light", "Dark"]);
+  });
+
+  it("persists display profile overrides and reports the auto compact resolution", () => {
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 320,
+      writable: true,
+    });
+
+    renderSettingsPageWithDisplayProfileProvider();
+
+    expect(screen.getByText(/Auto currently resolves to Small display\./i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Large display" }));
+
+    expect(localStorage.getItem("c64u_display_profile_override")).toBe("expanded");
+    expect(document.documentElement.dataset.displayProfile).toBe("expanded");
   });
 
   it("shows persisted SAF URIs after refresh", async () => {

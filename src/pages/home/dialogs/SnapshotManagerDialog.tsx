@@ -7,11 +7,17 @@
  */
 
 import { useEffect, useState, type MouseEvent, type SyntheticEvent } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AppSheet,
+  AppSheetBody,
+  AppSheetContent,
+  AppSheetDescription,
+  AppSheetHeader,
+  AppSheetTitle,
+} from "@/components/ui/app-surface";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
-import { cn } from "@/lib/utils";
 import { Trash2 } from "lucide-react";
 import type { SnapshotStorageEntry, SnapshotType } from "@/lib/snapshot/snapshotTypes";
 import { SNAPSHOT_TYPE_LIST } from "@/lib/snapshot/snapshotTypes";
@@ -46,6 +52,7 @@ function SnapshotRow({
   onDelete: (id: string) => void;
   onUpdateLabel: (id: string, label: string) => void;
 }) {
+  const { profile } = useDisplayProfile();
   const typeConfig = SNAPSHOT_TYPE_LIST.find((c) => c.type === snapshot.snapshotType);
   const typeLabel = typeConfig?.label ?? snapshot.snapshotType;
   const ranges = snapshot.metadata.display_ranges.join(", ");
@@ -109,7 +116,13 @@ function SnapshotRow({
             className="rounded-md border border-border/60 bg-background p-2.5"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="grid grid-cols-1 gap-2 text-[11px] md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-end">
+            <div
+              className={
+                profile === "expanded"
+                  ? "grid grid-cols-[minmax(0,1fr)_auto_auto] items-end gap-2 text-[11px]"
+                  : "grid grid-cols-1 gap-2 text-[11px]"
+              }
+            >
               <div className="space-y-1">
                 <label htmlFor={`snapshot-comment-${snapshot.id}`} className="text-muted-foreground">
                   Comment
@@ -183,6 +196,7 @@ export function SnapshotManagerDialog({
   const { profile } = useDisplayProfile();
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<SnapshotTypeFilter>("all");
+  const compact = profile === "compact";
 
   const filtered = filterSnapshots(snapshots, query, typeFilter);
 
@@ -195,23 +209,23 @@ export function SnapshotManagerDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent
-        surface="list-browser"
-        className={cn(
-          "overflow-hidden p-0",
-          profile === "compact" ? "" : "max-w-md h-[min(85vh,calc(100dvh-4rem))] max-h-[calc(100dvh-4rem)]",
-        )}
-        data-testid="snapshot-manager-dialog"
-      >
+    <AppSheet open={open} onOpenChange={handleOpenChange}>
+      <AppSheetContent className="overflow-hidden p-0" data-testid="snapshot-manager-dialog">
         <div className="flex h-full min-h-0 flex-col">
-          <DialogHeader className="border-b border-border px-6 pb-3 pt-6 pr-14">
-            <DialogTitle>Load RAM</DialogTitle>
-            <DialogDescription>Select a snapshot to restore.</DialogDescription>
-          </DialogHeader>
+          <AppSheetHeader className={compact ? "px-4 pb-2 pt-4 pr-12" : "px-6 pb-3 pt-6 pr-14"}>
+            <AppSheetTitle>Load RAM</AppSheetTitle>
+            <AppSheetDescription className={compact ? "hidden" : undefined}>
+              Select a snapshot to restore.
+            </AppSheetDescription>
+          </AppSheetHeader>
 
-          <div className="flex flex-1 min-h-0 flex-col gap-3 px-6 py-4">
-            {/* Text filter */}
+          <div
+            className={
+              compact
+                ? "shrink-0 space-y-2 border-b border-border px-4 py-3"
+                : "shrink-0 space-y-3 border-b border-border px-6 py-4"
+            }
+          >
             <Input
               placeholder="Filter snapshots…"
               value={query}
@@ -219,7 +233,6 @@ export function SnapshotManagerDialog({
               data-testid="snapshot-filter-input"
             />
 
-            {/* Type filter tabs */}
             <div className="flex gap-1 flex-wrap" data-testid="snapshot-type-filters">
               {TYPE_FILTERS.map(({ value, label }) => (
                 <button
@@ -237,19 +250,20 @@ export function SnapshotManagerDialog({
                 </button>
               ))}
             </div>
+          </div>
 
-            {/* Snapshot list */}
-            <div className="flex-1 min-h-0 overflow-y-auto pr-2" data-testid="snapshot-list">
+          <AppSheetBody className={compact ? "px-4 py-3" : "px-6 py-4"} data-testid="snapshot-list">
+            <div className="pr-2">
               <div className="space-y-2" data-testid="snapshot-list-content">
                 {filtered.length === 0 ? (
                   <p className="py-4 text-center text-sm text-muted-foreground" data-testid="snapshot-empty">
                     {snapshots.length === 0 ? "No snapshots saved yet." : "No snapshots match the filter."}
                   </p>
                 ) : (
-                  filtered.map((s) => (
+                  filtered.map((snapshot) => (
                     <SnapshotRow
-                      key={s.id}
-                      snapshot={s}
+                      key={snapshot.id}
+                      snapshot={snapshot}
                       onRestore={onRestore}
                       onDelete={onDelete}
                       onUpdateLabel={onUpdateLabel}
@@ -258,9 +272,9 @@ export function SnapshotManagerDialog({
                 )}
               </div>
             </div>
-          </div>
+          </AppSheetBody>
         </div>
-      </DialogContent>
-    </Dialog>
+      </AppSheetContent>
+    </AppSheet>
   );
 }

@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from "react";
+import { createContext, useContext, type CSSProperties, type ReactNode } from "react";
 
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { cn } from "@/lib/utils";
@@ -9,6 +9,12 @@ type PageContainerProps = {
   size?: "default" | "reading" | "full";
   as?: "main" | "div" | "section";
 };
+
+export type ProfileActionGridDensity = "adaptive" | "compact";
+
+const ProfileActionGridDensityContext = createContext<ProfileActionGridDensity>("adaptive");
+
+export const useProfileActionGridDensity = () => useContext(ProfileActionGridDensityContext);
 
 export function PageContainer({ children, className, size = "default", as = "main" }: PageContainerProps) {
   const { tokens } = useDisplayProfile();
@@ -36,6 +42,7 @@ type ProfileActionGridProps = {
   mediumColumns?: number;
   expandedColumns?: number;
   minItemWidth?: string;
+  cardDensity?: ProfileActionGridDensity;
   testId?: string;
 };
 
@@ -46,6 +53,7 @@ export function ProfileActionGrid({
   mediumColumns = 4,
   expandedColumns = 4,
   minItemWidth,
+  cardDensity = "adaptive",
   testId,
 }: ProfileActionGridProps) {
   const { profile, tokens } = useDisplayProfile();
@@ -54,9 +62,11 @@ export function ProfileActionGrid({
     gridTemplateColumns: `repeat(${columns}, minmax(${minItemWidth ?? tokens.actionGridMinWidth}, 1fr))`,
   };
   return (
-    <div className={cn("profile-action-grid", className)} style={style} data-testid={testId} data-profile={profile}>
-      {children}
-    </div>
+    <ProfileActionGridDensityContext.Provider value={cardDensity}>
+      <div className={cn("profile-action-grid", className)} style={style} data-testid={testId} data-profile={profile}>
+        {children}
+      </div>
+    </ProfileActionGridDensityContext.Provider>
   );
 }
 

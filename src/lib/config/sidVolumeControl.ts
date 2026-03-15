@@ -7,7 +7,7 @@
  */
 
 import { normalizeConfigItem } from "@/lib/config/normalizeConfigItem";
-import { isSidVolumeName, resolveAudioMixerMuteValue } from "@/lib/config/audioMixerSolo";
+import { isSidVolumeName } from "@/lib/config/audioMixerSolo";
 
 export type SidVolumeItem = {
   name: string;
@@ -35,9 +35,22 @@ const isOffOption = (value: string) => {
   return normalized === "off" || normalized === "mute" || normalized === "muted";
 };
 
+export const isSidVolumeOffValue = (value: string | number | undefined) =>
+  typeof value === "string" ? isOffOption(value) : false;
+
+const isExplicitMutedVolumeOption = (value: string) => normalizeToken(value) === "-42 db";
+
 const parseNumericOption = (option: string) => {
   const match = option.trim().match(/[+-]?\d+(?:\.\d+)?/);
   return match ? Number(match[0]) : null;
+};
+
+const valuesEqual = (left: string | number | undefined, right: string | number | undefined) => {
+  if (left === undefined || right === undefined) return false;
+  if (typeof left === "number" || typeof right === "number") {
+    return String(left).trim() === String(right).trim();
+  }
+  return normalizeToken(left) === normalizeToken(right);
 };
 
 const resolveEnabledValue = (value: string | number | undefined, disabledTokens: string[]) => {
@@ -103,6 +116,12 @@ export const buildSidVolumeSteps = (options: string[]): SidVolumeOption[] => {
   return steps;
 };
 
+export const resolveSidMutedVolumeOption = (options?: string[]) => {
+  const explicitMuted = options?.find((option) => isExplicitMutedVolumeOption(option));
+  if (explicitMuted) return explicitMuted;
+  return "-42 dB";
+};
+
 export const isSidEnabledForName = (name: string, enablement: SidEnablement) => {
   if (!isSidVolumeName(name)) return true;
   const match = normalizeToken(name).match(/^vol\s+(ultisid|socket)\s+([12])$/i);
@@ -127,8 +146,36 @@ export const buildEnabledSidVolumeSnapshot = (items: SidVolumeItem[], enablement
 
 export const buildEnabledSidMuteUpdates = (items: SidVolumeItem[], enablement: SidEnablement) => {
   const updates: Record<string, string | number> = {};
+  const muteTargetByName = new Map<string, string | number>();
   filterEnabledSidVolumeItems(items, enablement).forEach((item) => {
-    updates[item.name] = resolveAudioMixerMuteValue(item.options);
+    const muteTarget = resolveSidMutedVolumeOption(item.options);
+    muteTargetByName.set(item.name, muteTarget);
+    if (isSidVolumeOffValue(item.value)) {
+      return;
+    }
+    if (valuesEqual(item.value, muteTarget)) {
+      return;
+    }
+    updates[item.name] = muteTarget;
+  });
+  return updates;
+};
+
+export const buildEnabledSidMutedToTargetUpdates = (
+  items: SidVolumeItem[],
+  enablement: SidEnablement,
+  target: string,
+) => {
+  const updates: Record<string, string | number> = {};
+  filterEnabledSidVolumeItems(items, enablement).forEach((item) => {
+    const muteTarget = resolveSidMutedVolumeOption(item.options);
+    if (!valuesEqual(item.value, muteTarget)) {
+      return;
+    }
+    if (valuesEqual(item.value, target)) {
+      return;
+    }
+    updates[item.name] = target;
   });
   return updates;
 };

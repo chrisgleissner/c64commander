@@ -36,7 +36,7 @@ const defaultMixerItems = (value: string): MixerItem[] => [
   {
     name: "SID 1",
     value,
-    options: ["MUTED", "0", "5"],
+    options: ["OFF", "-42 dB", "0", "5"],
   },
 ];
 
@@ -76,7 +76,7 @@ vi.mock("@/lib/c64api", () => ({
 
 vi.mock("@/lib/config/audioMixerSolo", () => ({
   isSidVolumeName: () => true,
-  resolveAudioMixerMuteValue: () => "MUTED",
+  resolveAudioMixerMuteValue: () => "-42 dB",
 }));
 
 vi.mock("@/lib/config/configItems", () => ({
@@ -98,6 +98,9 @@ vi.mock("@/lib/deviceInteraction/latestIntentWriteLane", () => ({
 
 const buildEnabledSidUnmuteUpdatesMock = vi.fn((volumes: Record<string, string | number>) => volumes);
 const buildEnabledSidRestoreUpdatesMock = vi.fn(() => ({}));
+const buildEnabledSidMutedToTargetUpdatesMock = vi.fn((_items: MixerItem[], _enablement: unknown, target: string) => ({
+  "SID 1": target,
+}));
 const buildSidEnablementMock = vi.fn(() => ({ sid1: true }));
 const buildSidVolumeStepsMock = vi.fn(() => [
   { option: "0", label: "0", numeric: 0 },
@@ -105,16 +108,19 @@ const buildSidVolumeStepsMock = vi.fn(() => [
 ]);
 
 vi.mock("@/lib/config/sidVolumeControl", () => ({
+  buildEnabledSidMutedToTargetUpdates: (...args: unknown[]) => buildEnabledSidMutedToTargetUpdatesMock(...args),
   buildEnabledSidUnmuteUpdates: (...args: unknown[]) => buildEnabledSidUnmuteUpdatesMock(...args),
   buildEnabledSidRestoreUpdates: (...args: unknown[]) => buildEnabledSidRestoreUpdatesMock(...args),
   buildEnabledSidVolumeSnapshot: vi.fn(() => ({ "SID 1": "5" })),
   buildSidEnablement: (...args: unknown[]) => buildSidEnablementMock(...args),
   buildSidVolumeSteps: (...args: unknown[]) => buildSidVolumeStepsMock(...args),
   filterEnabledSidVolumeItems: vi.fn((items: MixerItem[]) => items),
-  buildEnabledSidMuteUpdates: vi.fn(() => ({ "SID 1": "MUTED" })),
+  buildEnabledSidMuteUpdates: vi.fn(() => ({ "SID 1": "-42 dB" })),
   buildEnabledSidVolumeUpdates: vi.fn((_items: MixerItem[], _enablement: unknown, target: string) => ({
     "SID 1": target,
   })),
+  isSidVolumeOffValue: vi.fn((value: string | number | undefined) => value === "OFF"),
+  resolveSidMutedVolumeOption: vi.fn(() => "-42 dB"),
 }));
 
 vi.mock("@/pages/playFiles/playFilesUtils", () => ({
@@ -139,6 +145,12 @@ describe("useVolumeOverride", () => {
       return Promise.resolve({});
     });
     buildEnabledSidUnmuteUpdatesMock.mockImplementation((volumes: Record<string, string | number>) => volumes);
+    buildEnabledSidMutedToTargetUpdatesMock.mockReset();
+    buildEnabledSidMutedToTargetUpdatesMock.mockImplementation(
+      (_items: MixerItem[], _enablement: unknown, target: string) => ({
+        "SID 1": target,
+      }),
+    );
     buildEnabledSidRestoreUpdatesMock.mockReset();
     buildEnabledSidRestoreUpdatesMock.mockReturnValue({});
     buildSidEnablementMock.mockReset();
@@ -274,7 +286,7 @@ describe("useVolumeOverride", () => {
     expect(mutateAsyncMock).not.toHaveBeenCalled();
   });
 
-  it("sends mute and unmute writes with the new manual logging paths", async () => {
+  it("mutes to -42 dB and restores the current slider target on unmute", async () => {
     audioMixerItemsRef.current = defaultMixerItems("5");
 
     const { result } = renderHook(() =>
@@ -292,6 +304,13 @@ describe("useVolumeOverride", () => {
 
     expect(result.current.volumeState.muted).toBe(true);
     expect(mutateAsyncMock).toHaveBeenCalledTimes(1);
+    expect(mutateAsyncMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        category: "Audio Mixer",
+        updates: { "SID 1": "-42 dB" },
+      }),
+    );
     expect(addLog).toHaveBeenCalledWith("info", "Play volume mute sent", expect.objectContaining({ index: 1 }));
 
     await act(async () => {
@@ -300,7 +319,94 @@ describe("useVolumeOverride", () => {
 
     expect(result.current.volumeState.muted).toBe(false);
     expect(mutateAsyncMock).toHaveBeenCalledTimes(2);
+    expect(mutateAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        category: "Audio Mixer",
+        updates: { "SID 1": "5" },
+      }),
+    );
     expect(addLog).toHaveBeenCalledWith("info", "Play volume unmute sent", expect.objectContaining({ index: 1 }));
+  });
+
+  it("ignores already-off SID outputs when deriving the shared playback volume target", async () => {
+    audioMixerItemsRef.current = [
+      {
+        name: "SID 1",
+        value: "OFF",
+        options: ["OFF", "-42 dB", "0", "5"],
+      },
+      {
+        name: "SID 2",
+        value: "5",
+        options: ["OFF", "-42 dB", "0", "5"],
+      },
+    ];
+
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: false, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.volumeState.index).toBe(1);
+      expect(result.current.volumeState.muted).toBe(false);
+    });
+  });
+
+  it("restores playback-start unmute to the active slider target without reviving already-off SIDs", async () => {
+    audioMixerItemsRef.current = [
+      {
+        name: "SID 1",
+        value: "OFF",
+        options: ["OFF", "-42 dB", "0", "5"],
+      },
+      {
+        name: "SID 2",
+        value: "5",
+        options: ["OFF", "-42 dB", "0", "5"],
+      },
+    ];
+    buildEnabledSidMutedToTargetUpdatesMock.mockImplementation(
+      (items: MixerItem[], _enablement: unknown, target: string) =>
+        Object.fromEntries(items.filter((item) => item.value === "-42 dB").map((item) => [item.name, target])),
+    );
+
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.volumeState.index).toBe(1);
+    });
+
+    await act(async () => {
+      await result.current.handleToggleMute();
+    });
+
+    audioMixerItemsRef.current = [
+      {
+        name: "SID 1",
+        value: "OFF",
+        options: ["OFF", "-42 dB", "0", "5"],
+      },
+      {
+        name: "SID 2",
+        value: "-42 dB",
+        options: ["OFF", "-42 dB", "0", "5"],
+      },
+    ];
+
+    await act(async () => {
+      await result.current.ensureUnmuted();
+    });
+
+    expect(mutateAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        category: "Audio Mixer",
+        updates: { "SID 2": "5" },
+      }),
+    );
   });
 
   it("falls back to the previous volume when playback-start unmute has no snapshot updates", async () => {

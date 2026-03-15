@@ -10,6 +10,7 @@ import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import { SidCard, type SidCardProps } from "@/pages/home/SidCard";
+import { DisplayProfileProvider, useDisplayProfilePreference } from "@/hooks/useDisplayProfile";
 
 // Mock UI components
 vi.mock("@/components/ui/button", () => ({
@@ -192,5 +193,26 @@ describe("SidCard", () => {
     const sliders = screen.getAllByTestId("slider");
     expect(sliders[0].getAttribute("data-midpoint")).toBe("false"); // Volume
     expect(sliders[1].getAttribute("data-midpoint")).toBe("true"); // Pan
+  });
+
+  it("uses compact-sized labels for vol and pan in compact profile", () => {
+    const CompactHarness = () => {
+      const { setOverride } = useDisplayProfilePreference();
+
+      React.useEffect(() => {
+        setOverride("compact");
+      }, [setOverride]);
+
+      return <SidCard {...defaultProps} />;
+    };
+
+    render(
+      <DisplayProfileProvider>
+        <CompactHarness />
+      </DisplayProfileProvider>,
+    );
+
+    expect(screen.getByText("Vol").className).toContain("text-xs");
+    expect(screen.getByText("Pan").className).toContain("text-xs");
   });
 });

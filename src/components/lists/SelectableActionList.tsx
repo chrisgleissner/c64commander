@@ -11,7 +11,14 @@ import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { MoreVertical, Play, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AppSheet,
+  AppSheetBody,
+  AppSheetContent,
+  AppSheetDescription,
+  AppSheetHeader,
+  AppSheetTitle,
+} from "@/components/ui/app-surface";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -88,6 +95,7 @@ export type SelectableActionListProps = {
   rowTestId?: string;
   headerActions?: React.ReactNode;
   filterHeader?: React.ReactNode;
+  viewAllFilterHeader?: React.ReactNode;
   filterPlaceholder?: string;
   showSelectionControls?: boolean;
   selectionLabel?: string;
@@ -291,11 +299,13 @@ export const SelectableActionList = ({
   rowTestId,
   headerActions,
   filterHeader,
+  viewAllFilterHeader,
   filterPlaceholder = "Filter files...",
   showSelectionControls = true,
   selectionLabel,
 }: SelectableActionListProps) => {
   const { profile } = useDisplayProfile();
+  const isCompact = profile === "compact";
   const [viewAllOpen, setViewAllOpen] = useState(false);
   const [filterText, setFilterText] = useState("");
   const [viewAllFilterText, setViewAllFilterText] = useState("");
@@ -462,21 +472,23 @@ export const SelectableActionList = ({
       <div className="bg-card border border-border rounded-xl p-4 overflow-hidden">{renderList(visibleItems)}</div>
 
       {viewAllTitle && (
-        <Dialog open={viewAllOpen} onOpenChange={setViewAllOpen}>
-          <DialogContent
-            surface="list-browser"
+        <AppSheet open={viewAllOpen} onOpenChange={setViewAllOpen}>
+          <AppSheetContent
             className={cn(
-              "mx-auto p-0 overflow-hidden",
-              profile === "compact"
-                ? ""
-                : "h-[min(70vh,calc(100dvh-4rem))] max-h-[calc(100dvh-4rem)] sm:w-full sm:max-w-[36rem]",
+              "p-0 overflow-hidden",
+              profile === "expanded" ? "w-[min(88vw,64rem)] h-[min(88dvh,64rem)] max-h-[calc(100dvh-2rem)]" : "",
             )}
           >
             <div className="flex h-full min-h-0 flex-col min-w-0 relative" data-testid="action-list-view-all">
-              <DialogHeader className="border-b border-border px-6 pb-3 pt-6 space-y-3">
+              <AppSheetHeader
+                className={cn(
+                  "border-b border-border",
+                  isCompact ? "space-y-2 px-3 pb-2 pt-3" : "space-y-3 px-6 pb-3 pt-6",
+                )}
+              >
                 <div>
-                  <DialogTitle>{viewAllTitle || title}</DialogTitle>
-                  <DialogDescription>Review all items in this list.</DialogDescription>
+                  <AppSheetTitle>{viewAllTitle || title}</AppSheetTitle>
+                  <AppSheetDescription>Review all items in this list.</AppSheetDescription>
                 </div>
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
@@ -500,12 +512,19 @@ export const SelectableActionList = ({
                     </Button>
                   )}
                 </div>
-                {filterHeader ? (
-                  <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2">{filterHeader}</div>
+                {(viewAllFilterHeader ?? filterHeader) ? (
+                  <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2">
+                    {viewAllFilterHeader ?? filterHeader}
+                  </div>
                 ) : null}
-              </DialogHeader>
-              <div className="flex-1 min-h-0 flex flex-col px-6 py-4">
-                <div className="bg-card border border-border rounded-xl p-4 overflow-hidden flex-1 h-full min-h-0 flex flex-col">
+              </AppSheetHeader>
+              <AppSheetBody className={cn("flex flex-col", isCompact ? "px-3 py-3" : "px-6 py-4")}>
+                <div
+                  className={cn(
+                    "bg-card border border-border rounded-xl overflow-hidden flex-1 h-full min-h-0 flex flex-col",
+                    isCompact ? "p-3" : "p-4",
+                  )}
+                >
                   {viewAllFilteredItems.length === 0 ? (
                     <p className="text-xs text-muted-foreground">{emptyLabel}</p>
                   ) : (
@@ -528,7 +547,7 @@ export const SelectableActionList = ({
                     />
                   )}
                 </div>
-              </div>
+              </AppSheetBody>
               <AlphabetScrollbar
                 items={viewAllFilteredItems
                   .filter((item) => item.variant !== "header")
@@ -549,8 +568,8 @@ export const SelectableActionList = ({
                 }}
               />
             </div>
-          </DialogContent>
-        </Dialog>
+          </AppSheetContent>
+        </AppSheet>
       )}
     </div>
   );

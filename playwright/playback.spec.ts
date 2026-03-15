@@ -490,8 +490,8 @@ test.describe("Playback file browser", () => {
     );
 
     const mixer = server.getState()["Audio Mixer"];
-    expect(mixer["Vol Socket 1"].value).toBe("OFF");
-    expect(mixer["Vol UltiSid 1"].value).toBe("OFF");
+    expect(mixer["Vol Socket 1"].value).toBe("-42 dB");
+    expect(mixer["Vol UltiSid 1"].value).toBe("-42 dB");
     expect(mixer["Vol Socket 2"].value).toBe("-6 dB");
     expect(mixer["Vol UltiSid 2"].value).toBe("+1 dB");
     await snap(page, testInfo, "volume-mute-enabled-only");
@@ -575,7 +575,7 @@ test.describe("Playback file browser", () => {
     await snap(page, testInfo, "playback-error-logged");
   });
 
-  test("playlist view-all dialog is constrained and scrollable", async ({
+  test("playlist view-all sheet stays viewport-safe and scrollable", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await page.addInitScript(() => {
@@ -595,6 +595,8 @@ test.describe("Playback file browser", () => {
     await page.getByRole("button", { name: "View all" }).click();
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
+    await expect(dialog).toHaveAttribute("data-app-surface", "sheet");
+    await expect(dialog).toHaveAttribute("data-sheet-presentation", "sheet");
     await snap(page, testInfo, "playlist-view-all-open");
 
     const dialogBox = await dialog.boundingBox();
@@ -603,11 +605,14 @@ test.describe("Playback file browser", () => {
     expect(viewport).not.toBeNull();
     if (dialogBox && viewport) {
       const heightRatio = dialogBox.height / viewport.height;
-      const widthRatio = dialogBox.width / viewport.width;
-      expect(heightRatio).toBeLessThan(0.9);
-      expect(widthRatio).toBeLessThan(0.92);
-      expect(dialogBox.y).toBeGreaterThan(viewport.height * 0.05);
-      expect(dialogBox.y + dialogBox.height).toBeLessThan(viewport.height * 0.98);
+      expect(heightRatio).toBeGreaterThan(0.85);
+      expect(heightRatio).toBeLessThan(0.98);
+      expect(dialogBox.x).toBeGreaterThanOrEqual(0);
+      expect(dialogBox.x).toBeLessThanOrEqual(1);
+      expect(dialogBox.x + dialogBox.width).toBeGreaterThanOrEqual(viewport.width - 1);
+      expect(dialogBox.x + dialogBox.width).toBeLessThanOrEqual(viewport.width + 1);
+      expect(dialogBox.y).toBeGreaterThanOrEqual(40);
+      expect(dialogBox.y + dialogBox.height).toBeLessThanOrEqual(viewport.height);
     }
 
     // Verify list is populated
@@ -1144,6 +1149,39 @@ test.describe("Playback file browser", () => {
     await page.waitForTimeout(2000);
     expect(server.sidplayRequests.length).toBe(2);
     await snap(page, testInfo, "auto-advance-single-shot");
+  });
+
+  test("auto-advance continues after navigating away from the play page", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
+    await seedPlaylistStorage(page, [
+      {
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/track-1.sid",
+        name: "track-1.sid",
+        durationMs: 1200,
+      },
+      {
+        source: "ultimate" as const,
+        path: "/Usb0/Demos/track-2.sid",
+        name: "track-2.sid",
+        durationMs: 20000,
+      },
+    ]);
+
+    await page.goto("/play");
+    await page.getByTestId("playlist-play").click();
+    await expect.poll(() => server.sidplayRequests.length).toBe(1);
+    await expect(page.getByTestId("playback-current-track")).toContainText("track-1.sid");
+
+    await page.getByTestId("tab-settings").click();
+    await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+
+    await expect.poll(() => server.sidplayRequests.length).toBe(2);
+
+    await page.getByTestId("tab-play").click();
+    await expect(page.getByTestId("playback-current-track")).toContainText("track-2.sid");
+    await snap(page, testInfo, "auto-advance-after-navigation");
   });
 
   test("user next cancels old-track auto-advance and transitions immediately", async ({

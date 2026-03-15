@@ -2,8 +2,14 @@ import { describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { ConfigItemRow } from "@/components/ConfigItemRow";
 
+let mockProfile: "compact" | "medium" | "expanded" = "medium";
+
 vi.mock("@/hooks/useC64Connection", () => ({
   useC64ConfigItem: () => ({ data: undefined, isLoading: false }),
+}));
+
+vi.mock("@/hooks/useDisplayProfile", () => ({
+  useDisplayProfile: () => ({ profile: mockProfile }),
 }));
 
 describe("ConfigItemRow text input buffering", () => {
@@ -68,5 +74,15 @@ describe("ConfigItemRow text input buffering", () => {
     fireEvent.keyDown(input, { key: "Enter" });
     expect(onValueChange).toHaveBeenCalledTimes(1);
     expect(onValueChange).toHaveBeenCalledWith("2026");
+  });
+
+  it("forces vertical layout on compact displays", () => {
+    mockProfile = "compact";
+    const onValueChange = vi.fn();
+
+    render(<ConfigItemRow category="Clock Settings" name="Clock Year" value="2025" onValueChange={onValueChange} />);
+
+    expect(screen.getByTestId("config-item-layout")).toHaveAttribute("data-layout", "vertical");
+    mockProfile = "medium";
   });
 });

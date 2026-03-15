@@ -37,16 +37,19 @@ const expectNoHorizontalOverflow = async (page: Page) => {
 
 const expectDialogWithinViewport = async (page: Page, dialog: Locator) => {
   await expect(dialog).toBeVisible();
-  const dialogBox = await dialog.boundingBox();
-  const viewport = page.viewportSize();
-  expect(dialogBox).not.toBeNull();
-  expect(viewport).not.toBeNull();
-  if (dialogBox && viewport) {
-    expect(dialogBox.x).toBeGreaterThanOrEqual(0);
-    expect(dialogBox.y).toBeGreaterThanOrEqual(0);
-    expect(dialogBox.x + dialogBox.width).toBeLessThanOrEqual(viewport.width);
-    expect(dialogBox.y + dialogBox.height).toBeLessThanOrEqual(viewport.height);
-  }
+  await expect
+    .poll(async () => {
+      const dialogBox = await dialog.boundingBox();
+      const viewport = page.viewportSize();
+      if (!dialogBox || !viewport) return false;
+      return (
+        dialogBox.x >= 0 &&
+        dialogBox.y >= 0 &&
+        dialogBox.x + dialogBox.width <= viewport.width &&
+        dialogBox.y + dialogBox.height <= viewport.height
+      );
+    })
+    .toBe(true);
 };
 
 const expectVerticalOverflowHandled = async (container: Locator) => {
@@ -548,7 +551,7 @@ test.describe("Layout overflow safeguards", () => {
     }
   });
 
-  test("AppBar header has safe-area top padding on all pages @layout", async ({
+  test("AppBar header uses compact top inset only on compact pages @layout", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     const routes = ["/", "/play", "/disks", "/config", "/settings"];
@@ -556,8 +559,21 @@ test.describe("Layout overflow safeguards", () => {
       await page.goto(route, { waitUntil: "domcontentloaded" });
       const header = page.locator("header").first();
       await expect(header).toBeVisible();
-      const hasSafeClass = await header.evaluate((el: HTMLElement) => el.classList.contains("pt-safe"));
-      expect(hasSafeClass, `header on ${route} should have pt-safe class`).toBe(true);
+      await expect
+        .poll(async () => {
+          return page.evaluate(() => {
+            const currentHeader = document.querySelector("header");
+            const profile = document.documentElement.dataset.displayProfile;
+            return {
+              hasSafeClass: currentHeader?.classList.contains("pt-safe") ?? false,
+              profile,
+            };
+          });
+        })
+        .toEqual({
+          hasSafeClass: false,
+          profile: "compact",
+        });
       await snap(page, testInfo, `safe-area-${route.replace("/", "root").replace(/\//g, "-")}`);
     }
   });

@@ -26,7 +26,7 @@ import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 
 import { buildLocalPlayFileFromUri, buildLocalPlayFileFromTree } from "@/lib/playback/fileLibraryUtils";
 import type { PlaylistItem } from "@/pages/playFiles/types";
-import { resolveAudioMixerMuteValue } from "@/lib/config/audioMixerSolo";
+import { resolveSidMutedVolumeOption } from "@/lib/config/sidVolumeControl";
 import type { AudioMixerItem } from "@/pages/playFiles/playFilesUtils";
 import type { VolumeAction } from "@/pages/playFiles/volumeState";
 import type { SidEnablement } from "@/lib/config/sidVolumeControl";
@@ -604,7 +604,7 @@ export function usePlaybackController({
               const wasMuted =
                 resumeSnapshot && resumeItems.length
                   ? resumeItems.every(
-                      (item) => resumeSnapshot.volumes[item.name] === resolveAudioMixerMuteValue(item.options),
+                      (item) => resumeSnapshot.volumes[item.name] === resolveSidMutedVolumeOption(item.options),
                     )
                   : false;
               if (!wasMuted) resumingFromPauseRef.current = true;

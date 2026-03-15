@@ -21,7 +21,13 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AppSheet,
+  AppSheetContent,
+  AppSheetDescription,
+  AppSheetHeader,
+  AppSheetTitle,
+} from "@/components/ui/app-surface";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDiagnosticsTimestamp } from "@/lib/diagnostics/timeFormat";
 import { getTraceTitle } from "@/lib/tracing/traceFormatter";
@@ -29,6 +35,8 @@ import { resolveLogSeverity, resolveTraceSeverity } from "@/lib/diagnostics/diag
 import { DiagnosticsListItem } from "@/components/diagnostics/DiagnosticsListItem";
 import { ActionSummaryListItem } from "@/components/diagnostics/ActionSummaryListItem";
 import type { DiagnosticsTabKey } from "@/lib/diagnostics/diagnosticsOverlay";
+import { useDisplayProfile } from "@/hooks/useDisplayProfile";
+import { cn } from "@/lib/utils";
 
 type DiagnosticsLogEntry = {
   id: string;
@@ -98,6 +106,8 @@ export function DiagnosticsDialog({
   onShareAll,
   onClearAll,
 }: Props) {
+  const { profile } = useDisplayProfile();
+  const isCompact = profile === "compact";
   const activeDiagnosticsFilter = diagnosticsFilters[diagnosticsTab] ?? "";
 
   const filteredErrorLogs = useMemo(() => {
@@ -160,13 +170,17 @@ export function DiagnosticsDialog({
   }, [actionSummaries, diagnosticsFilters]);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent surface="secondary-editor" className="flex min-h-0 flex-col overflow-hidden">
-        <DialogHeader className="shrink-0">
-          <DialogTitle>Diagnostics</DialogTitle>
-          <DialogDescription>Review warnings/errors, logs, traces, and action summaries.</DialogDescription>
-        </DialogHeader>
-        <div className="shrink-0 flex flex-wrap gap-2">
+    <AppSheet open={open} onOpenChange={onOpenChange}>
+      <AppSheetContent className="flex min-h-0 flex-col overflow-hidden" data-testid="diagnostics-sheet">
+        <AppSheetHeader
+          className={cn("shrink-0", isCompact ? "space-y-1 px-3 pb-2 pt-3" : "space-y-1.5 px-4 pb-2 pt-4")}
+        >
+          <AppSheetTitle>Diagnostics</AppSheetTitle>
+          <AppSheetDescription>Review warnings/errors, logs, traces, and action summaries.</AppSheetDescription>
+        </AppSheetHeader>
+        <div
+          className={cn("shrink-0 flex flex-wrap gap-2 border-b border-border", isCompact ? "px-3 py-2" : "px-4 py-2")}
+        >
           <Button variant="outline" size="sm" onClick={() => void onShareAll()}>
             Share All
           </Button>
@@ -192,183 +206,201 @@ export function DiagnosticsDialog({
             </AlertDialogContent>
           </AlertDialog>
         </div>
-        <div className="relative shrink-0">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-          <Input
-            type="text"
-            placeholder="Filter entries..."
-            value={activeDiagnosticsFilter}
-            onChange={(event) => onDiagnosticsFilterChange(diagnosticsTab, event.target.value)}
-            className="pl-9 pr-9 h-9"
-            data-testid="diagnostics-filter-input"
-          />
-          {activeDiagnosticsFilter ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onDiagnosticsFilterChange(diagnosticsTab, "")}
-              className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
-              aria-label="Clear filter"
+        <div className={cn("flex min-h-0 flex-1 flex-col", isCompact ? "px-3 pb-3 pt-2" : "px-4 pb-4 pt-2")}>
+          <div className="relative shrink-0">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <Input
+              type="text"
+              placeholder="Filter entries..."
+              value={activeDiagnosticsFilter}
+              onChange={(event) => onDiagnosticsFilterChange(diagnosticsTab, event.target.value)}
+              className="pl-9 pr-9 h-9"
+              data-testid="diagnostics-filter-input"
+            />
+            {activeDiagnosticsFilter ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onDiagnosticsFilterChange(diagnosticsTab, "")}
+                className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
+                aria-label="Clear filter"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            ) : null}
+          </div>
+          <Tabs
+            value={diagnosticsTab}
+            onValueChange={(value) => onDiagnosticsTabChange(value as DiagnosticsTabKey)}
+            className={cn("flex min-h-0 flex-1 flex-col", isCompact ? "space-y-2 pt-2" : "space-y-3 pt-3")}
+          >
+            <TabsList className="grid w-full shrink-0 grid-cols-4">
+              <TabsTrigger value="error-logs" className={diagnosticsTabTriggerClass}>
+                Errors
+              </TabsTrigger>
+              <TabsTrigger value="logs" className={diagnosticsTabTriggerClass}>
+                Logs
+              </TabsTrigger>
+              <TabsTrigger value="traces" className={diagnosticsTabTriggerClass}>
+                Traces
+              </TabsTrigger>
+              <TabsTrigger value="actions" className={diagnosticsTabTriggerClass}>
+                Actions
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent
+              value="error-logs"
+              className={cn("mt-0 flex-1 min-h-0 overflow-auto space-y-3", isCompact ? "pr-1" : "pr-2")}
             >
-              <X className="h-4 w-4" />
-            </Button>
-          ) : null}
-        </div>
-        <Tabs
-          value={diagnosticsTab}
-          onValueChange={(value) => onDiagnosticsTabChange(value as DiagnosticsTabKey)}
-          className="flex min-h-0 flex-1 flex-col space-y-3"
-        >
-          <TabsList className="grid w-full shrink-0 grid-cols-4">
-            <TabsTrigger value="error-logs" className={diagnosticsTabTriggerClass}>
-              Errors
-            </TabsTrigger>
-            <TabsTrigger value="logs" className={diagnosticsTabTriggerClass}>
-              Logs
-            </TabsTrigger>
-            <TabsTrigger value="traces" className={diagnosticsTabTriggerClass}>
-              Traces
-            </TabsTrigger>
-            <TabsTrigger value="actions" className={diagnosticsTabTriggerClass}>
-              Actions
-            </TabsTrigger>
-          </TabsList>
-          <TabsContent value="error-logs" className="mt-0 flex-1 min-h-0 overflow-auto pr-2 space-y-3">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs text-muted-foreground">Total warnings/errors: {errorLogs.length}</p>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => void onShareCurrentTab()}
-                data-testid="diagnostics-share-errors"
-              >
-                Share
-              </Button>
-            </div>
-            {filteredErrorLogs.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No warning or error logs recorded.</p>
-            ) : (
-              filteredErrorLogs.map((entry) => (
-                <DiagnosticsListItem
-                  key={entry.id}
-                  testId={`error-log-${entry.id}`}
-                  mode="log"
-                  severity={resolveLogSeverity(entry.level)}
-                  title={entry.message}
-                  timestamp={entry.timestamp}
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-muted-foreground">Total warnings/errors: {errorLogs.length}</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void onShareCurrentTab()}
+                  data-testid="diagnostics-share-errors"
                 >
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium text-foreground break-words whitespace-normal">{entry.message}</p>
-                    {entry.details && (
-                      <pre className="text-xs whitespace-pre text-muted-foreground overflow-x-auto">
-                        {JSON.stringify(entry.details, null, 2)}
-                      </pre>
-                    )}
-                  </div>
-                </DiagnosticsListItem>
-              ))
-            )}
-          </TabsContent>
-          <TabsContent value="logs" className="mt-0 flex-1 min-h-0 overflow-auto pr-2 space-y-3">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs text-muted-foreground">Total logs: {logs.length}</p>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => void onShareCurrentTab()}
-                data-testid="diagnostics-share-logs"
-              >
-                Share
-              </Button>
-            </div>
-            {filteredLogs.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No logs recorded.</p>
-            ) : (
-              filteredLogs.map((entry) => (
-                <DiagnosticsListItem
-                  key={entry.id}
-                  testId={`log-entry-${entry.id}`}
-                  mode="log"
-                  severity={resolveLogSeverity(entry.level)}
-                  title={entry.message}
-                  timestamp={entry.timestamp}
+                  Share
+                </Button>
+              </div>
+              {filteredErrorLogs.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No warning or error logs recorded.</p>
+              ) : (
+                filteredErrorLogs.map((entry) => (
+                  <DiagnosticsListItem
+                    key={entry.id}
+                    testId={`error-log-${entry.id}`}
+                    mode="log"
+                    severity={resolveLogSeverity(entry.level)}
+                    title={entry.message}
+                    timestamp={entry.timestamp}
+                  >
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium text-foreground break-words whitespace-normal">
+                        {entry.message}
+                      </p>
+                      {entry.details && (
+                        <pre className="text-xs whitespace-pre text-muted-foreground overflow-x-auto">
+                          {JSON.stringify(entry.details, null, 2)}
+                        </pre>
+                      )}
+                    </div>
+                  </DiagnosticsListItem>
+                ))
+              )}
+            </TabsContent>
+            <TabsContent
+              value="logs"
+              className={cn("mt-0 flex-1 min-h-0 overflow-auto space-y-3", isCompact ? "pr-1" : "pr-2")}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-muted-foreground">Total logs: {logs.length}</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void onShareCurrentTab()}
+                  data-testid="diagnostics-share-logs"
                 >
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium text-foreground break-words whitespace-normal">{entry.message}</p>
-                    {entry.details && (
-                      <pre className="text-xs whitespace-pre text-muted-foreground overflow-x-auto">
-                        {JSON.stringify(entry.details, null, 2)}
-                      </pre>
-                    )}
-                  </div>
-                </DiagnosticsListItem>
-              ))
-            )}
-          </TabsContent>
-          <TabsContent value="traces" className="mt-0 flex-1 min-h-0 overflow-auto pr-2 space-y-3">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs text-muted-foreground">Total traces: {traceEvents.length}</p>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => void onShareCurrentTab()}
-                data-testid="diagnostics-share-traces"
-              >
-                Share
-              </Button>
-            </div>
-            {filteredTraces.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No traces recorded.</p>
-            ) : (
-              <>
-                {filteredTraces.length > 100 && (
-                  <p className="text-xs text-muted-foreground font-medium text-amber-600">
-                    Showing last 100 events. Export for full history.
-                  </p>
-                )}
-                {filteredTraces
+                  Share
+                </Button>
+              </div>
+              {filteredLogs.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No logs recorded.</p>
+              ) : (
+                filteredLogs.map((entry) => (
+                  <DiagnosticsListItem
+                    key={entry.id}
+                    testId={`log-entry-${entry.id}`}
+                    mode="log"
+                    severity={resolveLogSeverity(entry.level)}
+                    title={entry.message}
+                    timestamp={entry.timestamp}
+                  >
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium text-foreground break-words whitespace-normal">
+                        {entry.message}
+                      </p>
+                      {entry.details && (
+                        <pre className="text-xs whitespace-pre text-muted-foreground overflow-x-auto">
+                          {JSON.stringify(entry.details, null, 2)}
+                        </pre>
+                      )}
+                    </div>
+                  </DiagnosticsListItem>
+                ))
+              )}
+            </TabsContent>
+            <TabsContent
+              value="traces"
+              className={cn("mt-0 flex-1 min-h-0 overflow-auto space-y-3", isCompact ? "pr-1" : "pr-2")}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-muted-foreground">Total traces: {traceEvents.length}</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void onShareCurrentTab()}
+                  data-testid="diagnostics-share-traces"
+                >
+                  Share
+                </Button>
+              </div>
+              {filteredTraces.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No traces recorded.</p>
+              ) : (
+                <>
+                  {filteredTraces.length > 100 && (
+                    <p className="text-xs text-muted-foreground font-medium text-amber-600">
+                      Showing last 100 events. Export for full history.
+                    </p>
+                  )}
+                  {filteredTraces
+                    .slice(-100)
+                    .reverse()
+                    .map((entry) => (
+                      <DiagnosticsListItem
+                        key={entry.id}
+                        testId={`trace-item-${entry.id}`}
+                        mode="trace"
+                        severity={resolveTraceSeverity(entry)}
+                        title={getTraceTitle(entry)}
+                        timestamp={entry.timestamp}
+                      >
+                        <pre className="text-xs whitespace-pre text-muted-foreground overflow-x-auto">
+                          {JSON.stringify(entry, null, 2)}
+                        </pre>
+                      </DiagnosticsListItem>
+                    ))}
+                </>
+              )}
+            </TabsContent>
+            <TabsContent
+              value="actions"
+              className={cn("mt-0 flex-1 min-h-0 overflow-auto space-y-3", isCompact ? "pr-1" : "pr-2")}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-muted-foreground">Total action summaries: {actionSummaries.length}</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void onShareCurrentTab()}
+                  data-testid="diagnostics-share-actions"
+                >
+                  Share
+                </Button>
+              </div>
+              {filteredActions.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No actions recorded.</p>
+              ) : (
+                filteredActions
                   .slice(-100)
                   .reverse()
-                  .map((entry) => (
-                    <DiagnosticsListItem
-                      key={entry.id}
-                      testId={`trace-item-${entry.id}`}
-                      mode="trace"
-                      severity={resolveTraceSeverity(entry)}
-                      title={getTraceTitle(entry)}
-                      timestamp={entry.timestamp}
-                    >
-                      <pre className="text-xs whitespace-pre text-muted-foreground overflow-x-auto">
-                        {JSON.stringify(entry, null, 2)}
-                      </pre>
-                    </DiagnosticsListItem>
-                  ))}
-              </>
-            )}
-          </TabsContent>
-          <TabsContent value="actions" className="mt-0 flex-1 min-h-0 overflow-auto pr-2 space-y-3">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs text-muted-foreground">Total action summaries: {actionSummaries.length}</p>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => void onShareCurrentTab()}
-                data-testid="diagnostics-share-actions"
-              >
-                Share
-              </Button>
-            </div>
-            {filteredActions.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No actions recorded.</p>
-            ) : (
-              filteredActions
-                .slice(-100)
-                .reverse()
-                .map((summary) => <ActionSummaryListItem key={summary.correlationId} summary={summary} />)
-            )}
-          </TabsContent>
-        </Tabs>
-      </DialogContent>
-    </Dialog>
+                  .map((summary) => <ActionSummaryListItem key={summary.correlationId} summary={summary} />)
+              )}
+            </TabsContent>
+          </Tabs>
+        </div>
+      </AppSheetContent>
+    </AppSheet>
   );
 }

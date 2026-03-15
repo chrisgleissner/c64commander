@@ -81,6 +81,31 @@ const listFiles = async (dirPath) => {
   return entries.filter((entry) => entry.isFile()).map((entry) => entry.name);
 };
 
+const readMetaSafe = async (folderPath) => {
+  const metaPath = path.join(folderPath, 'meta.json');
+  try {
+    const raw = await fs.readFile(metaPath, 'utf8');
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+};
+
+const isScreenshotEvidenceFolder = async (folderPath) => {
+  const testId = path.basename(path.dirname(folderPath));
+  if (testId.startsWith('screenshots--')) {
+    return true;
+  }
+
+  const meta = await readMetaSafe(folderPath);
+  if (!meta || typeof meta.testFile !== 'string') {
+    return false;
+  }
+
+  const normalizedTestFile = meta.testFile.replace(/\\/g, '/');
+  return normalizedTestFile.endsWith('/playwright/screenshots.spec.ts');
+};
+
 const getEvidenceLeafFolders = async (rootPath) => {
   const entries = await fs.readdir(rootPath, { withFileTypes: true });
   const hasScreenshotsDir = entries.some(
@@ -110,6 +135,7 @@ const validateEvidenceFolder = async (folderPath) => {
   const files = await listFiles(folderPath);
   const screenshotsDir = path.join(folderPath, 'screenshots');
   const screenshotsStat = await statSafe(screenshotsDir);
+  const isScreenshotEvidence = await isScreenshotEvidenceFolder(folderPath);
 
   let pngs = [];
   if (screenshotsStat?.isDirectory()) {
@@ -130,7 +156,12 @@ const validateEvidenceFolder = async (folderPath) => {
   if (pngs.length === 0) {
     errors.push(`No PNG screenshots in ${folderPath}`);
   }
-  if (videos.length !== 1) {
+  if (videos.length > 1) {
+    errors.push(
+      `Expected exactly one video.webm in ${folderPath}, found ${videos.length}`,
+    );
+  }
+  if (!isScreenshotEvidence && videos.length !== 1) {
     errors.push(
       `Expected exactly one video.webm in ${folderPath}, found ${videos.length}`,
     );

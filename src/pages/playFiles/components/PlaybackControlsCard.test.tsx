@@ -77,4 +77,21 @@ describe("PlaybackControlsCard", () => {
     expect(screen.getByTestId("playlist-play")).not.toHaveAttribute(CTA_PERSISTENT_ACTIVE_ATTR);
     vi.useRealTimers();
   });
+
+  it("keeps track metadata and transport controls stacked full-width", () => {
+    render(
+      <PlaybackControlsCard
+        {...buildProps({
+          hasCurrentItem: true,
+          currentItemLabel: "intro.sid",
+          currentDurationLabel: "02:31",
+          canPause: true,
+        })}
+      />,
+    );
+
+    expect(screen.getByTestId("playback-controls-layout")).toHaveClass("flex-col");
+    expect(screen.getByTestId("playback-current-track")).toHaveClass("w-full");
+    expect(screen.getByTestId("playback-controls-stack")).toHaveClass("w-full");
+  });
 });

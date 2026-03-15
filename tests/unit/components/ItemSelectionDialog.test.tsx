@@ -551,7 +551,12 @@ describe("ItemSelectionDialog source picker", () => {
         onOpenChange={vi.fn()}
         title="Add items"
         confirmLabel="Add"
-        sourceGroups={[]}
+        sourceGroups={[
+          {
+            label: "C64 Ultimate",
+            sources: [buildSource("ultimate", "C64 Ultimate", "ultimate")],
+          },
+        ]}
         onAddLocalSource={vi.fn().mockResolvedValue(null)}
         onConfirm={vi.fn().mockResolvedValue(true)}
         showProgressFooter
@@ -566,6 +571,7 @@ describe("ItemSelectionDialog source picker", () => {
       />,
     );
 
+    fireEvent.click(screen.getByTestId("import-option-c64u"));
     expect(screen.getByTestId("add-items-progress")).toBeInTheDocument();
     // Cancel scan button should be present
     const cancelBtn = screen.getByRole("button", { name: /cancel scan/i });
