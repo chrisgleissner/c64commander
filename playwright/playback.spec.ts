@@ -575,7 +575,7 @@ test.describe("Playback file browser", () => {
     await snap(page, testInfo, "playback-error-logged");
   });
 
-  test("playlist view-all dialog is constrained and scrollable", async ({
+  test("playlist view-all sheet stays viewport-safe and scrollable", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await page.addInitScript(() => {
@@ -595,6 +595,8 @@ test.describe("Playback file browser", () => {
     await page.getByRole("button", { name: "View all" }).click();
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
+    await expect(dialog).toHaveAttribute("data-app-surface", "sheet");
+    await expect(dialog).toHaveAttribute("data-sheet-presentation", "sheet");
     await snap(page, testInfo, "playlist-view-all-open");
 
     const dialogBox = await dialog.boundingBox();
@@ -603,11 +605,14 @@ test.describe("Playback file browser", () => {
     expect(viewport).not.toBeNull();
     if (dialogBox && viewport) {
       const heightRatio = dialogBox.height / viewport.height;
-      const widthRatio = dialogBox.width / viewport.width;
-      expect(heightRatio).toBeLessThan(0.9);
-      expect(widthRatio).toBeLessThan(0.92);
-      expect(dialogBox.y).toBeGreaterThan(viewport.height * 0.05);
-      expect(dialogBox.y + dialogBox.height).toBeLessThan(viewport.height * 0.98);
+      expect(heightRatio).toBeGreaterThan(0.85);
+      expect(heightRatio).toBeLessThan(0.98);
+      expect(dialogBox.x).toBeGreaterThanOrEqual(0);
+      expect(dialogBox.x).toBeLessThanOrEqual(1);
+      expect(dialogBox.x + dialogBox.width).toBeGreaterThanOrEqual(viewport.width - 1);
+      expect(dialogBox.x + dialogBox.width).toBeLessThanOrEqual(viewport.width + 1);
+      expect(dialogBox.y).toBeGreaterThanOrEqual(40);
+      expect(dialogBox.y + dialogBox.height).toBeLessThanOrEqual(viewport.height);
     }
 
     // Verify list is populated

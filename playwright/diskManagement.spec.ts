@@ -563,7 +563,7 @@ test.describe("Disk management", () => {
     await snap(page, testInfo, "disk-view-all");
   });
 
-  test("disk view-all dialog is constrained and scrollable @layout", async ({
+  test("disk view-all sheet stays viewport-safe and scrollable @layout", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await page.addInitScript(() => {
@@ -586,6 +586,8 @@ test.describe("Disk management", () => {
     await page.getByRole("button", { name: "View all" }).click();
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
+    await expect(dialog).toHaveAttribute("data-app-surface", "sheet");
+    await expect(dialog).toHaveAttribute("data-sheet-presentation", "sheet");
     await snap(page, testInfo, "disks-view-all-open");
 
     const dialogBox = await dialog.boundingBox();
@@ -593,10 +595,15 @@ test.describe("Disk management", () => {
     expect(dialogBox).not.toBeNull();
     expect(viewport).not.toBeNull();
     if (dialogBox && viewport) {
-      expect(dialogBox.x).toBeGreaterThanOrEqual(6);
-      expect(dialogBox.y).toBeGreaterThanOrEqual(6);
-      expect(dialogBox.x + dialogBox.width).toBeLessThanOrEqual(viewport.width - 6);
-      expect(dialogBox.y + dialogBox.height).toBeLessThanOrEqual(viewport.height - 6);
+      const heightRatio = dialogBox.height / viewport.height;
+      expect(heightRatio).toBeGreaterThan(0.85);
+      expect(heightRatio).toBeLessThan(0.98);
+      expect(dialogBox.x).toBeGreaterThanOrEqual(0);
+      expect(dialogBox.x).toBeLessThanOrEqual(1);
+      expect(dialogBox.x + dialogBox.width).toBeGreaterThanOrEqual(viewport.width - 1);
+      expect(dialogBox.x + dialogBox.width).toBeLessThanOrEqual(viewport.width + 1);
+      expect(dialogBox.y).toBeGreaterThanOrEqual(40);
+      expect(dialogBox.y + dialogBox.height).toBeLessThanOrEqual(viewport.height);
     }
 
     const scrollArea = page.locator('[data-virtuoso-scroller="true"]');

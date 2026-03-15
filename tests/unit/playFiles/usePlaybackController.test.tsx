@@ -118,8 +118,7 @@ const renderPlaybackController = (
       localSourceTreeUris: new Map(),
       ensurePlaybackConnection: options?.ensurePlaybackConnection ?? vi.fn().mockResolvedValue(undefined),
       resolveSonglengthDurationMsForPath: vi.fn().mockResolvedValue(null),
-      applySonglengthsToItems:
-        options?.applySonglengthsToItems ?? vi.fn().mockImplementation(async (items) => items),
+      applySonglengthsToItems: options?.applySonglengthsToItems ?? vi.fn().mockImplementation(async (items) => items),
       restoreVolumeOverrides: options?.restoreVolumeOverrides ?? vi.fn().mockResolvedValue(undefined),
       applyAudioMixerUpdates: options?.applyAudioMixerUpdates ?? vi.fn().mockResolvedValue(undefined),
       buildEnabledSidMuteUpdates: options?.buildEnabledSidMuteUpdates ?? vi.fn().mockReturnValue({}),
@@ -234,7 +233,9 @@ describe("usePlaybackController", () => {
   });
 
   it("keeps the pause mute state when resume snapshots are still at the playback mute target", async () => {
-    const playlist = [createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" }, category: "sid" })];
+    const playlist = [
+      createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" }, category: "sid" }),
+    ];
     const dispatchVolume = vi.fn();
     const applyAudioMixerUpdates = vi.fn().mockResolvedValue(undefined);
     const resolveEnabledSidVolumeItems = vi.fn().mockResolvedValue([
@@ -270,7 +271,9 @@ describe("usePlaybackController", () => {
   });
 
   it("mutes enabled SID outputs when pausing active playback", async () => {
-    const playlist = [createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" }, category: "sid" })];
+    const playlist = [
+      createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" }, category: "sid" }),
+    ];
     const dispatchVolume = vi.fn();
     const applyAudioMixerUpdates = vi.fn().mockResolvedValue(undefined);
     const resolveEnabledSidVolumeItems = vi.fn().mockResolvedValue([
@@ -305,7 +308,9 @@ describe("usePlaybackController", () => {
   });
 
   it("pauses without mixer writes when no enabled SID outputs are active", async () => {
-    const playlist = [createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" }, category: "sid" })];
+    const playlist = [
+      createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" }, category: "sid" }),
+    ];
     const dispatchVolume = vi.fn();
     const applyAudioMixerUpdates = vi.fn().mockResolvedValue(undefined);
     const machinePause = vi.fn().mockResolvedValue(undefined);
@@ -395,7 +400,9 @@ describe("usePlaybackController", () => {
   });
 
   it("resumes before stopping paused disk playback and reboots the machine", async () => {
-    const playlist = [createPlaylistItem({ category: "disk", request: { source: "ultimate", path: "/DISKS/demo.d64" } })];
+    const playlist = [
+      createPlaylistItem({ category: "disk", request: { source: "ultimate", path: "/DISKS/demo.d64" } }),
+    ];
     const machineResume = vi.fn().mockResolvedValue(undefined);
     const machineReboot = vi.fn().mockResolvedValue(undefined);
     const restoreVolumeOverrides = vi.fn().mockResolvedValue(undefined);
@@ -501,7 +508,10 @@ describe("usePlaybackController", () => {
   });
 
   it("ignores stale auto-advance callbacks when the track instance no longer matches", async () => {
-    const playlist = [createPlaylistItem(), createPlaylistItem({ id: "item-2", label: "demo-2.prg", path: "/PROGRAMS/demo-2.prg" })];
+    const playlist = [
+      createPlaylistItem(),
+      createPlaylistItem({ id: "item-2", label: "demo-2.prg", path: "/PROGRAMS/demo-2.prg" }),
+    ];
     const setPlayedMs = vi.fn();
     const playedClockRef = {
       current: {

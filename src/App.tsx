@@ -107,7 +107,11 @@ const PersistentPlayFilesRoute = () => {
   const isVisible = location.pathname === "/play";
 
   return (
-    <div className={isVisible ? "contents" : "hidden"} data-testid="persistent-play-files-route" aria-hidden={!isVisible}>
+    <div
+      className={isVisible ? "contents" : "hidden"}
+      data-testid="persistent-play-files-route"
+      aria-hidden={!isVisible}
+    >
       <PlayFilesPage />
     </div>
   );

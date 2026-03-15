@@ -129,4 +129,75 @@ describe("SelectableActionList", () => {
 
     expect(screen.getByText("No files")).toBeVisible();
   });
+
+  it("uses the shared medium sheet presentation and clears both inline and view-all filters", () => {
+    localStorage.clear();
+    setViewportWidth(480);
+
+    const onRemoveSelected = vi.fn();
+
+    render(
+      <DisplayProfileProvider>
+        <SelectableActionList
+          title="Files"
+          items={items}
+          emptyLabel="No files"
+          selectedCount={1}
+          allSelected={false}
+          onToggleSelectAll={vi.fn()}
+          onRemoveSelected={onRemoveSelected}
+          removeSelectedLabel="Remove selected"
+          maxVisible={1}
+          viewAllTitle="All files"
+          filterHeader={<div>Source filters</div>}
+          headerActions={<button type="button">Refresh</button>}
+        />
+      </DisplayProfileProvider>,
+    );
+
+    expect(screen.getByRole("button", { name: "Refresh" })).toBeVisible();
+    expect(screen.getByText("Source filters")).toBeVisible();
+
+    fireEvent.change(screen.getByTestId("list-filter-input"), { target: { value: "alp" } });
+    expect(screen.getByRole("button", { name: "Clear filter" })).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Clear filter" }));
+    expect(screen.getByTestId("list-filter-input")).toHaveValue("");
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove selected" }));
+    expect(onRemoveSelected).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "View all" }));
+
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveAttribute("data-app-surface", "sheet");
+    expect(dialog).toHaveAttribute("data-sheet-presentation", "sheet");
+    expect(dialog).toHaveClass("rounded-t-[28px]");
+
+    fireEvent.change(screen.getByTestId("view-all-filter-input"), { target: { value: "bet" } });
+    fireEvent.click(screen.getByRole("button", { name: "Clear filter" }));
+    expect(screen.getByTestId("view-all-filter-input")).toHaveValue("");
+  });
+
+  it("omits selection summary and view-all trigger when controls are disabled and the list fits", () => {
+    localStorage.clear();
+    setViewportWidth(360);
+
+    render(
+      <DisplayProfileProvider>
+        <SelectableActionList
+          title="Files"
+          items={items}
+          emptyLabel="No files"
+          selectedCount={0}
+          allSelected={false}
+          onToggleSelectAll={vi.fn()}
+          maxVisible={4}
+          showSelectionControls={false}
+        />
+      </DisplayProfileProvider>,
+    );
+
+    expect(screen.queryByText("No files selected")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "View all" })).not.toBeInTheDocument();
+  });
 });

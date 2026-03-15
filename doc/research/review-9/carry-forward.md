@@ -9,9 +9,9 @@
 
 ### R9-001 - Compact keyboard-safe dialog coverage
 
-- Status: resolved
-- Evidence: `playwright/displayProfiles.spec.ts` now includes focused-input Compact reduced-height coverage for the selection browser and snapshot manager, in addition to the existing diagnostics dialog coverage.
-- Next action: none.
+- Status: open
+- Evidence: `playwright/displayProfiles.spec.ts` now includes focused-input Compact reduced-height coverage for the selection browser and snapshot manager, in addition to the existing diagnostics dialog coverage, but the suite still approximates keyboard-open behavior via reduced viewport height instead of asserting a live `visualViewport` contraction.
+- Next action: add a follow-up scenario that verifies Compact dialog safety against a real keyboard-open or `visualViewport` change rather than reduced-height emulation alone.
 
 ### R9-002 - End-user display-profile documentation gap
 
@@ -51,7 +51,7 @@
 
 ## Open Item Count
 
-- Open: 0
+- Open: 1
 - Deferred: 0
 - Blocked: 0
-- Resolved: 7
+- Resolved: 6

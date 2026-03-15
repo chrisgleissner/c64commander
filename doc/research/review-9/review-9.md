@@ -51,15 +51,14 @@ Home:
 
 - Strong: page shell uses shared profile-aware boundaries in [src/pages/HomePage.tsx](../../../src/pages/HomePage.tsx#L438-L469) and [src/pages/HomePage.tsx](../../../src/pages/HomePage.tsx#L838-L907).
 - Strong: quick config uses `ProfileSplitSection` and machine/config quick actions use `ProfileActionGrid`.
-- Gap: drive and stream detail editors still use `md:` layouts in [src/pages/home/components/DriveManager.tsx](../../../src/pages/home/components/DriveManager.tsx#L133-L141) and [src/pages/home/components/StreamStatus.tsx](../../../src/pages/home/components/StreamStatus.tsx#L88-L123).
-- Gap: [src/pages/home/DriveCard.tsx](../../../src/pages/home/DriveCard.tsx#L124-L151) still uses a fixed two-column metadata grid rather than the profile context.
+- Strong: drive, stream, and drive-card detail layouts now route their structural variants through display-profile-aware logic rather than raw `md:` breakpoints.
 
 Play:
 
 - Strong: page shell uses `ProfileSplitSection` for wide composition in [src/pages/PlayFilesPage.tsx](../../../src/pages/PlayFilesPage.tsx#L951-L1107).
 - Strong: item selection uses the shared modal policy in [src/pages/PlayFilesPage.tsx](../../../src/pages/PlayFilesPage.tsx#L1144-L1158) and [src/components/itemSelection/ItemSelectionDialog.tsx](../../../src/components/itemSelection/ItemSelectionDialog.tsx#L286-L455).
 - Strong: playlist uses a query-backed virtualized view-all list in [src/components/lists/SelectableActionList.tsx](../../../src/components/lists/SelectableActionList.tsx#L447-L528).
-- Gap: playback control and volume sublayouts still use raw `sm:` minimum-width behavior in [src/pages/playFiles/components/PlaybackControlsCard.tsx](../../../src/pages/playFiles/components/PlaybackControlsCard.tsx#L72-L104) and [src/pages/playFiles/components/VolumeControls.tsx](../../../src/pages/playFiles/components/VolumeControls.tsx#L31-L62).
+- Strong: playback controls and volume controls now consume display-profile-aware layout decisions instead of raw `sm:` minimum-width behavior.
 
 Disks:
 
@@ -77,12 +76,12 @@ Settings:
 
 - Strong: Settings uses shared reading and split-section primitives in [src/pages/SettingsPage.tsx](../../../src/pages/SettingsPage.tsx#L591-L765) and [src/pages/SettingsPage.tsx](../../../src/pages/SettingsPage.tsx#L767-L984).
 - Strong: the user override control is present and wired to centralized state in [src/pages/SettingsPage.tsx](../../../src/pages/SettingsPage.tsx#L633-L651).
-- Gap: at least one settings subsection still uses raw `md:grid-cols-2` layout in [src/pages/SettingsPage.tsx](../../../src/pages/SettingsPage.tsx#L1281-L1281).
+- Strong: the reviewed Settings subsections now use display-profile-aware layout branching instead of the previously audited raw `md:grid-cols-2` structure.
 
 Selection browser, list browser, dialogs, and overlays:
 
 - Strong: `ItemSelectionDialog` and SelectableActionList view-all surfaces map to full-screen on Compact through the shared resolver in [src/components/itemSelection/ItemSelectionDialog.tsx](../../../src/components/itemSelection/ItemSelectionDialog.tsx#L286-L307) and [src/components/lists/SelectableActionList.tsx](../../../src/components/lists/SelectableActionList.tsx#L465-L474).
-- Gap: footer and header arrangement still depend partly on `sm:` classes in both dialog primitives and consumer components.
+- Strong: shared dialog primitives and consumer surfaces now derive their header, footer, and width behavior from modal presentation mode and display profile rather than the previously audited `sm:` classes.
 
 ## 5 Compact Profile Findings
 
@@ -95,13 +94,15 @@ Confirmed strengths:
 
 Confirmed Compact gaps or residual risks:
 
-| Finding                                                                              | Evidence                                                                                                                                                                                                                                                                                                                                                                                                                     | Why it matters                                                                                                                             | Recommended remediation                                                                                                                                  |
-| ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Shared surfaces still use raw breakpoints instead of the resolved profile            | [src/components/itemSelection/ItemSelectionDialog.tsx](../../../src/components/itemSelection/ItemSelectionDialog.tsx#L302-L302), [src/components/lists/SelectableActionList.tsx](../../../src/components/lists/SelectableActionList.tsx#L470-L472), [src/components/ui/dialog.tsx](../../../src/components/ui/dialog.tsx#L79-L96), [src/components/ui/alert-dialog.tsx](../../../src/components/ui/alert-dialog.tsx#L57-L75) | This violates the architectural rule against ad hoc breakpoint logic and makes Compact behavior harder to reason about                     | Move header/footer and non-compact width variants behind profile-aware helpers or tokenized variants                                                     |
-| Home drive cards still use a fixed two-column metadata row                           | [src/pages/home/DriveCard.tsx](../../../src/pages/home/DriveCard.tsx#L124-L151)                                                                                                                                                                                                                                                                                                                                              | The spec explicitly called for Compact-safe stacking of mounted path, status, bus ID, and type; this component itself is not profile-aware | Pass the resolved profile into `DriveCard` or collapse metadata rows through a shared compact variant                                                    |
-| Stream and snapshot inline editors still switch at `md:` rather than profile context | [src/pages/home/components/StreamStatus.tsx](../../../src/pages/home/components/StreamStatus.tsx#L88-L123), [src/pages/home/dialogs/SnapshotManagerDialog.tsx](../../../src/pages/home/dialogs/SnapshotManagerDialog.tsx#L103-L139)                                                                                                                                                                                          | Compact behavior is likely acceptable today, but the branching rule is inconsistent and future changes can drift from the profile model    | Replace raw breakpoint grids with profile-aware row/stack utilities                                                                                      |
-| Volume control still depends on a fixed minimum width                                | [src/pages/playFiles/components/VolumeControls.tsx](../../../src/pages/playFiles/components/VolumeControls.tsx#L31-L62)                                                                                                                                                                                                                                                                                                      | The spec warns against controls that rely on fine horizontal drag precision on constrained widths                                          | Provide a Compact-specific stepped or stacked alternative, or at least a profile-aware label/slider arrangement                                          |
-| Keyboard-safe proof is incomplete                                                    | [doc/display-profiles.md](../../../doc/display-profiles.md#L95-L106), [playwright/displayProfiles.spec.ts](../../../playwright/displayProfiles.spec.ts#L319-L342)                                                                                                                                                                                                                                                            | Reduced viewport height is not the same as a live keyboard reducing the visual viewport and obscuring focused inputs                       | Add tests that focus an input inside a Compact full-screen dialog and assert footer/title visibility using `visualViewport` or native keyboard emulation |
+- Keyboard-safe proof is still approximation-heavy.
+  Evidence: [doc/display-profiles.md](../../../doc/display-profiles.md#L95-L106) and [playwright/displayProfiles.spec.ts](../../../playwright/displayProfiles.spec.ts#L319-L487).
+  Why it matters: reduced viewport height is not the same as a live keyboard reducing the visual viewport and obscuring focused inputs.
+  Recommended remediation: add a follow-up test that asserts Compact dialog safety against a real keyboard-open or `visualViewport` change when possible.
+
+- Secondary control coverage is still incomplete.
+  Evidence: [doc/ux-interactions.md](../../../doc/ux-interactions.md#L58-L73), [doc/ux-interactions.md](../../../doc/ux-interactions.md#L99-L110), and [doc/ux-interactions.md](../../../doc/ux-interactions.md#L326-L367).
+  Why it matters: primary CTA coverage is stronger now, but native picker and lower-priority controls can still regress unnoticed.
+  Recommended remediation: prioritize native picker, file-type filter, and remaining menu/navigation interactions in the follow-up interaction backlog.
 
 ## 6 Expanded Profile Findings
 
@@ -121,20 +122,10 @@ Assessment: Expanded is implemented beyond “stretched Medium”, but not unifo
 
 ## 7 Component Compliance Matrix
 
-| Component                | Central profile context                                                                                                                                              | Compact adaptation                                                   | Expanded behavior                     | Width-assumption debt                |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- | ------------------------------------- | ------------------------------------ |
-| `DisplayProfileProvider` | Yes, [src/hooks/useDisplayProfile.tsx](../../../src/hooks/useDisplayProfile.tsx#L130-L186)                                                                           | N/A                                                                  | N/A                                   | No                                   |
-| `PageContainer`          | Yes, [src/components/layout/PageContainer.tsx](../../../src/components/layout/PageContainer.tsx#L13-L23)                                                             | Uses tokenized widths                                                | Uses bounded widths                   | No                                   |
-| `ProfileActionGrid`      | Yes, [src/components/layout/PageContainer.tsx](../../../src/components/layout/PageContainer.tsx#L45-L61)                                                             | Yes                                                                  | Yes                                   | No                                   |
-| `ProfileSplitSection`    | Yes, [src/components/layout/PageContainer.tsx](../../../src/components/layout/PageContainer.tsx#L63-L89)                                                             | Single column                                                        | Secondary-panel layout                | No                                   |
-| `SelectableActionList`   | Yes, [src/components/lists/SelectableActionList.tsx](../../../src/components/lists/SelectableActionList.tsx#L298-L528)                                               | Full-screen view-all on Compact                                      | Large dialog outside Compact          | Minor `sm:` dialog width class       |
-| `ItemSelectionDialog`    | Yes, [src/components/itemSelection/ItemSelectionDialog.tsx](../../../src/components/itemSelection/ItemSelectionDialog.tsx#L80-L455)                                  | Full-screen selection browser, state preserved across profile change | Large dialog outside Compact          | Still contains `sm:` layout classes  |
-| `QuickActionCard`        | No direct profile consumption, but receives `compact` prop from parents in [src/components/QuickActionCard.tsx](../../../src/components/QuickActionCard.tsx#L12-L69) | Yes via prop                                                         | No explicit Expanded variant          | Moderate                             |
-| `ConfigItemRow`          | No direct profile context; uses measured adaptive layout in [src/components/ConfigItemRow.tsx](../../../src/components/ConfigItemRow.tsx#L41-L86)                    | Indirectly responsive                                                | Indirectly responsive                 | Low                                  |
-| `DriveCard`              | No, [src/pages/home/DriveCard.tsx](../../../src/pages/home/DriveCard.tsx#L1-L178)                                                                                    | No explicit profile branch                                           | No explicit Expanded variant          | High                                 |
-| `HomeDiskManager`        | Yes, [src/components/disks/HomeDiskManager.tsx](../../../src/components/disks/HomeDiskManager.tsx#L113-L214)                                                         | Extensive compact-specific branching                                 | Wider row composition                 | Low                                  |
-| `Dialog` / `AlertDialog` | Yes for modal presentation mode                                                                                                                                      | Compact fullscreen where configured                                  | Centered/large                        | Moderate due to shared `sm:` classes |
-| `Sidebar`                | Indirect via `useIsMobile` in [src/components/ui/sidebar.tsx](../../../src/components/ui/sidebar.tsx#L10-L55)                                                        | Binary mobile path                                                   | Collapses Medium and Compact together | Moderate                             |
+- `DisplayProfileProvider`, `PageContainer`, `ProfileActionGrid`, and `ProfileSplitSection` remain the strongest shared boundaries: they consume centralized profile state directly and continue to deliver the expected Compact and Expanded variants with low regression risk.
+- `SelectableActionList` and `ItemSelectionDialog` now use the shared sheet/modal surface contract directly, giving Compact full-screen behavior and non-Compact modal-sheet behavior without the previously audited `sm:` width branching.
+- `QuickActionCard` and `ConfigItemRow` still rely on parent wiring or adaptive measurement for part of their behavior, so they remain more indirect consumers of the profile model than the shared layout primitives.
+- `DriveCard`, `HomeDiskManager`, `Dialog` / `AlertDialog`, and `Sidebar` now align more closely with the centralized profile model than they did at the start of the review, with the remaining risk concentrated in future regressions rather than the audited raw-breakpoint debt.
 
 ## 8 Modal Compliance
 
@@ -147,8 +138,7 @@ What is compliant:
 
 What remains incomplete:
 
-- Shared dialog header/footer primitives still use Tailwind `sm:` responsive classes in [src/components/ui/dialog.tsx](../../../src/components/ui/dialog.tsx#L79-L96) and [src/components/ui/alert-dialog.tsx](../../../src/components/ui/alert-dialog.tsx#L57-L75), which weakens the centralization rule.
-- Compact keyboard-safe proof is strongest for the Diagnostics dialog only; there is no corresponding end-to-end proof for ItemSelectionDialog, SnapshotManagerDialog, or other inline editors that place controls near the bottom of the viewport.
+- Compact keyboard-safe proof is still approximation-heavy: the suite now covers diagnostics, item selection, and snapshot manager with focused inputs and reduced viewport height, but it does not yet assert a live soft-keyboard or `visualViewport` transition.
 
 ## 9 CTA Reachability
 

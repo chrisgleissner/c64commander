@@ -132,37 +132,33 @@ This architecture preserves a single routed codebase. The audited pages reuse sh
 - Proposed fix:
   - Add profile tests that focus a live input inside compact full-screen dialogs and assert visibility using `visualViewport` changes or platform-specific keyboard emulation.
 
-### Issue 4: CTA coverage remains incomplete for several profile-sensitive actions
+### Issue 4: CTA coverage gaps are now concentrated in secondary and native-only controls
 
 - Severity: Medium
 - Impacted files:
-  - `doc/ux-interactions.md:42-44`
-  - `doc/ux-interactions.md:95`
-  - `doc/ux-interactions.md:129-133`
-  - `doc/ux-interactions.md:171`
-  - `doc/ux-interactions.md:246`
-  - `doc/ux-interactions.md:267`
+  - `doc/ux-interactions.md:35-110`
+  - `doc/ux-interactions.md:129-181`
   - `doc/ux-interactions.md:326-367`
 - Evidence:
-  - The UX inventory still marks Shuffle, Reshuffle, Home quick action cards, Test connection, and Add disks flows as missing or partial.
+  - The UX inventory now marks Shuffle, Reshuffle, Home quick actions, Add disks, Refresh connection, Recurse folders, and System theme as covered.
+  - The remaining uncovered or partial entries are concentrated in secondary controls such as Android folder picking, file-type filtering, some per-item menus, and lower-priority navigation paths.
 - UX impact:
-  - Overflow and some CTA reachability are covered, but the audit cannot claim full verification of the profile system while important compact-sensitive actions remain outside the validated acceptance inventory.
+  - The primary display-profile-sensitive CTA paths are now covered, but the inventory still cannot claim exhaustive interaction coverage while native picker flows and secondary controls remain outside the validated set.
 - Proposed fix:
-  - Add targeted Playwright coverage for the missing high-value CTA flows listed in the UX inventory, starting with Add disks, Home quick actions, Shuffle/Reshuffle, Recurse folders, and Test connection.
+  - Prioritize the remaining native-picker and filter/menu interactions in the UX inventory rather than re-auditing the already-covered primary CTA flows.
 
-### Issue 5: Diagnostics screenshot naming still mixes profile and state adjectives outside the profile folder structure
+### Issue 5: Legacy diagnostics screenshot naming now persists mainly in supporting docs and duplicate assets
 
 - Severity: Low
 - Impacted files:
-  - `playwright/screenshots.spec.ts:941-969`
-  - `README.md:252-253`
+  - `docs/diagnostics/index.md:1-13`
+  - `doc/img/app/diagnostics/`
 - Evidence:
-  - README embeds `diagnostics/01-actions-expanded.png` and `diagnostics/02-traces-expanded.png` outside the profile-folder convention.
-  - Screenshot generation still emits legacy diagnostics image names containing `expanded` as part of the filename.
+  - `README.md` now references the newer `*-detail.png` diagnostics screenshots, but the supporting diagnostics index and duplicate assets under `doc/img/app/diagnostics/` still preserve the legacy `*-expanded.png` naming.
 - UX impact:
-  - The screenshot infrastructure works, but naming is less clear because `expanded` can describe either content/state history or the Expanded display profile.
+  - End-user documentation is aligned, but the remaining duplicate filenames still make the screenshot corpus harder to reason about because `expanded` can describe either an expanded row state or the Expanded display profile.
 - Proposed fix:
-  - Rename legacy diagnostics images to state-oriented names that do not collide with profile vocabulary, or move them under an explicit non-profile naming convention.
+  - Keep converged docs on the `*-detail.png` naming and clean up the remaining duplicate `*-expanded.png` assets in a focused follow-up.
 
 ## UX Risks For Small Displays
 
