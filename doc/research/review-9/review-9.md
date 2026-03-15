@@ -183,7 +183,7 @@ Coverage gaps remain in:
 
 - live keyboard-open compact dialogs; current evidence uses reduced viewport height instead of a focused input plus actual visual viewport changes
 - live keyboard-safe proof currently centers on the diagnostics dialog path in `playwright/displayProfiles.spec.ts`; equivalent end-to-end proof was not found for selection-browser, snapshot, or other secondary-editor surfaces
-- direct end-to-end proof for Home quick actions, Add disks, Shuffle, Reshuffle, Recurse folders, System theme, and Test connection, all still flagged in [doc/ux-interactions.md](../../../doc/ux-interactions.md#L326-L367)
+- direct end-to-end proof remains incomplete for the secondary CTA paths still open in [doc/ux-interactions.md](../../../doc/ux-interactions.md#L326-L367), especially drive navigation from Home, the disk browser source-selection path, file-type filtering, HVSC installation cancel, drive configuration, disk group management, auto-connect, and log expansion
 - explicit tests proving Compact alternatives for slider-heavy or drag-sensitive controls beyond the diagnostics CTA case
 
 ## 12 Technical Debt
@@ -203,11 +203,11 @@ Priority 1:
 Priority 2:
 
 - Make `DriveCard` explicitly profile-aware so Compact metadata stacking is guaranteed by component contract rather than page composition.
-- Replace binary `useIsMobile` consumers with either direct display-profile use or a narrower helper whose semantics do not hide Medium vs Compact distinctions.
+- Keep eliminating measurement- or caller-owned layout branching where the component can derive Compact vs Medium vs Expanded behavior directly from the display-profile contract.
 
 Priority 3:
 
-- Close CTA coverage gaps documented in the UX interactions inventory, prioritizing Home machine controls, Add disks, Shuffle/Reshuffle, Recurse folders, and Test connection.
+- Close the remaining CTA coverage gaps documented in the UX interactions inventory, prioritizing Home drive navigation, disk-browser source selection, filter controls, HVSC cancel, drive configuration, disk groups, auto-connect, and log expansion.
 - Update README to describe the display-profile override, the meaning of Small/Standard/Large display, and how profile-specific screenshots are organized.
 
 ## 14 Final Verdict

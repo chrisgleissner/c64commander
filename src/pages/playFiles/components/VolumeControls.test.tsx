@@ -19,11 +19,7 @@ type RenderOptions = {
   profile?: "compact" | "medium" | "expanded";
 };
 
-const ProfileHarness = ({
-  volumeMuted,
-  canControlVolume = true,
-  profile,
-}: RenderOptions) => {
+const ProfileHarness = ({ volumeMuted, canControlVolume = true, profile }: RenderOptions) => {
   const { setOverride } = useDisplayProfilePreference();
 
   useEffect(() => {

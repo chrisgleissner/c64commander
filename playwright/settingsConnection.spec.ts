@@ -178,7 +178,7 @@ test.describe("Settings connection management", () => {
     await page.goto("/settings");
     await snap(page, testInfo, "settings-open");
 
-    const systemThemeButton = page.getByRole("button", { name: /System|system theme/i }).first();
+    const systemThemeButton = page.getByRole("button", { name: /Auto|System|system theme/i }).first();
     await expect(systemThemeButton).toBeVisible();
     await snap(page, testInfo, "system-button-visible");
 

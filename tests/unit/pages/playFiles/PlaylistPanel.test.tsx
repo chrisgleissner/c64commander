@@ -164,7 +164,12 @@ describe("PlaylistPanel", () => {
 
     rerender(
       <DisplayProfileProvider>
-        <PlaylistPanelHarness selectedCount={0} hasPlaylist={false} onAddItems={onAddItems} onClearPlaylist={onClearPlaylist} />
+        <PlaylistPanelHarness
+          selectedCount={0}
+          hasPlaylist={false}
+          onAddItems={onAddItems}
+          onClearPlaylist={onClearPlaylist}
+        />
       </DisplayProfileProvider>,
     );
 
