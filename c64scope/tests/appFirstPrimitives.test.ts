@@ -145,9 +145,7 @@ describe("app-first primitives", () => {
     expect(await tapByResourceId(client as never, "serial-1", "add-items-to-playlist")).toBe(true);
 
     dumpUiHierarchyMock.mockReset();
-    dumpUiHierarchyMock
-      .mockResolvedValueOnce(`<hierarchy></hierarchy>`)
-      .mockResolvedValueOnce(`
+    dumpUiHierarchyMock.mockResolvedValueOnce(`<hierarchy></hierarchy>`).mockResolvedValueOnce(`
         <hierarchy>
           <node text="" content-desc="Mute" class="android.widget.Button" clickable="true" enabled="true" bounds="[734,1845][990,1969]" />
         </hierarchy>

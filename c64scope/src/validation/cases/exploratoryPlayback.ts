@@ -698,7 +698,10 @@ export const appFirstPlaybackMuteLatency: ValidationCase = {
       const muteButtonFlipped = await waitForVisibleText(ctx.serial, "Unmute", 8, 250);
       await droidmind.screenshotToFile(ctx.serial, mutedScreenshotPath);
       const muteCapture = await muteCapturePromise;
-      const muteMetrics = analyzeMuteTransition(requireAudioFeatures(muteCapture.analysis, "mute transition"), muteTapAtMs);
+      const muteMetrics = analyzeMuteTransition(
+        requireAudioFeatures(muteCapture.analysis, "mute transition"),
+        muteTapAtMs,
+      );
 
       const unmuteCaptureStartedAt = Date.now();
       const unmuteCapturePromise = captureAndAnalyzeStream({
