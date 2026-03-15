@@ -147,7 +147,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.10.0",
-    "@capacitor/android": "^6.2.1",
+    "@capacitor/android": "^8.2.0",
     "@capacitor/cli": "^6.2.1",
     "@capacitor/core": "^6.2.1",
     "@capacitor/ios": "^6.2.1",
