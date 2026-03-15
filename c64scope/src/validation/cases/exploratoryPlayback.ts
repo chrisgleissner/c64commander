@@ -23,6 +23,7 @@ import {
   launchAppForeground,
   navigateToRoute,
   tapByResourceId,
+  tapByResourceIdOrLabel,
   tapByText,
 } from "../appFirstPrimitives.js";
 import {
@@ -133,6 +134,43 @@ type TransitionMetrics = {
   latencyMs: number | null;
   stableForWindow: boolean;
 };
+
+function isAudioFeatures(analysis: unknown): analysis is AudioFeatures {
+  if (!analysis || typeof analysis !== "object") {
+    return false;
+  }
+
+  const candidate = analysis as {
+    envelope?: unknown;
+    sampleRateHz?: unknown;
+    rms?: unknown;
+    peakAbs?: unknown;
+    dominantFrequencyHz?: unknown;
+    samplePairs?: unknown;
+    stats?: unknown;
+  };
+
+  return (
+    Array.isArray(candidate.envelope) &&
+    typeof candidate.sampleRateHz === "number" &&
+    typeof candidate.rms === "number" &&
+    typeof candidate.peakAbs === "number" &&
+    typeof candidate.dominantFrequencyHz === "number" &&
+    typeof candidate.samplePairs === "number" &&
+    !!candidate.stats &&
+    typeof candidate.stats === "object"
+  );
+}
+
+export function requireAudioFeatures(analysis: unknown, context: string): AudioFeatures {
+  if (!analysis || typeof analysis !== "object" || !Array.isArray((analysis as { envelope?: unknown }).envelope)) {
+    throw new Error(`Expected audio analysis with envelope data for ${context}.`);
+  }
+  if (!isAudioFeatures(analysis)) {
+    throw new Error(`Expected complete audio analysis payload for ${context}.`);
+  }
+  return analysis;
+}
 
 function analyzeMuteTransition(features: AudioFeatures, tapAtMs: number): TransitionMetrics {
   const baselineRms = medianEnvelopeRms(features.envelope, { endMs: Math.max(0, tapAtMs - 80) });
@@ -653,14 +691,14 @@ export const appFirstPlaybackMuteLatency: ValidationCase = {
       });
       await new Promise((resolve) => setTimeout(resolve, CAPTURE_PRE_ROLL_MS));
       const muteTapAtMs = Date.now() - muteCaptureStartedAt;
-      const muteTapped = await tapByResourceId(droidmind, ctx.serial, "volume-mute");
+      const muteTapped = await tapByResourceIdOrLabel(droidmind, ctx.serial, "volume-mute", ["Mute", "Unmute"]);
       if (!muteTapped) {
         throw new Error("Could not tap the Play mute button.");
       }
       const muteButtonFlipped = await waitForVisibleText(ctx.serial, "Unmute", 8, 250);
       await droidmind.screenshotToFile(ctx.serial, mutedScreenshotPath);
       const muteCapture = await muteCapturePromise;
-      const muteMetrics = analyzeMuteTransition(muteCapture.analysis as unknown as AudioFeatures, muteTapAtMs);
+      const muteMetrics = analyzeMuteTransition(requireAudioFeatures(muteCapture.analysis, "mute transition"), muteTapAtMs);
 
       const unmuteCaptureStartedAt = Date.now();
       const unmuteCapturePromise = captureAndAnalyzeStream({
@@ -671,7 +709,7 @@ export const appFirstPlaybackMuteLatency: ValidationCase = {
       });
       await new Promise((resolve) => setTimeout(resolve, CAPTURE_PRE_ROLL_MS));
       const unmuteTapAtMs = Date.now() - unmuteCaptureStartedAt;
-      const unmuteTapped = await tapByResourceId(droidmind, ctx.serial, "volume-mute");
+      const unmuteTapped = await tapByResourceIdOrLabel(droidmind, ctx.serial, "volume-mute", ["Unmute", "Mute"]);
       if (!unmuteTapped) {
         throw new Error("Could not tap the Play unmute button.");
       }
@@ -679,7 +717,7 @@ export const appFirstPlaybackMuteLatency: ValidationCase = {
       await droidmind.screenshotToFile(ctx.serial, unmutedScreenshotPath);
       const unmuteCapture = await unmuteCapturePromise;
       const unmuteMetrics = analyzeUnmuteTransition(
-        unmuteCapture.analysis as unknown as AudioFeatures,
+        requireAudioFeatures(unmuteCapture.analysis, "unmute transition"),
         unmuteTapAtMs,
         muteMetrics.baselineRms,
       );

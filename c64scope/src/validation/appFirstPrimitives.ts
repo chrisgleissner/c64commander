@@ -213,6 +213,25 @@ export async function tapByResourceId(
   return true;
 }
 
+export async function tapByResourceIdOrLabel(
+  client: DroidmindClient,
+  serial: string,
+  resourceIdSuffix: string,
+  labels: readonly string[],
+): Promise<boolean> {
+  if (await tapByResourceId(client, serial, resourceIdSuffix)) {
+    return true;
+  }
+
+  for (const label of labels) {
+    if (await tapByText(client, serial, label)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function computeBottomTabThreshold(nodes: ReturnType<typeof parseUiNodes>): number {
   let maxCenterY = 0;
   for (const node of nodes) {

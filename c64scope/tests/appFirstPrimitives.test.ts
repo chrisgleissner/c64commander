@@ -66,6 +66,7 @@ describe("app-first primitives", () => {
       navigateToRoute,
       restartApp,
       tapByResourceId,
+      tapByResourceIdOrLabel,
       tapByText,
       tapByTextContaining,
       waitForRouteMarkers,
@@ -142,6 +143,16 @@ describe("app-first primitives", () => {
         </hierarchy>
       `);
     expect(await tapByResourceId(client as never, "serial-1", "add-items-to-playlist")).toBe(true);
+
+    dumpUiHierarchyMock.mockReset();
+    dumpUiHierarchyMock
+      .mockResolvedValueOnce(`<hierarchy></hierarchy>`)
+      .mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="" content-desc="Mute" class="android.widget.Button" clickable="true" enabled="true" bounds="[734,1845][990,1969]" />
+        </hierarchy>
+      `);
+    expect(await tapByResourceIdOrLabel(client as never, "serial-1", "volume-mute", ["Mute", "Unmute"])).toBe(true);
 
     dumpUiHierarchyMock.mockReset();
     dumpUiHierarchyMock.mockResolvedValueOnce(`

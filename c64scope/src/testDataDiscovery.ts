@@ -10,8 +10,10 @@ import { execFile } from "node:child_process";
 import { lstat, readdir, readlink, realpath } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
+import { createLogger } from "./logger.js";
 
 const execFileAsync = promisify(execFile);
+const logger = createLogger("testDataDiscovery");
 
 export interface SymlinkRecord {
   path: string;
@@ -197,8 +199,13 @@ async function resolveDeviceTestDataRoot(c64uHost: string): Promise<{ rootPath: 
     try {
       const topLevelEntries = await ftpList(c64uHost, `${rootPath}/`);
       return { rootPath, topLevelEntries };
-    } catch {
-      // Try the next candidate mount.
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.warn("FTP probe failed for candidate test-data root", {
+        c64uHost,
+        rootPath,
+        error: message,
+      });
     }
   }
 
@@ -214,8 +221,13 @@ async function resolveDeviceTestDataRoot(c64uHost: string): Promise<{ rootPath: 
           topLevelEntries: await ftpList(c64uHost, `${rootPath}/`),
         };
       }
-    } catch {
-      // Skip unreadable roots while scanning for the mirrored corpus.
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.warn("FTP probe failed while scanning device roots for mirrored corpus", {
+        c64uHost,
+        deviceRoot,
+        error: message,
+      });
     }
   }
 
