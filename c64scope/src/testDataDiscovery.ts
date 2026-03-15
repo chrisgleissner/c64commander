@@ -190,6 +190,38 @@ async function ftpList(host: string, ftpPath: string): Promise<string[]> {
     .filter((line) => line.length > 0);
 }
 
+async function resolveDeviceTestDataRoot(c64uHost: string): Promise<{ rootPath: string; topLevelEntries: string[] }> {
+  const candidateRoots = ["/USB2/test-data", "/USB1/test-data", "/SD/test-data"];
+
+  for (const rootPath of candidateRoots) {
+    try {
+      const topLevelEntries = await ftpList(c64uHost, `${rootPath}/`);
+      return { rootPath, topLevelEntries };
+    } catch {
+      // Try the next candidate mount.
+    }
+  }
+
+  const deviceRoots = await ftpList(c64uHost, "/");
+  for (const deviceRoot of deviceRoots) {
+    try {
+      const entries = await ftpList(c64uHost, `/${deviceRoot}/`);
+      const testDataEntry = entries.find((entry) => entry.toLowerCase() === "test-data");
+      if (testDataEntry) {
+        const rootPath = `/${deviceRoot}/${testDataEntry}`;
+        return {
+          rootPath,
+          topLevelEntries: await ftpList(c64uHost, `${rootPath}/`),
+        };
+      }
+    } catch {
+      // Skip unreadable roots while scanning for the mirrored corpus.
+    }
+  }
+
+  throw new Error("Unable to locate a mirrored test-data root on the C64U FTP filesystem.");
+}
+
 export async function discoverLocalMirror(workspaceRoot: string): Promise<LocalMirrorDiscovery> {
   const mirrorRoot = path.resolve(workspaceRoot, "test-data");
   const mirror = await walkLocalTree(mirrorRoot);
@@ -213,8 +245,7 @@ export async function discoverDeviceMirror(
   c64uHost: string,
   localDiscovery?: LocalMirrorDiscovery,
 ): Promise<DeviceMirrorDiscovery> {
-  const rootPath = "/USB2/test-data";
-  const topLevelEntries = await ftpList(c64uHost, `${rootPath}/`);
+  const { rootPath, topLevelEntries } = await resolveDeviceTestDataRoot(c64uHost);
   const sidEntry = topLevelEntries.find((entry) => entry.toUpperCase() === "SID") ?? "SID";
   const sidPath = `${rootPath}/${sidEntry}`;
   const d64Entries = await ftpList(c64uHost, `${rootPath}/d64/`);

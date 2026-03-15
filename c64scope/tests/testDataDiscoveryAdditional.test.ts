@@ -75,6 +75,40 @@ describe("test-data discovery additional branches", () => {
     expect(discovery.approximationBasis).toContain("No local parity model was available");
   });
 
+  it("falls back from USB2 to USB1 when the mirrored corpus is mounted on USB1", async () => {
+    execFileMock
+      .mockImplementationOnce((_file: string, _args: string[], callback: (error: Error) => void) => {
+        callback(new Error("USB2 missing"));
+      })
+      .mockImplementationOnce(
+        (_file: string, _args: string[], callback: (error: null, result: { stdout: string }) => void) => {
+          callback(null, { stdout: "SID\nd64\n" });
+        },
+      )
+      .mockImplementationOnce(
+        (_file: string, _args: string[], callback: (error: null, result: { stdout: string }) => void) => {
+          callback(null, { stdout: "diskA.d64\nfolder\n" });
+        },
+      )
+      .mockImplementationOnce(
+        (_file: string, _args: string[], callback: (error: null, result: { stdout: string }) => void) => {
+          callback(null, { stdout: "Example.sid\nREADME\n" });
+        },
+      )
+      .mockImplementationOnce(
+        (_file: string, _args: string[], callback: (error: null, result: { stdout: string }) => void) => {
+          callback(null, { stdout: "C64Music\n" });
+        },
+      );
+
+    const { discoverDeviceMirror } = await import("../src/testDataDiscovery.js");
+    const discovery = await discoverDeviceMirror("c64u");
+
+    expect(discovery.rootPath).toBe("/USB1/test-data");
+    expect(discovery.sidPath).toBe("/USB1/test-data/SID");
+    expect(discovery.sidCandidates).toEqual(["Example.sid"]);
+  });
+
   it("discovers mirrored corpora by composing local and device discovery", async () => {
     tempRoot = await mkdtemp(path.join(os.tmpdir(), "c64scope-discovery-compose-"));
     const workspaceRoot = path.join(tempRoot, "workspace");

@@ -423,4 +423,57 @@ describe("app-first primitives", () => {
     );
     await expect(waitForRouteMarkers("serial-1", "/play", 1)).rejects.toThrow(/Route '\/play' marker check failed/);
   }, 4000);
+
+  it("retries navigation after dismissing a focused input that compresses the bottom tab layout", async () => {
+    const { navigateToRoute } = await import("../src/validation/appFirstPrimitives.js");
+    dumpUiHierarchyMock.mockReset();
+
+    const client = {
+      tap: vi.fn().mockResolvedValue(undefined),
+      pressKey: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const compactConfigHierarchy = `
+        <hierarchy>
+          <node text="CONFIG" class="android.widget.TextView" clickable="false" enabled="true" bounds="[44,126][266,209]" />
+          <node text="30" class="android.widget.EditText" clickable="true" enabled="true" focused="true" bounds="[44,291][1036,407]" />
+          <node text="" resource-id="tab-play" content-desc="Play" class="android.widget.Button" clickable="true" enabled="true" bounds="[203,1371][341,1371]" />
+        </hierarchy>
+      `;
+
+    dumpUiHierarchyMock
+      .mockResolvedValueOnce(compactConfigHierarchy)
+      .mockResolvedValueOnce(compactConfigHierarchy)
+      .mockResolvedValueOnce(compactConfigHierarchy)
+      .mockResolvedValueOnce(compactConfigHierarchy)
+      .mockResolvedValueOnce(compactConfigHierarchy)
+      .mockResolvedValueOnce(compactConfigHierarchy)
+      .mockResolvedValueOnce(compactConfigHierarchy)
+      .mockResolvedValueOnce(compactConfigHierarchy)
+      .mockResolvedValueOnce(compactConfigHierarchy)
+      .mockResolvedValueOnce(compactConfigHierarchy)
+      .mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="" resource-id="tab-play" content-desc="Play" class="android.widget.Button" clickable="true" enabled="true" bounds="[203,2004][341,2150]" />
+        </hierarchy>
+      `)
+      .mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="" resource-id="tab-play" content-desc="Play" class="android.widget.Button" clickable="true" enabled="true" bounds="[203,2004][341,2150]" />
+        </hierarchy>
+      `)
+      .mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="PLAY FILES" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,154][300,243]" />
+          <node text="Playlist" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,300][300,360]" />
+          <node text="Play" class="android.widget.Button" clickable="true" enabled="true" focused="true" bounds="[203,2004][341,2150]" />
+        </hierarchy>
+      `);
+
+    await navigateToRoute(client as never, "serial-1", "/play");
+
+    expect(client.tap).toHaveBeenNthCalledWith(1, "serial-1", 272, 2077);
+    expect(client.pressKey).toHaveBeenCalledWith("serial-1", 4);
+    expect(client.tap).toHaveBeenNthCalledWith(2, "serial-1", 272, 2077);
+  }, 8000);
 });
