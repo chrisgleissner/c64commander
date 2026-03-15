@@ -460,15 +460,19 @@ describe("app-first primitives", () => {
       .mockResolvedValueOnce(compactConfigHierarchy)
       .mockResolvedValueOnce(compactConfigHierarchy)
       .mockResolvedValueOnce(compactConfigHierarchy)
-      .mockResolvedValueOnce(compactConfigHierarchy).mockResolvedValueOnce(`
+      .mockResolvedValueOnce(compactConfigHierarchy)
+      .mockResolvedValueOnce(compactConfigHierarchy)
+      .mockResolvedValueOnce(`
         <hierarchy>
           <node text="" resource-id="tab-play" content-desc="Play" class="android.widget.Button" clickable="true" enabled="true" bounds="[203,2004][341,2150]" />
         </hierarchy>
-      `).mockResolvedValueOnce(`
+      `)
+      .mockResolvedValueOnce(`
         <hierarchy>
           <node text="" resource-id="tab-play" content-desc="Play" class="android.widget.Button" clickable="true" enabled="true" bounds="[203,2004][341,2150]" />
         </hierarchy>
-      `).mockResolvedValueOnce(`
+      `)
+      .mockResolvedValueOnce(`
         <hierarchy>
           <node text="PLAY FILES" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,154][300,243]" />
           <node text="Playlist" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,300][300,360]" />
@@ -480,6 +484,55 @@ describe("app-first primitives", () => {
 
     expect(client.tap).toHaveBeenNthCalledWith(1, "serial-1", 272, 2077);
     expect(client.pressKey).toHaveBeenCalledWith("serial-1", 4);
+    expect(client.tap).toHaveBeenNthCalledWith(2, "serial-1", 272, 2077);
+  }, 8000);
+
+  it("does not send Back on retry when no focused text input is present", async () => {
+    const { navigateToRoute } = await import("../src/validation/appFirstPrimitives.js");
+    dumpUiHierarchyMock.mockReset();
+
+    const client = {
+      tap: vi.fn().mockResolvedValue(undefined),
+      pressKey: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const slowTransitionHierarchy = `
+        <hierarchy>
+          <node text="CONFIG" class="android.widget.TextView" clickable="false" enabled="true" bounds="[44,126][266,209]" />
+          <node text="Loading" class="android.widget.TextView" clickable="false" enabled="true" bounds="[44,291][1036,407]" />
+          <node text="" resource-id="tab-play" content-desc="Play" class="android.widget.Button" clickable="true" enabled="true" bounds="[203,2004][341,2150]" />
+        </hierarchy>
+      `;
+
+    dumpUiHierarchyMock
+      .mockResolvedValueOnce(slowTransitionHierarchy)
+      .mockResolvedValueOnce(slowTransitionHierarchy)
+      .mockResolvedValueOnce(slowTransitionHierarchy)
+      .mockResolvedValueOnce(slowTransitionHierarchy)
+      .mockResolvedValueOnce(slowTransitionHierarchy)
+      .mockResolvedValueOnce(slowTransitionHierarchy)
+      .mockResolvedValueOnce(slowTransitionHierarchy)
+      .mockResolvedValueOnce(slowTransitionHierarchy)
+      .mockResolvedValueOnce(slowTransitionHierarchy)
+      .mockResolvedValueOnce(slowTransitionHierarchy)
+      .mockResolvedValueOnce(slowTransitionHierarchy)
+      .mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="" resource-id="tab-play" content-desc="Play" class="android.widget.Button" clickable="true" enabled="true" bounds="[203,2004][341,2150]" />
+        </hierarchy>
+      `)
+      .mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="PLAY FILES" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,154][300,243]" />
+          <node text="Playlist" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,300][300,360]" />
+          <node text="Play" class="android.widget.Button" clickable="true" enabled="true" focused="true" bounds="[203,2004][341,2150]" />
+        </hierarchy>
+      `);
+
+    await navigateToRoute(client as never, "serial-1", "/play");
+
+    expect(client.pressKey).not.toHaveBeenCalled();
+    expect(client.tap).toHaveBeenNthCalledWith(1, "serial-1", 272, 2077);
     expect(client.tap).toHaveBeenNthCalledWith(2, "serial-1", 272, 2077);
   }, 8000);
 });

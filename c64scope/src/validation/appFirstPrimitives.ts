@@ -81,6 +81,18 @@ async function maybeDismissFocusedInput(client: DroidmindClient, serial: string)
     return;
   }
 
+  const xml = await dumpUiHierarchy(serial);
+  const nodes = parseUiNodes(xml);
+  const focusedInputVisible = nodes.some(
+    (node) =>
+      node.enabled &&
+      node.focused &&
+      (node.className === "android.widget.EditText" || node.className === "android.widget.AutoCompleteTextView"),
+  );
+  if (!focusedInputVisible) {
+    return;
+  }
+
   await client.pressKey(serial, 4);
   await sleep(500);
 }

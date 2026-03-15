@@ -135,6 +135,10 @@ type TransitionMetrics = {
   stableForWindow: boolean;
 };
 
+export function expectedMuteToggleLabel(phase: "mute" | "unmute"): "Mute" | "Unmute" {
+  return phase === "mute" ? "Mute" : "Unmute";
+}
+
 function isAudioFeatures(analysis: unknown): analysis is AudioFeatures {
   if (!analysis || typeof analysis !== "object") {
     return false;
@@ -691,7 +695,7 @@ export const appFirstPlaybackMuteLatency: ValidationCase = {
       });
       await new Promise((resolve) => setTimeout(resolve, CAPTURE_PRE_ROLL_MS));
       const muteTapAtMs = Date.now() - muteCaptureStartedAt;
-      const muteTapped = await tapByResourceIdOrLabel(droidmind, ctx.serial, "volume-mute", ["Mute", "Unmute"]);
+      const muteTapped = await tapByResourceIdOrLabel(droidmind, ctx.serial, "volume-mute", [expectedMuteToggleLabel("mute")]);
       if (!muteTapped) {
         throw new Error("Could not tap the Play mute button.");
       }
@@ -712,7 +716,7 @@ export const appFirstPlaybackMuteLatency: ValidationCase = {
       });
       await new Promise((resolve) => setTimeout(resolve, CAPTURE_PRE_ROLL_MS));
       const unmuteTapAtMs = Date.now() - unmuteCaptureStartedAt;
-      const unmuteTapped = await tapByResourceIdOrLabel(droidmind, ctx.serial, "volume-mute", ["Unmute", "Mute"]);
+      const unmuteTapped = await tapByResourceIdOrLabel(droidmind, ctx.serial, "volume-mute", [expectedMuteToggleLabel("unmute")]);
       if (!unmuteTapped) {
         throw new Error("Could not tap the Play unmute button.");
       }

@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { requireAudioFeatures } from "../src/validation/cases/exploratoryPlayback.js";
+import { expectedMuteToggleLabel, requireAudioFeatures } from "../src/validation/cases/exploratoryPlayback.js";
 
 describe("exploratory playback audio analysis guard", () => {
   it("rejects non-audio analysis payloads before latency calculations", () => {
@@ -47,5 +47,13 @@ describe("exploratory playback audio analysis guard", () => {
 
     expect(analysis.sampleRateHz).toBe(48000);
     expect(analysis.envelope).toHaveLength(1);
+  });
+
+  it("requires the mute phase to target the mute label only", () => {
+    expect(expectedMuteToggleLabel("mute")).toBe("Mute");
+  });
+
+  it("requires the unmute phase to target the unmute label only", () => {
+    expect(expectedMuteToggleLabel("unmute")).toBe("Unmute");
   });
 });
