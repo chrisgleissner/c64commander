@@ -45,6 +45,13 @@ type DialogContentProps = React.ComponentPropsWithoutRef<typeof DialogPrimitive.
 
 const DialogPresentationContext = React.createContext(resolveModalPresentation("medium", "default"));
 
+const resolveDialogFooterClassName = (mode: "centered" | "fullscreen" | "large") => {
+  if (mode === "fullscreen") {
+    return "flex-col gap-2";
+  }
+  return "flex-row flex-wrap justify-end gap-2";
+};
+
 const DialogContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive.Content>, DialogContentProps>(
   ({ className, children, showClose = true, closeTestId, surface = "default", ...props }, ref) => {
     const { profile } = useDisplayProfile();
@@ -76,7 +83,7 @@ const DialogContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive.C
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
 const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("flex flex-col space-y-1.5 text-center sm:text-left", className)} {...props} />
+  <div className={cn("flex flex-col space-y-1.5 text-left", className)} {...props} />
 );
 DialogHeader.displayName = "DialogHeader";
 
@@ -84,11 +91,7 @@ const DialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
   const presentation = React.useContext(DialogPresentationContext);
   return (
     <div
-      className={cn(
-        "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2",
-        presentation.footerClassName,
-        className,
-      )}
+      className={cn("flex", resolveDialogFooterClassName(presentation.mode), presentation.footerClassName, className)}
       {...props}
     />
   );

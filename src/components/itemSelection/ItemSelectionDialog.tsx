@@ -52,7 +52,6 @@ export type ItemSelectionDialogProps = {
   allowFolderSelection?: boolean;
   isConfirming?: boolean;
   autoConfirmLocalSource?: boolean;
-  progress?: AddItemsProgressState;
   showProgressFooter?: boolean;
   autoConfirmCloseBefore?: boolean;
   onAutoConfirmStart?: (source: SourceLocation) => void;
@@ -288,27 +287,32 @@ export const ItemSelectionDialog = ({
     }
   };
 
+  const interstitialGridClassName = profile === "compact" ? "grid-cols-1" : "grid-cols-2";
+  const browserDialogClassName =
+    profile === "compact" ? "" : "h-[min(80vh,calc(100dvh-4rem))] max-h-[calc(100dvh-4rem)] rounded-2xl";
+  const footerLayoutClassName = profile === "compact" ? "flex-col" : "flex-row items-center justify-between";
+  const footerActionsClassName = profile === "compact" ? "flex-row flex-wrap" : "flex-row ml-auto";
+  const footerPaddingClassName =
+    profile === "compact"
+      ? "px-4 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]"
+      : "px-6 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))]";
+  const headerPaddingClassName = profile === "compact" ? "px-4 pb-2 pt-4" : "px-6 pb-3 pt-6";
+  const bodyPaddingClassName = profile === "compact" ? "px-4 py-3" : "px-6 py-4";
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         surface={source ? "selection-browser" : "default"}
         showClose={false}
         onOpenAutoFocus={(e) => e.preventDefault()}
-        className={cn(
-          "p-0 overflow-hidden shadow-2xl",
-          source
-            ? profile === "compact"
-              ? ""
-              : "h-[min(80vh,calc(100dvh-4rem))] max-h-[calc(100dvh-4rem)] sm:rounded-2xl"
-            : "max-w-md",
-        )}
+        className={cn("p-0 overflow-hidden shadow-2xl", source ? browserDialogClassName : "max-w-md")}
       >
         <div className={cn("flex min-h-0 flex-col overflow-hidden", source && "h-full")}>
-          <DialogHeader className="shrink-0 border-b border-border px-6 pb-3 pt-6">
+          <DialogHeader className={cn("shrink-0 border-b border-border", headerPaddingClassName)}>
             <div className="flex items-start justify-between gap-4">
               <div>
                 <DialogTitle className="text-xl">{title}</DialogTitle>
-                <DialogDescription className="text-sm text-muted-foreground">
+                <DialogDescription className={cn("text-sm text-muted-foreground", profile === "compact" && "hidden")}>
                   Select items from the chosen source to add.
                 </DialogDescription>
               </div>
@@ -320,11 +324,14 @@ export const ItemSelectionDialog = ({
             </div>
           </DialogHeader>
 
-          <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4" data-testid="add-items-scroll">
+          <div className={cn("flex-1 min-h-0 overflow-y-auto", bodyPaddingClassName)} data-testid="add-items-scroll">
             {!source && (
               <div className="space-y-5">
                 <p className="text-lg font-semibold text-foreground">Choose source</p>
-                <div className="grid gap-2 sm:grid-cols-2" data-testid="import-selection-interstitial">
+                <div
+                  className={cn("grid gap-2", interstitialGridClassName)}
+                  data-testid="import-selection-interstitial"
+                >
                   <Button
                     variant="outline"
                     className="justify-start min-w-0"
@@ -437,7 +444,9 @@ export const ItemSelectionDialog = ({
             )}
           </div>
 
-          <DialogFooter className="shrink-0 flex flex-col gap-2 border-t border-border px-6 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:flex-row sm:items-center sm:justify-between">
+          <DialogFooter
+            className={cn("shrink-0 gap-2 border-t border-border", footerPaddingClassName, footerLayoutClassName)}
+          >
             {showProgressFooter && progress && progress.status !== "idle" && (
               <div className="text-xs text-muted-foreground" data-testid="add-items-progress">
                 <span>
@@ -446,7 +455,7 @@ export const ItemSelectionDialog = ({
                 {progress.total ? <span> / {progress.total}</span> : null}
               </div>
             )}
-            <div className="flex gap-2 sm:ml-auto">
+            <div className={cn("flex gap-2", footerActionsClassName)}>
               <Button
                 variant="outline"
                 onClick={() => {

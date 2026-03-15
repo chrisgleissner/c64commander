@@ -207,6 +207,14 @@ Access full C64 Ultimate configuration pages, from basic tuning to hardware-spec
 
 Tune appearance, connection behavior, diagnostics, playback defaults, HVSC integration, and device-safety limits.
 
+Display profiles:
+
+- `Auto` resolves the current viewport into one of three width-based profiles: `Small display`, `Standard display`, or `Large display`.
+- `Small display` is the Compact profile for constrained widths and promotes cramped browser-style dialogs to full-screen layouts when needed.
+- `Standard display` is the Medium baseline and is the default profile used for the main documentation screenshots.
+- `Large display` is the Expanded profile and increases spacing, typography, and bounded-width composition on larger screens.
+- The override lives in **Settings → Appearance → Display profile** and is useful for previewing or locking a profile on tablets and the self-hosted web app.
+
 <table>
   <tr>
     <td><img src="doc/img/app/settings/sections/01-appearance.png" alt="Settings appearance" width="360"/></td>
@@ -248,6 +256,11 @@ Track actions, inspect traces, and export logs when it is time for serious troub
 </table>
 
 Full screenshot set: [doc/img/app/](doc/img/app/)
+
+Profile-specific screenshots:
+
+- Screenshots outside `profiles/` folders show the default Medium documentation profile unless the caption says otherwise.
+- Compact- and Expanded-specific screenshots live under `doc/img/app/<page>/profiles/compact/`, `doc/img/app/<page>/profiles/medium/`, and `doc/img/app/<page>/profiles/expanded/` when the visible layout differs from the default profile.
 
 ## 🛟 Troubleshooting
 

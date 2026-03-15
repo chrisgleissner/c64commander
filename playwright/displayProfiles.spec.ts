@@ -101,6 +101,89 @@ const scaleRootTextSize = async (page: Page, scale: number) => {
   }, scale);
 };
 
+const expectViewportState = async (page: Page, width: number, height: number) => {
+  await expect
+    .poll(() =>
+      page.evaluate(() => ({
+        width: window.innerWidth,
+        height: window.innerHeight,
+        visualViewportHeight: window.visualViewport?.height ?? window.innerHeight,
+      })),
+    )
+    .toEqual({ width, height, visualViewportHeight: height });
+};
+
+const reduceViewportForKeyboard = async (page: Page, width = 360, height = 420) => {
+  await page.setViewportSize({ width, height });
+  await expectViewportState(page, width, height);
+};
+
+const seedSnapshots = async (page: Page, count = 3) => {
+  await page.addInitScript((total: number) => {
+    const buildBytesBase64 = (typeCode: number, timestampSeconds: number) => {
+      const HEADER_SIZE = 28;
+      const meta = JSON.stringify({
+        snapshot_type: typeCode === 0 ? "program" : typeCode === 1 ? "basic" : "screen",
+        display_ranges: typeCode === 0 ? ["$0000\u2013$00FF", "$0200\u2013$FFFF"] : ["$0000\u2013$FFFF"],
+        created_at: "2026-01-10 09:00:00",
+      });
+      const metaBytes = new TextEncoder().encode(meta);
+      const totalBytes = HEADER_SIZE + metaBytes.length;
+      const buf = new Uint8Array(totalBytes);
+      const view = new DataView(buf.buffer);
+      new TextEncoder().encode("C64SNAP\0").forEach((b, i) => {
+        buf[i] = b;
+      });
+      view.setUint16(8, 1, true);
+      view.setUint16(10, typeCode, true);
+      view.setUint32(12, timestampSeconds, true);
+      view.setUint16(16, 0, true);
+      view.setUint16(18, 0, true);
+      view.setUint32(20, HEADER_SIZE, true);
+      view.setUint32(24, metaBytes.length, true);
+      buf.set(metaBytes, HEADER_SIZE);
+      let binary = "";
+      for (let index = 0; index < buf.length; index += 1) {
+        binary += String.fromCharCode(buf[index]);
+      }
+      return btoa(binary);
+    };
+
+    const typeCodes = [0, 1, 2];
+    const snapshots = Array.from({ length: total }, (_, index) => {
+      const typeCode = typeCodes[index % typeCodes.length] ?? 0;
+      const timestamp = 1736499600 - index * 3600;
+      const snapshotType = typeCode === 0 ? "program" : typeCode === 1 ? "basic" : "screen";
+      return {
+        id: `snap-${index + 1}`,
+        filename: `c64-${snapshotType}-${index + 1}.c64snap`,
+        bytesBase64: buildBytesBase64(typeCode, timestamp),
+        createdAt: new Date(timestamp * 1000).toISOString(),
+        snapshotType,
+        metadata: {
+          snapshot_type: snapshotType,
+          display_ranges:
+            typeCode === 0
+              ? ["$0000\u2013$00FF", "$0200\u2013$FFFF"]
+              : typeCode === 1
+                ? ["$0801\u2013STREND"]
+                : ["VICBANK", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"],
+          created_at: new Date(timestamp * 1000).toISOString().slice(0, 19).replace("T", " "),
+          ...(index === 0 ? { label: "JupiterLander.crt" } : {}),
+        },
+      };
+    });
+
+    localStorage.setItem(
+      "c64u_snapshots:v1",
+      JSON.stringify({
+        version: 1,
+        snapshots,
+      }),
+    );
+  }, count);
+};
+
 const setBrowserZoom = async (page: Page, scale: number) => {
   const session = await page.context().newCDPSession(page);
   await session.send("Emulation.setPageScaleFactor", { pageScaleFactor: scale });
@@ -339,6 +422,66 @@ test.describe("display profiles", () => {
     await expect(clearAllButton).toBeVisible();
     await expectLocatorWithinViewport(page, shareAllButton);
     await expectLocatorWithinViewport(page, clearAllButton);
+  });
+
+  test("compact selection browser keeps title input and confirm CTA visible during keyboard-height reduction", async ({
+    page,
+  }: {
+    page: Page;
+  }) => {
+    await page.goto("/play", { waitUntil: "domcontentloaded" });
+    await applyDisplayProfileViewport(page, "compact");
+
+    await page.getByRole("button", { name: /Add items|Add more items/i }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+
+    await dialog.getByTestId("import-option-hvsc").click();
+    await expect(dialog.getByTestId("source-file-picker")).toBeVisible();
+
+    const title = dialog.getByText("Add items", { exact: true });
+    const filterInput = dialog.getByTestId("add-items-filter");
+    await expect(filterInput).toBeVisible();
+    await filterInput.focus();
+    await expect(filterInput).toBeFocused();
+
+    await reduceViewportForKeyboard(page, 360, 450);
+
+    const confirmButton = dialog.getByTestId("add-items-confirm");
+    await expect(title).toBeVisible();
+    await expect(confirmButton).toBeVisible();
+    await expectLocatorWithinViewport(page, title);
+    await expectLocatorWithinViewport(page, filterInput);
+    await expectLocatorWithinViewport(page, confirmButton);
+  });
+
+  test("compact snapshot manager keeps title filter and primary row visible during keyboard-height reduction", async ({
+    page,
+  }: {
+    page: Page;
+  }) => {
+    await seedSnapshots(page);
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await applyDisplayProfileViewport(page, "compact");
+
+    await page.getByTestId("home-load-ram").click();
+    const dialog = page.getByTestId("snapshot-manager-dialog");
+    await expect(dialog).toBeVisible();
+
+    const title = dialog.getByText("Load RAM", { exact: true });
+    const filterInput = dialog.getByTestId("snapshot-filter-input");
+    const firstRow = page.getByTestId("snapshot-row").first();
+    await filterInput.focus();
+    await expect(filterInput).toBeFocused();
+
+    await reduceViewportForKeyboard(page);
+
+    await expect(title).toBeVisible();
+    await expect(filterInput).toBeVisible();
+    await expect(firstRow).toBeVisible();
+    await expectLocatorWithinViewport(page, title);
+    await expectLocatorWithinViewport(page, filterInput);
+    await expectLocatorWithinViewport(page, firstRow);
   });
 
   test("compact diagnostics CTA layout remains reachable under browser zoom on web", async ({
