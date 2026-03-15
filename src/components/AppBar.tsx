@@ -101,10 +101,7 @@ export function AppBar({ title, subtitle, leading, children }: Props) {
   return (
     <header
       ref={headerRef}
-      className={cn(
-        "fixed left-0 top-0 z-40 w-screen max-w-screen bg-background/80 border-b border-border backdrop-blur-lg",
-        !compact && "pt-safe",
-      )}
+      className="fixed left-0 top-0 z-40 w-screen max-w-screen bg-background/80 border-b border-border backdrop-blur-lg pt-safe"
     >
       <div
         className={cn("app-shell-container", compact ? "space-y-2" : "py-4 space-y-3")}

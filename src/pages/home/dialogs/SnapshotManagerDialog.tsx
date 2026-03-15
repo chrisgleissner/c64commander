@@ -193,8 +193,10 @@ export function SnapshotManagerDialog({
   onDelete,
   onUpdateLabel,
 }: SnapshotManagerDialogProps) {
+  const { profile } = useDisplayProfile();
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<SnapshotTypeFilter>("all");
+  const compact = profile === "compact";
 
   const filtered = filterSnapshots(snapshots, query, typeFilter);
 
@@ -210,12 +212,14 @@ export function SnapshotManagerDialog({
     <AppSheet open={open} onOpenChange={handleOpenChange}>
       <AppSheetContent className="overflow-hidden p-0" data-testid="snapshot-manager-dialog">
         <div className="flex h-full min-h-0 flex-col">
-          <AppSheetHeader className="px-6 pb-3 pt-6 pr-14">
+          <AppSheetHeader className={compact ? "px-4 pb-2 pt-4 pr-12" : "px-6 pb-3 pt-6 pr-14"}>
             <AppSheetTitle>Load RAM</AppSheetTitle>
-            <AppSheetDescription>Select a snapshot to restore.</AppSheetDescription>
+            <AppSheetDescription className={compact ? "hidden" : undefined}>
+              Select a snapshot to restore.
+            </AppSheetDescription>
           </AppSheetHeader>
 
-          <div className="shrink-0 space-y-3 border-b border-border px-6 py-4">
+          <div className={compact ? "shrink-0 space-y-2 border-b border-border px-4 py-3" : "shrink-0 space-y-3 border-b border-border px-6 py-4"}>
             <Input
               placeholder="Filter snapshots…"
               value={query}
@@ -242,7 +246,7 @@ export function SnapshotManagerDialog({
             </div>
           </div>
 
-          <AppSheetBody className="px-6 py-4" data-testid="snapshot-list">
+          <AppSheetBody className={compact ? "px-4 py-3" : "px-6 py-4"} data-testid="snapshot-list">
             <div className="pr-2">
               <div className="space-y-2" data-testid="snapshot-list-content">
                 {filtered.length === 0 ? (
