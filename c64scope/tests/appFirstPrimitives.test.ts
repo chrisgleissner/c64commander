@@ -451,18 +451,15 @@ describe("app-first primitives", () => {
       .mockResolvedValueOnce(compactConfigHierarchy)
       .mockResolvedValueOnce(compactConfigHierarchy)
       .mockResolvedValueOnce(compactConfigHierarchy)
-      .mockResolvedValueOnce(compactConfigHierarchy)
-      .mockResolvedValueOnce(`
+      .mockResolvedValueOnce(compactConfigHierarchy).mockResolvedValueOnce(`
         <hierarchy>
           <node text="" resource-id="tab-play" content-desc="Play" class="android.widget.Button" clickable="true" enabled="true" bounds="[203,2004][341,2150]" />
         </hierarchy>
-      `)
-      .mockResolvedValueOnce(`
+      `).mockResolvedValueOnce(`
         <hierarchy>
           <node text="" resource-id="tab-play" content-desc="Play" class="android.widget.Button" clickable="true" enabled="true" bounds="[203,2004][341,2150]" />
         </hierarchy>
-      `)
-      .mockResolvedValueOnce(`
+      `).mockResolvedValueOnce(`
         <hierarchy>
           <node text="PLAY FILES" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,154][300,243]" />
           <node text="Playlist" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,300][300,360]" />

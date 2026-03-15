@@ -187,7 +187,7 @@ dependencies {
     testImplementation "junit:junit:$junitVersion"
     testImplementation "org.json:json:20251224"
     testImplementation "org.robolectric:robolectric:4.11.1"
-    testImplementation "org.mockito:mockito-core:5.8.0"
+    testImplementation "org.mockito:mockito-core:5.23.0"
     testImplementation "androidx.test:core:1.7.0"
     testImplementation "androidx.test.ext:junit:1.1.5"
     testImplementation "org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3"

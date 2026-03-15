@@ -542,7 +542,7 @@ describe("useVolumeOverride", () => {
     expect(mutateAsyncMock).not.toHaveBeenCalled();
   });
 
-  it("sends a playback-start unmute write when a non-manual muted state has a previous active target", async () => {
+  it("does not send a playback-start unmute write when device sync already restored active playback", async () => {
     audioMixerItemsRef.current = defaultMixerItems("0");
 
     const { result } = renderHook(() =>
@@ -566,21 +566,12 @@ describe("useVolumeOverride", () => {
       await result.current.ensureUnmuted();
     });
 
-    expect(mutateAsyncMock).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        category: "Audio Mixer",
-        updates: { "SID 1": "5" },
-      }),
-    );
-    expect(addLog).toHaveBeenCalledWith(
-      "info",
-      "Play volume unmute sent on playback start",
-      expect.objectContaining({ index: 1 }),
-    );
+    expect(mutateAsyncMock).toHaveBeenCalledTimes(1);
+    expect(result.current.volumeState.muted).toBe(false);
+    expect(addLog).not.toHaveBeenCalledWith("info", "Play volume unmute sent on playback start", expect.anything());
   });
 
-  it("falls back to general volume updates when playback-start unmute has no muted-to-target updates", async () => {
+  it("does not issue fallback playback-start writes when device sync already reports active playback", async () => {
     audioMixerItemsRef.current = defaultMixerItems("0");
     buildEnabledSidMutedToTargetUpdatesMock.mockReturnValue({});
 
@@ -605,14 +596,9 @@ describe("useVolumeOverride", () => {
       await result.current.ensureUnmuted();
     });
 
-    expect(mutateAsyncMock).toHaveBeenCalledTimes(2);
-    expect(mutateAsyncMock).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        category: "Audio Mixer",
-        updates: { "SID 1": "5" },
-      }),
-    );
+    expect(mutateAsyncMock).toHaveBeenCalledTimes(1);
+    expect(result.current.volumeState.muted).toBe(false);
+    expect(addLog).not.toHaveBeenCalledWith("info", "Play volume unmute sent on playback start", expect.anything());
   });
 
   it("does not issue preview commits while muted and only updates the cached target", async () => {

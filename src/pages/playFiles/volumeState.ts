@@ -28,7 +28,7 @@ export const reduceVolumeState = (state: VolumeState, action: VolumeAction): Vol
     case "set-index":
       return { ...state, index: action.index };
     case "mute":
-      return { index: action.index ?? state.index, muted: true, reason: action.reason };
+      return { ...state, index: action.index ?? state.index, muted: true, reason: action.reason };
     case "unmute":
       return {
         index: action.index ?? state.index,

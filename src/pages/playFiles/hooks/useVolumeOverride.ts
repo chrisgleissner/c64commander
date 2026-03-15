@@ -301,7 +301,7 @@ export function useVolumeOverride({ isPlaying, isPaused, previewIntervalMs }: Us
           index: write.index,
           muted: write.muted,
         });
-        return;
+        return false;
       }
 
       const knownDevice = lastKnownDeviceVolumeRef.current;
@@ -319,13 +319,14 @@ export function useVolumeOverride({ isPlaying, isPaused, previewIntervalMs }: Us
           index: write.index,
           muted: write.muted,
         });
-        return;
+        return false;
       }
 
       markPendingVolumeWrite(write.index, write.muted);
       try {
         await playbackWriteLaneRef.current?.schedule(write);
         schedulePlaybackReconciliation();
+        return true;
       } catch (error) {
         const activePending = pendingVolumeWriteRef.current;
         if (activePending?.index === write.index && activePending.muted === write.muted) {
@@ -761,8 +762,8 @@ export function useVolumeOverride({ isPlaying, isPaused, previewIntervalMs }: Us
           return;
         }
       }
-      if (!volumeMuted || volumeIndex !== nextIndex || volumeState.reason === "sync") {
-        dispatchVolume({ type: "mute", reason: manualMuteIntentRef.current ? "manual" : "pause", index: nextIndex });
+      if (!volumeMuted || volumeIndex !== nextIndex || volumeState.reason !== "sync") {
+        dispatchVolume({ type: "sync", index: nextIndex, muted: true });
       }
       lastManualWriteRef.current = null;
       return;
@@ -828,16 +829,18 @@ export function useVolumeOverride({ isPlaying, isPaused, previewIntervalMs }: Us
         muted: false,
         setAtMs: Date.now(),
       };
-      await queuePlaybackMixerWrite({
+      const queued = await queuePlaybackMixerWrite({
         updates,
         context: "Unmute on playback start",
         index: fallbackIndex,
         muted: false,
         allowKnownDeviceSkip: false,
       });
-      addLog("info", "Play volume unmute sent on playback start", {
-        index: fallbackIndex,
-      });
+      if (queued) {
+        addLog("info", "Play volume unmute sent on playback start", {
+          index: fallbackIndex,
+        });
+      }
     }
     dispatchVolume({ type: "unmute", reason: "manual", index: fallbackIndex });
     manualMuteSnapshotRef.current = null;

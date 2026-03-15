@@ -77,7 +77,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 async function maybeDismissFocusedInput(client: DroidmindClient, serial: string): Promise<void> {
-  if (typeof client.pressKey !== 'function') {
+  if (typeof client.pressKey !== "function") {
     return;
   }
 

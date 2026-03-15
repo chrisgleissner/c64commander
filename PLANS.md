@@ -97,7 +97,7 @@ T+1 ms     automatic read burst starts (`GET /v1/configs/Audio Mixer`)
 T+349 ms   SID sockets/addressing enrichment reads still in progress
 T+542 ms   first mute write starts (`POST /v1/configs` -> `-42 dB`)
 T+756 ms   mute write returns 200
-T+211 ms   after write, reconciliation read burst starts again
+T+967 ms   after write, reconciliation read burst starts again
 T+2451 ms  unsolicited unmute write starts (`POST /v1/configs` -> `0 dB`)
 T+3411 ms  redundant unmute write repeats
 T+4272 ms  redundant unmute write repeats

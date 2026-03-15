@@ -1,8 +1,19 @@
 export const resolveMostCommonIndex = (indices: number[], fallbackIndex: number) => {
   if (!indices.length) return fallbackIndex;
   const counts = new Map<number, number>();
-  indices.forEach((index) => counts.set(index, (counts.get(index) ?? 0) + 1));
-  return Array.from(counts.entries()).sort((left, right) => right[1] - left[1])[0]?.[0] ?? fallbackIndex;
+  let mostCommonIndex = fallbackIndex;
+  let mostCommonCount = 0;
+
+  for (const index of indices) {
+    const nextCount = (counts.get(index) ?? 0) + 1;
+    counts.set(index, nextCount);
+    if (nextCount > mostCommonCount) {
+      mostCommonCount = nextCount;
+      mostCommonIndex = index;
+    }
+  }
+
+  return mostCommonIndex;
 };
 
 export const shouldHoldManualMuteSync = (manualMuteIntentActive: boolean, activeIndices: number[]) =>
