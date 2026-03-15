@@ -28,12 +28,14 @@ describe("displayProfiles", () => {
       modalInset: "1rem",
       pagePaddingX: "0.5rem",
       pagePaddingY: "0.5rem",
-      rootFontSize: "16px",
+      pagePaddingTop: "0.5rem",
+      rootFontSize: "17px",
     });
     expect(getDisplayProfileLayoutTokens("medium")).toMatchObject({
       pageMaxWidth: "960px",
       actionGridMinWidth: "0px",
       isCompactDialog: false,
+      pagePaddingTop: "1.25rem",
       rootFontSize: "16px",
     });
     expect(getDisplayProfileLayoutTokens("expanded")).toMatchObject({
@@ -41,6 +43,7 @@ describe("displayProfiles", () => {
       actionGridMinWidth: "9rem",
       pageMaxWidth: "1200px",
       isCompactDialog: false,
+      pagePaddingTop: "1.5rem",
       rootFontSize: "17.5px",
     });
   });

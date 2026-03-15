@@ -42,4 +42,25 @@ describe("QuickActionCard", () => {
 
     expect(screen.getByRole("button", { name: "Play" }).className).toContain("min-h-[86px]");
   });
+
+  it("lets compact labels and descriptions wrap instead of clipping", () => {
+    localStorage.clear();
+    setViewportWidth(360);
+
+    render(
+      <DisplayProfileProvider>
+        <QuickActionCard
+          icon={Play}
+          label="Very long compact action label"
+          description="Readable secondary copy should wrap on compact displays"
+          onClick={() => undefined}
+        />
+      </DisplayProfileProvider>,
+    );
+
+    expect(screen.getByText("Very long compact action label").className).toContain("whitespace-normal");
+    expect(screen.getByText("Readable secondary copy should wrap on compact displays").className).toContain(
+      "break-words",
+    );
+  });
 });

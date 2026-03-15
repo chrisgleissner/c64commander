@@ -43,11 +43,12 @@ export const getDisplayProfileLayoutTokens = (profile: DisplayProfile) => {
   switch (profile) {
     case "compact":
       return {
-        rootFontSize: "16px",
+        rootFontSize: "17px",
         pageMaxWidth: "100%",
         readingMaxWidth: "100%",
         pagePaddingX: "0.5rem",
         pagePaddingY: "0.5rem",
+        pagePaddingTop: "0.5rem",
         sectionGap: "1rem",
         panelGap: "0.875rem",
         actionGridColumns: 2,
@@ -64,6 +65,7 @@ export const getDisplayProfileLayoutTokens = (profile: DisplayProfile) => {
         readingMaxWidth: "1080px",
         pagePaddingX: "1.5rem",
         pagePaddingY: "1.5rem",
+        pagePaddingTop: "1.5rem",
         sectionGap: "1.5rem",
         panelGap: "1.25rem",
         actionGridColumns: 4,
@@ -80,6 +82,7 @@ export const getDisplayProfileLayoutTokens = (profile: DisplayProfile) => {
         readingMaxWidth: "960px",
         pagePaddingX: "1rem",
         pagePaddingY: "1.25rem",
+        pagePaddingTop: "1.25rem",
         sectionGap: "1.25rem",
         panelGap: "1rem",
         actionGridColumns: 4,

@@ -49,7 +49,8 @@ describe("DisplayProfileProvider", () => {
     expect(screen.getByTestId("auto-profile")).toHaveTextContent("compact");
     expect(screen.getByTestId("profile")).toHaveTextContent("compact");
     expect(document.documentElement.dataset.displayProfile).toBe("compact");
-    expect(document.documentElement.style.getPropertyValue("--display-profile-root-font-size")).toBe("16px");
+    expect(document.documentElement.style.getPropertyValue("--display-profile-root-font-size")).toBe("17px");
+    expect(document.documentElement.style.getPropertyValue("--display-profile-page-padding-top")).toBe("0.5rem");
     expect(document.documentElement.style.getPropertyValue("--display-profile-viewport-width")).toBe("320px");
 
     fireEvent.click(screen.getByRole("button", { name: "Force expanded" }));
@@ -198,6 +199,7 @@ describe("DisplayProfileProvider", () => {
     setViewportHeight(640);
     document.documentElement.dataset.displayProfile = "expanded";
     document.documentElement.style.setProperty("--display-profile-root-font-size", "19px");
+    document.documentElement.style.setProperty("--display-profile-page-padding-top", "2rem");
     document.documentElement.style.setProperty("--display-profile-viewport-width", "999px");
 
     const { unmount } = render(
@@ -207,13 +209,15 @@ describe("DisplayProfileProvider", () => {
     );
 
     expect(document.documentElement.dataset.displayProfile).toBe("compact");
-    expect(document.documentElement.style.getPropertyValue("--display-profile-root-font-size")).toBe("16px");
+    expect(document.documentElement.style.getPropertyValue("--display-profile-root-font-size")).toBe("17px");
+    expect(document.documentElement.style.getPropertyValue("--display-profile-page-padding-top")).toBe("0.5rem");
     expect(document.documentElement.style.getPropertyValue("--display-profile-viewport-width")).toBe("320px");
 
     unmount();
 
     expect(document.documentElement.dataset.displayProfile).toBe("expanded");
     expect(document.documentElement.style.getPropertyValue("--display-profile-root-font-size")).toBe("19px");
+    expect(document.documentElement.style.getPropertyValue("--display-profile-page-padding-top")).toBe("2rem");
     expect(document.documentElement.style.getPropertyValue("--display-profile-viewport-width")).toBe("999px");
   });
 
@@ -223,6 +227,7 @@ describe("DisplayProfileProvider", () => {
     setViewportHeight(640);
     delete document.documentElement.dataset.displayProfile;
     document.documentElement.style.removeProperty("--display-profile-root-font-size");
+    document.documentElement.style.removeProperty("--display-profile-page-padding-top");
     document.documentElement.style.removeProperty("--display-profile-viewport-width");
 
     const { unmount } = render(
@@ -232,13 +237,15 @@ describe("DisplayProfileProvider", () => {
     );
 
     expect(document.documentElement.dataset.displayProfile).toBe("compact");
-    expect(document.documentElement.style.getPropertyValue("--display-profile-root-font-size")).toBe("16px");
+    expect(document.documentElement.style.getPropertyValue("--display-profile-root-font-size")).toBe("17px");
+    expect(document.documentElement.style.getPropertyValue("--display-profile-page-padding-top")).toBe("0.5rem");
     expect(document.documentElement.style.getPropertyValue("--display-profile-viewport-width")).toBe("320px");
 
     unmount();
 
     expect(document.documentElement.dataset.displayProfile).toBeUndefined();
     expect(document.documentElement.style.getPropertyValue("--display-profile-root-font-size")).toBe("");
+    expect(document.documentElement.style.getPropertyValue("--display-profile-page-padding-top")).toBe("");
     expect(document.documentElement.style.getPropertyValue("--display-profile-viewport-width")).toBe("");
   });
 });

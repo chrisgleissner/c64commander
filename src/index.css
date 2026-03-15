@@ -12,6 +12,7 @@
   --display-profile-reading-max-width: 960px;
   --display-profile-page-padding-x: 1rem;
   --display-profile-page-padding-y: 1.25rem;
+  --display-profile-page-padding-top: 1.25rem;
   --display-profile-section-gap: 1.25rem;
   --display-profile-panel-gap: 1rem;
   --display-profile-action-grid-gap: 0.75rem;
@@ -260,6 +261,11 @@ button:focus-visible,
     min-width: 0;
   }
 
+  :root[data-display-profile='compact'] :where([class~='text-xs'], [class~='text-[11px]']) {
+    font-size: 0.8125rem;
+    line-height: 1.2rem;
+  }
+
   /* Custom font families */
   .font-mono {
     font-family: 'JetBrains Mono', ui-monospace, monospace;
@@ -338,7 +344,7 @@ button:focus-visible,
     width: 100%;
     max-width: var(--display-profile-page-max-width);
     margin-inline: auto;
-    padding-top: var(--display-profile-page-padding-y);
+    padding-top: var(--display-profile-page-padding-top);
     padding-bottom: var(--display-profile-page-padding-y);
     padding-left: calc(var(--display-profile-page-padding-x) + env(safe-area-inset-left));
     padding-right: calc(var(--display-profile-page-padding-x) + env(safe-area-inset-right));

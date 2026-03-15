@@ -10,10 +10,12 @@ import type { ReactNode } from "react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ConnectivityIndicator } from "@/components/ConnectivityIndicator";
 import { DiagnosticsActivityIndicator } from "@/components/DiagnosticsActivityIndicator";
+import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { requestDiagnosticsOpen } from "@/lib/diagnostics/diagnosticsOverlay";
 import { isDiagnosticsOverlayActive, subscribeDiagnosticsOverlay } from "@/lib/diagnostics/diagnosticsOverlayState";
 import { useDiagnosticsActivity } from "@/hooks/useDiagnosticsActivity";
 import { toast, useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 type Props = {
   title: ReactNode;
@@ -25,9 +27,11 @@ type Props = {
 export function AppBar({ title, subtitle, leading, children }: Props) {
   const headerRef = useRef<HTMLElement | null>(null);
   const restToastRef = useRef<ReturnType<typeof toast> | null>(null);
+  const { profile, tokens } = useDisplayProfile();
   const { restInFlight } = useDiagnosticsActivity();
   const { toasts } = useToast();
   const [diagnosticsOverlayActive, setDiagnosticsOverlayActive] = useState(isDiagnosticsOverlayActive());
+  const compact = profile === "compact";
 
   useLayoutEffect(() => {
     if (typeof window === "undefined") return;
@@ -97,9 +101,15 @@ export function AppBar({ title, subtitle, leading, children }: Props) {
   return (
     <header
       ref={headerRef}
-      className="fixed left-0 top-0 z-40 w-screen max-w-screen bg-background/80 border-b border-border backdrop-blur-lg pt-safe"
+      className={cn(
+        "fixed left-0 top-0 z-40 w-screen max-w-screen bg-background/80 border-b border-border backdrop-blur-lg",
+        !compact && "pt-safe",
+      )}
     >
-      <div className="app-shell-container py-4 space-y-3">
+      <div
+        className={cn("app-shell-container", compact ? "space-y-2" : "py-4 space-y-3")}
+        style={compact ? { paddingTop: tokens.pagePaddingX, paddingBottom: tokens.pagePaddingY } : undefined}
+      >
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             {leading ? (
