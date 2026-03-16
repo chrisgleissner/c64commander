@@ -15,7 +15,7 @@ import { normalizeFtpHost } from "@/lib/sourceNavigation/ftpSourceAdapter";
 import { getActiveAction } from "@/lib/tracing/actionTrace";
 import { recordDeviceGuard, recordTraceError } from "@/lib/tracing/traceSession";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
-import { AUTOSTART_SEQUENCE, injectAutostart } from "./autostart";
+import { AUTOSTART_SEQUENCE, buildAutostartSequence, injectAutostart } from "./autostart";
 import {
   formatPlayCategory,
   getFileExtension,
@@ -34,11 +34,11 @@ export type PlaySource = "local" | "ultimate" | "hvsc";
 export type LocalPlayFile =
   | File
   | {
-      name: string;
-      webkitRelativePath?: string;
-      lastModified: number;
-      arrayBuffer: () => Promise<ArrayBuffer>;
-    };
+    name: string;
+    webkitRelativePath?: string;
+    lastModified: number;
+    arrayBuffer: () => Promise<ArrayBuffer>;
+  };
 
 export type PlayRequest = {
   source: PlaySource;
@@ -98,14 +98,14 @@ const getDriveInfo = (drives: Awaited<ReturnType<C64API["getDrives"]>>, drive: "
 
 const ensureDiskAutoplayDriveReady = async (api: C64API, drive: "a" | "b", path: string) => {
   const desiredMode = getDiskAutoplayDriveMode(path);
-  if (!desiredMode) return;
+  if (!desiredMode) return 8;
 
   if (
     typeof api.getDrives !== "function" ||
     typeof api.driveOn !== "function" ||
     typeof api.setDriveMode !== "function"
   ) {
-    return;
+    return 8;
   }
 
   const drives = await api.getDrives();
@@ -118,6 +118,8 @@ const ensureDiskAutoplayDriveReady = async (api: C64API, drive: "a" | "b", path:
   if (driveInfo?.type !== desiredMode) {
     await api.setDriveMode(drive, desiredMode);
   }
+
+  return typeof driveInfo?.bus_id === "number" ? driveInfo.bus_id : 8;
 };
 
 const emitDurationPropagationEvent = (payload: {
@@ -269,7 +271,7 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
             const sslBlob = new Blob([sslPayload], {
               type: "application/octet-stream",
             });
-            await api.playSidUpload(ftpBlob, plan.songNr, sslBlob);
+            await api.playSidUpload(ftpBlob, plan.songNr, sslBlob, { filename: plan.path });
             return;
           } catch (error) {
             propagationFailure = error as Error;
@@ -315,10 +317,10 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
         const sslBlob =
           plan.durationMs && plan.durationMs > 0
             ? new Blob([createSslPayload(plan.durationMs)], {
-                type: "application/octet-stream",
-              })
+              type: "application/octet-stream",
+            })
             : undefined;
-        await api.playSidUpload(blob, plan.songNr, sslBlob);
+        await api.playSidUpload(blob, plan.songNr, sslBlob, { filename: plan.path });
         return;
       }
       case "mod": {
@@ -328,7 +330,7 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
         }
         const blob = await toBlob(plan.file);
         if (!blob) throw new Error("Missing local MOD data.");
-        await api.playModUpload(blob);
+        await api.playModUpload(blob, { filename: plan.path });
         return;
       }
       case "prg": {
@@ -343,9 +345,9 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
         const blob = await toBlob(plan.file);
         if (!blob) throw new Error("Missing local PRG data.");
         if (loadMode === "load") {
-          await api.loadPrgUpload(blob);
+          await api.loadPrgUpload(blob, { filename: plan.path });
         } else {
-          await api.runPrgUpload(blob);
+          await api.runPrgUpload(blob, { filename: plan.path });
         }
         return;
       }
@@ -356,7 +358,7 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
         }
         const blob = await toBlob(plan.file);
         if (!blob) throw new Error("Missing local CRT data.");
-        await api.runCartridgeUpload(blob);
+        await api.runCartridgeUpload(blob, { filename: plan.path });
         return;
       }
       case "disk": {
@@ -368,7 +370,7 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
           await delay(resetDelayMs);
         }
 
-        await ensureDiskAutoplayDriveReady(api, drive, plan.path);
+        const driveBusId = await ensureDiskAutoplayDriveReady(api, drive, plan.path);
 
         let localBlob: Blob | null = null;
 
@@ -381,7 +383,7 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
         } else if (plan.file) {
           localBlob = await toBlob(plan.file);
           if (!localBlob) throw new Error("Missing local disk data.");
-          await api.mountDriveUpload(drive, localBlob, plan.mountType, "readwrite");
+          await api.mountDriveUpload(drive, localBlob, plan.mountType, "readwrite", { filename: plan.path });
         } else {
           const diskEntry = createDiskEntry({
             path: plan.path,
@@ -419,10 +421,10 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
               path: plan.path,
               error: (error as Error).message,
             });
-            await injectDiskAutostart(api, AUTOSTART_SEQUENCE);
+            await injectDiskAutostart(api, buildAutostartSequence(driveBusId));
           }
         } else {
-          await injectDiskAutostart(api, AUTOSTART_SEQUENCE);
+          await injectDiskAutostart(api, buildAutostartSequence(driveBusId));
         }
         return;
       }

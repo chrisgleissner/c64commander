@@ -9,7 +9,7 @@
 import { zipSync, strToU8 } from "fflate";
 import { getTraceContextSnapshot } from "@/lib/tracing/traceContext";
 import { getLifecycleState } from "@/lib/appLifecycle";
-import { redactHeaders, redactPayload, redactErrorMessage } from "@/lib/tracing/redaction";
+import { redactPayload, redactErrorMessage } from "@/lib/tracing/redaction";
 import type {
   TraceEvent,
   TraceEventType,
@@ -18,6 +18,8 @@ import type {
   BackendTarget,
   BackendDecisionReason,
   TraceEventContextFields,
+  PayloadPreview,
+  TraceHeaders,
 } from "@/lib/tracing/types";
 import { classifyError, type FailureClassification } from "@/lib/tracing/failureTaxonomy";
 import { resolveBackendTarget } from "@/lib/tracing/traceTargets";
@@ -287,8 +289,9 @@ export const recordRestRequest = (
     method: string;
     url: string;
     normalizedUrl: string;
-    headers: Record<string, string | string[] | undefined>;
+    headers: TraceHeaders;
     body: unknown;
+    payloadPreview?: PayloadPreview | null;
   },
 ) => {
   const { target, reason } = resolveBackendTarget(payload.url);
@@ -297,8 +300,9 @@ export const recordRestRequest = (
     method: payload.method,
     url: payload.url,
     normalizedUrl: payload.normalizedUrl,
-    headers: redactHeaders(payload.headers),
-    body: redactPayload(payload.body ?? null),
+    headers: payload.headers,
+    body: payload.body ?? null,
+    payloadPreview: payload.payloadPreview ?? null,
     target,
   });
 };
@@ -311,7 +315,9 @@ export const recordRestResponse = (
   action: TraceActionContext,
   payload: {
     status: number | null;
+    headers: TraceHeaders;
     body: unknown;
+    payloadPreview?: PayloadPreview | null;
     durationMs: number;
     error: Error | null;
     errorMessage?: string | null;
@@ -320,7 +326,9 @@ export const recordRestResponse = (
   const errorMessage = payload.errorMessage ?? (payload.error ? payload.error.message : null);
   appendEvent("rest-response", action.origin, action.correlationId, {
     status: payload.status,
-    body: redactPayload(payload.body ?? null),
+    headers: payload.headers,
+    body: payload.body ?? null,
+    payloadPreview: payload.payloadPreview ?? null,
     durationMs: payload.durationMs,
     error: errorMessage ? redactErrorMessage(errorMessage) : null,
   });
@@ -333,6 +341,10 @@ export const recordFtpOperation = (
     path: string;
     result: "success" | "failure";
     error: Error | null;
+    requestPayload?: unknown;
+    requestPayloadPreview?: PayloadPreview | null;
+    responsePayload?: unknown;
+    responsePayloadPreview?: PayloadPreview | null;
   },
 ) => {
   const { target, reason } = resolveBackendTarget(null);
@@ -341,6 +353,10 @@ export const recordFtpOperation = (
     operation: payload.operation,
     path: payload.path,
     result: payload.result,
+    requestPayload: payload.requestPayload ?? null,
+    requestPayloadPreview: payload.requestPayloadPreview ?? null,
+    responsePayload: payload.responsePayload ?? null,
+    responsePayloadPreview: payload.responsePayloadPreview ?? null,
     error: payload.error ? redactErrorMessage(payload.error.message) : null,
     target,
   });

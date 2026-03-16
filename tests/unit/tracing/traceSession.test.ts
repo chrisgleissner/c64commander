@@ -147,7 +147,15 @@ describe("traceSession", () => {
     });
     recordRestResponse(action, {
       status: 200,
+      headers: { "content-type": "application/json" },
       body: { ok: true },
+      payloadPreview: {
+        byteCount: 11,
+        previewByteCount: 11,
+        hex: "7b 22 6f 6b 22 3a 74 72 75 65 7d",
+        ascii: '{"ok":true}',
+        truncated: false,
+      },
       durationMs: 123,
       error: null,
     });
@@ -155,12 +163,65 @@ describe("traceSession", () => {
       operation: "list",
       path: "/dir",
       result: "success",
+      requestPayload: { path: "/dir" },
+      requestPayloadPreview: {
+        byteCount: 15,
+        previewByteCount: 15,
+        hex: "7b 22 70 61 74 68 22 3a 22 2f 64 69 72 22 7d",
+        ascii: '{"path":"/dir"}',
+        truncated: false,
+      },
       error: null,
     });
 
     const events = getTraceEvents();
     expect(events.some((event) => event.type === "rest-response")).toBe(true);
     expect(events.some((event) => event.type === "ftp-operation")).toBe(true);
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "rest-response",
+        data: expect.objectContaining({
+          headers: { "content-type": "application/json" },
+          payloadPreview: expect.objectContaining({ ascii: '{"ok":true}' }),
+        }),
+      }),
+    );
+  });
+
+  it("records full REST request headers and payload previews", () => {
+    vi.stubGlobal("window", {
+      dispatchEvent: vi.fn(),
+      setTimeout: vi.fn(),
+      CustomEvent: class {},
+    });
+
+    recordRestRequest(action, {
+      method: "POST",
+      url: "http://device/v1/upload",
+      normalizedUrl: "/v1/upload",
+      headers: { "content-type": "application/octet-stream", "x-password": "secret" },
+      body: { type: "blob", sizeBytes: 2 },
+      payloadPreview: {
+        byteCount: 2,
+        previewByteCount: 2,
+        hex: "00 ff",
+        ascii: "..",
+        truncated: false,
+      },
+    });
+
+    expect(getTraceEvents()).toContainEqual(
+      expect.objectContaining({
+        type: "rest-request",
+        data: expect.objectContaining({
+          headers: {
+            "content-type": "application/octet-stream",
+            "x-password": "secret",
+          },
+          payloadPreview: expect.objectContaining({ hex: "00 ff", ascii: ".." }),
+        }),
+      }),
+    );
   });
 
   it("deduplicates trace errors and exports on error", async () => {

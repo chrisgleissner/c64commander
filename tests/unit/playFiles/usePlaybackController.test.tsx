@@ -204,7 +204,7 @@ describe("usePlaybackController", () => {
     expect(nextPlaylist?.[0]?.durationMs).toBe(45_000);
   });
 
-  it("unmutes before starting playback and only then executes the play plan", async () => {
+  it("refreshes playback mute state before starting playback and only then executes the play plan", async () => {
     const playlist = [createPlaylistItem()];
     const ensureUnmuted = vi.fn().mockResolvedValue(undefined);
     const ensurePlaybackConnection = vi.fn().mockResolvedValue(undefined);
@@ -213,6 +213,7 @@ describe("usePlaybackController", () => {
     await result.current.playItem(playlist[0], { playlistIndex: 0 });
 
     expect(ensureUnmuted).toHaveBeenCalledTimes(1);
+    expect(ensureUnmuted).toHaveBeenCalledWith({ refreshItems: true });
     expect(ensurePlaybackConnection).toHaveBeenCalledTimes(1);
     expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
     expect(ensureUnmuted.mock.invocationCallOrder[0]).toBeLessThan(

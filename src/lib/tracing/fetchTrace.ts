@@ -10,6 +10,8 @@ import { getActiveAction, runWithImplicitAction } from "@/lib/tracing/actionTrac
 import { decrementRestInFlight, incrementRestInFlight } from "@/lib/diagnostics/diagnosticsActivity";
 import { recordRestRequest, recordRestResponse, recordTraceError } from "@/lib/tracing/traceSession";
 import type { TraceActionContext } from "@/lib/tracing/types";
+import { collectTraceHeaders } from "@/lib/tracing/payloadPreview";
+import { inspectRequestPayload, inspectResponsePayload } from "@/lib/c64api/requestRuntime";
 
 const parseUrl = (url: string) => {
   const fallbackBase = typeof window !== "undefined" ? window.location.origin : "http://localhost";
@@ -24,79 +26,6 @@ const normalizeUrlPath = (url: string) => {
     console.warn("Failed to normalize fetch trace URL", { url, error });
     return url;
   }
-};
-
-const extractHeaders = (headers?: HeadersInit) => {
-  if (!headers) return {} as Record<string, string>;
-  if (headers instanceof Headers) {
-    const result: Record<string, string> = {};
-    headers.forEach((value, key) => {
-      result[key] = value;
-    });
-    return result;
-  }
-  if (Array.isArray(headers)) {
-    return headers.reduce<Record<string, string>>((acc, [key, value]) => {
-      acc[key] = value;
-      return acc;
-    }, {});
-  }
-  return { ...(headers as Record<string, string>) };
-};
-
-const extractBody = (body: BodyInit | null | undefined) => {
-  if (!body) return null;
-  if (typeof body === "string") {
-    try {
-      return JSON.parse(body);
-    } catch (error) {
-      console.warn("Failed to parse fetch trace body", { error });
-      return body;
-    }
-  }
-  if (body instanceof FormData) {
-    // Provide structured summary of FormData for diagnostics
-    const fields: Array<{
-      name: string;
-      type: "file" | "text";
-      fileName?: string;
-      sizeBytes?: number;
-      mimeType?: string;
-    }> = [];
-    body.forEach((value, name) => {
-      if (typeof File !== "undefined" && value instanceof File) {
-        fields.push({
-          name,
-          type: "file",
-          fileName: value.name,
-          sizeBytes: value.size,
-          mimeType: value.type || undefined,
-        });
-      } else if (typeof Blob !== "undefined" && value instanceof Blob) {
-        fields.push({
-          name,
-          type: "file",
-          sizeBytes: value.size,
-          mimeType: value.type || undefined,
-        });
-      } else {
-        fields.push({
-          name,
-          type: "text",
-        });
-      }
-    });
-    return { type: "form-data", fields };
-  }
-  if (typeof Blob !== "undefined" && body instanceof Blob) {
-    return {
-      type: "blob",
-      sizeBytes: body.size,
-      mimeType: body.type || null,
-      source: "blob",
-    };
-  }
-  return "[body]";
 };
 
 const shouldTraceUrl = (url: string) => {
@@ -128,13 +57,14 @@ export const registerFetchTrace = () => {
     method: string,
   ): Promise<Response> => {
     incrementRestInFlight();
-    const headers = extractHeaders(init?.headers ?? (input instanceof Request ? input.headers : undefined));
+    const requestTrace = await inspectRequestPayload(init?.body ?? (input instanceof Request ? input.body : null));
     recordRestRequest(action, {
       method,
       url,
       normalizedUrl: normalizeUrlPath(url),
-      headers,
-      body: extractBody(init?.body ?? (input instanceof Request ? input.body : null)),
+      headers: collectTraceHeaders(init?.headers ?? (input instanceof Request ? input.headers : undefined)),
+      body: requestTrace.body,
+      payloadPreview: requestTrace.payloadPreview,
     });
     const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
     try {
@@ -143,19 +73,14 @@ export const registerFetchTrace = () => {
         0,
         Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
       );
-      let responseBody: unknown = null;
-      try {
-        const clone = response.clone();
-        responseBody = await clone.json().catch(() => null);
-      } catch (error) {
-        console.warn("Failed to parse traced fetch response body", { error });
-        responseBody = null;
-      }
+      const responseTrace = await inspectResponsePayload(response);
       if (!response.ok) {
         const err = new Error(`HTTP ${response.status}`);
         recordRestResponse(action, {
           status: response.status,
-          body: responseBody,
+          headers: responseTrace.headers,
+          body: responseTrace.body,
+          payloadPreview: responseTrace.payloadPreview,
           durationMs,
           error: err,
           errorMessage: err.message,
@@ -165,7 +90,9 @@ export const registerFetchTrace = () => {
       }
       recordRestResponse(action, {
         status: response.status,
-        body: responseBody,
+        headers: responseTrace.headers,
+        body: responseTrace.body,
+        payloadPreview: responseTrace.payloadPreview,
         durationMs,
         error: null,
       });
@@ -185,8 +112,17 @@ export const registerFetchTrace = () => {
         errorMessage = `HTTP ${error.status}`;
         traceError = new Error(errorMessage);
         try {
-          const clone = error.clone();
-          responseBody = await clone.json().catch(() => null);
+          const responseTrace = await inspectResponsePayload(error);
+          responseBody = responseTrace.body;
+          recordRestResponse(action, {
+            status: responseStatus,
+            headers: responseTrace.headers,
+            body: responseTrace.body,
+            payloadPreview: responseTrace.payloadPreview,
+            durationMs,
+            error: traceError,
+            errorMessage,
+          });
         } catch (errorBody) {
           console.warn("Failed to parse traced error response body", {
             error: errorBody,
@@ -201,13 +137,17 @@ export const registerFetchTrace = () => {
         traceError = new Error(errorMessage);
       }
 
-      recordRestResponse(action, {
-        status: responseStatus,
-        body: responseBody,
-        durationMs,
-        error: traceError,
-        errorMessage,
-      });
+      if (!(error instanceof Response)) {
+        recordRestResponse(action, {
+          status: responseStatus,
+          headers: {},
+          body: responseBody,
+          payloadPreview: null,
+          durationMs,
+          error: traceError,
+          errorMessage,
+        });
+      }
       recordTraceError(action, traceError ?? new Error("Request failed"));
       throw error;
     } finally {

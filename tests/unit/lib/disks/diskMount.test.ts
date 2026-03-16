@@ -207,7 +207,9 @@ describe("diskMount", () => {
     it("uploads local disk blob via API", async () => {
       const file = new File(["test"], "disk.d64");
       await mountDiskToDrive(mockApi as any, "b", { path: "/disk.d64", location: "local" } as any, file);
-      expect(mockApi.mountDriveUpload).toHaveBeenCalledWith("b", file, "d64", "readwrite");
+      expect(mockApi.mountDriveUpload).toHaveBeenCalledWith("b", file, "d64", "readwrite", {
+        filename: "/disk.d64",
+      });
     });
 
     it("logs and rethrows on mount failure", async () => {

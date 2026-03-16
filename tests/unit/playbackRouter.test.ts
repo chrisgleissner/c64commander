@@ -11,7 +11,7 @@ import { buildPlayPlan, executePlayPlan, tryFetchUltimateSidBlob } from "@/lib/p
 import { readFtpFile } from "@/lib/ftp/ftpClient";
 import { getC64APIConfigSnapshot } from "@/lib/c64api";
 import { addErrorLog } from "@/lib/logging";
-import { injectAutostart } from "@/lib/playback/autostart";
+import { buildAutostartSequence, injectAutostart } from "@/lib/playback/autostart";
 import { loadFirstDiskPrgViaDma } from "@/lib/playback/diskFirstPrg";
 import { mountDiskToDrive, resolveLocalDiskBlob } from "@/lib/disks/diskMount";
 import { loadDiskAutostartMode } from "@/lib/config/appSettings";
@@ -365,6 +365,34 @@ describe("playbackRouter", () => {
     await vi.runAllTimersAsync();
     await task;
     expect(vi.mocked(injectAutostart)).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
+  });
+
+  it("uses the mounted drive bus id for kernal disk autostart", async () => {
+    vi.useFakeTimers();
+    const api = {
+      ...createApiMock(),
+      getDrives: vi.fn().mockResolvedValue({
+        drives: [{ a: { enabled: true, type: "1541", bus_id: 9 } }],
+        errors: [],
+      }),
+      driveOn: vi.fn().mockResolvedValue({ errors: [] }),
+      setDriveMode: vi.fn().mockResolvedValue({ errors: [] }),
+    };
+    const file = new File(["disk"], "demo.d64");
+    const plan = buildPlayPlan({ source: "local", path: "/demo.d64", file });
+    const task = executePlayPlan(api as any, plan, {
+      drive: "a",
+      rebootBeforeMount: true,
+      diskAutostartMode: "kernal",
+    });
+    await vi.runAllTimersAsync();
+    await task;
+
+    expect(vi.mocked(injectAutostart)).toHaveBeenCalledWith(api, buildAutostartSequence(9), {
+      pollIntervalMs: 140,
+      maxAttempts: 20,
+    });
     vi.useRealTimers();
   });
 

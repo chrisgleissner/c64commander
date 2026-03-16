@@ -104,7 +104,29 @@ describe("ftpClient", () => {
       expect(incrementFtpInFlight).toHaveBeenCalled();
       expect(recordFtpOperation).toHaveBeenCalledWith(
         expect.anything(),
-        expect.objectContaining({ operation: "read", result: "success" }),
+        expect.objectContaining({
+          operation: "read",
+          result: "success",
+          requestPayload: expect.objectContaining({ path: "/test.txt" }),
+          requestPayloadPreview: expect.objectContaining({ byteCount: expect.any(Number) }),
+        }),
+      );
+    });
+
+    it("decodes base64 payload previews for FTP reads", async () => {
+      vi.mocked(FtpClient.readFile).mockResolvedValue({ data: "QQ==", sizeBytes: 1 });
+
+      await readFtpFile(mockReadOptions);
+
+      expect(recordFtpOperation).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          responsePayloadPreview: expect.objectContaining({
+            byteCount: 1,
+            hex: "41",
+            ascii: "A",
+          }),
+        }),
       );
     });
 

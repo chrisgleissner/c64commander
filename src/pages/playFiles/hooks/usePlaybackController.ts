@@ -103,7 +103,7 @@ interface UsePlaybackControllerProps {
   pauseMuteSnapshotRef: MutableRefObject<SidMuteSnapshot | null>;
   pausingFromPauseRef: MutableRefObject<boolean>;
   resumingFromPauseRef: MutableRefObject<boolean>;
-  ensureUnmuted: () => Promise<void>;
+  ensureUnmuted: (options?: { force?: boolean; refreshItems?: boolean }) => Promise<void>;
 
   // Refs
   playedClockRef: MutableRefObject<{
@@ -330,7 +330,7 @@ export function usePlaybackController({
             });
           }
         }
-        await ensureUnmuted({ force: true, refreshItems: true });
+        await ensureUnmuted({ refreshItems: true });
         try {
           await ensurePlaybackConnection();
         } catch (error) {
@@ -389,10 +389,10 @@ export function usePlaybackController({
             prev.map((entry) =>
               entry.id === item.id
                 ? {
-                    ...entry,
-                    durationMs: resolvedDuration,
-                    subsongCount: subsongCount ?? entry.subsongCount,
-                  }
+                  ...entry,
+                  durationMs: resolvedDuration,
+                  subsongCount: subsongCount ?? entry.subsongCount,
+                }
                 : entry,
             ),
           );
@@ -604,8 +604,8 @@ export function usePlaybackController({
               const wasMuted =
                 resumeSnapshot && resumeItems.length
                   ? resumeItems.every(
-                      (item) => resumeSnapshot.volumes[item.name] === resolveSidMutedVolumeOption(item.options),
-                    )
+                    (item) => resumeSnapshot.volumes[item.name] === resolveSidMutedVolumeOption(item.options),
+                  )
                   : false;
               if (!wasMuted) resumingFromPauseRef.current = true;
               await resumeMachineWithRetry(api);

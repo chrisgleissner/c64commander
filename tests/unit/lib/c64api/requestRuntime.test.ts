@@ -14,9 +14,12 @@ import {
   estimateBudgetValueBytes,
   extractRequestBody,
   getIdleContext,
+  inspectRequestPayload,
+  inspectResponsePayload,
   readResponseBody,
   waitWithAbortSignal,
 } from "@/lib/c64api/requestRuntime";
+import { collectTraceHeaders } from "@/lib/tracing/payloadPreview";
 
 describe("requestRuntime", () => {
   beforeEach(() => {
@@ -130,5 +133,36 @@ describe("requestRuntime", () => {
 
   it("creates standard abort errors", () => {
     expect(createAbortError()).toMatchObject({ name: "AbortError", message: "The operation was aborted" });
+  });
+
+  it("collects full trace headers and builds byte previews with dot placeholders", async () => {
+    expect(collectTraceHeaders([["x-test", "one"], ["x-test", "two"]])).toEqual({
+      "x-test": ["one", "two"],
+    });
+
+    const requestTrace = await inspectRequestPayload(new Uint8Array([0x00, 0x0a, 0x41, 0x42]));
+    expect(requestTrace.body).toEqual({ type: "array-buffer-view", sizeBytes: 4 });
+    expect(requestTrace.payloadPreview).toEqual({
+      byteCount: 4,
+      previewByteCount: 4,
+      hex: "00 0a 41 42",
+      ascii: "..AB",
+      truncated: false,
+    });
+
+    const responseTrace = await inspectResponsePayload(
+      new Response(JSON.stringify({ ok: true }), {
+        headers: {
+          "content-type": "application/json",
+          "x-device": "c64u",
+        },
+      }),
+    );
+    expect(responseTrace.headers).toEqual({
+      "content-type": "application/json",
+      "x-device": "c64u",
+    });
+    expect(responseTrace.body).toEqual({ ok: true });
+    expect(responseTrace.payloadPreview?.ascii).toBe('{"ok":true}');
   });
 });

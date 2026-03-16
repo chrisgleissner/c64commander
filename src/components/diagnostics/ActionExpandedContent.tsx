@@ -7,6 +7,7 @@
  */
 
 import type { ActionSummary, ErrorEffect, FtpEffect, RestEffect } from "@/lib/diagnostics/actionSummaries";
+import type { PayloadPreview, TraceHeaders } from "@/lib/tracing/types";
 import {
   formatActionEffectTarget,
   formatActionSummaryOrigin,
@@ -15,6 +16,38 @@ import {
 
 type Props = {
   summary: ActionSummary;
+};
+
+const PayloadPreviewBlock = ({ label, preview }: { label: string; preview?: PayloadPreview | null }) => {
+  if (!preview) return null;
+  return (
+    <div className="space-y-1">
+      <p className="text-[11px] font-medium text-foreground">{label}</p>
+      <p className="text-muted-foreground">
+        bytes: {preview.byteCount}
+        {preview.truncated ? ` · showing ${preview.previewByteCount}` : ""}
+      </p>
+      <pre className="overflow-x-auto whitespace-pre text-[11px] text-muted-foreground">HEX {preview.hex}</pre>
+      <pre className="overflow-x-auto whitespace-pre text-[11px] text-muted-foreground">ASCII {preview.ascii}</pre>
+    </div>
+  );
+};
+
+const JsonBlock = ({ label, value }: { label: string; value: unknown }) => {
+  if (value === undefined) return null;
+  return (
+    <div className="space-y-1">
+      <p className="text-[11px] font-medium text-foreground">{label}</p>
+      <pre className="overflow-x-auto whitespace-pre text-[11px] text-muted-foreground">
+        {JSON.stringify(value, null, 2)}
+      </pre>
+    </div>
+  );
+};
+
+const HeaderBlock = ({ label, headers }: { label: string; headers?: TraceHeaders }) => {
+  if (!headers || Object.keys(headers).length === 0) return null;
+  return <JsonBlock label={label} value={headers} />;
 };
 
 export const ActionExpandedContent = ({ summary }: Props) => {
@@ -58,6 +91,14 @@ export const ActionExpandedContent = ({ summary }: Props) => {
                 {effect.durationMs !== null ? ` · ${effect.durationMs}ms` : ""}
               </p>
               {effect.error ? <p className="text-diagnostics-error">error: {effect.error}</p> : null}
+              <div className="mt-2 space-y-2">
+                <HeaderBlock label="Request headers" headers={effect.requestHeaders} />
+                <JsonBlock label="Request payload" value={effect.requestBody} />
+                <PayloadPreviewBlock label="Request preview" preview={effect.requestPayloadPreview} />
+                <HeaderBlock label="Response headers" headers={effect.responseHeaders} />
+                <JsonBlock label="Response payload" value={effect.responseBody} />
+                <PayloadPreviewBlock label="Response preview" preview={effect.responsePayloadPreview} />
+              </div>
             </div>
           ))}
         </div>
@@ -80,6 +121,12 @@ export const ActionExpandedContent = ({ summary }: Props) => {
                 {effect.result ?? "unknown"}
               </p>
               {effect.error ? <p className="text-diagnostics-error">error: {effect.error}</p> : null}
+              <div className="mt-2 space-y-2">
+                <JsonBlock label="Request payload" value={effect.requestPayload} />
+                <PayloadPreviewBlock label="Request preview" preview={effect.requestPayloadPreview} />
+                <JsonBlock label="Response payload" value={effect.responsePayload} />
+                <PayloadPreviewBlock label="Response preview" preview={effect.responsePayloadPreview} />
+              </div>
             </div>
           ))}
         </div>

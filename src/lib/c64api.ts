@@ -43,13 +43,16 @@ import {
   cloneBudgetValue,
   createAbortError,
   estimateBudgetValueBytes,
-  extractRequestBody,
   getIdleContext,
+  inspectRequestPayload,
+  inspectResponsePayload,
   normalizeUrlPath,
-  readResponseBody,
   wait,
   waitWithAbortSignal,
 } from "@/lib/c64api/requestRuntime";
+import { buildBinaryFingerprint } from "@/lib/binaryFingerprint";
+import { TransmissionGuard, type SupportedC64FileType, type TransmissionValidationContext } from "@/lib/fileValidation";
+import { collectTraceHeaders } from "@/lib/tracing/payloadPreview";
 const CONTROL_REQUEST_TIMEOUT_MS = 3000;
 const UPLOAD_REQUEST_TIMEOUT_MS = 5000;
 const PLAYBACK_REQUEST_TIMEOUT_MS = 5000;
@@ -75,6 +78,50 @@ const parseHttpStatusFromErrorMessage = (message: string) => {
   if (!match) return null;
   const status = Number(match[1]);
   return Number.isFinite(status) ? status : null;
+};
+
+const getHeaderValue = (headers: HeadersInit | undefined, name: string): string | null => {
+  if (!headers) return null;
+  if (headers instanceof Headers) {
+    return headers.get(name);
+  }
+  if (Array.isArray(headers)) {
+    const match = headers.find(([key]) => key.toLowerCase() === name.toLowerCase());
+    return match?.[1] ?? null;
+  }
+  const record = headers as Record<string, string>;
+  const direct = record[name];
+  if (typeof direct === "string") return direct;
+  const ciKey = Object.keys(record).find((key) => key.toLowerCase() === name.toLowerCase());
+  return ciKey ? record[ciKey] ?? null : null;
+};
+
+const isOctetStreamRequest = (headers: HeadersInit | undefined) => {
+  const contentType = getHeaderValue(headers, "content-type");
+  if (!contentType) return false;
+  return contentType.split(";")[0]?.trim().toLowerCase() === "application/octet-stream";
+};
+
+const normalizeNativeBinaryRequestBody = (
+  body: BodyInit | null | undefined,
+  headers: HeadersInit | undefined,
+): { body: BodyInit | null | undefined; transport: "default" | "file" } => {
+  if (!isNativePlatform() || typeof File === "undefined" || !isOctetStreamRequest(headers) || body == null) {
+    return { body, transport: "default" };
+  }
+
+  if (body instanceof File) {
+    return { body, transport: "file" };
+  }
+
+  if (body instanceof Blob || body instanceof ArrayBuffer || ArrayBuffer.isView(body)) {
+    return {
+      body: new File([body], "upload.bin", { type: "application/octet-stream" }),
+      transport: "file",
+    };
+  }
+
+  return { body, transport: "default" };
 };
 
 const isSidUploadTransientFailure = (error: unknown) => {
@@ -142,6 +189,22 @@ const isNativePlatform = () => {
 
 const isReadOnlyMethod = (method: string) => ["GET", "HEAD", "OPTIONS"].includes(method);
 
+type UploadValidationMetadata = {
+  filename?: string;
+};
+
+const extractUploadFilename = (body: Blob, fallbackName: string) => {
+  const candidate = (body as Blob & { name?: unknown }).name;
+  return typeof candidate === "string" && candidate.trim().length > 0 ? candidate : fallbackName;
+};
+
+const resolveDiskUploadType = (type?: string): SupportedC64FileType | undefined => {
+  if (type === "d64" || type === "d71" || type === "d81") {
+    return type;
+  }
+  return undefined;
+};
+
 const shouldBlockSmokeMutation = (method: string) =>
   isSmokeModeEnabled() && isSmokeReadOnlyEnabled() && !isReadOnlyMethod(method);
 
@@ -164,18 +227,18 @@ export interface VersionInfo {
 
 export interface ConfigCategory {
   [itemName: string]:
-    | {
-        selected?: string | number;
-        options?: string[];
-        details?: {
-          min?: number;
-          max?: number;
-          format?: string;
-          presets?: string[];
-        };
-      }
-    | string
-    | number;
+  | {
+    selected?: string | number;
+    options?: string[];
+    details?: {
+      min?: number;
+      max?: number;
+      format?: string;
+      presets?: string[];
+    };
+  }
+  | string
+  | number;
 }
 
 export interface ConfigResponse {
@@ -301,12 +364,17 @@ export class C64API {
     return headers;
   }
 
-  private async buildBinaryUploadRequest(body: Blob): Promise<{
+  private validateUploadBytes(body: ArrayBuffer, context: TransmissionValidationContext) {
+    TransmissionGuard.validateOrThrow(new Uint8Array(body), context);
+  }
+
+  private async buildBinaryUploadRequest(body: Blob, validationContext: TransmissionValidationContext): Promise<{
     headers: Record<string, string>;
     body: ArrayBuffer;
   }> {
     const uploadBody =
       typeof body.arrayBuffer === "function" ? await body.arrayBuffer() : await new Response(body).arrayBuffer();
+    this.validateUploadBytes(uploadBody, validationContext);
     return {
       headers: {
         ...this.buildAuthHeaders(),
@@ -513,7 +581,7 @@ export class C64API {
             const idleContext = getIdleContext();
             const canRetryAfterIdle = RETRYABLE_IDLE_RECOVERY_METHODS.has(method);
             const maxAttempts = canRetryAfterIdle && idleContext.wasIdle ? 2 : 1;
-            const bodyPayload = extractRequestBody(requestOptions.body);
+            const requestTrace = await inspectRequestPayload(requestOptions.body);
             const requestSignal = requestOptions.signal;
             let lastError: unknown = null;
 
@@ -525,8 +593,9 @@ export class C64API {
                 method,
                 url,
                 normalizedUrl: normalizeUrlPath(url),
-                headers,
-                body: bodyPayload,
+                headers: collectTraceHeaders(headers),
+                body: requestTrace.body,
+                payloadPreview: requestTrace.payloadPreview,
               });
 
               try {
@@ -587,8 +656,8 @@ export class C64API {
                 let timeoutPromiseId: ReturnType<typeof setTimeout> | null = null;
                 const timeoutPromise = timeoutMs
                   ? new Promise<never>((_, reject) => {
-                      timeoutPromiseId = setTimeout(() => reject(new Error("Request timed out")), timeoutMs);
-                    })
+                    timeoutPromiseId = setTimeout(() => reject(new Error("Request timed out")), timeoutMs);
+                  })
                   : null;
                 let response: Response;
                 try {
@@ -608,13 +677,15 @@ export class C64API {
                   0,
                   Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
                 );
+                const responseTrace = await inspectResponsePayload(response);
                 if (!response.ok) {
-                  const responseBody = await readResponseBody(response);
                   const err = new Error(`HTTP ${response.status}: ${response.statusText}`);
                   const failure = classifyError(err, "integration");
                   recordRestResponse(action, {
                     status: response.status,
-                    body: responseBody,
+                    headers: responseTrace.headers,
+                    body: responseTrace.body,
+                    payloadPreview: responseTrace.payloadPreview,
                     durationMs,
                     error: err,
                   });
@@ -626,7 +697,9 @@ export class C64API {
                 const parsedBody = await this.parseResponseJson<T>(response, path);
                 recordRestResponse(action, {
                   status: response.status,
-                  body: parsedBody,
+                  headers: responseTrace.headers,
+                  body: responseTrace.body ?? parsedBody,
+                  payloadPreview: responseTrace.payloadPreview,
                   durationMs,
                   error: null,
                 });
@@ -652,7 +725,9 @@ export class C64API {
                   const failure = classifyError(error);
                   recordRestResponse(action, {
                     status: status === "error" ? null : status,
+                    headers: {},
                     body: null,
+                    payloadPreview: null,
                     durationMs,
                     error: error as Error,
                   });
@@ -803,12 +878,23 @@ export class C64API {
           const requestId = buildRequestId();
           const idleContext = getIdleContext();
           const headers = (options.headers as Record<string, string>) || {};
+          const normalizedBody = normalizeNativeBinaryRequestBody(body, options.headers);
+          const requestTrace = await inspectRequestPayload(normalizedBody.body);
+          if (normalizedBody.transport === "file") {
+            addLog("debug", "Normalized native binary request body", {
+              method,
+              path: normalizeUrlPath(url),
+              requestId,
+              contentType: getHeaderValue(options.headers, "content-type"),
+            });
+          }
           recordRestRequest(action, {
             method,
             url,
             normalizedUrl: normalizeUrlPath(url),
-            headers,
-            body: extractRequestBody(body),
+            headers: collectTraceHeaders(headers),
+            body: requestTrace.body,
+            payloadPreview: requestTrace.payloadPreview,
           });
 
           if (isSmokeModeEnabled()) {
@@ -822,13 +908,14 @@ export class C64API {
           try {
             const responsePromise = fetch(url, {
               ...options,
+              body: normalizedBody.body,
               credentials: options.credentials ?? "omit",
               ...(controller ? { signal: controller.signal } : {}),
             });
             const timeoutPromise = timeoutMs
               ? new Promise<never>((_, reject) => {
-                  timeoutPromiseId = setTimeout(() => reject(new Error("Request timed out")), timeoutMs);
-                })
+                timeoutPromiseId = setTimeout(() => reject(new Error("Request timed out")), timeoutMs);
+              })
               : null;
             const response = timeoutPromise
               ? await Promise.race([responsePromise, timeoutPromise])
@@ -837,10 +924,12 @@ export class C64API {
               0,
               Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
             );
-            const responseBody = await readResponseBody(response);
+            const responseTrace = await inspectResponsePayload(response);
             recordRestResponse(action, {
               status: response.status,
-              body: responseBody,
+              headers: responseTrace.headers,
+              body: responseTrace.body,
+              payloadPreview: responseTrace.payloadPreview,
               durationMs,
               error: null,
             });
@@ -857,7 +946,9 @@ export class C64API {
             const failure = classifyError(error);
             recordRestResponse(action, {
               status: null,
+              headers: {},
               body: null,
+              payloadPreview: null,
               durationMs,
               error: error as Error,
             });
@@ -1199,6 +1290,7 @@ export class C64API {
     image: Blob,
     type?: string,
     mode?: "readwrite" | "readonly" | "unlinked",
+    metadata: UploadValidationMetadata = {},
   ): Promise<{ errors: string[] }> {
     let path = `/v1/drives/${drive}:mount`;
     if (type || mode) {
@@ -1214,7 +1306,20 @@ export class C64API {
     let response: Response;
     try {
       const baseUrl = this.getBaseUrl();
-      const upload = await this.buildBinaryUploadRequest(image);
+      const upload = await this.buildBinaryUploadRequest(image, {
+        filename: metadata.filename ?? extractUploadFilename(image, `disk.${type ?? "img"}`),
+        operation: "DRIVE_MOUNT_UPLOAD",
+        endpoint: path,
+        expectedType: resolveDiskUploadType(type),
+      });
+      addLog("debug", "Drive mount upload payload ready", {
+        drive,
+        type: type ?? null,
+        mode: mode ?? null,
+        baseUrl,
+        deviceHost: this.deviceHost,
+        fingerprint: buildBinaryFingerprint(new Uint8Array(upload.body)),
+      });
       addLog("debug", "Drive mount upload payload prepared", {
         drive,
         type: type ?? null,
@@ -1296,12 +1401,28 @@ export class C64API {
     });
   }
 
-  async playSidUpload(sidFile: Blob, songNr?: number, sslFile?: Blob): Promise<{ errors: string[] }> {
+  async playSidUpload(
+    sidFile: Blob,
+    songNr?: number,
+    sslFile?: Blob,
+    metadata: UploadValidationMetadata = {},
+  ): Promise<{ errors: string[] }> {
     const url = new URL(`${this.getBaseUrl()}/v1/runners:sidplay`);
     if (songNr !== undefined) {
       url.searchParams.set("songnr", String(songNr));
     }
     const headers = this.buildAuthHeaders();
+
+    const sidUploadBody =
+      typeof sidFile.arrayBuffer === "function"
+        ? await sidFile.arrayBuffer()
+        : await new Response(sidFile).arrayBuffer();
+    this.validateUploadBytes(sidUploadBody, {
+      filename: metadata.filename ?? extractUploadFilename(sidFile, "track.sid"),
+      operation: "SID_PLAY_UPLOAD",
+      endpoint: `${url.pathname}${url.search}`,
+      expectedType: "sid",
+    });
 
     const form = new FormData();
     form.append("file", sidFile, (sidFile as any).name ?? "track.sid");
@@ -1380,7 +1501,7 @@ export class C64API {
     });
   }
 
-  async playModUpload(modFile: Blob): Promise<{ errors: string[] }> {
+  async playModUpload(modFile: Blob, metadata: UploadValidationMetadata = {}): Promise<{ errors: string[] }> {
     const path = "/v1/runners:modplay";
     const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
     let status: number | "error" = "error";
@@ -1388,7 +1509,12 @@ export class C64API {
     let response: Response;
     try {
       const baseUrl = this.getBaseUrl();
-      const upload = await this.buildBinaryUploadRequest(modFile);
+      const upload = await this.buildBinaryUploadRequest(modFile, {
+        filename: metadata.filename ?? extractUploadFilename(modFile, "track.mod"),
+        operation: "MOD_PLAY_UPLOAD",
+        endpoint: path,
+        expectedType: "mod",
+      });
       response = await this.fetchWithTimeout(
         `${baseUrl}${path}`,
         {
@@ -1427,7 +1553,7 @@ export class C64API {
     });
   }
 
-  async runPrgUpload(prgFile: Blob): Promise<{ errors: string[] }> {
+  async runPrgUpload(prgFile: Blob, metadata: UploadValidationMetadata = {}): Promise<{ errors: string[] }> {
     const path = "/v1/runners:run_prg";
     const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
     let status: number | "error" = "error";
@@ -1435,7 +1561,12 @@ export class C64API {
     let response: Response;
     try {
       const baseUrl = this.getBaseUrl();
-      const upload = await this.buildBinaryUploadRequest(prgFile);
+      const upload = await this.buildBinaryUploadRequest(prgFile, {
+        filename: metadata.filename ?? extractUploadFilename(prgFile, "program.prg"),
+        operation: "PRG_RUN_UPLOAD",
+        endpoint: path,
+        expectedType: "prg",
+      });
       response = await this.fetchWithTimeout(
         `${baseUrl}${path}`,
         {
@@ -1474,7 +1605,7 @@ export class C64API {
     });
   }
 
-  async loadPrgUpload(prgFile: Blob): Promise<{ errors: string[] }> {
+  async loadPrgUpload(prgFile: Blob, metadata: UploadValidationMetadata = {}): Promise<{ errors: string[] }> {
     const path = "/v1/runners:load_prg";
     const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
     let status: number | "error" = "error";
@@ -1482,7 +1613,12 @@ export class C64API {
     let response: Response;
     try {
       const baseUrl = this.getBaseUrl();
-      const upload = await this.buildBinaryUploadRequest(prgFile);
+      const upload = await this.buildBinaryUploadRequest(prgFile, {
+        filename: metadata.filename ?? extractUploadFilename(prgFile, "program.prg"),
+        operation: "PRG_LOAD_UPLOAD",
+        endpoint: path,
+        expectedType: "prg",
+      });
       response = await this.fetchWithTimeout(
         `${baseUrl}${path}`,
         {
@@ -1521,7 +1657,7 @@ export class C64API {
     });
   }
 
-  async runCartridgeUpload(crtFile: Blob): Promise<{ errors: string[] }> {
+  async runCartridgeUpload(crtFile: Blob, metadata: UploadValidationMetadata = {}): Promise<{ errors: string[] }> {
     const path = "/v1/runners:run_crt";
     const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
     let status: number | "error" = "error";
@@ -1529,7 +1665,12 @@ export class C64API {
     let response: Response;
     try {
       const baseUrl = this.getBaseUrl();
-      const upload = await this.buildBinaryUploadRequest(crtFile);
+      const upload = await this.buildBinaryUploadRequest(crtFile, {
+        filename: metadata.filename ?? extractUploadFilename(crtFile, "cartridge.crt"),
+        operation: "CRT_RUN_UPLOAD",
+        endpoint: path,
+        expectedType: "crt",
+      });
       response = await this.fetchWithTimeout(
         `${baseUrl}${path}`,
         {

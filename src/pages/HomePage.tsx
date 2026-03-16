@@ -58,6 +58,8 @@ import { SectionHeader } from "@/components/SectionHeader";
 import { cn } from "@/lib/utils";
 import { PageContainer, PageStack, ProfileActionGrid, ProfileSplitSection } from "@/components/layout/PageContainer";
 
+const visibleQueryOptions = { intent: "user" as const, refetchOnMount: "always" as const };
+
 export default function HomePage() {
   return (
     <ConfigActionsProvider>
@@ -74,26 +76,31 @@ function HomePageContent() {
     "U64 Specific Settings",
     [...U64_HOME_ITEMS],
     isActive || status.isConnecting,
+    visibleQueryOptions,
   );
   const { data: c64CartridgeCategory } = useC64ConfigItems(
     "C64 and Cartridge Settings",
     [...C64_CARTRIDGE_HOME_ITEMS],
     isActive || status.isConnecting,
+    visibleQueryOptions,
   );
   const { data: ledStripCategory } = useC64ConfigItems(
     "LED Strip Settings",
     [...LED_STRIP_HOME_ITEMS],
     isActive || status.isConnecting,
+    visibleQueryOptions,
   );
   const { data: userInterfaceCategory } = useC64ConfigItems(
     "User Interface Settings",
     [...USER_INTERFACE_HOME_ITEMS],
     isActive || status.isConnecting,
+    visibleQueryOptions,
   );
   const { data: keyboardLightingCategory } = useC64ConfigItems(
     "Keyboard Lighting",
     [...KEYBOARD_LIGHTING_HOME_ITEMS],
     isActive || status.isConnecting,
+    visibleQueryOptions,
   );
 
   const {

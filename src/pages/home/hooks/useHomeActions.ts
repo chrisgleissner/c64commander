@@ -1,6 +1,10 @@
 import { useEffect, useState, useRef } from "react";
 import { getC64API } from "@/lib/c64api";
-import { useC64Connection, useC64MachineControl, useC64Drives } from "@/hooks/useC64Connection";
+import {
+  useC64Connection,
+  useC64MachineControl,
+  useC64Drives,
+} from "@/hooks/useC64Connection";
 import { toast } from "@/hooks/use-toast";
 import { reportUserError } from "@/lib/uiErrors";
 import { addErrorLog } from "@/lib/logging";
@@ -15,11 +19,13 @@ import { decodeSnapshot } from "@/lib/snapshot/snapshotFormat";
 import { getCurrentPlaybackSnapshotLabel } from "@/lib/snapshot/currentPlaybackSnapshotLabel";
 import type { MemoryRange, SnapshotStorageEntry, SnapshotType } from "@/lib/snapshot/snapshotTypes";
 
+const visibleQueryOptions = { intent: "user" as const, refetchOnMount: "always" as const };
+
 export function useHomeActions() {
   const api = getC64API();
   const { status } = useC64Connection();
   const controls = useC64MachineControl();
-  const { data: drivesData } = useC64Drives();
+  const { data: drivesData } = useC64Drives(visibleQueryOptions);
   const trace = useActionTrace();
   const machineTaskInFlightRef = useRef<string | null>(null);
   const [machineTaskId, setMachineTaskId] = useState<string | null>(null);

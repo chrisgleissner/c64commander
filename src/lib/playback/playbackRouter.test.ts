@@ -115,7 +115,9 @@ describe("executePlayPlan disk autoplay drive configuration", () => {
 
     expect(api.driveOn).toHaveBeenCalledWith("a");
     expect(api.setDriveMode).toHaveBeenCalledWith("a", "1541");
-    expect(api.mountDriveUpload).toHaveBeenCalledWith("a", expect.any(Blob), "d64", "readwrite");
+    expect(api.mountDriveUpload).toHaveBeenCalledWith("a", expect.any(Blob), "d64", "readwrite", {
+      filename: "/games/demo.d64",
+    });
     expect(loadFirstDiskPrgViaDma).toHaveBeenCalled();
     expect(api.driveOn.mock.invocationCallOrder[0]).toBeLessThan(api.setDriveMode.mock.invocationCallOrder[0]);
     expect(api.setDriveMode.mock.invocationCallOrder[0]).toBeLessThan(api.mountDriveUpload.mock.invocationCallOrder[0]);
@@ -136,7 +138,9 @@ describe("executePlayPlan disk autoplay drive configuration", () => {
 
     expect(api.driveOn).not.toHaveBeenCalled();
     expect(api.setDriveMode).toHaveBeenCalledWith("a", "1571");
-    expect(api.mountDriveUpload).toHaveBeenCalledWith("a", expect.any(Blob), "d71", "readwrite");
+    expect(api.mountDriveUpload).toHaveBeenCalledWith("a", expect.any(Blob), "d71", "readwrite", {
+      filename: "/games/demo.d71",
+    });
   });
 
   it("switches Drive A to 1581 before autoplaying a d81", async () => {
@@ -153,7 +157,9 @@ describe("executePlayPlan disk autoplay drive configuration", () => {
     );
 
     expect(api.setDriveMode).toHaveBeenCalledWith("a", "1581");
-    expect(api.mountDriveUpload).toHaveBeenCalledWith("a", expect.any(Blob), "d81", "readwrite");
+    expect(api.mountDriveUpload).toHaveBeenCalledWith("a", expect.any(Blob), "d81", "readwrite", {
+      filename: "/games/demo.d81",
+    });
   });
 
   it("skips drive power and mode changes when Drive A is already ready", async () => {
@@ -171,6 +177,8 @@ describe("executePlayPlan disk autoplay drive configuration", () => {
 
     expect(api.driveOn).not.toHaveBeenCalled();
     expect(api.setDriveMode).not.toHaveBeenCalled();
-    expect(api.mountDriveUpload).toHaveBeenCalledWith("a", expect.any(Blob), "d64", "readwrite");
+    expect(api.mountDriveUpload).toHaveBeenCalledWith("a", expect.any(Blob), "d64", "readwrite", {
+      filename: "/games/demo.d64",
+    });
   });
 });

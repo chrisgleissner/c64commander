@@ -169,6 +169,52 @@ const storePasswordMock = storePassword as unknown as ReturnType<typeof vi.fn>;
 const clearPasswordMock = clearStoredPassword as unknown as ReturnType<typeof vi.fn>;
 const capacitorHttpMock = CapacitorHttp.request as unknown as ReturnType<typeof vi.fn>;
 
+const ascii = (value: string) => new TextEncoder().encode(value);
+
+const setBE16 = (bytes: Uint8Array, offset: number, value: number) => {
+  bytes[offset] = (value >> 8) & 0xff;
+  bytes[offset + 1] = value & 0xff;
+};
+
+const setBE32 = (bytes: Uint8Array, offset: number, value: number) => {
+  bytes[offset] = (value >>> 24) & 0xff;
+  bytes[offset + 1] = (value >>> 16) & 0xff;
+  bytes[offset + 2] = (value >>> 8) & 0xff;
+  bytes[offset + 3] = value & 0xff;
+};
+
+const createValidD64Blob = () => new Blob([new Uint8Array(174848)], { type: "application/octet-stream" });
+
+const createValidPrgBlob = () =>
+  new Blob([Uint8Array.from([0x01, 0x08, 0x60])], { type: "application/octet-stream" });
+
+const createValidSidBlob = () => {
+  const bytes = new Uint8Array(0x77);
+  bytes.set(ascii("PSID"), 0);
+  setBE16(bytes, 4, 2);
+  setBE16(bytes, 6, 0x76);
+  setBE16(bytes, 14, 1);
+  setBE16(bytes, 16, 1);
+  bytes[0x76] = 0x60;
+  return new Blob([bytes], { type: "application/octet-stream" });
+};
+
+const createValidModBlob = () => {
+  const bytes = new Uint8Array(1084);
+  bytes.set(ascii("M.K."), 1080);
+  return new Blob([bytes], { type: "application/octet-stream" });
+};
+
+const createValidCrtBlob = (version: number = 0x0100) => {
+  const bytes = new Uint8Array(80);
+  bytes.set(ascii("C64 CARTRIDGE   "), 0);
+  setBE32(bytes, 16, 64);
+  setBE16(bytes, 20, version);
+  bytes.set(ascii("CHIP"), 64);
+  setBE32(bytes, 68, 16);
+  return new Blob([bytes], { type: "application/octet-stream" });
+};
+
 describe("c64api", () => {
   beforeEach(() => {
     localStorage.clear();
@@ -214,11 +260,11 @@ describe("c64api", () => {
         const socketInfo =
           type === "Socket"
             ? {
-                localAddress: handle.localAddress,
-                localPort: handle.localPort,
-                remoteAddress: handle.remoteAddress,
-                remotePort: handle.remotePort,
-              }
+              localAddress: handle.localAddress,
+              localPort: handle.localPort,
+              remoteAddress: handle.remoteAddress,
+              remotePort: handle.remotePort,
+            }
             : undefined;
         return { type, hasRef, idleTimeout, fd, socketInfo };
       });
@@ -514,7 +560,7 @@ describe("c64api", () => {
     );
 
     const api = new C64API("http://c64u");
-    const payload = new Blob(["CRT"], { type: "application/octet-stream" });
+    const payload = createValidCrtBlob(0x0101);
     const result = await api.runCartridgeUpload(payload);
     expect(result.errors).toEqual([]);
 
@@ -528,7 +574,7 @@ describe("c64api", () => {
     fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
 
     const api = new C64API("http://c64u");
-    const payload = new Blob(["SID"], { type: "application/octet-stream" });
+    const payload = createValidSidBlob();
 
     await expect(api.playSidUpload(payload)).rejects.toThrow("Host unreachable");
   });
@@ -538,7 +584,7 @@ describe("c64api", () => {
     fetchMock.mockRejectedValue(new TypeError("Unknown host"));
 
     const api = new C64API("http://c64u");
-    const payload = new Blob(["SID"], { type: "application/octet-stream" });
+    const payload = createValidSidBlob();
 
     await expect(api.playSidUpload(payload)).rejects.toThrow("Host unreachable (DNS)");
   });
@@ -609,7 +655,7 @@ describe("c64api", () => {
       const api = new C64API("http://c64u");
       const controller = new AbortController();
       const pending = api.getInfo({ signal: controller.signal });
-      void pending.catch(() => {});
+      void pending.catch(() => { });
 
       await Promise.resolve();
       controller.abort();
@@ -636,6 +682,7 @@ describe("c64api", () => {
     const first = api.getInfo();
     const second = api.getInfo();
 
+    await Promise.resolve();
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(resolveFetch).not.toBeNull();
     resolveFetch?.(
@@ -897,15 +944,15 @@ describe("c64api", () => {
       .mockImplementation(() => Promise.resolve(okResponse()));
 
     const api = new C64API("http://127.0.0.1:8787", "pw", "device-host");
-    await api.mountDriveUpload("a", new Blob(["disk"]), "1541", "readwrite");
-    await expect(api.mountDriveUpload("a", new Blob(["disk"]))).rejects.toThrow("HTTP 500");
+    await api.mountDriveUpload("a", createValidD64Blob(), "d64", "readwrite");
+    await expect(api.mountDriveUpload("a", createValidD64Blob(), "d64", "readwrite")).rejects.toThrow("HTTP 500");
 
-    const sidFile = new Blob(["PSID"], { type: "application/octet-stream" });
+    const sidFile = createValidSidBlob();
     const sslFile = new Blob(["SSL"], { type: "application/octet-stream" });
     await api.playSidUpload(sidFile, 2, sslFile);
-    await api.playModUpload(new Blob(["MOD"]));
-    await api.runPrgUpload(new Blob(["PRG"]));
-    await api.loadPrgUpload(new Blob(["PRG"]));
+    await api.playModUpload(createValidModBlob());
+    await api.runPrgUpload(createValidPrgBlob());
+    await api.loadPrgUpload(createValidPrgBlob());
 
     const headers = fetchMock.mock.calls[0][1]?.headers as Record<string, string>;
     expect(headers["X-Password"]).toBe("pw");
@@ -928,12 +975,51 @@ describe("c64api", () => {
     );
 
     const api = new C64API("http://c64u");
-    await api.mountDriveUpload("a", new Blob(["disk"], { type: "application/octet-stream" }));
+    await api.mountDriveUpload("a", createValidD64Blob(), "d64", "readwrite");
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "http://c64u/v1/drives/a:mount",
-      expect.objectContaining({ method: "POST" }),
+      "http://c64u/v1/drives/a:mount?type=d64&mode=readwrite",
+      expect.objectContaining({
+        method: "POST",
+        body: expect.any(File),
+      }),
     );
+  });
+
+  it("normalizes every native octet-stream upload to a File body before fetch marshalling", async () => {
+    (globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = true;
+    (window as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = true;
+    (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor = {
+      isNativePlatform: () => true,
+    };
+    const fetchMock = getFetchMock();
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ errors: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    const api = new C64API("http://c64u");
+    await api.mountDriveUpload("a", createValidD64Blob(), "d64", "readwrite");
+    await api.playModUpload(createValidModBlob());
+    await api.runPrgUpload(createValidPrgBlob());
+    await api.loadPrgUpload(createValidPrgBlob());
+    await api.runCartridgeUpload(createValidCrtBlob(0x0200));
+    await api.writeMemoryBlock("1000", new Uint8Array([17, 18, 19, 20]));
+
+    const binaryCalls = fetchMock.mock.calls.filter((call) => {
+      const options = call[1] as RequestInit | undefined;
+      const headers = (options?.headers ?? {}) as Record<string, string>;
+      return headers["Content-Type"] === "application/octet-stream";
+    });
+
+    expect(binaryCalls).toHaveLength(6);
+    binaryCalls.forEach((call) => {
+      const options = call[1] as RequestInit | undefined;
+      expect(options?.body).toBeInstanceOf(File);
+      expect((options?.body as File).type).toBe("application/octet-stream");
+    });
   });
 
   it("fetches config items from category payload before per-item fallback", async () => {
@@ -1079,10 +1165,10 @@ describe("c64api", () => {
       .mockResolvedValueOnce(new Response("crt fail", { status: 500, statusText: "Server Error" }));
 
     const api = new C64API("http://c64u");
-    await expect(api.playModUpload(new Blob(["MOD"]))).rejects.toThrow("HTTP 500");
-    await expect(api.runPrgUpload(new Blob(["PRG"]))).rejects.toThrow("HTTP 500");
-    await expect(api.loadPrgUpload(new Blob(["PRG"]))).rejects.toThrow("HTTP 500");
-    await expect(api.runCartridgeUpload(new Blob(["CRT"]))).rejects.toThrow("HTTP 500");
+    await expect(api.playModUpload(createValidModBlob())).rejects.toThrow("HTTP 500");
+    await expect(api.runPrgUpload(createValidPrgBlob())).rejects.toThrow("HTTP 500");
+    await expect(api.loadPrgUpload(createValidPrgBlob())).rejects.toThrow("HTTP 500");
+    await expect(api.runCartridgeUpload(createValidCrtBlob(0x0101))).rejects.toThrow("HTTP 500");
 
     expect(addErrorLogMock.mock.calls.map(([message]) => message)).toEqual([
       "MOD upload failed",
