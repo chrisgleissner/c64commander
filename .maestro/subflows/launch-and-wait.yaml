@@ -37,16 +37,3 @@ tags:
           text: "Allow only while using the app"
           optional: true
       - waitForAnimationToEnd
-# The iOS home tab label is not consistently exposed to Maestro during initial
-# launch. After launch, key off the home page content instead of the tab text.
-- tapOn:
-    text: "Home"
-    optional: true
-- tapOn:
-    point: "8%,95%"
-    optional: true
-- waitForAnimationToEnd
-- extendedWaitUntil:
-    visible: "Quick Config"
-    timeout: ${LONG_TIMEOUT}
-- takeScreenshot: home

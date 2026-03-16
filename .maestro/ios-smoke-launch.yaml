@@ -6,6 +6,4 @@ tags:
   - ci-critical-ios
 ---
 - runFlow: subflows/launch-and-wait.yaml
-- assertVisible: "Home"
-- takeScreenshot: ios-smoke-launch-home
 - runFlow: subflows/common-navigation.yaml

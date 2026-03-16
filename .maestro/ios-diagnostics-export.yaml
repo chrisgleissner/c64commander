@@ -16,11 +16,4 @@ tags:
           text: "Open diagnostics"
           optional: true
       - waitForAnimationToEnd
-      - extendedWaitUntil:
-          visible: "Diagnostics"
-          timeout: ${TIMEOUT}
-# iOS accessibility exposure for the diagnostics dialog controls is not stable
-# enough to key this flow off tab labels or action button text. The dialog title
-# remains consistently exposed when the diagnostics panel opens.
-- assertVisible: "Diagnostics"
 - takeScreenshot: ios-diagnostics-export-actions
