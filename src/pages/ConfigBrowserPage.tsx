@@ -182,6 +182,9 @@ function CategorySection({
         });
       }
     },
+    // audioConfiguredRef is intentionally omitted from deps: refs have stable identity
+    // and audioConfiguredRef.current is read at call time, not at dependency capture time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [isAudioMixer, categoryName, reportUserError],
   );
 

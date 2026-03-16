@@ -22,7 +22,6 @@ import { addErrorLog, addLog } from "@/lib/logging";
 import { loadDebugLoggingEnabled } from "@/lib/config/appSettings";
 import { getPlatform } from "@/lib/native/platform";
 import { redactTreeUri } from "@/lib/native/safUtils";
-import { SidPlayerProvider } from "@/hooks/useSidPlayer";
 import { FeatureFlagsProvider } from "@/hooks/useFeatureFlags";
 import { TraceContextBridge } from "@/components/TraceContextBridge";
 import { GlobalDiagnosticsOverlay } from "@/components/diagnostics/GlobalDiagnosticsOverlay";
@@ -160,17 +159,9 @@ const App = () => (
           <Sonner />
           <FeatureFlagsProvider>
             <RefreshControlProvider>
-              {shouldEnableCoverageProbe() ? (
-                <SidPlayerProvider>
-                  <AppErrorBoundary>
-                    <AppRoutes />
-                  </AppErrorBoundary>
-                </SidPlayerProvider>
-              ) : (
-                <AppErrorBoundary>
-                  <AppRoutes />
-                </AppErrorBoundary>
-              )}
+              <AppErrorBoundary>
+                <AppRoutes />
+              </AppErrorBoundary>
             </RefreshControlProvider>
           </FeatureFlagsProvider>
         </TooltipProvider>

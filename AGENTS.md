@@ -105,7 +105,7 @@ At completion, summarize:
 - **App config state**: `src/hooks/useAppConfigState.ts`, `src/lib/config/`
 - **Song sources**: `src/lib/sources/`
 - **HVSC module**: `src/lib/hvsc/`
-- **SID player**: `src/pages/MusicPlayerPage.tsx`, `src/hooks/useSidPlayer.tsx`, `src/lib/sid/`
+- **SID player utilities**: `src/lib/sid/`
 
 ## Architecture map
 
