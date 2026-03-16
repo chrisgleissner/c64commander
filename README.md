@@ -36,7 +36,6 @@ C64 Commander lets you control and manage a C64 Ultimate from Android, iOS, or a
     - [Docs](#docs)
     - [Diagnostics](#diagnostics)
   - [Display Profiles](#display-profiles)
-    - [Example: Home page across profiles](#example-home-page-across-profiles)
   - [🛟 Troubleshooting](#-troubleshooting)
     - [Connectivity](#connectivity)
       - [Can’t reach the device](#cant-reach-the-device)
