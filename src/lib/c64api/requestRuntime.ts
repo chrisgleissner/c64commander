@@ -304,10 +304,10 @@ export const inspectResponsePayload = async (
       body:
         bytes.byteLength > 0
           ? {
-              type: "binary",
-              sizeBytes: bytes.byteLength,
-              mimeType: contentType || null,
-            }
+            type: "binary",
+            sizeBytes: bytes.byteLength,
+            mimeType: contentType || null,
+          }
           : null,
       payloadPreview: buildPayloadPreviewFromBytes(bytes),
     };

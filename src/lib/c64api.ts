@@ -93,7 +93,7 @@ const getHeaderValue = (headers: HeadersInit | undefined, name: string): string 
   const direct = record[name];
   if (typeof direct === "string") return direct;
   const ciKey = Object.keys(record).find((key) => key.toLowerCase() === name.toLowerCase());
-  return ciKey ? record[ciKey] ?? null : null;
+  return ciKey ? (record[ciKey] ?? null) : null;
 };
 
 const isOctetStreamRequest = (headers: HeadersInit | undefined) => {
@@ -227,18 +227,18 @@ export interface VersionInfo {
 
 export interface ConfigCategory {
   [itemName: string]:
-  | {
-    selected?: string | number;
-    options?: string[];
-    details?: {
-      min?: number;
-      max?: number;
-      format?: string;
-      presets?: string[];
-    };
-  }
-  | string
-  | number;
+    | {
+        selected?: string | number;
+        options?: string[];
+        details?: {
+          min?: number;
+          max?: number;
+          format?: string;
+          presets?: string[];
+        };
+      }
+    | string
+    | number;
 }
 
 export interface ConfigResponse {
@@ -368,7 +368,10 @@ export class C64API {
     TransmissionGuard.validateOrThrow(new Uint8Array(body), context);
   }
 
-  private async buildBinaryUploadRequest(body: Blob, validationContext: TransmissionValidationContext): Promise<{
+  private async buildBinaryUploadRequest(
+    body: Blob,
+    validationContext: TransmissionValidationContext,
+  ): Promise<{
     headers: Record<string, string>;
     body: ArrayBuffer;
   }> {
@@ -656,8 +659,8 @@ export class C64API {
                 let timeoutPromiseId: ReturnType<typeof setTimeout> | null = null;
                 const timeoutPromise = timeoutMs
                   ? new Promise<never>((_, reject) => {
-                    timeoutPromiseId = setTimeout(() => reject(new Error("Request timed out")), timeoutMs);
-                  })
+                      timeoutPromiseId = setTimeout(() => reject(new Error("Request timed out")), timeoutMs);
+                    })
                   : null;
                 let response: Response;
                 try {
@@ -914,8 +917,8 @@ export class C64API {
             });
             const timeoutPromise = timeoutMs
               ? new Promise<never>((_, reject) => {
-                timeoutPromiseId = setTimeout(() => reject(new Error("Request timed out")), timeoutMs);
-              })
+                  timeoutPromiseId = setTimeout(() => reject(new Error("Request timed out")), timeoutMs);
+                })
               : null;
             const response = timeoutPromise
               ? await Promise.race([responsePromise, timeoutPromise])

@@ -34,11 +34,11 @@ export type PlaySource = "local" | "ultimate" | "hvsc";
 export type LocalPlayFile =
   | File
   | {
-    name: string;
-    webkitRelativePath?: string;
-    lastModified: number;
-    arrayBuffer: () => Promise<ArrayBuffer>;
-  };
+      name: string;
+      webkitRelativePath?: string;
+      lastModified: number;
+      arrayBuffer: () => Promise<ArrayBuffer>;
+    };
 
 export type PlayRequest = {
   source: PlaySource;
@@ -317,8 +317,8 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
         const sslBlob =
           plan.durationMs && plan.durationMs > 0
             ? new Blob([createSslPayload(plan.durationMs)], {
-              type: "application/octet-stream",
-            })
+                type: "application/octet-stream",
+              })
             : undefined;
         await api.playSidUpload(blob, plan.songNr, sslBlob, { filename: plan.path });
         return;

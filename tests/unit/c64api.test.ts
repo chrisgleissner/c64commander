@@ -185,8 +185,7 @@ const setBE32 = (bytes: Uint8Array, offset: number, value: number) => {
 
 const createValidD64Blob = () => new Blob([new Uint8Array(174848)], { type: "application/octet-stream" });
 
-const createValidPrgBlob = () =>
-  new Blob([Uint8Array.from([0x01, 0x08, 0x60])], { type: "application/octet-stream" });
+const createValidPrgBlob = () => new Blob([Uint8Array.from([0x01, 0x08, 0x60])], { type: "application/octet-stream" });
 
 const createValidSidBlob = () => {
   const bytes = new Uint8Array(0x77);
@@ -260,11 +259,11 @@ describe("c64api", () => {
         const socketInfo =
           type === "Socket"
             ? {
-              localAddress: handle.localAddress,
-              localPort: handle.localPort,
-              remoteAddress: handle.remoteAddress,
-              remotePort: handle.remotePort,
-            }
+                localAddress: handle.localAddress,
+                localPort: handle.localPort,
+                remoteAddress: handle.remoteAddress,
+                remotePort: handle.remotePort,
+              }
             : undefined;
         return { type, hasRef, idleTimeout, fd, socketInfo };
       });
@@ -655,7 +654,7 @@ describe("c64api", () => {
       const api = new C64API("http://c64u");
       const controller = new AbortController();
       const pending = api.getInfo({ signal: controller.signal });
-      void pending.catch(() => { });
+      void pending.catch(() => {});
 
       await Promise.resolve();
       controller.abort();

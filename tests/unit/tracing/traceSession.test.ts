@@ -98,7 +98,7 @@ describe("traceSession", () => {
     vi.stubGlobal("window", {
       dispatchEvent: vi.fn(),
       setTimeout: vi.fn(),
-      CustomEvent: class {},
+      CustomEvent: class { },
     });
 
     recordActionStart(action);
@@ -117,7 +117,7 @@ describe("traceSession", () => {
     vi.stubGlobal("window", {
       dispatchEvent: vi.fn(),
       setTimeout: vi.fn(),
-      CustomEvent: class {},
+      CustomEvent: class { },
     });
     recordRestRequest(action, {
       method: "GET",
@@ -143,7 +143,7 @@ describe("traceSession", () => {
     vi.stubGlobal("window", {
       dispatchEvent: vi.fn(),
       setTimeout: vi.fn(),
-      CustomEvent: class {},
+      CustomEvent: class { },
     });
     recordRestResponse(action, {
       status: 200,
@@ -192,7 +192,7 @@ describe("traceSession", () => {
     vi.stubGlobal("window", {
       dispatchEvent: vi.fn(),
       setTimeout: vi.fn(),
-      CustomEvent: class {},
+      CustomEvent: class { },
     });
 
     recordRestRequest(action, {
@@ -236,7 +236,7 @@ describe("traceSession", () => {
         constructor(
           public type: string,
           public detail?: any,
-        ) {}
+        ) { }
       },
     });
 
@@ -273,7 +273,7 @@ describe("traceSession", () => {
     vi.stubGlobal("window", {
       dispatchEvent: vi.fn(),
       setTimeout: vi.fn(),
-      CustomEvent: class {},
+      CustomEvent: class { },
     });
 
     recordActionStart({ ...action, correlationId: "C1" });
@@ -299,12 +299,12 @@ describe("traceSession", () => {
   it("handles restore with no data", () => {
     vi.stubGlobal("sessionStorage", {
       getItem: () => null,
-      removeItem: () => {},
+      removeItem: () => { },
     });
     vi.stubGlobal("window", {
       dispatchEvent: vi.fn(),
       setTimeout: vi.fn(),
-      CustomEvent: class {},
+      CustomEvent: class { },
     });
 
     restoreTracesFromSession();
@@ -315,7 +315,7 @@ describe("traceSession", () => {
     vi.stubGlobal("window", {
       dispatchEvent: vi.fn(),
       setTimeout: vi.fn(),
-      CustomEvent: class {},
+      CustomEvent: class { },
     });
     recordDeviceGuard(action, { allowed: true });
     const events = getTraceEvents();
@@ -328,7 +328,7 @@ describe("traceSession", () => {
   });
 
   it("handles storage errors gracefully", () => {
-    const consoleSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const consoleSpy = vi.spyOn(console, "warn").mockImplementation(() => { });
     vi.stubGlobal("sessionStorage", {
       setItem: () => {
         throw new Error("Full");
@@ -340,7 +340,7 @@ describe("traceSession", () => {
     vi.stubGlobal("window", {
       dispatchEvent: vi.fn(),
       setTimeout: vi.fn(),
-      CustomEvent: class {},
+      CustomEvent: class { },
     });
 
     persistTracesToSession();
@@ -354,7 +354,7 @@ describe("traceSession", () => {
     vi.stubGlobal("window", {
       dispatchEvent: vi.fn(),
       setTimeout: vi.fn(),
-      CustomEvent: class {},
+      CustomEvent: class { },
     });
     recordActionEnd(action, new Error("failed"));
     const events = getTraceEvents();
@@ -366,7 +366,7 @@ describe("traceSession", () => {
     vi.stubGlobal("window", {
       dispatchEvent: vi.fn(),
       setTimeout: vi.fn(),
-      CustomEvent: class {},
+      CustomEvent: class { },
     });
     recordActionScopeEnd(action, "scope", new Error("oops"));
     const events = getTraceEvents();
@@ -378,7 +378,7 @@ describe("traceSession", () => {
     vi.stubGlobal("window", {
       dispatchEvent: vi.fn(),
       setTimeout: vi.fn(),
-      CustomEvent: class {},
+      CustomEvent: class { },
     });
     recordRestResponse(action, {
       status: 500,
@@ -396,7 +396,7 @@ describe("traceSession", () => {
     vi.stubGlobal("window", {
       dispatchEvent: vi.fn(),
       setTimeout: vi.fn(),
-      CustomEvent: class {},
+      CustomEvent: class { },
     });
     recordRestResponse(action, {
       status: 500,
@@ -413,7 +413,7 @@ describe("traceSession", () => {
     vi.stubGlobal("window", {
       dispatchEvent: vi.fn(),
       setTimeout: vi.fn(),
-      CustomEvent: class {},
+      CustomEvent: class { },
     });
     recordRestResponse(action, {
       status: 200,
@@ -439,7 +439,7 @@ describe("traceSession", () => {
     vi.stubGlobal("window", {
       dispatchEvent: vi.fn(),
       setTimeout: vi.fn(),
-      CustomEvent: class {},
+      CustomEvent: class { },
     });
     replaceTraceEvents([
       {
@@ -471,7 +471,7 @@ describe("traceSession", () => {
     vi.stubGlobal("window", {
       dispatchEvent: vi.fn(),
       setTimeout: vi.fn(),
-      CustomEvent: class {},
+      CustomEvent: class { },
     });
     // Record one event
     recordActionStart({ ...action, correlationId: "DUP-1" });
@@ -509,7 +509,7 @@ describe("traceSession", () => {
     vi.stubGlobal("window", {
       dispatchEvent: vi.fn(),
       setTimeout: vi.fn(),
-      CustomEvent: class {},
+      CustomEvent: class { },
     });
     const origTE = globalThis.TextEncoder;
     // @ts-expect-error -- deliberately removing TextEncoder
@@ -526,7 +526,7 @@ describe("traceSession", () => {
     vi.stubGlobal("window", {
       dispatchEvent: vi.fn(),
       setTimeout: vi.fn(),
-      CustomEvent: class {},
+      CustomEvent: class { },
     });
     const trigger = {
       kind: "timer" as const,
@@ -545,7 +545,7 @@ describe("traceSession", () => {
     vi.stubGlobal("window", {
       dispatchEvent: vi.fn(),
       setTimeout: vi.fn(),
-      CustomEvent: class {},
+      CustomEvent: class { },
     });
     recordActionStart(action);
     const events = getTraceEvents();
@@ -557,7 +557,7 @@ describe("traceSession", () => {
     vi.stubGlobal("window", {
       dispatchEvent: vi.fn(),
       setTimeout: vi.fn(),
-      CustomEvent: class {},
+      CustomEvent: class { },
     });
     recordRestResponse(action, {
       status: null,
@@ -577,7 +577,7 @@ describe("traceSession", () => {
     vi.stubGlobal("window", {
       dispatchEvent: vi.fn(),
       setTimeout: vi.fn(),
-      CustomEvent: class {},
+      CustomEvent: class { },
     });
     recordActionStart(action);
     // non-error events should be suppressed
@@ -589,7 +589,7 @@ describe("traceSession", () => {
     vi.stubGlobal("window", {
       dispatchEvent: vi.fn(),
       setTimeout: vi.fn(),
-      CustomEvent: class {},
+      CustomEvent: class { },
     });
     recordTraceError(action, new Error("forced error"));
     expect(getTraceEvents().some((e) => e.type === "error")).toBe(true);
@@ -611,7 +611,7 @@ describe("traceSession", () => {
     vi.stubGlobal("window", {
       dispatchEvent: vi.fn(),
       setTimeout: vi.fn(),
-      CustomEvent: class {},
+      CustomEvent: class { },
     });
     recordActionStart(action);
     const events = getTraceEvents();
@@ -624,7 +624,7 @@ describe("traceSession", () => {
     vi.stubGlobal("window", {
       dispatchEvent: vi.fn(),
       setTimeout: vi.fn(),
-      CustomEvent: class {},
+      CustomEvent: class { },
     });
     recordFtpOperation(action, {
       operation: "download",
@@ -652,7 +652,7 @@ describe("traceSession", () => {
     vi.stubGlobal("window", {
       dispatchEvent: vi.fn(),
       setTimeout: vi.fn(),
-      CustomEvent: class {},
+      CustomEvent: class { },
     });
     const { MAX_EVENT_COUNT } = TRACE_SESSION;
     // Fill events array beyond the limit
@@ -674,7 +674,7 @@ describe("traceSession", () => {
     vi.stubGlobal("window", {
       dispatchEvent: vi.fn(),
       setTimeout: vi.fn(),
-      CustomEvent: class {},
+      CustomEvent: class { },
     });
     // Insert an event with a non-parseable timestamp to exercise NaN path in evictExpired
     const malformed = [
@@ -716,7 +716,7 @@ describe("traceSession", () => {
     vi.stubGlobal("window", {
       dispatchEvent: vi.fn(),
       setTimeout: vi.fn(),
-      CustomEvent: class {},
+      CustomEvent: class { },
     });
     // Add an event with a timestamp older than RETENTION_WINDOW_MS (30 minutes)
     const expiredTimestamp = new Date(Date.now() - 31 * 60 * 1000).toISOString();
@@ -740,7 +740,7 @@ describe("traceSession", () => {
     vi.stubGlobal("window", {
       dispatchEvent: vi.fn(),
       setTimeout: vi.fn(),
-      CustomEvent: class {},
+      CustomEvent: class { },
     });
     shouldSuppressMock.mockReturnValue(true);
     // action-start is not an error type → shouldSuppressTraceEvent returns true → event NOT recorded

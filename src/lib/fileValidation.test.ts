@@ -14,6 +14,7 @@ import {
     FILE_VALIDATION_FAILED_EVENT,
     FileValidationError,
     TransmissionGuard,
+    isHandledUiError,
     reportFileValidationFailure,
     validateFileBytes,
 } from "@/lib/fileValidation";
@@ -95,6 +96,9 @@ describe("fileValidation", () => {
 
     it("rejects truncated, malformed, and structurally invalid files", () => {
         expect(validateFileBytes(new Uint8Array(10), "d64")).toMatchObject({ ok: false, code: "INVALID_SIZE" });
+        expect(validateFileBytes(new Uint8Array(10), "d71")).toMatchObject({ ok: false, code: "INVALID_SIZE" });
+        expect(validateFileBytes(new Uint8Array(10), "d81")).toMatchObject({ ok: false, code: "INVALID_SIZE" });
+        expect(validateFileBytes(new Uint8Array(1), "prg")).toMatchObject({ ok: false, code: "INVALID_SIZE" });
 
         const badPrg = Uint8Array.from([0x01, 0x08]);
         expect(validateFileBytes(badPrg, "prg")).toMatchObject({ ok: false, code: "INVALID_PROGRAM_DATA" });
@@ -108,21 +112,74 @@ describe("fileValidation", () => {
         setBE16(badSongRange, 16, 2);
         expect(validateFileBytes(badSongRange, "sid")).toMatchObject({ ok: false, code: "INVALID_SONG_RANGE" });
 
+        const badSidVersion = createValidSid();
+        setBE16(badSidVersion, 4, 5);
+        expect(validateFileBytes(badSidVersion, "sid")).toMatchObject({ ok: false, code: "INVALID_VERSION" });
+
+        const badSidOffset = createValidSid();
+        setBE16(badSidOffset, 6, badSidOffset.length);
+        expect(validateFileBytes(badSidOffset, "sid")).toMatchObject({ ok: false, code: "INVALID_DATA_OFFSET" });
+
         const badMod = createValidMod();
         badMod[952] = 128;
         expect(validateFileBytes(badMod, "mod")).toMatchObject({ ok: false, code: "INVALID_PATTERN_TABLE" });
+
+        expect(validateFileBytes(new Uint8Array(16), "mod")).toMatchObject({ ok: false, code: "INVALID_SIZE" });
 
         const badCrtMagic = createValidCrt();
         badCrtMagic[0] = 0x00;
         expect(validateFileBytes(badCrtMagic, "crt")).toMatchObject({ ok: false, code: "INVALID_MAGIC" });
 
+        const badCrtHeaderLength = createValidCrt();
+        setBE32(badCrtHeaderLength, 16, 32);
+        expect(validateFileBytes(badCrtHeaderLength, "crt")).toMatchObject({ ok: false, code: "INVALID_HEADER_LENGTH" });
+
+        const badCrtVersion = createValidCrt();
+        setBE16(badCrtVersion, 20, 0x0300);
+        expect(validateFileBytes(badCrtVersion, "crt")).toMatchObject({ ok: false, code: "INVALID_VERSION" });
+
         const badChipHeader = createValidCrt();
         badChipHeader.set(ascii("BORK"), 64);
         expect(validateFileBytes(badChipHeader, "crt")).toMatchObject({ ok: false, code: "INVALID_CHIP_HEADER" });
 
+        const truncatedChipHeader = createValidCrt().subarray(0, 66);
+        expect(validateFileBytes(truncatedChipHeader, "crt")).toMatchObject({ ok: false, code: "INVALID_OUT_OF_BOUNDS" });
+
+        const truncatedChipPacketLength = createValidCrt().subarray(0, 70);
+        expect(validateFileBytes(truncatedChipPacketLength, "crt")).toMatchObject({
+            ok: false,
+            code: "INVALID_OUT_OF_BOUNDS",
+        });
+
         const badChipLength = createValidCrt();
         setBE32(badChipLength, 68, 15);
         expect(validateFileBytes(badChipLength, "crt")).toMatchObject({ ok: false, code: "INVALID_CHIP_PACKET" });
+    });
+
+    it("detects strong types and falls back to the preferred weak type when needed", () => {
+        expect(validateFileBytes(new Uint8Array(174848))).toMatchObject({ ok: true, detectedType: "d64" });
+        expect(validateFileBytes(new Uint8Array(349696))).toMatchObject({ ok: true, detectedType: "d71" });
+        expect(validateFileBytes(new Uint8Array(819200))).toMatchObject({ ok: true, detectedType: "d81" });
+        expect(validateFileBytes(createValidSid())).toMatchObject({ ok: true, detectedType: "sid" });
+        expect(validateFileBytes(createValidCrt())).toMatchObject({ ok: true, detectedType: "crt" });
+        expect(validateFileBytes(Uint8Array.from([0x01, 0x08, 0x60]), "prg")).toMatchObject({
+            ok: true,
+            detectedType: "prg",
+        });
+        expect(validateFileBytes(createValidMod(), "mod")).toMatchObject({ ok: true, detectedType: "mod" });
+    });
+
+    it("accepts RSID headers and strong-type mismatches for non-CRT formats", () => {
+        const rsid = createValidSid();
+        rsid.set(ascii("RSID"), 0);
+        expect(validateFileBytes(rsid, "sid")).toMatchObject({ ok: true, detectedType: "sid" });
+
+        const result = validateFileBytes(new Uint8Array(174848), "d81");
+        expect(result).toMatchObject({
+            ok: false,
+            code: "INVALID_FILE_TYPE",
+            detectedType: "d64",
+        });
     });
 
     it("detects strong type mismatches instead of trusting the requested upload type", () => {
@@ -148,7 +205,7 @@ describe("fileValidation", () => {
     it("reports validation failures exactly once", () => {
         const error = new FileValidationError(
             {
-                filename: "/games/Broken.crt",
+                filename: "C:\\games\\Broken.crt",
                 operation: "CRT_RUN_UPLOAD",
                 endpoint: "/v1/runners:run_crt",
                 expectedType: "crt",
@@ -161,21 +218,47 @@ describe("fileValidation", () => {
             },
         );
 
+        expect(isHandledUiError(error)).toBe(false);
+
         reportFileValidationFailure(error);
         reportFileValidationFailure(error);
 
+        expect(isHandledUiError(error)).toBe(true);
+
         expect(addErrorLog).toHaveBeenCalledTimes(1);
-        expect(addErrorLog).toHaveBeenCalledWith(FILE_VALIDATION_FAILED_EVENT, expect.objectContaining({
-            eventType: FILE_VALIDATION_FAILED_EVENT,
-            filename: "Broken.crt",
-            validationCode: "INVALID_CHIP_HEADER",
-        }));
+        expect(addErrorLog).toHaveBeenCalledWith(
+            FILE_VALIDATION_FAILED_EVENT,
+            expect.objectContaining({
+                eventType: FILE_VALIDATION_FAILED_EVENT,
+                filename: "Broken.crt",
+                validationCode: "INVALID_CHIP_HEADER",
+            }),
+        );
         expect(toast).toHaveBeenCalledTimes(1);
-        expect(toast).toHaveBeenCalledWith(expect.objectContaining({
-            title: "Upload blocked",
-            description: expect.stringContaining("Broken.crt is structurally invalid (invalid CHIP header)."),
-            variant: "destructive",
-        }));
+        expect(toast).toHaveBeenCalledWith(
+            expect.objectContaining({
+                title: "Upload blocked",
+                description: expect.stringContaining("Broken.crt is structurally invalid (invalid CHIP header)."),
+                variant: "destructive",
+            }),
+        );
+    });
+
+    it("uses a default filename when none is available", () => {
+        let thrown: unknown;
+
+        try {
+            TransmissionGuard.validateOrThrow(new Uint8Array(10), {
+                operation: "DRIVE_MOUNT_UPLOAD",
+                endpoint: "/v1/drives/a:mount",
+                expectedType: "d64",
+            });
+        } catch (error) {
+            thrown = error;
+        }
+
+        expect(thrown).toBeInstanceOf(FileValidationError);
+        expect((thrown as FileValidationError).message).toContain("upload.bin is structurally invalid");
     });
 
     it("safely rejects fuzzed CRT and SID inputs without crashing", () => {
@@ -200,5 +283,18 @@ describe("fileValidation", () => {
 
         expect(toast).toHaveBeenCalledTimes(1);
         expect(addErrorLog).toHaveBeenCalledTimes(1);
+    });
+
+    it("returns the validation result for successful guarded uploads", () => {
+        const result = TransmissionGuard.validateOrThrow(Uint8Array.from([0x01, 0x08, 0x60]), {
+            filename: "demo.prg",
+            operation: "PRG_RUN_UPLOAD",
+            endpoint: "/v1/runners:run_prg",
+            expectedType: "prg",
+        });
+
+        expect(result).toMatchObject({ ok: true, detectedType: "prg" });
+        expect(toast).not.toHaveBeenCalled();
+        expect(addErrorLog).not.toHaveBeenCalled();
     });
 });
