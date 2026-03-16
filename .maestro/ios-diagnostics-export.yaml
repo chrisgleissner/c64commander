@@ -17,7 +17,7 @@ tags:
           optional: true
       - waitForAnimationToEnd
       - extendedWaitUntil:
-          visible: "Share All"
+          visible: "Diagnostics"
           timeout: ${TIMEOUT}
 # iOS accessibility exposure for the diagnostics dialog controls is not stable
 # enough to key this flow off tab labels or action button text. The dialog title
