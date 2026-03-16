@@ -171,15 +171,26 @@ export function DiagnosticsDialog({
 
   return (
     <AppSheet open={open} onOpenChange={onOpenChange}>
-      <AppSheetContent className="flex min-h-0 flex-col overflow-hidden" data-testid="diagnostics-sheet">
+      <AppSheetContent
+        className={cn(
+          "flex min-h-0 flex-col overflow-hidden",
+          isCompact
+            ? "max-h-[calc(100dvh-max(3.25rem,calc(env(safe-area-inset-top)+2.75rem))-env(safe-area-inset-bottom)-4px)]"
+            : null,
+        )}
+        data-testid="diagnostics-sheet"
+      >
         <AppSheetHeader
-          className={cn("shrink-0", isCompact ? "space-y-1 px-3 pb-2 pt-3" : "space-y-1.5 px-4 pb-2 pt-4")}
+          className={cn("shrink-0", isCompact ? "space-y-1 px-3 pb-1.5 pt-2.5" : "space-y-1.5 px-4 pb-2 pt-4")}
         >
           <AppSheetTitle>Diagnostics</AppSheetTitle>
           <AppSheetDescription>Review warnings/errors, logs, traces, and action summaries.</AppSheetDescription>
         </AppSheetHeader>
         <div
-          className={cn("shrink-0 flex flex-wrap gap-2 border-b border-border", isCompact ? "px-3 py-2" : "px-4 py-2")}
+          className={cn(
+            "shrink-0 flex flex-wrap gap-2 border-b border-border",
+            isCompact ? "px-3 py-1.5" : "px-4 py-2",
+          )}
         >
           <Button variant="outline" size="sm" onClick={() => void onShareAll()}>
             Share All
@@ -206,7 +217,7 @@ export function DiagnosticsDialog({
             </AlertDialogContent>
           </AlertDialog>
         </div>
-        <div className={cn("flex min-h-0 flex-1 flex-col", isCompact ? "px-3 pb-3 pt-2" : "px-4 pb-4 pt-2")}>
+        <div className={cn("flex min-h-0 flex-1 flex-col", isCompact ? "px-3 pb-2.5 pt-1.5" : "px-4 pb-4 pt-2")}>
           <div className="relative shrink-0">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
             <Input

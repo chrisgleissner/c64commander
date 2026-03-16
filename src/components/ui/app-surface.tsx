@@ -43,7 +43,7 @@ const resolveAppSheetClassName = (mode: AppSheetMode) => {
 
   return [
     "fixed inset-x-0 bottom-0 z-50 flex w-full flex-col overflow-hidden rounded-t-[28px] border border-b-0 bg-background p-0 shadow-2xl",
-    "top-[max(3.25rem,calc(env(safe-area-inset-top)+2.75rem))] h-[calc(100dvh-max(3.25rem,calc(env(safe-area-inset-top)+2.75rem))-env(safe-area-inset-bottom))] max-h-[calc(100dvh-max(3.25rem,calc(env(safe-area-inset-top)+2.75rem))-env(safe-area-inset-bottom))]",
+    "top-[max(3.25rem,calc(env(safe-area-inset-top)+2.75rem))] min-h-0",
     "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
     "data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
   ].join(" ");

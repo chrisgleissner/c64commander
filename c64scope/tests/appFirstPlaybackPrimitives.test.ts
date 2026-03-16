@@ -359,6 +359,34 @@ describe("app-first playback primitives", () => {
     await expect(readTopmostTrackLabel("serial-1", ["Missing.sid"])).resolves.toBeNull();
   });
 
+  it("dismisses the Android permission sheet via the alternate apostrophe label", async () => {
+    const { setDurationSeconds } = await import("../src/validation/appFirstPlaybackPrimitives.js");
+
+    tapByTextMock.mockReset();
+    tapByTextContainingMock.mockReset();
+    tapByResourceIdMock.mockReset();
+    tapByTextMock.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    dumpUiHierarchyMock.mockReset();
+    dumpUiHierarchyMock.mockResolvedValueOnce(`
+      <hierarchy>
+        <node text="Default duration" class="android.widget.TextView" enabled="true" bounds="[40,200][260,260]" />
+        <node text="4" class="android.widget.EditText" enabled="true" bounds="[800,200][980,260]" />
+      </hierarchy>
+    `);
+
+    const client = {
+      tap: vi.fn().mockResolvedValue(undefined),
+      pressKey: vi.fn().mockResolvedValue(undefined),
+      inputText: vi.fn().mockResolvedValue(undefined),
+      swipe: vi.fn().mockResolvedValue(undefined),
+    };
+
+    await setDurationSeconds(client as never, "serial-1", 8);
+
+    expect(tapByTextMock).toHaveBeenNthCalledWith(1, client, "serial-1", "Don't allow");
+    expect(tapByTextMock).toHaveBeenNthCalledWith(2, client, "serial-1", "Don’t allow");
+  });
+
   it("retries checkbox taps with a deeper left offset when the selected count does not change", async () => {
     const { tapCheckboxForText } = await import("../src/validation/appFirstPlaybackPrimitives.js");
 

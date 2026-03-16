@@ -1,7 +1,7 @@
 version: 2
 
 multi-ecosystem-groups:
-  all-dependencies:
+  routine-updates:
     schedule:
       interval: weekly
     commit-message:
@@ -12,10 +12,17 @@ multi-ecosystem-groups:
 updates:
   - package-ecosystem: npm
     directory: /
-    multi-ecosystem-group: all-dependencies
+    multi-ecosystem-group: routine-updates
     patterns:
       - "*"
     open-pull-requests-limit: 1
+    groups:
+      routine-updates:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
     ignore:
       - dependency-name: "*"
         update-types:
@@ -23,21 +30,32 @@ updates:
 
   - package-ecosystem: github-actions
     directory: /
-    multi-ecosystem-group: all-dependencies
+    multi-ecosystem-group: routine-updates
     patterns:
       - "*"
     open-pull-requests-limit: 1
     ignore:
+      - dependency-name: actions/setup-python
+        versions:
+          - "6"
+          - "6.x"
       - dependency-name: "*"
         update-types:
           - version-update:semver-major
 
   - package-ecosystem: gradle
     directory: /android
-    multi-ecosystem-group: all-dependencies
+    multi-ecosystem-group: routine-updates
     patterns:
       - "*"
     open-pull-requests-limit: 1
+    groups:
+      routine-updates:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
     ignore:
       - dependency-name: "*"
         update-types:

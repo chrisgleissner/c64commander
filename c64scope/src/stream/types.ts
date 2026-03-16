@@ -34,12 +34,32 @@ export interface PacketStats {
   outOfOrderPackets: number;
 }
 
+export interface AudioEnvelopePoint {
+  receivedAtMs: number;
+  packetDurationMs: number;
+  rms: number;
+  peakAbs: number;
+  samplePairs: number;
+}
+
+export type AudioState = "active" | "silent";
+
+export interface AudioStateWindow {
+  state: AudioState;
+  thresholdRms: number;
+  requiredDurationMs: number;
+  firstObservedAtMs: number | null;
+  settledAtMs: number | null;
+  endAtMs: number | null;
+}
+
 export interface AudioFeatures {
   sampleRateHz: number;
   rms: number;
   peakAbs: number;
   dominantFrequencyHz: number;
   samplePairs: number;
+  envelope: AudioEnvelopePoint[];
   stats: PacketStats;
 }
 

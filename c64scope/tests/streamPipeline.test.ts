@@ -7,7 +7,12 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { analyzeAudioPackets, analyzeVideoPackets } from "../src/stream/analysis.js";
+import {
+  analyzeAudioPackets,
+  analyzeVideoPackets,
+  findFirstSustainedAudioState,
+  medianEnvelopeRms,
+} from "../src/stream/analysis.js";
 import {
   computePacketStats,
   parseAudioPacket,
@@ -30,6 +35,39 @@ describe("stream pipeline", () => {
     expect(features.rms).toBeGreaterThan(0.01);
     expect(features.dominantFrequencyHz).toBeGreaterThan(300);
     expect(features.dominantFrequencyHz).toBeLessThan(600);
+    expect(features.envelope).toHaveLength(12);
+    expect(features.envelope[0]?.packetDurationMs).toBeGreaterThan(0);
+  });
+
+  it("detects sustained silent and active windows from the audio envelope", () => {
+    const packets = [
+      ...buildAudioCapturePackets(440, 30),
+      ...buildSilentAudioCapturePackets(30, 120),
+      ...buildAudioCapturePackets(440, 60, 150),
+    ];
+
+    const features = analyzeAudioPackets(packets);
+    const preMuteMedian = medianEnvelopeRms(features.envelope, { endMs: 90 });
+    expect(preMuteMedian).toBeGreaterThan(0.01);
+
+    const silentWindow = findFirstSustainedAudioState(features.envelope, {
+      state: "silent",
+      thresholdRms: 0.001,
+      requiredDurationMs: 120,
+      afterMs: 100,
+    });
+    expect(silentWindow.firstObservedAtMs).not.toBeNull();
+    expect(silentWindow.settledAtMs).not.toBeNull();
+
+    const activeWindow = findFirstSustainedAudioState(features.envelope, {
+      state: "active",
+      thresholdRms: 0.01,
+      requiredDurationMs: 120,
+      afterMs: silentWindow.settledAtMs ?? 0,
+    });
+    expect(activeWindow.firstObservedAtMs).not.toBeNull();
+    expect((silentWindow.settledAtMs ?? 0) - (silentWindow.firstObservedAtMs ?? 0)).toBeGreaterThanOrEqual(120);
+    expect((activeWindow.settledAtMs ?? 0) - (activeWindow.firstObservedAtMs ?? 0)).toBeGreaterThanOrEqual(120);
   });
 
   it("reconstructs video frame and detects border/background color signature", () => {
@@ -66,7 +104,11 @@ describe("stream pipeline", () => {
   });
 });
 
-function buildAudioCapturePackets(freqHz: number, packetCount: number): StreamCapturePacket[] {
+function buildAudioCapturePackets(
+  freqHz: number,
+  packetCount: number,
+  startPacketIndex: number = 0,
+): StreamCapturePacket[] {
   const sampleRate = 47982.8869;
   const samplesPerPacketStereo = 192;
   const out: StreamCapturePacket[] = [];
@@ -74,7 +116,7 @@ function buildAudioCapturePackets(freqHz: number, packetCount: number): StreamCa
   let globalIndex = 0;
   for (let packet = 0; packet < packetCount; packet++) {
     const payload = Buffer.alloc(2 + samplesPerPacketStereo * 4);
-    payload.writeUInt16LE(packet + 1, 0);
+    payload.writeUInt16LE(startPacketIndex + packet + 1, 0);
 
     for (let i = 0; i < samplesPerPacketStereo; i++) {
       const t = globalIndex / sampleRate;
@@ -85,7 +127,20 @@ function buildAudioCapturePackets(freqHz: number, packetCount: number): StreamCa
       globalIndex += 1;
     }
 
-    out.push({ receivedAtMs: packet * 4, payload });
+    out.push({ receivedAtMs: (startPacketIndex + packet) * 4, payload });
+  }
+
+  return out;
+}
+
+function buildSilentAudioCapturePackets(startPacketIndex: number, packetCount: number): StreamCapturePacket[] {
+  const samplesPerPacketStereo = 192;
+  const out: StreamCapturePacket[] = [];
+
+  for (let packet = 0; packet < packetCount; packet++) {
+    const payload = Buffer.alloc(2 + samplesPerPacketStereo * 4);
+    payload.writeUInt16LE(startPacketIndex + packet + 1, 0);
+    out.push({ receivedAtMs: (startPacketIndex + packet) * 4, payload });
   }
 
   return out;

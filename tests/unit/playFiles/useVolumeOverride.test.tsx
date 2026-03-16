@@ -101,7 +101,11 @@ const buildEnabledSidRestoreUpdatesMock = vi.fn(() => ({}));
 const buildEnabledSidMutedToTargetUpdatesMock = vi.fn((_items: MixerItem[], _enablement: unknown, target: string) => ({
   "SID 1": target,
 }));
+const buildEnabledSidVolumeUpdatesMock = vi.fn((_items: MixerItem[], _enablement: unknown, target: string) => ({
+  "SID 1": target,
+}));
 const buildSidEnablementMock = vi.fn(() => ({ sid1: true }));
+const filterEnabledSidVolumeItemsMock = vi.fn((items: MixerItem[]) => items);
 const buildSidVolumeStepsMock = vi.fn(() => [
   { option: "0", label: "0", numeric: 0 },
   { option: "5", label: "5", numeric: 5 },
@@ -114,11 +118,9 @@ vi.mock("@/lib/config/sidVolumeControl", () => ({
   buildEnabledSidVolumeSnapshot: vi.fn(() => ({ "SID 1": "5" })),
   buildSidEnablement: (...args: unknown[]) => buildSidEnablementMock(...args),
   buildSidVolumeSteps: (...args: unknown[]) => buildSidVolumeStepsMock(...args),
-  filterEnabledSidVolumeItems: vi.fn((items: MixerItem[]) => items),
+  filterEnabledSidVolumeItems: (...args: unknown[]) => filterEnabledSidVolumeItemsMock(...args),
   buildEnabledSidMuteUpdates: vi.fn(() => ({ "SID 1": "-42 dB" })),
-  buildEnabledSidVolumeUpdates: vi.fn((_items: MixerItem[], _enablement: unknown, target: string) => ({
-    "SID 1": target,
-  })),
+  buildEnabledSidVolumeUpdates: (...args: unknown[]) => buildEnabledSidVolumeUpdatesMock(...args),
   isSidVolumeOffValue: vi.fn((value: string | number | undefined) => value === "OFF"),
   resolveSidMutedVolumeOption: vi.fn(() => "-42 dB"),
 }));
@@ -153,8 +155,16 @@ describe("useVolumeOverride", () => {
     );
     buildEnabledSidRestoreUpdatesMock.mockReset();
     buildEnabledSidRestoreUpdatesMock.mockReturnValue({});
+    buildEnabledSidVolumeUpdatesMock.mockReset();
+    buildEnabledSidVolumeUpdatesMock.mockImplementation(
+      (_items: MixerItem[], _enablement: unknown, target: string) => ({
+        "SID 1": target,
+      }),
+    );
     buildSidEnablementMock.mockReset();
     buildSidEnablementMock.mockReturnValue({ sid1: true });
+    filterEnabledSidVolumeItemsMock.mockReset();
+    filterEnabledSidVolumeItemsMock.mockImplementation((items: MixerItem[]) => items);
     buildSidVolumeStepsMock.mockReset();
     buildSidVolumeStepsMock.mockReturnValue([
       { option: "0", label: "0", numeric: 0 },
@@ -289,7 +299,7 @@ describe("useVolumeOverride", () => {
   it("mutes to -42 dB and restores the current slider target on unmute", async () => {
     audioMixerItemsRef.current = defaultMixerItems("5");
 
-    const { result } = renderHook(() =>
+    const { result, rerender } = renderHook(() =>
       useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
     );
 
@@ -311,7 +321,12 @@ describe("useVolumeOverride", () => {
         updates: { "SID 1": "-42 dB" },
       }),
     );
-    expect(addLog).toHaveBeenCalledWith("info", "Play volume mute sent", expect.objectContaining({ index: 1 }));
+    expect(addLog).toHaveBeenCalledWith(
+      "info",
+      "Play volume mute requested",
+      expect.objectContaining({ muteIndex: 0, previousIndex: 1 }),
+    );
+    expect(addLog).toHaveBeenCalledWith("info", "Play volume mute sent", expect.objectContaining({ index: 0 }));
 
     await act(async () => {
       await result.current.handleToggleMute();
@@ -353,7 +368,7 @@ describe("useVolumeOverride", () => {
     });
   });
 
-  it("restores playback-start unmute to the active slider target without reviving already-off SIDs", async () => {
+  it("does not auto-unmute playback-start state while a manual mute intent is still active", async () => {
     audioMixerItemsRef.current = [
       {
         name: "SID 1",
@@ -400,16 +415,12 @@ describe("useVolumeOverride", () => {
       await result.current.ensureUnmuted();
     });
 
-    expect(mutateAsyncMock).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        category: "Audio Mixer",
-        updates: { "SID 2": "5" },
-      }),
-    );
+    expect(mutateAsyncMock).toHaveBeenCalledTimes(1);
+    expect(result.current.volumeState.muted).toBe(true);
+    expect(addLog).not.toHaveBeenCalledWith("info", "Play volume unmute sent on playback start", expect.anything());
   });
 
-  it("falls back to the previous volume when playback-start unmute has no snapshot updates", async () => {
+  it("does not issue playback-start fallback unmute writes while manual mute remains authoritative", async () => {
     audioMixerItemsRef.current = defaultMixerItems("5");
     buildEnabledSidUnmuteUpdatesMock.mockReturnValue({});
 
@@ -429,12 +440,307 @@ describe("useVolumeOverride", () => {
       await result.current.ensureUnmuted();
     });
 
+    expect(mutateAsyncMock).toHaveBeenCalledTimes(1);
+    expect(result.current.volumeState.muted).toBe(true);
+    expect(addLog).not.toHaveBeenCalledWith("info", "Play volume unmute sent on playback start", expect.anything());
+  });
+
+  it("forces playback-start unmute writes even while manual mute intent is still active", async () => {
+    audioMixerItemsRef.current = defaultMixerItems("5");
+
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.volumeState.index).toBe(1);
+    });
+
+    await act(async () => {
+      await result.current.handleToggleMute();
+    });
+
+    await act(async () => {
+      await result.current.ensureUnmuted({ force: true, refreshItems: true });
+    });
+
     expect(mutateAsyncMock).toHaveBeenCalledTimes(2);
+    expect(result.current.volumeState.muted).toBe(false);
     expect(addLog).toHaveBeenCalledWith(
       "info",
       "Play volume unmute sent on playback start",
       expect.objectContaining({ index: 1 }),
     );
+  });
+
+  it("refreshes enabled SID items before unmuting so disabled channels stay muted", async () => {
+    audioMixerItemsRef.current = [
+      {
+        name: "SID 1",
+        value: "5",
+        options: ["OFF", "-42 dB", "0", "5"],
+      },
+      {
+        name: "SID 2",
+        value: "5",
+        options: ["OFF", "-42 dB", "0", "5"],
+      },
+    ];
+    getConfigItemsMock.mockImplementation((category: string) => {
+      if (category === "Audio Mixer") {
+        return Promise.resolve(audioMixerItemsRef.current);
+      }
+      if (category === "SID Sockets Configuration") {
+        return Promise.resolve({ sid1: false, sid2: true });
+      }
+      return Promise.resolve({ sid1: false, sid2: true });
+    });
+    buildSidEnablementMock.mockImplementation((sockets?: Record<string, boolean>) => sockets ?? { sid1: true, sid2: true });
+    filterEnabledSidVolumeItemsMock.mockImplementation((items: MixerItem[], enablement?: Record<string, boolean>) =>
+      items.filter((item) => {
+        if (item.name === "SID 1") return enablement?.sid1 !== false;
+        if (item.name === "SID 2") return enablement?.sid2 !== false;
+        return true;
+      }),
+    );
+    buildEnabledSidMutedToTargetUpdatesMock.mockImplementation(
+      (items: MixerItem[], _enablement: unknown, target: string) => Object.fromEntries(items.map((item) => [item.name, target])),
+    );
+
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.volumeState.muted).toBe(false);
+    });
+
+    await act(async () => {
+      await result.current.handleToggleMute();
+    });
+
+    await act(async () => {
+      await result.current.handleToggleMute();
+    });
+
+    expect(mutateAsyncMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        updates: { "SID 2": "5" },
+      }),
+    );
+  });
+
+  it("rolls back the immediate mute UI state when the mute write fails", async () => {
+    audioMixerItemsRef.current = defaultMixerItems("5");
+    mutateAsyncMock.mockRejectedValueOnce(new Error("mute failed"));
+
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.volumeState.index).toBe(1);
+      expect(result.current.volumeState.muted).toBe(false);
+    });
+
+    await expect(
+      act(async () => {
+        await result.current.handleToggleMute();
+      }),
+    ).rejects.toThrow("mute failed");
+
+    expect(result.current.volumeState.muted).toBe(false);
+    expect(mutateAsyncMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("restores the muted UI state when the unmute write fails", async () => {
+    audioMixerItemsRef.current = defaultMixerItems("5");
+    mutateAsyncMock.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("unmute failed"));
+
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.volumeState.index).toBe(1);
+      expect(result.current.volumeState.muted).toBe(false);
+    });
+
+    await act(async () => {
+      await result.current.handleToggleMute();
+    });
+
+    await expect(
+      act(async () => {
+        await result.current.handleToggleMute();
+      }),
+    ).rejects.toThrow("unmute failed");
+
+    expect(result.current.volumeState.muted).toBe(true);
+    expect(mutateAsyncMock).toHaveBeenCalled();
+  });
+
+  it("does nothing when ensureUnmuted runs while playback is already unmuted", async () => {
+    audioMixerItemsRef.current = defaultMixerItems("5");
+
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.volumeState.muted).toBe(false);
+    });
+
+    await act(async () => {
+      await result.current.ensureUnmuted();
+    });
+
+    expect(mutateAsyncMock).not.toHaveBeenCalled();
+  });
+
+  it("does not attempt to toggle mute when there are no enabled SID volume items", async () => {
+    audioMixerItemsRef.current = [];
+
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    await act(async () => {
+      await result.current.handleToggleMute();
+    });
+
+    expect(mutateAsyncMock).not.toHaveBeenCalled();
+  });
+
+  it("does not attempt playback-start unmute writes when the device exposes no enabled SID volume items", async () => {
+    audioMixerItemsRef.current = [];
+
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    act(() => {
+      result.current.dispatchVolume({ type: "mute", reason: "pause", index: 0 });
+    });
+
+    await act(async () => {
+      await result.current.ensureUnmuted();
+    });
+
+    expect(mutateAsyncMock).not.toHaveBeenCalled();
+  });
+
+  it("does not send a playback-start unmute write when device sync already restored active playback", async () => {
+    audioMixerItemsRef.current = defaultMixerItems("0");
+
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.volumeState.index).toBe(0);
+      expect(result.current.volumeState.muted).toBe(false);
+    });
+
+    await act(async () => {
+      await result.current.handleVolumeCommit(1);
+    });
+
+    act(() => {
+      result.current.dispatchVolume({ type: "mute", reason: "pause", index: 0 });
+    });
+
+    await act(async () => {
+      await result.current.ensureUnmuted();
+    });
+
+    expect(mutateAsyncMock).toHaveBeenCalledTimes(1);
+    expect(result.current.volumeState.muted).toBe(false);
+    expect(addLog).not.toHaveBeenCalledWith("info", "Play volume unmute sent on playback start", expect.anything());
+  });
+
+  it("does not issue fallback playback-start writes when device sync already reports active playback", async () => {
+    audioMixerItemsRef.current = defaultMixerItems("0");
+    buildEnabledSidMutedToTargetUpdatesMock.mockReturnValue({});
+
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.volumeState.index).toBe(0);
+      expect(result.current.volumeState.muted).toBe(false);
+    });
+
+    await act(async () => {
+      await result.current.handleVolumeCommit(1);
+    });
+
+    act(() => {
+      result.current.dispatchVolume({ type: "mute", reason: "pause", index: 0 });
+    });
+
+    await act(async () => {
+      await result.current.ensureUnmuted();
+    });
+
+    expect(mutateAsyncMock).toHaveBeenCalledTimes(1);
+    expect(result.current.volumeState.muted).toBe(false);
+    expect(addLog).not.toHaveBeenCalledWith("info", "Play volume unmute sent on playback start", expect.anything());
+  });
+
+  it("does not issue preview commits while muted and only updates the cached target", async () => {
+    audioMixerItemsRef.current = defaultMixerItems("5");
+
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.volumeState.index).toBe(1);
+      expect(result.current.volumeState.muted).toBe(false);
+    });
+
+    await act(async () => {
+      await result.current.handleToggleMute();
+    });
+
+    mutateAsyncMock.mockClear();
+
+    await act(async () => {
+      await result.current.handleVolumeCommit(0);
+    });
+
+    expect(result.current.volumeState.index).toBe(0);
+    expect(result.current.volumeState.muted).toBe(true);
+    expect(mutateAsyncMock).not.toHaveBeenCalled();
+  });
+
+  it("unmutes locally without a second write when no unmute updates are needed", async () => {
+    audioMixerItemsRef.current = defaultMixerItems("5");
+    buildEnabledSidMutedToTargetUpdatesMock.mockReturnValue({});
+    buildEnabledSidUnmuteUpdatesMock.mockReturnValue({});
+    buildEnabledSidVolumeUpdatesMock.mockReturnValue({});
+
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.volumeState.index).toBe(1);
+      expect(result.current.volumeState.muted).toBe(false);
+    });
+
+    await act(async () => {
+      await result.current.handleToggleMute();
+    });
+
+    await act(async () => {
+      await result.current.handleToggleMute();
+    });
+
+    expect(result.current.volumeState.muted).toBe(false);
+    expect(mutateAsyncMock).toHaveBeenCalledTimes(1);
   });
 
   it("reports failed preview writes with phase-specific context", async () => {
