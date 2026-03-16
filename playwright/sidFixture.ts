@@ -31,9 +31,9 @@ const looksLikeValidSid = (bytes: Uint8Array) => {
 };
 
 export const ensureValidSidBase64 = (value: string, songCount = 1) => {
-  const bytes = Buffer.from(value, 'base64');
+  const bytes = Buffer.from(value, "base64");
   if (looksLikeValidSid(bytes)) {
     return value;
   }
-  return Buffer.from(createMinimalSidBytes(songCount)).toString('base64');
+  return Buffer.from(createMinimalSidBytes(songCount)).toString("base64");
 };

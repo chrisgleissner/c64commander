@@ -374,12 +374,8 @@ test.describe("Playback file browser (part 2)", () => {
     await expect(muteButton).toContainText("Unmute");
     await expect(muteButton).toHaveAttribute(PERSISTENT_ATTR, "true");
     await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(0);
-    await expect
-      .poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 1"].value)
-      .toBe("OFF");
-    await expect
-      .poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 2"].value)
-      .toBe("-42 dB");
+    await expect.poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 1"].value).toBe("OFF");
+    await expect.poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 2"].value).toBe("-42 dB");
     await snap(page, testInfo, "start-unmuted");
 
     const sidplayIndex = server.requests.findIndex((req) => req.url.includes("/v1/runners:sidplay"));

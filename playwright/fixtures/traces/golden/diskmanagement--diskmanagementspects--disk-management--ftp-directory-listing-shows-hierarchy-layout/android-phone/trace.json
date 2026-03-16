@@ -656,18 +656,11 @@
           "items": {
             "Drive": {
               "selected": "Enabled",
-              "options": [
-                "Disabled",
-                "Enabled"
-              ]
+              "options": ["Disabled", "Enabled"]
             },
             "Drive Type": {
               "selected": "1541",
-              "options": [
-                "1541",
-                "1571",
-                "1581"
-              ]
+              "options": ["1541", "1571", "1581"]
             },
             "Drive Bus ID": {
               "selected": 8,
@@ -682,41 +675,26 @@
               "selected": "1541.rom",
               "options": [],
               "details": {
-                "presets": [
-                  "1541.rom",
-                  "1571.rom",
-                  "1581.rom"
-                ]
+                "presets": ["1541.rom", "1571.rom", "1581.rom"]
               }
             },
             "ROM for 1571 mode": {
               "selected": "1571.rom",
               "options": [],
               "details": {
-                "presets": [
-                  "1541.rom",
-                  "1571.rom",
-                  "1581.rom"
-                ]
+                "presets": ["1541.rom", "1571.rom", "1581.rom"]
               }
             },
             "ROM for 1581 mode": {
               "selected": "1581.rom",
               "options": [],
               "details": {
-                "presets": [
-                  "1541.rom",
-                  "1571.rom",
-                  "1581.rom"
-                ]
+                "presets": ["1541.rom", "1571.rom", "1581.rom"]
               }
             },
             "Extra RAM": {
               "selected": "Disabled",
-              "options": [
-                "Disabled",
-                "Enabled"
-              ]
+              "options": ["Disabled", "Enabled"]
             },
             "Disk swap delay": {
               "selected": 1,
@@ -729,40 +707,23 @@
             },
             "Resets when C64 resets": {
               "selected": "Yes",
-              "options": [
-                "No",
-                "Yes"
-              ]
+              "options": ["No", "Yes"]
             },
             "Freezes in menu": {
               "selected": "Yes",
-              "options": [
-                "No",
-                "Yes"
-              ]
+              "options": ["No", "Yes"]
             },
             "GCR Save Align Tracks": {
               "selected": "Yes",
-              "options": [
-                "No",
-                "Yes"
-              ]
+              "options": ["No", "Yes"]
             },
             "Leave Menu on Mount": {
               "selected": "Yes",
-              "options": [
-                "No",
-                "Yes"
-              ]
+              "options": ["No", "Yes"]
             },
             "D64 Geos Copy Protection": {
               "selected": "none",
-              "options": [
-                "none",
-                "Gaps",
-                "Track 36",
-                "Both"
-              ]
+              "options": ["none", "Gaps", "Track 36", "Both"]
             }
           }
         },
@@ -819,18 +780,11 @@
           "items": {
             "Drive": {
               "selected": "Disabled",
-              "options": [
-                "Disabled",
-                "Enabled"
-              ]
+              "options": ["Disabled", "Enabled"]
             },
             "Drive Type": {
               "selected": "1541",
-              "options": [
-                "1541",
-                "1571",
-                "1581"
-              ]
+              "options": ["1541", "1571", "1581"]
             },
             "Drive Bus ID": {
               "selected": 9,
@@ -845,41 +799,26 @@
               "selected": "1541.rom",
               "options": [],
               "details": {
-                "presets": [
-                  "1541.rom",
-                  "1571.rom",
-                  "1581.rom"
-                ]
+                "presets": ["1541.rom", "1571.rom", "1581.rom"]
               }
             },
             "ROM for 1571 mode": {
               "selected": "1571.rom",
               "options": [],
               "details": {
-                "presets": [
-                  "1541.rom",
-                  "1571.rom",
-                  "1581.rom"
-                ]
+                "presets": ["1541.rom", "1571.rom", "1581.rom"]
               }
             },
             "ROM for 1581 mode": {
               "selected": "1581.rom",
               "options": [],
               "details": {
-                "presets": [
-                  "1541.rom",
-                  "1571.rom",
-                  "1581.rom"
-                ]
+                "presets": ["1541.rom", "1571.rom", "1581.rom"]
               }
             },
             "Extra RAM": {
               "selected": "Disabled",
-              "options": [
-                "Disabled",
-                "Enabled"
-              ]
+              "options": ["Disabled", "Enabled"]
             },
             "Disk swap delay": {
               "selected": 1,
@@ -892,40 +831,23 @@
             },
             "Resets when C64 resets": {
               "selected": "Yes",
-              "options": [
-                "No",
-                "Yes"
-              ]
+              "options": ["No", "Yes"]
             },
             "Freezes in menu": {
               "selected": "Yes",
-              "options": [
-                "No",
-                "Yes"
-              ]
+              "options": ["No", "Yes"]
             },
             "GCR Save Align Tracks": {
               "selected": "Yes",
-              "options": [
-                "No",
-                "Yes"
-              ]
+              "options": ["No", "Yes"]
             },
             "Leave Menu on Mount": {
               "selected": "Yes",
-              "options": [
-                "No",
-                "Yes"
-              ]
+              "options": ["No", "Yes"]
             },
             "D64 Geos Copy Protection": {
               "selected": "none",
-              "options": [
-                "none",
-                "Gaps",
-                "Track 36",
-                "Both"
-              ]
+              "options": ["none", "Gaps", "Track 36", "Both"]
             }
           }
         },
@@ -982,10 +904,7 @@
           "items": {
             "IEC Drive": {
               "selected": "Disabled",
-              "options": [
-                "Disabled",
-                "Enabled"
-              ]
+              "options": ["Disabled", "Enabled"]
             },
             "Soft Drive Bus ID": {
               "selected": 11,

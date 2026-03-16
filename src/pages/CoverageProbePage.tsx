@@ -225,7 +225,7 @@ export default function CoverageProbePage() {
       await runProbe(
         "developer mode store",
         async () => {
-          const devUnsub = subscribeDeveloperMode(() => { });
+          const devUnsub = subscribeDeveloperMode(() => {});
           setDeveloperModeEnabled(true);
           getDeveloperModeEnabled();
           devUnsub();
