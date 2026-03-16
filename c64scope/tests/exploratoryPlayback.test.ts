@@ -7,7 +7,11 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { expectedMuteToggleLabel, requireAudioFeatures } from "../src/validation/cases/exploratoryPlayback.js";
+import {
+  expectedMuteToggleLabel,
+  hasVisibleButtonLabel,
+  requireAudioFeatures,
+} from "../src/validation/cases/exploratoryPlayback.js";
 
 describe("exploratory playback audio analysis guard", () => {
   it("rejects non-audio analysis payloads before latency calculations", () => {
@@ -61,5 +65,17 @@ describe("exploratory playback audio analysis guard", () => {
 
   it("requires the unmute phase to target the unmute label only", () => {
     expect(expectedMuteToggleLabel("unmute")).toBe("Unmute");
+  });
+
+  it("ignores unrelated text nodes when checking the mute toggle label", () => {
+    const xml = `
+      <hierarchy>
+        <node text="Unmute" class="android.widget.TextView" enabled="true" bounds="[42,154][300,243]" />
+        <node text="Mute" resource-id="volume-mute" class="android.widget.Button" clickable="true" enabled="true" bounds="[203,2004][341,2150]" />
+      </hierarchy>
+    `;
+
+    expect(hasVisibleButtonLabel(xml, "Unmute", "volume-mute")).toBe(false);
+    expect(hasVisibleButtonLabel(xml, "Mute", "volume-mute")).toBe(true);
   });
 });

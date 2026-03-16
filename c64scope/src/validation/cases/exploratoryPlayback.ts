@@ -17,7 +17,7 @@ import {
 } from "../../stream/index.js";
 import { discoverDeviceMirror } from "../../testDataDiscovery.js";
 import { DroidmindClient } from "../droidmindClient.js";
-import { findVisibleText, parseUiNodes } from "../appFirstUi.js";
+import { parseBoundsCenter, parseUiNodes } from "../appFirstUi.js";
 import {
   ensureDeviceUnlocked,
   launchAppForeground,
@@ -109,16 +109,37 @@ async function maybeClearPlaylist(client: DroidmindClient, serial: string): Prom
   }
 }
 
-async function waitForVisibleText(
+export function hasVisibleButtonLabel(xml: string, expectedText: string, resourceIdSuffix?: string): boolean {
+  const normalized = expectedText.trim().toLowerCase();
+  const nodes = parseUiNodes(xml);
+  return nodes.some((node) => {
+    if (!node.enabled || node.className !== "android.widget.Button") {
+      return false;
+    }
+    if (!parseBoundsCenter(node.bounds)) {
+      return false;
+    }
+    if (resourceIdSuffix && !node.resourceId.endsWith(resourceIdSuffix) && !node.contentDesc && !node.text) {
+      return false;
+    }
+    const label = (node.text || node.contentDesc).trim().toLowerCase();
+    if (label !== normalized) {
+      return false;
+    }
+    return !resourceIdSuffix || node.resourceId.length === 0 || node.resourceId.endsWith(resourceIdSuffix);
+  });
+}
+
+async function waitForVisibleButtonLabel(
   serial: string,
   expectedText: string,
   retries: number,
   delayMs: number,
+  resourceIdSuffix?: string,
 ): Promise<boolean> {
   for (let attempt = 1; attempt <= retries; attempt += 1) {
     const xml = await dumpUiHierarchy(serial);
-    const nodes = parseUiNodes(xml);
-    if (findVisibleText(nodes, expectedText)) {
+    if (hasVisibleButtonLabel(xml, expectedText, resourceIdSuffix)) {
       return true;
     }
     await new Promise((resolve) => setTimeout(resolve, delayMs));
@@ -701,7 +722,7 @@ export const appFirstPlaybackMuteLatency: ValidationCase = {
       if (!muteTapped) {
         throw new Error("Could not tap the Play mute button.");
       }
-      const muteButtonFlipped = await waitForVisibleText(ctx.serial, "Unmute", 8, 250);
+      const muteButtonFlipped = await waitForVisibleButtonLabel(ctx.serial, "Unmute", 8, 250, "volume-mute");
       await droidmind.screenshotToFile(ctx.serial, mutedScreenshotPath);
       const muteCapture = await muteCapturePromise;
       const muteMetrics = analyzeMuteTransition(
@@ -724,7 +745,7 @@ export const appFirstPlaybackMuteLatency: ValidationCase = {
       if (!unmuteTapped) {
         throw new Error("Could not tap the Play unmute button.");
       }
-      const unmuteButtonFlipped = await waitForVisibleText(ctx.serial, "Mute", 8, 250);
+      const unmuteButtonFlipped = await waitForVisibleButtonLabel(ctx.serial, "Mute", 8, 250, "volume-mute");
       await droidmind.screenshotToFile(ctx.serial, unmutedScreenshotPath);
       const unmuteCapture = await unmuteCapturePromise;
       const unmuteMetrics = analyzeUnmuteTransition(
