@@ -11,6 +11,10 @@ import { describe, expect, it, vi } from "vitest";
 import { useSidData } from "@/pages/home/hooks/useSidData";
 
 vi.mock("@/hooks/useC64Connection", () => ({
+  VISIBLE_C64_QUERY_OPTIONS: {
+    intent: "user",
+    refetchOnMount: "always",
+  },
   useC64ConfigItems: vi.fn(() => ({ data: undefined })),
 }));
 

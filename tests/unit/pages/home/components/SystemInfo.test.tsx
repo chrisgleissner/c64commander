@@ -13,6 +13,10 @@ import { SystemInfo } from "@/pages/home/components/SystemInfo";
 const mockUseC64Connection = vi.fn();
 
 vi.mock("@/hooks/useC64Connection", () => ({
+  VISIBLE_C64_QUERY_OPTIONS: {
+    intent: "user",
+    refetchOnMount: "always",
+  },
   useC64Connection: () => mockUseC64Connection(),
 }));
 

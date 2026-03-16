@@ -38,6 +38,10 @@ vi.mock("@/components/DiagnosticsActivityIndicator", () => ({
 }));
 
 vi.mock("@/hooks/useC64Connection", () => ({
+  VISIBLE_C64_QUERY_OPTIONS: {
+    intent: "user",
+    refetchOnMount: "always",
+  },
   useC64Connection: () => mockUseC64Connection(),
   useC64Categories: () => mockUseC64Categories(),
   useC64Category: (...args: [string, boolean]) => mockUseC64Category(...args),

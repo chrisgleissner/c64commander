@@ -15,6 +15,10 @@ vi.mock("@/hooks/useFeatureFlags", () => ({
 }));
 
 vi.mock("@/hooks/useC64Connection", () => ({
+  VISIBLE_C64_QUERY_OPTIONS: {
+    intent: "user",
+    refetchOnMount: "always",
+  },
   useC64Connection: () => ({
     status: {
       deviceInfo: { unique_id: "DEV-1" },

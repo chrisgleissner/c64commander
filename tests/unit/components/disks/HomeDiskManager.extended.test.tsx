@@ -284,6 +284,10 @@ const useC64DrivesMock = {
 };
 
 vi.mock("@/hooks/useC64Connection", () => ({
+  VISIBLE_C64_QUERY_OPTIONS: {
+    intent: "user",
+    refetchOnMount: "always",
+  },
   useC64Connection: () => useC64ConnectionMock,
   useC64Drives: () => useC64DrivesMock,
   useC64ConfigItems: () => ({ data: undefined }),

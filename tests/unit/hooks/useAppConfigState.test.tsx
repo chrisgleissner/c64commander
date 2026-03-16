@@ -34,6 +34,10 @@ const createAppConfigEntry = vi.fn((_baseUrl, name, data) => ({
 }));
 
 vi.mock("@/hooks/useC64Connection", () => ({
+  VISIBLE_C64_QUERY_OPTIONS: {
+    intent: "user",
+    refetchOnMount: "always",
+  },
   useC64Connection: () => ({ status, baseUrl: "http://c64u" }),
 }));
 
@@ -323,7 +327,7 @@ describe("useAppConfigState", () => {
     status.isConnected = false;
     renderHook(() => useAppConfigState(), { wrapper });
     // Allow React to process effects
-    await act(async () => {});
+    await act(async () => { });
     // When disconnected, effect returns early before fetching
     expect(saveInitialSnapshot).not.toHaveBeenCalled();
     status.isConnected = true;
@@ -332,7 +336,7 @@ describe("useAppConfigState", () => {
   it("does not recapture the initial snapshot when the current baseUrl already has a session marker", async () => {
     sessionStorage.setItem("c64u_initial_snapshot_session:http://c64u", "1");
     renderHook(() => useAppConfigState(), { wrapper });
-    await act(async () => {});
+    await act(async () => { });
     expect(getCategories).not.toHaveBeenCalled();
     expect(saveInitialSnapshot).not.toHaveBeenCalled();
   });
