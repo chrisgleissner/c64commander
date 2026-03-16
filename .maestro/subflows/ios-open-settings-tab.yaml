@@ -18,9 +18,9 @@ tags:
           optional: true
       - waitForAnimationToEnd
       - extendedWaitUntil:
-          visible: "Connection"
+          visible: "Settings"
           timeout: ${LONG_TIMEOUT}
 - extendedWaitUntil:
-    visible: "Connection"
+    visible: "Settings"
     timeout: ${LONG_TIMEOUT}
-- assertVisible: "Connection"
+- assertVisible: "Settings"
