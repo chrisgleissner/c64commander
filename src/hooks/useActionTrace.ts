@@ -9,6 +9,7 @@
 import { useCallback, useMemo } from "react";
 import type { TraceOrigin } from "@/lib/tracing/types";
 import { createActionContext, runActionScope, runWithActionTrace } from "@/lib/tracing/actionTrace";
+import { addLog } from "@/lib/logging";
 
 const inferActionName = (componentName: string | undefined, fn: (...args: unknown[]) => unknown) => {
   if (componentName) {
@@ -32,7 +33,7 @@ const inferComponentNameFromStack = () => {
       );
     return candidates[0];
   } catch (error) {
-    console.warn("Failed to infer component name from stack", { error });
+    addLog("warn", "Failed to infer component name from stack", { error: (error as Error).message });
     return undefined;
   }
 };

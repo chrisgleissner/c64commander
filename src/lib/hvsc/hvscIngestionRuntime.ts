@@ -28,7 +28,7 @@ import {
   resetLibraryRoot,
   resetSonglengthsCache,
 } from "./hvscFilesystem";
-import { loadHvscState, updateHvscState, isUpdateApplied, markUpdateApplied } from "./hvscStateStore";
+import { loadHvscState, updateHvscState, isUpdateApplied, markUpdateApplied, type HvscState } from "./hvscStateStore";
 import { loadHvscStatusSummary, saveHvscStatusSummary } from "./hvscStatusStore";
 import { getHvscSonglengthsStats, reloadHvscSonglengthsOnConfigChange } from "./hvscSongLengthService";
 import { addErrorLog, addLog } from "@/lib/logging";
@@ -79,7 +79,7 @@ const runtimeState = getHvscIngestionRuntimeState();
 export { isIngestionRuntimeActive, recoverStaleIngestionState } from "./hvscIngestionRuntimeSupport";
 
 const ensureNotCancelled = (token?: string) => {
-  ensureNotCancelledWith(runtimeState.cancelTokens, token, (patch) => updateHvscState(patch as any));
+  ensureNotCancelledWith(runtimeState.cancelTokens, token, (patch) => updateHvscState(patch as Partial<HvscState>));
 };
 
 const canUseNativeHvscIngestion = () => {

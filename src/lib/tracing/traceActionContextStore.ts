@@ -153,10 +153,11 @@ export const installAsyncContextPropagation = (): void => {
   // Patch setTimeout
   if (typeof globalThis !== "undefined" && typeof globalThis.setTimeout === "function") {
     originalSetTimeout = globalThis.setTimeout;
-    (globalThis as any).setTimeout = ((
-      callback: (...args: any[]) => void,
+    const g = globalThis as typeof globalThis & { setTimeout: typeof setTimeout };
+    g.setTimeout = ((
+      callback: (...args: unknown[]) => void,
       ms?: number,
-      ...args: any[]
+      ...args: unknown[]
     ): ReturnType<typeof setTimeout> => {
       const capturedCtx = getCurrentActionContext();
       return originalSetTimeout!(wrapCallback(callback, capturedCtx), ms, ...args);
@@ -166,10 +167,11 @@ export const installAsyncContextPropagation = (): void => {
   // Patch setInterval
   if (typeof globalThis !== "undefined" && typeof globalThis.setInterval === "function") {
     originalSetInterval = globalThis.setInterval;
-    (globalThis as any).setInterval = ((
-      callback: (...args: any[]) => void,
+    const g = globalThis as typeof globalThis & { setInterval: typeof setInterval };
+    g.setInterval = ((
+      callback: (...args: unknown[]) => void,
       ms?: number,
-      ...args: any[]
+      ...args: unknown[]
     ): ReturnType<typeof setInterval> => {
       const capturedCtx = getCurrentActionContext();
       return originalSetInterval!(wrapCallback(callback, capturedCtx), ms, ...args);

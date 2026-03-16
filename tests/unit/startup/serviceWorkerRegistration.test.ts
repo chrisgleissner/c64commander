@@ -55,7 +55,7 @@ describe("serviceWorkerRegistration", () => {
     window.dispatchEvent(new Event("load"));
     await Promise.resolve();
 
-    expect(registerMock).toHaveBeenCalledWith("/sw.js?v=0.1.0-test-build");
+    expect(registerMock).toHaveBeenCalledWith("/sw.js?v=0.6.4-rc2-test-build");
     expect(vi.mocked(addErrorLog)).toHaveBeenCalledWith(
       "Service worker registration failed",
       expect.objectContaining({
@@ -75,6 +75,6 @@ describe("serviceWorkerRegistration", () => {
   });
 
   it("builds a versioned service worker script url", () => {
-    expect(getServiceWorkerScriptUrl()).toBe("/sw.js?v=0.1.0-test-build");
+    expect(getServiceWorkerScriptUrl()).toBe("/sw.js?v=0.6.4-rc2-test-build");
   });
 });

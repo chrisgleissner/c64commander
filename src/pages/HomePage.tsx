@@ -8,7 +8,7 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { RotateCcw, Save, RefreshCw, Trash2, Upload, Download, FolderOpen } from "lucide-react";
+import { RotateCcw, Save, RefreshCw, Trash2, Upload, Download, FolderOpen, AlertCircle } from "lucide-react";
 import { useC64ConfigItems, useC64Connection, VISIBLE_C64_QUERY_OPTIONS } from "@/hooks/useC64Connection";
 import { useActionTrace } from "@/hooks/useActionTrace";
 import { AppBar } from "@/components/AppBar";
@@ -128,6 +128,7 @@ function HomePageContent() {
   const {
     appConfigs,
     hasChanges,
+    fetchError: configFetchError,
     isApplying,
     isSaving,
     revertToInitial,
@@ -904,6 +905,24 @@ function HomePageContent() {
               />
             </ProfileActionGrid>
           </motion.div>
+
+          {/* Config Fetch Error */}
+          {configFetchError && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex items-start gap-2 rounded-xl border border-destructive/20 bg-destructive/10 p-4"
+              data-testid="config-fetch-error"
+            >
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+              <div>
+                <p className="text-sm font-medium text-destructive">Config snapshot unavailable</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Could not load the initial configuration. Revert and save may be incomplete.
+                </p>
+              </div>
+            </motion.div>
+          )}
 
           {/* Offline Message */}
           {!isActive && !status.isConnecting && (

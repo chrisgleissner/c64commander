@@ -23,7 +23,7 @@ import { addErrorLog } from "@/lib/logging";
 import { resolveAudioMixerResetValue } from "@/lib/config/audioMixer";
 import { useRefreshControl } from "@/hooks/useRefreshControl";
 import { isAudioMixerValueEqual } from "@/lib/config/audioMixer";
-import { getC64API } from "@/lib/c64api";
+import { getC64API, type ConfigCategory } from "@/lib/c64api";
 import { cn } from "@/lib/utils";
 import { buildSoloRoutingUpdates, isSidVolumeName, soloReducer } from "@/lib/config/audioMixerSolo";
 import { normalizeConfigItem, type NormalizedConfigItem } from "@/lib/config/normalizeConfigItem";
@@ -79,10 +79,10 @@ function CategorySection({
   const items = useMemo<ConfigListItem[]>(() => {
     if (!categoryData) return [];
 
-    const catData = categoryData[categoryName] as any;
-    if (!catData || typeof catData !== "object") return [];
+    const catData = categoryData[categoryName] as ConfigCategory | undefined;
+    if (!catData || typeof catData !== "object" || Array.isArray(catData)) return [];
 
-    const itemsData = (catData as any).items ?? catData;
+    const itemsData = (catData as ConfigCategory & { items?: ConfigCategory }).items ?? catData;
 
     return Object.entries(itemsData)
       .filter(([key]) => key !== "errors")

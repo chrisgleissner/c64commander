@@ -63,6 +63,7 @@ vi.mock("@/lib/config/appConfigStore", () => ({
 
 vi.mock("@/lib/logging", () => ({
   addLog: vi.fn(),
+  addErrorLog: vi.fn(),
 }));
 
 describe("useAppConfigState", () => {
@@ -164,18 +165,32 @@ describe("useAppConfigState", () => {
     expect(updateHasChanges).toHaveBeenCalledWith(expect.any(String), false);
   });
 
-  it("logs when initial snapshot capture fails", async () => {
-    const { addLog } = await import("@/lib/logging");
-    getCategories.mockRejectedValueOnce(new Error("network error"));
+  it("sets fetchError state when initial snapshot capture always fails", async () => {
+    getCategories.mockRejectedValue(new Error("network error"));
+    const { result } = renderHook(() => useAppConfigState(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.fetchError).toBe("network error");
+    });
+
+    getCategories.mockReset();
+    getCategories.mockResolvedValue({ categories: ["Audio Mixer"] });
+  });
+
+  it("logs at error level when initial snapshot capture fails", async () => {
+    const { addErrorLog } = await import("@/lib/logging");
+    getCategories.mockRejectedValue(new Error("network error"));
     renderHook(() => useAppConfigState(), { wrapper });
 
     await waitFor(() => {
-      expect(addLog).toHaveBeenCalledWith(
-        "debug",
+      expect(addErrorLog).toHaveBeenCalledWith(
         expect.stringContaining("Initial config snapshot"),
         expect.objectContaining({ error: "network error" }),
       );
     });
+
+    getCategories.mockReset();
+    getCategories.mockResolvedValue({ categories: ["Audio Mixer"] });
   });
 
   it("handles partial category fetch failure gracefully", async () => {

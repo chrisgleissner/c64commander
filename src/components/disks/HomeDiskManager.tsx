@@ -771,10 +771,10 @@ export const HomeDiskManager = () => {
             try {
               listingCache.set(parent, await source.listEntries(parent));
             } catch (error) {
-              console.warn("Failed to list source entries for selection", {
+              addLog("warn", "Failed to list source entries for selection", {
                 path: parent,
                 sourceId: source.id,
-                error,
+                error: (error as Error).message,
               });
               listingCache.set(parent, []);
             }

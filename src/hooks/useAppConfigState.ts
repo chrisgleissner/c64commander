@@ -22,39 +22,23 @@ import {
   loadAppConfigs,
 } from "@/lib/config/appConfigStore";
 import { useC64Connection } from "@/hooks/useC64Connection";
-import { addLog } from "@/lib/logging";
+import { addErrorLog, addLog } from "@/lib/logging";
+import { extractConfigValue } from "@/lib/config/configValueExtractor";
 
 const FULL_CONFIG_BACKGROUND_CONCURRENCY = 4;
 
 const isReadOnlyItem = (name: string) => name.startsWith("SID Detected Socket");
 
-const extractValue = (config: unknown) => {
-  if (typeof config !== "object" || config === null || Array.isArray(config)) {
-    return config as string | number;
-  }
-
-  const cfg = config as Record<string, any>;
-  return (
-    cfg.selected ??
-    cfg.value ??
-    cfg.current ??
-    cfg.current_value ??
-    cfg.currentValue ??
-    cfg.default ??
-    cfg.default_value ??
-    ""
-  );
-};
-
 const extractItems = (categoryName: string, response: ConfigResponse) => {
-  const categoryBlock = (response as Record<string, any>)[categoryName] ?? response;
-  const itemsBlock = (categoryBlock as Record<string, any>)?.items ?? categoryBlock;
+  const responseRecord = response as Record<string, unknown>;
+  const categoryBlock = (responseRecord[categoryName] ?? response) as Record<string, unknown> | null;
+  const itemsBlock = (categoryBlock as Record<string, unknown> | null)?.items ?? categoryBlock;
 
   if (!itemsBlock || typeof itemsBlock !== "object") return [] as Array<{ name: string; value: string | number }>;
 
   return Object.entries(itemsBlock)
     .filter(([key]) => key !== "errors")
-    .map(([name, config]) => ({ name, value: extractValue(config) }));
+    .map(([name, config]) => ({ name, value: extractConfigValue(config) }));
 };
 
 const fetchAllConfig = async () => {
@@ -132,6 +116,7 @@ export function useAppConfigState() {
   const [isSnapshotLoading, setSnapshotLoading] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const hasCapturedRef = useRef(false);
   const sessionSnapshotKey = `c64u_initial_snapshot_session:${resolvedBaseUrl}`;
 
@@ -173,14 +158,18 @@ export function useAppConfigState() {
         const snapshot = { savedAt: new Date().toISOString(), data };
         saveInitialSnapshot(resolvedBaseUrl, snapshot);
         setInitialSnapshot(snapshot);
+        setFetchError(null);
         updateHasChanges(resolvedBaseUrl, false);
         hasCapturedRef.current = true;
         sessionStorage.setItem(sessionSnapshotKey, "1");
       })
       .catch((error) => {
-        addLog("debug", "Initial config snapshot capture deferred", {
-          error: (error as Error).message,
+        const message = (error as Error).message ?? "Unknown error";
+        addErrorLog("Initial config snapshot capture failed", {
+          error: message,
+          baseUrl: resolvedBaseUrl,
         });
+        setFetchError(message);
       })
       .finally(() => {
         if (isMounted) setSnapshotLoading(false);
@@ -286,6 +275,7 @@ export function useAppConfigState() {
   return {
     initialSnapshot,
     isSnapshotLoading,
+    fetchError,
     hasChanges,
     isApplying,
     isSaving,
