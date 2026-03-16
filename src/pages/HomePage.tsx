@@ -9,7 +9,7 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { RotateCcw, Save, RefreshCw, Trash2, Upload, Download, FolderOpen } from "lucide-react";
-import { useC64ConfigItems, useC64Connection } from "@/hooks/useC64Connection";
+import { useC64ConfigItems, useC64Connection, VISIBLE_C64_QUERY_OPTIONS } from "@/hooks/useC64Connection";
 import { useActionTrace } from "@/hooks/useActionTrace";
 import { AppBar } from "@/components/AppBar";
 import { QuickActionCard } from "@/components/QuickActionCard";
@@ -58,8 +58,6 @@ import { SectionHeader } from "@/components/SectionHeader";
 import { cn } from "@/lib/utils";
 import { PageContainer, PageStack, ProfileActionGrid, ProfileSplitSection } from "@/components/layout/PageContainer";
 
-const visibleQueryOptions = { intent: "user" as const, refetchOnMount: "always" as const };
-
 export default function HomePage() {
   return (
     <ConfigActionsProvider>
@@ -76,31 +74,31 @@ function HomePageContent() {
     "U64 Specific Settings",
     [...U64_HOME_ITEMS],
     isActive || status.isConnecting,
-    visibleQueryOptions,
+    VISIBLE_C64_QUERY_OPTIONS,
   );
   const { data: c64CartridgeCategory } = useC64ConfigItems(
     "C64 and Cartridge Settings",
     [...C64_CARTRIDGE_HOME_ITEMS],
     isActive || status.isConnecting,
-    visibleQueryOptions,
+    VISIBLE_C64_QUERY_OPTIONS,
   );
   const { data: ledStripCategory } = useC64ConfigItems(
     "LED Strip Settings",
     [...LED_STRIP_HOME_ITEMS],
     isActive || status.isConnecting,
-    visibleQueryOptions,
+    VISIBLE_C64_QUERY_OPTIONS,
   );
   const { data: userInterfaceCategory } = useC64ConfigItems(
     "User Interface Settings",
     [...USER_INTERFACE_HOME_ITEMS],
     isActive || status.isConnecting,
-    visibleQueryOptions,
+    VISIBLE_C64_QUERY_OPTIONS,
   );
   const { data: keyboardLightingCategory } = useC64ConfigItems(
     "Keyboard Lighting",
     [...KEYBOARD_LIGHTING_HOME_ITEMS],
     isActive || status.isConnecting,
-    visibleQueryOptions,
+    VISIBLE_C64_QUERY_OPTIONS,
   );
 
   const {

@@ -9,10 +9,19 @@
 import { addLog } from "@/lib/logging";
 import { getDeviceStateSnapshot } from "@/lib/deviceInteraction/deviceStateStore";
 import { canonicalizeRestPath } from "@/lib/deviceInteraction/restRequestIdentity";
-import { buildPayloadPreviewFromBytes, buildPayloadPreviewFromJson, buildPayloadPreviewFromText, collectTraceHeaders } from "@/lib/tracing/payloadPreview";
+import {
+  buildPayloadPreviewFromBytes,
+  buildPayloadPreviewFromJson,
+  buildPayloadPreviewFromText,
+  collectTraceHeaders,
+} from "@/lib/tracing/payloadPreview";
 import type { PayloadPreview, TraceHeaders } from "@/lib/tracing/types";
 
 const IDLE_RECOVERY_THRESHOLD_MS = 10_000;
+
+const isFile = (value: unknown): value is File => typeof File !== "undefined" && value instanceof File;
+
+const isBlob = (value: unknown): value is Blob => typeof Blob !== "undefined" && value instanceof Blob;
 
 export const normalizeUrlPath = (url: string) => {
   try {
@@ -152,7 +161,7 @@ const summarizeFormData = (body: FormData) => {
     mimeType?: string;
   }> = [];
   body.forEach((value, name) => {
-    if (value instanceof File) {
+    if (isFile(value)) {
       fields.push({
         name,
         type: "file",
@@ -160,7 +169,7 @@ const summarizeFormData = (body: FormData) => {
         sizeBytes: value.size,
         mimeType: value.type || undefined,
       });
-    } else if (typeof Blob !== "undefined" && value instanceof Blob) {
+    } else if (isBlob(value)) {
       fields.push({
         name,
         type: "file",
@@ -178,10 +187,18 @@ const summarizeFormData = (body: FormData) => {
 };
 
 const summarizeBinaryBody = (body: Blob | ArrayBuffer | ArrayBufferView) => {
-  if (typeof Blob !== "undefined" && body instanceof Blob) {
+  if (isFile(body)) {
     return {
-      type: body instanceof File ? "file" : "blob",
-      fileName: body instanceof File ? body.name : undefined,
+      type: "file",
+      fileName: body.name,
+      sizeBytes: body.size,
+      mimeType: body.type || null,
+      source: "blob",
+    };
+  }
+  if (isBlob(body)) {
+    return {
+      type: "blob",
       sizeBytes: body.size,
       mimeType: body.type || null,
       source: "blob",
@@ -226,7 +243,7 @@ export const inspectRequestPayload = async (
       payloadPreview: buildPayloadPreviewFromJson(summary),
     };
   }
-  if (typeof Blob !== "undefined" && body instanceof Blob) {
+  if (isBlob(body)) {
     const bytes = new Uint8Array(await body.arrayBuffer());
     return {
       body: summarizeBinaryBody(body),
@@ -304,10 +321,10 @@ export const inspectResponsePayload = async (
       body:
         bytes.byteLength > 0
           ? {
-            type: "binary",
-            sizeBytes: bytes.byteLength,
-            mimeType: contentType || null,
-          }
+              type: "binary",
+              sizeBytes: bytes.byteLength,
+              mimeType: contentType || null,
+            }
           : null,
       payloadPreview: buildPayloadPreviewFromBytes(bytes),
     };
@@ -334,7 +351,7 @@ export const extractRequestBody = (body: unknown) => {
   if (typeof FormData !== "undefined" && body instanceof FormData) {
     return summarizeFormData(body);
   }
-  if (typeof Blob !== "undefined" && body instanceof Blob) {
+  if (isBlob(body)) {
     return summarizeBinaryBody(body);
   }
   if (body instanceof ArrayBuffer) {

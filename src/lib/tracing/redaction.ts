@@ -40,8 +40,11 @@ const redactValue = (value: unknown, keyHint?: string): unknown => {
   return value;
 };
 
-export const redactHeaders = (headers: Record<string, string | string[] | undefined>) => {
+export const redactHeaders = (headers: Record<string, string | string[] | undefined> | null | undefined) => {
   const redacted: Record<string, string | string[] | undefined> = {};
+  if (!headers) {
+    return redacted;
+  }
   Object.entries(headers).forEach(([key, value]) => {
     if (value === undefined) return;
     if (isSensitiveKey(key)) {

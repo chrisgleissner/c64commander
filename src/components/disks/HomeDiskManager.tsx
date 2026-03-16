@@ -58,8 +58,6 @@ import { useDiskLibrary } from "@/hooks/useDiskLibrary";
 import { createUltimateSourceLocation } from "@/lib/sourceNavigation/ftpSourceAdapter";
 import { createLocalSourceLocation, resolveLocalRuntimeFile } from "@/lib/sourceNavigation/localSourceAdapter";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
-
-const visibleQueryOptions = { intent: "user" as const, refetchOnMount: "always" as const };
 import { getLocalSourceListingMode, requireLocalSourceEntries } from "@/lib/sourceNavigation/localSourcesStore";
 import { LocalSourceListingError } from "@/lib/sourceNavigation/localSourceErrors";
 import { prepareDirectoryInput } from "@/lib/sourceNavigation/localSourcesStore";
@@ -110,6 +108,8 @@ import {
   resolveStatusDisplaySeverity,
   type DriveKey,
 } from "@/components/disks/HomeDiskManagerSupport";
+
+const visibleQueryOptions = { intent: "user" as const, refetchOnMount: "always" as const };
 
 export const HomeDiskManager = () => {
   const { profile } = useDisplayProfile();
@@ -981,7 +981,7 @@ export const HomeDiskManager = () => {
           }));
         }
         if (addItemsOverlayActiveRef.current) {
-          const overlayStartedAt = addItemsOverlayStartedAtRef.current ?? startedAt;
+          const overlayStartedAt = addItemsOverlayStartedAtRef.current ?? addItemsStartedAtRef.current ?? Date.now();
           const minOverlayDuration = 800;
           const overlayElapsed = Date.now() - overlayStartedAt;
           if (overlayElapsed < minOverlayDuration) {

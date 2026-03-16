@@ -1,55 +1,11 @@
 [
   {
     "id": "EVT-0000",
-    "timestamp": "2026-03-09T23:10:22.171Z",
-    "relativeMs": 7,
+    "timestamp": "2026-03-16T14:16:39.969Z",
+    "relativeMs": 85,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0000",
-    "data": {
-      "name": "startup.bootstrap_complete",
-      "component": null,
-      "context": {
-        "ui": {
-          "route": "/",
-          "query": ""
-        },
-        "platform": "web",
-        "featureFlags": {},
-        "playback": null,
-        "device": null
-      },
-      "lifecycleState": "foreground",
-      "sourceKind": null,
-      "localAccessMode": null,
-      "trackInstanceId": null,
-      "playlistItemId": null
-    }
-  },
-  {
-    "id": "EVT-0001",
-    "timestamp": "2026-03-09T23:10:22.172Z",
-    "relativeMs": 8,
-    "type": "action-end",
-    "origin": "system",
-    "correlationId": "COR-0000",
-    "data": {
-      "status": "success",
-      "error": null,
-      "lifecycleState": "foreground",
-      "sourceKind": null,
-      "localAccessMode": null,
-      "trackInstanceId": null,
-      "playlistItemId": null
-    }
-  },
-  {
-    "id": "EVT-0002",
-    "timestamp": "2026-03-09T23:10:22.238Z",
-    "relativeMs": 74,
-    "type": "action-start",
-    "origin": "system",
-    "correlationId": "COR-0001",
     "data": {
       "name": "rest.get",
       "component": null,
@@ -76,12 +32,12 @@
     }
   },
   {
-    "id": "EVT-0003",
-    "timestamp": "2026-03-09T23:10:22.239Z",
-    "relativeMs": 75,
+    "id": "EVT-0001",
+    "timestamp": "2026-03-16T14:16:39.970Z",
+    "relativeMs": 86,
     "type": "backend-decision",
     "origin": "system",
-    "correlationId": "COR-0001",
+    "correlationId": "COR-0000",
     "data": {
       "selectedTarget": "external-mock",
       "reason": "test-mode",
@@ -93,21 +49,22 @@
     }
   },
   {
-    "id": "EVT-0004",
-    "timestamp": "2026-03-09T23:10:22.240Z",
-    "relativeMs": 76,
+    "id": "EVT-0002",
+    "timestamp": "2026-03-16T14:16:39.971Z",
+    "relativeMs": 87,
     "type": "rest-request",
     "origin": "system",
-    "correlationId": "COR-0001",
+    "correlationId": "COR-0000",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:35743/v1/info",
+      "url": "http://127.0.0.1:44347/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:35743"
+        "X-C64U-Host": "127.0.0.1:44347"
       },
       "body": null,
+      "payloadPreview": null,
       "target": "external-mock",
       "lifecycleState": "foreground",
       "sourceKind": null,
@@ -117,14 +74,18 @@
     }
   },
   {
-    "id": "EVT-0005",
-    "timestamp": "2026-03-09T23:10:22.295Z",
-    "relativeMs": 131,
+    "id": "EVT-0003",
+    "timestamp": "2026-03-16T14:16:40.022Z",
+    "relativeMs": 138,
     "type": "rest-response",
     "origin": "system",
-    "correlationId": "COR-0001",
+    "correlationId": "COR-0000",
     "data": {
       "status": 200,
+      "headers": {
+        "content-length": "153",
+        "content-type": "application/json"
+      },
       "body": {
         "product": "C64 Ultimate",
         "firmware_version": "3.12.0",
@@ -134,7 +95,14 @@
         "unique_id": "TEST-123",
         "errors": []
       },
-      "durationMs": 29,
+      "payloadPreview": {
+        "byteCount": 153,
+        "previewByteCount": 64,
+        "hex": "7b 22 70 72 6f 64 75 63 74 22 3a 22 43 36 34 20 55 6c 74 69 6d 61 74 65 22 2c 22 66 69 72 6d 77 61 72 65 5f 76 65 72 73 69 6f 6e 22 3a 22 33 2e 31 32 2e 30 22 2c 22 66 70 67 61 5f 76 65 72 73",
+        "ascii": "{\"product\":\"C64 Ultimate\",\"firmware_version\":\"3.12.0\",\"fpga_vers",
+        "truncated": true
+      },
+      "durationMs": 22,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": null,
@@ -144,12 +112,12 @@
     }
   },
   {
-    "id": "EVT-0006",
-    "timestamp": "2026-03-09T23:10:22.295Z",
-    "relativeMs": 131,
+    "id": "EVT-0004",
+    "timestamp": "2026-03-16T14:16:40.022Z",
+    "relativeMs": 138,
     "type": "action-end",
     "origin": "system",
-    "correlationId": "COR-0001",
+    "correlationId": "COR-0000",
     "data": {
       "status": "success",
       "error": null,
@@ -161,12 +129,12 @@
     }
   },
   {
-    "id": "EVT-0007",
-    "timestamp": "2026-03-09T23:10:22.296Z",
-    "relativeMs": 132,
+    "id": "EVT-0005",
+    "timestamp": "2026-03-16T14:16:40.024Z",
+    "relativeMs": 140,
     "type": "action-start",
     "origin": "system",
-    "correlationId": "COR-0002",
+    "correlationId": "COR-0001",
     "data": {
       "name": "rest.get",
       "component": null,
@@ -193,12 +161,12 @@
     }
   },
   {
-    "id": "EVT-0008",
-    "timestamp": "2026-03-09T23:10:22.296Z",
-    "relativeMs": 132,
+    "id": "EVT-0006",
+    "timestamp": "2026-03-16T14:16:40.024Z",
+    "relativeMs": 140,
     "type": "backend-decision",
     "origin": "system",
-    "correlationId": "COR-0002",
+    "correlationId": "COR-0001",
     "data": {
       "selectedTarget": "external-mock",
       "reason": "test-mode",
@@ -210,21 +178,22 @@
     }
   },
   {
-    "id": "EVT-0009",
-    "timestamp": "2026-03-09T23:10:22.296Z",
-    "relativeMs": 132,
+    "id": "EVT-0007",
+    "timestamp": "2026-03-16T14:16:40.024Z",
+    "relativeMs": 140,
     "type": "rest-request",
     "origin": "system",
-    "correlationId": "COR-0002",
+    "correlationId": "COR-0001",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:35743/v1/info",
+      "url": "http://127.0.0.1:44347/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:35743"
+        "X-C64U-Host": "127.0.0.1:44347"
       },
       "body": null,
+      "payloadPreview": null,
       "target": "external-mock",
       "lifecycleState": "foreground",
       "sourceKind": null,
@@ -234,25 +203,30 @@
     }
   },
   {
-    "id": "EVT-0010",
-    "timestamp": "2026-03-09T23:10:22.322Z",
-    "relativeMs": 158,
-    "type": "rest-response",
+    "id": "EVT-0008",
+    "timestamp": "2026-03-16T14:16:40.060Z",
+    "relativeMs": 176,
+    "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0002",
     "data": {
-      "status": 200,
-      "body": {
-        "product": "C64 Ultimate",
-        "firmware_version": "3.12.0",
-        "fpga_version": "1.0.0",
-        "core_version": "1.0.0",
-        "hostname": "c64u",
-        "unique_id": "TEST-123",
-        "errors": []
+      "name": "rest.get",
+      "component": null,
+      "context": {
+        "ui": {
+          "route": "/play",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": null,
+        "device": {
+          "deviceId": null,
+          "connectionState": "REAL_CONNECTED"
+        }
       },
-      "durationMs": 8,
-      "error": null,
       "lifecycleState": "foreground",
       "sourceKind": null,
       "localAccessMode": null,
@@ -261,26 +235,9 @@
     }
   },
   {
-    "id": "EVT-0011",
-    "timestamp": "2026-03-09T23:10:22.322Z",
-    "relativeMs": 158,
-    "type": "action-end",
-    "origin": "system",
-    "correlationId": "COR-0002",
-    "data": {
-      "status": "success",
-      "error": null,
-      "lifecycleState": "foreground",
-      "sourceKind": null,
-      "localAccessMode": null,
-      "trackInstanceId": null,
-      "playlistItemId": null
-    }
-  },
-  {
-    "id": "EVT-0012",
-    "timestamp": "2026-03-09T23:10:22.359Z",
-    "relativeMs": 195,
+    "id": "EVT-0009",
+    "timestamp": "2026-03-16T14:16:40.060Z",
+    "relativeMs": 176,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0003",
@@ -298,8 +255,8 @@
         },
         "playback": null,
         "device": {
-          "deviceId": "TEST-123",
-          "connectionState": "REAL_CONNECTED"
+          "deviceId": null,
+          "connectionState": "BUSY"
         }
       },
       "lifecycleState": "foreground",
@@ -310,9 +267,83 @@
     }
   },
   {
+    "id": "EVT-0010",
+    "timestamp": "2026-03-16T14:16:40.060Z",
+    "relativeMs": 176,
+    "type": "action-start",
+    "origin": "system",
+    "correlationId": "COR-0004",
+    "data": {
+      "name": "rest.get",
+      "component": null,
+      "context": {
+        "ui": {
+          "route": "/play",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": null,
+        "device": {
+          "deviceId": null,
+          "connectionState": "BUSY"
+        }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0011",
+    "timestamp": "2026-03-16T14:16:40.065Z",
+    "relativeMs": 181,
+    "type": "backend-decision",
+    "origin": "system",
+    "correlationId": "COR-0002",
+    "data": {
+      "selectedTarget": "external-mock",
+      "reason": "test-mode",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0012",
+    "timestamp": "2026-03-16T14:16:40.065Z",
+    "relativeMs": 181,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0002",
+    "data": {
+      "method": "GET",
+      "url": "http://127.0.0.1:44347/v1/configs/Audio%20Mixer",
+      "normalizedUrl": "/v1/configs/Audio%20Mixer",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:44347"
+      },
+      "body": null,
+      "payloadPreview": null,
+      "target": "external-mock",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
     "id": "EVT-0013",
-    "timestamp": "2026-03-09T23:10:22.359Z",
-    "relativeMs": 195,
+    "timestamp": "2026-03-16T14:16:40.065Z",
+    "relativeMs": 181,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0003",
@@ -328,20 +359,21 @@
   },
   {
     "id": "EVT-0014",
-    "timestamp": "2026-03-09T23:10:22.359Z",
-    "relativeMs": 195,
+    "timestamp": "2026-03-16T14:16:40.065Z",
+    "relativeMs": 181,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0003",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:35743/v1/configs/Audio%20Mixer",
-      "normalizedUrl": "/v1/configs/Audio%20Mixer",
+      "url": "http://127.0.0.1:44347/v1/configs/SID%20Sockets%20Configuration",
+      "normalizedUrl": "/v1/configs/SID%20Sockets%20Configuration",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:35743"
+        "X-C64U-Host": "127.0.0.1:44347"
       },
       "body": null,
+      "payloadPreview": null,
       "target": "external-mock",
       "lifecycleState": "foreground",
       "sourceKind": null,
@@ -352,29 +384,14 @@
   },
   {
     "id": "EVT-0015",
-    "timestamp": "2026-03-09T23:10:22.360Z",
-    "relativeMs": 196,
-    "type": "action-start",
+    "timestamp": "2026-03-16T14:16:40.065Z",
+    "relativeMs": 181,
+    "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0004",
     "data": {
-      "name": "rest.get",
-      "component": null,
-      "context": {
-        "ui": {
-          "route": "/play",
-          "query": ""
-        },
-        "platform": "web",
-        "featureFlags": {
-          "hvsc_enabled": true
-        },
-        "playback": null,
-        "device": {
-          "deviceId": null,
-          "connectionState": "BUSY"
-        }
-      },
+      "selectedTarget": "external-mock",
+      "reason": "test-mode",
       "lifecycleState": "foreground",
       "sourceKind": null,
       "localAccessMode": null,
@@ -384,14 +401,22 @@
   },
   {
     "id": "EVT-0016",
-    "timestamp": "2026-03-09T23:10:22.360Z",
-    "relativeMs": 196,
-    "type": "backend-decision",
+    "timestamp": "2026-03-16T14:16:40.066Z",
+    "relativeMs": 182,
+    "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0004",
     "data": {
-      "selectedTarget": "external-mock",
-      "reason": "test-mode",
+      "method": "GET",
+      "url": "http://127.0.0.1:44347/v1/configs/SID%20Addressing",
+      "normalizedUrl": "/v1/configs/SID%20Addressing",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:44347"
+      },
+      "body": null,
+      "payloadPreview": null,
+      "target": "external-mock",
       "lifecycleState": "foreground",
       "sourceKind": null,
       "localAccessMode": null,
@@ -401,21 +426,35 @@
   },
   {
     "id": "EVT-0017",
-    "timestamp": "2026-03-09T23:10:22.360Z",
-    "relativeMs": 196,
-    "type": "rest-request",
+    "timestamp": "2026-03-16T14:16:40.082Z",
+    "relativeMs": 198,
+    "type": "rest-response",
     "origin": "system",
-    "correlationId": "COR-0004",
+    "correlationId": "COR-0001",
     "data": {
-      "method": "GET",
-      "url": "http://127.0.0.1:35743/v1/configs/SID%20Sockets%20Configuration",
-      "normalizedUrl": "/v1/configs/SID%20Sockets%20Configuration",
+      "status": 200,
       "headers": {
-        "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:35743"
+        "content-length": "153",
+        "content-type": "application/json"
       },
-      "body": null,
-      "target": "external-mock",
+      "body": {
+        "product": "C64 Ultimate",
+        "firmware_version": "3.12.0",
+        "fpga_version": "1.0.0",
+        "core_version": "1.0.0",
+        "hostname": "c64u",
+        "unique_id": "TEST-123",
+        "errors": []
+      },
+      "payloadPreview": {
+        "byteCount": 153,
+        "previewByteCount": 64,
+        "hex": "7b 22 70 72 6f 64 75 63 74 22 3a 22 43 36 34 20 55 6c 74 69 6d 61 74 65 22 2c 22 66 69 72 6d 77 61 72 65 5f 76 65 72 73 69 6f 6e 22 3a 22 33 2e 31 32 2e 30 22 2c 22 66 70 67 61 5f 76 65 72 73",
+        "ascii": "{\"product\":\"C64 Ultimate\",\"firmware_version\":\"3.12.0\",\"fpga_vers",
+        "truncated": true
+      },
+      "durationMs": 20,
+      "error": null,
       "lifecycleState": "foreground",
       "sourceKind": null,
       "localAccessMode": null,
@@ -425,29 +464,14 @@
   },
   {
     "id": "EVT-0018",
-    "timestamp": "2026-03-09T23:10:22.361Z",
-    "relativeMs": 197,
-    "type": "action-start",
+    "timestamp": "2026-03-16T14:16:40.082Z",
+    "relativeMs": 198,
+    "type": "action-end",
     "origin": "system",
-    "correlationId": "COR-0005",
+    "correlationId": "COR-0001",
     "data": {
-      "name": "rest.get",
-      "component": null,
-      "context": {
-        "ui": {
-          "route": "/play",
-          "query": ""
-        },
-        "platform": "web",
-        "featureFlags": {
-          "hvsc_enabled": true
-        },
-        "playback": null,
-        "device": {
-          "deviceId": null,
-          "connectionState": "BUSY"
-        }
-      },
+      "status": "success",
+      "error": null,
       "lifecycleState": "foreground",
       "sourceKind": null,
       "localAccessMode": null,
@@ -457,54 +481,17 @@
   },
   {
     "id": "EVT-0019",
-    "timestamp": "2026-03-09T23:10:22.361Z",
-    "relativeMs": 197,
-    "type": "backend-decision",
-    "origin": "system",
-    "correlationId": "COR-0005",
-    "data": {
-      "selectedTarget": "external-mock",
-      "reason": "test-mode",
-      "lifecycleState": "foreground",
-      "sourceKind": null,
-      "localAccessMode": null,
-      "trackInstanceId": null,
-      "playlistItemId": null
-    }
-  },
-  {
-    "id": "EVT-0020",
-    "timestamp": "2026-03-09T23:10:22.361Z",
-    "relativeMs": 197,
-    "type": "rest-request",
-    "origin": "system",
-    "correlationId": "COR-0005",
-    "data": {
-      "method": "GET",
-      "url": "http://127.0.0.1:35743/v1/configs/SID%20Addressing",
-      "normalizedUrl": "/v1/configs/SID%20Addressing",
-      "headers": {
-        "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:35743"
-      },
-      "body": null,
-      "target": "external-mock",
-      "lifecycleState": "foreground",
-      "sourceKind": null,
-      "localAccessMode": null,
-      "trackInstanceId": null,
-      "playlistItemId": null
-    }
-  },
-  {
-    "id": "EVT-0021",
-    "timestamp": "2026-03-09T23:10:22.384Z",
-    "relativeMs": 220,
+    "timestamp": "2026-03-16T14:16:40.097Z",
+    "relativeMs": 213,
     "type": "rest-response",
     "origin": "system",
-    "correlationId": "COR-0003",
+    "correlationId": "COR-0002",
     "data": {
       "status": 200,
+      "headers": {
+        "content-length": "1545",
+        "content-type": "application/json"
+      },
       "body": {
         "Audio Mixer": {
           "items": {
@@ -654,25 +641,111 @@
             },
             "Pan Socket 1": {
               "selected": "Left 1",
-              "options": ["Left 1", "Right 1"]
+              "options": [
+                "Left 1",
+                "Right 1"
+              ]
             },
             "Pan Socket 2": {
               "selected": "Left 2",
-              "options": ["Left 2", "Right 2"]
+              "options": [
+                "Left 2",
+                "Right 2"
+              ]
             },
             "Pan UltiSID 1": {
               "selected": "Left 1",
-              "options": ["Left 1", "Right 1"]
+              "options": [
+                "Left 1",
+                "Right 1"
+              ]
             },
             "Pan UltiSID 2": {
               "selected": "Left 2",
-              "options": ["Left 2", "Right 2"]
+              "options": [
+                "Left 2",
+                "Right 2"
+              ]
             }
           }
         },
         "errors": []
       },
-      "durationMs": 9,
+      "payloadPreview": {
+        "byteCount": 1545,
+        "previewByteCount": 64,
+        "hex": "7b 22 41 75 64 69 6f 20 4d 69 78 65 72 22 3a 7b 22 69 74 65 6d 73 22 3a 7b 22 56 6f 6c 20 55 6c 74 69 53 69 64 20 31 22 3a 7b 22 73 65 6c 65 63 74 65 64 22 3a 22 4f 46 46 22 2c 22 6f 70 74 69",
+        "ascii": "{\"Audio Mixer\":{\"items\":{\"Vol UltiSid 1\":{\"selected\":\"OFF\",\"opti",
+        "truncated": true
+      },
+      "durationMs": 13,
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0020",
+    "timestamp": "2026-03-16T14:16:40.098Z",
+    "relativeMs": 214,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0002",
+    "data": {
+      "status": "success",
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0021",
+    "timestamp": "2026-03-16T14:16:40.105Z",
+    "relativeMs": 221,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0003",
+    "data": {
+      "status": 200,
+      "headers": {
+        "content-length": "195",
+        "content-type": "application/json"
+      },
+      "body": {
+        "SID Sockets Configuration": {
+          "items": {
+            "SID Socket 1": {
+              "selected": "Enabled",
+              "options": [
+                "Enabled",
+                "Disabled"
+              ]
+            },
+            "SID Socket 2": {
+              "selected": "Enabled",
+              "options": [
+                "Enabled",
+                "Disabled"
+              ]
+            }
+          }
+        },
+        "errors": []
+      },
+      "payloadPreview": {
+        "byteCount": 195,
+        "previewByteCount": 64,
+        "hex": "7b 22 53 49 44 20 53 6f 63 6b 65 74 73 20 43 6f 6e 66 69 67 75 72 61 74 69 6f 6e 22 3a 7b 22 69 74 65 6d 73 22 3a 7b 22 53 49 44 20 53 6f 63 6b 65 74 20 31 22 3a 7b 22 73 65 6c 65 63 74 65 64",
+        "ascii": "{\"SID Sockets Configuration\":{\"items\":{\"SID Socket 1\":{\"selected",
+        "truncated": true
+      },
+      "durationMs": 18,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": null,
@@ -683,7 +756,7 @@
   },
   {
     "id": "EVT-0022",
-    "timestamp": "2026-03-09T23:10:22.385Z",
+    "timestamp": "2026-03-16T14:16:40.105Z",
     "relativeMs": 221,
     "type": "action-end",
     "origin": "system",
@@ -700,29 +773,60 @@
   },
   {
     "id": "EVT-0023",
-    "timestamp": "2026-03-09T23:10:22.385Z",
-    "relativeMs": 221,
+    "timestamp": "2026-03-16T14:16:40.112Z",
+    "relativeMs": 228,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0004",
     "data": {
       "status": 200,
+      "headers": {
+        "content-length": "336",
+        "content-type": "application/json"
+      },
       "body": {
-        "SID Sockets Configuration": {
+        "SID Addressing": {
           "items": {
-            "SID Socket 1": {
-              "selected": "Enabled",
-              "options": ["Enabled", "Disabled"]
+            "SID Socket 1 Address": {
+              "selected": "$D400",
+              "options": [
+                "$D400",
+                "Unmapped"
+              ]
             },
-            "SID Socket 2": {
-              "selected": "Enabled",
-              "options": ["Enabled", "Disabled"]
+            "SID Socket 2 Address": {
+              "selected": "$D440",
+              "options": [
+                "$D420",
+                "Unmapped"
+              ]
+            },
+            "UltiSID 1 Address": {
+              "selected": "$D420",
+              "options": [
+                "$D420",
+                "Unmapped"
+              ]
+            },
+            "UltiSID 2 Address": {
+              "selected": "$D440",
+              "options": [
+                "$D440",
+                "Unmapped"
+              ]
             }
           }
         },
         "errors": []
       },
-      "durationMs": 18,
+      "payloadPreview": {
+        "byteCount": 336,
+        "previewByteCount": 64,
+        "hex": "7b 22 53 49 44 20 41 64 64 72 65 73 73 69 6e 67 22 3a 7b 22 69 74 65 6d 73 22 3a 7b 22 53 49 44 20 53 6f 63 6b 65 74 20 31 20 41 64 64 72 65 73 73 22 3a 7b 22 73 65 6c 65 63 74 65 64 22 3a 22",
+        "ascii": "{\"SID Addressing\":{\"items\":{\"SID Socket 1 Address\":{\"selected\":\"",
+        "truncated": true
+      },
+      "durationMs": 27,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": null,
@@ -733,8 +837,8 @@
   },
   {
     "id": "EVT-0024",
-    "timestamp": "2026-03-09T23:10:22.385Z",
-    "relativeMs": 221,
+    "timestamp": "2026-03-16T14:16:40.113Z",
+    "relativeMs": 229,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0004",
@@ -750,38 +854,29 @@
   },
   {
     "id": "EVT-0025",
-    "timestamp": "2026-03-09T23:10:22.385Z",
-    "relativeMs": 221,
-    "type": "rest-response",
+    "timestamp": "2026-03-16T14:16:40.121Z",
+    "relativeMs": 237,
+    "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0005",
     "data": {
-      "status": 200,
-      "body": {
-        "SID Addressing": {
-          "items": {
-            "SID Socket 1 Address": {
-              "selected": "$D400",
-              "options": ["$D400", "Unmapped"]
-            },
-            "SID Socket 2 Address": {
-              "selected": "$D440",
-              "options": ["$D420", "Unmapped"]
-            },
-            "UltiSID 1 Address": {
-              "selected": "$D420",
-              "options": ["$D420", "Unmapped"]
-            },
-            "UltiSID 2 Address": {
-              "selected": "$D440",
-              "options": ["$D440", "Unmapped"]
-            }
-          }
+      "name": "startup.bootstrap_complete",
+      "component": null,
+      "context": {
+        "ui": {
+          "route": "/play",
+          "query": ""
         },
-        "errors": []
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": null,
+        "device": {
+          "deviceId": null,
+          "connectionState": "READY"
+        }
       },
-      "durationMs": 17,
-      "error": null,
       "lifecycleState": "foreground",
       "sourceKind": null,
       "localAccessMode": null,
@@ -791,8 +886,8 @@
   },
   {
     "id": "EVT-0026",
-    "timestamp": "2026-03-09T23:10:22.385Z",
-    "relativeMs": 221,
+    "timestamp": "2026-03-16T14:16:40.122Z",
+    "relativeMs": 238,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0005",
@@ -808,8 +903,8 @@
   },
   {
     "id": "EVT-0027",
-    "timestamp": "2026-03-09T23:10:22.689Z",
-    "relativeMs": 525,
+    "timestamp": "2026-03-16T14:16:40.354Z",
+    "relativeMs": 470,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0007",
@@ -840,8 +935,8 @@
   },
   {
     "id": "EVT-0028",
-    "timestamp": "2026-03-09T23:10:22.689Z",
-    "relativeMs": 525,
+    "timestamp": "2026-03-16T14:16:40.354Z",
+    "relativeMs": 470,
     "type": "action-start",
     "origin": "user",
     "correlationId": "COR-0006",
@@ -872,8 +967,8 @@
   },
   {
     "id": "EVT-0029",
-    "timestamp": "2026-03-09T23:10:22.689Z",
-    "relativeMs": 525,
+    "timestamp": "2026-03-16T14:16:40.355Z",
+    "relativeMs": 471,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0007",
@@ -889,8 +984,8 @@
   },
   {
     "id": "EVT-0030",
-    "timestamp": "2026-03-09T23:10:22.722Z",
-    "relativeMs": 558,
+    "timestamp": "2026-03-16T14:16:40.415Z",
+    "relativeMs": 531,
     "type": "action-end",
     "origin": "user",
     "correlationId": "COR-0006",
@@ -906,8 +1001,8 @@
   },
   {
     "id": "EVT-0031",
-    "timestamp": "2026-03-09T23:10:23.002Z",
-    "relativeMs": 838,
+    "timestamp": "2026-03-16T14:16:40.697Z",
+    "relativeMs": 813,
     "type": "action-start",
     "origin": "user",
     "correlationId": "COR-0008",
@@ -938,8 +1033,8 @@
   },
   {
     "id": "EVT-0032",
-    "timestamp": "2026-03-09T23:10:23.002Z",
-    "relativeMs": 838,
+    "timestamp": "2026-03-16T14:16:40.697Z",
+    "relativeMs": 813,
     "type": "action-start",
     "origin": "user",
     "correlationId": "COR-0009",
@@ -970,8 +1065,8 @@
   },
   {
     "id": "EVT-0033",
-    "timestamp": "2026-03-09T23:10:23.015Z",
-    "relativeMs": 851,
+    "timestamp": "2026-03-16T14:16:40.709Z",
+    "relativeMs": 825,
     "type": "action-end",
     "origin": "user",
     "correlationId": "COR-0008",
@@ -987,8 +1082,8 @@
   },
   {
     "id": "EVT-0034",
-    "timestamp": "2026-03-09T23:10:23.015Z",
-    "relativeMs": 851,
+    "timestamp": "2026-03-16T14:16:40.709Z",
+    "relativeMs": 825,
     "type": "action-end",
     "origin": "user",
     "correlationId": "COR-0009",
@@ -1004,8 +1099,8 @@
   },
   {
     "id": "EVT-0035",
-    "timestamp": "2026-03-09T23:10:23.025Z",
-    "relativeMs": 861,
+    "timestamp": "2026-03-16T14:16:40.715Z",
+    "relativeMs": 831,
     "type": "action-start",
     "origin": "user",
     "correlationId": "COR-0010",
@@ -1036,8 +1131,8 @@
   },
   {
     "id": "EVT-0036",
-    "timestamp": "2026-03-09T23:10:23.025Z",
-    "relativeMs": 861,
+    "timestamp": "2026-03-16T14:16:40.716Z",
+    "relativeMs": 832,
     "type": "action-start",
     "origin": "user",
     "correlationId": "COR-0011",
@@ -1068,8 +1163,8 @@
   },
   {
     "id": "EVT-0037",
-    "timestamp": "2026-03-09T23:10:23.031Z",
-    "relativeMs": 867,
+    "timestamp": "2026-03-16T14:16:40.722Z",
+    "relativeMs": 838,
     "type": "action-end",
     "origin": "user",
     "correlationId": "COR-0011",
@@ -1085,8 +1180,8 @@
   },
   {
     "id": "EVT-0038",
-    "timestamp": "2026-03-09T23:10:23.043Z",
-    "relativeMs": 879,
+    "timestamp": "2026-03-16T14:16:40.749Z",
+    "relativeMs": 865,
     "type": "action-end",
     "origin": "user",
     "correlationId": "COR-0010",
@@ -1102,8 +1197,8 @@
   },
   {
     "id": "EVT-0039",
-    "timestamp": "2026-03-09T23:10:25.235Z",
-    "relativeMs": 3071,
+    "timestamp": "2026-03-16T14:16:42.917Z",
+    "relativeMs": 3033,
     "type": "action-start",
     "origin": "user",
     "correlationId": "COR-0012",
@@ -1145,8 +1240,8 @@
   },
   {
     "id": "EVT-0040",
-    "timestamp": "2026-03-09T23:10:25.240Z",
-    "relativeMs": 3076,
+    "timestamp": "2026-03-16T14:16:42.922Z",
+    "relativeMs": 3038,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0013",
@@ -1188,8 +1283,8 @@
   },
   {
     "id": "EVT-0041",
-    "timestamp": "2026-03-09T23:10:25.240Z",
-    "relativeMs": 3076,
+    "timestamp": "2026-03-16T14:16:42.925Z",
+    "relativeMs": 3041,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0013",
@@ -1197,40 +1292,41 @@
       "selectedTarget": "external-mock",
       "reason": "test-mode",
       "lifecycleState": "foreground",
-      "sourceKind": null,
-      "localAccessMode": null,
+      "sourceKind": "local",
+      "localAccessMode": "entries",
       "trackInstanceId": 0,
-      "playlistItemId": null
+      "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
     }
   },
   {
     "id": "EVT-0042",
-    "timestamp": "2026-03-09T23:10:25.240Z",
-    "relativeMs": 3076,
+    "timestamp": "2026-03-16T14:16:42.925Z",
+    "relativeMs": 3041,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0013",
     "data": {
       "method": "PUT",
-      "url": "http://127.0.0.1:35743/v1/machine:reboot",
+      "url": "http://127.0.0.1:44347/v1/machine:reboot",
       "normalizedUrl": "/v1/machine:reboot",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:35743"
+        "X-C64U-Host": "127.0.0.1:44347"
       },
       "body": null,
+      "payloadPreview": null,
       "target": "external-mock",
       "lifecycleState": "foreground",
-      "sourceKind": null,
-      "localAccessMode": null,
+      "sourceKind": "local",
+      "localAccessMode": "entries",
       "trackInstanceId": 0,
-      "playlistItemId": null
+      "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
     }
   },
   {
     "id": "EVT-0043",
-    "timestamp": "2026-03-09T23:10:25.251Z",
-    "relativeMs": 3087,
+    "timestamp": "2026-03-16T14:16:42.929Z",
+    "relativeMs": 3045,
     "type": "action-end",
     "origin": "user",
     "correlationId": "COR-0012",
@@ -1241,34 +1337,45 @@
       "sourceKind": "local",
       "localAccessMode": "entries",
       "trackInstanceId": 0,
-      "playlistItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64"
+      "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
     }
   },
   {
     "id": "EVT-0044",
-    "timestamp": "2026-03-09T23:10:25.253Z",
-    "relativeMs": 3089,
+    "timestamp": "2026-03-16T14:16:42.935Z",
+    "relativeMs": 3051,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0013",
     "data": {
       "status": 200,
+      "headers": {
+        "content-length": "13",
+        "content-type": "application/json"
+      },
       "body": {
         "errors": []
       },
-      "durationMs": 11,
+      "payloadPreview": {
+        "byteCount": 13,
+        "previewByteCount": 13,
+        "hex": "7b 22 65 72 72 6f 72 73 22 3a 5b 5d 7d",
+        "ascii": "{\"errors\":[]}",
+        "truncated": false
+      },
+      "durationMs": 9,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": "local",
       "localAccessMode": "entries",
       "trackInstanceId": 0,
-      "playlistItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64"
+      "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
     }
   },
   {
     "id": "EVT-0045",
-    "timestamp": "2026-03-09T23:10:25.253Z",
-    "relativeMs": 3089,
+    "timestamp": "2026-03-16T14:16:42.936Z",
+    "relativeMs": 3052,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0013",
@@ -1279,141 +1386,16 @@
       "sourceKind": "local",
       "localAccessMode": "entries",
       "trackInstanceId": 0,
-      "playlistItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64"
+      "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
     }
   },
   {
     "id": "EVT-0046",
-    "timestamp": "2026-03-09T23:10:25.760Z",
-    "relativeMs": 3596,
+    "timestamp": "2026-03-16T14:16:43.436Z",
+    "relativeMs": 3552,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0014",
-    "data": {
-      "name": "rest.post",
-      "component": null,
-      "context": {
-        "ui": {
-          "route": "/play",
-          "query": ""
-        },
-        "platform": "web",
-        "featureFlags": {
-          "hvsc_enabled": true
-        },
-        "playback": {
-          "queueLength": 2,
-          "currentIndex": 0,
-          "currentItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64",
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": 180000,
-          "sourceKind": "local",
-          "localAccessMode": "entries",
-          "trackInstanceId": 0,
-          "playlistItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64"
-        },
-        "device": {
-          "deviceId": null,
-          "connectionState": "READY"
-        }
-      },
-      "lifecycleState": "foreground",
-      "sourceKind": "local",
-      "localAccessMode": "entries",
-      "trackInstanceId": 0,
-      "playlistItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64"
-    }
-  },
-  {
-    "id": "EVT-0047",
-    "timestamp": "2026-03-09T23:10:25.762Z",
-    "relativeMs": 3598,
-    "type": "backend-decision",
-    "origin": "system",
-    "correlationId": "COR-0014",
-    "data": {
-      "selectedTarget": "external-mock",
-      "reason": "test-mode",
-      "lifecycleState": "foreground",
-      "sourceKind": "local",
-      "localAccessMode": "entries",
-      "trackInstanceId": 0,
-      "playlistItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64"
-    }
-  },
-  {
-    "id": "EVT-0048",
-    "timestamp": "2026-03-09T23:10:25.763Z",
-    "relativeMs": 3599,
-    "type": "rest-request",
-    "origin": "system",
-    "correlationId": "COR-0014",
-    "data": {
-      "method": "POST",
-      "url": "http://127.0.0.1:35743/v1/drives/a:mount?type=d64&mode=readwrite",
-      "normalizedUrl": "/v1/drives/a:mount?mode=readwrite&type=d64",
-      "headers": {
-        "X-C64U-Host": "127.0.0.1:35743",
-        "Content-Type": "application/octet-stream"
-      },
-      "body": {
-        "type": "array-buffer",
-        "sizeBytes": 4
-      },
-      "target": "external-mock",
-      "lifecycleState": "foreground",
-      "sourceKind": "local",
-      "localAccessMode": "entries",
-      "trackInstanceId": 0,
-      "playlistItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64"
-    }
-  },
-  {
-    "id": "EVT-0049",
-    "timestamp": "2026-03-09T23:10:25.782Z",
-    "relativeMs": 3618,
-    "type": "rest-response",
-    "origin": "system",
-    "correlationId": "COR-0014",
-    "data": {
-      "status": 200,
-      "body": {
-        "errors": []
-      },
-      "durationMs": 18,
-      "error": null,
-      "lifecycleState": "foreground",
-      "sourceKind": "local",
-      "localAccessMode": "entries",
-      "trackInstanceId": 0,
-      "playlistItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64"
-    }
-  },
-  {
-    "id": "EVT-0050",
-    "timestamp": "2026-03-09T23:10:25.783Z",
-    "relativeMs": 3619,
-    "type": "action-end",
-    "origin": "system",
-    "correlationId": "COR-0014",
-    "data": {
-      "status": "success",
-      "error": null,
-      "lifecycleState": "foreground",
-      "sourceKind": "local",
-      "localAccessMode": "entries",
-      "trackInstanceId": 0,
-      "playlistItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64"
-    }
-  },
-  {
-    "id": "EVT-0051",
-    "timestamp": "2026-03-09T23:10:26.039Z",
-    "relativeMs": 3875,
-    "type": "action-start",
-    "origin": "system",
-    "correlationId": "COR-0015",
     "data": {
       "name": "rest.get",
       "component": null,
@@ -1429,14 +1411,14 @@
         "playback": {
           "queueLength": 2,
           "currentIndex": 0,
-          "currentItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64",
+          "currentItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64",
           "isPlaying": false,
           "elapsedMs": 0,
           "durationMs": 180000,
           "sourceKind": "local",
           "localAccessMode": "entries",
           "trackInstanceId": 0,
-          "playlistItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64"
+          "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
         },
         "device": {
           "deviceId": null,
@@ -1447,13 +1429,183 @@
       "sourceKind": "local",
       "localAccessMode": "entries",
       "trackInstanceId": 0,
-      "playlistItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64"
+      "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
+    }
+  },
+  {
+    "id": "EVT-0047",
+    "timestamp": "2026-03-16T14:16:43.436Z",
+    "relativeMs": 3552,
+    "type": "backend-decision",
+    "origin": "system",
+    "correlationId": "COR-0014",
+    "data": {
+      "selectedTarget": "external-mock",
+      "reason": "test-mode",
+      "lifecycleState": "foreground",
+      "sourceKind": "local",
+      "localAccessMode": "entries",
+      "trackInstanceId": 0,
+      "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
+    }
+  },
+  {
+    "id": "EVT-0048",
+    "timestamp": "2026-03-16T14:16:43.436Z",
+    "relativeMs": 3552,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0014",
+    "data": {
+      "method": "GET",
+      "url": "http://127.0.0.1:44347/v1/drives",
+      "normalizedUrl": "/v1/drives",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:44347"
+      },
+      "body": null,
+      "payloadPreview": null,
+      "target": "external-mock",
+      "lifecycleState": "foreground",
+      "sourceKind": "local",
+      "localAccessMode": "entries",
+      "trackInstanceId": 0,
+      "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
+    }
+  },
+  {
+    "id": "EVT-0049",
+    "timestamp": "2026-03-16T14:16:43.446Z",
+    "relativeMs": 3562,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0014",
+    "data": {
+      "status": 200,
+      "headers": {
+        "content-length": "327",
+        "content-type": "application/json"
+      },
+      "body": {
+        "drives": [
+          {
+            "a": {
+              "enabled": true,
+              "bus_id": 8,
+              "type": "1541"
+            }
+          },
+          {
+            "b": {
+              "enabled": true,
+              "bus_id": 9,
+              "type": "1541"
+            }
+          },
+          {
+            "IEC Drive": {
+              "enabled": false,
+              "bus_id": 11,
+              "type": "DOS emulation",
+              "last_error": "73,U64IEC ULTIMATE DOS V1.1,00,00",
+              "partitions": [
+                {
+                  "id": 0,
+                  "path": "/USB0/"
+                }
+              ]
+            }
+          },
+          {
+            "Printer Emulation": {
+              "enabled": false,
+              "bus_id": 4
+            }
+          }
+        ],
+        "errors": []
+      },
+      "payloadPreview": {
+        "byteCount": 327,
+        "previewByteCount": 64,
+        "hex": "7b 22 64 72 69 76 65 73 22 3a 5b 7b 22 61 22 3a 7b 22 65 6e 61 62 6c 65 64 22 3a 74 72 75 65 2c 22 62 75 73 5f 69 64 22 3a 38 2c 22 74 79 70 65 22 3a 22 31 35 34 31 22 7d 7d 2c 7b 22 62 22 3a",
+        "ascii": "{\"drives\":[{\"a\":{\"enabled\":true,\"bus_id\":8,\"type\":\"1541\"}},{\"b\":",
+        "truncated": true
+      },
+      "durationMs": 9,
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": "local",
+      "localAccessMode": "entries",
+      "trackInstanceId": 0,
+      "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
+    }
+  },
+  {
+    "id": "EVT-0050",
+    "timestamp": "2026-03-16T14:16:43.447Z",
+    "relativeMs": 3563,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0014",
+    "data": {
+      "status": "success",
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": "local",
+      "localAccessMode": "entries",
+      "trackInstanceId": 0,
+      "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
+    }
+  },
+  {
+    "id": "EVT-0051",
+    "timestamp": "2026-03-16T14:16:43.456Z",
+    "relativeMs": 3572,
+    "type": "action-start",
+    "origin": "system",
+    "correlationId": "COR-0015",
+    "data": {
+      "name": "rest.post",
+      "component": null,
+      "context": {
+        "ui": {
+          "route": "/play",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 2,
+          "currentIndex": 0,
+          "currentItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64",
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": 180000,
+          "sourceKind": "local",
+          "localAccessMode": "entries",
+          "trackInstanceId": 0,
+          "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "READY"
+        }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": "local",
+      "localAccessMode": "entries",
+      "trackInstanceId": 0,
+      "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
     }
   },
   {
     "id": "EVT-0052",
-    "timestamp": "2026-03-09T23:10:26.039Z",
-    "relativeMs": 3875,
+    "timestamp": "2026-03-16T14:16:43.457Z",
+    "relativeMs": 3573,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0015",
@@ -1464,58 +1616,79 @@
       "sourceKind": "local",
       "localAccessMode": "entries",
       "trackInstanceId": 0,
-      "playlistItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64"
+      "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
     }
   },
   {
     "id": "EVT-0053",
-    "timestamp": "2026-03-09T23:10:26.039Z",
-    "relativeMs": 3875,
+    "timestamp": "2026-03-16T14:16:43.457Z",
+    "relativeMs": 3573,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0015",
     "data": {
-      "method": "GET",
-      "url": "http://127.0.0.1:35743/v1/machine:readmem?address=00C6&length=1",
-      "normalizedUrl": "/v1/machine:readmem?address=00C6&length=1",
+      "method": "POST",
+      "url": "http://127.0.0.1:44347/v1/drives/a:mount?type=d64&mode=readwrite",
+      "normalizedUrl": "/v1/drives/a:mount?mode=readwrite&type=d64",
       "headers": {
-        "X-C64U-Host": "127.0.0.1:35743"
+        "X-C64U-Host": "127.0.0.1:44347",
+        "Content-Type": "application/octet-stream"
       },
-      "body": null,
+      "body": {
+        "type": "array-buffer",
+        "sizeBytes": 174848
+      },
+      "payloadPreview": {
+        "byteCount": 174848,
+        "previewByteCount": 64,
+        "hex": "00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00",
+        "ascii": "................................................................",
+        "truncated": true
+      },
       "target": "external-mock",
       "lifecycleState": "foreground",
       "sourceKind": "local",
       "localAccessMode": "entries",
       "trackInstanceId": 0,
-      "playlistItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64"
+      "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
     }
   },
   {
     "id": "EVT-0054",
-    "timestamp": "2026-03-09T23:10:26.057Z",
-    "relativeMs": 3893,
+    "timestamp": "2026-03-16T14:16:43.577Z",
+    "relativeMs": 3693,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0015",
     "data": {
       "status": 200,
+      "headers": {
+        "content-length": "13",
+        "content-type": "application/json"
+      },
       "body": {
-        "data": [0],
         "errors": []
       },
-      "durationMs": 15,
+      "payloadPreview": {
+        "byteCount": 13,
+        "previewByteCount": 13,
+        "hex": "7b 22 65 72 72 6f 72 73 22 3a 5b 5d 7d",
+        "ascii": "{\"errors\":[]}",
+        "truncated": false
+      },
+      "durationMs": 119,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": "local",
       "localAccessMode": "entries",
       "trackInstanceId": 0,
-      "playlistItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64"
+      "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
     }
   },
   {
     "id": "EVT-0055",
-    "timestamp": "2026-03-09T23:10:26.057Z",
-    "relativeMs": 3893,
+    "timestamp": "2026-03-16T14:16:43.577Z",
+    "relativeMs": 3693,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0015",
@@ -1526,18 +1699,18 @@
       "sourceKind": "local",
       "localAccessMode": "entries",
       "trackInstanceId": 0,
-      "playlistItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64"
+      "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
     }
   },
   {
     "id": "EVT-0056",
-    "timestamp": "2026-03-09T23:10:26.062Z",
-    "relativeMs": 3898,
+    "timestamp": "2026-03-16T14:16:43.829Z",
+    "relativeMs": 3945,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0016",
     "data": {
-      "name": "rest.put",
+      "name": "rest.get",
       "component": null,
       "context": {
         "ui": {
@@ -1551,14 +1724,14 @@
         "playback": {
           "queueLength": 2,
           "currentIndex": 0,
-          "currentItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64",
+          "currentItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64",
           "isPlaying": false,
           "elapsedMs": 0,
           "durationMs": 180000,
           "sourceKind": "local",
           "localAccessMode": "entries",
           "trackInstanceId": 0,
-          "playlistItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64"
+          "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
         },
         "device": {
           "deviceId": null,
@@ -1569,13 +1742,13 @@
       "sourceKind": "local",
       "localAccessMode": "entries",
       "trackInstanceId": 0,
-      "playlistItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64"
+      "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
     }
   },
   {
     "id": "EVT-0057",
-    "timestamp": "2026-03-09T23:10:26.063Z",
-    "relativeMs": 3899,
+    "timestamp": "2026-03-16T14:16:43.831Z",
+    "relativeMs": 3947,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0016",
@@ -1586,58 +1759,72 @@
       "sourceKind": "local",
       "localAccessMode": "entries",
       "trackInstanceId": 0,
-      "playlistItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64"
+      "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
     }
   },
   {
     "id": "EVT-0058",
-    "timestamp": "2026-03-09T23:10:26.063Z",
-    "relativeMs": 3899,
+    "timestamp": "2026-03-16T14:16:43.831Z",
+    "relativeMs": 3947,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0016",
     "data": {
-      "method": "PUT",
-      "url": "http://127.0.0.1:35743/v1/machine:writemem?address=0277&data=4c4f4144222a222c382c310d52554e0d",
-      "normalizedUrl": "/v1/machine:writemem?address=0277&data=4c4f4144222a222c382c310d52554e0d",
+      "method": "GET",
+      "url": "http://127.0.0.1:44347/v1/machine:readmem?address=00C6&length=1",
+      "normalizedUrl": "/v1/machine:readmem?address=00C6&length=1",
       "headers": {
-        "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:35743"
+        "X-C64U-Host": "127.0.0.1:44347"
       },
       "body": null,
+      "payloadPreview": null,
       "target": "external-mock",
       "lifecycleState": "foreground",
       "sourceKind": "local",
       "localAccessMode": "entries",
       "trackInstanceId": 0,
-      "playlistItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64"
+      "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
     }
   },
   {
     "id": "EVT-0059",
-    "timestamp": "2026-03-09T23:10:26.079Z",
-    "relativeMs": 3915,
+    "timestamp": "2026-03-16T14:16:43.853Z",
+    "relativeMs": 3969,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0016",
     "data": {
       "status": 200,
+      "headers": {
+        "content-length": "24",
+        "content-type": "application/json"
+      },
       "body": {
+        "data": [
+          0
+        ],
         "errors": []
       },
-      "durationMs": 15,
+      "payloadPreview": {
+        "byteCount": 24,
+        "previewByteCount": 24,
+        "hex": "7b 22 64 61 74 61 22 3a 5b 30 5d 2c 22 65 72 72 6f 72 73 22 3a 5b 5d 7d",
+        "ascii": "{\"data\":[0],\"errors\":[]}",
+        "truncated": false
+      },
+      "durationMs": 21,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": "local",
       "localAccessMode": "entries",
       "trackInstanceId": 0,
-      "playlistItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64"
+      "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
     }
   },
   {
     "id": "EVT-0060",
-    "timestamp": "2026-03-09T23:10:26.079Z",
-    "relativeMs": 3915,
+    "timestamp": "2026-03-16T14:16:43.854Z",
+    "relativeMs": 3970,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0016",
@@ -1648,13 +1835,13 @@
       "sourceKind": "local",
       "localAccessMode": "entries",
       "trackInstanceId": 0,
-      "playlistItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64"
+      "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
     }
   },
   {
     "id": "EVT-0061",
-    "timestamp": "2026-03-09T23:10:26.080Z",
-    "relativeMs": 3916,
+    "timestamp": "2026-03-16T14:16:43.858Z",
+    "relativeMs": 3974,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0017",
@@ -1673,14 +1860,14 @@
         "playback": {
           "queueLength": 2,
           "currentIndex": 0,
-          "currentItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64",
+          "currentItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64",
           "isPlaying": false,
           "elapsedMs": 0,
           "durationMs": 180000,
           "sourceKind": "local",
           "localAccessMode": "entries",
           "trackInstanceId": 0,
-          "playlistItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64"
+          "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
         },
         "device": {
           "deviceId": null,
@@ -1691,13 +1878,13 @@
       "sourceKind": "local",
       "localAccessMode": "entries",
       "trackInstanceId": 0,
-      "playlistItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64"
+      "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
     }
   },
   {
     "id": "EVT-0062",
-    "timestamp": "2026-03-09T23:10:26.080Z",
-    "relativeMs": 3916,
+    "timestamp": "2026-03-16T14:16:43.860Z",
+    "relativeMs": 3976,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0017",
@@ -1708,58 +1895,70 @@
       "sourceKind": "local",
       "localAccessMode": "entries",
       "trackInstanceId": 0,
-      "playlistItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64"
+      "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
     }
   },
   {
     "id": "EVT-0063",
-    "timestamp": "2026-03-09T23:10:26.080Z",
-    "relativeMs": 3916,
+    "timestamp": "2026-03-16T14:16:43.860Z",
+    "relativeMs": 3976,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0017",
     "data": {
       "method": "PUT",
-      "url": "http://127.0.0.1:35743/v1/machine:writemem?address=00C6&data=10",
-      "normalizedUrl": "/v1/machine:writemem?address=00C6&data=10",
+      "url": "http://127.0.0.1:44347/v1/machine:writemem?address=0277&data=4c4f4144222a222c382c310d52554e0d",
+      "normalizedUrl": "/v1/machine:writemem?address=0277&data=4c4f4144222a222c382c310d52554e0d",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:35743"
+        "X-C64U-Host": "127.0.0.1:44347"
       },
       "body": null,
+      "payloadPreview": null,
       "target": "external-mock",
       "lifecycleState": "foreground",
       "sourceKind": "local",
       "localAccessMode": "entries",
       "trackInstanceId": 0,
-      "playlistItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64"
+      "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
     }
   },
   {
     "id": "EVT-0064",
-    "timestamp": "2026-03-09T23:10:26.090Z",
-    "relativeMs": 3926,
+    "timestamp": "2026-03-16T14:16:43.879Z",
+    "relativeMs": 3995,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0017",
     "data": {
       "status": 200,
+      "headers": {
+        "content-length": "13",
+        "content-type": "application/json"
+      },
       "body": {
         "errors": []
       },
-      "durationMs": 8,
+      "payloadPreview": {
+        "byteCount": 13,
+        "previewByteCount": 13,
+        "hex": "7b 22 65 72 72 6f 72 73 22 3a 5b 5d 7d",
+        "ascii": "{\"errors\":[]}",
+        "truncated": false
+      },
+      "durationMs": 18,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": "local",
       "localAccessMode": "entries",
       "trackInstanceId": 0,
-      "playlistItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64"
+      "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
     }
   },
   {
     "id": "EVT-0065",
-    "timestamp": "2026-03-09T23:10:26.090Z",
-    "relativeMs": 3926,
+    "timestamp": "2026-03-16T14:16:43.879Z",
+    "relativeMs": 3995,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0017",
@@ -1770,16 +1969,150 @@
       "sourceKind": "local",
       "localAccessMode": "entries",
       "trackInstanceId": 0,
-      "playlistItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64"
+      "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
     }
   },
   {
     "id": "EVT-0066",
-    "timestamp": "2026-03-09T23:10:26.668Z",
-    "relativeMs": 4504,
+    "timestamp": "2026-03-16T14:16:43.879Z",
+    "relativeMs": 3995,
+    "type": "action-start",
+    "origin": "system",
+    "correlationId": "COR-0018",
+    "data": {
+      "name": "rest.put",
+      "component": null,
+      "context": {
+        "ui": {
+          "route": "/play",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 2,
+          "currentIndex": 0,
+          "currentItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64",
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": 180000,
+          "sourceKind": "local",
+          "localAccessMode": "entries",
+          "trackInstanceId": 0,
+          "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "READY"
+        }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": "local",
+      "localAccessMode": "entries",
+      "trackInstanceId": 0,
+      "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
+    }
+  },
+  {
+    "id": "EVT-0067",
+    "timestamp": "2026-03-16T14:16:43.880Z",
+    "relativeMs": 3996,
+    "type": "backend-decision",
+    "origin": "system",
+    "correlationId": "COR-0018",
+    "data": {
+      "selectedTarget": "external-mock",
+      "reason": "test-mode",
+      "lifecycleState": "foreground",
+      "sourceKind": "local",
+      "localAccessMode": "entries",
+      "trackInstanceId": 0,
+      "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
+    }
+  },
+  {
+    "id": "EVT-0068",
+    "timestamp": "2026-03-16T14:16:43.880Z",
+    "relativeMs": 3996,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0018",
+    "data": {
+      "method": "PUT",
+      "url": "http://127.0.0.1:44347/v1/machine:writemem?address=00C6&data=10",
+      "normalizedUrl": "/v1/machine:writemem?address=00C6&data=10",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:44347"
+      },
+      "body": null,
+      "payloadPreview": null,
+      "target": "external-mock",
+      "lifecycleState": "foreground",
+      "sourceKind": "local",
+      "localAccessMode": "entries",
+      "trackInstanceId": 0,
+      "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
+    }
+  },
+  {
+    "id": "EVT-0069",
+    "timestamp": "2026-03-16T14:16:43.893Z",
+    "relativeMs": 4009,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0018",
+    "data": {
+      "status": 200,
+      "headers": {
+        "content-length": "13",
+        "content-type": "application/json"
+      },
+      "body": {
+        "errors": []
+      },
+      "payloadPreview": {
+        "byteCount": 13,
+        "previewByteCount": 13,
+        "hex": "7b 22 65 72 72 6f 72 73 22 3a 5b 5d 7d",
+        "ascii": "{\"errors\":[]}",
+        "truncated": false
+      },
+      "durationMs": 12,
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": "local",
+      "localAccessMode": "entries",
+      "trackInstanceId": 0,
+      "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
+    }
+  },
+  {
+    "id": "EVT-0070",
+    "timestamp": "2026-03-16T14:16:43.893Z",
+    "relativeMs": 4009,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0018",
+    "data": {
+      "status": "success",
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": "local",
+      "localAccessMode": "entries",
+      "trackInstanceId": 0,
+      "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
+    }
+  },
+  {
+    "id": "EVT-0071",
+    "timestamp": "2026-03-16T14:16:44.397Z",
+    "relativeMs": 4513,
     "type": "action-start",
     "origin": "user",
-    "correlationId": "COR-0018",
+    "correlationId": "COR-0019",
     "data": {
       "name": "click Stop",
       "component": "GlobalInteraction",
@@ -1795,14 +2128,14 @@
         "playback": {
           "queueLength": 2,
           "currentIndex": 0,
-          "currentItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64",
+          "currentItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64",
           "isPlaying": true,
           "elapsedMs": 8,
           "durationMs": 180000,
           "sourceKind": "local",
           "localAccessMode": "entries",
           "trackInstanceId": 1,
-          "playlistItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64"
+          "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
         },
         "device": {
           "deviceId": null,
@@ -1813,16 +2146,16 @@
       "sourceKind": "local",
       "localAccessMode": "entries",
       "trackInstanceId": 1,
-      "playlistItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64"
+      "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
     }
   },
   {
-    "id": "EVT-0067",
-    "timestamp": "2026-03-09T23:10:26.668Z",
-    "relativeMs": 4504,
+    "id": "EVT-0072",
+    "timestamp": "2026-03-16T14:16:44.398Z",
+    "relativeMs": 4514,
     "type": "action-start",
     "origin": "user",
-    "correlationId": "COR-0019",
+    "correlationId": "COR-0020",
     "data": {
       "name": "PlayFilesPage.anonymousAction",
       "component": "PlayFilesPage",
@@ -1838,14 +2171,14 @@
         "playback": {
           "queueLength": 2,
           "currentIndex": 0,
-          "currentItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64",
+          "currentItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64",
           "isPlaying": true,
           "elapsedMs": 8,
           "durationMs": 180000,
           "sourceKind": "local",
           "localAccessMode": "entries",
           "trackInstanceId": 1,
-          "playlistItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64"
+          "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
         },
         "device": {
           "deviceId": null,
@@ -1856,16 +2189,16 @@
       "sourceKind": "local",
       "localAccessMode": "entries",
       "trackInstanceId": 1,
-      "playlistItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64"
+      "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
     }
   },
   {
-    "id": "EVT-0068",
-    "timestamp": "2026-03-09T23:10:26.668Z",
-    "relativeMs": 4504,
+    "id": "EVT-0073",
+    "timestamp": "2026-03-16T14:16:44.398Z",
+    "relativeMs": 4514,
     "type": "action-start",
     "origin": "system",
-    "correlationId": "COR-0020",
+    "correlationId": "COR-0021",
     "data": {
       "name": "rest.put",
       "component": null,
@@ -1881,14 +2214,14 @@
         "playback": {
           "queueLength": 2,
           "currentIndex": 0,
-          "currentItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64",
+          "currentItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64",
           "isPlaying": true,
           "elapsedMs": 8,
           "durationMs": 180000,
           "sourceKind": "local",
           "localAccessMode": "entries",
           "trackInstanceId": 1,
-          "playlistItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64"
+          "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
         },
         "device": {
           "deviceId": null,
@@ -1899,16 +2232,16 @@
       "sourceKind": "local",
       "localAccessMode": "entries",
       "trackInstanceId": 1,
-      "playlistItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64"
+      "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
     }
   },
   {
-    "id": "EVT-0069",
-    "timestamp": "2026-03-09T23:10:26.668Z",
-    "relativeMs": 4504,
+    "id": "EVT-0074",
+    "timestamp": "2026-03-16T14:16:44.399Z",
+    "relativeMs": 4515,
     "type": "backend-decision",
     "origin": "system",
-    "correlationId": "COR-0020",
+    "correlationId": "COR-0021",
     "data": {
       "selectedTarget": "external-mock",
       "reason": "test-mode",
@@ -1916,92 +2249,38 @@
       "sourceKind": "local",
       "localAccessMode": "entries",
       "trackInstanceId": 1,
-      "playlistItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64"
+      "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
     }
   },
   {
-    "id": "EVT-0070",
-    "timestamp": "2026-03-09T23:10:26.668Z",
-    "relativeMs": 4504,
+    "id": "EVT-0075",
+    "timestamp": "2026-03-16T14:16:44.399Z",
+    "relativeMs": 4515,
     "type": "rest-request",
     "origin": "system",
-    "correlationId": "COR-0020",
+    "correlationId": "COR-0021",
     "data": {
       "method": "PUT",
-      "url": "http://127.0.0.1:35743/v1/machine:reboot",
+      "url": "http://127.0.0.1:44347/v1/machine:reboot",
       "normalizedUrl": "/v1/machine:reboot",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:35743"
+        "X-C64U-Host": "127.0.0.1:44347"
       },
       "body": null,
+      "payloadPreview": null,
       "target": "external-mock",
       "lifecycleState": "foreground",
       "sourceKind": "local",
       "localAccessMode": "entries",
       "trackInstanceId": 1,
-      "playlistItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64"
+      "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
     }
   },
   {
-    "id": "EVT-0071",
-    "timestamp": "2026-03-09T23:10:26.680Z",
-    "relativeMs": 4516,
-    "type": "action-end",
-    "origin": "user",
-    "correlationId": "COR-0018",
-    "data": {
-      "status": "success",
-      "error": null,
-      "lifecycleState": "foreground",
-      "sourceKind": "local",
-      "localAccessMode": "entries",
-      "trackInstanceId": 1,
-      "playlistItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64"
-    }
-  },
-  {
-    "id": "EVT-0072",
-    "timestamp": "2026-03-09T23:10:26.682Z",
-    "relativeMs": 4518,
-    "type": "rest-response",
-    "origin": "system",
-    "correlationId": "COR-0020",
-    "data": {
-      "status": 200,
-      "body": {
-        "errors": []
-      },
-      "durationMs": 12,
-      "error": null,
-      "lifecycleState": "foreground",
-      "sourceKind": "local",
-      "localAccessMode": "entries",
-      "trackInstanceId": 1,
-      "playlistItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64"
-    }
-  },
-  {
-    "id": "EVT-0073",
-    "timestamp": "2026-03-09T23:10:26.682Z",
-    "relativeMs": 4518,
-    "type": "action-end",
-    "origin": "system",
-    "correlationId": "COR-0020",
-    "data": {
-      "status": "success",
-      "error": null,
-      "lifecycleState": "foreground",
-      "sourceKind": "local",
-      "localAccessMode": "entries",
-      "trackInstanceId": 1,
-      "playlistItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64"
-    }
-  },
-  {
-    "id": "EVT-0074",
-    "timestamp": "2026-03-09T23:10:26.682Z",
-    "relativeMs": 4518,
+    "id": "EVT-0076",
+    "timestamp": "2026-03-16T14:16:44.411Z",
+    "relativeMs": 4527,
     "type": "action-end",
     "origin": "user",
     "correlationId": "COR-0019",
@@ -2012,7 +2291,73 @@
       "sourceKind": "local",
       "localAccessMode": "entries",
       "trackInstanceId": 1,
-      "playlistItemId": "local:6994b548-a583-4a18-84f2-26a1dd5d7c90:/local-play/demo.d64"
+      "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
+    }
+  },
+  {
+    "id": "EVT-0077",
+    "timestamp": "2026-03-16T14:16:44.414Z",
+    "relativeMs": 4530,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0021",
+    "data": {
+      "status": 200,
+      "headers": {
+        "content-length": "13",
+        "content-type": "application/json"
+      },
+      "body": {
+        "errors": []
+      },
+      "payloadPreview": {
+        "byteCount": 13,
+        "previewByteCount": 13,
+        "hex": "7b 22 65 72 72 6f 72 73 22 3a 5b 5d 7d",
+        "ascii": "{\"errors\":[]}",
+        "truncated": false
+      },
+      "durationMs": 12,
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": "local",
+      "localAccessMode": "entries",
+      "trackInstanceId": 1,
+      "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
+    }
+  },
+  {
+    "id": "EVT-0078",
+    "timestamp": "2026-03-16T14:16:44.414Z",
+    "relativeMs": 4530,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0021",
+    "data": {
+      "status": "success",
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": "local",
+      "localAccessMode": "entries",
+      "trackInstanceId": 1,
+      "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
+    }
+  },
+  {
+    "id": "EVT-0079",
+    "timestamp": "2026-03-16T14:16:44.414Z",
+    "relativeMs": 4530,
+    "type": "action-end",
+    "origin": "user",
+    "correlationId": "COR-0020",
+    "data": {
+      "status": "success",
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": "local",
+      "localAccessMode": "entries",
+      "trackInstanceId": 1,
+      "playlistItemId": "local:628948da-767d-4055-b08e-94972fbb0d3e:/local-play/demo.d64"
     }
   }
 ]

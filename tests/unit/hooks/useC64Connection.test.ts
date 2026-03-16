@@ -265,7 +265,7 @@ describe("useC64Connection", () => {
       }
       return { [category]: { items: {} }, errors: [] };
     });
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => { });
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     const { result } = renderHook(() => useC64AllConfig(), { wrapper });
     await waitFor(() => expect(result.current.data?.Audio).toBeDefined());

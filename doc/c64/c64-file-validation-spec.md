@@ -201,7 +201,10 @@ Block count:
 
 Must equal:
 
-    1367
+    1366
+
+or
+
     1371
 
 Otherwise:
@@ -369,6 +372,10 @@ Otherwise:
 Must satisfy:
 
     data_offset < size
+
+This means the data offset must point to at least one byte inside the file.
+An exact 0x76-byte header with data_offset = 0x76 is still invalid because it
+contains no program data after the header.
 
 Otherwise:
 

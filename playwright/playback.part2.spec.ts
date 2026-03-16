@@ -340,7 +340,7 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "volume-updated");
   });
 
-  test("starting playback while muted clears mute before SID playback begins", async ({
+  test("starting playback while manually muted preserves mute during SID playback", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     const initialState = server.getState()["Audio Mixer"];
@@ -371,15 +371,15 @@ test.describe("Playback file browser (part 2)", () => {
 
     await playButton.click();
     await expect(playButton).toHaveAttribute("aria-label", "Stop");
-    await expect(muteButton).toContainText("Mute");
-    await expect(muteButton).not.toHaveAttribute(PERSISTENT_ATTR, "true");
+    await expect(muteButton).toContainText("Unmute");
+    await expect(muteButton).toHaveAttribute(PERSISTENT_ATTR, "true");
     await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(0);
     await expect
       .poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 1"].value)
-      .toBe(initialState["Vol UltiSid 1"].value);
+      .toBe("OFF");
     await expect
       .poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 2"].value)
-      .toBe(initialState["Vol UltiSid 2"].value);
+      .toBe("-42 dB");
     await snap(page, testInfo, "start-unmuted");
 
     const sidplayIndex = server.requests.findIndex((req) => req.url.includes("/v1/runners:sidplay"));
@@ -387,10 +387,8 @@ test.describe("Playback file browser (part 2)", () => {
       .map((req, index) => (req.method === "POST" && req.url.startsWith("/v1/configs") ? index : -1))
       .filter((index) => index >= 0)
       .slice(configCountBeforePlay);
-    const lastConfigBeforeSidplay = configIndicesAfterPlay.filter((index) => index < sidplayIndex).pop() ?? -1;
-    expect(configIndicesAfterPlay.length).toBeGreaterThan(0);
     expect(sidplayIndex).toBeGreaterThan(-1);
-    expect(lastConfigBeforeSidplay).toBeGreaterThan(-1);
+    expect(configIndicesAfterPlay).toEqual([]);
   });
 
   test("pause mutes SID outputs and resume restores them", async ({ page }: { page: Page }, testInfo: TestInfo) => {

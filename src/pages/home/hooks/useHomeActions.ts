@@ -1,10 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { getC64API } from "@/lib/c64api";
-import {
-  useC64Connection,
-  useC64MachineControl,
-  useC64Drives,
-} from "@/hooks/useC64Connection";
+import { useC64Connection, useC64MachineControl, useC64Drives } from "@/hooks/useC64Connection";
 import { toast } from "@/hooks/use-toast";
 import { reportUserError } from "@/lib/uiErrors";
 import { addErrorLog } from "@/lib/logging";

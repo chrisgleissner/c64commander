@@ -6,7 +6,14 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { ActionTrigger, BackendTarget, PayloadPreview, TraceEvent, TraceHeaders, TraceOrigin } from "@/lib/tracing/types";
+import type {
+  ActionTrigger,
+  BackendTarget,
+  PayloadPreview,
+  TraceEvent,
+  TraceHeaders,
+  TraceOrigin,
+} from "@/lib/tracing/types";
 import { normalizeTraceHeaderValue } from "@/lib/tracing/payloadPreview";
 
 export type ActionSummaryOrigin = "user" | "system" | "unknown";

@@ -10,12 +10,7 @@ import { useState, useMemo, useEffect, useReducer, useRef, useCallback } from "r
 import { wrapUserEvent } from "@/lib/tracing/userTrace";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, ChevronDown, Loader2, RefreshCw, FolderOpen } from "lucide-react";
-import {
-  useC64Categories,
-  useC64Category,
-  useC64SetConfig,
-  useC64Connection,
-} from "@/hooks/useC64Connection";
+import { useC64Categories, useC64Category, useC64SetConfig, useC64Connection } from "@/hooks/useC64Connection";
 import { ConfigItemRow } from "@/components/ConfigItemRow";
 import { useC64UpdateConfigBatch } from "@/hooks/useC64Connection";
 import { Input } from "@/components/ui/input";

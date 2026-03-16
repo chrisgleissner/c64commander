@@ -16,6 +16,7 @@ import {
   getIdleContext,
   inspectRequestPayload,
   inspectResponsePayload,
+  normalizeUrlPath,
   readResponseBody,
   waitWithAbortSignal,
 } from "@/lib/c64api/requestRuntime";
@@ -29,6 +30,7 @@ describe("requestRuntime", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 
@@ -65,6 +67,11 @@ describe("requestRuntime", () => {
     const pendingUnsignaledWait = waitWithAbortSignal(20);
     await vi.advanceTimersByTimeAsync(20);
     await expect(pendingUnsignaledWait).resolves.toBeUndefined();
+
+    const signaledWaitController = new AbortController();
+    const signaledWait = waitWithAbortSignal(20, signaledWaitController.signal);
+    await vi.advanceTimersByTimeAsync(20);
+    await expect(signaledWait).resolves.toBeUndefined();
   });
 
   it("clones and sizes budget values defensively", () => {
@@ -75,6 +82,9 @@ describe("requestRuntime", () => {
     vi.stubGlobal("structuredClone", () => {
       throw new Error("clone failed");
     });
+    expect(cloneBudgetValue(value)).toBe(value);
+
+    vi.stubGlobal("structuredClone", undefined as unknown as typeof structuredClone);
     expect(cloneBudgetValue(value)).toBe(value);
 
     expect(estimateBudgetValueBytes(null)).toBe(0);
@@ -135,8 +145,214 @@ describe("requestRuntime", () => {
     expect(createAbortError()).toMatchObject({ name: "AbortError", message: "The operation was aborted" });
   });
 
+  it("normalizes invalid URLs conservatively and propagates rejected promises", async () => {
+    await expect(awaitPromiseWithAbortSignal(Promise.reject(new Error("boom")))).rejects.toThrow("boom");
+    expect(normalizeUrlPath("not a valid url")).toBe("not a valid url");
+  });
+
+  it("inspects request payload variants across text, binary, streams, and objects", async () => {
+    expect(estimateBudgetValueBytes(true)).toBe(4);
+    expect(estimateBudgetValueBytes(new ArrayBuffer(5))).toBe(5);
+
+    await expect(inspectRequestPayload(null)).resolves.toEqual({ body: null, payloadPreview: null });
+
+    vi.stubGlobal("ReadableStream", class FakeReadableStream {} as typeof ReadableStream);
+    const stream = new ReadableStream();
+    await expect(inspectRequestPayload(stream)).resolves.toEqual({ body: "[stream]", payloadPreview: null });
+
+    await expect(inspectRequestPayload('{"ok":true}')).resolves.toMatchObject({
+      body: { ok: true },
+      payloadPreview: expect.objectContaining({ ascii: '{"ok":true}' }),
+    });
+
+    await expect(inspectRequestPayload("plain-text")).resolves.toMatchObject({
+      body: "plain-text",
+      payloadPreview: expect.objectContaining({ ascii: "plain-text" }),
+    });
+
+    const filePayload = new File(["abc"], "demo.prg", { type: "application/octet-stream" });
+    await expect(inspectRequestPayload(filePayload)).resolves.toMatchObject({
+      body: {
+        type: "file",
+        fileName: "demo.prg",
+        sizeBytes: 3,
+        mimeType: "application/octet-stream",
+        source: "blob",
+      },
+      payloadPreview: expect.objectContaining({ ascii: "abc" }),
+    });
+
+    const typelessFilePayload = new File(["xyz"], "demo.bin");
+    await expect(inspectRequestPayload(typelessFilePayload)).resolves.toMatchObject({
+      body: {
+        type: "file",
+        fileName: "demo.bin",
+        mimeType: null,
+      },
+    });
+
+    const blobFormData = new FormData();
+    blobFormData.append("blob", new Blob(["abc"], { type: "text/plain" }));
+    vi.stubGlobal("File", undefined as unknown as typeof File);
+    await expect(inspectRequestPayload(blobFormData)).resolves.toMatchObject({
+      body: {
+        type: "form-data",
+        fields: [{ name: "blob", type: "file", sizeBytes: 3, mimeType: "text/plain" }],
+      },
+    });
+
+    class FakeFormData {
+      forEach(callback: (value: Blob, name: string) => void) {
+        callback(new Blob(["abc"], { type: "text/plain" }), "blob");
+      }
+    }
+    vi.stubGlobal("FormData", FakeFormData as unknown as typeof FormData);
+    await expect(inspectRequestPayload(new FormData())).resolves.toMatchObject({
+      body: {
+        type: "form-data",
+        fields: [{ name: "blob", type: "file", sizeBytes: 3, mimeType: "text/plain" }],
+      },
+    });
+
+    class TypelessBlobFormData {
+      forEach(callback: (value: Blob, name: string) => void) {
+        callback(new Blob(["abc"]), "blob");
+      }
+    }
+    vi.stubGlobal("FormData", TypelessBlobFormData as unknown as typeof FormData);
+    await expect(inspectRequestPayload(new FormData())).resolves.toMatchObject({
+      body: {
+        type: "form-data",
+        fields: [{ name: "blob", type: "file", sizeBytes: 3 }],
+      },
+    });
+
+    await expect(inspectRequestPayload(new ArrayBuffer(2))).resolves.toMatchObject({
+      body: { type: "array-buffer", sizeBytes: 2 },
+      payloadPreview: expect.objectContaining({ byteCount: 2 }),
+    });
+
+    await expect(inspectRequestPayload({ nested: { ok: true } })).resolves.toMatchObject({
+      body: { nested: { ok: true } },
+      payloadPreview: expect.objectContaining({ ascii: '{"nested":{"ok":true}}' }),
+    });
+  });
+
+  it("inspects response payload variants across empty, text, and binary responses", async () => {
+    await expect(
+      inspectResponsePayload(
+        new Response(null, {
+          status: 204,
+          headers: { "content-type": "application/json", "content-length": "0" },
+        }),
+      ),
+    ).resolves.toEqual({
+      headers: { "content-length": "0", "content-type": "application/json" },
+      body: null,
+      payloadPreview: null,
+    });
+
+    await expect(
+      inspectResponsePayload(
+        new Response("ok", {
+          headers: { "content-type": "text/plain", "x-mode": "demo" },
+        }),
+      ),
+    ).resolves.toMatchObject({
+      headers: expect.objectContaining({
+        "content-type": expect.stringContaining("text/plain"),
+        "x-mode": "demo",
+      }),
+      body: "ok",
+      payloadPreview: expect.objectContaining({ ascii: "ok" }),
+    });
+
+    await expect(
+      inspectResponsePayload(
+        new Response(Uint8Array.from([0x01, 0x02, 0x03]), {
+          headers: { "content-type": "application/octet-stream" },
+        }),
+      ),
+    ).resolves.toMatchObject({
+      headers: { "content-type": "application/octet-stream" },
+      body: { type: "binary", sizeBytes: 3, mimeType: "application/octet-stream" },
+      payloadPreview: expect.objectContaining({ byteCount: 3 }),
+    });
+
+    await expect(
+      inspectResponsePayload(
+        new Response(Uint8Array.from([0x01]), {
+          headers: {},
+        }),
+      ),
+    ).resolves.toMatchObject({
+      headers: {},
+      body: { type: "binary", sizeBytes: 1, mimeType: null },
+      payloadPreview: expect.objectContaining({ byteCount: 1 }),
+    });
+
+    await expect(
+      inspectResponsePayload(
+        new Response(new Uint8Array(0), {
+          headers: { "content-type": "application/octet-stream" },
+        }),
+      ),
+    ).resolves.toMatchObject({
+      headers: { "content-type": "application/octet-stream" },
+      body: null,
+      payloadPreview: null,
+    });
+
+    await expect(
+      inspectResponsePayload(
+        new Response("", {
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    ).resolves.toMatchObject({
+      headers: expect.objectContaining({ "content-type": "application/json" }),
+      body: null,
+      payloadPreview: null,
+    });
+
+    const textFailureResponse = {
+      headers: new Headers({ "content-type": "text/plain" }),
+      status: 200,
+      clone: () => ({
+        text: async () => {
+          throw new Error("text read failed");
+        },
+      }),
+    } as unknown as Response;
+    await expect(inspectResponsePayload(textFailureResponse)).resolves.toEqual({
+      headers: { "content-type": "text/plain" },
+      body: null,
+      payloadPreview: null,
+    });
+
+    const binaryFailureResponse = {
+      headers: new Headers(),
+      status: 200,
+      clone: () => ({
+        arrayBuffer: async () => {
+          throw new Error("binary read failed");
+        },
+      }),
+    } as unknown as Response;
+    await expect(inspectResponsePayload(binaryFailureResponse)).resolves.toEqual({
+      headers: {},
+      body: null,
+      payloadPreview: null,
+    });
+  });
+
   it("collects full trace headers and builds byte previews with dot placeholders", async () => {
-    expect(collectTraceHeaders([["x-test", "one"], ["x-test", "two"]])).toEqual({
+    expect(
+      collectTraceHeaders([
+        ["x-test", "one"],
+        ["x-test", "two"],
+      ]),
+    ).toEqual({
       "x-test": ["one", "two"],
     });
 
@@ -158,11 +374,17 @@ describe("requestRuntime", () => {
         },
       }),
     );
-    expect(responseTrace.headers).toEqual({
-      "content-type": "application/json",
-      "x-device": "c64u",
-    });
+    expect(responseTrace.headers).toEqual(
+      expect.objectContaining({
+        "content-type": expect.stringContaining("application/json"),
+        "x-device": "c64u",
+      }),
+    );
     expect(responseTrace.body).toEqual({ ok: true });
     expect(responseTrace.payloadPreview?.ascii).toBe('{"ok":true}');
+
+    expect(extractRequestBody({ ok: true })).toEqual({ ok: true });
+    await expect(readResponseBody(new Response("ok"))).resolves.toBeNull();
+    await expect(readResponseBody(new Response(null))).resolves.toBeNull();
   });
 });

@@ -9,6 +9,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type { Page } from "@playwright/test";
+import { ensureValidSidBase64 } from "./sidFixture";
 
 type HvscFixture = {
   version: number;
@@ -17,6 +18,7 @@ type HvscFixture = {
     fileName: string;
     dataBase64: string;
     durationSeconds?: number;
+    durations?: number[];
   }>;
 };
 
@@ -29,7 +31,9 @@ const baselineFixture = JSON.parse(
 ) as HvscFixture;
 
 const primarySong = baselineFixture.songs[0];
-const fixtureBase64 = primarySong?.dataBase64 ?? "";
+const fixtureBase64 = primarySong
+  ? ensureValidSidBase64(primarySong.dataBase64, primarySong.durations?.length ?? 1)
+  : "";
 
 const buildSnapshotData = () => {
   const data: Record<string, any> = {};
@@ -115,7 +119,7 @@ export async function seedUiMocks(page: Page, baseUrl: string) {
       window.__hvscMock__ = {
         addListener: (_event: string, listener: (event: any) => void) => {
           listeners.push(listener);
-          return { remove: async () => {} };
+          return { remove: async () => { } };
         },
         getHvscStatus: async () => ({
           installedBaselineVersion: 83,
@@ -141,7 +145,7 @@ export async function seedUiMocks(page: Page, baseUrl: string) {
           lastUpdateCheckUtcMs: Date.now(),
           ingestionError: null as string | null,
         }),
-        cancelHvscInstall: async () => {},
+        cancelHvscInstall: async () => { },
         getHvscFolderListing: async ({ path }: { path: string }) => {
           const normalized = path || "/";
           if (normalized === "/") {

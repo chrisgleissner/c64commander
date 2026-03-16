@@ -9,7 +9,7 @@
 import { zipSync, strToU8 } from "fflate";
 import { getTraceContextSnapshot } from "@/lib/tracing/traceContext";
 import { getLifecycleState } from "@/lib/appLifecycle";
-import { redactPayload, redactErrorMessage } from "@/lib/tracing/redaction";
+import { redactHeaders, redactPayload, redactErrorMessage } from "@/lib/tracing/redaction";
 import type {
   TraceEvent,
   TraceEventType,
@@ -300,9 +300,9 @@ export const recordRestRequest = (
     method: payload.method,
     url: payload.url,
     normalizedUrl: payload.normalizedUrl,
-    headers: payload.headers,
-    body: payload.body ?? null,
-    payloadPreview: payload.payloadPreview ?? null,
+    headers: redactHeaders(payload.headers),
+    body: redactPayload(payload.body ?? null),
+    payloadPreview: redactPayload(payload.payloadPreview ?? null),
     target,
   });
 };
@@ -326,9 +326,9 @@ export const recordRestResponse = (
   const errorMessage = payload.errorMessage ?? (payload.error ? payload.error.message : null);
   appendEvent("rest-response", action.origin, action.correlationId, {
     status: payload.status,
-    headers: payload.headers,
-    body: payload.body ?? null,
-    payloadPreview: payload.payloadPreview ?? null,
+    headers: redactHeaders(payload.headers),
+    body: redactPayload(payload.body ?? null),
+    payloadPreview: redactPayload(payload.payloadPreview ?? null),
     durationMs: payload.durationMs,
     error: errorMessage ? redactErrorMessage(errorMessage) : null,
   });
