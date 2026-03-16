@@ -586,6 +586,47 @@ describe("app-first primitives", () => {
     expect(client.tap).toHaveBeenNthCalledWith(2, "serial-1", 272, 2077);
   }, 8000);
 
+  it("retries without Back dismissal when the client cannot send key events", async () => {
+    const { navigateToRoute } = await import("../src/validation/appFirstPrimitives.js");
+    dumpUiHierarchyMock.mockReset();
+
+    const client = {
+      tap: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const slowTransitionHierarchy = `
+        <hierarchy>
+          <node text="CONFIG" class="android.widget.TextView" clickable="false" enabled="true" bounds="[44,126][266,209]" />
+          <node text="Loading" class="android.widget.TextView" clickable="false" enabled="true" bounds="[44,291][1036,407]" />
+          <node text="" resource-id="tab-play" content-desc="Play" class="android.widget.Button" clickable="true" enabled="true" bounds="[203,2004][341,2150]" />
+        </hierarchy>
+      `;
+    const secondAttemptTabHierarchy = `
+        <hierarchy>
+          <node text="" resource-id="tab-play" content-desc="Play" class="android.widget.Button" clickable="true" enabled="true" bounds="[203,2004][341,2150]" />
+        </hierarchy>
+      `;
+    const playRouteHierarchy = `
+        <hierarchy>
+          <node text="PLAY FILES" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,154][300,243]" />
+          <node text="Playlist" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,300][300,360]" />
+          <node text="Play" class="android.widget.Button" clickable="true" enabled="true" focused="true" bounds="[203,2004][341,2150]" />
+        </hierarchy>
+      `;
+    const responses = [
+      ...Array.from({ length: 11 }, () => slowTransitionHierarchy),
+      secondAttemptTabHierarchy,
+      secondAttemptTabHierarchy,
+      playRouteHierarchy,
+    ];
+    dumpUiHierarchyMock.mockImplementation(() => Promise.resolve(responses.shift() ?? playRouteHierarchy));
+
+    await navigateToRoute(client as never, "serial-1", "/play");
+
+    expect(client.tap).toHaveBeenNthCalledWith(1, "serial-1", 272, 2077);
+    expect(client.tap).toHaveBeenNthCalledWith(2, "serial-1", 272, 2077);
+  }, 8000);
+
   it("rethrows the last marker-check failure after three navigation attempts", async () => {
     const { navigateToRoute } = await import("../src/validation/appFirstPrimitives.js");
     dumpUiHierarchyMock.mockReset();
