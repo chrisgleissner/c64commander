@@ -495,7 +495,9 @@ describe("useVolumeOverride", () => {
       }
       return Promise.resolve({ sid1: false, sid2: true });
     });
-    buildSidEnablementMock.mockImplementation((sockets?: Record<string, boolean>) => sockets ?? { sid1: true, sid2: true });
+    buildSidEnablementMock.mockImplementation(
+      (sockets?: Record<string, boolean>) => sockets ?? { sid1: true, sid2: true },
+    );
     filterEnabledSidVolumeItemsMock.mockImplementation((items: MixerItem[], enablement?: Record<string, boolean>) =>
       items.filter((item) => {
         if (item.name === "SID 1") return enablement?.sid1 !== false;
@@ -504,7 +506,8 @@ describe("useVolumeOverride", () => {
       }),
     );
     buildEnabledSidMutedToTargetUpdatesMock.mockImplementation(
-      (items: MixerItem[], _enablement: unknown, target: string) => Object.fromEntries(items.map((item) => [item.name, target])),
+      (items: MixerItem[], _enablement: unknown, target: string) =>
+        Object.fromEntries(items.map((item) => [item.name, target])),
     );
 
     const { result } = renderHook(() =>
