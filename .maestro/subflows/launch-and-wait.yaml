@@ -26,6 +26,7 @@ tags:
           optional: true
       - tapOn:
           text: "Close app"
+          optional: true
       - tapOn:
           text: "Allow access"
           optional: true
