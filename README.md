@@ -35,6 +35,8 @@ C64 Commander lets you control and manage a C64 Ultimate from Android, iOS, or a
     - [Settings](#settings)
     - [Docs](#docs)
     - [Diagnostics](#diagnostics)
+  - [Display Profiles](#display-profiles)
+    - [Example: Home page across profiles](#example-home-page-across-profiles)
   - [🛟 Troubleshooting](#-troubleshooting)
     - [Connectivity](#connectivity)
       - [Can’t reach the device](#cant-reach-the-device)
@@ -207,13 +209,7 @@ Access full C64 Ultimate configuration pages, from basic tuning to hardware-spec
 
 Tune appearance, connection behavior, diagnostics, playback defaults, HVSC integration, and device-safety limits.
 
-Display profiles:
-
-- `Auto` resolves the current viewport into one of three width-based profiles: `Small display`, `Standard display`, or `Large display`.
-- `Small display` is the Compact profile for constrained widths and promotes cramped browser-style dialogs to full-screen layouts when needed.
-- `Standard display` is the Medium baseline and is the default profile used for the main documentation screenshots.
-- `Large display` is the Expanded profile and increases spacing, typography, and bounded-width composition on larger screens.
-- The override lives in **Settings → Appearance → Display profile** and is useful for previewing or locking a profile on tablets and the self-hosted web app.
+Display profile behavior is summarized in the [Display Profiles](#display-profiles) section. The override lives in **Settings → Appearance → Display profile** and is useful for previewing or locking a profile on tablets and the self-hosted web app.
 
 <table>
   <tr>
@@ -259,8 +255,55 @@ Full screenshot set: [doc/img/app/](doc/img/app/)
 
 Profile-specific screenshots:
 
-- Screenshots outside `profiles/` folders show the default Medium documentation profile unless the caption says otherwise.
-- Compact- and Expanded-specific screenshots live under `doc/img/app/<page>/profiles/compact/`, `doc/img/app/<page>/profiles/medium/`, and `doc/img/app/<page>/profiles/expanded/` when the visible layout differs from the default profile.
+- See [Display Profiles](#display-profiles) for the naming and automatic-selection model used throughout this README.
+- Screenshots outside `profiles/` folders show the default Standard display documentation profile unless the caption says otherwise.
+- Profile-specific screenshots live under `doc/img/app/<page>/profiles/compact/`, `doc/img/app/<page>/profiles/medium/`, and `doc/img/app/<page>/profiles/expanded/` when the visible layout differs from the default profile.
+
+## Display Profiles
+
+C64 Commander uses **Display Profiles** so the interface remains comfortable to use on a wide range of screens, from small phones to tablets and desktop browsers:
+
+| Profile name     | Profile ID | Device Type                           |
+| ---------------- | ---------- | ------------------------------------- |
+| Small display    | compact    | Narrow screens such as smaller phones |
+| Standard display | medium     | Most phones                           |
+| Large display    | expanded   | Tablets or wide browser windows       |
+
+When **Settings → Appearance → Display profile** is set to **Auto**, C64 Commander automatically chooses the most suitable profile based on the **available width of the app window**.
+
+The following screenshots show the same **Home page** rendered with the three display profiles:
+
+<table>
+  <thead>
+    <tr>
+      <th align="left">Small display</th>
+      <th align="left">Standard display</th>
+      <th align="left">Large display</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td valign="top">
+        <img
+          src="doc/img/app/home/profiles/compact/01-overview.png"
+          alt="Home page in the Small display profile"
+        />
+      </td>
+      <td valign="top">
+        <img
+          src="doc/img/app/home/profiles/medium/01-overview.png"
+          alt="Home page in the Standard display profile"
+        />
+      </td>
+      <td valign="top">
+        <img
+          src="doc/img/app/home/profiles/expanded/01-overview.png"
+          alt="Home page in the Large display profile"
+        />
+      </td>
+    </tr>
+  </tbody>
+</table>
 
 ## 🛟 Troubleshooting
 
