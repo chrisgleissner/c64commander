@@ -109,14 +109,22 @@ const ensureDiskAutoplayDriveReady = async (api: C64API, drive: "a" | "b", path:
   }
 
   const drives = await api.getDrives();
-  const driveInfo = getDriveInfo(drives, drive);
+  let driveInfo = getDriveInfo(drives, drive);
+  let requiresRefresh = false;
 
   if (driveInfo?.enabled === false) {
     await api.driveOn(drive);
+    requiresRefresh = true;
   }
 
   if (driveInfo?.type !== desiredMode) {
     await api.setDriveMode(drive, desiredMode);
+    requiresRefresh = true;
+  }
+
+  if (requiresRefresh) {
+    const refreshedDrives = await api.getDrives();
+    driveInfo = getDriveInfo(refreshedDrives, drive);
   }
 
   return typeof driveInfo?.bus_id === "number" ? driveInfo.bus_id : 8;

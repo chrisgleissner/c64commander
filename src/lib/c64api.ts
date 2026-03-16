@@ -239,18 +239,18 @@ export interface VersionInfo {
 
 export interface ConfigCategory {
   [itemName: string]:
-  | {
-    selected?: string | number;
-    options?: string[];
-    details?: {
-      min?: number;
-      max?: number;
-      format?: string;
-      presets?: string[];
-    };
-  }
-  | string
-  | number;
+    | {
+        selected?: string | number;
+        options?: string[];
+        details?: {
+          min?: number;
+          max?: number;
+          format?: string;
+          presets?: string[];
+        };
+      }
+    | string
+    | number;
 }
 
 export interface ConfigResponse {
@@ -671,8 +671,8 @@ export class C64API {
                 let timeoutPromiseId: ReturnType<typeof setTimeout> | null = null;
                 const timeoutPromise = timeoutMs
                   ? new Promise<never>((_, reject) => {
-                    timeoutPromiseId = setTimeout(() => reject(new Error("Request timed out")), timeoutMs);
-                  })
+                      timeoutPromiseId = setTimeout(() => reject(new Error("Request timed out")), timeoutMs);
+                    })
                   : null;
                 let response: Response;
                 try {
@@ -929,8 +929,8 @@ export class C64API {
             });
             const timeoutPromise = timeoutMs
               ? new Promise<never>((_, reject) => {
-                timeoutPromiseId = setTimeout(() => reject(new Error("Request timed out")), timeoutMs);
-              })
+                  timeoutPromiseId = setTimeout(() => reject(new Error("Request timed out")), timeoutMs);
+                })
               : null;
             const response = timeoutPromise
               ? await Promise.race([responsePromise, timeoutPromise])

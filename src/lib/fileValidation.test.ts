@@ -211,9 +211,21 @@ describe("fileValidation", () => {
     const modBytes = createValidMod();
 
     expect(validateFileBytes(modBytes, "prg")).toMatchObject({
-      ok: false,
-      code: "INVALID_FILE_TYPE",
-      detectedType: "mod",
+      ok: true,
+      detectedType: "prg",
+    });
+  });
+
+  it("accepts valid PRGs even when weak MOD heuristics also match", () => {
+    const prgBytes = new Uint8Array(1084);
+    prgBytes[0] = 0x01;
+    prgBytes[1] = 0x08;
+    prgBytes[2] = 0x60;
+    prgBytes.set(ascii("M.K."), 1080);
+
+    expect(validateFileBytes(prgBytes, "prg")).toMatchObject({
+      ok: true,
+      detectedType: "prg",
     });
   });
 

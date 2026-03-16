@@ -469,14 +469,6 @@ export const validateFileBytes = (bytes: Uint8Array, expectedType?: SupportedC64
       return expectedResult;
     }
 
-    if (alternateType && TYPE_SPECIFICITY[alternateType] > TYPE_SPECIFICITY[expectedType]) {
-      return failure(
-        "INVALID_FILE_TYPE",
-        alternateType,
-        `${describeType(alternateType)} data cannot be sent via a ${describeType(expectedType)} upload`,
-      );
-    }
-
     return expectedResult;
   }
 
