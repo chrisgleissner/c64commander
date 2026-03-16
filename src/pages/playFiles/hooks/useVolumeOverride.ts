@@ -45,6 +45,11 @@ interface UseVolumeOverrideProps {
   previewIntervalMs: number;
 }
 
+type EnsureUnmutedOptions = {
+  force?: boolean;
+  refreshItems?: boolean;
+};
+
 export function useVolumeOverride({ isPlaying, isPaused, previewIntervalMs }: UseVolumeOverrideProps) {
   const { status } = useC64Connection();
   const updateConfigBatch = useC64UpdateConfigBatch();
@@ -592,15 +597,15 @@ export function useVolumeOverride({ isPlaying, isPaused, previewIntervalMs }: Us
   );
 
   const handleToggleMute = useCallback(async () => {
-    const items = enabledSidVolumeItems.length ? enabledSidVolumeItems : await resolveEnabledSidVolumeItems();
-    if (!items.length) return;
+    const cachedItems = enabledSidVolumeItems.length ? enabledSidVolumeItems : await resolveEnabledSidVolumeItems();
+    if (!cachedItems.length) return;
     isDraggingVolumeRef.current = false;
     lastPreviewSentAtRef.current = null;
-    const muteIndex = resolveMutedVolumeIndex(items);
+    const muteIndex = resolveMutedVolumeIndex(cachedItems);
     if (!volumeMuted) {
       previousVolumeIndexRef.current = volumeIndex;
       await ensureVolumeSessionSnapshot();
-      manualMuteSnapshotRef.current = captureSidMuteSnapshot(items, sidEnablement);
+      manualMuteSnapshotRef.current = captureSidMuteSnapshot(cachedItems, sidEnablement);
       manualMuteIntentRef.current = true;
       dispatchVolume({ type: "mute", reason: "manual", index: muteIndex });
       addLog("info", "Play volume mute requested", {
@@ -614,7 +619,7 @@ export function useVolumeOverride({ isPlaying, isPaused, previewIntervalMs }: Us
       };
       try {
         await queuePlaybackMixerWrite({
-          updates: buildEnabledSidMuteUpdates(items, sidEnablement),
+          updates: buildEnabledSidMuteUpdates(cachedItems, sidEnablement),
           context: "Mute",
           index: muteIndex,
           muted: true,
@@ -630,11 +635,12 @@ export function useVolumeOverride({ isPlaying, isPaused, previewIntervalMs }: Us
       });
       return;
     }
+    const currentItems = await resolveEnabledSidVolumeItems(true);
     const fallbackIndex = previousVolumeIndexRef.current ?? volumeIndex;
     const target = volumeSteps[fallbackIndex]?.option;
-    let updates = target ? buildEnabledSidMutedToTargetUpdates(items, sidEnablement, target) : {};
+    let updates = target ? buildEnabledSidMutedToTargetUpdates(currentItems, sidEnablement, target) : {};
     if (!Object.keys(updates).length && target) {
-      updates = buildEnabledSidVolumeUpdates(items, sidEnablement, target);
+      updates = buildEnabledSidVolumeUpdates(currentItems, sidEnablement, target);
     }
     manualMuteIntentRef.current = false;
     dispatchVolume({ type: "unmute", reason: "manual", index: fallbackIndex });
@@ -813,51 +819,60 @@ export function useVolumeOverride({ isPlaying, isPaused, previewIntervalMs }: Us
     };
   }, []);
 
-  const ensureUnmuted = useCallback(async () => {
-    if (!volumeMuted || manualMuteIntentRef.current) return;
-    const items = enabledSidVolumeItems.length ? enabledSidVolumeItems : await resolveEnabledSidVolumeItems();
-    if (!items.length) return;
-    const fallbackIndex = previousVolumeIndexRef.current ?? volumeIndex;
-    const target = volumeSteps[fallbackIndex]?.option;
-    let updates = target ? buildEnabledSidMutedToTargetUpdates(items, sidEnablement, target) : {};
-    if (!Object.keys(updates).length && target) {
-      updates = buildEnabledSidVolumeUpdates(items, sidEnablement, target);
-    }
-    if (Object.keys(updates).length) {
-      lastManualWriteRef.current = {
-        index: fallbackIndex,
-        muted: false,
-        setAtMs: Date.now(),
-      };
-      const queued = await queuePlaybackMixerWrite({
-        updates,
-        context: "Unmute on playback start",
-        index: fallbackIndex,
-        muted: false,
-        allowKnownDeviceSkip: false,
-      });
-      if (queued) {
-        addLog("info", "Play volume unmute sent on playback start", {
-          index: fallbackIndex,
-        });
+  const ensureUnmuted = useCallback(
+    async (options: EnsureUnmutedOptions = {}) => {
+      const { force = false, refreshItems = false } = options;
+      if (!volumeMuted || (manualMuteIntentRef.current && !force)) return;
+      const items = refreshItems
+        ? await resolveEnabledSidVolumeItems(true)
+        : enabledSidVolumeItems.length
+          ? enabledSidVolumeItems
+          : await resolveEnabledSidVolumeItems();
+      if (!items.length) return;
+      const fallbackIndex = previousVolumeIndexRef.current ?? volumeIndex;
+      const target = volumeSteps[fallbackIndex]?.option;
+      let updates = target ? buildEnabledSidMutedToTargetUpdates(items, sidEnablement, target) : {};
+      if (!Object.keys(updates).length && target) {
+        updates = buildEnabledSidVolumeUpdates(items, sidEnablement, target);
       }
-    }
-    dispatchVolume({ type: "unmute", reason: "manual", index: fallbackIndex });
-    manualMuteSnapshotRef.current = null;
-    clearPendingVolumeWrite();
-  }, [
-    buildEnabledSidMutedToTargetUpdates,
-    buildEnabledSidVolumeUpdates,
-    clearPendingVolumeWrite,
-    dispatchVolume,
-    queuePlaybackMixerWrite,
-    resolveEnabledSidVolumeItems,
-    sidEnablement,
-    volumeIndex,
-    volumeMuted,
-    volumeSteps,
-    enabledSidVolumeItems,
-  ]);
+      if (Object.keys(updates).length) {
+        lastManualWriteRef.current = {
+          index: fallbackIndex,
+          muted: false,
+          setAtMs: Date.now(),
+        };
+        const queued = await queuePlaybackMixerWrite({
+          updates,
+          context: "Unmute on playback start",
+          index: fallbackIndex,
+          muted: false,
+          allowKnownDeviceSkip: false,
+        });
+        if (queued) {
+          addLog("info", "Play volume unmute sent on playback start", {
+            index: fallbackIndex,
+          });
+        }
+      }
+      dispatchVolume({ type: "unmute", reason: "manual", index: fallbackIndex });
+      manualMuteIntentRef.current = false;
+      manualMuteSnapshotRef.current = null;
+      clearPendingVolumeWrite();
+    },
+    [
+      buildEnabledSidMutedToTargetUpdates,
+      buildEnabledSidVolumeUpdates,
+      clearPendingVolumeWrite,
+      dispatchVolume,
+      queuePlaybackMixerWrite,
+      resolveEnabledSidVolumeItems,
+      sidEnablement,
+      volumeIndex,
+      volumeMuted,
+      volumeSteps,
+      enabledSidVolumeItems,
+    ],
+  );
 
   return {
     volumeState,

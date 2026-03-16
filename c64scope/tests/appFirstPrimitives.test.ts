@@ -461,18 +461,23 @@ describe("app-first primitives", () => {
       .mockResolvedValueOnce(compactConfigHierarchy)
       .mockResolvedValueOnce(compactConfigHierarchy)
       .mockResolvedValueOnce(compactConfigHierarchy)
-      .mockResolvedValueOnce(compactConfigHierarchy)
-      .mockResolvedValueOnce(`
+      .mockResolvedValueOnce(compactConfigHierarchy).mockResolvedValueOnce(`
         <hierarchy>
           <node text="" resource-id="tab-play" content-desc="Play" class="android.widget.Button" clickable="true" enabled="true" bounds="[203,2004][341,2150]" />
         </hierarchy>
-      `)
-      .mockResolvedValueOnce(`
+      `).mockResolvedValueOnce(`
         <hierarchy>
           <node text="" resource-id="tab-play" content-desc="Play" class="android.widget.Button" clickable="true" enabled="true" bounds="[203,2004][341,2150]" />
         </hierarchy>
-      `)
-      .mockResolvedValueOnce(`
+      `).mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="" resource-id="tab-play" content-desc="Play" class="android.widget.Button" clickable="true" enabled="true" bounds="[203,2004][341,2150]" />
+        </hierarchy>
+      `).mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="" resource-id="tab-play" content-desc="Play" class="android.widget.Button" clickable="true" enabled="true" bounds="[203,2004][341,2150]" />
+        </hierarchy>
+      `).mockResolvedValueOnce(`
         <hierarchy>
           <node text="PLAY FILES" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,154][300,243]" />
           <node text="Playlist" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,300][300,360]" />
@@ -483,6 +488,56 @@ describe("app-first primitives", () => {
     await navigateToRoute(client as never, "serial-1", "/play");
 
     expect(client.tap).toHaveBeenNthCalledWith(1, "serial-1", 272, 2077);
+    expect(client.pressKey).toHaveBeenCalledWith("serial-1", 4);
+    expect(client.tap).toHaveBeenNthCalledWith(2, "serial-1", 272, 2077);
+  }, 8000);
+
+  it("retries navigation after dismissing a focused autocomplete input", async () => {
+    const { navigateToRoute } = await import("../src/validation/appFirstPrimitives.js");
+    dumpUiHierarchyMock.mockReset();
+
+    const client = {
+      tap: vi.fn().mockResolvedValue(undefined),
+      pressKey: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const compactAutocompleteHierarchy = `
+        <hierarchy>
+          <node text="CONFIG" class="android.widget.TextView" clickable="false" enabled="true" bounds="[44,126][266,209]" />
+          <node text="Duration" class="android.widget.AutoCompleteTextView" clickable="true" enabled="true" focused="true" bounds="[44,291][1036,407]" />
+          <node text="" resource-id="tab-play" content-desc="Play" class="android.widget.Button" clickable="true" enabled="true" bounds="[203,1371][341,1371]" />
+        </hierarchy>
+      `;
+
+    dumpUiHierarchyMock
+      .mockResolvedValueOnce(compactAutocompleteHierarchy)
+      .mockResolvedValueOnce(compactAutocompleteHierarchy)
+      .mockResolvedValueOnce(compactAutocompleteHierarchy)
+      .mockResolvedValueOnce(compactAutocompleteHierarchy)
+      .mockResolvedValueOnce(compactAutocompleteHierarchy)
+      .mockResolvedValueOnce(compactAutocompleteHierarchy)
+      .mockResolvedValueOnce(compactAutocompleteHierarchy)
+      .mockResolvedValueOnce(compactAutocompleteHierarchy)
+      .mockResolvedValueOnce(compactAutocompleteHierarchy)
+      .mockResolvedValueOnce(compactAutocompleteHierarchy)
+      .mockResolvedValueOnce(compactAutocompleteHierarchy).mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="" resource-id="tab-play" content-desc="Play" class="android.widget.Button" clickable="true" enabled="true" bounds="[203,2004][341,2150]" />
+        </hierarchy>
+      `).mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="" resource-id="tab-play" content-desc="Play" class="android.widget.Button" clickable="true" enabled="true" bounds="[203,2004][341,2150]" />
+        </hierarchy>
+      `).mockResolvedValueOnce(`
+        <hierarchy>
+          <node text="PLAY FILES" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,154][300,243]" />
+          <node text="Playlist" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,300][300,360]" />
+          <node text="Play" class="android.widget.Button" clickable="true" enabled="true" focused="true" bounds="[203,2004][341,2150]" />
+        </hierarchy>
+      `);
+
+    await navigateToRoute(client as never, "serial-1", "/play");
+
     expect(client.pressKey).toHaveBeenCalledWith("serial-1", 4);
     expect(client.tap).toHaveBeenNthCalledWith(2, "serial-1", 272, 2077);
   }, 8000);
@@ -504,30 +559,25 @@ describe("app-first primitives", () => {
         </hierarchy>
       `;
 
-    dumpUiHierarchyMock
-      .mockResolvedValueOnce(slowTransitionHierarchy)
-      .mockResolvedValueOnce(slowTransitionHierarchy)
-      .mockResolvedValueOnce(slowTransitionHierarchy)
-      .mockResolvedValueOnce(slowTransitionHierarchy)
-      .mockResolvedValueOnce(slowTransitionHierarchy)
-      .mockResolvedValueOnce(slowTransitionHierarchy)
-      .mockResolvedValueOnce(slowTransitionHierarchy)
-      .mockResolvedValueOnce(slowTransitionHierarchy)
-      .mockResolvedValueOnce(slowTransitionHierarchy)
-      .mockResolvedValueOnce(slowTransitionHierarchy)
-      .mockResolvedValueOnce(slowTransitionHierarchy)
-      .mockResolvedValueOnce(`
+    const secondAttemptTabHierarchy = `
         <hierarchy>
           <node text="" resource-id="tab-play" content-desc="Play" class="android.widget.Button" clickable="true" enabled="true" bounds="[203,2004][341,2150]" />
         </hierarchy>
-      `)
-      .mockResolvedValueOnce(`
+      `;
+    const playRouteHierarchy = `
         <hierarchy>
           <node text="PLAY FILES" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,154][300,243]" />
           <node text="Playlist" class="android.widget.TextView" clickable="false" enabled="true" bounds="[42,300][300,360]" />
           <node text="Play" class="android.widget.Button" clickable="true" enabled="true" focused="true" bounds="[203,2004][341,2150]" />
         </hierarchy>
-      `);
+      `;
+    const responses = [
+      ...Array.from({ length: 11 }, () => slowTransitionHierarchy),
+      secondAttemptTabHierarchy,
+      secondAttemptTabHierarchy,
+      playRouteHierarchy,
+    ];
+    dumpUiHierarchyMock.mockImplementation(() => Promise.resolve(responses.shift() ?? playRouteHierarchy));
 
     await navigateToRoute(client as never, "serial-1", "/play");
 
@@ -535,4 +585,30 @@ describe("app-first primitives", () => {
     expect(client.tap).toHaveBeenNthCalledWith(1, "serial-1", 272, 2077);
     expect(client.tap).toHaveBeenNthCalledWith(2, "serial-1", 272, 2077);
   }, 8000);
+
+  it("rethrows the last marker-check failure after three navigation attempts", async () => {
+    const { navigateToRoute } = await import("../src/validation/appFirstPrimitives.js");
+    dumpUiHierarchyMock.mockReset();
+
+    const client = {
+      tap: vi.fn().mockResolvedValue(undefined),
+      pressKey: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const stalledPlayHierarchy = `
+        <hierarchy>
+          <node text="CONFIG" class="android.widget.TextView" clickable="false" enabled="true" bounds="[44,126][266,209]" />
+          <node text="Still loading" class="android.widget.TextView" clickable="false" enabled="true" bounds="[44,291][1036,407]" />
+          <node text="" resource-id="tab-play" content-desc="Play" class="android.widget.Button" clickable="true" enabled="true" bounds="[203,2004][341,2150]" />
+        </hierarchy>
+      `;
+
+    dumpUiHierarchyMock.mockImplementation(() => Promise.resolve(stalledPlayHierarchy));
+
+    await expect(navigateToRoute(client as never, "serial-1", "/play")).rejects.toThrow(
+      /Route '\/play' marker check failed/,
+    );
+    expect(client.tap).toHaveBeenCalledTimes(3);
+    expect(client.pressKey).not.toHaveBeenCalled();
+  }, 18000);
 });

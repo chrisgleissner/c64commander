@@ -16,6 +16,12 @@ describe("exploratory playback audio analysis guard", () => {
     );
   });
 
+  it("rejects incomplete audio analysis payloads after the envelope check", () => {
+    expect(() => requireAudioFeatures({ envelope: [], stats: {} }, "unmute transition")).toThrow(
+      /Expected complete audio analysis payload for unmute transition/,
+    );
+  });
+
   it("accepts audio analysis payloads with the expected shape", () => {
     const analysis = requireAudioFeatures(
       {
