@@ -120,4 +120,17 @@ describe("C64API file validation boundary", () => {
     expect(addErrorLog).not.toHaveBeenCalled();
     expect(toast).not.toHaveBeenCalled();
   });
+
+  it("rejects nameless cartridge blobs before validation so filename context is preserved", async () => {
+    const api = new C64API("http://127.0.0.1");
+    const namelessBlob = new Blob([new Uint8Array(80)], { type: "application/octet-stream" });
+
+    await expect(api.runCartridgeUpload(namelessBlob)).rejects.toThrow(
+      "CRT_RUN_UPLOAD requires a File upload or explicit metadata.filename for Blob uploads",
+    );
+
+    expect(vi.mocked(globalThis.fetch)).not.toHaveBeenCalled();
+    expect(addErrorLog).not.toHaveBeenCalled();
+    expect(toast).not.toHaveBeenCalled();
+  });
 });

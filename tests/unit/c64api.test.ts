@@ -259,11 +259,11 @@ describe("c64api", () => {
         const socketInfo =
           type === "Socket"
             ? {
-                localAddress: handle.localAddress,
-                localPort: handle.localPort,
-                remoteAddress: handle.remoteAddress,
-                remotePort: handle.remotePort,
-              }
+              localAddress: handle.localAddress,
+              localPort: handle.localPort,
+              remoteAddress: handle.remoteAddress,
+              remotePort: handle.remotePort,
+            }
             : undefined;
         return { type, hasRef, idleTimeout, fd, socketInfo };
       });
@@ -560,11 +560,11 @@ describe("c64api", () => {
 
     const api = new C64API("http://c64u");
     const payload = createValidCrtBlob(0x0101);
-    const result = await api.runCartridgeUpload(payload);
+    const result = await api.runCartridgeUpload(payload, { filename: "Demo.crt" });
     expect(result.errors).toEqual([]);
 
     fetchMock.mockResolvedValueOnce(new Response("fail", { status: 500, statusText: "Server Error" }));
-    await expect(api.runCartridgeUpload(payload)).rejects.toThrow("HTTP 500");
+    await expect(api.runCartridgeUpload(payload, { filename: "Demo.crt" })).rejects.toThrow("HTTP 500");
     expect(addErrorLogMock).toHaveBeenCalledWith("CRT upload failed", expect.any(Object));
   });
 
@@ -654,7 +654,7 @@ describe("c64api", () => {
       const api = new C64API("http://c64u");
       const controller = new AbortController();
       const pending = api.getInfo({ signal: controller.signal });
-      void pending.catch(() => {});
+      void pending.catch(() => { });
 
       await Promise.resolve();
       controller.abort();
@@ -1004,7 +1004,7 @@ describe("c64api", () => {
     await api.playModUpload(createValidModBlob());
     await api.runPrgUpload(createValidPrgBlob());
     await api.loadPrgUpload(createValidPrgBlob());
-    await api.runCartridgeUpload(createValidCrtBlob(0x0200));
+    await api.runCartridgeUpload(createValidCrtBlob(0x0200), { filename: "Native.crt" });
     await api.writeMemoryBlock("1000", new Uint8Array([17, 18, 19, 20]));
 
     const binaryCalls = fetchMock.mock.calls.filter((call) => {
@@ -1167,7 +1167,9 @@ describe("c64api", () => {
     await expect(api.playModUpload(createValidModBlob())).rejects.toThrow("HTTP 500");
     await expect(api.runPrgUpload(createValidPrgBlob())).rejects.toThrow("HTTP 500");
     await expect(api.loadPrgUpload(createValidPrgBlob())).rejects.toThrow("HTTP 500");
-    await expect(api.runCartridgeUpload(createValidCrtBlob(0x0101))).rejects.toThrow("HTTP 500");
+    await expect(api.runCartridgeUpload(createValidCrtBlob(0x0101), { filename: "Broken.crt" })).rejects.toThrow(
+      "HTTP 500",
+    );
 
     expect(addErrorLogMock.mock.calls.map(([message]) => message)).toEqual([
       "MOD upload failed",

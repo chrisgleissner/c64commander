@@ -82,7 +82,7 @@ describe("C64API upload bodies", () => {
     const crtBytes = createValidCrtBytes();
     const body = createBinaryBody(crtBytes);
 
-    await api.runCartridgeUpload(body);
+    await api.runCartridgeUpload(body, { filename: "local-test.crt" });
 
     const request = getLastRequest();
     expect(request).toBeDefined();

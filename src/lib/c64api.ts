@@ -193,9 +193,21 @@ type UploadValidationMetadata = {
   filename?: string;
 };
 
-const extractUploadFilename = (body: Blob, fallbackName: string) => {
+const getUploadFilename = (body: Blob) => {
   const candidate = (body as Blob & { name?: unknown }).name;
-  return typeof candidate === "string" && candidate.trim().length > 0 ? candidate : fallbackName;
+  return typeof candidate === "string" && candidate.trim().length > 0 ? candidate : null;
+};
+
+const extractUploadFilename = (body: Blob, fallbackName: string) => {
+  return getUploadFilename(body) ?? fallbackName;
+};
+
+const requireUploadFilename = (body: Blob, metadata: UploadValidationMetadata, operation: string) => {
+  const filename = metadata.filename ?? getUploadFilename(body);
+  if (filename) {
+    return filename;
+  }
+  throw new Error(`${operation} requires a File upload or explicit metadata.filename for Blob uploads`);
 };
 
 const resolveDiskUploadType = (type?: string): SupportedC64FileType | undefined => {
@@ -227,18 +239,18 @@ export interface VersionInfo {
 
 export interface ConfigCategory {
   [itemName: string]:
-    | {
-        selected?: string | number;
-        options?: string[];
-        details?: {
-          min?: number;
-          max?: number;
-          format?: string;
-          presets?: string[];
-        };
-      }
-    | string
-    | number;
+  | {
+    selected?: string | number;
+    options?: string[];
+    details?: {
+      min?: number;
+      max?: number;
+      format?: string;
+      presets?: string[];
+    };
+  }
+  | string
+  | number;
 }
 
 export interface ConfigResponse {
@@ -659,8 +671,8 @@ export class C64API {
                 let timeoutPromiseId: ReturnType<typeof setTimeout> | null = null;
                 const timeoutPromise = timeoutMs
                   ? new Promise<never>((_, reject) => {
-                      timeoutPromiseId = setTimeout(() => reject(new Error("Request timed out")), timeoutMs);
-                    })
+                    timeoutPromiseId = setTimeout(() => reject(new Error("Request timed out")), timeoutMs);
+                  })
                   : null;
                 let response: Response;
                 try {
@@ -917,8 +929,8 @@ export class C64API {
             });
             const timeoutPromise = timeoutMs
               ? new Promise<never>((_, reject) => {
-                  timeoutPromiseId = setTimeout(() => reject(new Error("Request timed out")), timeoutMs);
-                })
+                timeoutPromiseId = setTimeout(() => reject(new Error("Request timed out")), timeoutMs);
+              })
               : null;
             const response = timeoutPromise
               ? await Promise.race([responsePromise, timeoutPromise])
@@ -1668,8 +1680,9 @@ export class C64API {
     let response: Response;
     try {
       const baseUrl = this.getBaseUrl();
+      const filename = requireUploadFilename(crtFile, metadata, "CRT_RUN_UPLOAD");
       const upload = await this.buildBinaryUploadRequest(crtFile, {
-        filename: metadata.filename ?? extractUploadFilename(crtFile, "cartridge.crt"),
+        filename,
         operation: "CRT_RUN_UPLOAD",
         endpoint: path,
         expectedType: "crt",

@@ -207,6 +207,27 @@ describe("fileValidation", () => {
     });
   });
 
+  it("rejects uploads whose bytes validate as a different supported type", () => {
+    const modBytes = createValidMod();
+
+    expect(validateFileBytes(modBytes, "prg")).toMatchObject({
+      ok: false,
+      code: "INVALID_FILE_TYPE",
+      detectedType: "mod",
+    });
+  });
+
+  it("rejects MOD payloads with unsupported signatures", () => {
+    const invalidMod = createValidMod();
+    invalidMod.set(ascii("NOPE"), 1080);
+
+    expect(validateFileBytes(invalidMod, "mod")).toMatchObject({
+      ok: false,
+      code: "INVALID_MAGIC",
+      detectedType: "mod",
+    });
+  });
+
   it("rejects unsupported uploads when no type can be determined", () => {
     const result = validateFileBytes(Uint8Array.from([0xde, 0xad, 0xbe, 0xef]));
 

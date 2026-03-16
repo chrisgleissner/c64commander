@@ -93,6 +93,16 @@ const VALID_D81_BLOCK_COUNTS = new Set([3200, 3210]);
 const VALID_SID_VERSIONS = new Set([1, 2, 3, 4]);
 const VALID_MOD_SIGNATURES = new Set(["M.K.", "M!K!", "M&K!", "FLT8", "OCTA", "OKTA"]);
 const CRT_MAGIC = "C64 CARTRIDGE   ";
+const VALIDATED_TYPE_PRIORITY: ReadonlyArray<SupportedC64FileType> = ["crt", "sid", "d81", "d71", "d64", "mod", "prg"];
+const TYPE_SPECIFICITY: Record<SupportedC64FileType, number> = {
+  crt: 4,
+  sid: 4,
+  d81: 3,
+  d71: 3,
+  d64: 3,
+  mod: 2,
+  prg: 1,
+};
 
 const success = (detectedType: SupportedC64FileType): ValidationSuccess => ({
   ok: true,
@@ -247,8 +257,8 @@ const validateMod: Validator = (bytes) => {
   if (signature === null) {
     return failure("INVALID_OUT_OF_BOUNDS", "mod");
   }
-  if (!VALID_MOD_SIGNATURES.has(signature) && signature.length !== 4) {
-    return failure("INVALID_OUT_OF_BOUNDS", "mod");
+  if (!VALID_MOD_SIGNATURES.has(signature)) {
+    return failure("INVALID_MAGIC", "mod");
   }
   if (!hasBounds(bytes, 952, 128)) {
     return failure("INVALID_OUT_OF_BOUNDS", "mod");
@@ -422,6 +432,18 @@ export const reportFileValidationFailure = (error: FileValidationError) => {
 const validateAgainstType = (type: SupportedC64FileType, bytes: Uint8Array) =>
   FileValidatorRegistry.validate(type, bytes);
 
+const detectValidatedType = (bytes: Uint8Array, excludeType?: SupportedC64FileType): SupportedC64FileType | null => {
+  for (const type of VALIDATED_TYPE_PRIORITY) {
+    if (type === excludeType) {
+      continue;
+    }
+    if (validateAgainstType(type, bytes).ok) {
+      return type;
+    }
+  }
+  return null;
+};
+
 export const validateFileBytes = (bytes: Uint8Array, expectedType?: SupportedC64FileType): ValidationResult => {
   const detectedType = FileTypeDetector.detect(bytes, expectedType);
   if (expectedType) {
@@ -433,7 +455,29 @@ export const validateFileBytes = (bytes: Uint8Array, expectedType?: SupportedC64
         `${describeType(strongType)} data cannot be sent via a ${describeType(expectedType)} upload`,
       );
     }
-    return validateAgainstType(expectedType, bytes);
+    const expectedResult = validateAgainstType(expectedType, bytes);
+    const alternateType = detectValidatedType(bytes, expectedType);
+
+    if (!expectedResult.ok) {
+      if (alternateType && TYPE_SPECIFICITY[alternateType] > TYPE_SPECIFICITY[expectedType]) {
+        return failure(
+          "INVALID_FILE_TYPE",
+          alternateType,
+          `${describeType(alternateType)} data cannot be sent via a ${describeType(expectedType)} upload`,
+        );
+      }
+      return expectedResult;
+    }
+
+    if (alternateType && TYPE_SPECIFICITY[alternateType] > TYPE_SPECIFICITY[expectedType]) {
+      return failure(
+        "INVALID_FILE_TYPE",
+        alternateType,
+        `${describeType(alternateType)} data cannot be sent via a ${describeType(expectedType)} upload`,
+      );
+    }
+
+    return expectedResult;
   }
 
   if (detectedType === "unknown") {
