@@ -116,6 +116,53 @@ Object.defineProperty(globalThis, "fetch", {
 
 const getFetchMock = () => fetchMock as unknown as ReturnType<typeof vi.fn>;
 
+const ascii = (value: string) => new TextEncoder().encode(value);
+
+const setBE16 = (bytes: Uint8Array, offset: number, value: number) => {
+  bytes[offset] = (value >> 8) & 0xff;
+  bytes[offset + 1] = value & 0xff;
+};
+
+const setBE32 = (bytes: Uint8Array, offset: number, value: number) => {
+  bytes[offset] = (value >>> 24) & 0xff;
+  bytes[offset + 1] = (value >>> 16) & 0xff;
+  bytes[offset + 2] = (value >>> 8) & 0xff;
+  bytes[offset + 3] = value & 0xff;
+};
+
+const createValidArrayLikeD64 = () => new Uint8Array(174848) as unknown as Blob;
+
+const createValidD64Blob = () => new Blob([new Uint8Array(174848)], { type: "application/octet-stream" });
+
+const createValidArrayLikePrg = () => Uint8Array.from([0x01, 0x08, 0x60]) as unknown as Blob;
+
+const createValidArrayLikeMod = () => {
+  const bytes = new Uint8Array(1084);
+  bytes.set(ascii("M.K."), 1080);
+  return bytes as unknown as Blob;
+};
+
+const createValidArrayLikeCrt = (version: number = 0x0100) => {
+  const bytes = new Uint8Array(80);
+  bytes.set(ascii("C64 CARTRIDGE   "), 0);
+  setBE32(bytes, 16, 64);
+  setBE16(bytes, 20, version);
+  bytes.set(ascii("CHIP"), 64);
+  setBE32(bytes, 68, 16);
+  return bytes as unknown as Blob;
+};
+
+const createValidSidBlob = () => {
+  const bytes = new Uint8Array(0x77);
+  bytes.set(ascii("PSID"), 0);
+  setBE16(bytes, 4, 2);
+  setBE16(bytes, 6, 0x76);
+  setBE16(bytes, 14, 1);
+  setBE16(bytes, 16, 1);
+  bytes[0x76] = 0x60;
+  return new Blob([bytes], { type: "application/octet-stream" });
+};
+
 vi.mock("@/lib/logging", () => ({
   addErrorLog: vi.fn(),
   addLog: vi.fn(),
@@ -520,7 +567,7 @@ describe("c64api branches", () => {
     fetchMock.mockResolvedValue(okJsonResponse());
 
     const api = new C64API("http://c64u");
-    const sidFile = new File(["PSID"], "track.sid", { type: "audio/x-sid" });
+    const sidFile = new File([createValidSidBlob()], "track.sid", { type: "audio/x-sid" });
     const sslBlob = new Blob(["SSL"], { type: "application/octet-stream" });
     await api.playSidUpload(sidFile, 1, sslBlob);
 
@@ -957,7 +1004,7 @@ describe("c64api branches", () => {
     fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
 
     const api = new C64API("http://c64u");
-    const sidFile = new Blob(["PSID"], { type: "application/octet-stream" });
+    const sidFile = createValidSidBlob();
     await expect(api.playSidUpload(sidFile)).rejects.toThrow("Host unreachable");
     // Should have been called 3 times (initial + 2 retries)
     expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(3);
@@ -1219,7 +1266,7 @@ describe("c64api branches", () => {
       fetchMock.mockRejectedValue("plain-string-failure");
 
       const api = new C64API("http://c64u");
-      const sidBlob = new Blob(["PSID"], { type: "application/octet-stream" });
+      const sidBlob = createValidSidBlob();
       await expect(api.playSidUpload(sidBlob)).rejects.toBe("plain-string-failure");
     } finally {
       vi.useRealTimers();
@@ -1304,7 +1351,7 @@ describe("c64api branches", () => {
 
     const api = new C64API("http://c64u");
     // File with no type argument → type defaults to '' → value.type || undefined = undefined
-    const sidFile = new File(["PSID"], "track.sid");
+    const sidFile = new File([createValidSidBlob()], "track.sid");
     await api.playSidUpload(sidFile);
     expect(fetchMock).toHaveBeenCalled();
   });
@@ -1403,7 +1450,7 @@ describe("c64api branches", () => {
 
     const api = new C64API("http://c64u");
     // mountDriveUpload uses allowNonJsonSuccess: true
-    const result = await api.mountDriveUpload("a", new Blob(["data"]));
+    const result = await api.mountDriveUpload("a", createValidD64Blob(), "d64", "readwrite");
     expect(result).toEqual({ errors: [] });
     expect(addLogMock).toHaveBeenCalledWith("warn", expect.stringMatching(/non-JSON/i), expect.anything());
   });
@@ -1453,7 +1500,7 @@ describe("c64api branches", () => {
 
     await withNoPerformance(async () => {
       const api = new C64API("http://c64u");
-      const payload = new Uint8Array([1, 2, 3]) as unknown as Blob;
+      const payload = createValidArrayLikeD64();
       const result = await api.mountDriveUpload("a", payload);
       expect(result).toEqual({ errors: [] });
     });
@@ -1465,8 +1512,8 @@ describe("c64api branches", () => {
 
     await withNoPerformance(async () => {
       const api = new C64API("http://c64u");
-      expect(await api.playModUpload(new Uint8Array([4, 5]) as unknown as Blob)).toEqual({ errors: [] });
-      expect(await api.runPrgUpload(new Uint8Array([6, 7]) as unknown as Blob)).toEqual({ errors: [] });
+      expect(await api.playModUpload(createValidArrayLikeMod())).toEqual({ errors: [] });
+      expect(await api.runPrgUpload(createValidArrayLikePrg())).toEqual({ errors: [] });
     });
   });
 
@@ -1476,9 +1523,11 @@ describe("c64api branches", () => {
 
     await withNoPerformance(async () => {
       const api = new C64API("http://c64u");
-      expect(await api.playSidUpload(new Blob(["sid"]))).toEqual({ errors: [] });
-      expect(await api.loadPrgUpload(new Uint8Array([8, 9]) as unknown as Blob)).toEqual({ errors: [] });
-      expect(await api.runCartridgeUpload(new Uint8Array([10, 11]) as unknown as Blob)).toEqual({ errors: [] });
+      expect(await api.playSidUpload(createValidSidBlob())).toEqual({ errors: [] });
+      expect(await api.loadPrgUpload(createValidArrayLikePrg())).toEqual({ errors: [] });
+      expect(await api.runCartridgeUpload(createValidArrayLikeCrt(0x0200), { filename: "Fallback.crt" })).toEqual({
+        errors: [],
+      });
     });
   });
 

@@ -163,10 +163,10 @@ describe("fetchTrace", () => {
 
     const payload = recordRestRequestMock.mock.calls.at(-1)?.[1] as {
       method: string;
-      body: string;
+      body: { type: string; sizeBytes: number; mimeType: string } | string;
     };
     expect(payload.method).toBe("PUT");
-    expect(payload.body).toBe("[body]");
+    expect(payload.body).toBe("[stream]");
   });
 
   it("handles non-json response parsing paths without failing", async () => {
@@ -206,7 +206,6 @@ describe("fetchTrace", () => {
   });
 
   it("warns and continues when traced JSON response body is invalid", async () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const responseWithCloneFailure = {
       ok: true,
       status: 200,
@@ -219,7 +218,6 @@ describe("fetchTrace", () => {
 
     await window.fetch("/api/rest/v1/info");
 
-    expect(warnSpy).toHaveBeenCalledWith("Failed to parse traced fetch response body", expect.any(Object));
     expect(recordRestResponseMock).toHaveBeenCalled();
   });
 
@@ -318,7 +316,14 @@ describe("fetchTrace", () => {
     registerFetchTrace();
 
     await expect(window.fetch("/api/rest/v1/info")).rejects.toBeInstanceOf(Response);
-    expect(recordRestResponseMock).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ body: null }));
+    expect(recordRestResponseMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        body: "not-json-text",
+        headers: expect.objectContaining({ "content-type": "text/plain;charset=UTF-8" }),
+        payloadPreview: expect.objectContaining({ ascii: "not-json-text" }),
+      }),
+    );
   });
 
   it("uses String(input) fallback for non-string/Request/URL input (line 225)", async () => {

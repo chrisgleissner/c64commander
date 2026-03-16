@@ -9,10 +9,13 @@
 import { addErrorLog } from "@/lib/logging";
 import type { C64API } from "@/lib/c64api";
 
-// LOAD"*",8,1\rRUN\r
-export const AUTOSTART_SEQUENCE = new Uint8Array([
-  0x4c, 0x4f, 0x41, 0x44, 0x22, 0x2a, 0x22, 0x2c, 0x38, 0x2c, 0x31, 0x0d, 0x52, 0x55, 0x4e, 0x0d,
-]);
+export const buildAutostartSequence = (busId = 8) => {
+  const normalizedBusId = Number.isFinite(busId) && busId >= 0 ? Math.trunc(busId) : 8;
+  const command = `LOAD"*",${normalizedBusId},1\rRUN\r`;
+  return new Uint8Array(Array.from(command).map((char) => char.charCodeAt(0)));
+};
+
+export const AUTOSTART_SEQUENCE = buildAutostartSequence();
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 

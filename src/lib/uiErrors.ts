@@ -7,6 +7,7 @@
  */
 
 import { toast } from "@/hooks/use-toast";
+import { isHandledUiError } from "@/lib/fileValidation";
 import { addErrorLog, addLog } from "@/lib/logging";
 
 export type UiErrorReport = {
@@ -51,6 +52,10 @@ const isRecoverableConnectivityError = (description: string, error?: unknown) =>
 };
 
 export const reportUserError = ({ operation, title, description, error, context }: UiErrorReport) => {
+  if (isHandledUiError(error)) {
+    return;
+  }
+
   const logPayload = {
     operation,
     description,

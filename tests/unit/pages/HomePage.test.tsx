@@ -10,6 +10,8 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { RouterProvider, createMemoryRouter } from "react-router-dom";
 import HomePage from "../../../src/pages/HomePage";
+import { clearRamDumpFolderConfig, saveRamDumpFolderConfig } from "../../../src/lib/config/ramDumpFolderStore";
+import * as ramDumpStorage from "../../../src/lib/machine/ramDumpStorage";
 
 const {
   toastSpy,
@@ -462,6 +464,10 @@ vi.mock("@tanstack/react-query", () => ({
 }));
 
 vi.mock("@/hooks/useC64Connection", () => ({
+  VISIBLE_C64_QUERY_OPTIONS: {
+    intent: "user",
+    refetchOnMount: "always",
+  },
   useC64Connection: () => ({
     status: statusPayloadRef.current,
   }),
@@ -1251,6 +1257,95 @@ describe("HomePage SID status", () => {
 
     expect(screen.getByTestId("quickconfig-ram-expansion")).toHaveTextContent("Not available");
     expect(screen.queryByTestId("quickconfig-ram-size")).toBeNull();
+  });
+
+  it("uses the derived RAM dump folder path when no label metadata exists", () => {
+    saveRamDumpFolderConfig({
+      treeUri: "content://com.android.externalstorage.documents/tree/primary%3AC64%2Fdumps",
+      rootName: null,
+      selectedAt: "2024-01-01T00:00:00.000Z",
+    });
+
+    renderHomePage();
+
+    expect(screen.getByTestId("ram-dump-folder-trigger").textContent).toContain("Internal storage/C64/dumps");
+
+    clearRamDumpFolderConfig();
+  });
+
+  it("prefers an explicit RAM dump folder displayPath when one is stored", () => {
+    saveRamDumpFolderConfig({
+      treeUri: "content://com.android.externalstorage.documents/tree/primary%3AC64%2Fdumps",
+      rootName: null,
+      displayPath: "Pinned/Dumps",
+      selectedAt: "2024-01-01T00:00:00.000Z",
+    });
+
+    renderHomePage();
+
+    expect(screen.getByTestId("ram-dump-folder-trigger").textContent).toContain("Pinned/Dumps");
+
+    clearRamDumpFolderConfig();
+  });
+
+  it("shows a pending RAM dump folder label while folder selection is in flight", async () => {
+    const selectFolderSpy = vi.spyOn(ramDumpStorage, "selectRamDumpFolder").mockReturnValue(new Promise(() => {}));
+
+    renderHomePage();
+    fireEvent.click(screen.getByTestId("ram-dump-folder-trigger"));
+
+    await waitFor(() => expect(screen.getByTestId("ram-dump-folder-trigger").textContent).toContain("Changing…"));
+
+    selectFolderSpy.mockRestore();
+  });
+
+  it("updates CPU speed without touching turbo control when turbo options are unavailable", async () => {
+    u64SettingsPayloadRef.current = buildU64SettingsPayload({
+      cpuSpeed: "1",
+      turboControlOptions: [],
+    });
+
+    renderHomePage();
+
+    const slider = screen.getByTestId("home-cpu-speed-slider");
+    const thumb = slider.querySelector('[role="slider"]');
+    expect(thumb).toBeTruthy();
+
+    fireEvent.keyDown(thumb!, { key: "ArrowRight" });
+
+    await waitFor(() =>
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith("U64 Specific Settings", "CPU Speed", "2"),
+    );
+    expect(c64ApiMockRef.current.setConfigValue).not.toHaveBeenCalledWith(
+      "U64 Specific Settings",
+      "Turbo Control",
+      expect.anything(),
+    );
+  });
+
+  it("avoids redundant turbo-control writes when the desired turbo mode is already active", async () => {
+    u64SettingsPayloadRef.current = buildU64SettingsPayload({
+      cpuSpeed: "2",
+      turboControl: "Manual",
+      turboControlOptions: ["Manual", "Off"],
+    });
+
+    renderHomePage();
+
+    const slider = screen.getByTestId("home-cpu-speed-slider");
+    const thumb = slider.querySelector('[role="slider"]');
+    expect(thumb).toBeTruthy();
+
+    fireEvent.keyDown(thumb!, { key: "ArrowRight" });
+
+    await waitFor(() =>
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith("U64 Specific Settings", "CPU Speed", "3"),
+    );
+    expect(c64ApiMockRef.current.setConfigValue).not.toHaveBeenCalledWith(
+      "U64 Specific Settings",
+      "Turbo Control",
+      expect.anything(),
+    );
   });
 
   it("renders the quick actions RAM folder row and LED lighting cards in order", async () => {

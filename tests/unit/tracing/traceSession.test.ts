@@ -31,12 +31,6 @@ vi.mock("@/lib/tracing/traceTargets", () => ({
   resolveBackendTarget: () => ({ target: "real-device", reason: "reachable" }),
 }));
 
-vi.mock("@/lib/tracing/redaction", () => ({
-  redactHeaders: (value: unknown) => value,
-  redactPayload: (value: unknown) => value,
-  redactErrorMessage: (value: string) => value,
-}));
-
 vi.mock("@/lib/native/platform", () => ({
   getPlatform: () => "web",
   isNativePlatform: () => false,
@@ -147,7 +141,15 @@ describe("traceSession", () => {
     });
     recordRestResponse(action, {
       status: 200,
+      headers: { "content-type": "application/json" },
       body: { ok: true },
+      payloadPreview: {
+        byteCount: 11,
+        previewByteCount: 11,
+        hex: "7b 22 6f 6b 22 3a 74 72 75 65 7d",
+        ascii: '{"ok":true}',
+        truncated: false,
+      },
       durationMs: 123,
       error: null,
     });
@@ -155,12 +157,109 @@ describe("traceSession", () => {
       operation: "list",
       path: "/dir",
       result: "success",
+      requestPayload: { path: "/dir" },
+      requestPayloadPreview: {
+        byteCount: 15,
+        previewByteCount: 15,
+        hex: "7b 22 70 61 74 68 22 3a 22 2f 64 69 72 22 7d",
+        ascii: '{"path":"/dir"}',
+        truncated: false,
+      },
       error: null,
     });
 
     const events = getTraceEvents();
     expect(events.some((event) => event.type === "rest-response")).toBe(true);
     expect(events.some((event) => event.type === "ftp-operation")).toBe(true);
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "rest-response",
+        data: expect.objectContaining({
+          headers: { "content-type": "application/json" },
+          payloadPreview: expect.objectContaining({ ascii: '{"ok":true}' }),
+        }),
+      }),
+    );
+  });
+
+  it("redacts sensitive REST request fields before persisting trace events", () => {
+    vi.stubGlobal("window", {
+      dispatchEvent: vi.fn(),
+      setTimeout: vi.fn(),
+      CustomEvent: class {},
+    });
+
+    recordRestRequest(action, {
+      method: "POST",
+      url: "http://device/v1/upload",
+      normalizedUrl: "/v1/upload",
+      headers: { "content-type": "application/octet-stream", "x-password": "secret" },
+      body: { password: "secret", type: "blob", sizeBytes: 2 },
+      payloadPreview: {
+        byteCount: 2,
+        previewByteCount: 2,
+        hex: "00 ff",
+        ascii: "..",
+        truncated: false,
+      },
+    });
+
+    expect(getTraceEvents()).toContainEqual(
+      expect.objectContaining({
+        type: "rest-request",
+        data: expect.objectContaining({
+          headers: {
+            "content-type": "application/octet-stream",
+            "x-password": "***",
+          },
+          body: {
+            password: "***",
+            type: "blob",
+            sizeBytes: 2,
+          },
+          payloadPreview: expect.objectContaining({ hex: "00 ff", ascii: ".." }),
+        }),
+      }),
+    );
+  });
+
+  it("redacts sensitive REST response fields before persisting trace events", () => {
+    vi.stubGlobal("window", {
+      dispatchEvent: vi.fn(),
+      setTimeout: vi.fn(),
+      CustomEvent: class {},
+    });
+
+    recordRestResponse(action, {
+      status: 200,
+      headers: { authorization: "Bearer token", "content-type": "application/json" },
+      body: { token: "secret", ok: true },
+      payloadPreview: {
+        byteCount: 24,
+        previewByteCount: 24,
+        hex: "7b 22 74 6f 6b 65 6e 22 3a 22 73 65 63 72 65 74 22 2c 22 6f 6b 22 3a 74",
+        ascii: '{"token":"secret","ok":t',
+        truncated: true,
+      },
+      durationMs: 12,
+      error: null,
+    });
+
+    expect(getTraceEvents()).toContainEqual(
+      expect.objectContaining({
+        type: "rest-response",
+        data: expect.objectContaining({
+          headers: {
+            authorization: "***",
+            "content-type": "application/json",
+          },
+          body: {
+            token: "***",
+            ok: true,
+          },
+        }),
+      }),
+    );
   });
 
   it("deduplicates trace errors and exports on error", async () => {
@@ -461,6 +560,26 @@ describe("traceSession", () => {
     }
   });
 
+  it("estimateEventSize logs and falls back when JSON serialization fails", () => {
+    vi.stubGlobal("window", {
+      dispatchEvent: vi.fn(),
+      setTimeout: vi.fn(),
+      CustomEvent: class {},
+    });
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const originalStringify = JSON.stringify;
+    const stringifySpy = vi.spyOn(JSON, "stringify");
+    stringifySpy.mockImplementationOnce(() => {
+      throw new Error("serialize failed");
+    });
+    stringifySpy.mockImplementation(originalStringify);
+
+    recordActionStart(action);
+
+    expect(getTraceEvents()).toHaveLength(1);
+    expect(warnSpy).toHaveBeenCalledWith("Failed to estimate event size:", expect.any(Error));
+  });
+
   it("includes trigger in action-start data when provided", () => {
     vi.stubGlobal("window", {
       dispatchEvent: vi.fn(),
@@ -649,6 +768,60 @@ describe("traceSession", () => {
     const meta = buildAppMetadata();
     expect(meta.userAgent).toBe("TestBrowser/1.0");
     vi.unstubAllGlobals();
+  });
+
+  it("buildAppMetadata falls back to empty values when build globals are absent", () => {
+    vi.stubGlobal("__APP_VERSION__", undefined as unknown as string);
+    vi.stubGlobal("navigator", undefined as unknown as Navigator);
+
+    const meta = buildAppMetadata();
+
+    expect(meta.appVersion).toBe("");
+    expect(meta.userAgent).toBe("");
+  });
+
+  it("replaceTraceEvents evicts oversized events by storage budget", () => {
+    vi.stubGlobal("window", {
+      dispatchEvent: vi.fn(),
+      setTimeout: vi.fn(),
+      CustomEvent: class {},
+    });
+    const oversizedEvent = {
+      id: "oversized-1",
+      type: "action-start" as const,
+      timestamp: new Date().toISOString(),
+      origin: "user" as const,
+      correlationId: "COR-BIG",
+      data: { payload: "x".repeat(TRACE_SESSION.MAX_STORAGE_BYTES + 1024) },
+    };
+
+    replaceTraceEvents([oversizedEvent] as any);
+
+    expect(getTraceEvents()).toHaveLength(0);
+  });
+
+  it("recordTraceError warns when error-trace export dispatch fails", () => {
+    vi.useFakeTimers();
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.stubGlobal("window", {
+      dispatchEvent: vi.fn((event: { type?: string }) => {
+        if (event.type === "c64u-trace-exported") {
+          throw new Error("dispatch failed");
+        }
+      }),
+      setTimeout,
+      CustomEvent: class CustomEvent {
+        constructor(
+          public type: string,
+          public detail?: any,
+        ) {}
+      },
+    });
+
+    recordTraceError(action, new Error("boom"));
+    vi.runAllTimers();
+
+    expect(warnSpy).toHaveBeenCalledWith("Failed to export error trace:", expect.any(Error));
   });
 
   it("evictExpired calls dropOldest for truly expired events (line 73)", () => {

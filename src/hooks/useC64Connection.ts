@@ -27,6 +27,17 @@ import { invalidateForConnectionSettingsChange } from "@/lib/query/c64QueryInval
 import { getInfoRefreshMinIntervalMs, shouldRunRateLimited } from "@/lib/query/c64PollingGovernance";
 import { addLog } from "@/lib/logging";
 
+export type C64QueryOptions = {
+  intent?: InteractionIntent;
+  refetchOnMount?: boolean | "always";
+  staleTime?: number;
+};
+
+export const VISIBLE_C64_QUERY_OPTIONS: C64QueryOptions = {
+  intent: "user",
+  refetchOnMount: "always",
+};
+
 export interface ConnectionStatus {
   state: "UNKNOWN" | "DISCOVERING" | "REAL_CONNECTED" | "DEMO_ACTIVE" | "OFFLINE_NO_DEMO";
   connectionState: "connected" | "disconnected";
@@ -202,20 +213,23 @@ export function useC64Categories() {
   });
 }
 
-export function useC64Category(category: string, enabled = true) {
+export function useC64Category(category: string, enabled = true, options: C64QueryOptions = {}) {
+  const intent = options.intent ?? "background";
   return useQuery({
     queryKey: ["c64-category", category],
     queryFn: async () => {
       const api = getC64API();
-      return api.getCategory(category, { __c64uIntent: "background" });
+      return api.getCategory(category, { __c64uIntent: intent });
     },
     enabled: enabled && !!category,
-    staleTime: 30000,
+    staleTime: options.staleTime ?? 30000,
+    refetchOnMount: options.refetchOnMount,
   });
 }
 
-export function useC64ConfigItems(category: string, items: string[], enabled = true) {
+export function useC64ConfigItems(category: string, items: string[], enabled = true, options: C64QueryOptions = {}) {
   const itemKey = items.join("|");
+  const intent = options.intent ?? "background";
   const snapshot = loadInitialSnapshot(getC64APIConfigSnapshot().baseUrl);
   const placeholderData = (() => {
     if (!snapshot?.data?.[category]) return undefined;
@@ -241,11 +255,12 @@ export function useC64ConfigItems(category: string, items: string[], enabled = t
     queryKey: ["c64-config-items", category, itemKey],
     queryFn: async () => {
       const api = getC64API();
-      return api.getConfigItems(category, items, { __c64uIntent: "background" });
+      return api.getConfigItems(category, items, { __c64uIntent: intent });
     },
     enabled: enabled && !!category && items.length > 0,
     placeholderData,
-    staleTime: 30000,
+    staleTime: options.staleTime ?? 30000,
+    refetchOnMount: options.refetchOnMount,
   });
 }
 
@@ -347,14 +362,16 @@ export function useC64ConfigItem(category?: string, item?: string, enabled = tru
   });
 }
 
-export function useC64Drives() {
+export function useC64Drives(options: C64QueryOptions = {}) {
+  const intent = options.intent ?? "background";
   return useQuery({
     queryKey: ["c64-drives"],
     queryFn: async () => {
       const api = getC64API();
-      return api.getDrives({ __c64uIntent: "background" });
+      return api.getDrives({ __c64uIntent: intent });
     },
-    staleTime: 10000,
+    staleTime: options.staleTime ?? 10000,
+    refetchOnMount: options.refetchOnMount,
   });
 }
 

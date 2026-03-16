@@ -14,6 +14,7 @@ import { getActiveAction, runWithImplicitAction } from "@/lib/tracing/actionTrac
 import { recordFtpOperation, recordTraceError } from "@/lib/tracing/traceSession";
 import { withFtpInteraction, type InteractionIntent } from "@/lib/deviceInteraction/deviceInteractionManager";
 import type { TraceActionContext } from "@/lib/tracing/types";
+import { buildPayloadPreviewFromBase64, buildPayloadPreviewFromJson } from "@/lib/tracing/payloadPreview";
 
 export type FtpListResult = {
   path: string;
@@ -27,6 +28,10 @@ const executeFtpList = async (
   intent: InteractionIntent,
 ): Promise<FtpListResult> => {
   incrementFtpInFlight();
+  const requestPayload = {
+    ...ftpOptions,
+    path: normalizedPath,
+  };
   return withFtpInteraction(
     {
       action,
@@ -40,10 +45,15 @@ const executeFtpList = async (
           ...ftpOptions,
           path: normalizedPath,
         });
+        const responsePayload = { entries: response.entries };
         recordFtpOperation(action, {
           operation: "list",
           path: normalizedPath,
           result: "success",
+          requestPayload,
+          requestPayloadPreview: buildPayloadPreviewFromJson(requestPayload),
+          responsePayload,
+          responsePayloadPreview: buildPayloadPreviewFromJson(responsePayload),
           error: null,
         });
         return { path: normalizedPath, entries: response.entries };
@@ -60,6 +70,8 @@ const executeFtpList = async (
           operation: "list",
           path: normalizedPath,
           result: "failure",
+          requestPayload,
+          requestPayloadPreview: buildPayloadPreviewFromJson(requestPayload),
           error: err,
         });
         recordTraceError(action, err);
@@ -104,6 +116,7 @@ const executeFtpRead = async (
   intent: InteractionIntent,
 ): Promise<{ data: string; sizeBytes?: number }> => {
   incrementFtpInFlight();
+  const requestPayload = { ...ftpOptions, path };
   return withFtpInteraction(
     {
       action,
@@ -114,10 +127,18 @@ const executeFtpRead = async (
     async () => {
       try {
         const response = await FtpClient.readFile({ ...ftpOptions, path });
+        const responsePayload = {
+          data: response.data,
+          sizeBytes: response.sizeBytes,
+        };
         recordFtpOperation(action, {
           operation: "read",
           path,
           result: "success",
+          requestPayload,
+          requestPayloadPreview: buildPayloadPreviewFromJson(requestPayload),
+          responsePayload,
+          responsePayloadPreview: buildPayloadPreviewFromBase64(response.data),
           error: null,
         });
         return response;
@@ -134,6 +155,8 @@ const executeFtpRead = async (
           operation: "read",
           path,
           result: "failure",
+          requestPayload,
+          requestPayloadPreview: buildPayloadPreviewFromJson(requestPayload),
           error: err,
         });
         recordTraceError(action, err);

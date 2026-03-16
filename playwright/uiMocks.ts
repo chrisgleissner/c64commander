@@ -9,6 +9,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type { Page } from "@playwright/test";
+import { ensureValidSidBase64 } from "./sidFixture";
 
 type HvscFixture = {
   version: number;
@@ -17,6 +18,7 @@ type HvscFixture = {
     fileName: string;
     dataBase64: string;
     durationSeconds?: number;
+    durations?: number[];
   }>;
 };
 
@@ -29,7 +31,9 @@ const baselineFixture = JSON.parse(
 ) as HvscFixture;
 
 const primarySong = baselineFixture.songs[0];
-const fixtureBase64 = primarySong?.dataBase64 ?? "";
+const fixtureBase64 = primarySong
+  ? ensureValidSidBase64(primarySong.dataBase64, primarySong.durations?.length ?? 1)
+  : "";
 
 const buildSnapshotData = () => {
   const data: Record<string, any> = {};

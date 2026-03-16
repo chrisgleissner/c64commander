@@ -86,7 +86,7 @@ export function SidPlayerProvider({ children }: { children: React.ReactNode }) {
       sslBlob = new Blob([payload], { type: "application/octet-stream" });
     }
 
-    await api.playSidUpload(blob, track.songNr, sslBlob);
+    await api.playSidUpload(blob, track.songNr, sslBlob, { filename: track.path });
     startedAtRef.current = Date.now();
     setIsPlaying(true);
   }, []);

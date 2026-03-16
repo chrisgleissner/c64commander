@@ -94,6 +94,33 @@ describe("platform", () => {
       vi.stubEnv("VITE_ENABLE_TEST_PROBES", "1");
       expect(isNativePlatform()).toBe(false);
     });
+
+    it("accepts the window probe flag without env overrides", () => {
+      const win = window as Window & {
+        __c64uTestProbeEnabled?: boolean;
+        __c64uPlatformOverride?: string;
+      };
+      win.__c64uTestProbeEnabled = true;
+      win.__c64uPlatformOverride = "ios";
+
+      expect(getPlatform()).toBe("ios");
+      expect(isNativePlatform()).toBe(true);
+
+      delete win.__c64uTestProbeEnabled;
+      delete win.__c64uPlatformOverride;
+    });
+
+    it("defaults to web when the window probe flag is enabled without an override", () => {
+      const win = window as Window & {
+        __c64uTestProbeEnabled?: boolean;
+      };
+      win.__c64uTestProbeEnabled = true;
+
+      expect(getPlatform()).toBe("web");
+      expect(isNativePlatform()).toBe(false);
+
+      delete win.__c64uTestProbeEnabled;
+    });
   });
 
   describe("SSR environment", () => {

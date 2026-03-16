@@ -9,8 +9,19 @@
 import { addLog } from "@/lib/logging";
 import { getDeviceStateSnapshot } from "@/lib/deviceInteraction/deviceStateStore";
 import { canonicalizeRestPath } from "@/lib/deviceInteraction/restRequestIdentity";
+import {
+  buildPayloadPreviewFromBytes,
+  buildPayloadPreviewFromJson,
+  buildPayloadPreviewFromText,
+  collectTraceHeaders,
+} from "@/lib/tracing/payloadPreview";
+import type { PayloadPreview, TraceHeaders } from "@/lib/tracing/types";
 
 const IDLE_RECOVERY_THRESHOLD_MS = 10_000;
+
+const isFile = (value: unknown): value is File => typeof File !== "undefined" && value instanceof File;
+
+const isBlob = (value: unknown): value is Blob => typeof Blob !== "undefined" && value instanceof Blob;
 
 export const normalizeUrlPath = (url: string) => {
   try {
@@ -141,6 +152,190 @@ export const getIdleContext = () => {
   };
 };
 
+const summarizeFormData = (body: FormData) => {
+  const fields: Array<{
+    name: string;
+    type: "file" | "text";
+    fileName?: string;
+    sizeBytes?: number;
+    mimeType?: string;
+  }> = [];
+  body.forEach((value, name) => {
+    if (isFile(value)) {
+      fields.push({
+        name,
+        type: "file",
+        fileName: value.name,
+        sizeBytes: value.size,
+        mimeType: value.type || undefined,
+      });
+    } else if (isBlob(value)) {
+      fields.push({
+        name,
+        type: "file",
+        sizeBytes: value.size,
+        mimeType: value.type || undefined,
+      });
+    } else {
+      fields.push({
+        name,
+        type: "text",
+      });
+    }
+  });
+  return { type: "form-data", fields };
+};
+
+const summarizeBinaryBody = (body: Blob | ArrayBuffer | ArrayBufferView) => {
+  if (isFile(body)) {
+    return {
+      type: "file",
+      fileName: body.name,
+      sizeBytes: body.size,
+      mimeType: body.type || null,
+      source: "blob",
+    };
+  }
+  if (isBlob(body)) {
+    return {
+      type: "blob",
+      sizeBytes: body.size,
+      mimeType: body.type || null,
+      source: "blob",
+    };
+  }
+  if (body instanceof ArrayBuffer) {
+    return { type: "array-buffer", sizeBytes: body.byteLength };
+  }
+  return { type: "array-buffer-view", sizeBytes: body.byteLength };
+};
+
+export const inspectRequestPayload = async (
+  body: unknown,
+): Promise<{ body: unknown; payloadPreview: PayloadPreview | null }> => {
+  if (!body) {
+    return { body: null, payloadPreview: null };
+  }
+  if (typeof ReadableStream !== "undefined" && body instanceof ReadableStream) {
+    return { body: "[stream]", payloadPreview: null };
+  }
+  if (typeof body === "string") {
+    try {
+      const parsed = JSON.parse(body);
+      return {
+        body: parsed,
+        payloadPreview: buildPayloadPreviewFromText(body),
+      };
+    } catch (error) {
+      addLog("warn", "Failed to parse request body JSON", {
+        error: (error as Error).message,
+      });
+      return {
+        body,
+        payloadPreview: buildPayloadPreviewFromText(body),
+      };
+    }
+  }
+  if (typeof FormData !== "undefined" && body instanceof FormData) {
+    const summary = summarizeFormData(body);
+    return {
+      body: summary,
+      payloadPreview: buildPayloadPreviewFromJson(summary),
+    };
+  }
+  if (isBlob(body)) {
+    const bytes = new Uint8Array(await body.arrayBuffer());
+    return {
+      body: summarizeBinaryBody(body),
+      payloadPreview: buildPayloadPreviewFromBytes(bytes),
+    };
+  }
+  if (body instanceof ArrayBuffer) {
+    return {
+      body: summarizeBinaryBody(body),
+      payloadPreview: buildPayloadPreviewFromBytes(new Uint8Array(body)),
+    };
+  }
+  if (ArrayBuffer.isView(body)) {
+    return {
+      body: summarizeBinaryBody(body),
+      payloadPreview: buildPayloadPreviewFromBytes(new Uint8Array(body.buffer, body.byteOffset, body.byteLength)),
+    };
+  }
+  return {
+    body,
+    payloadPreview: buildPayloadPreviewFromJson(body),
+  };
+};
+
+export const inspectResponsePayload = async (
+  response: Response,
+): Promise<{ headers: TraceHeaders; body: unknown; payloadPreview: PayloadPreview | null }> => {
+  const rawHeaders = response.headers ?? new Headers();
+  const headers = collectTraceHeaders(rawHeaders);
+  const contentType = rawHeaders.get("content-type")?.toLowerCase() ?? "";
+  const contentLength = rawHeaders.get("content-length");
+  if (contentLength === "0" || response.status === 204) {
+    return { headers, body: null, payloadPreview: null };
+  }
+
+  if (contentType.includes("application/json")) {
+    try {
+      const text = await response.clone().text();
+      if (!text) {
+        return { headers, body: null, payloadPreview: null };
+      }
+      return {
+        headers,
+        body: JSON.parse(text),
+        payloadPreview: buildPayloadPreviewFromText(text),
+      };
+    } catch (error) {
+      addLog("warn", "Failed to parse API response JSON", {
+        error: (error as Error).message,
+      });
+      return { headers, body: null, payloadPreview: null };
+    }
+  }
+
+  if (contentType.startsWith("text/") || contentType.includes("xml") || contentType.includes("html")) {
+    try {
+      const text = await response.clone().text();
+      return {
+        headers,
+        body: text || null,
+        payloadPreview: text ? buildPayloadPreviewFromText(text) : null,
+      };
+    } catch (error) {
+      addLog("warn", "Failed to read API text response body", {
+        error: (error as Error).message,
+      });
+      return { headers, body: null, payloadPreview: null };
+    }
+  }
+
+  try {
+    const bytes = new Uint8Array(await response.clone().arrayBuffer());
+    return {
+      headers,
+      body:
+        bytes.byteLength > 0
+          ? {
+              type: "binary",
+              sizeBytes: bytes.byteLength,
+              mimeType: contentType || null,
+            }
+          : null,
+      payloadPreview: buildPayloadPreviewFromBytes(bytes),
+    };
+  } catch (error) {
+    addLog("warn", "Failed to read API binary response body", {
+      error: (error as Error).message,
+    });
+    return { headers, body: null, payloadPreview: null };
+  }
+};
+
 export const extractRequestBody = (body: unknown) => {
   if (!body) return null;
   if (typeof body === "string") {
@@ -154,51 +349,16 @@ export const extractRequestBody = (body: unknown) => {
     }
   }
   if (typeof FormData !== "undefined" && body instanceof FormData) {
-    const fields: Array<{
-      name: string;
-      type: "file" | "text";
-      fileName?: string;
-      sizeBytes?: number;
-      mimeType?: string;
-    }> = [];
-    body.forEach((value, name) => {
-      if (value instanceof File) {
-        fields.push({
-          name,
-          type: "file",
-          fileName: value.name,
-          sizeBytes: value.size,
-          mimeType: value.type || undefined,
-        });
-      } else if (typeof Blob !== "undefined" && value instanceof Blob) {
-        fields.push({
-          name,
-          type: "file",
-          sizeBytes: value.size,
-          mimeType: value.type || undefined,
-        });
-      } else {
-        fields.push({
-          name,
-          type: "text",
-        });
-      }
-    });
-    return { type: "form-data", fields };
+    return summarizeFormData(body);
   }
-  if (typeof Blob !== "undefined" && body instanceof Blob) {
-    return {
-      type: "blob",
-      sizeBytes: body.size,
-      mimeType: body.type || null,
-      source: "blob",
-    };
+  if (isBlob(body)) {
+    return summarizeBinaryBody(body);
   }
   if (body instanceof ArrayBuffer) {
-    return { type: "array-buffer", sizeBytes: body.byteLength };
+    return summarizeBinaryBody(body);
   }
   if (ArrayBuffer.isView(body)) {
-    return { type: "array-buffer-view", sizeBytes: body.byteLength };
+    return summarizeBinaryBody(body);
   }
   return body as unknown;
 };
@@ -206,12 +366,5 @@ export const extractRequestBody = (body: unknown) => {
 export const readResponseBody = async (response: Response) => {
   const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
   if (!contentType.includes("application/json")) return null;
-  try {
-    return await response.clone().json();
-  } catch (error) {
-    addLog("warn", "Failed to parse API response JSON", {
-      error: (error as Error).message,
-    });
-    return null;
-  }
+  return (await inspectResponsePayload(response)).body;
 };

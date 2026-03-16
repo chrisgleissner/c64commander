@@ -19,7 +19,6 @@ import {
   soloReducer,
 } from "@/lib/config/audioMixerSolo";
 import { AUDIO_MIXER_VOLUME_ITEMS } from "@/lib/config/configItems";
-import { useSidPlayer } from "@/hooks/useSidPlayer";
 import { useListPreviewLimit } from "@/hooks/useListPreviewLimit";
 import { useC64Connection } from "@/hooks/useC64Connection";
 import { buildDiskEntryFromDrive, buildDiskEntryFromPath, useDiskLibrary } from "@/hooks/useDiskLibrary";
@@ -50,7 +49,6 @@ const runProbe = async (label: string, runner: () => Promise<void>, errors: stri
 };
 
 export default function CoverageProbePage() {
-  const player = useSidPlayer();
   const listPreview = useListPreviewLimit();
   const connection = useC64Connection();
   const diskLibrary = useDiskLibrary("coverage-probe");
@@ -171,18 +169,7 @@ export default function CoverageProbePage() {
           await api.machinePowerOff();
           await api.machineMenuButton();
 
-          const sidFile = new Blob(["PSID"], {
-            type: "application/octet-stream",
-          });
-          await executePlayPlan(
-            api,
-            buildPlayPlan({
-              source: "local",
-              path: "/test.sid",
-              file: sidFile,
-              durationMs: 1000,
-            }),
-          );
+          await api.playSid("/test.sid", 1);
           await executePlayPlan(api, buildPlayPlan({ source: "ultimate", path: "/music.mod" }));
           await executePlayPlan(api, buildPlayPlan({ source: "ultimate", path: "/demo.prg" }), { loadMode: "load" });
           await executePlayPlan(api, buildPlayPlan({ source: "ultimate", path: "/demo.crt" }));
@@ -190,40 +177,6 @@ export default function CoverageProbePage() {
             drive: "b",
             rebootBeforeMount: true,
           });
-        },
-        failures,
-      );
-
-      await runProbe(
-        "sid player",
-        async () => {
-          const data = new Uint8Array([1, 2, 3, 4]);
-          await player.playTrack({
-            id: "probe-1",
-            title: "Probe",
-            source: "local",
-            data,
-            durationMs: 12000,
-          });
-          await player.playQueue([
-            {
-              id: "probe-2",
-              title: "Probe 2",
-              source: "local",
-              data,
-              durationMs: 8000,
-            },
-            {
-              id: "probe-3",
-              title: "Probe 3",
-              source: "local",
-              data,
-              durationMs: 6000,
-            },
-          ]);
-          player.setShuffle(true);
-          await player.next();
-          await player.previous();
         },
         failures,
       );
@@ -326,7 +279,7 @@ export default function CoverageProbePage() {
       setErrors(failures);
       setStatus(failures.length ? "error" : "done");
     };
-  }, [connection, diskLibrary, listPreview, player]);
+  }, [connection, diskLibrary, listPreview]);
 
   useEffect(() => {
     if (status !== "idle") return;

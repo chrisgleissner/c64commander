@@ -13,6 +13,10 @@ vi.mock("@/lib/c64api", () => ({
 
 vi.mock("@/hooks/useC64Connection", () => ({
   useC64ConfigItems: vi.fn().mockReturnValue({ data: undefined }),
+  VISIBLE_C64_QUERY_OPTIONS: {
+    intent: "user",
+    refetchOnMount: "always",
+  },
 }));
 
 vi.mock("@/hooks/useActionTrace", () => ({

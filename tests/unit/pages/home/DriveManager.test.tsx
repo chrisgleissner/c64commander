@@ -46,6 +46,10 @@ vi.mock("@/lib/uiErrors", () => ({
 }));
 
 vi.mock("@/hooks/useC64Connection", () => ({
+  VISIBLE_C64_QUERY_OPTIONS: {
+    intent: "user",
+    refetchOnMount: "always",
+  },
   useC64ConfigItems: () => ({ data: undefined }),
   useC64Drives: () => ({
     data: { drives: [] },

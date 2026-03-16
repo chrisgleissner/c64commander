@@ -41,8 +41,9 @@ describe("buildActionSummaries", () => {
           method: "GET",
           url: "http://device/v1/info",
           normalizedUrl: "/v1/info",
-          headers: {},
+          headers: { accept: "application/json" },
           body: null,
+          payloadPreview: null,
           target: "real-device",
         },
       }),
@@ -51,7 +52,14 @@ describe("buildActionSummaries", () => {
         type: "rest-response",
         correlationId: "COR-0001",
         relativeMs: 150,
-        data: { status: 200, body: {}, durationMs: 50, error: null },
+        data: {
+          status: 200,
+          headers: { "content-type": "application/json" },
+          body: {},
+          payloadPreview: { byteCount: 2, previewByteCount: 2, hex: "7b 7d", ascii: "{}", truncated: false },
+          durationMs: 50,
+          error: null,
+        },
       }),
       buildTrace({
         id: "EVT-0003",
@@ -123,6 +131,9 @@ describe("buildActionSummaries", () => {
     expect(restEffect).toBeDefined();
     expect(restEffect && "method" in restEffect ? restEffect.method : "").toBe("GET");
     expect(restEffect && "path" in restEffect ? restEffect.path : "").toBe("/v1/info");
+    expect(restEffect && "requestHeaders" in restEffect ? restEffect.requestHeaders : undefined).toEqual({
+      accept: "application/json",
+    });
 
     const ftpEffect = first.effects.find((effect) => effect.type === "FTP");
     expect(ftpEffect).toBeDefined();

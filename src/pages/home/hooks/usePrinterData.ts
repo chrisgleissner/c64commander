@@ -3,10 +3,17 @@ import { useC64ConfigItems, useC64Drives } from "@/hooks/useC64Connection";
 import { PRINTER_HOME_ITEMS } from "../constants";
 import { normalizeDriveDevices } from "@/lib/drives/driveDevices";
 
-export function usePrinterData(isConnected: boolean) {
-  const { data: drivesData, refetch: refetchDrives } = useC64Drives();
+const visibleQueryOptions = { intent: "user" as const, refetchOnMount: "always" as const };
 
-  const { data: printerConfig } = useC64ConfigItems("Printer Settings", [...PRINTER_HOME_ITEMS], isConnected);
+export function usePrinterData(isConnected: boolean) {
+  const { data: drivesData, refetch: refetchDrives } = useC64Drives(visibleQueryOptions);
+
+  const { data: printerConfig } = useC64ConfigItems(
+    "Printer Settings",
+    [...PRINTER_HOME_ITEMS],
+    isConnected,
+    visibleQueryOptions,
+  );
 
   const normalizedDriveModel = useMemo(() => normalizeDriveDevices(drivesData ?? null), [drivesData]);
 

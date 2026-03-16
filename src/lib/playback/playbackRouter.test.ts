@@ -10,6 +10,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import type { C64API, DrivesResponse } from "@/lib/c64api";
 import { buildPlayPlan, executePlayPlan } from "@/lib/playback/playbackRouter";
 import { loadFirstDiskPrgViaDma } from "@/lib/playback/diskFirstPrg";
+import { injectAutostart } from "@/lib/playback/autostart";
 
 vi.mock("@/lib/logging", () => ({
   addErrorLog: vi.fn(),
@@ -52,6 +53,7 @@ vi.mock("@/lib/disks/diskMount", () => ({
 
 vi.mock("@/lib/playback/autostart", () => ({
   AUTOSTART_SEQUENCE: new Uint8Array([42]),
+  buildAutostartSequence: vi.fn((busId = 8) => new Uint8Array([busId])),
   injectAutostart: vi.fn(async () => undefined),
 }));
 
@@ -62,9 +64,12 @@ vi.mock("@/lib/playback/diskFirstPrg", () => ({
 describe("executePlayPlan disk autoplay drive configuration", () => {
   const originalBlobArrayBuffer = Blob.prototype.arrayBuffer;
 
-  const createApi = (driveInfo: DrivesResponse["drives"][number]["a"]) => {
+  const createApi = (driveInfo: DrivesResponse["drives"][number]["a"], refreshedDriveInfo = driveInfo) => {
     return {
-      getDrives: vi.fn(async () => ({ drives: [{ a: driveInfo }], errors: [] }) satisfies DrivesResponse),
+      getDrives: vi
+        .fn()
+        .mockResolvedValueOnce({ drives: [{ a: driveInfo }], errors: [] } satisfies DrivesResponse)
+        .mockResolvedValue({ drives: [{ a: refreshedDriveInfo }], errors: [] } satisfies DrivesResponse),
       driveOn: vi.fn(async () => ({ errors: [] })),
       setDriveMode: vi.fn(async () => ({ errors: [] })),
       mountDriveUpload: vi.fn(async () => ({ errors: [] })),
@@ -115,7 +120,9 @@ describe("executePlayPlan disk autoplay drive configuration", () => {
 
     expect(api.driveOn).toHaveBeenCalledWith("a");
     expect(api.setDriveMode).toHaveBeenCalledWith("a", "1541");
-    expect(api.mountDriveUpload).toHaveBeenCalledWith("a", expect.any(Blob), "d64", "readwrite");
+    expect(api.mountDriveUpload).toHaveBeenCalledWith("a", expect.any(Blob), "d64", "readwrite", {
+      filename: "/games/demo.d64",
+    });
     expect(loadFirstDiskPrgViaDma).toHaveBeenCalled();
     expect(api.driveOn.mock.invocationCallOrder[0]).toBeLessThan(api.setDriveMode.mock.invocationCallOrder[0]);
     expect(api.setDriveMode.mock.invocationCallOrder[0]).toBeLessThan(api.mountDriveUpload.mock.invocationCallOrder[0]);
@@ -136,7 +143,9 @@ describe("executePlayPlan disk autoplay drive configuration", () => {
 
     expect(api.driveOn).not.toHaveBeenCalled();
     expect(api.setDriveMode).toHaveBeenCalledWith("a", "1571");
-    expect(api.mountDriveUpload).toHaveBeenCalledWith("a", expect.any(Blob), "d71", "readwrite");
+    expect(api.mountDriveUpload).toHaveBeenCalledWith("a", expect.any(Blob), "d71", "readwrite", {
+      filename: "/games/demo.d71",
+    });
   });
 
   it("switches Drive A to 1581 before autoplaying a d81", async () => {
@@ -153,7 +162,9 @@ describe("executePlayPlan disk autoplay drive configuration", () => {
     );
 
     expect(api.setDriveMode).toHaveBeenCalledWith("a", "1581");
-    expect(api.mountDriveUpload).toHaveBeenCalledWith("a", expect.any(Blob), "d81", "readwrite");
+    expect(api.mountDriveUpload).toHaveBeenCalledWith("a", expect.any(Blob), "d81", "readwrite", {
+      filename: "/games/demo.d81",
+    });
   });
 
   it("skips drive power and mode changes when Drive A is already ready", async () => {
@@ -171,6 +182,29 @@ describe("executePlayPlan disk autoplay drive configuration", () => {
 
     expect(api.driveOn).not.toHaveBeenCalled();
     expect(api.setDriveMode).not.toHaveBeenCalled();
-    expect(api.mountDriveUpload).toHaveBeenCalledWith("a", expect.any(Blob), "d64", "readwrite");
+    expect(api.mountDriveUpload).toHaveBeenCalledWith("a", expect.any(Blob), "d64", "readwrite", {
+      filename: "/games/demo.d64",
+    });
+  });
+
+  it("uses refreshed drive bus metadata after changing the drive mode", async () => {
+    const api = createApi({ enabled: true, type: "1541", bus_id: 8 }, { enabled: true, type: "1571", bus_id: 9 });
+
+    await executePlayPlan(
+      api,
+      buildPlayPlan({
+        source: "local",
+        path: "/games/demo.d71",
+        file: new Blob([Uint8Array.from([1, 2, 3])]),
+      }),
+      { resetBeforeMount: false, diskAutostartMode: "inject" },
+    );
+
+    expect(api.setDriveMode).toHaveBeenCalledWith("a", "1571");
+    expect(api.getDrives).toHaveBeenCalledTimes(2);
+    expect(injectAutostart).toHaveBeenCalledWith(api, new Uint8Array([9]), {
+      pollIntervalMs: 140,
+      maxAttempts: 20,
+    });
   });
 });

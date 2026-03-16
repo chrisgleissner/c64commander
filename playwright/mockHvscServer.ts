@@ -10,6 +10,7 @@ import * as http from "node:http";
 import * as path from "node:path";
 import * as fs from "node:fs";
 import { strToU8, zipSync } from "fflate";
+import { ensureValidSidBase64 } from "./sidFixture";
 
 export type HvscFixture = {
   version: number;
@@ -31,7 +32,14 @@ export interface MockHvscServer {
 
 const readFixture = <T>(name: string): T => {
   const filePath = path.resolve("playwright/fixtures/hvsc", name);
-  return JSON.parse(fs.readFileSync(filePath, "utf8")) as T;
+  const fixture = JSON.parse(fs.readFileSync(filePath, "utf8")) as HvscFixture;
+  return {
+    ...fixture,
+    songs: fixture.songs.map((song) => ({
+      ...song,
+      dataBase64: ensureValidSidBase64(song.dataBase64, song.durations?.length ?? 1),
+    })),
+  } as T;
 };
 
 export function createMockHvscServer(): Promise<MockHvscServer> {

@@ -7,6 +7,7 @@
  */
 
 import { addErrorLog, addLog } from "@/lib/logging";
+import { buildBinaryFingerprint } from "@/lib/binaryFingerprint";
 import type { C64API } from "@/lib/c64api";
 import { FolderPicker } from "@/lib/native/folderPicker";
 import { getFileExtension } from "@/lib/playback/fileTypes";
@@ -34,6 +35,18 @@ export const buildDiskMountType = (path: string) => {
   return ext || undefined;
 };
 
+const logResolvedLocalDiskBytes = (disk: DiskEntry, source: string, bytes: Uint8Array) => {
+  addLog("debug", "Local disk bytes resolved", {
+    path: disk.path,
+    location: disk.location,
+    sourceId: disk.sourceId ?? null,
+    localUri: disk.localUri ?? null,
+    localTreeUri: disk.localTreeUri ?? null,
+    resolutionSource: source,
+    fingerprint: buildBinaryFingerprint(bytes),
+  });
+};
+
 export const resolveLocalDiskBlob = async (disk: DiskEntry, runtimeFile?: File): Promise<Blob> => {
   const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, context: string) => {
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -47,10 +60,16 @@ export const resolveLocalDiskBlob = async (disk: DiskEntry, runtimeFile?: File):
     }
   };
 
-  if (runtimeFile) return runtimeFile;
+  if (runtimeFile) {
+    const bytes = new Uint8Array(await runtimeFile.arrayBuffer());
+    logResolvedLocalDiskBytes(disk, "runtime-file", bytes);
+    return runtimeFile;
+  }
   if (disk.localUri) {
     const data = await withTimeout(FolderPicker.readFile({ uri: disk.localUri }), 2000, "Local disk file read");
-    return new Blob([base64ToUint8(data.data)], {
+    const bytes = base64ToUint8(data.data);
+    logResolvedLocalDiskBytes(disk, "local-uri", bytes);
+    return new Blob([bytes], {
       type: "application/octet-stream",
     });
   }
@@ -63,7 +82,9 @@ export const resolveLocalDiskBlob = async (disk: DiskEntry, runtimeFile?: File):
       2000,
       "Local disk tree read",
     );
-    return new Blob([base64ToUint8(data.data)], {
+    const bytes = base64ToUint8(data.data);
+    logResolvedLocalDiskBytes(disk, "disk.localTreeUri", bytes);
+    return new Blob([bytes], {
       type: "application/octet-stream",
     });
   }
@@ -83,7 +104,9 @@ export const resolveLocalDiskBlob = async (disk: DiskEntry, runtimeFile?: File):
           2000,
           "Local disk tree read",
         );
-        return new Blob([base64ToUint8(data.data)], {
+        const bytes = base64ToUint8(data.data);
+        logResolvedLocalDiskBytes(disk, `source-tree:${source.id}`, bytes);
+        return new Blob([bytes], {
           type: "application/octet-stream",
         });
       } catch (error) {
@@ -101,7 +124,9 @@ export const resolveLocalDiskBlob = async (disk: DiskEntry, runtimeFile?: File):
         const match = entries.find((entry) => normalizeSourcePath(entry.relativePath) === normalizedPath);
         if (match?.uri) {
           const data = await withTimeout(FolderPicker.readFile({ uri: match.uri }), 2000, "Local disk file read");
-          return new Blob([base64ToUint8(data.data)], {
+          const bytes = base64ToUint8(data.data);
+          logResolvedLocalDiskBytes(disk, `source-uri:${source.id}`, bytes);
+          return new Blob([bytes], {
             type: "application/octet-stream",
           });
         }
@@ -157,7 +182,14 @@ export const mountDiskToDrive = async (api: C64API, drive: "a" | "b", disk: Disk
     }
 
     const blob = await resolveLocalDiskBlob(disk, runtimeFile);
-    await api.mountDriveUpload(drive, blob, mountType, "readwrite");
+    addLog("debug", "Local disk blob prepared for mount", {
+      drive,
+      path: disk.path,
+      location: disk.location,
+      sourceId: disk.sourceId ?? null,
+      sizeBytes: blob.size,
+    });
+    await api.mountDriveUpload(drive, blob, mountType, "readwrite", { filename: disk.path });
   } catch (error) {
     addErrorLog("Disk mount failed", {
       drive,

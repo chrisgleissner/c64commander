@@ -299,6 +299,35 @@ describe("useC64Connection", () => {
     await waitFor(() => expect(result.current.data?.drives).toBeDefined());
   });
 
+  it("supports visible-priority config item queries for page entry", async () => {
+    const { wrapper } = createWrapper();
+
+    renderHook(
+      () =>
+        useC64ConfigItems("Audio", ["Volume"], true, {
+          intent: "user",
+          refetchOnMount: "always",
+        }),
+      { wrapper },
+    );
+
+    await waitFor(() =>
+      expect(mockApi.getConfigItems).toHaveBeenCalledWith("Audio", ["Volume"], { __c64uIntent: "user" }),
+    );
+  });
+
+  it("supports visible-priority category and drive queries for page entry", async () => {
+    const { wrapper } = createWrapper();
+
+    renderHook(() => useC64Category("Audio", true, { intent: "user", refetchOnMount: "always" }), { wrapper });
+    renderHook(() => useC64Drives({ intent: "user", refetchOnMount: "always" }), { wrapper });
+
+    await waitFor(() => {
+      expect(mockApi.getCategory).toHaveBeenCalledWith("Audio", { __c64uIntent: "user" });
+      expect(mockApi.getDrives).toHaveBeenCalledWith({ __c64uIntent: "user" });
+    });
+  });
+
   it("invalidates and flags config loads and resets", async () => {
     const { wrapper, client } = createWrapper();
     const invalidateSpy = vi.spyOn(client, "invalidateQueries");

@@ -10,6 +10,26 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { C64API } from "@/lib/c64api";
 import { CapacitorHttp } from "@capacitor/core";
 
+const ascii = (value: string) => new TextEncoder().encode(value);
+
+const setBE16 = (bytes: Uint8Array, offset: number, value: number) => {
+  bytes[offset] = (value >> 8) & 0xff;
+  bytes[offset + 1] = value & 0xff;
+};
+
+const createValidSidBlob = () => {
+  const bytes = new Uint8Array(0x77);
+  bytes.set(ascii("PSID"), 0);
+  setBE16(bytes, 4, 2);
+  setBE16(bytes, 6, 0x76);
+  setBE16(bytes, 14, 1);
+  setBE16(bytes, 16, 1);
+  bytes[0x76] = 0x60;
+  return new Blob([bytes], {
+    type: "audio/sid",
+  });
+};
+
 vi.mock("@capacitor/core", () => ({
   CapacitorHttp: {
     request: vi.fn(),
@@ -44,9 +64,7 @@ describe("C64API playSidUpload", () => {
     const requestSpy = vi.spyOn(CapacitorHttp, "request");
 
     const api = new C64API("http://127.0.0.1:1234", undefined, "127.0.0.1:1234");
-    const sidFile = new Blob([new Uint8Array([0x50, 0x53, 0x49, 0x44])], {
-      type: "audio/sid",
-    });
+    const sidFile = createValidSidBlob();
 
     await api.playSidUpload(sidFile);
 
@@ -66,9 +84,7 @@ describe("C64API playSidUpload", () => {
     global.fetch = fetchSpy as unknown as typeof fetch;
 
     const api = new C64API("http://127.0.0.1:1234", undefined, "127.0.0.1:1234");
-    const sidFile = new Blob([new Uint8Array([0x50, 0x53, 0x49, 0x44])], {
-      type: "audio/sid",
-    });
+    const sidFile = createValidSidBlob();
 
     await api.playSidUpload(sidFile);
     expect(fetchSpy).toHaveBeenCalledTimes(2);
@@ -93,9 +109,7 @@ describe("C64API playSidUpload", () => {
     global.fetch = fetchSpy as unknown as typeof fetch;
 
     const api = new C64API("http://127.0.0.1:1234", undefined, "127.0.0.1:1234");
-    const sidFile = new Blob([new Uint8Array([0x50, 0x53, 0x49, 0x44])], {
-      type: "audio/sid",
-    });
+    const sidFile = createValidSidBlob();
 
     await api.playSidUpload(sidFile);
     expect(fetchSpy).toHaveBeenCalledTimes(3);
@@ -108,9 +122,7 @@ describe("C64API playSidUpload", () => {
     global.fetch = fetchSpy as unknown as typeof fetch;
 
     const api = new C64API("http://127.0.0.1:1234", undefined, "127.0.0.1:1234");
-    const sidFile = new Blob([new Uint8Array([0x50, 0x53, 0x49, 0x44])], {
-      type: "audio/sid",
-    });
+    const sidFile = createValidSidBlob();
 
     await expect(api.playSidUpload(sidFile)).rejects.toThrow("HTTP 400");
     expect(fetchSpy).toHaveBeenCalledTimes(1);

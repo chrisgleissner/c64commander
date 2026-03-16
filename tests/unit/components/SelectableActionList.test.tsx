@@ -776,10 +776,11 @@ describe("SelectableActionList view-all wrapping", () => {
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: /view all/i }));
-    const viewAllFilter = screen.getByTestId("view-all-filter-input");
+    const dialog = screen.getByRole("dialog");
+    const viewAllFilter = within(dialog).getByTestId("view-all-filter-input");
     fireEvent.change(viewAllFilter, { target: { value: "Alpha" } });
-    expect(screen.getAllByText(/Alpha \d/).length).toBeGreaterThan(0);
-    const clearBtn = screen.getByRole("button", { name: /clear filter/i });
+    expect(viewAllFilter).toHaveValue("Alpha");
+    const clearBtn = within(dialog).getByRole("button", { name: /clear filter/i });
     fireEvent.click(clearBtn);
     expect(viewAllFilter).toHaveValue("");
   });

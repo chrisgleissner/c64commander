@@ -37,7 +37,15 @@ const createMockDrive = (overrides: any = {}) => ({
 });
 
 // Mocks
-vi.mock("@/hooks/useC64Connection");
+vi.mock("@/hooks/useC64Connection", () => ({
+  VISIBLE_C64_QUERY_OPTIONS: {
+    intent: "user",
+    refetchOnMount: "always",
+  },
+  useC64Connection: vi.fn(),
+  useC64ConfigItems: vi.fn(),
+  useC64Drives: vi.fn(),
+}));
 vi.mock("@/hooks/useDiskLibrary");
 vi.mock("@/lib/c64api");
 vi.mock("@/hooks/use-toast");

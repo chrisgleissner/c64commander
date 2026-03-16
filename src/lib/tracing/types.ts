@@ -14,6 +14,18 @@ export type TraceSourceKind = "local" | "ultimate" | "hvsc";
 
 export type TraceLocalAccessMode = "entries" | "saf";
 
+export type TraceHeaderValue = string | string[];
+
+export type TraceHeaders = Record<string, TraceHeaderValue>;
+
+export type PayloadPreview = {
+  byteCount: number;
+  previewByteCount: number;
+  hex: string;
+  ascii: string;
+  truncated: boolean;
+};
+
 export type TraceEventType =
   | "action-start"
   | "action-end"

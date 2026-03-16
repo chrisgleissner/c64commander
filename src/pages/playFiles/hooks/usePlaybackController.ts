@@ -103,7 +103,7 @@ interface UsePlaybackControllerProps {
   pauseMuteSnapshotRef: MutableRefObject<SidMuteSnapshot | null>;
   pausingFromPauseRef: MutableRefObject<boolean>;
   resumingFromPauseRef: MutableRefObject<boolean>;
-  ensureUnmuted: () => Promise<void>;
+  ensureUnmuted: (options?: { force?: boolean; refreshItems?: boolean }) => Promise<void>;
 
   // Refs
   playedClockRef: MutableRefObject<{
@@ -330,7 +330,7 @@ export function usePlaybackController({
             });
           }
         }
-        await ensureUnmuted({ force: true, refreshItems: true });
+        await ensureUnmuted({ refreshItems: true });
         try {
           await ensurePlaybackConnection();
         } catch (error) {

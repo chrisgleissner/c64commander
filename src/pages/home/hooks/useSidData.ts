@@ -5,19 +5,33 @@ import { buildSidControlEntries } from "@/lib/config/sidDetails";
 import { buildConfigKey } from "../utils/HomeConfigUtils";
 import { buildSidSilenceTargets } from "@/lib/sid/sidSilence";
 
+const visibleQueryOptions = { intent: "user" as const, refetchOnMount: "always" as const };
+
 export function useSidData(isConnected: boolean, configOverrides: Record<string, string | number>) {
   const { data: sidSocketsCategory } = useC64ConfigItems(
     "SID Sockets Configuration",
     [...HOME_SID_SOCKET_ITEMS],
     isConnected,
+    visibleQueryOptions,
   );
-  const { data: ultiSidCategory } = useC64ConfigItems("UltiSID Configuration", [...HOME_ULTISID_ITEMS], isConnected);
+  const { data: ultiSidCategory } = useC64ConfigItems(
+    "UltiSID Configuration",
+    [...HOME_ULTISID_ITEMS],
+    isConnected,
+    visibleQueryOptions,
+  );
   const { data: sidAddressingCategory } = useC64ConfigItems(
     "SID Addressing",
     [...HOME_SID_ADDRESSING_ITEMS],
     isConnected,
+    visibleQueryOptions,
   );
-  const { data: audioMixerCategory } = useC64ConfigItems("Audio Mixer", [...SID_AUDIO_ITEMS], isConnected);
+  const { data: audioMixerCategory } = useC64ConfigItems(
+    "Audio Mixer",
+    [...SID_AUDIO_ITEMS],
+    isConnected,
+    visibleQueryOptions,
+  );
 
   const sidControlEntries = useMemo(() => {
     const entries = buildSidControlEntries(

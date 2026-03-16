@@ -1,4 +1,4 @@
-# Agent Guide (LLM / Copilot / Cursor)
+# Agent Guide
 
 This repository is **C64 Commander**, a React + Vite + Capacitor app for managing and controlling a C64 Ultimate device.
 

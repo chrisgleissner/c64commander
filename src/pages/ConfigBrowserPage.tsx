@@ -39,6 +39,7 @@ type ConfigListItem = {
 };
 
 const DHCP_STATIC_FIELDS = new Set(["Static IP", "Static Netmask", "Static Gateway", "Static DNS"]);
+const visibleQueryOptions = { intent: "user" as const, refetchOnMount: "always" as const };
 
 function CategorySection({
   categoryName,
@@ -51,7 +52,7 @@ function CategorySection({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
-  const { data: categoryData, isLoading, refetch } = useC64Category(categoryName, isOpen);
+  const { data: categoryData, isLoading, refetch } = useC64Category(categoryName, isOpen, visibleQueryOptions);
   const setConfig = useC64SetConfig();
   const updateConfigBatch = useC64UpdateConfigBatch();
   const isAudioMixer = categoryName === "Audio Mixer";

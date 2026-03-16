@@ -11,11 +11,41 @@ import { C64API, type ConfigResponse } from "@/lib/c64api";
 
 describe("C64API upload bodies", () => {
   const originalFetch = globalThis.fetch;
-  const createBinaryBody = (bytes: number[]) =>
+  const ascii = (value: string) => new TextEncoder().encode(value);
+  const setBE16 = (bytes: Uint8Array, offset: number, value: number) => {
+    bytes[offset] = (value >> 8) & 0xff;
+    bytes[offset + 1] = value & 0xff;
+  };
+  const setBE32 = (bytes: Uint8Array, offset: number, value: number) => {
+    bytes[offset] = (value >>> 24) & 0xff;
+    bytes[offset + 1] = (value >>> 16) & 0xff;
+    bytes[offset + 2] = (value >>> 8) & 0xff;
+    bytes[offset + 3] = value & 0xff;
+  };
+  const createBinaryBody = (bytes: Uint8Array) =>
     ({
       size: bytes.length,
-      arrayBuffer: vi.fn(async () => Uint8Array.from(bytes).buffer),
+      arrayBuffer: vi.fn(async () => bytes.buffer.slice(0)),
     }) as unknown as Blob;
+  const createValidCrtBytes = () => {
+    const bytes = new Uint8Array(80);
+    bytes.set(ascii("C64 CARTRIDGE   "), 0);
+    setBE32(bytes, 16, 64);
+    setBE16(bytes, 20, 0x0100);
+    bytes.set(ascii("CHIP"), 64);
+    setBE32(bytes, 68, 16);
+    return bytes;
+  };
+  const createValidSidBlob = () => {
+    const bytes = new Uint8Array(0x77);
+    bytes.set(ascii("PSID"), 0);
+    setBE16(bytes, 4, 2);
+    setBE16(bytes, 6, 0x76);
+    setBE16(bytes, 14, 1);
+    setBE16(bytes, 16, 1);
+    bytes[0x76] = 0x60;
+    return new Blob([bytes], { type: "application/octet-stream" });
+  };
 
   const getLastRequest = () => {
     const fetchMock = vi.mocked(globalThis.fetch);
@@ -34,50 +64,69 @@ describe("C64API upload bodies", () => {
     globalThis.fetch = originalFetch;
   });
 
-  it("keeps local PRG playback on raw ArrayBuffer uploads so Android binary bytes are not coerced like the SID-safe multipart path", async () => {
+  it("keeps local PRG playback on raw ArrayBuffer uploads on web", async () => {
     const api = new C64API("http://127.0.0.1");
-    const body = createBinaryBody([1, 2, 3, 4]);
+    const prgBytes = Uint8Array.from([0x01, 0x08, 0x60]);
+    const body = createBinaryBody(prgBytes);
 
     await api.runPrgUpload(body);
 
     const request = getLastRequest();
     expect(request).toBeDefined();
     expect(request?.body).toBeInstanceOf(ArrayBuffer);
-    expect(Array.from(new Uint8Array(request?.body as ArrayBuffer))).toEqual([1, 2, 3, 4]);
+    expect(Array.from(new Uint8Array(request?.body as ArrayBuffer))).toEqual(Array.from(prgBytes));
   });
 
-  it("keeps local CRT playback on raw ArrayBuffer uploads so Android cartridge bytes stay intact", async () => {
+  it("keeps local CRT playback on raw ArrayBuffer uploads on web", async () => {
     const api = new C64API("http://127.0.0.1");
-    const body = createBinaryBody([5, 6, 7, 8]);
+    const crtBytes = createValidCrtBytes();
+    const body = createBinaryBody(crtBytes);
 
-    await api.runCartridgeUpload(body);
+    await api.runCartridgeUpload(body, { filename: "local-test.crt" });
 
     const request = getLastRequest();
     expect(request).toBeDefined();
     expect(request?.body).toBeInstanceOf(ArrayBuffer);
-    expect(Array.from(new Uint8Array(request?.body as ArrayBuffer))).toEqual([5, 6, 7, 8]);
+    expect(Array.from(new Uint8Array(request?.body as ArrayBuffer))).toEqual(Array.from(crtBytes));
   });
 
-  it("keeps local D64 playback on raw ArrayBuffer uploads so Android disk images are not corrupted in transit", async () => {
+  it("keeps local D64 playback on raw ArrayBuffer uploads on web", async () => {
     const api = new C64API("http://127.0.0.1");
-    const body = createBinaryBody([9, 10, 11, 12]);
+    const d64Bytes = new Uint8Array(174848);
+    const body = createBinaryBody(d64Bytes);
 
     await api.mountDriveUpload("a", body, "d64", "readwrite");
 
     const request = getLastRequest();
     expect(request).toBeDefined();
     expect(request?.body).toBeInstanceOf(ArrayBuffer);
-    expect(Array.from(new Uint8Array(request?.body as ArrayBuffer))).toEqual([9, 10, 11, 12]);
+    expect((request?.body as ArrayBuffer).byteLength).toBe(d64Bytes.byteLength);
   });
 
   it("keeps local SID playback on multipart FormData so the known-good upload path stays unchanged", async () => {
     const api = new C64API("http://127.0.0.1");
 
-    await api.playSidUpload(new Blob([Uint8Array.from([9, 8, 7])]), 1);
+    await api.playSidUpload(createValidSidBlob(), 1);
 
     const request = getLastRequest();
     expect(request).toBeDefined();
     expect(request?.body).toBeInstanceOf(FormData);
+  });
+
+  it("uses File bodies for native octet-stream uploads so Capacitor patched fetch preserves binary bytes", async () => {
+    (globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = true;
+    const api = new C64API("http://127.0.0.1");
+    const d64Bytes = new Uint8Array(174848);
+    const body = createBinaryBody(d64Bytes);
+
+    await api.mountDriveUpload("a", body, "d64", "readwrite");
+
+    const request = getLastRequest();
+    expect(request).toBeDefined();
+    expect(request?.body).toBeInstanceOf(File);
+    expect((request?.body as File).size).toBe(d64Bytes.byteLength);
+    expect((request?.body as File).type).toBe("application/octet-stream");
+    (globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = false;
   });
 });
 

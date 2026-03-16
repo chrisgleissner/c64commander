@@ -6,7 +6,15 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { ActionTrigger, BackendTarget, TraceEvent, TraceOrigin } from "@/lib/tracing/types";
+import type {
+  ActionTrigger,
+  BackendTarget,
+  PayloadPreview,
+  TraceEvent,
+  TraceHeaders,
+  TraceOrigin,
+} from "@/lib/tracing/types";
+import { normalizeTraceHeaderValue } from "@/lib/tracing/payloadPreview";
 
 export type ActionSummaryOrigin = "user" | "system" | "unknown";
 export type ActionSummaryOutcome = "success" | "error" | "blocked" | "timeout" | "incomplete";
@@ -20,6 +28,12 @@ export type RestEffect = {
   product?: string;
   status: number | string | null;
   durationMs: number | null;
+  requestHeaders?: TraceHeaders;
+  responseHeaders?: TraceHeaders;
+  requestBody?: unknown;
+  responseBody?: unknown;
+  requestPayloadPreview?: PayloadPreview | null;
+  responsePayloadPreview?: PayloadPreview | null;
   error?: string;
 };
 
@@ -30,6 +44,10 @@ export type FtpEffect = {
   path: string;
   target: BackendTarget | null;
   result: string | null;
+  requestPayload?: unknown;
+  responsePayload?: unknown;
+  requestPayloadPreview?: PayloadPreview | null;
+  responsePayloadPreview?: PayloadPreview | null;
   error?: string;
 };
 
@@ -62,6 +80,33 @@ export type ActionSummary = {
 
 const readString = (value: unknown): string | null => (typeof value === "string" ? value : null);
 const readNumber = (value: unknown): number | null => (typeof value === "number" ? value : null);
+const readRecord = (value: unknown): Record<string, unknown> | null =>
+  value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+const readPayloadPreview = (value: unknown): PayloadPreview | null => {
+  const record = readRecord(value);
+  if (!record) return null;
+  const byteCount = readNumber(record.byteCount);
+  const previewByteCount = readNumber(record.previewByteCount);
+  const hex = readString(record.hex);
+  const ascii = readString(record.ascii);
+  const truncated = typeof record.truncated === "boolean" ? record.truncated : null;
+  if (byteCount === null || previewByteCount === null || hex === null || ascii === null || truncated === null) {
+    return null;
+  }
+  return { byteCount, previewByteCount, hex, ascii, truncated };
+};
+const readTraceHeaders = (value: unknown): TraceHeaders | undefined => {
+  const record = readRecord(value);
+  if (!record) return undefined;
+  const headers = Object.entries(record).reduce<TraceHeaders>((acc, [key, item]) => {
+    const normalized = normalizeTraceHeaderValue(item);
+    if (normalized !== null) {
+      acc[key] = normalized;
+    }
+    return acc;
+  }, {});
+  return Object.keys(headers).length > 0 ? headers : undefined;
+};
 
 const resolveSummaryOrigin = (origin: TraceOrigin | null): ActionSummaryOrigin => {
   if (origin === "user") return "user";
@@ -216,6 +261,16 @@ const resolveRestEffects = (events: TraceEvent[], actionEnd: TraceEvent | undefi
         ...(product ? { product } : {}),
         status: responseStatus,
         durationMs: readNumber(responseData.durationMs),
+        ...(readTraceHeaders(requestData.headers) ? { requestHeaders: readTraceHeaders(requestData.headers) } : {}),
+        ...(readTraceHeaders(responseData.headers) ? { responseHeaders: readTraceHeaders(responseData.headers) } : {}),
+        ...("body" in requestData ? { requestBody: requestData.body ?? null } : {}),
+        ...("body" in responseData ? { responseBody: responseData.body ?? null } : {}),
+        ...(readPayloadPreview(requestData.payloadPreview)
+          ? { requestPayloadPreview: readPayloadPreview(requestData.payloadPreview) }
+          : {}),
+        ...(readPayloadPreview(responseData.payloadPreview)
+          ? { responsePayloadPreview: readPayloadPreview(responseData.payloadPreview) }
+          : {}),
         ...(error !== null ? { error } : {}),
       });
     }
@@ -233,6 +288,11 @@ const resolveRestEffects = (events: TraceEvent[], actionEnd: TraceEvent | undefi
       target: (readString(requestData.target) as BackendTarget | null) ?? null,
       status: endStatus ?? null,
       durationMs: null,
+      ...(readTraceHeaders(requestData.headers) ? { requestHeaders: readTraceHeaders(requestData.headers) } : {}),
+      ...("body" in requestData ? { requestBody: requestData.body ?? null } : {}),
+      ...(readPayloadPreview(requestData.payloadPreview)
+        ? { requestPayloadPreview: readPayloadPreview(requestData.payloadPreview) }
+        : {}),
       ...(endError !== null ? { error: endError } : {}),
     });
   });
@@ -255,6 +315,14 @@ const resolveFtpEffects = (events: TraceEvent[]): FtpEffect[] => {
         path,
         target: (readString(data.target) as BackendTarget | null) ?? null,
         result: readString(data.result),
+        ...("requestPayload" in data ? { requestPayload: data.requestPayload ?? null } : {}),
+        ...("responsePayload" in data ? { responsePayload: data.responsePayload ?? null } : {}),
+        ...(readPayloadPreview(data.requestPayloadPreview)
+          ? { requestPayloadPreview: readPayloadPreview(data.requestPayloadPreview) }
+          : {}),
+        ...(readPayloadPreview(data.responsePayloadPreview)
+          ? { responsePayloadPreview: readPayloadPreview(data.responsePayloadPreview) }
+          : {}),
         ...(error !== null ? { error } : {}),
       };
     });

@@ -109,10 +109,12 @@ import {
   type DriveKey,
 } from "@/components/disks/HomeDiskManagerSupport";
 
+const visibleQueryOptions = { intent: "user" as const, refetchOnMount: "always" as const };
+
 export const HomeDiskManager = () => {
   const { profile } = useDisplayProfile();
   const { status } = useC64Connection();
-  const { data: drivesData } = useC64Drives();
+  const { data: drivesData } = useC64Drives(visibleQueryOptions);
   const uniqueId = status.deviceInfo?.unique_id || null;
   const trace = useActionTrace("HomeDiskManager");
 
@@ -177,16 +179,19 @@ export const HomeDiskManager = () => {
     DRIVE_CONFIG_CATEGORY.a,
     [DRIVE_BUS_ID_ITEM, DRIVE_TYPE_ITEM],
     status.isConnected || status.isConnecting,
+    visibleQueryOptions,
   );
   const { data: driveBConfig } = useC64ConfigItems(
     DRIVE_CONFIG_CATEGORY.b,
     [DRIVE_BUS_ID_ITEM, DRIVE_TYPE_ITEM],
     status.isConnected || status.isConnecting,
+    visibleQueryOptions,
   );
   const { data: softIecConfig } = useC64ConfigItems(
     SOFT_IEC_CONTROL.category,
     [SOFT_IEC_CONTROL.busItem, SOFT_IEC_DEFAULT_PATH_ITEM],
     status.isConnected || status.isConnecting,
+    visibleQueryOptions,
   );
 
   const normalizedDriveModel = useMemo(() => normalizeDriveDevices(drivesData ?? null), [drivesData]);
@@ -976,7 +981,7 @@ export const HomeDiskManager = () => {
           }));
         }
         if (addItemsOverlayActiveRef.current) {
-          const overlayStartedAt = addItemsOverlayStartedAtRef.current ?? startedAt;
+          const overlayStartedAt = addItemsOverlayStartedAtRef.current ?? addItemsStartedAtRef.current ?? Date.now();
           const minOverlayDuration = 800;
           const overlayElapsed = Date.now() - overlayStartedAt;
           if (overlayElapsed < minOverlayDuration) {

@@ -22,7 +22,10 @@ tags:
           timeout: ${TIMEOUT}
 - tapOn:
     text: "Play"
-- extendedWaitUntil:
-    visible: "Playlist"
-    timeout: ${TIMEOUT}
+- scrollUntilVisible:
+  element:
+    text: "Playlist"
+  direction: UP
+  speed: 80
+  timeout: ${TIMEOUT}
 - assertVisible: "Playlist"

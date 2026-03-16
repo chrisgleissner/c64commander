@@ -16,6 +16,8 @@ import {
 } from "@/lib/config/homeStreams";
 import { buildConfigKey } from "@/pages/home/utils/HomeConfigUtils";
 
+const visibleQueryOptions = { intent: "user" as const, refetchOnMount: "always" as const };
+
 export function useStreamData(
   isConnected: boolean,
   configWritePending: Record<string, boolean>,
@@ -35,6 +37,7 @@ export function useStreamData(
     "Data Streams",
     STREAM_ITEMS,
     isConnected, // Use isConnected directly as status.isConnected || status.isConnecting
+    visibleQueryOptions,
   );
 
   const streamControlEntries = useMemo(

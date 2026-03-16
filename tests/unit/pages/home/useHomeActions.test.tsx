@@ -37,6 +37,10 @@ vi.mock("@/lib/c64api", () => ({
 }));
 
 vi.mock("@/hooks/useC64Connection", () => ({
+  VISIBLE_C64_QUERY_OPTIONS: {
+    intent: "user",
+    refetchOnMount: "always",
+  },
   useC64Connection: () => ({ status: statusState }),
   useC64MachineControl: () => controlsState,
   useC64Drives: () => ({ data: drivesState.value }),
