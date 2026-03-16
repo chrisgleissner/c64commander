@@ -17,11 +17,12 @@ tags:
           optional: true
       - waitForAnimationToEnd
       - extendedWaitUntil:
-          visible: "Errors"
+          visible: "Share All"
           timeout: ${TIMEOUT}
-# WKWebView does not expose inactive Radix tab triggers (aria-selected=false)
-# in the accessibility tree, so we only assert the default-active Errors tab
-# and the dialog title to confirm the diagnostics panel opened correctly.
-- assertVisible: "Errors"
+# iOS accessibility exposure for the diagnostics tabs is not stable enough to
+# key this flow off a tab label. The dialog title plus the share/clear actions
+# are consistently exposed when the diagnostics panel is open.
+- assertVisible: "Share All"
+- assertVisible: "Clear All"
 - assertVisible: "Diagnostics"
 - takeScreenshot: ios-diagnostics-export-actions
