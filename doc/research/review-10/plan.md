@@ -300,6 +300,169 @@ These are the highest-effort tasks and should be tackled one component at a time
 
 ---
 
+## Phase 7 — UX Responsiveness & Data Freshness
+
+These tasks address slider mid-drag REST calls, stale-data recovery after hardware-menu changes, optimistic UI, skeleton screens, background polling, and other UX gaps identified in findings R10-030 through R10-041. Work through them in the order listed — the slider and visibility fixes are the highest-value items.
+
+### 7.1 Fix config-browser sliders to send REST updates during drag · R10-030, R10-035
+
+The root cause: `ConfigItemRow.tsx` passes only `onValueCommitAsync` to the slider, so the `SliderAsyncQueue` never fires `schedule()` during drag. `asyncThrottleMs={250}` is currently ignored.
+
+- [ ] In `src/lib/ui/sliderBehavior.ts`, rename `DEFAULT_SLIDER_ASYNC_THROTTLE_MS` to `SLIDER_MID_DRAG_THROTTLE_MS` and set it to `200`
+- [ ] Update all references to the old constant name across `src/`
+- [ ] In `src/components/ConfigItemRow.tsx`, add `onValueChangeAsync` wired to the same mutation handler used by `onValueCommitAsync`, with `suppressToast: true` and `asyncThrottleMs={200}`
+- [ ] Verify `AudioMixer.tsx` already passes `onVolumeChangeAsync` — confirm it now also uses `SLIDER_MID_DRAG_THROTTLE_MS` (or an explicit 200 ms value)
+- [ ] Run `npm run test` and `npm run lint`
+
+**Notes:**
+*(add here)*
+
+---
+
+### 7.2 Fix visibility-resume to force an immediate refetch · R10-031
+
+`invalidateForVisibilityResume` only marks queries stale. If no component re-renders, the refetch never fires, leaving users with stale data after returning from background or another app.
+
+- [ ] In `src/lib/query/c64QueryInvalidation.ts`, after `invalidateQueries`, also call `refetchQueries` (with `type: 'active'`) for the same query keys
+- [ ] Write a unit test: simulate visibility change → assert `refetchQueries` is called for the active route's key set
+- [ ] Run `npm run test:coverage` — confirm ≥ 91% branch coverage
+
+**Notes:**
+*(add here)*
+
+---
+
+### 7.3 Extend route invalidation map to cover Home and Config · R10-033
+
+`c64QueryInvalidation.ts` only adds `c64-drives` for the `/disks` route. Navigating to `/` or `/config` after a hardware-menu change leaves those pages showing stale data until the next manual interaction.
+
+- [ ] In `routePrefixMap` (or equivalent), add `c64-info` and `c64-config-items` for route prefix `/`
+- [ ] Add `c64-all-config` and `c64-config-item` for route prefix `/config`
+- [ ] Extend the existing invalidation unit tests to cover these new route entries
+- [ ] Run `npm run test`
+
+**Notes:**
+*(add here)*
+
+---
+
+### 7.4 Add background polling via `c64PollingGovernance.ts` · R10-036
+
+The app has no `refetchInterval` on any query. Hardware-menu changes on the C64U are invisible until the user navigates away and back.
+
+- [ ] Read `src/lib/query/c64PollingGovernance.ts` in full before starting
+- [ ] Add a `refetchInterval` of `INFO_REFRESH_MIN_CEILING_MS` to the `c64-info` query (status bar data) so the connection badge and basic info stay fresh
+- [ ] Add a `refetchInterval` of 30 000 ms to `c64-drives` so the disk list refreshes in the background on the Home page
+- [ ] Gate both intervals behind the polling governance check to avoid thrashing
+- [ ] Write unit tests asserting that the interval is respected and that polling stops when the component unmounts
+- [ ] Run `npm run test`
+
+**Notes:**
+*(add here)*
+
+---
+
+### 7.5 Fix slider commit rubber-band glitch · R10-038
+
+On slider commit, `activeSliders` is cleared immediately (resetting the displayed value to the stale server value) but `configOverrides` is never set, causing a visible 200–800 ms snap-back.
+
+- [ ] In `src/hooks/useAppConfigState.ts` (or `useSharedConfigActions.ts`), set `configOverrides[key] = committedValue` synchronously before the REST call resolves
+- [ ] Clear the override only after `invalidateQueries` confirms the cache has the new value
+- [ ] Apply the same pattern in `AudioMixer.tsx` volume commit path
+- [ ] Add a regression test: commit slider at value X → assert displayed value remains X while the mutation is in-flight
+- [ ] Run `npm run test:coverage` — confirm ≥ 91% branch coverage
+
+**Notes:**
+*(add here)*
+
+---
+
+### 7.6 Implement optimistic updates for config mutations · R10-032
+
+Config writes currently have no optimistic update: the UI shows the old value until the round-trip completes (~200–600 ms on WiFi).
+
+- [ ] In `useSharedConfigActions.ts` (or wherever `mutationFn` is defined), add `onMutate` to snapshot current cache and write an optimistic value via `queryClient.setQueryData`
+- [ ] Add `onError` to roll back to the snapshot
+- [ ] Add `onSettled` to invalidate and refetch
+- [ ] Ensure `configOverrides` overlay is updated in `onMutate` and cleared in `onSettled`
+- [ ] Write unit tests for the optimistic → rollback → settle cycle
+- [ ] Run `npm run test:coverage` — confirm ≥ 91% branch coverage
+
+**Notes:**
+*(add here)*
+
+---
+
+### 7.7 Add skeleton screens for heavy-load views · R10-034
+
+`ConfigBrowserPage`, `AudioMixer`, and the drive manager show blank space while their queries load.
+
+- [ ] Add a skeleton screen to `ConfigBrowserPage` — show placeholder rows while `c64-all-config` is loading
+- [ ] Add a skeleton screen to `AudioMixer` — show placeholder sliders while config data loads
+- [ ] Add a skeleton screen to the drive manager section of `HomePage` — show placeholder drive rows while `c64-drives` loads
+- [ ] Use the existing `Skeleton` component from `src/components/ui/skeleton.tsx` (or confirm it exists; add if missing)
+- [ ] Run `npm run test` — snapshot tests should show skeleton state
+
+**Notes:**
+*(add here)*
+
+---
+
+### 7.8 Add route-specific loading fallbacks · R10-037
+
+`RouteLoadingFallback` in `App.tsx` shows a generic "Loading screen…" string for every lazy-loaded route.
+
+- [ ] Create per-route loading fallback components (or use the skeleton screens from 7.7) for `HomePage`, `ConfigBrowserPage`, and `PlayFilesPage`
+- [ ] Pass each as the `fallback` prop of the relevant `<Suspense>` wrapper in `AppRoutes`
+- [ ] Run `npm run test`
+
+**Notes:**
+*(add here)*
+
+---
+
+### 7.9 Add FTP listing progress indicators · R10-039
+
+FTP directory listings can take 1–3 s on large directories. The current UX shows no progress.
+
+- [ ] In the FTP browsing components, expose a loading state while the listing request is in-flight
+- [ ] Show a spinner or skeleton row list while loading; show an error state if the request fails
+- [ ] Run `npm run test`
+
+**Notes:**
+*(add here)*
+
+---
+
+### 7.10 Add inline validation for hostname and password inputs · R10-040
+
+`SettingsPage` hostname and password inputs accept any string with no validation feedback until a connection attempt fails.
+
+- [ ] Add inline validation to the hostname field: check for empty string and invalid hostname/IP format; show error message below the input
+- [ ] Add inline validation to the password field if applicable: check for empty string when a password is required
+- [ ] Validation must fire on blur and on form submit attempt
+- [ ] Add unit tests asserting that invalid inputs render error messages
+- [ ] Run `npm run test`
+
+**Notes:**
+*(add here)*
+
+---
+
+### 7.11 Add retry action to failed mutation toasts · R10-041
+
+Failed config/volume write toasts show an error message but offer no retry action, requiring the user to find and interact with the control again.
+
+- [ ] In the mutation error handler (where `toast` is called), add a `action` button labelled "Retry" that re-invokes the same mutation with the same arguments
+- [ ] Ensure the retry action is available for at least config write mutations and volume override mutations
+- [ ] Add a unit test: trigger mutation failure → assert toast contains a retry action
+- [ ] Run `npm run test`
+
+**Notes:**
+*(add here)*
+
+---
+
 ## Completion Checklist
 
 Before closing this review cycle, confirm all of the following:
@@ -310,6 +473,7 @@ Before closing this review cycle, confirm all of the following:
 - [ ] Phase 4 (per-page error boundary granularity) is complete
 - [ ] At least Phase 5.1 (SettingsPage split) is complete
 - [ ] At least Phase 5.2 (HomeDiskManager split) is complete
+- [ ] All Phase 7 tasks are ticked (UX responsiveness & data freshness)
 - [ ] `npm run test:coverage` reports ≥ 91% branch coverage
 - [ ] `npm run lint` passes with zero errors
 - [ ] `npm run build` completes without errors
