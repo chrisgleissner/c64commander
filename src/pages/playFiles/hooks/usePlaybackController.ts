@@ -330,7 +330,7 @@ export function usePlaybackController({
             });
           }
         }
-        await ensureUnmuted();
+        await ensureUnmuted({ force: true, refreshItems: true });
         try {
           await ensurePlaybackConnection();
         } catch (error) {

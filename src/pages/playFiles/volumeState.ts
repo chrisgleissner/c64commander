@@ -16,7 +16,7 @@ export type VolumeAction =
   | { type: "reset"; index: number }
   | { type: "sync"; index: number; muted: boolean }
   | { type: "set-index"; index: number }
-  | { type: "mute"; reason: "manual" | "pause" }
+  | { type: "mute"; reason: "manual" | "pause"; index?: number }
   | { type: "unmute"; reason: "manual" | "pause" | "sync"; index?: number };
 
 export const reduceVolumeState = (state: VolumeState, action: VolumeAction): VolumeState => {
@@ -28,7 +28,7 @@ export const reduceVolumeState = (state: VolumeState, action: VolumeAction): Vol
     case "set-index":
       return { ...state, index: action.index };
     case "mute":
-      return { ...state, muted: true, reason: action.reason };
+      return { ...state, index: action.index ?? state.index, muted: true, reason: action.reason };
     case "unmute":
       return {
         index: action.index ?? state.index,

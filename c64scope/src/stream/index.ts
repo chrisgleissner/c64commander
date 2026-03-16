@@ -6,12 +6,21 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-export { analyzeAudioPackets, analyzeVideoPackets } from "./analysis.js";
+export {
+  analyzeAudioPackets,
+  analyzeVideoPackets,
+  findFirstSustainedAudioState,
+  hasContinuousAudioState,
+  medianEnvelopeRms,
+} from "./analysis.js";
 export { captureAndAnalyzeStream } from "./capture.js";
 export { computePacketStats, parseAudioPacket, parseVideoPacket, reconstructBestVideoFrame } from "./parser.js";
 export type {
+  AudioEnvelopePoint,
   AudioFeatures,
   AudioPacket,
+  AudioState,
+  AudioStateWindow,
   PacketStats,
   StreamCapturePacket,
   StreamCaptureResult,

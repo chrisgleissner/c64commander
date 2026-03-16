@@ -14,17 +14,28 @@ import {
   parseVideoPacket,
   reconstructBestVideoFrame,
 } from "./parser.js";
-import type { AudioFeatures, StreamCapturePacket, VideoFeatures } from "./types.js";
+import type {
+  AudioEnvelopePoint,
+  AudioFeatures,
+  AudioState,
+  AudioStateWindow,
+  StreamCapturePacket,
+  VideoFeatures,
+} from "./types.js";
 
 const AUDIO_SAMPLE_RATE_PAL_HZ = 47982.8869;
 
 export function analyzeAudioPackets(packets: StreamCapturePacket[]): AudioFeatures {
   const valid = packets.filter((p) => p.payload.length >= AUDIO_HEADER_BYTES);
-  const parsed = valid.map((packet) => parseAudioPacket(packet.payload));
-  const sequences = parsed.map((packet) => packet.sequence);
+  const parsed = valid.map((packet) => ({
+    receivedAtMs: packet.receivedAtMs,
+    parsed: parseAudioPacket(packet.payload),
+  }));
+  const sequences = parsed.map((packet) => packet.parsed.sequence);
   const stats = computePacketStats(sequences);
 
-  const samples = flattenSamples(parsed.map((packet) => packet.samplePairs));
+  const samples = flattenSamples(parsed.map((packet) => packet.parsed.samplePairs));
+  const envelope = buildAudioEnvelope(parsed);
   const rms = computeRms(samples);
   const peakAbs = computePeakAbs(samples);
   const dominantFrequencyHz = estimateDominantFrequency(samples, AUDIO_SAMPLE_RATE_PAL_HZ);
@@ -35,8 +46,130 @@ export function analyzeAudioPackets(packets: StreamCapturePacket[]): AudioFeatur
     peakAbs,
     dominantFrequencyHz,
     samplePairs: samples.length / 2,
+    envelope,
     stats,
   };
+}
+
+export function findFirstSustainedAudioState(
+  envelope: readonly AudioEnvelopePoint[],
+  options: {
+    state: AudioState;
+    thresholdRms: number;
+    requiredDurationMs: number;
+    afterMs?: number;
+    maxGapMs?: number;
+  },
+): AudioStateWindow {
+  const afterMs = options.afterMs ?? 0;
+  const maxGapMs = options.maxGapMs ?? 30;
+  let windowStartMs: number | null = null;
+  let lastPacketEndMs: number | null = null;
+
+  for (const point of envelope) {
+    const packetStartMs = point.receivedAtMs;
+    const packetEndMs = point.receivedAtMs + point.packetDurationMs;
+    if (packetEndMs <= afterMs) {
+      continue;
+    }
+
+    const matches = isAudioState(point.rms, options.thresholdRms, options.state);
+    if (!matches) {
+      windowStartMs = null;
+      lastPacketEndMs = null;
+      continue;
+    }
+
+    const effectiveStartMs = Math.max(packetStartMs, afterMs);
+    if (windowStartMs === null || lastPacketEndMs === null || effectiveStartMs - lastPacketEndMs > maxGapMs) {
+      windowStartMs = effectiveStartMs;
+    }
+    lastPacketEndMs = packetEndMs;
+
+    if (packetEndMs - windowStartMs >= options.requiredDurationMs) {
+      return {
+        state: options.state,
+        thresholdRms: options.thresholdRms,
+        requiredDurationMs: options.requiredDurationMs,
+        firstObservedAtMs: windowStartMs,
+        settledAtMs: packetEndMs,
+        endAtMs: packetEndMs,
+      };
+    }
+  }
+
+  return {
+    state: options.state,
+    thresholdRms: options.thresholdRms,
+    requiredDurationMs: options.requiredDurationMs,
+    firstObservedAtMs: null,
+    settledAtMs: null,
+    endAtMs: null,
+  };
+}
+
+export function hasContinuousAudioState(
+  envelope: readonly AudioEnvelopePoint[],
+  options: {
+    state: AudioState;
+    thresholdRms: number;
+    startMs: number;
+    durationMs: number;
+    maxGapMs?: number;
+  },
+): boolean {
+  const maxGapMs = options.maxGapMs ?? 30;
+  const endTargetMs = options.startMs + options.durationMs;
+  let coveredUntilMs = options.startMs;
+
+  for (const point of envelope) {
+    const packetStartMs = point.receivedAtMs;
+    const packetEndMs = point.receivedAtMs + point.packetDurationMs;
+    if (packetEndMs <= options.startMs) {
+      continue;
+    }
+    if (packetStartMs > coveredUntilMs + maxGapMs) {
+      return false;
+    }
+    if (!isAudioState(point.rms, options.thresholdRms, options.state)) {
+      return false;
+    }
+    coveredUntilMs = Math.max(coveredUntilMs, packetEndMs);
+    if (coveredUntilMs >= endTargetMs) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+export function medianEnvelopeRms(
+  envelope: readonly AudioEnvelopePoint[],
+  options: { startMs?: number; endMs?: number } = {},
+): number {
+  const values = envelope
+    .filter((point) => {
+      const packetStartMs = point.receivedAtMs;
+      const packetEndMs = point.receivedAtMs + point.packetDurationMs;
+      if (options.startMs !== undefined && packetEndMs <= options.startMs) {
+        return false;
+      }
+      if (options.endMs !== undefined && packetStartMs >= options.endMs) {
+        return false;
+      }
+      return true;
+    })
+    .map((point) => point.rms)
+    .sort((left, right) => left - right);
+
+  if (values.length === 0) {
+    return 0;
+  }
+  const middle = Math.floor(values.length / 2);
+  if (values.length % 2 === 1) {
+    return values[middle]!;
+  }
+  return (values[middle - 1]! + values[middle]!) / 2;
 }
 
 export function analyzeVideoPackets(packets: StreamCapturePacket[]): VideoFeatures {
@@ -68,6 +201,25 @@ function flattenSamples(chunks: Int16Array[]): Int16Array {
     offset += chunk.length;
   }
   return out;
+}
+
+function buildAudioEnvelope(
+  packets: Array<{
+    receivedAtMs: number;
+    parsed: ReturnType<typeof parseAudioPacket>;
+  }>,
+): AudioEnvelopePoint[] {
+  return packets.map(({ receivedAtMs, parsed }) => ({
+    receivedAtMs,
+    packetDurationMs: (parsed.samplePairs.length / 2 / AUDIO_SAMPLE_RATE_PAL_HZ) * 1000,
+    rms: computeRms(parsed.samplePairs),
+    peakAbs: computePeakAbs(parsed.samplePairs),
+    samplePairs: parsed.samplePairs.length / 2,
+  }));
+}
+
+function isAudioState(rms: number, thresholdRms: number, state: AudioState): boolean {
+  return state === "silent" ? rms <= thresholdRms : rms > thresholdRms;
 }
 
 function computeRms(samples: Int16Array): number {

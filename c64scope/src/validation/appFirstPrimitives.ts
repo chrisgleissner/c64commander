@@ -76,6 +76,27 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function maybeDismissFocusedInput(client: DroidmindClient, serial: string): Promise<void> {
+  if (typeof client.pressKey !== "function") {
+    return;
+  }
+
+  const xml = await dumpUiHierarchy(serial);
+  const nodes = parseUiNodes(xml);
+  const focusedInputVisible = nodes.some(
+    (node) =>
+      node.enabled &&
+      node.focused &&
+      (node.className === "android.widget.EditText" || node.className === "android.widget.AutoCompleteTextView"),
+  );
+  if (!focusedInputVisible) {
+    return;
+  }
+
+  await client.pressKey(serial, 4);
+  await sleep(500);
+}
+
 async function dismissConnectionStatusOverlay(client: DroidmindClient, serial: string): Promise<void> {
   const xml = await dumpUiHierarchy(serial);
   const nodes = parseUiNodes(xml);
@@ -204,6 +225,25 @@ export async function tapByResourceId(
   return true;
 }
 
+export async function tapByResourceIdOrLabel(
+  client: DroidmindClient,
+  serial: string,
+  resourceIdSuffix: string,
+  labels: readonly string[],
+): Promise<boolean> {
+  if (await tapByResourceId(client, serial, resourceIdSuffix)) {
+    return true;
+  }
+
+  for (const label of labels) {
+    if (await tapByText(client, serial, label)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function computeBottomTabThreshold(nodes: ReturnType<typeof parseUiNodes>): number {
   let maxCenterY = 0;
   for (const node of nodes) {
@@ -241,32 +281,48 @@ function findBottomTabByResourceId(
 
 export async function navigateToRoute(client: DroidmindClient, serial: string, route: string): Promise<void> {
   const tabLabel = routeLabel(route);
-  await dismissConnectionStatusOverlay(client, serial);
   const tabResourceId = TAB_RESOURCE_ID_BY_ROUTE[route];
-  const xml = await dumpUiHierarchy(serial);
-  const nodes = parseUiNodes(xml);
-  const bottomThreshold = computeBottomTabThreshold(nodes);
-  const tabNode =
-    findBottomTabByText(nodes, tabLabel, bottomThreshold) ??
-    findBottomTabByResourceId(nodes, tabResourceId, bottomThreshold);
+  let lastError: Error | null = null;
 
-  if (tabNode) {
-    const center = parseBoundsCenter(tabNode.bounds);
-    if (!center) {
-      throw new Error(`Bottom-tab node for '${tabLabel}' did not expose tap bounds.`);
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    await dismissConnectionStatusOverlay(client, serial);
+
+    const xml = await dumpUiHierarchy(serial);
+    const nodes = parseUiNodes(xml);
+    const bottomThreshold = computeBottomTabThreshold(nodes);
+    const tabNode =
+      findBottomTabByText(nodes, tabLabel, bottomThreshold) ??
+      findBottomTabByResourceId(nodes, tabResourceId, bottomThreshold);
+
+    if (tabNode) {
+      const center = parseBoundsCenter(tabNode.bounds);
+      if (!center) {
+        throw new Error(`Bottom-tab node for '${tabLabel}' did not expose tap bounds.`);
+      }
+      await client.tap(serial, center.x, center.y);
+    } else {
+      const fallback = TAB_FALLBACK_COORDS[tabLabel];
+      if (!fallback) {
+        throw new Error(`No fallback tab coordinates configured for '${tabLabel}'.`);
+      }
+      await client.tap(serial, fallback.x, fallback.y);
     }
-    await client.tap(serial, center.x, center.y);
+
     await sleep(900);
-  } else {
-    const fallback = TAB_FALLBACK_COORDS[tabLabel];
-    if (!fallback) {
-      throw new Error(`No fallback tab coordinates configured for '${tabLabel}'.`);
+
+    try {
+      await waitForRouteMarkers(serial, route, 8);
+      return;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      if (attempt === 3) {
+        break;
+      }
+      await maybeDismissFocusedInput(client, serial);
     }
-    await client.tap(serial, fallback.x, fallback.y);
-    await sleep(900);
   }
 
-  await waitForRouteMarkers(serial, route, 20);
+  throw lastError ?? new Error(`Route '${route}' navigation failed without a diagnostic error.`);
 }
 
 export async function waitForRouteMarkers(serial: string, route: string, retries: number): Promise<void> {
