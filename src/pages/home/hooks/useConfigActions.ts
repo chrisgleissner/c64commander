@@ -57,6 +57,9 @@ export function useConfigActions() {
         description: (error as Error).message,
         error,
         context: { category, item: itemName, value },
+        retry: options.suppressToast
+          ? undefined
+          : () => void updateConfigValue(category, itemName, value, operation, successTitle, options),
       });
     } finally {
       setConfigWritePending((previous) => {
@@ -74,10 +77,16 @@ export function useConfigActions() {
     return value === undefined ? fallback : (value as string | number);
   };
 
+  const setConfigOverride = (category: string, itemName: string, value: string | number) => {
+    const key = buildConfigKey(category, itemName);
+    setConfigOverrides((previous) => ({ ...previous, [key]: value }));
+  };
+
   return {
     configOverrides,
     configWritePending,
     updateConfigValue,
     resolveConfigValue,
+    setConfigOverride,
   };
 }

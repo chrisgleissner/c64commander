@@ -1451,4 +1451,66 @@ describe("SettingsPage", () => {
       expect(saveBackgroundRediscoveryIntervalMs).toHaveBeenCalled();
     }
   });
+
+  describe("hostname inline validation", () => {
+    it("shows an error message on blur when hostname is invalid", async () => {
+      renderSettingsPage();
+
+      const input = screen.getByLabelText(/C64U Hostname \/ IP/i);
+      fireEvent.change(input, { target: { value: "-bad-hostname" } });
+      fireEvent.blur(input);
+
+      await waitFor(() => {
+        expect(screen.getByRole("alert")).toBeInTheDocument();
+        expect(screen.getByRole("alert").textContent).toMatch(/valid hostname/i);
+      });
+    });
+
+    it("clears the error when the user corrects the hostname", async () => {
+      renderSettingsPage();
+
+      const input = screen.getByLabelText(/C64U Hostname \/ IP/i);
+      fireEvent.change(input, { target: { value: "-bad" } });
+      fireEvent.blur(input);
+
+      await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+
+      fireEvent.change(input, { target: { value: "c64u.local" } });
+
+      await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+    });
+
+    it("shows an error and does not call updateConfig when Save is clicked with an invalid hostname", async () => {
+      renderSettingsPage();
+
+      const input = screen.getByLabelText(/C64U Hostname \/ IP/i);
+      fireEvent.change(input, { target: { value: "not valid!" } });
+      fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+
+      await waitFor(() => {
+        expect(screen.getByRole("alert")).toBeInTheDocument();
+      });
+      expect(mockUpdateConfig).not.toHaveBeenCalled();
+    });
+
+    it("does not show an error for an empty hostname (uses application default)", async () => {
+      renderSettingsPage();
+
+      const input = screen.getByLabelText(/C64U Hostname \/ IP/i);
+      fireEvent.change(input, { target: { value: "" } });
+      fireEvent.blur(input);
+
+      await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+    });
+
+    it("does not show an error for a valid IPv4 address", async () => {
+      renderSettingsPage();
+
+      const input = screen.getByLabelText(/C64U Hostname \/ IP/i);
+      fireEvent.change(input, { target: { value: "192.168.1.42" } });
+      fireEvent.blur(input);
+
+      await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+    });
+  });
 });

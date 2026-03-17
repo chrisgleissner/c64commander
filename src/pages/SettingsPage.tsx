@@ -94,6 +94,7 @@ import {
   type DeviceSafetyMode,
 } from "@/lib/config/deviceSafetySettings";
 import { exportSettingsJson, importSettingsJson } from "@/lib/config/settingsTransfer";
+import { validateDeviceHost } from "@/lib/validation/connectionValidation";
 import { FolderPicker, type SafPersistedUri } from "@/lib/native/folderPicker";
 import { getPlatform } from "@/lib/native/platform";
 import { redactTreeUri } from "@/lib/native/safUtils";
@@ -138,6 +139,7 @@ export default function SettingsPage() {
 
   const [passwordInput, setPasswordInput] = useState(password);
   const [deviceHostInput, setDeviceHostInput] = useState(deviceHost);
+  const [hostnameError, setHostnameError] = useState<string | null>(null);
   const runtimeDeviceHost = getDeviceHostFromBaseUrl(runtimeBaseUrl);
   const isDemoActive = status.state === "DEMO_ACTIVE";
   const lastProbeSucceededAtMs = connectionSnapshot.lastProbeSucceededAtMs;
@@ -420,6 +422,9 @@ export default function SettingsPage() {
   };
 
   const handleSaveConnection = trace(async function handleSaveConnection() {
+    const hostError = validateDeviceHost(deviceHostInput);
+    setHostnameError(hostError);
+    if (hostError) return;
     setIsSaving(true);
     try {
       updateConfig(deviceHostInput || C64_DEFAULTS.DEFAULT_DEVICE_HOST, passwordInput || undefined);
@@ -676,10 +681,21 @@ export default function SettingsPage() {
                   <Input
                     id="deviceHost"
                     value={deviceHostInput}
-                    onChange={(e) => setDeviceHostInput(e.target.value)}
+                    onChange={(e) => {
+                      setDeviceHostInput(e.target.value);
+                      if (hostnameError) setHostnameError(validateDeviceHost(e.target.value));
+                    }}
+                    onBlur={(e) => setHostnameError(validateDeviceHost(e.target.value))}
                     placeholder={C64_DEFAULTS.DEFAULT_DEVICE_HOST}
                     className="font-sans"
+                    aria-describedby={hostnameError ? "deviceHost-error" : undefined}
+                    aria-invalid={hostnameError ? true : undefined}
                   />
+                  {hostnameError ? (
+                    <p id="deviceHost-error" className="text-xs text-destructive" role="alert">
+                      {hostnameError}
+                    </p>
+                  ) : null}
                   <p className="text-xs text-muted-foreground">Hostname or IP from the C64 menu.</p>
                   <p className="text-xs text-muted-foreground">
                     Currently using: <span className="font-sans break-all">{runtimeDeviceHost}</span>

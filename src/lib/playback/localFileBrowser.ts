@@ -9,8 +9,7 @@
 import type { LocalPlayFile } from "./playbackRouter";
 
 const normalizePath = (path: string) => (path.startsWith("/") ? path : `/${path}`);
-const getLocalPath = (file: LocalPlayFile): string =>
-  normalizePath(file.webkitRelativePath || file.name);
+const getLocalPath = (file: LocalPlayFile): string => normalizePath(file.webkitRelativePath || file.name);
 
 export const listLocalFolders = (files: LocalPlayFile[], path: string) => {
   const normalized = normalizePath(path || "/");

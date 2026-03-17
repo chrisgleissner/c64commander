@@ -24,7 +24,11 @@ import { getPassword as loadStoredPassword, hasStoredPasswordFlag } from "@/lib/
 import { getActiveBaseUrl, updateHasChanges, loadInitialSnapshot } from "@/lib/config/appConfigStore";
 import { useConnectionState } from "@/hooks/useConnectionState";
 import { invalidateForConnectionSettingsChange } from "@/lib/query/c64QueryInvalidation";
-import { getInfoRefreshMinIntervalMs, shouldRunRateLimited } from "@/lib/query/c64PollingGovernance";
+import {
+  getInfoRefreshMinIntervalMs,
+  shouldRunRateLimited,
+  DRIVES_POLL_INTERVAL_MS,
+} from "@/lib/query/c64PollingGovernance";
 import { addLog } from "@/lib/logging";
 
 export type C64QueryOptions = {
@@ -94,6 +98,7 @@ export function useC64Connection() {
     retry: 1,
     retryDelay: 1000,
     staleTime: 30000,
+    refetchInterval: getInfoRefreshMinIntervalMs(),
   });
 
   const rateLimitedInfoRefetch = useCallback(() => {
@@ -372,6 +377,7 @@ export function useC64Drives(options: C64QueryOptions = {}) {
     },
     staleTime: options.staleTime ?? 10000,
     refetchOnMount: options.refetchOnMount,
+    refetchInterval: DRIVES_POLL_INTERVAL_MS,
   });
 }
 

@@ -1624,7 +1624,8 @@ describe("c64api branches", () => {
     fetchMock.mockImplementation(
       () =>
         new Promise<Response>((resolve) => {
-          resolveHang = () => resolve(new Response(JSON.stringify({ errors: [] }), { headers: { 'content-type': 'application/json' } }));
+          resolveHang = () =>
+            resolve(new Response(JSON.stringify({ errors: [] }), { headers: { "content-type": "application/json" } }));
         }),
     );
 

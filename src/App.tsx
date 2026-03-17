@@ -91,6 +91,24 @@ const RouteLoadingFallback = () => (
   </div>
 );
 
+const HomeLoadingFallback = () => (
+  <div className="flex min-h-[calc(100vh-8rem)] items-center justify-center px-6 py-10 text-sm text-muted-foreground">
+    {t("app.loadingHome", "Loading home...")}
+  </div>
+);
+
+const ConfigLoadingFallback = () => (
+  <div className="flex min-h-[calc(100vh-8rem)] items-center justify-center px-6 py-10 text-sm text-muted-foreground">
+    {t("app.loadingConfig", "Loading config...")}
+  </div>
+);
+
+const PlayLoadingFallback = () => (
+  <div className="flex min-h-[calc(100vh-8rem)] items-center justify-center px-6 py-10 text-sm text-muted-foreground">
+    {t("app.loadingPlay", "Loading files...")}
+  </div>
+);
+
 const PersistentPlayFilesRoute = () => {
   const location = useLocation();
   const [hasVisitedPlay, setHasVisitedPlay] = useState(location.pathname === "/play");
@@ -133,7 +151,9 @@ const AppRoutes = () => {
       {coverageProbeEnabled && <TestHeartbeat />}
       <Suspense fallback={<RouteLoadingFallback />}>
         <PageErrorBoundary>
-          <PersistentPlayFilesRoute />
+          <Suspense fallback={<PlayLoadingFallback />}>
+            <PersistentPlayFilesRoute />
+          </Suspense>
         </PageErrorBoundary>
         <Routes>
           {coverageProbeEnabled ? <Route path="/__coverage__" element={<CoverageProbePage />} /> : null}
@@ -141,11 +161,20 @@ const AppRoutes = () => {
             path="/"
             element={
               <PageErrorBoundary>
-                <HomePage />
+                <Suspense fallback={<HomeLoadingFallback />}>
+                  <HomePage />
+                </Suspense>
               </PageErrorBoundary>
             }
           />
-          <Route path="/config" element={<ConfigBrowserPage />} />
+          <Route
+            path="/config"
+            element={
+              <Suspense fallback={<ConfigLoadingFallback />}>
+                <ConfigBrowserPage />
+              </Suspense>
+            }
+          />
           <Route path="/play" element={null} />
           <Route path="/disks" element={<DisksPage />} />
           <Route

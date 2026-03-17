@@ -111,6 +111,46 @@ describe("useConfigActions", () => {
     expect(result.current.configWritePending).toEqual({});
   });
 
+  it("setConfigOverride sets the override synchronously without a REST call", () => {
+    const { result } = renderHook(() => useConfigActions());
+
+    act(() => {
+      result.current.setConfigOverride("Audio Mixer", "Volume", 42);
+    });
+
+    expect(result.current.resolveConfigValue({}, "Audio Mixer", "Volume", 0)).toBe(42);
+    expect(setConfigValueMock).not.toHaveBeenCalled();
+  });
+
+  it("setConfigOverride prevents slider snap-back: displayed value remains committed while REST is in-flight", async () => {
+    let resolveApi!: () => void;
+    setConfigValueMock.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveApi = resolve;
+        }),
+    );
+    const { result } = renderHook(() => useConfigActions());
+
+    // Simulate what AudioMixer.handleVolumeLocalCommit does:
+    // 1. Set override synchronously (before activeSliders is cleared)
+    act(() => {
+      result.current.setConfigOverride("Audio Mixer", "Volume", 75);
+    });
+
+    // 2. Start the async REST call (will be in-flight until resolveApi is called)
+    const updatePromise = act(async () => {
+      await result.current.updateConfigValue("Audio Mixer", "Volume", 75, "HOME_SID_VOLUME", "Volume updated");
+    });
+
+    // Override is still visible while REST is pending
+    expect(result.current.resolveConfigValue({}, "Audio Mixer", "Volume", 0)).toBe(75);
+
+    // Clean up: resolve the pending REST call
+    resolveApi();
+    await updatePromise;
+  });
+
   it("removes temporary override after failed first write and falls back to payload value", async () => {
     setConfigValueMock.mockRejectedValueOnce(new Error("boom"));
     readItemValueMock.mockReturnValueOnce("from-payload");

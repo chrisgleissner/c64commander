@@ -34,7 +34,8 @@ interface AudioMixerProps {
 export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: AudioMixerProps) {
   const api = getC64API();
   const trace = useActionTrace("AudioMixer");
-  const { configOverrides, configWritePending, updateConfigValue, resolveConfigValue } = useSharedConfigActions();
+  const { configOverrides, configWritePending, updateConfigValue, resolveConfigValue, setConfigOverride } =
+    useSharedConfigActions();
 
   const { sidControlEntries, sidSilenceTargets, sidAddressingCategory, ultiSidCategory, sidSocketsCategory } =
     useSidData(isConnected, configOverrides);
@@ -210,7 +211,10 @@ export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: Aud
               [volumeSliderId]: snapped,
             }));
           };
-          const handleVolumeLocalCommit = (_val: number) => {
+          const handleVolumeLocalCommit = (val: number) => {
+            // Pre-emptively set the config override so the slider doesn't snap back to
+            // the stale server value before the REST round-trip completes.
+            setConfigOverride("Audio Mixer", entry.volumeItem, resolveVolumeOption(val));
             setActiveSliders((prev) => {
               const next = { ...prev };
               delete next[volumeSliderId];
@@ -242,7 +246,10 @@ export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: Aud
             const snapped = clampSliderValue(applySoftDetent(val, panCenterIndex), panMax);
             setActiveSliders((prev) => ({ ...prev, [panSliderId]: snapped }));
           };
-          const handlePanLocalCommit = (_val: number) => {
+          const handlePanLocalCommit = (val: number) => {
+            // Pre-emptively set the config override so the slider doesn't snap back to
+            // the stale server value before the REST round-trip completes.
+            setConfigOverride("Audio Mixer", entry.panItem, resolvePanOption(val));
             setActiveSliders((prev) => {
               const next = { ...prev };
               delete next[panSliderId];
