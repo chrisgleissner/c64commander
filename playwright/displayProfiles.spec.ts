@@ -95,16 +95,14 @@ const expectLocatorWithinViewport = async (
   page: Page,
   locator: ReturnType<Page["getByRole"]> | ReturnType<Page["getByTestId"]>,
 ) => {
-  const box = await locator.boundingBox();
-  const viewport = page.viewportSize();
-  expect(box).not.toBeNull();
-  expect(viewport).not.toBeNull();
-  if (box && viewport) {
-    expect(box.x).toBeGreaterThanOrEqual(0);
-    expect(box.y).toBeGreaterThanOrEqual(0);
-    expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
-    expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
-  }
+  await expect
+    .poll(async () => {
+      const box = await locator.boundingBox();
+      const viewport = page.viewportSize();
+      if (!box || !viewport) return false;
+      return box.x >= 0 && box.y >= 0 && box.x + box.width <= viewport.width && box.y + box.height <= viewport.height;
+    })
+    .toBe(true);
 };
 
 const scaleRootTextSize = async (page: Page, scale: number) => {

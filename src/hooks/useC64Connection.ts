@@ -31,9 +31,12 @@ import {
 } from "@/lib/query/c64PollingGovernance";
 import { addLog } from "@/lib/logging";
 import { useDiagnosticsSuppressionActive } from "@/hooks/useDiagnosticsSuppressionActive";
+import { useScreenActivity } from "@/hooks/useScreenActivity";
 import { isDiagnosticsOverlaySuppressionArmed } from "@/lib/diagnostics/diagnosticsOverlayState";
+import type { InteractionIntent } from "@/lib/deviceInteraction/deviceInteractionManager";
 
 export type C64QueryOptions = {
+  active?: boolean;
   intent?: InteractionIntent;
   refetchOnMount?: boolean | "always";
   staleTime?: number;
@@ -58,6 +61,7 @@ export interface ConnectionStatus {
 export function useC64Connection() {
   const connection = useConnectionState();
   const diagnosticsSuppressionActive = useDiagnosticsSuppressionActive();
+  const screenActive = useScreenActivity();
   const [baseUrl, setBaseUrl] = useState(() => {
     const resolvedDeviceHost = resolveDeviceHostFromStorage();
     return buildBaseUrlFromDeviceHost(resolvedDeviceHost);
@@ -104,15 +108,17 @@ export function useC64Connection() {
       });
     },
     enabled:
-      !diagnosticsSuppressionActive && (connection.state === "REAL_CONNECTED" || connection.state === "DEMO_ACTIVE"),
+      screenActive &&
+      !diagnosticsSuppressionActive &&
+      (connection.state === "REAL_CONNECTED" || connection.state === "DEMO_ACTIVE"),
     retry: 1,
     retryDelay: 1000,
     staleTime: 30000,
-    refetchInterval: diagnosticsSuppressionActive ? false : getInfoRefreshMinIntervalMs(),
+    refetchInterval: !screenActive || diagnosticsSuppressionActive ? false : getInfoRefreshMinIntervalMs(),
   });
 
   const rateLimitedInfoRefetch = useCallback(() => {
-    if (isDiagnosticsOverlaySuppressionArmed()) {
+    if (!screenActive || isDiagnosticsOverlaySuppressionArmed()) {
       return;
     }
     const nowMs = Date.now();
@@ -121,7 +127,7 @@ export function useC64Connection() {
     }
     lastInfoRefreshAtRef.current = nowMs;
     void refetch();
-  }, [refetch]);
+  }, [refetch, screenActive]);
 
   useEffect(() => {
     if (!diagnosticsSuppressionActive) return;
@@ -140,10 +146,10 @@ export function useC64Connection() {
     const handler = (event: Event) => {
       const detail = (event as CustomEvent).detail as
         | {
-            baseUrl?: string;
-            password?: string;
-            deviceHost?: string;
-          }
+          baseUrl?: string;
+          password?: string;
+          deviceHost?: string;
+        }
         | undefined;
       if (!detail) return;
       const current = settingsRef.current;
@@ -225,26 +231,33 @@ export function useC64Connection() {
   };
 }
 
-export function useC64Categories() {
+export function useC64Categories(options: C64QueryOptions = {}) {
+  const intent = options.intent ?? "background";
+  const screenActive = useScreenActivity();
+  const queryActive = (options.active ?? true) && screenActive;
   return useQuery({
     queryKey: ["c64-categories"],
     queryFn: async () => {
       const api = getC64API();
-      return api.getCategories({ __c64uIntent: "background" });
+      return api.getCategories({ __c64uIntent: intent });
     },
+    enabled: queryActive,
     staleTime: 60000,
+    refetchOnMount: options.refetchOnMount,
   });
 }
 
 export function useC64Category(category: string, enabled = true, options: C64QueryOptions = {}) {
   const intent = options.intent ?? "background";
+  const screenActive = useScreenActivity();
+  const queryActive = (options.active ?? true) && screenActive;
   return useQuery({
     queryKey: ["c64-category", category],
     queryFn: async () => {
       const api = getC64API();
       return api.getCategory(category, { __c64uIntent: intent });
     },
-    enabled: enabled && !!category,
+    enabled: queryActive && enabled && !!category,
     staleTime: options.staleTime ?? 30000,
     refetchOnMount: options.refetchOnMount,
   });
@@ -253,6 +266,8 @@ export function useC64Category(category: string, enabled = true, options: C64Que
 export function useC64ConfigItems(category: string, items: string[], enabled = true, options: C64QueryOptions = {}) {
   const itemKey = items.join("|");
   const intent = options.intent ?? "background";
+  const screenActive = useScreenActivity();
+  const queryActive = (options.active ?? true) && screenActive;
   const snapshot = loadInitialSnapshot(getC64APIConfigSnapshot().baseUrl);
   const placeholderData = (() => {
     if (!snapshot?.data?.[category]) return undefined;
@@ -280,26 +295,29 @@ export function useC64ConfigItems(category: string, items: string[], enabled = t
       const api = getC64API();
       return api.getConfigItems(category, items, { __c64uIntent: intent });
     },
-    enabled: enabled && !!category && items.length > 0,
+    enabled: queryActive && enabled && !!category && items.length > 0,
     placeholderData,
     staleTime: options.staleTime ?? 30000,
     refetchOnMount: options.refetchOnMount,
   });
 }
 
-export function useC64AllConfig() {
-  const { data: categories } = useC64Categories();
+export function useC64AllConfig(options: C64QueryOptions = {}) {
+  const intent = options.intent ?? "background";
+  const screenActive = useScreenActivity();
+  const queryActive = (options.active ?? true) && screenActive;
+  const { data: categories } = useC64Categories(options);
 
   return useQuery({
     queryKey: ["c64-all-config"],
     queryFn: async () => {
       const api = getC64API();
-      const cats = await api.getCategories({ __c64uIntent: "background" });
+      const cats = await api.getCategories({ __c64uIntent: intent });
       const configs: Record<string, ConfigResponse> = {};
 
       for (const cat of cats.categories) {
         try {
-          configs[cat] = await api.getCategory(cat, { __c64uIntent: "background" });
+          configs[cat] = await api.getCategory(cat, { __c64uIntent: intent });
         } catch (catError) {
           // Per-category failures are tolerated; callers can render partial config safely.
           addLog("debug", "Config category fetch failed; partial config in use", {
@@ -315,8 +333,9 @@ export function useC64AllConfig() {
 
       return configs;
     },
-    enabled: !!categories,
+    enabled: queryActive && !!categories,
     staleTime: 30000,
+    refetchOnMount: options.refetchOnMount,
   });
 }
 
@@ -370,7 +389,10 @@ export function useC64UpdateConfigBatch() {
   });
 }
 
-export function useC64ConfigItem(category?: string, item?: string, enabled = true) {
+export function useC64ConfigItem(category?: string, item?: string, enabled = true, options: C64QueryOptions = {}) {
+  const intent = options.intent ?? "background";
+  const screenActive = useScreenActivity();
+  const queryActive = (options.active ?? true) && screenActive;
   return useQuery({
     queryKey: ["c64-config-item", category, item],
     queryFn: async () => {
@@ -378,24 +400,29 @@ export function useC64ConfigItem(category?: string, item?: string, enabled = tru
       if (!category || !item) {
         return null;
       }
-      return api.getConfigItem(category, item, { __c64uIntent: "background" });
+      return api.getConfigItem(category, item, { __c64uIntent: intent });
     },
-    enabled: enabled && !!category && !!item,
+    enabled: queryActive && enabled && !!category && !!item,
     staleTime: 30000,
+    refetchOnMount: options.refetchOnMount,
   });
 }
 
 export function useC64Drives(options: C64QueryOptions = {}) {
   const intent = options.intent ?? "background";
+  const diagnosticsSuppressionActive = useDiagnosticsSuppressionActive();
+  const screenActive = useScreenActivity();
+  const queryActive = (options.active ?? true) && screenActive;
   return useQuery({
     queryKey: ["c64-drives"],
     queryFn: async () => {
       const api = getC64API();
       return api.getDrives({ __c64uIntent: intent });
     },
+    enabled: queryActive,
     staleTime: options.staleTime ?? 10000,
     refetchOnMount: options.refetchOnMount,
-    refetchInterval: DRIVES_POLL_INTERVAL_MS,
+    refetchInterval: !queryActive || diagnosticsSuppressionActive ? false : DRIVES_POLL_INTERVAL_MS,
   });
 }
 

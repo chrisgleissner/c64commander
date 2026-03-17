@@ -1188,6 +1188,8 @@ describe("HomePage SID status", () => {
     expect(thumb).toBeTruthy();
     fireEvent.keyDown(thumb!, { key: "ArrowRight" });
 
+    expect(screen.getByTestId("home-cpu-speed-value").textContent).toBe("2");
+
     await waitFor(() =>
       expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith("U64 Specific Settings", "CPU Speed", "2"),
     );

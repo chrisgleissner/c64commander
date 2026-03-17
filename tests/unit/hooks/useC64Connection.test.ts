@@ -22,6 +22,12 @@ import {
   useC64SetConfig,
   useC64UpdateConfigBatch,
 } from "@/hooks/useC64Connection";
+import {
+  resetDiagnosticsOverlayState,
+  primeDiagnosticsOverlaySuppression,
+} from "@/lib/diagnostics/diagnosticsOverlayState";
+import { DRIVES_POLL_INTERVAL_MS } from "@/lib/query/c64PollingGovernance";
+import { ScreenActivityProvider } from "@/hooks/useScreenActivity";
 
 const connectionSnapshot = {
   state: "REAL_CONNECTED" as const,
@@ -91,7 +97,7 @@ vi.mock("@/lib/secureStorage", () => ({
   getPassword: () => loadStoredPasswordMock(),
 }));
 
-const createWrapper = () => {
+const createWrapper = (screenActive = true) => {
   const client = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
@@ -100,13 +106,18 @@ const createWrapper = () => {
   });
 
   const wrapper = ({ children }: { children: React.ReactNode }) =>
-    React.createElement(QueryClientProvider, { client }, children);
+    React.createElement(
+      QueryClientProvider,
+      { client },
+      React.createElement(ScreenActivityProvider, { active: screenActive }, children),
+    );
 
   return { wrapper, client };
 };
 
 describe("useC64Connection", () => {
   beforeEach(() => {
+    resetDiagnosticsOverlayState();
     mockApi.getInfo.mockResolvedValue({ errors: [] });
     mockApi.getCategories.mockResolvedValue({
       categories: ["Audio"],
@@ -148,6 +159,7 @@ describe("useC64Connection", () => {
   });
 
   afterEach(() => {
+    resetDiagnosticsOverlayState();
     mockApi.getInfo.mockReset();
     mockApi.getCategories.mockReset();
     mockApi.getCategory.mockReset();
@@ -245,6 +257,14 @@ describe("useC64Connection", () => {
     await waitFor(() => expect(result.current.data?.categories).toEqual(["Audio"]));
   });
 
+  it("uses user intent for visible category queries", async () => {
+    const { wrapper } = createWrapper();
+
+    renderHook(() => useC64Categories({ intent: "user", refetchOnMount: "always" }), { wrapper });
+
+    await waitFor(() => expect(mockApi.getCategories).toHaveBeenCalledWith({ __c64uIntent: "user" }));
+  });
+
   it("marks config changes on mutation success", async () => {
     const { wrapper } = createWrapper();
     const { result } = renderHook(() => useC64SetConfig(), { wrapper });
@@ -265,7 +285,7 @@ describe("useC64Connection", () => {
       }
       return { [category]: { items: {} }, errors: [] };
     });
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => { });
 
     const { result } = renderHook(() => useC64AllConfig(), { wrapper });
     await waitFor(() => expect(result.current.data?.Audio).toBeDefined());
@@ -292,11 +312,65 @@ describe("useC64Connection", () => {
     expect(mockApi.getConfigItem).toHaveBeenCalledWith("Audio", "Volume", { __c64uIntent: "background" });
   });
 
+  it("uses user intent for visible config item detail queries", async () => {
+    const { wrapper } = createWrapper();
+
+    renderHook(() => useC64ConfigItem("Audio", "Volume", true, { intent: "user", refetchOnMount: "always" }), {
+      wrapper,
+    });
+
+    await waitFor(() =>
+      expect(mockApi.getConfigItem).toHaveBeenCalledWith("Audio", "Volume", { __c64uIntent: "user" }),
+    );
+  });
+
   it("fetches drives", async () => {
     const { wrapper } = createWrapper();
     const { result } = renderHook(() => useC64Drives(), { wrapper });
 
     await waitFor(() => expect(result.current.data?.drives).toBeDefined());
+  });
+
+  it("disables drive polling while diagnostics suppression is armed", async () => {
+    vi.useFakeTimers();
+    try {
+      primeDiagnosticsOverlaySuppression();
+      mockApi.getDrives.mockClear();
+
+      const { wrapper } = createWrapper();
+      renderHook(() => useC64Drives(), { wrapper });
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(mockApi.getDrives).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        vi.advanceTimersByTime(DRIVES_POLL_INTERVAL_MS * 2);
+        await Promise.resolve();
+      });
+
+      expect(mockApi.getDrives).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("disables background screen queries while the screen is inactive", async () => {
+    const { wrapper } = createWrapper(false);
+
+    renderHook(() => useC64Drives(), { wrapper });
+    renderHook(() => useC64ConfigItems("Audio", ["Volume"], true), { wrapper });
+    renderHook(() => useC64Categories(), { wrapper });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mockApi.getDrives).not.toHaveBeenCalled();
+    expect(mockApi.getConfigItems).not.toHaveBeenCalled();
+    expect(mockApi.getCategories).not.toHaveBeenCalled();
   });
 
   it("supports visible-priority config item queries for page entry", async () => {
@@ -349,20 +423,23 @@ describe("useC64Connection", () => {
 
   it("invalidates queries after reboot delay", async () => {
     vi.useFakeTimers();
-    const { wrapper, client } = createWrapper();
-    const invalidateSpy = vi.spyOn(client, "invalidateQueries");
-    const { result } = renderHook(() => useC64MachineControl(), { wrapper });
+    try {
+      const { wrapper, client } = createWrapper();
+      const invalidateSpy = vi.spyOn(client, "invalidateQueries");
+      const { result } = renderHook(() => useC64MachineControl(), { wrapper });
 
-    await act(async () => {
-      await result.current.reboot.mutateAsync();
-    });
+      await act(async () => {
+        await result.current.reboot.mutateAsync();
+      });
 
-    await act(async () => {
-      vi.advanceTimersByTime(3000);
-    });
+      await act(async () => {
+        vi.advanceTimersByTime(3000);
+      });
 
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["c64"] });
-    vi.useRealTimers();
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["c64"] });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("calls /v1/info in demo mode and reports isConnected as true", async () => {

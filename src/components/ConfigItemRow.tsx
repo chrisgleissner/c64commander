@@ -13,11 +13,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { emitUiTraceMarker } from "@/lib/tracing/userTrace";
-import { useC64ConfigItem } from "@/hooks/useC64Connection";
+import { useC64ConfigItem, VISIBLE_C64_QUERY_OPTIONS } from "@/hooks/useC64Connection";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { getCheckboxMapping, inferControlKind } from "@/lib/config/controlType";
 import { cn } from "@/lib/utils";
-import { SLIDER_MID_DRAG_THROTTLE_MS } from "@/lib/ui/sliderBehavior";
 
 interface ConfigItemRowProps {
   name: string;
@@ -80,8 +79,8 @@ const useAdaptiveLabelLayout = (label: string, widgetMinWidth: number, profile: 
     const observer =
       typeof ResizeObserver !== "undefined"
         ? new ResizeObserver(() => {
-            measureLayout();
-          })
+          measureLayout();
+        })
         : null;
     if (observer) {
       if (containerRef.current) observer.observe(containerRef.current);
@@ -139,7 +138,12 @@ export function ConfigItemRow({
     (import.meta.env.MODE === "test" || isConfigSurfaceActive) &&
     (!options || options.length === 0) &&
     !details?.presets;
-  const { data: itemData, isLoading: isItemLoading } = useC64ConfigItem(category, name, needsDetailFetch);
+  const { data: itemData, isLoading: isItemLoading } = useC64ConfigItem(
+    category,
+    name,
+    needsDetailFetch,
+    VISIBLE_C64_QUERY_OPTIONS,
+  );
 
   const fetchedConfig = useMemo(() => extractConfigFromResponse(itemData), [itemData]);
 
@@ -462,7 +466,6 @@ export function ConfigItemRow({
                 const nextValue = resolveSliderOption(nextIndex);
                 setInputValue(String(nextValue));
               }}
-              asyncThrottleMs={SLIDER_MID_DRAG_THROTTLE_MS}
               onValueChangeAsync={(nextIndex) => {
                 if (isReadOnly) return;
                 const nextValue = resolveSliderOption(nextIndex);

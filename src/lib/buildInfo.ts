@@ -8,6 +8,7 @@
 
 type BuildInfoInput = {
   appVersion?: string;
+  appVersionLabel?: string;
   gitSha?: string;
   buildTime?: string;
 };
@@ -35,22 +36,28 @@ export const formatBuildTimeUtc = (isoString: string) => {
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds} UTC`;
 };
 
-export const formatBuildInfo = ({ appVersion = "", gitSha = "", buildTime = "" }: BuildInfoInput): BuildInfo => {
+export const formatBuildInfo = ({
+  appVersion = "",
+  appVersionLabel = "",
+  gitSha = "",
+  buildTime = "",
+}: BuildInfoInput): BuildInfo => {
   const gitShaShort = gitSha ? gitSha.slice(0, 8) : "";
   return {
     appVersion,
     gitSha,
     gitShaShort,
-    versionLabel: appVersion || "—",
+    versionLabel: appVersionLabel || appVersion || "—",
     buildTimeUtc: formatBuildTimeUtc(buildTime),
   };
 };
 
 export const getBuildInfo = (): BuildInfo => {
   const appVersion = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "";
+  const appVersionLabel = typeof __APP_VERSION_LABEL__ !== "undefined" ? __APP_VERSION_LABEL__ : "";
   const gitSha = typeof __GIT_SHA__ !== "undefined" ? __GIT_SHA__ : "";
   const buildTime = typeof __BUILD_TIME__ !== "undefined" ? __BUILD_TIME__ : "";
-  return formatBuildInfo({ appVersion, gitSha, buildTime });
+  return formatBuildInfo({ appVersion, appVersionLabel, gitSha, buildTime });
 };
 
 export type BuildInfoRow = {

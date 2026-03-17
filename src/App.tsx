@@ -34,6 +34,7 @@ import { invalidateForVisibilityResume } from "@/lib/query/c64QueryInvalidation"
 import { useNavigationGuardBlocker } from "@/lib/navigation/navigationGuards";
 import { t } from "@/lib/i18n";
 import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
+import { ScreenActivityProvider } from "@/hooks/useScreenActivity";
 
 const HomePage = lazy(() => import("./pages/HomePage"));
 const ConfigBrowserPage = lazy(() => import("./pages/ConfigBrowserPage"));
@@ -136,13 +137,15 @@ const PersistentPlayFilesRoute = () => {
   const isVisible = location.pathname === "/play";
 
   return (
-    <div
-      className={isVisible ? "contents" : "hidden"}
-      data-testid="persistent-play-files-route"
-      aria-hidden={!isVisible}
-    >
-      <PlayFilesPage />
-    </div>
+    <ScreenActivityProvider active={isVisible}>
+      <div
+        className={isVisible ? "contents" : "hidden"}
+        data-testid="persistent-play-files-route"
+        aria-hidden={!isVisible}
+      >
+        <PlayFilesPage />
+      </div>
+    </ScreenActivityProvider>
   );
 };
 
