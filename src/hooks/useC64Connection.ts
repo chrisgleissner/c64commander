@@ -146,10 +146,10 @@ export function useC64Connection() {
     const handler = (event: Event) => {
       const detail = (event as CustomEvent).detail as
         | {
-          baseUrl?: string;
-          password?: string;
-          deviceHost?: string;
-        }
+            baseUrl?: string;
+            password?: string;
+            deviceHost?: string;
+          }
         | undefined;
       if (!detail) return;
       const current = settingsRef.current;

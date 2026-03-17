@@ -99,4 +99,30 @@ describe("validateDeviceHost", () => {
   it("returns an error for IPv4 with invalid octet and port", () => {
     expect(validateDeviceHost("300.0.0.1:8064")).not.toBeNull();
   });
+
+  it("returns null for a bare IPv6 address", () => {
+    expect(validateDeviceHost("fe80::1")).toBeNull();
+    expect(validateDeviceHost("2001:db8::1")).toBeNull();
+    expect(validateDeviceHost("::1")).toBeNull();
+  });
+
+  it("returns null for a bracketed IPv6 address without port", () => {
+    expect(validateDeviceHost("[fe80::1]")).toBeNull();
+    expect(validateDeviceHost("[2001:db8::1]")).toBeNull();
+  });
+
+  it("returns null for a bracketed IPv6 address with a valid port", () => {
+    expect(validateDeviceHost("[fe80::1]:8064")).toBeNull();
+    expect(validateDeviceHost("[2001:db8::1]:80")).toBeNull();
+  });
+
+  it("returns an error for a bracketed IPv6 address with an invalid port", () => {
+    expect(validateDeviceHost("[fe80::1]:0")).not.toBeNull();
+    expect(validateDeviceHost("[fe80::1]:65536")).not.toBeNull();
+    expect(validateDeviceHost("[fe80::1]:abc")).not.toBeNull();
+  });
+
+  it("returns an error for an unclosed IPv6 bracket", () => {
+    expect(validateDeviceHost("[fe80::1")).not.toBeNull();
+  });
 });

@@ -79,8 +79,8 @@ const useAdaptiveLabelLayout = (label: string, widgetMinWidth: number, profile: 
     const observer =
       typeof ResizeObserver !== "undefined"
         ? new ResizeObserver(() => {
-          measureLayout();
-        })
+            measureLayout();
+          })
         : null;
     if (observer) {
       if (containerRef.current) observer.observe(containerRef.current);

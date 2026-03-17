@@ -317,7 +317,7 @@ suppressing background polling that could overwrite in-flight values.
 
 - No toast notifications for volume changes.
 - The volume slider moves immediately with local state updates.
-- Pending state tracked via `updateConfigBatch.isPending`.
+- Pending writes are tracked internally via `pendingVolumeWriteRef` (set by `markPendingVolumeWrite`, cleared by `clearPendingVolumeWrite`); `updateConfigBatch.isPending` is only consulted to avoid syncing device values back into the UI while a batch mutation is in-flight.
 - If the write fails, an error is logged; the slider position is not rolled back
   (the reconciliation refetch corrects state shortly after).
 

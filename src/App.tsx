@@ -373,6 +373,12 @@ export class PageErrorBoundary extends React.Component<
     return { hasError: true };
   }
 
+  componentDidUpdate(prevProps: { children: React.ReactNode; active?: boolean }) {
+    if (!prevProps.active && this.props.active && this.state.hasError) {
+      this.setState({ hasError: false });
+    }
+  }
+
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     addErrorLog("Page render error", {
       message: error.message,
