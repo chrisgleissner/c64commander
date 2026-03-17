@@ -6,9 +6,16 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 import { reducer, useToast } from "@/hooks/use-toast";
+import { saveNotificationVisibility } from "@/lib/config/appSettings";
+
+beforeEach(() => {
+  // Allow all toast variants so hook-level tests are not filtered by visibility setting.
+  localStorage.clear();
+  saveNotificationVisibility("all");
+});
 
 describe("toast reducer", () => {
   it("adds, updates, dismisses, and removes toasts", () => {

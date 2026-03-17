@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Wifi, Moon, Sun, Monitor, Lock, RefreshCw, ExternalLink, Info, FileText, Cpu, Play } from "lucide-react";
+import { Wifi, Moon, Sun, Monitor, Lock, RefreshCw, ExternalLink, Info, FileText, Cpu, Play, Bell } from "lucide-react";
 import { useC64Connection } from "@/hooks/useC64Connection";
 import { C64_DEFAULTS, getDeviceHostFromBaseUrl, resolveDeviceHostFromStorage } from "@/lib/c64api";
 import { AppBar } from "@/components/AppBar";
@@ -76,7 +76,14 @@ import {
   saveDebugLoggingEnabled,
   saveDiskAutostartMode,
   saveVolumeSliderPreviewIntervalMs,
+  loadNotificationVisibility,
+  saveNotificationVisibility,
+  loadNotificationDurationMs,
+  saveNotificationDurationMs,
+  NOTIFICATION_DURATION_MIN_MS,
+  NOTIFICATION_DURATION_MAX_MS,
   type DiskAutostartMode,
+  type NotificationVisibility,
 } from "@/lib/config/appSettings";
 import {
   loadDeviceSafetyConfig,
@@ -197,6 +204,9 @@ export default function SettingsPage() {
   const [circuitCooldownInput, setCircuitCooldownInput] = useState(String(deviceSafetyConfig.circuitBreakerCooldownMs));
   const [probeIntervalInput, setProbeIntervalInput] = useState(String(deviceSafetyConfig.discoveryProbeIntervalMs));
   const [allowCircuitOverride, setAllowCircuitOverride] = useState(deviceSafetyConfig.allowUserOverrideCircuit);
+  const [notificationVisibility, setNotificationVisibility] =
+    useState<NotificationVisibility>(loadNotificationVisibility);
+  const [notificationDurationMs, setNotificationDurationMs] = useState(loadNotificationDurationMs);
   const [safUris, setSafUris] = useState<SafPersistedUri[]>([]);
   const [safEntries, setSafEntries] = useState<Array<{ name: string; path: string; type: string }>>([]);
   const [safBusy, setSafBusy] = useState(false);
@@ -1567,6 +1577,61 @@ export default function SettingsPage() {
                     />
                   </div>
                 </div>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Notifications */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.38 }}
+            className="bg-card border border-border rounded-xl p-4 space-y-4"
+          >
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Bell className="h-5 w-5 text-primary" />
+              </div>
+              <h2 className="font-medium">Notifications</h2>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label className="font-medium">Visibility</Label>
+                <Select
+                  value={notificationVisibility}
+                  onValueChange={(value) => {
+                    const v = value as NotificationVisibility;
+                    setNotificationVisibility(v);
+                    saveNotificationVisibility(v);
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="errors-only">Errors only</SelectItem>
+                    <SelectItem value="all">All</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Tap a notification to open Diagnostics. Swipe to dismiss.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="font-medium">Duration: {(notificationDurationMs / 1000).toFixed(1)}s</Label>
+                <Slider
+                  min={NOTIFICATION_DURATION_MIN_MS}
+                  max={NOTIFICATION_DURATION_MAX_MS}
+                  step={500}
+                  value={[notificationDurationMs]}
+                  onValueChange={([value]) => {
+                    setNotificationDurationMs(value);
+                    saveNotificationDurationMs(value);
+                  }}
+                />
+                <p className="text-xs text-muted-foreground">Default 4s. Range 2–8s.</p>
               </div>
             </div>
           </motion.div>

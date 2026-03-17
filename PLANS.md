@@ -358,3 +358,54 @@ Play page eliminates that queue with `immediate: true` + `LatestIntentWriteLane`
 - 2026-03-17: Plan written based on verified research in
   `doc/research/config-update-api-approaches.md`.
 - 2026-03-17: All phases implemented. Gate alias added, `useInteractiveConfigWrite` hook created with 12 unit tests, AudioMixer/LightingSummaryCard/HomePage sliders migrated, AppBar REST-activity toast removed, default interval reduced to 200 ms. `npm run lint`, `build`, `test` (4007 tests, 350 files), and `test:coverage` (92.85% statements, 90.99% branches) all pass.
+
+---
+
+# Notification System Redesign
+
+**Branch:** `fix/improve-slider-performance`
+**Research:** `doc/research/diagnostics-popup-accessibility-options.md`
+**Classification:** `UI_CHANGE`, `CODE_CHANGE`
+
+## Objective
+
+Replace the legacy full-width, hover-dependent toast system with a minimal, deterministic
+notification system that:
+- treats every notification as an entry point into Diagnostics (tap = dismiss + open overlay)
+- supports bidirectional swipe-to-dismiss (left and right)
+- has no X close button anywhere
+- shows content-sized (not full-width) notifications with a max-width constraint
+- defaults to errors-only visibility
+- exposes only two settings: Visibility (Errors only / All) and Duration (2–8 s, default 4 s)
+
+## Invariants
+
+- Tap notification → dismiss + open Diagnostics overlay (error-logs tab)
+- Swipe right → native Radix dismiss (slides out right)
+- Swipe left → threshold-triggered dismiss (delta.x < -50) → fade out
+- No X button, no hover-dependent interactions
+- Content-width only (`w-auto max-w-[min(90vw,22rem)]`), no full-width stretch on mobile
+- Errors-only default: non-destructive toasts are suppressed unless setting is "all"
+- Settings limited to Visibility and Duration; no other notification config
+- Mobile viewport: left-anchored below app bar (using `--app-bar-height` CSS var)
+- sm+ viewport: bottom-right (unchanged)
+
+## Task List
+
+- [x] Audit existing toast implementation
+- [x] Identify all toast entry points (17 files use toast())
+- [x] Map all interaction handlers and variants
+- [ ] Add notification settings to `src/lib/config/appSettings.ts`
+- [ ] Rewrite `src/components/ui/toast.tsx`: layout, remove X, update animations, update viewport
+- [ ] Rewrite `src/components/ui/toaster.tsx`: tap handler, swipe both directions, duration from settings
+- [ ] Update `src/hooks/use-toast.ts`: visibility filtering at dispatch layer
+- [ ] Add Notifications section to `src/pages/SettingsPage.tsx`
+- [ ] Add tests for notification settings and visibility filtering
+- [ ] Run build and lint, fix all issues
+- [ ] Verify: tap opens diagnostics, swipe works both directions, no toast blocks header
+- [ ] Commit changes
+
+## Work Log
+
+- 2026-03-17: Audited all relevant files. Toast system is full-width on mobile (w-screen), hover-only X button, no tap handler, no visibility filtering, no duration setting. Planned replacement: left-anchored below-app-bar viewport, content-width, tap=dismiss+diagnostics, left/right swipe dismiss, duration/visibility settings.
+- 2026-03-17: Implemented all tasks. `appSettings.ts` gains `NotificationVisibility`, `loadNotificationVisibility`, `saveNotificationVisibility`, `loadNotificationDurationMs`, `saveNotificationDurationMs`, `clampNotificationDurationMs`. `toast.tsx` rewritten: X button removed, viewport now left-anchored below app bar (`top-[calc(var(--app-bar-height,3.5rem)+0.5rem)]`), content-width (`w-auto max-w-[min(90vw,22rem)]`), state=closed fades (no slide-right). `toaster.tsx` rewritten: `ToastItem` component with `onSwipeStart/End/Cancel` refs, tap handler calls `dismiss()+requestDiagnosticsOpen("error-logs")`, `ToastProvider duration` driven reactively from settings event. `use-toast.ts` filters non-destructive toasts when visibility is errors-only. `SettingsPage.tsx` gains Notifications section with Visibility select and Duration slider. Tests: `appSettings.notifications.test.ts` (14 tests), `use-toast.test.ts` (6 tests), existing `SettingsPage.test.tsx` and `use-toast.test.tsx` updated. All 4028 tests pass, lint clean, build clean, branch coverage 90.98%.

@@ -276,6 +276,15 @@ vi.mock("@/lib/config/appSettings", () => ({
   saveDebugLoggingEnabled: vi.fn(),
   saveDiskAutostartMode: vi.fn(),
   saveVolumeSliderPreviewIntervalMs: vi.fn(),
+  loadNotificationVisibility: vi.fn(() => "errors-only"),
+  saveNotificationVisibility: vi.fn(),
+  loadNotificationDurationMs: vi.fn(() => 4000),
+  saveNotificationDurationMs: vi.fn(),
+  NOTIFICATION_DURATION_MIN_MS: 2000,
+  NOTIFICATION_DURATION_MAX_MS: 8000,
+  APP_SETTINGS_KEYS: {
+    NOTIFICATION_DURATION_MS_KEY: "c64u_notification_duration_ms",
+  },
 }));
 
 vi.mock("@/lib/hvsc/hvscReleaseService", () => ({
