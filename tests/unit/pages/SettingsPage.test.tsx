@@ -1209,7 +1209,7 @@ describe("SettingsPage", () => {
     expect(setHvscBaseUrlOverride).toHaveBeenCalledWith("https://custom.hvsc.example.com");
   });
 
-  it("saves the playback volume preview interval on blur and enter", () => {
+  it("saves the device slider preview interval on blur and enter", () => {
     renderSettingsPage();
 
     vi.mocked(loadVolumeSliderPreviewIntervalMs).mockReturnValue(345);
@@ -1219,7 +1219,7 @@ describe("SettingsPage", () => {
       }),
     );
 
-    const input = screen.getByLabelText(/volume slider preview interval/i);
+    const input = screen.getByLabelText(/slider preview interval/i);
     fireEvent.change(input, { target: { value: "345" } });
     fireEvent.keyDown(input, { key: "Enter" });
     fireEvent.blur(input);

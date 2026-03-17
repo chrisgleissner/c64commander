@@ -953,34 +953,6 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="volume-slider-preview-interval" className="text-sm">
-                    Volume slider preview interval (milliseconds)
-                  </Label>
-                  <Input
-                    id="volume-slider-preview-interval"
-                    type="number"
-                    min={100}
-                    max={500}
-                    step={10}
-                    value={volumeSliderPreviewIntervalMs}
-                    onChange={(event) => {
-                      const parsed = Number(event.target.value);
-                      if (Number.isFinite(parsed)) {
-                        setVolumeSliderPreviewIntervalMs(clampVolumeSliderPreviewIntervalMs(parsed));
-                      }
-                    }}
-                    onBlur={() => saveVolumeSliderPreviewIntervalMs(volumeSliderPreviewIntervalMs)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") saveVolumeSliderPreviewIntervalMs(volumeSliderPreviewIntervalMs);
-                    }}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Controls how often drag previews are sent while the playback volume slider is moving. Default 200
-                    ms. Range 100–500 ms.
-                  </p>
-                </div>
-
-                <div className="space-y-2">
                   <Label htmlFor="disk-autostart-mode" className="text-sm">
                     Disk first-PRG load
                   </Label>
@@ -1548,6 +1520,34 @@ export default function SettingsPage() {
                       )
                     }
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="volume-slider-preview-interval" className="text-sm">
+                    Slider preview interval (ms)
+                  </Label>
+                  <Input
+                    id="volume-slider-preview-interval"
+                    type="number"
+                    min={100}
+                    max={500}
+                    step={10}
+                    value={volumeSliderPreviewIntervalMs}
+                    onChange={(event) => {
+                      const parsed = Number(event.target.value);
+                      if (Number.isFinite(parsed)) {
+                        setVolumeSliderPreviewIntervalMs(clampVolumeSliderPreviewIntervalMs(parsed));
+                      }
+                    }}
+                    onBlur={() => saveVolumeSliderPreviewIntervalMs(volumeSliderPreviewIntervalMs)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") saveVolumeSliderPreviewIntervalMs(volumeSliderPreviewIntervalMs);
+                    }}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Controls how often drag previews are sent while device-backed sliders are moving, including CPU,
+                    playback volume, SID mixer, and lighting controls. Default 200 ms. Range 100–500 ms.
+                  </p>
                 </div>
 
                 <div className="space-y-2">
