@@ -137,8 +137,9 @@ between writes, serialises concurrent writes into a sequential queue).
 
 ### Cache behaviour
 
-On success, invalidates `["c64-category", category]` queries. The next render
-uses fresh data from the device.
+On success, invalidates queries matching `["c64-config-items", category]` via a
+predicate filter. Unlike Approaches B and C, it does **not** invalidate
+`["c64-all-config"]`. The next render uses fresh data from the device.
 
 ### Optimistic UI
 
@@ -245,8 +246,12 @@ is updated once the queued request fires.
 **Used by:** `PlayFilesPage.tsx` → `usePlaybackController` →
 `useVolumeOverride.ts`
 
-This is the only approach that produces an immediate audible effect during SID
-playback.
+This is the only approach that produces a **perceptually instantaneous** audible
+effect. All four approaches produce an immediate hardware change once the HTTP
+request reaches the device (the firmware `setMixer` hook is the same in every
+case); the difference is that Approach D eliminates the app-side queue delay,
+so the request reaches the device tens of milliseconds after the gesture instead
+of up to 500 ms later.
 
 ### Call chain
 
@@ -305,7 +310,7 @@ suppressing background polling that could overwrite in-flight values.
 
 | Phase     | Trigger                         | Rate limit                                         | Behaviour                                                    |
 | --------- | ------------------------------- | -------------------------------------------------- | ------------------------------------------------------------ |
-| `preview` | `onValueChangeAsync` (mid-drag) | `previewIntervalMs` (configurable, default 150 ms) | Fires only if enough time has elapsed since the last preview |
+| `preview` | `onValueChangeAsync` (mid-drag) | `previewIntervalMs` (configurable, default 200 ms) | Fires only if enough time has elapsed since the last preview |
 | `commit`  | `onValueCommit` (drag released) | None                                               | Always fires; resets the preview timer                       |
 
 ### UX
@@ -333,7 +338,7 @@ because it bypasses the app-side write queue. The audio and display effects are
 | **HTTP method**                | PUT                              | PUT                               | POST                              | POST                                |
 | **Endpoint**                   | `/v1/configs/{cat}/{item}`       | `/v1/configs/{cat}/{item}`        | `/v1/configs`                     | `/v1/configs`                       |
 | **Write throttle**             | Yes (`scheduleConfigWrite`)      | Yes                               | Yes                               | **No** (`immediate: true`)          |
-| **Cache invalidation**         | `c64-category/{cat}`             | `c64-category` + `c64-all-config` | `c64-category` + `c64-all-config` | **None** (`skipInvalidation: true`) |
+| **Cache invalidation**         | `c64-config-items/{cat}` only    | `c64-category` + `c64-all-config` | `c64-category` + `c64-all-config` | **None** (`skipInvalidation: true`) |
 | **Optimistic override**        | Yes (`configOverrides`)          | No                                | No                                | No (slider local state)             |
 | **Toast on success**           | Yes                              | Yes                               | Yes                               | **No**                              |
 | **Hardware effect**            | Immediate once request fires     | Immediate once request fires      | Immediate once request fires      | **Immediate** (no queue, ≤ 50 ms)   |
@@ -358,7 +363,7 @@ The Play page feels instant for two reasons that have nothing to do with SIDplay
 
 The Home page AudioMixer sends values to the same firmware change hook via PUT but
 waits in the write queue (0–500 ms), invalidates the React Query cache on success
-(triggering an immediate background refetch), and shows a toast for every change.
+(triggering an immediate background refetch), and shows a toast on commit.
 The user-observable "stale C64U menu display" is a direct consequence of the
 500 ms queue window, not of any firmware limitation.
 
@@ -387,7 +392,7 @@ Shared behaviour across all Home page writes:
 
 - Optimistic UI override via `configOverrides` written before the request
 - `configWritePending` flag set per config key; components disable re-interaction
-- Success toast shown on every change (even for slider-like repeated operations)
+- Success toast shown on commit; slider mid-drag previews pass `suppressToast: true`
 - Cache invalidated on success → background refetch triggered
 - On error: override rolled back, error toast with retry action shown
 
@@ -403,16 +408,19 @@ Shared behaviour across all Home page writes:
 
 ### Play Files page — Approach D
 
-All volume and mute operations on the Play page route through
+Volume slider and mute/unmute operations on the Play page route through
 `useVolumeOverride.ts` → `playbackWriteLane.schedule()` →
 `updateConfigBatch.mutateAsync({ immediate: true, skipInvalidation: true })`.
+Pause/resume volume adjustments use `applyAudioMixerUpdates()` directly (same
+`immediate: true` + `skipInvalidation: true` flags, but no write lane).
 
-| Control                         | Trigger               | Rate limiting                                                     |
-| ------------------------------- | --------------------- | ----------------------------------------------------------------- |
-| Volume slider (preview)         | `onValueChangeAsync`  | `previewIntervalMs` (default 200 ms), only if enough time elapsed |
-| Volume slider (commit)          | `onValueCommit`       | None — always fires; resets preview timer                         |
-| Mute/unmute button              | `onClick`             | `applyAudioMixerUpdates` (direct, no lane queue)                  |
-| Playback-sync volume adjustment | Playback state change | `queuePlaybackMixerWrite` via `playbackWriteLane`                 |
+| Control                         | Trigger               | Rate limiting                                                      |
+| ------------------------------- | --------------------- | ------------------------------------------------------------------ |
+| Volume slider (preview)         | `onValueChangeAsync`  | `previewIntervalMs` (default 200 ms), only if enough time elapsed  |
+| Volume slider (commit)          | `onValueCommit`       | None — always fires; resets preview timer                          |
+| Mute/unmute button              | `onClick`             | `queuePlaybackMixerWrite` via `playbackWriteLane`                  |
+| Pause/resume volume adjustment  | Playback state change | `applyAudioMixerUpdates` (direct, no lane queue)                   |
+| Playback-sync volume adjustment | Playback state change | `queuePlaybackMixerWrite` via `playbackWriteLane`                  |
 
 Write coalescing: `LatestIntentWriteLane` discards intermediate slider positions
 if a new intent arrives before the previous HTTP request completes. Only the
@@ -423,11 +431,11 @@ the last write, refetching Audio Mixer, SID Sockets, and SID Addressing.
 
 ### Other pages
 
-| Page               | REST calls to C64U config endpoints? | Notes                                             |
-| ------------------ | ------------------------------------ | ------------------------------------------------- |
-| `DisksPage.tsx`    | No (config writes)                   | Drive management: mount/unmount, not config items |
-| `SettingsPage.tsx` | No                                   | App-local settings written to localStorage only   |
-| `DocsPage.tsx`     | No                                   | Read-only documentation                           |
+| Page               | REST calls to C64U config endpoints? | Notes                                                                                               |
+| ------------------ | ------------------------------------ | --------------------------------------------------------------------------------------------------- |
+| `DisksPage.tsx`    | Yes (Approach A)                     | `HomeDiskManager` writes drive config items (drive type, Soft IEC) via `api.setConfigValue()` (PUT) |
+| `SettingsPage.tsx` | No                                   | App-local settings written to localStorage only                                                     |
+| `DocsPage.tsx`     | No                                   | Read-only documentation                                                                             |
 
 ---
 
@@ -467,9 +475,11 @@ notice it.
 ### Success toasts from Approach A / B
 
 `updateConfigValue` calls `toast({ title: successTitle })` on every successful
-write unless `suppressToast: true` is passed. This means a toast fires for every
-single config change on the Home page — even routine slider or toggle
-interactions. Each toast lives for ~5 s (Radix default), further extending the
+write unless `suppressToast: true` is passed. Slider mid-drag previews
+(`AudioMixer` volume/pan, `LightingSummaryCard` intensity/tint) pass
+`suppressToast: true` during the drag and only show a toast on the final commit.
+Non-slider interactions (drop-downs, toggles, enum selectors) show a toast on
+every change. Each toast lives for ~5 s (Radix default), further extending the
 window during which the status circles are hidden.
 
 ---
@@ -613,3 +623,64 @@ not block the status indicators. Options include:
    200 ms intervals caused no issues on real hardware, the default could be
    reduced from 500 ms to 100 ms for the deliberate-write queue without risk,
    if the interactive path is migrated to the lane-based pattern first.
+
+---
+
+## Verification notes
+
+_Added 2026-03-17 after exhaustive cross-referencing of the C64 Commander
+codebase and the symlinked 1541ultimate firmware source._
+
+### Firmware claims — all verified
+
+| Claim | Source file | Status |
+| --- | --- | --- |
+| `setValue()` always calls `setChanged()` | `config.h:151` — inline `int setValue(int v) { value = v; return setChanged(); }` | Verified |
+| `setChanged()` calls `set_need_flash_write(true)`, then hook or `set_need_effectuate()` | `config.cc:903-913` | Verified |
+| `at_close_config()` calls `effectuate()` if `need_effectuate()` is true | `config.h:197-203` | Verified |
+| `at_close_config()` is called at end of REST handler | `route_configs.cc:158` — `apply_config()` calls `at_close_config()` per store | Verified |
+| All 20 mixer items (10 vol + 10 pan) have `setMixer` hook | `u64_config.cc:416-420` | Verified |
+| `setMixer` writes to `U64_AUDIO_MIXER` FPGA register | `u64_config.cc:1150-1167` | Verified |
+| `volume_ctrl` has 31 entries (indices 0-30) | `u64_config.cc:261-264` | Verified |
+| `pan_ctrl` has 11 entries (0-10); pan math: `panL = pan_ctrl[pan]`, `panR = pan_ctrl[10 - pan]` | `u64_config.cc:266` | Verified |
+| No firmware-side rate limiting on REST config writes | Full search of `route_configs.cc` for sleep/delay/rate/limit/throttle | Verified: none found |
+| PUT path accepts 2 or 3 path elements (category + item + optional value-in-path) | `route_configs.cc:188` | Verified |
+| POST accepts `application/json` bulk body | `route_configs.cc:251` | Verified |
+
+### App-side claims — verified with corrections applied above
+
+| Claim | Status | Notes |
+| --- | --- | --- |
+| `scheduleConfigWrite` enforces serial global queue with `configWriteIntervalMs` gap | Verified | `configWriteThrottle.ts` — promise chain + `waitForInterval()` |
+| Default `configWriteIntervalMs` is 500 ms | Verified | `appSettings.ts:18` — `DEFAULT_CONFIG_WRITE_INTERVAL_MS = 500` |
+| `configWriteIntervalMs` clamped to 0-2000, step 100 | Verified | `appSettings.ts` clamp function + `SettingsPage.tsx` input constraints |
+| `immediate: true` bypasses `scheduleConfigWrite` entirely | Verified | `c64api.ts:1141-1144` — conditional bypass |
+| `previewIntervalMs` default | **Corrected** from 150 ms to **200 ms** | `appSettings.ts:25` — `DEFAULT_VOLUME_SLIDER_PREVIEW_INTERVAL_MS = 200` |
+| `previewIntervalMs` clamped to 100-500, step 10 | Verified | `appSettings.ts` clamp + `SettingsPage.tsx:1525-1551` |
+| `useC64SetConfig` invalidates both `c64-category` and `c64-all-config` | Verified | `useC64Connection.ts:350-354` |
+| Approach A invalidates `c64-config-items` only (not `c64-all-config`) | **Corrected** — was listed as `c64-category/{cat}` | `useConfigActions.ts:33-36` — predicate filter on `c64-config-items` |
+| Home page `configOverrides` is `useState`-based | Verified | `useConfigActions.ts:13` |
+| Mute/unmute uses write lane | **Corrected** — was listed as direct `applyAudioMixerUpdates` | `useVolumeOverride.ts:621,658` — both call `queuePlaybackMixerWrite` |
+| Pause/resume uses `applyAudioMixerUpdates` directly | Verified | `usePlaybackController.ts:614,649` |
+| 250 ms reconciliation refetches Audio Mixer, SID Sockets, SID Addressing | Verified | `useVolumeOverride.ts:254-262` |
+| DisksPage makes no config writes | **Corrected** — `HomeDiskManager` writes drive config | `HomeDiskManager.tsx:534,576` — calls `api.setConfigValue()` |
+| Home page slider toasts | **Corrected** — mid-drag suppressed via `suppressToast: true` | `AudioMixer.tsx:232,262`, `LightingSummaryCard.tsx:259,301` |
+| `TOAST_REMOVE_DELAY` is 1 000 000 ms | Verified | `use-toast.ts:14` |
+| Toast viewport: `fixed left-0 top-0 z-[100]` on mobile, `sm:bottom-[…] sm:right-0 sm:top-auto` on desktop | Verified | `toast.tsx:24-25` |
+| AppBar REST activity toast uses `useDiagnosticsActivity().restInFlight` | Verified | `AppBar.tsx:31,81-94` |
+
+### Additional firmware observations
+
+- The firmware `route_configs.cc` also exposes `PUT /configs/load_from_flash`,
+  `PUT /configs/save_to_flash`, and `PUT /configs/reset_to_default` endpoints.
+  These are used by the app's save/load/reset flows (mentioned in the "What to
+  keep from the existing safety model" table) but are not config-item writes.
+- The `setMixer` hook returns 0 unconditionally (no error path). This means the
+  HTTP handler will always report success for Audio Mixer writes, even if the
+  FPGA register write produces no audible effect (e.g., if audio output is
+  physically muted).
+- Items with hooks skip `set_need_effectuate()` entirely. This means
+  `at_close_config()` → `effectuate()` is never called for hooked items. For
+  Audio Mixer this is correct because `setMixer` already wrote the hardware.
+  For other categories with hooks, the same pattern applies — the hook is the
+  sole effectuation path.
