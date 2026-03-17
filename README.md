@@ -78,7 +78,7 @@ Because it gives you full control of your C64 Ultimate from any modern device:
 
 ### Install on Android
 
-1. Download the latest **APK** (e.g. `c64commander-0.6.4-rc2-debug.apk` for debug builds or `c64commander-0.6.4-rc2.apk` for signed release builds) from the [Releases](https://github.com/chrisgleissner/c64commander/releases) page.
+1. Download the latest **APK** (for example, `c64commander-<version>-debug.apk` for debug builds or `c64commander-<version>.apk` for signed release builds) from the [Releases](https://github.com/chrisgleissner/c64commander/releases) page.
 2. Open the APK.
 3. Allow installs from unknown sources if prompted.
 4. Tap **Install** and launch C64 Commander.
@@ -86,7 +86,7 @@ Because it gives you full control of your C64 Ultimate from any modern device:
 ### Install on iOS
 
 1. Set up [SideStore](https://docs.sidestore.io/).
-2. Download the latest **IPA** (e.g. `c64commander-0.6.4-rc2-ios.ipa`) from the [Releases](https://github.com/chrisgleissner/c64commander/releases) page.
+2. Download the latest **IPA** (for example, `c64commander-<version>-ios.ipa`) from the [Releases](https://github.com/chrisgleissner/c64commander/releases) page.
 3. In **SideStore → My Apps**, tap **+** and select the IPA.
 4. Launch C64 Commander.
 

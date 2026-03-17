@@ -109,6 +109,18 @@ const PlayLoadingFallback = () => (
   </div>
 );
 
+const PersistentPlayFilesBoundary = () => {
+  const location = useLocation();
+
+  return (
+    <PageErrorBoundary active={location.pathname === "/play"}>
+      <Suspense fallback={<PlayLoadingFallback />}>
+        <PersistentPlayFilesRoute />
+      </Suspense>
+    </PageErrorBoundary>
+  );
+};
+
 const PersistentPlayFilesRoute = () => {
   const location = useLocation();
   const [hasVisitedPlay, setHasVisitedPlay] = useState(location.pathname === "/play");
@@ -150,11 +162,7 @@ const AppRoutes = () => {
       <DemoModeInterstitial />
       {coverageProbeEnabled && <TestHeartbeat />}
       <Suspense fallback={<RouteLoadingFallback />}>
-        <PageErrorBoundary>
-          <Suspense fallback={<PlayLoadingFallback />}>
-            <PersistentPlayFilesRoute />
-          </Suspense>
-        </PageErrorBoundary>
+        <PersistentPlayFilesBoundary />
         <Routes>
           {coverageProbeEnabled ? <Route path="/__coverage__" element={<CoverageProbePage />} /> : null}
           <Route
@@ -352,7 +360,10 @@ class AppErrorBoundary extends React.Component<{ children: React.ReactNode }, { 
   }
 }
 
-export class PageErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
+export class PageErrorBoundary extends React.Component<
+  { children: React.ReactNode; active?: boolean },
+  { hasError: boolean }
+> {
   state = { hasError: false };
 
   static getDerivedStateFromError() {
@@ -369,6 +380,10 @@ export class PageErrorBoundary extends React.Component<{ children: React.ReactNo
 
   render() {
     if (this.state.hasError) {
+      if (this.props.active === false) {
+        return null;
+      }
+
       return (
         <div
           className="flex min-h-[calc(100vh-8rem)] items-center justify-center px-6 py-10"
