@@ -431,7 +431,7 @@ export default function SettingsPage() {
     if (hostError) return;
     setIsSaving(true);
     try {
-      updateConfig(deviceHostInput || C64_DEFAULTS.DEFAULT_DEVICE_HOST, passwordInput || undefined);
+      updateConfig(deviceHostInput.trim() || C64_DEFAULTS.DEFAULT_DEVICE_HOST, passwordInput || undefined);
       await discoverConnection("settings");
       toast({ title: "Connection settings saved" });
     } catch (error) {
