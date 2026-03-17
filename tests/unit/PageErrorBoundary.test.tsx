@@ -134,4 +134,34 @@ describe("PageErrorBoundary", () => {
     expect(screen.queryByTestId("page-error-boundary-fallback")).not.toBeInTheDocument();
     consoleSpy.mockRestore();
   });
+
+  it("resets error state when active transitions from false to true", () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    // Trigger an error while active
+    const { rerender } = render(
+      <PageErrorBoundary active={true}>
+        <ThrowOnMount shouldThrow={true} />
+      </PageErrorBoundary>,
+    );
+    expect(screen.getByTestId("page-error-boundary-fallback")).toBeInTheDocument();
+
+    // Navigate away — boundary goes inactive, fallback hidden
+    rerender(
+      <PageErrorBoundary active={false}>
+        <ThrowOnMount shouldThrow={false} />
+      </PageErrorBoundary>,
+    );
+    expect(screen.queryByTestId("page-error-boundary-fallback")).not.toBeInTheDocument();
+
+    // Navigate back — error state must be cleared so children render normally
+    rerender(
+      <PageErrorBoundary active={true}>
+        <ThrowOnMount shouldThrow={false} />
+      </PageErrorBoundary>,
+    );
+    expect(screen.getByTestId("page-content")).toBeInTheDocument();
+    expect(screen.queryByTestId("page-error-boundary-fallback")).not.toBeInTheDocument();
+    consoleSpy.mockRestore();
+  });
 });

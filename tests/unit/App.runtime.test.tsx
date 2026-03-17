@@ -294,6 +294,52 @@ describe("App runtime wiring", () => {
     );
   });
 
+  it("records window errors against the current active action when one exists", async () => {
+    const activeAction = { id: "active-action" };
+    mocks.getActiveAction.mockReturnValue(activeAction);
+
+    render(<App />);
+    await screen.findByText("Home Page");
+
+    const error = new Error("boom");
+    act(() => {
+      window.dispatchEvent(
+        new ErrorEvent("error", { message: "boom", error, filename: "app.tsx", lineno: 1, colno: 1 }),
+      );
+    });
+
+    expect(mocks.recordTraceError).toHaveBeenCalledWith(activeAction, error);
+    expect(mocks.createActionContext).not.toHaveBeenCalledWith("Window error", "system", "GlobalErrorListener");
+    expect(mocks.addErrorLog).toHaveBeenCalledWith("Window error", expect.objectContaining({ message: "boom" }));
+  });
+
+  it("records unhandled rejections when no active action exists", async () => {
+    render(<App />);
+    await screen.findByText("Home Page");
+
+    const rejection = new Event("unhandledrejection");
+    Object.defineProperty(rejection, "reason", { configurable: true, value: new Error("async fail") });
+
+    act(() => {
+      window.dispatchEvent(rejection);
+    });
+
+    expect(mocks.createActionContext).toHaveBeenCalledWith(
+      "Unhandled promise rejection",
+      "system",
+      "GlobalErrorListener",
+    );
+    expect(mocks.recordActionStart).toHaveBeenCalledTimes(1);
+    expect(mocks.recordActionEnd).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "Unhandled promise rejection" }),
+      expect.objectContaining({ message: "async fail" }),
+    );
+    expect(mocks.addErrorLog).toHaveBeenCalledWith(
+      "Unhandled promise rejection",
+      expect.objectContaining({ reason: expect.objectContaining({ message: "async fail" }) }),
+    );
+  });
+
   it("starts deferred diagnostics bridges on first meaningful interaction and cleans them up on unmount", async () => {
     const { unmount } = render(<App />);
     await screen.findByText("Home Page");
