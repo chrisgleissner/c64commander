@@ -223,3 +223,138 @@ npm run test:coverage
 | lint/build/test/coverage                        | PENDING                  |
 | Commit and push                                 | PENDING                  |
 | PR comment reply                                | PENDING                  |
+
+---
+
+# Interactive Config Write — Instant Slider Responsiveness
+
+**Branch:** `fix/improve-slider-performance`
+**Research:** `doc/research/config-update-api-approaches.md`
+**Classification:** `CODE_CHANGE`
+
+## Objective
+
+Make every device-backed slider on the Home page feel as responsive as the
+Play page volume slider. The Play page bypasses the 500 ms write queue
+(`immediate: true`) and uses `LatestIntentWriteLane` for coalescing. The goal
+is to extract that pattern into a reusable hook and apply it to all Home page
+sliders, then clean up cascading UX problems (unnecessary success toasts,
+REST-activity toast obscuring status indicators).
+
+## Background
+
+See `doc/research/config-update-api-approaches.md` for the full analysis.
+
+The key insight: the firmware processes config writes synchronously via the
+`setMixer` change hook. The only delay between a user gesture and hardware
+response is the app-side `scheduleConfigWrite` queue (default 500 ms). The
+Play page eliminates that queue with `immediate: true` + `LatestIntentWriteLane`.
+
+## Phases
+
+### Phase 1 — Gate alias (Step 0)
+
+- [x] Add `export const beginInteractiveWriteBurst = beginPlaybackWriteBurst;`
+  to `src/lib/deviceInteraction/deviceActivityGate.ts`.
+- No new tests needed — it is a re-export of an already-tested function.
+
+### Phase 2 — `useInteractiveConfigWrite` hook (Step 1)
+
+- [x] Create `src/hooks/useInteractiveConfigWrite.ts` with:
+  - `InteractiveWriteOptions`: `category`, `reconcileQueryKeys?`,
+    `reconciliationDelayMs?` (default 250 ms), `writeTimeoutMs?` (default 4000 ms).
+  - `InteractiveWriteResult`: `write(updates)` and `isPending`.
+  - One `LatestIntentWriteLane` per hook instance (via `useRef`).
+  - `beforeRun`: `waitForMachineTransitionsToSettle()`.
+  - `run`: `beginInteractiveWriteBurst()` → `updateConfigBatch.mutateAsync`
+    with `immediate: true` and `skipInvalidation: true` → `endBurst()` in
+    `finally`.
+  - Reconciliation: debounced timer (default 250 ms) that
+    `queryClient.invalidateQueries` on the configured query keys after the
+    last write.
+  - Error handling: log via `addErrorLog`, surface via `reportUserError` with
+    retry. No success toast.
+- [x] Create `src/hooks/useInteractiveConfigWrite.test.ts` covering:
+  - Single write calls `mutateAsync` with `immediate: true` and
+    `skipInvalidation: true`.
+  - Rapid writes coalesce — only the last payload reaches `mutateAsync`.
+  - Reconciliation fires after 250 ms following the last write.
+  - Machine-transition gate delays writes until settled.
+  - Errors surface via `reportUserError`; no success toast.
+
+### Phase 3 — AudioMixer sliders (Step 2)
+
+- [x] In `src/pages/home/components/AudioMixer.tsx`, replace
+  `handleVolumeAsyncChange` / `handleVolumeAsyncCommit` and
+  `handlePanAsyncChange` / `handlePanAsyncCommit` with calls to
+  `useInteractiveConfigWrite("Audio Mixer")`.
+  - The four local handlers (`handleVolumeLocalChange`,
+    `handleVolumeLocalCommit`, `handlePanLocalChange`,
+    `handlePanLocalCommit`) remain unchanged.
+  - Remove `configWritePending` usage for volume/pan keys (volume/pan pending
+    props become `false`; controls are no longer disabled during writes).
+  - No success toast for volume or pan writes.
+- [x] Remove `volumePending` and `panPending` prop passing from AudioMixer to
+  SidCard for the interactive slider path. The `isPending` flag from the hook
+  is not needed for control disabling.
+
+### Phase 4 — LightingSummaryCard sliders (Step 3)
+
+- [x] In `src/pages/home/components/LightingSummaryCard.tsx`, replace the
+  `onValueChangeAsync` and `onValueCommitAsync` handlers of the Fixed Color
+  slider and the Strip Intensity slider with calls to
+  `useInteractiveConfigWrite(category)`.
+  - Keep `fixedColorDraftIndex` and `intensityDraft` local state unchanged.
+  - No success toast for color or intensity writes.
+
+### Phase 5 — CPU speed slider (Step 4)
+
+- [x] In `src/pages/HomePage.tsx`, replace `handleCpuSpeedPreviewChange` and
+  `handleCpuSpeedCommitChange` with calls to
+  `useInteractiveConfigWrite("U64 Specific Settings")`.
+  - Keep `cpuSpeedDraftIndex` local state unchanged.
+  - The Turbo Control auto-adjustment (`handleCpuSpeedChange`) continues to
+    use `updateConfigValue` (one-shot, deliberate).
+  - No success toast for CPU speed preview or commit.
+
+### Phase 6 — AppBar REST-activity toast (Step 7)
+
+- [x] Remove the `useEffect` in `src/components/AppBar.tsx` that pushes a
+  "REST activity" toast, and remove its associated `restToastRef` and toast
+  import/usage. The `DiagnosticsActivityIndicator` already provides the same
+  information via the pulsing blue dot. Success toasts for slider interactions
+  are already eliminated in Phases 3–5.
+
+### Phase 7 — Default write interval (Step 8)
+
+- [x] Change `DEFAULT_CONFIG_WRITE_INTERVAL_MS` in
+  `src/lib/config/appSettings.ts` from `500` to `200`.
+  - The 500 ms gap was needed as a catch-all rate limiter. After Phases 3–5,
+    the queue is used only for one-shot operations (Config Browser selects,
+    solo routing, clock sync, save/load/reset, drive config). 200 ms is
+    empirically safe and matches the `previewIntervalMs` default.
+
+### Phase 8 — Validation
+
+- [x] Run `npm run lint` (includes Prettier check) and fix all issues.
+- [x] Run `npm run build`.
+- [x] Run `npm run test`.
+- [x] Run `npm run test:coverage` and confirm global branch coverage ≥ 91%.
+
+## What NOT to change
+
+- `useVolumeOverride` — the Play page volume path has audio-specific logic
+  (SID enablement, mute snapshots, pause/resume, playback sync) that must
+  not be touched.
+- `scheduleConfigWrite` — keeps one-shot write paths safe.
+- Non-slider Home page controls (toggles, dropdowns) — one-shot, latency
+  is acceptable.
+- Config Browser select/enum changes — deliberate one-shot writes.
+- `configWriteIntervalMs` and `previewIntervalMs` user settings UI — keep
+  the Settings controls so users can tune manually.
+
+## Work Log
+
+- 2026-03-17: Plan written based on verified research in
+  `doc/research/config-update-api-approaches.md`.
+- 2026-03-17: All phases implemented. Gate alias added, `useInteractiveConfigWrite` hook created with 12 unit tests, AudioMixer/LightingSummaryCard/HomePage sliders migrated, AppBar REST-activity toast removed, default interval reduced to 200 ms. `npm run lint`, `build`, `test` (4007 tests, 350 files), and `test:coverage` (92.85% statements, 90.99% branches) all pass.

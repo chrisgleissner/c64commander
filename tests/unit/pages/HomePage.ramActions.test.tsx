@@ -162,6 +162,10 @@ vi.mock("@/lib/c64api", () => ({
   getC64API: () => ({}),
 }));
 
+vi.mock("@/hooks/useInteractiveConfigWrite", () => ({
+  useInteractiveConfigWrite: () => ({ write: vi.fn(), isPending: false }),
+}));
+
 vi.mock("@/lib/machine/ramOperations", () => ({
   FULL_RAM_SIZE_BYTES: 0x10000,
   clearRamAndReboot: clearRamAndRebootSpy,

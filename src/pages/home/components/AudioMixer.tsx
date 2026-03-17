@@ -8,6 +8,7 @@ import { useSidData } from "../hooks/useSidData";
 import { SidCard } from "../SidCard";
 import { silenceSidTargets } from "@/lib/sid/sidSilence";
 import { buildSidEnablement } from "@/lib/config/sidVolumeControl";
+import { useInteractiveConfigWrite } from "@/hooks/useInteractiveConfigWrite";
 import {
   resolveOptionIndex,
   resolveVolumeCenterIndex,
@@ -36,6 +37,7 @@ export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: Aud
   const trace = useActionTrace("AudioMixer");
   const { configOverrides, configWritePending, updateConfigValue, resolveConfigValue, setConfigOverride } =
     useSharedConfigActions();
+  const { write: interactiveWrite } = useInteractiveConfigWrite({ category: "Audio Mixer" });
 
   const { sidControlEntries, sidSilenceTargets, sidAddressingCategory, ultiSidCategory, sidSocketsCategory } =
     useSidData(isConnected, configOverrides);
@@ -164,8 +166,6 @@ export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: Aud
       />
       <div className="space-y-3">
         {sidControlEntries.map((entry) => {
-          const volumeKey = buildConfigKey("Audio Mixer", entry.volumeItem);
-          const panKey = buildConfigKey("Audio Mixer", entry.panItem);
           const addressKey = buildConfigKey("SID Addressing", entry.addressItem);
 
           const statusValue = sidStatusMap.get(entry.key);
@@ -181,8 +181,9 @@ export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: Aud
           const panMax = Math.max(panOptions.length - 1, 0);
           const volumeSliderId = `sid-${entry.key}-volume`;
           const panSliderId = `sid-${entry.key}-pan`;
-          const volumePending = Boolean(configWritePending[volumeKey]);
-          const panPending = Boolean(configWritePending[panKey]);
+          // Volume and pan use the interactive write path — not the global queue.
+          const volumePending = false;
+          const panPending = false;
 
           const baseAddressLabel = formatSidBaseAddress(entry.addressRaw ?? entry.address);
           const activeVolumeValue = activeSliders[volumeSliderId];
@@ -222,25 +223,10 @@ export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: Aud
             });
           };
           const handleVolumeAsyncChange = (val: number) => {
-            const v = resolveVolumeOption(val);
-            void updateConfigValue(
-              "Audio Mixer",
-              entry.volumeItem,
-              v,
-              "HOME_SID_VOLUME",
-              `${entry.label} volume updated`,
-              { suppressToast: true },
-            );
+            interactiveWrite({ [entry.volumeItem]: resolveVolumeOption(val) });
           };
           const handleVolumeAsyncCommit = (val: number) => {
-            const v = resolveVolumeOption(val);
-            void updateConfigValue(
-              "Audio Mixer",
-              entry.volumeItem,
-              v,
-              "HOME_SID_VOLUME",
-              `${entry.label} volume updated`,
-            );
+            interactiveWrite({ [entry.volumeItem]: resolveVolumeOption(val) });
           };
           const handlePanLocalChange = (val: number) => {
             const snapped = clampSliderValue(applySoftDetent(val, panCenterIndex), panMax);
@@ -257,14 +243,10 @@ export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: Aud
             });
           };
           const handlePanAsyncChange = (val: number) => {
-            const v = resolvePanOption(val);
-            void updateConfigValue("Audio Mixer", entry.panItem, v, "HOME_SID_PAN", `${entry.label} pan updated`, {
-              suppressToast: true,
-            });
+            interactiveWrite({ [entry.panItem]: resolvePanOption(val) });
           };
           const handlePanAsyncCommit = (val: number) => {
-            const v = resolvePanOption(val);
-            void updateConfigValue("Audio Mixer", entry.panItem, v, "HOME_SID_PAN", `${entry.label} pan updated`);
+            interactiveWrite({ [entry.panItem]: resolvePanOption(val) });
           };
 
           // Identity / Filter

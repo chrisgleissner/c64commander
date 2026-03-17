@@ -21,7 +21,7 @@
     "c64scope": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "tsx", "${PWD}/c64scope/src/index.ts"],
+      "args": ["-y", "tsx", "c64scope/src/index.ts"],
       "env": {}
     }
   }

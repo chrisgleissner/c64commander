@@ -15,7 +15,7 @@ const DISCOVERY_PROBE_TIMEOUT_MS_KEY = "c64u_discovery_probe_timeout_ms";
 const DISK_AUTOSTART_MODE_KEY = "c64u_disk_autostart_mode";
 const VOLUME_SLIDER_PREVIEW_INTERVAL_MS_KEY = "c64u_volume_slider_preview_interval_ms";
 
-export const DEFAULT_CONFIG_WRITE_INTERVAL_MS = 500;
+export const DEFAULT_CONFIG_WRITE_INTERVAL_MS = 200;
 export const DEFAULT_AUTO_DEMO_MODE_ENABLED = true;
 export const DEFAULT_STARTUP_DISCOVERY_WINDOW_MS = 3000;
 export const DEFAULT_BACKGROUND_REDISCOVERY_INTERVAL_MS = 5000;

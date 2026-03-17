@@ -40,7 +40,7 @@ describe("appSettings", () => {
       expect(appSettings.clampConfigWriteIntervalMs(50)).toBe(100);
       expect(appSettings.clampConfigWriteIntervalMs(49)).toBe(0);
       expect(appSettings.clampConfigWriteIntervalMs(2300)).toBe(2000); // Max 2000
-      expect(appSettings.clampConfigWriteIntervalMs(NaN)).toBe(500); // Default
+      expect(appSettings.clampConfigWriteIntervalMs(NaN)).toBe(200); // Default
     });
 
     it("saves and loads", () => {

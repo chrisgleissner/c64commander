@@ -57,6 +57,7 @@ import { buildConfigKey, readItemOptions, resolveTurboControlValue } from "./hom
 import { SectionHeader } from "@/components/SectionHeader";
 import { cn } from "@/lib/utils";
 import { PageContainer, PageStack, ProfileActionGrid, ProfileSplitSection } from "@/components/layout/PageContainer";
+import { useInteractiveConfigWrite } from "@/hooks/useInteractiveConfigWrite";
 
 export default function HomePage() {
   return (
@@ -151,6 +152,7 @@ function HomePageContent() {
   const [applyingConfigId, setApplyingConfigId] = useState<string | null>(null);
 
   const { configWritePending, updateConfigValue, resolveConfigValue } = useSharedConfigActions();
+  const { write: interactiveWriteU64 } = useInteractiveConfigWrite({ category: "U64 Specific Settings" });
   const [activeSliders, setActiveSliders] = useState<Record<string, number>>({});
 
   const machineTaskBusy = machineTaskId !== null || pauseResumePending;
@@ -282,16 +284,20 @@ function HomePageContent() {
 
   const handleCpuSpeedPreviewChange = useCallback(
     (nextValue: string) => {
-      void handleCpuSpeedChange(nextValue, { suppressToast: true });
+      // Interactive write bypasses the queue for instant hardware feedback.
+      interactiveWriteU64({ "CPU Speed": nextValue });
     },
-    [handleCpuSpeedChange],
+    [interactiveWriteU64],
   );
 
   const handleCpuSpeedCommitChange = useCallback(
     (nextValue: string) => {
-      void handleCpuSpeedChange(nextValue);
+      // Commit via interactive write for the slider value, then trigger the
+      // Turbo Control auto-adjustment as a one-shot deliberate write (no toast).
+      interactiveWriteU64({ "CPU Speed": nextValue });
+      void handleCpuSpeedChange(nextValue, { suppressToast: true });
     },
-    [handleCpuSpeedChange],
+    [interactiveWriteU64, handleCpuSpeedChange],
   );
 
   const handleSaveToApp = trace(async function handleSaveToApp(name: string) {

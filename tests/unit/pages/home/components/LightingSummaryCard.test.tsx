@@ -25,6 +25,11 @@ vi.mock("@/pages/home/hooks/ConfigActionsContext", () => ({
   }),
 }));
 
+const interactiveWriteSpy = vi.fn();
+vi.mock("@/hooks/useInteractiveConfigWrite", () => ({
+  useInteractiveConfigWrite: () => ({ write: interactiveWriteSpy, isPending: false }),
+}));
+
 vi.mock("@/lib/config/ledColors", () => ({
   getLedColorRgb: (value: string) => (value === "Red" ? { r: 255, g: 0, b: 0 } : null),
   rgbToCss: ({ r, g, b }: { r: number; g: number; b: number }) => `rgb(${r},${g},${b})`,
@@ -136,11 +141,12 @@ describe("LightingSummaryCard", () => {
     );
   });
 
-  it("calls updateConfigValue when intensity slider is moved", () => {
+  it("calls interactiveWrite when intensity slider is moved", () => {
     render(<LightingSummaryCard {...defaultProps} />);
     fireEvent.click(screen.getByTestId("led-strip-intensity-slider-drag"));
-    // onValueCommitAsync triggers updateConfigValue
-    expect(updateConfigValueSpy).toHaveBeenCalled();
+    // onValueChangeAsync and onValueCommitAsync trigger interactiveWrite
+    expect(interactiveWriteSpy).toHaveBeenCalled();
+    expect(updateConfigValueSpy).not.toHaveBeenCalled();
   });
 
   it("shows intensity value from resolved config", () => {

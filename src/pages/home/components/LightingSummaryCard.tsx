@@ -12,6 +12,7 @@ import {
   resolveSelectValue,
 } from "../utils/uiLogic";
 import { useSharedConfigActions } from "../hooks/ConfigActionsContext";
+import { useInteractiveConfigWrite } from "@/hooks/useInteractiveConfigWrite";
 
 const formatLightingPatternLabel = (value: string) => {
   if (normalizeOptionToken(value) === "singlecolor") return "Single Color";
@@ -40,6 +41,7 @@ export function LightingSummaryCard({
   testIdPrefix,
 }: LightingSummaryCardProps) {
   const { configWritePending, resolveConfigValue, updateConfigValue } = useSharedConfigActions();
+  const { write: interactiveWrite } = useInteractiveConfigWrite({ category });
   const unavailableLabel = "Not available";
 
   const [fixedColorDraftIndex, setFixedColorDraftIndex] = useState<number | null>(null);
@@ -254,15 +256,11 @@ export function LightingSummaryCard({
           }}
           onValueChangeAsync={(nextValue) => {
             const nextIndex = clampToRange(nextValue, 0, fixedColorSliderMax);
-            const nextOption = resolveFixedColorOption(nextIndex);
-            void updateLightingConfig("Fixed Color", nextOption, "COLOR", `${successLabel} color updated`, {
-              suppressToast: true,
-            });
+            interactiveWrite({ "Fixed Color": resolveFixedColorOption(nextIndex) });
           }}
           onValueCommitAsync={(nextValue) => {
             const nextIndex = clampToRange(nextValue, 0, fixedColorSliderMax);
-            const nextOption = resolveFixedColorOption(nextIndex);
-            void updateLightingConfig("Fixed Color", nextOption, "COLOR", `${successLabel} color updated`);
+            interactiveWrite({ "Fixed Color": resolveFixedColorOption(nextIndex) });
           }}
           disabled={fixedColorSliderDisabled}
           valueFormatter={(value) => formatSelectOptionLabel(resolveFixedColorOption(value))}
@@ -293,22 +291,11 @@ export function LightingSummaryCard({
           }}
           onValueChangeAsync={(nextValue) => {
             const clamped = clampToRange(nextValue, intensityMin, intensityMax);
-            void updateLightingConfig(
-              "Strip Intensity",
-              Math.round(clamped),
-              "INTENSITY",
-              `${successLabel} intensity updated`,
-              { suppressToast: true },
-            );
+            interactiveWrite({ "Strip Intensity": Math.round(clamped) });
           }}
           onValueCommitAsync={(nextValue) => {
             const clamped = clampToRange(nextValue, intensityMin, intensityMax);
-            void updateLightingConfig(
-              "Strip Intensity",
-              Math.round(clamped),
-              "INTENSITY",
-              `${successLabel} intensity updated`,
-            );
+            interactiveWrite({ "Strip Intensity": Math.round(clamped) });
           }}
           disabled={!isActive || isPending("Strip Intensity")}
           data-testid={`${testIdPrefix}-intensity-slider`}

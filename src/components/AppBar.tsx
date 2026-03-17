@@ -13,8 +13,6 @@ import { DiagnosticsActivityIndicator } from "@/components/DiagnosticsActivityIn
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { requestDiagnosticsOpen } from "@/lib/diagnostics/diagnosticsOverlay";
 import { isDiagnosticsOverlayActive, subscribeDiagnosticsOverlay } from "@/lib/diagnostics/diagnosticsOverlayState";
-import { useDiagnosticsActivity } from "@/hooks/useDiagnosticsActivity";
-import { toast, useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -26,10 +24,7 @@ type Props = {
 
 export function AppBar({ title, subtitle, leading, children }: Props) {
   const headerRef = useRef<HTMLElement | null>(null);
-  const restToastRef = useRef<ReturnType<typeof toast> | null>(null);
   const { profile, tokens } = useDisplayProfile();
-  const { restInFlight } = useDiagnosticsActivity();
-  const { toasts } = useToast();
   const [diagnosticsOverlayActive, setDiagnosticsOverlayActive] = useState(isDiagnosticsOverlayActive());
   const compact = profile === "compact";
 
@@ -66,33 +61,6 @@ export function AppBar({ title, subtitle, leading, children }: Props) {
     });
     return () => unsubscribe();
   }, []);
-
-  useEffect(() => {
-    const restToastId = restToastRef.current?.id;
-    const hasOtherToast = toasts.some((entry) => entry.id !== restToastId);
-    if (diagnosticsOverlayActive || restInFlight === 0 || hasOtherToast) {
-      if (restToastRef.current) {
-        restToastRef.current.dismiss();
-        restToastRef.current = null;
-      }
-      return;
-    }
-
-    const description = restInFlight === 1 ? "1 request in flight." : `${restInFlight} requests in flight.`;
-
-    if (!restToastRef.current) {
-      restToastRef.current = toast({
-        title: "REST activity",
-        description,
-      });
-      return;
-    }
-
-    restToastRef.current.update({
-      title: "REST activity",
-      description,
-    });
-  }, [diagnosticsOverlayActive, restInFlight, toasts]);
 
   const handleDiagnosticsOpen = () => {
     requestDiagnosticsOpen("actions");

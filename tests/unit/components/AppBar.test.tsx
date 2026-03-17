@@ -6,20 +6,12 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppBar } from "@/components/AppBar";
 
 const navigateMock = vi.fn();
 const unsubscribeMock = vi.fn();
-const setDiagnosticsOverlayActive = vi.fn();
-const dismissToastMock = vi.fn();
-const updateToastMock = vi.fn();
-const toastMock = vi.fn(() => ({
-  id: "rest-toast",
-  dismiss: dismissToastMock,
-  update: updateToastMock,
-}));
 
 const diagnosticsOverlayStateRef = {
   current: false,
@@ -29,16 +21,6 @@ const diagnosticsOverlaySubscriberRef: {
   current: ((active: boolean) => void) | null;
 } = {
   current: null,
-};
-
-const diagnosticsActivityRef = {
-  current: {
-    restInFlight: 0,
-  },
-};
-
-const toastEntriesRef = {
-  current: [] as Array<{ id: string }>,
 };
 
 vi.mock("react-router-dom", () => ({
@@ -59,15 +41,6 @@ vi.mock("@/lib/diagnostics/diagnosticsOverlayState", () => ({
   },
 }));
 
-vi.mock("@/hooks/useDiagnosticsActivity", () => ({
-  useDiagnosticsActivity: () => diagnosticsActivityRef.current,
-}));
-
-vi.mock("@/hooks/use-toast", () => ({
-  toast: (...args: unknown[]) => toastMock(...args),
-  useToast: () => ({ toasts: toastEntriesRef.current }),
-}));
-
 vi.mock("@/components/DiagnosticsActivityIndicator", () => ({
   DiagnosticsActivityIndicator: ({ onClick }: { onClick: () => void }) => (
     <button type="button" data-testid="diagnostics-activity-indicator" onClick={onClick} />
@@ -86,13 +59,8 @@ describe("AppBar", () => {
     navigateMock.mockReset();
     requestDiagnosticsOpen.mockReset();
     unsubscribeMock.mockReset();
-    dismissToastMock.mockReset();
-    updateToastMock.mockReset();
-    toastMock.mockClear();
     diagnosticsOverlayStateRef.current = false;
     diagnosticsOverlaySubscriberRef.current = null;
-    diagnosticsActivityRef.current = { restInFlight: 0 };
-    toastEntriesRef.current = [];
   });
 
   afterEach(() => {
@@ -200,37 +168,5 @@ describe("AppBar", () => {
 
     unmount();
     expect(removeEventListenerSpy).toHaveBeenCalledWith("resize", expect.any(Function));
-  });
-
-  it("creates, updates, and dismisses the REST activity toast", () => {
-    diagnosticsActivityRef.current = { restInFlight: 2 };
-    const { rerender } = render(<AppBar title="Test" />);
-
-    expect(toastMock).toHaveBeenCalledWith({
-      title: "REST activity",
-      description: "2 requests in flight.",
-    });
-
-    diagnosticsActivityRef.current = { restInFlight: 1 };
-    rerender(<AppBar title="Test" />);
-    expect(updateToastMock).toHaveBeenCalledWith({
-      title: "REST activity",
-      description: "1 request in flight.",
-    });
-
-    toastEntriesRef.current = [{ id: "other-toast" }];
-    rerender(<AppBar title="Test" />);
-    expect(dismissToastMock).toHaveBeenCalled();
-  });
-
-  it("dismisses the REST activity toast when diagnostics overlay becomes active", () => {
-    diagnosticsActivityRef.current = { restInFlight: 1 };
-    render(<AppBar title="Test" />);
-    expect(toastMock).toHaveBeenCalledTimes(1);
-
-    act(() => {
-      diagnosticsOverlaySubscriberRef.current?.(true);
-    });
-    expect(dismissToastMock).toHaveBeenCalled();
   });
 });

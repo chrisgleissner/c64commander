@@ -565,6 +565,10 @@ vi.mock("@/lib/c64api", () => ({
   getC64API: () => c64ApiMockRef.current,
 }));
 
+vi.mock("@/hooks/useInteractiveConfigWrite", () => ({
+  useInteractiveConfigWrite: () => ({ write: vi.fn(), isPending: false }),
+}));
+
 beforeEach(() => {
   toastSpy.mockReset();
   reportUserErrorSpy.mockReset();

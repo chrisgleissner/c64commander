@@ -23,19 +23,6 @@ vi.mock("@/lib/diagnostics/diagnosticsOverlayState", () => ({
   subscribeDiagnosticsOverlay: () => () => undefined,
 }));
 
-vi.mock("@/hooks/useDiagnosticsActivity", () => ({
-  useDiagnosticsActivity: () => ({ restInFlight: 0 }),
-}));
-
-vi.mock("@/hooks/use-toast", () => ({
-  toast: vi.fn(() => ({
-    id: "rest-toast",
-    dismiss: vi.fn(),
-    update: vi.fn(),
-  })),
-  useToast: () => ({ toasts: [] }),
-}));
-
 const setViewportWidth = (width: number) => {
   Object.defineProperty(window, "innerWidth", {
     configurable: true,

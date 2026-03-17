@@ -145,3 +145,6 @@ const waitFor = (predicate: () => boolean) => {
 export const waitForMachineTransitionsToSettle = () => waitFor(() => !isMachineTransitionActive());
 
 export const waitForBackgroundReadsToResume = () => waitFor(() => !areBackgroundReadsSuspended());
+
+/** Alias for {@link beginPlaybackWriteBurst} for use outside the playback context. */
+export const beginInteractiveWriteBurst = beginPlaybackWriteBurst;
