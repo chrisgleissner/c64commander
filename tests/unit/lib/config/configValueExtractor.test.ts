@@ -19,12 +19,19 @@ describe("extractConfigValue", () => {
   });
 
   it("returns empty string for null", () => {
-    expect(extractConfigValue(null)).toBe(null);
+    expect(extractConfigValue(null)).toBe("");
   });
 
-  it("returns the array itself for an array input", () => {
-    const arr = ["a", "b"];
-    expect(extractConfigValue(arr)).toBe(arr);
+  it("returns empty string for undefined", () => {
+    expect(extractConfigValue(undefined)).toBe("");
+  });
+
+  it("returns empty string for an array input", () => {
+    expect(extractConfigValue(["a", "b"])).toBe("");
+  });
+
+  it("returns empty string for boolean true", () => {
+    expect(extractConfigValue(true)).toBe("");
   });
 
   it("extracts selected field (highest priority)", () => {

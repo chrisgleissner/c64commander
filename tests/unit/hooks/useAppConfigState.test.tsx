@@ -212,7 +212,7 @@ describe("useAppConfigState", () => {
     });
   });
 
-  it("extractValue handles null config via revertToInitial", async () => {
+  it("extractValue normalizes null config to empty string via revertToInitial", async () => {
     loadInitialSnapshot.mockReturnValue({
       savedAt: "t",
       data: { Cat: { items: { NullItem: null } } },
@@ -223,10 +223,11 @@ describe("useAppConfigState", () => {
       await result.current.revertToInitial();
     });
 
-    expect(updateConfigBatch).toHaveBeenCalledWith(expect.objectContaining({ Cat: { NullItem: null } }));
+    // null is not a valid config scalar; extractConfigValue normalizes it to ""
+    expect(updateConfigBatch).toHaveBeenCalledWith(expect.objectContaining({ Cat: { NullItem: "" } }));
   });
 
-  it("extractValue handles array config via revertToInitial", async () => {
+  it("extractValue normalizes array config to empty string via revertToInitial", async () => {
     loadInitialSnapshot.mockReturnValue({
       savedAt: "t",
       data: { Cat: { items: { ArrItem: [1, 2, 3] } } },
@@ -237,7 +238,8 @@ describe("useAppConfigState", () => {
       await result.current.revertToInitial();
     });
 
-    expect(updateConfigBatch).toHaveBeenCalledWith(expect.objectContaining({ Cat: { ArrItem: [1, 2, 3] } }));
+    // arrays are not valid config scalars; extractConfigValue normalizes them to ""
+    expect(updateConfigBatch).toHaveBeenCalledWith(expect.objectContaining({ Cat: { ArrItem: "" } }));
   });
 
   it("extractValue handles primitive string config via revertToInitial", async () => {

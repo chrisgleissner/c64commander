@@ -23,8 +23,15 @@
  * Returns "" if nothing matches, matching the API's empty-string sentinel.
  */
 export const extractConfigValue = (raw: unknown): string | number => {
-  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
-    return raw as string | number;
+  if (raw === null || raw === undefined) {
+    return "";
+  }
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    // Plain primitive (string, number, boolean) or array — return as-is if scalar, else ""
+    if (typeof raw === "string" || typeof raw === "number") {
+      return raw;
+    }
+    return "";
   }
 
   const cfg = raw as Record<string, unknown>;
