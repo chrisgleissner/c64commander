@@ -1,8 +1,8 @@
 import { useSyncExternalStore } from "react";
 import {
-    isDiagnosticsOverlaySuppressionArmed,
-    subscribeDiagnosticsSuppression,
+  isDiagnosticsOverlaySuppressionArmed,
+  subscribeDiagnosticsSuppression,
 } from "@/lib/diagnostics/diagnosticsOverlayState";
 
 export const useDiagnosticsSuppressionActive = () =>
-    useSyncExternalStore(subscribeDiagnosticsSuppression, isDiagnosticsOverlaySuppressionArmed, () => false);
+  useSyncExternalStore(subscribeDiagnosticsSuppression, isDiagnosticsOverlaySuppressionArmed, () => false);

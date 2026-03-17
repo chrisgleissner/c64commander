@@ -25,7 +25,7 @@ describe("diagnostics overlay suppression", () => {
     vi.stubGlobal("window", {
       dispatchEvent: vi.fn(),
       setTimeout,
-      CustomEvent: class { },
+      CustomEvent: class {},
     });
   });
 
