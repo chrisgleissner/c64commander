@@ -170,9 +170,11 @@ const AppRoutes = () => {
           <Route
             path="/config"
             element={
-              <Suspense fallback={<ConfigLoadingFallback />}>
-                <ConfigBrowserPage />
-              </Suspense>
+              <PageErrorBoundary>
+                <Suspense fallback={<ConfigLoadingFallback />}>
+                  <ConfigBrowserPage />
+                </Suspense>
+              </PageErrorBoundary>
             }
           />
           <Route path="/play" element={null} />

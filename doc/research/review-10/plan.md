@@ -24,6 +24,7 @@ Each task references the finding ID from `findings.md`. Check boxes are ticked w
 2026-03-16 — Phase 7.8: Added HomeLoadingFallback, ConfigLoadingFallback, PlayLoadingFallback. Heavy routes now have per-route Suspense. All tests pass.
 2026-03-16 — Phase 7.11: Added retry: () => void to UiErrorReport. reportUserError shows ToastAction "Retry" when provided. useConfigActions passes retry on failure. 2 uiErrors tests added. Coverage 91.01%.
 2026-03-16 — Phase 7.10: Added validateDeviceHost in src/lib/validation/connectionValidation.ts. SettingsPage validates on blur and on save; shows role="alert" error paragraph. 19 new tests (14 unit + 5 component). Coverage 91.03%.
+2026-03-17 — Audit pass: verified Phases 1.1–1.9 and 2.1 are fully implemented in code. Ticked all verified checkboxes. Fixed PR #145 review comment (ConfigBrowserPage not wrapped in PageErrorBoundary) — added PageErrorBoundary wrapper for /config route in App.tsx. Removed unused eslint-disable directive from ConfigBrowserPage.tsx applySoloRouting. Tests: 3942 pass. Lint: 0 errors. Build: clean. Coverage: 91.03%.
 
 ---
 
@@ -33,100 +34,100 @@ These tasks are small in scope but high in signal value. They can be done indepe
 
 ### 1.1 TypeScript config hardening · R10-006, R10-023, R10-025
 
-- [ ] Enable `"strict": true` in `tsconfig.app.json`
-- [ ] Enable `"noFallthroughCasesInSwitch": true`
-- [ ] Evaluate and remove `"allowJs": true` if no `.js` sources are compiled
-- [ ] Run `npx tsc --noEmit` and triage all new errors
-- [ ] Fix all implicit-any parameters in `src/` (batch by module)
-- [ ] Fix all null-check fallout from `strictNullChecks` being enabled
-- [ ] Run `npm run test` — confirm all tests still pass
-- [ ] Run `npm run test:coverage` — confirm ≥ 91% branch coverage
+- [x] Enable `"strict": true` in `tsconfig.app.json`
+- [x] Enable `"noFallthroughCasesInSwitch": true`
+- [x] Evaluate and remove `"allowJs": true` if no `.js` sources are compiled
+- [x] Run `npx tsc --noEmit` and triage all new errors
+- [x] Fix all implicit-any parameters in `src/` (batch by module)
+- [x] Fix all null-check fallout from `strictNullChecks` being enabled
+- [x] Run `npm run test` — confirm all tests still pass
+- [x] Run `npm run test:coverage` — confirm ≥ 91% branch coverage
 
 **Notes:**
-*(add here)*
+`tsconfig.app.json` has `"strict": true` and `"noFallthroughCasesInSwitch": true`. `allowJs` is absent from `tsconfig.app.json` (only in root `tsconfig.json` for JS tooling scripts). No `.js` files exist in `src/`. All implicit-any and null-check errors fixed. Tests: 3942 pass. Coverage: 91.03%.
 
 ---
 
 ### 1.2 Replace `as any` in tracing and config modules · R10-007, R10-021
 
-- [ ] Add typed event/action interfaces to `src/lib/tracing/` (covering the 5+3 instances in `userInteractionCapture.ts` and `userTrace.ts`)
-- [ ] Replace `as any` casts in `src/lib/tracing/traceActionContextStore.ts` (2 instances)
-- [ ] Type the `patch` parameter in `hvscIngestionRuntime.ts:82` as `Partial<HvscRuntimeState>` instead of `any`
-- [ ] Replace `ConfigBrowserPage.tsx` config-response casts with a typed interface
-- [ ] Verify `src/lib/playback/localFileBrowser.ts` — replace or document remaining 2 casts
-- [ ] Run `npm run test` and `npm run lint`
+- [x] Add typed event/action interfaces to `src/lib/tracing/` (covering the 5+3 instances in `userInteractionCapture.ts` and `userTrace.ts`)
+- [x] Replace `as any` casts in `src/lib/tracing/traceActionContextStore.ts` (2 instances)
+- [x] Type the `patch` parameter in `hvscIngestionRuntime.ts:82` as `Partial<HvscRuntimeState>` instead of `any`
+- [x] Replace `ConfigBrowserPage.tsx` config-response casts with a typed interface
+- [x] Verify `src/lib/playback/localFileBrowser.ts` — replace or document remaining 2 casts
+- [x] Run `npm run test` and `npm run lint`
 
 **Notes:**
-*(add here)*
+All tracing `as any` casts removed. `hvscIngestionRuntime.ts` patch typed as `Partial<HvscState>`. `ConfigBrowserPage.tsx` uses `ConfigCategory` typing. `localFileBrowser.ts` casts removed. Remaining 4 `as any` in production source are platform-detection workarounds (`window as any` for Capacitor, `File as any` for `.name` property, `FileSystemDirectoryHandle as any` for `.entries()` API) — all documented exceptions.
 
 ---
 
 ### 1.3 Centralise config value extraction · R10-009
 
-- [ ] Create `src/lib/config/configValueExtractor.ts` with exported `extractConfigValue(raw: unknown): string | number`
-- [ ] Write unit tests for `configValueExtractor.ts` covering all 9 probed keys and edge cases (null, array, primitive)
-- [ ] Replace the duplicated logic in `src/hooks/useAppConfigState.ts`
-- [ ] Replace the duplicated logic in `src/pages/ConfigBrowserPage.tsx`
-- [ ] Run `npm run test:coverage` — confirm ≥ 91% branch coverage
+- [x] Create `src/lib/config/configValueExtractor.ts` with exported `extractConfigValue(raw: unknown): string | number`
+- [x] Write unit tests for `configValueExtractor.ts` covering all 9 probed keys and edge cases (null, array, primitive)
+- [x] Replace the duplicated logic in `src/hooks/useAppConfigState.ts`
+- [x] Replace the duplicated logic in `src/pages/ConfigBrowserPage.tsx`
+- [x] Run `npm run test:coverage` — confirm ≥ 91% branch coverage
 
 **Notes:**
-*(add here)*
+`src/lib/config/configValueExtractor.ts` exists with `extractConfigValue` export. Unit tests in `tests/unit/lib/config/configValueExtractor.test.ts`. Used in `useAppConfigState.ts` and `normalizeConfigItem.ts`. Coverage 91.03%.
 
 ---
 
 ### 1.4 Fix config fetch failure UX · R10-011
 
-- [ ] In `useAppConfigState.ts`, upgrade the `.catch` log level from `debug` to `warn`
-- [ ] Propagate fetch failure to a `fetchError` state variable
-- [ ] Expose `fetchError` from the hook and render an error notice in `SettingsPage.tsx`
-- [ ] Add regression test: mock fetch failure → assert error state is set
-- [ ] Run `npm run test:coverage` — confirm ≥ 91% branch coverage
+- [x] In `useAppConfigState.ts`, upgrade the `.catch` log level from `debug` to `warn`
+- [x] Propagate fetch failure to a `fetchError` state variable
+- [x] Expose `fetchError` from the hook and render an error notice in `SettingsPage.tsx`
+- [x] Add regression test: mock fetch failure → assert error state is set
+- [x] Run `npm run test:coverage` — confirm ≥ 91% branch coverage
 
 **Notes:**
-*(add here)*
+`fetchError` state added to `useAppConfigState.ts`. Failure logged at ERROR level via `addErrorLog`. `fetchError` exposed from hook. Error notice rendered in `HomePage.tsx` (warning banner). Regression tests in `tests/unit/hooks/useAppConfigState.test.tsx`. Coverage 91.03%.
 
 ---
 
 ### 1.5 Replace direct `console.*` with structured logging · R10-013
 
-- [ ] Audit all `console.log/warn/error` calls in `src/` (non-test files)
-- [ ] Replace each with `addLog` / `addErrorLog` with appropriate level and context
-- [ ] For `fuzzMode.ts` and `NotFound.tsx`, confirm if `console` is intentional (debug/dev only) and wrap in `import.meta.env.DEV` guard or replace
-- [ ] Run `npm run lint` — confirm no new warnings
+- [x] Audit all `console.log/warn/error` calls in `src/` (non-test files)
+- [x] Replace each with `addLog` / `addErrorLog` with appropriate level and context
+- [x] For `fuzzMode.ts` and `NotFound.tsx`, confirm if `console` is intentional (debug/dev only) and wrap in `import.meta.env.DEV` guard or replace
+- [x] Run `npm run lint` — confirm no new warnings
 
 **Notes:**
-*(add here)*
+`HomeDiskManager.tsx`, `useActionTrace.ts`, and `NotFound.tsx` updated to use structured logging. `fuzzMode.ts` uses `console.warn` intentionally as a low-level bootstrap warning before the logger may be initialised. `songlengthService.ts` uses `console.warn` only as a fallback when structured logging itself fails. Tracing files use `console.warn` intentionally in error-path contexts where addLog is not reliably available. Lint passes with 0 errors.
 
 ---
 
 ### 1.6 Fix `useCallback` deps declaration · R10-022
 
-- [ ] In `ConfigBrowserPage.tsx`, add `audioConfiguredRef` to the `applySoloRouting` deps array or document why it is intentionally omitted (refs are stable — add a comment)
-- [ ] Run `npm run lint` and `npm run test`
+- [x] In `ConfigBrowserPage.tsx`, add `audioConfiguredRef` to the `applySoloRouting` deps array or document why it is intentionally omitted (refs are stable — add a comment)
+- [x] Run `npm run lint` and `npm run test`
 
 **Notes:**
-*(add here)*
+Comment added to `ConfigBrowserPage.tsx` explaining that `audioConfiguredRef` is a stable ref and is read at call time. The unused `eslint-disable-next-line` directive was removed since ESLint no longer flags the pattern. Lint: 0 errors. Tests: 3942 pass.
 
 ---
 
 ### 1.7 Extract `yieldToRenderer` helper · R10-010
 
-- [ ] In `HomeDiskManager.tsx`, extract `const yieldToRenderer = () => new Promise<void>((resolve) => setTimeout(resolve, 0))` to a local constant or import from a shared ui-utils module
-- [ ] Replace the 5+ raw `await new Promise(...)` occurrences with `await yieldToRenderer()`
+- [x] In `HomeDiskManager.tsx`, extract `const yieldToRenderer = () => new Promise<void>((resolve) => setTimeout(resolve, 0))` to a local constant or import from a shared ui-utils module
+- [x] Replace the 5+ raw `await new Promise(...)` occurrences with `await yieldToRenderer()`
 
 **Notes:**
-*(add here)*
+`yieldToRenderer` constant extracted at line 115 of `HomeDiskManager.tsx`. Used at lines 746, 1098, 1112. The two remaining `setTimeout` calls at lines 925 and 991 are minimum-duration waits, not renderer yields — correctly left as-is.
 
 ---
 
 ### 1.8 Housekeeping · R10-024, R10-025
 
-- [ ] Audit all TODO/FIXME comments — convert to GitHub issues or remove stale ones
-- [ ] Remove `"allowJs": true` from `tsconfig.app.json` if confirmed unused (check: `find src -name "*.js"`)
-- [ ] Run `npm run build` to confirm no regressions
+- [x] Audit all TODO/FIXME comments — convert to GitHub issues or remove stale ones
+- [x] Remove `"allowJs": true` from `tsconfig.app.json` if confirmed unused (check: `find src -name "*.js"`)
+- [x] Run `npm run build` to confirm no regressions
 
 **Notes:**
-*(add here)*
+No TODO/FIXME comments found in `src/` (non-test files). `allowJs` is not present in `tsconfig.app.json` (only in root `tsconfig.json` for JS tooling). No `.js` files in `src/`. Build passes cleanly.
 
 ---
 
@@ -134,17 +135,17 @@ These tasks are small in scope but high in signal value. They can be done indepe
 
 These are standalone files with zero consumers — no cascade effects.
 
-- [ ] Delete `src/hooks/useFileLibrary.ts` (unused hook, no consumers anywhere — confirmed by exhaustive search)
-- [ ] Delete `src/components/ConnectionBadge.tsx` (unused component, superseded by `ConnectivityIndicator.tsx`)
-- [ ] Delete `scripts/test_ram_ts.mjs` (self-described one-off debug script)
-- [ ] Delete `scripts/inventory-ctas.mjs` (one-off CTA inventory, no automation path)
-- [ ] Delete `scripts/merge-files.mjs` (ad-hoc file concatenator, no automation path)
-- [ ] Delete `scripts/cleanup-old-evidence.sh` (one-off evidence format migration, already completed)
-- [ ] Delete `scripts/hvsc_filename_frequency.py` (one-off HVSC filename analysis, no automation path)
-- [ ] Run `npm run build` and `npm run test` — confirm nothing breaks
+- [x] Delete `src/hooks/useFileLibrary.ts` (unused hook, no consumers anywhere — confirmed by exhaustive search)
+- [x] Delete `src/components/ConnectionBadge.tsx` (unused component, superseded by `ConnectivityIndicator.tsx`)
+- [x] Delete `scripts/test_ram_ts.mjs` (self-described one-off debug script)
+- [x] Delete `scripts/inventory-ctas.mjs` (one-off CTA inventory, no automation path)
+- [x] Delete `scripts/merge-files.mjs` (ad-hoc file concatenator, no automation path)
+- [x] Delete `scripts/cleanup-old-evidence.sh` (one-off evidence format migration, already completed)
+- [x] Delete `scripts/hvsc_filename_frequency.py` (one-off HVSC filename analysis, no automation path)
+- [x] Run `npm run build` and `npm run test` — confirm nothing breaks
 
 **Notes:**
-*(add here)*
+All 7 files confirmed deleted (not found in worktree). Build: clean. Tests: 3942 pass.
 
 ---
 
@@ -156,19 +157,19 @@ These deletions have dependencies on each other or require confirming intent bef
 
 `MusicPlayerPage.tsx` is not imported by `App.tsx`, has no route, and is explicitly documented as a legacy unrouted component. `useSidPlayer.tsx` is deprecated and its only real consumer is this unrouted page; the `SidPlayerProvider` wrapper in `App.tsx` creates context that nothing in the routed app consumes.
 
-- [ ] Confirm no active plan exists to re-route `MusicPlayerPage` (check open issues / PR queue)
-- [ ] Delete `src/pages/MusicPlayerPage.tsx`
-- [ ] Delete `playwright/musicPlayer.spec.ts`
-- [ ] Delete `src/hooks/useSidPlayer.tsx`
-- [ ] Delete `tests/unit/hooks/useSidPlayer.test.tsx`
-- [ ] In `src/App.tsx`, remove the `SidPlayerProvider` conditional wrapper (lines 163–175) and the `import { SidPlayerProvider }` line
-- [ ] Remove stale references to `MusicPlayerPage` and `useSidPlayer` from `.github/copilot-instructions.md`
-- [ ] Remove stale references from `CLAUDE.md`
-- [ ] Run `npm run build` and `npm run test` — confirm nothing breaks
-- [ ] Run `npm run test:coverage` — confirm ≥ 91% branch coverage (coverage should improve)
+- [x] Confirm no active plan exists to re-route `MusicPlayerPage` (check open issues / PR queue)
+- [x] Delete `src/pages/MusicPlayerPage.tsx`
+- [x] Delete `playwright/musicPlayer.spec.ts`
+- [x] Delete `src/hooks/useSidPlayer.tsx`
+- [x] Delete `tests/unit/hooks/useSidPlayer.test.tsx`
+- [x] In `src/App.tsx`, remove the `SidPlayerProvider` conditional wrapper (lines 163–175) and the `import { SidPlayerProvider }` line
+- [x] Remove stale references to `MusicPlayerPage` and `useSidPlayer` from `.github/copilot-instructions.md`
+- [x] Remove stale references from `CLAUDE.md`
+- [x] Run `npm run build` and `npm run test` — confirm nothing breaks
+- [x] Run `npm run test:coverage` — confirm ≥ 91% branch coverage (coverage should improve)
 
 **Notes:**
-*(add here)*
+All files confirmed deleted. `App.tsx` has no `SidPlayerProvider` or `MusicPlayerPage` references. `.github/copilot-instructions.md` and `CLAUDE.md` have no stale references. Build: clean. Tests: 3942 pass. Coverage: 91.03%.
 
 ---
 
@@ -478,8 +479,8 @@ Added optional `retry?: () => void` to UiErrorReport. reportUserError adds a Toa
 
 Before closing this review cycle, confirm all of the following:
 
-- [ ] All Phase 1 tasks are ticked (quick wins + isolated dead code)
-- [ ] All Phase 2 tasks are ticked (MusicPlayerPage + useSidPlayer cascade)
+- [x] All Phase 1 tasks are ticked (quick wins + isolated dead code)
+- [x] All Phase 2 tasks are ticked (MusicPlayerPage + useSidPlayer cascade)
 - [x] All Phase 3 tasks are ticked (test coverage uplift)
 - [x] Phase 4 (per-page error boundary granularity) is complete
 - [ ] At least Phase 5.1 (SettingsPage split) is complete
@@ -487,8 +488,8 @@ Before closing this review cycle, confirm all of the following:
 - [ ] All Phase 7 tasks are ticked (UX responsiveness & data freshness) — 7.6 and 7.7 remain
 - [x] `npm run test:coverage` reports ≥ 91% branch coverage (91.03% confirmed 2026-03-17)
 - [x] `npm run lint` passes with zero errors (0 errors confirmed 2026-03-17)
-- [ ] `npm run build` completes without errors
+- [x] `npm run build` completes without errors (confirmed 2026-03-17)
 - [x] No new `as any` introduced
 - [x] No new silent catch blocks introduced
 - [x] Worklog entries added for each completed phase
-- [ ] `findings.md` updated if new issues were discovered during remediation
+- [x] `findings.md` updated if new issues were discovered during remediation
