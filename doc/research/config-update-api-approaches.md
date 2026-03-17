@@ -498,7 +498,7 @@ window during which the status circles are hidden.
 
 ---
 
-## Responsiveness brainstorm: making the whole app feel like the Play page
+## Design: making the whole app feel like the Play page
 
 ### Problem statement
 
@@ -541,46 +541,185 @@ before issuing the next, the effective gap equals the round-trip time of a singl
 request (~30–100 ms on a local Wi-Fi network) — well below the 500 ms default of
 `scheduleConfigWrite`.
 
-### Proposal: a universal interactive-write hook
+### Complete slider inventory
 
-Extract the Approach D pattern into a reusable hook,
-e.g. `useInteractiveConfigWrite(category, items, options?)`, that any widget can
-adopt:
+Before designing the solution, here is every device-backed slider in the app:
+
+| Component | Page | Config category | Item(s) | Current path | Hardware effect |
+| --- | --- | --- | --- | --- | --- |
+| `SidCard.tsx` (×4, via `AudioMixer.tsx`) | Home | Audio Mixer | SID1/SID2/UltiSID1/UltiSID2 Volume | Approach A | Immediate via `setMixer` hook |
+| `SidCard.tsx` (×4, via `AudioMixer.tsx`) | Home | Audio Mixer | SID1/SID2/UltiSID1/UltiSID2 Pan | Approach A | Immediate via `setMixer` hook |
+| `LightingSummaryCard.tsx` | Home | LED Strip Settings / Keyboard Lighting | Fixed Color | Approach A | Hook-dependent |
+| `LightingSummaryCard.tsx` | Home | LED Strip Settings / Keyboard Lighting | Strip Intensity | Approach A | Hook-dependent |
+| `HomePage.tsx` | Home | U64 Specific Settings | CPU Speed | Approach A | `effectuate()` deferred |
+| `VolumeControls.tsx` | Play | Audio Mixer | SID volume targets | **Approach D** | Immediate via `setMixer` hook |
+| `ConfigItemRow.tsx` | Config Browser | Dynamic | Any slider-eligible item | Approach B | Varies |
+| `PlaybackSettingsPanel.tsx` | Play | N/A | Duration | localStorage only | None |
+
+The `PlaybackSettingsPanel` duration slider is app-local and requires no changes.
+
+All other device-backed sliders currently go through `scheduleConfigWrite`
+(Approaches A or B), adding 0–500 ms latency before the HTTP request even fires.
+
+### Existing slider infrastructure
+
+The `Slider` component (`src/components/ui/slider.tsx`) already supports
+dual-phase async callbacks:
+
+| Callback | When it fires | Throttling |
+| --- | --- | --- |
+| `onValueChange(value)` | Every drag pixel | None (synchronous, local state only) |
+| `onValueCommit(value)` | Drag release | None (synchronous, local state only) |
+| `onValueChangeAsync(value)` | Mid-drag | Throttled by `asyncThrottleMs` (default: `loadVolumeSliderPreviewIntervalMs()` = 200 ms) via `createSliderAsyncQueue` in `sliderBehavior.ts` |
+| `onValueCommitAsync(value)` | Drag release | None (fires immediately, cancels pending async) |
+
+The slider maintains its own `dragValue` local state for flicker-free rendering
+during interaction. The `createSliderAsyncQueue` in `sliderBehavior.ts` handles
+coalescing: it stores only the latest `pendingValue` and flushes once per
+throttle interval.
+
+This means the interactive-write hook does **not** need to implement its own
+throttle timer — the slider already limits how often `onValueChangeAsync` fires.
+The hook's `LatestIntentWriteLane` handles a complementary concern: coalescing
+writes that arrive faster than the device can respond (i.e. when RTT > throttle
+interval).
+
+### Reusable building blocks already in the codebase
+
+| Component | File | Generic? | Purpose |
+| --- | --- | --- | --- |
+| `createLatestIntentWriteLane<T>` | `src/lib/deviceInteraction/latestIntentWriteLane.ts` | **Yes** — fully generic, parameterised on `T` | Version-based write coalescing + serialisation |
+| `waitForMachineTransitionsToSettle` | `src/lib/deviceInteraction/deviceActivityGate.ts` | **Yes** — not audio-specific | Gate writes until machine state stabilises |
+| `beginPlaybackWriteBurst` | `src/lib/deviceInteraction/deviceActivityGate.ts` | **Yes in mechanism, audio in naming** | Suppress background polling during active writes |
+| `useC64UpdateConfigBatch` | `src/hooks/useC64Connection.ts` | **Yes** — accepts any category | Mutation wrapper with `immediate` + `skipInvalidation` flags |
+| `createSliderAsyncQueue` | `src/lib/ui/sliderBehavior.ts` | **Yes** | Throttle + coalesce slider async callbacks |
+
+All five are production-tested on the Play page volume path. No new primitives
+are needed — only a new composition.
+
+### Hook design: `useInteractiveConfigWrite`
+
+#### Proposed location
+
+`src/hooks/useInteractiveConfigWrite.ts`
+
+#### Signature
+
+```typescript
+interface InteractiveWriteOptions {
+  /** Config category name, e.g. "Audio Mixer", "LED Strip Settings". */
+  category: string;
+
+  /**
+   * Query key prefixes to refetch during reconciliation.
+   * Defaults to `["c64-config-items"]` scoped to `category`.
+   */
+  reconcileQueryKeys?: string[];
+
+  /** Delay before reconciliation refetch fires. Default 250 ms. */
+  reconciliationDelayMs?: number;
+
+  /** Timeout for individual write requests. Default 4000 ms. */
+  writeTimeoutMs?: number;
+}
+
+interface InteractiveWriteResult {
+  /** Send one or more item updates to the device immediately. */
+  write: (updates: Record<string, string | number>) => Promise<void>;
+
+  /** Whether a write is currently in-flight. */
+  isPending: boolean;
+}
+
+function useInteractiveConfigWrite(
+  options: InteractiveWriteOptions,
+): InteractiveWriteResult;
+```
+
+#### Internal architecture
 
 ```
-widget gesture
-  → local state update (optimistic UI, no pending flag shown to user)
-    → LatestIntentWriteLane.schedule(latestValues)
-      →   api.updateConfigBatch({ [category]: updates },
-                                { immediate: true })   // no scheduleConfigWrite
-      →   after write: scheduleReconciliation(250 ms)  // delayed cache resync
+caller invokes write({ "SID1 Volume": "12" })
+  │
+  ├─ lane.schedule({ category, updates })
+  │    │
+  │    ├─ [beforeRun] waitForMachineTransitionsToSettle()
+  │    │     waits if a machine reset/power-off is in progress
+  │    │
+  │    ├─ [coalesce] if a newer write arrived while waiting, skip this one
+  │    │
+  │    └─ [run]
+  │         ├─ endBurst = beginInteractiveWriteBurst()
+  │         ├─ updateConfigBatch.mutateAsync({
+  │         │    category,
+  │         │    updates,
+  │         │    immediate: true,         // bypass scheduleConfigWrite
+  │         │    skipInvalidation: true,   // no React Query invalidation
+  │         │  })
+  │         └─ finally: endBurst()
+  │
+  └─ scheduleReconciliation()
+       debounced 250 ms timer → refetch query keys for this category
 ```
 
-Key properties:
+One `LatestIntentWriteLane` instance per hook instance. Multiple sliders in the
+same component sharing one `useInteractiveConfigWrite("Audio Mixer")` call will
+coalesce into the same lane — which is correct, because the firmware's `setMixer`
+hook reads **all 10 channels** from the store on every write, so batching is
+preferred.
 
-- **`immediate: true`** bypasses `scheduleConfigWrite` for the interactive path.
-- **`skipInvalidation: true`** prevents cache churn during rapid edits.
-- **Per-control lane** (not global): independent controls do not block each other.
-- **Coalescing**: only the latest value per lane is issued; intermediate values
-  are dropped like non-slider-related data.
-- **Bounded cadence**: the lane awaits HTTP round-trip before issuing the next
-  write, so effective rate ≈ 1 000 ms / RTT ≈ 10–30 writes/sec max (vs.
-  `scheduleConfigWrite`'s 2 writes/sec global ceiling).
-- **250 ms post-burst reconciliation**: a delayed refetch resynchronises the
-  cache after interaction ends, exactly as the Play page does today.
+If two independent categories need independent lanes (e.g. Audio Mixer + LED
+Settings), the parent component calls the hook twice.
+
+#### Reconciliation
+
+After the last write in a burst, a debounced timer (default 250 ms) fires and
+refetches the relevant React Query cache entries. By default it refetches
+`["c64-config-items", category]` — the same query key pattern that
+`useConfigActions.updateConfigValue` currently invalidates on success.
+
+The reconciliation brings the query cache in sync with device state without
+causing mid-interaction flicker. The existing `configOverrides` mechanism in
+`useConfigActions` prevents the slider from snapping to a stale cached value
+during the brief window between commit and reconciliation.
+
+#### Relationship to `useVolumeOverride`
+
+`useVolumeOverride` will **not** be refactored or replaced. It has extensive
+audio-specific logic (SID enablement, mute snapshots, pause/resume transitions,
+playback sync) that does not generalise. It will continue to own the Play page
+volume path.
+
+`useInteractiveConfigWrite` extracts only the **write mechanics** —
+`LatestIntentWriteLane` + `immediate: true` + `skipInvalidation: true` +
+reconciliation — into a reusable hook that any slider or toggle can adopt.
+
+#### Naming: `beginInteractiveWriteBurst`
+
+The existing `beginPlaybackWriteBurst` in `deviceActivityGate.ts` suppresses
+background polling during writes. For the generic hook, add an alias:
+
+```typescript
+export const beginInteractiveWriteBurst = beginPlaybackWriteBurst;
+```
+
+This avoids breaking the Play page while giving the generic hook a semantically
+accurate name. Both point to the same counter. A later cleanup can unify the
+names once all callers are migrated.
 
 ### What to keep from the existing safety model
 
 The interactive-write hook is **not** a replacement for all existing write paths.
 The following should continue using `scheduleConfigWrite`:
 
-| Scenario                                    | Why keep the queue                                      |
-| ------------------------------------------- | ------------------------------------------------------- |
-| Config Browser bulk form submits            | One-shot deliberate changes; latency is acceptable      |
-| Clock sync batch write                      | One-shot; correctness matters more than speed           |
-| Audio solo routing                          | Complex multi-item snapshot/restore; not interactive    |
+| Scenario | Why keep the queue |
+| --- | --- |
+| Config Browser select/enum changes | One-shot deliberate changes; latency is acceptable |
+| Clock sync batch write | One-shot; correctness matters more than speed |
+| Audio solo routing | Complex multi-item snapshot/restore; not interactive |
 | `saveConfig` / `loadConfig` / `resetConfig` | High-impact operations; deliberate user intent required |
-| Machine control (reset, reboot, power-off)  | Already separate; safety gating by `deviceActivityGate` |
+| Machine control (reset, reboot, power-off) | Already separate; safety gating by `deviceActivityGate` |
+| `HomeDiskManager` drive config writes | Mount-related; one-shot, not interactive |
 
 For these operations the 500 ms minimum gap is harmless. For interactive controls
 (sliders, toggles, dropdowns that the user may click repeatedly) it is actively
@@ -588,41 +727,382 @@ harmful.
 
 ### Eliminating unnecessary toasts
 
-Success toasts for routine config changes should be removed from the interactive
-path:
+Success toasts for slider interactions should be removed entirely from the
+interactive path — both preview and commit:
 
-- For single-item Home page writes (`updateConfigValue`), the optimistic UI
-  override (`configOverrides`) already provides instant confirmation — the
-  displayed value changes before the request fires.
-- A success toast for "SID1 Volume updated" or "Printer port updated" adds no
-  information the user didn't already see in the control itself.
-- Error toasts (and error toasts with retry) should remain: failures are
-  unexpected and require user attention.
+- The slider position already provides instant visual confirmation of the change.
+- A toast for "SID1 Volume updated" or "Strip Intensity updated" adds no
+  information the user did not already see in the control itself.
+- Removing the commit toast also eliminates the 5 s window during which status
+  circles are obscured on mobile.
+- **Error toasts must remain.** Failures are unexpected and require user
+  attention. Error toasts with retry actions should continue to fire.
+
+For non-slider interactive controls (toggles, dropdowns), whether to suppress
+toasts is a per-widget decision. Controls where the new state is visually obvious
+(e.g. a toggle that changes colour) should suppress. Controls where the effect is
+invisible (e.g. a network config change) may keep the toast.
 
 The "REST activity" toast in `AppBar.tsx` is a useful debugging aid but should
 not block the status indicators. Options include:
 
 - Moving it to a non-blocking corner (bottom-centre) on mobile, or
-- integrating it into the `DiagnosticsActivityIndicator` that already lives in
+- Integrating it into the `DiagnosticsActivityIndicator` that already lives in
   the AppBar without covering content.
 
-### Suggested priority order
+---
 
-1. **Create `useInteractiveConfigWrite` hook** based on `useVolumeOverride`'s
-   `LatestIntentWriteLane` + `immediate: true` + `skipInvalidation: true` +
-   250 ms reconciliation pattern.
-2. **Migrate Home page widget interactions** to the new hook: AudioMixer sliders
-   and toggles, DriveManager, PrinterManager, LightingSummaryCard, StreamStatus,
-   UserInterfaceSummaryCard.
-3. **Migrate Config Browser interactive slider** (`handleAudioValueChange`) to
-   the new hook.
-4. **Remove success toasts from interactive write paths**; keep error toasts.
-5. **Fix AppBar "REST activity" toast position** so it no longer covers status
-   circles on mobile.
-6. **Evaluate `configWriteIntervalMs` default**: given empirical evidence that
-   200 ms intervals caused no issues on real hardware, the default could be
-   reduced from 500 ms to 100 ms for the deliberate-write queue without risk,
-   if the interactive path is migrated to the lane-based pattern first.
+## Implementation plan
+
+### Step 0 — Rename the write-burst gate (trivial)
+
+**Goal:** Give `beginPlaybackWriteBurst` a generic alias so the new hook can use
+a semantically accurate name.
+
+**Files changed:**
+
+| File | Change |
+| --- | --- |
+| `src/lib/deviceInteraction/deviceActivityGate.ts` | Add `export const beginInteractiveWriteBurst = beginPlaybackWriteBurst;` |
+
+**Tests:** Existing `deviceActivityGate` tests continue to pass unchanged. No
+new tests needed — it is a re-export.
+
+---
+
+### Step 1 — Create `useInteractiveConfigWrite` hook
+
+**Goal:** A new hook that any slider or toggle can call to write config values
+to the device with Approach D semantics.
+
+**Files created:**
+
+| File | Contents |
+| --- | --- |
+| `src/hooks/useInteractiveConfigWrite.ts` | Hook implementation |
+| `src/hooks/useInteractiveConfigWrite.test.ts` | Unit tests |
+
+**Implementation details:**
+
+1. Accept `InteractiveWriteOptions` (category, reconcile keys, delays).
+2. Create one `LatestIntentWriteLane<Record<string, string | number>>` via
+   `useRef`, initialised once on mount.
+3. `beforeRun`: call `waitForMachineTransitionsToSettle()`.
+4. `run`: call `beginInteractiveWriteBurst()`, then
+   `updateConfigBatch.mutateAsync({ category, updates, immediate: true,
+   skipInvalidation: true })` wrapped in `withTimeout`, then `endBurst()` in
+   `finally`.
+5. After each `lane.schedule()` call, call `scheduleReconciliation()` — a
+   debounced timer (250 ms default) that calls
+   `queryClient.invalidateQueries(...)` for the configured query keys.
+6. Expose `write(updates)` → `lane.schedule(updates)` and `isPending` (a
+   `useState` boolean toggled by the lane's lifecycle).
+
+**Error handling:**
+
+- The lane's `run` function is wrapped in try/catch.
+- On error: log via `addErrorLog`, surface via `reportUserError` with retry
+  (calling `write(updates)` again).
+- Do **not** show a success toast.
+
+**What this hook does NOT do:**
+
+- Manage slider local state (the `Slider` component and `activeSliders` /
+  `configOverrides` handle that).
+- Manage SID enablement, mute snapshots, or any audio-specific logic (that stays
+  in `useVolumeOverride`).
+- Replace `scheduleConfigWrite` for non-interactive paths.
+
+**Test strategy:**
+
+- Mock `useC64UpdateConfigBatch` and `waitForMachineTransitionsToSettle`.
+- Verify: single write calls `mutateAsync` with `immediate: true` and
+  `skipInvalidation: true`.
+- Verify: rapid writes coalesce (schedule three writes in quick succession;
+  assert only the last payload is sent to `mutateAsync`).
+- Verify: reconciliation fires 250 ms after the last write (advance timers).
+- Verify: machine-transition gate delays writes until settled.
+- Verify: errors surface via `reportUserError`.
+
+---
+
+### Step 2 — Migrate Home page AudioMixer sliders (highest priority)
+
+**Goal:** Volume and pan sliders on the Home page feel as instant as the Play
+page volume slider.
+
+**Files changed:**
+
+| File | Change |
+| --- | --- |
+| `src/pages/home/components/AudioMixer.tsx` | Call `useInteractiveConfigWrite("Audio Mixer")` and rewire `handleVolume*` / `handlePan*` async handlers |
+
+**Before (current Approach A):**
+
+```
+handleVolumeAsyncChange(val)
+  → resolveVolumeOption(val)
+  → updateConfigValue("Audio Mixer", entry.volumeItem, v,
+      "HOME_SID_VOLUME", "... volume updated", { suppressToast: true })
+    → api.setConfigValue(category, item, value)
+      → scheduleConfigWrite(PUT ...)       // 0–500 ms queue wait
+        → cache invalidation on success    // React Query refetch
+```
+
+**After (Approach D via hook):**
+
+```
+handleVolumeAsyncChange(val)
+  → resolveVolumeOption(val)
+  → interactiveWrite({ [entry.volumeItem]: v })
+    → lane.schedule(updates)               // immediate, no queue
+      → POST /v1/configs (immediate: true) // ≤ 50 ms to device
+    → scheduleReconciliation(250 ms)       // single delayed refetch
+```
+
+**Detailed handler changes in AudioMixer.tsx:**
+
+- `handleVolumeLocalChange` — **unchanged**. Continues to update `activeSliders`
+  local state for instant visual feedback and apply soft detent snapping.
+- `handleVolumeLocalCommit` — **unchanged**. Continues to set `configOverrides`
+  to prevent snap-back and clear `activeSliders`.
+- `handleVolumeAsyncChange` — **changed**. Calls
+  `interactiveWrite({ [entry.volumeItem]: resolveVolumeOption(val) })` instead
+  of `updateConfigValue(...)`. No toast. No `configWritePending`.
+- `handleVolumeAsyncCommit` — **changed**. Same as async change: calls
+  `interactiveWrite(...)`. **No toast** on commit either — the slider position is
+  the confirmation.
+- Same four changes for the pan handler pair.
+
+**Why `configOverrides` still works:**
+
+- During drag: `activeSliders` provides the visual value (priority over
+  `configOverrides` in `SidCard.tsx`'s value resolution).
+- On commit: `handleVolumeLocalCommit` sets `configOverrides[key] = value`.
+- The reconciliation refetch (250 ms later) brings the query cache in sync with
+  the device. At that point, `resolveConfigValue` reads the override first, which
+  matches the device value, so no visual jump.
+- On the next interaction, the override is replaced by a new one.
+
+**Why `configWritePending` is no longer needed for this path:**
+
+The pending flag exists to disable controls during the 0–500 ms queue wait. With
+`immediate: true`, the write completes in ≤ 50 ms. The `LatestIntentWriteLane`
+serialises writes, so there is no interleaving risk. The `isPending` flag from
+the hook can optionally be used for a subtle pending indicator, but the control
+should **not** be disabled during writes.
+
+**Tests:** Update `AudioMixer.test.tsx` to assert that volume/pan async handlers
+call `interactiveWrite` (not `updateConfigValue`) and that no success toast is
+shown.
+
+---
+
+### Step 3 — Migrate Home page LightingSummaryCard sliders
+
+**Goal:** LED colour and intensity sliders feel instant.
+
+**Files changed:**
+
+| File | Change |
+| --- | --- |
+| `src/pages/home/components/LightingSummaryCard.tsx` | Call `useInteractiveConfigWrite(category)` and rewire slider async handlers |
+
+**Migration details:**
+
+The component renders sliders for two possible categories (`LED Strip Settings`
+or `Keyboard Lighting`, determined by the `category` prop). Each category has:
+
+- **Fixed Color slider** (discrete colour index, ~31 options)
+- **Strip Intensity slider** (numeric, 0–31 range)
+
+Both currently use `updateLightingConfig` → `updateConfigValue` → Approach A.
+
+**Change for each slider:**
+
+- `onValueChangeAsync`: call `interactiveWrite({ [itemName]: value })` instead of
+  `updateLightingConfig(...)`. No toast.
+- `onValueCommitAsync`: call `interactiveWrite({ [itemName]: value })`. No toast.
+- Keep `draft` local state (`colorDraft`, `intensityDraft`) for visual feedback
+  during drag — **unchanged**.
+
+**LED hardware latency note:**
+
+LED config items may or may not have firmware change hooks. If they use deferred
+`effectuate()` rather than hooks, the hardware effect fires at `at_close_config()`
+— still within the same HTTP round-trip, so still perceptually instant. The key
+improvement is eliminating the 0–500 ms queue delay before the request fires.
+
+**Tests:** Update `LightingSummaryCard.test.tsx` to assert that slider async
+handlers call `interactiveWrite`.
+
+---
+
+### Step 4 — Migrate Home page CPU Speed slider
+
+**Goal:** CPU speed slider changes take effect immediately.
+
+**Files changed:**
+
+| File | Change |
+| --- | --- |
+| `src/pages/HomePage.tsx` | Call `useInteractiveConfigWrite("U64 Specific Settings")` and rewire CPU speed slider async handlers |
+
+**Migration details:**
+
+The CPU speed slider currently calls `handleCpuSpeedPreviewChange` (preview) and
+`handleCpuSpeedCommitChange` (commit), both of which call `updateConfigValue`
+with `"U64 Specific Settings"` category, `"CPU Speed"` item.
+
+**Change:**
+
+- Both async handlers call `interactiveWrite({ "CPU Speed": value })`.
+- No toast on preview or commit.
+- Keep the existing `cpuSpeedDraftIndex` local state for visual feedback —
+  **unchanged**.
+
+**Hardware note:** CPU speed does not have a firmware change hook — it goes
+through `effectuate()`, which is called by `at_close_config()` at the end of the
+HTTP handler. The effect still occurs within the same round-trip.
+
+**Tests:** Update `HomePage.test.tsx` to assert the new write path.
+
+---
+
+### Step 5 — Migrate Config Browser sliders (optional, lower priority)
+
+**Goal:** Sliders in the Config Browser (any category) use the instant path.
+
+**Files changed:**
+
+| File | Change |
+| --- | --- |
+| `src/components/ConfigItemRow.tsx` | Accept optional `interactiveWrite` prop; if present, use it for `onValueChangeAsync` / `onValueCommitAsync` instead of `onValueChange` |
+| `src/pages/ConfigBrowserPage.tsx` | For categories with slider-eligible items, create `useInteractiveConfigWrite(category)` and pass `write` to `ConfigItemRow` |
+
+**Why lower priority:** The Config Browser is a power-user tool where individual
+item changes are deliberate. The latency improvement matters most for sliders
+(Audio Mixer volume, LED controls) but less for enum selectors. Migrating all
+Config Browser slider interactions would be a broader change with more edge cases
+(dynamic categories, audio solo routing interactions).
+
+**Suggested scope:** Start with only the Audio Mixer category in the Config
+Browser, which already has special handling via `handleAudioValueChange`. Other
+categories can be migrated incrementally.
+
+---
+
+### Step 6 — Suppress success toasts for all interactive slider paths
+
+**Goal:** Remove visual noise from slider interactions on the Home page.
+
+**Files changed:**
+
+| File | Change |
+| --- | --- |
+| `src/pages/home/components/AudioMixer.tsx` | Already done in Step 2 — async handlers no longer call `updateConfigValue`, so no toast fires |
+| `src/pages/home/components/LightingSummaryCard.tsx` | Already done in Step 3 |
+| `src/pages/HomePage.tsx` | Already done in Step 4 |
+
+If Steps 2–4 are implemented correctly, this step requires no additional code
+changes — the interactive-write hook does not show toasts by design.
+
+**Error toasts remain:** The hook's error handler calls `reportUserError`, which
+shows a destructive toast with retry action.
+
+---
+
+### Step 7 — Fix AppBar REST activity toast positioning (independent)
+
+**Goal:** The REST activity toast no longer obscures status circle indicators on
+mobile.
+
+**Files changed:**
+
+| File | Change |
+| --- | --- |
+| `src/components/AppBar.tsx` | Replace the `toast()` call for REST activity with an inline indicator inside the `DiagnosticsActivityIndicator` or move the toast to a non-blocking position |
+
+**Options (pick one):**
+
+1. **Integrate into DiagnosticsActivityIndicator**: The blue REST dot already
+   pulses during in-flight requests. Add a small count badge or tooltip showing
+   the request count. Remove the separate toast entirely.
+2. **Move to bottom-centre on mobile**: Add a dedicated `ToastViewport` with
+   `fixed bottom-0 left-1/2 -translate-x-1/2` positioning for REST activity
+   toasts only.
+
+Option 1 is preferred because it eliminates the toast entirely and reuses an
+existing indicator that already conveys the same information.
+
+---
+
+### Step 8 — Evaluate `configWriteIntervalMs` default (post-migration)
+
+**Goal:** Reduce the minimum gap for the deliberate-write queue once the
+interactive path no longer depends on it.
+
+After Steps 2–4, all slider interactions bypass `scheduleConfigWrite`. The queue
+is only used for one-shot operations (Config Browser selects, solo routing, clock
+sync, save/load/reset, disk manager drive config). For these, the 500 ms gap is
+harmlessly conservative.
+
+**Recommendation:** Reduce the default from 500 ms to 200 ms. This matches the
+empirically safe `previewIntervalMs` default and halves the perceived delay for
+one-shot operations while still providing ample serialisation headroom.
+
+**Files changed:**
+
+| File | Change |
+| --- | --- |
+| `src/lib/config/appSettings.ts` | Change `DEFAULT_CONFIG_WRITE_INTERVAL_MS` from `500` to `200` |
+
+**Risk:** Low. One-shot operations fire at most a few times per second. The
+firmware has no rate limiting and processes writes synchronously.
+
+---
+
+### Implementation order and dependencies
+
+```text
+Step 0 (gate alias)
+  │
+  └→ Step 1 (create hook)
+       │
+       ├→ Step 2 (AudioMixer)     ← highest priority: volume + pan
+       ├→ Step 3 (LED controls)   ← high priority: colour + intensity
+       ├→ Step 4 (CPU speed)      ← medium priority
+       └→ Step 5 (Config Browser) ← lower priority, optional
+
+Step 6 (toast cleanup)           ← automatic if Steps 2–4 are done correctly
+Step 7 (AppBar toast position)   ← independent, can be done in parallel
+Step 8 (reduce default interval) ← do last, after migration is stable
+```
+
+Steps 2, 3, and 4 are independent of each other and can be done in any order or
+in parallel once Step 1 is complete.
+
+### What NOT to change
+
+- **`useVolumeOverride`**: Leave the Play page volume path untouched. It has
+  extensive audio-specific logic (SID enablement, mute snapshots, pause/resume
+  transitions, playback sync, volume session management) that does not generalise
+  and is already working correctly.
+- **`scheduleConfigWrite`**: Keep it for all non-interactive write paths. It
+  remains the safety net for one-shot operations.
+- **Non-slider Home page controls**: Toggles, dropdowns, and selects on the Home
+  page currently use `updateConfigValue` (Approach A). These fire at most once
+  per user click, so the 0–500 ms queue delay is barely perceptible. They can be
+  migrated to the interactive hook later if desired, but are not a priority.
+- **`configWriteIntervalMs` user setting**: Keep the Settings → Device Safety →
+  Advanced Controls UI for users who want to tune the deliberate-write queue
+  manually.
+- **`previewIntervalMs` user setting**: Keep the Settings → Device Safety →
+  Advanced Controls slider preview interval UI. The interactive hook's internal
+  cadence is bounded by the `LatestIntentWriteLane` (one in-flight request at a
+  time), but the `Slider` component's `asyncThrottleMs` (which reads
+  `previewIntervalMs`) still controls how often the slider fires async callbacks.
+  Both mechanisms remain independently useful.
 
 ---
 
