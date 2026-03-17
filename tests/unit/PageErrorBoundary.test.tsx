@@ -45,7 +45,7 @@ describe("PageErrorBoundary", () => {
 
   it("shows scoped fallback when a child throws", () => {
     // Suppress console.error for the expected React boundary error log
-    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => { });
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     render(
       <PageErrorBoundary>
         <ThrowOnMount shouldThrow={true} />
@@ -57,7 +57,7 @@ describe("PageErrorBoundary", () => {
   });
 
   it('renders "Try again" button in fallback', () => {
-    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => { });
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     render(
       <PageErrorBoundary>
         <ThrowOnMount shouldThrow={true} />
@@ -68,7 +68,7 @@ describe("PageErrorBoundary", () => {
   });
 
   it("does not fill the full screen — uses constrained height class", () => {
-    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => { });
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     render(
       <PageErrorBoundary>
         <ThrowOnMount shouldThrow={true} />
@@ -81,7 +81,7 @@ describe("PageErrorBoundary", () => {
   });
 
   it('retries rendering after clicking "Try again" when children no longer throw', () => {
-    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => { });
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const { rerender } = render(
       <PageErrorBoundary>
         <ThrowOnMount shouldThrow={true} />
@@ -101,7 +101,7 @@ describe("PageErrorBoundary", () => {
   });
 
   it("sibling content outside the boundary is unaffected by a child throw", () => {
-    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => { });
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     render(
       <div>
         <PageErrorBoundary>
@@ -116,7 +116,7 @@ describe("PageErrorBoundary", () => {
   });
 
   it("hides a latched fallback while the boundary is inactive", () => {
-    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => { });
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const { rerender } = render(
       <PageErrorBoundary active={true}>
         <ThrowOnMount shouldThrow={true} />
