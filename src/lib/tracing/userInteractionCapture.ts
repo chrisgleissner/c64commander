@@ -12,8 +12,13 @@ import { markFirstMeaningfulInteraction } from "@/lib/startup/startupMilestones"
 const INSTALL_FLAG = "__c64uUserInteractionCaptureInstalled";
 const COMPONENT_NAME = "GlobalInteraction";
 
+type TracedEvent = Event & { __c64uTraced?: boolean };
+type TraceAwareWindow = typeof window & { [key: string]: unknown };
+
+// Use structural check rather than instanceof to avoid cross-realm and non-DOM failures
+// (e.g. JSDOM tests, Capacitor WebViews, or nodes from a different frame).
 const isElement = (value: unknown): value is Element =>
-  typeof value === "object" && value !== null && "nodeType" in (value as any) && (value as any).nodeType === 1;
+  typeof value === "object" && value !== null && "nodeType" in value && (value as { nodeType: unknown }).nodeType === 1;
 
 const getAriaLabelledByText = (element: Element) => {
   const labelledBy = element.getAttribute("aria-labelledby");
@@ -123,12 +128,12 @@ const findInteractiveTarget = (event: Event) => {
   return null;
 };
 
-const traceInteraction = async (action: string, element: Element, event: Event) => {
+const traceInteraction = async (action: string, element: Element, event: TracedEvent) => {
   // Avoid double-tracing when a component wrapper already captured the interaction.
-  if ((event as any).__c64uTraced) return;
+  if (event.__c64uTraced) return;
   if (isDiagnosticsOpenTrigger(element, event)) return;
 
-  (event as any).__c64uTraced = true;
+  event.__c64uTraced = true;
 
   const label = getMeaningfulLabel(element);
   const name = `${action} ${label}`;
@@ -149,10 +154,11 @@ const traceInteraction = async (action: string, element: Element, event: Event) 
 
 export const registerUserInteractionCapture = () => {
   if (typeof window === "undefined" || typeof document === "undefined") return;
-  if ((window as any)[INSTALL_FLAG]) return;
-  (window as any)[INSTALL_FLAG] = true;
+  const w = window as TraceAwareWindow;
+  if (w[INSTALL_FLAG]) return;
+  w[INSTALL_FLAG] = true;
 
-  const onClick = (event: Event) => {
+  const onClick = (event: TracedEvent) => {
     if (eventHasDiagnosticsOpenTrigger(event)) return;
     const element = findInteractiveTarget(event);
     if (!element) return;
@@ -160,7 +166,7 @@ export const registerUserInteractionCapture = () => {
   };
 
   // Use change (not input) to avoid tracing every keystroke.
-  const onChange = (event: Event) => {
+  const onChange = (event: TracedEvent) => {
     if (eventHasDiagnosticsOpenTrigger(event)) return;
     const element = findInteractiveTarget(event);
     if (!element) return;
@@ -168,7 +174,7 @@ export const registerUserInteractionCapture = () => {
   };
 
   // Sliders (Radix) often don't emit native change events.
-  const onPointerUp = (event: Event) => {
+  const onPointerUp = (event: TracedEvent) => {
     if (eventHasDiagnosticsOpenTrigger(event)) return;
     const element = findInteractiveTarget(event);
     if (!element) return;

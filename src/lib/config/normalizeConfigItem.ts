@@ -6,6 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { extractConfigValue } from "./configValueExtractor";
+
 export type NormalizedConfigItem = {
   value: string | number;
   options?: string[];
@@ -22,28 +24,21 @@ export const normalizeConfigItem = (config: unknown): NormalizedConfigItem => {
     return { value: config as string | number };
   }
 
-  const cfg = config as Record<string, any>;
-  const selected =
-    cfg.selected ??
-    cfg.value ??
-    cfg.current ??
-    cfg.current_value ??
-    cfg.currentValue ??
-    cfg.default ??
-    cfg.default_value ??
-    "";
+  const cfg = config as Record<string, unknown>;
+  const selected = extractConfigValue(config);
 
   const optionsCandidate = cfg.options ?? cfg.values ?? cfg.choices;
-  const presetsCandidate = cfg.details?.presets ?? cfg.presets ?? cfg.values ?? cfg.choices;
-  const options = Array.isArray(optionsCandidate) ? optionsCandidate : undefined;
-  const presets = Array.isArray(presetsCandidate) ? presetsCandidate : undefined;
+  const details = cfg.details as Record<string, unknown> | undefined;
+  const presetsCandidate = details?.presets ?? cfg.presets ?? cfg.values ?? cfg.choices;
+  const options = Array.isArray(optionsCandidate) ? (optionsCandidate as string[]) : undefined;
+  const presets = Array.isArray(presetsCandidate) ? (presetsCandidate as string[]) : undefined;
 
-  const min = cfg.details?.min ?? cfg.min ?? cfg.minimum;
-  const max = cfg.details?.max ?? cfg.max ?? cfg.maximum;
-  const format = cfg.details?.format ?? cfg.format;
+  const min = (details?.min ?? cfg.min ?? cfg.minimum) as number | undefined;
+  const max = (details?.max ?? cfg.max ?? cfg.maximum) as number | undefined;
+  const format = (details?.format ?? cfg.format) as string | undefined;
 
-  const details =
+  const detailsOut =
     min !== undefined || max !== undefined || format || presets ? { min, max, format, presets } : undefined;
 
-  return { value: selected, options, details };
+  return { value: selected, options, details: detailsOut };
 };

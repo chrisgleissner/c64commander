@@ -137,6 +137,33 @@ describe("uiErrors", () => {
     });
   });
 
+  it("includes a Retry action in the toast when retry callback is provided", () => {
+    const retry = vi.fn();
+    reportUserError({
+      operation: "HOME_SID_VOLUME",
+      title: "Update failed",
+      description: "Host unreachable",
+      retry,
+    });
+
+    expect(toast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: expect.objectContaining({ type: expect.anything() }),
+      }),
+    );
+  });
+
+  it("omits action from toast when no retry callback is provided", () => {
+    reportUserError({
+      operation: "HOME_SID_VOLUME",
+      title: "Update failed",
+      description: "Network error",
+    });
+
+    const toastCall = (toast as ReturnType<typeof vi.fn>).mock.calls[0][0] as Record<string, unknown>;
+    expect(toastCall).not.toHaveProperty("action");
+  });
+
   it("uses error log with recoverableConnectivityIssue flag for connectivity errors", () => {
     reportUserError({
       operation: "HOME_CPU_SPEED",

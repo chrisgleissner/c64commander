@@ -13,7 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { emitUiTraceMarker } from "@/lib/tracing/userTrace";
-import { useC64ConfigItem } from "@/hooks/useC64Connection";
+import { useC64ConfigItem, VISIBLE_C64_QUERY_OPTIONS } from "@/hooks/useC64Connection";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { getCheckboxMapping, inferControlKind } from "@/lib/config/controlType";
 import { cn } from "@/lib/utils";
@@ -138,7 +138,12 @@ export function ConfigItemRow({
     (import.meta.env.MODE === "test" || isConfigSurfaceActive) &&
     (!options || options.length === 0) &&
     !details?.presets;
-  const { data: itemData, isLoading: isItemLoading } = useC64ConfigItem(category, name, needsDetailFetch);
+  const { data: itemData, isLoading: isItemLoading } = useC64ConfigItem(
+    category,
+    name,
+    needsDetailFetch,
+    VISIBLE_C64_QUERY_OPTIONS,
+  );
 
   const fetchedConfig = useMemo(() => extractConfigFromResponse(itemData), [itemData]);
 
@@ -461,7 +466,12 @@ export function ConfigItemRow({
                 const nextValue = resolveSliderOption(nextIndex);
                 setInputValue(String(nextValue));
               }}
-              asyncThrottleMs={250}
+              onValueChangeAsync={(nextIndex) => {
+                if (isReadOnly) return;
+                const nextValue = resolveSliderOption(nextIndex);
+                if (String(nextValue) === lastCommittedRef.current) return;
+                onValueChange(nextValue);
+              }}
               onValueCommitAsync={(nextIndex) => {
                 if (isReadOnly) return;
                 const nextValue = resolveSliderOption(nextIndex);

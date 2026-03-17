@@ -6,12 +6,15 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { primeDiagnosticsOverlaySuppression } from "@/lib/diagnostics/diagnosticsOverlayState";
+
 export type DiagnosticsTabKey = "error-logs" | "logs" | "traces" | "actions";
 
 const DIAGNOSTICS_OPEN_KEY = "c64u_diagnostics_open_tab";
 
 export const requestDiagnosticsOpen = (tab: DiagnosticsTabKey) => {
   if (typeof window === "undefined") return;
+  primeDiagnosticsOverlaySuppression();
   try {
     sessionStorage.setItem(DIAGNOSTICS_OPEN_KEY, tab);
   } catch (error) {

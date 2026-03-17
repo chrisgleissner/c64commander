@@ -7,14 +7,16 @@
  */
 
 import { createActionContext, runWithActionTrace, runWithImplicitAction } from "@/lib/tracing/actionTrace";
-import { addErrorLog, buildErrorLogDetails } from "@/lib/logging";
+import { addErrorLog, addLog, buildErrorLogDetails } from "@/lib/logging";
 import React from "react";
 
-function getMeaningfulName(props: any, defaultName: string): string {
-  if (props["aria-label"]) return props["aria-label"];
-  if (props.title) return props.title;
-  if (props.name) return props.name;
-  if (props.id) return props.id;
+type ComponentProps = Record<string, unknown>;
+
+function getMeaningfulName(props: ComponentProps, defaultName: string): string {
+  if (typeof props["aria-label"] === "string") return props["aria-label"];
+  if (typeof props.title === "string") return props.title;
+  if (typeof props.name === "string") return props.name;
+  if (typeof props.id === "string") return props.id;
 
   if (typeof props.children === "string") {
     return props.children.slice(0, 30);
@@ -22,13 +24,13 @@ function getMeaningfulName(props: any, defaultName: string): string {
 
   // Try to find text in children array (e.g. Button wrapping span)
   if (Array.isArray(props.children)) {
-    const textChild = props.children.find((c: any) => typeof c === "string");
-    if (textChild) return textChild.slice(0, 30);
+    const textChild = props.children.find((c: unknown) => typeof c === "string");
+    if (typeof textChild === "string") return textChild.slice(0, 30);
   }
 
   // Common pattern: Button > span > text
   if (React.isValidElement(props.children)) {
-    const child = props.children as React.ReactElement<any>;
+    const child = props.children as React.ReactElement<ComponentProps>;
     if (typeof child.props?.children === "string") {
       return child.props.children.slice(0, 30);
     }
@@ -37,18 +39,21 @@ function getMeaningfulName(props: any, defaultName: string): string {
   return defaultName;
 }
 
-export const wrapUserEvent = <E extends React.SyntheticEvent<any> | Event, R>(
+type TracedEvent = { __c64uTraced?: boolean };
+type EventWithNative = { nativeEvent?: TracedEvent & object };
+
+export const wrapUserEvent = <E extends React.SyntheticEvent<Element> | Event, R>(
   handler: ((e: E) => R) | undefined,
   actionType: string,
   componentName: string,
-  props: any,
+  props: ComponentProps,
   defaultLabel: string = "Element",
 ): ((e: E) => Promise<void>) => {
   return async (e: E) => {
-    (e as any).__c64uTraced = true;
-    const nativeEvent = (e as any).nativeEvent;
+    (e as unknown as TracedEvent).__c64uTraced = true;
+    const nativeEvent = (e as unknown as EventWithNative).nativeEvent;
     if (nativeEvent && typeof nativeEvent === "object") {
-      (nativeEvent as any).__c64uTraced = true;
+      nativeEvent.__c64uTraced = true;
     }
     const label = getMeaningfulName(props, defaultLabel);
     const actionName = `${actionType} ${label}`;
@@ -67,7 +72,7 @@ export const wrapValueChange = <T, R>(
   handler: ((value: T) => R) | undefined,
   actionType: string,
   componentName: string,
-  props: any,
+  props: ComponentProps,
   defaultLabel: string = "Element",
 ): ((value: T) => Promise<void>) => {
   return async (value: T) => {
@@ -80,7 +85,7 @@ export const wrapValueChange = <T, R>(
         valueStr = String(value);
       }
     } catch (error) {
-      console.warn("Failed to stringify traced value", { error });
+      addLog("warn", "Failed to stringify traced value", { error: (error as Error).message });
       valueStr = "[complex]";
     }
     const actionName = `${actionType} ${label} [${valueStr}]`;

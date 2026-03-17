@@ -12,6 +12,7 @@ import istanbul from "vite-plugin-istanbul";
 import path from "path";
 import fs from "fs";
 import { spawnSync } from "child_process";
+import { deriveVersionLabel } from "./src/lib/versionLabel";
 
 const pkg = JSON.parse(fs.readFileSync(new URL("./package.json", import.meta.url), "utf-8"));
 
@@ -34,8 +35,6 @@ const runGit = (args: string[], label: string, options: RunGitOptions = {}) => {
   return "";
 };
 
-const EXPECTED_GIT_DESCRIBE_NO_TAGS = /(?:No names found|cannot describe anything|no tag exactly matches)/i;
-
 const resolveGitSha = () =>
   process.env.VITE_GIT_SHA ||
   process.env.GIT_SHA ||
@@ -45,6 +44,13 @@ const resolveGitSha = () =>
 const sanitizeBuildToken = (value: string) => value.replace(/[^a-zA-Z0-9._-]+/g, "-");
 
 const resolveAppVersion = () => pkg.version || "";
+
+const resolveAppVersionLabel = (gitDescribeValue: string, gitShaValue: string, fallbackVersion: string) =>
+  deriveVersionLabel({
+    gitDescribe: gitDescribeValue,
+    gitSha: gitShaValue,
+    fallbackVersion,
+  });
 
 const resolveServiceWorkerBuildId = (appVersion: string, gitShaValue: string, buildTimeValue: string) => {
   const envBuildId = process.env.VITE_SW_BUILD_ID || process.env.SW_BUILD_ID || "";
@@ -56,7 +62,14 @@ const resolveServiceWorkerBuildId = (appVersion: string, gitShaValue: string, bu
 };
 
 const gitSha = resolveGitSha();
+const gitDescribe =
+  process.env.VITE_GIT_DESCRIBE ||
+  process.env.GIT_DESCRIBE ||
+  runGit(["describe", "--tags", "--long", "--dirty", "--always"], "git describe", {
+    quiet: true,
+  });
 const appVersion = resolveAppVersion();
+const appVersionLabel = resolveAppVersionLabel(gitDescribe, gitSha, appVersion);
 const buildTime = process.env.VITE_BUILD_TIME || new Date().toISOString();
 const serviceWorkerBuildId = resolveServiceWorkerBuildId(appVersion, gitSha, buildTime);
 const enableCoverageInstrumentation = ["1", "true"].includes((process.env.VITE_COVERAGE || "").toLowerCase());
@@ -114,6 +127,7 @@ export default defineConfig(() => ({
   ],
   define: {
     __APP_VERSION__: JSON.stringify(appVersion),
+    __APP_VERSION_LABEL__: JSON.stringify(appVersionLabel),
     __GIT_SHA__: JSON.stringify(gitSha),
     __BUILD_TIME__: JSON.stringify(buildTime),
     __SW_BUILD_ID__: JSON.stringify(serviceWorkerBuildId),

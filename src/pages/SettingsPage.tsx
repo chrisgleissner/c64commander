@@ -41,7 +41,11 @@ import { DiagnosticsDialog } from "@/components/diagnostics/DiagnosticsDialog";
 import { shareAllDiagnosticsZip, shareDiagnosticsZip } from "@/lib/diagnostics/diagnosticsExport";
 import { resetDiagnosticsActivity } from "@/lib/diagnostics/diagnosticsActivity";
 import { consumeDiagnosticsOpenRequest, type DiagnosticsTabKey } from "@/lib/diagnostics/diagnosticsOverlay";
-import { setDiagnosticsOverlayActive, withDiagnosticsTraceOverride } from "@/lib/diagnostics/diagnosticsOverlayState";
+import {
+  primeDiagnosticsOverlaySuppression,
+  setDiagnosticsOverlayActive,
+  withDiagnosticsTraceOverride,
+} from "@/lib/diagnostics/diagnosticsOverlayState";
 import { useDeveloperMode } from "@/hooks/useDeveloperMode";
 import { useFeatureFlag } from "@/hooks/useFeatureFlags";
 import { useListPreviewLimit } from "@/hooks/useListPreviewLimit";
@@ -94,6 +98,7 @@ import {
   type DeviceSafetyMode,
 } from "@/lib/config/deviceSafetySettings";
 import { exportSettingsJson, importSettingsJson } from "@/lib/config/settingsTransfer";
+import { validateDeviceHost } from "@/lib/validation/connectionValidation";
 import { FolderPicker, type SafPersistedUri } from "@/lib/native/folderPicker";
 import { getPlatform } from "@/lib/native/platform";
 import { redactTreeUri } from "@/lib/native/safUtils";
@@ -138,6 +143,7 @@ export default function SettingsPage() {
 
   const [passwordInput, setPasswordInput] = useState(password);
   const [deviceHostInput, setDeviceHostInput] = useState(deviceHost);
+  const [hostnameError, setHostnameError] = useState<string | null>(null);
   const runtimeDeviceHost = getDeviceHostFromBaseUrl(runtimeBaseUrl);
   const isDemoActive = status.state === "DEMO_ACTIVE";
   const lastProbeSucceededAtMs = connectionSnapshot.lastProbeSucceededAtMs;
@@ -208,8 +214,8 @@ export default function SettingsPage() {
   }, [hvscBaseUrlInput]);
 
   const setDiagnosticsDialogOpen = useCallback((open: boolean) => {
-    setLogsDialogOpen(open);
     setDiagnosticsOverlayActive(open);
+    setLogsDialogOpen(open);
   }, []);
 
   useEffect(() => {
@@ -420,9 +426,12 @@ export default function SettingsPage() {
   };
 
   const handleSaveConnection = trace(async function handleSaveConnection() {
+    const hostError = validateDeviceHost(deviceHostInput);
+    setHostnameError(hostError);
+    if (hostError) return;
     setIsSaving(true);
     try {
-      updateConfig(deviceHostInput || C64_DEFAULTS.DEFAULT_DEVICE_HOST, passwordInput || undefined);
+      updateConfig(deviceHostInput.trim() || C64_DEFAULTS.DEFAULT_DEVICE_HOST, passwordInput || undefined);
       await discoverConnection("settings");
       toast({ title: "Connection settings saved" });
     } catch (error) {
@@ -676,10 +685,21 @@ export default function SettingsPage() {
                   <Input
                     id="deviceHost"
                     value={deviceHostInput}
-                    onChange={(e) => setDeviceHostInput(e.target.value)}
+                    onChange={(e) => {
+                      setDeviceHostInput(e.target.value);
+                      if (hostnameError) setHostnameError(validateDeviceHost(e.target.value));
+                    }}
+                    onBlur={(e) => setHostnameError(validateDeviceHost(e.target.value))}
                     placeholder={C64_DEFAULTS.DEFAULT_DEVICE_HOST}
                     className="font-sans"
+                    aria-describedby={hostnameError ? "deviceHost-error" : undefined}
+                    aria-invalid={hostnameError ? true : undefined}
                   />
+                  {hostnameError ? (
+                    <p id="deviceHost-error" className="text-xs text-destructive" role="alert">
+                      {hostnameError}
+                    </p>
+                  ) : null}
                   <p className="text-xs text-muted-foreground">Hostname or IP from the C64 menu.</p>
                   <p className="text-xs text-muted-foreground">
                     Currently using: <span className="font-sans break-all">{runtimeDeviceHost}</span>
@@ -783,7 +803,13 @@ export default function SettingsPage() {
               <div className="space-y-4">
                 <Button
                   variant="outline"
-                  onClick={() => setDiagnosticsDialogOpen(true)}
+                  onMouseDownCapture={() => primeDiagnosticsOverlaySuppression()}
+                  onPointerDownCapture={() => primeDiagnosticsOverlaySuppression()}
+                  onTouchStartCapture={() => primeDiagnosticsOverlaySuppression()}
+                  onClick={() => {
+                    primeDiagnosticsOverlaySuppression();
+                    setDiagnosticsDialogOpen(true);
+                  }}
                   id="diagnostics-open-dialog"
                   data-diagnostics-open-trigger="true"
                   data-testid="diagnostics-open-dialog"
@@ -923,34 +949,6 @@ export default function SettingsPage() {
                   />
                   <p className="text-xs text-muted-foreground">
                     Controls how many playlist or disk items are shown before opening View all. Default is 50.
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="volume-slider-preview-interval" className="text-sm">
-                    Volume slider preview interval (milliseconds)
-                  </Label>
-                  <Input
-                    id="volume-slider-preview-interval"
-                    type="number"
-                    min={100}
-                    max={500}
-                    step={10}
-                    value={volumeSliderPreviewIntervalMs}
-                    onChange={(event) => {
-                      const parsed = Number(event.target.value);
-                      if (Number.isFinite(parsed)) {
-                        setVolumeSliderPreviewIntervalMs(clampVolumeSliderPreviewIntervalMs(parsed));
-                      }
-                    }}
-                    onBlur={() => saveVolumeSliderPreviewIntervalMs(volumeSliderPreviewIntervalMs)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") saveVolumeSliderPreviewIntervalMs(volumeSliderPreviewIntervalMs);
-                    }}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Controls how often drag previews are sent while the playback volume slider is moving. Default 200
-                    ms. Range 100–500 ms.
                   </p>
                 </div>
 
@@ -1522,6 +1520,34 @@ export default function SettingsPage() {
                       )
                     }
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="volume-slider-preview-interval" className="text-sm">
+                    Slider preview interval (ms)
+                  </Label>
+                  <Input
+                    id="volume-slider-preview-interval"
+                    type="number"
+                    min={100}
+                    max={500}
+                    step={10}
+                    value={volumeSliderPreviewIntervalMs}
+                    onChange={(event) => {
+                      const parsed = Number(event.target.value);
+                      if (Number.isFinite(parsed)) {
+                        setVolumeSliderPreviewIntervalMs(clampVolumeSliderPreviewIntervalMs(parsed));
+                      }
+                    }}
+                    onBlur={() => saveVolumeSliderPreviewIntervalMs(volumeSliderPreviewIntervalMs)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") saveVolumeSliderPreviewIntervalMs(volumeSliderPreviewIntervalMs);
+                    }}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Controls how often drag previews are sent while device-backed sliders are moving, including CPU,
+                    playback volume, SID mixer, and lighting controls. Default 200 ms. Range 100–500 ms.
+                  </p>
                 </div>
 
                 <div className="space-y-2">

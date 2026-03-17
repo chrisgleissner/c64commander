@@ -22,7 +22,6 @@ import { addErrorLog, addLog } from "@/lib/logging";
 import { loadDebugLoggingEnabled } from "@/lib/config/appSettings";
 import { getPlatform } from "@/lib/native/platform";
 import { redactTreeUri } from "@/lib/native/safUtils";
-import { SidPlayerProvider } from "@/hooks/useSidPlayer";
 import { FeatureFlagsProvider } from "@/hooks/useFeatureFlags";
 import { TraceContextBridge } from "@/components/TraceContextBridge";
 import { GlobalDiagnosticsOverlay } from "@/components/diagnostics/GlobalDiagnosticsOverlay";
@@ -35,6 +34,7 @@ import { invalidateForVisibilityResume } from "@/lib/query/c64QueryInvalidation"
 import { useNavigationGuardBlocker } from "@/lib/navigation/navigationGuards";
 import { t } from "@/lib/i18n";
 import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
+import { ScreenActivityProvider } from "@/hooks/useScreenActivity";
 
 const HomePage = lazy(() => import("./pages/HomePage"));
 const ConfigBrowserPage = lazy(() => import("./pages/ConfigBrowserPage"));
@@ -92,6 +92,36 @@ const RouteLoadingFallback = () => (
   </div>
 );
 
+const HomeLoadingFallback = () => (
+  <div className="flex min-h-[calc(100vh-8rem)] items-center justify-center px-6 py-10 text-sm text-muted-foreground">
+    {t("app.loadingHome", "Loading home...")}
+  </div>
+);
+
+const ConfigLoadingFallback = () => (
+  <div className="flex min-h-[calc(100vh-8rem)] items-center justify-center px-6 py-10 text-sm text-muted-foreground">
+    {t("app.loadingConfig", "Loading config...")}
+  </div>
+);
+
+const PlayLoadingFallback = () => (
+  <div className="flex min-h-[calc(100vh-8rem)] items-center justify-center px-6 py-10 text-sm text-muted-foreground">
+    {t("app.loadingPlay", "Loading files...")}
+  </div>
+);
+
+const PersistentPlayFilesBoundary = () => {
+  const location = useLocation();
+
+  return (
+    <PageErrorBoundary active={location.pathname === "/play"}>
+      <Suspense fallback={<PlayLoadingFallback />}>
+        <PersistentPlayFilesRoute />
+      </Suspense>
+    </PageErrorBoundary>
+  );
+};
+
 const PersistentPlayFilesRoute = () => {
   const location = useLocation();
   const [hasVisitedPlay, setHasVisitedPlay] = useState(location.pathname === "/play");
@@ -107,13 +137,15 @@ const PersistentPlayFilesRoute = () => {
   const isVisible = location.pathname === "/play";
 
   return (
-    <div
-      className={isVisible ? "contents" : "hidden"}
-      data-testid="persistent-play-files-route"
-      aria-hidden={!isVisible}
-    >
-      <PlayFilesPage />
-    </div>
+    <ScreenActivityProvider active={isVisible}>
+      <div
+        className={isVisible ? "contents" : "hidden"}
+        data-testid="persistent-play-files-route"
+        aria-hidden={!isVisible}
+      >
+        <PlayFilesPage />
+      </div>
+    </ScreenActivityProvider>
   );
 };
 
@@ -133,14 +165,39 @@ const AppRoutes = () => {
       <DemoModeInterstitial />
       {coverageProbeEnabled && <TestHeartbeat />}
       <Suspense fallback={<RouteLoadingFallback />}>
-        <PersistentPlayFilesRoute />
+        <PersistentPlayFilesBoundary />
         <Routes>
           {coverageProbeEnabled ? <Route path="/__coverage__" element={<CoverageProbePage />} /> : null}
-          <Route path="/" element={<HomePage />} />
-          <Route path="/config" element={<ConfigBrowserPage />} />
+          <Route
+            path="/"
+            element={
+              <PageErrorBoundary>
+                <Suspense fallback={<HomeLoadingFallback />}>
+                  <HomePage />
+                </Suspense>
+              </PageErrorBoundary>
+            }
+          />
+          <Route
+            path="/config"
+            element={
+              <PageErrorBoundary>
+                <Suspense fallback={<ConfigLoadingFallback />}>
+                  <ConfigBrowserPage />
+                </Suspense>
+              </PageErrorBoundary>
+            }
+          />
           <Route path="/play" element={null} />
           <Route path="/disks" element={<DisksPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
+          <Route
+            path="/settings"
+            element={
+              <PageErrorBoundary>
+                <SettingsPage />
+              </PageErrorBoundary>
+            }
+          />
           <Route path="/settings/open-source-licenses" element={<OpenSourceLicensesPage />} />
           <Route path="/docs" element={<DocsPage />} />
           <Route path="*" element={<NotFound />} />
@@ -160,17 +217,9 @@ const App = () => (
           <Sonner />
           <FeatureFlagsProvider>
             <RefreshControlProvider>
-              {shouldEnableCoverageProbe() ? (
-                <SidPlayerProvider>
-                  <AppErrorBoundary>
-                    <AppRoutes />
-                  </AppErrorBoundary>
-                </SidPlayerProvider>
-              ) : (
-                <AppErrorBoundary>
-                  <AppRoutes />
-                </AppErrorBoundary>
-              )}
+              <AppErrorBoundary>
+                <AppRoutes />
+              </AppErrorBoundary>
             </RefreshControlProvider>
           </FeatureFlagsProvider>
         </TooltipProvider>
@@ -305,6 +354,57 @@ class AppErrorBoundary extends React.Component<{ children: React.ReactNode }, { 
             </p>
             <Button className="mt-4" onClick={() => window.location.reload()}>
               {t("app.error.reload", "Reload")}
+            </Button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+export class PageErrorBoundary extends React.Component<
+  { children: React.ReactNode; active?: boolean },
+  { hasError: boolean }
+> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidUpdate(prevProps: { children: React.ReactNode; active?: boolean }) {
+    if (!prevProps.active && this.props.active && this.state.hasError) {
+      this.setState({ hasError: false });
+    }
+  }
+
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    addErrorLog("Page render error", {
+      message: error.message,
+      stack: error.stack,
+      componentStack: info.componentStack,
+    });
+  }
+
+  render() {
+    if (this.state.hasError) {
+      if (this.props.active === false) {
+        return null;
+      }
+
+      return (
+        <div
+          className="flex min-h-[calc(100vh-8rem)] items-center justify-center px-6 py-10"
+          data-testid="page-error-boundary-fallback"
+        >
+          <div className="max-w-sm rounded-xl border border-border bg-card p-5 text-center shadow">
+            <p className="text-sm font-semibold text-foreground">{t("app.error.title", "Something went wrong")}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {t("app.error.description", "The app hit an unexpected error. Please reopen the page or try again.")}
+            </p>
+            <Button size="sm" className="mt-3" onClick={() => this.setState({ hasError: false })}>
+              {t("app.error.retry", "Try again")}
             </Button>
           </div>
         </div>

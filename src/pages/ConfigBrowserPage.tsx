@@ -10,7 +10,13 @@ import { useState, useMemo, useEffect, useReducer, useRef, useCallback } from "r
 import { wrapUserEvent } from "@/lib/tracing/userTrace";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, ChevronDown, Loader2, RefreshCw, FolderOpen } from "lucide-react";
-import { useC64Categories, useC64Category, useC64SetConfig, useC64Connection } from "@/hooks/useC64Connection";
+import {
+  useC64Categories,
+  useC64Category,
+  useC64SetConfig,
+  useC64Connection,
+  VISIBLE_C64_QUERY_OPTIONS,
+} from "@/hooks/useC64Connection";
 import { ConfigItemRow } from "@/components/ConfigItemRow";
 import { useC64UpdateConfigBatch } from "@/hooks/useC64Connection";
 import { Input } from "@/components/ui/input";
@@ -23,7 +29,7 @@ import { addErrorLog } from "@/lib/logging";
 import { resolveAudioMixerResetValue } from "@/lib/config/audioMixer";
 import { useRefreshControl } from "@/hooks/useRefreshControl";
 import { isAudioMixerValueEqual } from "@/lib/config/audioMixer";
-import { getC64API } from "@/lib/c64api";
+import { getC64API, type ConfigCategory } from "@/lib/c64api";
 import { cn } from "@/lib/utils";
 import { buildSoloRoutingUpdates, isSidVolumeName, soloReducer } from "@/lib/config/audioMixerSolo";
 import { normalizeConfigItem, type NormalizedConfigItem } from "@/lib/config/normalizeConfigItem";
@@ -39,8 +45,6 @@ type ConfigListItem = {
 };
 
 const DHCP_STATIC_FIELDS = new Set(["Static IP", "Static Netmask", "Static Gateway", "Static DNS"]);
-const visibleQueryOptions = { intent: "user" as const, refetchOnMount: "always" as const };
-
 function CategorySection({
   categoryName,
   onOpenChange,
@@ -52,7 +56,7 @@ function CategorySection({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
-  const { data: categoryData, isLoading, refetch } = useC64Category(categoryName, isOpen, visibleQueryOptions);
+  const { data: categoryData, isLoading, refetch } = useC64Category(categoryName, isOpen, VISIBLE_C64_QUERY_OPTIONS);
   const setConfig = useC64SetConfig();
   const updateConfigBatch = useC64UpdateConfigBatch();
   const isAudioMixer = categoryName === "Audio Mixer";
@@ -79,10 +83,10 @@ function CategorySection({
   const items = useMemo<ConfigListItem[]>(() => {
     if (!categoryData) return [];
 
-    const catData = categoryData[categoryName] as any;
-    if (!catData || typeof catData !== "object") return [];
+    const catData = categoryData[categoryName] as ConfigCategory | undefined;
+    if (!catData || typeof catData !== "object" || Array.isArray(catData)) return [];
 
-    const itemsData = (catData as any).items ?? catData;
+    const itemsData = (catData as ConfigCategory & { items?: ConfigCategory }).items ?? catData;
 
     return Object.entries(itemsData)
       .filter(([key]) => key !== "errors")
@@ -182,6 +186,8 @@ function CategorySection({
         });
       }
     },
+    // audioConfiguredRef is intentionally omitted from deps: refs have stable identity
+    // and audioConfiguredRef.current is read at call time, not at dependency capture time.
     [isAudioMixer, categoryName, reportUserError],
   );
 
@@ -584,7 +590,7 @@ function CategorySection({
 
 export default function ConfigBrowserPage() {
   const { status, runtimeBaseUrl } = useC64Connection();
-  const { data: categoriesData, isLoading } = useC64Categories();
+  const { data: categoriesData, isLoading } = useC64Categories(VISIBLE_C64_QUERY_OPTIONS);
   const [searchQuery, setSearchQuery] = useState("");
   const { setConfigExpanded } = useRefreshControl();
   const markChanged = useCallback(() => {

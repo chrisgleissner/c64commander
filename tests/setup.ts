@@ -111,7 +111,7 @@ ensureLocalStorage();
 
 if (typeof (globalThis as { __APP_VERSION__?: string }).__APP_VERSION__ === "undefined") {
   Object.defineProperty(globalThis, "__APP_VERSION__", {
-    value: "0.1.0",
+    value: "0.6.4-rc2",
     configurable: true,
     writable: true,
   });
@@ -119,7 +119,7 @@ if (typeof (globalThis as { __APP_VERSION__?: string }).__APP_VERSION__ === "und
 
 if (typeof (globalThis as { __SW_BUILD_ID__?: string }).__SW_BUILD_ID__ === "undefined") {
   Object.defineProperty(globalThis, "__SW_BUILD_ID__", {
-    value: "0.1.0-test-build",
+    value: "0.6.4-rc2-test-build",
     configurable: true,
     writable: true,
   });

@@ -6,7 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import React from "react";
 import { toast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 import { isHandledUiError } from "@/lib/fileValidation";
 import { addErrorLog, addLog } from "@/lib/logging";
 
@@ -16,6 +18,7 @@ export type UiErrorReport = {
   description: string;
   error?: unknown;
   context?: Record<string, unknown>;
+  retry?: () => void;
 };
 
 const buildErrorDetails = (error?: unknown) => {
@@ -51,7 +54,7 @@ const isRecoverableConnectivityError = (description: string, error?: unknown) =>
   return isTransientConnectivityFailure(message);
 };
 
-export const reportUserError = ({ operation, title, description, error, context }: UiErrorReport) => {
+export const reportUserError = ({ operation, title, description, error, context, retry }: UiErrorReport) => {
   if (isHandledUiError(error)) {
     return;
   }
@@ -76,5 +79,10 @@ export const reportUserError = ({ operation, title, description, error, context 
     title,
     description,
     variant: "destructive",
+    ...(retry
+      ? {
+          action: React.createElement(ToastAction, { altText: "Retry", onClick: retry }, "Retry"),
+        }
+      : {}),
   });
 };

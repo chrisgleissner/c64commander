@@ -111,6 +111,9 @@ import {
 
 const visibleQueryOptions = { intent: "user" as const, refetchOnMount: "always" as const };
 
+/** Yields control back to the renderer for one event loop tick. */
+const yieldToRenderer = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
 export const HomeDiskManager = () => {
   const { profile } = useDisplayProfile();
   const { status } = useC64Connection();
@@ -740,7 +743,7 @@ export const HomeDiskManager = () => {
         const abortController = new AbortController();
         addItemsAbortRef.current = abortController;
         const abortSignal = abortController.signal;
-        await new Promise((resolve) => setTimeout(resolve, 0));
+        await yieldToRenderer();
         let processed = 0;
         let lastUpdate = 0;
 
@@ -771,10 +774,10 @@ export const HomeDiskManager = () => {
             try {
               listingCache.set(parent, await source.listEntries(parent));
             } catch (error) {
-              console.warn("Failed to list source entries for selection", {
+              addLog("warn", "Failed to list source entries for selection", {
                 path: parent,
                 sourceId: source.id,
-                error,
+                error: (error as Error).message,
               });
               listingCache.set(parent, []);
             }
@@ -1092,7 +1095,7 @@ export const HomeDiskManager = () => {
       setIsAddingItems(false);
     }
     if (success && browserOpen) {
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await yieldToRenderer();
       setBrowserOpen(false);
     }
   });
@@ -1106,7 +1109,7 @@ export const HomeDiskManager = () => {
         { type: "dir", name: location.name, path: location.rootPath },
       ]);
       if (success && browserOpen) {
-        await new Promise((resolve) => setTimeout(resolve, 0));
+        await yieldToRenderer();
         setBrowserOpen(false);
       }
       return source.id;

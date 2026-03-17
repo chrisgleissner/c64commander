@@ -1,0 +1,28 @@
+{
+  "mcpServers": {
+    "mobile-mcp": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@mobilenext/mobile-mcp@latest"],
+      "env": {}
+    },
+    "droidmind": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["--from", "git+https://github.com/hyperb1iss/droidmind", "droidmind", "--transport", "stdio"],
+      "env": {}
+    },
+    "c64bridge": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "c64bridge@latest"],
+      "env": {}
+    },
+    "c64scope": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "tsx", "${PWD}/c64scope/src/index.ts"],
+      "env": {}
+    }
+  }
+}

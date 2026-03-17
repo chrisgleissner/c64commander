@@ -10,6 +10,7 @@ import * as React from "react";
 import * as SliderPrimitive from "@radix-ui/react-slider";
 
 import { cn } from "@/lib/utils";
+import { APP_SETTINGS_KEYS, loadVolumeSliderPreviewIntervalMs } from "@/lib/config/appSettings";
 import { emitUiTraceMarker, wrapValueChange } from "@/lib/tracing/userTrace";
 import {
   clampSliderValue,
@@ -100,6 +101,9 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
     const lastValueRef = React.useRef<number | null>(null);
     const lastHapticAtRef = React.useRef<number | null>(null);
     const asyncQueueRef = React.useRef<SliderAsyncQueue | null>(null);
+    const [defaultAsyncThrottleMs, setDefaultAsyncThrottleMs] = React.useState(() =>
+      loadVolumeSliderPreviewIntervalMs(),
+    );
 
     const normalizedMidpoint = React.useMemo(() => normalizeSliderMidpoint(midpoint, min, max), [max, midpoint, min]);
     const normalizedValue = React.useMemo(
@@ -187,6 +191,19 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
     }, [clearPopupCloseTimer]);
 
     React.useEffect(() => {
+      const handler = (event: Event) => {
+        const detail = (event as CustomEvent).detail as { key?: string } | undefined;
+        if (detail?.key !== APP_SETTINGS_KEYS.VOLUME_SLIDER_PREVIEW_INTERVAL_MS_KEY) return;
+        setDefaultAsyncThrottleMs(loadVolumeSliderPreviewIntervalMs());
+      };
+
+      window.addEventListener("c64u-app-settings-updated", handler as EventListener);
+      return () => window.removeEventListener("c64u-app-settings-updated", handler as EventListener);
+    }, []);
+
+    const resolvedAsyncThrottleMs = asyncThrottleMs ?? defaultAsyncThrottleMs;
+
+    React.useEffect(() => {
       if (!onValueChangeAsync && !onValueCommitAsync) {
         asyncQueueRef.current?.cancel();
         asyncQueueRef.current = null;
@@ -195,13 +212,13 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
       const queue = createSliderAsyncQueue({
         onChange: onValueChangeAsync,
         onCommit: onValueCommitAsync,
-        throttleMs: asyncThrottleMs,
+        throttleMs: resolvedAsyncThrottleMs,
       });
       asyncQueueRef.current = queue;
       return () => {
         queue.cancel();
       };
-    }, [asyncThrottleMs, onValueChangeAsync, onValueCommitAsync]);
+    }, [onValueChangeAsync, onValueCommitAsync, resolvedAsyncThrottleMs]);
 
     const resolveValue = React.useCallback(
       (rawValue: number) => {

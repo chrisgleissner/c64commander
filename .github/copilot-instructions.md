@@ -186,7 +186,7 @@ If screenshots were **not** updated for a UI-related task, explicitly state why 
 - **Hooks**: `src/hooks/`
 - **Song sources**: `src/lib/sources/`
 - **HVSC module**: `src/lib/hvsc/`, `android/app/src/main/java/com/c64/commander/hvsc/`
-- **SID player**: `src/pages/MusicPlayerPage.tsx`, `src/hooks/useSidPlayer.tsx`, `src/lib/sid/`
+- **SID player utilities**: `src/lib/sid/`
 
 ## Project overview
 

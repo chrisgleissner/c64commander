@@ -223,7 +223,10 @@ export function SidCard({
       <div className={cn("pt-1", profile === "compact" ? "grid grid-cols-1 gap-2" : "grid grid-cols-2 gap-4")}>
         <div className="flex items-center gap-2">
           <span
-            className={cn("w-6 font-medium text-muted-foreground", profile === "compact" ? "text-xs" : "text-[10px]")}
+            className={cn(
+              "font-medium text-muted-foreground shrink-0 whitespace-nowrap",
+              profile === "compact" ? "text-xs w-8" : "text-[10px] w-6",
+            )}
           >
             Vol
           </span>
@@ -249,7 +252,10 @@ export function SidCard({
         </div>
         <div className="flex items-center gap-2">
           <span
-            className={cn("w-6 font-medium text-muted-foreground", profile === "compact" ? "text-xs" : "text-[10px]")}
+            className={cn(
+              "font-medium text-muted-foreground shrink-0 whitespace-nowrap",
+              profile === "compact" ? "text-xs w-8" : "text-[10px] w-6",
+            )}
           >
             Pan
           </span>

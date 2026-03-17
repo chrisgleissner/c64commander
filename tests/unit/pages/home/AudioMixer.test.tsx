@@ -82,6 +82,7 @@ vi.mock("@/pages/home/hooks/ConfigActionsContext", async () => {
       configWritePending: {},
       updateConfigValue: updateConfigValueSpy,
       resolveConfigValue: resolveConfigValueSpy,
+      setConfigOverride: vi.fn(),
     }),
     ConfigActionsProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   };

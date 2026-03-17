@@ -6,6 +6,7 @@ let mockProfile: "compact" | "medium" | "expanded" = "medium";
 
 vi.mock("@/hooks/useC64Connection", () => ({
   useC64ConfigItem: () => ({ data: undefined, isLoading: false }),
+  VISIBLE_C64_QUERY_OPTIONS: { intent: "user", refetchOnMount: "always" },
 }));
 
 vi.mock("@/hooks/useDisplayProfile", () => ({

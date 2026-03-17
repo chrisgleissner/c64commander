@@ -6,9 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { RotateCcw, Save, RefreshCw, Trash2, Upload, Download, FolderOpen } from "lucide-react";
+import { RotateCcw, Save, RefreshCw, Trash2, Upload, Download, FolderOpen, AlertCircle } from "lucide-react";
 import { useC64ConfigItems, useC64Connection, VISIBLE_C64_QUERY_OPTIONS } from "@/hooks/useC64Connection";
 import { useActionTrace } from "@/hooks/useActionTrace";
 import { AppBar } from "@/components/AppBar";
@@ -128,6 +128,7 @@ function HomePageContent() {
   const {
     appConfigs,
     hasChanges,
+    fetchError: configFetchError,
     isApplying,
     isSaving,
     revertToInitial,
@@ -258,8 +259,13 @@ function HomePageContent() {
     resolveConfigValue(u64Category, "U64 Specific Settings", "UserPort Power Enable", unavailableLabel),
   );
 
-  const handleCpuSpeedChange = trace(async function handleCpuSpeedChange(nextValue: string) {
-    await updateConfigValue("U64 Specific Settings", "CPU Speed", nextValue, "HOME_CPU_SPEED", "CPU speed updated");
+  const handleCpuSpeedChange = trace(async function handleCpuSpeedChange(
+    nextValue: string,
+    options?: { suppressToast?: boolean },
+  ) {
+    await updateConfigValue("U64 Specific Settings", "CPU Speed", nextValue, "HOME_CPU_SPEED", "CPU speed updated", {
+      suppressToast: options?.suppressToast,
+    });
 
     if (turboControlOptions.length === 0) return;
     const desiredTurbo = resolveTurboControlValue(nextValue, turboControlOptions);
@@ -273,6 +279,20 @@ function HomePageContent() {
       { suppressToast: true },
     );
   });
+
+  const handleCpuSpeedPreviewChange = useCallback(
+    (nextValue: string) => {
+      void handleCpuSpeedChange(nextValue, { suppressToast: true });
+    },
+    [handleCpuSpeedChange],
+  );
+
+  const handleCpuSpeedCommitChange = useCallback(
+    (nextValue: string) => {
+      void handleCpuSpeedChange(nextValue);
+    },
+    [handleCpuSpeedChange],
+  );
 
   const handleSaveToApp = trace(async function handleSaveToApp(name: string) {
     try {
@@ -496,7 +516,7 @@ function HomePageContent() {
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-muted-foreground">CPU Speed</span>
                       <span className="text-xs font-semibold text-foreground" data-testid="home-cpu-speed-value">
-                        {cpuSpeedValue}
+                        {resolveCpuSpeedOption(cpuSpeedDisplayIndex)}
                       </span>
                     </div>
                     <Slider
@@ -508,11 +528,14 @@ function HomePageContent() {
                       onValueChange={(values) => {
                         setCpuSpeedDraftIndex(values[0] ?? 0);
                       }}
-                      onValueCommit={(values) => {
-                        const nextIndex = values[0] ?? 0;
-                        const nextValue = resolveCpuSpeedOption(nextIndex);
+                      onValueCommit={() => {
                         setCpuSpeedDraftIndex(null);
-                        void handleCpuSpeedChange(String(nextValue));
+                      }}
+                      onValueChangeAsync={(nextIndex) => {
+                        handleCpuSpeedPreviewChange(String(resolveCpuSpeedOption(nextIndex)));
+                      }}
+                      onValueCommitAsync={(nextIndex) => {
+                        handleCpuSpeedCommitChange(String(resolveCpuSpeedOption(nextIndex)));
                       }}
                       valueFormatter={(index) => resolveCpuSpeedOption(index)}
                       data-testid="home-cpu-speed-slider"
@@ -904,6 +927,24 @@ function HomePageContent() {
               />
             </ProfileActionGrid>
           </motion.div>
+
+          {/* Config Fetch Error */}
+          {configFetchError && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex items-start gap-2 rounded-xl border border-destructive/20 bg-destructive/10 p-4"
+              data-testid="config-fetch-error"
+            >
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+              <div>
+                <p className="text-sm font-medium text-destructive">Config snapshot unavailable</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Could not load the initial configuration. Revert and save may be incomplete.
+                </p>
+              </div>
+            </motion.div>
+          )}
 
           {/* Offline Message */}
           {!isActive && !status.isConnecting && (

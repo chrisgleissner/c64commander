@@ -68,7 +68,12 @@ export function StreamStatus({ isConnected }: StreamStatusProps) {
                   data-testid={`home-stream-edit-toggle-${entry.key}`}
                   aria-label={`Edit ${entry.label} stream target`}
                 >
-                  <span className="font-semibold text-foreground w-12">{entry.label.toUpperCase()}</span>
+                  <span className="font-semibold text-foreground w-12 shrink-0 whitespace-nowrap">
+                    {profile === "compact"
+                      ? (({ vic: "VIC", audio: "AUD", debug: "DBG" } as Record<string, string>)[entry.key] ??
+                        entry.label.slice(0, 3).toUpperCase())
+                      : entry.label.toUpperCase()}
+                  </span>
                   <span
                     className="font-semibold text-foreground truncate"
                     data-testid={`home-stream-endpoint-display-${entry.key}`}

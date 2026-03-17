@@ -601,6 +601,10 @@ test.describe("Home header and diagnostics overlay", () => {
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await page.addInitScript(() => {
+      localStorage.setItem("c64u_startup_discovery_window_ms", "300");
+      localStorage.setItem("c64u_device_safety_info_cache_ms", "10000");
+      localStorage.setItem("c64u_device_safety_configs_cooldown_ms", "10000");
+      localStorage.setItem("c64u_device_safety_discovery_probe_interval_ms", "2000");
       (window as Window & { __c64uDiagnosticsSharePayloads?: unknown[] }).__c64uDiagnosticsSharePayloads = [];
       (
         window as Window & {

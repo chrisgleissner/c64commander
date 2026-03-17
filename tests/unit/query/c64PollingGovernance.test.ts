@@ -4,6 +4,8 @@ import {
   getInfoRefreshMinIntervalMs,
   getNextBackgroundFailureCount,
   shouldRunRateLimited,
+  INFO_REFRESH_MIN_CEILING_MS,
+  DRIVES_POLL_INTERVAL_MS,
 } from "@/lib/query/c64PollingGovernance";
 
 vi.mock("@/lib/config/deviceSafetySettings", () => ({
@@ -59,6 +61,18 @@ describe("c64PollingGovernance", () => {
         lastProbeFailedAtMs: 12_000,
       }),
     ).toBe(6);
+  });
+
+  it("INFO_REFRESH_MIN_CEILING_MS is 30 seconds — the upper bound for info polling", () => {
+    expect(INFO_REFRESH_MIN_CEILING_MS).toBe(30_000);
+  });
+
+  it("DRIVES_POLL_INTERVAL_MS is 30 seconds — the background polling interval for drives", () => {
+    expect(DRIVES_POLL_INTERVAL_MS).toBe(30_000);
+  });
+
+  it("getInfoRefreshMinIntervalMs never exceeds INFO_REFRESH_MIN_CEILING_MS", () => {
+    expect(getInfoRefreshMinIntervalMs()).toBeLessThanOrEqual(INFO_REFRESH_MIN_CEILING_MS);
   });
 
   it("applies exponential backoff with a hard delay ceiling", () => {

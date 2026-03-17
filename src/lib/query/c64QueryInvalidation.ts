@@ -58,6 +58,12 @@ const invalidateByPrefix = (queryClient: QueryClient, prefixes: ReadonlyArray<C6
   });
 };
 
+const refetchActiveByPrefix = (queryClient: QueryClient, prefixes: ReadonlyArray<C64QueryPrefix>) => {
+  uniquePrefixes(prefixes).forEach((prefix) => {
+    queryClient.refetchQueries({ queryKey: [prefix], type: "active" });
+  });
+};
+
 export const getRouteInvalidationPrefixes = (pathname: string): ReadonlyArray<C64QueryPrefix> => {
   const normalizedPath = pathname.trim() || "/";
   const matchedEntry = routePrefixMap.find(({ routePrefix }) =>
@@ -71,7 +77,9 @@ export const invalidateForRouteChange = (queryClient: QueryClient, pathname: str
 };
 
 export const invalidateForVisibilityResume = (queryClient: QueryClient, pathname: string) => {
-  invalidateByPrefix(queryClient, getRouteInvalidationPrefixes(pathname));
+  const prefixes = getRouteInvalidationPrefixes(pathname);
+  invalidateByPrefix(queryClient, prefixes);
+  refetchActiveByPrefix(queryClient, prefixes);
 };
 
 export const invalidateForConnectionSettingsChange = (queryClient: QueryClient) => {

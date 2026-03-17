@@ -1,6 +1,8 @@
 # iOS equivalent of Android edge-config-persistence.
-# Navigates to Settings, verifies the HVSC flag is enabled by default on
-# native builds, restarts the app, and confirms the flag persisted.
+# Navigates to Settings, verifies the HVSC feature flag is enabled by default
+# on native builds, restarts the app, and confirms the flag persisted.
+# Uses text selector for the checkbox label because id: selectors do not
+# reliably resolve for WebView elements in iOS WKWebView accessibility tree.
 
 appId: uk.gleissner.c64commander
 env:
@@ -13,13 +15,16 @@ tags:
 ---
 - runFlow: subflows/ios-open-settings-tab.yaml
 
-# Scroll until the HVSC checkbox is in view.
+# Scroll until the HVSC checkbox label is in view.
 - scrollUntilVisible:
     element:
-      text: "HVSC"
+      text: "Enable HVSC downloads"
     direction: DOWN
     speed: 80
     timeout: ${LONG_TIMEOUT}
+- assertVisible:
+    text: "Enable HVSC downloads"
+    checked: true
 - takeScreenshot: ios-hvsc-setting-visible
 
 # Restart and confirm it persisted.
@@ -28,8 +33,11 @@ tags:
 - runFlow: subflows/ios-open-settings-tab.yaml
 - scrollUntilVisible:
     element:
-      text: "HVSC"
+      text: "Enable HVSC downloads"
     direction: DOWN
     speed: 80
     timeout: ${LONG_TIMEOUT}
+- assertVisible:
+    text: "Enable HVSC downloads"
+    checked: true
 - takeScreenshot: ios-hvsc-setting-persisted

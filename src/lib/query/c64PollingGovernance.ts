@@ -6,7 +6,8 @@ type ProbeSnapshot = {
 };
 
 const INFO_REFRESH_MIN_FLOOR_MS = 1_500;
-const INFO_REFRESH_MIN_CEILING_MS = 30_000;
+export const INFO_REFRESH_MIN_CEILING_MS = 30_000;
+export const DRIVES_POLL_INTERVAL_MS = 30_000;
 const BACKGROUND_REDISCOVERY_MAX_DELAY_MS = 60_000;
 
 export const getInfoRefreshMinIntervalMs = () => {

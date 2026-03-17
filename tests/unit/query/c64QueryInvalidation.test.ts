@@ -5,6 +5,7 @@ import {
   invalidateForConnectionSettingsChange,
   invalidateForConnectionStateTransition,
   invalidateForRouteChange,
+  invalidateForVisibilityResume,
 } from "@/lib/query/c64QueryInvalidation";
 
 describe("c64QueryInvalidation", () => {
@@ -29,6 +30,17 @@ describe("c64QueryInvalidation", () => {
     const prefixes = getRouteInvalidationPrefixes("");
     expect(prefixes).toContain("c64-info");
     expect(prefixes).toContain("c64-drives");
+  });
+
+  it("maps home route to info, drives, and config-items prefixes", () => {
+    expect(getRouteInvalidationPrefixes("/")).toEqual(["c64-info", "c64-drives", "c64-config-items"]);
+  });
+
+  it("maps config route to all config prefixes including c64-all-config and c64-config-item", () => {
+    expect(getRouteInvalidationPrefixes("/config")).toContain("c64-all-config");
+    expect(getRouteInvalidationPrefixes("/config")).toContain("c64-config-item");
+    expect(getRouteInvalidationPrefixes("/config")).toContain("c64-config-items");
+    expect(getRouteInvalidationPrefixes("/config")).toContain("c64-info");
   });
 
   it("invalidates route prefixes using query keys instead of broad predicates", () => {
@@ -66,6 +78,24 @@ describe("c64QueryInvalidation", () => {
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: ["c64-all-config"],
     });
+  });
+
+  it("visibility resume invalidates and immediately refetches active queries for the route", () => {
+    const queryClient = new QueryClient();
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+    const refetchSpy = vi.spyOn(queryClient, "refetchQueries");
+
+    invalidateForVisibilityResume(queryClient, "/disks");
+
+    // invalidate should be called for all /disks prefixes
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["c64-info"] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["c64-drives"] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["c64-config-items"] });
+
+    // refetch should also be called with type:'active' for the same prefixes
+    expect(refetchSpy).toHaveBeenCalledWith({ queryKey: ["c64-info"], type: "active" });
+    expect(refetchSpy).toHaveBeenCalledWith({ queryKey: ["c64-drives"], type: "active" });
+    expect(refetchSpy).toHaveBeenCalledWith({ queryKey: ["c64-config-items"], type: "active" });
   });
 
   it("invalidates on meaningful connection state transitions only", () => {
