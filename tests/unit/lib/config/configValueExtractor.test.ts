@@ -42,6 +42,14 @@ describe("extractConfigValue", () => {
     expect(extractConfigValue({ value: "NTSC" })).toBe("NTSC");
   });
 
+  it("returns empty string when selected contains a boolean", () => {
+    expect(extractConfigValue({ selected: true })).toBe("");
+  });
+
+  it("returns empty string when value contains an array", () => {
+    expect(extractConfigValue({ value: ["NTSC"] })).toBe("");
+  });
+
   it("extracts current field", () => {
     expect(extractConfigValue({ current: "auto" })).toBe("auto");
   });

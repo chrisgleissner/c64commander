@@ -364,8 +364,11 @@ export const recordFtpOperation = (
 
 export const recordTraceError = (action: TraceActionContext, error: Error, classification?: FailureClassification) => {
   if (errorOnce.has(error)) return;
-  errorOnce.add(error);
   const resolved = classification ?? classifyError(error);
+  if (shouldSuppressDiagnosticsSideEffects() && resolved.failureClass === "user-cancellation") {
+    return;
+  }
+  errorOnce.add(error);
   appendEvent("error", action.origin, action.correlationId, {
     message: redactErrorMessage(error.message),
     name: error.name,

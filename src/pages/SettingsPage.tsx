@@ -41,7 +41,11 @@ import { DiagnosticsDialog } from "@/components/diagnostics/DiagnosticsDialog";
 import { shareAllDiagnosticsZip, shareDiagnosticsZip } from "@/lib/diagnostics/diagnosticsExport";
 import { resetDiagnosticsActivity } from "@/lib/diagnostics/diagnosticsActivity";
 import { consumeDiagnosticsOpenRequest, type DiagnosticsTabKey } from "@/lib/diagnostics/diagnosticsOverlay";
-import { setDiagnosticsOverlayActive, withDiagnosticsTraceOverride } from "@/lib/diagnostics/diagnosticsOverlayState";
+import {
+  primeDiagnosticsOverlaySuppression,
+  setDiagnosticsOverlayActive,
+  withDiagnosticsTraceOverride,
+} from "@/lib/diagnostics/diagnosticsOverlayState";
 import { useDeveloperMode } from "@/hooks/useDeveloperMode";
 import { useFeatureFlag } from "@/hooks/useFeatureFlags";
 import { useListPreviewLimit } from "@/hooks/useListPreviewLimit";
@@ -210,8 +214,8 @@ export default function SettingsPage() {
   }, [hvscBaseUrlInput]);
 
   const setDiagnosticsDialogOpen = useCallback((open: boolean) => {
-    setLogsDialogOpen(open);
     setDiagnosticsOverlayActive(open);
+    setLogsDialogOpen(open);
   }, []);
 
   useEffect(() => {
@@ -462,10 +466,10 @@ export default function SettingsPage() {
     icon: React.ElementType;
     label: string;
   }[] = [
-    { value: "system", icon: Monitor, label: "Auto" },
-    { value: "light", icon: Sun, label: "Light" },
-    { value: "dark", icon: Moon, label: "Dark" },
-  ];
+      { value: "system", icon: Monitor, label: "Auto" },
+      { value: "light", icon: Sun, label: "Light" },
+      { value: "dark", icon: Moon, label: "Dark" },
+    ];
 
   const displayProfileOptions = DISPLAY_PROFILE_OVERRIDE_SEQUENCE.map((value) => ({
     value,
@@ -799,7 +803,13 @@ export default function SettingsPage() {
               <div className="space-y-4">
                 <Button
                   variant="outline"
-                  onClick={() => setDiagnosticsDialogOpen(true)}
+                  onMouseDownCapture={() => primeDiagnosticsOverlaySuppression()}
+                  onPointerDownCapture={() => primeDiagnosticsOverlaySuppression()}
+                  onTouchStartCapture={() => primeDiagnosticsOverlaySuppression()}
+                  onClick={() => {
+                    primeDiagnosticsOverlaySuppression();
+                    setDiagnosticsDialogOpen(true);
+                  }}
                   id="diagnostics-open-dialog"
                   data-diagnostics-open-trigger="true"
                   data-testid="diagnostics-open-dialog"

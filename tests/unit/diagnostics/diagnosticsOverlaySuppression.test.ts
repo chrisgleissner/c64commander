@@ -10,6 +10,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createActionContext, runWithActionTrace, runWithImplicitAction } from "@/lib/tracing/actionTrace";
 import { clearTraceEvents, getTraceEvents, resetTraceSession } from "@/lib/tracing/traceSession";
 import {
+  isDiagnosticsOverlaySuppressionArmed,
+  primeDiagnosticsOverlaySuppression,
   resetDiagnosticsOverlayState,
   setDiagnosticsOverlayActive,
   withDiagnosticsTraceOverride,
@@ -23,7 +25,7 @@ describe("diagnostics overlay suppression", () => {
     vi.stubGlobal("window", {
       dispatchEvent: vi.fn(),
       setTimeout,
-      CustomEvent: class {},
+      CustomEvent: class { },
     });
   });
 
@@ -71,6 +73,15 @@ describe("diagnostics overlay suppression", () => {
     expect(getTraceEvents()).toHaveLength(0);
   });
 
+  it("suppresses implicit action traces while overlay opening is primed", async () => {
+    primeDiagnosticsOverlaySuppression();
+    expect(isDiagnosticsOverlaySuppressionArmed()).toBe(true);
+
+    await runWithImplicitAction("rest.get", async () => undefined);
+
+    expect(getTraceEvents()).toHaveLength(0);
+  });
+
   it("records implicit action errors while overlay is active", async () => {
     setDiagnosticsOverlayActive(true);
 
@@ -84,5 +95,19 @@ describe("diagnostics overlay suppression", () => {
     expect(events.some((event) => event.type === "action-start")).toBe(true);
     expect(events.some((event) => event.type === "action-end")).toBe(true);
     expect(events.some((event) => event.type === "error")).toBe(true);
+  });
+
+  it("suppresses implicit action cancellation while overlay is active", async () => {
+    setDiagnosticsOverlayActive(true);
+
+    await expect(
+      runWithImplicitAction("rest.get", async () => {
+        const error = new Error("The operation was aborted");
+        error.name = "AbortError";
+        throw error;
+      }),
+    ).rejects.toMatchObject({ name: "AbortError" });
+
+    expect(getTraceEvents()).toHaveLength(0);
   });
 });

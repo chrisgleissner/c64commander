@@ -45,5 +45,9 @@ export const extractConfigValue = (raw: unknown): string | number => {
     cfg.default_value ??
     "";
 
-  return value as string | number;
+  if (typeof value === "string" || typeof value === "number") {
+    return value;
+  }
+
+  return "";
 };

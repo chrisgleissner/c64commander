@@ -239,18 +239,18 @@ export interface VersionInfo {
 
 export interface ConfigCategory {
   [itemName: string]:
-    | {
-        selected?: string | number;
-        options?: string[];
-        details?: {
-          min?: number;
-          max?: number;
-          format?: string;
-          presets?: string[];
-        };
-      }
-    | string
-    | number;
+  | {
+    selected?: string | number;
+    options?: string[];
+    details?: {
+      min?: number;
+      max?: number;
+      format?: string;
+      presets?: string[];
+    };
+  }
+  | string
+  | number;
 }
 
 export interface ConfigResponse {
@@ -671,8 +671,8 @@ export class C64API {
                 let timeoutPromiseId: ReturnType<typeof setTimeout> | null = null;
                 const timeoutPromise = timeoutMs
                   ? new Promise<never>((_, reject) => {
-                      timeoutPromiseId = setTimeout(() => reject(new Error("Request timed out")), timeoutMs);
-                    })
+                    timeoutPromiseId = setTimeout(() => reject(new Error("Request timed out")), timeoutMs);
+                  })
                   : null;
                 let response: Response;
                 try {
@@ -729,9 +729,11 @@ export class C64API {
                 lastError = error;
                 const fuzzBlocked = (error as { __fuzzBlocked?: boolean }).__fuzzBlocked;
                 const rawMessage = (error as Error).message || "Request failed";
+                const callerAborted = requestSignal?.aborted === true;
                 const isAbort = (error as { name?: string }).name === "AbortError" || /timed out/i.test(rawMessage);
                 const isNetworkFailure = isNetworkFailureMessage(rawMessage);
-                const normalizedError = isAbort || isNetworkFailure ? resolveHostErrorMessage(rawMessage) : rawMessage;
+                const normalizedError =
+                  !callerAborted && (isAbort || isNetworkFailure) ? resolveHostErrorMessage(rawMessage) : rawMessage;
                 const durationMs = Math.max(
                   0,
                   Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
@@ -748,7 +750,7 @@ export class C64API {
                   });
                   recordTraceError(action, error as Error, failure);
                 }
-                if (!fuzzBlocked && intent !== "system") {
+                if (!fuzzBlocked && intent !== "system" && !callerAborted) {
                   const isTransientFailure =
                     isAbort ||
                     isNetworkFailure ||
@@ -793,7 +795,6 @@ export class C64API {
                   );
                 }
 
-                const callerAborted = requestSignal?.aborted === true;
                 const shouldRetry = !callerAborted && attempt < maxAttempts && (isAbort || isNetworkFailure);
                 if (shouldRetry) {
                   const retryDelayMs = NETWORK_RETRY_DELAY_MS * attempt;
@@ -929,8 +930,8 @@ export class C64API {
             });
             const timeoutPromise = timeoutMs
               ? new Promise<never>((_, reject) => {
-                  timeoutPromiseId = setTimeout(() => reject(new Error("Request timed out")), timeoutMs);
-                })
+                timeoutPromiseId = setTimeout(() => reject(new Error("Request timed out")), timeoutMs);
+              })
               : null;
             const response = timeoutPromise
               ? await Promise.race([responsePromise, timeoutPromise])

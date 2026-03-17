@@ -7,6 +7,7 @@
  */
 
 import type { TraceActionContext, TraceOrigin, ActionTrigger } from "@/lib/tracing/types";
+import { classifyError } from "@/lib/tracing/failureTaxonomy";
 import {
   recordActionEnd,
   recordActionScopeEnd,
@@ -63,14 +64,18 @@ export const runWithActionTrace = async <T>(context: TraceActionContext, fn: () 
       return result;
     } catch (error) {
       const err = error as Error;
+      const classification = classifyError(err);
+      if (suppress && classification.failureClass === "user-cancellation") {
+        throw error;
+      }
       if (suppress) {
         await withDiagnosticsTraceOverride(async () => {
           recordActionStart(context);
-          recordTraceError(context, err);
+          recordTraceError(context, err, classification);
           recordActionEnd(context, err);
         });
       } else {
-        recordTraceError(context, err);
+        recordTraceError(context, err, classification);
         recordActionEnd(context, err);
       }
       throw error;
@@ -105,14 +110,18 @@ const runWithDetachedActionTrace = async <T>(context: TraceActionContext, fn: ()
       return result;
     } catch (error) {
       const err = error as Error;
+      const classification = classifyError(err);
+      if (suppress && classification.failureClass === "user-cancellation") {
+        throw error;
+      }
       if (suppress) {
         await withDiagnosticsTraceOverride(async () => {
           recordActionStart(context);
-          recordTraceError(context, err);
+          recordTraceError(context, err, classification);
           recordActionEnd(context, err);
         });
       } else {
-        recordTraceError(context, err);
+        recordTraceError(context, err, classification);
         recordActionEnd(context, err);
       }
       throw error;

@@ -40,8 +40,8 @@ export const GlobalDiagnosticsOverlay = () => {
   const activeDiagnosticsFilter = diagnosticsFilters[diagnosticsTab] ?? "";
 
   const setDiagnosticsDialogOpen = useCallback((open: boolean) => {
-    setLogsDialogOpen(open);
     setDiagnosticsOverlayActive(open);
+    setLogsDialogOpen(open);
   }, []);
 
   useEffect(() => {

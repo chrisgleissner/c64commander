@@ -30,6 +30,8 @@ import {
   DRIVES_POLL_INTERVAL_MS,
 } from "@/lib/query/c64PollingGovernance";
 import { addLog } from "@/lib/logging";
+import { useDiagnosticsSuppressionActive } from "@/hooks/useDiagnosticsSuppressionActive";
+import { isDiagnosticsOverlaySuppressionArmed } from "@/lib/diagnostics/diagnosticsOverlayState";
 
 export type C64QueryOptions = {
   intent?: InteractionIntent;
@@ -55,6 +57,7 @@ export interface ConnectionStatus {
 
 export function useC64Connection() {
   const connection = useConnectionState();
+  const diagnosticsSuppressionActive = useDiagnosticsSuppressionActive();
   const [baseUrl, setBaseUrl] = useState(() => {
     const resolvedDeviceHost = resolveDeviceHostFromStorage();
     return buildBaseUrlFromDeviceHost(resolvedDeviceHost);
@@ -87,6 +90,12 @@ export function useC64Connection() {
   } = useQuery({
     queryKey: ["c64-info", baseUrl],
     queryFn: async ({ signal }) => {
+      if (isDiagnosticsOverlaySuppressionArmed()) {
+        const cached = queryClient.getQueryData<DeviceInfo>(["c64-info", baseUrl]);
+        if (cached) {
+          return cached;
+        }
+      }
       const api = getC64API();
       return api.getInfo({
         timeoutMs: 3000,
@@ -94,14 +103,18 @@ export function useC64Connection() {
         __c64uIntent: "background",
       });
     },
-    enabled: connection.state === "REAL_CONNECTED" || connection.state === "DEMO_ACTIVE",
+    enabled:
+      !diagnosticsSuppressionActive && (connection.state === "REAL_CONNECTED" || connection.state === "DEMO_ACTIVE"),
     retry: 1,
     retryDelay: 1000,
     staleTime: 30000,
-    refetchInterval: getInfoRefreshMinIntervalMs(),
+    refetchInterval: diagnosticsSuppressionActive ? false : getInfoRefreshMinIntervalMs(),
   });
 
   const rateLimitedInfoRefetch = useCallback(() => {
+    if (isDiagnosticsOverlaySuppressionArmed()) {
+      return;
+    }
     const nowMs = Date.now();
     if (!shouldRunRateLimited(lastInfoRefreshAtRef.current, getInfoRefreshMinIntervalMs(), nowMs)) {
       return;
@@ -109,6 +122,11 @@ export function useC64Connection() {
     lastInfoRefreshAtRef.current = nowMs;
     void refetch();
   }, [refetch]);
+
+  useEffect(() => {
+    if (!diagnosticsSuppressionActive) return;
+    void queryClient.cancelQueries({ queryKey: ["c64-info", baseUrl] });
+  }, [baseUrl, diagnosticsSuppressionActive, queryClient]);
 
   useEffect(() => {
     let isMounted = true;
@@ -122,10 +140,10 @@ export function useC64Connection() {
     const handler = (event: Event) => {
       const detail = (event as CustomEvent).detail as
         | {
-            baseUrl?: string;
-            password?: string;
-            deviceHost?: string;
-          }
+          baseUrl?: string;
+          password?: string;
+          deviceHost?: string;
+        }
         | undefined;
       if (!detail) return;
       const current = settingsRef.current;
