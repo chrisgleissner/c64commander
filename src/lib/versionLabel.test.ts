@@ -57,5 +57,58 @@ describe("versionLabel", () => {
         }),
       ).toBe("0.6.4-rc2");
     });
+
+    it("uses the sha from git describe when gitSha is absent but commits exist after the tag", () => {
+      expect(
+        deriveVersionLabel({
+          gitDescribe: "0.6.4-rc2-3-gabc1234",
+          gitSha: "",
+        }),
+      ).toBe("0.6.4-rc2-abc");
+    });
+
+    it("falls back to the sha from the bare-sha describe when gitSha and fallbackVersion are absent", () => {
+      expect(
+        deriveVersionLabel({
+          gitDescribe: "abc1234",
+          gitSha: "",
+          fallbackVersion: "",
+        }),
+      ).toBe("abc");
+    });
+
+    it("uses the gitSha over the sha captured in a bare describe", () => {
+      expect(
+        deriveVersionLabel({
+          gitDescribe: "abc1234",
+          gitSha: "def5678",
+          fallbackVersion: "",
+        }),
+      ).toBe("def");
+    });
+
+    it("returns the describe string verbatim when it does not match any known pattern", () => {
+      expect(
+        deriveVersionLabel({
+          gitDescribe: "custom-build/label",
+          gitSha: "",
+          fallbackVersion: "",
+        }),
+      ).toBe("custom-build/label");
+    });
+
+    it("returns the fallback version when describe is empty", () => {
+      expect(
+        deriveVersionLabel({
+          gitDescribe: "",
+          gitSha: "",
+          fallbackVersion: "1.2.3",
+        }),
+      ).toBe("1.2.3");
+    });
+
+    it("returns the em-dash placeholder when describe and fallback are both absent", () => {
+      expect(deriveVersionLabel({})).toBe("—");
+    });
   });
 });
