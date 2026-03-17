@@ -282,8 +282,11 @@ vi.mock("@/lib/config/appSettings", () => ({
   saveNotificationDurationMs: vi.fn(),
   NOTIFICATION_DURATION_MIN_MS: 2000,
   NOTIFICATION_DURATION_MAX_MS: 8000,
+  loadAutoRotationEnabled: vi.fn(() => false),
+  saveAutoRotationEnabled: vi.fn(),
   APP_SETTINGS_KEYS: {
     NOTIFICATION_DURATION_MS_KEY: "c64u_notification_duration_ms",
+    AUTO_ROTATION_ENABLED_KEY: "c64u_auto_rotation_enabled",
   },
 }));
 

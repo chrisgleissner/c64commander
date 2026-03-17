@@ -82,6 +82,8 @@ import {
   saveNotificationDurationMs,
   NOTIFICATION_DURATION_MIN_MS,
   NOTIFICATION_DURATION_MAX_MS,
+  loadAutoRotationEnabled,
+  saveAutoRotationEnabled,
   type DiskAutostartMode,
   type NotificationVisibility,
 } from "@/lib/config/appSettings";
@@ -207,6 +209,7 @@ export default function SettingsPage() {
   const [notificationVisibility, setNotificationVisibility] =
     useState<NotificationVisibility>(loadNotificationVisibility);
   const [notificationDurationMs, setNotificationDurationMs] = useState(loadNotificationDurationMs);
+  const [autoRotationEnabled, setAutoRotationEnabled] = useState(loadAutoRotationEnabled);
   const [safUris, setSafUris] = useState<SafPersistedUri[]>([]);
   const [safEntries, setSafEntries] = useState<Array<{ name: string; path: string; type: string }>>([]);
   const [safBusy, setSafBusy] = useState(false);
@@ -671,6 +674,26 @@ export default function SettingsPage() {
                   Auto currently resolves to {DISPLAY_PROFILE_OVERRIDE_LABELS[autoProfile]}. Use an override to preview
                   or lock a profile explicitly.
                 </p>
+              </div>
+
+              <div className="flex items-start justify-between gap-3 min-w-0">
+                <div className="space-y-1 min-w-0">
+                  <Label htmlFor="auto-rotation" className="font-medium">
+                    Adapt layout on screen rotation
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    When enabled, the display profile adjusts automatically when the device is rotated. Off by default.
+                  </p>
+                </div>
+                <Checkbox
+                  id="auto-rotation"
+                  checked={autoRotationEnabled}
+                  onCheckedChange={(checked) => {
+                    const enabled = checked === true;
+                    setAutoRotationEnabled(enabled);
+                    saveAutoRotationEnabled(enabled);
+                  }}
+                />
               </div>
             </motion.div>
 

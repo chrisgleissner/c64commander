@@ -1,7 +1,8 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import { DisplayProfileProvider, useDisplayProfile, useDisplayProfilePreference } from "@/hooks/useDisplayProfile";
+import { saveAutoRotationEnabled } from "@/lib/config/appSettings";
 
 const setViewportWidth = (width: number) => {
   Object.defineProperty(window, "innerWidth", {
@@ -35,8 +36,14 @@ const Consumer = () => {
 };
 
 describe("DisplayProfileProvider", () => {
-  it("tracks automatic viewport changes and persists manual overrides", () => {
+  beforeEach(() => {
     localStorage.clear();
+    // Default is off; tests that exercise resize-tracking must opt in explicitly.
+    saveAutoRotationEnabled(false);
+  });
+
+  it("tracks automatic viewport changes and persists manual overrides when auto-rotation is enabled", () => {
+    saveAutoRotationEnabled(true);
     setViewportWidth(320);
     setViewportHeight(640);
 
@@ -247,5 +254,64 @@ describe("DisplayProfileProvider", () => {
     expect(document.documentElement.style.getPropertyValue("--display-profile-root-font-size")).toBe("");
     expect(document.documentElement.style.getPropertyValue("--display-profile-page-padding-top")).toBe("");
     expect(document.documentElement.style.getPropertyValue("--display-profile-viewport-width")).toBe("");
+  });
+
+  it("freezes the display profile on resize when auto-rotation is disabled (default)", () => {
+    // autoRotationEnabled is false (set in beforeEach).
+    setViewportWidth(320);
+    setViewportHeight(640);
+
+    render(
+      <DisplayProfileProvider>
+        <Consumer />
+      </DisplayProfileProvider>,
+    );
+
+    // Initial profile is compact at 320px.
+    expect(screen.getByTestId("profile")).toHaveTextContent("compact");
+    expect(screen.getByTestId("auto-profile")).toHaveTextContent("compact");
+    expect(document.documentElement.style.getPropertyValue("--display-profile-viewport-width")).toBe("320px");
+
+    // Simulate device rotation to landscape (wider viewport).
+    act(() => {
+      setViewportWidth(700);
+      window.dispatchEvent(new Event("resize"));
+    });
+
+    // Profile must NOT change — resize listener is inactive when autoRotation=false.
+    expect(screen.getByTestId("auto-profile")).toHaveTextContent("compact");
+    expect(screen.getByTestId("profile")).toHaveTextContent("compact");
+  });
+
+  it("starts tracking viewport width immediately when auto-rotation is enabled at runtime", () => {
+    setViewportWidth(320);
+    setViewportHeight(640);
+
+    render(
+      <DisplayProfileProvider>
+        <Consumer />
+      </DisplayProfileProvider>,
+    );
+
+    expect(screen.getByTestId("profile")).toHaveTextContent("compact");
+
+    // Enable auto-rotation via settings event.
+    act(() => {
+      saveAutoRotationEnabled(true);
+      window.dispatchEvent(
+        new CustomEvent("c64u-app-settings-updated", {
+          detail: { key: "c64u_auto_rotation_enabled", value: true },
+        }),
+      );
+    });
+
+    // After enabling, simulate rotation to landscape.
+    act(() => {
+      setViewportWidth(700);
+      window.dispatchEvent(new Event("resize"));
+    });
+
+    expect(screen.getByTestId("auto-profile")).toHaveTextContent("expanded");
+    expect(screen.getByTestId("profile")).toHaveTextContent("expanded");
   });
 });
