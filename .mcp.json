@@ -9,13 +9,7 @@
     "droidmind": {
       "type": "stdio",
       "command": "uvx",
-      "args": [
-        "--from",
-        "git+https://github.com/hyperb1iss/droidmind",
-        "droidmind",
-        "--transport",
-        "stdio"
-      ],
+      "args": ["--from", "git+https://github.com/hyperb1iss/droidmind", "droidmind", "--transport", "stdio"],
       "env": {}
     },
     "c64bridge": {
