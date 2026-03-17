@@ -9,4 +9,5 @@ playwright-report/**
 test-results/**
 .nyc_output/**
 .tmp/**
+.claude/**
 Logs/**

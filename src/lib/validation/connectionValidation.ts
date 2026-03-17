@@ -13,8 +13,18 @@ const IPV4_PATTERN = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
 const HOSTNAME_PATTERN =
   /^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/;
 
+const parseHostAndPort = (input: string): { host: string; port: number | null } | null => {
+  const colonIdx = input.lastIndexOf(":");
+  if (colonIdx === -1) return { host: input, port: null };
+  const portStr = input.slice(colonIdx + 1);
+  const port = Number(portStr);
+  if (!portStr || !Number.isInteger(port) || port < 1 || port > 65535) return null;
+  return { host: input.slice(0, colonIdx), port };
+};
+
 /**
  * Validates a device hostname or IPv4 address entered by the user.
+ * Accepts an optional port suffix (e.g. "c64u:8064", "192.168.1.1:80").
  *
  * Returns null when the value is valid or empty (empty falls back to the
  * application default at save time). Returns an error message string when
@@ -24,14 +34,18 @@ export const validateDeviceHost = (value: string): string | null => {
   const trimmed = value.trim();
   if (!trimmed) return null;
 
-  const ipv4Match = IPV4_PATTERN.exec(trimmed);
+  const parsed = parseHostAndPort(trimmed);
+  if (!parsed) return "Enter a valid hostname or IP address (optionally with :port)";
+  const { host } = parsed;
+
+  const ipv4Match = IPV4_PATTERN.exec(host);
   if (ipv4Match) {
     const octets = [ipv4Match[1], ipv4Match[2], ipv4Match[3], ipv4Match[4]].map(Number);
     if (octets.every((n) => n >= 0 && n <= 255)) return null;
     return "Invalid IP address — each octet must be 0–255";
   }
 
-  if (HOSTNAME_PATTERN.test(trimmed) && trimmed.length <= 253) return null;
+  if (HOSTNAME_PATTERN.test(host) && host.length <= 253) return null;
 
-  return "Enter a valid hostname or IP address";
+  return "Enter a valid hostname or IP address (optionally with :port)";
 };

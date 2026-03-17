@@ -66,4 +66,37 @@ describe("validateDeviceHost", () => {
   it("returns an error for an empty label (leading dot)", () => {
     expect(validateDeviceHost(".c64u")).not.toBeNull();
   });
+
+  it("returns null for a hostname with a valid port", () => {
+    expect(validateDeviceHost("c64u:8064")).toBeNull();
+    expect(validateDeviceHost("localhost:8064")).toBeNull();
+    expect(validateDeviceHost("my-device.home.lan:9000")).toBeNull();
+  });
+
+  it("returns null for an IPv4 address with a valid port", () => {
+    expect(validateDeviceHost("127.0.0.1:12345")).toBeNull();
+    expect(validateDeviceHost("192.168.1.100:80")).toBeNull();
+    expect(validateDeviceHost("127.0.0.1:1")).toBeNull();
+  });
+
+  it("returns null for boundary port values", () => {
+    expect(validateDeviceHost("c64u:1")).toBeNull();
+    expect(validateDeviceHost("c64u:65535")).toBeNull();
+  });
+
+  it("returns an error for port 0 (invalid)", () => {
+    expect(validateDeviceHost("c64u:0")).not.toBeNull();
+  });
+
+  it("returns an error for port out of range", () => {
+    expect(validateDeviceHost("c64u:65536")).not.toBeNull();
+  });
+
+  it("returns an error for non-numeric port", () => {
+    expect(validateDeviceHost("c64u:abc")).not.toBeNull();
+  });
+
+  it("returns an error for IPv4 with invalid octet and port", () => {
+    expect(validateDeviceHost("300.0.0.1:8064")).not.toBeNull();
+  });
 });
