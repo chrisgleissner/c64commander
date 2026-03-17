@@ -1589,4 +1589,51 @@ describe("c64api branches", () => {
     expect(getCategorySpy).toHaveBeenCalled();
     expect(getConfigItemSpy).toHaveBeenCalled();
   });
+
+  // #30: request() timeout — timeout fires before response, abort signal propagates
+  // Uses timeoutMs:1 with a real timer so the timeout fires immediately without fake timers.
+  // withNoPerformance leaves performance non-writable so fake timers cannot be used here.
+  it("rejects with host-unreachable error when request timeout fires before response", async () => {
+    const fetchMock = getFetchMock();
+
+    // Fetch observes the abort signal and rejects with AbortError when the timeout fires
+    fetchMock.mockImplementation(
+      (_url: string, opts: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          opts.signal?.addEventListener("abort", () => {
+            const err = new Error("The operation was aborted");
+            err.name = "AbortError";
+            reject(err);
+          });
+        }),
+    );
+
+    const api = new C64API("http://c64u");
+    // timeoutMs:1 ensures the timeout fires almost immediately
+    await expect(api.getInfo({ timeoutMs: 1 } as any)).rejects.toThrow("Host unreachable");
+  });
+
+  // #31: request() timeout — "Request timed out" path when fetch ignores abort
+  it("rejects with host-unreachable error when fetch ignores abort signal and timeout expires", async () => {
+    const fetchMock = getFetchMock();
+
+    // Fetch hangs and does NOT react to the abort signal
+    // The second setTimeout (timeoutPromise) fires and rejects with "Request timed out"
+    // which is also normalised to "Host unreachable" by resolveHostErrorMessage
+    let resolveHang!: () => void;
+    fetchMock.mockImplementation(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolveHang = () => resolve(new Response(JSON.stringify({ errors: [] }), { headers: { 'content-type': 'application/json' } }));
+        }),
+    );
+
+    const api = new C64API("http://c64u");
+    const pending = api.getInfo({ timeoutMs: 1 } as any);
+    void pending.catch(() => {}); // suppress unhandled rejection
+
+    await expect(pending).rejects.toThrow("Host unreachable");
+    // Clean up the hanging promise to prevent memory leaks
+    resolveHang?.();
+  });
 });

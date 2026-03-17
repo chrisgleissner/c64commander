@@ -17,6 +17,7 @@ import { useC64ConfigItem } from "@/hooks/useC64Connection";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { getCheckboxMapping, inferControlKind } from "@/lib/config/controlType";
 import { cn } from "@/lib/utils";
+import { SLIDER_MID_DRAG_THROTTLE_MS } from "@/lib/ui/sliderBehavior";
 
 interface ConfigItemRowProps {
   name: string;
@@ -461,7 +462,13 @@ export function ConfigItemRow({
                 const nextValue = resolveSliderOption(nextIndex);
                 setInputValue(String(nextValue));
               }}
-              asyncThrottleMs={250}
+              asyncThrottleMs={SLIDER_MID_DRAG_THROTTLE_MS}
+              onValueChangeAsync={(nextIndex) => {
+                if (isReadOnly) return;
+                const nextValue = resolveSliderOption(nextIndex);
+                if (String(nextValue) === lastCommittedRef.current) return;
+                onValueChange(nextValue);
+              }}
               onValueCommitAsync={(nextIndex) => {
                 if (isReadOnly) return;
                 const nextValue = resolveSliderOption(nextIndex);

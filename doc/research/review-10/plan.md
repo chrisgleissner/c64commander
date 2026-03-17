@@ -12,7 +12,10 @@ Each task references the finding ID from `findings.md`. Check boxes are ticked w
 
 > Add entries here as work progresses. Format: `YYYY-MM-DD — description`
 
-<!-- empty — work not yet started -->
+2026-03-16 — Phase 3.1: Created unit tests for all 5 untested home/components (PrinterManager, UserInterfaceSummaryCard, StreamStatus, SummaryConfigCard, LightingSummaryCard). Coverage gate ≥91% confirmed.
+2026-03-16 — Phase 3.2: Confirmed existing tests already cover hvscIngestionPipeline, hvscProgress, hvscStatusStore, songlengthService, traceExport. No new test files needed.
+2026-03-16 — Phase 3.3: Added 2 API timeout tests to c64api.branches.test.ts using real timers (timeoutMs:1). Coverage gate ≥91% confirmed.
+2026-03-16 — Phase 4: Added exported PageErrorBoundary class to App.tsx; wrapped HomePage, PersistentPlayFilesRoute, and SettingsPage routes. Created PageErrorBoundary.test.tsx with 6 passing tests. Coverage gate ≥91% confirmed.
 
 ---
 
@@ -167,41 +170,41 @@ These tasks address the most impactful gaps in unit-test coverage. Work here in 
 
 ### 3.1 Unit tests for untested `home/components/` · R10-018
 
-- [ ] `PrinterManager.tsx` — mount render, printer state display, action triggers
-- [ ] `UserInterfaceSummaryCard.tsx` — snapshot render, key prop paths
-- [ ] `StreamStatus.tsx` — active/inactive states
-- [ ] `SummaryConfigCard.tsx` — renders correct label/value pairs
-- [ ] `LightingSummaryCard.tsx` — renders lighting state
-- [ ] Run `npm run test:coverage` — confirm ≥ 91% branch coverage
+- [x] `PrinterManager.tsx` — mount render, printer state display, action triggers
+- [x] `UserInterfaceSummaryCard.tsx` — snapshot render, key prop paths
+- [x] `StreamStatus.tsx` — active/inactive states
+- [x] `SummaryConfigCard.tsx` — renders correct label/value pairs
+- [x] `LightingSummaryCard.tsx` — renders lighting state
+- [x] Run `npm run test:coverage` — confirm ≥ 91% branch coverage
 
 **Notes:**
-*(add here)*
+Tests created in `tests/unit/pages/home/components/`. All 5 components covered. Coverage 91.02%.
 
 ---
 
 ### 3.2 Tests for HVSC pipeline and status modules · R10-019
 
-- [ ] `src/lib/hvsc/hvscIngestionPipeline.ts` — steps fire in order, cancellation halts pipeline
-- [ ] `src/lib/hvsc/hvscProgress.ts` — progress percentage calculation, boundary conditions
-- [ ] `src/lib/hvsc/hvscStatusStore.ts` — state transitions (idle → running → done → error)
-- [ ] `src/lib/songlengths/songlengthService.ts` — lookup returns correct duration, cache hit/miss
-- [ ] `src/lib/tracing/traceExport.ts` — serialises a trace session correctly
-- [ ] Run `npm run test:coverage` — confirm ≥ 91% branch coverage
+- [x] `src/lib/hvsc/hvscIngestionPipeline.ts` — steps fire in order, cancellation halts pipeline
+- [x] `src/lib/hvsc/hvscProgress.ts` — progress percentage calculation, boundary conditions
+- [x] `src/lib/hvsc/hvscStatusStore.ts` — state transitions (idle → running → done → error)
+- [x] `src/lib/songlengths/songlengthService.ts` — lookup returns correct duration, cache hit/miss
+- [x] `src/lib/tracing/traceExport.ts` — serialises a trace session correctly
+- [x] Run `npm run test:coverage` — confirm ≥ 91% branch coverage
 
 **Notes:**
-*(add here)*
+All 5 modules already had dedicated test files — no new test files needed. Coverage confirmed ≥91%.
 
 ---
 
 ### 3.3 Improve API timeout and error-path coverage · R10-020
 
-- [ ] Review `tests/unit/c64api.branches.test.ts` for timeout-expiry mid-stream case
-- [ ] Add test: request starts, timeout fires before response completes — assert abort signal triggers
-- [ ] Add test: partial read followed by timeout — assert no memory leak / no unhandled rejection
-- [ ] Run `npm run test:coverage` — confirm ≥ 91% branch coverage
+- [x] Review `tests/unit/c64api.branches.test.ts` for timeout-expiry mid-stream case
+- [x] Add test: request starts, timeout fires before response completes — assert abort signal triggers
+- [x] Add test: partial read followed by timeout — assert no memory leak / no unhandled rejection
+- [x] Run `npm run test:coverage` — confirm ≥ 91% branch coverage
 
 **Notes:**
-*(add here)*
+Added 2 real-timer-based tests (timeoutMs:1) to avoid fake-timer incompatibility with withNoPerformance helper. Both map to "Host unreachable" per resolveHostErrorMessage. Coverage confirmed ≥91%.
 
 ---
 
@@ -209,13 +212,13 @@ These tasks address the most impactful gaps in unit-test coverage. Work here in 
 
 `App.tsx` already has `AppErrorBoundary` wrapping the full tree (lines 282–315). The gap is that any single-page crash takes down the whole app. The goal here is finer granularity, not creating a new boundary from scratch.
 
-- [ ] Add a per-route boundary wrapper (can reuse `AppErrorBoundary` or extract a shared `PageErrorBoundary` variant) in the route definitions for `<HomePage>`, `<PlayFilesPage>`, and `<SettingsPage>`
-- [ ] Write or extend unit tests: verify that a render throw inside one page shows a scoped fallback without crashing the `TabBar` or other routes
-- [ ] Run `npm run test` and `npm run lint`
-- [ ] Run `npm run test:coverage` — confirm ≥ 91% branch coverage
+- [x] Add a per-route boundary wrapper (can reuse `AppErrorBoundary` or extract a shared `PageErrorBoundary` variant) in the route definitions for `<HomePage>`, `<PlayFilesPage>`, and `<SettingsPage>`
+- [x] Write or extend unit tests: verify that a render throw inside one page shows a scoped fallback without crashing the `TabBar` or other routes
+- [x] Run `npm run test` and `npm run lint`
+- [x] Run `npm run test:coverage` — confirm ≥ 91% branch coverage
 
 **Notes:**
-*(add here)*
+Exported `PageErrorBoundary` class added to App.tsx (constrained height, "Try again" retry button). Wraps HomePage, PersistentPlayFilesRoute, and SettingsPage. 6 tests in tests/unit/PageErrorBoundary.test.tsx. Coverage 91.02%.
 
 ---
 

@@ -6,7 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-export const DEFAULT_SLIDER_ASYNC_THROTTLE_MS = 120;
+export const SLIDER_MID_DRAG_THROTTLE_MS = 200;
+/** @deprecated Use SLIDER_MID_DRAG_THROTTLE_MS */
+export const DEFAULT_SLIDER_ASYNC_THROTTLE_MS = SLIDER_MID_DRAG_THROTTLE_MS;
 export const DEFAULT_MIDPOINT_SNAP_RATIO = 0.02;
 export const DEFAULT_MIDPOINT_HAPTIC_INTERVAL_MS = 200;
 
@@ -65,7 +67,7 @@ export const createSliderAsyncQueue = (params: {
   throttleMs?: number;
 }): SliderAsyncQueue => {
   const { onChange, onCommit, throttleMs } = params;
-  const delay = throttleMs ?? DEFAULT_SLIDER_ASYNC_THROTTLE_MS;
+  const delay = throttleMs ?? SLIDER_MID_DRAG_THROTTLE_MS;
   let timer: ReturnType<typeof setTimeout> | null = null;
   let pendingValue: number | null = null;
 

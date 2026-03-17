@@ -132,14 +132,30 @@ const AppRoutes = () => {
       <DemoModeInterstitial />
       {coverageProbeEnabled && <TestHeartbeat />}
       <Suspense fallback={<RouteLoadingFallback />}>
-        <PersistentPlayFilesRoute />
+        <PageErrorBoundary>
+          <PersistentPlayFilesRoute />
+        </PageErrorBoundary>
         <Routes>
           {coverageProbeEnabled ? <Route path="/__coverage__" element={<CoverageProbePage />} /> : null}
-          <Route path="/" element={<HomePage />} />
+          <Route
+            path="/"
+            element={
+              <PageErrorBoundary>
+                <HomePage />
+              </PageErrorBoundary>
+            }
+          />
           <Route path="/config" element={<ConfigBrowserPage />} />
           <Route path="/play" element={null} />
           <Route path="/disks" element={<DisksPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
+          <Route
+            path="/settings"
+            element={
+              <PageErrorBoundary>
+                <SettingsPage />
+              </PageErrorBoundary>
+            }
+          />
           <Route path="/settings/open-source-licenses" element={<OpenSourceLicensesPage />} />
           <Route path="/docs" element={<DocsPage />} />
           <Route path="*" element={<NotFound />} />
@@ -296,6 +312,44 @@ class AppErrorBoundary extends React.Component<{ children: React.ReactNode }, { 
             </p>
             <Button className="mt-4" onClick={() => window.location.reload()}>
               {t("app.error.reload", "Reload")}
+            </Button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+export class PageErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    addErrorLog("Page render error", {
+      message: error.message,
+      stack: error.stack,
+      componentStack: info.componentStack,
+    });
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div
+          className="flex min-h-[calc(100vh-8rem)] items-center justify-center px-6 py-10"
+          data-testid="page-error-boundary-fallback"
+        >
+          <div className="max-w-sm rounded-xl border border-border bg-card p-5 text-center shadow">
+            <p className="text-sm font-semibold text-foreground">{t("app.error.title", "Something went wrong")}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {t("app.error.description", "The app hit an unexpected error. Please reopen the page or try again.")}
+            </p>
+            <Button size="sm" className="mt-3" onClick={() => this.setState({ hasError: false })}>
+              {t("app.error.retry", "Try again")}
             </Button>
           </div>
         </div>

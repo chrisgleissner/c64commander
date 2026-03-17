@@ -12,7 +12,7 @@ import {
   resolveMidpointPercent,
   shouldTriggerMidpointHaptic,
   createSliderAsyncQueue,
-  DEFAULT_SLIDER_ASYNC_THROTTLE_MS,
+  SLIDER_MID_DRAG_THROTTLE_MS,
 } from "@/lib/ui/sliderBehavior";
 
 describe("sliderBehavior", () => {
