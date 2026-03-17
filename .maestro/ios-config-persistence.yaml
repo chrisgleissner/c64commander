@@ -16,10 +16,13 @@ tags:
 # Scroll until the HVSC checkbox is in view.
 - scrollUntilVisible:
     element:
-      text: "HVSC"
+      id: hvsc-flag
     direction: DOWN
     speed: 80
     timeout: ${LONG_TIMEOUT}
+- assertVisible:
+    id: hvsc-flag
+    checked: true
 - takeScreenshot: ios-hvsc-setting-visible
 
 # Restart and confirm it persisted.
@@ -28,8 +31,11 @@ tags:
 - runFlow: subflows/ios-open-settings-tab.yaml
 - scrollUntilVisible:
     element:
-      text: "HVSC"
+      id: hvsc-flag
     direction: DOWN
     speed: 80
     timeout: ${LONG_TIMEOUT}
+- assertVisible:
+    id: hvsc-flag
+    checked: true
 - takeScreenshot: ios-hvsc-setting-persisted
