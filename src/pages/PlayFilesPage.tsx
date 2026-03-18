@@ -51,6 +51,7 @@ import { startBackgroundExecution, stopBackgroundExecution } from "@/lib/native/
 import { BackgroundExecution, onBackgroundAutoSkipDue } from "@/lib/native/backgroundExecution";
 
 import { AppBar } from "@/components/AppBar";
+import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
 import { FileOriginIcon } from "@/components/FileOriginIcon";
 import { SOURCE_LABELS } from "@/lib/sourceNavigation/sourceTerms";
 import { VolumeControls } from "@/pages/playFiles/components/VolumeControls";
@@ -933,9 +934,10 @@ export default function PlayFilesPage() {
     getParentPath,
     currentPlayingItemId,
   });
+  const pageShellClassName = usePrimaryPageShellClassName("bg-gradient-to-b from-background to-background/95");
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-background/95 pt-[var(--app-bar-height)]">
+    <div className={pageShellClassName}>
       <AppBar
         title="Play Files"
         subtitle={

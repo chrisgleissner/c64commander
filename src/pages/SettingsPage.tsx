@@ -12,6 +12,7 @@ import { Wifi, Moon, Sun, Monitor, Lock, RefreshCw, ExternalLink, Info, FileText
 import { useC64Connection } from "@/hooks/useC64Connection";
 import { C64_DEFAULTS, getDeviceHostFromBaseUrl, resolveDeviceHostFromStorage } from "@/lib/c64api";
 import { AppBar } from "@/components/AppBar";
+import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
 import { useThemeContext } from "@/components/ThemeProvider";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -600,9 +601,10 @@ export default function SettingsPage() {
       });
     }
   });
+  const pageShellClassName = usePrimaryPageShellClassName("pb-24");
 
   return (
-    <div className="min-h-screen pb-24 pt-[var(--app-bar-height)]">
+    <div className={pageShellClassName}>
       <AppBar title="Settings" subtitle="Connection & appearance" />
 
       <PageContainer size="reading">

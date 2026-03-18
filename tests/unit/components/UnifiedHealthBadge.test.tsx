@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { UnifiedHealthBadge } from "@/components/UnifiedHealthBadge";
 
@@ -167,5 +167,54 @@ describe("UnifiedHealthBadge", () => {
 
     (mockHealthState as { state: string }).state = original;
     mockHealthState.problemCount = 3;
+  });
+
+  it("renders Demo connectivity label on medium profile", () => {
+    const original = mockHealthState.connectivity;
+    (mockHealthState as { connectivity: string }).connectivity = "Demo";
+    currentProfile = "medium";
+
+    render(<UnifiedHealthBadge />);
+
+    const badge = screen.getByTestId("unified-health-badge");
+    expect(badge.textContent).toContain("Demo");
+
+    (mockHealthState as { connectivity: string }).connectivity = original;
+  });
+
+  it("renders Offline label on medium profile", () => {
+    const original = mockHealthState.connectivity;
+    (mockHealthState as { connectivity: string }).connectivity = "Offline";
+    currentProfile = "medium";
+
+    render(<UnifiedHealthBadge />);
+
+    const badge = screen.getByTestId("unified-health-badge");
+    expect(badge.textContent).toContain("Offline");
+
+    (mockHealthState as { connectivity: string }).connectivity = original;
+  });
+
+  it("renders expanded Offline with 'Device not reachable' on expanded profile", () => {
+    const original = mockHealthState.connectivity;
+    (mockHealthState as { connectivity: string }).connectivity = "Offline";
+    currentProfile = "expanded";
+
+    render(<UnifiedHealthBadge />);
+
+    const badge = screen.getByTestId("unified-health-badge");
+    expect(badge.textContent).toContain("Device not reachable");
+
+    (mockHealthState as { connectivity: string }).connectivity = original;
+  });
+
+  it("clicking the badge calls requestDiagnosticsOpen with 'header'", async () => {
+    const { requestDiagnosticsOpen } = await import("@/lib/diagnostics/diagnosticsOverlay");
+    currentProfile = "compact";
+    render(<UnifiedHealthBadge />);
+
+    fireEvent.click(screen.getByTestId("unified-health-badge"));
+
+    expect(requestDiagnosticsOpen).toHaveBeenCalledWith("header");
   });
 });

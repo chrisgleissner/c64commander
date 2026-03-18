@@ -10,26 +10,28 @@ import { motion } from "framer-motion";
 import { Home, Sliders, Settings, BookOpen, Play, Disc } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { wrapUserEvent } from "@/lib/tracing/userTrace";
+import { TAB_ROUTES, tabIndexForPath } from "@/lib/navigation/tabRoutes";
 
-const baseTabs = [
-  { path: "/", icon: Home, label: "Home" },
-  { path: "/play", icon: Play, label: "Play" },
-  { path: "/disks", icon: Disc, label: "Disks" },
-  { path: "/config", icon: Sliders, label: "Config" },
-  { path: "/settings", icon: Settings, label: "Settings" },
-  { path: "/docs", icon: BookOpen, label: "Docs" },
-];
+const TAB_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  "/": Home,
+  "/play": Play,
+  "/disks": Disc,
+  "/config": Sliders,
+  "/settings": Settings,
+  "/docs": BookOpen,
+};
+
+const tabs = TAB_ROUTES.map((t) => ({ ...t, icon: TAB_ICONS[t.path]! }));
 
 export function TabBar() {
   const location = useLocation();
   const navigate = useNavigate();
-  const tabs = baseTabs;
 
   return (
     <div className="fixed bottom-0 left-0 z-50 w-screen max-w-screen">
       <nav className="tab-bar">
         {tabs.map((tab) => {
-          const isActive = location.pathname === tab.path;
+          const isActive = tabIndexForPath(location.pathname) === tabIndexForPath(tab.path);
           const Icon = tab.icon;
           const tabId = `tab-${tab.label.toLowerCase().replace(/\s+/g, "-")}`;
 

@@ -326,6 +326,7 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
         className={cn("relative flex w-full touch-none select-none items-center", className)}
+        data-swipe-exclude="true"
         {...props}
         min={min}
         max={max}

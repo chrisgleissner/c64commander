@@ -58,8 +58,10 @@ vi.mock("@/lib/diagnostics/diagnosticsSeverity", () => ({
   resolveTraceSeverity: () => "info",
 }));
 
+let currentDialogProfile: "compact" | "medium" | "expanded" = "medium";
+
 vi.mock("@/hooks/useDisplayProfile", () => ({
-  useDisplayProfile: () => ({ profile: "medium" }),
+  useDisplayProfile: () => ({ profile: currentDialogProfile }),
 }));
 
 const idleHealthState: OverallHealthState = {
@@ -77,7 +79,33 @@ const idleHealthState: OverallHealthState = {
   primaryProblem: null,
 };
 
+const primaryProblemHealthState: OverallHealthState = {
+  state: "Unhealthy",
+  connectivity: "Online",
+  host: "c64u",
+  problemCount: 1,
+  contributors: {
+    App: { state: "Idle", problemCount: 0, totalOperations: 0, failedOperations: 0 },
+    REST: { state: "Unhealthy", problemCount: 1, totalOperations: 2, failedOperations: 2 },
+    FTP: { state: "Idle", problemCount: 0, totalOperations: 0, failedOperations: 0 },
+  },
+  lastRestActivity: null,
+  lastFtpActivity: null,
+  primaryProblem: {
+    id: "problem-1",
+    title: "GET /v1/info failed",
+    contributor: "REST",
+    timestampMs: Date.now() - 1000,
+    impactLevel: 2,
+    causeHint: "HTTP 503",
+  },
+};
+
 describe("DiagnosticsDialog", () => {
+  beforeEach(() => {
+    currentDialogProfile = "medium";
+  });
+
   const renderDialog = (overrides: Partial<React.ComponentProps<typeof DiagnosticsDialog>> = {}) => {
     const props: React.ComponentProps<typeof DiagnosticsDialog> = {
       open: true,
@@ -272,6 +300,78 @@ describe("DiagnosticsDialog", () => {
     expect(screen.queryByTestId("trace-trace-unknown-1")).not.toBeInTheDocument();
   });
 
+  it("filters problem entries from trace events by origin when one origin filter is active", () => {
+    renderDialog({
+      defaultEvidenceTypes: new Set(["Problems"]),
+      traceEvents: [
+        {
+          id: "rest-fail-user",
+          timestamp: "2024-01-01T00:00:01.000Z",
+          type: "rest-response",
+          origin: "user",
+          data: { method: "GET", path: "/v1/info", status: 500 },
+        },
+        {
+          id: "rest-fail-system",
+          timestamp: "2024-01-01T00:00:02.000Z",
+          type: "rest-response",
+          origin: "system",
+          data: { method: "GET", path: "/v1/config", status: 500 },
+        },
+      ],
+    });
+
+    // Both problem entries visible initially
+    expect(screen.getByTestId("problem-rest-fail-user")).toBeInTheDocument();
+    expect(screen.getByTestId("problem-rest-fail-system")).toBeInTheDocument();
+
+    // Open Refine (medium profile) and activate System origin filter only
+    fireEvent.click(screen.getByTestId("refine-button"));
+    fireEvent.click(screen.getByTestId("origin-toggle-system"));
+
+    // Only system-origin problem remains
+    expect(screen.queryByTestId("problem-rest-fail-user")).not.toBeInTheDocument();
+    expect(screen.getByTestId("problem-rest-fail-system")).toBeInTheDocument();
+  });
+
+  it("filters action summaries by origin when one origin filter is active", () => {
+    renderDialog({
+      defaultEvidenceTypes: new Set(["Actions"]),
+      actionSummaries: [
+        {
+          correlationId: "act-user",
+          actionName: "UserAction",
+          origin: "user",
+          originalOrigin: "user",
+          outcome: "success",
+          startTimestamp: "2024-01-01T00:00:01.000Z",
+          durationMs: null,
+        },
+        {
+          correlationId: "act-system",
+          actionName: "SystemAction",
+          origin: "system",
+          originalOrigin: "system",
+          outcome: "success",
+          startTimestamp: "2024-01-01T00:00:02.000Z",
+          durationMs: null,
+        },
+      ],
+    });
+
+    // Both actions visible initially
+    expect(screen.getByTestId("action-act-user")).toBeInTheDocument();
+    expect(screen.getByTestId("action-act-system")).toBeInTheDocument();
+
+    // Activate User origin filter only
+    fireEvent.click(screen.getByTestId("refine-button"));
+    fireEvent.click(screen.getByTestId("origin-toggle-user"));
+
+    // Only user-origin action remains
+    expect(screen.getByTestId("action-act-user")).toBeInTheDocument();
+    expect(screen.queryByTestId("action-act-system")).not.toBeInTheDocument();
+  });
+
   it("filters traces by origin when one origin filter is active", () => {
     renderDialog({
       defaultEvidenceTypes: new Set(["Traces"]),
@@ -304,6 +404,54 @@ describe("DiagnosticsDialog", () => {
     // Only user-origin trace remains
     expect(screen.getByTestId("trace-trace-user-1")).toBeInTheDocument();
     expect(screen.queryByTestId("trace-trace-system-1")).not.toBeInTheDocument();
+  });
+
+  it("clicking primary problem spotlight on compact profile auto-expands the problem and enables Problems filter", () => {
+    currentDialogProfile = "compact";
+    renderDialog({
+      healthState: primaryProblemHealthState,
+      // Start without Problems in activeTypes so the spotlight adds it
+      defaultEvidenceTypes: new Set(["Logs"]),
+      errorLogs: [
+        {
+          id: "problem-1",
+          message: "GET /v1/info failed",
+          timestamp: new Date(Date.now() - 1000).toISOString(),
+        },
+      ],
+    });
+
+    // Primary problem spotlight is visible
+    const spotlight = screen.getByTestId("primary-problem-spotlight");
+    expect(spotlight).toBeInTheDocument();
+
+    // Click — this covers handleSpotlightSelect: line 765 (false), 766-777 (body), 776 (isCompact true)
+    fireEvent.click(spotlight);
+
+    // Problems filter should now be active (problem entry appears)
+    expect(screen.getByTestId("problem-problem-1")).toBeInTheDocument();
+  });
+
+  it("clicking primary problem spotlight on medium profile when Problems already active returns early in setActiveTypes", () => {
+    currentDialogProfile = "medium";
+    renderDialog({
+      healthState: primaryProblemHealthState,
+      // Problems already active — setActiveTypes callback hits the early-return branch
+      defaultEvidenceTypes: new Set(["Problems"]),
+      errorLogs: [
+        {
+          id: "problem-1",
+          message: "GET /v1/info failed",
+          timestamp: new Date(Date.now() - 1000).toISOString(),
+        },
+      ],
+    });
+
+    const spotlight = screen.getByTestId("primary-problem-spotlight");
+    fireEvent.click(spotlight);
+
+    // Problem still visible after clicking spotlight
+    expect(screen.getByTestId("problem-problem-1")).toBeInTheDocument();
   });
 
   it("invokes share-all, share-filtered, and clear-all actions", () => {

@@ -55,6 +55,7 @@ import { normalizeOptionToken } from "./home/utils/uiLogic";
 import { buildConfigKey, readItemOptions, resolveTurboControlValue } from "./home/utils/HomeConfigUtils";
 
 import { SectionHeader } from "@/components/SectionHeader";
+import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
 import { cn } from "@/lib/utils";
 import { PageContainer, PageStack, ProfileActionGrid, ProfileSplitSection } from "@/components/layout/PageContainer";
 import { useInteractiveConfigWrite } from "@/hooks/useInteractiveConfigWrite";
@@ -441,9 +442,10 @@ function HomePageContent() {
   const ramExpansionAvailable =
     ramExpansionOptions.length > 0 && ramExpansionModeToken !== normalizeOptionToken(unavailableLabel);
   const reuSizeVisible = isActive && ramExpansionAvailable && ramExpansionModeToken === normalizeOptionToken("Enabled");
+  const pageShellClassName = usePrimaryPageShellClassName("pb-24");
 
   return (
-    <div className="min-h-screen pb-24 pt-[var(--app-bar-height)]">
+    <div className={pageShellClassName}>
       <AppBar
         title="Home"
         leading={

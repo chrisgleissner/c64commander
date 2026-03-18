@@ -9,11 +9,13 @@
 import { motion } from "framer-motion";
 import { HomeDiskManager } from "@/components/disks/HomeDiskManager";
 import { AppBar } from "@/components/AppBar";
+import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
 import { PageContainer, PageStack } from "@/components/layout/PageContainer";
 
 export default function DisksPage() {
+  const pageShellClassName = usePrimaryPageShellClassName("pb-24");
   return (
-    <div className="min-h-screen pb-24 pt-[var(--app-bar-height)]">
+    <div className={pageShellClassName}>
       <AppBar title="Disks" subtitle="Drive control & disk library" />
 
       <PageContainer>

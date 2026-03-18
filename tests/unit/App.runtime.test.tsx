@@ -69,6 +69,15 @@ vi.mock("@/components/ThemeProvider", () => ({
 }));
 vi.mock("@/hooks/useDisplayProfile", () => ({
   DisplayProfileProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  useDisplayProfile: () => ({
+    viewportWidth: 390,
+    autoProfile: "compact",
+    profile: "compact",
+    override: "auto",
+    overrideLabel: "Auto",
+    tokens: {},
+    setOverride: vi.fn(),
+  }),
 }));
 vi.mock("@/hooks/useFeatureFlags", () => ({
   FeatureFlagsProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -133,7 +142,7 @@ vi.mock("@/pages/PlayFilesPage", () => ({ default: () => <div>Play Files Page</d
 vi.mock("@/pages/DisksPage", () => ({ default: () => <div>Disks Page</div> }));
 vi.mock("@/pages/CoverageProbePage", () => ({ default: () => <div>Coverage Probe Page</div> }));
 
-import App from "@/App";
+import App, { shouldEnableCoverageProbe } from "@/App";
 
 describe("App runtime wiring", () => {
   beforeEach(() => {
@@ -200,14 +209,47 @@ describe("App runtime wiring", () => {
     expect(mocks.useNavigationGuardBlocker).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps the play route mounted and hides it after navigation away from /play", async () => {
+  it("renders NotFound for unknown routes outside the swipe navigation pages", async () => {
+    window.history.pushState({}, "", "/definitely-not-a-tab");
+
+    render(<App />);
+
+    expect(await screen.findByText("Not Found")).toBeInTheDocument();
+  });
+
+  it("returns false for coverage probes when no window object is available", () => {
+    const originalWindow = globalThis.window;
+    // @ts-expect-error test-only window removal for the no-window branch
+    delete globalThis.window;
+
+    try {
+      expect(shouldEnableCoverageProbe()).toBe(false);
+    } finally {
+      Object.defineProperty(globalThis, "window", {
+        configurable: true,
+        value: originalWindow,
+        writable: true,
+      });
+    }
+  });
+
+  it("returns true for coverage probes when the build-time probe flag is enabled", () => {
+    const originalProbeFlag = import.meta.env.VITE_ENABLE_TEST_PROBES;
+    import.meta.env.VITE_ENABLE_TEST_PROBES = "1";
+
+    try {
+      expect(shouldEnableCoverageProbe()).toBe(true);
+    } finally {
+      import.meta.env.VITE_ENABLE_TEST_PROBES = originalProbeFlag;
+    }
+  });
+
+  it("updates the swipe navigation active slot after navigating away from /play", async () => {
     window.history.pushState({}, "", "/play");
     render(<App />);
 
     expect(await screen.findByText("Play Files Page")).toBeInTheDocument();
-    const routeContainer = await screen.findByTestId("persistent-play-files-route");
-    expect(routeContainer).toHaveAttribute("aria-hidden", "false");
-    expect(routeContainer.className).toContain("contents");
+    expect(await screen.findByTestId("swipe-slot-play")).toHaveAttribute("data-slot-active", "true");
 
     await act(async () => {
       window.history.pushState({}, "", "/settings");
@@ -215,8 +257,8 @@ describe("App runtime wiring", () => {
     });
 
     expect(await screen.findByText("Settings Page")).toBeInTheDocument();
-    expect(screen.getByTestId("persistent-play-files-route")).toHaveAttribute("aria-hidden", "true");
-    expect(screen.getByTestId("persistent-play-files-route").className).toContain("hidden");
+    expect(screen.getByTestId("swipe-slot-play")).toHaveAttribute("data-slot-active", "false");
+    expect(screen.getByTestId("swipe-slot-settings")).toHaveAttribute("data-slot-active", "true");
   });
 
   it("invalidates visible-route queries on visibility resume", async () => {
@@ -241,6 +283,28 @@ describe("App runtime wiring", () => {
     }
   });
 
+  it("does not invalidate queries while the document remains hidden", async () => {
+    window.history.pushState({}, "", "/settings");
+    const originalHidden = Object.getOwnPropertyDescriptor(document, "hidden");
+    Object.defineProperty(document, "hidden", {
+      configurable: true,
+      get: () => true,
+    });
+
+    render(<App />);
+    await screen.findByText("Settings Page");
+
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+
+    expect(mocks.invalidateForVisibilityResume).not.toHaveBeenCalled();
+
+    if (originalHidden) {
+      Object.defineProperty(document, "hidden", originalHidden);
+    }
+  });
+
   it("records window errors when no active action exists", async () => {
     render(<App />);
     await screen.findByText("Home Page");
@@ -259,6 +323,20 @@ describe("App runtime wiring", () => {
     expect(mocks.addErrorLog).toHaveBeenCalledWith(
       "Window error",
       expect.objectContaining({ message: "boom", filename: "app.tsx", lineno: 12, colno: 4, stack: error.stack }),
+    );
+  });
+
+  it('falls back to the default "Window error" message when the browser event has no error payload', async () => {
+    render(<App />);
+    await screen.findByText("Home Page");
+
+    act(() => {
+      window.dispatchEvent(new ErrorEvent("error"));
+    });
+
+    expect(mocks.recordTraceError).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "Window error" }),
+      expect.objectContaining({ message: "Window error" }),
     );
   });
 
@@ -340,6 +418,39 @@ describe("App runtime wiring", () => {
     );
   });
 
+  it("normalizes non-error unhandled rejections into Error objects", async () => {
+    render(<App />);
+    await screen.findByText("Home Page");
+
+    const rejection = new Event("unhandledrejection");
+    Object.defineProperty(rejection, "reason", { configurable: true, value: "plain rejection" });
+
+    act(() => {
+      window.dispatchEvent(rejection);
+    });
+
+    expect(mocks.recordTraceError).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "Unhandled promise rejection" }),
+      expect.objectContaining({ message: "plain rejection" }),
+    );
+  });
+
+  it('falls back to the default "Unhandled rejection" message when the rejection event has no reason', async () => {
+    render(<App />);
+    await screen.findByText("Home Page");
+
+    const rejection = new Event("unhandledrejection");
+
+    act(() => {
+      window.dispatchEvent(rejection);
+    });
+
+    expect(mocks.recordTraceError).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "Unhandled promise rejection" }),
+      expect.objectContaining({ message: "Unhandled rejection" }),
+    );
+  });
+
   it("starts deferred diagnostics bridges on first meaningful interaction and cleans them up on unmount", async () => {
     const { unmount } = render(<App />);
     await screen.findByText("Home Page");
@@ -399,6 +510,19 @@ describe("App runtime wiring", () => {
         expect.objectContaining({ error: "picker failed" }),
       );
     });
+  });
+
+  it("skips persisted SAF URI startup logging outside android or when debug logging is disabled", async () => {
+    mocks.getPlatform.mockReturnValue("web");
+    mocks.loadDebugLoggingEnabled.mockReturnValue(false);
+
+    render(<App />);
+    await screen.findByText("Home Page");
+
+    await waitFor(() => {
+      expect(mocks.getPersistedUris).not.toHaveBeenCalled();
+    });
+    expect(mocks.addLog).not.toHaveBeenCalledWith("debug", "SAF persisted URIs on startup", expect.anything());
   });
 
   it("renders the app fallback and reloads after a top-level render error", async () => {

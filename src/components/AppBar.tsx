@@ -10,8 +10,10 @@ import type { ReactNode } from "react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { UnifiedHealthBadge } from "@/components/UnifiedHealthBadge";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
+import { useScreenActivity } from "@/hooks/useScreenActivity";
 import { isDiagnosticsOverlayActive, subscribeDiagnosticsOverlay } from "@/lib/diagnostics/diagnosticsOverlayState";
 import { cn } from "@/lib/utils";
+import { useAppChromeMode } from "@/components/layout/AppChromeContext";
 
 type Props = {
   title: ReactNode;
@@ -23,11 +25,14 @@ type Props = {
 export function AppBar({ title, subtitle, leading, children }: Props) {
   const headerRef = useRef<HTMLElement | null>(null);
   const { profile, tokens } = useDisplayProfile();
+  const screenActive = useScreenActivity();
+  const appChromeMode = useAppChromeMode();
   const [diagnosticsOverlayActive, setDiagnosticsOverlayActive] = useState(isDiagnosticsOverlayActive());
   const compact = profile === "compact";
 
   useLayoutEffect(() => {
     if (typeof window === "undefined") return;
+    if (!screenActive) return;
     const element = headerRef.current;
     if (!element) return;
 
@@ -51,7 +56,7 @@ export function AppBar({ title, subtitle, leading, children }: Props) {
       observer?.disconnect();
       window.removeEventListener("resize", updateHeight);
     };
-  }, []);
+  }, [screenActive]);
 
   useEffect(() => {
     const unsubscribe = subscribeDiagnosticsOverlay((active) => {
@@ -64,9 +69,11 @@ export function AppBar({ title, subtitle, leading, children }: Props) {
     <header
       ref={headerRef}
       className={cn(
-        "fixed left-0 top-0 z-40 w-screen max-w-screen bg-background/80 border-b border-border backdrop-blur-lg",
+        "top-0 z-40 bg-background/80 border-b border-border backdrop-blur-lg",
+        appChromeMode === "sticky" ? "sticky w-full max-w-full" : "fixed left-0 w-screen max-w-screen",
         !compact && "pt-safe",
       )}
+      data-app-chrome-mode={appChromeMode}
     >
       <div
         className={cn("app-shell-container", compact ? "space-y-2" : "py-4 space-y-3")}

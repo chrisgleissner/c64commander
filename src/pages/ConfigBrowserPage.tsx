@@ -34,6 +34,7 @@ import { cn } from "@/lib/utils";
 import { buildSoloRoutingUpdates, isSidVolumeName, soloReducer } from "@/lib/config/audioMixerSolo";
 import { normalizeConfigItem, type NormalizedConfigItem } from "@/lib/config/normalizeConfigItem";
 import { AppBar } from "@/components/AppBar";
+import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
 import { updateHasChanges } from "@/lib/config/appConfigStore";
 import { PageContainer, PageStack } from "@/components/layout/PageContainer";
 
@@ -603,9 +604,10 @@ export default function ConfigBrowserPage() {
 
     return categoriesData.categories.filter((cat) => cat.toLowerCase().includes(searchQuery.toLowerCase()));
   }, [categoriesData?.categories, searchQuery]);
+  const pageShellClassName = usePrimaryPageShellClassName("pb-24");
 
   return (
-    <div className="min-h-screen pb-24 pt-[var(--app-bar-height)]">
+    <div className={pageShellClassName}>
       <AppBar title="Config" subtitle={<span>{categoriesData?.categories.length || 0} categories</span>}>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />

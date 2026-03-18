@@ -56,31 +56,31 @@ Classification: `UI_CHANGE` + `CODE_CHANGE`
 
 ## Gap Register
 
-| ID  | Description                                             | Status     |
-| --- | ------------------------------------------------------- | ---------- |
-| G14 | Branch coverage below 91% gate (90.81%)                 | IN PROGRESS |
-|     | - UnifiedHealthBadge healthLabel branches not covered   |            |
-|     | - DiagnosticsDialog trace indicator/origin filter gaps  |            |
+| ID  | Description                                            | Status      |
+| --- | ------------------------------------------------------ | ----------- |
+| G14 | Branch coverage below 91% gate (90.81%)                | IN PROGRESS |
+|     | - UnifiedHealthBadge healthLabel branches not covered  |             |
+|     | - DiagnosticsDialog trace indicator/origin filter gaps |             |
 
 ## Remediation Status
 
-| Step                                          | Status    |
-| --------------------------------------------- | --------- |
-| R01 Delete legacy files                       | completed |
-| R02 Delete legacy tests                       | completed |
-| R03 Add contributor stream filtering          | completed |
-| R04 Add origin filters + Refine               | completed |
-| R05 Add "Change host in Settings" link        | completed |
-| R06 Fix share-filtered export                 | completed |
-| R07 Spotlight scroll-to + compact auto-expand | completed |
-| R08 Session totals + explanation phrase       | completed |
-| R09 Reset summary on re-open                  | completed |
-| R10 Add pagination                            | completed |
-| R11 Update tests                              | completed |
-| R12 Validate lint/test/build/coverage         | completed |
+| Step                                                          | Status      |
+| ------------------------------------------------------------- | ----------- |
+| R01 Delete legacy files                                       | completed   |
+| R02 Delete legacy tests                                       | completed   |
+| R03 Add contributor stream filtering                          | completed   |
+| R04 Add origin filters + Refine                               | completed   |
+| R05 Add "Change host in Settings" link                        | completed   |
+| R06 Fix share-filtered export                                 | completed   |
+| R07 Spotlight scroll-to + compact auto-expand                 | completed   |
+| R08 Session totals + explanation phrase                       | completed   |
+| R09 Reset summary on re-open                                  | completed   |
+| R10 Add pagination                                            | completed   |
+| R11 Update tests                                              | completed   |
+| R12 Validate lint/test/build/coverage                         | completed   |
 | R13 Add coverage for UnifiedHealthBadge health label branches | in-progress |
 | R14 Add coverage for DiagnosticsDialog trace filter branches  | in-progress |
-| R15 Re-validate coverage ≥ 91%                | pending |
+| R15 Re-validate coverage ≥ 91%                                | pending     |
 
 ## Work Log
 
@@ -97,3 +97,77 @@ Classification: `UI_CHANGE` + `CODE_CHANGE`
 - **Lint**: 0 errors (3 warnings, pre-existing)
 - **Build**: clean
 - **TypeScript**: clean (no type errors)
+
+---
+
+## Swipe Navigation
+
+Classification: `UI_CHANGE` + `CODE_CHANGE`
+
+### Task Breakdown
+
+| ID   | Task                                               | Status    |
+| ---- | -------------------------------------------------- | --------- |
+| SN01 | Append this section to PLANS.md                    | completed |
+| SN02 | Create `src/lib/navigation/tabRoutes.ts`           | completed |
+| SN03 | Update `TabBar.tsx` to use shared tabRoutes        | completed |
+| SN04 | Add `data-swipe-exclude` to `slider.tsx`           | completed |
+| SN05 | Create `src/hooks/useSwipeGesture.ts`              | completed |
+| SN06 | Create `src/components/SwipeNavigationLayer.tsx`   | completed |
+| SN07 | Update `App.tsx` to integrate SwipeNavigationLayer | completed |
+| SN08 | Create unit tests for gesture/navigation logic     | completed |
+| SN09 | Create `playwright/swipe-navigation.spec.ts`       | completed |
+| SN10 | Run lint/format/test:coverage and fix failures     | in-progress |
+
+### Implementation Steps
+
+1. **Share page order**: `TAB_ROUTES` is the single ordered source for Home → Play → Disks → Config → Settings → Docs.
+2. **Gesture exclusion zones**: Swipe origin detection skips sliders, range inputs, draggable elements, and horizontally scrollable containers via boundary detection.
+3. **Gesture hook** (`useSwipeGesture.ts`): Pointer event detector enforces threshold, horizontal-vs-vertical axis locking, intent locking, and emits progress / commit / cancel metadata with logging.
+4. **Sliding container** (`SwipeNavigationLayer.tsx`): Three-panel wrap-aware runway supports partial drag, wrap-around, transform-based transitions, and route-driven animations without introducing a second navigation state.
+5. **Performance adaptation**: Swipe transition timing reuses the existing runtime motion mode (`data-c64-motion-mode`) and display profile instead of adding new heuristics.
+6. **App integration**: Primary tab content renders through `SwipeNavigationLayer`; tab taps still drive the same router state, and unknown routes still fall through to the existing `Routes` tree.
+
+### Test Checklist
+
+#### Unit tests
+
+- [ ] Gesture classification: horizontal vs. vertical dominant
+- [ ] Threshold enforcement (< 40px = ignored, ≥ 40px = navigate)
+- [ ] Wrap-around: last page → next = index 0; first page → prev = last index
+- [ ] State transitions: index increments/decrements correctly
+- [ ] Exclusion: pointer on `data-swipe-exclude` element → gesture not classified
+- [x] Gesture classification: horizontal vs. vertical dominant
+- [x] Threshold enforcement (< 40px = ignored, ≥ 40px = navigate)
+- [x] Wrap-around: last page → next = index 0; first page → prev = last index
+- [x] State transitions: index increments/decrements correctly
+- [x] Exclusion: pointer on `data-swipe-exclude` element → gesture not classified
+
+#### E2E tests (`playwright/swipe-navigation.spec.ts`)
+
+- [x] Swipe LEFT from Home → Play
+- [x] Swipe RIGHT from Play → Home
+- [x] Wrap: Docs → (LEFT) → Home
+- [x] Wrap: Home → (RIGHT) → Docs
+- [x] Slider interaction: drag slider → no page transition
+- [x] Rapid swipes: consecutive transitions, no state corruption
+- [x] Mid-transition screenshots captured for `home-to-play`, `play-to-disks`, and `docs-to-home`
+- [x] Swipe logs validated for gesture classification, transitions, and wrap-around cases
+
+### Artifact Locations
+
+- Mid-transition screenshots: `artifacts/swipe-transitions/<test-case>/<phase>.png`
+  - Phases: `early` (≈25%), `mid` (≈50%), `late` (≈75%)
+- Evidence also saved under: `test-results/evidence/playwright/`
+
+### Work Log
+
+- [2026-03-18] SN01 Appended swipe navigation section to PLANS.md
+- [2026-03-18] SN02-SN07 Implemented shared tab ordering, wrap-aware swipe runway, router integration, and motion-mode-aware transition timing
+- [2026-03-18] SN08 Added unit coverage for gesture helpers, hook integration, swipe runway model, swipe layer component branches, and App runtime mocks
+- [2026-03-18] SN09 Added `playwright/swipe-navigation.spec.ts` with deterministic swipe, wrap-around, slider exclusion, rapid-swipe, screenshot, and log validation
+- [2026-03-18] SN10 Validation run:
+  - `npm run lint` ✅
+  - `npm run build` ✅
+  - `npm exec playwright test playwright/swipe-navigation.spec.ts` ✅ (10 tests)
+  - `npm run test:coverage` ✅ test pass, but branch coverage remains **90.97%** and is still below the repo gate of 91%
