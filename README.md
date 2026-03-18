@@ -208,8 +208,6 @@ Access full C64 Ultimate configuration pages, from basic tuning to hardware-spec
 
 Tune appearance, connection behavior, diagnostics, playback defaults, HVSC integration, and device-safety limits.
 
-Display profile behavior is summarized in the [Display Profiles](#display-profiles) section. The override lives in **Settings → Appearance → Display profile** and is useful for previewing or locking a profile on tablets and the self-hosted web app.
-
 <table>
   <tr>
     <td><img src="doc/img/app/settings/sections/01-appearance.png" alt="Settings appearance" width="360"/></td>
