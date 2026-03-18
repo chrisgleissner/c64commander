@@ -845,6 +845,18 @@ describe("hvscIngestionRuntime", () => {
     expect(extractArchiveEntries).not.toHaveBeenCalled();
   });
 
+  it("rejects cached ingest when installed but no cached baseline and no updates", async () => {
+    vi.mocked(Filesystem.readdir).mockResolvedValue({ files: [] } as any);
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: "idle",
+      ingestionError: null,
+      installedVersion: 5,
+      installedBaselineVersion: 5,
+    } as any);
+
+    await expect(ingestCachedHvsc("token-no-cache-no-updates")).rejects.toThrow("No cached HVSC archives available");
+  });
+
   it("recovers stale ingestion state on cold start", async () => {
     const { loadHvscStatusSummary, saveHvscStatusSummary } = await import("@/lib/hvsc/hvscStatusStore");
     vi.mocked(loadHvscState).mockReturnValue({
