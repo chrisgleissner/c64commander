@@ -300,6 +300,66 @@ describe("useInteractiveConfigWrite", () => {
     expect(result.current.isPending).toBe(false);
   });
 
+  it("uses String(error) as description when rejection value is not an Error instance", async () => {
+    mockMutateAsync.mockRejectedValueOnce("network failure string");
+
+    const { result } = renderHook(() => useInteractiveConfigWrite({ category: "Audio Mixer" }), {
+      wrapper: createWrapper(),
+    });
+
+    await act(async () => {
+      result.current.write({ "SID1 Volume": "3" });
+      await vi.runAllTimersAsync();
+    });
+
+    expect(mockReportUserError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: "network failure string",
+      }),
+    );
+  });
+
+  it("schedules reconciliation after the write settles, not before", async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+    const wrapper = ({ children }: { children: React.ReactNode }) =>
+      React.createElement(QueryClientProvider, { client: queryClient }, children);
+
+    let resolveWrite!: () => void;
+    const writeGate = new Promise<void>((resolve) => {
+      resolveWrite = resolve;
+    });
+    mockMutateAsync.mockReturnValueOnce(writeGate);
+
+    const { result } = renderHook(
+      () => useInteractiveConfigWrite({ category: "Audio Mixer", reconciliationDelayMs: 50 }),
+      { wrapper },
+    );
+
+    act(() => {
+      result.current.write({ "SID1 Volume": "10" });
+    });
+
+    // Advance well past the reconciliation delay before the write settles.
+    await act(async () => {
+      vi.advanceTimersByTime(500);
+    });
+
+    // Reconciliation must NOT have fired yet — write hasn't settled.
+    expect(invalidateSpy).not.toHaveBeenCalled();
+
+    // Now settle the write and advance past the reconciliation delay.
+    await act(async () => {
+      resolveWrite();
+      await vi.runAllTimersAsync();
+    });
+
+    // Reconciliation fires only after the write settled.
+    expect(invalidateSpy).toHaveBeenCalledTimes(1);
+  });
+
   it("debounces reconciliation — only fires once after a burst of writes", async () => {
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false }, mutations: { retry: false } },

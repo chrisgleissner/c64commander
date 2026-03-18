@@ -74,7 +74,8 @@ export const enforceVisualBoundaries = async (page: Page, testInfo: TestInfo) =>
           '[data-sonner-toast], [data-sonner-toaster], .toaster, .toast, [role="status"], [data-state="open"].destructive, [aria-label="Notifications (F8)"], [data-radix-toast-viewport]',
         ),
       );
-    const isInsideSwipeRunway = (element: Element) => Boolean(element.closest('[data-testid="swipe-navigation-runway"]'));
+    const isInsideSwipeRunway = (element: Element) =>
+      Boolean(element.closest('[data-testid="swipe-navigation-runway"]'));
     const isInsideActiveSwipeSlot = (element: Element) => Boolean(activeSwipeSlot && activeSwipeSlot.contains(element));
 
     // Check all visible elements
@@ -165,20 +166,24 @@ export const enforceVisualBoundaries = async (page: Page, testInfo: TestInfo) =>
   if (hasHorizontalScroll) {
     const scrollInfo = await page.evaluate(() => ({
       scrollWidth:
-        (document.querySelector<HTMLElement>('[data-testid^="swipe-slot-"][data-slot-active="true"]') ??
-          document.querySelector<HTMLElement>('[data-testid^="swipe-slot-"][data-panel-position="1"]'))?.scrollWidth ??
-        document.documentElement.scrollWidth,
+        (
+          document.querySelector<HTMLElement>('[data-testid^="swipe-slot-"][data-slot-active="true"]') ??
+          document.querySelector<HTMLElement>('[data-testid^="swipe-slot-"][data-panel-position="1"]')
+        )?.scrollWidth ?? document.documentElement.scrollWidth,
       clientWidth:
-        (document.querySelector<HTMLElement>('[data-testid^="swipe-slot-"][data-slot-active="true"]') ??
-          document.querySelector<HTMLElement>('[data-testid^="swipe-slot-"][data-panel-position="1"]'))?.clientWidth ??
-        document.documentElement.clientWidth,
+        (
+          document.querySelector<HTMLElement>('[data-testid^="swipe-slot-"][data-slot-active="true"]') ??
+          document.querySelector<HTMLElement>('[data-testid^="swipe-slot-"][data-panel-position="1"]')
+        )?.clientWidth ?? document.documentElement.clientWidth,
       overflow:
-        ((document.querySelector<HTMLElement>('[data-testid^="swipe-slot-"][data-slot-active="true"]') ??
-          document.querySelector<HTMLElement>('[data-testid^="swipe-slot-"][data-panel-position="1"]'))?.scrollWidth ??
-          document.documentElement.scrollWidth) -
-        ((document.querySelector<HTMLElement>('[data-testid^="swipe-slot-"][data-slot-active="true"]') ??
-          document.querySelector<HTMLElement>('[data-testid^="swipe-slot-"][data-panel-position="1"]'))?.clientWidth ??
-          document.documentElement.clientWidth),
+        ((
+          document.querySelector<HTMLElement>('[data-testid^="swipe-slot-"][data-slot-active="true"]') ??
+          document.querySelector<HTMLElement>('[data-testid^="swipe-slot-"][data-panel-position="1"]')
+        )?.scrollWidth ?? document.documentElement.scrollWidth) -
+        ((
+          document.querySelector<HTMLElement>('[data-testid^="swipe-slot-"][data-slot-active="true"]') ??
+          document.querySelector<HTMLElement>('[data-testid^="swipe-slot-"][data-panel-position="1"]')
+        )?.clientWidth ?? document.documentElement.clientWidth),
     }));
 
     throw new Error(

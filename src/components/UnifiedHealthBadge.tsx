@@ -54,7 +54,9 @@ export function UnifiedHealthBadge({ className }: Props) {
   const showsCount =
     problemCount > 0 && profile !== "expanded" && connectivity !== "Offline" && connectivity !== "Not yet connected";
   const leadingLabel =
-    connectivity === "Online" || connectivity === "Checking" ? connectedDeviceLabel ?? connectivityLabel : connectivityLabel;
+    connectivity === "Online" || connectivity === "Checking"
+      ? (connectedDeviceLabel ?? connectivityLabel)
+      : connectivityLabel;
 
   const handleClick = () => {
     requestDiagnosticsOpen("header");
@@ -69,7 +71,9 @@ export function UnifiedHealthBadge({ className }: Props) {
       data-connection-state={rawConnectionState}
       data-health-state={state}
       data-connectivity-state={connectivity}
-      data-connected-device={connectivity === "Online" || connectivity === "Checking" ? connectedDeviceLabel ?? null : null}
+      data-connected-device={
+        connectivity === "Online" || connectivity === "Checking" ? (connectedDeviceLabel ?? null) : null
+      }
       onClick={handleClick}
       className={cn(
         "flex items-center gap-1 whitespace-nowrap rounded-lg px-2 py-1.5 min-h-[44px] min-w-[44px] touch-none",

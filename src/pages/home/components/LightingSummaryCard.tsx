@@ -251,9 +251,6 @@ export function LightingSummaryCard({
             const nextIndex = clampToRange(values[0] ?? 0, 0, fixedColorSliderMax);
             setFixedColorDraftIndex(nextIndex);
           }}
-          onValueCommit={() => {
-            setFixedColorDraftIndex(null);
-          }}
           onValueChangeAsync={(nextValue) => {
             const nextIndex = clampToRange(nextValue, 0, fixedColorSliderMax);
             interactiveWrite({ "Fixed Color": resolveFixedColorOption(nextIndex) });
@@ -285,9 +282,6 @@ export function LightingSummaryCard({
           onValueChange={(values) => {
             const nextValue = clampToRange(values[0] ?? intensityMin, intensityMin, intensityMax);
             setIntensityDraft(nextValue);
-          }}
-          onValueCommit={() => {
-            setIntensityDraft(null);
           }}
           onValueChangeAsync={(nextValue) => {
             const clamped = clampToRange(nextValue, intensityMin, intensityMax);

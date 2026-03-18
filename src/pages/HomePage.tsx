@@ -262,6 +262,23 @@ function HomePageContent() {
     resolveConfigValue(u64Category, "U64 Specific Settings", "UserPort Power Enable", unavailableLabel),
   );
 
+  const handleTurboControlAutoAdjust = useCallback(
+    async (cpuSpeedVal: string) => {
+      if (turboControlOptions.length === 0) return;
+      const desiredTurbo = resolveTurboControlValue(cpuSpeedVal, turboControlOptions);
+      if (normalizeOptionToken(desiredTurbo) === normalizeOptionToken(turboControlValue)) return;
+      await updateConfigValue(
+        "U64 Specific Settings",
+        "Turbo Control",
+        desiredTurbo,
+        "HOME_TURBO_CONTROL",
+        "Turbo control updated",
+        { suppressToast: true },
+      );
+    },
+    [turboControlOptions, turboControlValue, updateConfigValue],
+  );
+
   const handleCpuSpeedChange = trace(async function handleCpuSpeedChange(
     nextValue: string,
     options?: { suppressToast?: boolean },
@@ -269,18 +286,7 @@ function HomePageContent() {
     await updateConfigValue("U64 Specific Settings", "CPU Speed", nextValue, "HOME_CPU_SPEED", "CPU speed updated", {
       suppressToast: options?.suppressToast,
     });
-
-    if (turboControlOptions.length === 0) return;
-    const desiredTurbo = resolveTurboControlValue(nextValue, turboControlOptions);
-    if (normalizeOptionToken(desiredTurbo) === normalizeOptionToken(turboControlValue)) return;
-    await updateConfigValue(
-      "U64 Specific Settings",
-      "Turbo Control",
-      desiredTurbo,
-      "HOME_TURBO_CONTROL",
-      "Turbo control updated",
-      { suppressToast: true },
-    );
+    await handleTurboControlAutoAdjust(nextValue);
   });
 
   const handleCpuSpeedPreviewChange = useCallback(
@@ -294,11 +300,12 @@ function HomePageContent() {
   const handleCpuSpeedCommitChange = useCallback(
     (nextValue: string) => {
       // Commit via interactive write for the slider value, then trigger the
-      // Turbo Control auto-adjustment as a one-shot deliberate write (no toast).
+      // Turbo Control auto-adjustment as a one-shot deliberate write without
+      // re-writing CPU Speed through the global queue.
       interactiveWriteU64({ "CPU Speed": nextValue });
-      void handleCpuSpeedChange(nextValue, { suppressToast: true });
+      void handleTurboControlAutoAdjust(nextValue);
     },
-    [interactiveWriteU64, handleCpuSpeedChange],
+    [interactiveWriteU64, handleTurboControlAutoAdjust],
   );
 
   const handleSaveToApp = trace(async function handleSaveToApp(name: string) {

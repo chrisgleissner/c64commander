@@ -134,13 +134,15 @@ export function useInteractiveConfigWrite({
           reportUserError({
             operation: `INTERACTIVE_WRITE_${categoryRef.current.toUpperCase().replace(/\s+/g, "_")}`,
             title: "Update failed",
-            description: (error as Error).message ?? "Unknown error",
+            description: error instanceof Error ? error.message : String(error),
             error,
             context: { category: categoryRef.current, updates },
             retry: () => write(updates),
           });
+        })
+        .finally(() => {
+          scheduleReconciliation();
         });
-      scheduleReconciliation();
     },
     [scheduleReconciliation],
   );

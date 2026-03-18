@@ -28,9 +28,13 @@ const SHORT_PAUSE_MS = 800;
 const SCROLL_DURATION_MS = 9000;
 
 const waitForConnected = async (page: Page) => {
-  await expect(page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge")).toHaveAttribute("data-connection-state", "REAL_CONNECTED", {
-    timeout: 10000,
-  });
+  await expect(page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge")).toHaveAttribute(
+    "data-connection-state",
+    "REAL_CONNECTED",
+    {
+      timeout: 10000,
+    },
+  );
 };
 
 const pauseAtTop = async (page: Page, delayMs = TOP_PAUSE_MS) => {
