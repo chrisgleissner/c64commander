@@ -143,7 +143,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
       await dialog.getByRole("button", { name: "Continue in Demo Mode" }).click();
     }
 
-    const demoIndicator = page.getByTestId("connectivity-indicator");
+    const demoIndicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(demoIndicator).toHaveAttribute("data-connection-state", "DEMO_ACTIVE", { timeout: 10000 });
 
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
@@ -187,7 +187,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
     );
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    const indicator = page.getByTestId("connectivity-indicator");
+    const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 5000 });
     await expect(page.getByRole("dialog", { name: "Demo Mode" })).toHaveCount(0);
     expect(demoServer.requests.some((req) => req.url.startsWith("/v1/info"))).toBe(false);
@@ -264,7 +264,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
     await page.getByRole("button", { name: "Continue in Demo Mode" }).click();
-    const demoIndicator = page.getByTestId("connectivity-indicator");
+    const demoIndicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(demoIndicator).toHaveAttribute("data-connection-state", "DEMO_ACTIVE");
 
     server.setReachable(true);
@@ -335,7 +335,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
     await expect(saveButton).toBeVisible({ timeout: 15000 });
     await clickWithoutNavigationWait(page, saveButton);
 
-    const realIndicator = page.getByTestId("connectivity-indicator");
+    const realIndicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     let connected = false;
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
@@ -468,7 +468,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
       await expect(postSaveDialog).toBeHidden({ timeout: 5000 });
     }
 
-    const indicator = page.getByTestId("connectivity-indicator");
+    const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect
       .poll(async () => {
         const state = await indicator.getAttribute("data-connection-state");
@@ -507,7 +507,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
 
     await page.goto("/play", { waitUntil: "domcontentloaded" });
     await page.getByRole("button", { name: "Continue in Demo Mode" }).click();
-    const indicator = page.getByTestId("connectivity-indicator");
+    const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(indicator).toHaveAttribute("data-connection-state", "DEMO_ACTIVE");
     await page.evaluate(() => {
       const payload = {
@@ -564,7 +564,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
     if (await continueDemo.isVisible().catch(() => false)) {
       await continueDemo.click();
     }
-    const realIndicator = page.getByTestId("connectivity-indicator");
+    const realIndicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     try {
       await expect
         .poll(() => realIndicator.getAttribute("data-connection-state"), {
@@ -641,7 +641,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
     );
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    const indicator = page.getByTestId("connectivity-indicator");
+    const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     let initialRealConnected = false;
     for (let attempt = 0; attempt < 3; attempt += 1) {
       const state = await indicator.getAttribute("data-connection-state");
@@ -809,7 +809,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
 
     server.setReachable(true);
     await clickWithoutNavigationWait(page, page.getByRole("button", { name: /Save & Connect|Save connection/i }));
-    const indicator = page.getByTestId("connectivity-indicator");
+    const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 10000 });
     const currentUsing = page.getByText("Currently using:");
     await expect(currentUsing).toBeVisible();

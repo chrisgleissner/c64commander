@@ -7,6 +7,7 @@
  */
 
 import type { TraceEvent } from "@/lib/tracing/types";
+import { inferConnectedDeviceLabel } from "@/lib/diagnostics/targetDisplayMapper";
 
 // §7.1 — Health states (fixed labels, must not be paraphrased)
 export type HealthState = "Healthy" | "Degraded" | "Unhealthy" | "Idle" | "Unavailable";
@@ -26,18 +27,19 @@ export const HEALTH_GLYPHS: Record<HealthState, string> = {
   Unavailable: "◌",
 };
 
-export const getBadgeConnectivityLabel = (connectivity: ConnectivityState): string => {
+export const getBadgeConnectivityLabel = (connectivity: ConnectivityState, product?: string | null): string => {
+  const connectedDeviceLabel = inferConnectedDeviceLabel(product) ?? "C64U";
   switch (connectivity) {
     case "Online":
-      return "C64U";
+      return connectedDeviceLabel;
     case "Demo":
-      return "Demo";
+      return "DEMO";
     case "Offline":
       return "Offline";
     case "Not yet connected":
       return "—";
     case "Checking":
-      return "C64U";
+      return connectedDeviceLabel;
   }
 };
 
@@ -80,6 +82,7 @@ export type OverallHealthState = {
   state: HealthState;
   connectivity: ConnectivityState;
   host: string;
+  connectedDeviceLabel: string | null;
   problemCount: number;
   contributors: Record<ContributorKey, ContributorHealth>;
   lastRestActivity: LastActivity | null;
@@ -278,8 +281,9 @@ export const getBadgeLabel = (
   problemCount: number,
   profile: "compact" | "medium" | "expanded",
   glyph: string,
+  product?: string | null,
 ): string => {
-  const connLabel = getBadgeConnectivityLabel(connectivity);
+  const connLabel = getBadgeConnectivityLabel(connectivity, product);
 
   if (connectivity === "Offline") {
     if (profile === "expanded") return `${connLabel} ${glyph} Device not reachable`;
@@ -313,10 +317,14 @@ export const getBadgeAriaLabel = (
   health: HealthState,
   connectivity: ConnectivityState,
   problemCount: number,
+  product?: string | null,
 ): string => {
   if (connectivity === "Offline") return "Offline, device not reachable";
   if (connectivity === "Not yet connected") return "Not yet connected";
-  const connPhrase = connectivity === "Online" ? "Connected to C64U" : "Demo mode";
+  const connPhrase =
+    connectivity === "Online" || connectivity === "Checking"
+      ? `Connected to ${inferConnectedDeviceLabel(product) ?? "C64U"}`
+      : "Demo mode";
   switch (health) {
     case "Healthy":
       return `${connPhrase}, system healthy`;

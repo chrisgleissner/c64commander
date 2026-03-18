@@ -149,7 +149,7 @@ These labels are fixed and must not be paraphrased in the UI.
 Connectivity and health are independent dimensions that compose in the badge:
 
 - **Shape** encodes health (5 states → 5 distinct shapes)
-- **Leading label** encodes connectivity (`C64U`, `Demo`, `Offline`, `—`)
+- **Leading label** encodes connectivity (`C64U`/`U64`/`U64E`/`U64E2`, `DEMO`, `Offline`, `—`)
 - **Trailing label** encodes the health word when the active profile includes it
 
 When connectivity is `Offline`: health state is overridden to display as `Unavailable` because no device communication is possible.
@@ -164,7 +164,14 @@ Badge reading order is always:
 2. health glyph (and compact/medium count when present)
 3. health label, when the active profile includes it
 
-The badge must not insert a decorative separator dot between connectivity and health. Only the health glyph carries state color. All badge text remains neutral foreground text, including `C64U` and `Demo`.
+The badge must not insert a decorative separator dot between connectivity and health. Only the health glyph carries state color. All badge text remains neutral foreground text, including the inferred real-device label (`C64U`, `U64`, `U64E`, `U64E2`) and `DEMO`.
+
+For real hardware, the leading label is inferred directly from `GET /v1/info.product` and normalized as follows:
+
+- `C64 Ultimate` -> `C64U`
+- `Ultimate 64` -> `U64`
+- `Ultimate 64 Elite` -> `U64E`
+- `Ultimate 64-II` and `Ultimate 64 Elite 2` style variants -> `U64E2`
 
 ### 7.3 Current Window
 
@@ -247,14 +254,14 @@ Full encoding across connectivity × health × profile:
 
 | Connectivity      | Health      | Compact     | Medium              | Expanded                         |
 | ----------------- | ----------- | ----------- | ------------------- | -------------------------------- |
-| Online            | Healthy     | `C64U ●`    | `C64U ● Healthy`    | `C64U ● Healthy`                 |
-| Online            | Degraded 3  | `C64U ▲3`   | `C64U ▲3 Degraded`  | `C64U ▲ Degraded · 3 problems`   |
-| Online            | Unhealthy 5 | `C64U ◆5`   | `C64U ◆5 Unhealthy` | `C64U ◆ Unhealthy · 5 problems`  |
-| Online            | Idle        | `C64U ○`    | `C64U ○ Idle`       | `C64U ○ Idle`                    |
-| Online            | Unavailable | `C64U ◌`    | `C64U ◌ ?`          | `C64U ◌ Unavailable`             |
-| Demo              | Healthy     | `Demo ●`    | `Demo ● Healthy`    | `Demo ● Healthy`                 |
-| Demo              | Degraded 2  | `Demo ▲2`   | `Demo ▲2 Degraded`  | `Demo ▲ Degraded · 2 problems`   |
-| Demo              | Unhealthy 5 | `Demo ◆5`   | `Demo ◆5 Unhealthy` | `Demo ◆ Unhealthy · 5 problems`  |
+| Online            | Healthy     | `{MODEL} ●`    | `{MODEL} ● Healthy`    | `{MODEL} ● Healthy`                 |
+| Online            | Degraded 3  | `{MODEL} ▲3`   | `{MODEL} ▲3 Degraded`  | `{MODEL} ▲ Degraded · 3 problems`   |
+| Online            | Unhealthy 5 | `{MODEL} ◆5`   | `{MODEL} ◆5 Unhealthy` | `{MODEL} ◆ Unhealthy · 5 problems`  |
+| Online            | Idle        | `{MODEL} ○`    | `{MODEL} ○ Idle`       | `{MODEL} ○ Idle`                    |
+| Online            | Unavailable | `{MODEL} ◌`    | `{MODEL} ◌ ?`          | `{MODEL} ◌ Unavailable`             |
+| Demo              | Healthy     | `DEMO ●`       | `DEMO ● Healthy`       | `DEMO ● Healthy`                    |
+| Demo              | Degraded 2  | `DEMO ▲2`      | `DEMO ▲2 Degraded`     | `DEMO ▲ Degraded · 2 problems`      |
+| Demo              | Unhealthy 5 | `DEMO ◆5`      | `DEMO ◆5 Unhealthy`    | `DEMO ◆ Unhealthy · 5 problems`     |
 | Offline           | \*          | `Offline ◌` | `Offline ◌`         | `Offline ◌ Device not reachable` |
 | Not yet connected | \*          | `— ○`       | `Not connected ○`   | `Not yet connected ○`            |
 

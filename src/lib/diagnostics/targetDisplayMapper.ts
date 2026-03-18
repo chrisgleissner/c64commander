@@ -37,6 +37,25 @@ const normalizeKnownProduct = (value?: string | null): "c64u" | "u64" | "u64e" |
   return null;
 };
 
+export const inferConnectedDeviceCode = (product?: string | null): "c64u" | "u64" | "u64e" | "u64e2" | null =>
+  normalizeKnownProduct(product);
+
+export const inferConnectedDeviceLabel = (product?: string | null): "C64U" | "U64" | "U64E" | "U64E2" | null => {
+  const code = normalizeKnownProduct(product);
+  switch (code) {
+    case "c64u":
+      return "C64U";
+    case "u64":
+      return "U64";
+    case "u64e":
+      return "U64E";
+    case "u64e2":
+      return "U64E2";
+    default:
+      return null;
+  }
+};
+
 export const mapTargetDisplayLabel = (targetType?: string | null, product?: string | null): string => {
   const normalizedTargetType = (targetType ?? "").trim().toLowerCase();
   const mockLabelFromTarget = resolveMockLabel(normalizedTargetType);
@@ -46,7 +65,7 @@ export const mapTargetDisplayLabel = (targetType?: string | null, product?: stri
   if (normalizedTargetType === "real-device") {
     const mockLabelFromProduct = resolveMockLabel(product);
     if (mockLabelFromProduct) return mockLabelFromProduct;
-    return normalizeKnownProduct(product) ?? "device";
+    return inferConnectedDeviceCode(product) ?? "device";
   }
 
   if (KNOWN_PRODUCT_TOKENS.has(normalizedTargetType as "c64u" | "u64" | "u64e" | "u64e2")) {

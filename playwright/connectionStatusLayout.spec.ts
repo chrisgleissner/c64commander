@@ -41,7 +41,7 @@ test.describe("Connection Status pop-up layout", () => {
   });
 
   const openPopover = async (page: Page) => {
-    const indicator = page.getByTestId("connectivity-indicator");
+    const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 10000 });
     await indicator.click();
     const popover = page.getByTestId("connection-status-popover");
@@ -171,7 +171,7 @@ test.describe("Connection Status pop-up layout", () => {
     await seedOfflineState(page);
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    const indicator = page.getByTestId("connectivity-indicator");
+    const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(indicator).toHaveAttribute("data-connection-state", "OFFLINE_NO_DEMO", { timeout: 10000 });
     await indicator.click();
     const popover = page.getByTestId("connection-status-popover");

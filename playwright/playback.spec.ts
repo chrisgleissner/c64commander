@@ -499,7 +499,7 @@ test.describe("Playback file browser", () => {
 
   test("local SID playback uploads before play", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/play");
-    const indicator = page.getByTestId("connectivity-indicator");
+    const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 5000 });
     await addLocalFolder(page, path.resolve("playwright/fixtures/local-play-sids"));
     await snap(page, testInfo, "local-playlist-ready");
@@ -520,7 +520,7 @@ test.describe("Playback file browser", () => {
 
   test("local SID playback does not throw unavailable error", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/play");
-    const indicator = page.getByTestId("connectivity-indicator");
+    const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 5000 });
     await addLocalFolder(page, path.resolve("playwright/fixtures/local-play-sids"));
     await expect(page.getByTestId("playlist-item")).toHaveCount(2);

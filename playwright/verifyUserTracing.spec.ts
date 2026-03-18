@@ -100,7 +100,7 @@ test("verify comprehensive user tracing", async ({ page }) => {
   await page.waitForURL("**/config");
 
   // 3. Open diagnostics from header indicator
-  const connectivityIndicator = page.getByTestId("connectivity-indicator");
+  const connectivityIndicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
   for (let attempt = 0; attempt < 2; attempt += 1) {
     await dismissBlockingDialogIfPresent();
     await connectivityIndicator.scrollIntoViewIfNeeded();

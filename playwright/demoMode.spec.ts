@@ -107,7 +107,7 @@ test.describe("Automatic Demo Mode", () => {
     const routes = ["/", "/play", "/disks", "/config", "/settings", "/docs"];
     for (const route of routes) {
       await page.goto(route, { waitUntil: "domcontentloaded" });
-      const indicator = page.getByTestId("connectivity-indicator");
+      const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
       await expect(indicator).toBeVisible();
       await expect(indicator).toHaveAttribute(
         "data-connection-state",
@@ -126,7 +126,7 @@ test.describe("Automatic Demo Mode", () => {
     await seedUiMocks(page, server.baseUrl);
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    const indicator = page.getByTestId("connectivity-indicator");
+    const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(indicator).toBeVisible();
     await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED");
     await expect(indicator.locator(".indicator-real")).toHaveText("C64U");
@@ -152,7 +152,7 @@ test.describe("Automatic Demo Mode", () => {
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
 
-    const indicator = page.getByTestId("connectivity-indicator");
+    const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(indicator).toBeVisible();
     await indicator.click();
     const popover = page.getByTestId("connection-status-popover");
@@ -200,7 +200,7 @@ test.describe("Automatic Demo Mode", () => {
     });
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    const indicator = page.getByTestId("connectivity-indicator");
+    const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(indicator).toHaveAttribute("data-connection-state", "OFFLINE_NO_DEMO", { timeout: 10000 });
 
     const openPopover = async () => {
@@ -263,7 +263,7 @@ test.describe("Automatic Demo Mode", () => {
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
 
-    const indicator = page.getByTestId("connectivity-indicator");
+    const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(indicator).toBeVisible();
     await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 5000 });
 
@@ -298,7 +298,7 @@ test.describe("Automatic Demo Mode", () => {
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
 
-    const indicator = page.getByTestId("connectivity-indicator");
+    const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     const dialog = page.getByRole("dialog", { name: "Demo Mode" });
 
     // Wait for DEMO_ACTIVE state first – Playwright's locator polling reliably
@@ -316,7 +316,7 @@ test.describe("Automatic Demo Mode", () => {
     await expect(dialog).toBeHidden();
 
     await expect(indicator).toHaveAttribute("data-connection-state", "DEMO_ACTIVE");
-    await expect(indicator).toHaveAttribute("aria-label", /C64U( Demo)?/);
+    await expect(indicator).toHaveAttribute("aria-label", /(Connected to .*|Demo mode)/);
     await snap(page, testInfo, "demo-indicator");
 
     // Manual retry: should not show interstitial again in this session.
@@ -350,7 +350,7 @@ test.describe("Automatic Demo Mode", () => {
     await passwordInput.fill("new-password");
     await page.getByRole("button", { name: /Save & Connect|Save connection/i }).click();
 
-    const indicator = page.getByTestId("connectivity-indicator");
+    const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 5000 });
     expect(seenPasswords).toContain("new-password");
     await snap(page, testInfo, "settings-rediscovery-password");
@@ -374,7 +374,7 @@ test.describe("Automatic Demo Mode", () => {
     });
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    const indicator = page.getByTestId("connectivity-indicator");
+    const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     const dialog = page.getByRole("dialog", { name: "Demo Mode" });
     await expect(indicator).toHaveAttribute("data-connection-state", "DEMO_ACTIVE", { timeout: 10000 });
     await expect(dialog).toBeVisible();
@@ -415,7 +415,7 @@ test.describe("Automatic Demo Mode", () => {
     if (dialogVisible) {
       await dialog.getByRole("button", { name: "Continue in Demo Mode" }).click();
     }
-    const indicator = page.getByTestId("connectivity-indicator");
+    const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(indicator).toHaveAttribute("data-connection-state", /DEMO_ACTIVE|DISCOVERING/);
 
     await page.goto("/settings", { waitUntil: "domcontentloaded" });

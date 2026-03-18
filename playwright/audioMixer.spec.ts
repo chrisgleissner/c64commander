@@ -38,7 +38,7 @@ const nudgeSliderUp = async (page: Page, id: string) => {
 };
 
 const waitForConnectivityReady = async (page: Page) => {
-  const indicator = page.getByTestId("connectivity-indicator");
+  const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
   await expect(indicator).toBeVisible({ timeout: 15000 });
   await expect(indicator).toHaveAttribute("data-connection-state", /DEMO_ACTIVE|REAL_CONNECTED/, { timeout: 15000 });
 };

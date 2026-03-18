@@ -56,7 +56,7 @@ test.describe("Modal close-button consistency", () => {
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
 
-    const indicator = page.getByTestId("connectivity-indicator");
+    const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(indicator).toHaveAttribute("data-connection-state", "OFFLINE_NO_DEMO", { timeout: 10000 });
     await indicator.click();
 
@@ -78,7 +78,7 @@ test.describe("Modal close-button consistency", () => {
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
 
-    const indicator = page.getByTestId("connectivity-indicator");
+    const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(indicator).toHaveAttribute("data-connection-state", "OFFLINE_NO_DEMO", { timeout: 10000 });
     await indicator.click();
 
@@ -109,7 +109,7 @@ test.describe("Modal close-button consistency", () => {
     await page.goto("/", { waitUntil: "domcontentloaded" });
 
     // Open connection status and navigate to diagnostics via the diagnostics section.
-    const indicator = page.getByTestId("connectivity-indicator");
+    const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 10000 });
     await indicator.click();
     const connDialog = page.getByTestId("connection-status-popover");

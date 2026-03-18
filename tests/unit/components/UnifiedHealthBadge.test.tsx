@@ -7,13 +7,14 @@
  */
 
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { UnifiedHealthBadge } from "@/components/UnifiedHealthBadge";
 
 // Mock health state hook
 const mockHealthState = {
   state: "Degraded" as const,
   connectivity: "Online" as const,
+  connectedDeviceLabel: "C64U",
   problemCount: 3,
   host: "c64u",
   contributors: {
@@ -27,6 +28,10 @@ const mockHealthState = {
 };
 
 let currentProfile = "compact";
+const mockConnectionStatus = {
+  state: "REAL_CONNECTED",
+  deviceInfo: { product: "C64 Ultimate", errors: [] as string[] },
+};
 
 vi.mock("@/hooks/useHealthState", () => ({
   useHealthState: () => mockHealthState,
@@ -36,11 +41,27 @@ vi.mock("@/hooks/useDisplayProfile", () => ({
   useDisplayProfile: () => ({ profile: currentProfile }),
 }));
 
+vi.mock("@/hooks/useC64Connection", () => ({
+  useC64Connection: () => ({
+    status: mockConnectionStatus,
+  }),
+}));
+
 vi.mock("@/lib/diagnostics/diagnosticsOverlay", () => ({
   requestDiagnosticsOpen: vi.fn(),
 }));
 
 describe("UnifiedHealthBadge", () => {
+  beforeEach(() => {
+    currentProfile = "compact";
+    (mockHealthState as { state: string }).state = "Degraded";
+    (mockHealthState as { connectivity: string }).connectivity = "Online";
+    mockHealthState.connectedDeviceLabel = "C64U";
+    mockHealthState.problemCount = 3;
+    mockConnectionStatus.state = "REAL_CONNECTED";
+    mockConnectionStatus.deviceInfo = { product: "C64 Ultimate", errors: [] };
+  });
+
   it("renders connectivity before the health signal on medium profile", () => {
     currentProfile = "medium";
     render(<UnifiedHealthBadge />);
@@ -199,8 +220,8 @@ describe("UnifiedHealthBadge", () => {
     render(<UnifiedHealthBadge />);
 
     const badge = screen.getByTestId("unified-health-badge");
-    expect(badge.textContent).toContain("Demo");
-    expect(badge.textContent).toContain("Demo▲3Degraded");
+    expect(badge.textContent).toContain("DEMO");
+    expect(badge.textContent).toContain("DEMO▲3Degraded");
 
     (mockHealthState as { connectivity: string }).connectivity = original;
   });
@@ -252,6 +273,19 @@ describe("UnifiedHealthBadge", () => {
 
     (mockHealthState as { connectivity: string }).connectivity = original;
     (mockHealthState as { state: string }).state = originalState;
+  });
+
+  it("renders inferred connected-device model instead of a hardcoded C64U label", () => {
+    currentProfile = "medium";
+    (mockHealthState as { state: string }).state = "Healthy";
+    mockHealthState.problemCount = 0;
+    mockHealthState.connectedDeviceLabel = "U64E";
+    mockConnectionStatus.deviceInfo = { product: "Ultimate 64 Elite", errors: [] };
+    render(<UnifiedHealthBadge />);
+
+    const badge = screen.getByTestId("unified-health-badge");
+    expect(badge.textContent).toContain("U64E");
+    expect(badge).toHaveAttribute("data-connected-device", "U64E");
   });
 
   it("clicking the badge calls requestDiagnosticsOpen with 'header'", async () => {

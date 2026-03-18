@@ -447,14 +447,19 @@ describe("getBadgeLabel", () => {
     expect(label).toBe(`Not yet connected ${HEALTH_GLYPHS.Idle}`);
   });
 
-  it("medium — Demo connectivity uses Demo label", () => {
+  it("medium — Demo connectivity uses DEMO label", () => {
     const label = getBadgeLabel("Healthy", "Demo", 0, "medium", HEALTH_GLYPHS.Healthy);
-    expect(label).toContain("Demo");
+    expect(label).toContain("DEMO");
   });
 
   it("compact — Online + Healthy → C64U + glyph", () => {
     const label = getBadgeLabel("Healthy", "Online", 0, "compact", g);
     expect(label).toBe(`C64U ${g}`);
+  });
+
+  it("compact — Online uses inferred /v1/info product label", () => {
+    const label = getBadgeLabel("Healthy", "Online", 0, "compact", g, "Ultimate 64 Elite");
+    expect(label).toBe(`U64E ${g}`);
   });
 
   it("compact — Online + Degraded 3 → C64U + glyph + 3", () => {
@@ -551,6 +556,10 @@ describe("getBadgeAriaLabel", () => {
 
   it("Online + Healthy → Connected to C64U, system healthy", () => {
     expect(getBadgeAriaLabel("Healthy", "Online", 0)).toBe("Connected to C64U, system healthy");
+  });
+
+  it("Online aria label uses inferred /v1/info product label", () => {
+    expect(getBadgeAriaLabel("Healthy", "Online", 0, "Ultimate 64-II")).toBe("Connected to U64E2, system healthy");
   });
 
   it("Online + Degraded N → includes problem count", () => {

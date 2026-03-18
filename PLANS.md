@@ -117,7 +117,8 @@ Classification: `UI_CHANGE` + `CODE_CHANGE`
 | SN07 | Update `App.tsx` to integrate SwipeNavigationLayer | completed |
 | SN08 | Create unit tests for gesture/navigation logic     | completed |
 | SN09 | Create `playwright/swipe-navigation.spec.ts`       | completed |
-| SN10 | Run lint/format/test:coverage and fix failures     | in-progress |
+| SN10 | Infer connected device label from `GET /v1/info`   | in-progress |
+| SN11 | Run lint/format/test:coverage and fix failures     | in-progress |
 
 ### Implementation Steps
 
@@ -127,6 +128,7 @@ Classification: `UI_CHANGE` + `CODE_CHANGE`
 4. **Sliding container** (`SwipeNavigationLayer.tsx`): Three-panel wrap-aware runway supports partial drag, wrap-around, transform-based transitions, and route-driven animations without introducing a second navigation state.
 5. **Performance adaptation**: Swipe transition timing reuses the existing runtime motion mode (`data-c64-motion-mode`) and display profile instead of adding new heuristics.
 6. **App integration**: Primary tab content renders through `SwipeNavigationLayer`; tab taps still drive the same router state, and unknown routes still fall through to the existing `Routes` tree.
+7. **Connected-model label**: Header badge must infer the real-device model from `GET /v1/info.product` and render the normalized short code (`C64U`, `U64`, `U64E`, `U64E2`) instead of a hardcoded `C64U`.
 
 ### Test Checklist
 
@@ -153,6 +155,7 @@ Classification: `UI_CHANGE` + `CODE_CHANGE`
 - [x] Rapid swipes: consecutive transitions, no state corruption
 - [x] Mid-transition screenshots captured for `home-to-play`, `play-to-disks`, and `docs-to-home`
 - [x] Swipe logs validated for gesture classification, transitions, and wrap-around cases
+- [ ] Header badge uses `/v1/info.product` to render the connected-device model
 
 ### Artifact Locations
 
@@ -166,7 +169,8 @@ Classification: `UI_CHANGE` + `CODE_CHANGE`
 - [2026-03-18] SN02-SN07 Implemented shared tab ordering, wrap-aware swipe runway, router integration, and motion-mode-aware transition timing
 - [2026-03-18] SN08 Added unit coverage for gesture helpers, hook integration, swipe runway model, swipe layer component branches, and App runtime mocks
 - [2026-03-18] SN09 Added `playwright/swipe-navigation.spec.ts` with deterministic swipe, wrap-around, slider exclusion, rapid-swipe, screenshot, and log validation
-- [2026-03-18] SN10 Validation run:
+- [2026-03-18] SN10 Added follow-up task to infer the real connected device model from `GET /v1/info.product` and render it in the header badge
+- [2026-03-18] SN11 Validation run:
   - `npm run lint` ✅
   - `npm run build` ✅
   - `npm exec playwright test playwright/swipe-navigation.spec.ts` ✅ (10 tests)

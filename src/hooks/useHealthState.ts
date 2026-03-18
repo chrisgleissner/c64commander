@@ -7,6 +7,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
+import { useC64Connection } from "@/hooks/useC64Connection";
 import { getTraceEvents } from "@/lib/tracing/traceSession";
 import { getConfiguredHost } from "@/lib/connection/hostEdit";
 import { useConnectionState } from "@/hooks/useConnectionState";
@@ -21,9 +22,13 @@ import {
   rollUpHealth,
   type OverallHealthState,
 } from "@/lib/diagnostics/healthModel";
+import { inferConnectedDeviceLabel } from "@/lib/diagnostics/targetDisplayMapper";
 
 export function useHealthState(): OverallHealthState {
   const connectionSnapshot = useConnectionState();
+  const {
+    status: { deviceInfo },
+  } = useC64Connection();
   const [traceEvents, setTraceEvents] = useState(getTraceEvents);
 
   useEffect(() => {
@@ -50,11 +55,12 @@ export function useHealthState(): OverallHealthState {
       state,
       connectivity,
       host,
+      connectedDeviceLabel: inferConnectedDeviceLabel(deviceInfo?.product),
       problemCount: totalProblems,
       contributors,
       lastRestActivity: deriveLastRestActivity(traceEvents),
       lastFtpActivity: deriveLastFtpActivity(traceEvents),
       primaryProblem: derivePrimaryProblem(traceEvents, contributors),
     };
-  }, [connectionSnapshot.state, traceEvents]);
+  }, [connectionSnapshot.state, deviceInfo?.product, traceEvents]);
 }

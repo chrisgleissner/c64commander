@@ -22,7 +22,7 @@ const snap = async (page: Page, testInfo: TestInfo, label: string) => {
 };
 
 const waitForConnected = async (page: Page) => {
-  await expect(page.getByTestId("connectivity-indicator")).toHaveAttribute("data-connection-state", "REAL_CONNECTED", {
+  await expect(page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge")).toHaveAttribute("data-connection-state", "REAL_CONNECTED", {
     timeout: 10000,
   });
 };

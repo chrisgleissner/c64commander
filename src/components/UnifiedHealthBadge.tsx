@@ -7,6 +7,7 @@
  */
 
 import { useHealthState } from "@/hooks/useHealthState";
+import { useC64Connection } from "@/hooks/useC64Connection";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import {
   HEALTH_GLYPHS,
@@ -39,16 +40,21 @@ type Props = {
  * Tapping opens the diagnostics overlay (§8.9).
  */
 export function UnifiedHealthBadge({ className }: Props) {
-  const { state, connectivity, problemCount } = useHealthState();
+  const { state, connectivity, problemCount, connectedDeviceLabel } = useHealthState();
+  const {
+    status: { state: rawConnectionState, deviceInfo },
+  } = useC64Connection();
   const { profile } = useDisplayProfile();
 
   const glyph = HEALTH_GLYPHS[state];
-  const ariaLabel = getBadgeAriaLabel(state, connectivity, problemCount);
+  const ariaLabel = getBadgeAriaLabel(state, connectivity, problemCount, deviceInfo?.product);
   const glyphColor = HEALTH_COLOR[state];
-  const connectivityLabel = getBadgeConnectivityLabel(connectivity);
+  const connectivityLabel = getBadgeConnectivityLabel(connectivity, deviceInfo?.product);
   const healthLabel = getBadgeHealthLabel(state, profile);
   const showsCount =
     problemCount > 0 && profile !== "expanded" && connectivity !== "Offline" && connectivity !== "Not yet connected";
+  const leadingLabel =
+    connectivity === "Online" || connectivity === "Checking" ? connectedDeviceLabel ?? connectivityLabel : connectivityLabel;
 
   const handleClick = () => {
     requestDiagnosticsOpen("header");
@@ -60,8 +66,10 @@ export function UnifiedHealthBadge({ className }: Props) {
       role="button"
       aria-label={ariaLabel}
       data-testid="unified-health-badge"
+      data-connection-state={rawConnectionState}
       data-health-state={state}
       data-connectivity-state={connectivity}
+      data-connected-device={connectivity === "Online" || connectivity === "Checking" ? connectedDeviceLabel ?? null : null}
       onClick={handleClick}
       className={cn(
         "flex items-center gap-1 whitespace-nowrap rounded-lg px-2 py-1.5 min-h-[44px] min-w-[44px] touch-none",
@@ -79,7 +87,7 @@ export function UnifiedHealthBadge({ className }: Props) {
             : profile === "medium"
               ? "Not connected"
               : "Not yet connected"
-          : connectivityLabel}
+          : leadingLabel}
       </span>
 
       <span className={cn("font-mono text-base leading-none shrink-0", glyphColor)} aria-hidden="true">

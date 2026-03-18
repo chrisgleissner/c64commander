@@ -1290,7 +1290,7 @@ test.describe("Fuzz Test", () => {
         sessionSteps += 1;
         logInteraction(`s=${totalSteps}\ta=infra\tpage-load`);
         await page
-          .waitForSelector('[data-testid="connectivity-indicator"]', {
+          .waitForSelector('[data-testid="unified-health-badge"]', {
             timeout: 5000,
           })
           .catch(() => {});

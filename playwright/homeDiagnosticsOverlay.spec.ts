@@ -122,7 +122,7 @@ test.describe("Home header and diagnostics overlay", () => {
     await expect(page.getByText("C64 Commander", { exact: true })).toHaveCount(0);
 
     const diagnosticsIndicator = page.getByTestId("diagnostics-activity-indicator");
-    const connectivityIndicator = page.getByTestId("connectivity-indicator");
+    const connectivityIndicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(diagnosticsIndicator).toBeVisible();
     await expect(connectivityIndicator).toBeVisible();
     const [diagnosticsBox, connectivityBox] = await Promise.all([
