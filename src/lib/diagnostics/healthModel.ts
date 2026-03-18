@@ -26,6 +26,33 @@ export const HEALTH_GLYPHS: Record<HealthState, string> = {
   Unavailable: "◌",
 };
 
+export const getBadgeConnectivityLabel = (connectivity: ConnectivityState): string => {
+  switch (connectivity) {
+    case "Online":
+      return "C64U";
+    case "Demo":
+      return "Demo";
+    case "Offline":
+      return "Offline";
+    case "Not yet connected":
+      return "—";
+    case "Checking":
+      return "C64U";
+  }
+};
+
+export const getBadgeHealthLabel = (health: HealthState, profile: "compact" | "medium" | "expanded"): string | null => {
+  if (profile === "compact") {
+    return null;
+  }
+
+  if (health === "Unavailable") {
+    return profile === "medium" ? "?" : "Unavailable";
+  }
+
+  return health;
+};
+
 export type LastActivity = {
   operation: string;
   result: string;
@@ -252,61 +279,33 @@ export const getBadgeLabel = (
   profile: "compact" | "medium" | "expanded",
   glyph: string,
 ): string => {
-  const connLabel =
-    connectivity === "Online"
-      ? "C64U"
-      : connectivity === "Demo"
-        ? "Demo"
-        : connectivity === "Offline"
-          ? "Offline"
-          : connectivity === "Not yet connected"
-            ? "—"
-            : "C64U"; // Checking: show previous
+  const connLabel = getBadgeConnectivityLabel(connectivity);
 
   if (connectivity === "Offline") {
-    if (profile === "expanded") return `${glyph} Offline · Device not reachable`;
-    return `${glyph} Offline`;
+    if (profile === "expanded") return `${connLabel} ${glyph} Device not reachable`;
+    return `${connLabel} ${glyph}`;
   }
 
   if (connectivity === "Not yet connected") {
-    if (profile === "compact") return `${glyph} —`;
-    if (profile === "medium") return `${glyph} Not connected`;
-    return `${glyph} Not yet connected`;
+    if (profile === "compact") return `${connLabel} ${glyph}`;
+    if (profile === "medium") return `Not connected ${glyph}`;
+    return `Not yet connected ${glyph}`;
   }
 
   const countStr = problemCount > 0 ? String(Math.min(problemCount, 99)) : "";
 
   if (profile === "compact") {
-    return `${glyph}${countStr} ${connLabel}`.trim();
+    return `${connLabel} ${glyph}${countStr}`.trim();
   }
+
+  const healthLabel = getBadgeHealthLabel(health, profile);
 
   if (profile === "medium") {
-    const healthLabel =
-      health === "Unavailable"
-        ? "?"
-        : health === "Idle"
-          ? "Idle"
-          : health === "Healthy"
-            ? "Healthy"
-            : health === "Degraded"
-              ? "Degraded"
-              : "Unhealthy";
-    return `${glyph}${countStr} ${healthLabel} · ${connLabel}`;
+    return `${connLabel} ${glyph}${countStr} ${healthLabel}`;
   }
 
-  // expanded
   const problemSuffix = problemCount > 0 ? ` · ${problemCount} problem${problemCount !== 1 ? "s" : ""}` : "";
-  const healthLabel =
-    health === "Unavailable"
-      ? "Unavailable"
-      : health === "Idle"
-        ? "Idle"
-        : health === "Healthy"
-          ? "Healthy"
-          : health === "Degraded"
-            ? "Degraded"
-            : "Unhealthy";
-  return `${glyph} ${healthLabel}${problemSuffix} · ${connLabel}`;
+  return `${connLabel} ${glyph} ${healthLabel}${problemSuffix}`;
 };
 
 // §8.5 — aria-label

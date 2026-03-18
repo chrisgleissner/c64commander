@@ -60,7 +60,7 @@ The Connection Status popover is **eliminated entirely**. There is exactly ONE h
 - **Connectivity and health are unified in one badge.** No separate connectivity indicator exists.
 - Meaning must never rely on color alone. Shape and text are primary carriers.
 - In the diagnostics overlay: icons that carry meaning must be paired with a text label.
-- In the header badge: shape encodes health state, text label encodes connectivity. The glyph + label combination is an interactive badge with an `aria-label`. Text pairing within the badge itself provides connectivity context; shape + optional count provides health context.
+- In the header badge: leading text encodes connectivity, the glyph encodes health state, and trailing text encodes the health label when shown by the active profile. The badge is an interactive element with an `aria-label`. Text provides connectivity context; the glyph and optional count provide health context.
 - Motion must not communicate health or severity.
 - Light, Dark, and System themes must preserve the same information hierarchy.
 
@@ -149,13 +149,22 @@ These labels are fixed and must not be paraphrased in the UI.
 Connectivity and health are independent dimensions that compose in the badge:
 
 - **Shape** encodes health (5 states → 5 distinct shapes)
-- **Label** encodes connectivity (`C64U`, `Demo`, `Offline`, `—`)
+- **Leading label** encodes connectivity (`C64U`, `Demo`, `Offline`, `—`)
+- **Trailing label** encodes the health word when the active profile includes it
 
 When connectivity is `Offline`: health state is overridden to display as `Unavailable` because no device communication is possible.
 
 When connectivity is `Not yet connected`: health state displays as `Idle`.
 
 When connectivity is `Checking`: the badge shows the previous connectivity label.
+
+Badge reading order is always:
+
+1. connectivity label
+2. health glyph (and compact/medium count when present)
+3. health label, when the active profile includes it
+
+The badge must not insert a decorative separator dot between connectivity and health. Only the health glyph carries state color. All badge text remains neutral foreground text, including `C64U` and `Demo`.
 
 ### 7.3 Current Window
 
@@ -178,7 +187,7 @@ At app startup before any diagnostics activity:
 - Overall health: `Idle`
 - Connectivity: `Not yet connected`
 - All contributors: `Idle`
-- Header badge: `○ —` (compact), `○ Not connected` (medium), `○ Not yet connected` (expanded)
+- Header badge: `— ○` (compact), `Not connected ○` (medium), `Not yet connected ○` (expanded)
 - Overlay stream: empty session state message
 
 ### 7.6 Primary Problem Selection
@@ -215,7 +224,8 @@ No other connectivity or diagnostics indicators exist in the header.
 The badge encodes two independent dimensions:
 
 - **Shape** → health state (5 distinct shapes, color-independent)
-- **Label** → connectivity state (text, unambiguous)
+- **Leading label** → connectivity state (text, unambiguous)
+- **Trailing label** → health state word when shown by the active profile
 
 | Health State | Glyph | Shape description  |
 | ------------ | ----- | ------------------ |
@@ -235,18 +245,24 @@ Colorblind safety: no two states share a shape, so no color pair matters.
 
 Full encoding across connectivity × health × profile:
 
-| Connectivity      | Health      | Compact     | Medium                | Expanded                           |
-| ----------------- | ----------- | ----------- | --------------------- | ---------------------------------- |
-| Online            | Healthy     | `● C64U`    | `● Healthy · C64U`    | `● Healthy · C64U`                 |
-| Online            | Degraded 3  | `▲3 C64U`   | `▲3 Degraded · C64U`  | `▲ Degraded · 3 problems · C64U`   |
-| Online            | Unhealthy 5 | `◆5 C64U`   | `◆5 Unhealthy · C64U` | `◆ Unhealthy · 5 problems · C64U`  |
-| Online            | Idle        | `○ C64U`    | `○ Idle · C64U`       | `○ Idle · C64U`                    |
-| Online            | Unavailable | `◌ C64U`    | `◌ ? · C64U`          | `◌ Unavailable · C64U`             |
-| Demo              | Healthy     | `● Demo`    | `● Healthy · Demo`    | `● Healthy · Demo`                 |
-| Demo              | Degraded 2  | `▲2 Demo`   | `▲2 Degraded · Demo`  | `▲ Degraded · 2 problems · Demo`   |
-| Demo              | Unhealthy 5 | `◆5 Demo`   | `◆5 Unhealthy · Demo` | `◆ Unhealthy · 5 problems · Demo`  |
-| Offline           | \*          | `◌ Offline` | `◌ Offline`           | `◌ Offline · Device not reachable` |
-| Not yet connected | \*          | `○ —`       | `○ Not connected`     | `○ Not yet connected`              |
+| Connectivity      | Health      | Compact     | Medium              | Expanded                         |
+| ----------------- | ----------- | ----------- | ------------------- | -------------------------------- |
+| Online            | Healthy     | `C64U ●`    | `C64U ● Healthy`    | `C64U ● Healthy`                 |
+| Online            | Degraded 3  | `C64U ▲3`   | `C64U ▲3 Degraded`  | `C64U ▲ Degraded · 3 problems`   |
+| Online            | Unhealthy 5 | `C64U ◆5`   | `C64U ◆5 Unhealthy` | `C64U ◆ Unhealthy · 5 problems`  |
+| Online            | Idle        | `C64U ○`    | `C64U ○ Idle`       | `C64U ○ Idle`                    |
+| Online            | Unavailable | `C64U ◌`    | `C64U ◌ ?`          | `C64U ◌ Unavailable`             |
+| Demo              | Healthy     | `Demo ●`    | `Demo ● Healthy`    | `Demo ● Healthy`                 |
+| Demo              | Degraded 2  | `Demo ▲2`   | `Demo ▲2 Degraded`  | `Demo ▲ Degraded · 2 problems`   |
+| Demo              | Unhealthy 5 | `Demo ◆5`   | `Demo ◆5 Unhealthy` | `Demo ◆ Unhealthy · 5 problems`  |
+| Offline           | \*          | `Offline ◌` | `Offline ◌`         | `Offline ◌ Device not reachable` |
+| Not yet connected | \*          | `— ○`       | `Not connected ○`   | `Not yet connected ○`            |
+
+Text color rules:
+
+- `C64U`, `Demo`, `Offline`, and all health words render in neutral foreground text.
+- The state glyph uses the health color token.
+- Compact and medium numeric problem counts inherit the glyph color because they are part of the health signal.
 
 ### 8.5 aria-label Matrix
 
@@ -265,16 +281,16 @@ Full encoding across connectivity × health × profile:
 
 ### 8.6 Compact Profile (≤360px)
 
-**Renders:** glyph + optional count (1–2 digits) + gap + connectivity label
+**Renders:** connectivity label + gap + glyph + optional count (1–2 digits)
 
 | State                 | Visual      | Max width |
 | --------------------- | ----------- | --------- |
-| Online + Healthy      | `● C64U`    | ~62px     |
-| Online + Degraded 3   | `▲3 C64U`   | ~76px     |
-| Online + Unhealthy 12 | `◆12 C64U`  | ~83px     |
-| Demo + Healthy        | `● Demo`    | ~66px     |
-| Offline               | `◌ Offline` | ~78px     |
-| Not yet connected     | `○ —`       | ~42px     |
+| Online + Healthy      | `C64U ●`    | ~62px     |
+| Online + Degraded 3   | `C64U ▲3`   | ~76px     |
+| Online + Unhealthy 12 | `C64U ◆12`  | ~83px     |
+| Demo + Healthy        | `Demo ●`    | ~66px     |
+| Offline               | `Offline ◌` | ~78px     |
+| Not yet connected     | `— ○`       | ~42px     |
 
 **Pixel budget:** glyph 24px + count 0–14px + gap 4px + label 28–48px = **56–90px max**.
 
@@ -282,17 +298,17 @@ The combined previous allocation was ~72px (DiagnosticsActivityIndicator) + ~50p
 
 ### 8.7 Medium Profile (361–599px)
 
-**Renders:** glyph + optional count (1–2 digits) + health label + separator + connectivity label
+**Renders:** connectivity label + gap + glyph + optional count (1–2 digits) + gap + health label
 
-Examples: `● Healthy · C64U`, `▲3 Degraded · C64U`, `◆5 Unhealthy · C64U`, `◌ Offline`
+Examples: `C64U ● Healthy`, `C64U ▲3 Degraded`, `C64U ◆5 Unhealthy`, `Offline ◌`
 
 **Character budget:** ~25 characters max. Pixel budget: ~170px.
 
 ### 8.8 Expanded Profile (≥600px)
 
-**Renders:** glyph + health label + problem count (spelled out) + separator + connectivity label
+**Renders:** connectivity label + gap + glyph + gap + health label + optional problem count (spelled out)
 
-Examples: `● Healthy · C64U`, `▲ Degraded · 3 problems · C64U`, `◆ Unhealthy · 5 problems · C64U`, `◌ Offline · Device not reachable`
+Examples: `C64U ● Healthy`, `C64U ▲ Degraded · 3 problems`, `C64U ◆ Unhealthy · 5 problems`, `Offline ◌ Device not reachable`
 
 **Character budget:** 35 characters max. Truncate with ellipsis if exceeded.
 
@@ -381,9 +397,9 @@ All five sections are visible without scrolling when the summary is expanded. Th
 
 ### 10.3 Collapsed Layout
 
-Single row: `[health glyph] [health label] · [connectivity label]`
+Single row: `[connectivity label] [health glyph] [health label]`
 
-Example: `▲ Degraded · C64U` or `◌ Offline`
+Example: `C64U ▲ Degraded` or `Offline ◌`
 
 Tapping the collapsed row expands the summary.
 
@@ -719,7 +735,7 @@ All profiles preserve the same concepts, labels, states, and interaction model. 
 
 ### 18.2 Compact
 
-- Header badge: glyph + optional count + connectivity label (§8.6)
+- Header badge: connectivity label + glyph + optional count (§8.6)
 - Overlay: full-height sheet
 - Summary panel: collapsible, stacked rows, short supporting phrases
 - Note: compact badge omits health label text to save space; the shape + count is sufficient at small sizes
@@ -732,7 +748,7 @@ All profiles preserve the same concepts, labels, states, and interaction model. 
 
 ### 18.3 Medium
 
-- Header badge: glyph + count + health label + connectivity label (§8.7)
+- Header badge: connectivity label + glyph + count + health label (§8.7)
 - Summary panel: collapsible, state + one supporting phrase per row
 - Last activity rows: full operation description
 - Quick-focus visible; search visible; origin behind Refine
@@ -741,7 +757,7 @@ All profiles preserve the same concepts, labels, states, and interaction model. 
 
 ### 18.4 Expanded
 
-- Header badge: glyph + full label + problem count + connectivity label (§8.8)
+- Header badge: connectivity label + glyph + health label + problem count (§8.8)
 - Summary panel: collapsible, state + supporting phrase + session totals
 - Last activity rows: full operation description + absolute timestamp
 - Timestamps: absolute + relative

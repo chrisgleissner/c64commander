@@ -1,2 +1,2 @@
-DISKS e@ HEALTHY - C64U
+DISKS C64U e HEALTHY
 Drive control & disk library

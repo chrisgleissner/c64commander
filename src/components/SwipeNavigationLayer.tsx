@@ -319,6 +319,7 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
               className="relative h-full overflow-y-auto overflow-x-hidden"
               style={{ width: "33.333333%", flexShrink: 0 }}
               aria-hidden={!isActive}
+              inert={isActive ? undefined : ""}
               data-testid={`swipe-slot-${TAB_ROUTES[pageIndex].label.toLowerCase()}`}
               data-route-index={pageIndex}
               data-slot-active={isActive ? "true" : "false"}

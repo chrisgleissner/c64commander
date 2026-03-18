@@ -30,6 +30,13 @@ const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
 };
 
+const nudgeSliderUp = async (page: Page, id: string) => {
+  const thumb = getSlider(page, id).getByRole("slider");
+  await thumb.scrollIntoViewIfNeeded();
+  await thumb.focus();
+  await page.keyboard.press("ArrowRight");
+};
+
 const waitForConnectivityReady = async (page: Page) => {
   const indicator = page.getByTestId("connectivity-indicator");
   await expect(indicator).toBeVisible({ timeout: 15000 });
@@ -80,14 +87,8 @@ test.describe("Audio Mixer volumes", () => {
       sliderIds.map(async (id) => (await getValue(page, id).textContent())?.trim() || ""),
     );
 
-    const slider = getSlider(page, "vol-ultisid-1");
-    const sliderBox = await slider.boundingBox();
-    if (sliderBox) {
-      await clearTraces(page);
-      await slider.click({
-        position: { x: sliderBox.width * 0.8, y: sliderBox.height / 2 },
-      });
-    }
+    await clearTraces(page);
+    await nudgeSliderUp(page, "vol-ultisid-1");
 
     const updated = await Promise.all(
       sliderIds.map(async (id) => (await getValue(page, id).textContent())?.trim() || ""),
@@ -135,13 +136,7 @@ test.describe("Audio Mixer volumes", () => {
     await expect.poll(() => server.getState()["Audio Mixer"]["Vol Socket 1"].value).toBe("OFF");
     await snap(page, testInfo, "solo-enabled");
 
-    const slider = getSlider(page, "vol-ultisid-1");
-    const sliderBox = await slider.boundingBox();
-    if (sliderBox) {
-      await slider.click({
-        position: { x: sliderBox.width * 0.8, y: sliderBox.height / 2 },
-      });
-    }
+    await nudgeSliderUp(page, "vol-ultisid-1");
     await expect(getSoloToggle(page, "vol-ultisid-1")).toHaveAttribute("aria-checked", "false");
     await snap(page, testInfo, "solo-cleared-after-edit");
 
@@ -174,13 +169,7 @@ test.describe("Audio Mixer volumes", () => {
     await expect(getSoloToggle(page, "vol-ultisid-1")).toHaveAttribute("aria-checked", "true");
     await snap(page, testInfo, "solo-enabled");
 
-    const slider = getSlider(page, "vol-socket-1");
-    const sliderBox = await slider.boundingBox();
-    if (sliderBox) {
-      await slider.click({
-        position: { x: sliderBox.width * 0.8, y: sliderBox.height / 2 },
-      });
-    }
+    await nudgeSliderUp(page, "vol-socket-1");
 
     await expect(getSoloToggle(page, "vol-ultisid-1")).toHaveAttribute("aria-checked", "false");
     await snap(page, testInfo, "solo-disabled");

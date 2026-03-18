@@ -421,29 +421,30 @@ describe("derivePrimaryProblem", () => {
 describe("getBadgeLabel", () => {
   const g = HEALTH_GLYPHS.Healthy;
 
-  it("compact — Offline → glyph + Offline", () => {
+  it("compact — Offline → Offline + glyph", () => {
     const label = getBadgeLabel("Unavailable", "Offline", 0, "compact", HEALTH_GLYPHS.Unavailable);
-    expect(label).toBe(`${HEALTH_GLYPHS.Unavailable} Offline`);
+    expect(label).toBe(`Offline ${HEALTH_GLYPHS.Unavailable}`);
   });
 
-  it("expanded — Offline → glyph + Offline · Device not reachable", () => {
+  it("expanded — Offline → Offline + glyph + Device not reachable", () => {
     const label = getBadgeLabel("Unavailable", "Offline", 0, "expanded", HEALTH_GLYPHS.Unavailable);
+    expect(label).toContain(`Offline ${HEALTH_GLYPHS.Unavailable}`);
     expect(label).toContain("Device not reachable");
   });
 
-  it("compact — Not yet connected → glyph + —", () => {
+  it("compact — Not yet connected → — + glyph", () => {
     const label = getBadgeLabel("Idle", "Not yet connected", 0, "compact", HEALTH_GLYPHS.Idle);
-    expect(label).toBe(`${HEALTH_GLYPHS.Idle} —`);
+    expect(label).toBe(`— ${HEALTH_GLYPHS.Idle}`);
   });
 
-  it("medium — Not yet connected → glyph + Not connected", () => {
+  it("medium — Not yet connected → Not connected + glyph", () => {
     const label = getBadgeLabel("Idle", "Not yet connected", 0, "medium", HEALTH_GLYPHS.Idle);
-    expect(label).toContain("Not connected");
+    expect(label).toBe(`Not connected ${HEALTH_GLYPHS.Idle}`);
   });
 
-  it("expanded — Not yet connected → glyph + Not yet connected", () => {
+  it("expanded — Not yet connected → Not yet connected + glyph", () => {
     const label = getBadgeLabel("Idle", "Not yet connected", 0, "expanded", HEALTH_GLYPHS.Idle);
-    expect(label).toContain("Not yet connected");
+    expect(label).toBe(`Not yet connected ${HEALTH_GLYPHS.Idle}`);
   });
 
   it("medium — Demo connectivity uses Demo label", () => {
@@ -451,40 +452,41 @@ describe("getBadgeLabel", () => {
     expect(label).toContain("Demo");
   });
 
-  it("compact — Online + Healthy → glyph + C64U", () => {
+  it("compact — Online + Healthy → C64U + glyph", () => {
     const label = getBadgeLabel("Healthy", "Online", 0, "compact", g);
-    expect(label).toBe(`${g} C64U`);
+    expect(label).toBe(`C64U ${g}`);
   });
 
-  it("compact — Online + Degraded 3 → glyph + 3 + C64U", () => {
+  it("compact — Online + Degraded 3 → C64U + glyph + 3", () => {
     const label = getBadgeLabel("Degraded", "Online", 3, "compact", HEALTH_GLYPHS.Degraded);
-    expect(label).toContain("3");
     expect(label).toContain("C64U");
+    expect(label).toContain("3");
+    expect(label.indexOf("C64U")).toBeLessThan(label.indexOf("3"));
   });
 
-  it("medium — Online + Unhealthy 5 → count + Unhealthy + C64U", () => {
+  it("medium — Online + Unhealthy 5 → C64U + count + Unhealthy", () => {
     const label = getBadgeLabel("Unhealthy", "Online", 5, "medium", HEALTH_GLYPHS.Unhealthy);
+    expect(label.startsWith("C64U")).toBe(true);
     expect(label).toContain("5");
     expect(label).toContain("Unhealthy");
-    expect(label).toContain("C64U");
   });
 
-  it("medium — Online + Degraded 3 → Degraded + C64U", () => {
+  it("medium — Online + Degraded 3 → C64U + Degraded", () => {
     const label = getBadgeLabel("Degraded", "Online", 3, "medium", HEALTH_GLYPHS.Degraded);
+    expect(label.startsWith("C64U")).toBe(true);
     expect(label).toContain("Degraded");
-    expect(label).toContain("C64U");
   });
 
-  it("medium — Online + Healthy → Healthy + C64U", () => {
+  it("medium — Online + Healthy → C64U + Healthy", () => {
     const label = getBadgeLabel("Healthy", "Online", 0, "medium", HEALTH_GLYPHS.Healthy);
+    expect(label.startsWith("C64U")).toBe(true);
     expect(label).toContain("Healthy");
-    expect(label).toContain("C64U");
   });
 
-  it("medium — Online + Idle → Idle + C64U", () => {
+  it("medium — Online + Idle → C64U + Idle", () => {
     const label = getBadgeLabel("Idle", "Online", 0, "medium", HEALTH_GLYPHS.Idle);
+    expect(label.startsWith("C64U")).toBe(true);
     expect(label).toContain("Idle");
-    expect(label).toContain("C64U");
   });
 
   it("medium — Checking + Unavailable → ? label", () => {
@@ -494,6 +496,7 @@ describe("getBadgeLabel", () => {
 
   it("expanded — Online + Degraded 2 → spells out problems count", () => {
     const label = getBadgeLabel("Degraded", "Online", 2, "expanded", HEALTH_GLYPHS.Degraded);
+    expect(label.startsWith("C64U")).toBe(true);
     expect(label).toContain("2 problems");
     expect(label).toContain("Degraded");
   });
@@ -512,8 +515,8 @@ describe("getBadgeLabel", () => {
 
   it("expanded — Online + Healthy → Healthy label", () => {
     const label = getBadgeLabel("Healthy", "Online", 0, "expanded", HEALTH_GLYPHS.Healthy);
+    expect(label.startsWith("C64U")).toBe(true);
     expect(label).toContain("Healthy");
-    expect(label).toContain("C64U");
   });
 
   it("expanded — Online + Unhealthy → Unhealthy label", () => {
@@ -524,8 +527,8 @@ describe("getBadgeLabel", () => {
 
   it("expanded — Online + Idle → Idle label", () => {
     const label = getBadgeLabel("Idle", "Online", 0, "expanded", HEALTH_GLYPHS.Idle);
+    expect(label.startsWith("C64U")).toBe(true);
     expect(label).toContain("Idle");
-    expect(label).toContain("C64U");
   });
 
   it("expanded — Checking + Unavailable → Unavailable label", () => {

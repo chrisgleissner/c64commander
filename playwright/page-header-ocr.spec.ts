@@ -62,6 +62,8 @@ const captureScreenArtifacts = async (page: Page, testInfo: TestInfo, slug: stri
   await fs.writeFile(ocrPath, `${ocrText}\n`, "utf8");
 
   expect(normalizeOcr(ocrText)).toContain(normalizeOcr(expectedTitle));
+  expect(normalizeOcr(ocrText)).toContain("c64u");
+  expect(normalizeOcr(ocrText)).toContain("healthy");
 
   await attachStepScreenshot(page, testInfo, `${slug}-screen`);
 

@@ -70,11 +70,18 @@ export const enforceVisualBoundaries = async (page: Page, testInfo: TestInfo) =>
           '[data-sonner-toast], [data-sonner-toaster], .toaster, .toast, [role="status"], [data-state="open"].destructive, [aria-label="Notifications (F8)"], [data-radix-toast-viewport]',
         ),
       );
+    const isSwipeRunwayOverflow = (element: Element) =>
+      Boolean(
+        element.closest('[data-testid="swipe-navigation-runway"]') &&
+        !element.closest('[data-slot-active="true"]') &&
+        !element.matches('[data-testid="swipe-navigation-container"]'),
+      );
 
     // Check all visible elements
     const elements = document.querySelectorAll("body *");
     elements.forEach((element) => {
       if (isToastElement(element)) return;
+      if (isSwipeRunwayOverflow(element)) return;
       const rect = element.getBoundingClientRect();
       const style = window.getComputedStyle(element);
 
@@ -139,14 +146,26 @@ export const enforceVisualBoundaries = async (page: Page, testInfo: TestInfo) =>
 
   // Check for horizontal scroll
   const hasHorizontalScroll = await page.evaluate(() => {
+    const activeSlot = document.querySelector<HTMLElement>('[data-slot-active="true"]');
+    if (activeSlot) {
+      return activeSlot.scrollWidth > activeSlot.clientWidth + 1;
+    }
     return document.documentElement.scrollWidth > document.documentElement.clientWidth;
   });
 
   if (hasHorizontalScroll) {
     const scrollInfo = await page.evaluate(() => ({
-      scrollWidth: document.documentElement.scrollWidth,
-      clientWidth: document.documentElement.clientWidth,
-      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      scrollWidth:
+        document.querySelector<HTMLElement>('[data-slot-active="true"]')?.scrollWidth ??
+        document.documentElement.scrollWidth,
+      clientWidth:
+        document.querySelector<HTMLElement>('[data-slot-active="true"]')?.clientWidth ??
+        document.documentElement.clientWidth,
+      overflow:
+        (document.querySelector<HTMLElement>('[data-slot-active="true"]')?.scrollWidth ??
+          document.documentElement.scrollWidth) -
+        (document.querySelector<HTMLElement>('[data-slot-active="true"]')?.clientWidth ??
+          document.documentElement.clientWidth),
     }));
 
     throw new Error(

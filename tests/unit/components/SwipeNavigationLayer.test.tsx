@@ -119,6 +119,7 @@ describe("SwipeNavigationLayer", () => {
     renderLayer("/settings/open-source-licenses");
     expect(await screen.findByText("Open Source Licenses Page")).toBeInTheDocument();
     expect(screen.getByTestId("swipe-slot-settings")).toHaveAttribute("data-slot-active", "true");
+    expect(screen.getByTestId("swipe-slot-config")).toHaveAttribute("inert", "");
   });
 
   it("tracks drag progress and cancels back to the same page", async () => {
