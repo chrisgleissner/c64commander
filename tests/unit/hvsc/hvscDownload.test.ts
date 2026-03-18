@@ -683,5 +683,20 @@ describe("hvscDownload", () => {
 
       await expect(downloadArchive(makeOptions())).rejects.toThrow("Download failed: 500 Server error");
     });
+
+    it("native download: throws corrupt-archive when written size is far below content-length hint", async () => {
+      vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        headers: { get: (name: string) => (name === "content-length" ? "1000000" : null) },
+      });
+      vi.mocked(Filesystem.downloadFile).mockResolvedValue({} as any);
+      vi.mocked(Filesystem.stat).mockResolvedValue({ size: 50000, type: "file" } as any);
+
+      const { deleteCachedArchive } = await import("@/lib/hvsc/hvscFilesystem");
+
+      await expect(downloadArchive(makeOptions())).rejects.toThrow("HVSC archive is corrupt or truncated");
+      expect(vi.mocked(deleteCachedArchive)).toHaveBeenCalledWith("hvsc-baseline-84.7z");
+    });
   });
 });

@@ -409,3 +409,83 @@ notification system that:
 
 - 2026-03-17: Audited all relevant files. Toast system is full-width on mobile (w-screen), hover-only X button, no tap handler, no visibility filtering, no duration setting. Planned replacement: left-anchored below-app-bar viewport, content-width, tap=dismiss+diagnostics, left/right swipe dismiss, duration/visibility settings.
 - 2026-03-17: Implemented all tasks. `appSettings.ts` gains `NotificationVisibility`, `loadNotificationVisibility`, `saveNotificationVisibility`, `loadNotificationDurationMs`, `saveNotificationDurationMs`, `clampNotificationDurationMs`. `toast.tsx` rewritten: X button removed, viewport now left-anchored below app bar (`top-[calc(var(--app-bar-height,3.5rem)+0.5rem)]`), content-width (`w-auto max-w-[min(90vw,22rem)]`), state=closed fades (no slide-right). `toaster.tsx` rewritten: `ToastItem` component with `onSwipeStart/End/Cancel` refs, tap handler calls `dismiss()+requestDiagnosticsOpen("error-logs")`, `ToastProvider duration` driven reactively from settings event. `use-toast.ts` filters non-destructive toasts when visibility is errors-only. `SettingsPage.tsx` gains Notifications section with Visibility select and Duration slider. Tests: `appSettings.notifications.test.ts` (14 tests), `use-toast.test.ts` (6 tests), existing `SettingsPage.test.tsx` and `use-toast.test.tsx` updated. All 4028 tests pass, lint clean, build clean, branch coverage 90.98%.
+
+---
+
+# PLANS: HVSC ingestion fix, download UX, PLAY layout
+
+## Summary
+
+Three related bugs and one UX redesign tracked together. Classification: `CODE_CHANGE`, `UI_CHANGE`.
+
+---
+
+## Phases and tasks
+
+### Phase 1 — Root cause investigation (complete)
+
+- [x] Trace "offset bytes must be larger equal zero" to `RandomAccessFile.seek()` inside Apache Commons Compress `SevenZFile`
+- [x] Map HVSC ingestion pipeline (native path vs non-native fallback)
+- [x] Read `HvscIngestionPlugin.kt`, `hvscDownload.ts`, `hvscIngestionRuntime.ts` in full
+- [x] Read `HvscControls.tsx` and `PlayFilesPage.tsx` layout section
+- [x] Read `index.css` and confirm CSS layer precedence bug in `.page-shell`
+
+### Phase 2 — Fix PLAY page layout
+
+- [ ] Update `.page-shell` padding-bottom in `src/index.css` to clear fixed TabBar
+
+### Phase 3 — Fix HVSC ingestion failure
+
+- [ ] Add `isCorruptedArchiveError()` helper in `hvscIngestionRuntime.ts`
+- [ ] Map corrupt-archive error to user-readable message with re-download CTA
+- [ ] In `downloadArchive()`: validate native download file size against Content-Length hint
+- [ ] Add archive-size pre-ingestion check before calling `ingestHvsc()`
+- [ ] `HvscIngestionPlugin.kt`: add archive-file length sanity check before `SevenZFile()` / `ZipInputStream()`
+- [ ] `HvscIngestionPlugin.kt`: catch `IOException` from archive parser and rethrow with clear "Archive corrupt or truncated" message
+
+### Phase 4 — Redesign HVSC download UX
+
+- [ ] Remove verbose progress metrics from `HvscControls.tsx` (bars, %, totals, status strings, current file)
+- [ ] Keep only: downloaded bytes in MB + elapsed time
+- [ ] Remove unused props from `HvscControlsProps` and `HvscManager.tsx`
+
+### Phase 5 — Tests
+
+- [ ] Regression test: `isCorruptedArchiveError` classifies the error correctly
+- [ ] Regression test: native download size mismatch → throws before ingestion
+- [ ] Update HvscControls tests for removed props
+- [ ] `npm run test:coverage` ≥ 91%
+
+### Phase 6 — Validation
+
+- [ ] `npm run lint`
+- [ ] `npm run test:coverage`
+- [ ] `npm run build`
+- [ ] `cd android && ./gradlew test`
+
+---
+
+## Findings
+
+### Root cause: "offset bytes must be larger equal zero"
+
+- NOT from `readArchiveChunk` (the `offsetBytes < 0` guard is correct there)
+- Source: `java.io.RandomAccessFile.seek(long)` throws `IOException("offset bytes must be larger/equal zero")` when pos < 0
+- Trigger: Apache Commons Compress `SevenZFile` internally calls `seek()` with a negative offset when `.7z` is truncated or corrupt (missing/garbage End of Archive block; `NextHeaderOffset` reads as negative signed long)
+- Propagation: `ingestSevenZip()` has no outer guard; propagates to `ingestHvsc()` catch → `call.reject()` → JS bridge → page error
+- `isUnsupportedNativeSevenZipMethodError()` does NOT match → error is shown raw with no re-download CTA
+
+### Root cause: PLAY page layout (button clipped)
+
+- CSS layer cascade: `@layer components` always wins over `@layer base`
+- `main { padding-bottom: calc(6rem + safe-area) }` in `@layer base` is overridden by `.page-shell { padding-bottom: 1.25rem }` in `@layer components`
+- HvscManager is the last element in PlayFilesPage — on small screens clipped by fixed TabBar
+
+---
+
+## Work log
+
+| Time | Action |
+|------|--------|
+| Session start | Research complete; PLANS.md appended |
+| Now | Beginning implementation |

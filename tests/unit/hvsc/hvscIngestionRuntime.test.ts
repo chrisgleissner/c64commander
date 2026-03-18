@@ -714,6 +714,84 @@ describe("hvscIngestionRuntime", () => {
     );
   });
 
+  it("throws re-download message and deletes corrupt archive when native ingestHvsc returns corrupt error", async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
+    vi.mocked(fetchLatestHvscVersions).mockResolvedValue({
+      baselineVersion: 5,
+      updateVersion: 5,
+      baseUrl: "https://example.com",
+    } as any);
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: "idle",
+      ingestionError: null,
+      installedVersion: 0,
+      installedBaselineVersion: null,
+    } as any);
+    vi.mocked(Filesystem.stat).mockResolvedValue({ size: 123, type: "file" } as any);
+    nativeHvscPlugin.ingestHvsc.mockRejectedValueOnce(
+      new Error("HVSC archive is corrupt or truncated; please re-download"),
+    );
+
+    const { deleteCachedArchive } = await import("@/lib/hvsc/hvscFilesystem");
+
+    await expect(installOrUpdateHvsc("token-corrupt")).rejects.toThrow(/corrupt or truncated.*re-download/i);
+    expect(vi.mocked(deleteCachedArchive)).toHaveBeenCalledWith("hvsc-baseline-5.7z");
+  });
+
+  it("treats raw 'offset bytes must be larger/equal zero' IOException as corrupt archive error", async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
+    vi.mocked(fetchLatestHvscVersions).mockResolvedValue({
+      baselineVersion: 5,
+      updateVersion: 5,
+      baseUrl: "https://example.com",
+    } as any);
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: "idle",
+      ingestionError: null,
+      installedVersion: 0,
+      installedBaselineVersion: null,
+    } as any);
+    vi.mocked(Filesystem.stat).mockResolvedValue({ size: 123, type: "file" } as any);
+    nativeHvscPlugin.ingestHvsc.mockRejectedValueOnce(
+      new Error("offset bytes must be larger equal zero"),
+    );
+
+    const { deleteCachedArchive } = await import("@/lib/hvsc/hvscFilesystem");
+
+    await expect(installOrUpdateHvsc("token-offset-bytes")).rejects.toThrow(/corrupt or truncated.*re-download/i);
+    expect(vi.mocked(deleteCachedArchive)).toHaveBeenCalledWith("hvsc-baseline-5.7z");
+  });
+
+  it("deletes corrupt cached archive during ingestCachedHvsc and rethrows", async () => {
+    vi.mocked(Filesystem.readdir).mockResolvedValue({
+      files: ["hvsc-baseline-5.complete.json"],
+    } as any);
+    vi.mocked(readCachedArchiveMarker).mockResolvedValue({
+      version: 5,
+      type: "baseline",
+    } as any);
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: "idle",
+      ingestionError: null,
+      installedVersion: 0,
+      installedBaselineVersion: null,
+    } as any);
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
+    vi.mocked(Filesystem.stat).mockResolvedValue({ size: 123, type: "file" } as any);
+    nativeHvscPlugin.ingestHvsc.mockRejectedValueOnce(
+      new Error("HVSC archive is corrupt or truncated; please re-download"),
+    );
+
+    const { deleteCachedArchive } = await import("@/lib/hvsc/hvscFilesystem");
+    vi.mocked(deleteCachedArchive).mockClear();
+
+    await expect(ingestCachedHvsc("token-corrupt-cached")).rejects.toThrow();
+    expect(vi.mocked(deleteCachedArchive)).toHaveBeenCalledWith(expect.stringContaining("hvsc-baseline-5"));
+  });
+
   it("rejects cached ingest when baseline is missing", async () => {
     vi.mocked(Filesystem.readdir).mockResolvedValue({ files: [] } as any);
     vi.mocked(loadHvscState).mockReturnValue({

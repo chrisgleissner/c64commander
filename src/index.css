@@ -370,7 +370,10 @@ button:focus-visible,
     max-width: var(--display-profile-page-max-width);
     margin-inline: auto;
     padding-top: var(--display-profile-page-padding-top);
-    padding-bottom: var(--display-profile-page-padding-y);
+    /* Must clear the fixed TabBar (~5rem) plus safe-area inset.
+       @layer components wins over @layer base so the main{} rule in base
+       is not effective here; we set the clearance explicitly. */
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom));
     padding-left: calc(var(--display-profile-page-padding-x) + env(safe-area-inset-left));
     padding-right: calc(var(--display-profile-page-padding-x) + env(safe-area-inset-right));
   }

@@ -16,7 +16,25 @@ export function HvscManager({ hvscControlsEnabled }: HvscManagerProps) {
 
   return (
     <HvscControls
-      {...hvsc}
+      hvscInstalled={hvsc.hvscInstalled}
+      hvscAvailable={hvsc.hvscAvailable}
+      hvscUpdating={hvsc.hvscUpdating}
+      hvscInProgress={hvsc.hvscInProgress}
+      hvscCanIngest={hvsc.hvscCanIngest}
+      hvscPhase={hvsc.hvscPhase}
+      hvscSummaryState={hvsc.hvscSummaryState}
+      hvscSummaryFilesExtracted={hvsc.hvscSummaryFilesExtracted}
+      hvscSummaryDurationMs={hvsc.hvscSummaryDurationMs}
+      hvscSummaryUpdatedAt={hvsc.hvscSummaryUpdatedAt}
+      hvscSummaryFailureLabel={hvsc.hvscSummaryFailureLabel}
+      hvscIngestionTotalSongs={hvsc.hvscIngestionTotalSongs}
+      hvscIngestionIngestedSongs={hvsc.hvscIngestionIngestedSongs}
+      hvscIngestionFailedSongs={hvsc.hvscIngestionFailedSongs}
+      hvscSonglengthSyntaxErrors={hvsc.hvscSonglengthSyntaxErrors}
+      hvscActionLabel={hvsc.hvscActionLabel}
+      hvscDownloadBytes={hvsc.hvscDownloadBytes}
+      hvscDownloadElapsedMs={hvsc.hvscDownloadElapsedMs}
+      hvscInlineError={hvsc.hvscInlineError}
       formatBytes={formatBytes}
       formatHvscDuration={formatHvscDuration}
       formatHvscTimestamp={formatHvscTimestamp}

@@ -872,9 +872,7 @@ test.describe("HVSC Play page", () => {
     await page.getByRole("button", { name: "Download HVSC" }).click();
 
     await expect(page.getByTestId("hvsc-progress")).toBeVisible();
-    const files = page.getByTestId("hvsc-extraction-files");
-    await expect(files).toContainText("Files:");
-    await expect.poll(async () => files.textContent()).toContain("Files: 1");
+    await expect(page.getByTestId("hvsc-download-bytes")).toBeVisible();
     await snap(page, testInfo, "hvsc-extraction-progress");
   });
 

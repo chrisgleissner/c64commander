@@ -55,6 +55,20 @@ open class HvscIngestionPlugin : Plugin() {
     private val REQUIRED_XZ_CLASS: Class<*> = LZMA2Options::class.java
     private val UNSUPPORTED_SEVEN_Z_METHOD_PATTERN =
             Pattern.compile("Unsupported compression method \\[(.*?)\\]", Pattern.CASE_INSENSITIVE)
+    /**
+     * Matches IOException messages that indicate a corrupt or truncated archive.
+     * "offset bytes must be larger equal zero" is Android's RandomAccessFile.seek()
+     * message when SevenZFile internally seeks to a negative offset caused by a
+     * corrupt or truncated End-of-Archive block in the .7z file.
+     */
+    private val CORRUPT_ARCHIVE_PATTERN =
+            Pattern.compile(
+                    "offset bytes.*larger.*equal zero" +
+                            "|corrupt.*archive|archive.*corrupt" +
+                            "|unexpected end.*archive|end of central directory not found" +
+                            "|truncated.*archive|archive.*truncated",
+                    Pattern.CASE_INSENSITIVE,
+            )
   }
 
   private fun ensureSevenZipRuntimeClasses() {
@@ -67,10 +81,13 @@ open class HvscIngestionPlugin : Plugin() {
 
   private fun buildIngestionFailureMessage(error: Exception): String {
     val message = error.message ?: "HVSC ingestion failed"
-    val matcher = UNSUPPORTED_SEVEN_Z_METHOD_PATTERN.matcher(message)
-    if (matcher.find()) {
-      val methodChain = matcher.group(1) ?: "unknown"
+    val methodMatcher = UNSUPPORTED_SEVEN_Z_METHOD_PATTERN.matcher(message)
+    if (methodMatcher.find()) {
+      val methodChain = methodMatcher.group(1) ?: "unknown"
       return "HVSC 7z method chain [$methodChain] is unsupported by Android native extraction; retry will use the non-native fallback extractor"
+    }
+    if (CORRUPT_ARCHIVE_PATTERN.matcher(message).find()) {
+      return "HVSC archive is corrupt or truncated; please re-download"
     }
     return message
   }

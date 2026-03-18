@@ -124,6 +124,18 @@ const isUnsupportedNativeSevenZipMethodError = (error: unknown) => {
   return /7z method chain.*unsupported|unsupported.*7z method chain|unsupported compression method/i.test(message);
 };
 
+const isCorruptedArchiveError = (error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error);
+  // Matches:
+  // - Kotlin-transformed message: "HVSC archive is corrupt or truncated; please re-download"
+  // - Re-thrown TS message:       "HVSC archive \"name\" is corrupt or truncated..."
+  // - Raw Android IOException:    "offset bytes must be larger equal zero"
+  // - Apache Commons Compress:    various corrupt/truncated/eof messages
+  return /HVSC archive.*corrupt.*truncated|offset bytes.*must be.*larger|corrupt.*archive|truncated.*archive|unexpected.*eof|invalid.*7z|invalid.*zip/i.test(
+    message,
+  );
+};
+
 // ── Listener management ──────────────────────────────────────────
 
 export const addHvscProgressListener = async (listener: (event: HvscProgressEvent) => void) => {
@@ -563,6 +575,11 @@ const ingestArchivePathNative = async (options: {
       });
     } catch (error) {
       if (!isUnsupportedNativeSevenZipMethodError(error)) {
+        if (isCorruptedArchiveError(error)) {
+          throw new Error(
+            `HVSC archive "${archiveName}" is corrupt or truncated and has been removed. Please tap Install to re-download.`,
+          );
+        }
         throw error;
       }
 
@@ -844,7 +861,7 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
     return loadHvscState();
   } catch (error) {
     const failure = classifyError(error);
-    if (currentArchive && !currentArchiveComplete) {
+    if (currentArchive && (!currentArchiveComplete || isCorruptedArchiveError(error))) {
       const { deleteCachedArchive } = await import("./hvscFilesystem");
       await deleteCachedArchive(currentArchive);
     }
@@ -1055,6 +1072,10 @@ export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus>
     return loadHvscState();
   } catch (error) {
     const failure = classifyError(error);
+    if (currentArchive && isCorruptedArchiveError(error)) {
+      const { deleteCachedArchive } = await import("./hvscFilesystem");
+      await deleteCachedArchive(currentArchive);
+    }
     if (failure.category === "cancelled") {
       addLog("info", "HVSC cached ingest cancelled", {
         ingestionId,
