@@ -24,6 +24,8 @@ type Props = {
   secondaryRight?: ReactNode;
   children?: ReactNode;
   testId?: string;
+  /** §13.4 — Auto-expand on open (compact primary problem) */
+  defaultExpanded?: boolean;
 };
 
 export const DiagnosticsListItem = ({
@@ -36,6 +38,7 @@ export const DiagnosticsListItem = ({
   secondaryRight,
   children,
   testId,
+  defaultExpanded,
 }: Props) => {
   const showOrigin = mode === "action";
   const originClass =
@@ -45,7 +48,7 @@ export const DiagnosticsListItem = ({
   const isActionMode = mode === "action";
 
   return (
-    <details className="group rounded-lg border border-border" data-testid={testId}>
+    <details className="group rounded-lg border border-border" data-testid={testId} open={defaultExpanded || undefined}>
       <summary className="list-none cursor-pointer select-none px-2 py-0.5 [&::-webkit-details-marker]:hidden">
         <div
           className="grid grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-2"

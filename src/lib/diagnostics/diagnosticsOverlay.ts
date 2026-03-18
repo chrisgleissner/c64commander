@@ -8,28 +8,34 @@
 
 import { primeDiagnosticsOverlaySuppression } from "@/lib/diagnostics/diagnosticsOverlayState";
 
-export type DiagnosticsTabKey = "error-logs" | "logs" | "traces" | "actions";
+/**
+ * Entry presets (§12.7).
+ * Controls which filters are active when the overlay opens.
+ * - 'header': opened from the unified header badge (Problems + Actions, All indicators)
+ * - 'settings': opened from Settings (Problems + Actions, All indicators)
+ */
+export type DiagnosticsEntryPreset = "header" | "settings";
 
-const DIAGNOSTICS_OPEN_KEY = "c64u_diagnostics_open_tab";
+const DIAGNOSTICS_OPEN_KEY = "c64u_diagnostics_open_preset";
 
-export const requestDiagnosticsOpen = (tab: DiagnosticsTabKey) => {
+export const requestDiagnosticsOpen = (preset: DiagnosticsEntryPreset) => {
   if (typeof window === "undefined") return;
   primeDiagnosticsOverlaySuppression();
   try {
-    sessionStorage.setItem(DIAGNOSTICS_OPEN_KEY, tab);
+    sessionStorage.setItem(DIAGNOSTICS_OPEN_KEY, preset);
   } catch (error) {
     console.warn("Unable to persist diagnostics open request:", error);
   }
-  window.dispatchEvent(new CustomEvent("c64u-diagnostics-open-request", { detail: { tab } }));
+  window.dispatchEvent(new CustomEvent("c64u-diagnostics-open-request", { detail: { preset } }));
 };
 
-export const consumeDiagnosticsOpenRequest = (): DiagnosticsTabKey | null => {
+export const consumeDiagnosticsOpenRequest = (): DiagnosticsEntryPreset | null => {
   if (typeof window === "undefined") return null;
   try {
-    const tab = sessionStorage.getItem(DIAGNOSTICS_OPEN_KEY) as DiagnosticsTabKey | null;
-    if (tab) {
+    const preset = sessionStorage.getItem(DIAGNOSTICS_OPEN_KEY) as DiagnosticsEntryPreset | null;
+    if (preset) {
       sessionStorage.removeItem(DIAGNOSTICS_OPEN_KEY);
-      return tab;
+      return preset;
     }
   } catch (error) {
     console.warn("Unable to consume diagnostics open request:", error);

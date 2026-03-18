@@ -4,18 +4,8 @@ import { describe, expect, it, vi } from "vitest";
 import { AppBar } from "@/components/AppBar";
 import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
 
-vi.mock("@/components/ConnectivityIndicator", () => ({
-  ConnectivityIndicator: () => <div data-testid="connectivity-indicator" />,
-}));
-
-vi.mock("@/components/DiagnosticsActivityIndicator", () => ({
-  DiagnosticsActivityIndicator: ({ onClick }: { onClick: () => void }) => (
-    <button type="button" onClick={onClick} data-testid="diagnostics-activity-indicator" />
-  ),
-}));
-
-vi.mock("@/lib/diagnostics/diagnosticsOverlay", () => ({
-  requestDiagnosticsOpen: vi.fn(),
+vi.mock("@/components/UnifiedHealthBadge", () => ({
+  UnifiedHealthBadge: () => <div data-testid="unified-health-badge" />,
 }));
 
 vi.mock("@/lib/diagnostics/diagnosticsOverlayState", () => ({
@@ -66,5 +56,18 @@ describe("AppBar", () => {
     expect(header?.className).toContain("pt-safe");
     expect(shell?.className).toContain("py-4");
     expect(screen.getByRole("heading", { name: "Settings" })).toBeVisible();
+  });
+
+  it("renders the unified health badge as the sole diagnostic/connectivity element", () => {
+    localStorage.clear();
+    setViewportWidth(600);
+
+    render(
+      <DisplayProfileProvider>
+        <AppBar title="Play" />
+      </DisplayProfileProvider>,
+    );
+
+    expect(screen.getByTestId("unified-health-badge")).toBeVisible();
   });
 });

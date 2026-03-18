@@ -8,10 +8,8 @@
 
 import type { ReactNode } from "react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ConnectivityIndicator } from "@/components/ConnectivityIndicator";
-import { DiagnosticsActivityIndicator } from "@/components/DiagnosticsActivityIndicator";
+import { UnifiedHealthBadge } from "@/components/UnifiedHealthBadge";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
-import { requestDiagnosticsOpen } from "@/lib/diagnostics/diagnosticsOverlay";
 import { isDiagnosticsOverlayActive, subscribeDiagnosticsOverlay } from "@/lib/diagnostics/diagnosticsOverlayState";
 import { cn } from "@/lib/utils";
 
@@ -62,10 +60,6 @@ export function AppBar({ title, subtitle, leading, children }: Props) {
     return () => unsubscribe();
   }, []);
 
-  const handleDiagnosticsOpen = () => {
-    requestDiagnosticsOpen("actions");
-  };
-
   return (
     <header
       ref={headerRef}
@@ -89,10 +83,8 @@ export function AppBar({ title, subtitle, leading, children }: Props) {
               </>
             )}
           </div>
-          <div className="flex items-center gap-3">
-            <DiagnosticsActivityIndicator onClick={handleDiagnosticsOpen} />
-            <ConnectivityIndicator />
-          </div>
+          {/* §8.1 — Unified badge: sole diagnostic/connectivity element in AppBar */}
+          <UnifiedHealthBadge />
         </div>
         {children ? <div className="min-w-0">{children}</div> : null}
       </div>

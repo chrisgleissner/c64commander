@@ -178,7 +178,7 @@ describe("GlobalDiagnosticsOverlay", () => {
     await act(async () => {
       window.dispatchEvent(
         new CustomEvent("c64u-diagnostics-open-request", {
-          detail: { tab: "traces" },
+          detail: { preset: "header" },
         }),
       );
     });

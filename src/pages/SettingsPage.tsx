@@ -40,7 +40,8 @@ import { clearTraceEvents, getTraceEvents } from "@/lib/tracing/traceSession";
 import { DiagnosticsDialog } from "@/components/diagnostics/DiagnosticsDialog";
 import { shareAllDiagnosticsZip, shareDiagnosticsZip } from "@/lib/diagnostics/diagnosticsExport";
 import { resetDiagnosticsActivity } from "@/lib/diagnostics/diagnosticsActivity";
-import { consumeDiagnosticsOpenRequest, type DiagnosticsTabKey } from "@/lib/diagnostics/diagnosticsOverlay";
+import { consumeDiagnosticsOpenRequest, type DiagnosticsEntryPreset } from "@/lib/diagnostics/diagnosticsOverlay";
+import { useHealthState } from "@/hooks/useHealthState";
 import {
   primeDiagnosticsOverlaySuppression,
   setDiagnosticsOverlayActive,
@@ -159,13 +160,7 @@ export default function SettingsPage() {
   const lastProbeFailedAtMs = connectionSnapshot.lastProbeFailedAtMs;
   const [isSaving, setIsSaving] = useState(false);
   const [logsDialogOpen, setLogsDialogOpen] = useState(false);
-  const [diagnosticsTab, setDiagnosticsTab] = useState<DiagnosticsTabKey>("actions");
-  const [diagnosticsFilters, setDiagnosticsFilters] = useState<Record<DiagnosticsTabKey, string>>({
-    "error-logs": "",
-    logs: "",
-    traces: "",
-    actions: "",
-  });
+  const healthState = useHealthState();
   const [logs, setLogs] = useState(getLogs());
   const [errorLogs, setErrorLogs] = useState(getErrorLogs());
   const [traceEvents, setTraceEvents] = useState(getTraceEvents());
@@ -324,14 +319,12 @@ export default function SettingsPage() {
 
   useEffect(() => {
     const handleDiagnosticsRequest = (event: Event) => {
-      const detail = (event as CustomEvent).detail as { tab?: DiagnosticsTabKey } | undefined;
-      if (!detail?.tab) return;
-      setDiagnosticsTab(detail.tab);
+      const detail = (event as CustomEvent).detail as { preset?: DiagnosticsEntryPreset } | undefined;
+      if (!detail?.preset) return;
       setDiagnosticsDialogOpen(true);
     };
     const pending = consumeDiagnosticsOpenRequest();
     if (pending) {
-      setDiagnosticsTab(pending);
       setDiagnosticsDialogOpen(true);
     }
     window.addEventListener("c64u-diagnostics-open-request", handleDiagnosticsRequest);
@@ -401,10 +394,11 @@ export default function SettingsPage() {
     [actionSummaries, errorLogs, logs, traceEvents],
   );
 
-  const handleShareDiagnostics = trace(async function handleShareDiagnostics() {
-    const data = diagnosticsExportData[diagnosticsTab];
+  const handleShareFilteredDiagnostics = trace(async function handleShareFilteredDiagnostics(
+    filteredEntries: unknown[],
+  ) {
     try {
-      await shareDiagnosticsZip(diagnosticsTab, data);
+      await shareDiagnosticsZip("actions", filteredEntries);
     } catch (error) {
       reportUserError({
         operation: "DIAGNOSTICS_EXPORT",
@@ -1744,22 +1738,15 @@ export default function SettingsPage() {
       <DiagnosticsDialog
         open={logsDialogOpen}
         onOpenChange={setDiagnosticsDialogOpen}
-        diagnosticsTab={diagnosticsTab}
-        onDiagnosticsTabChange={setDiagnosticsTab}
-        diagnosticsFilters={diagnosticsFilters}
-        onDiagnosticsFilterChange={(tab, value) =>
-          setDiagnosticsFilters((prev) => ({
-            ...prev,
-            [tab]: value,
-          }))
-        }
+        healthState={healthState}
         logs={logs}
         errorLogs={errorLogs}
         traceEvents={traceEvents}
         actionSummaries={actionSummaries}
-        onShareCurrentTab={() => withDiagnosticsTraceOverride(handleShareDiagnostics)}
+        onShareFiltered={(entries) => withDiagnosticsTraceOverride(() => handleShareFilteredDiagnostics(entries))}
         onShareAll={() => withDiagnosticsTraceOverride(handleShareAllDiagnostics)}
         onClearAll={handleClearAllDiagnostics}
+        onRetryConnection={() => void discoverConnection("manual")}
       />
     </div>
   );

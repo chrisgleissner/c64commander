@@ -146,12 +146,6 @@ vi.mock("@/components/ThemeProvider", () => ({
   }),
 }));
 
-vi.mock("@/components/DiagnosticsActivityIndicator", () => ({
-  DiagnosticsActivityIndicator: ({ onClick }: { onClick: () => void }) => (
-    <button type="button" onClick={onClick} data-testid="diagnostics-activity-indicator" />
-  ),
-}));
-
 const buildRouter = (ui: JSX.Element) =>
   createMemoryRouter([{ path: "*", element: ui }], {
     initialEntries: ["/"],

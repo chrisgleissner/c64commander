@@ -1,123 +1,99 @@
-# Diagnostics UX Specification Rewrite Plan
+# Diagnostics UX — Audit and Remediation Plan
 
-Classification: `DOC_ONLY`
+Classification: `UI_CHANGE` + `CODE_CHANGE`
 
-## Objective
+## Phase 1: Spec Assertions (PASS/FAIL)
 
-Produce a single, unified, internally consistent, and fully implementable diagnostics UX specification that eliminates duplication between diagnostics and connection status, unifies connectivity/health/diagnostics into one system, and satisfies all six invariants (I1–I6).
+| ID  | Description                                | Spec  | Status |
+| --- | ------------------------------------------ | ----- | ------ |
+| A01 | Single unified badge; no legacy indicators | §2.1  | PASS   |
+| A02 | Connection Status popover eliminated       | §2.1  | PASS   |
+| A03 | Badge health via shape (5 glyphs)          | §8.3  | PASS   |
+| A04 | Badge connectivity via text label          | §8.3  | PASS   |
+| A05 | Badge state matrix                         | §8.4  | PASS   |
+| A06 | Badge aria-label matrix                    | §8.5  | PASS   |
+| A07 | Badge min tap target 44x44                 | §8.10 | PASS   |
+| A08 | Badge data-testid, data attrs              | §8.10 | PASS   |
+| A09 | Overlay title/desc correct                 | §9.3  | PASS   |
+| A10 | Overlay structure order                    | §9.2  | PASS   |
+| A11 | Summary default expanded, reset on re-open | §10.1 | PASS   |
+| A12 | Collapsed summary format                   | §10.3 | PASS   |
+| A13 | Overall health row explanation phrase      | §10.4 | PASS   |
+| A14 | Last activity rows visible                 | §10.5 | PASS   |
+| A15 | Last activity format                       | §10.5 | PASS   |
+| A16 | Contributor order App/REST/FTP             | §10.6 | PASS   |
+| A17 | Contributor phrase truncation              | §10.6 | PASS   |
+| A18 | Expanded contributors session totals       | §10.6 | PASS   |
+| A19 | Contributor row scopes stream              | §10.7 | PASS   |
+| A20 | Primary problem spotlight                  | §10.8 | PASS   |
+| A21 | Spotlight constraints                      | §10.8 | PASS   |
+| A22 | Spotlight scrolls to stream entry          | §10.8 | PASS   |
+| A23 | Retry when Offline/Not connected           | §10.9 | PASS   |
+| A24 | Retry disabled while Checking              | §10.9 | PASS   |
+| A25 | "Change host in Settings" link             | §10.9 | PASS   |
+| A26 | Quick-focus 4 toggles                      | §11.1 | PASS   |
+| A27 | Default Problems+Actions; min 1            | §11.2 | PASS   |
+| A28 | Search behind Refine on compact            | §11.3 | PASS   |
+| A29 | Origin filters (User/System)               | §11.3 | PASS   |
+| A30 | Indicator filter one active                | §12.4 | PASS   |
+| A31 | Stream filtered by indicator               | §12.4 | PASS   |
+| A32 | Presets per entry path                     | §12.7 | PASS   |
+| A33 | Reset filters control                      | §12.8 | PASS   |
+| A34 | Stream newest first                        | §13.1 | PASS   |
+| A35 | Problem entry badges                       | §13.3 | PASS   |
+| A36 | Empty session message                      | §14.1 | PASS   |
+| A37 | No results message                         | §14.3 | PASS   |
+| A38 | Load older entries pagination              | §15.1 | PASS   |
+| A39 | Share all exports all                      | §16.1 | PASS   |
+| A40 | Share filtered exports filtered            | §16.1 | PASS   |
+| A41 | Clear all confirmation text                | §16.2 | PASS   |
+| A42 | Fixed terminology                          | §20   | PASS   |
+| A43 | No field duplication                       | §21   | PASS   |
+| A44 | Compact auto-expand primary problem        | §8.9  | PASS   |
+| A45 | DiagnosticsActivityIndicator deleted       | §2.1  | PASS   |
+| A46 | ConnectivityIndicator deleted              | §2.1  | PASS   |
+| A47 | Legacy test files removed                  | §2.1  | PASS   |
 
-## Binding Design Decisions
+## Gap Register
 
-- **D1**: Diagnostics absorbs Connection Status (Option 1A). Single badge, single overlay.
-- **D2**: Collapsible health summary in overlay (Option 2B). Expanded by default on open.
-- **D3**: Badge encoding uses shape + label (Option 3A). Shape = health, label = connectivity.
-- **D4**: Retry action inline in overlay summary when offline (Option 4A).
-- **D5**: Host editing remains in Settings. Overlay shows host read-only.
-- **D6**: All popover fields moved into unified badge + overlay. Popover eliminated.
-- **D7**: Eleven spec sections identified for modification.
-- **D8**: All six invariants satisfied by design.
+| ID  | Description                                             | Status     |
+| --- | ------------------------------------------------------- | ---------- |
+| G14 | Branch coverage below 91% gate (90.81%)                 | IN PROGRESS |
+|     | - UnifiedHealthBadge healthLabel branches not covered   |            |
+|     | - DiagnosticsDialog trace indicator/origin filter gaps  |            |
 
-## Phases
+## Remediation Status
 
-### Phase 1 — Current System Decomposition
+| Step                                          | Status    |
+| --------------------------------------------- | --------- |
+| R01 Delete legacy files                       | completed |
+| R02 Delete legacy tests                       | completed |
+| R03 Add contributor stream filtering          | completed |
+| R04 Add origin filters + Refine               | completed |
+| R05 Add "Change host in Settings" link        | completed |
+| R06 Fix share-filtered export                 | completed |
+| R07 Spotlight scroll-to + compact auto-expand | completed |
+| R08 Session totals + explanation phrase       | completed |
+| R09 Reset summary on re-open                  | completed |
+| R10 Add pagination                            | completed |
+| R11 Update tests                              | completed |
+| R12 Validate lint/test/build/coverage         | completed |
+| R13 Add coverage for UnifiedHealthBadge health label branches | in-progress |
+| R14 Add coverage for DiagnosticsDialog trace filter branches  | in-progress |
+| R15 Re-validate coverage ≥ 91%                | pending |
 
-- [x] Read existing diagnostics UX spec (`doc/diagnostics/diagnostics-ux-redesign.md`)
-- [x] Read Connection Status popover (`src/components/ConnectivityIndicator.tsx`)
-- [x] Read DiagnosticsActivityIndicator (`src/components/DiagnosticsActivityIndicator.tsx`)
-- [x] Read AppBar layout (`src/components/AppBar.tsx`)
-- [x] Catalog all fields, surfaces, and interaction paths
+## Work Log
 
-### Phase 2 — Duplication Mapping
+- [prior] All spec gaps resolved (R01–R12)
+- [2026-03-18] Coverage gate check: 90.81% branches (below 91% gate)
+  - UnifiedHealthBadge.tsx: 58.33% branches (lines 147,149,151,154 uncovered)
+  - DiagnosticsDialog.tsx: 78.64% branches (lines 873-876,879-881 uncovered)
+  - Adding targeted regression tests (R13, R14)
 
-- [x] Map every concept to its current surface(s)
-- [x] Identify all duplicated data across diagnostics and connection status
-- [x] Document field-level ownership conflicts
+## Verification Evidence
 
-Duplication found:
-| Concept | Diagnostics surface | Connection Status popover | Conflict |
-|---|---|---|---|
-| Connectivity (online/demo/offline) | Not shown | Popover status + header label | Separate surface |
-| REST failure counts | DiagnosticsActivityIndicator dot | Popover diagnostics row | Duplicated |
-| FTP failure counts | DiagnosticsActivityIndicator dot | Popover diagnostics row | Duplicated |
-| Error/log counts | DiagnosticsActivityIndicator dot | Popover diagnostics row | Duplicated |
-| Last activity | Not shown in diagnostics | Popover row | Missing from diagnostics |
-| Host | Not shown | Popover row | Not in diagnostics |
-| Health state | Not yet implemented (spec only) | Not shown | Missing from both live surfaces |
-
-### Phase 3 — Invariant Enforcement
-
-- [x] Validate I1 (Zero Confusion) against current system → FAIL: two entry points
-- [x] Validate I2 (Always-Visible Global State) → FAIL: connectivity not visible in health badge
-- [x] Validate I3 (Single Deterministic Click Path) → FAIL: badge + C64U button compete
-- [x] Validate I4 (No Duplication) → FAIL: REST/FTP/error counts in two places
-- [x] Validate I5 (Progressive Disclosure Integrity) → FAIL: connectivity outside ladder
-- [x] Validate I6 (Immediate Recency Visibility) → FAIL: last activity not in diagnostics
-
-### Phase 4 — Header + Indicator Redesign
-
-- [x] Design unified badge encoding (shape × connectivity matrix per D3)
-- [x] Prove compact fit (≤360px, single line)
-- [x] Define glyph system (5 shapes, color-independent)
-- [x] Define pixel budget (56–90px, within 122px formerly used by both indicators)
-
-### Phase 5 — Surface Consolidation
-
-- [x] Confirm: diagnostics absorbs connection status (D1)
-- [x] Eliminate ConnectivityIndicator popover as a surface
-- [x] Eliminate DiagnosticsActivityIndicator as a surface
-- [x] Design single unified badge replacing both
-- [x] Assign every field to exactly one surface (D6)
-
-### Phase 6 — Summary Layer Integration (Recency)
-
-- [x] Design collapsible summary panel (D2)
-- [x] Define summary field order: health → last activity → contributors → primary problem
-- [x] Place last REST/FTP activity on contributor rows (I6 compliance)
-- [x] Add connectivity row with host (read-only) and retry action (D4, D5)
-
-### Phase 7 — Full Spec Rewrite
-
-- [x] Write complete rewritten spec
-
-### Phase 8 — Final Consistency Audit
-
-- [x] Verify all 6 invariants against final spec
-- [x] Verify no duplication remains
-- [x] Verify compact layout feasibility
-- [x] Verify single interaction path
-- [x] Verify field ownership table completeness
-- [x] Verify popover disposition completeness
-
-## Decisions Log
-
-| Decision              | Choice                                     | Rationale                                                           |
-| --------------------- | ------------------------------------------ | ------------------------------------------------------------------- |
-| Surface consolidation | Diagnostics absorbs Connection Status (1A) | Single entry point satisfies I3. Existing overlay is 90% complete.  |
-| Overlay space         | Collapsible summary (2B)                   | Preserves I6 (expanded default) while maximizing event stream space |
-| Badge encoding        | Shape + label (3A)                         | Unambiguous text labels. Shape is color-independent.                |
-| Retry action          | In overlay summary when offline (4A)       | Immediate action after tapping offline badge. Minimal friction.     |
-| Host editing          | Settings page only (D5)                    | Overlay shows read-only context. Full editing in Settings.          |
-
-## Invariant Validation Log (Final)
-
-| Invariant                           | Status | Evidence                                                                        |
-| ----------------------------------- | ------ | ------------------------------------------------------------------------------- |
-| I1 Zero Confusion                   | PASS   | Single badge, single overlay, one click path                                    |
-| I2 Always-Visible Global State      | PASS   | Badge shape = health, label = connectivity, always in header                    |
-| I3 Single Deterministic Click Path  | PASS   | ONE badge → ONE overlay. Compact: 1 tap. Medium/expanded: 2 taps                |
-| I4 No Duplication                   | PASS   | Field ownership table assigns each concept to exactly one surface               |
-| I5 Progressive Disclosure Integrity | PASS   | Header signal → summary (health + connectivity + recency) → problems → evidence |
-| I6 Immediate Recency Visibility     | PASS   | Summary expanded by default — last REST/FTP activity visible without scrolling  |
-
-## Rejected Approaches
-
-| Approach                                                         | Reason rejected                                                                                                                                            |
-| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Keep both surfaces (popover + overlay)                           | Violates I3 (two entry points create "which do I tap?" ambiguity), violates I4 (REST/FTP counts duplicated)                                                |
-| Partial merge (popover keeps connectivity, overlay keeps health) | Violates I5 (connectivity outside disclosure ladder), violates I2 (health not visible alongside connectivity)                                              |
-| Header-only solution (encode everything in header, no overlay)   | Cannot show recency, contributors, or evidence in header. Violates I6. Insufficient for investigation.                                                     |
-| Encode diagnostics in C64U indicator                             | Multiplexes two independent concerns (connectivity + health) into one signal. "Is it red because offline or because REST failed?" Violates zero confusion. |
-| Color-coded header background                                    | Violates "no color-only encoding." Creates visual instability.                                                                                             |
-| Separate badge per contributor                                   | Returns to 3-dot model. Users interpret 3 signals before understanding overall health.                                                                     |
-| Hover tooltip for badge details                                  | Not available on mobile. Violates compact-safe.                                                                                                            |
-| Animation for severity                                           | Spec prohibits motion for health/severity. Accessibility concerns.                                                                                         |
+- **Tests**: 353 files, 4121 tests — all passing
+- **Coverage**: 92.64% statements, **90.81% branches** (below 91% gate — R13/R14 in progress)
+- **Lint**: 0 errors (3 warnings, pre-existing)
+- **Build**: clean
+- **TypeScript**: clean (no type errors)

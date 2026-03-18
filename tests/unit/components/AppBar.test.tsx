@@ -41,14 +41,10 @@ vi.mock("@/lib/diagnostics/diagnosticsOverlayState", () => ({
   },
 }));
 
-vi.mock("@/components/DiagnosticsActivityIndicator", () => ({
-  DiagnosticsActivityIndicator: ({ onClick }: { onClick: () => void }) => (
-    <button type="button" data-testid="diagnostics-activity-indicator" onClick={onClick} />
+vi.mock("@/components/UnifiedHealthBadge", () => ({
+  UnifiedHealthBadge: ({ className }: { className?: string }) => (
+    <button type="button" data-testid="unified-health-badge" className={className} />
   ),
-}));
-
-vi.mock("@/components/ConnectivityIndicator", () => ({
-  ConnectivityIndicator: () => <div data-testid="connectivity-indicator" />,
 }));
 
 describe("AppBar", () => {
@@ -80,23 +76,19 @@ describe("AppBar", () => {
     }
   });
 
-  it("opens diagnostics actions when activity indicator is clicked", () => {
+  it("renders the unified health badge", () => {
     render(<AppBar title="Test" />);
 
-    fireEvent.click(screen.getByTestId("diagnostics-activity-indicator"));
-
-    expect(requestDiagnosticsOpen).toHaveBeenCalledWith("actions");
+    expect(screen.getByTestId("unified-health-badge")).toBeInTheDocument();
     expect(navigateMock).not.toHaveBeenCalled();
   });
 
-  it("renders activity indicator before connectivity indicator", () => {
+  it("renders only the unified health badge (no separate activity or connectivity indicators)", () => {
     render(<AppBar title="Test" />);
 
-    const activity = screen.getByTestId("diagnostics-activity-indicator");
-    const connectivity = screen.getByTestId("connectivity-indicator");
-
-    const position = activity.compareDocumentPosition(connectivity);
-    expect(position & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByTestId("unified-health-badge")).toBeInTheDocument();
+    expect(screen.queryByTestId("diagnostics-activity-indicator")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("connectivity-indicator")).not.toBeInTheDocument();
   });
 
   it("applies pt-safe class for Android status bar inset", () => {

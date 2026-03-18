@@ -1,18 +1,19 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { DiagnosticsDialog } from "@/components/diagnostics/DiagnosticsDialog";
+import type { OverallHealthState } from "@/lib/diagnostics/healthModel";
 
-vi.mock("@/components/ui/dialog", () => ({
-  Dialog: ({ children, open }: any) => (open ? <div role="dialog">{children}</div> : null),
-  DialogContent: ({ children }: any) => <div>{children}</div>,
-  DialogHeader: ({ children }: any) => <div>{children}</div>,
-  DialogTitle: ({ children }: any) => <div>{children}</div>,
-  DialogDescription: ({ children }: any) => <div>{children}</div>,
+vi.mock("@/components/ui/app-surface", () => ({
+  AppSheet: ({ children, open }: any) => (open ? <div role="dialog">{children}</div> : null),
+  AppSheetContent: ({ children }: any) => <div>{children}</div>,
+  AppSheetHeader: ({ children }: any) => <div>{children}</div>,
+  AppSheetTitle: ({ children }: any) => <div>{children}</div>,
+  AppSheetDescription: ({ children }: any) => <div>{children}</div>,
 }));
 
 vi.mock("@/components/ui/alert-dialog", () => ({
   AlertDialog: ({ children }: any) => <div>{children}</div>,
-  AlertDialogTrigger: ({ children }: any) => <div>{children}</div>,
+  AlertDialogTrigger: ({ children, asChild }: any) => (asChild ? children : <div>{children}</div>),
   AlertDialogContent: ({ children }: any) => <div>{children}</div>,
   AlertDialogHeader: ({ children }: any) => <div>{children}</div>,
   AlertDialogTitle: ({ children }: any) => <div>{children}</div>,
@@ -23,8 +24,8 @@ vi.mock("@/components/ui/alert-dialog", () => ({
 }));
 
 vi.mock("@/components/ui/button", () => ({
-  Button: ({ children, onClick, ...props }: any) => (
-    <button onClick={onClick} {...props}>
+  Button: ({ children, onClick, disabled, ...props }: any) => (
+    <button onClick={onClick} disabled={disabled} {...props}>
       {children}
     </button>
   ),
@@ -32,13 +33,6 @@ vi.mock("@/components/ui/button", () => ({
 
 vi.mock("@/components/ui/input", () => ({
   Input: (props: any) => <input {...props} />,
-}));
-
-vi.mock("@/components/ui/tabs", () => ({
-  Tabs: ({ children }: any) => <div>{children}</div>,
-  TabsList: ({ children }: any) => <div>{children}</div>,
-  TabsTrigger: ({ children }: any) => <button>{children}</button>,
-  TabsContent: ({ children, value }: any) => <section data-testid={`tab-${value}`}>{children}</section>,
 }));
 
 vi.mock("@/components/diagnostics/DiagnosticsListItem", () => ({
@@ -64,79 +58,74 @@ vi.mock("@/lib/diagnostics/diagnosticsSeverity", () => ({
   resolveTraceSeverity: () => "info",
 }));
 
+vi.mock("@/hooks/useDisplayProfile", () => ({
+  useDisplayProfile: () => ({ profile: "medium" }),
+}));
+
+const idleHealthState: OverallHealthState = {
+  state: "Idle",
+  connectivity: "Not yet connected",
+  host: "c64u",
+  problemCount: 0,
+  contributors: {
+    App: { state: "Idle", problemCount: 0, totalOperations: 0, failedOperations: 0 },
+    REST: { state: "Idle", problemCount: 0, totalOperations: 0, failedOperations: 0 },
+    FTP: { state: "Idle", problemCount: 0, totalOperations: 0, failedOperations: 0 },
+  },
+  lastRestActivity: null,
+  lastFtpActivity: null,
+  primaryProblem: null,
+};
+
 describe("DiagnosticsDialog", () => {
   const renderDialog = (overrides: Partial<React.ComponentProps<typeof DiagnosticsDialog>> = {}) => {
     const props: React.ComponentProps<typeof DiagnosticsDialog> = {
       open: true,
       onOpenChange: vi.fn(),
-      diagnosticsTab: "traces",
-      onDiagnosticsTabChange: vi.fn(),
-      diagnosticsFilters: {
-        "error-logs": "",
-        logs: "",
-        traces: "",
-        actions: "",
-      },
-      onDiagnosticsFilterChange: vi.fn(),
+      healthState: idleHealthState,
       logs: [],
       errorLogs: [],
       traceEvents: [],
       actionSummaries: [],
-      onShareCurrentTab: vi.fn(),
+      onShareFiltered: vi.fn(),
       onShareAll: vi.fn(),
       onClearAll: vi.fn(),
+      onRetryConnection: vi.fn(),
       ...overrides,
     };
     return { props, ...render(<DiagnosticsDialog {...props} />) };
   };
 
-  it("filters entries, clears the active filter, and renders empty states", () => {
-    const onDiagnosticsFilterChange = vi.fn();
+  it("shows logs and filters them by search text", () => {
+    const onShareFiltered = vi.fn();
     renderDialog({
-      diagnosticsTab: "logs",
-      diagnosticsFilters: {
-        "error-logs": "",
-        logs: "ready",
-        traces: "",
-        actions: "",
-      },
-      onDiagnosticsFilterChange,
+      // activate Logs type from the start
+      defaultEvidenceTypes: new Set(["Logs"]),
       logs: [
         { id: "log-1", level: "info", message: "Ready", timestamp: "2024-01-01T00:00:00.000Z" },
         { id: "log-2", level: "warn", message: "Ignored", timestamp: "2024-01-01T00:00:01.000Z" },
       ],
+      onShareFiltered,
     });
 
-    expect(screen.getByTestId("log-entry-log-1")).toBeInTheDocument();
-    expect(screen.queryByTestId("log-entry-log-2")).not.toBeInTheDocument();
+    // Both entries visible initially
+    expect(screen.getByTestId("log-log-1")).toBeInTheDocument();
+    expect(screen.getByTestId("log-log-2")).toBeInTheDocument();
 
-    fireEvent.change(screen.getByTestId("diagnostics-filter-input"), { target: { value: "warn" } });
-    expect(onDiagnosticsFilterChange).toHaveBeenCalledWith("logs", "warn");
+    // Type in filter — only matching entry remains
+    fireEvent.change(screen.getByTestId("diagnostics-filter-input"), { target: { value: "ready" } });
+    expect(screen.getByTestId("log-log-1")).toBeInTheDocument();
+    expect(screen.queryByTestId("log-log-2")).not.toBeInTheDocument();
 
+    // Clear filter
     fireEvent.click(screen.getByRole("button", { name: /clear filter/i }));
-    expect(onDiagnosticsFilterChange).toHaveBeenCalledWith("logs", "");
-
-    expect(screen.getByText("No warning or error logs recorded.")).toBeInTheDocument();
-    expect(screen.getByText("No traces recorded.")).toBeInTheDocument();
-    expect(screen.getByText("No actions recorded.")).toBeInTheDocument();
+    expect(screen.getByTestId("log-log-1")).toBeInTheDocument();
+    expect(screen.getByTestId("log-log-2")).toBeInTheDocument();
   });
 
-  it("shows the trace truncation warning and filters actions using unknown duration text", () => {
-    const traceEvents = Array.from({ length: 101 }, (_, index) => ({
-      id: `trace-${index}`,
-      title: `Trace ${index}`,
-      timestamp: `2024-01-01T00:00:${String(index).padStart(2, "0")}.000Z`,
-    }));
-
+  it("shows action summaries and filters by search text", () => {
     renderDialog({
-      diagnosticsTab: "actions",
-      diagnosticsFilters: {
-        "error-logs": "",
-        logs: "",
-        traces: "",
-        actions: "unknown",
-      },
-      traceEvents,
+      defaultEvidenceTypes: new Set(["Actions"]),
       actionSummaries: [
         {
           correlationId: "act-1",
@@ -159,30 +148,185 @@ describe("DiagnosticsDialog", () => {
       ],
     });
 
-    expect(screen.getByText("Showing last 100 events. Export for full history.")).toBeInTheDocument();
+    expect(screen.getByTestId("action-act-1")).toBeInTheDocument();
+    expect(screen.getByTestId("action-act-2")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByTestId("diagnostics-filter-input"), { target: { value: "upload" } });
     expect(screen.getByTestId("action-act-1")).toBeInTheDocument();
     expect(screen.queryByTestId("action-act-2")).not.toBeInTheDocument();
   });
 
-  it("invokes share-all, share-current-tab, and clear-all actions", () => {
+  it("surfaces REST failures as problem entries when Problems filter is active", () => {
+    renderDialog({
+      defaultEvidenceTypes: new Set(["Problems"]),
+      traceEvents: [
+        {
+          id: "rest-fail-1",
+          timestamp: "2024-01-01T00:00:05.000Z",
+          type: "rest-response",
+          data: { method: "GET", path: "/v1/machine", status: 500 },
+        },
+      ],
+    });
+
+    // REST failure should appear as a problem entry
+    expect(screen.getByTestId("problem-rest-fail-1")).toBeInTheDocument();
+  });
+
+  it("surfaces FTP failures as problem entries when Problems filter is active", () => {
+    renderDialog({
+      defaultEvidenceTypes: new Set(["Problems"]),
+      traceEvents: [
+        {
+          id: "ftp-fail-1",
+          timestamp: "2024-01-01T00:00:05.000Z",
+          type: "ftp-operation",
+          data: { operation: "STOR", path: "/test.sid", result: "failure" },
+        },
+      ],
+    });
+
+    expect(screen.getByTestId("problem-ftp-fail-1")).toBeInTheDocument();
+  });
+
+  it("does not duplicate failed traces as both problem and trace entries", () => {
+    renderDialog({
+      defaultEvidenceTypes: new Set(["Problems", "Traces"]),
+      traceEvents: [
+        {
+          id: "rest-fail-2",
+          timestamp: "2024-01-01T00:00:05.000Z",
+          type: "rest-response",
+          data: { method: "PUT", path: "/v1/config", status: 502 },
+        },
+      ],
+    });
+
+    // Should appear as a problem, not duplicated as a trace
+    expect(screen.getByTestId("problem-rest-fail-2")).toBeInTheDocument();
+    expect(screen.queryByTestId("trace-rest-fail-2")).not.toBeInTheDocument();
+  });
+
+  it("shows contributor badge on problem entries", () => {
+    renderDialog({
+      defaultEvidenceTypes: new Set(["Problems"]),
+      errorLogs: [{ id: "err-app-1", message: "App crash", timestamp: "2024-01-01T00:00:00.000Z" }],
+      traceEvents: [
+        {
+          id: "rest-fail-3",
+          timestamp: "2024-01-01T00:00:05.000Z",
+          type: "rest-response",
+          data: { method: "GET", path: "/v1/info", status: 503 },
+        },
+      ],
+    });
+
+    const appProblem = screen.getByTestId("problem-err-app-1");
+    expect(appProblem.textContent).toContain("App");
+
+    const restProblem = screen.getByTestId("problem-rest-fail-3");
+    expect(restProblem.textContent).toContain("REST");
+  });
+
+  it("filters traces by indicator — excludes traces whose contributor does not match", () => {
+    // We need to open the dialog with Traces active and set an indicatorFilter.
+    // The indicator filter is controlled via the contributor rows in the health summary.
+    // We test that with Traces active, a REST-type trace survives while an FTP-type trace is excluded
+    // when the REST indicator row is clicked.
+    renderDialog({
+      defaultEvidenceTypes: new Set(["Traces"]),
+      traceEvents: [
+        {
+          id: "trace-rest-1",
+          timestamp: "2024-01-01T00:00:01.000Z",
+          title: "REST request",
+          type: "rest-request",
+        },
+        {
+          id: "trace-ftp-1",
+          timestamp: "2024-01-01T00:00:02.000Z",
+          title: "FTP operation",
+          type: "ftp-operation",
+          data: { operation: "STOR", path: "/test.sid", result: "success" },
+        },
+        {
+          id: "trace-unknown-1",
+          timestamp: "2024-01-01T00:00:03.000Z",
+          title: "Unknown trace",
+          type: "action-start",
+        },
+      ],
+    });
+
+    // All three visible initially (no indicator filter)
+    expect(screen.getByTestId("trace-trace-rest-1")).toBeInTheDocument();
+    expect(screen.getByTestId("trace-trace-ftp-1")).toBeInTheDocument();
+    expect(screen.getByTestId("trace-trace-unknown-1")).toBeInTheDocument();
+
+    // Click the REST contributor row to set indicatorFilter = "REST"
+    fireEvent.click(screen.getByTestId("contributor-row-rest"));
+
+    // REST trace stays; FTP trace and unknown-contributor trace are filtered out
+    expect(screen.getByTestId("trace-trace-rest-1")).toBeInTheDocument();
+    expect(screen.queryByTestId("trace-trace-ftp-1")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("trace-trace-unknown-1")).not.toBeInTheDocument();
+  });
+
+  it("filters traces by origin when one origin filter is active", () => {
+    renderDialog({
+      defaultEvidenceTypes: new Set(["Traces"]),
+      traceEvents: [
+        {
+          id: "trace-user-1",
+          timestamp: "2024-01-01T00:00:01.000Z",
+          title: "User trace",
+          type: "rest-request",
+          origin: "user",
+        },
+        {
+          id: "trace-system-1",
+          timestamp: "2024-01-01T00:00:02.000Z",
+          title: "System trace",
+          type: "rest-request",
+          origin: "system",
+        },
+      ],
+    });
+
+    // Both visible initially
+    expect(screen.getByTestId("trace-trace-user-1")).toBeInTheDocument();
+    expect(screen.getByTestId("trace-trace-system-1")).toBeInTheDocument();
+
+    // Open Refine panel and click User origin filter
+    fireEvent.click(screen.getByTestId("refine-button"));
+    fireEvent.click(screen.getByTestId("origin-toggle-user"));
+
+    // Only user-origin trace remains
+    expect(screen.getByTestId("trace-trace-user-1")).toBeInTheDocument();
+    expect(screen.queryByTestId("trace-trace-system-1")).not.toBeInTheDocument();
+  });
+
+  it("invokes share-all, share-filtered, and clear-all actions", () => {
     const onShareAll = vi.fn();
-    const onShareCurrentTab = vi.fn();
+    const onShareFiltered = vi.fn();
     const onClearAll = vi.fn();
     renderDialog({
-      diagnosticsTab: "error-logs",
-      onShareAll,
-      onShareCurrentTab,
-      onClearAll,
+      defaultEvidenceTypes: new Set(["Problems"]),
       errorLogs: [{ id: "err-1", message: "Broken export", timestamp: "2024-01-01T00:00:00.000Z" }],
+      onShareAll,
+      onShareFiltered,
+      onClearAll,
     });
 
     const dialog = screen.getByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: /^share all$/i }));
-    fireEvent.click(screen.getByTestId("diagnostics-share-errors"));
-    fireEvent.click(screen.getByRole("button", { name: /^clear$/i }));
+    fireEvent.click(within(dialog).getByTestId("diagnostics-share-all"));
+    fireEvent.click(within(dialog).getByTestId("diagnostics-share-filtered"));
+    fireEvent.click(within(dialog).getByTestId("diagnostics-clear-all-trigger"));
+    // The confirm button in AlertDialog
+    fireEvent.click(within(dialog).getByRole("button", { name: /^clear$/i }));
 
     expect(onShareAll).toHaveBeenCalled();
-    expect(onShareCurrentTab).toHaveBeenCalled();
+    expect(onShareFiltered).toHaveBeenCalled();
     expect(onClearAll).toHaveBeenCalled();
   });
 });
