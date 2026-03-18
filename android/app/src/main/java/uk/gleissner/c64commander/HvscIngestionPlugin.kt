@@ -56,10 +56,10 @@ open class HvscIngestionPlugin : Plugin() {
     private val UNSUPPORTED_SEVEN_Z_METHOD_PATTERN =
             Pattern.compile("Unsupported compression method \\[(.*?)\\]", Pattern.CASE_INSENSITIVE)
     /**
-     * Matches IOException messages that indicate a corrupt or truncated archive.
-     * "offset bytes must be larger equal zero" is Android's RandomAccessFile.seek()
-     * message when SevenZFile internally seeks to a negative offset caused by a
-     * corrupt or truncated End-of-Archive block in the .7z file.
+     * Matches IOException messages that indicate a corrupt or truncated archive. "offset bytes must
+     * be larger equal zero" is Android's RandomAccessFile.seek() message when SevenZFile internally
+     * seeks to a negative offset caused by a corrupt or truncated End-of-Archive block in the .7z
+     * file.
      */
     private val CORRUPT_ARCHIVE_PATTERN =
             Pattern.compile(

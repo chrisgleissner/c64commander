@@ -248,7 +248,8 @@ class HvscIngestionPluginTest {
             method.invoke(
                     plugin,
                     java.io.IOException("offset bytes must be larger equal zero"),
-            ) as String
+            ) as
+                    String
 
     assertEquals("HVSC archive is corrupt or truncated; please re-download", result)
   }
@@ -266,7 +267,8 @@ class HvscIngestionPluginTest {
             method.invoke(
                     plugin,
                     java.io.IOException("unexpected end of archive reading header"),
-            ) as String
+            ) as
+                    String
 
     assertEquals("HVSC archive is corrupt or truncated; please re-download", result)
   }
@@ -284,9 +286,9 @@ class HvscIngestionPluginTest {
             method.invoke(
                     plugin,
                     RuntimeException("something entirely unrelated"),
-            ) as String
+            ) as
+                    String
 
     assertEquals("something entirely unrelated", result)
   }
 }
-

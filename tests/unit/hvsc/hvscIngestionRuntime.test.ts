@@ -754,9 +754,7 @@ describe("hvscIngestionRuntime", () => {
       installedBaselineVersion: null,
     } as any);
     vi.mocked(Filesystem.stat).mockResolvedValue({ size: 123, type: "file" } as any);
-    nativeHvscPlugin.ingestHvsc.mockRejectedValueOnce(
-      new Error("offset bytes must be larger equal zero"),
-    );
+    nativeHvscPlugin.ingestHvsc.mockRejectedValueOnce(new Error("offset bytes must be larger equal zero"));
 
     const { deleteCachedArchive } = await import("@/lib/hvsc/hvscFilesystem");
 

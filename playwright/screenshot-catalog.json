@@ -40,7 +40,8 @@
     "hvsc-library",
     "device-safety",
     "about",
-    "hvsc"
+    "hvsc",
+    "notifications"
   ],
   "docs": [
     "getting-started",
