@@ -28,6 +28,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ActionSummaryListItem } from "@/components/diagnostics/ActionSummaryListItem";
 import { DiagnosticsListItem } from "@/components/diagnostics/DiagnosticsListItem";
+import {
+  ConnectionActionsRegion,
+  isRecoveryFirstState,
+  type ConnectionActionsCallbacks,
+} from "@/components/diagnostics/ConnectionActionsRegion";
+import { DeviceDetailView, type DeviceDetailInfo } from "@/components/diagnostics/DeviceDetailView";
+import { LatencyAnalysisPopup } from "@/components/diagnostics/LatencyAnalysisPopup";
+import { HealthHistoryPopup } from "@/components/diagnostics/HealthHistoryPopup";
+import { HeatMapPopup } from "@/components/diagnostics/HeatMapPopup";
+import type { HeatMapVariant } from "@/lib/diagnostics/heatMapData";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import type { ActionSummary } from "@/lib/diagnostics/actionSummaries";
 import {
@@ -40,11 +50,22 @@ import {
   type OverallHealthState,
   type Problem,
 } from "@/lib/diagnostics/healthModel";
+import { computeLatencyPercentiles } from "@/lib/diagnostics/latencyTracker";
 import { resolveLogSeverity, resolveTraceSeverity } from "@/lib/diagnostics/diagnosticsSeverity";
 import { formatDiagnosticsTimestamp } from "@/lib/diagnostics/timeFormat";
 import { getTraceTitle } from "@/lib/tracing/traceFormatter";
 import { cn } from "@/lib/utils";
-import { ChevronDown, ChevronUp, RefreshCw, Search, SlidersHorizontal, X } from "lucide-react";
+import {
+  Activity,
+  BarChart2,
+  ChevronDown,
+  ChevronUp,
+  Clock,
+  RefreshCw,
+  Search,
+  SlidersHorizontal,
+  X,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 // §11 — Evidence type filters
@@ -70,6 +91,8 @@ type DiagnosticsTraceEntry = {
   [key: string]: unknown;
 };
 
+type ActivePopup = "latency" | "history" | `heatmap-${"REST" | "FTP" | "CONFIG"}` | null;
+
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -85,9 +108,17 @@ type Props = {
     entries: Array<DiagnosticsLogEntry | ActionSummary | DiagnosticsTraceEntry>,
   ) => void | Promise<void>;
   onClearAll: () => void;
+  /** Legacy simple retry — called when no async feedback is needed */
   onRetryConnection: () => void;
   // §11.2 — Default filter state on open (driven by entry preset)
   defaultEvidenceTypes?: Set<EvidenceType>;
+  // §7/8 — Extended connection action callbacks (async, with inline feedback)
+  connectionCallbacks?: ConnectionActionsCallbacks;
+  // §14 — Device detail from last health check
+  deviceInfo?: DeviceDetailInfo | null;
+  // §5 — Whether a health check is currently running
+  healthCheckRunning?: boolean;
+  onRunHealthCheck?: () => void;
 };
 
 const CONTRIBUTOR_ORDER: ContributorKey[] = ["App", "REST", "FTP"];
@@ -292,6 +323,13 @@ const HealthSummary = ({
   profile,
   expanded,
   onExpandedChange,
+  connectionCallbacks,
+  deviceInfo,
+  healthCheckRunning,
+  onRunHealthCheck,
+  onOpenDeviceDetail,
+  onOpenLatency,
+  onOpenHistory,
 }: {
   healthState: OverallHealthState;
   indicatorFilter: IndicatorFilter;
@@ -302,11 +340,26 @@ const HealthSummary = ({
   profile: "compact" | "medium" | "expanded";
   expanded: boolean;
   onExpandedChange: (v: boolean) => void;
+  connectionCallbacks?: ConnectionActionsCallbacks;
+  deviceInfo?: DeviceDetailInfo | null;
+  healthCheckRunning?: boolean;
+  onRunHealthCheck?: () => void;
+  onOpenDeviceDetail: () => void;
+  onOpenLatency: () => void;
+  onOpenHistory: () => void;
 }) => {
   const { state, connectivity, host, contributors, lastRestActivity, lastFtpActivity, primaryProblem } = healthState;
   const glyph = HEALTH_GLYPHS[state];
-  const showRetry = connectivity === "Offline" || connectivity === "Not yet connected";
+  // §7.2 — Show legacy retry only when connection callbacks are not provided
+  const showLegacyRetry = !connectionCallbacks && (connectivity === "Offline" || connectivity === "Not yet connected");
   const explanation = getExplanationPhrase(state, contributors, profile);
+
+  // §6.3 — Recovery-first: auto-expand Connection Actions when offline/disconnected
+  const recoveryFirst = isRecoveryFirstState(connectivity);
+
+  // Latency summary
+  const latency = computeLatencyPercentiles();
+  const hasLatencyData = latency.sampleCount > 0;
 
   return (
     <div
@@ -330,28 +383,40 @@ const HealthSummary = ({
 
       {expanded && (
         <div className="space-y-2">
-          {/* §10.4 — Overall health row */}
-          <button
-            type="button"
-            onClick={() => onIndicatorFilterChange("All")}
-            className={cn(
-              "flex w-full items-center justify-between gap-2 rounded px-1 py-0.5 text-sm hover:bg-muted/50 transition-colors",
-              indicatorFilter === "All" && "bg-muted",
-            )}
-            aria-pressed={indicatorFilter === "All"}
-            data-testid="overall-health-row"
-          >
-            <span className="flex items-center gap-1.5 flex-wrap">
-              <span className={cn("font-mono text-base leading-none", HEALTH_STATE_COLOR[state])} aria-hidden="true">
-                {glyph}
+          {/* §10.4 — Overall health row (tappable → device detail) */}
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => onIndicatorFilterChange("All")}
+              className={cn(
+                "flex flex-1 items-center justify-between gap-2 rounded px-1 py-0.5 text-sm hover:bg-muted/50 transition-colors",
+                indicatorFilter === "All" && "bg-muted",
+              )}
+              aria-pressed={indicatorFilter === "All"}
+              data-testid="overall-health-row"
+            >
+              <span className="flex items-center gap-1.5 flex-wrap">
+                <span className={cn("font-mono text-base leading-none", HEALTH_STATE_COLOR[state])} aria-hidden="true">
+                  {glyph}
+                </span>
+                <span className="font-medium">Overall health</span>
+                <span className="text-muted-foreground">·</span>
+                <span className={cn("font-medium", HEALTH_STATE_COLOR[state])}>{state}</span>
+                <span className="text-muted-foreground">·</span>
+                <span className={cn("font-medium", CONN_COLOR[connectivity])}>{connLabel(connectivity)}</span>
               </span>
-              <span className="font-medium">Overall health</span>
-              <span className="text-muted-foreground">·</span>
-              <span className={cn("font-medium", HEALTH_STATE_COLOR[state])}>{state}</span>
-              <span className="text-muted-foreground">·</span>
-              <span className={cn("font-medium", CONN_COLOR[connectivity])}>{connLabel(connectivity)}</span>
-            </span>
-          </button>
+            </button>
+            {/* §14 — Device detail shortcut */}
+            <button
+              type="button"
+              onClick={onOpenDeviceDetail}
+              className="shrink-0 rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+              aria-label="Device firmware and uptime detail"
+              data-testid="open-device-detail"
+            >
+              <Activity className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          </div>
 
           {/* §10.4 — Explanation phrase */}
           {explanation && (
@@ -390,8 +455,51 @@ const HealthSummary = ({
           {/* §10.8 — Primary problem spotlight */}
           {primaryProblem && <PrimaryProblemSpotlight problem={primaryProblem} onSelect={onSpotlightSelect} />}
 
-          {/* §10.9 — Retry connection */}
-          {showRetry && (
+          {/* §12.2 — Latency summary (tappable → latency popup) */}
+          {hasLatencyData && (
+            <button
+              type="button"
+              onClick={onOpenLatency}
+              className="flex w-full items-center gap-2 rounded px-1 py-0.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+              data-testid="latency-summary-row"
+            >
+              <Clock className="h-3 w-3 shrink-0" aria-hidden="true" />
+              <span>
+                P50 <span className="font-mono">{latency.p50}ms</span>
+                {" · "}P90 <span className="font-mono">{latency.p90}ms</span>
+                {" · "}P99 <span className="font-mono">{latency.p99}ms</span>
+              </span>
+              <span className="ml-auto text-[10px] underline">Analyse</span>
+            </button>
+          )}
+
+          {/* §13 — Health history shortcut */}
+          <button
+            type="button"
+            onClick={onOpenHistory}
+            className="flex w-full items-center gap-2 rounded px-1 py-0.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+            data-testid="health-history-row"
+          >
+            <BarChart2 className="h-3 w-3 shrink-0" aria-hidden="true" />
+            <span>Health history</span>
+          </button>
+
+          {/* §11.2 — Run health check */}
+          {onRunHealthCheck && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onRunHealthCheck}
+              disabled={healthCheckRunning}
+              className="w-full"
+              data-testid="run-health-check-button"
+            >
+              {healthCheckRunning ? "Running health check…" : "Run health check"}
+            </Button>
+          )}
+
+          {/* §10.9 — Legacy retry (when no connectionCallbacks provided) */}
+          {showLegacyRetry && (
             <div className="space-y-1 pt-0.5">
               <div className="flex items-center gap-2">
                 <Button
@@ -417,6 +525,16 @@ const HealthSummary = ({
                 </a>
               </p>
             </div>
+          )}
+
+          {/* §7 / §8 — Connection actions region (replaces legacy retry when callbacks provided) */}
+          {connectionCallbacks && (
+            <ConnectionActionsRegion
+              connectivity={connectivity}
+              currentHost={host}
+              callbacks={connectionCallbacks}
+              defaultExpanded={recoveryFirst}
+            />
           )}
         </div>
       )}
@@ -675,10 +793,19 @@ export function DiagnosticsDialog({
   onClearAll,
   onRetryConnection,
   defaultEvidenceTypes,
+  connectionCallbacks,
+  deviceInfo,
+  healthCheckRunning,
+  onRunHealthCheck,
 }: Props) {
   const { profile } = useDisplayProfile();
   const isCompact = profile === "compact";
   const isMedium = profile === "medium";
+
+  // §5.3 — One analytic popup slot at a time
+  const [activePopup, setActivePopup] = useState<ActivePopup>(null);
+  // §14 — Device detail secondary view inside the overlay
+  const [deviceDetailOpen, setDeviceDetailOpen] = useState(false);
 
   // §11.2 — Default: Problems + Actions active
   const [activeTypes, setActiveTypes] = useState<Set<EvidenceType>>(
@@ -934,18 +1061,34 @@ export function DiagnosticsDialog({
           <AppSheetDescription>Health, connectivity, and supporting evidence.</AppSheetDescription>
         </AppSheetHeader>
 
+        {/* §14 — Device detail secondary view */}
+        {deviceDetailOpen && (
+          <div className={cn("border-b border-border", isCompact ? "px-3 pb-2 pt-1.5" : "px-4 pb-3 pt-2")}>
+            <DeviceDetailView info={deviceInfo ?? null} onBack={() => setDeviceDetailOpen(false)} />
+          </div>
+        )}
+
         {/* §10 — Collapsible health summary */}
-        <HealthSummary
-          healthState={healthState}
-          indicatorFilter={indicatorFilter}
-          onIndicatorFilterChange={setIndicatorFilter}
-          onRetryConnection={onRetryConnection}
-          onSpotlightSelect={handleSpotlightSelect}
-          isCompact={isCompact}
-          profile={profile}
-          expanded={summaryExpanded}
-          onExpandedChange={setSummaryExpanded}
-        />
+        {!deviceDetailOpen && (
+          <HealthSummary
+            healthState={healthState}
+            indicatorFilter={indicatorFilter}
+            onIndicatorFilterChange={setIndicatorFilter}
+            onRetryConnection={onRetryConnection}
+            onSpotlightSelect={handleSpotlightSelect}
+            isCompact={isCompact}
+            profile={profile}
+            expanded={summaryExpanded}
+            onExpandedChange={setSummaryExpanded}
+            connectionCallbacks={connectionCallbacks}
+            deviceInfo={deviceInfo}
+            healthCheckRunning={healthCheckRunning}
+            onRunHealthCheck={onRunHealthCheck}
+            onOpenDeviceDetail={() => setDeviceDetailOpen(true)}
+            onOpenLatency={() => setActivePopup("latency")}
+            onOpenHistory={() => setActivePopup("history")}
+          />
+        )}
 
         {/* §11 — Quick-focus controls */}
         <QuickFocusControls
@@ -1095,6 +1238,27 @@ export function DiagnosticsDialog({
           >
             Share filtered
           </Button>
+          {/* §15 — Heat map access from toolbar */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setActivePopup("heatmap-REST")}
+            data-testid="open-heatmap-rest"
+            title="REST activity heat map"
+          >
+            <BarChart2 className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
+            REST
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setActivePopup("heatmap-FTP")}
+            data-testid="open-heatmap-ftp"
+            title="FTP activity heat map"
+          >
+            <BarChart2 className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
+            FTP
+          </Button>
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button variant="destructive" size="sm" data-testid="diagnostics-clear-all-trigger">
@@ -1122,6 +1286,18 @@ export function DiagnosticsDialog({
           </AlertDialog>
         </div>
       </AppSheetContent>
+
+      {/* §5.3 — Nested analytic popups (one at a time, above the overlay) */}
+      <LatencyAnalysisPopup open={activePopup === "latency"} onClose={() => setActivePopup(null)} />
+      <HealthHistoryPopup open={activePopup === "history"} onClose={() => setActivePopup(null)} />
+      {(activePopup === "heatmap-REST" || activePopup === "heatmap-FTP" || activePopup === "heatmap-CONFIG") && (
+        <HeatMapPopup
+          open
+          onClose={() => setActivePopup(null)}
+          variant={activePopup.replace("heatmap-", "") as HeatMapVariant}
+          traceEvents={traceEvents}
+        />
+      )}
     </AppSheet>
   );
 }

@@ -175,3 +175,54 @@ Classification: `UI_CHANGE` + `CODE_CHANGE`
   - `npm run build` ✅
   - `npm exec playwright test playwright/swipe-navigation.spec.ts` ✅ (10 tests)
   - `npm run test:coverage` ✅ test pass, but branch coverage remains **90.97%** and is still below the repo gate of 91%
+
+---
+
+## Diagnostics UX Extension 1
+
+Classification: `UI_CHANGE` + `CODE_CHANGE`
+
+Source spec: `doc/diagnostics/diagnostics-ux-extension-1.md`
+Base spec (authoritative): `doc/diagnostics/diagnostics-ux-redesign.md`
+
+### Pre-implementation gap list
+
+| Gap | Chapter | Description |
+| --- | --- | --- |
+| G-EXT-01 | 7/8 | No `Switch device` inline disclosure — only a "Change host in Settings" link |
+| G-EXT-02 | 7/8 | `Retry connection` produces no inline feedback (no progress/success/failure message) |
+| G-EXT-03 | 9 | Recovery actions emit no Action/Problem trace evidence |
+| G-EXT-04 | 11 | Deterministic health check system absent (REST→JIFFY→RASTER→CONFIG→FTP) |
+| G-EXT-05 | 12 | No latency p50/p90/p99 collection or display |
+| G-EXT-06 | 12 | No nested analytic popup layer |
+| G-EXT-07 | 13 | No health history ring buffer or chart popup |
+| G-EXT-08 | 14 | Firmware/FPGA/core/uptime detail view absent |
+| G-EXT-09 | 15 | Config drift view absent |
+| G-EXT-10 | 15 | REST/FTP/CONFIG heat maps absent |
+| G-EXT-11 | 16 | Export lacks recovery/health-check/latency/drift data |
+
+### Task breakdown
+
+| ID | Task | Status |
+| --- | --- | --- |
+| EXT-01 | Create `src/lib/diagnostics/healthCheckEngine.ts` | pending |
+| EXT-02 | Create `src/lib/diagnostics/latencyTracker.ts` | pending |
+| EXT-03 | Create `src/lib/diagnostics/healthHistory.ts` (ring buffer) | pending |
+| EXT-04 | Create `src/lib/diagnostics/configDrift.ts` | pending |
+| EXT-05 | Create `src/lib/diagnostics/heatMapData.ts` | pending |
+| EXT-06 | Create `src/components/diagnostics/ConnectionActionsRegion.tsx` | pending |
+| EXT-07 | Create `src/components/diagnostics/LatencyAnalysisPopup.tsx` | pending |
+| EXT-08 | Create `src/components/diagnostics/HealthHistoryPopup.tsx` | pending |
+| EXT-09 | Create `src/components/diagnostics/DeviceDetailView.tsx` | pending |
+| EXT-10 | Create `src/components/diagnostics/HeatMapPopup.tsx` | pending |
+| EXT-11 | Create `src/components/diagnostics/ConfigDriftView.tsx` | pending |
+| EXT-12 | Extend `DiagnosticsDialog.tsx`: popup slot, Connection Actions, detail views | pending |
+| EXT-13 | Extend `GlobalDiagnosticsOverlay.tsx`: wire health checks, recovery evidence | pending |
+| EXT-14 | Extend `diagnosticsExport.ts`: enrichment payload | pending |
+| EXT-15 | Unit tests for all new logic modules | pending |
+| EXT-16 | Unit tests for new components | pending |
+| EXT-17 | Coverage validation ≥ 91% | pending |
+
+### Work log
+
+- [2026-03-19] Initial plan created, implementation starting
