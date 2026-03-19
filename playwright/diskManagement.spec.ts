@@ -82,8 +82,9 @@ const addLocalFolder = async (page: Page, folderPath: string, diskNames: string[
   await openAddItemsDialog(page);
   const dialog = page.getByRole("dialog");
   await clickSourceSelectionButton(dialog, "This device");
-  const input = page.locator('input[type="file"][webkitdirectory]');
-  await expect(input).toHaveCount(1);
+  // Scope to the active swipe slot — SwipeNavigationLayer renders 3 panels simultaneously
+  // so un-scoped selectors would match inputs from adjacent (inactive) slots too.
+  const input = page.locator('[data-slot-active="true"] input[type="file"][webkitdirectory]');
   await input.setInputFiles(folderPath);
   await expect(page.getByRole("dialog")).toBeHidden();
   const overlay = page.locator('[data-testid="add-disks-overlay"]');
@@ -763,8 +764,8 @@ test.describe("Disk management", () => {
     await openAddItemsDialog(page);
     const dialog = page.getByRole("dialog");
     await clickSourceSelectionButton(dialog, "This device");
-    const input = page.locator('input[type="file"][webkitdirectory]');
-    await expect(input).toHaveCount(1);
+    // Scope to active swipe slot to avoid matching inputs from adjacent rendered panels.
+    const input = page.locator('[data-slot-active="true"] input[type="file"][webkitdirectory]');
     await input.setInputFiles(path.resolve("playwright/fixtures/disks-local/EmptyFolder"));
     await expect(page.getByRole("dialog")).toBeVisible();
     await expect(page.getByText("No matching items in this folder.", { exact: true })).toBeVisible();

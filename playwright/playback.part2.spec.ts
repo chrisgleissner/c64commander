@@ -195,7 +195,7 @@ test.describe("Playback file browser (part 2)", () => {
     await page.goto("/play");
     await openAddItemsDialog(page);
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
-    const input = page.locator('input[type="file"][webkitdirectory]');
+    const input = page.locator('[data-slot-active="true"] input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play-songlengths")]);
     await expect(page.getByRole("dialog")).toBeHidden();
 
@@ -214,7 +214,7 @@ test.describe("Playback file browser (part 2)", () => {
     await page.goto("/play");
     await openAddItemsDialog(page);
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
-    const input = page.locator('input[type="file"][webkitdirectory]');
+    const input = page.locator('[data-slot-active="true"] input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play-songlengths-txt")]);
     await expect(page.getByRole("dialog")).toBeHidden();
 
@@ -235,7 +235,7 @@ test.describe("Playback file browser (part 2)", () => {
     await page.goto("/play");
     await openAddItemsDialog(page);
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
-    const input = page.locator('input[type="file"][webkitdirectory]');
+    const input = page.locator('[data-slot-active="true"] input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play-songlengths-documents")]);
     await expect(page.getByRole("dialog")).toBeHidden();
 
@@ -250,7 +250,7 @@ test.describe("Playback file browser (part 2)", () => {
     await page.goto("/play");
     await openAddItemsDialog(page);
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
-    const input = page.locator('input[type="file"][webkitdirectory]');
+    const input = page.locator('[data-slot-active="true"] input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play")]);
     await expect(page.getByRole("dialog")).toBeHidden();
 
@@ -654,7 +654,7 @@ test.describe("Playback file browser (part 2)", () => {
     await openAddItemsDialog(page);
     await snap(page, testInfo, "add-items-open");
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
-    const input = page.locator('input[type="file"][webkitdirectory]');
+    const input = page.locator('[data-slot-active="true"] input[type="file"][webkitdirectory]');
     await expect(input).toHaveCount(1);
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play")]);
     await expect(page.getByRole("dialog")).toBeHidden();
@@ -689,7 +689,7 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "play-open");
     await openAddItemsDialog(page);
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
-    const input = page.locator('input[type="file"][webkitdirectory]');
+    const input = page.locator('[data-slot-active="true"] input[type="file"][webkitdirectory]');
     await expect(input).toHaveCount(1);
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play-songlengths-documents")]);
     await expect(page.getByRole("dialog")).toBeHidden();
@@ -707,7 +707,7 @@ test.describe("Playback file browser (part 2)", () => {
     await page.goto("/play");
     await openAddItemsDialog(page);
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
-    const input = page.locator('input[type="file"][webkitdirectory]');
+    const input = page.locator('[data-slot-active="true"] input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play-songlengths-documents")]);
     await expect(page.getByRole("dialog")).toBeHidden();
 
@@ -731,7 +731,7 @@ test.describe("Playback file browser (part 2)", () => {
     await page.goto("/play");
     await openAddItemsDialog(page);
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
-    const input = page.locator('input[type="file"][webkitdirectory]');
+    const input = page.locator('[data-slot-active="true"] input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play")]);
     await expect(page.getByRole("dialog")).toBeHidden();
 
@@ -749,7 +749,7 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "play-open");
     await openAddItemsDialog(page);
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
-    const input = page.locator('input[type="file"][webkitdirectory]');
+    const input = page.locator('[data-slot-active="true"] input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play")]);
     await expect(page.getByRole("dialog")).toBeHidden();
     await snap(page, testInfo, "local-source-added");
@@ -767,7 +767,7 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "play-open");
     await openAddItemsDialog(page);
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
-    const input = page.locator('input[type="file"][webkitdirectory]');
+    const input = page.locator('[data-slot-active="true"] input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play")]);
     await expect(page.getByRole("dialog")).toBeHidden();
     await snap(page, testInfo, "playlist-preview");
@@ -784,7 +784,7 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "play-open");
     await openAddItemsDialog(page);
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
-    const input = page.locator('input[type="file"][webkitdirectory]');
+    const input = page.locator('[data-slot-active="true"] input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play")]);
     await expect(page.getByRole("dialog")).toBeHidden();
     await expect(page.getByText("Connected", { exact: true })).toBeVisible();
@@ -868,7 +868,7 @@ test.describe("Playback file browser (part 2)", () => {
     await openAddItemsDialog(page);
     await snap(page, testInfo, "add-items-open");
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
-    const input = page.locator('input[type="file"][webkitdirectory]');
+    const input = page.locator('[data-slot-active="true"] input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play-unsupported")]);
     await expect(page.getByRole("dialog")).toBeVisible();
     await expect(page.getByTestId("add-items-progress")).toContainText("No supported files");
@@ -932,7 +932,7 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "play-open");
     await openAddItemsDialog(page);
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
-    const input = page.locator('input[type="file"][webkitdirectory]');
+    const input = page.locator('[data-slot-active="true"] input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play")]);
     await expect(page.getByRole("dialog")).toBeHidden();
     await snap(page, testInfo, "playlist-ready");
@@ -1015,7 +1015,7 @@ test.describe("Playback file browser (part 2)", () => {
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device", {
       force: true,
     });
-    const input = page.locator('input[type="file"][webkitdirectory]');
+    const input = page.locator('[data-slot-active="true"] input[type="file"][webkitdirectory]');
     await expect(input.first()).toBeAttached();
     const tempDir = createTempDiskDirectory();
     try {
@@ -1056,7 +1056,7 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "play-open");
     await openAddItemsDialog(page);
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
-    const input = page.locator('input[type="file"][webkitdirectory]');
+    const input = page.locator('[data-slot-active="true"] input[type="file"][webkitdirectory]');
     const tempDir = createTempDiskDirectory();
     try {
       await input.setInputFiles(tempDir);
@@ -1350,7 +1350,7 @@ test.describe("Playback file browser (part 2)", () => {
     await page.goto("/play");
     await openAddItemsDialog(page);
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
-    const input = page.locator('input[type="file"][webkitdirectory]');
+    const input = page.locator('[data-slot-active="true"] input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play")]);
     await expect(page.getByRole("dialog")).toBeHidden();
 
@@ -1390,7 +1390,7 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "add-items-open");
 
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
-    const input = page.locator('input[type="file"][webkitdirectory]');
+    const input = page.locator('[data-slot-active="true"] input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play")]);
     await expect(page.getByRole("dialog")).toBeHidden();
     await snap(page, testInfo, "local-library-added");
@@ -1438,7 +1438,7 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "play-open");
     await openAddItemsDialog(page);
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
-    const input = page.locator('input[type="file"][webkitdirectory]');
+    const input = page.locator('[data-slot-active="true"] input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play")]);
     await expect(page.getByRole("dialog")).toBeHidden();
     await snap(page, testInfo, "playlist-ready");
@@ -1454,7 +1454,7 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "play-open");
     await openAddItemsDialog(page);
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
-    const input = page.locator('input[type="file"][webkitdirectory]');
+    const input = page.locator('[data-slot-active="true"] input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play")]);
     await expect(page.getByRole("dialog")).toBeHidden();
     await snap(page, testInfo, "playlist-ready");
@@ -1494,7 +1494,7 @@ test.describe("Playback file browser (part 2)", () => {
 
     await openAddItemsDialog(page);
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
-    const input = page.locator('input[type="file"][webkitdirectory]');
+    const input = page.locator('[data-slot-active="true"] input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play")]);
     await expect(page.getByRole("dialog")).toBeHidden();
     await snap(page, testInfo, "playlist-ready");
@@ -1539,7 +1539,7 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "play-open");
     await openAddItemsDialog(page);
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
-    const input = page.locator('input[type="file"][webkitdirectory]');
+    const input = page.locator('[data-slot-active="true"] input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play")]);
     await expect(page.getByRole("dialog")).toBeHidden();
     await snap(page, testInfo, "playlist-ready");
@@ -1556,7 +1556,7 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "play-open");
     await openAddItemsDialog(page);
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
-    const input = page.locator('input[type="file"][webkitdirectory]');
+    const input = page.locator('[data-slot-active="true"] input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play")]);
     await expect(page.getByRole("dialog")).toBeHidden();
     await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
@@ -1571,7 +1571,7 @@ test.describe("Playback file browser (part 2)", () => {
     await page.goto("/play");
     await openAddItemsDialog(page);
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
-    const input = page.locator('input[type="file"][webkitdirectory]');
+    const input = page.locator('[data-slot-active="true"] input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play")]);
     await expect(page.getByRole("dialog")).toBeHidden();
     await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
@@ -1599,7 +1599,7 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "play-open");
     await openAddItemsDialog(page);
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
-    const input = page.locator('input[type="file"][webkitdirectory]');
+    const input = page.locator('[data-slot-active="true"] input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play")]);
     await expect(page.getByRole("dialog")).toBeHidden();
     await snap(page, testInfo, "playlist-ready");

@@ -37,8 +37,9 @@ const openAddItemsDialog = async (page: Page) => {
 const addLocalFolder = async (page: Page, folderPath: string) => {
   await openAddItemsDialog(page);
   await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
-  const input = page.locator('input[type="file"][webkitdirectory]');
-  await expect(input).toHaveCount(1);
+  // Scope to the active swipe slot — SwipeNavigationLayer renders 3 panels simultaneously
+  // so un-scoped selectors would match inputs from adjacent (inactive) slots too.
+  const input = page.locator('[data-slot-active="true"] input[type="file"][webkitdirectory]');
   await input.setInputFiles([folderPath]);
   await expect(page.getByRole("dialog")).toBeHidden();
 };
@@ -970,7 +971,7 @@ test.describe("Playback file browser", () => {
     await snap(page, testInfo, "play-open");
     await openAddItemsDialog(page);
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
-    const input = page.locator('input[type="file"][webkitdirectory]');
+    const input = page.locator('[data-slot-active="true"] input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play-songlengths")]);
     await expect(page.getByRole("dialog")).toBeHidden();
     await snap(page, testInfo, "playlist-ready");
@@ -1037,7 +1038,7 @@ test.describe("Playback file browser", () => {
     await page.goto("/play");
     await openAddItemsDialog(page);
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
-    const input = page.locator('input[type="file"][webkitdirectory]');
+    const input = page.locator('[data-slot-active="true"] input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play-songlengths")]);
     await expect(page.getByRole("dialog")).toBeHidden();
 
