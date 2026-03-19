@@ -63,6 +63,7 @@ export type HealthCheckRunResult = {
 };
 
 let running = false;
+let runSequence = 0;
 
 const timedProbe = async <T>(fn: () => Promise<T>): Promise<{ result: T; durationMs: number }> => {
   const start = Date.now();
@@ -307,7 +308,10 @@ const probeFtp = async (): Promise<HealthCheckProbeRecord> => {
   }
 };
 
-const generateRunId = (): string => `hcr-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+const generateRunId = (): string => {
+  runSequence += 1;
+  return `hcr-${runSequence.toString().padStart(4, "0")}`;
+};
 
 /**
  * Run one complete health check pass.

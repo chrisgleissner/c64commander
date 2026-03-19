@@ -51,7 +51,7 @@ const shouldShowRetry = (connectivity: ConnectivityState): boolean =>
 export const isRecoveryFirstState = (connectivity: ConnectivityState, hadRecentFailure?: boolean): boolean =>
   connectivity === "Offline" ||
   connectivity === "Not yet connected" ||
-  (connectivity === "Demo" && Boolean(hadRecentFailure)) ||
+  connectivity === "Demo" ||
   Boolean(hadRecentFailure);
 
 export function ConnectionActionsRegion({ connectivity, currentHost, callbacks, defaultExpanded = false }: Props) {

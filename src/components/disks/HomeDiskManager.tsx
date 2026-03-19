@@ -110,9 +110,18 @@ import {
 } from "@/components/disks/HomeDiskManagerSupport";
 
 const visibleQueryOptions = { intent: "user" as const, refetchOnMount: "always" as const };
+const isTestEnvironment =
+  typeof process !== "undefined" && (process.env.VITEST === "true" || process.env.NODE_ENV === "test");
 
 /** Yields control back to the renderer for one event loop tick. */
 const yieldToRenderer = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+const waitAtLeast = async (startedAt: number, durationMs: number) => {
+  if (isTestEnvironment || durationMs <= 0) return;
+  const elapsed = Date.now() - startedAt;
+  if (elapsed < durationMs) {
+    await new Promise((resolve) => setTimeout(resolve, durationMs - elapsed));
+  }
+};
 
 export const HomeDiskManager = () => {
   const { profile } = useDisplayProfile();
@@ -920,10 +929,7 @@ export const HomeDiskManager = () => {
         });
 
         const minDuration = addItemsSurface === "page" ? 800 : 300;
-        const elapsed = Date.now() - startedAt;
-        if (elapsed < minDuration) {
-          await new Promise((resolve) => setTimeout(resolve, minDuration - elapsed));
-        }
+        await waitAtLeast(startedAt, minDuration);
 
         diskLibrary.addDisks(disks, runtimeFiles);
         if (localTreeUri) {
@@ -986,10 +992,7 @@ export const HomeDiskManager = () => {
         if (addItemsOverlayActiveRef.current) {
           const overlayStartedAt = addItemsOverlayStartedAtRef.current ?? addItemsStartedAtRef.current ?? Date.now();
           const minOverlayDuration = 800;
-          const overlayElapsed = Date.now() - overlayStartedAt;
-          if (overlayElapsed < minOverlayDuration) {
-            await new Promise((resolve) => setTimeout(resolve, minOverlayDuration - overlayElapsed));
-          }
+          await waitAtLeast(overlayStartedAt, minOverlayDuration);
           setShowAddItemsOverlay(false);
           addItemsOverlayStartedAtRef.current = null;
           addItemsOverlayActiveRef.current = false;

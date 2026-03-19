@@ -10,20 +10,12 @@
 // Visualises health states over time using a categorical Y-axis.
 
 import { AnalyticPopup } from "@/components/diagnostics/AnalyticPopup";
+import { Button } from "@/components/ui/button";
 import { getHealthHistory, type HealthHistoryEntry } from "@/lib/diagnostics/healthHistory";
 import type { HealthState } from "@/lib/diagnostics/healthModel";
-import {
-  CartesianGrid,
-  Cell,
-  Legend,
-  ResponsiveContainer,
-  Scatter,
-  ScatterChart,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import { useMemo } from "react";
+import { getRecoveryEvidence } from "@/lib/diagnostics/recoveryEvidence";
+import { CartesianGrid, Cell, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis } from "recharts";
+import { useEffect, useMemo, useState } from "react";
 import { HEALTH_GLYPHS } from "@/lib/diagnostics/healthModel";
 import { formatDiagnosticsTimestamp } from "@/lib/diagnostics/timeFormat";
 
@@ -46,6 +38,12 @@ type ChartPoint = {
   label: string;
 };
 
+type OverlayPoint = {
+  timestampMs: number;
+  yIndex: number;
+  label: string;
+};
+
 type Props = {
   open: boolean;
   onClose: () => void;
@@ -53,6 +51,9 @@ type Props = {
 
 export function HealthHistoryPopup({ open, onClose }: Props) {
   const history: Readonly<HealthHistoryEntry[]> = getHealthHistory();
+  const recoveryEvents = getRecoveryEvidence();
+  const [zoom, setZoom] = useState(50);
+  const [windowStart, setWindowStart] = useState(0);
 
   const points = useMemo<ChartPoint[]>(() => {
     return history.map((entry) => ({
@@ -64,7 +65,48 @@ export function HealthHistoryPopup({ open, onClose }: Props) {
     }));
   }, [history]);
 
+  useEffect(() => {
+    if (!open) return;
+    setZoom(50);
+    setWindowStart(0);
+  }, [open]);
+
+  const visiblePoints = useMemo(() => {
+    if (points.length <= zoom) {
+      return points;
+    }
+    const maxStart = Math.max(0, points.length - zoom);
+    const clampedStart = Math.min(windowStart, maxStart);
+    return points.slice(clampedStart, clampedStart + zoom);
+  }, [points, windowStart, zoom]);
+
+  const visibleWindow = useMemo(() => {
+    if (visiblePoints.length === 0) {
+      return null;
+    }
+    return {
+      min: visiblePoints[0].timestampMs,
+      max: visiblePoints[visiblePoints.length - 1].timestampMs,
+    };
+  }, [visiblePoints]);
+
+  const overlayPoints = useMemo<OverlayPoint[]>(() => {
+    if (!visibleWindow) return [];
+    return recoveryEvents
+      .filter((event) => {
+        const timestampMs = new Date(event.timestamp).getTime();
+        return timestampMs >= visibleWindow.min && timestampMs <= visibleWindow.max;
+      })
+      .map((event) => ({
+        timestampMs: new Date(event.timestamp).getTime(),
+        yIndex: -0.2,
+        label: `${event.kind} · ${event.outcome}`,
+      }));
+  }, [recoveryEvents, visibleWindow]);
+
   const isEmpty = points.length === 0;
+  const canPan = points.length > zoom;
+  const maxWindowStart = Math.max(0, points.length - zoom);
 
   return (
     <AnalyticPopup
@@ -96,13 +138,55 @@ export function HealthHistoryPopup({ open, onClose }: Props) {
               ))}
             </div>
 
+            <div className="mb-2 flex items-center gap-2 shrink-0 flex-wrap">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setZoom((current) => Math.max(10, current - 10))}
+                disabled={zoom <= 10}
+                data-testid="health-history-zoom-in"
+              >
+                Zoom in
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setZoom((current) => Math.min(Math.max(points.length, 10), current + 10))}
+                disabled={zoom >= points.length}
+                data-testid="health-history-zoom-out"
+              >
+                Zoom out
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setWindowStart((current) => Math.max(0, current - 10))}
+                disabled={!canPan || windowStart <= 0}
+                data-testid="health-history-pan-left"
+              >
+                Earlier
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setWindowStart((current) => Math.min(maxWindowStart, current + 10))}
+                disabled={!canPan || windowStart >= maxWindowStart}
+                data-testid="health-history-pan-right"
+              >
+                Later
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                Showing {visiblePoints.length} of {points.length} checks
+              </span>
+            </div>
+
             <ResponsiveContainer width="100%" height={220}>
               <ScatterChart margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
                 <XAxis
                   dataKey="timestampMs"
                   type="number"
-                  domain={["dataMin", "dataMax"]}
+                  domain={visibleWindow ? [visibleWindow.min, visibleWindow.max] : ["dataMin", "dataMax"]}
                   scale="time"
                   tickFormatter={(v: number) => {
                     const d = new Date(v);
@@ -139,17 +223,20 @@ export function HealthHistoryPopup({ open, onClose }: Props) {
                     );
                   }}
                 />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Scatter name="Health" data={points}>
-                  {points.map((p, idx) => (
+                <Scatter name="Health" data={visiblePoints}>
+                  {visiblePoints.map((p, idx) => (
                     <Cell key={`cell-${idx}`} fill={BAND_COLORS[p.health]} />
                   ))}
                 </Scatter>
+                {overlayPoints.length > 0 && (
+                  <Scatter name="Recovery events" data={overlayPoints} fill="hsl(var(--foreground))" />
+                )}
               </ScatterChart>
             </ResponsiveContainer>
 
             <p className="text-xs text-muted-foreground mt-2 shrink-0">
-              {history.length} check{history.length !== 1 ? "s" : ""} recorded.
+              {history.length} check{history.length !== 1 ? "s" : ""} recorded. Recovery overlays mark reconnect and
+              switch events in the visible range.
             </p>
           </>
         )}

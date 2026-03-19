@@ -92,6 +92,7 @@ type DiagnosticsTraceEntry = {
 };
 
 type ActivePopup = "latency" | "history" | `heatmap-${"REST" | "FTP" | "CONFIG"}` | null;
+type ActiveDetailView = "device" | "config-drift" | null;
 
 type Props = {
   open: boolean;
@@ -805,7 +806,7 @@ export function DiagnosticsDialog({
   // §5.3 — One analytic popup slot at a time
   const [activePopup, setActivePopup] = useState<ActivePopup>(null);
   // §14 — Device detail secondary view inside the overlay
-  const [deviceDetailOpen, setDeviceDetailOpen] = useState(false);
+  const [activeDetailView, setActiveDetailView] = useState<ActiveDetailView>(null);
 
   // §11.2 — Default: Problems + Actions active
   const [activeTypes, setActiveTypes] = useState<Set<EvidenceType>>(
@@ -1062,14 +1063,18 @@ export function DiagnosticsDialog({
         </AppSheetHeader>
 
         {/* §14 — Device detail secondary view */}
-        {deviceDetailOpen && (
+        {activeDetailView && (
           <div className={cn("border-b border-border", isCompact ? "px-3 pb-2 pt-1.5" : "px-4 pb-3 pt-2")}>
-            <DeviceDetailView info={deviceInfo ?? null} onBack={() => setDeviceDetailOpen(false)} />
+            {activeDetailView === "device" ? (
+              <DeviceDetailView info={deviceInfo ?? null} onBack={() => setActiveDetailView(null)} />
+            ) : (
+              <ConfigDriftView onBack={() => setActiveDetailView(null)} />
+            )}
           </div>
         )}
 
         {/* §10 — Collapsible health summary */}
-        {!deviceDetailOpen && (
+        {!activeDetailView && (
           <HealthSummary
             healthState={healthState}
             indicatorFilter={indicatorFilter}
@@ -1084,7 +1089,7 @@ export function DiagnosticsDialog({
             deviceInfo={deviceInfo}
             healthCheckRunning={healthCheckRunning}
             onRunHealthCheck={onRunHealthCheck}
-            onOpenDeviceDetail={() => setDeviceDetailOpen(true)}
+            onOpenDeviceDetail={() => setActiveDetailView("device")}
             onOpenLatency={() => setActivePopup("latency")}
             onOpenHistory={() => setActivePopup("history")}
           />
@@ -1258,6 +1263,24 @@ export function DiagnosticsDialog({
           >
             <BarChart2 className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
             FTP
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setActivePopup("heatmap-CONFIG")}
+            data-testid="open-heatmap-config"
+            title="Config activity heat map"
+          >
+            <BarChart2 className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
+            Config
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setActiveDetailView("config-drift")}
+            data-testid="open-config-drift"
+          >
+            Config drift
           </Button>
           <AlertDialog>
             <AlertDialogTrigger asChild>

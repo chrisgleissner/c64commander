@@ -235,7 +235,7 @@ describe('buildConfigHeatMap', () => {
     const longItem = 'AVeryLongConfigItemNameThatExceedsLimit';
     const m = buildConfigHeatMap([restResponse(`/v1/configs/Audio/${longItem}`)]);
     const items = Object.keys(m.cells['Audio'] ?? {});
-    expect(items[0]).toHaveLength(24);
+    expect(items[0]).toHaveLength(23); // 22 chars + 1-char ellipsis '…'
     expect(items[0].endsWith('…')).toBe(true);
   });
 

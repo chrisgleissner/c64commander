@@ -228,6 +228,20 @@ describe("DiagnosticsDialog", () => {
     expect(screen.getByTestId("diagnostics-clear-all-trigger")).toBeVisible();
   });
 
+  it("shows config drift and config heat map entry points in the toolbar", () => {
+    localStorage.clear();
+    setViewportWidth(600);
+
+    render(
+      <DisplayProfileProvider>
+        <DiagnosticsDialog {...defaultProps} />
+      </DisplayProfileProvider>,
+    );
+
+    expect(screen.getByTestId("open-config-drift")).toBeVisible();
+    expect(screen.getByTestId("open-heatmap-config")).toBeVisible();
+  });
+
   it("shows primary problem spotlight when healthState includes a primary problem", () => {
     localStorage.clear();
     setViewportWidth(600);

@@ -8,7 +8,25 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// ─── Module mocks (must be declared before imports) ───────────────────────────
+// ─── Hoisted mocks (accessible in vi.mock factories) ─────────────────────────
+
+const {
+  mockGetInfo,
+  mockReadMemory,
+  mockGetConfigItem,
+  mockSetConfigValue,
+  mockLoadConfig,
+  mockListFtpDirectory,
+} = vi.hoisted(() => ({
+  mockGetInfo: vi.fn(),
+  mockReadMemory: vi.fn(),
+  mockGetConfigItem: vi.fn(),
+  mockSetConfigValue: vi.fn(),
+  mockLoadConfig: vi.fn(),
+  mockListFtpDirectory: vi.fn(),
+}));
+
+// ─── Module mocks ─────────────────────────────────────────────────────────────
 
 vi.mock('@/lib/logging', () => ({ addLog: vi.fn() }));
 
@@ -16,9 +34,11 @@ vi.mock('@/lib/diagnostics/latencyTracker', () => ({
   computeLatencyPercentiles: vi.fn(() => ({ p50: 10, p90: 20, p99: 30 })),
 }));
 
-vi.mock('@/lib/diagnostics/healthHistory', () => ({
-  pushHealthHistoryEntry: vi.fn(),
-}));
+vi.mock('@/lib/diagnostics/healthHistory', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@/lib/diagnostics/healthHistory')>();
+  return { ...actual, pushHealthHistoryEntry: vi.fn() };
+});
 
 vi.mock('@/lib/diagnostics/healthModel', async (importOriginal) => {
   const mod = await importOriginal<typeof import('@/lib/diagnostics/healthModel')>();
@@ -27,12 +47,6 @@ vi.mock('@/lib/diagnostics/healthModel', async (importOriginal) => {
     deriveConnectivityState: vi.fn(() => 'Online'),
   };
 });
-
-const mockGetInfo = vi.fn();
-const mockReadMemory = vi.fn();
-const mockGetConfigItem = vi.fn();
-const mockSetConfigValue = vi.fn();
-const mockLoadConfig = vi.fn();
 
 vi.mock('@/lib/c64api', () => ({
   getC64API: vi.fn(() => ({
@@ -45,7 +59,6 @@ vi.mock('@/lib/c64api', () => ({
   getC64APIConfigSnapshot: vi.fn(() => ({ deviceHost: 'c64u.local' })),
 }));
 
-const mockListFtpDirectory = vi.fn();
 vi.mock('@/lib/ftp/ftpClient', () => ({
   listFtpDirectory: mockListFtpDirectory,
 }));
@@ -76,12 +89,11 @@ const successfulInfo = {
   errors: [],
 };
 
-// A valid 3-byte JIFFY response: jiffy = 0x003C00 = 15360 → 256 seconds uptime
+// A valid 3-byte JIFFY response: jiffy = 0 | (0x3C << 8) | 0 = 15360 → floor(15360/60) = 256 s
 const jiffyBytes = new Uint8Array([0x00, 0x3c, 0x00]);
 
-// LED Strip Settings roundtrip — returns currentValue=5
-const ledItemData = { selected: 5 };
-const ledResp = { 'LED Strip Settings': { 'Strip Intensity': ledItemData } };
+const ledResp = { 'LED Strip Settings': { 'Strip Intensity': { selected: 5 } } };
+const ledReadbackResp = { 'LED Strip Settings': { 'Strip Intensity': { selected: 6 } } };
 
 const setupAllProbesSuccess = () => {
   mockGetInfo.mockResolvedValue(successfulInfo);
@@ -90,11 +102,9 @@ const setupAllProbesSuccess = () => {
     if (addr === 'D012') return Promise.resolve(new Uint8Array([0x42]));
     return Promise.resolve(new Uint8Array(0));
   });
-  // CONFIG probe: read → write → readback → revert → verify
-  // All return selected=5 to simulate no drift. writeTemp=6 (5+1 ≤ 31)
   mockGetConfigItem
     .mockResolvedValueOnce(ledResp) // initial read: value=5
-    .mockResolvedValueOnce({ 'LED Strip Settings': { 'Strip Intensity': { selected: 6 } } }) // readback: value=6
+    .mockResolvedValueOnce(ledReadbackResp) // readback: value=6
     .mockResolvedValueOnce(ledResp); // verify revert: value=5
   mockSetConfigValue.mockResolvedValue(undefined);
   mockListFtpDirectory.mockResolvedValue([]);
@@ -166,9 +176,7 @@ describe('runHealthCheck — all-success path', () => {
 
   it('returns null when a run is already in progress (concurrent guard)', async () => {
     setupAllProbesSuccess();
-    // Start first run but don't await yet
     const first = runHealthCheck();
-    // Second run should return null immediately
     const second = await runHealthCheck();
     expect(second).toBeNull();
     await first;
@@ -224,11 +232,9 @@ describe('runHealthCheck — JIFFY probe', () => {
       if (addr === 'D012') return Promise.resolve(new Uint8Array([0x42]));
       return Promise.resolve(new Uint8Array(0));
     });
-    mockGetConfigItem.mockResolvedValue(ledResp).mockResolvedValueOnce(ledResp);
-    // All getConfigItem calls
     mockGetConfigItem
       .mockResolvedValueOnce(ledResp)
-      .mockResolvedValueOnce({ 'LED Strip Settings': { 'Strip Intensity': { selected: 6 } } })
+      .mockResolvedValueOnce(ledReadbackResp)
       .mockResolvedValueOnce(ledResp);
     mockSetConfigValue.mockResolvedValue(undefined);
     mockListFtpDirectory.mockResolvedValue([]);
@@ -238,7 +244,7 @@ describe('runHealthCheck — JIFFY probe', () => {
     expect(result!.probes.JIFFY.reason).toContain('Expected 3 bytes');
   });
 
-  it('skips JIFFY when readMemory throws', async () => {
+  it('fails JIFFY when readMemory throws', async () => {
     mockGetInfo.mockResolvedValue(successfulInfo);
     mockReadMemory.mockImplementation((addr: string) => {
       if (addr === '00A2') return Promise.reject(new Error('Read failed'));
@@ -246,7 +252,7 @@ describe('runHealthCheck — JIFFY probe', () => {
     });
     mockGetConfigItem
       .mockResolvedValueOnce(ledResp)
-      .mockResolvedValueOnce({ 'LED Strip Settings': { 'Strip Intensity': { selected: 6 } } })
+      .mockResolvedValueOnce(ledReadbackResp)
       .mockResolvedValueOnce(ledResp);
     mockSetConfigValue.mockResolvedValue(undefined);
     mockListFtpDirectory.mockResolvedValue([]);
@@ -263,12 +269,12 @@ describe('runHealthCheck — RASTER probe', () => {
     mockGetInfo.mockResolvedValue(successfulInfo);
     mockReadMemory.mockImplementation((addr: string) => {
       if (addr === '00A2') return Promise.resolve(jiffyBytes);
-      if (addr === 'D012') return Promise.resolve(new Uint8Array(0)); // empty
+      if (addr === 'D012') return Promise.resolve(new Uint8Array(0));
       return Promise.resolve(new Uint8Array(0));
     });
     mockGetConfigItem
       .mockResolvedValueOnce(ledResp)
-      .mockResolvedValueOnce({ 'LED Strip Settings': { 'Strip Intensity': { selected: 6 } } })
+      .mockResolvedValueOnce(ledReadbackResp)
       .mockResolvedValueOnce(ledResp);
     mockSetConfigValue.mockResolvedValue(undefined);
     mockListFtpDirectory.mockResolvedValue([]);
@@ -285,7 +291,7 @@ describe('runHealthCheck — RASTER probe', () => {
     });
     mockGetConfigItem
       .mockResolvedValueOnce(ledResp)
-      .mockResolvedValueOnce({ 'LED Strip Settings': { 'Strip Intensity': { selected: 6 } } })
+      .mockResolvedValueOnce(ledReadbackResp)
       .mockResolvedValueOnce(ledResp);
     mockSetConfigValue.mockResolvedValue(undefined);
     mockListFtpDirectory.mockResolvedValue([]);
@@ -304,10 +310,10 @@ describe('runHealthCheck — CONFIG probe', () => {
       if (addr === '00A2') return Promise.resolve(jiffyBytes);
       return Promise.resolve(new Uint8Array([0x42]));
     });
-    // Initial read=5, writeTemp=6 is sent, but readback returns 5 (no change)
+    // Initial read=5, writeTemp=6, but readback returns 5 → mismatch
     mockGetConfigItem
-      .mockResolvedValueOnce(ledResp) // initial read: 5
-      .mockResolvedValueOnce(ledResp) // readback: still 5, expected 6 → mismatch
+      .mockResolvedValueOnce(ledResp) // initial: 5
+      .mockResolvedValueOnce(ledResp) // readback: still 5, expected 6
       .mockResolvedValueOnce(ledResp); // verify
     mockSetConfigValue.mockResolvedValue(undefined);
     mockListFtpDirectory.mockResolvedValue([]);
@@ -323,11 +329,11 @@ describe('runHealthCheck — CONFIG probe', () => {
       if (addr === '00A2') return Promise.resolve(jiffyBytes);
       return Promise.resolve(new Uint8Array([0x42]));
     });
-    // Initial=5, writeTemp=6, readback=6 (ok), revert to 5, verify returns 6 (fail)
+    // Initial=5, readback=6 ok, verify=6 ≠ 5 → fail
     mockGetConfigItem
       .mockResolvedValueOnce(ledResp) // initial: 5
-      .mockResolvedValueOnce({ 'LED Strip Settings': { 'Strip Intensity': { selected: 6 } } }) // readback: 6 ok
-      .mockResolvedValueOnce({ 'LED Strip Settings': { 'Strip Intensity': { selected: 6 } } }); // verify: 6 ≠ 5
+      .mockResolvedValueOnce(ledReadbackResp) // readback: 6 ok
+      .mockResolvedValueOnce(ledReadbackResp); // verify: 6 ≠ 5
     mockSetConfigValue.mockResolvedValue(undefined);
     mockListFtpDirectory.mockResolvedValue([]);
 
@@ -336,14 +342,13 @@ describe('runHealthCheck — CONFIG probe', () => {
     expect(result!.probes.CONFIG.reason).toContain('Post-revert mismatch');
   });
 
-  it('skips CONFIG when no suitable target is available', async () => {
+  it('skips CONFIG when no suitable target available', async () => {
     mockGetInfo.mockResolvedValue(successfulInfo);
     mockReadMemory.mockImplementation((addr: string) => {
       if (addr === '00A2') return Promise.resolve(jiffyBytes);
       return Promise.resolve(new Uint8Array([0x42]));
     });
-    // getConfigItem returns empty data for all targets → both targets skipped
-    mockGetConfigItem.mockResolvedValue({});
+    mockGetConfigItem.mockResolvedValue({}); // both targets return empty → continue loop → Skipped
     mockSetConfigValue.mockResolvedValue(undefined);
     mockListFtpDirectory.mockResolvedValue([]);
 
@@ -363,7 +368,7 @@ describe('runHealthCheck — FTP probe', () => {
     });
     mockGetConfigItem
       .mockResolvedValueOnce(ledResp)
-      .mockResolvedValueOnce({ 'LED Strip Settings': { 'Strip Intensity': { selected: 6 } } })
+      .mockResolvedValueOnce(ledReadbackResp)
       .mockResolvedValueOnce(ledResp);
     mockSetConfigValue.mockResolvedValue(undefined);
     mockListFtpDirectory.mockRejectedValue(new Error('FTP connection refused'));

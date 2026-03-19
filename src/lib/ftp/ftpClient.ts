@@ -28,6 +28,7 @@ const executeFtpList = async (
   intent: InteractionIntent,
 ): Promise<FtpListResult> => {
   incrementFtpInFlight();
+  const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
   const requestPayload = {
     ...ftpOptions,
     path: normalizedPath,
@@ -49,6 +50,10 @@ const executeFtpList = async (
         recordFtpOperation(action, {
           operation: "list",
           path: normalizedPath,
+          durationMs: Math.max(
+            0,
+            Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
+          ),
           result: "success",
           requestPayload,
           requestPayloadPreview: buildPayloadPreviewFromJson(requestPayload),
@@ -69,6 +74,10 @@ const executeFtpList = async (
         recordFtpOperation(action, {
           operation: "list",
           path: normalizedPath,
+          durationMs: Math.max(
+            0,
+            Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
+          ),
           result: "failure",
           requestPayload,
           requestPayloadPreview: buildPayloadPreviewFromJson(requestPayload),
@@ -116,6 +125,7 @@ const executeFtpRead = async (
   intent: InteractionIntent,
 ): Promise<{ data: string; sizeBytes?: number }> => {
   incrementFtpInFlight();
+  const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
   const requestPayload = { ...ftpOptions, path };
   return withFtpInteraction(
     {
@@ -134,6 +144,10 @@ const executeFtpRead = async (
         recordFtpOperation(action, {
           operation: "read",
           path,
+          durationMs: Math.max(
+            0,
+            Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
+          ),
           result: "success",
           requestPayload,
           requestPayloadPreview: buildPayloadPreviewFromJson(requestPayload),
@@ -154,6 +168,10 @@ const executeFtpRead = async (
         recordFtpOperation(action, {
           operation: "read",
           path,
+          durationMs: Math.max(
+            0,
+            Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
+          ),
           result: "failure",
           requestPayload,
           requestPayloadPreview: buildPayloadPreviewFromJson(requestPayload),
