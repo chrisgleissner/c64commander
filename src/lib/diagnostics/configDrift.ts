@@ -28,28 +28,6 @@ export type ConfigDriftResult = {
 
 type RawConfigMap = Record<string, Record<string, string | number | undefined>>;
 
-const extractValues = (raw: unknown): RawConfigMap => {
-  const result: RawConfigMap = {};
-  if (!raw || typeof raw !== "object") return result;
-  const top = raw as Record<string, unknown>;
-  for (const [category, catData] of Object.entries(top)) {
-    if (!catData || typeof catData !== "object") continue;
-    const items: Record<string, string | number | undefined> = {};
-    for (const [key, val] of Object.entries(catData as Record<string, unknown>)) {
-      if (val && typeof val === "object" && "selected" in val) {
-        const sel = (val as { selected?: string | number }).selected;
-        if (sel !== undefined) items[key] = sel;
-      } else if (typeof val === "string" || typeof val === "number") {
-        items[key] = val;
-      }
-    }
-    if (Object.keys(items).length > 0) {
-      result[category] = items;
-    }
-  }
-  return result;
-};
-
 /**
  * §15.1 — Fetch runtime and persisted configs then diff item by item.
  *

@@ -39,4 +39,9 @@ describe("modalPresentation", () => {
       footerClassName: "",
     });
   });
+
+  it("uses centered mode for secondary-editor on non-compact profiles", () => {
+    expect(resolveModalPresentation("medium", "secondary-editor")).toMatchObject({ mode: "centered" });
+    expect(resolveModalPresentation("expanded", "secondary-editor")).toMatchObject({ mode: "centered" });
+  });
 });

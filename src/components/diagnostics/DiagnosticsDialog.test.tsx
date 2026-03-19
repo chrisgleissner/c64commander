@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { DiagnosticsDialog } from "@/components/diagnostics/DiagnosticsDialog";
@@ -240,6 +240,39 @@ describe("DiagnosticsDialog", () => {
 
     expect(screen.getByTestId("open-config-drift")).toBeVisible();
     expect(screen.getByTestId("open-heatmap-config")).toBeVisible();
+  });
+
+  it("opens health check detail when a last health check result exists", async () => {
+    localStorage.clear();
+    setViewportWidth(600);
+
+    render(
+      <DisplayProfileProvider>
+        <DiagnosticsDialog
+          {...defaultProps}
+          onRunHealthCheck={vi.fn()}
+          lastHealthCheckResult={{
+            runId: "hcr-0001",
+            startTimestamp: "2026-03-19T10:00:00.000Z",
+            endTimestamp: "2026-03-19T10:00:01.000Z",
+            totalDurationMs: 1000,
+            overallHealth: "Healthy",
+            latency: { p50: 10, p90: 20, p99: 30 },
+            probes: {
+              REST: { probe: "REST", outcome: "Success", durationMs: 10, reason: null, startMs: 1 },
+              JIFFY: { probe: "JIFFY", outcome: "Success", durationMs: 20, reason: null, startMs: 2 },
+              RASTER: { probe: "RASTER", outcome: "Skipped", durationMs: null, reason: "Unsupported", startMs: 3 },
+              CONFIG: { probe: "CONFIG", outcome: "Success", durationMs: 30, reason: null, startMs: 4 },
+              FTP: { probe: "FTP", outcome: "Success", durationMs: 40, reason: null, startMs: 5 },
+            },
+          }}
+        />
+      </DisplayProfileProvider>,
+    );
+
+    fireEvent.click(screen.getByTestId("open-health-check-detail"));
+    expect(screen.getByTestId("health-check-detail-view")).toBeVisible();
+    expect(screen.getByTestId("health-check-probe-rest")).toBeVisible();
   });
 
   it("shows primary problem spotlight when healthState includes a primary problem", () => {

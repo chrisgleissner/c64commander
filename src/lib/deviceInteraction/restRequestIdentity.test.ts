@@ -67,4 +67,12 @@ describe("restRequestIdentity", () => {
     expect(isConfigMutationPath("/v1/configs/Audio%20Mixer/Vol%20Socket%201?value=0%20dB")).toBe(true);
     expect(isMachineControlPath("/v1/configs")).toBe(false);
   });
+
+  it("canonicalizes absolute URLs by extracting the pathname", () => {
+    expect(canonicalizeRestPath("http://c64u.local/v1/info?b=2&a=1")).toBe("/v1/info?a=1&b=2");
+  });
+
+  it("sorts by value when two params share the same key", () => {
+    expect(canonicalizeRestPath("/v1/configs?a=2&a=1")).toBe("/v1/configs?a=1&a=2");
+  });
 });

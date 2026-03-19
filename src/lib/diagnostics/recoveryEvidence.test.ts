@@ -48,4 +48,23 @@ describe("recoveryEvidence", () => {
     clearRecoveryEvidence();
     expect(getRecoveryEvidence()).toEqual([]);
   });
+
+  it("evicts the oldest entry when MAX_RECOVERY_EVENTS (500) is reached", () => {
+    const base = {
+      kind: "health-check" as const,
+      outcome: "success" as const,
+      contributor: "App" as const,
+      target: "c64u.local",
+    };
+    for (let i = 0; i < 500; i++) {
+      recordRecoveryEvidence({ ...base, message: `event-${i}` });
+    }
+    expect(getRecoveryEvidence()).toHaveLength(500);
+
+    recordRecoveryEvidence({ ...base, message: "event-500" });
+    const evidence = getRecoveryEvidence();
+    expect(evidence).toHaveLength(500);
+    expect(evidence[499].message).toBe("event-500");
+    expect(evidence[0].message).toBe("event-1");
+  });
 });

@@ -36,6 +36,8 @@ import { tabIndexForPath } from "@/lib/navigation/tabRoutes";
 import { t } from "@/lib/i18n";
 import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
 import { SwipeNavigationLayer } from "@/components/SwipeNavigationLayer";
+import { LightingStudioProvider } from "@/hooks/useLightingStudio";
+import { LightingStudioDialog } from "@/components/lighting/LightingStudioDialog";
 
 const NotFound = lazy(() => import("./pages/NotFound"));
 const CoverageProbePage = lazy(() => import("./pages/CoverageProbePage"));
@@ -100,25 +102,28 @@ const AppRoutes = () => {
   const coverageProbeEnabled = shouldEnableCoverageProbe();
   return (
     <BrowserRouter>
-      <GlobalErrorListener />
-      <GlobalButtonInteractionModel />
-      <GlobalNavigationBlocker />
-      <RouteRefresher />
-      <DebugStartupLogger />
-      <DiagnosticsRuntimeBridge />
-      <TraceContextBridge />
-      <GlobalDiagnosticsOverlay />
-      <ConnectionController />
-      <DemoModeInterstitial />
-      {coverageProbeEnabled && <TestHeartbeat />}
-      <Suspense fallback={<RouteLoadingFallback />}>
-        <SwipeNavigationLayer />
-        <Routes>
-          {coverageProbeEnabled ? <Route path="/__coverage__" element={<CoverageProbePage />} /> : null}
-          <Route path="*" element={<NotFoundForUnknownPaths />} />
-        </Routes>
-      </Suspense>
-      <TabBar />
+      <LightingStudioProvider>
+        <GlobalErrorListener />
+        <GlobalButtonInteractionModel />
+        <GlobalNavigationBlocker />
+        <RouteRefresher />
+        <DebugStartupLogger />
+        <DiagnosticsRuntimeBridge />
+        <TraceContextBridge />
+        <GlobalDiagnosticsOverlay />
+        <ConnectionController />
+        <DemoModeInterstitial />
+        <LightingStudioDialog />
+        {coverageProbeEnabled && <TestHeartbeat />}
+        <Suspense fallback={<RouteLoadingFallback />}>
+          <SwipeNavigationLayer />
+          <Routes>
+            {coverageProbeEnabled ? <Route path="/__coverage__" element={<CoverageProbePage />} /> : null}
+            <Route path="*" element={<NotFoundForUnknownPaths />} />
+          </Routes>
+        </Suspense>
+        <TabBar />
+      </LightingStudioProvider>
     </BrowserRouter>
   );
 };

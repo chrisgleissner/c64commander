@@ -136,6 +136,12 @@ describe("deriveRestContributorHealth", () => {
     ];
     expect(deriveRestContributorHealth(events)).toMatchObject({ state: "Healthy" });
   });
+
+  it("treats event with non-numeric status as success (status becomes null)", () => {
+    // status is not a number → status = null → not counted as failed
+    const events = [makeEvent("rest-response", 30_000, { status: "200" })];
+    expect(deriveRestContributorHealth(events)).toMatchObject({ state: "Healthy", problemCount: 0 });
+  });
 });
 
 // ──────────────────────────────────────────────────────────────────────────────

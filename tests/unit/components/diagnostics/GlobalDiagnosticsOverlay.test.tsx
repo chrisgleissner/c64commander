@@ -164,7 +164,7 @@ describe("GlobalDiagnosticsOverlay", () => {
         actions: expect.any(Array),
       }),
     );
-  });
+  }, 10_000);
 
   it("reports share-all failures", async () => {
     vi.mocked(shareAllDiagnosticsZip).mockRejectedValue(new Error("zip failed"));

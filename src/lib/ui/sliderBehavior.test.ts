@@ -93,3 +93,10 @@ describe("shouldTriggerMidpointHaptic", () => {
     expect(shouldTriggerMidpointHaptic({ ...base, previous: 1, next: 2 })).toBe(false);
   });
 });
+
+describe("createSliderAsyncQueue — no onChange guard", () => {
+  it("schedule is a no-op when no onChange is provided", () => {
+    const queue = createSliderAsyncQueue({});
+    expect(() => queue.schedule(42)).not.toThrow();
+  });
+});

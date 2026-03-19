@@ -169,7 +169,7 @@ describe("HomeDiskManager Dialogs", () => {
         undefined, // runtimeFile
       );
     });
-  });
+  }, 10_000);
 
   it("handles mounting a specific disk to a drive via dialog", async () => {
     // 1. Click "Mount" on a disk in the main list

@@ -11,15 +11,25 @@ import { HomeDiskManager } from "@/components/disks/HomeDiskManager";
 import { AppBar } from "@/components/AppBar";
 import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
 import { PageContainer, PageStack } from "@/components/layout/PageContainer";
+import { LightingAutomationCue } from "@/components/lighting/LightingStudioDialog";
+import { useLightingStudio } from "@/hooks/useLightingStudio";
 
 export default function DisksPage() {
   const pageShellClassName = usePrimaryPageShellClassName("pb-24");
+  const { resolved, openStudio, openContextLens } = useLightingStudio();
   return (
     <div className={pageShellClassName}>
       <AppBar title="Disks" subtitle="Drive control & disk library" />
 
       <PageContainer>
         <PageStack>
+          {resolved.sourceCue?.bucket === "disks" ? (
+            <LightingAutomationCue
+              label={resolved.sourceCue.label}
+              onOpenStudio={openStudio}
+              onOpenContextLens={openContextLens}
+            />
+          ) : null}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
             <HomeDiskManager />
           </motion.div>

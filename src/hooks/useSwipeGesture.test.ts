@@ -552,4 +552,83 @@ describe("useSwipeGesture integration", () => {
     expect(callbacks.onCommit).not.toHaveBeenCalled();
     expect(callbacks.onCancel).not.toHaveBeenCalled();
   });
+
+  it("does not call setPointerCapture on pointerdown — defers capture until horizontal intent confirmed", () => {
+    // Regression: capturing on pointerdown routes the subsequent pointerup to the
+    // container, so React click handlers on buttons inside the swipe surface never
+    // fire.  Capture must only happen after the gesture is classified as navigating.
+    const callbacks = {
+      onProgress: vi.fn(),
+      onCommit: vi.fn(),
+      onCancel: vi.fn(),
+    };
+
+    render(React.createElement(GestureHarness, { callbacks }));
+    const surface = screen.getByTestId("gesture-surface");
+
+    const capturedPointers: number[] = [];
+    surface.setPointerCapture = (id: number) => capturedPointers.push(id);
+
+    // Fire pointerdown only — no move.  Capture must NOT have been set yet.
+    surface.dispatchEvent(
+      new PointerEvent("pointerdown", {
+        bubbles: true,
+        button: 0,
+        pointerId: 7,
+        isPrimary: true,
+        clientX: 100,
+        clientY: 100,
+      }),
+    );
+    expect(capturedPointers).toHaveLength(0);
+
+    // Now fire a horizontal move that exceeds axis-lock threshold — capture SHOULD fire now.
+    surface.dispatchEvent(
+      new PointerEvent("pointermove", {
+        bubbles: true,
+        pointerId: 7,
+        clientX: 89,
+        clientY: 101,
+      }),
+    );
+    expect(capturedPointers).toHaveLength(1);
+  });
+
+  it("pointer-down on a non-excluded button inside the gesture surface fires no callbacks", () => {
+    // Regression: setPointerCapture on pointerdown prevented click handlers on
+    // non-excluded buttons (e.g. category section headers) from firing.
+    const callbacks = {
+      onProgress: vi.fn(),
+      onCommit: vi.fn(),
+      onCancel: vi.fn(),
+    };
+
+    const ButtonHarness = ({ callbacks: cb }: { callbacks: typeof callbacks }) => {
+      const ref = React.useRef<HTMLDivElement | null>(null);
+      useSwipeGesture(ref, cb);
+      return React.createElement(
+        "div",
+        { ref, "data-testid": "gesture-surface" },
+        React.createElement("button", { type: "button", "data-testid": "inner-button" }, "Click me"),
+      );
+    };
+
+    render(React.createElement(ButtonHarness, { callbacks }));
+    const surface = screen.getByTestId("gesture-surface");
+    const btn = screen.getByTestId("inner-button");
+
+    const capturedPointers: number[] = [];
+    surface.setPointerCapture = (id: number) => capturedPointers.push(id);
+
+    // Simulate a clean click: pointerdown then immediately pointerup on the button.
+    btn.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, pointerId: 8, isPrimary: true }));
+    // No pointermove → gesture stays undecided → no capture, no callbacks.
+    expect(capturedPointers).toHaveLength(0);
+
+    surface.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerId: 8 }));
+    expect(callbacks.onProgress).not.toHaveBeenCalled();
+    expect(callbacks.onCommit).not.toHaveBeenCalled();
+    expect(callbacks.onCancel).not.toHaveBeenCalled();
+    expect(capturedPointers).toHaveLength(0);
+  });
 });

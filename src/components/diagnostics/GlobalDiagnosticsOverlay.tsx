@@ -22,7 +22,13 @@ import { consumeDiagnosticsOpenRequest, type DiagnosticsEntryPreset } from "@/li
 import { setDiagnosticsOverlayActive, withDiagnosticsTraceOverride } from "@/lib/diagnostics/diagnosticsOverlayState";
 import { discoverConnection } from "@/lib/connection/connectionManager";
 import { getConfiguredHost, saveConfiguredHostAndRetry } from "@/lib/connection/hostEdit";
-import { runHealthCheck, isHealthCheckRunning, type HealthCheckRunResult } from "@/lib/diagnostics/healthCheckEngine";
+import {
+  runHealthCheck,
+  isHealthCheckRunning,
+  type HealthCheckRunResult,
+  type HealthCheckProbeType,
+  type HealthCheckProbeRecord,
+} from "@/lib/diagnostics/healthCheckEngine";
 import { clearLatencySamples, getAllLatencySamples } from "@/lib/diagnostics/latencyTracker";
 import { clearHealthHistory, getHealthHistory } from "@/lib/diagnostics/healthHistory";
 import { recordRecentTarget } from "@/lib/diagnostics/recentTargets";
@@ -92,6 +98,9 @@ export const GlobalDiagnosticsOverlay = () => {
   // §11 — Health check state
   const [healthCheckRunning, setHealthCheckRunning] = useState(false);
   const [lastHealthCheckResult, setLastHealthCheckResult] = useState<HealthCheckRunResult | null>(null);
+  const [liveHealthCheckProbes, setLiveHealthCheckProbes] = useState<Partial<
+    Record<HealthCheckProbeType, HealthCheckProbeRecord>
+  > | null>(null);
 
   const setDialogOpen = useCallback((open: boolean) => {
     setDiagnosticsOverlayActive(open);
@@ -215,8 +224,9 @@ export const GlobalDiagnosticsOverlay = () => {
   const handleRunHealthCheck = useCallback(async () => {
     if (isHealthCheckRunning()) return;
     setHealthCheckRunning(true);
+    setLiveHealthCheckProbes({});
     try {
-      const result = await runHealthCheck();
+      const result = await runHealthCheck((partial) => setLiveHealthCheckProbes(partial));
       if (result) {
         setLastHealthCheckResult(result);
         recordRecoveryEvidence({
@@ -243,6 +253,7 @@ export const GlobalDiagnosticsOverlay = () => {
       });
     } finally {
       setHealthCheckRunning(false);
+      setLiveHealthCheckProbes(null);
     }
   }, [healthState.host]);
 
@@ -389,6 +400,8 @@ export const GlobalDiagnosticsOverlay = () => {
       connectionCallbacks={connectionCallbacks}
       deviceInfo={deviceInfo}
       healthCheckRunning={healthCheckRunning}
+      lastHealthCheckResult={lastHealthCheckResult}
+      liveHealthCheckProbes={liveHealthCheckProbes}
       onRunHealthCheck={() => {
         void handleRunHealthCheck();
       }}

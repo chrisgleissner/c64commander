@@ -142,7 +142,10 @@ export function useSwipeGesture(
         return;
       }
 
-      containerRef.current?.setPointerCapture?.(event.pointerId);
+      // Do not call setPointerCapture here — defer it until intent is confirmed
+      // as horizontal ("navigating") in handlePointerMove. Capturing on pointerdown
+      // would redirect the subsequent pointerup away from the original target,
+      // preventing React click handlers on buttons and links from firing.
       stateRef.current = {
         active: true,
         pointerId: event.pointerId,
@@ -161,19 +164,55 @@ export function useSwipeGesture(
     [containerRef],
   );
 
-  const handlePointerMove = useCallback((event: PointerEvent) => {
-    const state = stateRef.current;
-    if (!state.active || event.pointerId !== state.pointerId) return;
-    if (state.intent === "locked") return;
+  const handlePointerMove = useCallback(
+    (event: PointerEvent) => {
+      const state = stateRef.current;
+      if (!state.active || event.pointerId !== state.pointerId) return;
+      if (state.intent === "locked") return;
 
-    const dx = event.clientX - state.startX;
-    const dy = event.clientY - state.startY;
-    const deltaTime = Math.max(event.timeStamp - state.lastTime, 1);
-    const velocityX = (event.clientX - state.lastX) / deltaTime;
+      const dx = event.clientX - state.startX;
+      const dy = event.clientY - state.startY;
+      const deltaTime = Math.max(event.timeStamp - state.lastTime, 1);
+      const velocityX = (event.clientX - state.lastX) / deltaTime;
 
-    if (state.intent === "undecided") {
-      const intent = classifyGestureIntent(dx, dy);
-      if (intent === "undecided") {
+      if (state.intent === "undecided") {
+        const intent = classifyGestureIntent(dx, dy);
+        if (intent === "undecided") {
+          stateRef.current = {
+            ...state,
+            lastX: event.clientX,
+            lastY: event.clientY,
+            lastTime: event.timeStamp,
+            lastDx: dx,
+            lastDy: dy,
+            velocityX,
+          };
+          return;
+        }
+
+        addLog("debug", "[SwipeNav] gesture-classified", {
+          classification: intent,
+          dx,
+          dy,
+        });
+
+        stateRef.current = {
+          ...state,
+          intent,
+          lastX: event.clientX,
+          lastY: event.clientY,
+          lastTime: event.timeStamp,
+          lastDx: dx,
+          lastDy: dy,
+          velocityX,
+        };
+
+        if (intent === "locked") return;
+
+        // Gesture confirmed as horizontal: now capture the pointer so subsequent
+        // pointer events route to the container even if the pointer leaves it.
+        containerRef.current?.setPointerCapture?.(state.pointerId);
+      } else {
         stateRef.current = {
           ...state,
           lastX: event.clientX,
@@ -183,41 +222,12 @@ export function useSwipeGesture(
           lastDy: dy,
           velocityX,
         };
-        return;
       }
 
-      addLog("debug", "[SwipeNav] gesture-classified", {
-        classification: intent,
-        dx,
-        dy,
-      });
-
-      stateRef.current = {
-        ...state,
-        intent,
-        lastX: event.clientX,
-        lastY: event.clientY,
-        lastTime: event.timeStamp,
-        lastDx: dx,
-        lastDy: dy,
-        velocityX,
-      };
-
-      if (intent === "locked") return;
-    } else {
-      stateRef.current = {
-        ...state,
-        lastX: event.clientX,
-        lastY: event.clientY,
-        lastTime: event.timeStamp,
-        lastDx: dx,
-        lastDy: dy,
-        velocityX,
-      };
-    }
-
-    callbacksRef.current.onProgress(dx, velocityX);
-  }, []);
+      callbacksRef.current.onProgress(dx, velocityX);
+    },
+    [containerRef],
+  );
 
   const handlePointerEnd = useCallback(
     (event: PointerEvent) => {

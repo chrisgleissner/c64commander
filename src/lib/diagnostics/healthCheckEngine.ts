@@ -9,7 +9,7 @@
 // §11 — Deterministic health check system.
 //
 // Execution order (strict sequential, no retries, no parallelism):
-//   REST → JIFFY → RASTER → CONFIG → FTP
+//   REST → FTP → CONFIG → RASTER → JIFFY
 //
 // Each probe is recorded with outcome, duration, and skip/fail reason.
 
@@ -316,14 +316,17 @@ const generateRunId = (): string => {
 /**
  * Run one complete health check pass.
  *
- * §11.1 — Sequential execution: REST → JIFFY → RASTER → CONFIG → FTP.
+ * §11.1 — Sequential execution: REST → FTP → CONFIG → RASTER → JIFFY.
  * §11.1 — No retries, no parallelism, no hidden state.
  * §11.4 — Dependent probes are skipped with an explicit reason when a
  *         prerequisite probe failed.
  *
+ * @param onProbeProgress - Called after each probe completes with probes resolved so far.
  * @returns The full run result, or null if a run was already in progress.
  */
-export const runHealthCheck = async (): Promise<HealthCheckRunResult | null> => {
+export const runHealthCheck = async (
+  onProbeProgress?: (partial: Partial<Record<HealthCheckProbeType, HealthCheckProbeRecord>>) => void,
+): Promise<HealthCheckRunResult | null> => {
   if (running) {
     addLog("debug", "Health check skipped: run already in progress");
     return null;
@@ -336,11 +339,39 @@ export const runHealthCheck = async (): Promise<HealthCheckRunResult | null> => 
   try {
     addLog("info", "Health check started", { runId });
 
-    // REST probe
+    // REST probe (1 of 5)
     const { record: restRecord, deviceInfo } = await probeRest();
     const restFailed = restRecord.outcome === "Fail";
+    onProbeProgress?.({ REST: restRecord });
 
-    // JIFFY probe (may skip if REST failed)
+    // FTP probe (2 of 5 — skipped if REST failed)
+    let ftpRecord: HealthCheckProbeRecord;
+    if (restFailed) {
+      ftpRecord = makeRecord("FTP", "Skipped", null, "Skipped: REST probe failed", Date.now());
+    } else {
+      ftpRecord = await probeFtp();
+    }
+    onProbeProgress?.({ REST: restRecord, FTP: ftpRecord });
+
+    // CONFIG probe (3 of 5 — skipped if REST failed)
+    let configRecord: HealthCheckProbeRecord;
+    if (restFailed) {
+      configRecord = makeRecord("CONFIG", "Skipped", null, "Skipped: REST probe failed", Date.now());
+    } else {
+      configRecord = await probeConfig();
+    }
+    onProbeProgress?.({ REST: restRecord, FTP: ftpRecord, CONFIG: configRecord });
+
+    // RASTER probe (4 of 5 — skipped if REST failed)
+    let rasterRecord: HealthCheckProbeRecord;
+    if (restFailed) {
+      rasterRecord = makeRecord("RASTER", "Skipped", null, "Skipped: REST probe failed", Date.now());
+    } else {
+      rasterRecord = await probeRaster();
+    }
+    onProbeProgress?.({ REST: restRecord, FTP: ftpRecord, CONFIG: configRecord, RASTER: rasterRecord });
+
+    // JIFFY probe (5 of 5 — skipped if REST failed)
     let jiffyRecord: HealthCheckProbeRecord;
     let uptimeSeconds: number | null = null;
     if (restFailed) {
@@ -350,25 +381,13 @@ export const runHealthCheck = async (): Promise<HealthCheckRunResult | null> => 
       jiffyRecord = r.record;
       uptimeSeconds = r.uptimeSeconds;
     }
-
-    // RASTER probe (may skip if REST failed)
-    let rasterRecord: HealthCheckProbeRecord;
-    if (restFailed) {
-      rasterRecord = makeRecord("RASTER", "Skipped", null, "Skipped: REST probe failed", Date.now());
-    } else {
-      rasterRecord = await probeRaster();
-    }
-
-    // CONFIG probe (may skip if REST failed)
-    let configRecord: HealthCheckProbeRecord;
-    if (restFailed) {
-      configRecord = makeRecord("CONFIG", "Skipped", null, "Skipped: REST probe failed", Date.now());
-    } else {
-      configRecord = await probeConfig();
-    }
-
-    // FTP probe — runs independently of REST/JIFFY
-    const ftpRecord = await probeFtp();
+    onProbeProgress?.({
+      REST: restRecord,
+      FTP: ftpRecord,
+      CONFIG: configRecord,
+      RASTER: rasterRecord,
+      JIFFY: jiffyRecord,
+    });
 
     const endTimestamp = new Date().toISOString();
     const totalDurationMs = Date.now() - runStartMs;

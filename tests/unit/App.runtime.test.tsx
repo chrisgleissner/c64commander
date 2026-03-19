@@ -85,6 +85,46 @@ vi.mock("@/hooks/useFeatureFlags", () => ({
 vi.mock("@/hooks/useRefreshControl", () => ({
   RefreshControlProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
+vi.mock("@/hooks/useLightingStudio", () => ({
+  LightingStudioProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  useLightingStudio: () => ({
+    studioState: { activeProfileId: null, profiles: [], automation: {} },
+    capabilities: {},
+    rawDeviceState: {},
+    resolved: { activeProfile: null, activeAutomationChip: null, resolvedState: {}, contextLens: [], sourceCue: null },
+    connectionSentinelState: null,
+    circadianState: null,
+    playbackContext: { sourceBucket: null, activeItemLabel: null },
+    studioOpen: false,
+    contextLensOpen: false,
+    previewState: null,
+    manualLockEnabled: false,
+    deviceLocationStatus: "idle",
+    deviceLocationError: null,
+    openStudio: vi.fn(),
+    closeStudio: vi.fn(),
+    openContextLens: vi.fn(),
+    closeContextLens: vi.fn(),
+    setPreviewState: vi.fn(),
+    clearPreviewState: vi.fn(),
+    applyPreviewAsProfileBase: vi.fn(),
+    setActiveProfileId: vi.fn(),
+    saveProfile: vi.fn(),
+    duplicateProfile: vi.fn(),
+    renameProfile: vi.fn(),
+    deleteProfile: vi.fn(),
+    togglePinProfile: vi.fn(),
+    updateAutomation: vi.fn(),
+    setPlaybackContext: vi.fn(),
+    setManualLockEnabled: vi.fn(),
+    lockCurrentLook: vi.fn(),
+    unlockCurrentLook: vi.fn(),
+    markManualLightingChange: vi.fn(),
+    updateCircadianLocationPreference: vi.fn(),
+    requestDeviceLocation: vi.fn(),
+    isActiveProfileModified: false,
+  }),
+}));
 vi.mock("@/components/TabBar", () => ({ TabBar: () => <div data-testid="tab-bar">Tab Bar</div> }));
 vi.mock("@/components/ConnectionController", () => ({
   ConnectionController: () => <div data-testid="connection-controller" />,
@@ -98,6 +138,10 @@ vi.mock("@/components/diagnostics/GlobalDiagnosticsOverlay", () => ({
 }));
 vi.mock("@/components/TestHeartbeat", () => ({
   TestHeartbeat: () => <div data-testid="test-heartbeat">Heartbeat</div>,
+}));
+vi.mock("@/components/lighting/LightingStudioDialog", () => ({
+  LightingStudioDialog: () => <div data-testid="lighting-studio-dialog" />,
+  LightingAutomationCue: () => <div data-testid="lighting-automation-cue" />,
 }));
 
 vi.mock("@/lib/logging", () => ({ addErrorLog: mocks.addErrorLog, addLog: mocks.addLog }));

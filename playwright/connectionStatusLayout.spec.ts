@@ -27,7 +27,7 @@ const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   }
 };
 
-test.describe("Connection Status pop-up layout", () => {
+test.describe("Connection Status diagnostics layout", () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
   test.afterEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
@@ -40,13 +40,14 @@ test.describe("Connection Status pop-up layout", () => {
     }
   });
 
-  const openPopover = async (page: Page) => {
+  const openDiagnostics = async (page: Page) => {
     const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 10000 });
     await indicator.click();
-    const popover = page.getByTestId("connection-status-popover");
-    await expect(popover).toBeVisible();
-    return popover;
+    const dialog = page.getByRole("dialog", { name: "Diagnostics" });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByTestId("health-summary")).toBeVisible();
+    return dialog;
   };
 
   const seedOfflineState = async (page: Page) => {
@@ -61,7 +62,7 @@ test.describe("Connection Status pop-up layout", () => {
     });
   };
 
-  test("row heights are equal for Status, Host and Last activity", async ({
+  test("health summary keeps REST and FTP activity rows aligned", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
@@ -75,31 +76,26 @@ test.describe("Connection Status pop-up layout", () => {
     await seedUiMocks(page, server.baseUrl);
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    const popover = await openPopover(page);
+    const dialog = await openDiagnostics(page);
+    const restRow = dialog.getByText(/^REST:/).first();
+    const ftpRow = dialog.getByText(/^FTP:/).first();
 
-    const statusBox = await popover.getByTestId("connection-status-row-status").boundingBox();
-    const hostBox = await popover.getByTestId("connection-status-row-host").boundingBox();
-    const lastActivityBox = await popover.getByTestId("connection-status-row-last-activity").boundingBox();
+    const restBox = await restRow.boundingBox();
+    const ftpBox = await ftpRow.boundingBox();
 
-    expect(statusBox).toBeTruthy();
-    expect(hostBox).toBeTruthy();
-    expect(lastActivityBox).toBeTruthy();
-
-    // Row heights must be equal within 4px tolerance.
-    expect(Math.abs(statusBox!.height - hostBox!.height)).toBeLessThanOrEqual(4);
-    expect(Math.abs(statusBox!.height - lastActivityBox!.height)).toBeLessThanOrEqual(4);
-
-    // Vertical gap between Status→Host and Host→Last activity must be equal within 4px.
-    const gapStatusToHost = hostBox!.y - (statusBox!.y + statusBox!.height);
-    const gapHostToLastActivity = lastActivityBox!.y - (hostBox!.y + hostBox!.height);
-    expect(Math.abs(gapStatusToHost - gapHostToLastActivity)).toBeLessThanOrEqual(4);
+    expect(restBox).toBeTruthy();
+    expect(ftpBox).toBeTruthy();
+    expect(Math.abs((restBox?.x ?? 0) - (ftpBox?.x ?? 0))).toBeLessThanOrEqual(4);
+    expect(Math.abs((restBox?.height ?? 0) - (ftpBox?.height ?? 0))).toBeLessThanOrEqual(4);
 
     await snap(page, testInfo, "connection-status-layout-rhythm");
   });
 
-  test("Change button is a button element, focusable, and does not expand row height", async ({
+  test("overall health row and device detail shortcut stay focusable and compact", async ({
     page,
-  }: { page: Page }, testInfo: TestInfo) => {
+  }: {
+    page: Page;
+  }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
     server = await createMockC64Server({});
     await page.addInitScript(
@@ -111,29 +107,29 @@ test.describe("Connection Status pop-up layout", () => {
     await seedUiMocks(page, server.baseUrl);
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    const popover = await openPopover(page);
+    const dialog = await openDiagnostics(page);
 
-    const changeButton = popover.getByRole("button", { name: "Change" });
-    await expect(changeButton).toBeVisible();
+    const overallHealthRow = dialog.getByTestId("overall-health-row");
+    const deviceDetailButton = dialog.getByTestId("open-device-detail");
 
-    // Must be a real button element.
-    const tagName = await changeButton.evaluate((el) => el.tagName.toLowerCase());
+    await expect(overallHealthRow).toBeVisible();
+    await expect(deviceDetailButton).toBeVisible();
+
+    const tagName = await deviceDetailButton.evaluate((element) => element.tagName.toLowerCase());
     expect(tagName).toBe("button");
 
-    // Must be focusable.
-    await changeButton.focus();
+    await deviceDetailButton.focus();
     const focused = await page.evaluate(() => document.activeElement?.tagName.toLowerCase());
     expect(focused).toBe("button");
 
-    // Host row height must not exceed Status row height by more than 1px.
-    const statusBox = await popover.getByTestId("connection-status-row-status").boundingBox();
-    const hostBox = await popover.getByTestId("connection-status-row-host").boundingBox();
-    expect(statusBox).not.toBeNull();
-    expect(hostBox).not.toBeNull();
-    expect(Math.abs(hostBox!.height - statusBox!.height)).toBeLessThanOrEqual(1);
+    const summaryBox = await overallHealthRow.boundingBox();
+    const detailBox = await deviceDetailButton.boundingBox();
+    expect(summaryBox).not.toBeNull();
+    expect(detailBox).not.toBeNull();
+    expect(Math.abs((summaryBox?.y ?? 0) - (detailBox?.y ?? 0))).toBeLessThanOrEqual(6);
   });
 
-  test("all rows are flush-left aligned (no indentation)", async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test("contributor rows are flush-left aligned", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
     server = await createMockC64Server({});
     await page.addInitScript(
@@ -145,25 +141,20 @@ test.describe("Connection Status pop-up layout", () => {
     await seedUiMocks(page, server.baseUrl);
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    const popover = await openPopover(page);
+    const dialog = await openDiagnostics(page);
 
-    const statusBox = await popover.getByTestId("connection-status-row-status").boundingBox();
-    const hostBox = await popover.getByTestId("connection-status-row-host").boundingBox();
-    const lastActivityBox = await popover.getByTestId("connection-status-row-last-activity").boundingBox();
-    const restBox = await popover.getByTestId("connection-diagnostics-row-rest").boundingBox();
+    const appRow = await dialog.getByTestId("contributor-row-app").boundingBox();
+    const restRow = await dialog.getByTestId("contributor-row-rest").boundingBox();
+    const ftpRow = await dialog.getByTestId("contributor-row-ftp").boundingBox();
 
-    expect(statusBox).not.toBeNull();
-    expect(hostBox).not.toBeNull();
-    expect(lastActivityBox).not.toBeNull();
-    expect(restBox).not.toBeNull();
-
-    // All rows must share the same left offset within 5px.
-    expect(Math.abs(statusBox!.x - hostBox!.x)).toBeLessThanOrEqual(5);
-    expect(Math.abs(statusBox!.x - lastActivityBox!.x)).toBeLessThanOrEqual(5);
-    expect(Math.abs(statusBox!.x - restBox!.x)).toBeLessThanOrEqual(5);
+    expect(appRow).not.toBeNull();
+    expect(restRow).not.toBeNull();
+    expect(ftpRow).not.toBeNull();
+    expect(Math.abs((appRow?.x ?? 0) - (restRow?.x ?? 0))).toBeLessThanOrEqual(5);
+    expect(Math.abs((appRow?.x ?? 0) - (ftpRow?.x ?? 0))).toBeLessThanOrEqual(5);
   });
 
-  test("Last activity uses strict numeric format: Xs ago for under 60s", async ({
+  test("offline summary uses deterministic last-activity copy", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
@@ -174,16 +165,20 @@ test.describe("Connection Status pop-up layout", () => {
     const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(indicator).toHaveAttribute("data-connection-state", "OFFLINE_NO_DEMO", { timeout: 10000 });
     await indicator.click();
-    const popover = page.getByTestId("connection-status-popover");
-    await expect(popover).toBeVisible();
+    const dialog = page.getByRole("dialog", { name: "Diagnostics" });
+    await expect(dialog).toBeVisible();
 
-    // Must match numeric format; must NOT contain "just now" or "Communication".
-    await expect(popover).toContainText(/Last activity:\s+(\d+s ago|\d+m \d+s ago|none yet|unknown)/i);
-    await expect(popover).not.toContainText("just now");
-    await expect(popover).not.toContainText("Communication");
+    await expect(dialog.getByTestId("health-summary")).toContainText(
+      /REST:\s+(No REST activity yet|.+\s+·\s+.+\s+·\s+(\d+s ago|\d+m \d+s ago))/i,
+    );
+    await expect(dialog.getByTestId("health-summary")).toContainText(
+      /FTP:\s+(No FTP activity yet|.+\s+·\s+.+\s+·\s+(\d+s ago|\d+m \d+s ago))/i,
+    );
+    await expect(dialog.getByTestId("health-summary")).not.toContainText("just now");
+    await expect(dialog.getByTestId("health-summary")).not.toContainText("Communication");
   });
 
-  test("close icon closes the pop-up", async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test("close button closes the diagnostics dialog", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
     server = await createMockC64Server({});
     await page.addInitScript(
@@ -195,15 +190,15 @@ test.describe("Connection Status pop-up layout", () => {
     await seedUiMocks(page, server.baseUrl);
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    const popover = await openPopover(page);
+    const dialog = await openDiagnostics(page);
 
-    const closeButton = page.getByTestId("connection-status-close");
+    const closeButton = page.getByRole("button", { name: "Close" }).last();
     await expect(closeButton).toBeVisible();
     await closeButton.click();
-    await expect(popover).toBeHidden();
+    await expect(dialog).toBeHidden();
   });
 
-  test("Escape key closes the pop-up", async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test("Escape key closes the diagnostics dialog", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
     server = await createMockC64Server({});
     await page.addInitScript(
@@ -215,14 +210,12 @@ test.describe("Connection Status pop-up layout", () => {
     await seedUiMocks(page, server.baseUrl);
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    const popover = await openPopover(page);
-    await expect(popover).toBeVisible();
-
+    const dialog = await openDiagnostics(page);
     await page.keyboard.press("Escape");
-    await expect(popover).toBeHidden();
+    await expect(dialog).toBeHidden();
   });
 
-  test("clicking outside closes the pop-up", async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test("clicking outside closes the diagnostics dialog", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
     server = await createMockC64Server({});
     await page.addInitScript(
@@ -234,43 +227,8 @@ test.describe("Connection Status pop-up layout", () => {
     await seedUiMocks(page, server.baseUrl);
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    const popover = await openPopover(page);
-    await expect(popover).toBeVisible();
-
+    const dialog = await openDiagnostics(page);
     await page.mouse.click(10, 10);
-    await expect(popover).toBeHidden();
-  });
-
-  test("spacing before Diagnostics is greater than spacing between Group 1 rows", async ({
-    page,
-  }: { page: Page }, testInfo: TestInfo) => {
-    await startStrictUiMonitoring(page, testInfo);
-    server = await createMockC64Server({});
-    await page.addInitScript(
-      ({ url }: { url: string }) => {
-        (window as Window & { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl = url;
-      },
-      { url: server.baseUrl },
-    );
-    await seedUiMocks(page, server.baseUrl);
-
-    await page.goto("/", { waitUntil: "domcontentloaded" });
-    const popover = await openPopover(page);
-
-    const statusBox = await popover.getByTestId("connection-status-row-status").boundingBox();
-    const hostBox = await popover.getByTestId("connection-status-row-host").boundingBox();
-    const lastActivityBox = await popover.getByTestId("connection-status-row-last-activity").boundingBox();
-    const diagnosticsSectionBox = await popover.getByTestId("connection-diagnostics-section").boundingBox();
-
-    expect(statusBox).not.toBeNull();
-    expect(hostBox).not.toBeNull();
-    expect(lastActivityBox).not.toBeNull();
-    expect(diagnosticsSectionBox).not.toBeNull();
-
-    const intraGroupGap = hostBox!.y - (statusBox!.y + statusBox!.height);
-    const interGroupGap = diagnosticsSectionBox!.y - (lastActivityBox!.y + lastActivityBox!.height);
-
-    // Inter-group spacing must be strictly larger than intra-group spacing.
-    expect(interGroupGap).toBeGreaterThan(intraGroupGap);
+    await expect(dialog).toBeHidden();
   });
 });

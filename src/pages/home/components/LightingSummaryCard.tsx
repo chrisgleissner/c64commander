@@ -23,6 +23,7 @@ type LightingSummaryCardProps = {
   category: string;
   config: Record<string, unknown> | undefined;
   isActive: boolean;
+  onManualLightingChange?: () => void;
   operationPrefix: string;
   sectionLabel: string;
   selectTriggerClassName: string;
@@ -34,6 +35,7 @@ export function LightingSummaryCard({
   category,
   config,
   isActive,
+  onManualLightingChange,
   operationPrefix,
   sectionLabel,
   selectTriggerClassName,
@@ -127,7 +129,17 @@ export function LightingSummaryCard({
     operationSuffix: string,
     successMessage: string,
     options?: { suppressToast?: boolean },
-  ) => updateConfigValue(category, itemName, value, `${operationPrefix}_${operationSuffix}`, successMessage, options);
+  ) => {
+    onManualLightingChange?.();
+    return updateConfigValue(
+      category,
+      itemName,
+      value,
+      `${operationPrefix}_${operationSuffix}`,
+      successMessage,
+      options,
+    );
+  };
 
   return (
     <div
@@ -253,10 +265,12 @@ export function LightingSummaryCard({
           }}
           onValueChangeAsync={(nextValue) => {
             const nextIndex = clampToRange(nextValue, 0, fixedColorSliderMax);
+            onManualLightingChange?.();
             interactiveWrite({ "Fixed Color": resolveFixedColorOption(nextIndex) });
           }}
           onValueCommitAsync={(nextValue) => {
             const nextIndex = clampToRange(nextValue, 0, fixedColorSliderMax);
+            onManualLightingChange?.();
             interactiveWrite({ "Fixed Color": resolveFixedColorOption(nextIndex) });
           }}
           disabled={fixedColorSliderDisabled}
@@ -285,10 +299,12 @@ export function LightingSummaryCard({
           }}
           onValueChangeAsync={(nextValue) => {
             const clamped = clampToRange(nextValue, intensityMin, intensityMax);
+            onManualLightingChange?.();
             interactiveWrite({ "Strip Intensity": Math.round(clamped) });
           }}
           onValueCommitAsync={(nextValue) => {
             const clamped = clampToRange(nextValue, intensityMin, intensityMax);
+            onManualLightingChange?.();
             interactiveWrite({ "Strip Intensity": Math.round(clamped) });
           }}
           disabled={!isActive || isPending("Strip Intensity")}

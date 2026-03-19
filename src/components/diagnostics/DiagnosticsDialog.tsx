@@ -33,7 +33,9 @@ import {
   isRecoveryFirstState,
   type ConnectionActionsCallbacks,
 } from "@/components/diagnostics/ConnectionActionsRegion";
+import { ConfigDriftView } from "@/components/diagnostics/ConfigDriftView";
 import { DeviceDetailView, type DeviceDetailInfo } from "@/components/diagnostics/DeviceDetailView";
+import { HealthCheckDetailView } from "@/components/diagnostics/HealthCheckDetailView";
 import { LatencyAnalysisPopup } from "@/components/diagnostics/LatencyAnalysisPopup";
 import { HealthHistoryPopup } from "@/components/diagnostics/HealthHistoryPopup";
 import { HeatMapPopup } from "@/components/diagnostics/HeatMapPopup";
@@ -92,7 +94,7 @@ type DiagnosticsTraceEntry = {
 };
 
 type ActivePopup = "latency" | "history" | `heatmap-${"REST" | "FTP" | "CONFIG"}` | null;
-type ActiveDetailView = "device" | "config-drift" | null;
+type ActiveDetailView = "device" | "config-drift" | "health-check" | null;
 
 type Props = {
   open: boolean;
@@ -120,6 +122,13 @@ type Props = {
   // §5 — Whether a health check is currently running
   healthCheckRunning?: boolean;
   onRunHealthCheck?: () => void;
+  lastHealthCheckResult?: import("@/lib/diagnostics/healthCheckEngine").HealthCheckRunResult | null;
+  liveHealthCheckProbes?: Partial<
+    Record<
+      import("@/lib/diagnostics/healthCheckEngine").HealthCheckProbeType,
+      import("@/lib/diagnostics/healthCheckEngine").HealthCheckProbeRecord
+    >
+  > | null;
 };
 
 const CONTRIBUTOR_ORDER: ContributorKey[] = ["App", "REST", "FTP"];
@@ -331,6 +340,8 @@ const HealthSummary = ({
   onOpenDeviceDetail,
   onOpenLatency,
   onOpenHistory,
+  lastHealthCheckResult,
+  onOpenHealthCheckDetail,
 }: {
   healthState: OverallHealthState;
   indicatorFilter: IndicatorFilter;
@@ -348,6 +359,8 @@ const HealthSummary = ({
   onOpenDeviceDetail: () => void;
   onOpenLatency: () => void;
   onOpenHistory: () => void;
+  lastHealthCheckResult?: import("@/lib/diagnostics/healthCheckEngine").HealthCheckRunResult | null;
+  onOpenHealthCheckDetail: () => void;
 }) => {
   const { state, connectivity, host, contributors, lastRestActivity, lastFtpActivity, primaryProblem } = healthState;
   const glyph = HEALTH_GLYPHS[state];
@@ -487,16 +500,29 @@ const HealthSummary = ({
 
           {/* §11.2 — Run health check */}
           {onRunHealthCheck && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={onRunHealthCheck}
-              disabled={healthCheckRunning}
-              className="w-full"
-              data-testid="run-health-check-button"
-            >
-              {healthCheckRunning ? "Running health check…" : "Run health check"}
-            </Button>
+            <div className="space-y-1.5">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={onRunHealthCheck}
+                disabled={healthCheckRunning}
+                className="w-full"
+                data-testid="run-health-check-button"
+              >
+                {healthCheckRunning ? "Running health check…" : "Run health check"}
+              </Button>
+              {lastHealthCheckResult && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={onOpenHealthCheckDetail}
+                  className="w-full"
+                  data-testid="open-health-check-detail"
+                >
+                  Last health check
+                </Button>
+              )}
+            </div>
           )}
 
           {/* §10.9 — Legacy retry (when no connectionCallbacks provided) */}
@@ -798,6 +824,8 @@ export function DiagnosticsDialog({
   deviceInfo,
   healthCheckRunning,
   onRunHealthCheck,
+  lastHealthCheckResult,
+  liveHealthCheckProbes,
 }: Props) {
   const { profile } = useDisplayProfile();
   const isCompact = profile === "compact";
@@ -1067,9 +1095,16 @@ export function DiagnosticsDialog({
           <div className={cn("border-b border-border", isCompact ? "px-3 pb-2 pt-1.5" : "px-4 pb-3 pt-2")}>
             {activeDetailView === "device" ? (
               <DeviceDetailView info={deviceInfo ?? null} onBack={() => setActiveDetailView(null)} />
-            ) : (
-              <ConfigDriftView onBack={() => setActiveDetailView(null)} />
-            )}
+            ) : null}
+            {activeDetailView === "config-drift" ? <ConfigDriftView onBack={() => setActiveDetailView(null)} /> : null}
+            {activeDetailView === "health-check" ? (
+              <HealthCheckDetailView
+                result={lastHealthCheckResult ?? null}
+                liveProbes={liveHealthCheckProbes}
+                isRunning={healthCheckRunning}
+                onBack={() => setActiveDetailView(null)}
+              />
+            ) : null}
           </div>
         )}
 
@@ -1092,6 +1127,8 @@ export function DiagnosticsDialog({
             onOpenDeviceDetail={() => setActiveDetailView("device")}
             onOpenLatency={() => setActivePopup("latency")}
             onOpenHistory={() => setActivePopup("history")}
+            lastHealthCheckResult={lastHealthCheckResult}
+            onOpenHealthCheckDetail={() => setActiveDetailView("health-check")}
           />
         )}
 
