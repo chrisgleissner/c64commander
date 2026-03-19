@@ -1,6 +1,6 @@
-# Diagnostics UX Extension Implementation Plan
+# Lighting Studio Redesign
 
-Status: Completed
+Status: IN PROGRESS
 Classification: DOC_PLUS_CODE, UI_CHANGE
 Specs:
 

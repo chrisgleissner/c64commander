@@ -560,28 +560,38 @@ export function LightingAutomationCue({
 function LightingContextLensDialog() {
   const { profile } = useDisplayProfile();
   const { contextLensOpen, closeContextLens, resolved } = useLightingStudio();
+  const compact = profile === "compact";
 
   return (
     <Dialog open={contextLensOpen} onOpenChange={(open) => (open ? undefined : closeContextLens())}>
-      <DialogContent surface="secondary-editor" className="max-w-2xl">
+      <DialogContent className={compact ? undefined : "max-w-lg"}>
         <DialogHeader>
           <DialogTitle>Context Lens</DialogTitle>
           <DialogDescription>
-            {profile === "compact"
+            {compact
               ? "Who owns each surface right now."
               : "Which resolver layer currently owns each lighting surface."}
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-3">
+        <div className="space-y-2">
           {resolved.contextLens.map((entry) => (
-            <div key={`${entry.surface}-${entry.owner}`} className="rounded-lg border border-border/60 p-3">
-              <div className="flex items-center justify-between gap-2">
-                <p className="font-medium">{entry.surface === "case" ? "Case" : "Keys"}</p>
-                <Badge variant="secondary">{entry.label}</Badge>
+            <div
+              key={`${entry.surface}-${entry.owner}`}
+              className="flex items-start justify-between gap-2 rounded-lg border border-border/60 p-2.5"
+              data-testid={`lighting-context-lens-${entry.surface}`}
+            >
+              <div className="min-w-0">
+                <p className="text-sm font-medium">{entry.surface === "case" ? "Case" : "Keys"}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">{entry.detail}</p>
               </div>
-              <p className="mt-1 text-sm text-muted-foreground">{entry.detail}</p>
+              <Badge variant="secondary" className="shrink-0 text-xs">
+                {entry.label}
+              </Badge>
             </div>
           ))}
+          {resolved.contextLens.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">No resolver data available.</p>
+          ) : null}
         </div>
       </DialogContent>
     </Dialog>
@@ -711,12 +721,12 @@ export function LightingStudioDialog() {
   };
 
   const activeProfileChip = resolved.activeProfile ? (
-    <Badge variant="secondary" data-testid="lighting-active-profile-chip">
+    <Badge variant="secondary" className="text-xs" data-testid="lighting-active-profile-chip">
       {resolved.activeProfile.name}
       {isActiveProfileModified ? " *" : ""}
     </Badge>
   ) : (
-    <Badge variant="outline" data-testid="lighting-active-profile-chip">
+    <Badge variant="outline" className="text-xs" data-testid="lighting-active-profile-chip">
       Device look
     </Badge>
   );
@@ -724,82 +734,81 @@ export function LightingStudioDialog() {
   return (
     <>
       <Dialog open={studioOpen} onOpenChange={(open) => (open ? undefined : closeStudio())}>
-        <DialogContent surface="secondary-editor" className="max-w-5xl p-0">
-          <DialogHeader className={cn("border-b border-border/60", compact ? "p-4 pb-3" : "p-6 pb-4")}>
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div className="min-w-0 space-y-2">
-                <DialogTitle>Lighting Studio</DialogTitle>
-                <DialogDescription>
-                  {compact ? "Shape looks and automate them." : "Shape looks, save them, and tune the resolver."}
-                </DialogDescription>
-                <div className="flex flex-wrap gap-2">
-                  {activeProfileChip}
-                  {resolved.activeAutomationChip ? <Badge>{resolved.activeAutomationChip}</Badge> : null}
-                  {circadianState?.fallbackActive ? <Badge variant="outline">Fallback schedule</Badge> : null}
-                </div>
-              </div>
-              <div className={cn("flex flex-wrap items-center gap-2", compact && "w-full")}>
-                <Button variant="ghost" size="sm" onClick={openContextLens} data-testid="lighting-open-context-lens">
-                  Why
+        <DialogContent surface="secondary-editor" className="flex flex-col p-0">
+          <DialogHeader className={cn("shrink-0 border-b border-border/60", compact ? "p-3" : "p-5 pb-4")}>
+            <div className="flex items-center gap-2">
+              <DialogTitle className={cn("min-w-0 flex-1", compact && "text-base")}>Lighting Studio</DialogTitle>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 shrink-0 px-2 text-xs"
+                onClick={openContextLens}
+                data-testid="lighting-open-context-lens"
+              >
+                Why
+              </Button>
+              {manualLockEnabled ? (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="h-7 shrink-0 px-2 text-xs"
+                  onClick={unlockCurrentLook}
+                  data-testid="lighting-unlock"
+                >
+                  <PlayCircle className="h-3.5 w-3.5" />
+                  <span className="ml-1">Resume</span>
                 </Button>
-                {manualLockEnabled ? (
-                  <Button variant="outline" size="sm" onClick={unlockCurrentLook} data-testid="lighting-unlock">
-                    <PlayCircle className="mr-2 h-4 w-4" />
-                    Resume
-                  </Button>
-                ) : (
-                  <Button variant="outline" size="sm" onClick={lockCurrentLook} data-testid="lighting-lock">
-                    <PauseCircle className="mr-2 h-4 w-4" />
-                    Hold look
-                  </Button>
-                )}
-              </div>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 shrink-0 px-2 text-xs"
+                  onClick={lockCurrentLook}
+                  data-testid="lighting-lock"
+                >
+                  <PauseCircle className="h-3.5 w-3.5" />
+                  <span className="ml-1">Hold</span>
+                </Button>
+              )}
             </div>
-
-            <div className={cn("mt-4 grid gap-3", compact ? "grid-cols-1" : "sm:grid-cols-2")}>
-              {(["case", "keyboard"] as const).map((surface) => (
-                <div key={surface} className="rounded-xl border border-border/60 bg-card/70 p-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-semibold">{surface === "case" ? "Case" : "Keys"}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatLightingColor((previewState?.[surface] ?? resolved.resolvedState[surface])?.color)}
-                      </p>
-                    </div>
-                    <div
-                      className="h-11 w-11 rounded-full border border-border/60"
-                      style={composeSurfaceSwatchStyle(previewState?.[surface] ?? resolved.resolvedState[surface])}
-                    />
-                  </div>
-                </div>
-              ))}
+            <DialogDescription className={cn("mt-0.5 text-xs", compact && "sr-only")}>
+              {compact ? "Shape looks and automate them." : "Shape looks, save them, and tune the resolver."}
+            </DialogDescription>
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              {activeProfileChip}
+              {resolved.activeAutomationChip ? (
+                <Badge className="text-xs">{resolved.activeAutomationChip}</Badge>
+              ) : null}
+              {circadianState?.fallbackActive ? (
+                <Badge variant="outline" className="text-xs">
+                  Fallback
+                </Badge>
+              ) : null}
             </div>
           </DialogHeader>
 
-          <ScrollArea className="max-h-[70vh]">
+          <ScrollArea className="flex-1 min-h-0">
             <div className={cn("space-y-6", compact ? "p-4" : "p-6")}>
               <section className="space-y-3" data-testid="lighting-profiles-section">
-                <div className={cn("flex items-start justify-between gap-3", compact && "flex-col")}>
-                  <div>
-                    <h3 className="text-base font-semibold">Profiles</h3>
-                    <p className="text-sm text-muted-foreground">Save and reuse looks.</p>
-                  </div>
-                  <div
-                    className={cn(
-                      "grid w-full gap-2",
-                      compact ? "grid-cols-1" : "sm:w-auto sm:grid-cols-[minmax(0,13rem)_auto] sm:items-center",
-                    )}
-                  >
+                <div className="flex items-center gap-2">
+                  <h3 className={cn("min-w-0 flex-1 font-semibold", compact ? "text-sm" : "text-base")}>Profiles</h3>
+                  {!compact ? <p className="text-sm text-muted-foreground">Save and reuse looks.</p> : null}
+                  <div className="flex shrink-0 items-center gap-1.5">
                     <Input
                       value={saveName}
                       onChange={(event) => setSaveName(event.target.value)}
                       placeholder="Save current"
                       data-testid="lighting-profile-save-name"
-                      className="w-full min-w-0"
+                      className={cn("min-w-0", compact ? "h-8 w-28 text-xs" : "w-40")}
                     />
-                    <Button onClick={handleSaveDraft} data-testid="lighting-profile-save">
-                      <Save className="mr-2 h-4 w-4" />
-                      Save
+                    <Button
+                      size="sm"
+                      onClick={handleSaveDraft}
+                      data-testid="lighting-profile-save"
+                      className={compact ? "h-8 px-2.5" : undefined}
+                    >
+                      <Save className="h-3.5 w-3.5" />
+                      <span className={cn("ml-1.5", compact && "sr-only")}>Save</span>
                     </Button>
                   </div>
                 </div>
@@ -851,7 +860,7 @@ export function LightingStudioDialog() {
                     })}
                   </div>
 
-                  <div className="min-w-0 rounded-xl border border-border/60 bg-card/60 p-4">
+                  <div className="min-w-0 rounded-xl border border-border/60 bg-card/60 p-3">
                     <h4 className="font-medium">{selectedProfile?.name ?? "Select a profile"}</h4>
                     {selectedProfile ? (
                       <div className="mt-3 space-y-3">
@@ -862,7 +871,7 @@ export function LightingStudioDialog() {
                           disabled={Boolean(selectedProfile.bundled)}
                           data-testid="lighting-profile-rename-input"
                         />
-                        <div className="grid gap-2 sm:grid-cols-2">
+                        <div className="grid grid-cols-2 gap-2">
                           <Button
                             size="sm"
                             onClick={() => {
@@ -926,15 +935,18 @@ export function LightingStudioDialog() {
               <Separator />
 
               <section className="space-y-3" data-testid="lighting-compose-section">
-                <div className={cn("flex flex-wrap items-center justify-between gap-3", compact && "items-start")}>
-                  <div>
-                    <h3 className="text-base font-semibold">Compose</h3>
-                    <p className="text-sm text-muted-foreground">Tune shell and keys together.</p>
-                  </div>
-                  <div className={cn("flex items-center gap-2", compact && "w-full flex-wrap")}>
-                    <Label htmlFor="lighting-link-mode">Link mode</Label>
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className={cn("font-semibold", compact ? "text-sm" : "text-base")}>Compose</h3>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Label htmlFor="lighting-link-mode" className="text-xs text-muted-foreground">
+                      Link
+                    </Label>
                     <Select value={linkMode} onValueChange={(value: LightingLinkMode) => setLinkMode(value)}>
-                      <SelectTrigger id="lighting-link-mode" className="w-40" data-testid="lighting-link-mode">
+                      <SelectTrigger
+                        id="lighting-link-mode"
+                        className={cn(compact ? "h-8 w-28 text-xs" : "w-40")}
+                        data-testid="lighting-link-mode"
+                      >
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -998,11 +1010,13 @@ export function LightingStudioDialog() {
 
               <section className="space-y-4" data-testid="lighting-automation-section">
                 <div>
-                  <h3 className="text-base font-semibold">Automation</h3>
-                  <p className="text-sm text-muted-foreground">Status, startup, source, and daylight rules.</p>
+                  <h3 className={cn("font-semibold", compact ? "text-sm" : "text-base")}>Automation</h3>
+                  {!compact ? (
+                    <p className="text-sm text-muted-foreground">Status, startup, source, and daylight rules.</p>
+                  ) : null}
                 </div>
 
-                <div className="space-y-3 rounded-xl border border-border/60 bg-card/60 p-4">
+                <div className="space-y-3 rounded-xl border border-border/60 bg-card/60 p-3">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-medium">Connection Sentinel</p>
@@ -1019,7 +1033,7 @@ export function LightingStudioDialog() {
                       data-testid="lighting-connection-sentinel-toggle"
                     />
                   </div>
-                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  <div className="grid grid-cols-2 gap-2">
                     {(Object.keys(CONNECTION_STATE_LABELS) as LightingConnectionSentinelState[]).map((stateKey) => (
                       <div key={stateKey} className="space-y-1.5">
                         <Label>{CONNECTION_STATE_LABELS[stateKey]}</Label>
@@ -1055,7 +1069,7 @@ export function LightingStudioDialog() {
                   </div>
                 </div>
 
-                <div className="space-y-3 rounded-xl border border-border/60 bg-card/60 p-4">
+                <div className="space-y-3 rounded-xl border border-border/60 bg-card/60 p-3">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-medium">Quiet Launch</p>
@@ -1104,7 +1118,7 @@ export function LightingStudioDialog() {
                   </div>
                 </div>
 
-                <div className="space-y-3 rounded-xl border border-border/60 bg-card/60 p-4">
+                <div className="space-y-3 rounded-xl border border-border/60 bg-card/60 p-3">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-medium">Source Identity Map</p>
@@ -1121,7 +1135,7 @@ export function LightingStudioDialog() {
                       data-testid="lighting-source-identity-toggle"
                     />
                   </div>
-                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  <div className="grid grid-cols-2 gap-2">
                     {(
                       Object.keys(LIGHTING_SOURCE_BUCKET_LABELS) as Array<keyof typeof LIGHTING_SOURCE_BUCKET_LABELS>
                     ).map((bucket) => (
@@ -1161,7 +1175,7 @@ export function LightingStudioDialog() {
                   </div>
                 </div>
 
-                <div className="space-y-3 rounded-xl border border-border/60 bg-card/60 p-4">
+                <div className="space-y-3 rounded-xl border border-border/60 bg-card/60 p-3">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-medium">Circadian Palette</p>
@@ -1323,14 +1337,30 @@ export function LightingStudioDialog() {
             </div>
           </ScrollArea>
 
-          <DialogFooter className={cn("border-t border-border/60", compact ? "p-4 pt-3" : "p-6 pt-4")}>
-            <Button variant="outline" onClick={clearPreviewState} data-testid="lighting-clear-preview">
-              Clear preview
+          <DialogFooter
+            className={cn("shrink-0 border-t border-border/60", compact ? "flex-row gap-1.5 p-3" : "p-5 pt-4")}
+          >
+            <Button
+              variant="outline"
+              size={compact ? "sm" : "default"}
+              className={compact ? "flex-1" : undefined}
+              onClick={clearPreviewState}
+              data-testid="lighting-clear-preview"
+            >
+              {compact ? "Clear" : "Clear preview"}
             </Button>
-            <Button variant="outline" onClick={handlePreview} data-testid="lighting-preview">
+            <Button
+              variant="outline"
+              size={compact ? "sm" : "default"}
+              className={compact ? "flex-1" : undefined}
+              onClick={handlePreview}
+              data-testid="lighting-preview"
+            >
               Preview
             </Button>
             <Button
+              size={compact ? "sm" : "default"}
+              className={compact ? "flex-1" : undefined}
               onClick={() => applyPreviewAsProfileBase(studioState.activeProfileId)}
               data-testid="lighting-apply-draft"
             >

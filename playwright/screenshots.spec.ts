@@ -739,95 +739,95 @@ test.describe("App screenshots", () => {
           const snapshots =
             mode === "snapshot-manager"
               ? [
-                  {
-                    id: "snap-1",
-                    filename: "c64-program-20260110-090000.c64snap",
-                    bytesBase64: buildSnap(0, 1736499600),
-                    createdAt: "2026-01-10T09:00:00.000Z",
-                    snapshotType: "program",
-                    metadata: {
-                      snapshot_type: "program",
-                      display_ranges: ["$0000\u2013$00FF", "$0200\u2013$FFFF"],
-                      created_at: "2026-01-10 09:00:00",
-                      label: "JupiterLander.crt",
-                    },
+                {
+                  id: "snap-1",
+                  filename: "c64-program-20260110-090000.c64snap",
+                  bytesBase64: buildSnap(0, 1736499600),
+                  createdAt: "2026-01-10T09:00:00.000Z",
+                  snapshotType: "program",
+                  metadata: {
+                    snapshot_type: "program",
+                    display_ranges: ["$0000\u2013$00FF", "$0200\u2013$FFFF"],
+                    created_at: "2026-01-10 09:00:00",
+                    label: "JupiterLander.crt",
                   },
-                  {
-                    id: "snap-2",
-                    filename: "c64-basic-20260110-080000.c64snap",
-                    bytesBase64: buildSnap(1, 1736496000),
-                    createdAt: "2026-01-10T08:00:00.000Z",
-                    snapshotType: "basic",
-                    metadata: {
-                      snapshot_type: "basic",
-                      display_ranges: ["$002B\u2013$0038", "$0801\u2013STREND"],
-                      created_at: "2026-01-10 08:00:00",
-                    },
+                },
+                {
+                  id: "snap-2",
+                  filename: "c64-basic-20260110-080000.c64snap",
+                  bytesBase64: buildSnap(1, 1736496000),
+                  createdAt: "2026-01-10T08:00:00.000Z",
+                  snapshotType: "basic",
+                  metadata: {
+                    snapshot_type: "basic",
+                    display_ranges: ["$002B\u2013$0038", "$0801\u2013STREND"],
+                    created_at: "2026-01-10 08:00:00",
                   },
-                  {
-                    id: "snap-3",
-                    filename: "c64-screen-20260110-070000.c64snap",
-                    bytesBase64: buildSnap(2, 1736492400),
-                    createdAt: "2026-01-10T07:00:00.000Z",
-                    snapshotType: "screen",
-                    metadata: {
-                      snapshot_type: "screen",
-                      display_ranges: ["VICBANK", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"],
-                      created_at: "2026-01-10 07:00:00",
-                    },
+                },
+                {
+                  id: "snap-3",
+                  filename: "c64-screen-20260110-070000.c64snap",
+                  bytesBase64: buildSnap(2, 1736492400),
+                  createdAt: "2026-01-10T07:00:00.000Z",
+                  snapshotType: "screen",
+                  metadata: {
+                    snapshot_type: "screen",
+                    display_ranges: ["VICBANK", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"],
+                    created_at: "2026-01-10 07:00:00",
                   },
-                  {
-                    id: "snap-4",
-                    filename: "c64-custom-20260110-060000.c64snap",
-                    bytesBase64: buildSnap(3, 1736488800),
-                    createdAt: "2026-01-10T06:00:00.000Z",
-                    snapshotType: "custom",
-                    metadata: {
-                      snapshot_type: "custom",
-                      display_ranges: ["$0400\u2013$07E7", "$2000\u2013$20FF"],
-                      created_at: "2026-01-10 06:00:00",
-                    },
+                },
+                {
+                  id: "snap-4",
+                  filename: "c64-custom-20260110-060000.c64snap",
+                  bytesBase64: buildSnap(3, 1736488800),
+                  createdAt: "2026-01-10T06:00:00.000Z",
+                  snapshotType: "custom",
+                  metadata: {
+                    snapshot_type: "custom",
+                    display_ranges: ["$0400\u2013$07E7", "$2000\u2013$20FF"],
+                    created_at: "2026-01-10 06:00:00",
                   },
-                ]
+                },
+              ]
               : [
-                  {
-                    id: "snap-1",
-                    filename: "c64-program-20260110-090000.c64snap",
-                    bytesBase64: buildSnap(0, 1736499600),
-                    createdAt: "2026-01-10T09:00:00.000Z",
-                    snapshotType: "program",
-                    metadata: {
-                      snapshot_type: "program",
-                      display_ranges: ["$0000\u2013$00FF", "$0200\u2013$FFFF"],
-                      created_at: "2026-01-10 09:00:00",
-                      label: "JupiterLander.crt",
-                    },
+                {
+                  id: "snap-1",
+                  filename: "c64-program-20260110-090000.c64snap",
+                  bytesBase64: buildSnap(0, 1736499600),
+                  createdAt: "2026-01-10T09:00:00.000Z",
+                  snapshotType: "program",
+                  metadata: {
+                    snapshot_type: "program",
+                    display_ranges: ["$0000\u2013$00FF", "$0200\u2013$FFFF"],
+                    created_at: "2026-01-10 09:00:00",
+                    label: "JupiterLander.crt",
                   },
-                  {
-                    id: "snap-2",
-                    filename: "c64-basic-20260110-080000.c64snap",
-                    bytesBase64: buildSnap(1, 1736496000),
-                    createdAt: "2026-01-10T08:00:00.000Z",
-                    snapshotType: "basic",
-                    metadata: {
-                      snapshot_type: "basic",
-                      display_ranges: ["$002B\u2013$0038", "$0801\u2013STREND"],
-                      created_at: "2026-01-10 08:00:00",
-                    },
+                },
+                {
+                  id: "snap-2",
+                  filename: "c64-basic-20260110-080000.c64snap",
+                  bytesBase64: buildSnap(1, 1736496000),
+                  createdAt: "2026-01-10T08:00:00.000Z",
+                  snapshotType: "basic",
+                  metadata: {
+                    snapshot_type: "basic",
+                    display_ranges: ["$002B\u2013$0038", "$0801\u2013STREND"],
+                    created_at: "2026-01-10 08:00:00",
                   },
-                  {
-                    id: "snap-3",
-                    filename: "c64-screen-20260110-070000.c64snap",
-                    bytesBase64: buildSnap(2, 1736492400),
-                    createdAt: "2026-01-10T07:00:00.000Z",
-                    snapshotType: "screen",
-                    metadata: {
-                      snapshot_type: "screen",
-                      display_ranges: ["VICBANK", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"],
-                      created_at: "2026-01-10 07:00:00",
-                    },
+                },
+                {
+                  id: "snap-3",
+                  filename: "c64-screen-20260110-070000.c64snap",
+                  bytesBase64: buildSnap(2, 1736492400),
+                  createdAt: "2026-01-10T07:00:00.000Z",
+                  snapshotType: "screen",
+                  metadata: {
+                    snapshot_type: "screen",
+                    display_ranges: ["VICBANK", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"],
+                    created_at: "2026-01-10 07:00:00",
                   },
-                ];
+                },
+              ];
 
           localStorage.setItem(
             "c64u_snapshots:v1",
@@ -961,12 +961,14 @@ test.describe("App screenshots", () => {
 
       await page.goto("/");
       await waitForConnected(page);
+
+      // --- compact profile ---
       await applyDisplayProfileViewport(page, "compact");
       await getActiveMain(page).getByTestId("home-lighting-studio").click();
       const dialog = page.getByRole("dialog", { name: "Lighting Studio" });
       await expect(dialog).toBeVisible();
 
-      await captureScreenshot(page, testInfo, "home/dialogs/05-lighting-studio.png", {
+      await captureScreenshot(page, testInfo, "home/dialogs/05-lighting-studio-compact.png", {
         borderPx: 6,
         borderColor: { r: 255, g: 255, b: 255, alpha: 1 },
       });
@@ -974,14 +976,41 @@ test.describe("App screenshots", () => {
       await page.getByTestId("lighting-profile-studio-neon").click();
       await page.getByTestId("lighting-select-surface-keyboard").click();
       await page.getByTestId("lighting-compose-section").scrollIntoViewIfNeeded();
-      await captureScreenshot(page, testInfo, "home/dialogs/06-lighting-studio-compose.png");
+      await captureScreenshot(page, testInfo, "home/dialogs/06-lighting-studio-compose-compact.png");
 
       await page.getByTestId("lighting-automation-section").scrollIntoViewIfNeeded();
-      await captureScreenshot(page, testInfo, "home/dialogs/07-lighting-studio-automation.png");
+      await captureScreenshot(page, testInfo, "home/dialogs/07-lighting-studio-automation-compact.png");
 
       await page.getByTestId("lighting-open-context-lens").click();
       await expect(page.getByRole("dialog", { name: "Context Lens" })).toBeVisible();
-      await captureScreenshot(page, testInfo, "home/dialogs/08-lighting-context-lens.png");
+      await captureScreenshot(page, testInfo, "home/dialogs/08-lighting-context-lens-compact.png");
+      await page.keyboard.press("Escape");
+      await expect(page.getByRole("dialog", { name: "Context Lens" })).not.toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(dialog).not.toBeVisible();
+
+      // --- medium profile ---
+      await applyDisplayProfileViewport(page, "medium");
+      await getActiveMain(page).getByTestId("home-lighting-studio").click();
+      const dialogMedium = page.getByRole("dialog", { name: "Lighting Studio" });
+      await expect(dialogMedium).toBeVisible();
+
+      await captureScreenshot(page, testInfo, "home/dialogs/05-lighting-studio-medium.png", {
+        borderPx: 6,
+        borderColor: { r: 255, g: 255, b: 255, alpha: 1 },
+      });
+
+      await page.getByTestId("lighting-profile-studio-neon").click();
+      await page.getByTestId("lighting-select-surface-keyboard").click();
+      await page.getByTestId("lighting-compose-section").scrollIntoViewIfNeeded();
+      await captureScreenshot(page, testInfo, "home/dialogs/06-lighting-studio-compose-medium.png");
+
+      await page.getByTestId("lighting-automation-section").scrollIntoViewIfNeeded();
+      await captureScreenshot(page, testInfo, "home/dialogs/07-lighting-studio-automation-medium.png");
+
+      await page.getByTestId("lighting-open-context-lens").click();
+      await expect(page.getByRole("dialog", { name: "Context Lens" })).toBeVisible();
+      await captureScreenshot(page, testInfo, "home/dialogs/08-lighting-context-lens-medium.png");
     },
   );
 
