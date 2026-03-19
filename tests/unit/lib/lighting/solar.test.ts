@@ -15,7 +15,7 @@ describe("lighting solar module", () => {
 
   it("searches the bundled city list with prefix and contains matching", () => {
     expect(searchLightingCities("to").map((city) => city.name)).toContain("Tokyo");
-    expect(searchLightingCities("ange").map((city) => city.name)).toContain("Los Angeles");
+    expect(searchLightingCities("ange").map((city) => city.name)).toContain("Los Angeles, CA");
   });
 
   it("passes through coordinates directly", () => {

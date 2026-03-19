@@ -188,6 +188,8 @@ const CPU_SPEED_OPTIONS = ["1", "2", "3", "4", "6", "8", "10", "12", "14", "16",
 const COLOR_SCHEME_OPTIONS = ["Commodore Blue", "Ultimate Black", "Commodore 1", "Commodore 2", "Commodore 3"];
 
 const buildLightingPayload = ({
+  autoSidMode = "Enabled",
+  autoSidModeOptions = ["Disabled", "Enabled"],
   mode = "Fixed Color",
   modeOptions = ["Off", "Fixed Color", "Rainbow"],
   pattern = "SingleColor",
@@ -200,6 +202,8 @@ const buildLightingPayload = ({
   tint = "Pure",
   tintOptions = ["Pure", "Warm"],
 }: {
+  autoSidMode?: string;
+  autoSidModeOptions?: string[];
   fixedColor?: string;
   fixedColorOptions?: string[];
   intensity?: string;
@@ -216,6 +220,10 @@ const buildLightingPayload = ({
     "LedStrip Mode": {
       selected: mode,
       options: modeOptions,
+    },
+    "LedStrip Auto SID Mode": {
+      selected: autoSidMode,
+      options: autoSidModeOptions,
     },
     "LedStrip Pattern": {
       selected: pattern,
@@ -389,6 +397,7 @@ const expectLightingControls = (prefix: string, title: string) => {
   const section = screen.getByTestId(`${prefix}-summary`);
   expect(within(section).getByText(title)).toBeTruthy();
   expect(screen.getByTestId(`${prefix}-mode`)).toBeTruthy();
+  expect(screen.getByTestId(`${prefix}-auto-sid`)).toBeTruthy();
   expect(screen.getByTestId(`${prefix}-pattern`)).toBeTruthy();
   expect(screen.getByTestId(`${prefix}-color`)).toBeTruthy();
   expect(screen.getByTestId(`${prefix}-color-slider`)).toBeTruthy();
@@ -398,7 +407,7 @@ const expectLightingControls = (prefix: string, title: string) => {
   expect(screen.getByTestId(`${prefix}-tint`)).toBeTruthy();
 
   const labels = Array.from(section.querySelectorAll(".text-muted-foreground")).map((node) => node.textContent);
-  expect(labels).toEqual(["Mode", "Pattern", "Color", "Brightness", "Tint", "SID Select"]);
+  expect(labels).toEqual(["Mode", "Auto SID", "Pattern", "Color", "Brightness", "Tint", "SID Select"]);
 };
 
 const expectUserInterfaceControls = (prefix: string) => {
@@ -1536,6 +1545,8 @@ describe("HomePage SID status", () => {
     fireEvent.click(screen.getByTestId("home-led-mode"));
     fireEvent.click(await screen.findByRole("option", { name: /Rainbow/i }));
 
+    fireEvent.click(screen.getByTestId("home-led-auto-sid"));
+
     fireEvent.click(screen.getByTestId("home-led-pattern"));
     fireEvent.click(await screen.findByRole("option", { name: /Outward/i }));
 
@@ -1565,6 +1576,8 @@ describe("HomePage SID status", () => {
 
     fireEvent.click(screen.getByTestId("home-keyboard-lighting-mode"));
     fireEvent.click(await screen.findByRole("option", { name: /Rainbow/i }));
+
+    fireEvent.click(screen.getByTestId("home-keyboard-lighting-auto-sid"));
 
     fireEvent.click(screen.getByTestId("home-keyboard-lighting-pattern"));
     fireEvent.click(await screen.findByRole("option", { name: /Circular/i }));
@@ -1676,6 +1689,11 @@ describe("HomePage SID status", () => {
       );
       expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
         "LED Strip Settings",
+        "LedStrip Auto SID Mode",
+        "Disabled",
+      );
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
+        "LED Strip Settings",
         "LedStrip Pattern",
         "Outward",
       );
@@ -1690,6 +1708,11 @@ describe("HomePage SID status", () => {
         "Keyboard Lighting",
         "LedStrip Mode",
         "Rainbow",
+      );
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
+        "Keyboard Lighting",
+        "LedStrip Auto SID Mode",
+        "Disabled",
       );
       expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
         "Keyboard Lighting",

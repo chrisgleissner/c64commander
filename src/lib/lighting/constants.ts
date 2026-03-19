@@ -14,6 +14,7 @@ export const LIGHTING_SURFACE_TO_CATEGORY: Record<LightingSurface, LightingCateg
 
 export const LIGHTING_CATEGORY_ITEMS = [
   "LedStrip Mode",
+  "LedStrip Auto SID Mode",
   "LedStrip Pattern",
   "Fixed Color",
   "Fixed Color Red",

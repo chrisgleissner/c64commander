@@ -2,7 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getLedColorRgb, rgbToCss } from "@/lib/config/ledColors";
-import { buildConfigKey, parseNumericValue, readItemDetails, readItemOptions } from "../utils/HomeConfigUtils";
+import {
+  buildConfigKey,
+  parseNumericValue,
+  readItemDetails,
+  readItemOptions,
+  readItemValue,
+} from "../utils/HomeConfigUtils";
 import {
   clampToRange,
   formatSelectOptionLabel,
@@ -13,6 +19,7 @@ import {
 } from "../utils/uiLogic";
 import { useSharedConfigActions } from "../hooks/ConfigActionsContext";
 import { useInteractiveConfigWrite } from "@/hooks/useInteractiveConfigWrite";
+import { SummaryConfigControlRow } from "./SummaryConfigCard";
 
 const formatLightingPatternLabel = (value: string) => {
   if (normalizeOptionToken(value) === "singlecolor") return "Single Color";
@@ -56,10 +63,12 @@ export function LightingSummaryCard({
   const modeOptions = readOptions("LedStrip Mode");
   const patternOptions = readOptions("LedStrip Pattern");
   const fixedColorOptions = readOptions("Fixed Color");
+  const autoSidModeOptions = readOptions("LedStrip Auto SID Mode");
   const sidSelectOptions = readOptions("LedStrip SID Select");
   const tintOptions = readOptions("Color tint");
 
   const modeValue = resolveValue("LedStrip Mode", "Off");
+  const autoSidModeValue = resolveValue("LedStrip Auto SID Mode", "Disabled");
   const patternValue = resolveValue("LedStrip Pattern", unavailableLabel);
   const fixedColorValue = resolveValue("Fixed Color", unavailableLabel);
   const sidSelectValue = resolveValue("LedStrip SID Select", unavailableLabel);
@@ -89,14 +98,21 @@ export function LightingSummaryCard({
   const modeSelectOptions = normalizeSelectOptions(effectiveModeOptions, modeValue);
   const patternSelectOptions = normalizeSelectOptions(effectivePatternOptions, patternValue);
   const fixedColorSelectOptions = normalizeSelectOptions(effectiveFixedColorOptions, fixedColorValue);
+  const autoSidModeSelectOptions = normalizeSelectOptions(
+    autoSidModeOptions.length ? autoSidModeOptions : [autoSidModeValue],
+    autoSidModeValue,
+  );
   const sidSelectSelectOptions = normalizeSelectOptions(effectiveSidSelectOptions, sidSelectValue);
   const tintSelectOptions = normalizeSelectOptions(effectiveTintOptions, tintValue);
 
   const modeSelectValue = normalizeSelectValue(modeValue);
   const patternSelectValue = normalizeSelectValue(patternValue);
   const fixedColorSelectValue = normalizeSelectValue(fixedColorValue);
+  const autoSidModeSelectValue = normalizeSelectValue(autoSidModeValue);
   const sidSelectSelectValue = normalizeSelectValue(sidSelectValue);
   const tintSelectValue = normalizeSelectValue(tintValue);
+  const showAutoSidMode =
+    autoSidModeOptions.length > 0 || readItemValue(config, category, "LedStrip Auto SID Mode") !== undefined;
 
   const fixedColorSliderOptions = fixedColorSelectOptions.length ? fixedColorSelectOptions : [fixedColorValue];
   const fixedColorSliderMax = Math.max(0, fixedColorSliderOptions.length - 1);
@@ -175,6 +191,25 @@ export function LightingSummaryCard({
             </SelectContent>
           </Select>
         </div>
+
+        {showAutoSidMode ? (
+          <SummaryConfigControlRow
+            disabled={!isActive || isPending("LedStrip Auto SID Mode")}
+            label="Auto SID"
+            options={autoSidModeSelectOptions}
+            selectTriggerClassName={selectTriggerClassName}
+            testId={`${testIdPrefix}-auto-sid`}
+            value={autoSidModeSelectValue}
+            onValueChange={(value) =>
+              void updateLightingConfig(
+                "LedStrip Auto SID Mode",
+                resolveSelectValue(value),
+                "AUTO_SID_MODE",
+                `${successLabel} Auto SID updated`,
+              )
+            }
+          />
+        ) : null}
 
         <div className="flex items-center justify-between gap-2">
           <span className="text-muted-foreground">Pattern</span>

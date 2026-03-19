@@ -4,7 +4,7 @@ config:
     rest_api_version: "0.1"
     device_type: "C64 Ultimate"
     firmware_version: 1.1.0
-    fetched_at: "2026-03-19T19:10:35.263951+00:00"
+    fetched_at: "2026-03-19T19:10:22.400989+00:00"
   categories:
     Audio Mixer:
       items:

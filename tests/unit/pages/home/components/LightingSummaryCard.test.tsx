@@ -78,7 +78,14 @@ vi.mock("@/components/ui/slider", () => ({
 
 const defaultProps = {
   category: "LED Strip",
-  config: undefined,
+  config: {
+    items: {
+      "LedStrip Auto SID Mode": {
+        selected: "Enabled",
+        options: ["Disabled", "Enabled"],
+      },
+    },
+  },
   isActive: true,
   operationPrefix: "HOME_LED_STRIP",
   sectionLabel: "LED Strip",
@@ -105,9 +112,10 @@ describe("LightingSummaryCard", () => {
     expect(screen.getByText("LED Strip")).toBeInTheDocument();
   });
 
-  it("renders mode, pattern, color, tint, and sid-select selects", () => {
+  it("renders mode, auto-sid, pattern, color, tint, and sid-select controls", () => {
     render(<LightingSummaryCard {...defaultProps} />);
     expect(screen.getByTestId("led-strip-mode")).toBeInTheDocument();
+    expect(screen.getByTestId("led-strip-auto-sid")).toBeInTheDocument();
     expect(screen.getByTestId("led-strip-pattern")).toBeInTheDocument();
     expect(screen.getByTestId("led-strip-color")).toBeInTheDocument();
     expect(screen.getByTestId("led-strip-tint")).toBeInTheDocument();
@@ -141,6 +149,19 @@ describe("LightingSummaryCard", () => {
     );
   });
 
+  it("calls updateConfigValue when auto SID mode changes", () => {
+    render(<LightingSummaryCard {...defaultProps} />);
+    fireEvent.click(screen.getByTestId("led-strip-auto-sid"));
+    expect(updateConfigValueSpy).toHaveBeenCalledWith(
+      "LED Strip",
+      "LedStrip Auto SID Mode",
+      "Disabled",
+      "HOME_LED_STRIP_AUTO_SID_MODE",
+      "LED strip Auto SID updated",
+      undefined,
+    );
+  });
+
   it("calls interactiveWrite when intensity slider is moved", () => {
     render(<LightingSummaryCard {...defaultProps} />);
     fireEvent.click(screen.getByTestId("led-strip-intensity-slider-drag"));
@@ -167,5 +188,10 @@ describe("LightingSummaryCard", () => {
   it("disables intensity slider when isActive=false", () => {
     render(<LightingSummaryCard {...defaultProps} isActive={false} />);
     expect(screen.getByTestId("led-strip-intensity-slider")).toHaveAttribute("data-disabled", "true");
+  });
+
+  it("hides auto SID mode when the config item is unavailable", () => {
+    render(<LightingSummaryCard {...defaultProps} config={undefined} />);
+    expect(screen.queryByTestId("led-strip-auto-sid")).toBeNull();
   });
 });

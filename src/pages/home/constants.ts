@@ -21,6 +21,7 @@ export const C64_CARTRIDGE_HOME_ITEMS = ["Cartridge Preference", "RAM Expansion 
 export const USER_INTERFACE_HOME_ITEMS = ["Interface Type", "Navigation Style", "Color Scheme"] as const;
 export const LIGHTING_HOME_ITEMS = [
   "LedStrip Mode",
+  "LedStrip Auto SID Mode",
   "LedStrip Pattern",
   "Fixed Color",
   "Strip Intensity",
