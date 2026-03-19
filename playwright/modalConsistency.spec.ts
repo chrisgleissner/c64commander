@@ -43,7 +43,7 @@ test.describe("Modal close-button consistency", () => {
       await assertNoUiIssues(page, testInfo);
     } finally {
       await finalizeEvidence(page, testInfo);
-      await server?.close?.().catch(() => {});
+      await server?.close?.().catch(() => { });
     }
   });
 
@@ -58,15 +58,15 @@ test.describe("Modal close-button consistency", () => {
 
     const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(indicator).toHaveAttribute("data-connection-state", "OFFLINE_NO_DEMO", { timeout: 10000 });
+    // UnifiedHealthBadge now opens the Diagnostics sheet directly instead of a connection-status popover.
     await indicator.click();
 
-    const dialog = page.getByTestId("connection-status-popover");
-    await expect(dialog).toBeVisible();
-    // Ensures the time is shown in numeric format (e.g. "5s ago", "2m 3s ago") rather than
-    // text like "just now" that was removed in a previous fix.
-    await expect(dialog).toContainText(/Last activity:\s+(\d+s ago|\d+m \d+s ago|none yet|unknown)/i);
-    await expect(dialog).not.toContainText("just now");
-    await expect(dialog).not.toContainText("Communication");
+    const diagSheet = page.getByTestId("diagnostics-sheet");
+    await expect(diagSheet).toBeVisible();
+    // In offline mode the activity rows show "No X activity yet" — never "just now" or "Communication".
+    await expect(diagSheet).toContainText(/No REST activity yet|No FTP activity yet/);
+    await expect(diagSheet).not.toContainText("just now");
+    await expect(diagSheet).not.toContainText("Communication");
   });
 
   test("Connection Status dialog close button has unified ModalCloseButton classes", async ({
@@ -80,12 +80,13 @@ test.describe("Modal close-button consistency", () => {
 
     const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(indicator).toHaveAttribute("data-connection-state", "OFFLINE_NO_DEMO", { timeout: 10000 });
+    // UnifiedHealthBadge now opens the Diagnostics sheet directly instead of a connection-status popover.
     await indicator.click();
 
-    const dialog = page.getByTestId("connection-status-popover");
-    await expect(dialog).toBeVisible();
+    const diagSheet = page.getByTestId("diagnostics-sheet");
+    await expect(diagSheet).toBeVisible();
 
-    const closeBtn = page.getByTestId("connection-status-close");
+    const closeBtn = diagSheet.getByRole("button", { name: "Close" });
     await expect(closeBtn).toBeVisible();
     const classAttr = (await closeBtn.getAttribute("class")) ?? "";
     for (const cls of MODAL_CLOSE_CLASSES) {
@@ -108,20 +109,15 @@ test.describe("Modal close-button consistency", () => {
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
 
-    // Open connection status and navigate to diagnostics via the diagnostics section.
+    // UnifiedHealthBadge now opens the Diagnostics sheet directly — no intermediate popover.
     const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 10000 });
     await indicator.click();
-    const connDialog = page.getByTestId("connection-status-popover");
-    await expect(connDialog).toBeVisible();
 
-    // Click the REST diagnostics row to open the Diagnostics overlay.
-    await connDialog.getByTestId("connection-diagnostics-row-rest").click();
+    const diagSheet = page.getByTestId("diagnostics-sheet");
+    await expect(diagSheet).toBeVisible({ timeout: 5000 });
 
-    const diagDialog = page.getByRole("dialog", { name: "Diagnostics" });
-    await expect(diagDialog).toBeVisible({ timeout: 5000 });
-
-    const closeBtn = diagDialog.getByRole("button", { name: "Close" });
+    const closeBtn = diagSheet.getByRole("button", { name: "Close" });
     await expect(closeBtn).toBeVisible();
     const classAttr = (await closeBtn.getAttribute("class")) ?? "";
     for (const cls of MODAL_CLOSE_CLASSES) {

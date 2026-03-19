@@ -185,18 +185,6 @@ Your everyday dashboard: quick access to the controls you touch most often.
   </tr>
 </table>
 
-### Lighting Studio
-
-Open **Studio** from the Home lighting section to compose paired case and keyboard looks, manage reusable profiles, inspect `Why this look?`, and configure deterministic lighting automations for connection state, startup, source identity, and circadian fallback.
-
-<table>
-  <tr>
-    <td><img src="doc/img/app/home/dialogs/05-lighting-studio.png" alt="Lighting Studio dialog" width="360"/></td>
-    <td><img src="doc/img/app/home/dialogs/06-lighting-studio-compose.png" alt="Lighting Studio compose view" width="360"/></td>
-    <td><img src="doc/img/app/home/dialogs/07-lighting-studio-automation.png" alt="Lighting Studio automation view" width="360"/></td>
-  </tr>
-</table>
-
 ### Play
 
 Build playlists from local content, C64 Ultimate storage, or HVSC, then run autoplay or shuffle sessions.

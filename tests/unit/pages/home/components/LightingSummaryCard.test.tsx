@@ -72,6 +72,17 @@ vi.mock("@/components/ui/slider", () => ({
       >
         Drag
       </button>
+      <button
+        onClick={() => {
+          onValueChange?.([]);
+          onValueCommit?.([]);
+          onValueChangeAsync?.(undefined);
+          onValueCommitAsync?.(undefined);
+        }}
+        data-testid={`${testId}-drag-empty`}
+      >
+        Drag Empty
+      </button>
     </div>
   ),
 }));
@@ -155,7 +166,7 @@ describe("LightingSummaryCard", () => {
     expect(updateConfigValueSpy).toHaveBeenCalledWith(
       "LED Strip",
       "LedStrip Auto SID Mode",
-      "Disabled",
+      "Enabled",
       "HOME_LED_STRIP_AUTO_SID_MODE",
       "LED strip Auto SID updated",
       undefined,
@@ -168,6 +179,13 @@ describe("LightingSummaryCard", () => {
     // onValueChangeAsync and onValueCommitAsync trigger interactiveWrite
     expect(interactiveWriteSpy).toHaveBeenCalled();
     expect(updateConfigValueSpy).not.toHaveBeenCalled();
+  });
+
+  it("passes through NaN when slider callbacks report no concrete value", () => {
+    render(<LightingSummaryCard {...defaultProps} />);
+    fireEvent.click(screen.getByTestId("led-strip-intensity-slider-drag-empty"));
+    const payload = interactiveWriteSpy.mock.calls.at(-1)?.[0] as Record<string, number>;
+    expect(Number.isNaN(payload["Strip Intensity"])).toBe(true);
   });
 
   it("shows intensity value from resolved config", () => {

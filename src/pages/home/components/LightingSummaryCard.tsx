@@ -108,7 +108,6 @@ export function LightingSummaryCard({
   const modeSelectValue = normalizeSelectValue(modeValue);
   const patternSelectValue = normalizeSelectValue(patternValue);
   const fixedColorSelectValue = normalizeSelectValue(fixedColorValue);
-  const autoSidModeSelectValue = normalizeSelectValue(autoSidModeValue);
   const sidSelectSelectValue = normalizeSelectValue(sidSelectValue);
   const tintSelectValue = normalizeSelectValue(tintValue);
   const showAutoSidMode =
@@ -199,7 +198,7 @@ export function LightingSummaryCard({
             options={autoSidModeSelectOptions}
             selectTriggerClassName={selectTriggerClassName}
             testId={`${testIdPrefix}-auto-sid`}
-            value={autoSidModeSelectValue}
+            value={autoSidModeValue}
             onValueChange={(value) =>
               void updateLightingConfig(
                 "LedStrip Auto SID Mode",

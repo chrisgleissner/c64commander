@@ -28,6 +28,15 @@ const legacyRgbConfig = {
   },
 };
 
+const directValuesConfig = {
+  "LedStrip Mode": { selected: "Fixed Color", values: ["Off", "Fixed Color"] },
+  "LedStrip Pattern": { selected: "SingleColor", values: ["SingleColor", "Outward"] },
+  "Fixed Color": { selected: "Red", values: ["Red", "Green"] },
+  "Strip Intensity": { selected: 9 },
+  "Color tint": { selected: "Warm" },
+  "LedStrip SID Select": { selected: "SID 2" },
+};
+
 describe("lighting capabilities", () => {
   it("normalizes a modern named-color capability set", () => {
     const capability = normalizeLightingCapability("case", modernConfig);
@@ -49,6 +58,16 @@ describe("lighting capabilities", () => {
     expect(capability.supported).toBe(false);
     expect(capability.colorEncoding).toBeNull();
     expect(capability.supportedModes).toEqual([]);
+  });
+
+  it("accepts direct config objects and values-based option lists", () => {
+    const capability = normalizeLightingCapability("keyboard", directValuesConfig);
+    expect(capability.supported).toBe(true);
+    expect(capability.supportedModes).toEqual(["Off", "Fixed Color"]);
+    expect(capability.supportedPatterns).toEqual(["SingleColor", "Outward"]);
+    expect(capability.intensityRange).toEqual({ min: 0, max: 31 });
+    expect(capability.supportsTint).toBe(true);
+    expect(capability.supportsSidSelect).toBe(true);
   });
 
   it("normalizes runtime state from named-color config", () => {
@@ -74,6 +93,46 @@ describe("lighting capabilities", () => {
 
     const unsupported = normalizeLightingCapability("keyboard", undefined);
     expect(normalizeLightingState(unsupported, undefined)).toBeNull();
+  });
+
+  it("omits color when named-color configs do not currently expose one", () => {
+    const config = {
+      items: {
+        "LedStrip Mode": { selected: "Fixed Color", options: ["Off", "Fixed Color"] },
+        "Fixed Color": { selected: "", options: ["Red"] },
+        "Strip Intensity": { selected: 6, min: 0, max: 31 },
+      },
+    };
+    const capability = normalizeLightingCapability("case", config);
+    expect(normalizeLightingState(capability, config)).toMatchObject({
+      mode: "Fixed Color",
+      intensity: 6,
+      color: undefined,
+    });
+  });
+
+  it("falls back missing runtime values to empty strings and zeroes for sparse rgb configs", () => {
+    const sparseRgbConfig = {
+      items: {
+        "LedStrip Mode": { selected: "", options: ["Off", "Fixed Color"] },
+        "LedStrip Pattern": { selected: "", options: ["SingleColor"] },
+        "Strip Intensity": { selected: 0, min: 0, max: 31 },
+        "Fixed Color Red": {},
+        "Fixed Color Green": {},
+        "Fixed Color Blue": {},
+        "Color tint": { selected: "" },
+        "LedStrip SID Select": { selected: "" },
+      },
+    };
+    const capability = normalizeLightingCapability("case", sparseRgbConfig);
+    expect(normalizeLightingState(capability, sparseRgbConfig)).toMatchObject({
+      mode: "",
+      pattern: "",
+      tint: "",
+      sidSelect: "",
+      intensity: 0,
+      color: { kind: "rgb", r: 0, g: 0, b: 0 },
+    });
   });
 
   it("maps named colors into rgb when applying to legacy devices", () => {
@@ -103,6 +162,18 @@ describe("lighting capabilities", () => {
     expect(normalized?.color).toMatchObject({ kind: "rgb", r: 1, g: 2, b: 3 });
   });
 
+  it("keeps tint and SID select when the capability exposes those items without option lists", () => {
+    const capability = normalizeLightingCapability("case", directValuesConfig);
+    const normalized = normalizeSurfaceStateForCapability(capability, {
+      tint: "Warm",
+      sidSelect: "SID 2",
+    });
+    expect(normalized).toEqual({
+      tint: "Warm",
+      sidSelect: "SID 2",
+    });
+  });
+
   it("maps rgb colors back to the closest allowed named color and drops unsupported named colors", () => {
     const capability = normalizeLightingCapability("case", modernConfig);
     const fromRgb = normalizeSurfaceStateForCapability(capability, {
@@ -119,6 +190,28 @@ describe("lighting capabilities", () => {
       color: { kind: "named", value: "Green" },
     });
     expect(invalidNamed).toEqual({});
+  });
+
+  it("drops rgb-to-named and named-to-rgb conversions when no palette match exists", () => {
+    const namedCapability = normalizeLightingCapability("case", {
+      items: {
+        "LedStrip Mode": { selected: "Fixed Color", options: ["Fixed Color"] },
+        "Fixed Color": { selected: "Mystery", options: ["Mystery"] },
+        "Strip Intensity": { selected: 5, min: 0, max: 31 },
+      },
+    });
+    expect(
+      normalizeSurfaceStateForCapability(namedCapability, {
+        color: { kind: "rgb", r: 1, g: 2, b: 3 },
+      }),
+    ).toEqual({});
+
+    const rgbCapability = normalizeLightingCapability("case", legacyRgbConfig);
+    expect(
+      normalizeSurfaceStateForCapability(rgbCapability, {
+        color: { kind: "named", value: "Mystery" },
+      }),
+    ).toEqual({});
   });
 
   it("builds update payloads for named-color devices", () => {
@@ -160,5 +253,12 @@ describe("lighting capabilities", () => {
     );
     expect(formatLightingColor(undefined)).toBe("Unset");
     expect(formatLightingColor({ kind: "rgb", r: 1, g: 2, b: 3 })).toBe("rgb(1, 2, 3)");
+  });
+
+  it("formats named colors and compares missing lighting states deterministically", async () => {
+    const { lightingStateEquals } = await import("@/lib/lighting/capabilities");
+    expect(formatLightingColor({ kind: "named", value: "Green" })).toBe("Green");
+    expect(lightingStateEquals(null, undefined)).toBe(true);
+    expect(lightingStateEquals({ mode: "Off" }, { mode: "Fixed Color" })).toBe(false);
   });
 });
