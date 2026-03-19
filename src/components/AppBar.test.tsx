@@ -13,6 +13,8 @@ vi.mock("@/components/UnifiedHealthBadge", () => ({
 vi.mock("@/lib/diagnostics/diagnosticsOverlayState", () => ({
   isDiagnosticsOverlayActive: () => false,
   subscribeDiagnosticsOverlay: () => () => undefined,
+  subscribeDiagnosticsSuppression: () => () => { },
+  isDiagnosticsOverlaySuppressionArmed: () => false,
 }));
 
 const setViewportWidth = (width: number) => {

@@ -89,9 +89,29 @@ vi.mock("@/lib/diagnostics/diagnosticsOverlay", () => ({
   consumeDiagnosticsOpenRequest: () => consumeDiagnosticsOpenRequestMock(),
 }));
 
+vi.mock("@/hooks/useHealthState", () => ({
+  useHealthState: () => ({
+    state: "Idle",
+    connectivity: "Offline",
+    connectedDeviceLabel: null,
+    problemCount: 0,
+    host: null,
+    contributors: {
+      App: { state: "Idle", problemCount: 0, totalOperations: 0, failedOperations: 0 },
+      REST: { state: "Idle", problemCount: 0, totalOperations: 0, failedOperations: 0 },
+      FTP: { state: "Idle", problemCount: 0, totalOperations: 0, failedOperations: 0 },
+    },
+    lastRestActivity: null,
+    lastFtpActivity: null,
+    primaryProblem: null,
+  }),
+}));
+
 vi.mock("@/lib/diagnostics/diagnosticsOverlayState", () => ({
   setDiagnosticsOverlayActive: vi.fn(),
   withDiagnosticsTraceOverride: (fn: () => unknown) => fn(),
+  subscribeDiagnosticsSuppression: () => () => { },
+  isDiagnosticsOverlaySuppressionArmed: () => false,
 }));
 
 vi.mock("@/lib/diagnostics/diagnosticsSeverity", () => ({

@@ -69,8 +69,10 @@ vi.mock("@/hooks/useDiagnosticsActivity", () => ({
 
 vi.mock("@/lib/diagnostics/diagnosticsOverlayState", () => ({
   isDiagnosticsOverlayActive: () => false,
-  subscribeDiagnosticsOverlay: () => () => {},
+  subscribeDiagnosticsOverlay: () => () => { },
   shouldSuppressDiagnosticsSideEffects: () => false,
+  subscribeDiagnosticsSuppression: () => () => { },
+  isDiagnosticsOverlaySuppressionArmed: () => false,
 }));
 
 // Mock the ConfigActionsContext to provide shared config actions

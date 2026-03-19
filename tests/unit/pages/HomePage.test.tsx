@@ -547,8 +547,10 @@ vi.mock("@/hooks/useDiagnosticsActivity", () => ({
 
 vi.mock("@/lib/diagnostics/diagnosticsOverlayState", () => ({
   isDiagnosticsOverlayActive: () => false,
-  subscribeDiagnosticsOverlay: () => () => {},
+  subscribeDiagnosticsOverlay: () => () => { },
   shouldSuppressDiagnosticsSideEffects: () => false,
+  subscribeDiagnosticsSuppression: () => () => { },
+  isDiagnosticsOverlaySuppressionArmed: () => false,
 }));
 
 vi.mock("@/lib/uiErrors", () => ({
@@ -1189,7 +1191,11 @@ describe("HomePage SID status", () => {
     expect(screen.getByTestId("home-cpu-speed-value").textContent).toBe("2");
 
     await waitFor(() =>
-      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith("U64 Specific Settings", "CPU Speed", "2"),
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
+        "U64 Specific Settings",
+        "Turbo Control",
+        "Manual",
+      ),
     );
   });
 
@@ -1289,7 +1295,7 @@ describe("HomePage SID status", () => {
   });
 
   it("shows a pending RAM dump folder label while folder selection is in flight", async () => {
-    const selectFolderSpy = vi.spyOn(ramDumpStorage, "selectRamDumpFolder").mockReturnValue(new Promise(() => {}));
+    const selectFolderSpy = vi.spyOn(ramDumpStorage, "selectRamDumpFolder").mockReturnValue(new Promise(() => { }));
 
     renderHomePage();
     fireEvent.click(screen.getByTestId("ram-dump-folder-trigger"));
@@ -1313,9 +1319,9 @@ describe("HomePage SID status", () => {
 
     fireEvent.keyDown(thumb!, { key: "ArrowRight" });
 
-    await waitFor(() =>
-      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith("U64 Specific Settings", "CPU Speed", "2"),
-    );
+    // CPU speed commit goes via interactive write; setConfigValue is not used for CPU Speed changes.
+    // With no turbo options, no setConfigValue call of any kind should happen.
+    await waitFor(() => expect(screen.getByTestId("home-cpu-speed-value").textContent).toBe("2"));
     expect(c64ApiMockRef.current.setConfigValue).not.toHaveBeenCalledWith(
       "U64 Specific Settings",
       "Turbo Control",
@@ -1338,9 +1344,9 @@ describe("HomePage SID status", () => {
 
     fireEvent.keyDown(thumb!, { key: "ArrowRight" });
 
-    await waitFor(() =>
-      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith("U64 Specific Settings", "CPU Speed", "3"),
-    );
+    // CPU speed commit goes via interactive write; only Turbo Control auto-adjust uses setConfigValue.
+    // Turbo is already "Manual", so no redundant write should happen.
+    await waitFor(() => expect(screen.getByTestId("home-cpu-speed-value").textContent).toBe("3"));
     expect(c64ApiMockRef.current.setConfigValue).not.toHaveBeenCalledWith(
       "U64 Specific Settings",
       "Turbo Control",
@@ -1378,7 +1384,7 @@ describe("HomePage SID status", () => {
     expect(machineSection?.contains(ramFolderRow)).toBe(true);
     expect(
       screen.getByTestId("home-machine-controls").compareDocumentPosition(screen.getByTestId("home-machine-footer")) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
+      Node.DOCUMENT_POSITION_FOLLOWING,
     ).not.toBe(0);
 
     const cardColumn = screen.getByTestId("home-secondary-cards");
@@ -1581,7 +1587,7 @@ describe("HomePage SID status", () => {
         "Turbo Control",
         "C64U Turbo Registers",
       );
-      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith("U64 Specific Settings", "CPU Speed", "2");
+      // CPU Speed commit goes via interactive write; not via setConfigValue
       expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
         "U64 Specific Settings",
         "Turbo Control",

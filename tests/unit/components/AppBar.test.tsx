@@ -39,6 +39,8 @@ vi.mock("@/lib/diagnostics/diagnosticsOverlayState", () => ({
     diagnosticsOverlaySubscriberRef.current = listener;
     return unsubscribeMock;
   },
+  subscribeDiagnosticsSuppression: () => () => { },
+  isDiagnosticsOverlaySuppressionArmed: () => false,
 }));
 
 vi.mock("@/components/UnifiedHealthBadge", () => ({
