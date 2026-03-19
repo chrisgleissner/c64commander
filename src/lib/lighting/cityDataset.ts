@@ -1,116 +1,113 @@
-export type LightingCityEntry = {
+export interface LightingCityEntry {
   name: string;
+  country: string; // ISO 3166-1 alpha-2 code
   lat: number;
   lon: number;
-};
+}
 
 export const LIGHTING_CITY_DATASET: LightingCityEntry[] = [
-  // --- EUROPE (Capitals) ---
-  { name: "Amsterdam", lat: 52.3676, lon: 4.9041 },
-  { name: "Andorra la Vella", lat: 42.5063, lon: 1.5218 },
-  { name: "Athens", lat: 37.9838, lon: 23.7275 },
-  { name: "Belgrade", lat: 44.7866, lon: 20.4489 },
-  { name: "Berlin", lat: 52.52, lon: 13.405 },
-  { name: "Bern", lat: 46.948, lon: 7.4474 },
-  { name: "Bratislava", lat: 48.1486, lon: 17.1077 },
-  { name: "Brussels", lat: 50.8503, lon: 4.3517 },
-  { name: "Bucharest", lat: 44.4268, lon: 26.1025 },
-  { name: "Budapest", lat: 47.4979, lon: 19.0402 },
-  { name: "Copenhagen", lat: 55.6761, lon: 12.5683 },
-  { name: "Dublin", lat: 53.3498, lon: -6.2603 },
-  { name: "Helsinki", lat: 60.1699, lon: 24.9384 },
-  { name: "Lisbon", lat: 38.7223, lon: -9.1393 },
-  { name: "Ljubljana", lat: 46.0569, lon: 14.5058 },
-  { name: "London", lat: 51.5072, lon: -0.1276 },
-  { name: "Luxembourg", lat: 49.6116, lon: 6.1319 },
-  { name: "Madrid", lat: 40.4168, lon: -3.7038 },
-  { name: "Monaco", lat: 43.7384, lon: 7.4246 },
-  { name: "Oslo", lat: 59.9139, lon: 10.7522 },
-  { name: "Paris", lat: 48.8566, lon: 2.3522 },
-  { name: "Prague", lat: 50.0755, lon: 14.4378 },
-  { name: "Reykjavik", lat: 64.1466, lon: -21.9426 },
-  { name: "Rome", lat: 41.9028, lon: 12.4964 },
-  { name: "Stockholm", lat: 59.3293, lon: 18.0686 },
-  { name: "Tallinn", lat: 59.437, lon: 24.7536 },
-  { name: "Vienna", lat: 48.2082, lon: 16.3738 },
-  { name: "Warsaw", lat: 52.2297, lon: 21.0122 },
+  // --- EUROPE ---
+  { name: "Amsterdam", country: "NL", lat: 52.3740, lon: 4.8897 },
+  { name: "Athens", country: "GR", lat: 37.9795, lon: 23.7162 },
+  { name: "Belgrade", country: "RS", lat: 44.8040, lon: 20.4651 },
+  { name: "Berlin", country: "DE", lat: 52.5244, lon: 13.4105 },
+  { name: "Bern", country: "CH", lat: 46.9481, lon: 7.4474 },
+  { name: "Brussels", country: "BE", lat: 50.8505, lon: 4.3488 },
+  { name: "Bucharest", country: "RO", lat: 44.4323, lon: 26.1063 },
+  { name: "Budapest", country: "HU", lat: 47.4984, lon: 19.0405 },
+  { name: "Copenhagen", country: "DK", lat: 55.6759, lon: 12.5655 },
+  { name: "Dublin", country: "IE", lat: 53.3331, lon: -6.2489 },
+  { name: "Helsinki", country: "FI", lat: 60.1695, lon: 24.9355 },
+  { name: "Istanbul", country: "TR", lat: 41.0138, lon: 28.9497 },
+  { name: "Kyiv", country: "UA", lat: 50.4547, lon: 30.5238 },
+  { name: "Lisbon", country: "PT", lat: 38.7167, lon: -9.1333 },
+  { name: "London", country: "GB", lat: 51.5085, lon: -0.1257 },
+  { name: "Madrid", country: "ES", lat: 40.4165, lon: -3.7026 },
+  { name: "Moscow", country: "RU", lat: 55.7522, lon: 37.6156 },
+  { name: "Oslo", country: "NO", lat: 59.9127, lon: 10.7461 },
+  { name: "Paris", country: "FR", lat: 48.8534, lon: 2.3488 },
+  { name: "Prague", country: "CZ", lat: 50.0880, lon: 14.4208 },
+  { name: "Reykjavik", country: "IS", lat: 64.1355, lon: -21.8954 },
+  { name: "Rome", country: "IT", lat: 41.8919, lon: 12.5113 },
+  { name: "Sarajevo", country: "BA", lat: 43.8486, lon: 18.3564 },
+  { name: "Stockholm", country: "SE", lat: 59.3326, lon: 18.0649 },
+  { name: "Tallinn", country: "EE", lat: 59.4370, lon: 24.7535 },
+  { name: "Vienna", country: "AT", lat: 48.2085, lon: 16.3721 },
+  { name: "Warsaw", country: "PL", lat: 52.2297, lon: 21.0118 },
+  { name: "Zagreb", country: "HR", lat: 45.8144, lon: 15.9780 },
+  { name: "Zurich", country: "CH", lat: 47.3667, lon: 8.5500 },
 
-  // --- AMERICAS (Capitals) ---
-  { name: "Brasilia", lat: -15.8267, lon: -47.9218 },
-  { name: "Buenos Aires", lat: -34.6037, lon: -58.3816 },
-  { name: "Ottawa", lat: 45.4215, lon: -75.6972 },
-  { name: "Washington DC", lat: 38.9072, lon: -77.0369 },
-  { name: "Mexico City", lat: 19.4326, lon: -99.1332 },
-  { name: "Santiago", lat: -33.4489, lon: -70.6693 },
-  { name: "Lima", lat: -12.0464, lon: -77.0428 },
-  { name: "Bogota", lat: 4.711, lon: -74.0721 },
+  // --- NORTH AMERICA ---
+  { name: "Anchorage, AK", country: "US", lat: 61.2181, lon: -149.9003 },
+  { name: "Calgary, AB", country: "CA", lat: 51.0501, lon: -114.0853 },
+  { name: "Chicago, IL", country: "US", lat: 41.8500, lon: -87.6500 },
+  { name: "Dallas, TX", country: "US", lat: 32.7831, lon: -96.8067 },
+  { name: "Denver, CO", country: "US", lat: 39.7392, lon: -104.9847 },
+  { name: "Honolulu, HI", country: "US", lat: 21.3069, lon: -157.8583 },
+  { name: "Los Angeles, CA", country: "US", lat: 34.0522, lon: -118.2437 },
+  { name: "Mexico City", country: "MX", lat: 19.4285, lon: -99.1277 },
+  { name: "Miami, FL", country: "US", lat: 25.7743, lon: -80.1937 },
+  { name: "Montreal, QC", country: "CA", lat: 45.5088, lon: -73.5878 },
+  { name: "New York, NY", country: "US", lat: 40.7143, lon: -74.0060 },
+  { name: "Phoenix, AZ", country: "US", lat: 33.4484, lon: -112.0740 },
+  { name: "San Francisco, CA", country: "US", lat: 37.7749, lon: -122.4194 },
+  { name: "Toronto, ON", country: "CA", lat: 43.7001, lon: -79.4163 },
+  { name: "Vancouver, BC", country: "CA", lat: 49.2497, lon: -123.1193 },
+  { name: "Washington DC", country: "US", lat: 38.8951, lon: -77.0364 },
+  { name: "Winnipeg, MB", country: "CA", lat: 49.8844, lon: -97.1470 },
 
-  // --- AFRICA (Capitals subset) ---
-  { name: "Cairo", lat: 30.0444, lon: 31.2357 },
-  { name: "Nairobi", lat: -1.2921, lon: 36.8219 },
-  { name: "Pretoria", lat: -25.7479, lon: 28.2293 },
-  { name: "Cape Town", lat: -33.9249, lon: 18.4241 },
-  { name: "Abuja", lat: 9.0765, lon: 7.3986 },
+  // --- SOUTH AMERICA ---
+  { name: "Asuncion", country: "PY", lat: -25.2637, lon: -57.5759 },
+  { name: "Bogota", country: "CO", lat: 4.6097, lon: -74.0817 },
+  { name: "Brasilia", country: "BR", lat: -15.7797, lon: -47.9297 },
+  { name: "Buenos Aires", country: "AR", lat: -34.6132, lon: -58.3772 },
+  { name: "Caracas", country: "VE", lat: 10.4880, lon: -66.8792 },
+  { name: "Lima", country: "PE", lat: -12.0433, lon: -77.0283 },
+  { name: "Manaus", country: "BR", lat: -3.1019, lon: -60.0250 },
+  { name: "Montevideo", country: "UY", lat: -34.8333, lon: -56.1667 },
+  { name: "Santiago", country: "CL", lat: -33.4569, lon: -70.6483 },
+  { name: "Sao Paulo", country: "BR", lat: -23.5475, lon: -46.6358 },
 
-  // --- ASIA (Capitals subset) ---
-  { name: "Tokyo", lat: 35.6762, lon: 139.6503 },
-  { name: "Beijing", lat: 39.9042, lon: 116.4074 },
-  { name: "Seoul", lat: 37.5665, lon: 126.978 },
-  { name: "Bangkok", lat: 13.7563, lon: 100.5018 },
-  { name: "Singapore", lat: 1.3521, lon: 103.8198 },
-  { name: "New Delhi", lat: 28.6139, lon: 77.209 },
-  { name: "Jakarta", lat: -6.2088, lon: 106.8456 },
-  { name: "Riyadh", lat: 24.7136, lon: 46.6753 },
+  // --- AFRICA ---
+  { name: "Abuja", country: "NG", lat: 9.0579, lon: 7.4951 },
+  { name: "Accra", country: "GH", lat: 5.5560, lon: -0.1969 },
+  { name: "Addis Ababa", country: "ET", lat: 9.0250, lon: 38.7469 },
+  { name: "Algiers", country: "DZ", lat: 36.7525, lon: 3.0420 },
+  { name: "Cairo", country: "EG", lat: 30.0626, lon: 31.2497 },
+  { name: "Cape Town", country: "ZA", lat: -33.9258, lon: 18.4232 },
+  { name: "Casablanca", country: "MA", lat: 33.5883, lon: -7.6114 },
+  { name: "Johannesburg", country: "ZA", lat: -26.2023, lon: 28.0436 },
+  { name: "Lagos", country: "NG", lat: 6.4541, lon: 3.3947 },
+  { name: "Nairobi", country: "KE", lat: -1.2833, lon: 36.8167 },
+
+  // --- ASIA & MIDDLE EAST ---
+  { name: "Bangkok", country: "TH", lat: 13.7500, lon: 100.5167 },
+  { name: "Beijing", country: "CN", lat: 39.9075, lon: 116.3972 },
+  { name: "Dubai", country: "AE", lat: 25.0772, lon: 55.3093 },
+  { name: "Hong Kong", country: "HK", lat: 22.2855, lon: 114.1577 },
+  { name: "Islamabad", country: "PK", lat: 33.7215, lon: 73.0433 },
+  { name: "Jakarta", country: "ID", lat: -6.1744, lon: 106.8294 },
+  { name: "Jerusalem", country: "IL", lat: 31.7690, lon: 35.2163 },
+  { name: "Manila", country: "PH", lat: 14.6042, lon: 120.9822 },
+  { name: "Mumbai", country: "IN", lat: 18.9750, lon: 72.8258 },
+  { name: "New Delhi", country: "IN", lat: 28.6358, lon: 77.2245 },
+  { name: "Osaka", country: "JP", lat: 34.6937, lon: 135.5023 },
+  { name: "Riyadh", country: "SA", lat: 24.6877, lon: 46.7219 },
+  { name: "Seoul", country: "KR", lat: 37.5660, lon: 126.9784 },
+  { name: "Singapore", country: "SG", lat: 1.2897, lon: 103.8501 },
+  { name: "Taipei", country: "TW", lat: 25.0478, lon: 121.5319 },
+  { name: "Tehran", country: "IR", lat: 35.6944, lon: 51.4215 },
+  { name: "Tokyo", country: "JP", lat: 35.6895, lon: 139.6917 },
+  { name: "Vladivostok", country: "RU", lat: 43.1056, lon: 131.8735 },
 
   // --- OCEANIA ---
-  { name: "Canberra", lat: -35.2809, lon: 149.13 },
-  { name: "Wellington", lat: -41.2866, lon: 174.7756 },
-
-  // --- USA TIMEZONES (2 major cities each) ---
-  // Pacific
-  { name: "Los Angeles", lat: 34.0522, lon: -118.2437 },
-  { name: "San Francisco", lat: 37.7749, lon: -122.4194 },
-
-  // Mountain
-  { name: "Denver", lat: 39.7392, lon: -104.9903 },
-  { name: "Phoenix", lat: 33.4484, lon: -112.074 },
-
-  // Central
-  { name: "Chicago", lat: 41.8781, lon: -87.6298 },
-  { name: "Dallas", lat: 32.7767, lon: -96.797 },
-
-  // Eastern
-  { name: "New York", lat: 40.7128, lon: -74.006 },
-  { name: "Miami", lat: 25.7617, lon: -80.1918 },
-
-  // Alaska
-  { name: "Anchorage", lat: 61.2181, lon: -149.9003 },
-  { name: "Juneau", lat: 58.3019, lon: -134.4197 },
-
-  // Hawaii
-  { name: "Honolulu", lat: 21.3069, lon: -157.8583 },
-  { name: "Hilo", lat: 19.7076, lon: -155.0885 },
-
-  // --- MULTI-TIMEZONE COUNTRIES (major cities) ---
-  // Canada
-  { name: "Toronto", lat: 43.6532, lon: -79.3832 },
-  { name: "Vancouver", lat: 49.2827, lon: -123.1207 },
-
-  // Australia
-  { name: "Sydney", lat: -33.8688, lon: 151.2093 },
-  { name: "Perth", lat: -31.9505, lon: 115.8605 },
-
-  // Russia
-  { name: "Moscow", lat: 55.7558, lon: 37.6173 },
-  { name: "Vladivostok", lat: 43.1155, lon: 131.8855 },
-
-  // Brazil
-  { name: "Sao Paulo", lat: -23.5505, lon: -46.6333 },
-  { name: "Manaus", lat: -3.119, lon: -60.0217 },
-
-  // Indonesia
-  { name: "Jakarta", lat: -6.2088, lon: 106.8456 },
-  { name: "Jayapura", lat: -2.5337, lon: 140.7181 },
+  { name: "Adelaide", country: "AU", lat: -34.9287, lon: 138.5986 },
+  { name: "Auckland", country: "NZ", lat: -36.8485, lon: 174.7633 },
+  { name: "Brisbane", country: "AU", lat: -27.4679, lon: 153.0278 },
+  { name: "Canberra", country: "AU", lat: -35.2835, lon: 149.1281 },
+  { name: "Perth", country: "AU", lat: -31.9522, lon: 115.8614 },
+  { name: "Sydney", country: "AU", lat: -33.8678, lon: 151.2073 },
+  { name: "Wellington", country: "NZ", lat: -41.2865, lon: 174.7762 },
 ];
 
 export const findLightingCity = (city: string): LightingCityEntry => {

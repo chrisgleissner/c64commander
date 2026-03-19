@@ -32,7 +32,7 @@ const HEADER_CASES = [
   { slug: "docs", route: "/docs", expectedTitle: "Docs" },
 ] as const;
 
-const artifactRoot = path.resolve("artifacts/page-headers");
+const artifactRoot = path.resolve("doc/img/app/details/page-headers");
 
 const normalizeOcr = (value: string) => value.replace(/\s+/g, " ").trim().toLowerCase();
 

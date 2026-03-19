@@ -108,7 +108,7 @@ const captureTransitionPhase = async (
   sourceSlot: string,
   targetSlot: string,
 ) => {
-  const artifactDir = path.resolve("artifacts/swipe-transitions", caseName);
+  const artifactDir = path.resolve("doc/img/app/details/swipe-transitions", caseName);
   await fs.mkdir(artifactDir, { recursive: true });
   await page.evaluate(
     () =>
