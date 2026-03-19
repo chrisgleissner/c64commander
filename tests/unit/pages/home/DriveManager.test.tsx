@@ -63,9 +63,9 @@ vi.mock("@/hooks/useDiagnosticsActivity", () => ({
 
 vi.mock("@/lib/diagnostics/diagnosticsOverlayState", () => ({
   isDiagnosticsOverlayActive: () => false,
-  subscribeDiagnosticsOverlay: () => () => { },
+  subscribeDiagnosticsOverlay: () => () => {},
   shouldSuppressDiagnosticsSideEffects: () => false,
-  subscribeDiagnosticsSuppression: () => () => { },
+  subscribeDiagnosticsSuppression: () => () => {},
   isDiagnosticsOverlaySuppressionArmed: () => false,
 }));
 

@@ -547,9 +547,9 @@ vi.mock("@/hooks/useDiagnosticsActivity", () => ({
 
 vi.mock("@/lib/diagnostics/diagnosticsOverlayState", () => ({
   isDiagnosticsOverlayActive: () => false,
-  subscribeDiagnosticsOverlay: () => () => { },
+  subscribeDiagnosticsOverlay: () => () => {},
   shouldSuppressDiagnosticsSideEffects: () => false,
-  subscribeDiagnosticsSuppression: () => () => { },
+  subscribeDiagnosticsSuppression: () => () => {},
   isDiagnosticsOverlaySuppressionArmed: () => false,
 }));
 
@@ -1295,7 +1295,7 @@ describe("HomePage SID status", () => {
   });
 
   it("shows a pending RAM dump folder label while folder selection is in flight", async () => {
-    const selectFolderSpy = vi.spyOn(ramDumpStorage, "selectRamDumpFolder").mockReturnValue(new Promise(() => { }));
+    const selectFolderSpy = vi.spyOn(ramDumpStorage, "selectRamDumpFolder").mockReturnValue(new Promise(() => {}));
 
     renderHomePage();
     fireEvent.click(screen.getByTestId("ram-dump-folder-trigger"));
@@ -1384,7 +1384,7 @@ describe("HomePage SID status", () => {
     expect(machineSection?.contains(ramFolderRow)).toBe(true);
     expect(
       screen.getByTestId("home-machine-controls").compareDocumentPosition(screen.getByTestId("home-machine-footer")) &
-      Node.DOCUMENT_POSITION_FOLLOWING,
+        Node.DOCUMENT_POSITION_FOLLOWING,
     ).not.toBe(0);
 
     const cardColumn = screen.getByTestId("home-secondary-cards");
