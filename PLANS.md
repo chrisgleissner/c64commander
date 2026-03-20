@@ -1,285 +1,234 @@
-# Diagnostics UX Redesign Plan
+# Diagnostics Overlay Redesign Plan
 
-Status: IN PROGRESS
-Classification: UI_CHANGE + CODE_CHANGE
-
-## Goal
-
-Redesign the Diagnostics overlay to match the existing app UX language (Home, Play, Disks, Settings).
-This is a hobby-facing status screen — not a developer tool.
-
-## Three Modes
-
-**HEALTHY / IDLE**
-First screen: ONE card — "Healthy", device name, "All systems working", Run health check, "View activity and details" link.
-
-**UNHEALTHY / DEGRADED**
-First screen: ONE card — "Needs attention", plain-language issue, contributor, "View issue" CTA.
-
-**OFFLINE**
-First screen: ONE card — "Device not reachable", host, Retry / Switch device.
-
-## Progressive Disclosure Layers
-
-| Layer | Card                 | Content                                                                  |
-| ----- | -------------------- | ------------------------------------------------------------------------ |
-| 1     | StatusSummaryCard    | Mode title, device, primary action, show-details link                    |
-| 2     | IssueCard            | Primary problem title + contributor (visible when showDetails=true)      |
-| 3     | EvidencePreviewCard  | Max 3 recent Problems/Actions (no filters)                               |
-| 4     | TechnicalDetailsCard | Contributors, latency, health history, health check                      |
-| 5     | ToolsCard            | Filters, full stream, Share all/filtered, heat maps, config drift, clear |
-
-`showDetails=false` (default): only Layer 1 + Layer 3 preview.
-`showDetails=true`: all layers, each individually expandable.
-
-## Key Implementation Changes
-
-- `DiagnosticsDialog.tsx`: add `showDetails` state, add `StatusSummaryCard` + `EvidencePreviewCard` sub-components
-- `DiagnosticsDialog.test.tsx`: update filter-visibility tests, add mode-based card tests
-- Playwright tests: add `show-details-button` expansion steps before accessing Technical/Tools layers
-
-## Termination Criteria
-
-- [ ] First view shows ONE status card only
-- [ ] No filters/logs visible initially
-- [ ] All data accessible via progressive disclosure
-- [ ] All unit tests pass + ≥91% branch coverage
-- [ ] Screenshots updated
-- [ ] Build + CI green
-
----
-
-# Health History Timeline Plan (ARCHIVED — COMPLETE)
-
-Status: COMPLETE
-Classification: DOC_PLUS_CODE, UI_CHANGE
+Status: DONE
+Classification: UI_CHANGE + DOC_PLUS_CODE
+Owner: GitHub Copilot
+Date: 2026-03-20
 
 ## Objective
 
-- Replace the diagnostics Health History scatter chart with a deterministic single-state timeline.
-- Keep the existing health-history store and diagnostics overlay plumbing unless a thin mapping layer is required.
-- Migrate all diagnostics screenshot assumptions and regenerated outputs to `doc/img/app/diagnostics`.
+Redesign the Diagnostics overlay so it behaves like a calm, hobby-friendly status surface rather than a diagnostics console.
 
-## Constraints
+Required outcomes:
 
-- Exactly one state exists at any timestamp.
-- Adjacent identical states must merge.
-- Rendering must be deterministic and pixel-stable.
-- No symbol, marker, circle, gradient, outline, or external dependency may be introduced.
-- Degraded and unhealthy intervals must remain visible at every zoom level.
+- first-open state answers device health in under 2 seconds
+- strict progressive disclosure from summary to tools
+- visual alignment with the rest of the app
+- zero loss of existing diagnostics capabilities or data access
+- updated unit tests, Playwright coverage, screenshots, build, and validation
 
-## Task Breakdown
+## Non-Negotiable UX Rules
 
-| ID  | Task                                                                                                 | Status    | Notes                                                                                                                                                       |
-| --- | ---------------------------------------------------------------------------------------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| H1  | Audit current popup, history store, screenshot paths, and tests                                      | completed | Scatter/glyph renderer confirmed in `HealthHistoryPopup.tsx`; stale screenshot path assumptions limited to `.vscode/tasks.json`.                            |
-| H2  | Define deterministic timeline mapping and update this plan                                           | completed | Timeline will be derived from existing history entries plus a thin details mapper.                                                                          |
-| H3  | Implement pure segment builder for last-4h window continuity                                         | completed | `healthHistoryTimeline.ts` now derives continuous source segments, carries the pre-window state, and fills missing leading history with `Idle`.             |
-| H4  | Implement pixel-column aggregation and high-severity visibility pass                                 | completed | Worst-state aggregation plus reserved red/amber columns shipped in the timeline renderer utility.                                                           |
-| H5  | Replace scatter popup with contiguous timeline renderer and simplified legend                        | completed | `HealthHistoryPopup.tsx` now renders measured solid segments with a color-only legend and no glyph charting.                                                |
-| H6  | Add tap-based detail overlay with aggregated interval support                                        | completed | Detail card shows segment or aggregated interval metadata, severity, timestamps, reason, subsystem, and event count.                                        |
-| H7  | Update screenshot path assumptions and diagnostics screenshot capture stability                      | completed | Diagnostics screenshot task wiring now targets `doc/img/app/diagnostics` and uses corrected Playwright grep quoting.                                        |
-| H8  | Add regression tests for segment logic, aggregation, visibility, tap resolution, and overlay content | completed | Added utility, popup, dialog, overlay, and diagnostics bridge regression coverage plus updated Playwright diagnostics coverage.                             |
-| H9  | Regenerate affected diagnostics screenshots                                                          | completed | Regenerated the targeted diagnostics screenshot subset under `doc/img/app/diagnostics`.                                                                     |
-| H10 | Run validation and update this plan to complete                                                      | completed | `npm run lint`, `npm run test`, `npm run test:coverage`, `npm run build`, targeted diagnostics Playwright, and targeted diagnostics screenshots all passed. |
+- First-open healthy state shows one dominant card only.
+- First-open unhealthy state shows one dominant card only.
+- First-open offline state shows one dominant card only.
+- No filters, raw logs, evidence stream, or tools are visible on first open.
+- Evidence preview is collapsed by default and may not exceed three human-readable items.
+- Raw diagnostics activity and filters appear only after explicit layer expansion.
+- No child layer is visible before its parent is expanded.
 
-## Rendering Algorithm
+## Authoritative Phase Plan
 
-1. Sort `HealthHistoryEntry` values by timestamp ascending.
-2. Define a visible time window using the selected zoom duration with a default of 4 hours ending at `max(Date.now(), lastHistoryTimestamp)`.
-3. Build contiguous source segments across the entire visible window.
-   - Use the last sample at or before `windowStart` as the carried state when available.
-   - Otherwise fill from `windowStart` until the first in-window sample with `Idle`.
-   - Each interval is `[t_i, t_{i+1})` and the sample state persists until the next sample.
-4. Merge adjacent source intervals with the same state.
-5. Measure the track width in CSS pixels and build one deterministic rendered column per pixel.
-6. For each pixel column interval, collect all overlapping source segments and choose the worst state using:
-   - `Unhealthy > Degraded > Healthy > Idle > Unavailable`
-7. Apply a second visibility pass for high-severity source segments.
-   - Every `Unhealthy` and `Degraded` source segment is assigned at least one deterministic rendered column.
-   - `Unhealthy` overrides `Degraded` when both contend for the same column.
-8. Merge adjacent rendered columns with the same displayed state and same underlying selection payload into rendered display segments.
-9. Render each display segment as a solid rectangle spanning the full track height.
+| Phase | Name | Scope | Status | Verification Gate |
+| --- | --- | --- | --- | --- |
+| 1 | Audit | Inspect current diagnostics dialog, tests, screenshots, and UX constraints. No product code changes. | DONE | Current behavior, gaps, and impacted files documented in WORKLOG. |
+| 2 | Data Mapping | Map existing diagnostics data and capabilities into summary, issue, evidence, technical, and tools layers. | DONE | Every existing capability has a destination layer. |
+| 3 | UX Definition | Lock exact healthy, unhealthy, offline, and expansion behavior plus component contract. | DONE | Component responsibilities and disclosure rules documented in WORKLOG. |
+| 4 | Implementation | Refactor dialog and add new card components with app-aligned layout. | DONE | Overlay renders required layered structure. |
+| 5 | State Logic | Enforce progressive disclosure and preserve all existing actions, detail views, and advanced tools. | DONE | No forbidden first-open content remains. |
+| 6 | Testing | Update unit and Playwright tests for new structure and flows. | DONE | Required tests exist and pass locally. |
+| 7 | Screenshots | Regenerate targeted diagnostics screenshots for required states only. | DONE | Required screenshot set updated under doc/img/app/diagnostics. |
+| 8 | Validation | Run lint, unit tests, coverage, build, and targeted Playwright validations. | DONE | Validation commands pass with required coverage threshold. |
+| 9 | UX Consistency Audit | Review rendered diagnostics UI against Home, Play, Disks, and Settings language. | DONE | WORKLOG records final UX audit findings and any corrective fixes. |
+| 10 | CI Green | Confirm repo is green for touched scope and close execution. | DONE | All plan rows marked DONE and WORKLOG contains proof. |
 
-## Aggregation Logic
+## Atomic Task Breakdown
 
-- Source segments are duration-based intervals built from health-history timestamps.
-- Rendered columns are derived from the current measured width and visible time window.
-- Aggregated display segments are any rendered segments backed by multiple source segments or by a reserved visibility override.
-- Aggregated detail overlay must show:
-  - `Aggregated interval`
-  - worst state
-  - underlying event count
-  - optional expandable event list
+### Phase 1 - Audit
 
-## Visibility Guarantees
+| ID | Task | Status |
+| --- | --- | --- |
+| P1.1 | Read repo instructions, UX guidance, current diagnostics dialog, related tests, and screenshot harness. | DONE |
+| P1.2 | Identify current anti-patterns against requested UX. | DONE |
+| P1.3 | List impacted files and validation obligations. | DONE |
 
-- Any rendered segment has `widthPx = max(1, computedWidthPx)`.
-- Any `Degraded` or `Unhealthy` source segment is guaranteed at least one rendered pixel column.
-- Worst-state aggregation determines the base fill.
-- The visibility pass may reserve a specific column for a high-severity segment to prevent amber/red loss during compression.
-- Allocation order is deterministic and stable for identical inputs.
+### Phase 2 - Data Mapping
 
-## Interaction Flow
+| ID | Task | Status |
+| --- | --- | --- |
+| P2.1 | Inventory existing diagnostics inputs, actions, popups, detail views, filters, and exports. | DONE |
+| P2.2 | Map each current capability to one of the five disclosure layers. | DONE |
+| P2.3 | Define which data becomes human-readable summary copy versus technical detail copy. | DONE |
 
-1. User taps or clicks the timeline track.
-2. X coordinate maps to a rendered display segment through the measured pixel-column model.
-3. The popup opens a dismissible detail card inside the analytic popup.
-4. Non-aggregated selection shows:
-   - start timestamp
-   - end timestamp
-   - state text and color
-   - duration
-   - root cause / diagnostic reason
-   - subsystem (`REST`, `FTP`, or `App`)
-   - error message or code when present
-5. Aggregated selection shows the aggregated summary plus event list.
+### Phase 3 - UX Definition
 
-## Risks
+| ID | Task | Status |
+| --- | --- | --- |
+| P3.1 | Define SummaryCard behavior for healthy, unhealthy, and offline modes. | DONE |
+| P3.2 | Define IssueCard visibility and copy rules. | DONE |
+| P3.3 | Define EvidencePreviewCard, EvidenceFullView, TechnicalDetailsCard, and ToolsCard expansion rules. | DONE |
+| P3.4 | Define required test IDs and expansion flow contract. | DONE |
 
-| Risk                                                                                  | Impact | Mitigation                                                                  | Status    |
-| ------------------------------------------------------------------------------------- | ------ | --------------------------------------------------------------------------- | --------- |
-| The health-history store is sample-based, not interval-based                          | High   | Derive intervals in a pure mapping layer instead of changing the core model | mitigated |
-| Extreme compression can collapse multiple high-severity intervals into the same pixel | High   | Reserve deterministic red/amber columns after the worst-state base pass     | mitigated |
-| JSDOM measurement can make renderer tests flaky                                       | Medium | Keep the layout algorithm pure and stub measurements in component tests     | mitigated |
-| Screenshot path migration could leave stale task wiring                               | Low    | Search globally and update all references before regeneration               | mitigated |
+### Phase 4 - Implementation
 
-## Validation Steps
+| ID | Task | Status |
+| --- | --- | --- |
+| P4.1 | Add SummaryCard component. | DONE |
+| P4.2 | Add IssueCard component. | DONE |
+| P4.3 | Add EvidencePreviewCard component. | DONE |
+| P4.4 | Add EvidenceFullView component. | DONE |
+| P4.5 | Add TechnicalDetailsCard component. | DONE |
+| P4.6 | Add ToolsCard component. | DONE |
+| P4.7 | Refactor DiagnosticsDialog to render strict parent-child layers only. | DONE |
 
-- Unit tests for timeline segment construction, merge behavior, severity aggregation, and reserved-column visibility.
-- Component tests for legend rendering, segment rectangles, tap resolution, and overlay content.
-- Playwright diagnostics overlay coverage for history popup behavior and deterministic screenshot capture.
-- Screenshot regeneration for diagnostics images under `doc/img/app/diagnostics` only.
-- Required commands before completion:
-  - `npm run lint`
-  - `npm run test`
-  - `npm run test:coverage`
-  - `npm run build`
-  - targeted Playwright diagnostics runs, including screenshots
+### Phase 5 - State Logic
 
-## Completion Snapshot
+| ID | Task | Status |
+| --- | --- | --- |
+| P5.1 | Remove first-open filters, raw stream, and tools from initial view. | DONE |
+| P5.2 | Preserve issue drill-down, health check, connection recovery, device detail, history, latency, config drift, heat maps, sharing, and clear actions. | DONE |
+| P5.3 | Ensure evidence preview shows at most three human-readable entries. | DONE |
+| P5.4 | Ensure filters appear only inside ToolsCard. | DONE |
+| P5.5 | Ensure layer visibility obeys parent expansion rules. | DONE |
 
-- Complete.
-- Implemented deterministic segment derivation, worst-state aggregation, and reserved high-severity visibility in `src/lib/diagnostics/healthHistoryTimeline.ts`.
-- Replaced the Health History scatter chart with a contiguous timeline and tap-driven detail overlay in `src/components/diagnostics/HealthHistoryPopup.tsx`.
-- Updated diagnostics Playwright coverage and regenerated the targeted diagnostics screenshots under `doc/img/app/diagnostics`.
-- Validation passed with `npm run lint`, `npm run test`, `npm run test:coverage` at 91.01% global branch coverage, `npm run build`, targeted diagnostics Playwright, and targeted diagnostics screenshot capture.
+### Phase 6 - Testing
 
----
+| ID | Task | Status |
+| --- | --- | --- |
+| P6.1 | Update unit tests for healthy first-open state. | DONE |
+| P6.2 | Update unit tests for unhealthy first-open state. | DONE |
+| P6.3 | Update unit tests for disclosure flow and Tools-only filters. | DONE |
+| P6.4 | Update GlobalDiagnosticsOverlay tests if dialog contract changes. | DONE |
+| P6.5 | Update Playwright diagnostics tests for new expansion flow. | DONE |
 
-# Diagnostics Overlay Progressive-Disclosure UX Redesign
+### Phase 7 - Screenshots
 
-Status: IN PROGRESS
-Classification: UI_CHANGE, CODE_CHANGE
+| ID | Task | Status |
+| --- | --- | --- |
+| P7.1 | Capture healthy collapsed screenshot. | DONE |
+| P7.2 | Capture healthy expanded screenshot. | DONE |
+| P7.3 | Capture unhealthy collapsed screenshot. | DONE |
+| P7.4 | Capture unhealthy issue-expanded screenshot. | DONE |
+| P7.5 | Capture full drill-down screenshot with tools visible. | DONE |
 
-## Objective
+### Phase 8 - Validation
 
-Redesign the Diagnostics overlay to achieve progressive-disclosure UX:
+| ID | Task | Status |
+| --- | --- | --- |
+| P8.1 | Run lint. | DONE |
+| P8.2 | Run unit tests. | DONE |
+| P8.3 | Run coverage and confirm global branch coverage >= 91%. | DONE |
+| P8.4 | Run build. | DONE |
+| P8.5 | Run targeted Playwright diagnostics coverage. | DONE |
 
-1. Answer "is the device healthy?" immediately
-2. Apply strict layer structure: Summary → Problem → Technical → Evidence → Tools
-3. Compact devices: no scrolling for core answer
-4. Preserve ALL existing diagnostic information; nothing removed
+### Phase 9 - UX Consistency Audit
 
-## Phased Execution
+| ID | Task | Status |
+| --- | --- | --- |
+| P9.1 | Compare diagnostics spacing, card structure, and actions against the app’s existing pages. | DONE |
+| P9.2 | Fix any remaining console-like or cluttered behavior. | DONE |
 
-### PHASE 1 — BASELINE ANALYSIS ✅ COMPLETE
+### Phase 10 - CI Green
 
-**Data surfaces in DiagnosticsDialog.tsx:**
+| ID | Task | Status |
+| --- | --- | --- |
+| P10.1 | Verify all plan tasks are DONE and WORKLOG proof is complete. | DONE |
+| P10.2 | Summarize completed validation and screenshot scope accurately. | DONE |
 
-| Element                   | testId                           | Location           |
-| ------------------------- | -------------------------------- | ------------------ |
-| Overall health row        | `overall-health-row`             | HealthSummary      |
-| Device detail button      | `open-device-detail`             | HealthSummary      |
-| Explanation phrase        | `health-explanation`             | HealthSummary      |
-| Last REST activity        | (text)                           | HealthSummary      |
-| Last FTP activity         | (text)                           | HealthSummary      |
-| Contributor rows ×3       | `contributor-row-{app,rest,ftp}` | HealthSummary      |
-| Primary problem spotlight | `primary-problem-spotlight`      | HealthSummary      |
-| Latency P50/P90/P99       | `latency-summary-row`            | HealthSummary      |
-| Health history shortcut   | `health-history-row`             | HealthSummary      |
-| Run health check          | `run-health-check-button`        | HealthSummary      |
-| Last health check         | `open-health-check-detail`       | HealthSummary      |
-| Connection actions        | (region)                         | HealthSummary      |
-| Evidence type toggles     | `evidence-toggle-*`              | QuickFocusControls |
-| Filters / Refine          | `refine-button`                  | QuickFocusControls |
-| Evidence stream           | `activity-help`                  | Stream section     |
-| Share all/filtered/tools  | `diagnostics-share-all` etc.     | Action shelf       |
+## Phase 1 Audit Findings
 
-**Display profiles:**
+- Current first-open state still renders more than one conceptual block: the dominant status card, an optional standalone problem spotlight, and an evidence preview card.
+- Current first-open state violates the requested healthy-mode rule because healthy sessions can immediately show recent activity.
+- Current full-details state still uses a filter-first mental model with QuickFocusControls placed before the evidence stream.
+- Filters are available before the deepest tool layer, which violates the requested disclosure hierarchy.
+- Existing technical data and advanced capabilities are already present and should be preserved, not reimplemented from scratch.
 
-- compact: ≤360px (unit tests use 360, screenshots use 360)
-- medium: 361–599px (unit tests use some 900px = expanded; screenshots use 393px)
-- expanded: ≥600px (all Playwright tests use 800px default)
+## Phase 2 Data Mapping
 
-### PHASE 2 — INFORMATION ARCHITECTURE ✅ COMPLETE
+| Current capability | Target layer | Notes |
+| --- | --- | --- |
+| Overall health state, connectivity, host, connected device label | Layer 1 - SummaryCard | First-answer content only; human-readable copy. |
+| Primary problem title and cause hint | Layer 1 summary copy and Layer 2 IssueCard | Summary gets plain-language headline; IssueCard gets fuller explanation. |
+| Run health check | Layer 1 primary action in healthy mode, Layer 2 secondary action in unhealthy mode | Last health check detail remains deeper. |
+| Retry connection and switch device | Layer 1 offline actions and Layer 4 technical access | Recovery stays available without exposing tools first. |
+| Device detail view, health check detail view | Layer 4 - TechnicalDetailsCard | Kept as navigable detail views from deeper layer. |
+| Last REST and FTP activity | Layer 4 - TechnicalDetailsCard | Technical phrasing stays out of the first-open surface. |
+| Contributor health rows | Layer 4 - TechnicalDetailsCard | Remains available as technical breakdown. |
+| Latency percentiles and latency popup | Layer 4 - TechnicalDetailsCard | Shown only after explicit expansion. |
+| Health history shortcut and popup | Layer 4 - TechnicalDetailsCard | Shown only after explicit expansion. |
+| Evidence preview | Layer 3 - EvidencePreviewCard | Human-readable top three entries, collapsed by default. |
+| Full evidence stream | Layer 5 - ToolsCard via EvidenceFullView | Existing stream preserved in deep view. |
+| Filters, search, severity, contributor, origin toggles | Layer 5 - ToolsCard | No longer visible before tools expansion. |
+| Share all, share filtered, config drift, heat maps, clear all | Layer 5 - ToolsCard | Advanced actions remain grouped at the deepest layer. |
 
-**Layer model:**
+## Phase 3 UX Definition
 
-| Layer                | Content                                                                     | Default visibility                   |
-| -------------------- | --------------------------------------------------------------------------- | ------------------------------------ |
-| L1 Summary           | Overall health + connectivity, explanation, primary problem spotlight, host | Always visible                       |
-| L2 Primary Actions   | Run health check, connection actions                                        | Always visible                       |
-| L3 Technical Details | REST/FTP activity, contributor rows, latency, health history                | compact=closed, medium/expanded=open |
-| L4 Evidence          | "Recent evidence" stream + filters                                          | Visible but collapsed detail         |
-| L5 Tools             | Share, Tools menu                                                           | Always visible (action shelf)        |
+### Disclosure contract
 
-**Key decision:** Technical details default = open on medium/expanded so all existing tests at 800px and 600px pass without modification.
+- First open renders SummaryCard only.
+- Clicking the healthy summary link reveals Layer 3 and Layer 4 as collapsed cards.
+- Clicking the unhealthy primary action reveals Layer 2, then Layer 3 and Layer 4 beneath it.
+- Layer 5 is rendered only inside Layer 4 after TechnicalDetailsCard is expanded.
+- Filters and the raw event stream are rendered only inside ToolsCard.
 
-### PHASE 3 — COMPONENT REFACTOR ✅ COMPLETE
+### Component contract
 
-Changes to `DiagnosticsDialog.tsx`:
+- SummaryCard
+	- healthy: title `Healthy`, calm copy, primary `Run health check`, secondary `Show details`
+	- unhealthy: title `Needs attention`, plain-language issue headline, secondary technical cause, primary `View issue`, secondary `Run health check`
+	- offline: title `Device not reachable`, host target, primary `Retry connection`, secondary `Switch device`
+- IssueCard
+	- visible only for unhealthy states after disclosure
+	- repeats the problem in clear language and optionally exposes the technical cause
+- EvidencePreviewCard
+	- collapsed by default
+	- when expanded, shows up to three human-readable items only
+	- contains CTA `View all activity` to reveal ToolsCard
+- TechnicalDetailsCard
+	- collapsed by default
+	- contains contributor breakdown, REST/FTP activity, latency, health history, device detail, and health-check detail access
+- ToolsCard
+	- collapsed by default and visible only from inside an expanded TechnicalDetailsCard
+	- contains filters, EvidenceFullView, sharing actions, advanced tools, and destructive clear action
 
-1. State `techDetailsExpanded` in DiagnosticsDialog, default `!isCompact`, reset on open
-2. Pass to HealthSummary as `techDetailsExpanded`/`onTechDetailsExpandedChange`
-3. HealthSummary: add `technical-details-toggle` button
-4. Wrap in `{techDetailsExpanded && ...}`: LastActivityRows, ContributorRows, latency row, history row
-5. Stream header: rename "Activity" → "Recent evidence" (testId `activity-help` unchanged)
+### Test contract
 
-### PHASE 4 — STATE-DRIVEN RENDERING ✅ COMPLETE
+- `status-summary-card` remains the first-open anchor test id.
+- `show-details-button` remains the disclosure control for healthy mode and secondary disclosure flows.
+- add `issue-card`, `evidence-preview-card`, `technical-details-card`, `tools-card`, and `evidence-full-view` test ids.
+- `refine-button` and `diagnostics-filter-input` must not exist in the DOM until ToolsCard is expanded.
 
-`techDetailsExpanded` reset on dialog open → compact always starts closed → medium/expanded starts open
+## Impacted Files
 
-### PHASE 5 — TEST ADAPTATION
+- src/components/diagnostics/DiagnosticsDialog.tsx
+- src/components/diagnostics/GlobalDiagnosticsOverlay.tsx
+- src/components/diagnostics/ConnectionActionsRegion.tsx
+- src/components/diagnostics/DiagnosticsListItem.tsx
+- src/components/diagnostics/ActionSummaryListItem.tsx
+- src/components/diagnostics/DeviceDetailView.tsx
+- src/components/diagnostics/HealthCheckDetailView.tsx
+- src/components/diagnostics/HealthHistoryPopup.tsx
+- src/components/diagnostics/LatencyAnalysisPopup.tsx
+- src/components/diagnostics/ConfigDriftView.tsx
+- src/components/diagnostics/HeatMapPopup.tsx
+- src/components/diagnostics/DiagnosticsDialog.test.tsx
+- tests/unit/components/diagnostics/GlobalDiagnosticsOverlay.test.tsx
+- playwright/homeDiagnosticsOverlay.spec.ts
+- playwright/settingsDiagnostics.spec.ts
+- playwright/diagnosticsActions.spec.ts
+- playwright/screenshots.spec.ts
+- playwright/visualSeeds.ts
+- doc/img/app/diagnostics/*
+- WORKLOG.md
 
-Unit tests:
+## Completion Gate
 
-- No existing tests need modification (all at 600px = expanded = open by default)
-- Add new tests:
-  - "technical details collapsed by default on compact profile"
-  - "technical details toggle expands and collapses the technical section"
+This plan is complete only when all of the following are true:
 
-### PHASE 6 — SCREENSHOT REGENERATION
-
-Re-run diagnostics screenshot Playwright task (targeted). Updates:
-
-- New "Technical details" toggle button visible in screenshots
-- "Recent evidence" label instead of "Activity"
-
-### PHASE 7 — FULL VALIDATION
-
-- `npm run lint`
-- `npm run test`
-- `npm run test:coverage` (≥91% branch)
-- `npm run build`
-
-### PHASE 8 — CONSISTENCY PASS
-
-Review alignment with Home screen language and information hierarchy.
-
-### PHASE 9 — CI CONVERGENCE
-
-All pipelines green; no skipped tests.
-
-## Termination Criteria
-
-- [ ] 1. All diagnostics data accessible via progressive disclosure
-- [ ] 2. Technical details behind disclosure toggle on compact
-- [ ] 3. Healthy compact = minimal (no contributor rows on first view)
-- [ ] 4. Unhealthy = primary problem spotlight always visible
-- [ ] 5. Offline = recovery actions prominent (unchanged)
-- [ ] 6. All unit tests pass
-- [ ] 7. All Playwright tests pass
-- [ ] 8. Screenshots updated
-- [ ] 9. Build succeeds
-- [ ] 10. PLANS.md final state reached
+- all phase and task rows are marked DONE
+- WORKLOG contains verification proof for every completed phase
+- healthy first-open view contains one dominant card only
+- filters and raw logs are absent until the tools layer is opened
+- all existing diagnostics capabilities remain accessible
+- targeted diagnostics screenshots are updated
+- lint, tests, coverage, Playwright, and build pass

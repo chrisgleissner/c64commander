@@ -19,6 +19,21 @@ const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
 };
 
+const ensureTechnicalDetailsExpanded = async (dialog: Locator) => {
+  const toggle = dialog.getByTestId("technical-details-toggle");
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") {
+    await toggle.click();
+  }
+};
+
+const ensureToolsExpanded = async (dialog: Locator) => {
+  await ensureTechnicalDetailsExpanded(dialog);
+  const toggle = dialog.getByTestId("tools-card-toggle");
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") {
+    await toggle.click();
+  }
+};
+
 test.describe("Settings diagnostics workflows", () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
@@ -28,7 +43,7 @@ test.describe("Settings diagnostics workflows", () => {
     await seedUiMocks(page, server.baseUrl);
 
     await page.addInitScript(() => {
-      window.addEventListener("c64u-logs-updated", () => {});
+      window.addEventListener("c64u-logs-updated", () => { });
 
       const logs = [
         {
@@ -80,6 +95,7 @@ test.describe("Settings diagnostics workflows", () => {
     await snap(page, testInfo, "dialog-open");
 
     await dialog.getByTestId("show-details-button").click();
+    await ensureToolsExpanded(dialog);
     await dialog.getByTestId("evidence-toggle-logs").click();
 
     // Check if logs are shown (they may not be if not loaded from storage)
@@ -120,6 +136,7 @@ test.describe("Settings diagnostics workflows", () => {
     await snap(page, testInfo, "diagnostics-open");
 
     await dialog.getByTestId("show-details-button").click();
+    await ensureToolsExpanded(dialog);
     await dialog.getByTestId("evidence-toggle-logs").click();
     const apiRequestEntry = dialog.getByText("C64 API request", { exact: true }).first();
     await expect(apiRequestEntry).toBeVisible();
@@ -198,6 +215,7 @@ test.describe("Settings diagnostics workflows", () => {
     const dialog = page.getByRole("dialog", { name: /Diagnostics|Logs/i });
     await expect(dialog).toBeVisible();
     await dialog.getByTestId("show-details-button").click();
+    await ensureToolsExpanded(dialog);
 
     const getPadding = async (summary: Locator) =>
       summary.evaluate((node) => {
@@ -285,6 +303,7 @@ test.describe("Settings diagnostics workflows", () => {
     await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
     await snap(page, testInfo, "dialog-open");
     await page.getByTestId("show-details-button").click();
+    await ensureToolsExpanded(page.getByRole("dialog", { name: /Diagnostics|Logs/i }));
 
     await expect(page.getByTestId("diagnostics-share-all")).toBeVisible();
     await expect(page.getByTestId("diagnostics-share-filtered")).toBeVisible();
@@ -298,6 +317,7 @@ test.describe("Settings diagnostics workflows", () => {
     await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
     await snap(page, testInfo, "dialog-open");
     await page.getByTestId("show-details-button").click();
+    await ensureToolsExpanded(page.getByRole("dialog", { name: /Diagnostics|Logs/i }));
 
     // Clear All is now inside the Tools dropdown
     await page.getByTestId("diagnostics-tools-menu").click();

@@ -189,6 +189,25 @@ const renderSettingsPageWithDisplayProfileProvider = () =>
     </DisplayProfileProvider>,
   );
 
+const openDiagnosticsTools = async () => {
+  fireEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
+  const dialog = await screen.findByRole("dialog");
+
+  fireEvent.click(within(dialog).getByTestId("show-details-button"));
+
+  const technicalDetailsToggle = within(dialog).getByTestId("technical-details-toggle");
+  if (technicalDetailsToggle.getAttribute("aria-expanded") !== "true") {
+    fireEvent.click(technicalDetailsToggle);
+  }
+
+  const toolsToggle = within(dialog).getByTestId("tools-card-toggle");
+  if (toolsToggle.getAttribute("aria-expanded") !== "true") {
+    fireEvent.click(toolsToggle);
+  }
+
+  return dialog;
+};
+
 vi.mock("@/lib/uiErrors", () => ({
   reportUserError: vi.fn(),
 }));
@@ -587,9 +606,7 @@ describe("SettingsPage", () => {
   it("shows evidence type toggles in required order", async () => {
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
-    const dialog = await screen.findByRole("dialog");
-    fireEvent.click(screen.getByTestId("show-details-button"));
+    const dialog = await openDiagnosticsTools();
 
     expect(within(dialog).getByTestId("evidence-toggle-problems")).toBeInTheDocument();
     expect(within(dialog).getByTestId("evidence-toggle-actions")).toBeInTheDocument();
@@ -614,9 +631,7 @@ describe("SettingsPage", () => {
   it("renders the diagnostics toolbar with share and clear buttons", async () => {
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
-    const dialog = await screen.findByRole("dialog");
-    fireEvent.click(screen.getByTestId("show-details-button"));
+    const dialog = await openDiagnosticsTools();
 
     expect(within(dialog).getByTestId("diagnostics-share-all")).toBeInTheDocument();
     expect(within(dialog).getByTestId("diagnostics-share-filtered")).toBeInTheDocument();
@@ -648,9 +663,7 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
-    const dialog = await screen.findByRole("dialog");
-    fireEvent.click(screen.getByTestId("show-details-button"));
+    const dialog = await openDiagnosticsTools();
 
     // Problems are active by default — both error entries are visible
     expect((await within(dialog).findAllByText("Disk error")).length).toBeGreaterThan(0);
@@ -679,9 +692,7 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
-    const dialog = await screen.findByRole("dialog");
-    fireEvent.click(screen.getByTestId("show-details-button"));
+    const dialog = await openDiagnosticsTools();
 
     // Enable Logs toggle
     fireEvent.click(within(dialog).getByTestId("evidence-toggle-logs"));
@@ -718,9 +729,7 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
-    const dialog = await screen.findByRole("dialog");
-    fireEvent.click(screen.getByTestId("show-details-button"));
+    const dialog = await openDiagnosticsTools();
 
     // Problems active by default — error entry visible
     expect((await within(dialog).findAllByText("Error entry")).length).toBeGreaterThan(0);
@@ -739,9 +748,7 @@ describe("SettingsPage", () => {
   it("requires confirmation to clear diagnostics", async () => {
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
-    const dialog = await screen.findByRole("dialog");
-    fireEvent.click(screen.getByTestId("show-details-button"));
+    const dialog = await openDiagnosticsTools();
 
     fireEvent.pointerDown(within(dialog).getByTestId("diagnostics-tools-menu"));
     fireEvent.click(await screen.findByTestId("diagnostics-clear-all-trigger"));
@@ -830,8 +837,7 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await openDiagnosticsTools();
 
     // Dispatch trace update so action summaries are derived from mock trace events
     await act(async () => {
@@ -892,9 +898,7 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
-    const dialog = await screen.findByRole("dialog");
-    fireEvent.click(screen.getByTestId("show-details-button"));
+    const dialog = await openDiagnosticsTools();
 
     // Dispatch trace update so trace events and action summaries are updated
     await act(async () => {
@@ -923,9 +927,7 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
-    const dialog = await screen.findByRole("dialog");
-    fireEvent.click(screen.getByTestId("show-details-button"));
+    const dialog = await openDiagnosticsTools();
 
     // Wait for the error entry so Share filtered is enabled
     await within(dialog).findByTestId("problem-err-x1");
@@ -954,9 +956,7 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
-    const dialog = await screen.findByRole("dialog");
-    fireEvent.click(screen.getByTestId("show-details-button"));
+    const dialog = await openDiagnosticsTools();
     const shareAllButton = within(dialog).getByRole("button", { name: /^share all$/i });
 
     fireEvent.click(shareAllButton);
@@ -1323,9 +1323,7 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
-    const dialog = await screen.findByRole("dialog");
-    fireEvent.click(screen.getByTestId("show-details-button"));
+    const dialog = await openDiagnosticsTools();
 
     // Dispatch update so state picks up mocked traces
     await act(async () => {
@@ -1352,9 +1350,7 @@ describe("SettingsPage", () => {
   it("filters actions tab entries with non-empty filter text", async () => {
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
-    const dialog = await screen.findByRole("dialog");
-    fireEvent.click(screen.getByTestId("show-details-button"));
+    const dialog = await openDiagnosticsTools();
 
     // Actions are active by default — type a filter that matches nothing
     const filterInput = within(dialog).getByTestId("diagnostics-filter-input");
@@ -1372,9 +1368,7 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
-    const dialog = await screen.findByRole("dialog");
-    fireEvent.click(screen.getByTestId("show-details-button"));
+    const dialog = await openDiagnosticsTools();
 
     // Wait for visible entry so the button is enabled
     await within(dialog).findByTestId("problem-err-sf1");

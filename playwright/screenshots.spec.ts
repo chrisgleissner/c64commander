@@ -756,95 +756,95 @@ test.describe("App screenshots", () => {
           const snapshots =
             mode === "snapshot-manager"
               ? [
-                  {
-                    id: "snap-1",
-                    filename: "c64-program-20260110-090000.c64snap",
-                    bytesBase64: buildSnap(0, 1736499600),
-                    createdAt: "2026-01-10T09:00:00.000Z",
-                    snapshotType: "program",
-                    metadata: {
-                      snapshot_type: "program",
-                      display_ranges: ["$0000\u2013$00FF", "$0200\u2013$FFFF"],
-                      created_at: "2026-01-10 09:00:00",
-                      label: "JupiterLander.crt",
-                    },
+                {
+                  id: "snap-1",
+                  filename: "c64-program-20260110-090000.c64snap",
+                  bytesBase64: buildSnap(0, 1736499600),
+                  createdAt: "2026-01-10T09:00:00.000Z",
+                  snapshotType: "program",
+                  metadata: {
+                    snapshot_type: "program",
+                    display_ranges: ["$0000\u2013$00FF", "$0200\u2013$FFFF"],
+                    created_at: "2026-01-10 09:00:00",
+                    label: "JupiterLander.crt",
                   },
-                  {
-                    id: "snap-2",
-                    filename: "c64-basic-20260110-080000.c64snap",
-                    bytesBase64: buildSnap(1, 1736496000),
-                    createdAt: "2026-01-10T08:00:00.000Z",
-                    snapshotType: "basic",
-                    metadata: {
-                      snapshot_type: "basic",
-                      display_ranges: ["$002B\u2013$0038", "$0801\u2013STREND"],
-                      created_at: "2026-01-10 08:00:00",
-                    },
+                },
+                {
+                  id: "snap-2",
+                  filename: "c64-basic-20260110-080000.c64snap",
+                  bytesBase64: buildSnap(1, 1736496000),
+                  createdAt: "2026-01-10T08:00:00.000Z",
+                  snapshotType: "basic",
+                  metadata: {
+                    snapshot_type: "basic",
+                    display_ranges: ["$002B\u2013$0038", "$0801\u2013STREND"],
+                    created_at: "2026-01-10 08:00:00",
                   },
-                  {
-                    id: "snap-3",
-                    filename: "c64-screen-20260110-070000.c64snap",
-                    bytesBase64: buildSnap(2, 1736492400),
-                    createdAt: "2026-01-10T07:00:00.000Z",
-                    snapshotType: "screen",
-                    metadata: {
-                      snapshot_type: "screen",
-                      display_ranges: ["VICBANK", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"],
-                      created_at: "2026-01-10 07:00:00",
-                    },
+                },
+                {
+                  id: "snap-3",
+                  filename: "c64-screen-20260110-070000.c64snap",
+                  bytesBase64: buildSnap(2, 1736492400),
+                  createdAt: "2026-01-10T07:00:00.000Z",
+                  snapshotType: "screen",
+                  metadata: {
+                    snapshot_type: "screen",
+                    display_ranges: ["VICBANK", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"],
+                    created_at: "2026-01-10 07:00:00",
                   },
-                  {
-                    id: "snap-4",
-                    filename: "c64-custom-20260110-060000.c64snap",
-                    bytesBase64: buildSnap(3, 1736488800),
-                    createdAt: "2026-01-10T06:00:00.000Z",
-                    snapshotType: "custom",
-                    metadata: {
-                      snapshot_type: "custom",
-                      display_ranges: ["$0400\u2013$07E7", "$2000\u2013$20FF"],
-                      created_at: "2026-01-10 06:00:00",
-                    },
+                },
+                {
+                  id: "snap-4",
+                  filename: "c64-custom-20260110-060000.c64snap",
+                  bytesBase64: buildSnap(3, 1736488800),
+                  createdAt: "2026-01-10T06:00:00.000Z",
+                  snapshotType: "custom",
+                  metadata: {
+                    snapshot_type: "custom",
+                    display_ranges: ["$0400\u2013$07E7", "$2000\u2013$20FF"],
+                    created_at: "2026-01-10 06:00:00",
                   },
-                ]
+                },
+              ]
               : [
-                  {
-                    id: "snap-1",
-                    filename: "c64-program-20260110-090000.c64snap",
-                    bytesBase64: buildSnap(0, 1736499600),
-                    createdAt: "2026-01-10T09:00:00.000Z",
-                    snapshotType: "program",
-                    metadata: {
-                      snapshot_type: "program",
-                      display_ranges: ["$0000\u2013$00FF", "$0200\u2013$FFFF"],
-                      created_at: "2026-01-10 09:00:00",
-                      label: "JupiterLander.crt",
-                    },
+                {
+                  id: "snap-1",
+                  filename: "c64-program-20260110-090000.c64snap",
+                  bytesBase64: buildSnap(0, 1736499600),
+                  createdAt: "2026-01-10T09:00:00.000Z",
+                  snapshotType: "program",
+                  metadata: {
+                    snapshot_type: "program",
+                    display_ranges: ["$0000\u2013$00FF", "$0200\u2013$FFFF"],
+                    created_at: "2026-01-10 09:00:00",
+                    label: "JupiterLander.crt",
                   },
-                  {
-                    id: "snap-2",
-                    filename: "c64-basic-20260110-080000.c64snap",
-                    bytesBase64: buildSnap(1, 1736496000),
-                    createdAt: "2026-01-10T08:00:00.000Z",
-                    snapshotType: "basic",
-                    metadata: {
-                      snapshot_type: "basic",
-                      display_ranges: ["$002B\u2013$0038", "$0801\u2013STREND"],
-                      created_at: "2026-01-10 08:00:00",
-                    },
+                },
+                {
+                  id: "snap-2",
+                  filename: "c64-basic-20260110-080000.c64snap",
+                  bytesBase64: buildSnap(1, 1736496000),
+                  createdAt: "2026-01-10T08:00:00.000Z",
+                  snapshotType: "basic",
+                  metadata: {
+                    snapshot_type: "basic",
+                    display_ranges: ["$002B\u2013$0038", "$0801\u2013STREND"],
+                    created_at: "2026-01-10 08:00:00",
                   },
-                  {
-                    id: "snap-3",
-                    filename: "c64-screen-20260110-070000.c64snap",
-                    bytesBase64: buildSnap(2, 1736492400),
-                    createdAt: "2026-01-10T07:00:00.000Z",
-                    snapshotType: "screen",
-                    metadata: {
-                      snapshot_type: "screen",
-                      display_ranges: ["VICBANK", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"],
-                      created_at: "2026-01-10 07:00:00",
-                    },
+                },
+                {
+                  id: "snap-3",
+                  filename: "c64-screen-20260110-070000.c64snap",
+                  bytesBase64: buildSnap(2, 1736492400),
+                  createdAt: "2026-01-10T07:00:00.000Z",
+                  snapshotType: "screen",
+                  metadata: {
+                    snapshot_type: "screen",
+                    display_ranges: ["VICBANK", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"],
+                    created_at: "2026-01-10 07:00:00",
                   },
-                ];
+                },
+              ];
 
           localStorage.setItem(
             "c64u_snapshots:v1",
@@ -1234,6 +1234,109 @@ test.describe("App screenshots", () => {
     "capture diagnostics screenshots",
     { tag: "@screenshots" },
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      const seedTraceState = async (events: unknown[]) => {
+        await page.evaluate((seed) => {
+          const tracing = (
+            window as Window & {
+              __c64uTracing?: { seedTraces?: (events: unknown[]) => void };
+            }
+          ).__c64uTracing;
+          tracing?.seedTraces?.(seed);
+        }, events);
+      };
+
+      const buildContextFields = () => ({
+        lifecycleState: "foreground",
+        sourceKind: null,
+        localAccessMode: null,
+        trackInstanceId: null,
+        playlistItemId: null,
+      });
+
+      const buildHealthyEvents = () => {
+        const now = Date.now();
+        return [
+          {
+            id: "SCR-100",
+            timestamp: new Date(now).toISOString(),
+            relativeMs: 0,
+            type: "rest-response",
+            origin: "user",
+            correlationId: "SCR-COR-1",
+            data: {
+              ...buildContextFields(),
+              method: "GET",
+              path: "/v1/info",
+              status: 200,
+              error: null,
+            },
+          },
+          {
+            id: "SCR-101",
+            timestamp: new Date(now + 100).toISOString(),
+            relativeMs: 100,
+            type: "ftp-operation",
+            origin: "user",
+            correlationId: "SCR-COR-1",
+            data: {
+              ...buildContextFields(),
+              operation: "LIST",
+              path: "/Usb0",
+              result: "success",
+              error: null,
+            },
+          },
+          {
+            id: "SCR-102",
+            timestamp: new Date(now + 150).toISOString(),
+            relativeMs: 150,
+            type: "action-start",
+            origin: "user",
+            correlationId: "SCR-COR-1",
+            data: {
+              ...buildContextFields(),
+              name: "Configuration updated successfully",
+            },
+          },
+          {
+            id: "SCR-103",
+            timestamp: new Date(now + 220).toISOString(),
+            relativeMs: 220,
+            type: "action-end",
+            origin: "user",
+            correlationId: "SCR-COR-1",
+            data: {
+              ...buildContextFields(),
+              status: "success",
+              error: null,
+            },
+          },
+        ];
+      };
+
+      const buildUnhealthyEvents = () => {
+        const healthyEvents = buildHealthyEvents();
+        const now = Date.now();
+        return [
+          ...healthyEvents,
+          {
+            id: "SCR-104",
+            timestamp: new Date(now + 300).toISOString(),
+            relativeMs: 300,
+            type: "rest-response",
+            origin: "user",
+            correlationId: "SCR-COR-2",
+            data: {
+              ...buildContextFields(),
+              method: "PUT",
+              path: "/v1/configs/Audio/Volume",
+              status: 403,
+              error: "HTTP 403",
+            },
+          },
+        ];
+      };
+
       const openDiagnostics = async () => {
         await page.goto("/");
         await applyDisplayProfileViewport(page, "medium");
@@ -1242,181 +1345,59 @@ test.describe("App screenshots", () => {
         await page.waitForFunction(() =>
           Boolean((window as Window & { __c64uTracing?: { seedTraces?: unknown } }).__c64uTracing?.seedTraces),
         );
-        await seedDiagnosticsTraces(page);
         await seedDiagnosticsAnalytics(page);
+
+        const dialog = page.getByRole("dialog", { name: "Diagnostics" });
+        if (await dialog.isVisible().catch(() => false)) {
+          return dialog;
+        }
 
         const diagnosticsButton = page.getByTestId("unified-health-badge");
         await diagnosticsButton.scrollIntoViewIfNeeded();
         await diagnosticsButton.click();
-
-        const dialog = page.getByRole("dialog", { name: "Diagnostics" });
         await expect(dialog).toBeVisible();
         return dialog;
       };
 
-      const resetEvidenceFilters = async (dialog: ReturnType<Page["getByRole"]>) => {
-        const resetButton = dialog.getByTestId("reset-filters-button");
-        if (await resetButton.isVisible().catch(() => false)) {
-          await resetButton.click();
+      const ensureTechnicalDetailsExpanded = async (dialog: ReturnType<Page["getByRole"]>) => {
+        const toggle = dialog.getByTestId("technical-details-toggle");
+        if ((await toggle.getAttribute("aria-expanded")) !== "true") {
+          await toggle.click();
         }
       };
 
-      const openToolsMenu = async (dialog: ReturnType<Page["getByRole"]>) => {
-        await dialog.getByTestId("diagnostics-tools-menu").click();
-      };
-
-      const openRefinePanelIfNeeded = async (dialog: ReturnType<Page["getByRole"]>, targetTestId: string) => {
-        const target = dialog.getByTestId(targetTestId);
-        if (await target.isVisible().catch(() => false)) return;
-        const refineButton = dialog.getByTestId("refine-button");
-        if (await refineButton.isVisible().catch(() => false)) {
-          await refineButton.click();
-          await expect(target).toBeVisible();
+      const ensureToolsExpanded = async (dialog: ReturnType<Page["getByRole"]>) => {
+        await ensureTechnicalDetailsExpanded(dialog);
+        const toggle = dialog.getByTestId("tools-card-toggle");
+        if ((await toggle.getAttribute("aria-expanded")) !== "true") {
+          await toggle.click();
         }
       };
 
-      const ensureSummaryExpanded = async (dialog: ReturnType<Page["getByRole"]>) => {
-        const summary = dialog.getByTestId("health-summary");
-        if (await summary.isVisible().catch(() => false)) {
-          await summary.scrollIntoViewIfNeeded();
-        }
-        const deviceDetailButton = dialog.getByTestId("open-device-detail");
-        if (await deviceDetailButton.isVisible().catch(() => false)) {
-          await deviceDetailButton.scrollIntoViewIfNeeded();
-          return;
-        }
-        const expandButton = dialog.getByLabel("Expand health summary");
-        if (await expandButton.isVisible().catch(() => false)) {
-          await expandButton.scrollIntoViewIfNeeded();
-          await expandButton.click();
-          await expect(deviceDetailButton).toBeVisible();
-          await deviceDetailButton.scrollIntoViewIfNeeded();
-        }
-      };
+      await seedTraceState(buildHealthyEvents());
+      let dialog = await openDiagnostics();
+      await captureDiagnosticsScreenshot(page, testInfo, "diagnostics/healthy-collapsed.png");
 
-      const closeTransientSurface = async () => {
-        await page.keyboard.press("Escape");
-        await page.waitForTimeout(120);
-      };
+      await dialog.getByTestId("show-details-button").click();
+      await expect(dialog.getByTestId("evidence-preview-card")).toBeVisible();
+      await expect(dialog.getByTestId("technical-details-card")).toBeVisible();
+      await captureDiagnosticsScreenshot(page, testInfo, "diagnostics/healthy-expanded.png");
 
-      const dialog = await openDiagnostics();
+      await page.keyboard.press("Escape");
+      await expect(dialog).toBeHidden();
 
-      await captureDiagnosticsScreenshot(page, testInfo, "01-entry/01-overview.png");
+      await seedTraceState(buildUnhealthyEvents());
+      dialog = await openDiagnostics();
+      await expect(dialog.getByText("Needs attention")).toBeVisible();
+      await captureDiagnosticsScreenshot(page, testInfo, "diagnostics/unhealthy-collapsed.png");
 
-      const actionSummary = dialog.locator('[data-testid^="action-summary-"]').first();
-      if ((await actionSummary.count()) > 0 && (await actionSummary.isVisible().catch(() => false))) {
-        await actionSummary.evaluate((node) => {
-          (node as HTMLDetailsElement).open = true;
-        });
-        await expect(actionSummary).toHaveJSProperty("open", true);
-        await captureDiagnosticsScreenshot(page, testInfo, "02-activity/01-actions-detail.png");
-      }
+      await dialog.getByTestId("show-details-button").click();
+      await expect(dialog.getByTestId("issue-card")).toBeVisible();
+      await captureDiagnosticsScreenshot(page, testInfo, "diagnostics/unhealthy-issue-expanded.png");
 
-      await resetEvidenceFilters(dialog);
-      await dialog.getByTestId("evidence-toggle-actions").click();
-      await dialog.getByTestId("evidence-toggle-problems").click();
-      await dialog.getByTestId("evidence-toggle-logs").click();
-      await openRefinePanelIfNeeded(dialog, "severity-toggle-errors");
-      await dialog.getByTestId("severity-toggle-errors").click();
-      await captureDiagnosticsScreenshot(page, testInfo, "02-activity/02-logs-errors-filtered.png");
-      const logEntry = dialog.locator('[data-testid^="log-"]').first();
-      if ((await logEntry.count()) > 0 && (await logEntry.isVisible().catch(() => false))) {
-        await logEntry.evaluate((node) => {
-          (node as HTMLDetailsElement).open = true;
-        });
-      }
-
-      await resetEvidenceFilters(dialog);
-      await dialog.getByTestId("evidence-toggle-actions").click();
-      await dialog.getByTestId("evidence-toggle-problems").click();
-      await dialog.getByTestId("evidence-toggle-traces").click();
-      await openRefinePanelIfNeeded(dialog, "indicator-toggle-rest");
-      await dialog.getByTestId("indicator-toggle-rest").click();
-      await captureDiagnosticsScreenshot(page, testInfo, "02-activity/03-rest-traces-filtered.png");
-      const traceItem = dialog.locator('[data-testid^="trace-"]').first();
-      if ((await traceItem.count()) > 0 && (await traceItem.isVisible().catch(() => false))) {
-        await traceItem.evaluate((node) => {
-          (node as HTMLDetailsElement).open = true;
-        });
-        await captureDiagnosticsScreenshot(page, testInfo, "02-activity/04-rest-trace-detail.png");
-      }
-
-      await resetEvidenceFilters(dialog);
-      const problemItem = dialog.locator('[data-testid^="problem-"]').first();
-      if ((await problemItem.count()) > 0 && (await problemItem.isVisible().catch(() => false))) {
-        await problemItem.evaluate((node) => {
-          (node as HTMLDetailsElement).open = true;
-        });
-        await captureDiagnosticsScreenshot(page, testInfo, "02-activity/05-problems-detail.png");
-      }
-
-      await ensureSummaryExpanded(dialog);
-      await dialog.getByTestId("open-device-detail").click();
-      await expect(dialog.getByTestId("device-detail-view")).toBeVisible();
-      await captureDiagnosticsScreenshot(page, testInfo, "03-summary/01-device-detail.png");
-      await dialog.getByTestId("device-detail-back").click();
-
-      await ensureSummaryExpanded(dialog);
-      if (
-        await dialog
-          .getByTestId("open-health-check-detail")
-          .isVisible()
-          .catch(() => false)
-      ) {
-        await dialog.getByTestId("open-health-check-detail").click();
-        await expect(dialog.getByTestId("health-check-detail-view")).toBeVisible();
-        await captureDiagnosticsScreenshot(page, testInfo, "03-summary/02-health-check-detail.png");
-        await dialog.getByTestId("health-check-detail-back").click();
-      }
-
-      await ensureSummaryExpanded(dialog);
-      if (
-        await dialog
-          .getByTestId("latency-summary-row")
-          .isVisible()
-          .catch(() => false)
-      ) {
-        await dialog.getByTestId("latency-summary-row").click();
-        await expect(page.getByTestId("latency-analysis-popup")).toBeVisible();
-        await captureDiagnosticsScreenshot(page, testInfo, "03-summary/03-latency-analysis.png");
-        await closeTransientSurface();
-      }
-
-      await ensureSummaryExpanded(dialog);
-      await dialog.getByTestId("health-history-row").click();
-      await expect(page.getByTestId("health-history-popup")).toBeVisible();
-      await captureDiagnosticsScreenshot(page, testInfo, "03-summary/04-health-history.png");
-      await closeTransientSurface();
-
-      await openToolsMenu(dialog);
-      await page.getByTestId("open-heatmap-rest").click();
-      await expect(page.getByTestId("heat-map-popup-rest")).toBeVisible();
-      await captureDiagnosticsScreenshot(page, testInfo, "04-tools/01-heat-maps/01-rest-heat-map.png");
-      await closeTransientSurface();
-
-      await openToolsMenu(dialog);
-      await page.getByTestId("open-heatmap-ftp").click();
-      await expect(page.getByTestId("heat-map-popup-ftp")).toBeVisible();
-      await captureDiagnosticsScreenshot(page, testInfo, "04-tools/01-heat-maps/02-ftp-heat-map.png");
-      await closeTransientSurface();
-
-      await openToolsMenu(dialog);
-      await page.getByTestId("open-heatmap-config").click();
-      await expect(page.getByTestId("heat-map-popup-config")).toBeVisible();
-      await captureDiagnosticsScreenshot(page, testInfo, "04-tools/01-heat-maps/03-config-heat-map.png");
-      await closeTransientSurface();
-
-      await openToolsMenu(dialog);
-      await page.getByTestId("open-config-drift").click();
-      await expect(dialog.getByTestId("config-drift-view")).toBeVisible();
-      await captureDiagnosticsScreenshot(page, testInfo, "04-tools/02-config/01-config-drift.png");
-      await dialog.getByTestId("config-drift-back").click();
-
-      await openToolsMenu(dialog);
-      await page.getByTestId("diagnostics-clear-all-trigger").click();
-      await expect(page.getByRole("alertdialog")).toBeVisible();
-      await captureDiagnosticsScreenshot(page, testInfo, "04-tools/03-clear/01-clear-confirmation.png");
-      await page.getByRole("button", { name: "Cancel" }).click();
+      await ensureToolsExpanded(dialog);
+      await expect(dialog.getByTestId("evidence-full-view")).toBeVisible();
+      await captureDiagnosticsScreenshot(page, testInfo, "diagnostics/full-drill-down-tools-visible.png");
 
       await page.keyboard.press("Escape");
       await expect(dialog).toBeHidden();

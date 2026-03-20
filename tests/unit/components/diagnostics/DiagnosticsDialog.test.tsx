@@ -149,6 +149,20 @@ describe("DiagnosticsDialog", () => {
     return { props, ...render(<DiagnosticsDialog {...props} />) };
   };
 
+  const openToolsView = () => {
+    fireEvent.click(screen.getByTestId("show-details-button"));
+
+    const technicalDetailsToggle = screen.getByTestId("technical-details-toggle");
+    if (technicalDetailsToggle.getAttribute("aria-expanded") !== "true") {
+      fireEvent.click(technicalDetailsToggle);
+    }
+
+    const toolsToggle = screen.getByTestId("tools-card-toggle");
+    if (toolsToggle.getAttribute("aria-expanded") !== "true") {
+      fireEvent.click(toolsToggle);
+    }
+  };
+
   it("shows logs and filters them by search text", () => {
     const onShareFiltered = vi.fn();
     renderDialog({
@@ -161,8 +175,7 @@ describe("DiagnosticsDialog", () => {
       onShareFiltered,
     });
 
-    // Expand full details view first
-    fireEvent.click(screen.getByTestId("show-details-button"));
+    openToolsView();
 
     // Both entries visible initially
     expect(screen.getByTestId("log-log-1")).toBeInTheDocument();
@@ -204,8 +217,7 @@ describe("DiagnosticsDialog", () => {
       ],
     });
 
-    // Expand full details view first
-    fireEvent.click(screen.getByTestId("show-details-button"));
+    openToolsView();
 
     expect(screen.getByTestId("action-act-1")).toBeInTheDocument();
     expect(screen.getByTestId("action-act-2")).toBeInTheDocument();
@@ -228,8 +240,7 @@ describe("DiagnosticsDialog", () => {
       ],
     });
 
-    // Expand full details view first
-    fireEvent.click(screen.getByTestId("show-details-button"));
+    openToolsView();
 
     // REST failure should appear as a problem entry
     expect(screen.getByTestId("problem-rest-fail-1")).toBeInTheDocument();
@@ -247,11 +258,11 @@ describe("DiagnosticsDialog", () => {
         },
       ],
     });
-    fireEvent.click(screen.getByTestId("show-details-button"));
+    openToolsView();
     expect(screen.getByTestId("problem-ftp-fail-1")).toBeInTheDocument();
   });
 
-  it("uses compact health-check labels and shows the last-check shortcut when a result exists", () => {
+  it("uses the technical health-check controls and shows the last-check shortcut when a result exists", () => {
     currentDialogProfile = "compact";
 
     renderDialog({
@@ -274,9 +285,9 @@ describe("DiagnosticsDialog", () => {
       },
     });
 
-    fireEvent.click(screen.getByTestId("show-details-button"));
-    expect(screen.getByTestId("run-health-check-button")).toHaveTextContent("Run check");
-    expect(screen.getByTestId("open-health-check-detail")).toHaveTextContent("Last check");
+    openToolsView();
+    expect(screen.getByTestId("technical-run-health-check-button")).toHaveTextContent("Run health check");
+    expect(screen.getByTestId("open-health-check-detail")).toHaveTextContent("Last health check");
   });
 
   it("shows the running health-check label when a check is already in progress", () => {
@@ -287,9 +298,9 @@ describe("DiagnosticsDialog", () => {
       healthCheckRunning: true,
     });
 
-    fireEvent.click(screen.getByTestId("show-details-button"));
-    expect(screen.getByTestId("run-health-check-button")).toHaveTextContent("Running health check…");
-    expect(screen.getByTestId("run-health-check-button")).toBeDisabled();
+    openToolsView();
+    expect(screen.getByTestId("technical-run-health-check-button")).toHaveTextContent("Running health check…");
+    expect(screen.getByTestId("technical-run-health-check-button")).toBeDisabled();
     expect(screen.queryByTestId("open-health-check-detail")).not.toBeInTheDocument();
   });
 
@@ -306,7 +317,7 @@ describe("DiagnosticsDialog", () => {
       ],
     });
 
-    fireEvent.click(screen.getByTestId("show-details-button"));
+    openToolsView();
     // Should appear as a problem, not duplicated as a trace
     expect(screen.getByTestId("problem-rest-fail-2")).toBeInTheDocument();
     expect(screen.queryByTestId("trace-rest-fail-2")).not.toBeInTheDocument();
@@ -326,7 +337,7 @@ describe("DiagnosticsDialog", () => {
       ],
     });
 
-    fireEvent.click(screen.getByTestId("show-details-button"));
+    openToolsView();
     const appProblem = screen.getByTestId("problem-err-app-1");
     expect(appProblem.textContent).toContain("App");
 
@@ -365,7 +376,7 @@ describe("DiagnosticsDialog", () => {
       ],
     });
 
-    fireEvent.click(screen.getByTestId("show-details-button"));
+    openToolsView();
     // All three visible initially (no indicator filter)
     expect(screen.getByTestId("trace-trace-rest-1")).toBeInTheDocument();
     expect(screen.getByTestId("trace-trace-ftp-1")).toBeInTheDocument();
@@ -400,7 +411,7 @@ describe("DiagnosticsDialog", () => {
       ],
     });
 
-    fireEvent.click(screen.getByTestId("show-details-button"));
+    openToolsView();
     // Both problem entries visible initially
     expect(screen.getByTestId("problem-rest-fail-user")).toBeInTheDocument();
     expect(screen.getByTestId("problem-rest-fail-system")).toBeInTheDocument();
@@ -439,7 +450,7 @@ describe("DiagnosticsDialog", () => {
       ],
     });
 
-    fireEvent.click(screen.getByTestId("show-details-button"));
+    openToolsView();
     // Both actions visible initially
     expect(screen.getByTestId("action-act-user")).toBeInTheDocument();
     expect(screen.getByTestId("action-act-system")).toBeInTheDocument();
@@ -474,7 +485,7 @@ describe("DiagnosticsDialog", () => {
       ],
     });
 
-    fireEvent.click(screen.getByTestId("show-details-button"));
+    openToolsView();
     // Both visible initially
     expect(screen.getByTestId("trace-trace-user-1")).toBeInTheDocument();
     expect(screen.getByTestId("trace-trace-system-1")).toBeInTheDocument();
@@ -488,11 +499,10 @@ describe("DiagnosticsDialog", () => {
     expect(screen.queryByTestId("trace-trace-system-1")).not.toBeInTheDocument();
   });
 
-  it("clicking primary problem spotlight on compact profile auto-expands the problem and enables Problems filter", () => {
+  it("reveals the issue card from the compact unhealthy summary after disclosure", () => {
     currentDialogProfile = "compact";
     renderDialog({
       healthState: primaryProblemHealthState,
-      // Start without Problems in activeTypes so the spotlight adds it
       defaultEvidenceTypes: new Set(["Actions"]),
       errorLogs: [
         {
@@ -503,22 +513,15 @@ describe("DiagnosticsDialog", () => {
       ],
     });
 
-    // Primary problem spotlight is visible
-    const spotlight = screen.getByTestId("primary-problem-spotlight");
-    expect(spotlight).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("show-details-button"));
 
-    // Click — this covers handleSpotlightSelect: line 765 (false), 766-777 (body), 776 (isCompact true)
-    fireEvent.click(spotlight);
-
-    // Problems filter should now be active (problem entry appears)
-    expect(screen.getByTestId("problem-problem-1")).toBeInTheDocument();
+    expect(screen.getByTestId("issue-card")).toBeInTheDocument();
   });
 
-  it("clicking primary problem spotlight on medium profile when Problems already active returns early in setActiveTypes", () => {
+  it("keeps problem entries visible after disclosure when problems are already active", () => {
     currentDialogProfile = "medium";
     renderDialog({
       healthState: primaryProblemHealthState,
-      // Problems already active — setActiveTypes callback hits the early-return branch
       defaultEvidenceTypes: new Set(["Problems"]),
       errorLogs: [
         {
@@ -529,10 +532,8 @@ describe("DiagnosticsDialog", () => {
       ],
     });
 
-    const spotlight = screen.getByTestId("primary-problem-spotlight");
-    fireEvent.click(spotlight);
+    openToolsView();
 
-    // Problem still visible after clicking spotlight
     expect(screen.getByTestId("problem-problem-1")).toBeInTheDocument();
   });
 
@@ -548,7 +549,7 @@ describe("DiagnosticsDialog", () => {
       onClearAll,
     });
 
-    fireEvent.click(screen.getByTestId("show-details-button"));
+    openToolsView();
     const dialog = screen.getByRole("dialog");
     fireEvent.click(within(dialog).getByTestId("diagnostics-share-all"));
     fireEvent.click(within(dialog).getByTestId("diagnostics-share-filtered"));

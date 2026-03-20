@@ -6,736 +6,279 @@ import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
 import type { OverallHealthState } from "@/lib/diagnostics/healthModel";
 
 const setViewportWidth = (width: number) => {
-  Object.defineProperty(window, "innerWidth", {
-    configurable: true,
-    writable: true,
-    value: width,
-  });
+    Object.defineProperty(window, "innerWidth", {
+        configurable: true,
+        writable: true,
+        value: width,
+    });
 };
 
-const idleHealthState: OverallHealthState = {
-  state: "Idle",
-  connectivity: "Online",
-  host: "c64u",
-  problemCount: 0,
-  contributors: {
-    App: { state: "Idle", problemCount: 0, totalOperations: 0, failedOperations: 0 },
-    REST: { state: "Idle", problemCount: 0, totalOperations: 0, failedOperations: 0 },
-    FTP: { state: "Idle", problemCount: 0, totalOperations: 0, failedOperations: 0 },
-  },
-  lastRestActivity: null,
-  lastFtpActivity: null,
-  primaryProblem: null,
+const renderDialog = (props?: Partial<typeof defaultProps>) =>
+    render(
+        <DisplayProfileProvider>
+            <DiagnosticsDialog {...defaultProps} {...props} />
+        </DisplayProfileProvider>,
+    );
+
+const healthyHealthState: OverallHealthState = {
+    state: "Healthy",
+    connectivity: "Online",
+    host: "c64u",
+    connectedDeviceLabel: "C64U",
+    problemCount: 0,
+    contributors: {
+        App: { state: "Healthy", problemCount: 0, totalOperations: 3, failedOperations: 0 },
+        REST: { state: "Healthy", problemCount: 0, totalOperations: 4, failedOperations: 0 },
+        FTP: { state: "Healthy", problemCount: 0, totalOperations: 2, failedOperations: 0 },
+    },
+    lastRestActivity: { operation: "GET /v1/info", result: "200", timestampMs: Date.now() - 5_000 },
+    lastFtpActivity: { operation: "LIST /Usb0", result: "success", timestampMs: Date.now() - 8_000 },
+    primaryProblem: null,
 };
 
-const defaultProps = {
-  open: true,
-  onOpenChange: vi.fn(),
-  healthState: idleHealthState,
-  logs: [],
-  errorLogs: [],
-  traceEvents: [],
-  actionSummaries: [],
-  onShareAll: vi.fn(),
-  onShareFiltered: vi.fn(),
-  onClearAll: vi.fn(),
-  onRetryConnection: vi.fn(),
-};
-
-describe("DiagnosticsDialog", () => {
-  it("adds compact inner padding so the title and toolbar do not sit flush to the fullscreen shell", () => {
-    localStorage.clear();
-    setViewportWidth(360);
-
-    render(
-      <DisplayProfileProvider>
-        <DiagnosticsDialog {...defaultProps} />
-      </DisplayProfileProvider>,
-    );
-
-    const title = screen.getByText("Diagnostics");
-    expect(title.closest("div.border-b")).toHaveClass("px-3");
-  });
-
-  it("keeps medium and expanded padding aligned with tighter list-browser rhythm", () => {
-    localStorage.clear();
-    setViewportWidth(900);
-
-    render(
-      <DisplayProfileProvider>
-        <DiagnosticsDialog {...defaultProps} />
-      </DisplayProfileProvider>,
-    );
-
-    const title = screen.getByText("Diagnostics");
-    expect(title.closest("div.border-b")).toHaveClass("px-4");
-    expect(title.closest("div.border-b")).not.toHaveClass("px-6");
-  });
-
-  it("status-summary-card is visible in the initial summary view", () => {
-    localStorage.clear();
-    setViewportWidth(600);
-
-    render(
-      <DisplayProfileProvider>
-        <DiagnosticsDialog {...defaultProps} />
-      </DisplayProfileProvider>,
-    );
-
-    expect(screen.getByTestId("status-summary-card")).toBeVisible();
-    expect(screen.getByTestId("show-details-button")).toBeVisible();
-  });
-
-  it("subtitle is hidden in summary view and visible after expanding to full details", () => {
-    localStorage.clear();
-    setViewportWidth(600);
-
-    render(
-      <DisplayProfileProvider>
-        <DiagnosticsDialog {...defaultProps} />
-      </DisplayProfileProvider>,
-    );
-
-    expect(screen.getByTestId("diagnostics-subtitle")).toHaveClass("hidden");
-
-    fireEvent.click(screen.getByTestId("show-details-button"));
-
-    const description = screen.getByTestId("diagnostics-subtitle");
-    expect(description).not.toHaveClass("hidden");
-    expect(description).toHaveTextContent("Health, status, and recent evidence.");
-    expect(description).toHaveClass("truncate");
-    expect(description).toHaveClass("whitespace-nowrap");
-  });
-
-  it("shows empty session message when no data and no filters active", () => {
-    localStorage.clear();
-    setViewportWidth(600);
-
-    render(
-      <DisplayProfileProvider>
-        <DiagnosticsDialog {...defaultProps} />
-      </DisplayProfileProvider>,
-    );
-
-    fireEvent.click(screen.getByTestId("show-details-button"));
-
-    expect(screen.getByTestId("diagnostics-empty-message")).toBeVisible();
-  });
-
-  it("shows evidence type toggles — Problems and Actions active by default", () => {
-    localStorage.clear();
-    setViewportWidth(600);
-
-    render(
-      <DisplayProfileProvider>
-        <DiagnosticsDialog {...defaultProps} />
-      </DisplayProfileProvider>,
-    );
-
-    fireEvent.click(screen.getByTestId("show-details-button"));
-
-    const problemsBtn = screen.getByTestId("evidence-toggle-problems");
-    const actionsBtn = screen.getByTestId("evidence-toggle-actions");
-    const logsBtn = screen.getByTestId("evidence-toggle-logs");
-    const tracesBtn = screen.getByTestId("evidence-toggle-traces");
-
-    expect(problemsBtn).toHaveAttribute("aria-pressed", "true");
-    expect(actionsBtn).toHaveAttribute("aria-pressed", "true");
-    expect(logsBtn).toHaveAttribute("aria-pressed", "false");
-    expect(tracesBtn).toHaveAttribute("aria-pressed", "false");
-  });
-
-  it("shows health summary with connectivity and overall health row", () => {
-    localStorage.clear();
-    setViewportWidth(600);
-
-    render(
-      <DisplayProfileProvider>
-        <DiagnosticsDialog
-          {...defaultProps}
-          healthState={{ ...idleHealthState, state: "Healthy", connectivity: "Online" }}
-        />
-      </DisplayProfileProvider>,
-    );
-
-    fireEvent.click(screen.getByTestId("show-details-button"));
-
-    expect(screen.getByTestId("health-summary")).toBeVisible();
-    expect(screen.getByTestId("overall-health-row")).toBeVisible();
-  });
-
-  it("shows contributor rows for App, REST, FTP", () => {
-    localStorage.clear();
-    setViewportWidth(600);
-
-    render(
-      <DisplayProfileProvider>
-        <DiagnosticsDialog {...defaultProps} />
-      </DisplayProfileProvider>,
-    );
-
-    fireEvent.click(screen.getByTestId("show-details-button"));
-
-    expect(screen.getByTestId("contributor-row-app")).toBeVisible();
-    expect(screen.getByTestId("contributor-row-rest")).toBeVisible();
-    expect(screen.getByTestId("contributor-row-ftp")).toBeVisible();
-  });
-
-  it("shows retry connection button when connectivity is Offline (after expanding to full details)", () => {
-    localStorage.clear();
-    setViewportWidth(600);
-
-    render(
-      <DisplayProfileProvider>
-        <DiagnosticsDialog
-          {...defaultProps}
-          healthState={{ ...idleHealthState, state: "Unavailable", connectivity: "Offline" }}
-        />
-      </DisplayProfileProvider>,
-    );
-
-    fireEvent.click(screen.getByTestId("show-details-button"));
-
-    expect(screen.getByTestId("retry-connection-button")).toBeVisible();
-  });
-
-  it("does not show retry button in summary view when connectivity is Offline and no connectionCallbacks", () => {
-    localStorage.clear();
-    setViewportWidth(600);
-
-    render(
-      <DisplayProfileProvider>
-        <DiagnosticsDialog
-          {...defaultProps}
-          healthState={{ ...idleHealthState, state: "Unavailable", connectivity: "Offline" }}
-        />
-      </DisplayProfileProvider>,
-    );
-
-    // retry button is in HealthSummary (full-details only)
-    expect(screen.queryByTestId("retry-connection-button")).toBeNull();
-  });
-
-  it("does not show retry button when connectivity is Online", () => {
-    localStorage.clear();
-    setViewportWidth(600);
-
-    render(
-      <DisplayProfileProvider>
-        <DiagnosticsDialog {...defaultProps} />
-      </DisplayProfileProvider>,
-    );
-
-    fireEvent.click(screen.getByTestId("show-details-button"));
-
-    expect(screen.queryByTestId("retry-connection-button")).toBeNull();
-  });
-
-  it("shows search input on medium and expanded profiles", () => {
-    localStorage.clear();
-    setViewportWidth(600);
-
-    render(
-      <DisplayProfileProvider>
-        <DiagnosticsDialog {...defaultProps} />
-      </DisplayProfileProvider>,
-    );
-
-    fireEvent.click(screen.getByTestId("show-details-button"));
-
-    expect(screen.getByTestId("diagnostics-filter-input")).toBeVisible();
-  });
-
-  it("does not show search input on compact profile (behind Refine)", () => {
-    localStorage.clear();
-    setViewportWidth(360);
-
-    render(
-      <DisplayProfileProvider>
-        <DiagnosticsDialog {...defaultProps} />
-      </DisplayProfileProvider>,
-    );
-
-    fireEvent.click(screen.getByTestId("show-details-button"));
-
-    expect(screen.queryByTestId("diagnostics-filter-input")).toBeNull();
-  });
-
-  it("uses tooltip triggers to distinguish filters from the activity stream", () => {
-    localStorage.clear();
-    setViewportWidth(600);
-
-    render(
-      <DisplayProfileProvider>
-        <DiagnosticsDialog {...defaultProps} />
-      </DisplayProfileProvider>,
-    );
-
-    fireEvent.click(screen.getByTestId("show-details-button"));
-
-    expect(screen.getByTestId("filters-help")).toBeVisible();
-    expect(screen.getByTestId("activity-help")).toBeVisible();
-  });
-
-  it("shows Share all and Share filtered buttons in a pinned action shelf", () => {
-    localStorage.clear();
-    setViewportWidth(600);
-
-    render(
-      <DisplayProfileProvider>
-        <DiagnosticsDialog {...defaultProps} />
-      </DisplayProfileProvider>,
-    );
-
-    fireEvent.click(screen.getByTestId("show-details-button"));
-
-    expect(screen.getByTestId("diagnostics-action-shelf")).toHaveClass("sticky");
-    expect(screen.getByTestId("diagnostics-share-all")).toBeVisible();
-    expect(screen.getByTestId("diagnostics-share-filtered")).toBeVisible();
-    expect(screen.getByTestId("diagnostics-tools-menu")).toBeVisible();
-  });
-
-  it("uses a non-wrapping More filters label on compact layouts", () => {
-    localStorage.clear();
-    setViewportWidth(360);
-
-    render(
-      <DisplayProfileProvider>
-        <DiagnosticsDialog {...defaultProps} />
-      </DisplayProfileProvider>,
-    );
-
-    fireEvent.click(screen.getByTestId("show-details-button"));
-
-    expect(screen.getByTestId("refine-button")).toHaveTextContent("More filters");
-    expect(screen.getByTestId("refine-button")).toHaveClass("whitespace-nowrap");
-  });
-
-  it("shows config drift, heat maps, and clear actions inside the tools menu", () => {
-    localStorage.clear();
-    setViewportWidth(600);
-
-    render(
-      <DisplayProfileProvider>
-        <DiagnosticsDialog {...defaultProps} />
-      </DisplayProfileProvider>,
-    );
-
-    fireEvent.click(screen.getByTestId("show-details-button"));
-    fireEvent.pointerDown(screen.getByTestId("diagnostics-tools-menu"));
-    expect(screen.getByTestId("open-config-drift")).toBeVisible();
-    expect(screen.getByTestId("open-heatmap-config")).toBeVisible();
-    expect(screen.getByTestId("diagnostics-clear-all-trigger")).toBeVisible();
-  });
-
-  it("shows contributor and severity filters for multi-dimensional narrowing", () => {
-    localStorage.clear();
-    setViewportWidth(900);
-
-    render(
-      <DisplayProfileProvider>
-        <DiagnosticsDialog {...defaultProps} />
-      </DisplayProfileProvider>,
-    );
-
-    fireEvent.click(screen.getByTestId("show-details-button"));
-
-    expect(screen.getByTestId("indicator-toggle-app")).toBeVisible();
-    expect(screen.getByTestId("indicator-toggle-rest")).toBeVisible();
-    expect(screen.getByTestId("severity-toggle-errors")).toBeVisible();
-    expect(screen.getByTestId("severity-toggle-info")).toBeVisible();
-  });
-
-  it("auto-collapses the summary on compact screens when raw evidence filtering starts", () => {
-    localStorage.clear();
-    setViewportWidth(360);
-
-    render(
-      <DisplayProfileProvider>
-        <DiagnosticsDialog {...defaultProps} />
-      </DisplayProfileProvider>,
-    );
-
-    fireEvent.click(screen.getByTestId("show-details-button"));
-    fireEvent.click(screen.getByTestId("refine-button"));
-    fireEvent.click(screen.getByTestId("severity-toggle-errors"));
-
-    expect(screen.getByLabelText("Expand health summary")).toBeVisible();
-  });
-
-  it("opens health check detail when a last health check result exists", async () => {
-    localStorage.clear();
-    setViewportWidth(600);
-
-    render(
-      <DisplayProfileProvider>
-        <DiagnosticsDialog
-          {...defaultProps}
-          onRunHealthCheck={vi.fn()}
-          lastHealthCheckResult={{
-            runId: "hcr-0001",
-            startTimestamp: "2026-03-19T10:00:00.000Z",
-            endTimestamp: "2026-03-19T10:00:01.000Z",
-            totalDurationMs: 1000,
-            overallHealth: "Healthy",
-            latency: { p50: 10, p90: 20, p99: 30 },
-            probes: {
-              REST: { probe: "REST", outcome: "Success", durationMs: 10, reason: null, startMs: 1 },
-              JIFFY: { probe: "JIFFY", outcome: "Success", durationMs: 20, reason: null, startMs: 2 },
-              RASTER: { probe: "RASTER", outcome: "Skipped", durationMs: null, reason: "Unsupported", startMs: 3 },
-              CONFIG: { probe: "CONFIG", outcome: "Success", durationMs: 30, reason: null, startMs: 4 },
-              FTP: { probe: "FTP", outcome: "Success", durationMs: 40, reason: null, startMs: 5 },
-            },
-          }}
-        />
-      </DisplayProfileProvider>,
-    );
-
-    fireEvent.click(screen.getByTestId("open-health-check-detail"));
-    expect(screen.getByTestId("health-check-detail-view")).toBeVisible();
-    expect(screen.getByTestId("health-check-probe-rest")).toBeVisible();
-  });
-
-  it("uses condensed health-check action labels on compact layouts", () => {
-    localStorage.clear();
-    setViewportWidth(360);
-
-    render(
-      <DisplayProfileProvider>
-        <DiagnosticsDialog
-          {...defaultProps}
-          onRunHealthCheck={vi.fn()}
-          lastHealthCheckResult={{
-            runId: "hcr-0001",
-            startTimestamp: "2026-03-19T10:00:00.000Z",
-            endTimestamp: "2026-03-19T10:00:01.000Z",
-            totalDurationMs: 1000,
-            overallHealth: "Healthy",
-            latency: { p50: 10, p90: 20, p99: 30 },
-            probes: {
-              REST: { probe: "REST", outcome: "Success", durationMs: 10, reason: null, startMs: 1 },
-              JIFFY: { probe: "JIFFY", outcome: "Success", durationMs: 20, reason: null, startMs: 2 },
-              RASTER: { probe: "RASTER", outcome: "Skipped", durationMs: null, reason: "Unsupported", startMs: 3 },
-              CONFIG: { probe: "CONFIG", outcome: "Success", durationMs: 30, reason: null, startMs: 4 },
-              FTP: { probe: "FTP", outcome: "Success", durationMs: 40, reason: null, startMs: 5 },
-            },
-          }}
-        />
-      </DisplayProfileProvider>,
-    );
-
-    expect(screen.getByTestId("run-health-check-button")).toHaveTextContent("Run check");
-    expect(screen.getByTestId("open-health-check-detail")).toHaveTextContent("Last check");
-  });
-
-  it("keeps the running health-check label explicit on compact layouts", () => {
-    localStorage.clear();
-    setViewportWidth(360);
-
-    render(
-      <DisplayProfileProvider>
-        <DiagnosticsDialog
-          {...defaultProps}
-          healthCheckRunning
-          onRunHealthCheck={vi.fn()}
-          lastHealthCheckResult={{
-            runId: "hcr-0002",
-            startTimestamp: "2026-03-19T10:00:00.000Z",
-            endTimestamp: "2026-03-19T10:00:01.000Z",
-            totalDurationMs: 1000,
-            overallHealth: "Healthy",
-            latency: { p50: 10, p90: 20, p99: 30 },
-            probes: {
-              REST: { probe: "REST", outcome: "Success", durationMs: 10, reason: null, startMs: 1 },
-              JIFFY: { probe: "JIFFY", outcome: "Success", durationMs: 20, reason: null, startMs: 2 },
-              RASTER: { probe: "RASTER", outcome: "Skipped", durationMs: null, reason: "Unsupported", startMs: 3 },
-              CONFIG: { probe: "CONFIG", outcome: "Success", durationMs: 30, reason: null, startMs: 4 },
-              FTP: { probe: "FTP", outcome: "Success", durationMs: 40, reason: null, startMs: 5 },
-            },
-          }}
-        />
-      </DisplayProfileProvider>,
-    );
-
-    expect(screen.getByTestId("run-health-check-button")).toHaveTextContent("Running health check…");
-  });
-
-  it("shows primary problem spotlight when healthState includes a primary problem", () => {
-    localStorage.clear();
-    setViewportWidth(600);
-
-    const healthWithProblem: OverallHealthState = {
-      ...idleHealthState,
-      state: "Unhealthy",
-      primaryProblem: {
-        id: "prob-1",
-        title: "GET /v1/machine failed",
+const unhealthyHealthState: OverallHealthState = {
+    ...healthyHealthState,
+    state: "Unhealthy",
+    problemCount: 1,
+    contributors: {
+        ...healthyHealthState.contributors,
+        REST: { state: "Unhealthy", problemCount: 1, totalOperations: 4, failedOperations: 2 },
+    },
+    primaryProblem: {
+        id: "problem-1",
+        title: "PUT /v1/configs/Audio/Volume failed",
         contributor: "REST",
         timestampMs: Date.now() - 10_000,
         impactLevel: 2,
-        causeHint: "HTTP 500",
-      },
-    };
+        causeHint: "HTTP 403",
+    },
+};
 
-    render(
-      <DisplayProfileProvider>
-        <DiagnosticsDialog {...defaultProps} healthState={healthWithProblem} />
-      </DisplayProfileProvider>,
-    );
+const offlineHealthState: OverallHealthState = {
+    ...healthyHealthState,
+    state: "Unavailable",
+    connectivity: "Offline",
+    connectedDeviceLabel: null,
+};
 
-    expect(screen.getByTestId("primary-problem-spotlight")).toBeVisible();
-    expect(screen.getByTestId("status-summary-card")).toHaveTextContent("Needs attention");
-  });
-
-  it("hides technical details rows by default on compact profile", () => {
-    localStorage.clear();
-    setViewportWidth(360);
-
-    render(
-      <DisplayProfileProvider>
-        <DiagnosticsDialog {...defaultProps} />
-      </DisplayProfileProvider>,
-    );
-
-    fireEvent.click(screen.getByTestId("show-details-button"));
-
-    expect(screen.queryByTestId("contributor-row-app")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("contributor-row-rest")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("contributor-row-ftp")).not.toBeInTheDocument();
-    expect(screen.getByTestId("technical-details-toggle")).toBeVisible();
-  });
-
-  it("shows technical details rows after toggle click on compact profile", () => {
-    localStorage.clear();
-    setViewportWidth(360);
-
-    render(
-      <DisplayProfileProvider>
-        <DiagnosticsDialog {...defaultProps} />
-      </DisplayProfileProvider>,
-    );
-
-    fireEvent.click(screen.getByTestId("show-details-button"));
-    fireEvent.click(screen.getByTestId("technical-details-toggle"));
-
-    expect(screen.getByTestId("contributor-row-app")).toBeVisible();
-    expect(screen.getByTestId("contributor-row-rest")).toBeVisible();
-    expect(screen.getByTestId("contributor-row-ftp")).toBeVisible();
-  });
-
-  it("shows technical details open by default on expanded profile", () => {
-    localStorage.clear();
-    setViewportWidth(600);
-
-    render(
-      <DisplayProfileProvider>
-        <DiagnosticsDialog {...defaultProps} />
-      </DisplayProfileProvider>,
-    );
-
-    fireEvent.click(screen.getByTestId("show-details-button"));
-
-    expect(screen.getByTestId("contributor-row-app")).toBeVisible();
-    expect(screen.getByTestId("contributor-row-rest")).toBeVisible();
-    expect(screen.getByTestId("contributor-row-ftp")).toBeVisible();
-    expect(screen.getByTestId("technical-details-toggle")).toBeVisible();
-  });
-
-  it("stream section header is labelled Activity", () => {
-    localStorage.clear();
-    setViewportWidth(600);
-
-    render(
-      <DisplayProfileProvider>
-        <DiagnosticsDialog {...defaultProps} />
-      </DisplayProfileProvider>,
-    );
-
-    fireEvent.click(screen.getByTestId("show-details-button"));
-
-    expect(screen.getByText("Activity")).toBeVisible();
-    expect(screen.queryByText("Recent evidence")).not.toBeInTheDocument();
-  });
-
-  it("status-summary-card shows Healthy title for Healthy state", () => {
-    localStorage.clear();
-    setViewportWidth(600);
-
-    render(
-      <DisplayProfileProvider>
-        <DiagnosticsDialog
-          {...defaultProps}
-          healthState={{ ...idleHealthState, state: "Healthy", connectivity: "Online" }}
-        />
-      </DisplayProfileProvider>,
-    );
-
-    const card = screen.getByTestId("status-summary-card");
-    expect(card).toHaveTextContent("Healthy");
-  });
-
-  it("status-summary-card shows Device not reachable for Offline connectivity", () => {
-    localStorage.clear();
-    setViewportWidth(600);
-
-    render(
-      <DisplayProfileProvider>
-        <DiagnosticsDialog
-          {...defaultProps}
-          healthState={{ ...idleHealthState, state: "Unavailable", connectivity: "Offline" }}
-        />
-      </DisplayProfileProvider>,
-    );
-
-    const card = screen.getByTestId("status-summary-card");
-    expect(card).toHaveTextContent("Device not reachable");
-  });
-
-  it("status-summary-card shows Needs attention for Unhealthy state with primary problem", () => {
-    localStorage.clear();
-    setViewportWidth(600);
-
-    const healthWithProblem: OverallHealthState = {
-      ...idleHealthState,
-      state: "Unhealthy",
-      primaryProblem: {
-        id: "prob-99",
-        title: "REST probe failed",
-        contributor: "REST",
-        timestampMs: Date.now() - 5_000,
-        impactLevel: 2,
-        causeHint: "HTTP 503",
-      },
-    };
-
-    render(
-      <DisplayProfileProvider>
-        <DiagnosticsDialog {...defaultProps} healthState={healthWithProblem} />
-      </DisplayProfileProvider>,
-    );
-
-    expect(screen.getByTestId("status-summary-card")).toHaveTextContent("Needs attention");
-    expect(screen.getByTestId("status-summary-card")).toHaveTextContent("REST probe failed");
-  });
-
-  it("evidence-preview-card shows view-all link when entries are present", () => {
-    localStorage.clear();
-    setViewportWidth(600);
-
-    render(
-      <DisplayProfileProvider>
-        <DiagnosticsDialog
-          {...defaultProps}
-          actionSummaries={[
-            {
-              correlationId: "COR-0001",
-              operationType: "REST",
-              endpoint: "/v1/machine",
-              startTimestamp: new Date(Date.now() - 2000).toISOString(),
-              endTimestamp: new Date(Date.now() - 1000).toISOString(),
-              outcome: "Success",
-              durationMs: 1000,
-              errorMessage: null,
-              statusCode: 200,
-              contributor: "App",
-              impactLevel: 0,
+const defaultProps = {
+    open: true,
+    onOpenChange: vi.fn(),
+    healthState: healthyHealthState,
+    logs: [
+        {
+            id: "log-1",
+            level: "info" as const,
+            message: "Configuration updated successfully",
+            timestamp: new Date(Date.now() - 4_000).toISOString(),
+        },
+    ],
+    errorLogs: [
+        {
+            id: "error-1",
+            level: "error" as const,
+            message: "Failed to save audio profile",
+            timestamp: new Date(Date.now() - 6_000).toISOString(),
+            details: { code: "E_AUDIO" },
+        },
+    ],
+    traceEvents: [
+        {
+            id: "trace-1",
+            timestamp: new Date(Date.now() - 5_000).toISOString(),
+            relativeMs: 0,
+            type: "rest-response" as const,
+            origin: "user" as const,
+            correlationId: "action-1",
+            data: {
+                lifecycleState: "foreground" as const,
+                sourceKind: null,
+                localAccessMode: null,
+                trackInstanceId: null,
+                playlistItemId: null,
+                method: "GET",
+                path: "/v1/info",
+                status: 200,
             },
-          ]}
-        />
-      </DisplayProfileProvider>,
-    );
+        },
+    ],
+    actionSummaries: [
+        {
+            correlationId: "action-1",
+            actionName: "Configuration updated successfully",
+            origin: "user" as const,
+            originalOrigin: "user" as const,
+            startTimestamp: new Date(Date.now() - 7_000).toISOString(),
+            endTimestamp: new Date(Date.now() - 6_500).toISOString(),
+            durationMs: 500,
+            outcome: "success" as const,
+            startRelativeMs: 0,
+            effects: [
+                {
+                    type: "REST" as const,
+                    label: "Save",
+                    method: "PUT",
+                    path: "/v1/configs",
+                    target: null,
+                    status: 200,
+                    durationMs: 500,
+                },
+            ],
+        },
+    ],
+    onShareAll: vi.fn(),
+    onShareFiltered: vi.fn(),
+    onClearAll: vi.fn(),
+    onRetryConnection: vi.fn(),
+    connectionCallbacks: {
+        onRetryConnection: vi.fn().mockResolvedValue({ success: true, message: "Connected to c64u" }),
+        onSwitchDevice: vi.fn().mockResolvedValue({ success: true, message: "Switched to c64u-backup" }),
+    },
+    deviceInfo: null,
+    healthCheckRunning: false,
+    onRunHealthCheck: vi.fn(),
+    lastHealthCheckResult: {
+        runId: "hc-1",
+        startTimestamp: new Date(Date.now() - 60_000).toISOString(),
+        endTimestamp: new Date(Date.now() - 59_000).toISOString(),
+        totalDurationMs: 1000,
+        overallHealth: "Healthy" as const,
+        probes: {
+            REST: { probe: "REST" as const, outcome: "Success" as const, durationMs: 100, reason: null, startMs: 0 },
+            FTP: { probe: "FTP" as const, outcome: "Success" as const, durationMs: 100, reason: null, startMs: 100 },
+            CONFIG: { probe: "CONFIG" as const, outcome: "Success" as const, durationMs: 100, reason: null, startMs: 200 },
+            RASTER: { probe: "RASTER" as const, outcome: "Success" as const, durationMs: 100, reason: null, startMs: 300 },
+            JIFFY: { probe: "JIFFY" as const, outcome: "Success" as const, durationMs: 100, reason: null, startMs: 400 },
+        },
+        latency: { p50: 10, p90: 20, p99: 30 },
+        deviceInfo: null,
+    },
+    liveHealthCheckProbes: null,
+};
 
-    expect(screen.getByTestId("evidence-preview-card")).toBeVisible();
-    expect(screen.getByTestId("view-all-activity")).toBeVisible();
-  });
+describe("DiagnosticsDialog", () => {
+    it("shows only the summary card on first open in healthy mode", () => {
+        localStorage.clear();
+        setViewportWidth(600);
 
-  it("pane-focus-activity maximises the activity pane and restores via pane-expand-right", () => {
-    setViewportWidth(1200);
+        renderDialog();
 
-    render(
-      <DisplayProfileProvider>
-        <DiagnosticsDialog {...defaultProps} />
-      </DisplayProfileProvider>,
-    );
+        expect(screen.getByTestId("status-summary-card")).toBeVisible();
+        expect(screen.getByText("Healthy")).toBeVisible();
+        expect(screen.getByText("C64U")).toBeVisible();
+        expect(screen.getByText("All systems working.")).toBeVisible();
+        expect(screen.queryByTestId("issue-card")).toBeNull();
+        expect(screen.queryByTestId("evidence-preview-card")).toBeNull();
+        expect(screen.queryByTestId("technical-details-card")).toBeNull();
+        expect(screen.queryByTestId("tools-card")).toBeNull();
+        expect(screen.queryByTestId("diagnostics-filter-input")).toBeNull();
+    });
 
-    fireEvent.click(screen.getByTestId("show-details-button"));
+    it("shows only the dominant summary card on first open in unhealthy mode", () => {
+        localStorage.clear();
+        setViewportWidth(600);
 
-    // Both pane-focus buttons visible in split view
-    expect(screen.getByTestId("pane-focus-activity")).toBeInTheDocument();
-    expect(screen.getByTestId("pane-focus-health")).toBeInTheDocument();
+        renderDialog({ healthState: unhealthyHealthState });
 
-    // Maximise activity pane
-    fireEvent.click(screen.getByTestId("pane-focus-activity"));
+        expect(screen.getByTestId("status-summary-card")).toBeVisible();
+        expect(screen.getByText("Needs attention")).toBeVisible();
+        expect(screen.queryByTestId("issue-card")).toBeNull();
+        expect(screen.queryByTestId("evidence-preview-card")).toBeNull();
+        expect(screen.queryByTestId("evidence-full-view")).toBeNull();
+    });
 
-    // Left pane is now minimised — restore button visible, content gone
-    expect(screen.getByTestId("pane-expand-left")).toBeInTheDocument();
-    expect(screen.queryByTestId("pane-focus-health")).not.toBeInTheDocument();
+    it("shows retry and switch-device actions on the offline summary card without exposing diagnostics tools", () => {
+        localStorage.clear();
+        setViewportWidth(600);
 
-    // Restore split view
-    fireEvent.click(screen.getByTestId("pane-expand-left"));
+        renderDialog({ healthState: offlineHealthState });
 
-    expect(screen.getByTestId("pane-focus-health")).toBeInTheDocument();
-    expect(screen.queryByTestId("pane-expand-left")).not.toBeInTheDocument();
-  });
+        expect(screen.getByText("Device not reachable")).toBeVisible();
+        expect(screen.getByTestId("retry-connection-action")).toBeVisible();
+        expect(screen.getByTestId("switch-device-toggle")).toBeVisible();
+        expect(screen.queryByTestId("diagnostics-filter-input")).toBeNull();
+        expect(screen.queryByTestId("tools-card")).toBeNull();
+    });
 
-  it("pane-focus-health maximises the health pane and restores via pane-expand-right", () => {
-    setViewportWidth(1200);
+    it("reveals the issue card and disclosure cards after unhealthy issue disclosure", () => {
+        localStorage.clear();
+        setViewportWidth(600);
 
-    render(
-      <DisplayProfileProvider>
-        <DiagnosticsDialog {...defaultProps} />
-      </DisplayProfileProvider>,
-    );
+        renderDialog({ healthState: unhealthyHealthState });
 
-    fireEvent.click(screen.getByTestId("show-details-button"));
+        fireEvent.click(screen.getByTestId("show-details-button"));
 
-    // Maximise health pane
-    fireEvent.click(screen.getByTestId("pane-focus-health"));
+        expect(screen.getByTestId("issue-card")).toBeVisible();
+        expect(screen.getByTestId("evidence-preview-card")).toBeVisible();
+        expect(screen.getByTestId("technical-details-card")).toBeVisible();
+        expect(screen.queryByTestId("diagnostics-filter-input")).toBeNull();
+        expect(screen.queryByTestId("evidence-full-view")).toBeNull();
+    });
 
-    // Right pane is now minimised — restore button visible
-    expect(screen.getByTestId("pane-expand-right")).toBeInTheDocument();
-    expect(screen.queryByTestId("pane-focus-activity")).not.toBeInTheDocument();
+    it("reveals collapsed evidence and technical cards after healthy disclosure", () => {
+        localStorage.clear();
+        setViewportWidth(600);
 
-    // Restore split view
-    fireEvent.click(screen.getByTestId("pane-expand-right"));
+        renderDialog();
 
-    expect(screen.getByTestId("pane-focus-activity")).toBeInTheDocument();
-    expect(screen.queryByTestId("pane-expand-right")).not.toBeInTheDocument();
-  });
+        fireEvent.click(screen.getByTestId("show-details-button"));
 
-  it("paneFocus resets to split view when dialog is closed and re-opened", () => {
-    setViewportWidth(1200);
-    const onOpenChange = vi.fn();
+        expect(screen.getByTestId("diagnostics-subtitle")).not.toHaveClass("hidden");
+        expect(screen.getByTestId("evidence-preview-card")).toBeVisible();
+        expect(screen.getByTestId("technical-details-card")).toBeVisible();
+        expect(screen.queryByTestId("diagnostics-filter-input")).toBeNull();
+        expect(screen.queryByTestId("refine-button")).toBeNull();
+    });
 
-    const { rerender } = render(
-      <DisplayProfileProvider>
-        <DiagnosticsDialog {...defaultProps} onOpenChange={onOpenChange} />
-      </DisplayProfileProvider>,
-    );
+    it("shows up to three human-readable preview items only after expanding the evidence preview", () => {
+        localStorage.clear();
+        setViewportWidth(600);
 
-    fireEvent.click(screen.getByTestId("show-details-button"));
-    fireEvent.click(screen.getByTestId("pane-focus-activity"));
-    expect(screen.getByTestId("pane-expand-left")).toBeInTheDocument();
+        renderDialog();
 
-    // Close dialog
-    rerender(
-      <DisplayProfileProvider>
-        <DiagnosticsDialog {...defaultProps} open={false} onOpenChange={onOpenChange} />
-      </DisplayProfileProvider>,
-    );
+        fireEvent.click(screen.getByTestId("show-details-button"));
+        fireEvent.click(screen.getByTestId("evidence-preview-toggle"));
 
-    // Re-open dialog — paneFocus should have reset to 'both'
-    rerender(
-      <DisplayProfileProvider>
-        <DiagnosticsDialog {...defaultProps} open={true} onOpenChange={onOpenChange} />
-      </DisplayProfileProvider>,
-    );
+        expect(screen.getByTestId("preview-item-action-1")).toBeVisible();
+        expect(screen.getByText("Configuration updated successfully")).toBeVisible();
+        expect(screen.queryAllByTestId(/preview-item-/).length).toBeLessThanOrEqual(3);
+    });
 
-    fireEvent.click(screen.getByTestId("show-details-button"));
+    it("keeps filters hidden until the tools card is expanded", () => {
+        localStorage.clear();
+        setViewportWidth(600);
 
-    // Both pane-focus buttons visible again (no maximised state)
-    expect(screen.getByTestId("pane-focus-activity")).toBeInTheDocument();
-    expect(screen.getByTestId("pane-focus-health")).toBeInTheDocument();
-    expect(screen.queryByTestId("pane-expand-left")).not.toBeInTheDocument();
-  });
+        renderDialog();
+
+        fireEvent.click(screen.getByTestId("show-details-button"));
+
+        expect(screen.queryByTestId("tools-card")).toBeNull();
+        expect(screen.queryByTestId("diagnostics-filter-input")).toBeNull();
+
+        fireEvent.click(screen.getByTestId("technical-details-toggle"));
+
+        expect(screen.getByTestId("tools-card")).toBeVisible();
+        expect(screen.queryByTestId("diagnostics-filter-input")).toBeNull();
+
+        fireEvent.click(screen.getByTestId("tools-card-toggle"));
+
+        expect(screen.getByTestId("diagnostics-filter-input")).toBeVisible();
+        expect(screen.getByTestId("evidence-full-view")).toBeVisible();
+        expect(screen.getByTestId("diagnostics-share-all")).toBeVisible();
+    });
+
+    it("opens the full activity tools flow from the preview card CTA", () => {
+        localStorage.clear();
+        setViewportWidth(600);
+
+        renderDialog();
+
+        fireEvent.click(screen.getByTestId("show-details-button"));
+        fireEvent.click(screen.getByTestId("evidence-preview-toggle"));
+        fireEvent.click(screen.getByTestId("view-all-activity"));
+
+        expect(screen.getByTestId("tools-card")).toBeVisible();
+        expect(screen.getByTestId("diagnostics-filter-input")).toBeVisible();
+        expect(screen.getByTestId("evidence-full-view")).toBeVisible();
+    });
 });

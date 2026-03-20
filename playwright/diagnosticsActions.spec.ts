@@ -24,6 +24,21 @@ const waitForTracing = async (page: Page) => {
   );
 };
 
+const ensureTechnicalDetailsExpanded = async (dialog: Page) => {
+  const toggle = dialog.getByTestId("technical-details-toggle");
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") {
+    await toggle.click();
+  }
+};
+
+const ensureToolsExpanded = async (dialog: Page) => {
+  await ensureTechnicalDetailsExpanded(dialog);
+  const toggle = dialog.getByTestId("tools-card-toggle");
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") {
+    await toggle.click();
+  }
+};
+
 test.describe("Diagnostics Actions tab", () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
@@ -174,6 +189,7 @@ test.describe("Diagnostics Actions tab", () => {
     await expect(page.getByRole("dialog", { name: "Diagnostics" })).toBeVisible();
     await snap(page, testInfo, "diagnostics-open");
     await page.getByTestId("show-details-button").click();
+    await ensureToolsExpanded(page);
 
     // Actions evidence filter is active by default – verify before inspecting content
     await expect(page.getByTestId("evidence-toggle-actions")).toHaveAttribute("aria-pressed", "true");
@@ -374,6 +390,7 @@ test.describe("Diagnostics Actions tab", () => {
     await expect(page.getByRole("dialog", { name: "Diagnostics" })).toBeVisible();
     // Expand to full details before checking filters and action summaries
     await page.getByTestId("show-details-button").click();
+    await ensureToolsExpanded(page);
     // Actions evidence filter is active by default
     await expect(page.getByTestId("evidence-toggle-actions")).toHaveAttribute("aria-pressed", "true");
 

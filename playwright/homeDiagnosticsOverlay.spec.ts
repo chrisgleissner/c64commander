@@ -7,7 +7,7 @@
  */
 
 import { test, expect } from "@playwright/test";
-import type { Page, TestInfo } from "@playwright/test";
+import type { Locator, Page, TestInfo } from "@playwright/test";
 import { unzipSync, strFromU8 } from "fflate";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
 import { seedUiMocks } from "./uiMocks";
@@ -33,6 +33,21 @@ const openDiagnosticsOverlay = async (page: Page) => {
   const sheet = page.locator('[data-testid="diagnostics-sheet"][data-state="open"]').last();
   await expect(sheet).toBeVisible();
   return sheet;
+};
+
+const ensureTechnicalDetailsExpanded = async (dialog: Locator) => {
+  const toggle = dialog.getByTestId("technical-details-toggle");
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") {
+    await toggle.click();
+  }
+};
+
+const ensureToolsExpanded = async (dialog: Locator) => {
+  await ensureTechnicalDetailsExpanded(dialog);
+  const toggle = dialog.getByTestId("tools-card-toggle");
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") {
+    await toggle.click();
+  }
 };
 
 const installShareOverride = async (page: Page) => {
@@ -126,12 +141,15 @@ test.describe("Home diagnostics overlay", () => {
   }: { page: Page }, testInfo: TestInfo) => {
     const serverUrl = new URL(server.baseUrl);
     const openToolsMenu = async () => {
+      await ensureToolsExpanded(dialog);
       await dialog.getByTestId("diagnostics-tools-menu").click();
     };
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
     const dialog = await openDiagnosticsOverlay(page);
 
+    await dialog.getByTestId("show-details-button").click();
+    await ensureTechnicalDetailsExpanded(dialog);
     await dialog.getByTestId("connection-actions-toggle").click();
     await expect(dialog.getByTestId("connection-actions-expanded")).toBeVisible();
     await dialog.getByTestId("switch-device-toggle").click();
@@ -146,6 +164,8 @@ test.describe("Home diagnostics overlay", () => {
     await dialog.getByTestId("run-health-check-button").click();
     await expect(dialog.getByTestId("run-health-check-button")).toHaveText("Running health check…");
     await expect(dialog.getByTestId("run-health-check-button")).toHaveText("Run health check", { timeout: 15000 });
+    await dialog.getByTestId("show-details-button").click();
+    await ensureTechnicalDetailsExpanded(dialog);
     await expect(dialog.getByTestId("open-health-check-detail")).toBeVisible();
     await snap(page, testInfo, "health-check-finished");
 
@@ -159,9 +179,6 @@ test.describe("Home diagnostics overlay", () => {
     await snap(page, testInfo, "health-check-detail");
     await dialog.getByRole("button", { name: /Back to diagnostics summary/i }).click();
     await expect(healthCheckDetail).toBeHidden();
-
-    // Expand to full details view to access HealthSummary rows and action shelf
-    await dialog.getByTestId("show-details-button").click();
 
     await dialog.getByTestId("latency-summary-row").click();
     const latencyPopup = page.getByTestId("latency-analysis-popup");
