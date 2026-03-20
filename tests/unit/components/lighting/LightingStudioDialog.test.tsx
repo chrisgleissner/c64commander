@@ -132,6 +132,11 @@ describe("LightingStudioDialog", () => {
     expect(screen.getByTestId("lighting-circadian-fallback")).toHaveTextContent("Fallback schedule");
     expect(screen.getByTestId("lighting-open-context-lens")).toHaveTextContent("Why");
     expect(screen.getByTestId("lighting-device-mockup")).toBeInTheDocument();
+    expect(document.querySelector("#c64-root")).not.toBeNull();
+    expect(document.querySelector("#case-shell")).not.toBeNull();
+    expect(document.querySelector("#keyboard-area")).not.toBeNull();
+    expect(document.querySelector("#main-keys")).not.toBeNull();
+    expect(document.querySelector("#function-keys")).not.toBeNull();
   });
 
   it("saves a new profile from the draft and surfaces location-denied fallback state", () => {
@@ -228,7 +233,6 @@ describe("LightingStudioDialog", () => {
     renderDialog();
 
     fireEvent.click(screen.getByTestId("lighting-mockup-case-shell"));
-    fireEvent.click(screen.getByTestId("lighting-mockup-key-0"));
     fireEvent.click(screen.getByTestId("lighting-select-surface-keyboard"));
 
     expect(screen.getByTestId("lighting-device-summary-keyboard").className).toContain("border-primary");

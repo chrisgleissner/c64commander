@@ -40,6 +40,21 @@ describe("AddItemsProgressOverlay", () => {
     expect(onCancel).toHaveBeenCalled();
   });
 
+  it("portals the overlay to document.body to avoid transformed parent bounds", () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+
+    try {
+      render(<AddItemsProgressOverlay progress={buildProgress()} testId="progress" />, { container: host });
+
+      const overlay = screen.getByTestId("progress");
+      expect(overlay.parentElement).toBe(document.body);
+      expect(host).not.toContainElement(overlay);
+    } finally {
+      host.remove();
+    }
+  });
+
   it("hides when not scanning and visibility is undefined", () => {
     const { container } = render(<AddItemsProgressOverlay progress={buildProgress({ status: "done" })} />);
 

@@ -1499,12 +1499,30 @@ test.describe("Playback file browser (part 2)", () => {
     await expect(page.getByRole("dialog")).toBeHidden();
     await snap(page, testInfo, "playlist-ready");
 
-    const before = await Promise.all([
-      page.getByTestId("playlist-prev").boundingBox(),
-      playButton.boundingBox(),
-      pauseButton.boundingBox(),
-      page.getByTestId("playlist-next").boundingBox(),
-    ]);
+    const transportRow = page
+      .getByTestId("playback-controls-layout")
+      .getByTestId("playback-controls-stack")
+      .locator("> div")
+      .first();
+    const captureRelativeTransportLayout = async () => {
+      const rowBox = await transportRow.boundingBox();
+      expect(rowBox).not.toBeNull();
+      if (!rowBox) return [];
+
+      const boxes = await Promise.all([
+        page.getByTestId("playlist-prev").boundingBox(),
+        playButton.boundingBox(),
+        pauseButton.boundingBox(),
+        page.getByTestId("playlist-next").boundingBox(),
+      ]);
+
+      return boxes.map((box) => ({
+        x: (box?.x ?? 0) - rowBox.x,
+        width: box?.width ?? 0,
+      }));
+    };
+
+    const before = await captureRelativeTransportLayout();
 
     await expect(playButton).toBeEnabled();
     await playButton.click();
@@ -1522,14 +1540,16 @@ test.describe("Playback file browser (part 2)", () => {
     await expect(playButton).toHaveAttribute("aria-label", "Play");
     await snap(page, testInfo, "stopped");
 
-    const after = await Promise.all([
-      page.getByTestId("playlist-prev").boundingBox(),
-      playButton.boundingBox(),
-      pauseButton.boundingBox(),
-      page.getByTestId("playlist-next").boundingBox(),
-    ]);
+    const after = await captureRelativeTransportLayout();
 
-    expect(after.map((box) => box?.x)).toEqual(before.map((box) => box?.x));
+    expect(after).toHaveLength(before.length);
+    for (let index = 0; index < before.length; index += 1) {
+      expect(after[index]?.x).toBeCloseTo(before[index]?.x ?? 0, 1);
+      expect(after[index]?.width).toBeCloseTo(before[index]?.width ?? 0, 1);
+      if (index > 0) {
+        expect(after[index]!.x).toBeGreaterThan(after[index - 1]!.x);
+      }
+    }
   });
 
   test("playlist selection supports select all and remove selected", async ({

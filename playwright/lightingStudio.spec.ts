@@ -10,6 +10,7 @@ import { test, expect } from "@playwright/test";
 import type { Page, TestInfo } from "@playwright/test";
 import { saveCoverageFromPage } from "./withCoverage";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
+import { DISPLAY_PROFILE_VIEWPORTS } from "./displayProfileViewports";
 import { seedUiMocks } from "./uiMocks";
 import { assertNoUiIssues, finalizeEvidence, startStrictUiMonitoring } from "./testArtifacts";
 
@@ -24,6 +25,29 @@ const waitForConnected = async (page: Page) => {
 };
 
 const getActiveSlot = (page: Page) => page.locator('[data-slot-active="true"]');
+
+const applyMediumDisplayProfile = async (page: Page) => {
+  const profile = DISPLAY_PROFILE_VIEWPORTS.medium;
+  await page.setViewportSize(profile.viewport);
+  await page.evaluate((override) => {
+    localStorage.setItem("c64u_display_profile_override", override);
+    window.dispatchEvent(
+      new CustomEvent("c64u-ui-preferences-changed", {
+        detail: { displayProfileOverride: override },
+      }),
+    );
+  }, profile.override);
+  await expect.poll(() => page.evaluate(() => document.documentElement.dataset.displayProfile)).toBe("medium");
+};
+
+const boxesOverlap = (
+  left: { x: number; y: number; width: number; height: number },
+  right: { x: number; y: number; width: number; height: number },
+) =>
+  left.x < right.x + right.width &&
+  left.x + left.width > right.x &&
+  left.y < right.y + right.height &&
+  left.y + left.height > right.y;
 
 const seedLightingStudioState = async (page: Page, state: unknown) => {
   await page.addInitScript((payload) => {
@@ -157,5 +181,80 @@ test.describe("Lighting Studio", () => {
     await page.getByTestId("lighting-request-device-location").click();
     await expect(page.getByTestId("lighting-device-location-status")).toContainText("denied");
     await expect(page.getByTestId("lighting-circadian-fallback")).toHaveText(/Fallback schedule|Solar schedule/);
+  });
+
+  test("medium layout keeps the simplified keyboard blocks and avoids header/card clipping", async ({
+    page,
+  }: {
+    page: Page;
+  }) => {
+    await seedLightingStudioState(page, {
+      activeProfileId: "studio-neon",
+      profiles: [
+        {
+          id: "studio-neon",
+          name: "Neon Orbit",
+          savedAt: "2026-01-10T08:30:00.000Z",
+          pinned: true,
+          surfaces: {
+            case: {
+              mode: "Fixed Color",
+              pattern: "SingleColor",
+              color: { kind: "named", value: "Blue" },
+              intensity: 22,
+              tint: "Pure",
+            },
+            keyboard: {
+              mode: "Fixed Color",
+              pattern: "SingleColor",
+              color: { kind: "named", value: "Green" },
+              intensity: 18,
+              tint: "Warm",
+            },
+          },
+        },
+      ],
+      automation: {
+        connectionSentinel: {
+          enabled: true,
+          mappings: {
+            connected: "studio-neon",
+          },
+        },
+      },
+    });
+
+    await page.goto("/");
+    await waitForConnected(page);
+    await applyMediumDisplayProfile(page);
+
+    await page.getByTestId("home-lighting-studio").click();
+    const dialog = page.getByRole("dialog", { name: "Lighting Studio" });
+    await expect(dialog).toBeVisible();
+
+    const dialogBox = await dialog.boundingBox();
+    const closeBox = await page.getByTestId("lighting-studio-close").boundingBox();
+    const holdBox = await page.getByTestId("lighting-lock").boundingBox();
+    const profileCardBox = await page.getByTestId("lighting-profile-detail-card").boundingBox();
+    const mockupBox = await page.getByTestId("lighting-device-mockup").boundingBox();
+    const mainBlockBox = await page.getByTestId("lighting-mockup-main-block").boundingBox();
+    const functionBlockBox = await page.getByTestId("lighting-mockup-function-block").boundingBox();
+
+    expect(dialogBox).not.toBeNull();
+    expect(closeBox).not.toBeNull();
+    expect(holdBox).not.toBeNull();
+    expect(profileCardBox).not.toBeNull();
+    expect(mockupBox).not.toBeNull();
+    expect(mainBlockBox).not.toBeNull();
+    expect(functionBlockBox).not.toBeNull();
+
+    expect(boxesOverlap(closeBox!, holdBox!)).toBe(false);
+    expect(profileCardBox!.x).toBeGreaterThanOrEqual(dialogBox!.x - 1);
+    expect(profileCardBox!.x + profileCardBox!.width).toBeLessThanOrEqual(dialogBox!.x + dialogBox!.width + 1);
+    expect(mockupBox!.x).toBeGreaterThanOrEqual(dialogBox!.x - 1);
+    expect(mockupBox!.x + mockupBox!.width).toBeLessThanOrEqual(dialogBox!.x + dialogBox!.width + 1);
+    expect(mainBlockBox!.width).toBeGreaterThan(functionBlockBox!.width * 6);
+    expect(mainBlockBox!.x).toBeLessThan(functionBlockBox!.x);
+    expect(functionBlockBox!.height).toBeGreaterThan(mainBlockBox!.height * 0.6);
   });
 });

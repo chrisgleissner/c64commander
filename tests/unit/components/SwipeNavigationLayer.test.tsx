@@ -146,6 +146,17 @@ describe("SwipeNavigationLayer", () => {
     );
   });
 
+  it("keeps idle inactive slots empty so page selectors stay unique", async () => {
+    renderLayer("/play");
+
+    expect(await screen.findByText("Play Page")).toBeInTheDocument();
+    expect(screen.getByTestId("swipe-slot-play")).toHaveAttribute("data-slot-active", "true");
+    expect(screen.getByTestId("swipe-slot-home").textContent).toBe("");
+    expect(screen.getByTestId("swipe-slot-disks").textContent).toBe("");
+    expect(screen.queryByText("Home Page")).not.toBeInTheDocument();
+    expect(screen.queryByText("Disks Page")).not.toBeInTheDocument();
+  });
+
   it("commits swipe navigation with wrap-around and settles on transition end", async () => {
     renderLayer("/docs");
     const runway = await screen.findByTestId("swipe-navigation-runway");

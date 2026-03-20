@@ -111,8 +111,8 @@ const readRuntimeMotionMode = (): RuntimeMotionMode => {
 
 const resolveTransitionConfig = (profile: string, runtimeMotionMode: RuntimeMotionMode, velocityX: number) => {
   if (
-    typeof window !== "undefined" &&
-    (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled
+    import.meta.env.VITE_ENABLE_TEST_PROBES === "1" ||
+    (typeof window !== "undefined" && (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled)
   ) {
     return {
       durationMs: TRANSITION_DURATION_TEST_MS,
@@ -312,6 +312,30 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
           const Component = SLOT_COMPONENTS[pageIndex];
           const isActive =
             runway.phase === "transitioning" ? pageIndex === runway.targetIndex : pageIndex === routeIndex;
+          const testProbeActive =
+            import.meta.env.VITE_ENABLE_TEST_PROBES === "1" ||
+            (typeof window !== "undefined" &&
+              (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled);
+          const renderPlaceholderOnly = !isActive && (runway.phase === "idle" || testProbeActive);
+
+          // Render idle inactive slots as placeholders so selectors only see the
+          // active page. During transitions we still mount adjacent pages unless
+          // deterministic probe mode is enabled.
+          if (renderPlaceholderOnly) {
+            return (
+              <div
+                key={`${panelPosition}-${pageIndex}`}
+                className="relative h-full overflow-y-auto overflow-x-hidden"
+                style={{ width: "33.333333%", flexShrink: 0 }}
+                aria-hidden={true}
+                inert=""
+                data-testid={`swipe-slot-${TAB_ROUTES[pageIndex].label.toLowerCase()}`}
+                data-route-index={pageIndex}
+                data-slot-active="false"
+                data-panel-position={panelPosition}
+              />
+            );
+          }
 
           return (
             <div

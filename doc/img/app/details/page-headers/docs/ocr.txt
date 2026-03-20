@@ -1,2 +1,2 @@
-DOCS C64U 4 3 DEGRADED
+DOCS C64U e HEALTHY
 How to use this app

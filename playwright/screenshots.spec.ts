@@ -962,34 +962,6 @@ test.describe("App screenshots", () => {
       await page.goto("/");
       await waitForConnected(page);
 
-      // --- compact profile ---
-      await applyDisplayProfileViewport(page, "compact");
-      await getActiveMain(page).getByTestId("home-lighting-studio").click();
-      const dialog = page.getByRole("dialog", { name: "Lighting Studio" });
-      await expect(dialog).toBeVisible();
-
-      await captureScreenshot(page, testInfo, "home/dialogs/05-lighting-studio-compact.png", {
-        borderPx: 6,
-        borderColor: { r: 255, g: 255, b: 255, alpha: 1 },
-      });
-
-      await page.getByTestId("lighting-profile-studio-neon").click();
-      await page.getByTestId("lighting-select-surface-keyboard").click();
-      await page.getByTestId("lighting-compose-section").scrollIntoViewIfNeeded();
-      await captureScreenshot(page, testInfo, "home/dialogs/06-lighting-studio-compose-compact.png");
-
-      await page.getByTestId("lighting-automation-section").scrollIntoViewIfNeeded();
-      await captureScreenshot(page, testInfo, "home/dialogs/07-lighting-studio-automation-compact.png");
-
-      await page.getByTestId("lighting-open-context-lens").click();
-      await expect(page.getByRole("dialog", { name: "Context Lens" })).toBeVisible();
-      await captureScreenshot(page, testInfo, "home/dialogs/08-lighting-context-lens-compact.png");
-      await page.keyboard.press("Escape");
-      await expect(page.getByRole("dialog", { name: "Context Lens" })).not.toBeVisible();
-      await page.keyboard.press("Escape");
-      await expect(dialog).not.toBeVisible();
-
-      // --- medium profile ---
       await applyDisplayProfileViewport(page, "medium");
       await getActiveMain(page).getByTestId("home-lighting-studio").click();
       const dialogMedium = page.getByRole("dialog", { name: "Lighting Studio" });

@@ -174,10 +174,10 @@ test.describe("Diagnostics Actions tab", () => {
     await expect(page.getByRole("dialog", { name: "Diagnostics" })).toBeVisible();
     await snap(page, testInfo, "diagnostics-open");
 
-    // Navigate to Actions tab
-    await page.getByRole("tab", { name: "Actions" }).click();
+    // Actions evidence filter is active by default – verify before inspecting content
+    await expect(page.getByTestId("evidence-toggle-actions")).toHaveAttribute("aria-pressed", "true");
 
-    // Wait for the actions tab to render and verify action summary is visible
+    // Verify action summary is visible
     await expect(page.getByTestId("action-summary-COR-0900")).toBeVisible();
 
     // Verify badge counts
@@ -368,7 +368,8 @@ test.describe("Diagnostics Actions tab", () => {
 
     await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
     await expect(page.getByRole("dialog", { name: "Diagnostics" })).toBeVisible();
-    await page.getByRole("tab", { name: "Actions" }).click();
+    // Actions evidence filter is active by default
+    await expect(page.getByTestId("evidence-toggle-actions")).toHaveAttribute("aria-pressed", "true");
 
     await page.getByTestId("action-summary-COR-0700").locator("summary").click();
     await page.getByTestId("action-summary-COR-0710").locator("summary").click();

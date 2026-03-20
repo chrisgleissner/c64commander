@@ -2,6 +2,7 @@ import React from "react";
 import { Copy, Info, MapPinned, PauseCircle, Pin, PinOff, PlayCircle, Save, Sparkles, Trash2 } from "lucide-react";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -17,6 +18,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { ModalCloseButton } from "@/components/ui/modal-close-button";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useLightingStudio } from "@/hooks/useLightingStudio";
 import { getLedColorRgb, rgbToCss } from "@/lib/config/ledColors";
@@ -42,7 +44,45 @@ const CONNECTION_STATE_LABELS: Record<LightingConnectionSentinelState, string> =
 };
 
 const FALLBACK_SURFACE_RGB = { r: 99, g: 102, b: 120 };
-const KEYBOARD_ROW_LENGTHS = [15, 15, 14, 11, 10] as const;
+
+type MockKeySpec = {
+  x: number;
+  y: number;
+  units: number;
+};
+
+const MOCK_KEY_WIDTH = 34;
+const MOCK_KEY_HEIGHT = 24;
+const MOCK_KEY_GAP = 9;
+const MOCK_KEY_RADIUS = 4;
+
+const buildMockKeyRow = (y: number, units: number[], xOffset = 0): MockKeySpec[] => {
+  let cursor = xOffset;
+  return units.map((widthUnits) => {
+    const width = widthUnits * MOCK_KEY_WIDTH + Math.max(0, widthUnits - 1) * MOCK_KEY_GAP;
+    const key = { x: cursor, y, units: widthUnits };
+    cursor += width + MOCK_KEY_GAP;
+    return key;
+  });
+};
+
+const buildMockKeyColumn = (x: number, units: number[], yOffset = 0, rowGap = 36): MockKeySpec[] =>
+  units.map((widthUnits, index) => ({
+    x,
+    y: yOffset + index * rowGap,
+    units: widthUnits,
+  }));
+
+const MAIN_KEY_SPECS: MockKeySpec[] = [
+  ...buildMockKeyRow(0, [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]),
+  ...buildMockKeyRow(34, [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0.75], 14),
+  ...buildMockKeyRow(68, [1.2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0.8]),
+  ...buildMockKeyRow(102, [1.45, 1, 1, 1, 1, 3.4, 1, 1, 0.8]),
+];
+
+const FUNCTION_KEY_SPECS: MockKeySpec[] = buildMockKeyColumn(0, [1, 1, 1, 1]);
+
+const keyWidth = (units: number) => units * MOCK_KEY_WIDTH + Math.max(0, units - 1) * MOCK_KEY_GAP;
 
 const buildDraftFromCurrent = (
   surfaces: Partial<Record<LightingSurface, LightingSurfaceState>>,
@@ -118,19 +158,6 @@ const resolveSurfaceRgb = (surface: LightingSurfaceState | undefined) => {
 };
 
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
-
-const mixRgb = (
-  primary: { r: number; g: number; b: number },
-  secondary: { r: number; g: number; b: number },
-  ratio: number,
-) => {
-  const blend = clamp01(ratio);
-  return {
-    r: Math.round(primary.r * (1 - blend) + secondary.r * blend),
-    g: Math.round(primary.g * (1 - blend) + secondary.g * blend),
-    b: Math.round(primary.b * (1 - blend) + secondary.b * blend),
-  };
-};
 
 const scaleGlowAlpha = (intensity: number | undefined, max = 0.9, min = 0.18) =>
   min + (max - min) * clamp01((intensity ?? 0) / 31);
@@ -349,13 +376,19 @@ function LightingDeviceMockup({
 }) {
   const caseRgb = resolveSurfaceRgb(draft.case);
   const keyboardRgb = resolveSurfaceRgb(draft.keyboard ?? draft.case);
-  const caseGlowAlpha = scaleGlowAlpha(draft.case?.intensity, 0.78, 0.2);
-  const keyboardGlowAlpha = scaleGlowAlpha(draft.keyboard?.intensity ?? draft.case?.intensity, 0.86, 0.18);
-  const blendedKeyRgb = mixRgb(caseRgb, keyboardRgb, 0.7);
-  let keyIndex = 0;
+  const caseGlowAlpha = scaleGlowAlpha(draft.case?.intensity, 0.78, 0.18);
+  const keyboardGlowAlpha = scaleGlowAlpha(draft.keyboard?.intensity ?? draft.case?.intensity, 0.8, 0.16);
+  const caseSelected = selectedSurface === "case";
+  const keyboardSelected = keyboardSupported && selectedSurface === "keyboard";
+  const caseStroke = caseSelected ? "rgba(255,255,255,0.88)" : "rgba(255,255,255,0.18)";
+  const keyboardStroke = keyboardSelected ? "rgba(255,255,255,0.84)" : "rgba(255,255,255,0.22)";
+  const keyStroke = keyboardSelected ? "rgba(255,255,255,0.65)" : "rgba(122,117,108,0.78)";
 
   return (
-    <div className="space-y-3 rounded-2xl border border-border/60 bg-card/70 p-4" data-testid="lighting-device-mockup">
+    <div
+      className="space-y-3 overflow-visible rounded-2xl border border-border/60 bg-card/70 p-4"
+      data-testid="lighting-device-mockup"
+    >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="text-sm font-semibold">Device preview</p>
@@ -385,108 +418,238 @@ function LightingDeviceMockup({
         </div>
       </div>
 
-      <div className="rounded-[28px] border border-border/60 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.07),_transparent_58%),linear-gradient(180deg,rgba(15,23,42,0.96),rgba(2,6,23,0.94))] p-4">
-        <div className="mx-auto w-full max-w-[28rem] [perspective:1400px]">
-          <div
-            className="relative aspect-[16/10] origin-top rounded-[30px] border border-white/10 bg-slate-900/80 shadow-[0_32px_80px_rgba(15,23,42,0.55)] [transform:rotateX(46deg)]"
-            style={{
-              boxShadow: `0 32px 80px rgba(15, 23, 42, 0.55), 0 0 0 1px ${toRgba(caseRgb, caseGlowAlpha * 0.35)}`,
-              background: `
-                radial-gradient(circle at 50% 110%, ${toRgba(caseRgb, caseGlowAlpha * 0.72)}, transparent 52%),
-                linear-gradient(180deg, rgba(226,232,240,0.06), rgba(15,23,42,0.02) 16%, rgba(15,23,42,0.82) 30%, rgba(2,6,23,0.96))
-              `,
-            }}
+      <div className="overflow-visible rounded-[28px] border border-border/60 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.07),_transparent_58%),linear-gradient(180deg,rgba(15,23,42,0.96),rgba(2,6,23,0.94))] px-3 py-5 sm:p-5">
+        <div className="mx-auto w-full max-w-[34rem] overflow-visible px-2 pb-2 pt-2">
+          <svg
+            viewBox="0 0 1000 620"
+            className="h-auto w-full overflow-visible drop-shadow-[0_28px_48px_rgba(15,23,42,0.52)]"
+            aria-label="Commodore 64 lighting preview"
           >
-            <button
-              type="button"
-              onClick={() => onSelectSurface("case")}
-              className={cn(
-                "absolute inset-0 rounded-[30px] border transition",
-                selectedSurface === "case"
-                  ? "border-white/70 ring-2 ring-white/60"
-                  : "border-white/10 hover:border-white/30",
-              )}
-              data-testid="lighting-mockup-case-shell"
-              aria-label="Edit case lighting"
-            />
-
-            <div
-              className="absolute inset-x-[8%] top-[17%] bottom-[15%] rounded-[24px] border border-white/8"
-              style={{
-                background: `
-                  linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0) 18%),
-                  radial-gradient(circle at 50% 100%, ${toRgba(caseRgb, caseGlowAlpha * 0.82)}, transparent 62%),
-                  linear-gradient(180deg, rgba(15,23,42,0.58), rgba(15,23,42,0.86))
-                `,
-              }}
-            />
-
-            <div
-              className="absolute inset-x-[12%] top-[29%] bottom-[28%] rounded-[16px] border border-white/8 px-[3.5%] py-[4%]"
-              style={{
-                background: `
-                  radial-gradient(circle at 50% 100%, ${toRgba(keyboardRgb, keyboardGlowAlpha * 0.88)}, transparent 58%),
-                  radial-gradient(circle at 50% 110%, ${toRgba(caseRgb, caseGlowAlpha * 0.45)}, transparent 62%),
-                  linear-gradient(180deg, rgba(15,23,42,0.34), rgba(15,23,42,0.82))
-                `,
-              }}
-            >
-              <div
-                className="grid h-full gap-[4px]"
-                style={{ gridTemplateRows: `repeat(${KEYBOARD_ROW_LENGTHS.length}, minmax(0, 1fr))` }}
+            <defs>
+              <linearGradient
+                id="lighting-shell-top"
+                x1="500"
+                y1="118"
+                x2="500"
+                y2="404"
+                gradientUnits="userSpaceOnUse"
               >
-                {KEYBOARD_ROW_LENGTHS.map((length, rowIndex) => (
-                  <div key={rowIndex} className="flex justify-center gap-[4px]">
-                    {Array.from({ length }).map((_, index) => {
-                      const isSpace = rowIndex === KEYBOARD_ROW_LENGTHS.length - 1 && index >= 3 && index <= 7;
-                      const widthClassName = isSpace ? "w-[18%]" : rowIndex === 4 && index === 0 ? "w-[8%]" : "w-full";
-                      const keyId = keyIndex++;
-                      return (
-                        <button
-                          key={keyId}
-                          type="button"
-                          onClick={() => keyboardSupported && onSelectSurface("keyboard")}
-                          className={cn(
-                            "min-w-0 rounded-[6px] border border-white/10 transition",
-                            keyboardSupported && selectedSurface === "keyboard"
-                              ? "ring-1 ring-white/75 border-white/60"
-                              : "hover:border-white/35",
-                            widthClassName,
-                            !keyboardSupported && "cursor-default opacity-80",
-                          )}
-                          style={{
-                            background: `
-                              linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0.02) 34%, rgba(15,23,42,0.48) 35%, rgba(15,23,42,0.74)),
-                              radial-gradient(circle at 50% 135%, ${toRgba(blendedKeyRgb, keyboardGlowAlpha * 0.92)}, transparent 68%),
-                              radial-gradient(circle at 50% 120%, ${toRgba(caseRgb, caseGlowAlpha * 0.34)}, transparent 74%)
-                            `,
-                            boxShadow: `
-                              inset 0 1px 0 rgba(255,255,255,0.18),
-                              0 1px 0 rgba(15,23,42,0.46),
-                              0 4px 14px ${toRgba(keyboardRgb, keyboardGlowAlpha * 0.34)}
-                            `,
-                          }}
-                          data-testid={`lighting-mockup-key-${keyId}`}
-                          aria-label={`Edit keyboard lighting from key ${keyId + 1}`}
-                        />
-                      );
-                    })}
-                  </div>
-                ))}
-              </div>
-            </div>
+                <stop offset="0" stopColor="#d8ceb8" />
+                <stop offset="1" stopColor="#b8ad97" />
+              </linearGradient>
+              <linearGradient
+                id="lighting-shell-front"
+                x1="500"
+                y1="404"
+                x2="500"
+                y2="523"
+                gradientUnits="userSpaceOnUse"
+              >
+                <stop offset="0" stopColor="#a89b83" />
+                <stop offset="1" stopColor="#8f836f" />
+              </linearGradient>
+              <linearGradient
+                id="lighting-keyboard-bed"
+                x1="504"
+                y1="220"
+                x2="504"
+                y2="390"
+                gradientUnits="userSpaceOnUse"
+              >
+                <stop offset="0" stopColor="#8f948e" />
+                <stop offset="1" stopColor="#717772" />
+              </linearGradient>
+              <linearGradient id="lighting-main-key" x1="0" y1="0" x2="0" y2="26" gradientUnits="userSpaceOnUse">
+                <stop offset="0" stopColor="#f3f1eb" />
+                <stop offset="1" stopColor="#d8d4ca" />
+              </linearGradient>
+              <linearGradient id="lighting-fkey" x1="0" y1="0" x2="0" y2="30" gradientUnits="userSpaceOnUse">
+                <stop offset="0" stopColor="#ece8de" />
+                <stop offset="1" stopColor="#cfc9bc" />
+              </linearGradient>
+            </defs>
 
-            <div
-              className="absolute bottom-[10%] left-[18%] right-[18%] h-[11%] rounded-b-[18px] border border-white/10"
-              style={{
-                background: `
-                  linear-gradient(180deg, rgba(255,255,255,0.1), rgba(255,255,255,0) 26%),
-                  radial-gradient(circle at 50% 20%, ${toRgba(caseRgb, caseGlowAlpha * 0.4)}, transparent 76%),
-                  linear-gradient(180deg, rgba(30,41,59,0.54), rgba(15,23,42,0.88))
-                `,
-              }}
-            />
-          </div>
+            <ellipse cx="500" cy="545" rx="316" ry="26" fill={toRgba(caseRgb, caseGlowAlpha * 0.36)} />
+            <ellipse cx="500" cy="560" rx="286" ry="18" fill="rgba(15,23,42,0.35)" />
+
+            <g id="c64-root">
+              <g id="case-shell">
+                <path
+                  d="M190 118H809C825 118 838 127 844 141L905 437C909 454 902 469 889 478L848 514C840 520 830 523 820 523H180C170 523 160 520 152 514L111 478C98 469 91 454 95 437L156 141C162 127 175 118 190 118Z"
+                  fill="url(#lighting-shell-front)"
+                />
+                <path
+                  d="M190 118H809C825 118 838 127 844 141L870 404H130L156 141C162 127 175 118 190 118Z"
+                  fill="url(#lighting-shell-top)"
+                />
+                <path
+                  d="M190 118H809C825 118 838 127 844 141L870 404H130L156 141C162 127 175 118 190 118Z"
+                  fill={toRgba(caseRgb, caseGlowAlpha * 0.28)}
+                />
+                <path
+                  d="M130 404H870L848 514C840 520 830 523 820 523H180C170 523 160 520 152 514L130 404Z"
+                  fill="url(#lighting-shell-front)"
+                />
+                <path
+                  d="M130 404H870L848 514C840 520 830 523 820 523H180C170 523 160 520 152 514L130 404Z"
+                  fill={toRgba(caseRgb, caseGlowAlpha * 0.18)}
+                />
+                <path d="M222 155H778L796 189H204L222 155Z" fill="rgba(255,248,235,0.44)" />
+                <path d="M173 429H827L817 479H183L173 429Z" fill="rgba(80,69,54,0.28)" />
+                <path d="M184 442H336L331 466H189L184 442Z" fill="rgba(164,153,132,0.62)" />
+                <path d="M202 449H250L248 459H200L202 449Z" fill="rgba(51,56,61,0.92)" />
+                <path d="M256 449H304L302 459H254L256 449Z" fill="rgba(111,117,123,0.84)" />
+                <path d="M310 449H326L325 459H309L310 449Z" fill="rgba(190,195,199,0.82)" />
+                <path d="M130 404L190 118" stroke="rgba(255,246,230,0.34)" strokeWidth="3" />
+                <path d="M870 404L809 118" stroke="rgba(108,95,75,0.34)" strokeWidth="3" />
+                <path
+                  d="M190 118H809C825 118 838 127 844 141L905 437C909 454 902 469 889 478L848 514C840 520 830 523 820 523H180C170 523 160 520 152 514L111 478C98 469 91 454 95 437L156 141C162 127 175 118 190 118Z"
+                  fill="transparent"
+                  stroke={caseStroke}
+                  strokeWidth={caseSelected ? 7 : 3}
+                  vectorEffect="non-scaling-stroke"
+                  data-testid="lighting-mockup-case-shell"
+                  aria-label="Edit case lighting"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => onSelectSurface("case")}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      onSelectSurface("case");
+                    }
+                  }}
+                  className="cursor-pointer focus:outline-none"
+                />
+              </g>
+
+              <g id="keyboard-area" data-testid="lighting-mockup-keyboard-layout">
+                <path
+                  d="M248 220H748C760 220 770 227 774 239L792 363C795 378 786 390 772 390H236C222 390 213 378 216 363L234 239C238 227 248 220 260 220H248Z"
+                  fill="url(#lighting-keyboard-bed)"
+                  data-testid="lighting-mockup-keyboard-bed"
+                />
+                <path
+                  d="M248 220H748C760 220 770 227 774 239L792 363C795 378 786 390 772 390H236C222 390 213 378 216 363L234 239C238 227 248 220 260 220H248Z"
+                  fill={toRgba(keyboardRgb, keyboardGlowAlpha * 0.24)}
+                />
+                <path d="M260 237H736L748 267H248L260 237Z" fill="rgba(223,230,220,0.26)" />
+                <path d="M232 371H776" stroke="rgba(70,77,72,0.46)" strokeWidth="3" />
+
+                <g
+                  id="main-keys"
+                  transform="translate(272 244) skewX(-16)"
+                  aria-label="Edit main keyboard lighting"
+                  role="button"
+                  tabIndex={keyboardSupported ? 0 : -1}
+                  onClick={() => keyboardSupported && onSelectSurface("keyboard")}
+                  onKeyDown={(event) => {
+                    if (!keyboardSupported) return;
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      onSelectSurface("keyboard");
+                    }
+                  }}
+                  className={cn("cursor-pointer", !keyboardSupported && "cursor-default opacity-80")}
+                >
+                  <rect
+                    x={-14}
+                    y={-12}
+                    width={530}
+                    height={152}
+                    rx={18}
+                    fill={toRgba(keyboardRgb, keyboardGlowAlpha * 0.14)}
+                    stroke={keyboardStroke}
+                    strokeWidth={keyboardSelected ? 5 : 2}
+                    vectorEffect="non-scaling-stroke"
+                    data-testid="lighting-mockup-main-block"
+                  />
+                  {MAIN_KEY_SPECS.map((key, index) => (
+                    <rect
+                      key={`${key.x}-${key.y}-${index}`}
+                      x={key.x}
+                      y={key.y}
+                      width={keyWidth(key.units)}
+                      height={MOCK_KEY_HEIGHT}
+                      rx={MOCK_KEY_RADIUS}
+                      fill="url(#lighting-main-key)"
+                      stroke={keyStroke}
+                      strokeWidth="1.2"
+                    />
+                  ))}
+                  <rect
+                    x={-2}
+                    y={136}
+                    width={486}
+                    height={6}
+                    rx={3}
+                    fill={toRgba(keyboardRgb, keyboardGlowAlpha * 0.45)}
+                    data-testid="lighting-mockup-main-graphic"
+                  />
+                </g>
+
+                <g
+                  id="function-keys"
+                  transform="translate(782 250)"
+                  aria-label="Edit function keyboard lighting"
+                  role="button"
+                  tabIndex={keyboardSupported ? 0 : -1}
+                  onClick={() => keyboardSupported && onSelectSurface("keyboard")}
+                  onKeyDown={(event) => {
+                    if (!keyboardSupported) return;
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      onSelectSurface("keyboard");
+                    }
+                  }}
+                  className={cn("cursor-pointer", !keyboardSupported && "cursor-default opacity-80")}
+                >
+                  <rect
+                    x={-14}
+                    y={-14}
+                    width={68}
+                    height={166}
+                    rx={16}
+                    fill={toRgba(keyboardRgb, keyboardGlowAlpha * 0.16)}
+                    stroke={keyboardStroke}
+                    strokeWidth={keyboardSelected ? 5 : 2}
+                    vectorEffect="non-scaling-stroke"
+                    data-testid="lighting-mockup-function-block"
+                  />
+                  {FUNCTION_KEY_SPECS.map((key, index) => (
+                    <rect
+                      key={`${key.y}-${index}`}
+                      x={key.x}
+                      y={key.y}
+                      width={keyWidth(key.units)}
+                      height={28}
+                      rx={5}
+                      fill="url(#lighting-fkey)"
+                      stroke={keyStroke}
+                      strokeWidth="1.2"
+                    />
+                  ))}
+                  <rect
+                    x={-2}
+                    y={145}
+                    width={40}
+                    height={6}
+                    rx={3}
+                    fill={toRgba(keyboardRgb, keyboardGlowAlpha * 0.5)}
+                    data-testid="lighting-mockup-function-graphic"
+                  />
+                </g>
+
+                <path
+                  d="M248 220H748C760 220 770 227 774 239L792 363C795 378 786 390 772 390H236C222 390 213 378 216 363L234 239C238 227 248 220 260 220H248Z"
+                  fill="transparent"
+                  stroke={keyboardStroke}
+                  strokeWidth={keyboardSelected ? 6 : 2.5}
+                  vectorEffect="non-scaling-stroke"
+                />
+              </g>
+            </g>
+          </svg>
         </div>
       </div>
 
@@ -631,6 +794,7 @@ export function LightingStudioDialog() {
   } = useLightingStudio();
 
   const compact = profile === "compact";
+  const narrow = profile !== "expanded";
   const [selectedProfileId, setSelectedProfileId] = React.useState<string | null>(studioState.activeProfileId);
   const [selectedSurface, setSelectedSurface] = React.useState<LightingSurface>("case");
   const [saveName, setSaveName] = React.useState("");
@@ -734,14 +898,48 @@ export function LightingStudioDialog() {
   return (
     <>
       <Dialog open={studioOpen} onOpenChange={(open) => (open ? undefined : closeStudio())}>
-        <DialogContent surface="secondary-editor" className="flex flex-col p-0">
-          <DialogHeader className={cn("shrink-0 border-b border-border/60", compact ? "p-3" : "p-5 pb-4")}>
-            <div className="flex items-center gap-2">
-              <DialogTitle className={cn("min-w-0 flex-1", compact && "text-base")}>Lighting Studio</DialogTitle>
+        <DialogContent
+          surface="secondary-editor"
+          showClose={false}
+          className="flex min-w-0 flex-col overflow-hidden p-0"
+        >
+          <DialogHeader
+            className={cn("shrink-0 border-b border-border/60", compact ? "p-3" : "p-4 pb-4 sm:p-5 sm:pb-4")}
+          >
+            <div className="flex items-start gap-3">
+              <div className="min-w-0 flex-1">
+                <DialogTitle className={cn("min-w-0", compact && "text-base")}>Lighting Studio</DialogTitle>
+                <DialogDescription className={cn("mt-0.5 text-xs", compact && "sr-only")}>
+                  {compact ? "Shape looks and automate them." : "Shape looks, save them, and tune the resolver."}
+                </DialogDescription>
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                  {activeProfileChip}
+                  {resolved.activeAutomationChip ? (
+                    <Badge className="text-xs">{resolved.activeAutomationChip}</Badge>
+                  ) : null}
+                  {circadianState?.fallbackActive ? (
+                    <Badge variant="outline" className="text-xs">
+                      Fallback
+                    </Badge>
+                  ) : null}
+                </div>
+              </div>
+              <DialogClose asChild>
+                <ModalCloseButton
+                  className="static h-8 w-8 shrink-0 opacity-100"
+                  data-testid="lighting-studio-close"
+                  aria-label="Close"
+                />
+              </DialogClose>
+            </div>
+            <div
+              className={cn("mt-3 flex gap-2", narrow ? "flex-wrap" : "items-center justify-between")}
+              data-testid="lighting-header-actions"
+            >
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 shrink-0 px-2 text-xs"
+                className="h-8 shrink-0 px-2 text-xs"
                 onClick={openContextLens}
                 data-testid="lighting-open-context-lens"
               >
@@ -751,7 +949,7 @@ export function LightingStudioDialog() {
                 <Button
                   variant="secondary"
                   size="sm"
-                  className="h-7 shrink-0 px-2 text-xs"
+                  className="h-8 shrink-0 px-2 text-xs"
                   onClick={unlockCurrentLook}
                   data-testid="lighting-unlock"
                 >
@@ -762,7 +960,7 @@ export function LightingStudioDialog() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-7 shrink-0 px-2 text-xs"
+                  className="h-8 shrink-0 px-2 text-xs"
                   onClick={lockCurrentLook}
                   data-testid="lighting-lock"
                 >
@@ -771,35 +969,23 @@ export function LightingStudioDialog() {
                 </Button>
               )}
             </div>
-            <DialogDescription className={cn("mt-0.5 text-xs", compact && "sr-only")}>
-              {compact ? "Shape looks and automate them." : "Shape looks, save them, and tune the resolver."}
-            </DialogDescription>
-            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-              {activeProfileChip}
-              {resolved.activeAutomationChip ? (
-                <Badge className="text-xs">{resolved.activeAutomationChip}</Badge>
-              ) : null}
-              {circadianState?.fallbackActive ? (
-                <Badge variant="outline" className="text-xs">
-                  Fallback
-                </Badge>
-              ) : null}
-            </div>
           </DialogHeader>
 
           <ScrollArea className="flex-1 min-h-0">
             <div className={cn("space-y-6", compact ? "p-4" : "p-6")}>
               <section className="space-y-3" data-testid="lighting-profiles-section">
-                <div className="flex items-center gap-2">
-                  <h3 className={cn("min-w-0 flex-1 font-semibold", compact ? "text-sm" : "text-base")}>Profiles</h3>
-                  {!compact ? <p className="text-sm text-muted-foreground">Save and reuse looks.</p> : null}
-                  <div className="flex shrink-0 items-center gap-1.5">
+                <div className={cn("flex gap-3", narrow ? "flex-col" : "items-center")}>
+                  <div className="min-w-0 flex-1">
+                    <h3 className={cn("min-w-0 font-semibold", compact ? "text-sm" : "text-base")}>Profiles</h3>
+                    {!compact ? <p className="text-sm text-muted-foreground">Save and reuse looks.</p> : null}
+                  </div>
+                  <div className={cn("flex shrink-0 gap-1.5", narrow ? "w-full" : "items-center")}>
                     <Input
                       value={saveName}
                       onChange={(event) => setSaveName(event.target.value)}
                       placeholder="Save current"
                       data-testid="lighting-profile-save-name"
-                      className={cn("min-w-0", compact ? "h-8 w-28 text-xs" : "w-40")}
+                      className={cn("min-w-0", narrow ? "flex-1" : null, compact ? "h-8 text-xs" : "w-40")}
                     />
                     <Button
                       size="sm"
@@ -860,7 +1046,10 @@ export function LightingStudioDialog() {
                     })}
                   </div>
 
-                  <div className="min-w-0 rounded-xl border border-border/60 bg-card/60 p-3">
+                  <div
+                    className="min-w-0 rounded-xl border border-border/60 bg-card/60 p-3"
+                    data-testid="lighting-profile-detail-card"
+                  >
                     <h4 className="font-medium">{selectedProfile?.name ?? "Select a profile"}</h4>
                     {selectedProfile ? (
                       <div className="mt-3 space-y-3">
@@ -871,7 +1060,7 @@ export function LightingStudioDialog() {
                           disabled={Boolean(selectedProfile.bundled)}
                           data-testid="lighting-profile-rename-input"
                         />
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                           <Button
                             size="sm"
                             onClick={() => {
@@ -935,7 +1124,7 @@ export function LightingStudioDialog() {
               <Separator />
 
               <section className="space-y-3" data-testid="lighting-compose-section">
-                <div className="flex items-center justify-between gap-2">
+                <div className={cn("flex gap-3", narrow ? "flex-col" : "items-center justify-between")}>
                   <h3 className={cn("font-semibold", compact ? "text-sm" : "text-base")}>Compose</h3>
                   <div className="flex shrink-0 items-center gap-2">
                     <Label htmlFor="lighting-link-mode" className="text-xs text-muted-foreground">
@@ -1017,7 +1206,7 @@ export function LightingStudioDialog() {
                 </div>
 
                 <div className="space-y-3 rounded-xl border border-border/60 bg-card/60 p-3">
-                  <div className="flex items-center justify-between">
+                  <div className={cn("flex gap-3", narrow ? "flex-wrap" : "items-center justify-between")}>
                     <div>
                       <p className="font-medium">Connection Sentinel</p>
                       <p className="text-sm text-muted-foreground">Map link state to looks.</p>
@@ -1033,7 +1222,7 @@ export function LightingStudioDialog() {
                       data-testid="lighting-connection-sentinel-toggle"
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {(Object.keys(CONNECTION_STATE_LABELS) as LightingConnectionSentinelState[]).map((stateKey) => (
                       <div key={stateKey} className="space-y-1.5">
                         <Label>{CONNECTION_STATE_LABELS[stateKey]}</Label>
@@ -1070,7 +1259,7 @@ export function LightingStudioDialog() {
                 </div>
 
                 <div className="space-y-3 rounded-xl border border-border/60 bg-card/60 p-3">
-                  <div className="flex items-center justify-between">
+                  <div className={cn("flex gap-3", narrow ? "flex-wrap" : "items-center justify-between")}>
                     <div>
                       <p className="font-medium">Quiet Launch</p>
                       <p className="text-sm text-muted-foreground">Use a calm look at startup, then hand off.</p>
@@ -1119,7 +1308,7 @@ export function LightingStudioDialog() {
                 </div>
 
                 <div className="space-y-3 rounded-xl border border-border/60 bg-card/60 p-3">
-                  <div className="flex items-center justify-between">
+                  <div className={cn("flex gap-3", narrow ? "flex-wrap" : "items-center justify-between")}>
                     <div>
                       <p className="font-medium">Source Identity Map</p>
                       <p className="text-sm text-muted-foreground">Reflect the active source on Play and Disks.</p>
@@ -1135,7 +1324,7 @@ export function LightingStudioDialog() {
                       data-testid="lighting-source-identity-toggle"
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {(
                       Object.keys(LIGHTING_SOURCE_BUCKET_LABELS) as Array<keyof typeof LIGHTING_SOURCE_BUCKET_LABELS>
                     ).map((bucket) => (
@@ -1176,7 +1365,7 @@ export function LightingStudioDialog() {
                 </div>
 
                 <div className="space-y-3 rounded-xl border border-border/60 bg-card/60 p-3">
-                  <div className="flex items-center justify-between">
+                  <div className={cn("flex gap-3", narrow ? "flex-wrap" : "items-center justify-between")}>
                     <div>
                       <p className="font-medium">Circadian Palette</p>
                       <p className="text-sm text-muted-foreground">
@@ -1196,7 +1385,12 @@ export function LightingStudioDialog() {
                   </div>
                   <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
                     <div className="space-y-3">
-                      <div className="flex items-center justify-between rounded-lg border border-border/60 bg-background/70 p-3">
+                      <div
+                        className={cn(
+                          "rounded-lg border border-border/60 bg-background/70 p-3",
+                          narrow ? "space-y-3" : "flex items-center justify-between gap-3",
+                        )}
+                      >
                         <div>
                           <p className="font-medium">Use device location</p>
                           <p className="text-xs text-muted-foreground">Best when permission is granted.</p>
@@ -1221,7 +1415,7 @@ export function LightingStudioDialog() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div className="space-y-1.5">
                           <Label>Latitude</Label>
                           <Input
