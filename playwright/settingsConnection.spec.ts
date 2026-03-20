@@ -175,10 +175,16 @@ test.describe("Settings connection management", () => {
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await page.emulateMedia({ colorScheme: "dark" });
+    await page.addInitScript(() => {
+      localStorage.removeItem("c64u_theme");
+    });
     await page.goto("/settings");
     await snap(page, testInfo, "settings-open");
 
-    const systemThemeButton = page.getByRole("button", { name: /Auto|System|system theme/i }).first();
+    const settingsMain = page.locator("main");
+    const lightThemeButton = settingsMain.getByRole("button", { name: /^Light$/ }).first();
+    const systemThemeButton = settingsMain.getByRole("button", { name: /^Auto$/ }).first();
+    await lightThemeButton.click();
     await expect(systemThemeButton).toBeVisible();
     await snap(page, testInfo, "system-button-visible");
 
@@ -249,6 +255,7 @@ test.describe("Settings connection management", () => {
       "Config",
       "HVSC",
       "Device Safety",
+      "Notifications",
       "About",
     ]);
   });

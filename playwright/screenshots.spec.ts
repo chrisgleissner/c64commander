@@ -1444,12 +1444,9 @@ test.describe("App screenshots", () => {
     await captureScreenshot(page, testInfo, "docs/01-overview.png");
     await captureDocsSections(page, testInfo);
 
-    await scrollAndCapture(
-      page,
-      testInfo,
-      page.getByText("External Resources", { exact: true }),
-      "docs/external/01-external-resources.png",
-    );
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await page.waitForTimeout(150);
+    await captureScreenshot(page, testInfo, "docs/external/01-external-resources.png");
 
     for (const profileId of DISPLAY_PROFILE_VIEWPORT_SEQUENCE) {
       await page.goto("/docs");
