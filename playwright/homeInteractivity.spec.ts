@@ -122,7 +122,7 @@ test.describe("Home interactions", () => {
     const sidToggle = page.getByTestId("home-sid-toggle-socket1");
     await expect(sidEntry).toBeVisible();
     await expect(sidToggle).toBeVisible();
-  await expect(sidToggle).toHaveText("ON");
+    await expect(sidToggle).toHaveText("ON");
     await sidToggle.click();
     await expect(sidEntry).toHaveCount(0);
   });
