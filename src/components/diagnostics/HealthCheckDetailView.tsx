@@ -35,11 +35,9 @@ const outcomeColorClass: Record<string, string> = {
 export function HealthCheckDetailView({ result, liveProbes, isRunning, onBack }: Props) {
   // During a live run, show liveProbes overlaid over any previous result.
   // A probe is "done" if it appears in liveProbes, "running" if it's the first
-  // absent probe after all done probes, and "pending" otherwise.
+  // missing probe in presentation order, and "pending" otherwise.
   const activeLive = isRunning && liveProbes != null;
-  const doneCount = activeLive
-    ? PRESENTATION_ORDER.filter((p) => liveProbes[p] != null).length
-    : PRESENTATION_ORDER.length;
+  const firstPendingIndex = activeLive ? PRESENTATION_ORDER.findIndex((probe) => liveProbes[probe] == null) : -1;
 
   return (
     <div className="space-y-3" data-testid="health-check-detail-view">
@@ -71,7 +69,7 @@ export function HealthCheckDetailView({ result, liveProbes, isRunning, onBack }:
                 probe = liveProbes[probeName] ?? undefined;
                 if (probe != null) {
                   liveStatus = "done";
-                } else if (idx === doneCount) {
+                } else if (idx === firstPendingIndex) {
                   liveStatus = "running";
                 } else {
                   liveStatus = "pending";

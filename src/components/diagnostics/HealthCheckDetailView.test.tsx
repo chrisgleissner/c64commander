@@ -169,6 +169,25 @@ describe("HealthCheckDetailView", () => {
         expect(screen.getByTestId(`health-check-probe-${name}`).getAttribute("data-live-status")).toBe("done");
       }
     });
+
+    it("marks the first missing probe as running even when later probes finish out of order", () => {
+      render(
+        <HealthCheckDetailView
+          result={null}
+          liveProbes={{
+            REST: makeProbe("REST", "Success"),
+            CONFIG: makeProbe("CONFIG", "Success"),
+          }}
+          isRunning={true}
+          onBack={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByTestId("health-check-probe-rest").getAttribute("data-live-status")).toBe("done");
+      expect(screen.getByTestId("health-check-probe-ftp").getAttribute("data-live-status")).toBe("running");
+      expect(screen.getByTestId("health-check-probe-config").getAttribute("data-live-status")).toBe("done");
+      expect(screen.getByTestId("health-check-probe-raster").getAttribute("data-live-status")).toBe("pending");
+    });
   });
 
   describe("back button", () => {

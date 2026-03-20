@@ -270,24 +270,30 @@ export function HeatMapPopup({ open, onClose, variant, traceEvents }: Props) {
                       const cell = matrix.cells[rowGroup]?.[col];
                       const value = cell ? getCellMetricValue(cell, mode) : 0;
                       const intensity = metricIntensity(value, maxMetric);
+                      const label = cell
+                        ? `${cell.rowGroup} ${cell.columnItem}: ${mode === "Count" ? `${value} calls` : `${value}ms p90`}`
+                        : `${rowGroup} ${col}: no data`;
                       return (
                         <td
                           key={col}
                           className={cn(
-                            "h-9 rounded-md border px-1 py-0.5 text-center cursor-pointer transition-transform duration-150",
+                            "h-9 rounded-md border px-1 py-0.5 text-center transition-transform duration-150",
                             "hover:scale-[1.02] hover:ring-1 hover:ring-primary/70",
                           )}
                           style={heatCellStyle(intensity)}
-                          onClick={() => cell && setCellDetail({ cell })}
                           title={cell ? `${cell.rowGroup}/${cell.columnItem}: ${value}` : "—"}
-                          aria-label={
-                            cell
-                              ? `${cell.rowGroup} ${cell.columnItem}: ${mode === "Count" ? `${value} calls` : `${value}ms p90`}`
-                              : `${rowGroup} ${col}: no data`
-                          }
                           data-testid={`heat-cell-${rowGroup}-${col}`}
                         >
-                          <span className="font-mono text-[11px] font-semibold">{value > 0 ? value : ""}</span>
+                          <button
+                            type="button"
+                            className="flex h-full w-full cursor-pointer items-center justify-center rounded-[inherit] font-mono text-[11px] font-semibold focus:outline-none focus:ring-2 focus:ring-primary/70"
+                            onClick={() => cell && setCellDetail({ cell })}
+                            title={cell ? `${cell.rowGroup}/${cell.columnItem}: ${value}` : "—"}
+                            aria-label={label}
+                            disabled={!cell}
+                          >
+                            {value > 0 ? value : ""}
+                          </button>
                         </td>
                       );
                     })}

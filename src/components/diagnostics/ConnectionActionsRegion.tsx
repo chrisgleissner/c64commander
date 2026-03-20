@@ -44,6 +44,8 @@ type Props = {
 
 const DEFAULT_PORT = 80;
 
+const toErrorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
+
 /** §7.2 — Whether Retry connection should be visible */
 const shouldShowRetry = (connectivity: ConnectivityState): boolean =>
   connectivity === "Offline" || connectivity === "Not yet connected" || connectivity === "Demo";
@@ -97,7 +99,7 @@ export function ConnectionActionsRegion({
       setBusy({
         type: "done",
         success: false,
-        message: (error as Error).message,
+        message: toErrorMessage(error),
         action: "retry",
       });
     }
@@ -126,7 +128,7 @@ export function ConnectionActionsRegion({
         setBusy({
           type: "done",
           success: false,
-          message: (error as Error).message,
+          message: toErrorMessage(error),
           action: "switch",
         });
       }

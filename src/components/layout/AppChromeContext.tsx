@@ -1,4 +1,4 @@
-import { createContext, useContext } from "react";
+import { createContext, useContext, type ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -6,7 +6,7 @@ type AppChromeMode = "fixed" | "sticky";
 
 const AppChromeModeContext = createContext<AppChromeMode>("fixed");
 
-export function AppChromeModeProvider({ mode, children }: { mode: AppChromeMode; children: React.ReactNode }) {
+export function AppChromeModeProvider({ mode, children }: { mode: AppChromeMode; children: ReactNode }) {
   return <AppChromeModeContext.Provider value={mode}>{children}</AppChromeModeContext.Provider>;
 }
 

@@ -7,11 +7,10 @@
  */
 
 import type { ReactNode } from "react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { UnifiedHealthBadge } from "@/components/UnifiedHealthBadge";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useScreenActivity } from "@/hooks/useScreenActivity";
-import { isDiagnosticsOverlayActive, subscribeDiagnosticsOverlay } from "@/lib/diagnostics/diagnosticsOverlayState";
 import { cn } from "@/lib/utils";
 import { useAppChromeMode } from "@/components/layout/AppChromeContext";
 
@@ -27,7 +26,6 @@ export function AppBar({ title, subtitle, leading, children }: Props) {
   const { profile, tokens } = useDisplayProfile();
   const screenActive = useScreenActivity();
   const appChromeMode = useAppChromeMode();
-  const [diagnosticsOverlayActive, setDiagnosticsOverlayActive] = useState(isDiagnosticsOverlayActive());
   const compact = profile === "compact";
 
   useLayoutEffect(() => {
@@ -57,13 +55,6 @@ export function AppBar({ title, subtitle, leading, children }: Props) {
       window.removeEventListener("resize", updateHeight);
     };
   }, [screenActive]);
-
-  useEffect(() => {
-    const unsubscribe = subscribeDiagnosticsOverlay((active) => {
-      setDiagnosticsOverlayActive(active);
-    });
-    return () => unsubscribe();
-  }, []);
 
   return (
     <header

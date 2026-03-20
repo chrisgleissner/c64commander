@@ -11,36 +11,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppBar } from "@/components/AppBar";
 
 const navigateMock = vi.fn();
-const unsubscribeMock = vi.fn();
-
-const diagnosticsOverlayStateRef = {
-  current: false,
-};
-
-const diagnosticsOverlaySubscriberRef: {
-  current: ((active: boolean) => void) | null;
-} = {
-  current: null,
-};
 
 vi.mock("react-router-dom", () => ({
   useNavigate: () => navigateMock,
-}));
-
-const requestDiagnosticsOpen = vi.fn();
-
-vi.mock("@/lib/diagnostics/diagnosticsOverlay", () => ({
-  requestDiagnosticsOpen: (...args: unknown[]) => requestDiagnosticsOpen(...args),
-}));
-
-vi.mock("@/lib/diagnostics/diagnosticsOverlayState", () => ({
-  isDiagnosticsOverlayActive: () => diagnosticsOverlayStateRef.current,
-  subscribeDiagnosticsOverlay: (listener: (active: boolean) => void) => {
-    diagnosticsOverlaySubscriberRef.current = listener;
-    return unsubscribeMock;
-  },
-  subscribeDiagnosticsSuppression: () => () => {},
-  isDiagnosticsOverlaySuppressionArmed: () => false,
 }));
 
 vi.mock("@/components/UnifiedHealthBadge", () => ({
@@ -55,10 +28,6 @@ describe("AppBar", () => {
 
   beforeEach(() => {
     navigateMock.mockReset();
-    requestDiagnosticsOpen.mockReset();
-    unsubscribeMock.mockReset();
-    diagnosticsOverlayStateRef.current = false;
-    diagnosticsOverlaySubscriberRef.current = null;
   });
 
   afterEach(() => {
@@ -138,7 +107,6 @@ describe("AppBar", () => {
 
     unmount();
     expect(disconnectMock).toHaveBeenCalled();
-    expect(unsubscribeMock).toHaveBeenCalled();
   });
 
   it("falls back to resize events when ResizeObserver is unavailable and ignores zero heights", () => {
