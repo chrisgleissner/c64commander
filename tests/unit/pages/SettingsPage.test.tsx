@@ -618,7 +618,8 @@ describe("SettingsPage", () => {
 
     expect(within(dialog).getByTestId("diagnostics-share-all")).toBeInTheDocument();
     expect(within(dialog).getByTestId("diagnostics-share-filtered")).toBeInTheDocument();
-    expect(within(dialog).getByTestId("diagnostics-clear-all-trigger")).toBeInTheDocument();
+    fireEvent.pointerDown(within(dialog).getByTestId("diagnostics-tools-menu"));
+    expect(await screen.findByTestId("diagnostics-clear-all-trigger")).toBeInTheDocument();
     expect(within(dialog).queryByRole("button", { name: /clear logs/i })).not.toBeInTheDocument();
     expect(within(dialog).queryByRole("button", { name: /clear traces/i })).not.toBeInTheDocument();
     expect(within(dialog).queryByRole("button", { name: /share redacted/i })).not.toBeInTheDocument();
@@ -720,7 +721,8 @@ describe("SettingsPage", () => {
     expect((await within(dialog).findAllByText("Error entry")).length).toBeGreaterThan(0);
 
     // Click clear all trigger, confirm
-    fireEvent.click(within(dialog).getByTestId("diagnostics-clear-all-trigger"));
+    fireEvent.pointerDown(within(dialog).getByTestId("diagnostics-tools-menu"));
+    fireEvent.click(await screen.findByTestId("diagnostics-clear-all-trigger"));
     const confirm = await screen.findByRole("alertdialog");
     fireEvent.click(within(confirm).getByTestId("diagnostics-clear-all-confirm"));
 
@@ -735,7 +737,8 @@ describe("SettingsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
     const dialog = await screen.findByRole("dialog");
 
-    fireEvent.click(within(dialog).getByTestId("diagnostics-clear-all-trigger"));
+    fireEvent.pointerDown(within(dialog).getByTestId("diagnostics-tools-menu"));
+    fireEvent.click(await screen.findByTestId("diagnostics-clear-all-trigger"));
     const confirm = await screen.findByRole("alertdialog");
     fireEvent.click(within(confirm).getByRole("button", { name: /cancel/i }));
 

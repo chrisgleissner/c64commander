@@ -261,13 +261,13 @@ Track actions, inspect traces, and export logs when it is time for serious troub
 
 <table>
   <tr>
-    <td><img src="doc/img/app/diagnostics/01-actions-detail.png" alt="Diagnostics actions" width="360"/></td>
-    <td><img src="doc/img/app/diagnostics/02-traces-detail.png" alt="Diagnostics traces" width="360"/></td>
-    <td><img src="doc/img/app/diagnostics/03-logs.png" alt="Diagnostics logs" width="360"/></td>
+    <td><img src="doc/img/app/diagnostics/01-entry/01-overview.png" alt="Diagnostics overview" width="360"/></td>
+    <td><img src="doc/img/app/diagnostics/02-activity/04-rest-trace-detail.png" alt="Diagnostics traces" width="360"/></td>
+    <td><img src="doc/img/app/diagnostics/03-summary/03-latency-analysis.png" alt="Diagnostics latency analysis" width="360"/></td>
   </tr>
 </table>
 
-Full screenshot set: [doc/img/app/](doc/img/app/)
+Full screenshot set: [doc/img/app/diagnostics/](doc/img/app/diagnostics/)
 
 Profile-specific screenshots:
 

@@ -6,42 +6,33 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-// §13 — Health history nested analytic popup.
-// Visualises health states over time using a categorical Y-axis.
-
 import { AnalyticPopup } from "@/components/diagnostics/AnalyticPopup";
 import { Button } from "@/components/ui/button";
-import { getHealthHistory, type HealthHistoryEntry } from "@/lib/diagnostics/healthHistory";
-import type { HealthState } from "@/lib/diagnostics/healthModel";
-import { getRecoveryEvidence } from "@/lib/diagnostics/recoveryEvidence";
-import { CartesianGrid, Cell, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis } from "recharts";
-import { useEffect, useMemo, useState } from "react";
-import { HEALTH_GLYPHS } from "@/lib/diagnostics/healthModel";
+import { formatActionDuration } from "@/lib/diagnostics/actionSummaryDisplay";
+import { getHealthHistory } from "@/lib/diagnostics/healthHistory";
+import {
+  buildHealthTimelineModel,
+  buildRenderedHealthTimeline,
+  formatTimelineTickLabel,
+  getHealthTimelineTicks,
+  HEALTH_TIMELINE_DEFAULT_WINDOW_MS,
+  HEALTH_TIMELINE_LEGEND_STATES,
+  HEALTH_TIMELINE_STATE_COLORS,
+  HEALTH_TIMELINE_ZOOM_WINDOWS,
+  selectMostRelevantTimelineEvent,
+} from "@/lib/diagnostics/healthHistoryTimeline";
 import { formatDiagnosticsTimestamp } from "@/lib/diagnostics/timeFormat";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-// §13.3 — Y-axis bands (top → bottom per spec)
-const HEALTH_BANDS: HealthState[] = ["Unavailable", "Unhealthy", "Degraded", "Healthy", "Idle"];
+const TRACK_HEIGHT_PX = 28;
+const DEFAULT_ZOOM_INDEX = HEALTH_TIMELINE_ZOOM_WINDOWS.length - 1;
 
-const BAND_COLORS: Record<HealthState, string> = {
-  Unavailable: "hsl(var(--muted-foreground))",
-  Unhealthy: "hsl(var(--destructive))",
-  Degraded: "hsl(39 100% 57%)",
-  Healthy: "hsl(var(--success, 142 71% 45%))",
-  Idle: "hsl(var(--muted-foreground))",
-};
-
-type ChartPoint = {
-  timestampMs: number;
-  health: HealthState;
-  yIndex: number;
-  durationMs: number;
-  label: string;
-};
-
-type OverlayPoint = {
-  timestampMs: number;
-  yIndex: number;
-  label: string;
+const ZOOM_LABELS: Record<number, string> = {
+  [15 * 60 * 1000]: "15m",
+  [30 * 60 * 1000]: "30m",
+  [60 * 60 * 1000]: "1h",
+  [2 * 60 * 60 * 1000]: "2h",
+  [4 * 60 * 60 * 1000]: "4h",
 };
 
 type Props = {
@@ -50,70 +41,96 @@ type Props = {
 };
 
 export function HealthHistoryPopup({ open, onClose }: Props) {
-  const history: Readonly<HealthHistoryEntry[]> = getHealthHistory();
-  const recoveryEvents = getRecoveryEvidence();
-  const [zoom, setZoom] = useState(50);
-  const [windowStart, setWindowStart] = useState(0);
+  const history = getHealthHistory();
+  const trackRef = useRef<HTMLDivElement | null>(null);
+  const [trackWidthPx, setTrackWidthPx] = useState(1);
+  const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX);
+  const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
 
-  const points = useMemo<ChartPoint[]>(() => {
-    return history.map((entry) => ({
-      timestampMs: new Date(entry.timestamp).getTime(),
-      health: entry.overallHealth,
-      yIndex: HEALTH_BANDS.indexOf(entry.overallHealth),
-      durationMs: entry.durationMs,
-      label: entry.overallHealth,
-    }));
+  const lastTimestampMs = useMemo(() => {
+    const timestamps = history
+      .map((entry) => Date.parse(entry.timestamp))
+      .filter((timestampMs) => Number.isFinite(timestampMs));
+    return timestamps[timestamps.length - 1] ?? Date.now();
   }, [history]);
 
+  const windowEndMs = useMemo(() => Math.max(Date.now(), lastTimestampMs), [lastTimestampMs]);
+  const windowDurationMs = HEALTH_TIMELINE_ZOOM_WINDOWS[zoomIndex] ?? HEALTH_TIMELINE_DEFAULT_WINDOW_MS;
+
   useEffect(() => {
-    if (!open) return;
-    setZoom(50);
-    setWindowStart(0);
+    if (!open) {
+      return;
+    }
+    setZoomIndex(DEFAULT_ZOOM_INDEX);
+    setSelectedSegmentId(null);
   }, [open]);
 
-  const visiblePoints = useMemo(() => {
-    if (points.length <= zoom) {
-      return points;
+  useEffect(() => {
+    if (!open) {
+      return;
     }
-    const maxStart = Math.max(0, points.length - zoom);
-    const clampedStart = Math.min(windowStart, maxStart);
-    return points.slice(clampedStart, clampedStart + zoom);
-  }, [points, windowStart, zoom]);
 
-  const visibleWindow = useMemo(() => {
-    if (visiblePoints.length === 0) {
-      return null;
+    const element = trackRef.current;
+    if (!element) {
+      return;
     }
-    return {
-      min: visiblePoints[0].timestampMs,
-      max: visiblePoints[visiblePoints.length - 1].timestampMs,
+
+    const measure = () => {
+      const nextWidth = Math.max(1, Math.floor(element.getBoundingClientRect().width));
+      setTrackWidthPx(nextWidth);
     };
-  }, [visiblePoints]);
 
-  const overlayPoints = useMemo<OverlayPoint[]>(() => {
-    if (!visibleWindow) return [];
-    return recoveryEvents
-      .filter((event) => {
-        const timestampMs = new Date(event.timestamp).getTime();
-        return timestampMs >= visibleWindow.min && timestampMs <= visibleWindow.max;
-      })
-      .map((event) => ({
-        timestampMs: new Date(event.timestamp).getTime(),
-        yIndex: -0.2,
-        label: `${event.kind} · ${event.outcome}`,
-      }));
-  }, [recoveryEvents, visibleWindow]);
+    measure();
 
-  const isEmpty = points.length === 0;
-  const canPan = points.length > zoom;
-  const maxWindowStart = Math.max(0, points.length - zoom);
+    const resizeObserver =
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(() => {
+          measure();
+        })
+        : null;
+
+    resizeObserver?.observe(element);
+    window.addEventListener("resize", measure);
+
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [open]);
+
+  const timelineModel = useMemo(
+    () =>
+      buildHealthTimelineModel(history, {
+        nowMs: windowEndMs,
+        windowDurationMs,
+        windowEndMs,
+      }),
+    [history, windowDurationMs, windowEndMs],
+  );
+
+  const renderedTimeline = useMemo(
+    () => buildRenderedHealthTimeline(timelineModel, trackWidthPx),
+    [timelineModel, trackWidthPx],
+  );
+
+  const selectedSegment = useMemo(
+    () => renderedTimeline.displaySegments.find((segment) => segment.id === selectedSegmentId) ?? null,
+    [renderedTimeline.displaySegments, selectedSegmentId],
+  );
+
+  const selectedEvent = selectedSegment ? selectMostRelevantTimelineEvent(selectedSegment.selection) : null;
+  const isEmpty = history.length === 0;
+  const tickMarks = useMemo(
+    () => getHealthTimelineTicks(timelineModel.windowStartMs, timelineModel.windowEndMs),
+    [timelineModel.windowEndMs, timelineModel.windowStartMs],
+  );
 
   return (
     <AnalyticPopup
       open={open}
       onClose={onClose}
       title="Health history"
-      description="Health check outcomes over the current diagnostics session."
+      description="Single-state timeline over the current diagnostics window."
       data-testid="health-history-popup"
     >
       <div className="flex flex-1 min-h-0 flex-col p-3">
@@ -124,26 +141,25 @@ export function HealthHistoryPopup({ open, onClose }: Props) {
           </div>
         ) : (
           <>
-            <div className="mb-2 flex items-center gap-3 flex-wrap shrink-0">
-              {HEALTH_BANDS.map((band) => (
-                <div key={band} className="flex items-center gap-1 text-xs">
+            <div className="mb-3 flex items-center gap-3 flex-wrap shrink-0" data-testid="health-history-legend">
+              {HEALTH_TIMELINE_LEGEND_STATES.map((state) => (
+                <div key={state} className="flex items-center gap-2 text-xs text-muted-foreground">
                   <span
-                    className="inline-block h-2.5 w-2.5 rounded-full"
-                    style={{ background: BAND_COLORS[band] }}
+                    className="inline-block h-2.5 w-4 rounded-sm"
+                    style={{ backgroundColor: HEALTH_TIMELINE_STATE_COLORS[state] }}
                     aria-hidden="true"
                   />
-                  <span className="font-mono">{HEALTH_GLYPHS[band]}</span>
-                  <span>{band}</span>
+                  <span>{state}</span>
                 </div>
               ))}
             </div>
 
-            <div className="mb-2 flex items-center gap-2 shrink-0 flex-wrap">
+            <div className="mb-3 flex items-center gap-2 shrink-0 flex-wrap">
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => setZoom((current) => Math.max(10, current - 10))}
-                disabled={zoom <= 10}
+                onClick={() => setZoomIndex((current) => Math.max(0, current - 1))}
+                disabled={zoomIndex <= 0}
                 data-testid="health-history-zoom-in"
               >
                 Zoom in
@@ -151,93 +167,169 @@ export function HealthHistoryPopup({ open, onClose }: Props) {
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => setZoom((current) => Math.min(Math.max(points.length, 10), current + 10))}
-                disabled={zoom >= points.length}
+                onClick={() =>
+                  setZoomIndex((current) => Math.min(HEALTH_TIMELINE_ZOOM_WINDOWS.length - 1, current + 1))
+                }
+                disabled={zoomIndex >= HEALTH_TIMELINE_ZOOM_WINDOWS.length - 1}
                 data-testid="health-history-zoom-out"
               >
                 Zoom out
               </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setWindowStart((current) => Math.max(0, current - 10))}
-                disabled={!canPan || windowStart <= 0}
-                data-testid="health-history-pan-left"
-              >
-                Earlier
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setWindowStart((current) => Math.min(maxWindowStart, current + 10))}
-                disabled={!canPan || windowStart >= maxWindowStart}
-                data-testid="health-history-pan-right"
-              >
-                Later
-              </Button>
               <span className="text-xs text-muted-foreground">
-                Showing {visiblePoints.length} of {points.length} checks
+                Visible window {ZOOM_LABELS[windowDurationMs] ?? formatActionDuration(windowDurationMs)}
               </span>
             </div>
 
-            <ResponsiveContainer width="100%" height={220}>
-              <ScatterChart margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
-                <XAxis
-                  dataKey="timestampMs"
-                  type="number"
-                  domain={visibleWindow ? [visibleWindow.min, visibleWindow.max] : ["dataMin", "dataMax"]}
-                  scale="time"
-                  tickFormatter={(v: number) => {
-                    const d = new Date(v);
-                    return `${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
-                  }}
-                  tick={{ fontSize: 10 }}
-                  name="Time"
-                />
-                <YAxis
-                  dataKey="yIndex"
-                  type="number"
-                  domain={[-0.5, HEALTH_BANDS.length - 0.5]}
-                  ticks={HEALTH_BANDS.map((_, i) => i)}
-                  tickFormatter={(i: number) => HEALTH_BANDS[i] ?? ""}
-                  tick={{ fontSize: 10 }}
-                  width={72}
-                  name="Health"
-                />
-                <Tooltip
-                  content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null;
-                    const d = payload[0]?.payload as ChartPoint | undefined;
-                    if (!d) return null;
-                    return (
-                      <div className="rounded border bg-popover px-2 py-1.5 text-xs shadow-md">
-                        <p className="font-medium">
-                          {formatDiagnosticsTimestamp(new Date(d.timestampMs).toISOString())}
-                        </p>
-                        <p>
-                          {HEALTH_GLYPHS[d.health]} {d.health}
-                        </p>
-                        <p className="text-muted-foreground">{d.durationMs}ms</p>
-                      </div>
-                    );
-                  }}
-                />
-                <Scatter name="Health" data={visiblePoints}>
-                  {visiblePoints.map((p, idx) => (
-                    <Cell key={`cell-${idx}`} fill={BAND_COLORS[p.health]} />
-                  ))}
-                </Scatter>
-                {overlayPoints.length > 0 && (
-                  <Scatter name="Recovery events" data={overlayPoints} fill="hsl(var(--foreground))" />
-                )}
-              </ScatterChart>
-            </ResponsiveContainer>
+            <div
+              className="rounded-lg border border-border bg-muted/20 p-3"
+              data-testid="health-history-timeline-panel"
+            >
+              <div
+                ref={trackRef}
+                className="relative w-full overflow-hidden rounded-md bg-background"
+                style={{ height: `${TRACK_HEIGHT_PX}px` }}
+                data-testid="health-history-track"
+              >
+                {renderedTimeline.displaySegments.map((segment) => {
+                  const widthPx = Math.max(1, segment.endColumn - segment.startColumn + 1);
+                  return (
+                    <button
+                      key={segment.id}
+                      type="button"
+                      onClick={() => setSelectedSegmentId(segment.id)}
+                      className="absolute inset-y-0 border-0 p-0"
+                      style={{
+                        left: `${segment.startColumn}px`,
+                        width: `${widthPx}px`,
+                        backgroundColor: HEALTH_TIMELINE_STATE_COLORS[segment.state],
+                        opacity: selectedSegmentId === segment.id ? 0.92 : 1,
+                      }}
+                      data-testid={`health-history-segment-${segment.startColumn}`}
+                      data-state={segment.state}
+                      aria-label={`${segment.state} from ${formatDiagnosticsTimestamp(segment.selection.startMs)} to ${formatDiagnosticsTimestamp(segment.selection.endMs)}`}
+                    />
+                  );
+                })}
+              </div>
 
-            <p className="text-xs text-muted-foreground mt-2 shrink-0">
-              {history.length} check{history.length !== 1 ? "s" : ""} recorded. Recovery overlays mark reconnect and
-              switch events in the visible range.
-            </p>
+              <div
+                className="mt-2 grid grid-cols-5 gap-2 text-[10px] text-muted-foreground"
+                data-testid="health-history-axis"
+              >
+                {tickMarks.map((tick) => (
+                  <span key={tick} className="truncate last:text-right">
+                    {formatTimelineTickLabel(tick)}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div
+              className="mt-3 rounded-md border border-border bg-background/80 p-3 text-xs"
+              data-testid="health-history-summary"
+            >
+              <p className="text-muted-foreground">
+                Showing the last {ZOOM_LABELS[windowDurationMs] ?? formatActionDuration(windowDurationMs)} with{" "}
+                {history.length} recorded health check
+                {history.length !== 1 ? "s" : ""}. Tap the timeline to inspect a segment.
+              </p>
+            </div>
+
+            {selectedSegment && (
+              <div
+                className="mt-3 rounded-lg border border-border bg-background p-3 shadow-sm"
+                data-testid="health-history-selection-overlay"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1.5">
+                    {selectedSegment.selection.kind === "aggregated" ? (
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Aggregated interval
+                      </p>
+                    ) : (
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Segment detail
+                      </p>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="inline-block h-2.5 w-4 rounded-sm"
+                        style={{ backgroundColor: HEALTH_TIMELINE_STATE_COLORS[selectedSegment.selection.state] }}
+                        aria-hidden="true"
+                      />
+                      <span className="text-sm font-medium">{selectedSegment.selection.state}</span>
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setSelectedSegmentId(null)}
+                    data-testid="health-history-selection-dismiss"
+                  >
+                    Dismiss
+                  </Button>
+                </div>
+
+                <div className="mt-3 grid gap-2 text-xs md:grid-cols-2">
+                  <p>
+                    Start{" "}
+                    <span className="font-mono">{formatDiagnosticsTimestamp(selectedSegment.selection.startMs)}</span>
+                  </p>
+                  <p>
+                    End <span className="font-mono">{formatDiagnosticsTimestamp(selectedSegment.selection.endMs)}</span>
+                  </p>
+                  <p>
+                    Duration{" "}
+                    <span className="font-mono">
+                      {formatActionDuration(selectedSegment.selection.endMs - selectedSegment.selection.startMs)}
+                    </span>
+                  </p>
+                  <p>
+                    Events <span className="font-mono">{selectedSegment.selection.eventCount}</span>
+                  </p>
+                  {selectedSegment.selection.kind === "aggregated" && (
+                    <p>
+                      Worst state <span className="font-medium">{selectedSegment.selection.worstState}</span>
+                    </p>
+                  )}
+                  <p>
+                    Subsystem <span className="font-medium">{selectedEvent?.subsystem ?? "—"}</span>
+                  </p>
+                </div>
+
+                <div className="mt-3 space-y-1">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Root cause</p>
+                  <p data-testid="health-history-selection-reason">
+                    {selectedEvent?.rootCause ?? "No diagnostic detail recorded for this interval."}
+                  </p>
+                </div>
+
+                <div className="mt-3 space-y-1">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Error message or code
+                  </p>
+                  <p data-testid="health-history-selection-error">{selectedEvent?.errorMessage ?? "—"}</p>
+                </div>
+
+                {selectedSegment.selection.kind === "aggregated" && selectedSegment.selection.events.length > 0 && (
+                  <details className="mt-3" data-testid="health-history-selection-events">
+                    <summary className="cursor-pointer text-xs font-medium">Show underlying events</summary>
+                    <div className="mt-2 space-y-2">
+                      {selectedSegment.selection.events.map((event) => (
+                        <div key={event.id} className="rounded border border-border px-2 py-1.5 text-xs">
+                          <p className="font-mono">{formatDiagnosticsTimestamp(event.timestampMs)}</p>
+                          <p>
+                            {event.state}
+                            {event.subsystem ? ` · ${event.subsystem}` : ""}
+                          </p>
+                          <p className="text-muted-foreground">{event.rootCause}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                )}
+              </div>
+            )}
           </>
         )}
       </div>

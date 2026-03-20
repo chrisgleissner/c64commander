@@ -34,34 +34,169 @@ export type HeatMapMatrix = {
   computedAt: string;
 };
 
-// ─── REST row groups and column classification ────────────────────────────────
+const REST_ROW_ORDER = [
+  "Device info",
+  "Config reads",
+  "Config writes",
+  "Drive ops",
+  "Machine",
+  "Streams",
+  "Automation",
+  "Diagnostics",
+  "Library",
+  "Other",
+];
 
-const REST_ROW_GROUPS: Record<string, string> = {
-  Info: "Device info",
-  "Configs (full tree)": "Config reads",
-  "Config items": "Config reads",
-  Drives: "Drive ops",
-  "Machine control": "Machine",
-  Other: "Other",
+const FTP_ROW_ORDER = ["Browse", "Read", "Write", "Manage", "Session", "Other FTP"];
+
+const READ_METHODS = new Set(["GET", "HEAD"]);
+
+const naturalCompare = (left: string, right: string) => left.localeCompare(right, undefined, { numeric: true });
+
+const decodeLabelSegment = (value: string): string =>
+  decodeURIComponent(value)
+    .replace(/[._-]+/g, " ")
+    .replace(/\b\w/g, (match) => match.toUpperCase())
+    .trim();
+
+const truncateLabel = (value: string, maxLength = 18): string =>
+  value.length > maxLength ? `${value.slice(0, Math.max(1, maxLength - 1))}…` : value;
+
+const sortMatrix = (matrix: HeatMapMatrix, rowOrder?: string[]) => {
+  if (rowOrder) {
+    matrix.rowGroups.sort((left, right) => {
+      const leftIndex = rowOrder.indexOf(left);
+      const rightIndex = rowOrder.indexOf(right);
+      if (leftIndex === -1 && rightIndex === -1) return naturalCompare(left, right);
+      if (leftIndex === -1) return 1;
+      if (rightIndex === -1) return -1;
+      return leftIndex - rightIndex;
+    });
+  } else {
+    matrix.rowGroups.sort(naturalCompare);
+  }
+  matrix.columnItems.sort(naturalCompare);
+  return matrix;
 };
 
-const classifyRestPath = (path: string): string => {
-  if (/^\/v1\/info\b/.test(path)) return "Info";
-  if (/^\/v1\/configs$/.test(path)) return "Configs (full tree)";
-  if (/^\/v1\/configs\//.test(path)) return "Config items";
-  if (/^\/v1\/drives\b/.test(path)) return "Drives";
-  if (/^\/v1\/(machine|runners|streams)\b/.test(path)) return "Machine control";
-  return "Other";
+const classifyDriveAction = (segments: string[]): string => {
+  const action = segments[3] ?? "";
+  if (!segments[2]) return "Inventory";
+  if (action === "mount") return "Mount";
+  if (action === "eject") return "Eject";
+  if (action === "attach") return "Attach";
+  if (action === "detach") return "Detach";
+  if (action === "status") return "Status";
+  return "Drive detail";
+};
+
+const classifyRestEndpoint = (path: string, method: string): { rowGroup: string; columnItem: string } => {
+  const cleanPath = path.split("?")[0];
+  const segments = cleanPath.split("/").filter(Boolean);
+  const family = segments[1] ?? "";
+  const isRead = READ_METHODS.has(method);
+
+  if (family === "info") {
+    return { rowGroup: "Device info", columnItem: "Info" };
+  }
+
+  if (family === "configs") {
+    const category = segments[2];
+    return {
+      rowGroup: isRead ? "Config reads" : "Config writes",
+      columnItem: category ? truncateLabel(decodeLabelSegment(category)) : "Config tree",
+    };
+  }
+
+  if (family === "drives") {
+    return {
+      rowGroup: "Drive ops",
+      columnItem: classifyDriveAction(segments),
+    };
+  }
+
+  if (family === "machine") {
+    return {
+      rowGroup: "Machine",
+      columnItem: truncateLabel(decodeLabelSegment(segments[2] ?? "Status")),
+    };
+  }
+
+  if (family === "streams") {
+    return {
+      rowGroup: "Streams",
+      columnItem: truncateLabel(decodeLabelSegment(segments[2] ?? "Overview")),
+    };
+  }
+
+  if (family === "runners") {
+    return {
+      rowGroup: "Automation",
+      columnItem: truncateLabel(decodeLabelSegment(segments[3] ?? segments[2] ?? "Overview")),
+    };
+  }
+
+  if (family === "diagnostics") {
+    return {
+      rowGroup: "Diagnostics",
+      columnItem: truncateLabel(decodeLabelSegment(segments[2] ?? "Overview")),
+    };
+  }
+
+  if (family === "playlists" || family === "files") {
+    return {
+      rowGroup: "Library",
+      columnItem: truncateLabel(decodeLabelSegment(segments[2] ?? family)),
+    };
+  }
+
+  return {
+    rowGroup: "Other",
+    columnItem: truncateLabel(decodeLabelSegment(segments[1] ?? "Other")),
+  };
 };
 
 // ─── FTP row groups ───────────────────────────────────────────────────────────
 
 const classifyFtpOperation = (op: string): string => {
   const upper = op.toUpperCase();
-  if (upper === "LIST" || upper === "NLST") return "List operations";
-  if (upper === "RETR" || upper === "GET" || upper === "READ") return "Read operations";
-  if (upper === "STOR" || upper === "PUT" || upper === "WRITE") return "Write operations";
+  if (upper === "LIST" || upper === "NLST" || upper === "MLSD") return "Browse";
+  if (upper === "RETR" || upper === "GET" || upper === "READ" || upper === "SIZE" || upper === "MDTM") {
+    return "Read";
+  }
+  if (upper === "STOR" || upper === "PUT" || upper === "WRITE" || upper === "APPE") return "Write";
+  if (upper === "DELE" || upper === "RMD" || upper === "MKD" || upper === "RNFR" || upper === "RNTO") {
+    return "Manage";
+  }
+  if (upper === "CWD" || upper === "PWD" || upper === "NOOP" || upper === "TYPE" || upper === "PASV") {
+    return "Session";
+  }
   return "Other FTP";
+};
+
+const classifyFtpTarget = (path: string): string | null => {
+  if (!path) return null;
+  const lower = path.toLowerCase();
+  if (lower === "/") return "Root";
+  if (lower.includes("/games")) return "Games";
+  if (lower.includes("/demos")) return "Demos";
+  if (lower.includes("/config")) return "Config";
+  if (lower.includes("/saves")) return "Saves";
+  if (lower.includes("/logs")) return "Logs";
+  if (lower.endsWith(".d64")) return "Disk";
+  if (lower.endsWith(".prg")) return "PRG";
+  if (lower.endsWith(".sid")) return "SID";
+  if (lower.endsWith(".crt")) return "CRT";
+  if (lower.endsWith(".txt")) return "Text";
+  if (lower.endsWith(".json")) return "JSON";
+  const finalSegment = path.split("/").filter(Boolean).at(-1);
+  return finalSegment ? truncateLabel(decodeLabelSegment(finalSegment), 14) : null;
+};
+
+const formatFtpColumnLabel = (operation: string, path: string): string => {
+  const upper = operation.toUpperCase();
+  const target = classifyFtpTarget(path);
+  return truncateLabel(target ? `${upper} ${target}` : upper);
 };
 
 // ─── CONFIG row groups ────────────────────────────────────────────────────────
@@ -100,8 +235,9 @@ export const buildRestHeatMap = (events: TraceEvent[]): HeatMapMatrix => {
   for (const e of events) {
     if (e.type !== "rest-response") continue;
     const path = typeof e.data.path === "string" ? e.data.path : "";
-    const colItem = classifyRestPath(path);
-    const rowGroup = REST_ROW_GROUPS[colItem] ?? "Other";
+    const method = typeof e.data.method === "string" ? e.data.method.toUpperCase() : "GET";
+    const { rowGroup, columnItem } = classifyRestEndpoint(path, method);
+    const colItem = columnItem;
     const cell = ensureCell(matrix, rowGroup, colItem);
     cell.callCount++;
 
@@ -115,12 +251,11 @@ export const buildRestHeatMap = (events: TraceEvent[]): HeatMapMatrix => {
       cell.latenciesMs.sort((a, b) => a - b);
     }
 
-    const method = typeof e.data.method === "string" ? e.data.method.toUpperCase() : "GET";
     if (method === "GET" || method === "HEAD") cell.readCount++;
     else cell.writeCount++;
   }
 
-  return matrix;
+  return sortMatrix(matrix, REST_ROW_ORDER);
 };
 
 export const buildFtpHeatMap = (events: TraceEvent[]): HeatMapMatrix => {
@@ -135,8 +270,9 @@ export const buildFtpHeatMap = (events: TraceEvent[]): HeatMapMatrix => {
   for (const e of events) {
     if (e.type !== "ftp-operation") continue;
     const op = typeof e.data.operation === "string" ? e.data.operation : "OTHER";
+    const path = typeof e.data.path === "string" ? e.data.path : "";
     const rowGroup = classifyFtpOperation(op);
-    const colItem = op.toUpperCase().slice(0, 12);
+    const colItem = formatFtpColumnLabel(op, path);
     const cell = ensureCell(matrix, rowGroup, colItem);
     cell.callCount++;
 
@@ -151,7 +287,7 @@ export const buildFtpHeatMap = (events: TraceEvent[]): HeatMapMatrix => {
     }
   }
 
-  return matrix;
+  return sortMatrix(matrix, FTP_ROW_ORDER);
 };
 
 export const buildConfigHeatMap = (events: TraceEvent[]): HeatMapMatrix => {
@@ -193,7 +329,7 @@ export const buildConfigHeatMap = (events: TraceEvent[]): HeatMapMatrix => {
     }
   }
 
-  return matrix;
+  return sortMatrix(matrix);
 };
 
 /** Compute the cell metric value given the mode. */

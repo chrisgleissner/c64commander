@@ -38,6 +38,10 @@ import { buildBaseUrlFromDeviceHost, normalizeDeviceHost } from "@/lib/c64api";
 import { createActionContext, runWithActionTrace } from "@/lib/tracing/actionTrace";
 import { recordRestResponse } from "@/lib/tracing/traceSession";
 import { getRecoveryEvidence, clearRecoveryEvidence, recordRecoveryEvidence } from "@/lib/diagnostics/recoveryEvidence";
+import {
+  DIAGNOSTICS_TEST_OVERLAY_STATE_EVENT,
+  type DiagnosticsOverlaySeedState,
+} from "@/lib/diagnostics/diagnosticsTestBridge";
 
 const validateTarget = async (host: string, port: number) => {
   const normalizedHost = normalizeDeviceHost(host);
@@ -157,6 +161,31 @@ export const GlobalDiagnosticsOverlay = () => {
 
   useEffect(() => {
     return () => setDiagnosticsOverlayActive(false);
+  }, []);
+
+  useEffect(() => {
+    const applyOverlaySeedState = (state: DiagnosticsOverlaySeedState | null | undefined) => {
+      if (!state) return;
+      setLastHealthCheckResult(state.lastHealthCheckResult ?? null);
+      setLiveHealthCheckProbes(state.liveHealthCheckProbes ?? null);
+      setHealthCheckRunning(state.healthCheckRunning ?? false);
+    };
+
+    const win = window as Window & {
+      __c64uDiagnosticsTestBridge?: {
+        getOverlayStateSnapshot?: () => DiagnosticsOverlaySeedState;
+      };
+    };
+
+    applyOverlaySeedState(win.__c64uDiagnosticsTestBridge?.getOverlayStateSnapshot?.());
+
+    const handleOverlaySeedState = (event: Event) => {
+      applyOverlaySeedState((event as CustomEvent<DiagnosticsOverlaySeedState>).detail);
+    };
+
+    window.addEventListener(DIAGNOSTICS_TEST_OVERLAY_STATE_EVENT, handleOverlaySeedState as EventListener);
+    return () =>
+      window.removeEventListener(DIAGNOSTICS_TEST_OVERLAY_STATE_EVENT, handleOverlaySeedState as EventListener);
   }, []);
 
   const diagnosticsExportData = useMemo(

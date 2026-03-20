@@ -21,6 +21,7 @@ type Props = {
   title: string;
   description: string;
   children: React.ReactNode;
+  contentClassName?: string;
   "data-testid"?: string;
 };
 
@@ -30,7 +31,15 @@ type Props = {
  * §5.4 — Close order: this popup closes before the overlay.
  * §5.7 — Back/Escape: closes this popup, not the overlay.
  */
-export function AnalyticPopup({ open, onClose, title, description, children, "data-testid": testId }: Props) {
+export function AnalyticPopup({
+  open,
+  onClose,
+  title,
+  description,
+  children,
+  contentClassName,
+  "data-testid": testId,
+}: Props) {
   // §5.7 — Escape key closes only this popup, not the parent overlay
   useEffect(() => {
     if (!open) return;
@@ -65,6 +74,7 @@ export function AnalyticPopup({ open, onClose, title, description, children, "da
             "data-[state=open]:animate-in data-[state=closed]:animate-out",
             "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
             "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+            contentClassName,
           )}
           data-testid={testId ?? "analytic-popup"}
           onEscapeKeyDown={(e) => {

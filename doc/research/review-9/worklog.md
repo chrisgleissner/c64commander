@@ -108,7 +108,7 @@
   - `doc/img/app/play/import/profiles/**`
   - `doc/img/app/config/profiles/**`
   - `doc/img/app/settings/profiles/**`
-  - `doc/img/app/diagnostics/profiles/**`
+  - `doc/img/app/diagnostics/01-entry/profiles/**`
 - Findings:
   - Unit tests prove threshold boundaries, override persistence, root-token application, storage synchronization, and modal-presentation mode selection.
   - Component tests prove that `ItemSelectionDialog` preserves selection and filter state across profile override changes.

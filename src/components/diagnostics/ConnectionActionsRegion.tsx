@@ -140,7 +140,7 @@ export function ConnectionActionsRegion({ connectivity, currentHost, callbacks, 
   const feedbackIsSuccess = busy.type === "done" && busy.success;
 
   return (
-    <div className="mt-2 space-y-1" data-testid="connection-actions-region">
+    <div className="mt-1.5 space-y-1" data-testid="connection-actions-region">
       {/* §7 — Collapsed summary row (compact) */}
       <button
         type="button"

@@ -36,7 +36,13 @@ import {
 } from "./displayProfileViewports";
 import { registerScreenshotSections, sanitizeSegment } from "./screenshotCatalog";
 import { planHomeScreenshotSlices } from "./homeScreenshotLayout";
-import { installFixedClock, installListPreviewLimit, installStableStorage, seedDiagnosticsTraces } from "./visualSeeds";
+import {
+  installFixedClock,
+  installListPreviewLimit,
+  installStableStorage,
+  seedDiagnosticsAnalytics,
+  seedDiagnosticsTraces,
+} from "./visualSeeds";
 
 const SCREENSHOT_ROOT = path.resolve("doc/img/app");
 const execFile = promisify(execFileCb);
@@ -47,6 +53,8 @@ const screenshotLabel = (relativePath: string) => relativePath.replace(/\.[^.]+$
 const screenshotRepoPath = (relativePath: string) => path.posix.join("doc/img/app", relativePath);
 const profileScreenshotPath = (pageId: string, profileId: DisplayProfileViewportId, fileName: string) =>
   `${pageId}/profiles/${profileId}/${fileName}`;
+const diagnosticsProfileScreenshotPath = (profileId: DisplayProfileViewportId, fileName: string) =>
+  `01-entry/profiles/${profileId}/${fileName}`;
 
 const ensureScreenshotDir = async (filePath: string) => {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
@@ -354,6 +362,15 @@ const captureScreenshot = async (
 
   await attachStepScreenshot(page, testInfo, screenshotLabel(relativePath));
 };
+
+const captureDiagnosticsScreenshot = async (
+  page: Page,
+  testInfo: TestInfo,
+  relativePath: string,
+  options?: {
+    fullPage?: boolean;
+  },
+) => captureScreenshot(page, testInfo, `diagnostics/${relativePath}`, options);
 
 const scrollAndCapture = async (
   page: Page,
@@ -1217,68 +1234,189 @@ test.describe("App screenshots", () => {
     "capture diagnostics screenshots",
     { tag: "@screenshots" },
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
-      await page.goto("/settings");
-      await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+      const openDiagnostics = async () => {
+        await page.goto("/");
+        await applyDisplayProfileViewport(page, "medium");
+        await waitForConnected(page);
+        await expect(page.getByTestId("unified-health-badge")).toBeVisible();
+        await page.waitForFunction(() =>
+          Boolean((window as Window & { __c64uTracing?: { seedTraces?: unknown } }).__c64uTracing?.seedTraces),
+        );
+        await seedDiagnosticsTraces(page);
+        await seedDiagnosticsAnalytics(page);
 
-      await page.waitForFunction(() =>
-        Boolean((window as Window & { __c64uTracing?: { seedTraces?: unknown } }).__c64uTracing?.seedTraces),
-      );
-      await seedDiagnosticsTraces(page);
+        const diagnosticsButton = page.getByTestId("unified-health-badge");
+        await diagnosticsButton.scrollIntoViewIfNeeded();
+        await diagnosticsButton.click();
 
-      const diagnosticsButton = getActiveMain(page).getByRole("button", {
-        name: "Diagnostics",
-        exact: true,
-      });
-      await diagnosticsButton.scrollIntoViewIfNeeded();
-      await diagnosticsButton.click();
+        const dialog = page.getByRole("dialog", { name: "Diagnostics" });
+        await expect(dialog).toBeVisible();
+        return dialog;
+      };
 
-      const dialog = page.getByRole("dialog", { name: "Diagnostics" });
-      if (!(await dialog.isVisible().catch(() => false))) {
-        return;
-      }
+      const resetEvidenceFilters = async (dialog: ReturnType<Page["getByRole"]>) => {
+        const resetButton = dialog.getByTestId("reset-filters-button");
+        if (await resetButton.isVisible().catch(() => false)) {
+          await resetButton.click();
+        }
+      };
 
-      const actionsTab = dialog.getByRole("button", { name: "Actions", exact: true });
-      await actionsTab.scrollIntoViewIfNeeded();
-      await expect(actionsTab).toBeVisible();
-      await actionsTab.click({ force: true });
-      await expect(dialog.getByRole("button", { name: /Share all/i })).toBeVisible();
-      await expect(dialog.getByRole("button", { name: /Clear all/i })).toBeVisible();
-      await captureScreenshot(page, testInfo, "diagnostics/00-controls.png");
+      const openToolsMenu = async (dialog: ReturnType<Page["getByRole"]>) => {
+        await dialog.getByTestId("diagnostics-tools-menu").click();
+      };
+
+      const openRefinePanelIfNeeded = async (dialog: ReturnType<Page["getByRole"]>, targetTestId: string) => {
+        const target = dialog.getByTestId(targetTestId);
+        if (await target.isVisible().catch(() => false)) return;
+        const refineButton = dialog.getByTestId("refine-button");
+        if (await refineButton.isVisible().catch(() => false)) {
+          await refineButton.click();
+          await expect(target).toBeVisible();
+        }
+      };
+
+      const ensureSummaryExpanded = async (dialog: ReturnType<Page["getByRole"]>) => {
+        const summary = dialog.getByTestId("health-summary");
+        if (await summary.isVisible().catch(() => false)) {
+          await summary.scrollIntoViewIfNeeded();
+        }
+        const deviceDetailButton = dialog.getByTestId("open-device-detail");
+        if (await deviceDetailButton.isVisible().catch(() => false)) {
+          await deviceDetailButton.scrollIntoViewIfNeeded();
+          return;
+        }
+        const expandButton = dialog.getByLabel("Expand health summary");
+        if (await expandButton.isVisible().catch(() => false)) {
+          await expandButton.scrollIntoViewIfNeeded();
+          await expandButton.click();
+          await expect(deviceDetailButton).toBeVisible();
+          await deviceDetailButton.scrollIntoViewIfNeeded();
+        }
+      };
+
+      const closeTransientSurface = async () => {
+        await page.keyboard.press("Escape");
+        await page.waitForTimeout(120);
+      };
+
+      const dialog = await openDiagnostics();
+
+      await captureDiagnosticsScreenshot(page, testInfo, "01-entry/01-overview.png");
+
       const actionSummary = dialog.locator('[data-testid^="action-summary-"]').first();
       if ((await actionSummary.count()) > 0 && (await actionSummary.isVisible().catch(() => false))) {
-        await actionSummary.locator("summary").click();
+        await actionSummary.evaluate((node) => {
+          (node as HTMLDetailsElement).open = true;
+        });
         await expect(actionSummary).toHaveJSProperty("open", true);
-        await captureScreenshot(page, testInfo, "diagnostics/01-actions-detail.png");
+        await captureDiagnosticsScreenshot(page, testInfo, "02-activity/01-actions-detail.png");
       }
 
-      const tracesTab = dialog.getByRole("button", { name: "Traces", exact: true });
-      await tracesTab.click();
-      const traceItem = dialog.locator('[data-testid^="trace-item-"]').first();
-      if ((await traceItem.count()) > 0 && (await traceItem.isVisible().catch(() => false))) {
-        await traceItem.locator("summary").click();
-        await expect(traceItem).toHaveJSProperty("open", true);
-        await captureScreenshot(page, testInfo, "diagnostics/02-traces-detail.png");
-      }
-
-      const logsTab = dialog.getByRole("button", { name: "Logs", exact: true });
-      await logsTab.click();
-      await captureScreenshot(page, testInfo, "diagnostics/03-logs.png");
-      const logEntry = dialog.locator('[data-testid^="log-entry-"]').first();
+      await resetEvidenceFilters(dialog);
+      await dialog.getByTestId("evidence-toggle-actions").click();
+      await dialog.getByTestId("evidence-toggle-problems").click();
+      await dialog.getByTestId("evidence-toggle-logs").click();
+      await openRefinePanelIfNeeded(dialog, "severity-toggle-errors");
+      await dialog.getByTestId("severity-toggle-errors").click();
+      await captureDiagnosticsScreenshot(page, testInfo, "02-activity/02-logs-errors-filtered.png");
+      const logEntry = dialog.locator('[data-testid^="log-"]').first();
       if ((await logEntry.count()) > 0 && (await logEntry.isVisible().catch(() => false))) {
-        await logEntry.locator("summary").click();
-        await expect(logEntry).toHaveJSProperty("open", true);
-        await captureScreenshot(page, testInfo, "diagnostics/03-logs-detail.png");
+        await logEntry.evaluate((node) => {
+          (node as HTMLDetailsElement).open = true;
+        });
       }
 
-      const errorsTab = dialog.getByRole("button", { name: "Problems", exact: true });
-      await errorsTab.click();
-      await captureScreenshot(page, testInfo, "diagnostics/04-errors.png");
-      const errorEntry = dialog.locator('[data-testid^="error-log-"]').first();
-      if ((await errorEntry.count()) > 0 && (await errorEntry.isVisible().catch(() => false))) {
-        await errorEntry.locator("summary").click();
-        await expect(errorEntry).toHaveJSProperty("open", true);
-        await captureScreenshot(page, testInfo, "diagnostics/04-errors-detail.png");
+      await resetEvidenceFilters(dialog);
+      await dialog.getByTestId("evidence-toggle-actions").click();
+      await dialog.getByTestId("evidence-toggle-problems").click();
+      await dialog.getByTestId("evidence-toggle-traces").click();
+      await openRefinePanelIfNeeded(dialog, "indicator-toggle-rest");
+      await dialog.getByTestId("indicator-toggle-rest").click();
+      await captureDiagnosticsScreenshot(page, testInfo, "02-activity/03-rest-traces-filtered.png");
+      const traceItem = dialog.locator('[data-testid^="trace-"]').first();
+      if ((await traceItem.count()) > 0 && (await traceItem.isVisible().catch(() => false))) {
+        await traceItem.evaluate((node) => {
+          (node as HTMLDetailsElement).open = true;
+        });
+        await captureDiagnosticsScreenshot(page, testInfo, "02-activity/04-rest-trace-detail.png");
       }
+
+      await resetEvidenceFilters(dialog);
+      const problemItem = dialog.locator('[data-testid^="problem-"]').first();
+      if ((await problemItem.count()) > 0 && (await problemItem.isVisible().catch(() => false))) {
+        await problemItem.evaluate((node) => {
+          (node as HTMLDetailsElement).open = true;
+        });
+        await captureDiagnosticsScreenshot(page, testInfo, "02-activity/05-problems-detail.png");
+      }
+
+      await ensureSummaryExpanded(dialog);
+      await dialog.getByTestId("open-device-detail").click();
+      await expect(dialog.getByTestId("device-detail-view")).toBeVisible();
+      await captureDiagnosticsScreenshot(page, testInfo, "03-summary/01-device-detail.png");
+      await dialog.getByTestId("device-detail-back").click();
+
+      await ensureSummaryExpanded(dialog);
+      if (
+        await dialog
+          .getByTestId("open-health-check-detail")
+          .isVisible()
+          .catch(() => false)
+      ) {
+        await dialog.getByTestId("open-health-check-detail").click();
+        await expect(dialog.getByTestId("health-check-detail-view")).toBeVisible();
+        await captureDiagnosticsScreenshot(page, testInfo, "03-summary/02-health-check-detail.png");
+        await dialog.getByTestId("health-check-detail-back").click();
+      }
+
+      await ensureSummaryExpanded(dialog);
+      if (
+        await dialog
+          .getByTestId("latency-summary-row")
+          .isVisible()
+          .catch(() => false)
+      ) {
+        await dialog.getByTestId("latency-summary-row").click();
+        await expect(page.getByTestId("latency-analysis-popup")).toBeVisible();
+        await captureDiagnosticsScreenshot(page, testInfo, "03-summary/03-latency-analysis.png");
+        await closeTransientSurface();
+      }
+
+      await ensureSummaryExpanded(dialog);
+      await dialog.getByTestId("health-history-row").click();
+      await expect(page.getByTestId("health-history-popup")).toBeVisible();
+      await captureDiagnosticsScreenshot(page, testInfo, "03-summary/04-health-history.png");
+      await closeTransientSurface();
+
+      await openToolsMenu(dialog);
+      await page.getByTestId("open-heatmap-rest").click();
+      await expect(page.getByTestId("heat-map-popup-rest")).toBeVisible();
+      await captureDiagnosticsScreenshot(page, testInfo, "04-tools/01-heat-maps/01-rest-heat-map.png");
+      await closeTransientSurface();
+
+      await openToolsMenu(dialog);
+      await page.getByTestId("open-heatmap-ftp").click();
+      await expect(page.getByTestId("heat-map-popup-ftp")).toBeVisible();
+      await captureDiagnosticsScreenshot(page, testInfo, "04-tools/01-heat-maps/02-ftp-heat-map.png");
+      await closeTransientSurface();
+
+      await openToolsMenu(dialog);
+      await page.getByTestId("open-heatmap-config").click();
+      await expect(page.getByTestId("heat-map-popup-config")).toBeVisible();
+      await captureDiagnosticsScreenshot(page, testInfo, "04-tools/01-heat-maps/03-config-heat-map.png");
+      await closeTransientSurface();
+
+      await openToolsMenu(dialog);
+      await page.getByTestId("open-config-drift").click();
+      await expect(dialog.getByTestId("config-drift-view")).toBeVisible();
+      await captureDiagnosticsScreenshot(page, testInfo, "04-tools/02-config/01-config-drift.png");
+      await dialog.getByTestId("config-drift-back").click();
+
+      await openToolsMenu(dialog);
+      await page.getByTestId("diagnostics-clear-all-trigger").click();
+      await expect(page.getByRole("alertdialog")).toBeVisible();
+      await captureDiagnosticsScreenshot(page, testInfo, "04-tools/03-clear/01-clear-confirmation.png");
+      await page.getByRole("button", { name: "Cancel" }).click();
 
       await page.keyboard.press("Escape");
       await expect(dialog).toBeHidden();
@@ -1290,15 +1428,28 @@ test.describe("App screenshots", () => {
     { tag: "@screenshots" },
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
       for (const profileId of DISPLAY_PROFILE_VIEWPORT_SEQUENCE) {
-        await page.goto("/settings");
+        await page.goto("/");
         await applyDisplayProfileViewport(page, profileId);
+        await waitForConnected(page);
+        await expect(page.getByTestId("unified-health-badge")).toBeVisible();
+        await page.waitForFunction(() =>
+          Boolean((window as Window & { __c64uTracing?: { seedTraces?: unknown } }).__c64uTracing?.seedTraces),
+        );
         await seedDiagnosticsTraces(page);
-        await getActiveMain(page).getByRole("button", { name: "Diagnostics", exact: true }).click();
+        await seedDiagnosticsAnalytics(page);
         const dialog = page.getByRole("dialog", { name: "Diagnostics" });
+        if (!(await dialog.isVisible().catch(() => false))) {
+          await page.getByTestId("unified-health-badge").click();
+          await expect(dialog).toBeVisible();
+        }
         if (!(await dialog.isVisible().catch(() => false))) {
           continue;
         }
-        await captureScreenshot(page, testInfo, profileScreenshotPath("diagnostics", profileId, "01-overview.png"));
+        await captureDiagnosticsScreenshot(
+          page,
+          testInfo,
+          diagnosticsProfileScreenshotPath(profileId, "01-overview.png"),
+        );
         await page.keyboard.press("Escape");
       }
     },

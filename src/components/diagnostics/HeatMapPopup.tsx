@@ -24,7 +24,7 @@ import {
 } from "@/lib/diagnostics/heatMapData";
 import type { TraceEvent } from "@/lib/tracing/types";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 
 const VARIANT_TITLES: Record<HeatMapVariant, string> = {
   REST: "REST activity",
@@ -54,13 +54,28 @@ const metricIntensity = (value: number, max: number): number => {
   return Math.min(1, value / max);
 };
 
-const intensityClass = (intensity: number): string => {
-  if (intensity === 0) return "bg-muted/30";
-  if (intensity < 0.2) return "bg-primary/10";
-  if (intensity < 0.4) return "bg-primary/25";
-  if (intensity < 0.6) return "bg-primary/45";
-  if (intensity < 0.8) return "bg-primary/65";
-  return "bg-primary/90";
+const legendSteps = Array.from({ length: 10 }, (_, index) => (index + 1) / 10);
+
+const interpolate = (from: number, to: number, intensity: number) => from + (to - from) * intensity;
+
+const heatCellStyle = (intensity: number): CSSProperties => {
+  if (intensity <= 0) {
+    return {
+      backgroundColor: "hsl(var(--muted) / 0.4)",
+      borderColor: "hsl(var(--border) / 0.65)",
+      color: "hsl(var(--muted-foreground))",
+    };
+  }
+
+  const hue = interpolate(196, 12, intensity);
+  const saturation = interpolate(82, 88, intensity);
+  const lightness = interpolate(96, 38, intensity);
+
+  return {
+    backgroundColor: `hsl(${hue} ${saturation}% ${lightness}%)`,
+    borderColor: `hsl(${hue} ${Math.min(96, saturation + 4)}% ${Math.max(24, lightness - 12)}%)`,
+    color: lightness < 58 ? "hsl(var(--primary-foreground))" : "hsl(var(--foreground))",
+  };
 };
 
 const MetricToggle = ({ mode, onChange }: { mode: HeatMapMetricMode; onChange: (m: HeatMapMetricMode) => void }) => (
@@ -189,15 +204,33 @@ export function HeatMapPopup({ open, onClose, variant, traceEvents }: Props) {
       onClose={onClose}
       title={VARIANT_TITLES[variant]}
       description={VARIANT_DESCRIPTIONS[variant]}
+      contentClassName="w-[min(96vw,72rem)] h-[min(88dvh,52rem)]"
       data-testid={`heat-map-popup-${variant.toLowerCase()}`}
     >
       <div className="flex flex-1 min-h-0 flex-col p-3 relative">
-        {/* Metric mode toggle */}
-        <div className="flex items-center gap-3 mb-3 shrink-0">
+        <div className="flex flex-wrap items-center gap-3 mb-3 shrink-0">
           <MetricToggle mode={mode} onChange={setMode} />
           <span className="text-xs text-muted-foreground">
             {mode === "Count" ? "Color encodes call count" : "Color encodes p90 latency"}
           </span>
+        </div>
+
+        <div className="mb-3 shrink-0 rounded-xl border border-border/70 bg-muted/20 px-3 py-2">
+          <div className="flex items-center justify-between gap-3 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+            <span>Low signal</span>
+            <span>High signal</span>
+          </div>
+          <div className="mt-2 grid grid-cols-10 gap-1" data-testid="heat-map-legend">
+            {legendSteps.map((step) => (
+              <div
+                key={step}
+                className="flex h-7 items-center justify-center rounded-md border text-[10px] font-semibold"
+                style={heatCellStyle(step)}
+              >
+                {Math.round(step * 100)}
+              </div>
+            ))}
+          </div>
         </div>
 
         {isEmpty ? (
@@ -206,22 +239,23 @@ export function HeatMapPopup({ open, onClose, variant, traceEvents }: Props) {
           </div>
         ) : (
           <div className="overflow-auto flex-1">
-            <table className="border-collapse text-xs w-full" aria-label={`${variant} heat map`}>
+            <table
+              className="w-full table-fixed border-separate border-spacing-1 text-xs"
+              aria-label={`${variant} heat map`}
+            >
               <thead>
                 <tr>
-                  {/* §15.3 — Row label column */}
-                  <th className="text-left text-muted-foreground font-normal px-1 pb-1 min-w-[6rem] whitespace-nowrap">
+                  <th className="sticky left-0 z-20 w-[9.5rem] rounded-md bg-background px-2 pb-1 text-left font-normal text-muted-foreground sm:w-[10.5rem]">
                     Group
                   </th>
-                  {/* §15.3 — Column labels (diagonal when dense, flat here) */}
                   {matrix.columnItems.map((col) => (
                     <th
                       key={col}
-                      className="text-muted-foreground font-normal pb-1 px-1 whitespace-nowrap max-w-[4rem]"
+                      className="rounded-md bg-background px-0.5 pb-1 font-normal text-muted-foreground"
                       style={{ writingMode: "vertical-lr", textOrientation: "mixed", transform: "rotate(180deg)" }}
                       title={col}
                     >
-                      <span className="block max-h-[5rem] overflow-hidden text-[10px]">{col}</span>
+                      <span className="block max-h-[6rem] overflow-hidden text-[10px] tracking-[0.08em]">{col}</span>
                     </th>
                   ))}
                 </tr>
@@ -229,7 +263,9 @@ export function HeatMapPopup({ open, onClose, variant, traceEvents }: Props) {
               <tbody>
                 {matrix.rowGroups.map((rowGroup) => (
                   <tr key={rowGroup}>
-                    <td className="text-muted-foreground px-1 py-0.5 font-medium whitespace-nowrap">{rowGroup}</td>
+                    <td className="sticky left-0 z-10 rounded-md border border-border/60 bg-background px-2 py-1.5 font-medium leading-tight text-muted-foreground whitespace-normal break-words">
+                      {rowGroup}
+                    </td>
                     {matrix.columnItems.map((col) => {
                       const cell = matrix.cells[rowGroup]?.[col];
                       const value = cell ? getCellMetricValue(cell, mode) : 0;
@@ -238,10 +274,10 @@ export function HeatMapPopup({ open, onClose, variant, traceEvents }: Props) {
                         <td
                           key={col}
                           className={cn(
-                            "px-1 py-0.5 text-center cursor-pointer transition-colors",
-                            intensityClass(intensity),
-                            "hover:ring-1 hover:ring-primary",
+                            "h-9 rounded-md border px-1 py-0.5 text-center cursor-pointer transition-transform duration-150",
+                            "hover:scale-[1.02] hover:ring-1 hover:ring-primary/70",
                           )}
+                          style={heatCellStyle(intensity)}
                           onClick={() => cell && setCellDetail({ cell })}
                           title={cell ? `${cell.rowGroup}/${cell.columnItem}: ${value}` : "—"}
                           aria-label={
@@ -251,7 +287,7 @@ export function HeatMapPopup({ open, onClose, variant, traceEvents }: Props) {
                           }
                           data-testid={`heat-cell-${rowGroup}-${col}`}
                         >
-                          <span className="font-mono text-[10px]">{value > 0 ? value : ""}</span>
+                          <span className="font-mono text-[11px] font-semibold">{value > 0 ? value : ""}</span>
                         </td>
                       );
                     })}

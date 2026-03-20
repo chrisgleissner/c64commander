@@ -25,6 +25,7 @@ import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, X
 import { useCallback, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { formatDiagnosticsTimestamp } from "@/lib/diagnostics/timeFormat";
+import { BarChart2 } from "lucide-react";
 
 // §12.7 — Checkbox order per spec
 const TRANSPORT_FAMILIES: TransportFamily[] = ["REST", "FTP"];
@@ -216,6 +217,7 @@ export function LatencyAnalysisPopup({ open, onClose }: Props) {
       onClose={onClose}
       title="Latency analysis"
       description="Request latency over time for the current diagnostics session."
+      contentClassName={isEmpty ? "h-auto max-h-[min(72dvh,38rem)]" : undefined}
       data-testid="latency-analysis-popup"
     >
       <div className="flex flex-1 min-h-0 flex-col sm:flex-row">
@@ -292,13 +294,25 @@ export function LatencyAnalysisPopup({ open, onClose }: Props) {
 
           {/* §12.10 — Empty state */}
           {isEmpty ? (
-            <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center text-sm text-muted-foreground">
-              <p>No latency samples match the current filters.</p>
-              {!filters.allCallTypes && (
-                <Button size="sm" variant="outline" onClick={resetFilters}>
-                  Reset filters
-                </Button>
-              )}
+            <div className="flex flex-1 items-center justify-center py-2">
+              <div className="flex min-h-40 w-full max-w-xl flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border/70 bg-muted/15 px-5 py-6 text-center">
+                <BarChart2 className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-foreground">
+                    {filters.allCallTypes ? "No latency samples yet" : "No latency samples match these filters"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {filters.allCallTypes
+                      ? "Run a health check or keep using the app to populate the chart."
+                      : "Widen the selected call types to bring latency history back into view."}
+                  </p>
+                </div>
+                {!filters.allCallTypes && (
+                  <Button size="sm" variant="outline" onClick={resetFilters}>
+                    Reset filters
+                  </Button>
+                )}
+              </div>
             </div>
           ) : (
             <ResponsiveContainer width="100%" height={240}>

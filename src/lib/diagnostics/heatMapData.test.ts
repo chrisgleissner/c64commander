@@ -103,7 +103,7 @@ describe("buildRestHeatMap", () => {
 
   it("counts write methods as writeCount", () => {
     const m = buildRestHeatMap([restResponse("/v1/machine", 204, 50, "PUT")]);
-    const cell = m.cells["Machine"]?.["Machine control"];
+    const cell = m.cells["Machine"]?.["Status"];
     expect(cell).toBeDefined();
     expect(cell.writeCount).toBe(1);
     expect(cell.readCount).toBe(0);
@@ -111,22 +111,38 @@ describe("buildRestHeatMap", () => {
 
   it("groups /v1/configs exactly under Config reads", () => {
     const m = buildRestHeatMap([restResponse("/v1/configs")]);
-    expect(m.cells["Config reads"]?.["Configs (full tree)"]).toBeDefined();
+    expect(m.cells["Config reads"]?.["Config tree"]).toBeDefined();
   });
 
   it("groups /v1/configs/Audio under Config reads / Config items", () => {
     const m = buildRestHeatMap([restResponse("/v1/configs/Audio")]);
-    expect(m.cells["Config reads"]?.["Config items"]).toBeDefined();
+    expect(m.cells["Config reads"]?.["Audio"]).toBeDefined();
   });
 
   it("groups /v1/drives under Drive ops", () => {
     const m = buildRestHeatMap([restResponse("/v1/drives")]);
-    expect(m.cells["Drive ops"]?.["Drives"]).toBeDefined();
+    expect(m.cells["Drive ops"]?.["Inventory"]).toBeDefined();
+  });
+
+  it("classifies attach, detach, and status drive paths distinctly", () => {
+    const m = buildRestHeatMap([
+      restResponse("/v1/drives/8/attach", 200, 18, "POST"),
+      restResponse("/v1/drives/8/detach", 200, 22, "POST"),
+      restResponse("/v1/drives/8/status"),
+    ]);
+    expect(m.cells["Drive ops"]?.["Attach"]).toBeDefined();
+    expect(m.cells["Drive ops"]?.["Detach"]).toBeDefined();
+    expect(m.cells["Drive ops"]?.["Status"]).toBeDefined();
+  });
+
+  it("falls back to Drive detail for unrecognized drive sub-actions", () => {
+    const m = buildRestHeatMap([restResponse("/v1/drives/8/rename", 200, 19, "POST")]);
+    expect(m.cells["Drive ops"]?.["Drive detail"]).toBeDefined();
   });
 
   it("groups unknown path under Other", () => {
     const m = buildRestHeatMap([restResponse("/v1/unknown")]);
-    expect(m.cells["Other"]?.["Other"]).toBeDefined();
+    expect(m.cells["Other"]?.["Unknown"]).toBeDefined();
   });
 
   it("handles missing path (not a string) → uses empty string → Other", () => {
@@ -176,33 +192,33 @@ describe("buildFtpHeatMap", () => {
 
   it("groups LIST under List operations", () => {
     const m = buildFtpHeatMap([ftpOp("LIST")]);
-    expect(m.cells["List operations"]?.["LIST"]).toBeDefined();
-    expect(m.cells["List operations"]?.["LIST"]?.callCount).toBe(1);
+    expect(m.cells["Browse"]?.["LIST"]).toBeDefined();
+    expect(m.cells["Browse"]?.["LIST"]?.callCount).toBe(1);
   });
 
   it("groups NLST under List operations", () => {
     const m = buildFtpHeatMap([ftpOp("NLST")]);
-    expect(m.cells["List operations"]?.["NLST"]).toBeDefined();
+    expect(m.cells["Browse"]?.["NLST"]).toBeDefined();
   });
 
   it("groups RETR under Read operations", () => {
     const m = buildFtpHeatMap([ftpOp("RETR")]);
-    expect(m.cells["Read operations"]?.["RETR"]).toBeDefined();
+    expect(m.cells["Read"]?.["RETR"]).toBeDefined();
   });
 
   it("groups STOR under Write operations", () => {
     const m = buildFtpHeatMap([ftpOp("STOR")]);
-    expect(m.cells["Write operations"]?.["STOR"]).toBeDefined();
+    expect(m.cells["Write"]?.["STOR"]).toBeDefined();
   });
 
   it("groups unknown FTP operation under Other FTP", () => {
     const m = buildFtpHeatMap([ftpOp("MKD")]);
-    expect(m.cells["Other FTP"]?.["MKD"]).toBeDefined();
+    expect(m.cells["Manage"]?.["MKD"]).toBeDefined();
   });
 
   it("increments failCount for failure result", () => {
     const m = buildFtpHeatMap([ftpOp("LIST", "failure")]);
-    expect(m.cells["List operations"]?.["LIST"]?.failCount).toBe(1);
+    expect(m.cells["Browse"]?.["LIST"]?.failCount).toBe(1);
   });
 
   it("increments failCount when error string is present", () => {
@@ -213,13 +229,13 @@ describe("buildFtpHeatMap", () => {
       error: "connection refused",
     });
     const m = buildFtpHeatMap([event]);
-    expect(m.cells["List operations"]?.["LIST"]?.failCount).toBe(1);
+    expect(m.cells["Browse"]?.["LIST"]?.failCount).toBe(1);
   });
 
   it("accumulates and sorts latencies", () => {
     const events = [ftpOp("LIST", "success", 80), ftpOp("LIST", "success", 20)];
     const m = buildFtpHeatMap(events);
-    expect(m.cells["List operations"]?.["LIST"]?.latenciesMs).toEqual([20, 80]);
+    expect(m.cells["Browse"]?.["LIST"]?.latenciesMs).toEqual([20, 80]);
   });
 
   it("handles missing operation (not a string) → 'OTHER' fallback", () => {
@@ -230,12 +246,153 @@ describe("buildFtpHeatMap", () => {
 
   it("handles missing result (not a string) → null → no failCount", () => {
     const m = buildFtpHeatMap([makeEvent("ftp-operation", { operation: "LIST", durationMs: 10 })]);
-    expect(m.cells["List operations"]?.["LIST"]?.failCount).toBe(0);
+    expect(m.cells["Browse"]?.["LIST"]?.failCount).toBe(0);
   });
 
   it("handles missing durationMs in FTP → no latency recorded", () => {
     const m = buildFtpHeatMap([makeEvent("ftp-operation", { operation: "LIST", result: "success" })]);
-    expect(m.cells["List operations"]?.["LIST"]?.latenciesMs).toHaveLength(0);
+    expect(m.cells["Browse"]?.["LIST"]?.latenciesMs).toHaveLength(0);
+  });
+
+  it("uses path-aware FTP columns so screenshot seeds can render a wide matrix", () => {
+    const events = [
+      makeEvent("ftp-operation", { operation: "LIST", path: "/Usb0/Games", result: "success", durationMs: 12 }),
+      makeEvent("ftp-operation", { operation: "LIST", path: "/Usb0/Config", result: "success", durationMs: 14 }),
+      makeEvent("ftp-operation", {
+        operation: "STOR",
+        path: "/Usb0/Saves/slot1.sav",
+        result: "success",
+        durationMs: 18,
+      }),
+      makeEvent("ftp-operation", { operation: "CWD", path: "/Usb0/Config", result: "success", durationMs: 8 }),
+    ];
+    const m = buildFtpHeatMap(events);
+    expect(m.cells["Browse"]?.["LIST Games"]).toBeDefined();
+    expect(m.cells["Browse"]?.["LIST Config"]).toBeDefined();
+    expect(m.cells["Write"]?.["STOR Saves"]).toBeDefined();
+    expect(m.cells["Session"]?.["CWD Config"]).toBeDefined();
+  });
+
+  it("classifies demo, cartridge, text, json, and fallback FTP targets", () => {
+    const events = [
+      makeEvent("ftp-operation", { operation: "NLST", path: "/Usb0/Demos", result: "success", durationMs: 10 }),
+      makeEvent("ftp-operation", {
+        operation: "RETR",
+        path: "/Usb0/Cartridges/ActionReplay.crt",
+        result: "success",
+        durationMs: 16,
+      }),
+      makeEvent("ftp-operation", {
+        operation: "STOR",
+        path: "/Usb0/Exports/export.json",
+        result: "success",
+        durationMs: 19,
+      }),
+      makeEvent("ftp-operation", {
+        operation: "STOR",
+        path: "/Usb0/Notes/default-path.txt",
+        result: "success",
+        durationMs: 21,
+      }),
+      makeEvent("ftp-operation", {
+        operation: "MDTM",
+        path: "/Usb0/Extras/readme.md",
+        result: "success",
+        durationMs: 11,
+      }),
+    ];
+    const m = buildFtpHeatMap(events);
+    expect(m.cells["Browse"]?.["NLST Demos"]).toBeDefined();
+    expect(m.cells["Read"]?.["RETR CRT"]).toBeDefined();
+    expect(m.cells["Write"]?.["STOR JSON"]).toBeDefined();
+    expect(m.cells["Write"]?.["STOR Text"]).toBeDefined();
+    expect(m.columnItems.some((item) => item.startsWith("MDTM "))).toBe(true);
+  });
+
+  it("classifies log, disk, PRG, SID, and empty-path FTP targets", () => {
+    const events = [
+      makeEvent("ftp-operation", { operation: "DELE", path: "/Usb0/Logs/old.log", result: "success", durationMs: 9 }),
+      makeEvent("ftp-operation", {
+        operation: "SIZE",
+        path: "/Usb0/Games/Turrican II/Disk 1.d64",
+        result: "success",
+        durationMs: 13,
+      }),
+      makeEvent("ftp-operation", {
+        operation: "RETR",
+        path: "/Usb0/Games/Turrican_II/loader.prg",
+        result: "success",
+        durationMs: 14,
+      }),
+      makeEvent("ftp-operation", {
+        operation: "RETR",
+        path: "/Usb0/Music/intro.sid",
+        result: "success",
+        durationMs: 15,
+      }),
+      makeEvent("ftp-operation", { operation: "NOOP", path: "", result: "success", durationMs: 6 }),
+    ];
+    const m = buildFtpHeatMap(events);
+    expect(m.cells["Manage"]?.["DELE Logs"]).toBeDefined();
+    expect(m.cells["Read"]?.["SIZE Games"]).toBeDefined();
+    expect(m.cells["Read"]?.["RETR Games"]).toBeDefined();
+    expect(m.cells["Read"]?.["RETR SID"]).toBeDefined();
+    expect(m.cells["Session"]?.["NOOP"]).toBeDefined();
+  });
+
+  it("classifies archive disk, archive PRG, and slash-only FTP paths", () => {
+    const events = [
+      makeEvent("ftp-operation", {
+        operation: "SIZE",
+        path: "/Usb0/Archives/favorites.d64",
+        result: "success",
+        durationMs: 12,
+      }),
+      makeEvent("ftp-operation", {
+        operation: "RETR",
+        path: "/Usb0/Bin/fastload.prg",
+        result: "success",
+        durationMs: 12,
+      }),
+      makeEvent("ftp-operation", { operation: "NOOP", path: "////", result: "success", durationMs: 5 }),
+    ];
+    const m = buildFtpHeatMap(events);
+    expect(m.cells["Read"]?.["SIZE Disk"]).toBeDefined();
+    expect(m.cells["Read"]?.["RETR PRG"]).toBeDefined();
+    expect(m.cells["Session"]?.["NOOP"]).toBeDefined();
+  });
+});
+
+describe("heat map taxonomy", () => {
+  it("creates a multi-row, multi-column REST matrix for mixed diagnostics traffic", () => {
+    const events = [
+      restResponse("/v1/info"),
+      restResponse("/v1/configs/Audio/Volume"),
+      restResponse("/v1/configs/Video/Palette", 200, 40, "PUT"),
+      restResponse("/v1/drives/8/mount", 200, 45, "POST"),
+      restResponse("/v1/machine/reset", 200, 60, "POST"),
+      restResponse("/v1/streams/status"),
+      restResponse("/v1/runners/script/launch", 200, 55, "POST"),
+      restResponse("/v1/diagnostics/export", 200, 65, "POST"),
+      restResponse("/v1/playlists/current"),
+    ];
+    const m = buildRestHeatMap(events);
+    expect(m.rowGroups).toEqual(
+      expect.arrayContaining([
+        "Device info",
+        "Config reads",
+        "Config writes",
+        "Drive ops",
+        "Machine",
+        "Streams",
+        "Automation",
+        "Diagnostics",
+        "Library",
+      ]),
+    );
+    expect(m.columnItems).toEqual(
+      expect.arrayContaining(["Info", "Audio", "Video", "Mount", "Reset", "Status", "Launch", "Export", "Current"]),
+    );
   });
 });
 

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GlobalDiagnosticsOverlay } from "@/components/diagnostics/GlobalDiagnosticsOverlay";
 import { reportUserError } from "@/lib/uiErrors";
 import { shareAllDiagnosticsZip } from "@/lib/diagnostics/diagnosticsExport";
+import { DIAGNOSTICS_TEST_OVERLAY_STATE_EVENT } from "@/lib/diagnostics/diagnosticsTestBridge";
 
 const consumeDiagnosticsOpenRequestMock = vi.fn();
 
@@ -110,13 +111,14 @@ vi.mock("@/hooks/useHealthState", () => ({
 vi.mock("@/lib/diagnostics/diagnosticsOverlayState", () => ({
   setDiagnosticsOverlayActive: vi.fn(),
   withDiagnosticsTraceOverride: (fn: () => unknown) => fn(),
-  subscribeDiagnosticsSuppression: () => () => {},
+  subscribeDiagnosticsSuppression: () => () => { },
   isDiagnosticsOverlaySuppressionArmed: () => false,
 }));
 
 vi.mock("@/lib/diagnostics/diagnosticsSeverity", () => ({
   resolveLogSeverity: vi.fn(() => "error"),
   resolveTraceSeverity: vi.fn(() => "info"),
+  resolveActionSeverity: vi.fn(() => "info"),
 }));
 
 vi.mock("@/components/diagnostics/DiagnosticsListItem", () => ({
@@ -144,6 +146,11 @@ describe("GlobalDiagnosticsOverlay", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     consumeDiagnosticsOpenRequestMock.mockReturnValue("actions");
+    delete (
+      window as Window & {
+        __c64uDiagnosticsTestBridge?: { getOverlayStateSnapshot?: () => Record<string, unknown> };
+      }
+    ).__c64uDiagnosticsTestBridge;
   });
 
   it("opens from a pending diagnostics request and shares all diagnostics", async () => {
@@ -204,5 +211,70 @@ describe("GlobalDiagnosticsOverlay", () => {
     });
 
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("applies seeded health-check overlay state from the diagnostics bridge and runtime events", async () => {
+    const seededResult = {
+      runId: "hc-seeded",
+      startTimestamp: "2024-01-01T00:00:00.000Z",
+      endTimestamp: "2024-01-01T00:00:01.000Z",
+      totalDurationMs: 1000,
+      overallHealth: "Healthy",
+      probes: {
+        REST: { probe: "REST", outcome: "Success", durationMs: 100, reason: null, startMs: 0 },
+        FTP: { probe: "FTP", outcome: "Success", durationMs: 100, reason: null, startMs: 0 },
+        CONFIG: { probe: "CONFIG", outcome: "Success", durationMs: 100, reason: null, startMs: 0 },
+        RASTER: { probe: "RASTER", outcome: "Success", durationMs: 100, reason: null, startMs: 0 },
+        JIFFY: { probe: "JIFFY", outcome: "Success", durationMs: 100, reason: null, startMs: 0 },
+      },
+      latency: { p50: 10, p90: 20, p99: 30 },
+      deviceInfo: null,
+    };
+
+    (
+      window as Window & {
+        __c64uDiagnosticsTestBridge?: { getOverlayStateSnapshot?: () => Record<string, unknown> };
+      }
+    ).__c64uDiagnosticsTestBridge = {
+      getOverlayStateSnapshot: () => ({
+        healthCheckRunning: false,
+        lastHealthCheckResult: seededResult,
+        liveHealthCheckProbes: null,
+      }),
+    };
+
+    renderOverlay();
+
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByTestId("open-health-check-detail")).toBeInTheDocument();
+
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent(DIAGNOSTICS_TEST_OVERLAY_STATE_EVENT, {
+          detail: {
+            healthCheckRunning: true,
+            lastHealthCheckResult: null,
+            liveHealthCheckProbes: null,
+          },
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("run-health-check-button")).toHaveTextContent("Running health check…");
+    });
+    expect(screen.queryByTestId("open-health-check-detail")).not.toBeInTheDocument();
+  });
+
+  it("ignores runtime diagnostics open requests without a preset", async () => {
+    consumeDiagnosticsOpenRequestMock.mockReturnValue(null);
+
+    renderOverlay();
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent("c64u-diagnostics-open-request", { detail: {} }));
+    });
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 });

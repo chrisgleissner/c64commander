@@ -14,13 +14,37 @@ vi.mock("@/components/ui/app-surface", () => ({
 vi.mock("@/components/ui/alert-dialog", () => ({
   AlertDialog: ({ children }: any) => <div>{children}</div>,
   AlertDialogTrigger: ({ children, asChild }: any) => (asChild ? children : <div>{children}</div>),
-  AlertDialogContent: ({ children }: any) => <div>{children}</div>,
+  AlertDialogContent: ({ children }: any) => <div role="alertdialog">{children}</div>,
   AlertDialogHeader: ({ children }: any) => <div>{children}</div>,
   AlertDialogTitle: ({ children }: any) => <div>{children}</div>,
   AlertDialogDescription: ({ children }: any) => <div>{children}</div>,
   AlertDialogFooter: ({ children }: any) => <div>{children}</div>,
   AlertDialogCancel: ({ children }: any) => <button>{children}</button>,
   AlertDialogAction: ({ children, onClick }: any) => <button onClick={onClick}>{children}</button>,
+}));
+
+vi.mock("@/components/ui/dropdown-menu", () => ({
+  DropdownMenu: ({ children }: any) => <div>{children}</div>,
+  DropdownMenuTrigger: ({ children, asChild }: any) => (asChild ? children : <div>{children}</div>),
+  DropdownMenuContent: ({ children }: any) => <div>{children}</div>,
+  DropdownMenuItem: ({ children, onSelect, ...props }: any) => (
+    <button
+      onClick={(event) => {
+        onSelect?.(event);
+      }}
+      {...props}
+    >
+      {children}
+    </button>
+  ),
+  DropdownMenuSeparator: () => <div />,
+}));
+
+vi.mock("@/components/ui/tooltip", () => ({
+  TooltipProvider: ({ children }: any) => <>{children}</>,
+  Tooltip: ({ children }: any) => <>{children}</>,
+  TooltipTrigger: ({ children, asChild }: any) => (asChild ? children : <div>{children}</div>),
+  TooltipContent: ({ children }: any) => <div>{children}</div>,
 }));
 
 vi.mock("@/components/ui/button", () => ({
@@ -56,6 +80,7 @@ vi.mock("@/lib/tracing/traceFormatter", () => ({
 vi.mock("@/lib/diagnostics/diagnosticsSeverity", () => ({
   resolveLogSeverity: () => "info",
   resolveTraceSeverity: () => "info",
+  resolveActionSeverity: () => "info",
 }));
 
 let currentDialogProfile: "compact" | "medium" | "expanded" = "medium";
@@ -217,6 +242,46 @@ describe("DiagnosticsDialog", () => {
     expect(screen.getByTestId("problem-ftp-fail-1")).toBeInTheDocument();
   });
 
+  it("uses compact health-check labels and shows the last-check shortcut when a result exists", () => {
+    currentDialogProfile = "compact";
+
+    renderDialog({
+      onRunHealthCheck: vi.fn(),
+      lastHealthCheckResult: {
+        runId: "hc-1",
+        startTimestamp: "2024-01-01T00:00:00.000Z",
+        endTimestamp: "2024-01-01T00:00:01.000Z",
+        totalDurationMs: 1000,
+        overallHealth: "Healthy",
+        probes: {
+          REST: { probe: "REST", outcome: "Success", durationMs: 100, reason: null, startMs: 0 },
+          FTP: { probe: "FTP", outcome: "Success", durationMs: 100, reason: null, startMs: 0 },
+          CONFIG: { probe: "CONFIG", outcome: "Success", durationMs: 100, reason: null, startMs: 0 },
+          RASTER: { probe: "RASTER", outcome: "Success", durationMs: 100, reason: null, startMs: 0 },
+          JIFFY: { probe: "JIFFY", outcome: "Success", durationMs: 100, reason: null, startMs: 0 },
+        },
+        latency: { p50: 10, p90: 20, p99: 30 },
+        deviceInfo: null,
+      },
+    });
+
+    expect(screen.getByTestId("run-health-check-button")).toHaveTextContent("Run check");
+    expect(screen.getByTestId("open-health-check-detail")).toHaveTextContent("Last check");
+  });
+
+  it("shows the running health-check label when a check is already in progress", () => {
+    currentDialogProfile = "compact";
+
+    renderDialog({
+      onRunHealthCheck: vi.fn(),
+      healthCheckRunning: true,
+    });
+
+    expect(screen.getByTestId("run-health-check-button")).toHaveTextContent("Running health check…");
+    expect(screen.getByTestId("run-health-check-button")).toBeDisabled();
+    expect(screen.queryByTestId("open-health-check-detail")).not.toBeInTheDocument();
+  });
+
   it("does not duplicate failed traces as both problem and trace entries", () => {
     renderDialog({
       defaultEvidenceTypes: new Set(["Problems", "Traces"]),
@@ -257,6 +322,7 @@ describe("DiagnosticsDialog", () => {
   });
 
   it("filters traces by indicator — excludes traces whose contributor does not match", () => {
+    currentDialogProfile = "expanded";
     // We need to open the dialog with Traces active and set an indicatorFilter.
     // The indicator filter is controlled via the contributor rows in the health summary.
     // We test that with Traces active, a REST-type trace survives while an FTP-type trace is excluded
@@ -290,7 +356,6 @@ describe("DiagnosticsDialog", () => {
     expect(screen.getByTestId("trace-trace-rest-1")).toBeInTheDocument();
     expect(screen.getByTestId("trace-trace-ftp-1")).toBeInTheDocument();
     expect(screen.getByTestId("trace-trace-unknown-1")).toBeInTheDocument();
-
     // Click the REST contributor row to set indicatorFilter = "REST"
     fireEvent.click(screen.getByTestId("contributor-row-rest"));
 
@@ -411,7 +476,7 @@ describe("DiagnosticsDialog", () => {
     renderDialog({
       healthState: primaryProblemHealthState,
       // Start without Problems in activeTypes so the spotlight adds it
-      defaultEvidenceTypes: new Set(["Logs"]),
+      defaultEvidenceTypes: new Set(["Actions"]),
       errorLogs: [
         {
           id: "problem-1",
@@ -454,7 +519,7 @@ describe("DiagnosticsDialog", () => {
     expect(screen.getByTestId("problem-problem-1")).toBeInTheDocument();
   });
 
-  it("invokes share-all, share-filtered, and clear-all actions", () => {
+  it("invokes share-all, share-filtered, and clear-all actions", async () => {
     const onShareAll = vi.fn();
     const onShareFiltered = vi.fn();
     const onClearAll = vi.fn();
@@ -469,9 +534,10 @@ describe("DiagnosticsDialog", () => {
     const dialog = screen.getByRole("dialog");
     fireEvent.click(within(dialog).getByTestId("diagnostics-share-all"));
     fireEvent.click(within(dialog).getByTestId("diagnostics-share-filtered"));
-    fireEvent.click(within(dialog).getByTestId("diagnostics-clear-all-trigger"));
+    fireEvent.click(within(dialog).getByTestId("diagnostics-tools-menu"));
+    fireEvent.click(screen.getByTestId("diagnostics-clear-all-trigger"));
     // The confirm button in AlertDialog
-    fireEvent.click(within(dialog).getByRole("button", { name: /^clear$/i }));
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: /^clear$/i }));
 
     expect(onShareAll).toHaveBeenCalled();
     expect(onShareFiltered).toHaveBeenCalled();

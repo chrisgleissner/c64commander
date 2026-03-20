@@ -125,6 +125,9 @@ test.describe("Home diagnostics overlay", () => {
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     const serverUrl = new URL(server.baseUrl);
+    const openToolsMenu = async () => {
+      await dialog.getByTestId("diagnostics-tools-menu").click();
+    };
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
     const dialog = await openDiagnosticsOverlay(page);
@@ -172,13 +175,20 @@ test.describe("Home diagnostics overlay", () => {
     await dialog.getByTestId("health-history-row").click();
     const historyPopup = page.getByTestId("health-history-popup");
     await expect(historyPopup).toBeVisible();
-    await expect(historyPopup.getByText(/check recorded|checks recorded/i)).toBeVisible();
+    await expect(historyPopup.getByText(/recorded health check|recorded health checks/i)).toBeVisible();
     await expect(historyPopup.getByTestId("health-history-zoom-in")).toBeVisible();
+    await expect(historyPopup.getByTestId("health-history-track")).toBeVisible();
+    await historyPopup.locator('[data-testid^="health-history-segment-"]').last().click();
+    await expect(historyPopup.getByTestId("health-history-selection-overlay")).toBeVisible();
+    await expect(historyPopup.getByTestId("health-history-selection-reason")).toBeVisible();
+    await historyPopup.getByTestId("health-history-selection-dismiss").click();
+    await expect(historyPopup.getByTestId("health-history-selection-overlay")).toBeHidden();
     await snap(page, testInfo, "history-popup");
     await historyPopup.getByRole("button", { name: /Close/i }).click();
     await expect(historyPopup).toBeHidden();
 
-    await dialog.getByTestId("open-heatmap-config").click();
+    await openToolsMenu();
+    await page.getByTestId("open-heatmap-config").click();
     const heatMapPopup = page.getByTestId("heat-map-popup-config");
     await expect(heatMapPopup).toBeVisible();
     await heatMapPopup.getByTestId("heat-metric-latency").click();
@@ -190,7 +200,8 @@ test.describe("Home diagnostics overlay", () => {
     await heatMapPopup.getByTestId("analytic-popup-close").click();
     await expect(heatMapPopup).toBeHidden();
 
-    await dialog.getByTestId("open-config-drift").click();
+    await openToolsMenu();
+    await page.getByTestId("open-config-drift").click();
     const driftView = dialog.getByTestId("config-drift-view");
     await expect(driftView).toBeVisible();
     await expect(
@@ -240,7 +251,8 @@ test.describe("Home diagnostics overlay", () => {
     expect(Array.isArray(supplemental.latencySamples)).toBeTruthy();
     expect(Array.isArray(supplemental.recoveryEvidence)).toBeTruthy();
 
-    await dialog.getByTestId("diagnostics-clear-all-trigger").click();
+    await openToolsMenu();
+    await page.getByTestId("diagnostics-clear-all-trigger").click();
     await page.getByTestId("diagnostics-clear-all-confirm").click();
     await expect(dialog.getByTestId("diagnostics-empty-message")).toBeVisible();
     await expect(dialog.getByTestId("open-health-check-detail")).toHaveCount(0);

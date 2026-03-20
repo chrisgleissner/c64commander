@@ -54,10 +54,7 @@ describe("DiagnosticsDialog", () => {
     );
 
     const title = screen.getByText("Diagnostics");
-    expect(title.parentElement).toHaveClass("px-3");
-
-    const shareAllButton = screen.getByTestId("diagnostics-share-all");
-    expect(shareAllButton.parentElement).toHaveClass("px-3");
+    expect(title.closest("div.border-b")).toHaveClass("px-3");
   });
 
   it("keeps medium and expanded padding aligned with tighter list-browser rhythm", () => {
@@ -71,15 +68,11 @@ describe("DiagnosticsDialog", () => {
     );
 
     const title = screen.getByText("Diagnostics");
-    expect(title.parentElement).toHaveClass("px-4");
-    expect(title.parentElement).not.toHaveClass("px-6");
-
-    const shareAllButton = screen.getByTestId("diagnostics-share-all");
-    expect(shareAllButton.parentElement).toHaveClass("px-4");
-    expect(shareAllButton.parentElement).not.toHaveClass("px-6");
+    expect(title.closest("div.border-b")).toHaveClass("px-4");
+    expect(title.closest("div.border-b")).not.toHaveClass("px-6");
   });
 
-  it("shows the description text", () => {
+  it("keeps the description to a single concise line", () => {
     localStorage.clear();
     setViewportWidth(600);
 
@@ -89,7 +82,10 @@ describe("DiagnosticsDialog", () => {
       </DisplayProfileProvider>,
     );
 
-    expect(screen.getByText("Health, connectivity, and supporting evidence.")).toBeVisible();
+    const description = screen.getByTestId("diagnostics-subtitle");
+    expect(description).toHaveTextContent("Health, status, and recent evidence.");
+    expect(description).toHaveClass("truncate");
+    expect(description).toHaveClass("whitespace-nowrap");
   });
 
   it("shows empty session message when no data and no filters active", () => {
@@ -213,7 +209,7 @@ describe("DiagnosticsDialog", () => {
     expect(screen.queryByTestId("diagnostics-filter-input")).toBeNull();
   });
 
-  it("shows Share all and Share filtered buttons in toolbar", () => {
+  it("uses tooltip triggers to distinguish filters from the activity stream", () => {
     localStorage.clear();
     setViewportWidth(600);
 
@@ -223,14 +219,59 @@ describe("DiagnosticsDialog", () => {
       </DisplayProfileProvider>,
     );
 
+    expect(screen.getByTestId("filters-help")).toBeVisible();
+    expect(screen.getByTestId("activity-help")).toBeVisible();
+  });
+
+  it("shows Share all and Share filtered buttons in a pinned action shelf", () => {
+    localStorage.clear();
+    setViewportWidth(600);
+
+    render(
+      <DisplayProfileProvider>
+        <DiagnosticsDialog {...defaultProps} />
+      </DisplayProfileProvider>,
+    );
+
+    expect(screen.getByTestId("diagnostics-action-shelf")).toHaveClass("sticky");
     expect(screen.getByTestId("diagnostics-share-all")).toBeVisible();
     expect(screen.getByTestId("diagnostics-share-filtered")).toBeVisible();
+    expect(screen.getByTestId("diagnostics-tools-menu")).toBeVisible();
+  });
+
+  it("uses a non-wrapping More filters label on compact layouts", () => {
+    localStorage.clear();
+    setViewportWidth(360);
+
+    render(
+      <DisplayProfileProvider>
+        <DiagnosticsDialog {...defaultProps} />
+      </DisplayProfileProvider>,
+    );
+
+    expect(screen.getByTestId("refine-button")).toHaveTextContent("More filters");
+    expect(screen.getByTestId("refine-button")).toHaveClass("whitespace-nowrap");
+  });
+
+  it("shows config drift, heat maps, and clear actions inside the tools menu", () => {
+    localStorage.clear();
+    setViewportWidth(600);
+
+    render(
+      <DisplayProfileProvider>
+        <DiagnosticsDialog {...defaultProps} />
+      </DisplayProfileProvider>,
+    );
+
+    fireEvent.pointerDown(screen.getByTestId("diagnostics-tools-menu"));
+    expect(screen.getByTestId("open-config-drift")).toBeVisible();
+    expect(screen.getByTestId("open-heatmap-config")).toBeVisible();
     expect(screen.getByTestId("diagnostics-clear-all-trigger")).toBeVisible();
   });
 
-  it("shows config drift and config heat map entry points in the toolbar", () => {
+  it("shows contributor and severity filters for multi-dimensional narrowing", () => {
     localStorage.clear();
-    setViewportWidth(600);
+    setViewportWidth(900);
 
     render(
       <DisplayProfileProvider>
@@ -238,8 +279,26 @@ describe("DiagnosticsDialog", () => {
       </DisplayProfileProvider>,
     );
 
-    expect(screen.getByTestId("open-config-drift")).toBeVisible();
-    expect(screen.getByTestId("open-heatmap-config")).toBeVisible();
+    expect(screen.getByTestId("indicator-toggle-app")).toBeVisible();
+    expect(screen.getByTestId("indicator-toggle-rest")).toBeVisible();
+    expect(screen.getByTestId("severity-toggle-errors")).toBeVisible();
+    expect(screen.getByTestId("severity-toggle-info")).toBeVisible();
+  });
+
+  it("auto-collapses the summary on compact screens when raw evidence filtering starts", () => {
+    localStorage.clear();
+    setViewportWidth(360);
+
+    render(
+      <DisplayProfileProvider>
+        <DiagnosticsDialog {...defaultProps} />
+      </DisplayProfileProvider>,
+    );
+
+    fireEvent.click(screen.getByTestId("refine-button"));
+    fireEvent.click(screen.getByTestId("severity-toggle-errors"));
+
+    expect(screen.getByLabelText("Expand health summary")).toBeVisible();
   });
 
   it("opens health check detail when a last health check result exists", async () => {
@@ -275,6 +334,70 @@ describe("DiagnosticsDialog", () => {
     expect(screen.getByTestId("health-check-probe-rest")).toBeVisible();
   });
 
+  it("uses condensed health-check action labels on compact layouts", () => {
+    localStorage.clear();
+    setViewportWidth(360);
+
+    render(
+      <DisplayProfileProvider>
+        <DiagnosticsDialog
+          {...defaultProps}
+          onRunHealthCheck={vi.fn()}
+          lastHealthCheckResult={{
+            runId: "hcr-0001",
+            startTimestamp: "2026-03-19T10:00:00.000Z",
+            endTimestamp: "2026-03-19T10:00:01.000Z",
+            totalDurationMs: 1000,
+            overallHealth: "Healthy",
+            latency: { p50: 10, p90: 20, p99: 30 },
+            probes: {
+              REST: { probe: "REST", outcome: "Success", durationMs: 10, reason: null, startMs: 1 },
+              JIFFY: { probe: "JIFFY", outcome: "Success", durationMs: 20, reason: null, startMs: 2 },
+              RASTER: { probe: "RASTER", outcome: "Skipped", durationMs: null, reason: "Unsupported", startMs: 3 },
+              CONFIG: { probe: "CONFIG", outcome: "Success", durationMs: 30, reason: null, startMs: 4 },
+              FTP: { probe: "FTP", outcome: "Success", durationMs: 40, reason: null, startMs: 5 },
+            },
+          }}
+        />
+      </DisplayProfileProvider>,
+    );
+
+    expect(screen.getByTestId("run-health-check-button")).toHaveTextContent("Run check");
+    expect(screen.getByTestId("open-health-check-detail")).toHaveTextContent("Last check");
+  });
+
+  it("keeps the running health-check label explicit on compact layouts", () => {
+    localStorage.clear();
+    setViewportWidth(360);
+
+    render(
+      <DisplayProfileProvider>
+        <DiagnosticsDialog
+          {...defaultProps}
+          healthCheckRunning
+          onRunHealthCheck={vi.fn()}
+          lastHealthCheckResult={{
+            runId: "hcr-0002",
+            startTimestamp: "2026-03-19T10:00:00.000Z",
+            endTimestamp: "2026-03-19T10:00:01.000Z",
+            totalDurationMs: 1000,
+            overallHealth: "Healthy",
+            latency: { p50: 10, p90: 20, p99: 30 },
+            probes: {
+              REST: { probe: "REST", outcome: "Success", durationMs: 10, reason: null, startMs: 1 },
+              JIFFY: { probe: "JIFFY", outcome: "Success", durationMs: 20, reason: null, startMs: 2 },
+              RASTER: { probe: "RASTER", outcome: "Skipped", durationMs: null, reason: "Unsupported", startMs: 3 },
+              CONFIG: { probe: "CONFIG", outcome: "Success", durationMs: 30, reason: null, startMs: 4 },
+              FTP: { probe: "FTP", outcome: "Success", durationMs: 40, reason: null, startMs: 5 },
+            },
+          }}
+        />
+      </DisplayProfileProvider>,
+    );
+
+    expect(screen.getByTestId("run-health-check-button")).toHaveTextContent("Running health check…");
+  });
+
   it("shows primary problem spotlight when healthState includes a primary problem", () => {
     localStorage.clear();
     setViewportWidth(600);
@@ -299,6 +422,6 @@ describe("DiagnosticsDialog", () => {
     );
 
     expect(screen.getByTestId("primary-problem-spotlight")).toBeVisible();
-    expect(screen.getByText("Investigate now")).toBeVisible();
+    expect(screen.getByText("Needs attention")).toBeVisible();
   });
 });
