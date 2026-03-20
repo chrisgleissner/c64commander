@@ -159,6 +159,7 @@ describe("GlobalDiagnosticsOverlay", () => {
     renderOverlay();
 
     const dialog = await screen.findByRole("dialog");
+    fireEvent.click(screen.getByTestId("show-details-button"));
     expect(within(dialog).getByRole("button", { name: /^share all$/i })).toBeInTheDocument();
 
     fireEvent.click(within(dialog).getByRole("button", { name: /^share all$/i }));
@@ -179,6 +180,7 @@ describe("GlobalDiagnosticsOverlay", () => {
     renderOverlay();
 
     const dialog = await screen.findByRole("dialog");
+    fireEvent.click(screen.getByTestId("show-details-button"));
     fireEvent.click(within(dialog).getByRole("button", { name: /^share all$/i }));
 
     await waitFor(() => {
@@ -246,6 +248,7 @@ describe("GlobalDiagnosticsOverlay", () => {
     renderOverlay();
 
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("show-details-button"));
     expect(screen.getByTestId("open-health-check-detail")).toBeInTheDocument();
 
     await act(async () => {

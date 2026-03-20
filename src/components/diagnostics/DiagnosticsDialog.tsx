@@ -124,41 +124,41 @@ type ActiveDetailView = "device" | "config-drift" | "health-check" | null;
 
 type StreamEntry =
   | {
-      id: string;
-      kind: "problem";
-      timestamp: string;
-      contributor: ContributorKey;
-      origin: OriginFilter | null;
-      severity: DiagnosticsSeverity;
-      data: DiagnosticsLogEntry;
-    }
+    id: string;
+    kind: "problem";
+    timestamp: string;
+    contributor: ContributorKey;
+    origin: OriginFilter | null;
+    severity: DiagnosticsSeverity;
+    data: DiagnosticsLogEntry;
+  }
   | {
-      id: string;
-      kind: "action";
-      timestamp: string;
-      contributor: ContributorKey | null;
-      origin: OriginFilter | null;
-      severity: DiagnosticsSeverity;
-      data: ActionSummary;
-    }
+    id: string;
+    kind: "action";
+    timestamp: string;
+    contributor: ContributorKey | null;
+    origin: OriginFilter | null;
+    severity: DiagnosticsSeverity;
+    data: ActionSummary;
+  }
   | {
-      id: string;
-      kind: "log";
-      timestamp: string;
-      contributor: ContributorKey | null;
-      origin: OriginFilter | null;
-      severity: DiagnosticsSeverity;
-      data: DiagnosticsLogEntry;
-    }
+    id: string;
+    kind: "log";
+    timestamp: string;
+    contributor: ContributorKey | null;
+    origin: OriginFilter | null;
+    severity: DiagnosticsSeverity;
+    data: DiagnosticsLogEntry;
+  }
   | {
-      id: string;
-      kind: "trace";
-      timestamp: string;
-      contributor: ContributorKey | null;
-      origin: OriginFilter | null;
-      severity: DiagnosticsSeverity;
-      data: DiagnosticsTraceEntry;
-    };
+    id: string;
+    kind: "trace";
+    timestamp: string;
+    contributor: ContributorKey | null;
+    origin: OriginFilter | null;
+    severity: DiagnosticsSeverity;
+    data: DiagnosticsTraceEntry;
+  };
 
 type Props = {
   open: boolean;
@@ -1661,11 +1661,11 @@ export function DiagnosticsDialog({
                 className={cn(
                   useInsightsRail
                     ? cn(
-                        "flex min-h-0 flex-col border-r border-border",
-                        paneFocus === 'left' ? "flex-1 min-w-0" :
+                      "flex min-h-0 flex-col border-r border-border",
+                      paneFocus === 'left' ? "flex-1 min-w-0" :
                         paneFocus === 'right' ? "w-10 shrink-0 overflow-hidden" :
-                        "w-[19rem] shrink-0",
-                      )
+                          "w-[19rem] shrink-0",
+                    )
                     : "",
                 )}
               >
@@ -1711,45 +1711,45 @@ export function DiagnosticsDialog({
                         </Tooltip>
                       </div>
                     )}
-                <HealthSummary
-                  healthState={healthState}
-                  indicatorFilter={indicatorFilter}
-                  onIndicatorFilterChange={setIndicatorFilter}
-                  onRetryConnection={onRetryConnection}
-                  onSpotlightSelect={handleSpotlightSelect}
-                  isCompact={isCompact}
-                  profile={profile}
-                  expanded={summaryExpanded}
-                  onExpandedChange={setSummaryExpanded}
-                  techDetailsExpanded={techDetailsExpanded}
-                  onTechDetailsExpandedChange={setTechDetailsExpanded}
-                  connectionCallbacks={connectionCallbacks}
-                  deviceInfo={deviceInfo}
-                  healthCheckRunning={healthCheckRunning}
-                  onRunHealthCheck={onRunHealthCheck}
-                  onOpenDeviceDetail={() => setActiveDetailView("device")}
-                  onOpenLatency={() => setActivePopup("latency")}
-                  onOpenHistory={() => setActivePopup("history")}
-                  lastHealthCheckResult={lastHealthCheckResult}
-                  onOpenHealthCheckDetail={() => setActiveDetailView("health-check")}
-                />
+                    <HealthSummary
+                      healthState={healthState}
+                      indicatorFilter={indicatorFilter}
+                      onIndicatorFilterChange={setIndicatorFilter}
+                      onRetryConnection={onRetryConnection}
+                      onSpotlightSelect={handleSpotlightSelect}
+                      isCompact={isCompact}
+                      profile={profile}
+                      expanded={summaryExpanded}
+                      onExpandedChange={setSummaryExpanded}
+                      techDetailsExpanded={techDetailsExpanded}
+                      onTechDetailsExpandedChange={setTechDetailsExpanded}
+                      connectionCallbacks={connectionCallbacks}
+                      deviceInfo={deviceInfo}
+                      healthCheckRunning={healthCheckRunning}
+                      onRunHealthCheck={onRunHealthCheck}
+                      onOpenDeviceDetail={() => setActiveDetailView("device")}
+                      onOpenLatency={() => setActivePopup("latency")}
+                      onOpenHistory={() => setActivePopup("history")}
+                      lastHealthCheckResult={lastHealthCheckResult}
+                      onOpenHealthCheckDetail={() => setActiveDetailView("health-check")}
+                    />
 
-                <QuickFocusControls
-                  activeTypes={activeTypes}
-                  onToggle={handleToggleType}
-                  indicatorFilter={indicatorFilter}
-                  onIndicatorFilterChange={setIndicatorFilter}
-                  severityFilter={severityFilter}
-                  onSeverityFilterChange={setSeverityFilter}
-                  searchText={searchText}
-                  onSearchChange={setSearchText}
-                  originFilters={originFilters}
-                  onOriginToggle={handleOriginToggle}
-                  isCompact={isCompact}
-                  isMedium={isMedium}
-                  refineCount={refineCount}
-                  entryCount={allStreamEntries.length}
-                />
+                    <QuickFocusControls
+                      activeTypes={activeTypes}
+                      onToggle={handleToggleType}
+                      indicatorFilter={indicatorFilter}
+                      onIndicatorFilterChange={setIndicatorFilter}
+                      severityFilter={severityFilter}
+                      onSeverityFilterChange={setSeverityFilter}
+                      searchText={searchText}
+                      onSearchChange={setSearchText}
+                      originFilters={originFilters}
+                      onOriginToggle={handleOriginToggle}
+                      isCompact={isCompact}
+                      isMedium={isMedium}
+                      refineCount={refineCount}
+                      entryCount={allStreamEntries.length}
+                    />
                   </>
                 )}
               </div>
@@ -1781,280 +1781,280 @@ export function DiagnosticsDialog({
                   </div>
                 ) : (
                   <>
-                <div className="mb-2 flex flex-wrap items-center justify-between gap-2 border-b border-border/70 pb-2">
-                  <div className="min-w-0 space-y-1">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                        Activity
-                      </p>
-                      <SectionHelp label="Activity" testId="activity-help">
-                        Recent session evidence in reverse chronological order. Filters decide which entries stay in
-                        view.
-                      </SectionHelp>
-                      <Badge variant="outline" className="border-border bg-background/80 text-muted-foreground">
-                        Showing {streamEntries.length} of {allStreamEntries.length}
-                      </Badge>
-                      <Badge variant="outline" className="border-border bg-background/80 text-muted-foreground">
-                        Latest {formatStreamTimestamp(newestEntryTimestamp)}
-                      </Badge>
-                    </div>
-                    {activeFilterPills.length > 0 ? (
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        {activeFilterPills.map((pill) => (
-                          <Badge
-                            key={pill}
-                            variant="outline"
-                            className="border-border bg-background/80 text-muted-foreground"
-                          >
-                            {pill}
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2 border-b border-border/70 pb-2">
+                      <div className="min-w-0 space-y-1">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                            Activity
+                          </p>
+                          <SectionHelp label="Activity" testId="activity-help">
+                            Recent session evidence in reverse chronological order. Filters decide which entries stay in
+                            view.
+                          </SectionHelp>
+                          <Badge variant="outline" className="border-border bg-background/80 text-muted-foreground">
+                            Showing {streamEntries.length} of {allStreamEntries.length}
                           </Badge>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
-                  <div className="flex shrink-0 items-center gap-1">
-                    {isFiltersModified ? (
-                      <Button variant="ghost" size="sm" onClick={handleResetFilters} data-testid="reset-filters-button">
-                        Reset filters
-                      </Button>
-                    ) : null}
-                    {useInsightsRail && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button
-                            type="button"
-                            onClick={() => setPaneFocus(paneFocus === 'right' ? 'both' : 'right')}
-                            className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
-                            data-testid="pane-focus-activity"
-                          >
-                            {paneFocus === 'right' ? (
-                              <PanelLeftOpen className="h-3.5 w-3.5" aria-hidden="true" />
-                            ) : (
-                              <PanelLeftClose className="h-3.5 w-3.5" aria-hidden="true" />
-                            )}
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent side="left">
-                          {paneFocus === 'right' ? 'Restore split view' : 'Maximise activity'}
-                        </TooltipContent>
-                      </Tooltip>
-                    )}
-                  </div>
-                </div>
-
-                <div ref={streamRef} className="flex-1 min-h-0 overflow-auto space-y-1.5 pr-1">
-                  {/* §14.1 — Empty session */}
-                  {streamEntries.length === 0 && !isFiltersModified && (
-                    <p className="text-sm text-muted-foreground" data-testid="diagnostics-empty-message">
-                      No diagnostics yet. Health information will appear here after activity occurs.
-                    </p>
-                  )}
-
-                  {/* §14.3 — No results */}
-                  {streamEntries.length === 0 && isFiltersModified && (
-                    <p className="text-sm text-muted-foreground" data-testid="diagnostics-no-results-message">
-                      No entries match the current filters.
-                    </p>
-                  )}
-
-                  {streamEntries.map((entry) => {
-                    if (entry.kind === "problem") {
-                      const isAutoExpanded = autoExpandedProblemId === entry.data.id;
-                      return (
-                        <DiagnosticsListItem
-                          key={`problem-${entry.data.id}`}
-                          testId={`problem-${entry.data.id}`}
-                          mode="log"
-                          severity={resolveLogSeverity(entry.data.level)}
-                          title={entry.data.message}
-                          timestamp={entry.data.timestamp}
-                          defaultExpanded={isAutoExpanded}
-                        >
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-2">
-                              <p className="text-xs font-semibold uppercase tracking-wide text-destructive">Problem</p>
-                              <span className="text-xs font-medium text-muted-foreground">{entry.contributor}</span>
-                            </div>
-                            <p className="text-sm font-medium break-words whitespace-normal">{entry.data.message}</p>
-                            {entry.data.details && (
-                              <pre className="text-xs whitespace-pre text-muted-foreground overflow-x-auto">
-                                {JSON.stringify(entry.data.details, null, 2)}
-                              </pre>
-                            )}
-                          </div>
-                        </DiagnosticsListItem>
-                      );
-                    }
-
-                    if (entry.kind === "action") {
-                      return <ActionSummaryListItem key={entry.data.correlationId} summary={entry.data} />;
-                    }
-
-                    if (entry.kind === "log") {
-                      return (
-                        <DiagnosticsListItem
-                          key={`log-${entry.data.id}`}
-                          testId={`log-${entry.data.id}`}
-                          mode="log"
-                          severity={resolveLogSeverity(entry.data.level)}
-                          title={entry.data.message}
-                          timestamp={entry.data.timestamp}
-                        >
-                          <div className="space-y-2">
-                            <p className="text-sm font-medium break-words whitespace-normal">{entry.data.message}</p>
-                            {entry.data.details && (
-                              <pre className="text-xs whitespace-pre text-muted-foreground overflow-x-auto">
-                                {JSON.stringify(entry.data.details, null, 2)}
-                              </pre>
-                            )}
-                          </div>
-                        </DiagnosticsListItem>
-                      );
-                    }
-
-                    // trace
-                    return (
-                      <DiagnosticsListItem
-                        key={`trace-${entry.data.id}`}
-                        testId={`trace-${entry.data.id}`}
-                        mode="trace"
-                        severity={resolveTraceSeverity(entry.data)}
-                        title={getTraceTitle(entry.data)}
-                        timestamp={entry.data.timestamp}
-                      >
-                        <pre className="text-xs whitespace-pre text-muted-foreground overflow-x-auto">
-                          {JSON.stringify(entry.data, null, 2)}
-                        </pre>
-                      </DiagnosticsListItem>
-                    );
-                  })}
-
-                  {/* §15.1 — Load older entries */}
-                  {hasMoreEntries && (
-                    <div className="flex justify-center pt-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
-                        data-testid="load-older-entries"
-                      >
-                        Load older entries
-                      </Button>
-                    </div>
-                  )}
-                </div>
-                <div
-                  className={cn(
-                    "sticky bottom-0 z-10 mt-2 border-t border-border/70 bg-background/95 pt-2 backdrop-blur supports-[backdrop-filter]:bg-background/85",
-                    isCompact
-                      ? "pb-[calc(0.5rem+env(safe-area-inset-bottom))]"
-                      : "pb-[calc(0.25rem+env(safe-area-inset-bottom))]",
-                  )}
-                  data-testid="diagnostics-action-shelf"
-                >
-                  <div
-                    className={cn(
-                      "flex items-center gap-1.5",
-                      isCompact ? "grid grid-cols-3" : "flex-wrap justify-end",
-                    )}
-                  >
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => void onShareAll()}
-                      data-testid="diagnostics-share-all"
-                      aria-label="Share all"
-                      className="h-8 gap-1.5 px-2"
-                    >
-                      <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
-                      {isCompact ? 'All' : 'Share all'}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={!hasVisibleEntries}
-                      onClick={handleShareFiltered}
-                      data-testid="diagnostics-share-filtered"
-                      aria-label="Share filtered"
-                      className="h-8 gap-1.5 px-2"
-                    >
-                      <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
-                      {isCompact ? 'Filtered' : 'Share filtered'}
-                    </Button>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-8 gap-1.5 px-2"
-                          data-testid="diagnostics-tools-menu"
-                        >
-                          <MoreHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
-                          Tools
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-56">
-                        <DropdownMenuItem
-                          onSelect={() => setActivePopup("heatmap-REST")}
-                          data-testid="open-heatmap-rest"
-                        >
-                          <BarChart2 className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
-                          REST heat map
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onSelect={() => setActivePopup("heatmap-FTP")} data-testid="open-heatmap-ftp">
-                          <BarChart2 className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
-                          FTP heat map
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onSelect={() => setActivePopup("heatmap-CONFIG")}
-                          data-testid="open-heatmap-config"
-                        >
-                          <BarChart2 className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
-                          Config heat map
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onSelect={() => setActiveDetailView("config-drift")}
-                          data-testid="open-config-drift"
-                        >
-                          <Activity className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
-                          Config drift
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <button
-                              type="button"
-                              className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm text-destructive outline-none transition-colors hover:bg-accent"
-                              data-testid="diagnostics-clear-all-trigger"
-                            >
-                              <TriangleAlert className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
-                              Clear all diagnostics
-                            </button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent surface="confirmation">
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Clear all diagnostics?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                This removes health evidence, problems, actions, logs, and traces for the current
-                                session.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={onClearAll}
-                                className="bg-destructive text-destructive-foreground"
-                                data-testid="diagnostics-clear-all-confirm"
+                          <Badge variant="outline" className="border-border bg-background/80 text-muted-foreground">
+                            Latest {formatStreamTimestamp(newestEntryTimestamp)}
+                          </Badge>
+                        </div>
+                        {activeFilterPills.length > 0 ? (
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {activeFilterPills.map((pill) => (
+                              <Badge
+                                key={pill}
+                                variant="outline"
+                                className="border-border bg-background/80 text-muted-foreground"
                               >
-                                Clear
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
+                                {pill}
+                              </Badge>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1">
+                        {isFiltersModified ? (
+                          <Button variant="ghost" size="sm" onClick={handleResetFilters} data-testid="reset-filters-button">
+                            Reset filters
+                          </Button>
+                        ) : null}
+                        {useInsightsRail && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                type="button"
+                                onClick={() => setPaneFocus(paneFocus === 'right' ? 'both' : 'right')}
+                                className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                                data-testid="pane-focus-activity"
+                              >
+                                {paneFocus === 'right' ? (
+                                  <PanelLeftOpen className="h-3.5 w-3.5" aria-hidden="true" />
+                                ) : (
+                                  <PanelLeftClose className="h-3.5 w-3.5" aria-hidden="true" />
+                                )}
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="left">
+                              {paneFocus === 'right' ? 'Restore split view' : 'Maximise activity'}
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+                      </div>
+                    </div>
+
+                    <div ref={streamRef} className="flex-1 min-h-0 overflow-auto space-y-1.5 pr-1">
+                      {/* §14.1 — Empty session */}
+                      {streamEntries.length === 0 && !isFiltersModified && (
+                        <p className="text-sm text-muted-foreground" data-testid="diagnostics-empty-message">
+                          No diagnostics yet. Health information will appear here after activity occurs.
+                        </p>
+                      )}
+
+                      {/* §14.3 — No results */}
+                      {streamEntries.length === 0 && isFiltersModified && (
+                        <p className="text-sm text-muted-foreground" data-testid="diagnostics-no-results-message">
+                          No entries match the current filters.
+                        </p>
+                      )}
+
+                      {streamEntries.map((entry) => {
+                        if (entry.kind === "problem") {
+                          const isAutoExpanded = autoExpandedProblemId === entry.data.id;
+                          return (
+                            <DiagnosticsListItem
+                              key={`problem-${entry.data.id}`}
+                              testId={`problem-${entry.data.id}`}
+                              mode="log"
+                              severity={resolveLogSeverity(entry.data.level)}
+                              title={entry.data.message}
+                              timestamp={entry.data.timestamp}
+                              defaultExpanded={isAutoExpanded}
+                            >
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <p className="text-xs font-semibold uppercase tracking-wide text-destructive">Problem</p>
+                                  <span className="text-xs font-medium text-muted-foreground">{entry.contributor}</span>
+                                </div>
+                                <p className="text-sm font-medium break-words whitespace-normal">{entry.data.message}</p>
+                                {entry.data.details && (
+                                  <pre className="text-xs whitespace-pre text-muted-foreground overflow-x-auto">
+                                    {JSON.stringify(entry.data.details, null, 2)}
+                                  </pre>
+                                )}
+                              </div>
+                            </DiagnosticsListItem>
+                          );
+                        }
+
+                        if (entry.kind === "action") {
+                          return <ActionSummaryListItem key={entry.data.correlationId} summary={entry.data} />;
+                        }
+
+                        if (entry.kind === "log") {
+                          return (
+                            <DiagnosticsListItem
+                              key={`log-${entry.data.id}`}
+                              testId={`log-${entry.data.id}`}
+                              mode="log"
+                              severity={resolveLogSeverity(entry.data.level)}
+                              title={entry.data.message}
+                              timestamp={entry.data.timestamp}
+                            >
+                              <div className="space-y-2">
+                                <p className="text-sm font-medium break-words whitespace-normal">{entry.data.message}</p>
+                                {entry.data.details && (
+                                  <pre className="text-xs whitespace-pre text-muted-foreground overflow-x-auto">
+                                    {JSON.stringify(entry.data.details, null, 2)}
+                                  </pre>
+                                )}
+                              </div>
+                            </DiagnosticsListItem>
+                          );
+                        }
+
+                        // trace
+                        return (
+                          <DiagnosticsListItem
+                            key={`trace-${entry.data.id}`}
+                            testId={`trace-${entry.data.id}`}
+                            mode="trace"
+                            severity={resolveTraceSeverity(entry.data)}
+                            title={getTraceTitle(entry.data)}
+                            timestamp={entry.data.timestamp}
+                          >
+                            <pre className="text-xs whitespace-pre text-muted-foreground overflow-x-auto">
+                              {JSON.stringify(entry.data, null, 2)}
+                            </pre>
+                          </DiagnosticsListItem>
+                        );
+                      })}
+
+                      {/* §15.1 — Load older entries */}
+                      {hasMoreEntries && (
+                        <div className="flex justify-center pt-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+                            data-testid="load-older-entries"
+                          >
+                            Load older entries
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                    <div
+                      className={cn(
+                        "sticky bottom-0 z-10 mt-2 border-t border-border/70 bg-background/95 pt-2 backdrop-blur supports-[backdrop-filter]:bg-background/85",
+                        isCompact
+                          ? "pb-[calc(0.5rem+env(safe-area-inset-bottom))]"
+                          : "pb-[calc(0.25rem+env(safe-area-inset-bottom))]",
+                      )}
+                      data-testid="diagnostics-action-shelf"
+                    >
+                      <div
+                        className={cn(
+                          "flex items-center gap-1.5",
+                          isCompact ? "grid grid-cols-3" : "flex-wrap justify-end",
+                        )}
+                      >
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => void onShareAll()}
+                          data-testid="diagnostics-share-all"
+                          aria-label="Share all"
+                          className="h-8 gap-1.5 px-2"
+                        >
+                          <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
+                          {isCompact ? 'All' : 'Share all'}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={!hasVisibleEntries}
+                          onClick={handleShareFiltered}
+                          data-testid="diagnostics-share-filtered"
+                          aria-label="Share filtered"
+                          className="h-8 gap-1.5 px-2"
+                        >
+                          <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
+                          {isCompact ? 'Filtered' : 'Share filtered'}
+                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 gap-1.5 px-2"
+                              data-testid="diagnostics-tools-menu"
+                            >
+                              <MoreHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
+                              Tools
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-56">
+                            <DropdownMenuItem
+                              onSelect={() => setActivePopup("heatmap-REST")}
+                              data-testid="open-heatmap-rest"
+                            >
+                              <BarChart2 className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
+                              REST heat map
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => setActivePopup("heatmap-FTP")} data-testid="open-heatmap-ftp">
+                              <BarChart2 className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
+                              FTP heat map
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onSelect={() => setActivePopup("heatmap-CONFIG")}
+                              data-testid="open-heatmap-config"
+                            >
+                              <BarChart2 className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
+                              Config heat map
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onSelect={() => setActiveDetailView("config-drift")}
+                              data-testid="open-config-drift"
+                            >
+                              <Activity className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
+                              Config drift
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <button
+                                  type="button"
+                                  className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm text-destructive outline-none transition-colors hover:bg-accent"
+                                  data-testid="diagnostics-clear-all-trigger"
+                                >
+                                  <TriangleAlert className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
+                                  Clear all diagnostics
+                                </button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent surface="confirmation">
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Clear all diagnostics?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    This removes health evidence, problems, actions, logs, and traces for the current
+                                    session.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={onClearAll}
+                                    className="bg-destructive text-destructive-foreground"
+                                    data-testid="diagnostics-clear-all-confirm"
+                                  >
+                                    Clear
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </div>
                   </>
                 )}
               </div>
