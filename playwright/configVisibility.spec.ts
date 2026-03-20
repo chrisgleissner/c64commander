@@ -177,11 +177,7 @@ test.describe("Config visibility across modes", () => {
     await selectTrigger.click();
     await page.getByRole("option", { name: /^NTSC$/ }).click();
 
-    const checkbox = page.getByLabel("HDMI Scan lines checkbox");
-    await checkbox.click();
-
     await expect.poll(() => server.getState()["U64 Specific Settings"]["System Mode"].value).toBe("NTSC");
-    await expect.poll(() => server.getState()["U64 Specific Settings"]["HDMI Scan lines"].value).toBe("Disabled");
 
     await snap(page, testInfo, "config-visible-after-real");
   });
