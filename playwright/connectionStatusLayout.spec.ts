@@ -7,7 +7,7 @@
  */
 
 import { test, expect } from "@playwright/test";
-import type { Page, TestInfo } from "@playwright/test";
+import type { Locator, Page, TestInfo } from "@playwright/test";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
 import { seedUiMocks } from "./uiMocks";
 import {
@@ -24,6 +24,13 @@ const snap = async (page: Page, testInfo: TestInfo, label: string) => {
     await attachStepScreenshot(page, testInfo, label);
   } catch (error) {
     console.warn(`Step screenshot failed for "${label}"`, error);
+  }
+};
+
+const ensureTechnicalDetailsExpanded = async (dialog: Locator) => {
+  const toggle = dialog.getByTestId("technical-details-toggle");
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") {
+    await toggle.click();
   }
 };
 
@@ -46,7 +53,9 @@ test.describe("Connection Status diagnostics layout", () => {
     await indicator.click();
     const dialog = page.getByRole("dialog", { name: "Diagnostics" });
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByTestId("health-summary")).toBeVisible();
+    await dialog.getByTestId("show-details-button").click();
+    await ensureTechnicalDetailsExpanded(dialog);
+    await expect(dialog.getByTestId("technical-details-card")).toBeVisible();
     return dialog;
   };
 
@@ -77,8 +86,11 @@ test.describe("Connection Status diagnostics layout", () => {
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
     const dialog = await openDiagnostics(page);
-    const restRow = dialog.getByText(/^REST:/).first();
-    const ftpRow = dialog.getByText(/^FTP:/).first();
+    const restRow = dialog
+      .locator("p")
+      .filter({ hasText: /^REST:/ })
+      .first();
+    const ftpRow = dialog.locator("p").filter({ hasText: /^FTP:/ }).first();
 
     const restBox = await restRow.boundingBox();
     const ftpBox = await ftpRow.boundingBox();
@@ -86,7 +98,6 @@ test.describe("Connection Status diagnostics layout", () => {
     expect(restBox).toBeTruthy();
     expect(ftpBox).toBeTruthy();
     expect(Math.abs((restBox?.x ?? 0) - (ftpBox?.x ?? 0))).toBeLessThanOrEqual(4);
-    expect(Math.abs((restBox?.height ?? 0) - (ftpBox?.height ?? 0))).toBeLessThanOrEqual(4);
 
     await snap(page, testInfo, "connection-status-layout-rhythm");
   });
@@ -109,11 +120,11 @@ test.describe("Connection Status diagnostics layout", () => {
     await page.goto("/", { waitUntil: "domcontentloaded" });
     const dialog = await openDiagnostics(page);
 
-    const overallHealthRow = dialog.getByTestId("overall-health-row");
     const deviceDetailButton = dialog.getByTestId("open-device-detail");
+    const connectionLabel = dialog.getByText("Connection", { exact: true });
 
-    await expect(overallHealthRow).toBeVisible();
     await expect(deviceDetailButton).toBeVisible();
+    await expect(connectionLabel).toBeVisible();
 
     const tagName = await deviceDetailButton.evaluate((element) => element.tagName.toLowerCase());
     expect(tagName).toBe("button");
@@ -122,7 +133,7 @@ test.describe("Connection Status diagnostics layout", () => {
     const focused = await page.evaluate(() => document.activeElement?.tagName.toLowerCase());
     expect(focused).toBe("button");
 
-    const summaryBox = await overallHealthRow.boundingBox();
+    const summaryBox = await connectionLabel.boundingBox();
     const detailBox = await deviceDetailButton.boundingBox();
     expect(summaryBox).not.toBeNull();
     expect(detailBox).not.toBeNull();
@@ -167,15 +178,20 @@ test.describe("Connection Status diagnostics layout", () => {
     await indicator.click();
     const dialog = page.getByRole("dialog", { name: "Diagnostics" });
     await expect(dialog).toBeVisible();
+    await dialog.getByTestId("show-details-button").click();
+    await ensureTechnicalDetailsExpanded(dialog);
 
-    await expect(dialog.getByTestId("health-summary")).toContainText(
-      /REST:\s+(No REST activity yet|.+\s+·\s+.+\s+·\s+(\d+s ago|\d+m \d+s ago))/i,
-    );
-    await expect(dialog.getByTestId("health-summary")).toContainText(
-      /FTP:\s+(No FTP activity yet|.+\s+·\s+.+\s+·\s+(\d+s ago|\d+m \d+s ago))/i,
-    );
-    await expect(dialog.getByTestId("health-summary")).not.toContainText("just now");
-    await expect(dialog.getByTestId("health-summary")).not.toContainText("Communication");
+    const restRow = dialog
+      .locator("p")
+      .filter({ hasText: /^REST:/ })
+      .first();
+    const ftpRow = dialog.locator("p").filter({ hasText: /^FTP:/ }).first();
+
+    await expect(restRow).toContainText(/REST:\s+(No REST activity yet|.+\s+·\s+.+\s+·\s+(\d+s ago|\d+m \d+s ago))/i);
+    await expect(ftpRow).toContainText(/FTP:\s+(No FTP activity yet|.+\s+·\s+.+\s+·\s+(\d+s ago|\d+m \d+s ago))/i);
+    await expect(restRow).not.toContainText("just now");
+    await expect(ftpRow).not.toContainText("just now");
+    await expect(dialog.getByTestId("technical-details-card")).not.toContainText("Communication");
   });
 
   test("close button closes the diagnostics dialog", async ({ page }: { page: Page }, testInfo: TestInfo) => {

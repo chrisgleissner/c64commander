@@ -204,6 +204,7 @@ test.describe("HVSC Play page", () => {
     failInstallAttempts?: number;
     installDelayMs?: number;
     seedInProgressSummary?: boolean;
+    seedInstallingState?: boolean;
     downloadProgressSteps?: number[];
     ingestionProgressSteps?: number[];
   };
@@ -222,6 +223,7 @@ test.describe("HVSC Play page", () => {
         failInstallAttempts,
         installDelayMs,
         seedInProgressSummary,
+        seedInstallingState,
         downloadProgressSteps,
         ingestionProgressSteps,
       }: {
@@ -236,6 +238,7 @@ test.describe("HVSC Play page", () => {
         failInstallAttempts?: number;
         installDelayMs?: number;
         seedInProgressSummary?: boolean;
+        seedInstallingState?: boolean;
         downloadProgressSteps?: number[];
         ingestionProgressSteps?: number[];
       }) => {
@@ -284,7 +287,7 @@ test.describe("HVSC Play page", () => {
         const state = {
           installedBaselineVersion: initialInstalledVersion ? baseline.version : null,
           installedVersion: initialInstalledVersion,
-          ingestionState: "idle",
+          ingestionState: seedInstallingState ? "installing" : "idle",
           lastUpdateCheckUtcMs: null as number | null,
           ingestionError: null as string | null,
           cachedBaselineVersion: null as number | null,
@@ -662,6 +665,10 @@ test.describe("HVSC Play page", () => {
           localStorage.removeItem("c64u_hvsc_status:v1");
         }
 
+        if (seedInstallingState) {
+          cancelTokens.set("hvsc-install", { cancelled: false });
+        }
+
         const host = c64BaseUrl.replace(/^https?:\/\//, "");
         localStorage.setItem("c64u_device_host", host);
         localStorage.setItem("c64u_feature_flag:hvsc_enabled", "1");
@@ -688,6 +695,7 @@ test.describe("HVSC Play page", () => {
         failInstallAttempts: options.failInstallAttempts,
         installDelayMs: options.installDelayMs,
         seedInProgressSummary: options.seedInProgressSummary,
+        seedInstallingState: options.seedInstallingState,
         downloadProgressSteps: options.downloadProgressSteps,
         ingestionProgressSteps: options.ingestionProgressSteps,
       },
@@ -763,17 +771,19 @@ test.describe("HVSC Play page", () => {
   });
 
   test("HVSC stop cancels install", async ({ page }: { page: Page }, testInfo: TestInfo) => {
-    await installMocks(page, { installedVersion: 0 });
     await installMocks(page, {
       installedVersion: 0,
+      seedInstallingState: true,
       seedInProgressSummary: true,
     });
     await page.goto("/play");
     await snap(page, testInfo, "play-open");
     await expect(page.getByTestId("hvsc-stop")).toBeVisible();
     await page.getByTestId("hvsc-stop").click();
-    await expect(page.getByText("HVSC update cancelled", { exact: true })).toBeVisible();
-    await expect(page.getByTestId("hvsc-controls").getByText("Cancelled", { exact: true })).toBeVisible();
+    await expect(page.getByTestId("hvsc-stop")).toBeHidden();
+    await expect(page.getByTestId("hvsc-controls")).toContainText("Status: Failed");
+    await expect(page.getByTestId("hvsc-controls")).toContainText("Cancelled");
+    await expect(page.getByRole("button", { name: "Reset status" })).toBeVisible();
     await snap(page, testInfo, "cancelled");
   });
 

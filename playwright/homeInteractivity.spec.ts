@@ -352,15 +352,7 @@ test.describe("Home interactions", () => {
 
     const keyboardLight = page.getByTestId("home-keyboard-lighting-summary");
     const keyboardLightLabels = await keyboardLight.locator(".text-muted-foreground").allTextContents();
-    expect(keyboardLightLabels).toEqual([
-      "Mode",
-      "Auto SID",
-      "Pattern",
-      "Color",
-      "Brightness",
-      "Tint",
-      "SID Select",
-    ]);
+    expect(keyboardLightLabels).toEqual(["Mode", "Auto SID", "Pattern", "Color", "Brightness", "Tint", "SID Select"]);
 
     await expect(page.getByTestId("home-led-pattern")).toHaveText(/Single Color/);
     await expect(page.getByTestId("home-keyboard-lighting-pattern")).toHaveText(/Single Color/);

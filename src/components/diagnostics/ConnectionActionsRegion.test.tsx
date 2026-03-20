@@ -75,9 +75,7 @@ describe("ConnectionActionsRegion", () => {
   it("defaults invalid switch-device ports to 80 and closes the form after success", async () => {
     const callbacks = makeCallbacks();
 
-    render(
-      <ConnectionActionsRegion connectivity="Online" currentHost="c64u" callbacks={callbacks} defaultExpanded />,
-    );
+    render(<ConnectionActionsRegion connectivity="Online" currentHost="c64u" callbacks={callbacks} defaultExpanded />);
 
     fireEvent.click(screen.getByTestId("switch-device-toggle"));
     fireEvent.change(screen.getByTestId("switch-device-host-input"), { target: { value: "backup-c64" } });
@@ -97,9 +95,7 @@ describe("ConnectionActionsRegion", () => {
     vi.mocked(getRecentTargets).mockReturnValue([{ host: "spare-c64", modelLabel: "Ultimate 64" }]);
     const callbacks = makeCallbacks();
 
-    render(
-      <ConnectionActionsRegion connectivity="Online" currentHost="c64u" callbacks={callbacks} defaultExpanded />,
-    );
+    render(<ConnectionActionsRegion connectivity="Online" currentHost="c64u" callbacks={callbacks} defaultExpanded />);
 
     fireEvent.click(screen.getByTestId("switch-device-toggle"));
     fireEvent.click(screen.getByTestId("recent-target-spare-c64"));
