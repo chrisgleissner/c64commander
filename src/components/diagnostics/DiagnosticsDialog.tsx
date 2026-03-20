@@ -80,6 +80,10 @@ import {
   Clock,
   FilterX,
   MoreHorizontal,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
   RefreshCw,
   Search,
   Share2,
@@ -426,6 +430,195 @@ const SectionHelp = ({ label, children, testId }: { label: string; children: str
   </Tooltip>
 );
 
+// § StatusSummaryCard — Layer 1: single dominant card on first open
+const StatusSummaryCard = ({
+  healthState,
+  onShowDetails,
+  onRunHealthCheck,
+  healthCheckRunning,
+  connectionCallbacks,
+  isCompact,
+  lastHealthCheckResult,
+  onOpenHealthCheckDetail,
+}: {
+  healthState: OverallHealthState;
+  onShowDetails: () => void;
+  onRunHealthCheck?: () => void;
+  healthCheckRunning?: boolean;
+  connectionCallbacks?: ConnectionActionsCallbacks;
+  isCompact: boolean;
+  lastHealthCheckResult?: import("@/lib/diagnostics/healthCheckEngine").HealthCheckRunResult | null;
+  onOpenHealthCheckDetail: () => void;
+}) => {
+  const { state, connectivity, host, primaryProblem } = healthState;
+  const connectedLabel =
+    (healthState as OverallHealthState & { connectedDeviceLabel?: string | null }).connectedDeviceLabel ?? null;
+
+  const isOffline = connectivity === "Offline" || connectivity === "Not yet connected";
+  const isUnhealthy = !isOffline && (state === "Unhealthy" || state === "Degraded");
+  const recoveryFirst = isRecoveryFirstState(connectivity);
+
+  const title = isOffline
+    ? "Device not reachable"
+    : isUnhealthy
+      ? "Needs attention"
+      : state === "Idle"
+        ? "Ready"
+        : "Healthy";
+
+  const titleColorClass = isOffline ? "text-destructive" : isUnhealthy ? "text-amber-500" : "text-success";
+
+  const glyph = HEALTH_GLYPHS[isOffline ? "Unavailable" : state];
+  const showSplitHealthCheck = !isOffline && Boolean(lastHealthCheckResult);
+
+  return (
+    <div
+      className={cn("bg-card border border-border rounded-xl space-y-3", isCompact ? "p-3" : "p-4")}
+      data-testid="status-summary-card"
+    >
+      {/* Title row */}
+      <div className="flex items-center gap-2">
+        <span
+          className={cn("font-mono leading-none shrink-0", isCompact ? "text-xl" : "text-2xl", titleColorClass)}
+          aria-hidden="true"
+        >
+          {glyph}
+        </span>
+        <span className={cn("font-semibold", isCompact ? "text-base" : "text-lg", titleColorClass)}>{title}</span>
+      </div>
+
+      {/* Device / issue context */}
+      <div className="space-y-1">
+        {isOffline && (
+          <>
+            <p className="text-sm font-mono text-muted-foreground">{host}</p>
+            <p className="text-sm text-muted-foreground">Cannot reach your device.</p>
+          </>
+        )}
+        {isUnhealthy && primaryProblem && (
+          <>
+            <p className="text-sm font-medium truncate">{primaryProblem.title.slice(0, 80)}</p>
+            <p className="text-xs text-muted-foreground">{primaryProblem.contributor}</p>
+            {primaryProblem.causeHint && (
+              <p className="text-xs text-muted-foreground truncate">{primaryProblem.causeHint.slice(0, 60)}</p>
+            )}
+          </>
+        )}
+        {isUnhealthy && !primaryProblem && (
+          <p className="text-sm text-muted-foreground">Some systems need attention.</p>
+        )}
+        {!isOffline && !isUnhealthy && (
+          <p className="text-sm text-muted-foreground">
+            {connectedLabel ? `${connectedLabel} · ` : ""}
+            {state === "Idle" ? "No activity yet." : "All systems working."}
+          </p>
+        )}
+      </div>
+
+      {/* Actions */}
+      <div className="space-y-2">
+        {/* Connection actions — always shown when callbacks provided (includes switch device) */}
+        {connectionCallbacks && (
+          <ConnectionActionsRegion
+            connectivity={connectivity}
+            currentHost={host}
+            callbacks={connectionCallbacks}
+            defaultExpanded={recoveryFirst}
+          />
+        )}
+
+        {/* Health check button — shown when not offline */}
+        {onRunHealthCheck && !isOffline && (
+          <div className={showSplitHealthCheck ? "grid grid-cols-2 gap-1.5" : ""}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onRunHealthCheck}
+              disabled={healthCheckRunning}
+              className={cn("w-full", showSplitHealthCheck && "min-w-0 px-2")}
+              data-testid="run-health-check-button"
+            >
+              {healthCheckRunning ? "Running health check…" : isCompact ? "Run check" : "Run health check"}
+            </Button>
+            {lastHealthCheckResult && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={onOpenHealthCheckDetail}
+                className={cn("w-full", showSplitHealthCheck && "min-w-0 px-2")}
+                data-testid="open-health-check-detail"
+              >
+                {isCompact ? "Last check" : "Last health check"}
+              </Button>
+            )}
+          </div>
+        )}
+
+        {/* View details link */}
+        <div className="pt-0.5">
+          <button
+            type="button"
+            onClick={onShowDetails}
+            className="text-xs text-muted-foreground hover:text-foreground underline transition-colors"
+            data-testid="show-details-button"
+          >
+            View activity and details
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// § EvidencePreviewCard — Layer 3: max 3 entries, no filters, human-readable guide to recent activity
+const EvidencePreviewCard = ({
+  entries,
+  onViewAll,
+  isCompact,
+}: {
+  entries: StreamEntry[];
+  onViewAll: () => void;
+  isCompact: boolean;
+}) => {
+  if (entries.length === 0) return null;
+
+  return (
+    <div
+      className={cn("bg-card border border-border rounded-xl space-y-2", isCompact ? "p-3" : "p-4")}
+      data-testid="evidence-preview-card"
+    >
+      <p className="text-xs font-semibold text-primary uppercase tracking-wider">Recent activity</p>
+      <div className="space-y-1.5">
+        {entries.map((entry) => {
+          if (entry.kind === "action") {
+            return <ActionSummaryListItem key={`prev-${entry.data.correlationId}`} summary={entry.data} />;
+          }
+          const title =
+            entry.kind === "problem" || entry.kind === "log" ? entry.data.message : getTraceTitle(entry.data);
+          return (
+            <DiagnosticsListItem
+              key={`prev-${entry.id}`}
+              testId={`preview-${entry.id}`}
+              mode="log"
+              severity={entry.severity}
+              title={title}
+              timestamp={entry.timestamp}
+            />
+          );
+        })}
+      </div>
+      <button
+        type="button"
+        onClick={onViewAll}
+        className="text-xs text-muted-foreground hover:text-foreground underline transition-colors"
+        data-testid="view-all-activity"
+      >
+        View all activity →
+      </button>
+    </div>
+  );
+};
+
 // §10 — Collapsible health summary
 const HealthSummary = ({
   healthState,
@@ -437,6 +630,8 @@ const HealthSummary = ({
   profile,
   expanded,
   onExpandedChange,
+  techDetailsExpanded,
+  onTechDetailsExpandedChange,
   connectionCallbacks,
   deviceInfo,
   healthCheckRunning,
@@ -456,6 +651,8 @@ const HealthSummary = ({
   profile: "compact" | "medium" | "expanded";
   expanded: boolean;
   onExpandedChange: (v: boolean) => void;
+  techDetailsExpanded: boolean;
+  onTechDetailsExpandedChange: (v: boolean) => void;
   connectionCallbacks?: ConnectionActionsCallbacks;
   deviceInfo?: DeviceDetailInfo | null;
   healthCheckRunning?: boolean;
@@ -558,57 +755,77 @@ const HealthSummary = ({
             </p>
           )}
 
-          {/* §10.5 — Last activity rows */}
-          <div className="space-y-0.5 px-1">
-            <LastActivityRow label="REST" activity={lastRestActivity} profile={profile} />
-            <LastActivityRow label="FTP" activity={lastFtpActivity} profile={profile} />
-          </div>
-
-          {/* §10.6 — Contributor rows */}
-          <div className="space-y-0.5">
-            {CONTRIBUTOR_ORDER.map((key) => (
-              <ContributorRow
-                key={key}
-                contributorKey={key}
-                health={contributors[key]}
-                isActive={indicatorFilter === key}
-                onClick={() => onIndicatorFilterChange(indicatorFilter === key ? "All" : key)}
-                profile={profile}
-              />
-            ))}
-          </div>
-
           {/* §10.8 — Primary problem spotlight */}
           {primaryProblem && <PrimaryProblemSpotlight problem={primaryProblem} onSelect={onSpotlightSelect} />}
 
-          {/* §12.2 — Latency summary (tappable → latency popup) */}
-          {hasLatencyData && (
-            <button
-              type="button"
-              onClick={onOpenLatency}
-              className="flex w-full items-center gap-2 rounded px-1 py-0.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
-              data-testid="latency-summary-row"
-            >
-              <Clock className="h-3 w-3 shrink-0" aria-hidden="true" />
-              <span>
-                P50 <span className="font-mono">{latency.p50}ms</span>
-                {" · "}P90 <span className="font-mono">{latency.p90}ms</span>
-                {" · "}P99 <span className="font-mono">{latency.p99}ms</span>
-              </span>
-              <span className="ml-auto text-[10px] underline">Analyse</span>
-            </button>
-          )}
-
-          {/* §13 — Health history shortcut */}
+          {/* §T — Technical details disclosure */}
           <button
             type="button"
-            onClick={onOpenHistory}
-            className="flex w-full items-center gap-2 rounded px-1 py-0.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
-            data-testid="health-history-row"
+            onClick={() => onTechDetailsExpandedChange(!techDetailsExpanded)}
+            className="flex w-full items-center justify-between gap-2 rounded px-1 py-0.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+            data-testid="technical-details-toggle"
+            aria-expanded={techDetailsExpanded}
           >
-            <BarChart2 className="h-3 w-3 shrink-0" aria-hidden="true" />
-            <span>Health history</span>
+            <span className="font-medium">Technical details</span>
+            {techDetailsExpanded ? (
+              <ChevronUp className="h-3 w-3 shrink-0" aria-hidden="true" />
+            ) : (
+              <ChevronDown className="h-3 w-3 shrink-0" aria-hidden="true" />
+            )}
           </button>
+
+          {techDetailsExpanded && (
+            <div className="space-y-1.5">
+              {/* §10.5 — Last activity rows */}
+              <div className="space-y-0.5 px-1">
+                <LastActivityRow label="REST" activity={lastRestActivity} profile={profile} />
+                <LastActivityRow label="FTP" activity={lastFtpActivity} profile={profile} />
+              </div>
+
+              {/* §10.6 — Contributor rows */}
+              <div className="space-y-0.5">
+                {CONTRIBUTOR_ORDER.map((key) => (
+                  <ContributorRow
+                    key={key}
+                    contributorKey={key}
+                    health={contributors[key]}
+                    isActive={indicatorFilter === key}
+                    onClick={() => onIndicatorFilterChange(indicatorFilter === key ? "All" : key)}
+                    profile={profile}
+                  />
+                ))}
+              </div>
+
+              {/* §12.2 — Latency summary (tappable → latency popup) */}
+              {hasLatencyData && (
+                <button
+                  type="button"
+                  onClick={onOpenLatency}
+                  className="flex w-full items-center gap-2 rounded px-1 py-0.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                  data-testid="latency-summary-row"
+                >
+                  <Clock className="h-3 w-3 shrink-0" aria-hidden="true" />
+                  <span>
+                    P50 <span className="font-mono">{latency.p50}ms</span>
+                    {" · "}P90 <span className="font-mono">{latency.p90}ms</span>
+                    {" · "}P99 <span className="font-mono">{latency.p99}ms</span>
+                  </span>
+                  <span className="ml-auto text-[10px] underline">Analyse</span>
+                </button>
+              )}
+
+              {/* §13 — Health history shortcut */}
+              <button
+                type="button"
+                onClick={onOpenHistory}
+                className="flex w-full items-center gap-2 rounded px-1 py-0.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                data-testid="health-history-row"
+              >
+                <BarChart2 className="h-3 w-3 shrink-0" aria-hidden="true" />
+                <span>Health history</span>
+              </button>
+            </div>
+          )}
 
           {/* §11.2 — Run health check */}
           {onRunHealthCheck && (
@@ -1014,6 +1231,10 @@ export function DiagnosticsDialog({
   const isCompact = profile === "compact";
   const isMedium = profile === "medium";
 
+  // § Progressive disclosure: summary-only on first open; showDetails=true reveals all layers
+  const [showDetails, setShowDetails] = useState(false);
+  // § Split-pane focus: which pane is maximized in expanded profile (null = equal split)
+  const [paneFocus, setPaneFocus] = useState<'both' | 'left' | 'right'>('both');
   // §5.3 — One analytic popup slot at a time
   const [activePopup, setActivePopup] = useState<ActivePopup>(null);
   // §14 — Device detail secondary view inside the overlay
@@ -1029,6 +1250,8 @@ export function DiagnosticsDialog({
   const [originFilters, setOriginFilters] = useState<Set<OriginFilter>>(() => new Set<OriginFilter>());
   // §10.1 — Summary expanded state, reset to true on each open
   const [summaryExpanded, setSummaryExpanded] = useState(true);
+  // §T — Technical details expanded state: closed on compact, open on medium/expanded
+  const [techDetailsExpanded, setTechDetailsExpanded] = useState(!isCompact);
   // §15.1 — Pagination
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   // §8.9 / §13.4 — Auto-expand primary problem on compact
@@ -1040,7 +1263,10 @@ export function DiagnosticsDialog({
   // §10.1 — Reset summary to expanded on each new open
   useEffect(() => {
     if (open) {
+      setShowDetails(false);
+      setPaneFocus('both');
       setSummaryExpanded(true);
+      setTechDetailsExpanded(!isCompact);
       setVisibleCount(PAGE_SIZE);
       // §8.9 — Compact auto-expansion
       if (profile === "compact" && healthState.primaryProblem) {
@@ -1317,13 +1543,15 @@ export function DiagnosticsDialog({
   const hasVisibleEntries = streamEntries.length > 0;
   const newestEntryTimestamp = streamEntries[0]?.timestamp ?? allStreamEntries[0]?.timestamp ?? null;
   const visibleProblemCount = streamEntries.filter((entry) => entry.kind === "problem").length;
+  // § Evidence preview — top 3 entries for the summary view (no filter changes needed)
+  const previewEntries = useMemo(() => allStreamEntries.slice(0, 3), [allStreamEntries]);
   const activeFilterPills = [
     indicatorFilter !== "All" ? `Contributor: ${indicatorFilter}` : null,
     severityFilter !== "All" ? describeSeverityFilter(severityFilter) : null,
     originFilters.size > 0 ? `Origin: ${Array.from(originFilters).join(" + ")}` : null,
     searchText.trim() !== "" ? `Search: “${searchText.trim()}”` : null,
   ].filter(Boolean) as string[];
-  const useInsightsRail = profile === "expanded" && !activeDetailView;
+  const useInsightsRail = showDetails && profile === "expanded";
 
   // §16.1 — Share filtered: pass filtered data
   const handleShareFiltered = useCallback(() => {
@@ -1350,33 +1578,37 @@ export function DiagnosticsDialog({
               <div className="min-w-0 space-y-1">
                 <AppSheetTitle>Diagnostics</AppSheetTitle>
                 <AppSheetDescription
-                  className="max-w-full truncate whitespace-nowrap pr-8"
+                  className={cn("max-w-full truncate whitespace-nowrap pr-8", !showDetails && "hidden")}
                   data-testid="diagnostics-subtitle"
                 >
                   Health, status, and recent evidence.
                 </AppSheetDescription>
               </div>
-              <div className="flex flex-wrap items-center justify-end gap-1.5">
-                <Badge variant="outline" className="gap-1 border-primary/30 bg-primary/5 text-primary">
-                  <Sparkles className="h-3 w-3" aria-hidden="true" />
-                  {allStreamEntries.length} entries
-                </Badge>
-                <Badge variant="outline" className="gap-1 border-border bg-background/80 text-foreground">
-                  <TriangleAlert className="h-3 w-3" aria-hidden="true" />
-                  {visibleProblemCount} problems in view
-                </Badge>
-                {entryFilterCount > 0 ? (
-                  <Badge variant="outline" className="gap-1 border-border bg-background/80 text-muted-foreground">
-                    <FilterX className="h-3 w-3" aria-hidden="true" />
-                    {entryFilterCount} active filters
+              {showDetails && (
+                <div className="flex flex-wrap items-center justify-end gap-1.5">
+                  <Badge variant="outline" className="gap-1 border-primary/30 bg-primary/5 text-primary">
+                    <Sparkles className="h-3 w-3" aria-hidden="true" />
+                    {allStreamEntries.length} entries
                   </Badge>
-                ) : null}
-              </div>
+                  <Badge variant="outline" className="gap-1 border-border bg-background/80 text-foreground">
+                    <TriangleAlert className="h-3 w-3" aria-hidden="true" />
+                    {visibleProblemCount} problems in view
+                  </Badge>
+                  {entryFilterCount > 0 ? (
+                    <Badge variant="outline" className="gap-1 border-border bg-background/80 text-muted-foreground">
+                      <FilterX className="h-3 w-3" aria-hidden="true" />
+                      {entryFilterCount} active filters
+                    </Badge>
+                  ) : null}
+                </div>
+              )}
             </div>
           </AppSheetHeader>
 
-          {activeDetailView && (
-            <div className={cn("border-b border-border", isCompact ? "px-3 pb-2 pt-1.5" : "px-4 pb-3 pt-2")}>
+          {/* Three-way conditional: detail view | summary | full details */}
+          {activeDetailView ? (
+            /* Active detail view replaces main content */
+            <div className={cn("flex-1 overflow-auto", isCompact ? "px-3 pb-4 pt-2" : "px-4 pb-4 pt-3")}>
               {activeDetailView === "device" ? (
                 <DeviceDetailView info={deviceInfo ?? null} onBack={() => setActiveDetailView(null)} />
               ) : null}
@@ -1392,13 +1624,93 @@ export function DiagnosticsDialog({
                 />
               ) : null}
             </div>
-          )}
-
-          <div className={cn("flex min-h-0 flex-1", useInsightsRail ? "flex-row" : "flex-col")}>
-            {!activeDetailView ? (
+          ) : !showDetails ? (
+            /* Summary view — Layer 1 (status) + Layer 3 preview (max 3 entries) */
+            <div className="flex-1 overflow-auto">
+              <div className={cn("space-y-3", isCompact ? "px-3 py-3" : "px-4 py-4")}>
+                <StatusSummaryCard
+                  healthState={healthState}
+                  onShowDetails={() => setShowDetails(true)}
+                  onRunHealthCheck={onRunHealthCheck}
+                  healthCheckRunning={healthCheckRunning}
+                  connectionCallbacks={connectionCallbacks}
+                  isCompact={isCompact}
+                  lastHealthCheckResult={lastHealthCheckResult}
+                  onOpenHealthCheckDetail={() => setActiveDetailView("health-check")}
+                />
+                {healthState.primaryProblem && (
+                  <PrimaryProblemSpotlight
+                    problem={healthState.primaryProblem}
+                    onSelect={() => {
+                      setShowDetails(true);
+                      handleSpotlightSelect();
+                    }}
+                  />
+                )}
+                <EvidencePreviewCard
+                  entries={previewEntries}
+                  onViewAll={() => setShowDetails(true)}
+                  isCompact={isCompact}
+                />
+              </div>
+            </div>
+          ) : (
+            /* Full details view — Layers 4-5: Technical + Tools */
+            <div className={cn("flex min-h-0 flex-1", useInsightsRail ? "flex-row" : "flex-col")}>
               <div
-                className={cn(useInsightsRail ? "flex min-h-0 w-[19rem] shrink-0 flex-col border-r border-border" : "")}
+                className={cn(
+                  useInsightsRail
+                    ? cn(
+                        "flex min-h-0 flex-col border-r border-border",
+                        paneFocus === 'left' ? "flex-1 min-w-0" :
+                        paneFocus === 'right' ? "w-10 shrink-0 overflow-hidden" :
+                        "w-[19rem] shrink-0",
+                      )
+                    : "",
+                )}
               >
+                {useInsightsRail && paneFocus === 'right' ? (
+                  /* Minimised left strip — restore button */
+                  <div className="flex h-full flex-col items-center pt-3">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={() => setPaneFocus('both')}
+                          className="rounded p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                          data-testid="pane-expand-left"
+                        >
+                          <PanelRightOpen className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="right">Show health summary</TooltipContent>
+                    </Tooltip>
+                  </div>
+                ) : (
+                  <>
+                    {useInsightsRail && (
+                      <div className="flex items-center justify-end border-b border-border/40 px-2 py-0.5">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              onClick={() => setPaneFocus(paneFocus === 'left' ? 'both' : 'left')}
+                              className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                              data-testid="pane-focus-health"
+                            >
+                              {paneFocus === 'left' ? (
+                                <PanelRightOpen className="h-3.5 w-3.5" aria-hidden="true" />
+                              ) : (
+                                <PanelRightClose className="h-3.5 w-3.5" aria-hidden="true" />
+                              )}
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent side="right">
+                            {paneFocus === 'left' ? 'Restore split view' : 'Maximise health summary'}
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                    )}
                 <HealthSummary
                   healthState={healthState}
                   indicatorFilter={indicatorFilter}
@@ -1409,6 +1721,8 @@ export function DiagnosticsDialog({
                   profile={profile}
                   expanded={summaryExpanded}
                   onExpandedChange={setSummaryExpanded}
+                  techDetailsExpanded={techDetailsExpanded}
+                  onTechDetailsExpandedChange={setTechDetailsExpanded}
                   connectionCallbacks={connectionCallbacks}
                   deviceInfo={deviceInfo}
                   healthCheckRunning={healthCheckRunning}
@@ -1436,256 +1750,316 @@ export function DiagnosticsDialog({
                   refineCount={refineCount}
                   entryCount={allStreamEntries.length}
                 />
-              </div>
-            ) : null}
-
-            <div
-              className={cn(
-                "flex min-h-0 min-w-0 flex-1 flex-col",
-                isCompact ? "px-3 pb-2.5 pt-1.5" : "px-4 pb-4 pt-2",
-              )}
-            >
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-2 border-b border-border/70 pb-2">
-                <div className="min-w-0 space-y-1">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Activity</p>
-                    <SectionHelp label="Activity stream" testId="activity-help">
-                      Recent session evidence in reverse chronological order. Filters decide which entries stay in view.
-                    </SectionHelp>
-                    <Badge variant="outline" className="border-border bg-background/80 text-muted-foreground">
-                      Showing {streamEntries.length} of {allStreamEntries.length}
-                    </Badge>
-                    <Badge variant="outline" className="border-border bg-background/80 text-muted-foreground">
-                      Latest {formatStreamTimestamp(newestEntryTimestamp)}
-                    </Badge>
-                  </div>
-                  {activeFilterPills.length > 0 ? (
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {activeFilterPills.map((pill) => (
-                        <Badge
-                          key={pill}
-                          variant="outline"
-                          className="border-border bg-background/80 text-muted-foreground"
-                        >
-                          {pill}
-                        </Badge>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-                {isFiltersModified ? (
-                  <Button variant="ghost" size="sm" onClick={handleResetFilters} data-testid="reset-filters-button">
-                    Reset filters
-                  </Button>
-                ) : null}
-              </div>
-
-              <div ref={streamRef} className="flex-1 min-h-0 overflow-auto space-y-1.5 pr-1">
-                {/* §14.1 — Empty session */}
-                {streamEntries.length === 0 && !isFiltersModified && (
-                  <p className="text-sm text-muted-foreground" data-testid="diagnostics-empty-message">
-                    No diagnostics yet. Health information will appear here after activity occurs.
-                  </p>
-                )}
-
-                {/* §14.3 — No results */}
-                {streamEntries.length === 0 && isFiltersModified && (
-                  <p className="text-sm text-muted-foreground" data-testid="diagnostics-no-results-message">
-                    No entries match the current filters.
-                  </p>
-                )}
-
-                {streamEntries.map((entry) => {
-                  if (entry.kind === "problem") {
-                    const isAutoExpanded = autoExpandedProblemId === entry.data.id;
-                    return (
-                      <DiagnosticsListItem
-                        key={`problem-${entry.data.id}`}
-                        testId={`problem-${entry.data.id}`}
-                        mode="log"
-                        severity={resolveLogSeverity(entry.data.level)}
-                        title={entry.data.message}
-                        timestamp={entry.data.timestamp}
-                        defaultExpanded={isAutoExpanded}
-                      >
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2">
-                            <p className="text-xs font-semibold uppercase tracking-wide text-destructive">Problem</p>
-                            <span className="text-xs font-medium text-muted-foreground">{entry.contributor}</span>
-                          </div>
-                          <p className="text-sm font-medium break-words whitespace-normal">{entry.data.message}</p>
-                          {entry.data.details && (
-                            <pre className="text-xs whitespace-pre text-muted-foreground overflow-x-auto">
-                              {JSON.stringify(entry.data.details, null, 2)}
-                            </pre>
-                          )}
-                        </div>
-                      </DiagnosticsListItem>
-                    );
-                  }
-
-                  if (entry.kind === "action") {
-                    return <ActionSummaryListItem key={entry.data.correlationId} summary={entry.data} />;
-                  }
-
-                  if (entry.kind === "log") {
-                    return (
-                      <DiagnosticsListItem
-                        key={`log-${entry.data.id}`}
-                        testId={`log-${entry.data.id}`}
-                        mode="log"
-                        severity={resolveLogSeverity(entry.data.level)}
-                        title={entry.data.message}
-                        timestamp={entry.data.timestamp}
-                      >
-                        <div className="space-y-2">
-                          <p className="text-sm font-medium break-words whitespace-normal">{entry.data.message}</p>
-                          {entry.data.details && (
-                            <pre className="text-xs whitespace-pre text-muted-foreground overflow-x-auto">
-                              {JSON.stringify(entry.data.details, null, 2)}
-                            </pre>
-                          )}
-                        </div>
-                      </DiagnosticsListItem>
-                    );
-                  }
-
-                  // trace
-                  return (
-                    <DiagnosticsListItem
-                      key={`trace-${entry.data.id}`}
-                      testId={`trace-${entry.data.id}`}
-                      mode="trace"
-                      severity={resolveTraceSeverity(entry.data)}
-                      title={getTraceTitle(entry.data)}
-                      timestamp={entry.data.timestamp}
-                    >
-                      <pre className="text-xs whitespace-pre text-muted-foreground overflow-x-auto">
-                        {JSON.stringify(entry.data, null, 2)}
-                      </pre>
-                    </DiagnosticsListItem>
-                  );
-                })}
-
-                {/* §15.1 — Load older entries */}
-                {hasMoreEntries && (
-                  <div className="flex justify-center pt-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
-                      data-testid="load-older-entries"
-                    >
-                      Load older entries
-                    </Button>
-                  </div>
+                  </>
                 )}
               </div>
+
               <div
                 className={cn(
-                  "sticky bottom-0 z-10 mt-2 border-t border-border/70 bg-background/95 pt-2 backdrop-blur supports-[backdrop-filter]:bg-background/85",
-                  isCompact
-                    ? "pb-[calc(0.5rem+env(safe-area-inset-bottom))]"
-                    : "pb-[calc(0.25rem+env(safe-area-inset-bottom))]",
+                  "flex min-h-0 min-w-0 flex-col",
+                  useInsightsRail && paneFocus === 'left'
+                    ? "w-10 shrink-0 overflow-hidden px-0"
+                    : cn("flex-1", isCompact ? "px-3 pb-2.5 pt-1.5" : "px-4 pb-4 pt-2"),
                 )}
-                data-testid="diagnostics-action-shelf"
               >
-                <div
-                  className={cn("flex items-center gap-1.5", isCompact ? "grid grid-cols-3" : "flex-wrap justify-end")}
-                >
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => void onShareAll()}
-                    data-testid="diagnostics-share-all"
-                    className="h-8 gap-1.5 px-2"
-                  >
-                    <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
-                    Share all
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={!hasVisibleEntries}
-                    onClick={handleShareFiltered}
-                    data-testid="diagnostics-share-filtered"
-                    className="h-8 gap-1.5 px-2"
-                  >
-                    <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
-                    Share filtered
-                  </Button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
+                {useInsightsRail && paneFocus === 'left' ? (
+                  /* Minimised right strip — restore button */
+                  <div className="flex h-full flex-col items-center pt-3">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={() => setPaneFocus('both')}
+                          className="rounded p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                          data-testid="pane-expand-right"
+                        >
+                          <PanelLeftOpen className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="left">Show activity</TooltipContent>
+                    </Tooltip>
+                  </div>
+                ) : (
+                  <>
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2 border-b border-border/70 pb-2">
+                  <div className="min-w-0 space-y-1">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                        Activity
+                      </p>
+                      <SectionHelp label="Activity" testId="activity-help">
+                        Recent session evidence in reverse chronological order. Filters decide which entries stay in
+                        view.
+                      </SectionHelp>
+                      <Badge variant="outline" className="border-border bg-background/80 text-muted-foreground">
+                        Showing {streamEntries.length} of {allStreamEntries.length}
+                      </Badge>
+                      <Badge variant="outline" className="border-border bg-background/80 text-muted-foreground">
+                        Latest {formatStreamTimestamp(newestEntryTimestamp)}
+                      </Badge>
+                    </div>
+                    {activeFilterPills.length > 0 ? (
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {activeFilterPills.map((pill) => (
+                          <Badge
+                            key={pill}
+                            variant="outline"
+                            className="border-border bg-background/80 text-muted-foreground"
+                          >
+                            {pill}
+                          </Badge>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    {isFiltersModified ? (
+                      <Button variant="ghost" size="sm" onClick={handleResetFilters} data-testid="reset-filters-button">
+                        Reset filters
+                      </Button>
+                    ) : null}
+                    {useInsightsRail && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            onClick={() => setPaneFocus(paneFocus === 'right' ? 'both' : 'right')}
+                            className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                            data-testid="pane-focus-activity"
+                          >
+                            {paneFocus === 'right' ? (
+                              <PanelLeftOpen className="h-3.5 w-3.5" aria-hidden="true" />
+                            ) : (
+                              <PanelLeftClose className="h-3.5 w-3.5" aria-hidden="true" />
+                            )}
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="left">
+                          {paneFocus === 'right' ? 'Restore split view' : 'Maximise activity'}
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
+                  </div>
+                </div>
+
+                <div ref={streamRef} className="flex-1 min-h-0 overflow-auto space-y-1.5 pr-1">
+                  {/* §14.1 — Empty session */}
+                  {streamEntries.length === 0 && !isFiltersModified && (
+                    <p className="text-sm text-muted-foreground" data-testid="diagnostics-empty-message">
+                      No diagnostics yet. Health information will appear here after activity occurs.
+                    </p>
+                  )}
+
+                  {/* §14.3 — No results */}
+                  {streamEntries.length === 0 && isFiltersModified && (
+                    <p className="text-sm text-muted-foreground" data-testid="diagnostics-no-results-message">
+                      No entries match the current filters.
+                    </p>
+                  )}
+
+                  {streamEntries.map((entry) => {
+                    if (entry.kind === "problem") {
+                      const isAutoExpanded = autoExpandedProblemId === entry.data.id;
+                      return (
+                        <DiagnosticsListItem
+                          key={`problem-${entry.data.id}`}
+                          testId={`problem-${entry.data.id}`}
+                          mode="log"
+                          severity={resolveLogSeverity(entry.data.level)}
+                          title={entry.data.message}
+                          timestamp={entry.data.timestamp}
+                          defaultExpanded={isAutoExpanded}
+                        >
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <p className="text-xs font-semibold uppercase tracking-wide text-destructive">Problem</p>
+                              <span className="text-xs font-medium text-muted-foreground">{entry.contributor}</span>
+                            </div>
+                            <p className="text-sm font-medium break-words whitespace-normal">{entry.data.message}</p>
+                            {entry.data.details && (
+                              <pre className="text-xs whitespace-pre text-muted-foreground overflow-x-auto">
+                                {JSON.stringify(entry.data.details, null, 2)}
+                              </pre>
+                            )}
+                          </div>
+                        </DiagnosticsListItem>
+                      );
+                    }
+
+                    if (entry.kind === "action") {
+                      return <ActionSummaryListItem key={entry.data.correlationId} summary={entry.data} />;
+                    }
+
+                    if (entry.kind === "log") {
+                      return (
+                        <DiagnosticsListItem
+                          key={`log-${entry.data.id}`}
+                          testId={`log-${entry.data.id}`}
+                          mode="log"
+                          severity={resolveLogSeverity(entry.data.level)}
+                          title={entry.data.message}
+                          timestamp={entry.data.timestamp}
+                        >
+                          <div className="space-y-2">
+                            <p className="text-sm font-medium break-words whitespace-normal">{entry.data.message}</p>
+                            {entry.data.details && (
+                              <pre className="text-xs whitespace-pre text-muted-foreground overflow-x-auto">
+                                {JSON.stringify(entry.data.details, null, 2)}
+                              </pre>
+                            )}
+                          </div>
+                        </DiagnosticsListItem>
+                      );
+                    }
+
+                    // trace
+                    return (
+                      <DiagnosticsListItem
+                        key={`trace-${entry.data.id}`}
+                        testId={`trace-${entry.data.id}`}
+                        mode="trace"
+                        severity={resolveTraceSeverity(entry.data)}
+                        title={getTraceTitle(entry.data)}
+                        timestamp={entry.data.timestamp}
+                      >
+                        <pre className="text-xs whitespace-pre text-muted-foreground overflow-x-auto">
+                          {JSON.stringify(entry.data, null, 2)}
+                        </pre>
+                      </DiagnosticsListItem>
+                    );
+                  })}
+
+                  {/* §15.1 — Load older entries */}
+                  {hasMoreEntries && (
+                    <div className="flex justify-center pt-2">
                       <Button
                         variant="outline"
                         size="sm"
-                        className="h-8 gap-1.5 px-2"
-                        data-testid="diagnostics-tools-menu"
+                        onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+                        data-testid="load-older-entries"
                       >
-                        <MoreHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
-                        Tools
+                        Load older entries
                       </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-56">
-                      <DropdownMenuItem onSelect={() => setActivePopup("heatmap-REST")} data-testid="open-heatmap-rest">
-                        <BarChart2 className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
-                        REST heat map
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onSelect={() => setActivePopup("heatmap-FTP")} data-testid="open-heatmap-ftp">
-                        <BarChart2 className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
-                        FTP heat map
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onSelect={() => setActivePopup("heatmap-CONFIG")}
-                        data-testid="open-heatmap-config"
-                      >
-                        <BarChart2 className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
-                        Config heat map
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onSelect={() => setActiveDetailView("config-drift")}
-                        data-testid="open-config-drift"
-                      >
-                        <Activity className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
-                        Config drift
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <button
-                            type="button"
-                            className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm text-destructive outline-none transition-colors hover:bg-accent"
-                            data-testid="diagnostics-clear-all-trigger"
-                          >
-                            <TriangleAlert className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
-                            Clear all diagnostics
-                          </button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent surface="confirmation">
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Clear all diagnostics?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              This removes health evidence, problems, actions, logs, and traces for the current session.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={onClearAll}
-                              className="bg-destructive text-destructive-foreground"
-                              data-testid="diagnostics-clear-all-confirm"
-                            >
-                              Clear
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                    </div>
+                  )}
                 </div>
+                <div
+                  className={cn(
+                    "sticky bottom-0 z-10 mt-2 border-t border-border/70 bg-background/95 pt-2 backdrop-blur supports-[backdrop-filter]:bg-background/85",
+                    isCompact
+                      ? "pb-[calc(0.5rem+env(safe-area-inset-bottom))]"
+                      : "pb-[calc(0.25rem+env(safe-area-inset-bottom))]",
+                  )}
+                  data-testid="diagnostics-action-shelf"
+                >
+                  <div
+                    className={cn(
+                      "flex items-center gap-1.5",
+                      isCompact ? "grid grid-cols-3" : "flex-wrap justify-end",
+                    )}
+                  >
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => void onShareAll()}
+                      data-testid="diagnostics-share-all"
+                      aria-label="Share all"
+                      className="h-8 gap-1.5 px-2"
+                    >
+                      <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
+                      {isCompact ? 'All' : 'Share all'}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={!hasVisibleEntries}
+                      onClick={handleShareFiltered}
+                      data-testid="diagnostics-share-filtered"
+                      aria-label="Share filtered"
+                      className="h-8 gap-1.5 px-2"
+                    >
+                      <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
+                      {isCompact ? 'Filtered' : 'Share filtered'}
+                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 gap-1.5 px-2"
+                          data-testid="diagnostics-tools-menu"
+                        >
+                          <MoreHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
+                          Tools
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-56">
+                        <DropdownMenuItem
+                          onSelect={() => setActivePopup("heatmap-REST")}
+                          data-testid="open-heatmap-rest"
+                        >
+                          <BarChart2 className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
+                          REST heat map
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => setActivePopup("heatmap-FTP")} data-testid="open-heatmap-ftp">
+                          <BarChart2 className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
+                          FTP heat map
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onSelect={() => setActivePopup("heatmap-CONFIG")}
+                          data-testid="open-heatmap-config"
+                        >
+                          <BarChart2 className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
+                          Config heat map
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onSelect={() => setActiveDetailView("config-drift")}
+                          data-testid="open-config-drift"
+                        >
+                          <Activity className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
+                          Config drift
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <button
+                              type="button"
+                              className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm text-destructive outline-none transition-colors hover:bg-accent"
+                              data-testid="diagnostics-clear-all-trigger"
+                            >
+                              <TriangleAlert className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
+                              Clear all diagnostics
+                            </button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent surface="confirmation">
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Clear all diagnostics?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This removes health evidence, problems, actions, logs, and traces for the current
+                                session.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={onClearAll}
+                                className="bg-destructive text-destructive-foreground"
+                                data-testid="diagnostics-clear-all-confirm"
+                              >
+                                Clear
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+                  </>
+                )}
               </div>
             </div>
-          </div>
+          )}
         </AppSheetContent>
 
         {/* §5.3 — Nested analytic popups (one at a time, above the overlay) */}

@@ -147,7 +147,6 @@ test.describe("Home diagnostics overlay", () => {
     await expect(dialog.getByTestId("run-health-check-button")).toHaveText("Running health check…");
     await expect(dialog.getByTestId("run-health-check-button")).toHaveText("Run health check", { timeout: 15000 });
     await expect(dialog.getByTestId("open-health-check-detail")).toBeVisible();
-    await expect(dialog.getByTestId("latency-summary-row")).toBeVisible();
     await snap(page, testInfo, "health-check-finished");
 
     await dialog.getByTestId("open-health-check-detail").click();
@@ -160,6 +159,9 @@ test.describe("Home diagnostics overlay", () => {
     await snap(page, testInfo, "health-check-detail");
     await dialog.getByRole("button", { name: /Back to diagnostics summary/i }).click();
     await expect(healthCheckDetail).toBeHidden();
+
+    // Expand to full details view to access HealthSummary rows and action shelf
+    await dialog.getByTestId("show-details-button").click();
 
     await dialog.getByTestId("latency-summary-row").click();
     const latencyPopup = page.getByTestId("latency-analysis-popup");

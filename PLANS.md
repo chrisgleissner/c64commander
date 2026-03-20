@@ -1,4 +1,55 @@
-# Health History Timeline Plan
+# Diagnostics UX Redesign Plan
+
+Status: IN PROGRESS
+Classification: UI_CHANGE + CODE_CHANGE
+
+## Goal
+
+Redesign the Diagnostics overlay to match the existing app UX language (Home, Play, Disks, Settings).
+This is a hobby-facing status screen — not a developer tool.
+
+## Three Modes
+
+**HEALTHY / IDLE**
+First screen: ONE card — "Healthy", device name, "All systems working", Run health check, "View activity and details" link.
+
+**UNHEALTHY / DEGRADED**
+First screen: ONE card — "Needs attention", plain-language issue, contributor, "View issue" CTA.
+
+**OFFLINE**
+First screen: ONE card — "Device not reachable", host, Retry / Switch device.
+
+## Progressive Disclosure Layers
+
+| Layer | Card                 | Content                                                                  |
+| ----- | -------------------- | ------------------------------------------------------------------------ |
+| 1     | StatusSummaryCard    | Mode title, device, primary action, show-details link                    |
+| 2     | IssueCard            | Primary problem title + contributor (visible when showDetails=true)      |
+| 3     | EvidencePreviewCard  | Max 3 recent Problems/Actions (no filters)                               |
+| 4     | TechnicalDetailsCard | Contributors, latency, health history, health check                      |
+| 5     | ToolsCard            | Filters, full stream, Share all/filtered, heat maps, config drift, clear |
+
+`showDetails=false` (default): only Layer 1 + Layer 3 preview.
+`showDetails=true`: all layers, each individually expandable.
+
+## Key Implementation Changes
+
+- `DiagnosticsDialog.tsx`: add `showDetails` state, add `StatusSummaryCard` + `EvidencePreviewCard` sub-components
+- `DiagnosticsDialog.test.tsx`: update filter-visibility tests, add mode-based card tests
+- Playwright tests: add `show-details-button` expansion steps before accessing Technical/Tools layers
+
+## Termination Criteria
+
+- [ ] First view shows ONE status card only
+- [ ] No filters/logs visible initially
+- [ ] All data accessible via progressive disclosure
+- [ ] All unit tests pass + ≥91% branch coverage
+- [ ] Screenshots updated
+- [ ] Build + CI green
+
+---
+
+# Health History Timeline Plan (ARCHIVED — COMPLETE)
 
 Status: COMPLETE
 Classification: DOC_PLUS_CODE, UI_CHANGE
@@ -113,3 +164,122 @@ Classification: DOC_PLUS_CODE, UI_CHANGE
 - Replaced the Health History scatter chart with a contiguous timeline and tap-driven detail overlay in `src/components/diagnostics/HealthHistoryPopup.tsx`.
 - Updated diagnostics Playwright coverage and regenerated the targeted diagnostics screenshots under `doc/img/app/diagnostics`.
 - Validation passed with `npm run lint`, `npm run test`, `npm run test:coverage` at 91.01% global branch coverage, `npm run build`, targeted diagnostics Playwright, and targeted diagnostics screenshot capture.
+
+---
+
+# Diagnostics Overlay Progressive-Disclosure UX Redesign
+
+Status: IN PROGRESS
+Classification: UI_CHANGE, CODE_CHANGE
+
+## Objective
+
+Redesign the Diagnostics overlay to achieve progressive-disclosure UX:
+
+1. Answer "is the device healthy?" immediately
+2. Apply strict layer structure: Summary → Problem → Technical → Evidence → Tools
+3. Compact devices: no scrolling for core answer
+4. Preserve ALL existing diagnostic information; nothing removed
+
+## Phased Execution
+
+### PHASE 1 — BASELINE ANALYSIS ✅ COMPLETE
+
+**Data surfaces in DiagnosticsDialog.tsx:**
+
+| Element                   | testId                           | Location           |
+| ------------------------- | -------------------------------- | ------------------ |
+| Overall health row        | `overall-health-row`             | HealthSummary      |
+| Device detail button      | `open-device-detail`             | HealthSummary      |
+| Explanation phrase        | `health-explanation`             | HealthSummary      |
+| Last REST activity        | (text)                           | HealthSummary      |
+| Last FTP activity         | (text)                           | HealthSummary      |
+| Contributor rows ×3       | `contributor-row-{app,rest,ftp}` | HealthSummary      |
+| Primary problem spotlight | `primary-problem-spotlight`      | HealthSummary      |
+| Latency P50/P90/P99       | `latency-summary-row`            | HealthSummary      |
+| Health history shortcut   | `health-history-row`             | HealthSummary      |
+| Run health check          | `run-health-check-button`        | HealthSummary      |
+| Last health check         | `open-health-check-detail`       | HealthSummary      |
+| Connection actions        | (region)                         | HealthSummary      |
+| Evidence type toggles     | `evidence-toggle-*`              | QuickFocusControls |
+| Filters / Refine          | `refine-button`                  | QuickFocusControls |
+| Evidence stream           | `activity-help`                  | Stream section     |
+| Share all/filtered/tools  | `diagnostics-share-all` etc.     | Action shelf       |
+
+**Display profiles:**
+
+- compact: ≤360px (unit tests use 360, screenshots use 360)
+- medium: 361–599px (unit tests use some 900px = expanded; screenshots use 393px)
+- expanded: ≥600px (all Playwright tests use 800px default)
+
+### PHASE 2 — INFORMATION ARCHITECTURE ✅ COMPLETE
+
+**Layer model:**
+
+| Layer                | Content                                                                     | Default visibility                   |
+| -------------------- | --------------------------------------------------------------------------- | ------------------------------------ |
+| L1 Summary           | Overall health + connectivity, explanation, primary problem spotlight, host | Always visible                       |
+| L2 Primary Actions   | Run health check, connection actions                                        | Always visible                       |
+| L3 Technical Details | REST/FTP activity, contributor rows, latency, health history                | compact=closed, medium/expanded=open |
+| L4 Evidence          | "Recent evidence" stream + filters                                          | Visible but collapsed detail         |
+| L5 Tools             | Share, Tools menu                                                           | Always visible (action shelf)        |
+
+**Key decision:** Technical details default = open on medium/expanded so all existing tests at 800px and 600px pass without modification.
+
+### PHASE 3 — COMPONENT REFACTOR ✅ COMPLETE
+
+Changes to `DiagnosticsDialog.tsx`:
+
+1. State `techDetailsExpanded` in DiagnosticsDialog, default `!isCompact`, reset on open
+2. Pass to HealthSummary as `techDetailsExpanded`/`onTechDetailsExpandedChange`
+3. HealthSummary: add `technical-details-toggle` button
+4. Wrap in `{techDetailsExpanded && ...}`: LastActivityRows, ContributorRows, latency row, history row
+5. Stream header: rename "Activity" → "Recent evidence" (testId `activity-help` unchanged)
+
+### PHASE 4 — STATE-DRIVEN RENDERING ✅ COMPLETE
+
+`techDetailsExpanded` reset on dialog open → compact always starts closed → medium/expanded starts open
+
+### PHASE 5 — TEST ADAPTATION
+
+Unit tests:
+
+- No existing tests need modification (all at 600px = expanded = open by default)
+- Add new tests:
+  - "technical details collapsed by default on compact profile"
+  - "technical details toggle expands and collapses the technical section"
+
+### PHASE 6 — SCREENSHOT REGENERATION
+
+Re-run diagnostics screenshot Playwright task (targeted). Updates:
+
+- New "Technical details" toggle button visible in screenshots
+- "Recent evidence" label instead of "Activity"
+
+### PHASE 7 — FULL VALIDATION
+
+- `npm run lint`
+- `npm run test`
+- `npm run test:coverage` (≥91% branch)
+- `npm run build`
+
+### PHASE 8 — CONSISTENCY PASS
+
+Review alignment with Home screen language and information hierarchy.
+
+### PHASE 9 — CI CONVERGENCE
+
+All pipelines green; no skipped tests.
+
+## Termination Criteria
+
+- [ ] 1. All diagnostics data accessible via progressive disclosure
+- [ ] 2. Technical details behind disclosure toggle on compact
+- [ ] 3. Healthy compact = minimal (no contributor rows on first view)
+- [ ] 4. Unhealthy = primary problem spotlight always visible
+- [ ] 5. Offline = recovery actions prominent (unchanged)
+- [ ] 6. All unit tests pass
+- [ ] 7. All Playwright tests pass
+- [ ] 8. Screenshots updated
+- [ ] 9. Build succeeds
+- [ ] 10. PLANS.md final state reached

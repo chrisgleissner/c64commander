@@ -85,8 +85,8 @@ export function HealthHistoryPopup({ open, onClose }: Props) {
     const resizeObserver =
       typeof ResizeObserver !== "undefined"
         ? new ResizeObserver(() => {
-          measure();
-        })
+            measure();
+          })
         : null;
 
     resizeObserver?.observe(element);

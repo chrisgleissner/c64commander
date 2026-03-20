@@ -72,7 +72,7 @@ describe("DiagnosticsDialog", () => {
     expect(title.closest("div.border-b")).not.toHaveClass("px-6");
   });
 
-  it("keeps the description to a single concise line", () => {
+  it("status-summary-card is visible in the initial summary view", () => {
     localStorage.clear();
     setViewportWidth(600);
 
@@ -82,7 +82,26 @@ describe("DiagnosticsDialog", () => {
       </DisplayProfileProvider>,
     );
 
+    expect(screen.getByTestId("status-summary-card")).toBeVisible();
+    expect(screen.getByTestId("show-details-button")).toBeVisible();
+  });
+
+  it("subtitle is hidden in summary view and visible after expanding to full details", () => {
+    localStorage.clear();
+    setViewportWidth(600);
+
+    render(
+      <DisplayProfileProvider>
+        <DiagnosticsDialog {...defaultProps} />
+      </DisplayProfileProvider>,
+    );
+
+    expect(screen.getByTestId("diagnostics-subtitle")).toHaveClass("hidden");
+
+    fireEvent.click(screen.getByTestId("show-details-button"));
+
     const description = screen.getByTestId("diagnostics-subtitle");
+    expect(description).not.toHaveClass("hidden");
     expect(description).toHaveTextContent("Health, status, and recent evidence.");
     expect(description).toHaveClass("truncate");
     expect(description).toHaveClass("whitespace-nowrap");
@@ -98,6 +117,8 @@ describe("DiagnosticsDialog", () => {
       </DisplayProfileProvider>,
     );
 
+    fireEvent.click(screen.getByTestId("show-details-button"));
+
     expect(screen.getByTestId("diagnostics-empty-message")).toBeVisible();
   });
 
@@ -110,6 +131,8 @@ describe("DiagnosticsDialog", () => {
         <DiagnosticsDialog {...defaultProps} />
       </DisplayProfileProvider>,
     );
+
+    fireEvent.click(screen.getByTestId("show-details-button"));
 
     const problemsBtn = screen.getByTestId("evidence-toggle-problems");
     const actionsBtn = screen.getByTestId("evidence-toggle-actions");
@@ -135,6 +158,8 @@ describe("DiagnosticsDialog", () => {
       </DisplayProfileProvider>,
     );
 
+    fireEvent.click(screen.getByTestId("show-details-button"));
+
     expect(screen.getByTestId("health-summary")).toBeVisible();
     expect(screen.getByTestId("overall-health-row")).toBeVisible();
   });
@@ -149,12 +174,14 @@ describe("DiagnosticsDialog", () => {
       </DisplayProfileProvider>,
     );
 
+    fireEvent.click(screen.getByTestId("show-details-button"));
+
     expect(screen.getByTestId("contributor-row-app")).toBeVisible();
     expect(screen.getByTestId("contributor-row-rest")).toBeVisible();
     expect(screen.getByTestId("contributor-row-ftp")).toBeVisible();
   });
 
-  it("shows retry connection button when connectivity is Offline", () => {
+  it("shows retry connection button when connectivity is Offline (after expanding to full details)", () => {
     localStorage.clear();
     setViewportWidth(600);
 
@@ -167,7 +194,26 @@ describe("DiagnosticsDialog", () => {
       </DisplayProfileProvider>,
     );
 
+    fireEvent.click(screen.getByTestId("show-details-button"));
+
     expect(screen.getByTestId("retry-connection-button")).toBeVisible();
+  });
+
+  it("does not show retry button in summary view when connectivity is Offline and no connectionCallbacks", () => {
+    localStorage.clear();
+    setViewportWidth(600);
+
+    render(
+      <DisplayProfileProvider>
+        <DiagnosticsDialog
+          {...defaultProps}
+          healthState={{ ...idleHealthState, state: "Unavailable", connectivity: "Offline" }}
+        />
+      </DisplayProfileProvider>,
+    );
+
+    // retry button is in HealthSummary (full-details only)
+    expect(screen.queryByTestId("retry-connection-button")).toBeNull();
   });
 
   it("does not show retry button when connectivity is Online", () => {
@@ -179,6 +225,8 @@ describe("DiagnosticsDialog", () => {
         <DiagnosticsDialog {...defaultProps} />
       </DisplayProfileProvider>,
     );
+
+    fireEvent.click(screen.getByTestId("show-details-button"));
 
     expect(screen.queryByTestId("retry-connection-button")).toBeNull();
   });
@@ -193,6 +241,8 @@ describe("DiagnosticsDialog", () => {
       </DisplayProfileProvider>,
     );
 
+    fireEvent.click(screen.getByTestId("show-details-button"));
+
     expect(screen.getByTestId("diagnostics-filter-input")).toBeVisible();
   });
 
@@ -205,6 +255,8 @@ describe("DiagnosticsDialog", () => {
         <DiagnosticsDialog {...defaultProps} />
       </DisplayProfileProvider>,
     );
+
+    fireEvent.click(screen.getByTestId("show-details-button"));
 
     expect(screen.queryByTestId("diagnostics-filter-input")).toBeNull();
   });
@@ -219,6 +271,8 @@ describe("DiagnosticsDialog", () => {
       </DisplayProfileProvider>,
     );
 
+    fireEvent.click(screen.getByTestId("show-details-button"));
+
     expect(screen.getByTestId("filters-help")).toBeVisible();
     expect(screen.getByTestId("activity-help")).toBeVisible();
   });
@@ -232,6 +286,8 @@ describe("DiagnosticsDialog", () => {
         <DiagnosticsDialog {...defaultProps} />
       </DisplayProfileProvider>,
     );
+
+    fireEvent.click(screen.getByTestId("show-details-button"));
 
     expect(screen.getByTestId("diagnostics-action-shelf")).toHaveClass("sticky");
     expect(screen.getByTestId("diagnostics-share-all")).toBeVisible();
@@ -249,6 +305,8 @@ describe("DiagnosticsDialog", () => {
       </DisplayProfileProvider>,
     );
 
+    fireEvent.click(screen.getByTestId("show-details-button"));
+
     expect(screen.getByTestId("refine-button")).toHaveTextContent("More filters");
     expect(screen.getByTestId("refine-button")).toHaveClass("whitespace-nowrap");
   });
@@ -263,6 +321,7 @@ describe("DiagnosticsDialog", () => {
       </DisplayProfileProvider>,
     );
 
+    fireEvent.click(screen.getByTestId("show-details-button"));
     fireEvent.pointerDown(screen.getByTestId("diagnostics-tools-menu"));
     expect(screen.getByTestId("open-config-drift")).toBeVisible();
     expect(screen.getByTestId("open-heatmap-config")).toBeVisible();
@@ -278,6 +337,8 @@ describe("DiagnosticsDialog", () => {
         <DiagnosticsDialog {...defaultProps} />
       </DisplayProfileProvider>,
     );
+
+    fireEvent.click(screen.getByTestId("show-details-button"));
 
     expect(screen.getByTestId("indicator-toggle-app")).toBeVisible();
     expect(screen.getByTestId("indicator-toggle-rest")).toBeVisible();
@@ -295,6 +356,7 @@ describe("DiagnosticsDialog", () => {
       </DisplayProfileProvider>,
     );
 
+    fireEvent.click(screen.getByTestId("show-details-button"));
     fireEvent.click(screen.getByTestId("refine-button"));
     fireEvent.click(screen.getByTestId("severity-toggle-errors"));
 
@@ -422,6 +484,168 @@ describe("DiagnosticsDialog", () => {
     );
 
     expect(screen.getByTestId("primary-problem-spotlight")).toBeVisible();
-    expect(screen.getByText("Needs attention")).toBeVisible();
+    expect(screen.getByTestId("status-summary-card")).toHaveTextContent("Needs attention");
+  });
+
+  it("hides technical details rows by default on compact profile", () => {
+    localStorage.clear();
+    setViewportWidth(360);
+
+    render(
+      <DisplayProfileProvider>
+        <DiagnosticsDialog {...defaultProps} />
+      </DisplayProfileProvider>,
+    );
+
+    fireEvent.click(screen.getByTestId("show-details-button"));
+
+    expect(screen.queryByTestId("contributor-row-app")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("contributor-row-rest")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("contributor-row-ftp")).not.toBeInTheDocument();
+    expect(screen.getByTestId("technical-details-toggle")).toBeVisible();
+  });
+
+  it("shows technical details rows after toggle click on compact profile", () => {
+    localStorage.clear();
+    setViewportWidth(360);
+
+    render(
+      <DisplayProfileProvider>
+        <DiagnosticsDialog {...defaultProps} />
+      </DisplayProfileProvider>,
+    );
+
+    fireEvent.click(screen.getByTestId("show-details-button"));
+    fireEvent.click(screen.getByTestId("technical-details-toggle"));
+
+    expect(screen.getByTestId("contributor-row-app")).toBeVisible();
+    expect(screen.getByTestId("contributor-row-rest")).toBeVisible();
+    expect(screen.getByTestId("contributor-row-ftp")).toBeVisible();
+  });
+
+  it("shows technical details open by default on expanded profile", () => {
+    localStorage.clear();
+    setViewportWidth(600);
+
+    render(
+      <DisplayProfileProvider>
+        <DiagnosticsDialog {...defaultProps} />
+      </DisplayProfileProvider>,
+    );
+
+    fireEvent.click(screen.getByTestId("show-details-button"));
+
+    expect(screen.getByTestId("contributor-row-app")).toBeVisible();
+    expect(screen.getByTestId("contributor-row-rest")).toBeVisible();
+    expect(screen.getByTestId("contributor-row-ftp")).toBeVisible();
+    expect(screen.getByTestId("technical-details-toggle")).toBeVisible();
+  });
+
+  it("stream section header is labelled Recent evidence", () => {
+    localStorage.clear();
+    setViewportWidth(600);
+
+    render(
+      <DisplayProfileProvider>
+        <DiagnosticsDialog {...defaultProps} />
+      </DisplayProfileProvider>,
+    );
+
+    fireEvent.click(screen.getByTestId("show-details-button"));
+
+    expect(screen.getByText("Recent evidence")).toBeVisible();
+    expect(screen.queryByText("Activity")).not.toBeInTheDocument();
+  });
+
+  it("status-summary-card shows Healthy title for Healthy state", () => {
+    localStorage.clear();
+    setViewportWidth(600);
+
+    render(
+      <DisplayProfileProvider>
+        <DiagnosticsDialog
+          {...defaultProps}
+          healthState={{ ...idleHealthState, state: "Healthy", connectivity: "Online" }}
+        />
+      </DisplayProfileProvider>,
+    );
+
+    const card = screen.getByTestId("status-summary-card");
+    expect(card).toHaveTextContent("Healthy");
+  });
+
+  it("status-summary-card shows Device not reachable for Offline connectivity", () => {
+    localStorage.clear();
+    setViewportWidth(600);
+
+    render(
+      <DisplayProfileProvider>
+        <DiagnosticsDialog
+          {...defaultProps}
+          healthState={{ ...idleHealthState, state: "Unavailable", connectivity: "Offline" }}
+        />
+      </DisplayProfileProvider>,
+    );
+
+    const card = screen.getByTestId("status-summary-card");
+    expect(card).toHaveTextContent("Device not reachable");
+  });
+
+  it("status-summary-card shows Needs attention for Unhealthy state with primary problem", () => {
+    localStorage.clear();
+    setViewportWidth(600);
+
+    const healthWithProblem: OverallHealthState = {
+      ...idleHealthState,
+      state: "Unhealthy",
+      primaryProblem: {
+        id: "prob-99",
+        title: "REST probe failed",
+        contributor: "REST",
+        timestampMs: Date.now() - 5_000,
+        impactLevel: 2,
+        causeHint: "HTTP 503",
+      },
+    };
+
+    render(
+      <DisplayProfileProvider>
+        <DiagnosticsDialog {...defaultProps} healthState={healthWithProblem} />
+      </DisplayProfileProvider>,
+    );
+
+    expect(screen.getByTestId("status-summary-card")).toHaveTextContent("Needs attention");
+    expect(screen.getByTestId("status-summary-card")).toHaveTextContent("REST probe failed");
+  });
+
+  it("evidence-preview-card shows view-all link when entries are present", () => {
+    localStorage.clear();
+    setViewportWidth(600);
+
+    render(
+      <DisplayProfileProvider>
+        <DiagnosticsDialog
+          {...defaultProps}
+          actionSummaries={[
+            {
+              correlationId: "COR-0001",
+              operationType: "REST",
+              endpoint: "/v1/machine",
+              startTimestamp: new Date(Date.now() - 2000).toISOString(),
+              endTimestamp: new Date(Date.now() - 1000).toISOString(),
+              outcome: "Success",
+              durationMs: 1000,
+              errorMessage: null,
+              statusCode: 200,
+              contributor: "App",
+              impactLevel: 0,
+            },
+          ]}
+        />
+      </DisplayProfileProvider>,
+    );
+
+    expect(screen.getByTestId("evidence-preview-card")).toBeVisible();
+    expect(screen.getByTestId("view-all-activity")).toBeVisible();
   });
 });

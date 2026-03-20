@@ -161,6 +161,9 @@ describe("DiagnosticsDialog", () => {
       onShareFiltered,
     });
 
+    // Expand full details view first
+    fireEvent.click(screen.getByTestId("show-details-button"));
+
     // Both entries visible initially
     expect(screen.getByTestId("log-log-1")).toBeInTheDocument();
     expect(screen.getByTestId("log-log-2")).toBeInTheDocument();
@@ -201,6 +204,9 @@ describe("DiagnosticsDialog", () => {
       ],
     });
 
+    // Expand full details view first
+    fireEvent.click(screen.getByTestId("show-details-button"));
+
     expect(screen.getByTestId("action-act-1")).toBeInTheDocument();
     expect(screen.getByTestId("action-act-2")).toBeInTheDocument();
 
@@ -222,6 +228,9 @@ describe("DiagnosticsDialog", () => {
       ],
     });
 
+    // Expand full details view first
+    fireEvent.click(screen.getByTestId("show-details-button"));
+
     // REST failure should appear as a problem entry
     expect(screen.getByTestId("problem-rest-fail-1")).toBeInTheDocument();
   });
@@ -238,8 +247,7 @@ describe("DiagnosticsDialog", () => {
         },
       ],
     });
-
-    expect(screen.getByTestId("problem-ftp-fail-1")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("show-details-button"));    expect(screen.getByTestId("problem-ftp-fail-1")).toBeInTheDocument();
   });
 
   it("uses compact health-check labels and shows the last-check shortcut when a result exists", () => {
@@ -265,6 +273,7 @@ describe("DiagnosticsDialog", () => {
       },
     });
 
+    fireEvent.click(screen.getByTestId("show-details-button"));
     expect(screen.getByTestId("run-health-check-button")).toHaveTextContent("Run check");
     expect(screen.getByTestId("open-health-check-detail")).toHaveTextContent("Last check");
   });
@@ -277,6 +286,7 @@ describe("DiagnosticsDialog", () => {
       healthCheckRunning: true,
     });
 
+    fireEvent.click(screen.getByTestId("show-details-button"));
     expect(screen.getByTestId("run-health-check-button")).toHaveTextContent("Running health check…");
     expect(screen.getByTestId("run-health-check-button")).toBeDisabled();
     expect(screen.queryByTestId("open-health-check-detail")).not.toBeInTheDocument();
@@ -295,6 +305,7 @@ describe("DiagnosticsDialog", () => {
       ],
     });
 
+    fireEvent.click(screen.getByTestId("show-details-button"));
     // Should appear as a problem, not duplicated as a trace
     expect(screen.getByTestId("problem-rest-fail-2")).toBeInTheDocument();
     expect(screen.queryByTestId("trace-rest-fail-2")).not.toBeInTheDocument();
@@ -314,6 +325,7 @@ describe("DiagnosticsDialog", () => {
       ],
     });
 
+    fireEvent.click(screen.getByTestId("show-details-button"));
     const appProblem = screen.getByTestId("problem-err-app-1");
     expect(appProblem.textContent).toContain("App");
 
@@ -352,6 +364,7 @@ describe("DiagnosticsDialog", () => {
       ],
     });
 
+    fireEvent.click(screen.getByTestId("show-details-button"));
     // All three visible initially (no indicator filter)
     expect(screen.getByTestId("trace-trace-rest-1")).toBeInTheDocument();
     expect(screen.getByTestId("trace-trace-ftp-1")).toBeInTheDocument();
@@ -386,6 +399,7 @@ describe("DiagnosticsDialog", () => {
       ],
     });
 
+    fireEvent.click(screen.getByTestId("show-details-button"));
     // Both problem entries visible initially
     expect(screen.getByTestId("problem-rest-fail-user")).toBeInTheDocument();
     expect(screen.getByTestId("problem-rest-fail-system")).toBeInTheDocument();
@@ -424,6 +438,7 @@ describe("DiagnosticsDialog", () => {
       ],
     });
 
+    fireEvent.click(screen.getByTestId("show-details-button"));
     // Both actions visible initially
     expect(screen.getByTestId("action-act-user")).toBeInTheDocument();
     expect(screen.getByTestId("action-act-system")).toBeInTheDocument();
@@ -458,6 +473,7 @@ describe("DiagnosticsDialog", () => {
       ],
     });
 
+    fireEvent.click(screen.getByTestId("show-details-button"));
     // Both visible initially
     expect(screen.getByTestId("trace-trace-user-1")).toBeInTheDocument();
     expect(screen.getByTestId("trace-trace-system-1")).toBeInTheDocument();
@@ -531,6 +547,7 @@ describe("DiagnosticsDialog", () => {
       onClearAll,
     });
 
+    fireEvent.click(screen.getByTestId("show-details-button"));
     const dialog = screen.getByRole("dialog");
     fireEvent.click(within(dialog).getByTestId("diagnostics-share-all"));
     fireEvent.click(within(dialog).getByTestId("diagnostics-share-filtered"));
