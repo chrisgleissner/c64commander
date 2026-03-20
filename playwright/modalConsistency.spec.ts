@@ -63,8 +63,8 @@ test.describe("Modal close-button consistency", () => {
 
     const diagSheet = page.getByTestId("diagnostics-sheet");
     await expect(diagSheet).toBeVisible();
-    // In offline mode the activity rows show "No X activity yet" — never "just now" or "Communication".
-    await expect(diagSheet).toContainText(/No REST activity yet|No FTP activity yet/);
+    await expect(diagSheet).toContainText("Device not reachable");
+    await expect(diagSheet).toContainText("Cannot reach this device right now.");
     await expect(diagSheet).not.toContainText("just now");
     await expect(diagSheet).not.toContainText("Communication");
   });
