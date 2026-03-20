@@ -124,41 +124,41 @@ type ActiveDetailView = "device" | "config-drift" | "health-check" | null;
 
 type StreamEntry =
   | {
-    id: string;
-    kind: "problem";
-    timestamp: string;
-    contributor: ContributorKey;
-    origin: OriginFilter | null;
-    severity: DiagnosticsSeverity;
-    data: DiagnosticsLogEntry;
-  }
+      id: string;
+      kind: "problem";
+      timestamp: string;
+      contributor: ContributorKey;
+      origin: OriginFilter | null;
+      severity: DiagnosticsSeverity;
+      data: DiagnosticsLogEntry;
+    }
   | {
-    id: string;
-    kind: "action";
-    timestamp: string;
-    contributor: ContributorKey | null;
-    origin: OriginFilter | null;
-    severity: DiagnosticsSeverity;
-    data: ActionSummary;
-  }
+      id: string;
+      kind: "action";
+      timestamp: string;
+      contributor: ContributorKey | null;
+      origin: OriginFilter | null;
+      severity: DiagnosticsSeverity;
+      data: ActionSummary;
+    }
   | {
-    id: string;
-    kind: "log";
-    timestamp: string;
-    contributor: ContributorKey | null;
-    origin: OriginFilter | null;
-    severity: DiagnosticsSeverity;
-    data: DiagnosticsLogEntry;
-  }
+      id: string;
+      kind: "log";
+      timestamp: string;
+      contributor: ContributorKey | null;
+      origin: OriginFilter | null;
+      severity: DiagnosticsSeverity;
+      data: DiagnosticsLogEntry;
+    }
   | {
-    id: string;
-    kind: "trace";
-    timestamp: string;
-    contributor: ContributorKey | null;
-    origin: OriginFilter | null;
-    severity: DiagnosticsSeverity;
-    data: DiagnosticsTraceEntry;
-  };
+      id: string;
+      kind: "trace";
+      timestamp: string;
+      contributor: ContributorKey | null;
+      origin: OriginFilter | null;
+      severity: DiagnosticsSeverity;
+      data: DiagnosticsTraceEntry;
+    };
 
 type Props = {
   open: boolean;
@@ -1234,7 +1234,7 @@ export function DiagnosticsDialog({
   // § Progressive disclosure: summary-only on first open; showDetails=true reveals all layers
   const [showDetails, setShowDetails] = useState(false);
   // § Split-pane focus: which pane is maximized in expanded profile (null = equal split)
-  const [paneFocus, setPaneFocus] = useState<'both' | 'left' | 'right'>('both');
+  const [paneFocus, setPaneFocus] = useState<"both" | "left" | "right">("both");
   // §5.3 — One analytic popup slot at a time
   const [activePopup, setActivePopup] = useState<ActivePopup>(null);
   // §14 — Device detail secondary view inside the overlay
@@ -1264,7 +1264,7 @@ export function DiagnosticsDialog({
   useEffect(() => {
     if (open) {
       setShowDetails(false);
-      setPaneFocus('both');
+      setPaneFocus("both");
       setSummaryExpanded(true);
       setTechDetailsExpanded(!isCompact);
       setVisibleCount(PAGE_SIZE);
@@ -1661,22 +1661,24 @@ export function DiagnosticsDialog({
                 className={cn(
                   useInsightsRail
                     ? cn(
-                      "flex min-h-0 flex-col border-r border-border",
-                      paneFocus === 'left' ? "flex-1 min-w-0" :
-                        paneFocus === 'right' ? "w-10 shrink-0 overflow-hidden" :
-                          "w-[19rem] shrink-0",
-                    )
+                        "flex min-h-0 flex-col border-r border-border",
+                        paneFocus === "left"
+                          ? "flex-1 min-w-0"
+                          : paneFocus === "right"
+                            ? "w-10 shrink-0 overflow-hidden"
+                            : "w-[19rem] shrink-0",
+                      )
                     : "",
                 )}
               >
-                {useInsightsRail && paneFocus === 'right' ? (
+                {useInsightsRail && paneFocus === "right" ? (
                   /* Minimised left strip — restore button */
                   <div className="flex h-full flex-col items-center pt-3">
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <button
                           type="button"
-                          onClick={() => setPaneFocus('both')}
+                          onClick={() => setPaneFocus("both")}
                           className="rounded p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
                           data-testid="pane-expand-left"
                         >
@@ -1694,11 +1696,11 @@ export function DiagnosticsDialog({
                           <TooltipTrigger asChild>
                             <button
                               type="button"
-                              onClick={() => setPaneFocus(paneFocus === 'left' ? 'both' : 'left')}
+                              onClick={() => setPaneFocus(paneFocus === "left" ? "both" : "left")}
                               className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
                               data-testid="pane-focus-health"
                             >
-                              {paneFocus === 'left' ? (
+                              {paneFocus === "left" ? (
                                 <PanelRightOpen className="h-3.5 w-3.5" aria-hidden="true" />
                               ) : (
                                 <PanelRightClose className="h-3.5 w-3.5" aria-hidden="true" />
@@ -1706,7 +1708,7 @@ export function DiagnosticsDialog({
                             </button>
                           </TooltipTrigger>
                           <TooltipContent side="right">
-                            {paneFocus === 'left' ? 'Restore split view' : 'Maximise health summary'}
+                            {paneFocus === "left" ? "Restore split view" : "Maximise health summary"}
                           </TooltipContent>
                         </Tooltip>
                       </div>
@@ -1757,19 +1759,19 @@ export function DiagnosticsDialog({
               <div
                 className={cn(
                   "flex min-h-0 min-w-0 flex-col",
-                  useInsightsRail && paneFocus === 'left'
+                  useInsightsRail && paneFocus === "left"
                     ? "w-10 shrink-0 overflow-hidden px-0"
                     : cn("flex-1", isCompact ? "px-3 pb-2.5 pt-1.5" : "px-4 pb-4 pt-2"),
                 )}
               >
-                {useInsightsRail && paneFocus === 'left' ? (
+                {useInsightsRail && paneFocus === "left" ? (
                   /* Minimised right strip — restore button */
                   <div className="flex h-full flex-col items-center pt-3">
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <button
                           type="button"
-                          onClick={() => setPaneFocus('both')}
+                          onClick={() => setPaneFocus("both")}
                           className="rounded p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
                           data-testid="pane-expand-right"
                         >
@@ -1814,7 +1816,12 @@ export function DiagnosticsDialog({
                       </div>
                       <div className="flex shrink-0 items-center gap-1">
                         {isFiltersModified ? (
-                          <Button variant="ghost" size="sm" onClick={handleResetFilters} data-testid="reset-filters-button">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleResetFilters}
+                            data-testid="reset-filters-button"
+                          >
                             Reset filters
                           </Button>
                         ) : null}
@@ -1823,11 +1830,11 @@ export function DiagnosticsDialog({
                             <TooltipTrigger asChild>
                               <button
                                 type="button"
-                                onClick={() => setPaneFocus(paneFocus === 'right' ? 'both' : 'right')}
+                                onClick={() => setPaneFocus(paneFocus === "right" ? "both" : "right")}
                                 className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
                                 data-testid="pane-focus-activity"
                               >
-                                {paneFocus === 'right' ? (
+                                {paneFocus === "right" ? (
                                   <PanelLeftOpen className="h-3.5 w-3.5" aria-hidden="true" />
                                 ) : (
                                   <PanelLeftClose className="h-3.5 w-3.5" aria-hidden="true" />
@@ -1835,7 +1842,7 @@ export function DiagnosticsDialog({
                               </button>
                             </TooltipTrigger>
                             <TooltipContent side="left">
-                              {paneFocus === 'right' ? 'Restore split view' : 'Maximise activity'}
+                              {paneFocus === "right" ? "Restore split view" : "Maximise activity"}
                             </TooltipContent>
                           </Tooltip>
                         )}
@@ -1872,10 +1879,14 @@ export function DiagnosticsDialog({
                             >
                               <div className="space-y-2">
                                 <div className="flex items-center gap-2">
-                                  <p className="text-xs font-semibold uppercase tracking-wide text-destructive">Problem</p>
+                                  <p className="text-xs font-semibold uppercase tracking-wide text-destructive">
+                                    Problem
+                                  </p>
                                   <span className="text-xs font-medium text-muted-foreground">{entry.contributor}</span>
                                 </div>
-                                <p className="text-sm font-medium break-words whitespace-normal">{entry.data.message}</p>
+                                <p className="text-sm font-medium break-words whitespace-normal">
+                                  {entry.data.message}
+                                </p>
                                 {entry.data.details && (
                                   <pre className="text-xs whitespace-pre text-muted-foreground overflow-x-auto">
                                     {JSON.stringify(entry.data.details, null, 2)}
@@ -1901,7 +1912,9 @@ export function DiagnosticsDialog({
                               timestamp={entry.data.timestamp}
                             >
                               <div className="space-y-2">
-                                <p className="text-sm font-medium break-words whitespace-normal">{entry.data.message}</p>
+                                <p className="text-sm font-medium break-words whitespace-normal">
+                                  {entry.data.message}
+                                </p>
                                 {entry.data.details && (
                                   <pre className="text-xs whitespace-pre text-muted-foreground overflow-x-auto">
                                     {JSON.stringify(entry.data.details, null, 2)}
@@ -1967,7 +1980,7 @@ export function DiagnosticsDialog({
                           className="h-8 gap-1.5 px-2"
                         >
                           <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
-                          {isCompact ? 'All' : 'Share all'}
+                          {isCompact ? "All" : "Share all"}
                         </Button>
                         <Button
                           variant="ghost"
@@ -1979,7 +1992,7 @@ export function DiagnosticsDialog({
                           className="h-8 gap-1.5 px-2"
                         >
                           <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
-                          {isCompact ? 'Filtered' : 'Share filtered'}
+                          {isCompact ? "Filtered" : "Share filtered"}
                         </Button>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -2001,7 +2014,10 @@ export function DiagnosticsDialog({
                               <BarChart2 className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
                               REST heat map
                             </DropdownMenuItem>
-                            <DropdownMenuItem onSelect={() => setActivePopup("heatmap-FTP")} data-testid="open-heatmap-ftp">
+                            <DropdownMenuItem
+                              onSelect={() => setActivePopup("heatmap-FTP")}
+                              data-testid="open-heatmap-ftp"
+                            >
                               <BarChart2 className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
                               FTP heat map
                             </DropdownMenuItem>

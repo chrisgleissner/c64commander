@@ -247,7 +247,8 @@ describe("DiagnosticsDialog", () => {
         },
       ],
     });
-    fireEvent.click(screen.getByTestId("show-details-button")); expect(screen.getByTestId("problem-ftp-fail-1")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("show-details-button"));
+    expect(screen.getByTestId("problem-ftp-fail-1")).toBeInTheDocument();
   });
 
   it("uses compact health-check labels and shows the last-check shortcut when a result exists", () => {

@@ -541,7 +541,7 @@ describe("DiagnosticsDialog", () => {
     expect(screen.getByTestId("technical-details-toggle")).toBeVisible();
   });
 
-  it("stream section header is labelled Recent evidence", () => {
+  it("stream section header is labelled Activity", () => {
     localStorage.clear();
     setViewportWidth(600);
 
@@ -553,8 +553,8 @@ describe("DiagnosticsDialog", () => {
 
     fireEvent.click(screen.getByTestId("show-details-button"));
 
-    expect(screen.getByText("Recent evidence")).toBeVisible();
-    expect(screen.queryByText("Activity")).not.toBeInTheDocument();
+    expect(screen.getByText("Activity")).toBeVisible();
+    expect(screen.queryByText("Recent evidence")).not.toBeInTheDocument();
   });
 
   it("status-summary-card shows Healthy title for Healthy state", () => {
@@ -647,5 +647,95 @@ describe("DiagnosticsDialog", () => {
 
     expect(screen.getByTestId("evidence-preview-card")).toBeVisible();
     expect(screen.getByTestId("view-all-activity")).toBeVisible();
+  });
+
+  it("pane-focus-activity maximises the activity pane and restores via pane-expand-right", () => {
+    setViewportWidth(1200);
+
+    render(
+      <DisplayProfileProvider>
+        <DiagnosticsDialog {...defaultProps} />
+      </DisplayProfileProvider>,
+    );
+
+    fireEvent.click(screen.getByTestId("show-details-button"));
+
+    // Both pane-focus buttons visible in split view
+    expect(screen.getByTestId("pane-focus-activity")).toBeInTheDocument();
+    expect(screen.getByTestId("pane-focus-health")).toBeInTheDocument();
+
+    // Maximise activity pane
+    fireEvent.click(screen.getByTestId("pane-focus-activity"));
+
+    // Left pane is now minimised — restore button visible, content gone
+    expect(screen.getByTestId("pane-expand-left")).toBeInTheDocument();
+    expect(screen.queryByTestId("pane-focus-health")).not.toBeInTheDocument();
+
+    // Restore split view
+    fireEvent.click(screen.getByTestId("pane-expand-left"));
+
+    expect(screen.getByTestId("pane-focus-health")).toBeInTheDocument();
+    expect(screen.queryByTestId("pane-expand-left")).not.toBeInTheDocument();
+  });
+
+  it("pane-focus-health maximises the health pane and restores via pane-expand-right", () => {
+    setViewportWidth(1200);
+
+    render(
+      <DisplayProfileProvider>
+        <DiagnosticsDialog {...defaultProps} />
+      </DisplayProfileProvider>,
+    );
+
+    fireEvent.click(screen.getByTestId("show-details-button"));
+
+    // Maximise health pane
+    fireEvent.click(screen.getByTestId("pane-focus-health"));
+
+    // Right pane is now minimised — restore button visible
+    expect(screen.getByTestId("pane-expand-right")).toBeInTheDocument();
+    expect(screen.queryByTestId("pane-focus-activity")).not.toBeInTheDocument();
+
+    // Restore split view
+    fireEvent.click(screen.getByTestId("pane-expand-right"));
+
+    expect(screen.getByTestId("pane-focus-activity")).toBeInTheDocument();
+    expect(screen.queryByTestId("pane-expand-right")).not.toBeInTheDocument();
+  });
+
+  it("paneFocus resets to split view when dialog is closed and re-opened", () => {
+    setViewportWidth(1200);
+    const onOpenChange = vi.fn();
+
+    const { rerender } = render(
+      <DisplayProfileProvider>
+        <DiagnosticsDialog {...defaultProps} onOpenChange={onOpenChange} />
+      </DisplayProfileProvider>,
+    );
+
+    fireEvent.click(screen.getByTestId("show-details-button"));
+    fireEvent.click(screen.getByTestId("pane-focus-activity"));
+    expect(screen.getByTestId("pane-expand-left")).toBeInTheDocument();
+
+    // Close dialog
+    rerender(
+      <DisplayProfileProvider>
+        <DiagnosticsDialog {...defaultProps} open={false} onOpenChange={onOpenChange} />
+      </DisplayProfileProvider>,
+    );
+
+    // Re-open dialog — paneFocus should have reset to 'both'
+    rerender(
+      <DisplayProfileProvider>
+        <DiagnosticsDialog {...defaultProps} open={true} onOpenChange={onOpenChange} />
+      </DisplayProfileProvider>,
+    );
+
+    fireEvent.click(screen.getByTestId("show-details-button"));
+
+    // Both pane-focus buttons visible again (no maximised state)
+    expect(screen.getByTestId("pane-focus-activity")).toBeInTheDocument();
+    expect(screen.getByTestId("pane-focus-health")).toBeInTheDocument();
+    expect(screen.queryByTestId("pane-expand-left")).not.toBeInTheDocument();
   });
 });
