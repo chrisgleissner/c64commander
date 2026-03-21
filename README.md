@@ -70,13 +70,6 @@ Because it gives you full control of your C64 Ultimate from any modern device:
 
 ## 🚀 Quick Start
 
-### Current Rollout Boundaries
-
-- Android Play upload is already operational for the supported release flow.
-- iOS distribution currently remains a sideload flow built around SideStore and signed IPA installation. App Store and TestFlight distribution are not part of the current rollout scope.
-- C64 Ultimate connectivity remains HTTP for REST and plain FTP for file operations because that is what current firmware supports.
-- GitHub Actions release tags are an intentional contributor policy. Keep release tags aligned with `package.json`.
-
 ### Install on Android
 
 1. Download the latest **APK** (for example, `c64commander-<version>-debug.apk` for debug builds or `c64commander-<version>.apk` for signed release builds) from the [Releases](https://github.com/chrisgleissner/c64commander/releases) page.
