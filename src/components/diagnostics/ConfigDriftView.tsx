@@ -68,7 +68,13 @@ export function ConfigDriftView({ onBack }: Props) {
         >
           <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
         </Button>
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Config drift</p>
+        <div className="space-y-0.5">
+          <h3 className="text-sm font-semibold text-foreground">Config Drift</h3>
+          <p className="text-xs text-muted-foreground">Purpose: Compares runtime vs saved config.</p>
+          <p className="text-xs text-muted-foreground">
+            Interpretation: Mismatch indicates configuration drift affecting behavior.
+          </p>
+        </div>
         <Button
           size="sm"
           variant="ghost"

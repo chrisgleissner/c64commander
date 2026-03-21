@@ -12,7 +12,6 @@ import {
   BarChart2,
   CircleHelp,
   Clock,
-  FilterX,
   MoreHorizontal,
   Search,
   Share2,
@@ -39,7 +38,6 @@ import {
   AppSheetHeader,
   AppSheetTitle,
 } from "@/components/ui/app-surface";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -60,15 +58,12 @@ import { ConfigDriftView } from "@/components/diagnostics/ConfigDriftView";
 import { DeviceDetailView, type DeviceDetailInfo } from "@/components/diagnostics/DeviceDetailView";
 import { DiagnosticsListItem } from "@/components/diagnostics/DiagnosticsListItem";
 import { EvidenceFullView } from "@/components/diagnostics/EvidenceFullView";
-import { EvidencePreviewCard } from "@/components/diagnostics/EvidencePreviewCard";
 import { HealthCheckDetailView } from "@/components/diagnostics/HealthCheckDetailView";
 import { HealthHistoryPopup } from "@/components/diagnostics/HealthHistoryPopup";
 import { HeatMapPopup } from "@/components/diagnostics/HeatMapPopup";
 import { IssueCard } from "@/components/diagnostics/IssueCard";
 import { LatencyAnalysisPopup } from "@/components/diagnostics/LatencyAnalysisPopup";
 import { SummaryCard } from "@/components/diagnostics/SummaryCard";
-import { TechnicalDetailsCard } from "@/components/diagnostics/TechnicalDetailsCard";
-import { ToolsCard } from "@/components/diagnostics/ToolsCard";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import type { ActionSummary } from "@/lib/diagnostics/actionSummaries";
 import type { HeatMapVariant } from "@/lib/diagnostics/heatMapData";
@@ -148,12 +143,6 @@ type StreamEntry =
       severity: DiagnosticsSeverity;
       data: DiagnosticsTraceEntry;
     };
-
-type PreviewItem = {
-  id: string;
-  title: string;
-  supportingText: string;
-};
 
 type Props = {
   open: boolean;
@@ -317,54 +306,6 @@ const humanizeProblem = (problem: Problem | null) => {
   };
 };
 
-const describeActionOutcome = (summary: ActionSummary) => {
-  if (summary.outcome === "success") return "Completed successfully";
-  if (summary.outcome === "error") return "Needs attention";
-  if (summary.outcome === "blocked") return "Blocked before completion";
-  if (summary.outcome === "timeout") return "Timed out";
-  return "Recorded activity";
-};
-
-const describePreviewItem = (entry: StreamEntry): PreviewItem => {
-  if (entry.kind === "action") {
-    return {
-      id: entry.id,
-      title: entry.data.actionName,
-      supportingText: `${describeActionOutcome(entry.data)} · ${formatStreamTimestamp(entry.timestamp)}`,
-    };
-  }
-
-  if (entry.kind === "problem") {
-    const contributor = entry.contributor ?? "App";
-    return {
-      id: entry.id,
-      title: entry.data.message,
-      supportingText: `${contributor} · ${formatStreamTimestamp(entry.timestamp)}`,
-    };
-  }
-
-  if (entry.kind === "log") {
-    return {
-      id: entry.id,
-      title: entry.data.message,
-      supportingText: `Log entry · ${formatStreamTimestamp(entry.timestamp)}`,
-    };
-  }
-
-  return {
-    id: entry.id,
-    title: "Technical activity recorded",
-    supportingText: `${getTraceTitle(entry.data)} · ${formatStreamTimestamp(entry.timestamp)}`,
-  };
-};
-
-const derivePreviewItems = (entries: StreamEntry[]) => {
-  const highValueEntries = entries.filter((entry) => entry.kind === "action" || entry.kind === "problem");
-  const fallbackEntries = entries.filter((entry) => entry.kind === "log");
-  const traceEntries = entries.filter((entry) => entry.kind === "trace");
-  return [...highValueEntries, ...fallbackEntries, ...traceEntries].slice(0, 3).map(describePreviewItem);
-};
-
 const LastActivityRow = ({
   label,
   activity,
@@ -470,7 +411,6 @@ const QuickFocusControls = ({
   isCompact,
   isMedium,
   refineCount,
-  entryCount,
 }: {
   activeTypes: Set<EvidenceType>;
   onToggle: (type: EvidenceType) => void;
@@ -485,7 +425,6 @@ const QuickFocusControls = ({
   isCompact: boolean;
   isMedium: boolean;
   refineCount: number;
-  entryCount: number;
 }) => {
   const [refineOpen, setRefineOpen] = useState(false);
   const types: EvidenceType[] = ["Problems", "Actions", "Logs", "Traces"];
@@ -571,9 +510,6 @@ const QuickFocusControls = ({
           <SectionHelp label="Filters" testId="filters-help">
             Choose evidence types and narrow the visible activity by contributor, origin, severity, or text.
           </SectionHelp>
-          <Badge variant="outline" className="border-border bg-background/80 text-muted-foreground">
-            {entryCount} match{entryCount === 1 ? "" : "es"}
-          </Badge>
         </div>
 
         {showRefineButton ? (
@@ -737,9 +673,7 @@ export function DiagnosticsDialog({
   const isMedium = profile === "medium";
 
   const [showDetails, setShowDetails] = useState(false);
-  const [evidencePreviewExpanded, setEvidencePreviewExpanded] = useState(false);
-  const [technicalDetailsExpanded, setTechnicalDetailsExpanded] = useState(false);
-  const [toolsExpanded, setToolsExpanded] = useState(false);
+  const [showAnalysis, setShowAnalysis] = useState(false);
   const [activePopup, setActivePopup] = useState<ActivePopup>(null);
   const [activeDetailView, setActiveDetailView] = useState<ActiveDetailView>(null);
   const [activeTypes, setActiveTypes] = useState<Set<EvidenceType>>(
@@ -751,16 +685,14 @@ export function DiagnosticsDialog({
   const [originFilters, setOriginFilters] = useState<Set<OriginFilter>>(() => new Set<OriginFilter>());
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [expandedProblemId, setExpandedProblemId] = useState<string | null>(null);
+  const [focusedScope, setFocusedScope] = useState<string | null>(null);
 
   const streamRef = useRef<HTMLDivElement>(null);
-  const spotlightTargetRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
     setShowDetails(false);
-    setEvidencePreviewExpanded(false);
-    setTechnicalDetailsExpanded(false);
-    setToolsExpanded(false);
+    setShowAnalysis(false);
     setActivePopup(null);
     setActiveDetailView(null);
     setActiveTypes(defaultEvidenceTypes ?? new Set(["Problems", "Actions"]));
@@ -770,6 +702,7 @@ export function DiagnosticsDialog({
     setOriginFilters(new Set<OriginFilter>());
     setVisibleCount(PAGE_SIZE);
     setExpandedProblemId(null);
+    setFocusedScope(null);
   }, [defaultEvidenceTypes, open]);
 
   const handleOriginToggle = useCallback((origin: OriginFilter) => {
@@ -805,6 +738,7 @@ export function DiagnosticsDialog({
     setSearchText("");
     setOriginFilters(new Set<OriginFilter>());
     setVisibleCount(PAGE_SIZE);
+    setFocusedScope(null);
   }, []);
 
   const allStreamEntries = useMemo(() => {
@@ -958,8 +892,6 @@ export function DiagnosticsDialog({
   const hasMoreEntries = allStreamEntries.length > visibleCount;
   const hasVisibleEntries = streamEntries.length > 0;
   const newestEntryTimestamp = streamEntries[0]?.timestamp ?? allStreamEntries[0]?.timestamp ?? null;
-  const previewItems = useMemo(() => derivePreviewItems(allStreamEntries), [allStreamEntries]);
-
   const refineCount = originFilters.size + (searchText.trim() !== "" ? 1 : 0);
   const entryFilterCount = refineCount + (indicatorFilter !== "All" ? 1 : 0) + (severityFilter !== "All" ? 1 : 0);
   const isFiltersModified =
@@ -983,91 +915,116 @@ export function DiagnosticsDialog({
     void onShareFiltered(allStreamEntries.map((entry) => entry.data));
   }, [allStreamEntries, onShareFiltered]);
 
-  const handleRevealDetails = useCallback(() => {
+  const handleRevealAnalysis = useCallback(() => {
     setShowDetails(true);
+    setShowAnalysis(true);
+    setFocusedScope((previous) => previous ?? "Analysis");
   }, []);
-
-  const handleRevealTools = useCallback(() => {
-    setShowDetails(true);
-    setEvidencePreviewExpanded(true);
-    setTechnicalDetailsExpanded(true);
-    setToolsExpanded(true);
-  }, []);
-
-  const handleSpotlightSelect = useCallback(() => {
-    if (!healthState.primaryProblem) return;
-    spotlightTargetRef.current = `problem-${healthState.primaryProblem.id}`;
-    setExpandedProblemId(healthState.primaryProblem.id);
-    setShowDetails(true);
-    setEvidencePreviewExpanded(true);
-    setTechnicalDetailsExpanded(true);
-    setToolsExpanded(true);
-    setActiveTypes((previous) => {
-      if (previous.has("Problems")) return previous;
-      const next = new Set(previous);
-      next.add("Problems");
-      return next;
-    });
-    setIndicatorFilter("All");
-  }, [healthState.primaryProblem]);
-
-  useEffect(() => {
-    const targetId = spotlightTargetRef.current;
-    if (!targetId || !streamRef.current) return;
-    spotlightTargetRef.current = null;
-    requestAnimationFrame(() => {
-      const element = streamRef.current?.querySelector(`[data-testid="${targetId}"]`);
-      element?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    });
-  });
 
   const latency = computeLatencyPercentiles();
   const hasLatencyData = latency.sampleCount > 0;
 
   const isOffline = healthState.connectivity === "Offline" || healthState.connectivity === "Not yet connected";
   const isUnhealthy = !isOffline && (healthState.state === "Unhealthy" || healthState.state === "Degraded");
+  const needsAttention = isOffline || isUnhealthy;
   const connectedLabel = healthState.connectedDeviceLabel ?? "C64U";
   const humanizedProblem = humanizeProblem(healthState.primaryProblem);
 
+  const primaryContributor = healthState.primaryProblem?.contributor ?? (isOffline ? "REST" : null);
+  const lastMeaningfulActivity = needsAttention
+    ? healthState.primaryProblem
+      ? `${healthState.primaryProblem.contributor} issue recorded ${formatRelative(healthState.primaryProblem.timestampMs)}`
+      : healthState.lastRestActivity
+        ? `Last device check ${formatRelative(healthState.lastRestActivity.timestampMs)}`
+        : healthState.lastFtpActivity
+          ? `Last file transfer activity ${formatRelative(healthState.lastFtpActivity.timestampMs)}`
+          : "No recent activity recorded"
+    : null;
+
   const summaryCard = isOffline
     ? {
-        badgeLabel: "Connection target",
-        title: "Device not reachable",
+        badgeLabel: "Health",
+        title: "Unhealthy",
         titleToneClassName: "text-destructive",
         statusGlyph: HEALTH_GLYPHS.Unavailable,
         statusGlyphClassName: HEALTH_STATE_COLOR.Unavailable,
         headline: healthState.host,
-        supportingText: "Cannot reach this device right now.",
+        supportingText: "Contributor: REST",
       }
     : isUnhealthy
       ? {
-          badgeLabel: "Device",
-          title: "Needs attention",
-          titleToneClassName: "text-amber-500",
+          badgeLabel: "Health",
+          title: healthState.state,
+          titleToneClassName: HEALTH_STATE_COLOR[healthState.state],
           statusGlyph: HEALTH_GLYPHS[healthState.state],
           statusGlyphClassName: HEALTH_STATE_COLOR[healthState.state],
-          headline: humanizedProblem.headline,
-          supportingText: humanizedProblem.supportingText,
+          headline: connectedLabel,
+          supportingText: primaryContributor ? `Contributor: ${primaryContributor}` : null,
         }
       : {
-          badgeLabel: "Device",
+          badgeLabel: "Health",
           title: "Healthy",
           titleToneClassName: "text-success",
           statusGlyph: HEALTH_GLYPHS[healthState.state === "Idle" ? "Healthy" : healthState.state],
           statusGlyphClassName: "text-success",
           headline: connectedLabel,
-          supportingText: "All systems working.",
+          supportingText: "All systems working",
         };
 
-  const technicalSummary = isOffline
-    ? "Connection history, device detail, and advanced diagnostics remain available here."
-    : "Contributor health, raw activity, and deeper diagnostics tools are available here.";
+  const scopeLabel = (() => {
+    if (activeDetailView === "device") return "Showing: Device detail";
+    if (activeDetailView === "config-drift") return "Showing: Config drift";
+    if (activeDetailView === "health-check") return "Showing: Health check detail";
+    if (searchText.trim() !== "") return "Showing: Search results";
+    if (indicatorFilter !== "All") return `Showing: ${indicatorFilter} issues`;
+    if (focusedScope) return `Showing: ${focusedScope}`;
+    return null;
+  })();
+
+  const handleSummaryPrimaryAction = useCallback(() => {
+    if (isOffline) {
+      setFocusedScope("Connection recovery");
+      setShowDetails(true);
+      onRetryConnection();
+      return;
+    }
+
+    if (isUnhealthy) {
+      setFocusedScope("Problem details");
+      setShowDetails(true);
+      return;
+    }
+
+    setFocusedScope("Health check");
+    setShowDetails(true);
+    onRunHealthCheck?.();
+  }, [isOffline, isUnhealthy, onRetryConnection, onRunHealthCheck]);
+
+  const handleContributorFocus = useCallback((contributor: IndicatorFilter) => {
+    setShowDetails(true);
+    setIndicatorFilter((previous) => {
+      const nextValue = previous === contributor ? "All" : contributor;
+      setFocusedScope(nextValue === "All" ? null : `${nextValue} issues`);
+      return nextValue;
+    });
+  }, []);
+
+  const handleSheetOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      if (!nextOpen && activePopup) {
+        setActivePopup(null);
+        return;
+      }
+      onOpenChange(nextOpen);
+    },
+    [activePopup, onOpenChange],
+  );
 
   const recoveryFirst = isRecoveryFirstState(healthState.connectivity);
 
   return (
     <TooltipProvider delayDuration={150}>
-      <AppSheet open={open} onOpenChange={onOpenChange}>
+      <AppSheet open={open} onOpenChange={handleSheetOpenChange}>
         <AppSheetContent
           className={cn(
             "flex min-h-0 flex-col overflow-hidden",
@@ -1082,491 +1039,509 @@ export function DiagnosticsDialog({
           >
             <div className="min-w-0 space-y-1">
               <AppSheetTitle>Diagnostics</AppSheetTitle>
-              <AppSheetDescription
-                className={cn("max-w-full truncate whitespace-nowrap pr-8", !showDetails && "hidden")}
-                data-testid="diagnostics-subtitle"
-              >
-                Health, status, and recent evidence.
+              <AppSheetDescription className="max-w-full pr-8" data-testid="diagnostics-subtitle">
+                Health status, focused details, and deeper analysis when you ask for it.
               </AppSheetDescription>
             </div>
           </AppSheetHeader>
 
-          {activeDetailView ? (
-            <div className={cn("flex-1 overflow-auto", isCompact ? "px-3 pb-4 pt-2" : "px-4 pb-4 pt-3")}>
-              {activeDetailView === "device" ? (
-                <DeviceDetailView info={deviceInfo ?? null} onBack={() => setActiveDetailView(null)} />
-              ) : null}
-              {activeDetailView === "config-drift" ? (
-                <ConfigDriftView onBack={() => setActiveDetailView(null)} />
-              ) : null}
-              {activeDetailView === "health-check" ? (
-                <HealthCheckDetailView
-                  result={lastHealthCheckResult ?? null}
-                  liveProbes={liveHealthCheckProbes}
-                  isRunning={healthCheckRunning}
-                  onBack={() => setActiveDetailView(null)}
-                />
-              ) : null}
-            </div>
-          ) : (
-            <div className="flex-1 overflow-auto">
-              <div className={cn("space-y-3", isCompact ? "px-3 py-3" : "px-4 py-4")}>
-                <SummaryCard
-                  badgeLabel={summaryCard.badgeLabel}
-                  title={summaryCard.title}
-                  titleToneClassName={summaryCard.titleToneClassName}
-                  statusGlyph={summaryCard.statusGlyph}
-                  statusGlyphClassName={summaryCard.statusGlyphClassName}
-                  headline={summaryCard.headline}
-                  supportingText={summaryCard.supportingText}
-                  isCompact={isCompact}
-                  primaryAction={
-                    isOffline
-                      ? undefined
-                      : isUnhealthy
-                        ? { label: "View issue", onClick: handleRevealDetails, testId: "show-details-button" }
-                        : onRunHealthCheck
-                          ? {
-                              label: healthCheckRunning
-                                ? "Running health check…"
-                                : isCompact
-                                  ? "Run check"
-                                  : "Run health check",
-                              onClick: onRunHealthCheck,
-                              testId: "run-health-check-button",
-                            }
-                          : { label: "Show details", onClick: handleRevealDetails, testId: "show-details-button" }
-                  }
-                  secondaryAction={
-                    isUnhealthy && onRunHealthCheck
-                      ? {
-                          label: healthCheckRunning
-                            ? "Running health check…"
-                            : isCompact
-                              ? "Run check"
-                              : "Run health check",
-                          onClick: onRunHealthCheck,
-                          testId: "run-health-check-button",
-                          variant: "ghost",
-                        }
-                      : undefined
-                  }
-                  footerAction={
-                    isUnhealthy || (!isOffline && !onRunHealthCheck)
-                      ? undefined
-                      : { label: "Show details", onClick: handleRevealDetails, testId: "show-details-button" }
-                  }
-                >
-                  {isOffline && connectionCallbacks ? (
-                    <ConnectionActionsRegion
-                      connectivity={healthState.connectivity}
-                      currentHost={healthState.host}
-                      callbacks={connectionCallbacks}
-                      defaultExpanded={recoveryFirst}
-                      mode="summary"
-                    />
-                  ) : null}
-                </SummaryCard>
+          <div className="flex-1 overflow-auto">
+            <div className={cn("space-y-3", isCompact ? "px-3 py-3" : "px-4 py-4")}>
+              <SummaryCard
+                badgeLabel={summaryCard.badgeLabel}
+                title={summaryCard.title}
+                titleToneClassName={summaryCard.titleToneClassName}
+                statusGlyph={summaryCard.statusGlyph}
+                statusGlyphClassName={summaryCard.statusGlyphClassName}
+                headline={summaryCard.headline}
+                supportingText={summaryCard.supportingText}
+                isCompact={isCompact}
+                primaryAction={{
+                  label: isOffline
+                    ? "Fix / Retry"
+                    : isUnhealthy
+                      ? "View issue"
+                      : healthCheckRunning
+                        ? "Running health check…"
+                        : "Run health check",
+                  onClick: handleSummaryPrimaryAction,
+                  testId: "show-details-button",
+                }}
+                secondaryAction={
+                  isUnhealthy && onRunHealthCheck
+                    ? {
+                        label: healthCheckRunning ? "Running health check…" : "Run health check",
+                        onClick: () => {
+                          setFocusedScope("Health check");
+                          setShowDetails(true);
+                          onRunHealthCheck();
+                        },
+                        testId: "run-health-check-button",
+                        variant: "ghost",
+                      }
+                    : undefined
+                }
+              >
+                {lastMeaningfulActivity ? (
+                  <div
+                    className="rounded-lg border border-border/60 bg-background/60 px-3 py-2"
+                    data-testid="summary-activity-line"
+                  >
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      Last meaningful activity
+                    </p>
+                    <p className="mt-1 text-sm text-foreground">{lastMeaningfulActivity}</p>
+                  </div>
+                ) : null}
 
-                {showDetails && isUnhealthy && healthState.primaryProblem ? (
+                {needsAttention ? (
+                  <div className="space-y-2" data-testid="summary-contributors">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      Contributors
+                    </p>
+                    <div className="space-y-2">
+                      {CONTRIBUTOR_ORDER.map((key) => (
+                        <ContributorRow
+                          key={key}
+                          contributorKey={key}
+                          health={healthState.contributors[key]}
+                          isActive={indicatorFilter === key}
+                          onClick={() => handleContributorFocus(key)}
+                          profile={profile}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {needsAttention ? (
                   <IssueCard
                     title={humanizedProblem.headline}
-                    supportingText={healthState.primaryProblem.causeHint ?? humanizedProblem.supportingText}
-                    contributor={healthState.primaryProblem.contributor}
+                    supportingText={healthState.primaryProblem?.causeHint ?? humanizedProblem.supportingText}
+                    contributor={primaryContributor ?? "App"}
                     isCompact={isCompact}
                   />
                 ) : null}
+              </SummaryCard>
 
-                {showDetails ? (
-                  <EvidencePreviewCard
-                    expanded={evidencePreviewExpanded}
-                    onToggle={() => setEvidencePreviewExpanded((value) => !value)}
-                    onViewAll={handleRevealTools}
-                    items={previewItems}
-                    isCompact={isCompact}
-                  />
-                ) : null}
+              {showDetails ? (
+                <section
+                  className={cn(
+                    "rounded-xl border border-border/80 bg-card",
+                    isCompact ? "p-3 space-y-3" : "p-4 space-y-4",
+                  )}
+                  data-testid="diagnostics-details-layer"
+                >
+                  <button type="button" className="sr-only" aria-expanded="true" data-testid="technical-details-toggle">
+                    Details open
+                  </button>
+                  <div data-testid="technical-details-card" className="space-y-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="space-y-1">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                          Details
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Health history, latency, contributor detail, and recovery actions stay here.
+                        </p>
+                        {scopeLabel ? (
+                          <p className="text-xs font-medium text-foreground" data-testid="diagnostics-scope-label">
+                            {scopeLabel}
+                          </p>
+                        ) : null}
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleRevealAnalysis}
+                        data-testid="tools-card-toggle"
+                      >
+                        <span data-testid="analyse-button">Analyse</span>
+                      </Button>
+                    </div>
 
-                {showDetails ? (
-                  <TechnicalDetailsCard
-                    expanded={technicalDetailsExpanded}
-                    onToggle={() => setTechnicalDetailsExpanded((value) => !value)}
-                    summary={technicalSummary}
-                    isCompact={isCompact}
-                  >
-                    <div className="space-y-3">
-                      <div className="rounded-lg border border-border/60 bg-background/50 p-3">
-                        <div className="flex flex-wrap items-start justify-between gap-2">
-                          <div className="space-y-1">
-                            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                              Connection
-                            </p>
-                            <p className="text-sm font-medium text-foreground">{healthState.host}</p>
-                            <p className="text-xs text-muted-foreground">{connectedLabel}</p>
-                          </div>
-                          <div className="flex flex-wrap items-center gap-2">
+                    <div className="rounded-lg border border-border/60 bg-background/50 p-3">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="space-y-1">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                            Connection
+                          </p>
+                          <p className="text-sm font-medium text-foreground">{healthState.host}</p>
+                          <p className="text-xs text-muted-foreground">{connectedLabel}</p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setActiveDetailView("device")}
+                            data-testid="open-device-detail"
+                          >
+                            <Activity className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                            Device detail
+                          </Button>
+                          {lastHealthCheckResult ? (
                             <Button
                               size="sm"
-                              variant="outline"
-                              onClick={() => setActiveDetailView("device")}
-                              data-testid="open-device-detail"
+                              variant="ghost"
+                              onClick={() => setActiveDetailView("health-check")}
+                              data-testid="open-health-check-detail"
                             >
-                              <Activity className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
-                              Device detail
+                              Health check detail
                             </Button>
-                            {lastHealthCheckResult ? (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => setActiveDetailView("health-check")}
-                                data-testid="open-health-check-detail"
-                              >
-                                Last health check
-                              </Button>
-                            ) : null}
-                          </div>
+                          ) : null}
                         </div>
                       </div>
+                    </div>
 
-                      <div className="rounded-lg border border-border/60 bg-background/50 p-3 space-y-2">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                          Technical activity
-                        </p>
-                        <div className="space-y-1.5">
-                          <LastActivityRow label="REST" activity={healthState.lastRestActivity} profile={profile} />
-                          <LastActivityRow label="FTP" activity={healthState.lastFtpActivity} profile={profile} />
-                        </div>
+                    <div className="rounded-lg border border-border/60 bg-background/50 p-3 space-y-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                        Contributor detail
+                      </p>
+                      <div className="space-y-1.5">
+                        <LastActivityRow label="REST" activity={healthState.lastRestActivity} profile={profile} />
+                        <LastActivityRow label="FTP" activity={healthState.lastFtpActivity} profile={profile} />
                       </div>
+                    </div>
 
-                      <div className="space-y-2">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                          Contributors
-                        </p>
-                        <div className="space-y-2">
-                          {CONTRIBUTOR_ORDER.map((key) => (
-                            <ContributorRow
-                              key={key}
-                              contributorKey={key}
-                              health={healthState.contributors[key]}
-                              isActive={indicatorFilter === key}
-                              onClick={() => setIndicatorFilter(indicatorFilter === key ? "All" : key)}
-                              profile={profile}
-                            />
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        {onRunHealthCheck ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={onRunHealthCheck}
-                            disabled={healthCheckRunning}
-                            data-testid="technical-run-health-check-button"
-                          >
-                            {healthCheckRunning ? "Running health check…" : "Run health check"}
-                          </Button>
-                        ) : null}
-
-                        {hasLatencyData ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setActivePopup("latency")}
-                            data-testid="latency-summary-row"
-                          >
-                            <Clock className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
-                            P50 {latency.p50}ms · P90 {latency.p90}ms · P99 {latency.p99}ms
-                          </Button>
-                        ) : null}
-
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {onRunHealthCheck ? (
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => setActivePopup("history")}
-                          data-testid="health-history-row"
+                          onClick={onRunHealthCheck}
+                          disabled={healthCheckRunning}
+                          data-testid="technical-run-health-check-button"
                         >
-                          <BarChart2 className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
-                          Health history
+                          {healthCheckRunning ? "Running health check…" : "Run health check"}
                         </Button>
-                      </div>
-
-                      {connectionCallbacks ? (
-                        <div className="rounded-lg border border-border/60 bg-background/50 p-3">
-                          <ConnectionActionsRegion
-                            connectivity={healthState.connectivity}
-                            currentHost={healthState.host}
-                            callbacks={connectionCallbacks}
-                            defaultExpanded={recoveryFirst}
-                          />
-                        </div>
-                      ) : healthState.connectivity === "Offline" || healthState.connectivity === "Not yet connected" ? (
-                        <div className="rounded-lg border border-border/60 bg-background/50 p-3">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={onRetryConnection}
-                            data-testid="retry-connection-button"
-                          >
-                            Retry connection
-                          </Button>
-                        </div>
                       ) : null}
 
-                      <ToolsCard
-                        expanded={toolsExpanded}
-                        onToggle={() => setToolsExpanded((value) => !value)}
-                        summary="Filters, full activity, sharing, and advanced diagnostics tools."
-                        isCompact={isCompact}
-                      >
-                        <QuickFocusControls
-                          activeTypes={activeTypes}
-                          onToggle={handleToggleType}
-                          indicatorFilter={indicatorFilter}
-                          onIndicatorFilterChange={setIndicatorFilter}
-                          severityFilter={severityFilter}
-                          onSeverityFilterChange={setSeverityFilter}
-                          searchText={searchText}
-                          onSearchChange={setSearchText}
-                          originFilters={originFilters}
-                          onOriginToggle={handleOriginToggle}
-                          isCompact={isCompact}
-                          isMedium={isMedium}
-                          refineCount={refineCount}
-                          entryCount={allStreamEntries.length}
-                        />
-
-                        <EvidenceFullView
-                          totalCount={allStreamEntries.length}
-                          visibleCount={streamEntries.length}
-                          newestEntryLabel={formatStreamTimestamp(newestEntryTimestamp)}
-                          activeFilterPills={activeFilterPills}
-                          isFiltersModified={isFiltersModified}
-                          onResetFilters={handleResetFilters}
-                          isCompact={isCompact}
+                      {hasLatencyData ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setActivePopup("latency")}
+                          data-testid="latency-summary-row"
                         >
-                          <div ref={streamRef} className="space-y-1.5" data-testid="diagnostics-stream-region">
-                            {streamEntries.length === 0 && !isFiltersModified ? (
-                              <p className="text-sm text-muted-foreground" data-testid="diagnostics-empty-message">
-                                No diagnostics yet. Health information will appear here after activity occurs.
-                              </p>
-                            ) : null}
+                          <Clock className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                          Latency analysis
+                        </Button>
+                      ) : null}
 
-                            {streamEntries.length === 0 && isFiltersModified ? (
-                              <p className="text-sm text-muted-foreground" data-testid="diagnostics-no-results-message">
-                                No entries match the current filters.
-                              </p>
-                            ) : null}
-
-                            {streamEntries.map((entry) => {
-                              if (entry.kind === "problem") {
-                                const isExpanded = expandedProblemId === entry.data.id;
-                                return (
-                                  <DiagnosticsListItem
-                                    key={`problem-${entry.data.id}`}
-                                    testId={`problem-${entry.data.id}`}
-                                    mode="log"
-                                    severity={resolveLogSeverity(entry.data.level)}
-                                    title={entry.data.message}
-                                    timestamp={entry.data.timestamp}
-                                    defaultExpanded={isExpanded}
-                                  >
-                                    <div className="space-y-2">
-                                      <div className="flex items-center gap-2">
-                                        <p className="text-xs font-semibold uppercase tracking-wide text-destructive">
-                                          Problem
-                                        </p>
-                                        <span className="text-xs font-medium text-muted-foreground">
-                                          {entry.contributor}
-                                        </span>
-                                      </div>
-                                      <p className="text-sm font-medium break-words whitespace-normal">
-                                        {entry.data.message}
-                                      </p>
-                                      {entry.data.details ? (
-                                        <pre className="overflow-x-auto whitespace-pre text-xs text-muted-foreground">
-                                          {JSON.stringify(entry.data.details, null, 2)}
-                                        </pre>
-                                      ) : null}
-                                    </div>
-                                  </DiagnosticsListItem>
-                                );
-                              }
-
-                              if (entry.kind === "action") {
-                                return <ActionSummaryListItem key={entry.data.correlationId} summary={entry.data} />;
-                              }
-
-                              if (entry.kind === "log") {
-                                return (
-                                  <DiagnosticsListItem
-                                    key={`log-${entry.data.id}`}
-                                    testId={`log-${entry.data.id}`}
-                                    mode="log"
-                                    severity={resolveLogSeverity(entry.data.level)}
-                                    title={entry.data.message}
-                                    timestamp={entry.data.timestamp}
-                                  >
-                                    <div className="space-y-2">
-                                      <p className="text-sm font-medium break-words whitespace-normal">
-                                        {entry.data.message}
-                                      </p>
-                                      {entry.data.details ? (
-                                        <pre className="overflow-x-auto whitespace-pre text-xs text-muted-foreground">
-                                          {JSON.stringify(entry.data.details, null, 2)}
-                                        </pre>
-                                      ) : null}
-                                    </div>
-                                  </DiagnosticsListItem>
-                                );
-                              }
-
-                              return (
-                                <DiagnosticsListItem
-                                  key={`trace-${entry.data.id}`}
-                                  testId={`trace-${entry.data.id}`}
-                                  mode="trace"
-                                  severity={resolveTraceSeverity(entry.data)}
-                                  title={getTraceTitle(entry.data)}
-                                  timestamp={entry.data.timestamp}
-                                >
-                                  <pre className="overflow-x-auto whitespace-pre text-xs text-muted-foreground">
-                                    {JSON.stringify(entry.data, null, 2)}
-                                  </pre>
-                                </DiagnosticsListItem>
-                              );
-                            })}
-
-                            {hasMoreEntries ? (
-                              <div className="flex justify-center pt-2">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}
-                                  data-testid="load-older-entries"
-                                >
-                                  Load older entries
-                                </Button>
-                              </div>
-                            ) : null}
-                          </div>
-                        </EvidenceFullView>
-
-                        <div className="border-t border-border/70 pt-3" data-testid="diagnostics-action-shelf">
-                          <div
-                            className={cn(
-                              "items-center gap-1.5",
-                              isCompact ? "grid grid-cols-1" : "flex flex-wrap justify-end",
-                            )}
-                          >
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => void onShareAll()}
-                              data-testid="diagnostics-share-all"
-                              aria-label="Share all"
-                              className={cn("h-8 gap-1.5 px-2", isCompact && "w-full min-w-0 justify-center")}
-                            >
-                              <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
-                              {isCompact ? "All" : "Share all"}
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              disabled={!hasVisibleEntries}
-                              onClick={handleShareFiltered}
-                              data-testid="diagnostics-share-filtered"
-                              aria-label="Share filtered"
-                              className={cn("h-8 gap-1.5 px-2", isCompact && "w-full min-w-0 justify-center")}
-                            >
-                              <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
-                              {isCompact ? "Filtered" : "Share filtered"}
-                            </Button>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className={cn("h-8 gap-1.5 px-2", isCompact && "w-full min-w-0 justify-center")}
-                                  data-testid="diagnostics-tools-menu"
-                                >
-                                  <MoreHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
-                                  Tools
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-56">
-                                <DropdownMenuItem
-                                  onSelect={() => setActivePopup("heatmap-REST")}
-                                  data-testid="open-heatmap-rest"
-                                >
-                                  <BarChart2 className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
-                                  REST heat map
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onSelect={() => setActivePopup("heatmap-FTP")}
-                                  data-testid="open-heatmap-ftp"
-                                >
-                                  <BarChart2 className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
-                                  FTP heat map
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onSelect={() => setActivePopup("heatmap-CONFIG")}
-                                  data-testid="open-heatmap-config"
-                                >
-                                  <BarChart2 className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
-                                  Config heat map
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onSelect={() => setActiveDetailView("config-drift")}
-                                  data-testid="open-config-drift"
-                                >
-                                  <Activity className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
-                                  Config drift
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <AlertDialog>
-                                  <AlertDialogTrigger asChild>
-                                    <button
-                                      type="button"
-                                      className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm text-destructive outline-none transition-colors hover:bg-accent"
-                                      data-testid="diagnostics-clear-all-trigger"
-                                    >
-                                      <TriangleAlert className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
-                                      Clear all diagnostics
-                                    </button>
-                                  </AlertDialogTrigger>
-                                  <AlertDialogContent surface="confirmation">
-                                    <AlertDialogHeader>
-                                      <AlertDialogTitle>Clear all diagnostics?</AlertDialogTitle>
-                                      <AlertDialogDescription>
-                                        This removes health evidence, problems, actions, logs, and traces for the
-                                        current session.
-                                      </AlertDialogDescription>
-                                    </AlertDialogHeader>
-                                    <AlertDialogFooter>
-                                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                      <AlertDialogAction
-                                        onClick={onClearAll}
-                                        className="bg-destructive text-destructive-foreground"
-                                        data-testid="diagnostics-clear-all-confirm"
-                                      >
-                                        Clear
-                                      </AlertDialogAction>
-                                    </AlertDialogFooter>
-                                  </AlertDialogContent>
-                                </AlertDialog>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        </div>
-                      </ToolsCard>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setActivePopup("history")}
+                        data-testid="health-history-row"
+                      >
+                        <BarChart2 className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                        Health history
+                      </Button>
                     </div>
-                  </TechnicalDetailsCard>
-                ) : null}
-              </div>
+
+                    {connectionCallbacks ? (
+                      <div className="rounded-lg border border-border/60 bg-background/50 p-3">
+                        <ConnectionActionsRegion
+                          connectivity={healthState.connectivity}
+                          currentHost={healthState.host}
+                          callbacks={connectionCallbacks}
+                          defaultExpanded={recoveryFirst}
+                        />
+                      </div>
+                    ) : healthState.connectivity === "Offline" || healthState.connectivity === "Not yet connected" ? (
+                      <div className="rounded-lg border border-border/60 bg-background/50 p-3">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={onRetryConnection}
+                          data-testid="retry-connection-button"
+                        >
+                          Retry connection
+                        </Button>
+                      </div>
+                    ) : null}
+
+                    {activeDetailView === "device" ? (
+                      <DeviceDetailView info={deviceInfo ?? null} onBack={() => setActiveDetailView(null)} />
+                    ) : null}
+                    {activeDetailView === "config-drift" ? (
+                      <ConfigDriftView onBack={() => setActiveDetailView(null)} />
+                    ) : null}
+                    {activeDetailView === "health-check" ? (
+                      <HealthCheckDetailView
+                        result={lastHealthCheckResult ?? null}
+                        liveProbes={liveHealthCheckProbes}
+                        isRunning={healthCheckRunning}
+                        onBack={() => setActiveDetailView(null)}
+                      />
+                    ) : null}
+                  </div>
+                </section>
+              ) : null}
+
+              {showAnalysis ? (
+                <section
+                  className={cn(
+                    "rounded-xl border border-border/80 bg-background/60",
+                    isCompact ? "p-3 space-y-4" : "p-4 space-y-4",
+                  )}
+                  data-testid="diagnostics-analysis-layer"
+                >
+                  <div data-testid="tools-card" className="space-y-4">
+                    {scopeLabel ? (
+                      <p className="text-xs font-medium text-foreground" data-testid="diagnostics-analysis-scope-label">
+                        {scopeLabel}
+                      </p>
+                    ) : null}
+
+                    <QuickFocusControls
+                      activeTypes={activeTypes}
+                      onToggle={handleToggleType}
+                      indicatorFilter={indicatorFilter}
+                      onIndicatorFilterChange={(filter) => handleContributorFocus(filter)}
+                      severityFilter={severityFilter}
+                      onSeverityFilterChange={setSeverityFilter}
+                      searchText={searchText}
+                      onSearchChange={setSearchText}
+                      originFilters={originFilters}
+                      onOriginToggle={handleOriginToggle}
+                      isCompact={isCompact}
+                      isMedium={isMedium}
+                      refineCount={refineCount}
+                    />
+
+                    <EvidenceFullView
+                      totalCount={allStreamEntries.length}
+                      visibleCount={streamEntries.length}
+                      newestEntryLabel={formatStreamTimestamp(newestEntryTimestamp)}
+                      activeFilterPills={activeFilterPills}
+                      isFiltersModified={isFiltersModified}
+                      onResetFilters={handleResetFilters}
+                      isCompact={isCompact}
+                    >
+                      <div ref={streamRef} className="space-y-1.5" data-testid="diagnostics-stream-region">
+                        {streamEntries.length === 0 && !isFiltersModified ? (
+                          <p className="text-sm text-muted-foreground" data-testid="diagnostics-empty-message">
+                            No diagnostics yet. Health information will appear here after activity occurs.
+                          </p>
+                        ) : null}
+
+                        {streamEntries.length === 0 && isFiltersModified ? (
+                          <p className="text-sm text-muted-foreground" data-testid="diagnostics-no-results-message">
+                            No entries match the current filters.
+                          </p>
+                        ) : null}
+
+                        {streamEntries.map((entry) => {
+                          if (entry.kind === "problem") {
+                            const isExpanded = expandedProblemId === entry.data.id;
+                            return (
+                              <DiagnosticsListItem
+                                key={`problem-${entry.data.id}`}
+                                testId={`problem-${entry.data.id}`}
+                                mode="log"
+                                severity={resolveLogSeverity(entry.data.level)}
+                                title={entry.data.message}
+                                timestamp={entry.data.timestamp}
+                                defaultExpanded={isExpanded}
+                              >
+                                <div className="space-y-2">
+                                  <div className="flex items-center gap-2">
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-destructive">
+                                      Problem
+                                    </p>
+                                    <span className="text-xs font-medium text-muted-foreground">
+                                      {entry.contributor}
+                                    </span>
+                                  </div>
+                                  <p className="text-sm font-medium break-words whitespace-normal">
+                                    {entry.data.message}
+                                  </p>
+                                  {entry.data.details ? (
+                                    <pre className="overflow-x-auto whitespace-pre text-xs text-muted-foreground">
+                                      {JSON.stringify(entry.data.details, null, 2)}
+                                    </pre>
+                                  ) : null}
+                                </div>
+                              </DiagnosticsListItem>
+                            );
+                          }
+
+                          if (entry.kind === "action") {
+                            return <ActionSummaryListItem key={entry.data.correlationId} summary={entry.data} />;
+                          }
+
+                          if (entry.kind === "log") {
+                            return (
+                              <DiagnosticsListItem
+                                key={`log-${entry.data.id}`}
+                                testId={`log-${entry.data.id}`}
+                                mode="log"
+                                severity={resolveLogSeverity(entry.data.level)}
+                                title={entry.data.message}
+                                timestamp={entry.data.timestamp}
+                              >
+                                <div className="space-y-2">
+                                  <p className="text-sm font-medium break-words whitespace-normal">
+                                    {entry.data.message}
+                                  </p>
+                                  {entry.data.details ? (
+                                    <pre className="overflow-x-auto whitespace-pre text-xs text-muted-foreground">
+                                      {JSON.stringify(entry.data.details, null, 2)}
+                                    </pre>
+                                  ) : null}
+                                </div>
+                              </DiagnosticsListItem>
+                            );
+                          }
+
+                          return (
+                            <DiagnosticsListItem
+                              key={`trace-${entry.data.id}`}
+                              testId={`trace-${entry.data.id}`}
+                              mode="trace"
+                              severity={resolveTraceSeverity(entry.data)}
+                              title={getTraceTitle(entry.data)}
+                              timestamp={entry.data.timestamp}
+                            >
+                              <pre className="overflow-x-auto whitespace-pre text-xs text-muted-foreground">
+                                {JSON.stringify(entry.data, null, 2)}
+                              </pre>
+                            </DiagnosticsListItem>
+                          );
+                        })}
+
+                        {hasMoreEntries ? (
+                          <div className="flex justify-center pt-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}
+                              data-testid="load-older-entries"
+                            >
+                              Load older entries
+                            </Button>
+                          </div>
+                        ) : null}
+                      </div>
+                    </EvidenceFullView>
+
+                    <div className="border-t border-border/70 pt-3" data-testid="diagnostics-action-shelf">
+                      <div
+                        className={cn(
+                          "items-center gap-1.5",
+                          isCompact ? "grid grid-cols-1" : "flex flex-wrap justify-end",
+                        )}
+                      >
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => void onShareAll()}
+                          data-testid="diagnostics-share-all"
+                          aria-label="Share all"
+                          className={cn("h-8 gap-1.5 px-2", isCompact && "w-full min-w-0 justify-center")}
+                        >
+                          <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
+                          {isCompact ? "All" : "Share all"}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={!hasVisibleEntries}
+                          onClick={handleShareFiltered}
+                          data-testid="diagnostics-share-filtered"
+                          aria-label="Share filtered"
+                          className={cn("h-8 gap-1.5 px-2", isCompact && "w-full min-w-0 justify-center")}
+                        >
+                          <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
+                          {isCompact ? "Filtered" : "Share filtered"}
+                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className={cn("h-8 gap-1.5 px-2", isCompact && "w-full min-w-0 justify-center")}
+                              data-testid="diagnostics-tools-menu"
+                            >
+                              <MoreHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
+                              Tools
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-56">
+                            <DropdownMenuItem
+                              onSelect={() => setActivePopup("heatmap-REST")}
+                              data-testid="open-heatmap-rest"
+                            >
+                              <BarChart2 className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
+                              REST activity
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onSelect={() => setActivePopup("heatmap-FTP")}
+                              data-testid="open-heatmap-ftp"
+                            >
+                              <BarChart2 className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
+                              FTP activity
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onSelect={() => setActivePopup("heatmap-CONFIG")}
+                              data-testid="open-heatmap-config"
+                            >
+                              <BarChart2 className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
+                              Config activity
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onSelect={() => {
+                                setShowDetails(true);
+                                setActiveDetailView("config-drift");
+                                setFocusedScope("Config drift");
+                              }}
+                              data-testid="open-config-drift"
+                            >
+                              <Activity className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
+                              Config drift
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <button
+                                  type="button"
+                                  className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm text-destructive outline-none transition-colors hover:bg-accent"
+                                  data-testid="diagnostics-clear-all-trigger"
+                                >
+                                  <TriangleAlert className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
+                                  Clear all diagnostics
+                                </button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent surface="confirmation">
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Clear all diagnostics?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    This removes health evidence, problems, actions, logs, and traces for the current
+                                    session.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={onClearAll}
+                                    className="bg-destructive text-destructive-foreground"
+                                    data-testid="diagnostics-clear-all-confirm"
+                                  >
+                                    Clear
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              ) : null}
             </div>
-          )}
+          </div>
         </AppSheetContent>
 
         <LatencyAnalysisPopup open={activePopup === "latency"} onClose={() => setActivePopup(null)} />

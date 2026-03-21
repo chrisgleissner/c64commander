@@ -64,13 +64,13 @@ export function AnalyticPopup({
     >
       <DialogPrimitive.Portal>
         {/* §5.6 — Additional dim over diagnostics overlay */}
-        <DialogPrimitive.Overlay className="fixed inset-0 z-[60] bg-black/50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+        <DialogPrimitive.Overlay className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
         {/* §5.5 — Popup content with own scroll, title, close affordance */}
         <DialogPrimitive.Content
           className={cn(
             "fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[61]",
             "w-[min(90vw,52rem)] h-[min(80dvh,48rem)]",
-            "flex flex-col overflow-hidden rounded-2xl border bg-background shadow-2xl",
+            "flex flex-col overflow-hidden rounded-2xl border border-border/90 bg-background shadow-[0_32px_80px_rgba(0,0,0,0.45)]",
             "data-[state=open]:animate-in data-[state=closed]:animate-out",
             "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
             "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
@@ -86,10 +86,23 @@ export function AnalyticPopup({
           }}
         >
           {/* Header */}
-          <div className="flex shrink-0 items-center justify-between gap-4 border-b border-border px-4 py-3">
-            <div className="min-w-0">
-              <DialogPrimitive.Title className="text-sm font-semibold truncate">{title}</DialogPrimitive.Title>
-              <DialogPrimitive.Description className="text-xs text-muted-foreground truncate mt-0.5">
+          <div className="flex shrink-0 items-start justify-between gap-4 border-b border-border px-4 py-3">
+            <div className="min-w-0 space-y-1.5">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="shrink-0 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                  aria-label="Return to Diagnostics"
+                  data-testid="analytic-popup-return"
+                >
+                  ← Diagnostics
+                </button>
+                <DialogPrimitive.Title className="min-w-0 truncate text-sm font-semibold">
+                  {title}
+                </DialogPrimitive.Title>
+              </div>
+              <DialogPrimitive.Description className="text-xs text-muted-foreground">
                 {description}
               </DialogPrimitive.Description>
             </div>

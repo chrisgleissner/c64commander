@@ -273,6 +273,14 @@ export function LatencyAnalysisPopup({ open, onClose }: Props) {
 
         {/* Chart area */}
         <div className="flex flex-1 min-h-0 flex-col p-3">
+          <div className="mb-3 space-y-1 rounded-lg border border-border/60 bg-background/70 p-3 text-xs">
+            <p className="font-medium text-foreground">
+              Purpose: Shows request latency over time for the active diagnostics scope.
+            </p>
+            <p className="text-muted-foreground">
+              Interpretation: Higher percentiles indicate slower or less predictable request performance.
+            </p>
+          </div>
           {/* Summary row */}
           <div className="flex items-center gap-4 mb-3 shrink-0">
             <div className="text-xs">

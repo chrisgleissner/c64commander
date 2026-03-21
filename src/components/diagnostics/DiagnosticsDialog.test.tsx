@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { DiagnosticsDialog } from "@/components/diagnostics/DiagnosticsDialog";
@@ -52,13 +52,6 @@ const unhealthyHealthState: OverallHealthState = {
     impactLevel: 2,
     causeHint: "HTTP 403",
   },
-};
-
-const offlineHealthState: OverallHealthState = {
-  ...healthyHealthState,
-  state: "Unavailable",
-  connectivity: "Offline",
-  connectedDeviceLabel: null,
 };
 
 const defaultProps = {
@@ -157,8 +150,7 @@ const defaultProps = {
 };
 
 describe("DiagnosticsDialog", () => {
-  it("shows only the summary card on first open in healthy mode", () => {
-    localStorage.clear();
+  it("keeps the healthy first-open state calm and summary-only", () => {
     setViewportWidth(600);
 
     renderDialog();
@@ -166,119 +158,119 @@ describe("DiagnosticsDialog", () => {
     expect(screen.getByTestId("status-summary-card")).toBeVisible();
     expect(screen.getByText("Healthy")).toBeVisible();
     expect(screen.getByText("C64U")).toBeVisible();
-    expect(screen.getByText("All systems working.")).toBeVisible();
+    expect(screen.getByText("All systems working")).toBeVisible();
+    expect(screen.getByTestId("show-details-button")).toHaveTextContent("Run health check");
     expect(screen.queryByTestId("issue-card")).toBeNull();
-    expect(screen.queryByTestId("evidence-preview-card")).toBeNull();
-    expect(screen.queryByTestId("technical-details-card")).toBeNull();
-    expect(screen.queryByTestId("tools-card")).toBeNull();
+    expect(screen.queryByTestId("diagnostics-details-layer")).toBeNull();
+    expect(screen.queryByTestId("diagnostics-analysis-layer")).toBeNull();
     expect(screen.queryByTestId("diagnostics-filter-input")).toBeNull();
+    expect(screen.queryByText(/Showing \d+ of \d+/i)).toBeNull();
   });
 
-  it("shows only the dominant summary card on first open in unhealthy mode", () => {
-    localStorage.clear();
+  it("shows contributor context, issue, and one dominant action immediately when unhealthy", () => {
     setViewportWidth(600);
 
     renderDialog({ healthState: unhealthyHealthState });
 
-    expect(screen.getByTestId("status-summary-card")).toBeVisible();
-    expect(screen.getByText("Needs attention")).toBeVisible();
-    expect(screen.queryByTestId("issue-card")).toBeNull();
-    expect(screen.queryByTestId("evidence-preview-card")).toBeNull();
-    expect(screen.queryByTestId("evidence-full-view")).toBeNull();
-  });
-
-  it("shows retry and switch-device actions on the offline summary card without exposing diagnostics tools", () => {
-    localStorage.clear();
-    setViewportWidth(600);
-
-    renderDialog({ healthState: offlineHealthState });
-
-    expect(screen.getByText("Device not reachable")).toBeVisible();
-    expect(screen.getByTestId("retry-connection-action")).toBeVisible();
-    expect(screen.getByTestId("switch-device-toggle")).toBeVisible();
-    expect(screen.queryByTestId("diagnostics-filter-input")).toBeNull();
-    expect(screen.queryByTestId("tools-card")).toBeNull();
-  });
-
-  it("reveals the issue card and disclosure cards after unhealthy issue disclosure", () => {
-    localStorage.clear();
-    setViewportWidth(600);
-
-    renderDialog({ healthState: unhealthyHealthState });
-
-    fireEvent.click(screen.getByTestId("show-details-button"));
-
+    expect(screen.getByRole("heading", { name: "Unhealthy" })).toBeVisible();
+    expect(screen.getByText("Contributor: REST")).toBeVisible();
     expect(screen.getByTestId("issue-card")).toBeVisible();
-    expect(screen.getByTestId("evidence-preview-card")).toBeVisible();
-    expect(screen.getByTestId("technical-details-card")).toBeVisible();
-    expect(screen.queryByTestId("diagnostics-filter-input")).toBeNull();
-    expect(screen.queryByTestId("evidence-full-view")).toBeNull();
+    expect(screen.getByText("A device request could not be completed")).toBeVisible();
+    expect(screen.getByText("HTTP 403")).toBeVisible();
+    expect(screen.getByTestId("show-details-button")).toHaveTextContent("View issue");
+    expect(screen.getByTestId("run-health-check-button")).toHaveTextContent("Run health check");
   });
 
-  it("reveals collapsed evidence and technical cards after healthy disclosure", () => {
-    localStorage.clear();
+  it("enforces progressive disclosure from summary to details to analysis", () => {
     setViewportWidth(600);
 
     renderDialog();
 
-    fireEvent.click(screen.getByTestId("show-details-button"));
-
-    expect(screen.getByTestId("diagnostics-subtitle")).not.toHaveClass("hidden");
-    expect(screen.getByTestId("evidence-preview-card")).toBeVisible();
-    expect(screen.getByTestId("technical-details-card")).toBeVisible();
+    expect(screen.queryByTestId("diagnostics-details-layer")).toBeNull();
+    expect(screen.queryByTestId("diagnostics-analysis-layer")).toBeNull();
     expect(screen.queryByTestId("diagnostics-filter-input")).toBeNull();
-    expect(screen.queryByTestId("refine-button")).toBeNull();
-  });
-
-  it("shows up to three human-readable preview items only after expanding the evidence preview", () => {
-    localStorage.clear();
-    setViewportWidth(600);
-
-    renderDialog();
-
-    fireEvent.click(screen.getByTestId("show-details-button"));
-    fireEvent.click(screen.getByTestId("evidence-preview-toggle"));
-
-    expect(screen.getByTestId("preview-item-action-1")).toBeVisible();
-    expect(screen.getByText("Configuration updated successfully")).toBeVisible();
-    expect(screen.queryAllByTestId(/preview-item-/).length).toBeLessThanOrEqual(3);
-  });
-
-  it("keeps filters hidden until the tools card is expanded", () => {
-    localStorage.clear();
-    setViewportWidth(600);
-
-    renderDialog();
 
     fireEvent.click(screen.getByTestId("show-details-button"));
 
-    expect(screen.queryByTestId("tools-card")).toBeNull();
+    expect(screen.getByTestId("diagnostics-details-layer")).toBeVisible();
+    expect(screen.queryByTestId("diagnostics-analysis-layer")).toBeNull();
     expect(screen.queryByTestId("diagnostics-filter-input")).toBeNull();
 
-    fireEvent.click(screen.getByTestId("technical-details-toggle"));
+    fireEvent.click(screen.getByTestId("analyse-button"));
 
-    expect(screen.getByTestId("tools-card")).toBeVisible();
-    expect(screen.queryByTestId("diagnostics-filter-input")).toBeNull();
-
-    fireEvent.click(screen.getByTestId("tools-card-toggle"));
-
+    expect(screen.getByTestId("diagnostics-analysis-layer")).toBeVisible();
     expect(screen.getByTestId("diagnostics-filter-input")).toBeVisible();
     expect(screen.getByTestId("evidence-full-view")).toBeVisible();
-    expect(screen.getByTestId("diagnostics-share-all")).toBeVisible();
   });
 
-  it("opens the full activity tools flow from the preview card CTA", () => {
-    localStorage.clear();
+  it("keeps counts and timestamps singular inside analysis", () => {
+    setViewportWidth(600);
+
+    renderDialog({ healthState: unhealthyHealthState });
+
+    fireEvent.click(screen.getByTestId("show-details-button"));
+    fireEvent.click(screen.getByTestId("analyse-button"));
+
+    expect(screen.getAllByText(/Showing \d+ of \d+/i)).toHaveLength(1);
+    expect(screen.getAllByText(/Latest/i)).toHaveLength(1);
+    expect(screen.queryByText(/matches$/i)).toBeNull();
+  });
+
+  it("keeps the unhealthy summary as one coherent block instead of a dashboard", () => {
+    setViewportWidth(600);
+
+    renderDialog({ healthState: unhealthyHealthState });
+
+    const summary = screen.getByTestId("status-summary-card");
+    const issue = screen.getByTestId("issue-card");
+
+    expect(summary).toContainElement(issue);
+    expect(summary).toContainElement(screen.getByTestId("summary-activity-line"));
+    expect(summary).toContainElement(screen.getByTestId("summary-contributors"));
+    expect(screen.queryByText(/Technical details/i)).toBeNull();
+  });
+
+  it("makes nested overlay depth explicit", async () => {
     setViewportWidth(600);
 
     renderDialog();
 
     fireEvent.click(screen.getByTestId("show-details-button"));
-    fireEvent.click(screen.getByTestId("evidence-preview-toggle"));
-    fireEvent.click(screen.getByTestId("view-all-activity"));
+    fireEvent.click(screen.getByTestId("health-history-row"));
 
-    expect(screen.getByTestId("tools-card")).toBeVisible();
-    expect(screen.getByTestId("diagnostics-filter-input")).toBeVisible();
-    expect(screen.getByTestId("evidence-full-view")).toBeVisible();
+    expect(screen.getByTestId("health-history-popup")).toBeVisible();
+    expect(screen.getByTestId("analytic-popup-return")).toHaveTextContent("← Diagnostics");
+    expect(screen.getByRole("heading", { name: "Health history" })).toBeVisible();
+    expect(screen.getByTestId("diagnostics-sheet")).toBeVisible();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("health-history-popup").className).toContain("shadow-");
+    });
+  });
+
+  it("closes nested overlay first, then requests closing diagnostics", async () => {
+    setViewportWidth(600);
+    const onOpenChange = vi.fn();
+
+    renderDialog({ onOpenChange });
+
+    fireEvent.click(screen.getByTestId("show-details-button"));
+    fireEvent.click(screen.getByTestId("health-history-row"));
+
+    expect(screen.getByTestId("health-history-popup")).toBeVisible();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("health-history-popup")).toBeNull();
+    });
+    expect(screen.getByTestId("diagnostics-sheet")).toBeVisible();
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    await waitFor(() => {
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+    });
   });
 });

@@ -208,6 +208,14 @@ export function HeatMapPopup({ open, onClose, variant, traceEvents }: Props) {
       data-testid={`heat-map-popup-${variant.toLowerCase()}`}
     >
       <div className="flex flex-1 min-h-0 flex-col p-3 relative">
+        <div className="mb-3 space-y-1 rounded-lg border border-border/60 bg-background/70 p-3 text-xs">
+          <p className="font-medium text-foreground">
+            Purpose: Shows concentrated {variant.toLowerCase()} activity by area.
+          </p>
+          <p className="text-muted-foreground">
+            Interpretation: Brighter cells indicate where activity or latency is concentrated enough to investigate.
+          </p>
+        </div>
         <div className="flex flex-wrap items-center gap-3 mb-3 shrink-0">
           <MetricToggle mode={mode} onChange={setMode} />
           <span className="text-xs text-muted-foreground">

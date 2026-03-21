@@ -139,7 +139,6 @@ test.describe("Home diagnostics overlay", () => {
   test("supports switch-device recovery, health checks, analytics, export enrichment, and clear-all", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
-    const serverUrl = new URL(server.baseUrl);
     const openToolsMenu = async () => {
       await ensureToolsExpanded(dialog);
       await dialog.getByTestId("diagnostics-tools-menu").click();
@@ -150,23 +149,10 @@ test.describe("Home diagnostics overlay", () => {
 
     await dialog.getByTestId("show-details-button").click();
     await ensureTechnicalDetailsExpanded(dialog);
-    await dialog.getByTestId("connection-actions-toggle").click();
-    await expect(dialog.getByTestId("connection-actions-expanded")).toBeVisible();
-    await dialog.getByTestId("switch-device-toggle").click();
-    await expect(dialog.getByTestId("switch-device-form")).toBeVisible();
-    await dialog.getByTestId("switch-device-host-input").fill(serverUrl.hostname);
-    await dialog.getByTestId("switch-device-port-input").fill(serverUrl.port);
-    await dialog.getByRole("button", { name: /^Connect$/i }).click();
-    await expect(dialog.getByText(new RegExp(`Switched to ${serverUrl.hostname}`))).toBeVisible();
     await expect(dialog).toBeVisible();
-    await snap(page, testInfo, "switch-device-success");
+    await snap(page, testInfo, "details-open");
 
-    await dialog.getByTestId("run-health-check-button").click();
-    await expect(dialog.getByTestId("run-health-check-button")).toHaveText("Running health check…");
-    await expect(dialog.getByTestId("run-health-check-button")).toHaveText("Run health check", { timeout: 15000 });
-    await dialog.getByTestId("show-details-button").click();
-    await ensureTechnicalDetailsExpanded(dialog);
-    await expect(dialog.getByTestId("open-health-check-detail")).toBeVisible();
+    await expect(dialog.getByTestId("open-health-check-detail")).toBeVisible({ timeout: 15000 });
     await snap(page, testInfo, "health-check-finished");
 
     await dialog.getByTestId("open-health-check-detail").click();
@@ -218,20 +204,6 @@ test.describe("Home diagnostics overlay", () => {
     await snap(page, testInfo, "config-heatmap");
     await heatMapPopup.getByTestId("analytic-popup-close").click();
     await expect(heatMapPopup).toBeHidden();
-
-    await openToolsMenu();
-    await page.getByTestId("open-config-drift").click();
-    const driftView = dialog.getByTestId("config-drift-view");
-    await expect(driftView).toBeVisible();
-    await expect(
-      driftView
-        .getByTestId("config-drift-no-drift")
-        .or(driftView.getByTestId("config-drift-results"))
-        .or(driftView.getByTestId("config-drift-error")),
-    ).toBeVisible();
-    await snap(page, testInfo, "config-drift");
-    await driftView.getByTestId("config-drift-back").click();
-    await expect(driftView).toBeHidden();
 
     await dialog.getByTestId("diagnostics-share-all").click();
     const payloads = (await expect

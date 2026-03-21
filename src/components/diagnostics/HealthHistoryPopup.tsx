@@ -134,6 +134,14 @@ export function HealthHistoryPopup({ open, onClose }: Props) {
       data-testid="health-history-popup"
     >
       <div className="flex flex-1 min-h-0 flex-col p-3">
+        <div className="mb-3 space-y-1 rounded-lg border border-border/60 bg-background/70 p-3 text-xs">
+          <p className="font-medium text-foreground">
+            Purpose: Shows how health changed across the current diagnostics window.
+          </p>
+          <p className="text-muted-foreground">
+            Interpretation: A worsening segment points to when the system moved from stable to degraded or unhealthy.
+          </p>
+        </div>
         {isEmpty ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center text-sm text-muted-foreground">
             <p>No health check history yet.</p>
