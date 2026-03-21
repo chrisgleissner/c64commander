@@ -26,6 +26,17 @@ import {
   resolveRunwayTranslatePercent,
 } from "@/lib/navigation/swipeNavigationModel";
 
+const createPointerEvent = (type: string, init: PointerEventInit, timeStamp?: number) => {
+  const event = new PointerEvent(type, init);
+  if (typeof timeStamp === "number") {
+    Object.defineProperty(event, "timeStamp", {
+      configurable: true,
+      value: timeStamp,
+    });
+  }
+  return event;
+};
+
 // ---------------------------------------------------------------------------
 // classifyGestureIntent
 // ---------------------------------------------------------------------------
@@ -355,24 +366,30 @@ describe("useSwipeGesture integration", () => {
     render(React.createElement(GestureHarness, { callbacks }));
     const surface = screen.getByTestId("gesture-surface");
 
-    surface.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, pointerId: 2, isPrimary: true }));
+    surface.dispatchEvent(createPointerEvent("pointerdown", { bubbles: true, button: 0, pointerId: 2, isPrimary: true }));
     surface.dispatchEvent(
-      new PointerEvent("pointermove", {
-        bubbles: true,
-        pointerId: 2,
-        clientX: 5,
-        clientY: 60,
-        timeStamp: 10,
-      }),
+      createPointerEvent(
+        "pointermove",
+        {
+          bubbles: true,
+          pointerId: 2,
+          clientX: 5,
+          clientY: 60,
+        },
+        10,
+      ),
     );
     surface.dispatchEvent(
-      new PointerEvent("pointerup", {
-        bubbles: true,
-        pointerId: 2,
-        clientX: 5,
-        clientY: 60,
-        timeStamp: 20,
-      }),
+      createPointerEvent(
+        "pointerup",
+        {
+          bubbles: true,
+          pointerId: 2,
+          clientX: 5,
+          clientY: 60,
+        },
+        20,
+      ),
     );
 
     expect(callbacks.onProgress).not.toHaveBeenCalled();
@@ -391,33 +408,38 @@ describe("useSwipeGesture integration", () => {
     const surface = screen.getByTestId("gesture-surface");
 
     surface.dispatchEvent(
-      new PointerEvent("pointerdown", {
+      createPointerEvent("pointerdown", {
         bubbles: true,
         button: 0,
         pointerId: 3,
         isPrimary: true,
         clientX: 180,
         clientY: 20,
-        timeStamp: 0,
       }),
     );
     surface.dispatchEvent(
-      new PointerEvent("pointermove", {
-        bubbles: true,
-        pointerId: 3,
-        clientX: 110,
-        clientY: 25,
-        timeStamp: 20,
-      }),
+      createPointerEvent(
+        "pointermove",
+        {
+          bubbles: true,
+          pointerId: 3,
+          clientX: 110,
+          clientY: 25,
+        },
+        20,
+      ),
     );
     surface.dispatchEvent(
-      new PointerEvent("pointerup", {
-        bubbles: true,
-        pointerId: 3,
-        clientX: 110,
-        clientY: 25,
-        timeStamp: 40,
-      }),
+      createPointerEvent(
+        "pointerup",
+        {
+          bubbles: true,
+          pointerId: 3,
+          clientX: 110,
+          clientY: 25,
+        },
+        40,
+      ),
     );
 
     expect(callbacks.onProgress).toHaveBeenCalledWith(-70, expect.any(Number));
@@ -439,44 +461,52 @@ describe("useSwipeGesture integration", () => {
     const surface = screen.getByTestId("gesture-surface");
 
     surface.dispatchEvent(
-      new PointerEvent("pointerdown", {
+      createPointerEvent("pointerdown", {
         bubbles: true,
         button: 0,
         pointerId: 4,
         isPrimary: true,
         clientX: 120,
         clientY: 20,
-        timeStamp: 0,
       }),
     );
     surface.dispatchEvent(
-      new PointerEvent("pointermove", {
-        bubbles: true,
-        pointerId: 4,
-        clientX: 116,
-        clientY: 18,
-        timeStamp: 10,
-      }),
+      createPointerEvent(
+        "pointermove",
+        {
+          bubbles: true,
+          pointerId: 4,
+          clientX: 116,
+          clientY: 18,
+        },
+        10,
+      ),
     );
     expect(callbacks.onProgress).not.toHaveBeenCalled();
 
     surface.dispatchEvent(
-      new PointerEvent("pointermove", {
-        bubbles: true,
-        pointerId: 4,
-        clientX: 90,
-        clientY: 18,
-        timeStamp: 20,
-      }),
+      createPointerEvent(
+        "pointermove",
+        {
+          bubbles: true,
+          pointerId: 4,
+          clientX: 90,
+          clientY: 18,
+        },
+        20,
+      ),
     );
     surface.dispatchEvent(
-      new PointerEvent("pointermove", {
-        bubbles: true,
-        pointerId: 4,
-        clientX: 70,
-        clientY: 18,
-        timeStamp: 30,
-      }),
+      createPointerEvent(
+        "pointermove",
+        {
+          bubbles: true,
+          pointerId: 4,
+          clientX: 70,
+          clientY: 18,
+        },
+        30,
+      ),
     );
 
     expect(callbacks.onProgress).toHaveBeenNthCalledWith(1, -30, expect.any(Number));
@@ -494,33 +524,38 @@ describe("useSwipeGesture integration", () => {
     const surface = screen.getByTestId("gesture-surface");
 
     surface.dispatchEvent(
-      new PointerEvent("pointerdown", {
+      createPointerEvent("pointerdown", {
         bubbles: true,
         button: 0,
         pointerId: 5,
         isPrimary: true,
         clientX: 120,
         clientY: 20,
-        timeStamp: 0,
       }),
     );
     surface.dispatchEvent(
-      new PointerEvent("pointermove", {
-        bubbles: true,
-        pointerId: 5,
-        clientX: 95,
-        clientY: 22,
-        timeStamp: 20,
-      }),
+      createPointerEvent(
+        "pointermove",
+        {
+          bubbles: true,
+          pointerId: 5,
+          clientX: 95,
+          clientY: 22,
+        },
+        20,
+      ),
     );
     surface.dispatchEvent(
-      new PointerEvent("pointerup", {
-        bubbles: true,
-        pointerId: 5,
-        clientX: 95,
-        clientY: 22,
-        timeStamp: 40,
-      }),
+      createPointerEvent(
+        "pointerup",
+        {
+          bubbles: true,
+          pointerId: 5,
+          clientX: 95,
+          clientY: 22,
+        },
+        40,
+      ),
     );
 
     expect(callbacks.onCommit).not.toHaveBeenCalled();

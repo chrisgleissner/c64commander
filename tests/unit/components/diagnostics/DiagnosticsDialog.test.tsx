@@ -178,7 +178,7 @@ describe("DiagnosticsDialog", () => {
 
     expect(screen.getByTestId("diagnostics-header")).toBeVisible();
     expect(screen.getByTestId("evidence-panel")).toBeVisible();
-    expect(screen.getByTestId("evidence-heading")).toHaveTextContent("1 problem");
+    expect(screen.getByTestId("evidence-heading")).toHaveTextContent("Evidence");
     expect(screen.getByTestId("filters-collapsed-bar")).toBeVisible();
     expect(screen.queryByText(/in view/i)).toBeNull();
     expect(screen.queryByTestId("filters-editor-surface")).toBeNull();
@@ -238,11 +238,9 @@ describe("DiagnosticsDialog", () => {
     fireEvent.click(screen.getByTestId("open-filters-editor"));
 
     expect(screen.getByTestId("filters-editor-surface")).toBeVisible();
-    fireEvent.click(screen.getByLabelText("Logs"));
-    fireEvent.click(screen.getByLabelText("Problems"));
+    fireEvent.click(within(screen.getByTestId("filters-editor-surface")).getByRole("button", { name: "Logs" }));
+    fireEvent.click(within(screen.getByTestId("filters-editor-surface")).getByRole("button", { name: "✓ Problems" }));
 
-    expect(screen.getByTestId("evidence-tab-problems")).toHaveClass("opacity-45");
-    expect(screen.getByTestId("evidence-heading")).toHaveTextContent("1 action");
     expect(screen.getByTestId("filters-collapsed-bar")).toHaveTextContent("Actions");
   });
 
@@ -277,10 +275,11 @@ describe("DiagnosticsDialog", () => {
     renderDialog({ onShareFiltered });
 
     fireEvent.click(screen.getByTestId("open-filters-editor"));
-    fireEvent.click(screen.getByLabelText("Logs"));
-    fireEvent.click(screen.getByLabelText("Problems"));
-    fireEvent.click(screen.getByLabelText("Actions"));
+    fireEvent.click(within(screen.getByTestId("filters-editor-surface")).getByRole("button", { name: "Logs" }));
+    fireEvent.click(within(screen.getByTestId("filters-editor-surface")).getByRole("button", { name: "✓ Problems" }));
+    fireEvent.click(within(screen.getByTestId("filters-editor-surface")).getByRole("button", { name: "✓ Actions" }));
 
+    fireEvent.click(screen.getByTestId("diagnostics-overflow-menu"));
     fireEvent.click(screen.getByTestId("diagnostics-share-filtered"));
 
     expect(onShareFiltered).toHaveBeenCalledTimes(1);

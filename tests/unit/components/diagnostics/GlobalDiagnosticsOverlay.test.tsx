@@ -168,9 +168,10 @@ describe("GlobalDiagnosticsOverlay", () => {
     renderOverlay();
 
     const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByRole("button", { name: /^share all$/i })).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByTestId("diagnostics-overflow-menu"));
+    expect(within(dialog).getByTestId("diagnostics-share-all")).toBeInTheDocument();
 
-    fireEvent.click(within(dialog).getByRole("button", { name: /^share all$/i }));
+    fireEvent.click(within(dialog).getByTestId("diagnostics-share-all"));
 
     expect(shareAllDiagnosticsZip).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -188,7 +189,8 @@ describe("GlobalDiagnosticsOverlay", () => {
     renderOverlay();
 
     const dialog = await screen.findByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: /^share all$/i }));
+    fireEvent.click(within(dialog).getByTestId("diagnostics-overflow-menu"));
+    fireEvent.click(within(dialog).getByTestId("diagnostics-share-all"));
 
     await waitFor(() => {
       expect(reportUserError).toHaveBeenCalledWith(

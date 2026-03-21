@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v3.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import React from "react";
 import { useLocation } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
@@ -371,11 +379,11 @@ export function LightingStudioProvider({ children }: { children: React.ReactNode
       const resolved =
         resolvedLocation.source === "city"
           ? {
-              source: "city" as const,
-              lat: calculation.location.lat,
-              lon: calculation.location.lon,
-              label: calculation.location.label,
-            }
+            source: "city" as const,
+            lat: calculation.location.lat,
+            lon: calculation.location.lon,
+            label: calculation.location.label,
+          }
           : resolvedLocation;
       return {
         period: phase.period,
@@ -402,12 +410,12 @@ export function LightingStudioProvider({ children }: { children: React.ReactNode
     if (!circadianState) return;
     setStudioState((current) =>
       current.lastResolvedLocation?.label === circadianState.resolvedLocation.label &&
-      current.lastResolvedLocation?.source === circadianState.resolvedLocation.source
+        current.lastResolvedLocation?.source === circadianState.resolvedLocation.source
         ? current
         : {
-            ...current,
-            lastResolvedLocation: circadianState.resolvedLocation,
-          },
+          ...current,
+          lastResolvedLocation: circadianState.resolvedLocation,
+        },
     );
   }, [circadianState]);
 

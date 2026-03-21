@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v3.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import { createContext, useContext, type CSSProperties, type ReactNode } from "react";
 
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
@@ -87,8 +95,8 @@ export function ProfileSplitSection({
   const style: CSSProperties | undefined =
     profile === "expanded"
       ? {
-          gridTemplateColumns: `repeat(auto-fit, minmax(min(${minColumnWidth}, 100%), 1fr))`,
-        }
+        gridTemplateColumns: `repeat(auto-fit, minmax(min(${minColumnWidth}, 100%), 1fr))`,
+      }
       : undefined;
 
   return (

@@ -599,10 +599,8 @@ describe("SettingsPage", () => {
 
     const dialog = await openDiagnosticsTools();
 
-    expect(within(dialog).getByTestId("evidence-tab-problems")).toBeInTheDocument();
-    expect(within(dialog).getByTestId("evidence-tab-actions")).toBeInTheDocument();
-    expect(within(dialog).getByTestId("evidence-tab-logs")).toBeInTheDocument();
-    expect(within(dialog).getByTestId("evidence-tab-traces")).toBeInTheDocument();
+    expect(within(dialog).getByTestId("evidence-panel")).toBeInTheDocument();
+    expect(within(dialog).getByTestId("evidence-heading")).toBeInTheDocument();
   });
 
   it("opens diagnostics from a preset request event", async () => {
@@ -624,6 +622,7 @@ describe("SettingsPage", () => {
 
     const dialog = await openDiagnosticsTools();
 
+    fireEvent.click(within(dialog).getByTestId("diagnostics-overflow-menu"));
     expect(within(dialog).getByTestId("diagnostics-share-all")).toBeInTheDocument();
     expect(within(dialog).getByTestId("diagnostics-share-filtered")).toBeInTheDocument();
     expect(within(dialog).getByTestId("diagnostics-clear-all-trigger")).toBeInTheDocument();
@@ -655,10 +654,9 @@ describe("SettingsPage", () => {
     expect((await within(dialog).findAllByText("Disk error")).length).toBeGreaterThan(0);
     expect((await within(dialog).findAllByText("Network failure")).length).toBeGreaterThan(0);
 
-    fireEvent.click(within(filters).getByLabelText("Logs"));
-    fireEvent.click(within(filters).getByLabelText("Actions"));
-    fireEvent.click(within(filters).getByLabelText("Problems"));
-    fireEvent.click(within(dialog).getByTestId("evidence-tab-logs"));
+    fireEvent.click(within(filters).getByRole("button", { name: "Logs" }));
+    fireEvent.click(within(filters).getByRole("button", { name: "✓ Actions" }));
+    fireEvent.click(within(filters).getByRole("button", { name: "✓ Problems" }));
 
     expect(within(dialog).queryByText("Disk error")).not.toBeInTheDocument();
     expect(within(dialog).queryByText("Network failure")).not.toBeInTheDocument();
@@ -681,6 +679,7 @@ describe("SettingsPage", () => {
 
     expect((await within(dialog).findAllByText("Error entry")).length).toBeGreaterThan(0);
 
+    fireEvent.click(within(dialog).getByTestId("diagnostics-overflow-menu"));
     fireEvent.click(within(dialog).getByTestId("diagnostics-clear-all-trigger"));
     const confirm = await screen.findByRole("alertdialog");
     fireEvent.click(within(confirm).getByTestId("diagnostics-clear-all-confirm"));
@@ -695,6 +694,7 @@ describe("SettingsPage", () => {
 
     const dialog = await openDiagnosticsTools();
 
+    fireEvent.click(within(dialog).getByTestId("diagnostics-overflow-menu"));
     fireEvent.click(within(dialog).getByTestId("diagnostics-clear-all-trigger"));
     const confirm = await screen.findByRole("alertdialog");
     fireEvent.click(within(confirm).getByRole("button", { name: /cancel/i }));
@@ -790,8 +790,7 @@ describe("SettingsPage", () => {
 
     expect(await within(dialog).findByTestId("evidence-row-action-COR-0001")).toBeInTheDocument();
 
-    fireEvent.click(within(filters).getByLabelText("Traces"));
-    fireEvent.click(within(dialog).getByTestId("evidence-tab-traces"));
+    fireEvent.click(within(filters).getByRole("button", { name: "Traces" }));
 
     await waitFor(() => {
       expect(within(dialog).queryAllByTestId(/^evidence-row-trace-/).length).toBeGreaterThan(0);
@@ -810,6 +809,7 @@ describe("SettingsPage", () => {
 
     await within(dialog).findByText("Export test error");
 
+    fireEvent.click(within(dialog).getByTestId("diagnostics-overflow-menu"));
     fireEvent.click(within(dialog).getByTestId("diagnostics-share-filtered"));
 
     await waitFor(() => {
@@ -818,6 +818,7 @@ describe("SettingsPage", () => {
 
     vi.mocked(shareDiagnosticsZip).mockRejectedValue(new Error("export failed"));
 
+    fireEvent.click(within(dialog).getByTestId("diagnostics-overflow-menu"));
     fireEvent.click(within(dialog).getByTestId("diagnostics-share-filtered"));
 
     await waitFor(() => {
@@ -835,7 +836,8 @@ describe("SettingsPage", () => {
     renderSettingsPage();
 
     const dialog = await openDiagnosticsTools();
-    const shareAllButton = within(dialog).getByRole("button", { name: /^share all$/i });
+    fireEvent.click(within(dialog).getByTestId("diagnostics-overflow-menu"));
+    const shareAllButton = within(dialog).getByTestId("diagnostics-share-all");
 
     fireEvent.click(shareAllButton);
 
@@ -852,7 +854,8 @@ describe("SettingsPage", () => {
       throw new Error("share all failed");
     });
 
-    fireEvent.click(shareAllButton);
+    fireEvent.click(within(dialog).getByTestId("diagnostics-overflow-menu"));
+    fireEvent.click(within(dialog).getByTestId("diagnostics-share-all"));
 
     await waitFor(() => {
       expect(reportUserError).toHaveBeenCalledWith(
@@ -1208,8 +1211,7 @@ describe("SettingsPage", () => {
       window.dispatchEvent(new Event("c64u-traces-updated"));
     });
 
-    fireEvent.click(within(filters).getByLabelText("Traces"));
-    fireEvent.click(within(dialog).getByTestId("evidence-tab-traces"));
+    fireEvent.click(within(filters).getByRole("button", { name: "Traces" }));
 
     expect(await within(dialog).findByTestId("evidence-row-trace-trace-filter-a")).toBeInTheDocument();
     expect(await within(dialog).findByTestId("evidence-row-trace-trace-filter-b")).toBeInTheDocument();

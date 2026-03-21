@@ -1,103 +1,120 @@
-# Diagnostics Overlay Redesign Plan
+# Diagnostics UX Production-Grade Plan
 
-Status: COMPLETE
-Classification: UI_CHANGE + DOC_PLUS_CODE
+Status: IN PROGRESS
+Classification: UI_CHANGE
 Date: 2026-03-21
 
 ## Objective
 
-Deliver a diagnostics experience that surfaces evidence first, keeps configuration secondary, removes redundant wording, and converges through deterministic tests and screenshots.
+Fix all remaining Diagnostics UX and layout issues to production-grade quality by enforcing evidence-first layout, unified filtering, maximum density, strict progressive disclosure, zero redundant text, and deterministic testable UI behavior.
 
 ## Phases
 
-### Phase 1 - Audit
+### Phase 1 - Header Replacement
 
-- Identify current layout violations against the target overlay structure.
-- Identify redundant copy, duplicated state, and nested-surface confusion.
-- Map deterministic seed points for evidence, latency, and health history.
-
-Acceptance criteria:
-
-- Existing diagnostics surfaces and screenshot hooks are mapped.
-- Violations are recorded in this plan and then addressed in later phases.
-
-### Phase 2 - Header + Connection
-
-- Replace the header with the required four-line compact health block.
-- Make the health block collapsible and default-collapsed in activity scenarios.
-- Implement tap-to-view and long-press-to-edit connection details.
-- Stage host, HTTP port, and FTP port changes and save atomically.
+- Replace header with compact 4-line block: health glyph+state, device+address, last check time, run health check button.
+- Remove "Diagnostics" subtitle, "Health summary", "Technical details" from default view.
+- Header default: collapsed. Tap to expand for latency percentiles.
 
 Acceptance criteria:
+- Header matches 4-line spec exactly.
+- No legacy header elements remain.
 
-- Header matches the required structure.
-- Connection details open in view mode on tap and edit mode on long press.
-- Host and port validation rejects invalid input.
+### Phase 2 - Evidence-First Layout
 
-### Phase 3 - Filter System
-
-- Replace inline filter expansion with a one-line collapsed filter bar.
-- Add a dedicated filter editor surface.
-- Keep state visibility separate from configuration.
+- Strict vertical order: header (collapsed ~80px), evidence (immediately visible), controls.
+- Remove latency summary and technical details from top.
+- Evidence shows at least 2 entries without scrolling on compact viewport.
 
 Acceptance criteria:
+- Evidence visible without scrolling.
+- No placeholder rows.
 
-- Filter chips are visible in one line.
-- Filter editor opens in one tap.
-- Mobile uses a sheet and expanded layouts use a side panel.
+### Phase 3 - Filter System Unification
 
-### Phase 4 - Evidence Visibility
-
-- Reorder the overlay to header, evidence, then controls.
-- Keep evidence visible in the default screenshot without scrolling.
-- Keep Problems and Actions useful by default while Logs and Traces remain opt-in.
-
-Acceptance criteria:
-
-- Evidence is visible without scrolling.
-- Controls do not obscure the evidence panel.
-
-### Phase 5 - Text Cleanup + Latency
-
-- Remove all explanatory prose and duplicated labels.
-- Rename surfaces to Diagnostics, Evidence, and Latency.
-- Simplify latency to chart plus P50, P90, and P99 with filter sheet access.
+- Remove tabs (Problems/Actions/Logs/Traces).
+- Remove inline severity and contributor filters.
+- Replace with single collapsed filter bar with chips.
+- Max 2 visible chips, overflow as +N.
 
 Acceptance criteria:
+- Only ONE filtering mechanism exists.
+- No wrapping, no horizontal scroll.
 
-- No diagnostic UI contains purpose, interpretation, in view, or current scope wording.
-- Latency contains zero descriptive paragraphs.
+### Phase 4 - Filter Editor (Bottom Sheet)
 
-### Phase 6 - Timeline + Data
-
-- Use deterministic diagnostics seeds with realistic severity variation.
-- Render continuous health bars with healthy, degraded, unhealthy, and recovery segments.
-- Show timestamp and cause on timeline selection.
-
-Acceptance criteria:
-
-- Timeline contains realistic variation and at least one unhealthy segment.
-- Selected timeline segments show timestamp and cause.
-
-### Phase 7 - Screenshots + Validation
-
-- Update screenshot capture flow for the required diagnostics artifacts.
-- Add and update unit tests for the new overlay behavior.
-- Run targeted UI validation plus repository-required validation.
+- Keep bottom sheet pattern.
+- Show count summary, type/contributor/severity chips (inline layout).
+- Add quick filters: Errors only, Problems only, Reset.
+- Immediate apply (no Apply button).
+- Reduce vertical spacing ~30%.
 
 Acceptance criteria:
+- Filter editor dense and non-scrolling on standard mobile.
+- No explanatory text.
 
-- Required screenshots are generated.
-- Relevant unit tests, coverage, lint, and build pass.
-- Diagnostics-specific Playwright validation passes.
+### Phase 5 - Text Elimination
+
+- Remove all explanatory/descriptive text.
+- Remove "Showing X of Y", "Latest HH:MM", "Purpose", "Interpretation", etc.
+- Replace "Recent evidence" with "Evidence".
+
+Acceptance criteria:
+- Zero explanatory sentences in any diagnostics surface.
+
+### Phase 6 - Density Optimization
+
+- Reduce vertical spacing globally ~20-30%.
+- Compact section headers.
+- Inline buttons where possible.
+- Move Share/Clear into overflow menu.
+
+Acceptance criteria:
+- No visible empty vertical space > 25% of screen.
+
+### Phase 7 - Evidence List Cleanup
+
+- Remove letter + colored dot severity indicators.
+- Use severity color dot only.
+- Consistent alignment, minimal horizontal noise.
+
+Acceptance criteria:
+- No mixed severity indicators.
+
+### Phase 8 - Overlay Consistency
+
+- All secondary screens use back arrow + title header.
+- Consistent navigation style.
+
+Acceptance criteria:
+- No mixed modal + navigation patterns.
+
+### Phase 9 - Data Realism
+
+- Health history: ≥70% healthy, ≥2 degraded spikes, ≥1 unhealthy, recovery present.
+- Latency: non-zero realistic values, multiple percentiles.
+
+Acceptance criteria:
+- Data appears realistic and varied (already satisfied by existing seeds).
+
+### Phase 10 - Final Validation
+
+- Generate required screenshots.
+- Run lint, test, build, coverage.
+
+Acceptance criteria:
+- All screenshots pass.
+- Branch coverage ≥91%.
 
 ## Risks
 
-- Existing diagnostics tests and screenshots are coupled to the previous summary/details/tools model.
-- Connection state currently stores HTTP host and port together, so the edit sheet must split and recompose safely.
-- Evidence visibility can regress across compact and medium layouts if sheet height is not controlled tightly.
+- Tab removal affects evidence-tab test selectors in Playwright.
+- Filter unification changes test data-testid references.
+- Density changes may affect compact viewport evidence visibility.
 
 ## Rollback Strategy
+
+Revert DiagnosticsDialog.tsx to prior commit. All changes are isolated to this component and its direct sub-components.
 
 - Revert the diagnostics component files and screenshot capture changes as one unit.
 - Restore the previous diagnostics test expectations if the redesign must be backed out.
