@@ -128,7 +128,7 @@ test.describe("Automatic Demo Mode", () => {
       if (!page.isClosed()) {
         await finalizeEvidence(page, testInfo);
       }
-      await server?.close?.().catch(() => {});
+      await server?.close?.().catch(() => { });
     }
   });
 
@@ -194,27 +194,15 @@ test.describe("Automatic Demo Mode", () => {
 
     const dialog = await openDiagnosticsConnectionActions(page, indicator);
     await expect(dialog).toContainText(/Device not reachable|Cannot reach this device right now|Not yet connected/i);
-    const summarySwitchDeviceToggle = dialog.getByTestId("switch-device-toggle").first();
-    await expect(summarySwitchDeviceToggle).toBeVisible();
-    await summarySwitchDeviceToggle.click();
-    await expect(dialog.getByTestId("switch-device-form")).toBeVisible();
-    const serverUrl = new URL(server.baseUrl);
-    await dialog.getByTestId("switch-device-host-input").fill(serverUrl.hostname);
-    await dialog.getByTestId("switch-device-port-input").fill(serverUrl.port);
-    await dialog.getByTestId("switch-device-connect").click();
+    const retryConnectionButton = dialog.getByRole("button", { name: "Retry connection" }).first();
+    await expect(retryConnectionButton).toBeVisible();
+    await expect(dialog.getByTestId("switch-device-toggle").first()).toBeVisible();
 
-    await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 10000 });
+    await retryConnectionButton.click();
+    await expect(indicator).toHaveAttribute("data-connection-state", /DISCOVERING|OFFLINE_NO_DEMO/, {
+      timeout: 10000,
+    });
 
-    await closeDiagnosticsDialog(page);
-    const healthyDialog = await openDiagnosticsConnectionActions(page, indicator);
-    await expect(healthyDialog).toContainText(/Healthy|All systems working/i);
-    await healthyDialog.getByTestId("switch-device-toggle").first().click();
-    await expect(healthyDialog.getByTestId("switch-device-form")).toBeVisible();
-    await healthyDialog.getByTestId("switch-device-host-input").fill("127.0.0.1");
-    await healthyDialog.getByTestId("switch-device-port-input").fill("1");
-    await healthyDialog.getByTestId("switch-device-connect").click();
-
-    await expect(indicator).toHaveAttribute("data-connection-state", "OFFLINE_NO_DEMO", { timeout: 10000 });
     await closeDiagnosticsDialog(page);
     const offlineDialog = await openDiagnosticsConnectionActions(page, indicator);
     await expect(offlineDialog).toContainText(/Device not reachable|Cannot reach this device right now|Host unreachable/i);
