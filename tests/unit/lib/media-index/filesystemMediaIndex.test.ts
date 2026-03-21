@@ -37,7 +37,7 @@ describe("filesystemMediaIndex", () => {
     it("returns null when file does not exist", async () => {
       mockReadFile.mockRejectedValue(new Error("File not found"));
 
-      const { FilesystemMediaIndexStorage } = await import("./filesystemMediaIndex");
+      const { FilesystemMediaIndexStorage } = await import("@/lib/media-index/filesystemMediaIndex");
       const storage = new FilesystemMediaIndexStorage();
       const result = await storage.read();
 
@@ -55,7 +55,7 @@ describe("filesystemMediaIndex", () => {
       const base64 = btoa(jsonStr);
       mockReadFile.mockResolvedValue({ data: base64 });
 
-      const { FilesystemMediaIndexStorage } = await import("./filesystemMediaIndex");
+      const { FilesystemMediaIndexStorage } = await import("@/lib/media-index/filesystemMediaIndex");
       const storage = new FilesystemMediaIndexStorage();
       const result = await storage.read();
 
@@ -65,7 +65,7 @@ describe("filesystemMediaIndex", () => {
     it("returns null for invalid JSON", async () => {
       mockReadFile.mockResolvedValue({ data: btoa("invalid json") });
 
-      const { FilesystemMediaIndexStorage } = await import("./filesystemMediaIndex");
+      const { FilesystemMediaIndexStorage } = await import("@/lib/media-index/filesystemMediaIndex");
       const storage = new FilesystemMediaIndexStorage();
       const result = await storage.read();
 
@@ -79,7 +79,7 @@ describe("filesystemMediaIndex", () => {
         entries: [],
       };
 
-      const { FilesystemMediaIndexStorage } = await import("./filesystemMediaIndex");
+      const { FilesystemMediaIndexStorage } = await import("@/lib/media-index/filesystemMediaIndex");
       const storage = new FilesystemMediaIndexStorage();
       await storage.write(snapshot);
 
@@ -91,7 +91,7 @@ describe("filesystemMediaIndex", () => {
       // Empty string data decodes to empty string → safeParse(!raw) → null
       mockReadFile.mockResolvedValue({ data: "" });
 
-      const { FilesystemMediaIndexStorage } = await import("./filesystemMediaIndex");
+      const { FilesystemMediaIndexStorage } = await import("@/lib/media-index/filesystemMediaIndex");
       const storage = new FilesystemMediaIndexStorage();
       const result = await storage.read();
 
@@ -106,7 +106,7 @@ describe("filesystemMediaIndex", () => {
         updatedAt: "2024-01-01T00:00:00.000Z",
         entries: [],
       };
-      const { FilesystemMediaIndexStorage } = await import("./filesystemMediaIndex");
+      const { FilesystemMediaIndexStorage } = await import("@/lib/media-index/filesystemMediaIndex");
       const storage = new FilesystemMediaIndexStorage();
       await storage.write(snapshot);
 
@@ -128,7 +128,7 @@ describe("filesystemMediaIndex", () => {
       const base64 = Buffer.from(JSON.stringify(snapshot), "utf-8").toString("base64");
       mockReadFile.mockResolvedValue({ data: base64 });
 
-      const { FilesystemMediaIndexStorage } = await import("./filesystemMediaIndex");
+      const { FilesystemMediaIndexStorage } = await import("@/lib/media-index/filesystemMediaIndex");
       const storage = new FilesystemMediaIndexStorage();
       const result = await storage.read();
 
@@ -145,7 +145,7 @@ describe("filesystemMediaIndex", () => {
 
       mockReadFile.mockResolvedValue({ data: "notvalidbase64" });
 
-      const { FilesystemMediaIndexStorage } = await import("./filesystemMediaIndex");
+      const { FilesystemMediaIndexStorage } = await import("@/lib/media-index/filesystemMediaIndex");
       const storage = new FilesystemMediaIndexStorage();
       // catch returns raw value → safeParse fails → null
       const result = await storage.read();

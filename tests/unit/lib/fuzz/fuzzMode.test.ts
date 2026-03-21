@@ -56,25 +56,25 @@ describe("fuzzMode", () => {
   describe("isFuzzModeEnabled", () => {
     it("returns false when no fuzz mode indicators are set", async () => {
       localStorageMock.getItem.mockReturnValue(null);
-      const { isFuzzModeEnabled } = await import("./fuzzMode");
+      const { isFuzzModeEnabled } = await import("@/lib/fuzz/fuzzMode");
       expect(isFuzzModeEnabled()).toBe(false);
     });
 
     it("returns true when localStorage has fuzz mode enabled", async () => {
       localStorageMock.getItem.mockReturnValue("1");
-      const { isFuzzModeEnabled } = await import("./fuzzMode");
+      const { isFuzzModeEnabled } = await import("@/lib/fuzz/fuzzMode");
       expect(isFuzzModeEnabled()).toBe(true);
     });
 
     it("returns true when window.__c64uFuzzMode is set", async () => {
       (window as Window & { __c64uFuzzMode?: boolean }).__c64uFuzzMode = true;
-      const { isFuzzModeEnabled } = await import("./fuzzMode");
+      const { isFuzzModeEnabled } = await import("@/lib/fuzz/fuzzMode");
       expect(isFuzzModeEnabled()).toBe(true);
     });
 
     it('returns false when localStorage value is not "1"', async () => {
       localStorageMock.getItem.mockReturnValue("0");
-      const { isFuzzModeEnabled } = await import("./fuzzMode");
+      const { isFuzzModeEnabled } = await import("@/lib/fuzz/fuzzMode");
       expect(isFuzzModeEnabled()).toBe(false);
     });
   });
@@ -82,20 +82,20 @@ describe("fuzzMode", () => {
   describe("getFuzzMockBaseUrl", () => {
     it("returns null when no base URL is set", async () => {
       localStorageMock.getItem.mockReturnValue(null);
-      const { getFuzzMockBaseUrl } = await import("./fuzzMode");
+      const { getFuzzMockBaseUrl } = await import("@/lib/fuzz/fuzzMode");
       expect(getFuzzMockBaseUrl()).toBeNull();
     });
 
     it("returns the base URL when set", async () => {
       localStorageMock.getItem.mockReturnValue("http://localhost:8064");
-      const { getFuzzMockBaseUrl } = await import("./fuzzMode");
+      const { getFuzzMockBaseUrl } = await import("@/lib/fuzz/fuzzMode");
       expect(getFuzzMockBaseUrl()).toBe("http://localhost:8064");
     });
   });
 
   describe("markFuzzModeEnabled", () => {
     it("sets fuzz mode in localStorage", async () => {
-      const { markFuzzModeEnabled } = await import("./fuzzMode");
+      const { markFuzzModeEnabled } = await import("@/lib/fuzz/fuzzMode");
       markFuzzModeEnabled();
       expect(localStorageMock.setItem).toHaveBeenCalledWith("c64u_fuzz_mode_enabled", "1");
     });
@@ -106,7 +106,7 @@ describe("fuzzMode", () => {
         writable: true,
         configurable: true,
       });
-      const { markFuzzModeEnabled } = await import("./fuzzMode");
+      const { markFuzzModeEnabled } = await import("@/lib/fuzz/fuzzMode");
       expect(() => markFuzzModeEnabled()).not.toThrow();
     });
   });
@@ -114,7 +114,7 @@ describe("fuzzMode", () => {
   describe("resetFuzzStorage", () => {
     it("does nothing when fuzz mode is not enabled", async () => {
       localStorageMock.getItem.mockReturnValue(null);
-      const { resetFuzzStorage } = await import("./fuzzMode");
+      const { resetFuzzStorage } = await import("@/lib/fuzz/fuzzMode");
       resetFuzzStorage();
       expect(localStorageMock.clear).not.toHaveBeenCalled();
     });
@@ -125,7 +125,7 @@ describe("fuzzMode", () => {
         if (key === "c64u_fuzz_storage_seeded") return null;
         return null;
       });
-      const { resetFuzzStorage } = await import("./fuzzMode");
+      const { resetFuzzStorage } = await import("@/lib/fuzz/fuzzMode");
       resetFuzzStorage();
       expect(localStorageMock.clear).toHaveBeenCalled();
       expect(sessionStorageMock.clear).toHaveBeenCalled();
@@ -138,7 +138,7 @@ describe("fuzzMode", () => {
         if (key === "c64u_fuzz_mock_base_url") return "http://localhost:3000";
         return null;
       });
-      const { resetFuzzStorage } = await import("./fuzzMode");
+      const { resetFuzzStorage } = await import("@/lib/fuzz/fuzzMode");
       resetFuzzStorage();
       expect(localStorageMock.setItem).toHaveBeenCalledWith("c64u_fuzz_mock_base_url", "http://localhost:3000");
     });
@@ -149,7 +149,7 @@ describe("fuzzMode", () => {
         if (key === "c64u_fuzz_storage_seeded") return "1";
         return null;
       });
-      const { resetFuzzStorage } = await import("./fuzzMode");
+      const { resetFuzzStorage } = await import("@/lib/fuzz/fuzzMode");
       resetFuzzStorage();
       expect(localStorageMock.clear).not.toHaveBeenCalled();
     });
@@ -158,7 +158,7 @@ describe("fuzzMode", () => {
   describe("applyFuzzModeDefaults", () => {
     it("does nothing when fuzz mode is not enabled", async () => {
       localStorageMock.getItem.mockReturnValue(null);
-      const { applyFuzzModeDefaults } = await import("./fuzzMode");
+      const { applyFuzzModeDefaults } = await import("@/lib/fuzz/fuzzMode");
       applyFuzzModeDefaults();
       expect(localStorageMock.setItem).not.toHaveBeenCalled();
     });
@@ -169,7 +169,7 @@ describe("fuzzMode", () => {
         if (key === "c64u_fuzz_storage_seeded") return null;
         return null;
       });
-      const { applyFuzzModeDefaults } = await import("./fuzzMode");
+      const { applyFuzzModeDefaults } = await import("@/lib/fuzz/fuzzMode");
       applyFuzzModeDefaults();
       expect(localStorageMock.setItem).toHaveBeenCalledWith("c64u_fuzz_storage_seeded", "1");
       expect(localStorageMock.setItem).toHaveBeenCalledWith("c64u_debug_logging_enabled", "1");
@@ -185,7 +185,7 @@ describe("fuzzMode", () => {
         configurable: true,
       });
 
-      const { applyFuzzModeDefaults } = await import("./fuzzMode");
+      const { applyFuzzModeDefaults } = await import("@/lib/fuzz/fuzzMode");
       expect(() => applyFuzzModeDefaults()).not.toThrow();
 
       // Restore
@@ -206,7 +206,7 @@ describe("fuzzMode", () => {
         configurable: true,
       });
 
-      const { getFuzzMockBaseUrl } = await import("./fuzzMode");
+      const { getFuzzMockBaseUrl } = await import("@/lib/fuzz/fuzzMode");
       expect(getFuzzMockBaseUrl()).toBeNull();
 
       // Restore
@@ -226,7 +226,7 @@ describe("fuzzMode", () => {
         configurable: true,
       });
 
-      const { isFuzzModeEnabled } = await import("./fuzzMode");
+      const { isFuzzModeEnabled } = await import("@/lib/fuzz/fuzzMode");
       expect(isFuzzModeEnabled()).toBe(false);
 
       Object.defineProperty(globalThis, "window", {

@@ -73,21 +73,21 @@ describe("smokeMode", () => {
 
   describe("isSmokeModeEnabled", () => {
     it("returns false when no config is cached", async () => {
-      const { isSmokeModeEnabled } = await import("./smokeMode");
+      const { isSmokeModeEnabled } = await import("@/lib/smoke/smokeMode");
       expect(isSmokeModeEnabled()).toBe(false);
     });
   });
 
   describe("getSmokeConfig", () => {
     it("returns null when no config is cached", async () => {
-      const { getSmokeConfig } = await import("./smokeMode");
+      const { getSmokeConfig } = await import("@/lib/smoke/smokeMode");
       expect(getSmokeConfig()).toBeNull();
     });
   });
 
   describe("isSmokeReadOnlyEnabled", () => {
     it("returns true when no config is cached", async () => {
-      const { isSmokeReadOnlyEnabled } = await import("./smokeMode");
+      const { isSmokeReadOnlyEnabled } = await import("@/lib/smoke/smokeMode");
       expect(isSmokeReadOnlyEnabled()).toBe(true);
     });
   });
@@ -95,7 +95,7 @@ describe("smokeMode", () => {
   describe("initializeSmokeMode", () => {
     it("returns null when no config in storage", async () => {
       localStorageMock.getItem.mockReturnValue(null);
-      const { initializeSmokeMode } = await import("./smokeMode");
+      const { initializeSmokeMode } = await import("@/lib/smoke/smokeMode");
       const result = await initializeSmokeMode();
       expect(result).toBeNull();
     });
@@ -106,7 +106,7 @@ describe("smokeMode", () => {
         writable: true,
         configurable: true,
       });
-      const { initializeSmokeMode } = await import("./smokeMode");
+      const { initializeSmokeMode } = await import("@/lib/smoke/smokeMode");
       const result = await initializeSmokeMode();
       expect(result).toBeNull();
     });
@@ -119,7 +119,7 @@ describe("smokeMode", () => {
       });
       localStorageMock.getItem.mockReturnValue(configJson);
 
-      const { initializeSmokeMode, getSmokeConfig } = await import("./smokeMode");
+      const { initializeSmokeMode, getSmokeConfig } = await import("@/lib/smoke/smokeMode");
       const result = await initializeSmokeMode();
 
       expect(result).not.toBeNull();
@@ -132,7 +132,7 @@ describe("smokeMode", () => {
       localStorageMock.getItem.mockReturnValue("invalid json");
 
       const { addLog } = await import("@/lib/logging");
-      const { initializeSmokeMode } = await import("./smokeMode");
+      const { initializeSmokeMode } = await import("@/lib/smoke/smokeMode");
       const result = await initializeSmokeMode();
 
       expect(result).toBeNull();
@@ -142,7 +142,7 @@ describe("smokeMode", () => {
     it("handles invalid config structure", async () => {
       localStorageMock.getItem.mockReturnValue(JSON.stringify({ target: "invalid" }));
 
-      const { initializeSmokeMode } = await import("./smokeMode");
+      const { initializeSmokeMode } = await import("@/lib/smoke/smokeMode");
       const result = await initializeSmokeMode();
 
       expect(result).toBeNull();
@@ -156,7 +156,7 @@ describe("smokeMode", () => {
       localStorageMock.getItem.mockReturnValue(configJson);
 
       const { saveDebugLoggingEnabled } = await import("@/lib/config/appSettings");
-      const { initializeSmokeMode } = await import("./smokeMode");
+      const { initializeSmokeMode } = await import("@/lib/smoke/smokeMode");
       await initializeSmokeMode();
 
       expect(saveDebugLoggingEnabled).toHaveBeenCalledWith(true);
@@ -169,7 +169,7 @@ describe("smokeMode", () => {
       });
       localStorageMock.getItem.mockReturnValue(configJson);
 
-      const { initializeSmokeMode } = await import("./smokeMode");
+      const { initializeSmokeMode } = await import("@/lib/smoke/smokeMode");
       await initializeSmokeMode();
 
       expect(localStorageMock.setItem).toHaveBeenCalledWith("c64u_device_host", "192.168.1.100");
@@ -183,7 +183,7 @@ describe("smokeMode", () => {
       });
       vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
 
-      const { initializeSmokeMode } = await import("./smokeMode");
+      const { initializeSmokeMode } = await import("@/lib/smoke/smokeMode");
       await initializeSmokeMode();
 
       expect(Filesystem.readFile).not.toHaveBeenCalled();
@@ -205,7 +205,7 @@ describe("smokeMode", () => {
         }),
       } as any);
 
-      const { initializeSmokeMode } = await import("./smokeMode");
+      const { initializeSmokeMode } = await import("@/lib/smoke/smokeMode");
       const result = await initializeSmokeMode();
 
       expect(Filesystem.readFile).toHaveBeenCalledTimes(1);
@@ -216,7 +216,7 @@ describe("smokeMode", () => {
 
   describe("recordSmokeStatus", () => {
     it("does nothing when no config cached", async () => {
-      const { recordSmokeStatus } = await import("./smokeMode");
+      const { recordSmokeStatus } = await import("@/lib/smoke/smokeMode");
       await recordSmokeStatus({ state: "test" });
       // Should not throw
     });
