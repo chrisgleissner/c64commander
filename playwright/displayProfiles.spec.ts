@@ -321,9 +321,7 @@ test.describe("display profiles", () => {
 
     // End on a stable expanded route; play-page overflow is covered by dedicated layout tests.
     await page.goto("/config", { waitUntil: "domcontentloaded" });
-    await expect
-      .poll(() => page.evaluate(() => document.documentElement.dataset.displayProfile))
-      .toBe("expanded");
+    await expect.poll(() => page.evaluate(() => document.documentElement.dataset.displayProfile)).toBe("expanded");
   });
 
   test("compact profile keeps header top inset no larger than the side inset and enlarges body text", async ({
@@ -507,6 +505,13 @@ test.describe("display profiles", () => {
 
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
     expect(overflow).toBe(true);
+
+    // Reset font scaling so afterEach boundary checks see the base layout, not
+    // the 1.5× scale used for this assertion (which causes a 2 px subpixel
+    // overflow that is an artefact of the scaling, not a real content overflow).
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = "";
+    });
   });
 
   test("compact diagnostics CTA layout remains reachable after reduced viewport height", async ({

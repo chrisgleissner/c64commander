@@ -68,7 +68,11 @@ const expectSwipeLog = async (page: Page, predicate: (entry: SwipeLogEntry) => b
 const waitForCommittedRouteIndex = async (page: Page, expectedIndex: number) => {
   await waitForRouteIndex(page, expectedIndex);
   await expect(page.locator('[data-slot-active="true"]')).toHaveAttribute("data-route-index", String(expectedIndex));
-  await page.waitForTimeout(900);
+  // Wait for the CSS transition to fully complete before the next swipe.
+  // Polling for idle is more reliable than a fixed timeout on slow CI runners.
+  await expect
+    .poll(async () => page.getByTestId("swipe-navigation-runway").getAttribute("data-runway-phase"), { timeout: 8000 })
+    .toBe("idle");
 };
 
 const visibleWidth = (box: { x: number; width: number } | null, viewportWidth: number) => {
