@@ -157,4 +157,27 @@ describe("HealthHistoryPopup", () => {
     fireEvent.click(screen.getByTestId("health-history-zoom-out"));
     expect(screen.getByText("4h")).toBeInTheDocument();
   });
+
+  it("dismisses the selection overlay when the Dismiss button is tapped", () => {
+    vi.mocked(getHealthHistory).mockReturnValue([
+      makeEntry(60, "Healthy"),
+      makeEntry(30, "Unhealthy"),
+      makeEntry(10, "Healthy"),
+    ]);
+
+    render(<HealthHistoryPopup open={true} onClose={vi.fn()} />);
+
+    const unhealthySegment = screen
+      .getAllByTestId(/health-history-segment-/)
+      .find((node) => node.getAttribute("data-state") === "Unhealthy");
+    expect(unhealthySegment).toBeDefined();
+    fireEvent.click(unhealthySegment!);
+
+    expect(screen.getByTestId("health-history-selection-overlay")).toBeInTheDocument();
+
+    // Click Dismiss – covers the onClick={() => setSelectedSegmentId(null)} handler
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+
+    expect(screen.queryByTestId("health-history-selection-overlay")).not.toBeInTheDocument();
+  });
 });
