@@ -20,7 +20,6 @@ C64 Commander lets you control and manage a C64 Ultimate from Android, iOS, or a
   - [📑 Contents](#-contents)
   - [✨ Why C64 Commander?](#-why-c64-commander)
   - [🚀 Quick Start](#-quick-start)
-    - [Current Rollout Boundaries](#current-rollout-boundaries)
     - [Install on Android](#install-on-android)
     - [Install on iOS](#install-on-ios)
     - [Install for Web Access](#install-for-web-access)
