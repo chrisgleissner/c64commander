@@ -49,3 +49,13 @@ Date: 2026-03-21
   - Lint: npm run lint passed with existing generated-report warnings under .cov-unit only.
   - Coverage: npm run test:coverage passed with 4469 tests green and 91.13% branch coverage.
 - Screenshot references: doc/img/app/diagnostics/\*.png refreshed for the redesigned diagnostics flow.
+
+## 2026-03-21T02:45:00Z - Step 7 - Relocate remaining diagnostics library tests
+
+- Decision: Finish the diagnostics-scope cleanup for the repository test-location rule without broadening into unrelated src component and playback areas.
+- High-level diff: Moved the remaining src/lib/diagnostics test suites into tests/unit/lib/diagnostics and removed the redundant source-tree networkSnapshot spec because a tests/unit version already existed.
+- Validation:
+  - runTests: 255 diagnostics-library tests passed after relocation.
+  - Coverage: npm run test:coverage passed with 4462 tests green and 91.10% branch coverage.
+  - Lint: npm run lint returned to the existing .cov-unit warning-only state; no new source-file lint errors were introduced.
+- Screenshot references: None.
