@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v3.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { getC64API } from "@/lib/c64api";
@@ -271,13 +279,13 @@ export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: Aud
             : undefined;
           const identityPending = isUltiSid
             ? Boolean(
-                configWritePending[
-                  buildConfigKey(
-                    "UltiSID Configuration",
-                    entry.key === "ultiSid1" ? "UltiSID 1 Filter Curve" : "UltiSID 2 Filter Curve",
-                  )
-                ],
+              configWritePending[
+              buildConfigKey(
+                "UltiSID Configuration",
+                entry.key === "ultiSid1" ? "UltiSID 1 Filter Curve" : "UltiSID 2 Filter Curve",
               )
+              ],
+            )
             : false;
 
           // Address

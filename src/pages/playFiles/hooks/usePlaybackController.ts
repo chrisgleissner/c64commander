@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v3.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import { useCallback, useRef, type MutableRefObject } from "react";
 import { getC64API } from "@/lib/c64api";
 import { beginMachineTransition } from "@/lib/deviceInteraction/deviceActivityGate";
@@ -389,10 +397,10 @@ export function usePlaybackController({
             prev.map((entry) =>
               entry.id === item.id
                 ? {
-                    ...entry,
-                    durationMs: resolvedDuration,
-                    subsongCount: subsongCount ?? entry.subsongCount,
-                  }
+                  ...entry,
+                  durationMs: resolvedDuration,
+                  subsongCount: subsongCount ?? entry.subsongCount,
+                }
                 : entry,
             ),
           );
@@ -604,8 +612,8 @@ export function usePlaybackController({
               const wasMuted =
                 resumeSnapshot && resumeItems.length
                   ? resumeItems.every(
-                      (item) => resumeSnapshot.volumes[item.name] === resolveSidMutedVolumeOption(item.options),
-                    )
+                    (item) => resumeSnapshot.volumes[item.name] === resolveSidMutedVolumeOption(item.options),
+                  )
                   : false;
               if (!wasMuted) resumingFromPauseRef.current = true;
               await resumeMachineWithRetry(api);

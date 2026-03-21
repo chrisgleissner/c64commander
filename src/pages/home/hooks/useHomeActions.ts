@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v3.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import { useEffect, useState, useRef } from "react";
 import { getC64API } from "@/lib/c64api";
 import { useC64Connection, useC64MachineControl, useC64Drives } from "@/hooks/useC64Connection";

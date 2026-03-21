@@ -17,6 +17,7 @@ Fix all remaining Diagnostics UX and layout issues to production-grade quality b
 - Header default: collapsed. Tap to expand for latency percentiles.
 
 Acceptance criteria:
+
 - Header matches 4-line spec exactly.
 - No legacy header elements remain.
 
@@ -27,6 +28,7 @@ Acceptance criteria:
 - Evidence shows at least 2 entries without scrolling on compact viewport.
 
 Acceptance criteria:
+
 - Evidence visible without scrolling.
 - No placeholder rows.
 
@@ -38,6 +40,7 @@ Acceptance criteria:
 - Max 2 visible chips, overflow as +N.
 
 Acceptance criteria:
+
 - Only ONE filtering mechanism exists.
 - No wrapping, no horizontal scroll.
 
@@ -50,6 +53,7 @@ Acceptance criteria:
 - Reduce vertical spacing ~30%.
 
 Acceptance criteria:
+
 - Filter editor dense and non-scrolling on standard mobile.
 - No explanatory text.
 
@@ -60,6 +64,7 @@ Acceptance criteria:
 - Replace "Recent evidence" with "Evidence".
 
 Acceptance criteria:
+
 - Zero explanatory sentences in any diagnostics surface.
 
 ### Phase 6 - Density Optimization
@@ -70,6 +75,7 @@ Acceptance criteria:
 - Move Share/Clear into overflow menu.
 
 Acceptance criteria:
+
 - No visible empty vertical space > 25% of screen.
 
 ### Phase 7 - Evidence List Cleanup
@@ -79,6 +85,7 @@ Acceptance criteria:
 - Consistent alignment, minimal horizontal noise.
 
 Acceptance criteria:
+
 - No mixed severity indicators.
 
 ### Phase 8 - Overlay Consistency
@@ -87,6 +94,7 @@ Acceptance criteria:
 - Consistent navigation style.
 
 Acceptance criteria:
+
 - No mixed modal + navigation patterns.
 
 ### Phase 9 - Data Realism
@@ -95,6 +103,7 @@ Acceptance criteria:
 - Latency: non-zero realistic values, multiple percentiles.
 
 Acceptance criteria:
+
 - Data appears realistic and varied (already satisfied by existing seeds).
 
 ### Phase 10 - Final Validation
@@ -103,6 +112,7 @@ Acceptance criteria:
 - Run lint, test, build, coverage.
 
 Acceptance criteria:
+
 - All screenshots pass.
 - Branch coverage ≥91%.
 

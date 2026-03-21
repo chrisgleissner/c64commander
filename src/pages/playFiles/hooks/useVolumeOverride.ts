@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v3.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import { useC64ConfigItems, useC64Connection, useC64UpdateConfigBatch } from "@/hooks/useC64Connection";
 import { toast } from "@/hooks/use-toast";
@@ -209,9 +217,9 @@ export function useVolumeOverride({ isPlaying, isPaused, previewIntervalMs }: Us
       volumeUiTargetRef.current = muted
         ? null
         : {
-            index,
-            setAtMs: nextIntent.setAtMs,
-          };
+          index,
+          setAtMs: nextIntent.setAtMs,
+        };
     },
     [setPlaybackSyncIntent],
   );

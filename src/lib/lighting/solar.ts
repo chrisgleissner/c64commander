@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v3.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import SunCalc from "suncalc";
 import { findLightingCity } from "@/lib/lighting/cityDataset";
 import type { LightingCircadianPeriod } from "@/lib/lighting/types";
@@ -82,12 +90,12 @@ export const calculateSolarTimes = (input: SolarLocationInput, date: Date): Sola
     sunTimes: fallbackActive
       ? fallback
       : {
-          sunrise: raw.sunrise!,
-          sunset: raw.sunset!,
-          dawn: isValidDate(raw.dawn) ? raw.dawn! : fallback.dawn,
-          dusk: isValidDate(raw.dusk) ? raw.dusk! : fallback.dusk,
-          solarNoon: isValidDate(raw.solarNoon) ? raw.solarNoon! : fallback.solarNoon,
-        },
+        sunrise: raw.sunrise!,
+        sunset: raw.sunset!,
+        dawn: isValidDate(raw.dawn) ? raw.dawn! : fallback.dawn,
+        dusk: isValidDate(raw.dusk) ? raw.dusk! : fallback.dusk,
+        solarNoon: isValidDate(raw.solarNoon) ? raw.solarNoon! : fallback.solarNoon,
+      },
     fallbackActive,
   };
 };

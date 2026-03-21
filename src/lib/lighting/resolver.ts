@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v3.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import {
   LIGHTING_CIRCADIAN_PERIOD_LABELS,
   LIGHTING_PERIOD_MODIFIERS,
@@ -76,12 +84,12 @@ export const resolveLightingState = (input: LightingResolverInput): LightingReso
 
     const ambientConnectionProfile =
       input.connectionState &&
-      !isCriticalConnectionState(input.connectionState) &&
-      input.studioState.automation.connectionSentinel.enabled
+        !isCriticalConnectionState(input.connectionState) &&
+        input.studioState.automation.connectionSentinel.enabled
         ? resolveProfileById(
-            input.studioState.profiles,
-            input.studioState.automation.connectionSentinel.mappings[input.connectionState] ?? null,
-          )
+          input.studioState.profiles,
+          input.studioState.automation.connectionSentinel.mappings[input.connectionState] ?? null,
+        )
         : null;
     if (ambientConnectionProfile?.surfaces[surface]) {
       finalState =
@@ -171,18 +179,18 @@ export const resolveLightingState = (input: LightingResolverInput): LightingReso
 
   const sourceCue =
     input.sourceBucket &&
-    contextLens.some((entry) => entry.owner === "source-identity") &&
-    !contextLens.some(
-      (entry) =>
-        entry.owner === "preview" ||
-        entry.owner === "manual-lock" ||
-        entry.owner === "quiet-launch" ||
-        entry.owner === "connection-critical",
-    )
+      contextLens.some((entry) => entry.owner === "source-identity") &&
+      !contextLens.some(
+        (entry) =>
+          entry.owner === "preview" ||
+          entry.owner === "manual-lock" ||
+          entry.owner === "quiet-launch" ||
+          entry.owner === "connection-critical",
+      )
       ? {
-          bucket: input.sourceBucket,
-          label: LIGHTING_SOURCE_BUCKET_LABELS[input.sourceBucket],
-        }
+        bucket: input.sourceBucket,
+        label: LIGHTING_SOURCE_BUCKET_LABELS[input.sourceBucket],
+      }
       : null;
 
   return {

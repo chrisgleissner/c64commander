@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v3.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import { useState, useMemo } from "react";
 import { getC64API } from "@/lib/c64api";
 import { useActionTrace } from "@/hooks/useActionTrace";
@@ -250,16 +258,16 @@ export function DriveManager({
               onTypeChange={
                 !isSoftIec
                   ? (value) => {
-                      if (!spec.typeItem) return;
-                      void updateConfigValue(
-                        spec.category,
-                        spec.typeItem,
-                        value,
-                        "HOME_DRIVE_TYPE",
-                        `${label} type updated`,
-                        { refreshDrives: true },
-                      );
-                    }
+                    if (!spec.typeItem) return;
+                    void updateConfigValue(
+                      spec.category,
+                      spec.typeItem,
+                      value,
+                      "HOME_DRIVE_TYPE",
+                      `${label} type updated`,
+                      { refreshDrives: true },
+                    );
+                  }
                   : undefined
               }
               typePending={!isSoftIec ? pendingType : undefined}
@@ -271,15 +279,15 @@ export function DriveManager({
               onStatusClick={
                 formattedStatus
                   ? () =>
-                      setStatusDetailsDialog({
-                        driveLabel: label,
-                        status: formattedStatus,
-                      })
+                    setStatusDetailsDialog({
+                      driveLabel: label,
+                      status: formattedStatus,
+                    })
                   : () =>
-                      setStatusDetailsDialog({
-                        driveLabel: label,
-                        status: statusDetails,
-                      })
+                    setStatusDetailsDialog({
+                      driveLabel: label,
+                      status: statusDetails,
+                    })
               }
               statusRaw={formattedStatus?.raw}
               pathPending={pathPending}

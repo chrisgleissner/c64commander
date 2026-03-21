@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v3.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import { useEffect, useRef } from "react";
 import type { PlayableEntry, PlaylistItem, StoredPlaybackSession, StoredPlaylistState } from "../types";
 import {
@@ -124,22 +132,22 @@ export function usePlaybackPersistence({
           file:
             entry.source === "local"
               ? resolveLocalRuntimeFile(entry.sourceId ?? "", normalizedPath) ||
-                (localEntry?.uri
-                  ? buildLocalPlayFileFromUri(
-                      entry.name,
-                      normalizedPath,
-                      localEntry.uri,
-                      parseModifiedAt(localEntry.modifiedAt),
-                    )
-                  : undefined) ||
-                (localTreeUri
-                  ? buildLocalPlayFileFromTree(
-                      entry.name,
-                      normalizedPath,
-                      localTreeUri,
-                      parseModifiedAt(localEntry?.modifiedAt),
-                    )
-                  : undefined)
+              (localEntry?.uri
+                ? buildLocalPlayFileFromUri(
+                  entry.name,
+                  normalizedPath,
+                  localEntry.uri,
+                  parseModifiedAt(localEntry.modifiedAt),
+                )
+                : undefined) ||
+              (localTreeUri
+                ? buildLocalPlayFileFromTree(
+                  entry.name,
+                  normalizedPath,
+                  localTreeUri,
+                  parseModifiedAt(localEntry?.modifiedAt),
+                )
+                : undefined)
               : entry.source === "hvsc"
                 ? buildHvscLocalPlayFile(normalizedPath, entry.name)
                 : undefined,
