@@ -128,7 +128,7 @@ test.describe("Automatic Demo Mode", () => {
       if (!page.isClosed()) {
         await finalizeEvidence(page, testInfo);
       }
-      await server?.close?.().catch(() => { });
+      await server?.close?.().catch(() => {});
     }
   });
 
@@ -205,7 +205,9 @@ test.describe("Automatic Demo Mode", () => {
 
     await closeDiagnosticsDialog(page);
     const offlineDialog = await openDiagnosticsConnectionActions(page, indicator);
-    await expect(offlineDialog).toContainText(/Device not reachable|Cannot reach this device right now|Host unreachable/i);
+    await expect(offlineDialog).toContainText(
+      /Device not reachable|Cannot reach this device right now|Host unreachable/i,
+    );
     await expect(offlineDialog.getByTestId("switch-device-toggle").first()).toBeVisible();
     await snap(page, testInfo, "connection-status-surface-states");
   });

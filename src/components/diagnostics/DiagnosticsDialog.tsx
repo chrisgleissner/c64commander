@@ -1457,7 +1457,7 @@ export function DiagnosticsDialog({
                           <div
                             className={cn(
                               "items-center gap-1.5",
-                              isCompact ? "grid grid-cols-3" : "flex flex-wrap justify-end",
+                              isCompact ? "grid grid-cols-1" : "flex flex-wrap justify-end",
                             )}
                           >
                             <Button
@@ -1466,7 +1466,7 @@ export function DiagnosticsDialog({
                               onClick={() => void onShareAll()}
                               data-testid="diagnostics-share-all"
                               aria-label="Share all"
-                              className="h-8 gap-1.5 px-2"
+                              className={cn("h-8 gap-1.5 px-2", isCompact && "min-w-0")}
                             >
                               <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
                               {isCompact ? "All" : "Share all"}
@@ -1478,7 +1478,7 @@ export function DiagnosticsDialog({
                               onClick={handleShareFiltered}
                               data-testid="diagnostics-share-filtered"
                               aria-label="Share filtered"
-                              className="h-8 gap-1.5 px-2"
+                              className={cn("h-8 gap-1.5 px-2", isCompact && "min-w-0")}
                             >
                               <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
                               {isCompact ? "Filtered" : "Share filtered"}
@@ -1488,7 +1488,7 @@ export function DiagnosticsDialog({
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  className="h-8 gap-1.5 px-2"
+                                  className={cn("h-8 gap-1.5 px-2", isCompact && "min-w-0")}
                                   data-testid="diagnostics-tools-menu"
                                 >
                                   <MoreHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
