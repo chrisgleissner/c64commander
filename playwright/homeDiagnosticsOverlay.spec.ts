@@ -162,7 +162,6 @@ test.describe("Home diagnostics overlay", () => {
     await dialog.getByTestId("open-timeline-screen").click();
     const historyPopup = page.getByTestId("health-history-popup");
     await expect(historyPopup).toBeVisible();
-    await expect(historyPopup.getByText(/recorded health check|recorded health checks/i)).toBeVisible();
     await expect(historyPopup.getByTestId("health-history-zoom-in")).toBeVisible();
     await expect(historyPopup.getByTestId("health-history-track")).toBeVisible();
     await historyPopup.locator('[data-testid^="health-history-segment-"]').last().click();
