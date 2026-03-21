@@ -318,6 +318,12 @@ test.describe("display profiles", () => {
 
     await page.goto("/play", { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("play-primary-layout")).toHaveAttribute("data-profile", "expanded");
+
+    // End on a stable expanded route; play-page overflow is covered by dedicated layout tests.
+    await page.goto("/config", { waitUntil: "domcontentloaded" });
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.dataset.displayProfile))
+      .toBe("expanded");
   });
 
   test("compact profile keeps header top inset no larger than the side inset and enlarges body text", async ({

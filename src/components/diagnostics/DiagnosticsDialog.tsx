@@ -1466,7 +1466,7 @@ export function DiagnosticsDialog({
                               onClick={() => void onShareAll()}
                               data-testid="diagnostics-share-all"
                               aria-label="Share all"
-                              className={cn("h-8 gap-1.5 px-2", isCompact && "min-w-0")}
+                              className={cn("h-8 gap-1.5 px-2", isCompact && "w-full min-w-0 justify-center")}
                             >
                               <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
                               {isCompact ? "All" : "Share all"}
@@ -1478,7 +1478,7 @@ export function DiagnosticsDialog({
                               onClick={handleShareFiltered}
                               data-testid="diagnostics-share-filtered"
                               aria-label="Share filtered"
-                              className={cn("h-8 gap-1.5 px-2", isCompact && "min-w-0")}
+                              className={cn("h-8 gap-1.5 px-2", isCompact && "w-full min-w-0 justify-center")}
                             >
                               <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
                               {isCompact ? "Filtered" : "Share filtered"}
@@ -1488,7 +1488,7 @@ export function DiagnosticsDialog({
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  className={cn("h-8 gap-1.5 px-2", isCompact && "min-w-0")}
+                                  className={cn("h-8 gap-1.5 px-2", isCompact && "w-full min-w-0 justify-center")}
                                   data-testid="diagnostics-tools-menu"
                                 >
                                   <MoreHorizontal className="h-3.5 w-3.5" aria-hidden="true" />

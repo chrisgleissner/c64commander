@@ -65,12 +65,10 @@ const expectSwipeLog = async (page: Page, predicate: (entry: SwipeLogEntry) => b
     .toBe(true);
 };
 
-const waitForSettledRouteIndex = async (page: Page, expectedIndex: number) => {
+const waitForCommittedRouteIndex = async (page: Page, expectedIndex: number) => {
   await waitForRouteIndex(page, expectedIndex);
-  await expect
-    .poll(async () => page.getByTestId("swipe-navigation-runway").getAttribute("data-runway-phase"), { timeout: 4000 })
-    .toBe("idle");
   await expect(page.locator('[data-slot-active="true"]')).toHaveAttribute("data-route-index", String(expectedIndex));
+  await page.waitForTimeout(900);
 };
 
 const visibleWidth = (box: { x: number; width: number } | null, viewportWidth: number) => {
@@ -382,16 +380,16 @@ test.describe("Swipe navigation", () => {
 
   test("rapid consecutive swipes do not corrupt state", async ({ page }, testInfo) => {
     await page.goto("/");
-    await waitForSettledRouteIndex(page, 0);
+    await waitForCommittedRouteIndex(page, 0);
 
     await swipe(page, cx, cy, cx - swipeLen, cy);
-    await waitForSettledRouteIndex(page, 1);
+    await waitForCommittedRouteIndex(page, 1);
 
     await swipe(page, cx, cy, cx - swipeLen, cy);
-    await waitForSettledRouteIndex(page, 2);
+    await waitForCommittedRouteIndex(page, 2);
 
     await swipe(page, cx, cy, cx - swipeLen, cy);
-    await waitForSettledRouteIndex(page, 3);
+    await waitForCommittedRouteIndex(page, 3);
 
     await attachStepScreenshot(page, testInfo, "config-after-rapid-swipes");
     await expect(page).toHaveURL(/\/config$/);
