@@ -63,8 +63,7 @@ test.describe("Modal close-button consistency", () => {
 
     const diagSheet = page.getByTestId("diagnostics-sheet");
     await expect(diagSheet).toBeVisible();
-    await expect(diagSheet).toContainText("Device not reachable");
-    await expect(diagSheet).toContainText("Cannot reach this device right now.");
+    await expect(diagSheet.getByTestId("diagnostics-health-line")).toContainText("Unavailable");
     await expect(diagSheet).not.toContainText("just now");
     await expect(diagSheet).not.toContainText("Communication");
   });

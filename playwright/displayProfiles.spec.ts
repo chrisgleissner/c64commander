@@ -203,19 +203,12 @@ const setBrowserZoom = async (page: Page, scale: number) => {
   return session;
 };
 
-const ensureTechnicalDetailsExpanded = async (dialog: Locator) => {
-  const toggle = dialog.getByTestId("technical-details-toggle");
-  if ((await toggle.getAttribute("aria-expanded")) !== "true") {
-    await toggle.click();
-  }
+const ensureTechnicalDetailsExpanded = async (_dialog: Locator) => {
+  // no-op: technical details section removed from redesigned DiagnosticsDialog
 };
 
-const ensureToolsExpanded = async (dialog: Locator) => {
-  await ensureTechnicalDetailsExpanded(dialog);
-  const toggle = dialog.getByTestId("tools-card-toggle");
-  if ((await toggle.getAttribute("aria-expanded")) !== "true") {
-    await toggle.click();
-  }
+const ensureToolsExpanded = async (_dialog: Locator) => {
+  // no-op: tools expansion removed from redesigned DiagnosticsDialog
 };
 
 test.describe("display profiles", () => {
@@ -469,10 +462,9 @@ test.describe("display profiles", () => {
       const diagnosticsDialog = page.getByRole("dialog", { name: "Diagnostics" });
       await expect(diagnosticsDialog).toBeVisible();
       await expectDialogPresentationMode(diagnosticsDialog, profileId === "expanded" ? "modal" : "sheet");
-      await diagnosticsDialog.getByTestId("show-details-button").click();
-      await ensureToolsExpanded(diagnosticsDialog);
+      await diagnosticsDialog.getByTestId("diagnostics-overflow-menu").click();
       await expect(diagnosticsDialog.getByTestId("diagnostics-share-all")).toBeVisible();
-      await expect(diagnosticsDialog.getByTestId("diagnostics-tools-menu")).toBeVisible();
+      await expect(diagnosticsDialog.getByTestId("diagnostics-overflow-menu")).toBeVisible();
       const settingsOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
       expect(settingsOverflow).toBe(true);
       await page.keyboard.press("Escape");
@@ -490,13 +482,12 @@ test.describe("display profiles", () => {
     await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
     const diagnosticsDialog = page.getByRole("dialog", { name: "Diagnostics" });
     await expect(diagnosticsDialog).toBeVisible();
-    await diagnosticsDialog.getByTestId("show-details-button").click();
-    await ensureToolsExpanded(diagnosticsDialog);
 
     await scaleRootTextSize(page, 1.5);
 
+    await diagnosticsDialog.getByTestId("diagnostics-overflow-menu").click();
     const shareAllButton = diagnosticsDialog.getByTestId("diagnostics-share-all");
-    const clearAllButton = diagnosticsDialog.getByTestId("diagnostics-tools-menu");
+    const clearAllButton = diagnosticsDialog.getByTestId("diagnostics-clear-all-trigger");
     await expect(shareAllButton).toBeVisible();
     await expect(clearAllButton).toBeVisible();
     await expectLocatorWithinViewport(page, diagnosticsDialog);
@@ -533,8 +524,9 @@ test.describe("display profiles", () => {
       .poll(() => page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight })))
       .toEqual({ width: 360, height: 420 });
 
+    await diagnosticsDialog.getByTestId("diagnostics-overflow-menu").click();
     const shareAllButton = diagnosticsDialog.getByTestId("diagnostics-share-all");
-    const clearAllButton = diagnosticsDialog.getByTestId("diagnostics-tools-menu");
+    const clearAllButton = diagnosticsDialog.getByTestId("diagnostics-clear-all-trigger");
     await expect(shareAllButton).toBeVisible();
     await expect(clearAllButton).toBeVisible();
     await expectLocatorWithinViewport(page, shareAllButton);
@@ -617,11 +609,10 @@ test.describe("display profiles", () => {
     await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
     const diagnosticsDialog = page.getByRole("dialog", { name: "Diagnostics" });
     await expect(diagnosticsDialog).toBeVisible();
-    await diagnosticsDialog.getByTestId("show-details-button").click();
-    await ensureToolsExpanded(diagnosticsDialog);
 
+    await diagnosticsDialog.getByTestId("diagnostics-overflow-menu").click();
     const shareAllButton = diagnosticsDialog.getByTestId("diagnostics-share-all");
-    const clearAllButton = diagnosticsDialog.getByTestId("diagnostics-tools-menu");
+    const clearAllButton = diagnosticsDialog.getByTestId("diagnostics-clear-all-trigger");
     await expect(shareAllButton).toBeVisible();
     await expect(clearAllButton).toBeVisible();
     await expectLocatorWithinViewport(page, shareAllButton);
