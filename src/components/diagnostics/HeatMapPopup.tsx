@@ -209,9 +209,7 @@ export function HeatMapPopup({ open, onClose, variant, traceEvents }: Props) {
     >
       <div className="flex flex-1 min-h-0 flex-col p-3 relative">
         <div className="mb-3 space-y-1 rounded-lg border border-border/60 bg-background/70 p-3 text-xs">
-          <p className="font-medium text-foreground">
-            Purpose: Shows concentrated {variant.toLowerCase()} activity by area.
-          </p>
+          <p className="font-medium text-foreground">Purpose: Shows concentrated {VARIANT_TITLES[variant]} by area.</p>
           <p className="text-muted-foreground">
             Interpretation: Brighter cells indicate where activity or latency is concentrated enough to investigate.
           </p>

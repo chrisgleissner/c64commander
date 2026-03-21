@@ -21,31 +21,31 @@ describe("versionLabel", () => {
     it("returns the exact tag when the build matches the tagged commit exactly", () => {
       expect(
         deriveVersionLabel({
-          gitDescribe: "0.6.4-rc2-0-gb1141986",
+          gitDescribe: "0.6.4-rc4-0-gb1141986",
           gitSha: "b1141986f00d",
           fallbackVersion: "0.1.0",
         }),
-      ).toBe("0.6.4-rc2");
+      ).toBe("0.6.4-rc4");
     });
 
     it("appends the first three git id characters when commits exist after the latest tag", () => {
       expect(
         deriveVersionLabel({
-          gitDescribe: "0.6.4-rc2-13-gb1141986",
+          gitDescribe: "0.6.4-rc4-13-gb1141986",
           gitSha: "b1141986f00d",
           fallbackVersion: "0.1.0",
         }),
-      ).toBe("0.6.4-rc2-b11");
+      ).toBe("0.6.4-rc4-b11");
     });
 
     it("appends the first three git id characters when the tag commit has additional uncommitted changes", () => {
       expect(
         deriveVersionLabel({
-          gitDescribe: "0.6.4-rc2-0-gb1141986-dirty",
+          gitDescribe: "0.6.4-rc4-0-gb1141986-dirty",
           gitSha: "b1141986f00d",
           fallbackVersion: "0.1.0",
         }),
-      ).toBe("0.6.4-rc2-b11");
+      ).toBe("0.6.4-rc4-b11");
     });
 
     it("falls back to the package version when git describe does not resolve a tag", () => {
@@ -53,18 +53,18 @@ describe("versionLabel", () => {
         deriveVersionLabel({
           gitDescribe: "b1141986",
           gitSha: "b1141986f00d",
-          fallbackVersion: "0.6.4-rc2",
+          fallbackVersion: "0.6.4-rc4",
         }),
-      ).toBe("0.6.4-rc2");
+      ).toBe("0.6.4-rc4");
     });
 
     it("uses the sha from git describe when gitSha is absent but commits exist after the tag", () => {
       expect(
         deriveVersionLabel({
-          gitDescribe: "0.6.4-rc2-3-gabc1234",
+          gitDescribe: "0.6.4-rc4-3-gabc1234",
           gitSha: "",
         }),
-      ).toBe("0.6.4-rc2-abc");
+      ).toBe("0.6.4-rc4-abc");
     });
 
     it("falls back to the sha from the bare-sha describe when gitSha and fallbackVersion are absent", () => {

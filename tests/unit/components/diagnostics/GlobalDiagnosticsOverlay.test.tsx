@@ -23,27 +23,31 @@ vi.mock("@/lib/uiErrors", () => ({
   reportUserError: vi.fn(),
 }));
 
-vi.mock("@/lib/logging", () => ({
-  addLog: vi.fn(),
-  clearLogs: vi.fn(),
-  getErrorLogs: vi.fn(() => [
-    {
-      id: "err-1",
-      level: "error",
-      message: "Broken export",
-      timestamp: "2024-01-01T00:00:00.000Z",
-      details: { code: "E1" },
-    },
-  ]),
-  getLogs: vi.fn(() => [
-    {
-      id: "log-1",
-      level: "info",
-      message: "Ready",
-      timestamp: "2024-01-01T00:00:01.000Z",
-    },
-  ]),
-}));
+vi.mock("@/lib/logging", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/logging")>("@/lib/logging");
+  return {
+    ...actual,
+    addLog: vi.fn(),
+    clearLogs: vi.fn(),
+    getErrorLogs: vi.fn(() => [
+      {
+        id: "err-1",
+        level: "error",
+        message: "Broken export",
+        timestamp: "2024-01-01T00:00:00.000Z",
+        details: { code: "E1" },
+      },
+    ]),
+    getLogs: vi.fn(() => [
+      {
+        id: "log-1",
+        level: "info",
+        message: "Ready",
+        timestamp: "2024-01-01T00:00:01.000Z",
+      },
+    ]),
+  };
+});
 
 vi.mock("@/lib/tracing/traceSession", () => ({
   clearTraceEvents: vi.fn(),
@@ -112,7 +116,7 @@ vi.mock("@/hooks/useHealthState", () => ({
 vi.mock("@/lib/diagnostics/diagnosticsOverlayState", () => ({
   setDiagnosticsOverlayActive: vi.fn(),
   withDiagnosticsTraceOverride: (fn: () => unknown) => fn(),
-  subscribeDiagnosticsSuppression: () => () => { },
+  subscribeDiagnosticsSuppression: () => () => {},
   isDiagnosticsOverlaySuppressionArmed: () => false,
 }));
 

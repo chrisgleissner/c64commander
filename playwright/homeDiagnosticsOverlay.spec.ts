@@ -136,7 +136,7 @@ test.describe("Home diagnostics overlay", () => {
     await snap(page, testInfo, "overlay-open-home");
   });
 
-  test("supports switch-device recovery, health checks, analytics, export enrichment, and clear-all", async ({
+  test("supports health checks, analytics, export enrichment, and clear-all", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     const openToolsMenu = async () => {

@@ -689,8 +689,7 @@ export function DiagnosticsDialog({
 
   const streamRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!open) return;
+  const resetOverlayState = useCallback(() => {
     setShowDetails(false);
     setShowAnalysis(false);
     setActivePopup(null);
@@ -703,7 +702,11 @@ export function DiagnosticsDialog({
     setVisibleCount(PAGE_SIZE);
     setExpandedProblemId(null);
     setFocusedScope(null);
-  }, [defaultEvidenceTypes, open]);
+  }, [defaultEvidenceTypes]);
+
+  useEffect(() => {
+    resetOverlayState();
+  }, [open, resetOverlayState]);
 
   const handleOriginToggle = useCallback((origin: OriginFilter) => {
     setOriginFilters((previous) => {
@@ -944,12 +947,15 @@ export function DiagnosticsDialog({
   const summaryCard = isOffline
     ? {
         badgeLabel: "Health",
-        title: "Unhealthy",
-        titleToneClassName: "text-destructive",
+        title: healthState.connectivity === "Not yet connected" ? "Not connected" : "Offline",
+        titleToneClassName: HEALTH_STATE_COLOR.Unavailable,
         statusGlyph: HEALTH_GLYPHS.Unavailable,
         statusGlyphClassName: HEALTH_STATE_COLOR.Unavailable,
         headline: healthState.host,
-        supportingText: "Contributor: REST",
+        supportingText:
+          healthState.connectivity === "Not yet connected"
+            ? "Waiting for first device connection"
+            : "Device not reachable",
       }
     : isUnhealthy
       ? {
@@ -1015,9 +1021,12 @@ export function DiagnosticsDialog({
         setActivePopup(null);
         return;
       }
+      if (!nextOpen) {
+        resetOverlayState();
+      }
       onOpenChange(nextOpen);
     },
-    [activePopup, onOpenChange],
+    [activePopup, onOpenChange, resetOverlayState],
   );
 
   const recoveryFirst = isRecoveryFirstState(healthState.connectivity);
@@ -1132,9 +1141,15 @@ export function DiagnosticsDialog({
                   )}
                   data-testid="diagnostics-details-layer"
                 >
-                  <button type="button" className="sr-only" aria-expanded="true" data-testid="technical-details-toggle">
+                  <span
+                    className="sr-only"
+                    role="status"
+                    aria-live="polite"
+                    aria-expanded="true"
+                    data-testid="technical-details-toggle"
+                  >
                     Details open
-                  </button>
+                  </span>
                   <div data-testid="technical-details-card" className="space-y-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="space-y-1">
@@ -1544,11 +1559,11 @@ export function DiagnosticsDialog({
           </div>
         </AppSheetContent>
 
-        <LatencyAnalysisPopup open={activePopup === "latency"} onClose={() => setActivePopup(null)} />
-        <HealthHistoryPopup open={activePopup === "history"} onClose={() => setActivePopup(null)} />
+        <LatencyAnalysisPopup open={open && activePopup === "latency"} onClose={() => setActivePopup(null)} />
+        <HealthHistoryPopup open={open && activePopup === "history"} onClose={() => setActivePopup(null)} />
         {activePopup === "heatmap-REST" || activePopup === "heatmap-FTP" || activePopup === "heatmap-CONFIG" ? (
           <HeatMapPopup
-            open
+            open={open}
             onClose={() => setActivePopup(null)}
             variant={activePopup.replace("heatmap-", "") as HeatMapVariant}
             traceEvents={traceEvents}

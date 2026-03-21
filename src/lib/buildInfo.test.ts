@@ -21,16 +21,16 @@ describe("buildInfo", () => {
     it("prefers the git-derived app version label over the package version", () => {
       expect(
         formatBuildInfo({
-          appVersion: "0.6.4-rc2",
-          appVersionLabel: "0.6.4-rc2-b11",
+          appVersion: "0.6.4-rc4",
+          appVersionLabel: "0.6.4-rc4-b11",
           gitSha: "b1141986f00d",
           buildTime: "2026-03-17T12:34:56.000Z",
         }),
       ).toMatchObject({
-        appVersion: "0.6.4-rc2",
+        appVersion: "0.6.4-rc4",
         gitSha: "b1141986f00d",
         gitShaShort: "b1141986",
-        versionLabel: "0.6.4-rc2-b11",
+        versionLabel: "0.6.4-rc4-b11",
         buildTimeUtc: "2026-03-17 12:34:56 UTC",
       });
     });
@@ -38,11 +38,11 @@ describe("buildInfo", () => {
     it("falls back to the package version when no derived label is provided", () => {
       expect(
         formatBuildInfo({
-          appVersion: "0.6.4-rc2",
+          appVersion: "0.6.4-rc4",
           gitSha: "b1141986f00d",
           buildTime: "2026-03-17T12:34:56.000Z",
         }).versionLabel,
-      ).toBe("0.6.4-rc2");
+      ).toBe("0.6.4-rc4");
     });
   });
 });
