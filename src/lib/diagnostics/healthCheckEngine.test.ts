@@ -56,6 +56,17 @@ vi.mock("@/lib/ftp/ftpClient", () => ({
   listFtpDirectory: mockListFtpDirectory,
 }));
 
+vi.mock("@/lib/sourceNavigation/ftpSourceAdapter", () => ({
+  normalizeFtpHost: vi.fn((host: string) => {
+    if (!host) return host;
+    if (host.startsWith("[")) {
+      const end = host.indexOf("]");
+      if (end !== -1) return host.slice(0, end + 1);
+    }
+    return host.split(":")[0] ?? host;
+  }),
+}));
+
 vi.mock("@/lib/ftp/ftpConfig", () => ({
   getStoredFtpPort: vi.fn(() => 21),
 }));
@@ -455,6 +466,34 @@ describe("runHealthCheck — FTP probe", () => {
     const result = await runHealthCheck();
     expect(result!.probes.FTP.outcome).toBe("Fail");
     expect(result!.probes.FTP.reason).toContain("FTP connection refused");
+  });
+
+  it("normalizes an HTTP device host with a port before probing FTP", async () => {
+    const { getC64APIConfigSnapshot } = await import("@/lib/c64api");
+    vi.mocked(getC64APIConfigSnapshot).mockReturnValue({ deviceHost: "127.0.0.1:8080" });
+
+    mockGetInfo.mockResolvedValue(successfulInfo);
+    mockReadMemory.mockImplementation((addr: string) => {
+      if (addr === "00A2") return Promise.resolve(jiffyBytes);
+      return Promise.resolve(new Uint8Array([0x42]));
+    });
+    mockGetConfigItem
+      .mockResolvedValueOnce(ledResp)
+      .mockResolvedValueOnce(ledReadbackResp)
+      .mockResolvedValueOnce(ledResp);
+    mockSetConfigValue.mockResolvedValue(undefined);
+    mockListFtpDirectory.mockResolvedValue([]);
+
+    const result = await runHealthCheck();
+
+    expect(result!.probes.FTP.outcome).toBe("Success");
+    expect(mockListFtpDirectory).toHaveBeenCalledWith(
+      expect.objectContaining({
+        host: "127.0.0.1",
+        port: 21,
+        path: "/",
+      }),
+    );
   });
 });
 

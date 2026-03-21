@@ -18,6 +18,7 @@ import { listFtpDirectory } from "@/lib/ftp/ftpClient";
 import { getStoredFtpPort } from "@/lib/ftp/ftpConfig";
 import { getC64APIConfigSnapshot } from "@/lib/c64api";
 import { addLog } from "@/lib/logging";
+import { normalizeFtpHost } from "@/lib/sourceNavigation/ftpSourceAdapter";
 import { rollUpHealth, deriveConnectivityState } from "@/lib/diagnostics/healthModel";
 import type { HealthState } from "@/lib/diagnostics/healthModel";
 import {
@@ -289,7 +290,7 @@ const probeFtp = async (): Promise<HealthCheckProbeRecord> => {
   const startMs = Date.now();
   try {
     const snap = getC64APIConfigSnapshot();
-    const host = snap.deviceHost;
+    const host = normalizeFtpHost(snap.deviceHost);
     const port = getStoredFtpPort();
     const { durationMs } = await timedProbe(() =>
       listFtpDirectory({

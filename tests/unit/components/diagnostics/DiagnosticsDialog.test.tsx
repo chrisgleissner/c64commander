@@ -287,7 +287,7 @@ describe("DiagnosticsDialog", () => {
 
     openToolsView();
     expect(screen.getByTestId("technical-run-health-check-button")).toHaveTextContent("Run health check");
-    expect(screen.getByTestId("open-health-check-detail")).toHaveTextContent("Last health check");
+    expect(screen.getByTestId("open-health-check-detail")).toHaveTextContent("Health check detail");
   });
 
   it("shows the running health-check label when a check is already in progress", () => {

@@ -24,6 +24,7 @@ vi.mock("@/lib/uiErrors", () => ({
 }));
 
 vi.mock("@/lib/logging", () => ({
+  addLog: vi.fn(),
   clearLogs: vi.fn(),
   getErrorLogs: vi.fn(() => [
     {
@@ -111,7 +112,7 @@ vi.mock("@/hooks/useHealthState", () => ({
 vi.mock("@/lib/diagnostics/diagnosticsOverlayState", () => ({
   setDiagnosticsOverlayActive: vi.fn(),
   withDiagnosticsTraceOverride: (fn: () => unknown) => fn(),
-  subscribeDiagnosticsSuppression: () => () => {},
+  subscribeDiagnosticsSuppression: () => () => { },
   isDiagnosticsOverlaySuppressionArmed: () => false,
 }));
 
