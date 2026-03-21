@@ -93,9 +93,6 @@ The Web version is self-hosted and intended for LAN use. The browser connects to
 - Raspberry Pi Zero 2W, 4B, or similar with ≥ 512 MiB RAM recommended.
 - If a C64U network password is configured in Settings, it also protects the web interface.
 
-> [!NOTE]
-> Intended for trusted LAN use only. Do not expose directly to the public internet.
-
 #### Install Docker
 
 - For Windows and macOS, install [Docker Desktop](https://docs.docker.com/desktop/).
