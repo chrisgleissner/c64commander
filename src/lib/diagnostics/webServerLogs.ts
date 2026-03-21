@@ -36,8 +36,8 @@ const normalizeLogs = (logs: ServerLogEntry[]): LogEntry[] =>
     }));
 
 export const startWebServerLogBridge = () => {
-  if (typeof window === "undefined") return () => { };
-  if (!isWebPlatformServerMode()) return () => { };
+  if (typeof window === "undefined") return () => {};
+  if (!isWebPlatformServerMode()) return () => {};
 
   let disposed = false;
   let timer: number | null = null;

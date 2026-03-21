@@ -379,11 +379,11 @@ export function LightingStudioProvider({ children }: { children: React.ReactNode
       const resolved =
         resolvedLocation.source === "city"
           ? {
-            source: "city" as const,
-            lat: calculation.location.lat,
-            lon: calculation.location.lon,
-            label: calculation.location.label,
-          }
+              source: "city" as const,
+              lat: calculation.location.lat,
+              lon: calculation.location.lon,
+              label: calculation.location.label,
+            }
           : resolvedLocation;
       return {
         period: phase.period,
@@ -410,12 +410,12 @@ export function LightingStudioProvider({ children }: { children: React.ReactNode
     if (!circadianState) return;
     setStudioState((current) =>
       current.lastResolvedLocation?.label === circadianState.resolvedLocation.label &&
-        current.lastResolvedLocation?.source === circadianState.resolvedLocation.source
+      current.lastResolvedLocation?.source === circadianState.resolvedLocation.source
         ? current
         : {
-          ...current,
-          lastResolvedLocation: circadianState.resolvedLocation,
-        },
+            ...current,
+            lastResolvedLocation: circadianState.resolvedLocation,
+          },
     );
   }, [circadianState]);
 

@@ -43,7 +43,7 @@ test.describe("Modal close-button consistency", () => {
       await assertNoUiIssues(page, testInfo);
     } finally {
       await finalizeEvidence(page, testInfo);
-      await server?.close?.().catch(() => {});
+      await server?.close?.().catch(() => { });
     }
   });
 

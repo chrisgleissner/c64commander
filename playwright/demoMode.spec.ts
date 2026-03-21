@@ -118,7 +118,7 @@ test.describe("Automatic Demo Mode", () => {
       if (!page.isClosed()) {
         await finalizeEvidence(page, testInfo);
       }
-      await server?.close?.().catch(() => {});
+      await server?.close?.().catch(() => { });
     }
   });
 
@@ -188,9 +188,13 @@ test.describe("Automatic Demo Mode", () => {
     await expect(dialog.getByTestId("diagnostics-device-line")).toBeVisible();
 
     await dialog.getByTestId("run-health-check").click();
-    await expect(indicator).toHaveAttribute("data-connection-state", /DISCOVERING|OFFLINE_NO_DEMO|REAL_CONNECTED|DEMO_ACTIVE/, {
-      timeout: 10000,
-    });
+    await expect(indicator).toHaveAttribute(
+      "data-connection-state",
+      /DISCOVERING|OFFLINE_NO_DEMO|REAL_CONNECTED|DEMO_ACTIVE/,
+      {
+        timeout: 10000,
+      },
+    );
 
     await closeDiagnosticsDialog(page);
     const offlineDialog = await openDiagnosticsConnectionActions(page, indicator);

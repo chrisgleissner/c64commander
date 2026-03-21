@@ -7,7 +7,13 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { isUpdateApplied, loadHvscState, markUpdateApplied, saveHvscState, updateHvscState } from "@/lib/hvsc/hvscStateStore";
+import {
+  isUpdateApplied,
+  loadHvscState,
+  markUpdateApplied,
+  saveHvscState,
+  updateHvscState,
+} from "@/lib/hvsc/hvscStateStore";
 import { addLog } from "@/lib/logging";
 
 vi.mock("@/lib/logging", () => ({

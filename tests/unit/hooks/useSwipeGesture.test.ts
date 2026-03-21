@@ -322,14 +322,14 @@ describe("useSwipeGesture integration", () => {
       { ref, "data-testid": "gesture-surface" },
       withExcludedChild
         ? React.createElement(
-          "button",
-          {
-            type: "button",
-            "data-testid": "excluded-origin",
-            "data-swipe-exclude": "true",
-          },
-          "Excluded",
-        )
+            "button",
+            {
+              type: "button",
+              "data-testid": "excluded-origin",
+              "data-swipe-exclude": "true",
+            },
+            "Excluded",
+          )
         : null,
     );
   };
@@ -366,7 +366,9 @@ describe("useSwipeGesture integration", () => {
     render(React.createElement(GestureHarness, { callbacks }));
     const surface = screen.getByTestId("gesture-surface");
 
-    surface.dispatchEvent(createPointerEvent("pointerdown", { bubbles: true, button: 0, pointerId: 2, isPrimary: true }));
+    surface.dispatchEvent(
+      createPointerEvent("pointerdown", { bubbles: true, button: 0, pointerId: 2, isPrimary: true }),
+    );
     surface.dispatchEvent(
       createPointerEvent(
         "pointermove",

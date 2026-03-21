@@ -9,7 +9,10 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { CTA_HIGHLIGHT_DURATION_MS, CTA_PERSISTENT_ACTIVE_ATTR } from "@/lib/ui/buttonInteraction";
-import { PlaybackControlsCard, type PlaybackControlsCardProps } from "@/pages/playFiles/components/PlaybackControlsCard";
+import {
+  PlaybackControlsCard,
+  type PlaybackControlsCardProps,
+} from "@/pages/playFiles/components/PlaybackControlsCard";
 
 const buildProps = (overrides: Partial<PlaybackControlsCardProps> = {}): PlaybackControlsCardProps => ({
   hasCurrentItem: false,

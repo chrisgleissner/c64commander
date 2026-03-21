@@ -121,15 +121,15 @@ export type LightingResolverInput = {
 export type LightingContextLensEntry = {
   surface: LightingSurface;
   owner:
-  | "preview"
-  | "connection-critical"
-  | "manual-lock"
-  | "quiet-launch"
-  | "source-identity"
-  | "circadian"
-  | "connection-ambient"
-  | "profile"
-  | "device-fallback";
+    | "preview"
+    | "connection-critical"
+    | "manual-lock"
+    | "quiet-launch"
+    | "source-identity"
+    | "circadian"
+    | "connection-ambient"
+    | "profile"
+    | "device-fallback";
   label: string;
   detail: string;
 };

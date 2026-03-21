@@ -279,13 +279,13 @@ export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: Aud
             : undefined;
           const identityPending = isUltiSid
             ? Boolean(
-              configWritePending[
-              buildConfigKey(
-                "UltiSID Configuration",
-                entry.key === "ultiSid1" ? "UltiSID 1 Filter Curve" : "UltiSID 2 Filter Curve",
+                configWritePending[
+                  buildConfigKey(
+                    "UltiSID Configuration",
+                    entry.key === "ultiSid1" ? "UltiSID 1 Filter Curve" : "UltiSID 2 Filter Curve",
+                  )
+                ],
               )
-              ],
-            )
             : false;
 
           // Address

@@ -258,16 +258,16 @@ export function DriveManager({
               onTypeChange={
                 !isSoftIec
                   ? (value) => {
-                    if (!spec.typeItem) return;
-                    void updateConfigValue(
-                      spec.category,
-                      spec.typeItem,
-                      value,
-                      "HOME_DRIVE_TYPE",
-                      `${label} type updated`,
-                      { refreshDrives: true },
-                    );
-                  }
+                      if (!spec.typeItem) return;
+                      void updateConfigValue(
+                        spec.category,
+                        spec.typeItem,
+                        value,
+                        "HOME_DRIVE_TYPE",
+                        `${label} type updated`,
+                        { refreshDrives: true },
+                      );
+                    }
                   : undefined
               }
               typePending={!isSoftIec ? pendingType : undefined}
@@ -279,15 +279,15 @@ export function DriveManager({
               onStatusClick={
                 formattedStatus
                   ? () =>
-                    setStatusDetailsDialog({
-                      driveLabel: label,
-                      status: formattedStatus,
-                    })
+                      setStatusDetailsDialog({
+                        driveLabel: label,
+                        status: formattedStatus,
+                      })
                   : () =>
-                    setStatusDetailsDialog({
-                      driveLabel: label,
-                      status: statusDetails,
-                    })
+                      setStatusDetailsDialog({
+                        driveLabel: label,
+                        status: statusDetails,
+                      })
               }
               statusRaw={formattedStatus?.raw}
               pathPending={pathPending}

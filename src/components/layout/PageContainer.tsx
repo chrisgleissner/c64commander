@@ -95,8 +95,8 @@ export function ProfileSplitSection({
   const style: CSSProperties | undefined =
     profile === "expanded"
       ? {
-        gridTemplateColumns: `repeat(auto-fit, minmax(min(${minColumnWidth}, 100%), 1fr))`,
-      }
+          gridTemplateColumns: `repeat(auto-fit, minmax(min(${minColumnWidth}, 100%), 1fr))`,
+        }
       : undefined;
 
   return (

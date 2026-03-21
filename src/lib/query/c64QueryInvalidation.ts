@@ -32,31 +32,31 @@ const routePrefixMap: Array<{
   routePrefix: string;
   prefixes: ReadonlyArray<C64QueryPrefix>;
 }> = [
-    {
-      routePrefix: "/config",
-      prefixes: ["c64-info", "c64-categories", "c64-category", "c64-config-item", "c64-config-items", "c64-all-config"],
-    },
-    {
-      routePrefix: "/disks",
-      prefixes: ["c64-info", "c64-drives", "c64-config-items"],
-    },
-    {
-      routePrefix: "/play",
-      prefixes: ["c64-info", "c64-config-item", "c64-config-items"],
-    },
-    {
-      routePrefix: "/settings",
-      prefixes: ["c64-info", "c64-categories"],
-    },
-    {
-      routePrefix: "/docs",
-      prefixes: ["c64-info"],
-    },
-    {
-      routePrefix: "/",
-      prefixes: ["c64-info", "c64-drives", "c64-config-items"],
-    },
-  ];
+  {
+    routePrefix: "/config",
+    prefixes: ["c64-info", "c64-categories", "c64-category", "c64-config-item", "c64-config-items", "c64-all-config"],
+  },
+  {
+    routePrefix: "/disks",
+    prefixes: ["c64-info", "c64-drives", "c64-config-items"],
+  },
+  {
+    routePrefix: "/play",
+    prefixes: ["c64-info", "c64-config-item", "c64-config-items"],
+  },
+  {
+    routePrefix: "/settings",
+    prefixes: ["c64-info", "c64-categories"],
+  },
+  {
+    routePrefix: "/docs",
+    prefixes: ["c64-info"],
+  },
+  {
+    routePrefix: "/",
+    prefixes: ["c64-info", "c64-drives", "c64-config-items"],
+  },
+];
 
 const uniquePrefixes = (prefixes: ReadonlyArray<C64QueryPrefix>) => Array.from(new Set(prefixes));
 
