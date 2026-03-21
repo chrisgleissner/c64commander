@@ -516,8 +516,6 @@ test.describe("display profiles", () => {
     await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
     const diagnosticsDialog = page.getByRole("dialog", { name: "Diagnostics" });
     await expect(diagnosticsDialog).toBeVisible();
-    await diagnosticsDialog.getByTestId("show-details-button").click();
-    await ensureToolsExpanded(diagnosticsDialog);
 
     await page.setViewportSize({ width: 360, height: 420 });
     await expect

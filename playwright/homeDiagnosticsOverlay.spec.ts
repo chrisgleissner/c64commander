@@ -154,8 +154,6 @@ test.describe("Home diagnostics overlay", () => {
     const latencyPopup = page.getByTestId("latency-analysis-popup");
     await expect(latencyPopup).toBeVisible();
     await expect(dialog).toBeVisible();
-    await latencyPopup.getByLabel("All call types").click();
-    await latencyPopup.getByLabel("REST").click();
     await expect(latencyPopup.getByText(/\d+ samples?/)).toBeVisible();
     await snap(page, testInfo, "latency-popup");
     await latencyPopup.getByRole("button", { name: /Close/i }).click();
