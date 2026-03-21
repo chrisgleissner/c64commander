@@ -108,41 +108,41 @@ type ActiveDetailView = "device" | "config-drift" | "health-check" | null;
 
 type StreamEntry =
   | {
-      id: string;
-      kind: "problem";
-      timestamp: string;
-      contributor: ContributorKey;
-      origin: OriginFilter | null;
-      severity: DiagnosticsSeverity;
-      data: DiagnosticsLogEntry;
-    }
+    id: string;
+    kind: "problem";
+    timestamp: string;
+    contributor: ContributorKey;
+    origin: OriginFilter | null;
+    severity: DiagnosticsSeverity;
+    data: DiagnosticsLogEntry;
+  }
   | {
-      id: string;
-      kind: "action";
-      timestamp: string;
-      contributor: ContributorKey | null;
-      origin: OriginFilter | null;
-      severity: DiagnosticsSeverity;
-      data: ActionSummary;
-    }
+    id: string;
+    kind: "action";
+    timestamp: string;
+    contributor: ContributorKey | null;
+    origin: OriginFilter | null;
+    severity: DiagnosticsSeverity;
+    data: ActionSummary;
+  }
   | {
-      id: string;
-      kind: "log";
-      timestamp: string;
-      contributor: ContributorKey | null;
-      origin: OriginFilter | null;
-      severity: DiagnosticsSeverity;
-      data: DiagnosticsLogEntry;
-    }
+    id: string;
+    kind: "log";
+    timestamp: string;
+    contributor: ContributorKey | null;
+    origin: OriginFilter | null;
+    severity: DiagnosticsSeverity;
+    data: DiagnosticsLogEntry;
+  }
   | {
-      id: string;
-      kind: "trace";
-      timestamp: string;
-      contributor: ContributorKey | null;
-      origin: OriginFilter | null;
-      severity: DiagnosticsSeverity;
-      data: DiagnosticsTraceEntry;
-    };
+    id: string;
+    kind: "trace";
+    timestamp: string;
+    contributor: ContributorKey | null;
+    origin: OriginFilter | null;
+    severity: DiagnosticsSeverity;
+    data: DiagnosticsTraceEntry;
+  };
 
 type Props = {
   open: boolean;
@@ -949,40 +949,40 @@ export function DiagnosticsDialog({
 
   const summaryCard = isOffline
     ? {
-        badgeLabel: "Health",
-        title: healthState.connectivity === "Not yet connected" ? "Not connected" : "Offline",
-        titleToneClassName: HEALTH_STATE_COLOR.Unavailable,
-        statusGlyph: HEALTH_GLYPHS.Unavailable,
-        statusGlyphClassName: HEALTH_STATE_COLOR.Unavailable,
-        headline: healthState.host,
-        supportingText:
-          healthState.connectivity === "Not yet connected"
-            ? "Waiting for first device connection"
-            : "Device not reachable",
-      }
+      badgeLabel: "Health",
+      title: healthState.connectivity === "Not yet connected" ? "Not connected" : "Offline",
+      titleToneClassName: HEALTH_STATE_COLOR.Unavailable,
+      statusGlyph: HEALTH_GLYPHS.Unavailable,
+      statusGlyphClassName: HEALTH_STATE_COLOR.Unavailable,
+      headline: healthState.host,
+      supportingText:
+        healthState.connectivity === "Not yet connected"
+          ? "Waiting for first device connection"
+          : "Device not reachable",
+    }
     : isUnhealthy
       ? {
-          badgeLabel: "Health",
-          title: healthState.state,
-          titleToneClassName: HEALTH_STATE_COLOR[healthState.state],
-          statusGlyph: HEALTH_GLYPHS[healthState.state],
-          statusGlyphClassName: HEALTH_STATE_COLOR[healthState.state],
-          headline: connectedLabel,
-          supportingText: primaryContributor ? `Contributor: ${primaryContributor}` : null,
-        }
+        badgeLabel: "Health",
+        title: healthState.state,
+        titleToneClassName: HEALTH_STATE_COLOR[healthState.state],
+        statusGlyph: HEALTH_GLYPHS[healthState.state],
+        statusGlyphClassName: HEALTH_STATE_COLOR[healthState.state],
+        headline: connectedLabel,
+        supportingText: primaryContributor ? `Contributor: ${primaryContributor}` : null,
+      }
       : {
-          badgeLabel: "Health",
-          title: "Healthy",
-          titleToneClassName: "text-success",
-          statusGlyph: HEALTH_GLYPHS[healthState.state === "Idle" ? "Healthy" : healthState.state],
-          statusGlyphClassName: "text-success",
-          headline: connectedLabel,
-          supportingText: healthState.lastRestActivity
-            ? `${healthState.host} · Last check ${formatRelative(healthState.lastRestActivity.timestampMs)}`
-            : healthState.lastFtpActivity
-              ? `${healthState.host} · Last activity ${formatRelative(healthState.lastFtpActivity.timestampMs)}`
-              : healthState.host,
-        };
+        badgeLabel: "Health",
+        title: "Healthy",
+        titleToneClassName: "text-success",
+        statusGlyph: HEALTH_GLYPHS[healthState.state === "Idle" ? "Healthy" : healthState.state],
+        statusGlyphClassName: "text-success",
+        headline: connectedLabel,
+        supportingText: healthState.lastRestActivity
+          ? `${healthState.host} · Last check ${formatRelative(healthState.lastRestActivity.timestampMs)}`
+          : healthState.lastFtpActivity
+            ? `${healthState.host} · Last activity ${formatRelative(healthState.lastFtpActivity.timestampMs)}`
+            : healthState.host,
+      };
 
   const scopeLabel = (() => {
     if (activeDetailView === "device") return "Showing: Device detail";
@@ -1086,15 +1086,15 @@ export function DiagnosticsDialog({
                 secondaryAction={
                   isUnhealthy && onRunHealthCheck
                     ? {
-                        label: healthCheckRunning ? "Running health check…" : "Run health check",
-                        onClick: () => {
-                          setFocusedScope("Health check");
-                          setShowDetails(true);
-                          onRunHealthCheck();
-                        },
-                        testId: "run-health-check-button",
-                        variant: "ghost",
-                      }
+                      label: healthCheckRunning ? "Running health check…" : "Run health check",
+                      onClick: () => {
+                        setFocusedScope("Health check");
+                        setShowDetails(true);
+                        onRunHealthCheck();
+                      },
+                      testId: "run-health-check-button",
+                      variant: "ghost",
+                    }
                     : undefined
                 }
               >
