@@ -163,7 +163,7 @@ describe("DiagnosticsDialog", () => {
     expect(screen.getByTestId("status-summary-card")).toBeVisible();
     expect(screen.getByText("Healthy")).toBeVisible();
     expect(screen.getByText("C64U")).toBeVisible();
-    expect(screen.getByText("All systems working")).toBeVisible();
+    expect(screen.getByText(/c64u · Last check/)).toBeVisible();
     expect(screen.getByTestId("show-details-button")).toHaveTextContent("Run health check");
     expect(screen.queryByTestId("issue-card")).toBeNull();
     expect(screen.queryByTestId("diagnostics-details-layer")).toBeNull();

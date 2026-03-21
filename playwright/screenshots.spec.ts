@@ -756,95 +756,95 @@ test.describe("App screenshots", () => {
           const snapshots =
             mode === "snapshot-manager"
               ? [
-                {
-                  id: "snap-1",
-                  filename: "c64-program-20260110-090000.c64snap",
-                  bytesBase64: buildSnap(0, 1736499600),
-                  createdAt: "2026-01-10T09:00:00.000Z",
-                  snapshotType: "program",
-                  metadata: {
-                    snapshot_type: "program",
-                    display_ranges: ["$0000\u2013$00FF", "$0200\u2013$FFFF"],
-                    created_at: "2026-01-10 09:00:00",
-                    label: "JupiterLander.crt",
+                  {
+                    id: "snap-1",
+                    filename: "c64-program-20260110-090000.c64snap",
+                    bytesBase64: buildSnap(0, 1736499600),
+                    createdAt: "2026-01-10T09:00:00.000Z",
+                    snapshotType: "program",
+                    metadata: {
+                      snapshot_type: "program",
+                      display_ranges: ["$0000\u2013$00FF", "$0200\u2013$FFFF"],
+                      created_at: "2026-01-10 09:00:00",
+                      label: "JupiterLander.crt",
+                    },
                   },
-                },
-                {
-                  id: "snap-2",
-                  filename: "c64-basic-20260110-080000.c64snap",
-                  bytesBase64: buildSnap(1, 1736496000),
-                  createdAt: "2026-01-10T08:00:00.000Z",
-                  snapshotType: "basic",
-                  metadata: {
-                    snapshot_type: "basic",
-                    display_ranges: ["$002B\u2013$0038", "$0801\u2013STREND"],
-                    created_at: "2026-01-10 08:00:00",
+                  {
+                    id: "snap-2",
+                    filename: "c64-basic-20260110-080000.c64snap",
+                    bytesBase64: buildSnap(1, 1736496000),
+                    createdAt: "2026-01-10T08:00:00.000Z",
+                    snapshotType: "basic",
+                    metadata: {
+                      snapshot_type: "basic",
+                      display_ranges: ["$002B\u2013$0038", "$0801\u2013STREND"],
+                      created_at: "2026-01-10 08:00:00",
+                    },
                   },
-                },
-                {
-                  id: "snap-3",
-                  filename: "c64-screen-20260110-070000.c64snap",
-                  bytesBase64: buildSnap(2, 1736492400),
-                  createdAt: "2026-01-10T07:00:00.000Z",
-                  snapshotType: "screen",
-                  metadata: {
-                    snapshot_type: "screen",
-                    display_ranges: ["VICBANK", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"],
-                    created_at: "2026-01-10 07:00:00",
+                  {
+                    id: "snap-3",
+                    filename: "c64-screen-20260110-070000.c64snap",
+                    bytesBase64: buildSnap(2, 1736492400),
+                    createdAt: "2026-01-10T07:00:00.000Z",
+                    snapshotType: "screen",
+                    metadata: {
+                      snapshot_type: "screen",
+                      display_ranges: ["VICBANK", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"],
+                      created_at: "2026-01-10 07:00:00",
+                    },
                   },
-                },
-                {
-                  id: "snap-4",
-                  filename: "c64-custom-20260110-060000.c64snap",
-                  bytesBase64: buildSnap(3, 1736488800),
-                  createdAt: "2026-01-10T06:00:00.000Z",
-                  snapshotType: "custom",
-                  metadata: {
-                    snapshot_type: "custom",
-                    display_ranges: ["$0400\u2013$07E7", "$2000\u2013$20FF"],
-                    created_at: "2026-01-10 06:00:00",
+                  {
+                    id: "snap-4",
+                    filename: "c64-custom-20260110-060000.c64snap",
+                    bytesBase64: buildSnap(3, 1736488800),
+                    createdAt: "2026-01-10T06:00:00.000Z",
+                    snapshotType: "custom",
+                    metadata: {
+                      snapshot_type: "custom",
+                      display_ranges: ["$0400\u2013$07E7", "$2000\u2013$20FF"],
+                      created_at: "2026-01-10 06:00:00",
+                    },
                   },
-                },
-              ]
+                ]
               : [
-                {
-                  id: "snap-1",
-                  filename: "c64-program-20260110-090000.c64snap",
-                  bytesBase64: buildSnap(0, 1736499600),
-                  createdAt: "2026-01-10T09:00:00.000Z",
-                  snapshotType: "program",
-                  metadata: {
-                    snapshot_type: "program",
-                    display_ranges: ["$0000\u2013$00FF", "$0200\u2013$FFFF"],
-                    created_at: "2026-01-10 09:00:00",
-                    label: "JupiterLander.crt",
+                  {
+                    id: "snap-1",
+                    filename: "c64-program-20260110-090000.c64snap",
+                    bytesBase64: buildSnap(0, 1736499600),
+                    createdAt: "2026-01-10T09:00:00.000Z",
+                    snapshotType: "program",
+                    metadata: {
+                      snapshot_type: "program",
+                      display_ranges: ["$0000\u2013$00FF", "$0200\u2013$FFFF"],
+                      created_at: "2026-01-10 09:00:00",
+                      label: "JupiterLander.crt",
+                    },
                   },
-                },
-                {
-                  id: "snap-2",
-                  filename: "c64-basic-20260110-080000.c64snap",
-                  bytesBase64: buildSnap(1, 1736496000),
-                  createdAt: "2026-01-10T08:00:00.000Z",
-                  snapshotType: "basic",
-                  metadata: {
-                    snapshot_type: "basic",
-                    display_ranges: ["$002B\u2013$0038", "$0801\u2013STREND"],
-                    created_at: "2026-01-10 08:00:00",
+                  {
+                    id: "snap-2",
+                    filename: "c64-basic-20260110-080000.c64snap",
+                    bytesBase64: buildSnap(1, 1736496000),
+                    createdAt: "2026-01-10T08:00:00.000Z",
+                    snapshotType: "basic",
+                    metadata: {
+                      snapshot_type: "basic",
+                      display_ranges: ["$002B\u2013$0038", "$0801\u2013STREND"],
+                      created_at: "2026-01-10 08:00:00",
+                    },
                   },
-                },
-                {
-                  id: "snap-3",
-                  filename: "c64-screen-20260110-070000.c64snap",
-                  bytesBase64: buildSnap(2, 1736492400),
-                  createdAt: "2026-01-10T07:00:00.000Z",
-                  snapshotType: "screen",
-                  metadata: {
-                    snapshot_type: "screen",
-                    display_ranges: ["VICBANK", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"],
-                    created_at: "2026-01-10 07:00:00",
+                  {
+                    id: "snap-3",
+                    filename: "c64-screen-20260110-070000.c64snap",
+                    bytesBase64: buildSnap(2, 1736492400),
+                    createdAt: "2026-01-10T07:00:00.000Z",
+                    snapshotType: "screen",
+                    metadata: {
+                      snapshot_type: "screen",
+                      display_ranges: ["VICBANK", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"],
+                      created_at: "2026-01-10 07:00:00",
+                    },
                   },
-                },
-              ];
+                ];
 
           localStorage.setItem(
             "c64u_snapshots:v1",
@@ -1360,9 +1360,9 @@ test.describe("App screenshots", () => {
       };
 
       const ensureTechnicalDetailsExpanded = async (dialog: ReturnType<Page["getByRole"]>) => {
-        const toggle = dialog.getByTestId("technical-details-toggle");
-        if ((await toggle.getAttribute("aria-expanded")) !== "true") {
-          await toggle.click();
+        if (!(await dialog.getByTestId("diagnostics-details-layer").isVisible())) {
+          await dialog.getByTestId("show-details-button").click();
+          await expect(dialog.getByTestId("diagnostics-details-layer")).toBeVisible();
         }
       };
 
@@ -1398,6 +1398,40 @@ test.describe("App screenshots", () => {
       await ensureToolsExpanded(dialog);
       await expect(dialog.getByTestId("evidence-full-view")).toBeVisible();
       await captureDiagnosticsScreenshot(page, testInfo, "diagnostics/full-drill-down-tools-visible.png");
+
+      await page.keyboard.press("Escape");
+      await expect(dialog).toBeHidden();
+
+      // 03-summary sub-view screenshots (healthy state with details expanded)
+      dialog = await openDiagnostics();
+      await dialog.getByTestId("show-details-button").click();
+      await expect(dialog.getByTestId("diagnostics-details-layer")).toBeVisible();
+
+      await dialog.getByTestId("open-device-detail").click();
+      await expect(dialog.getByTestId("device-detail-back")).toBeVisible();
+      await captureDiagnosticsScreenshot(page, testInfo, "03-summary/01-device-detail.png");
+      await dialog.getByTestId("device-detail-back").click();
+
+      if (await dialog.getByTestId("open-health-check-detail").isVisible()) {
+        await dialog.getByTestId("open-health-check-detail").click();
+        await expect(dialog.getByTestId("health-check-detail-back")).toBeVisible();
+        await captureDiagnosticsScreenshot(page, testInfo, "03-summary/02-health-check-detail.png");
+        await dialog.getByTestId("health-check-detail-back").click();
+      }
+
+      if (await dialog.getByTestId("latency-summary-row").isVisible()) {
+        await dialog.getByTestId("latency-summary-row").click();
+        await expect(page.getByTestId("latency-analysis-popup")).toBeVisible();
+        await captureDiagnosticsScreenshot(page, testInfo, "03-summary/03-latency-analysis.png");
+        await page.getByTestId("analytic-popup-close").click();
+        await expect(page.getByTestId("latency-analysis-popup")).toBeHidden();
+      }
+
+      await dialog.getByTestId("health-history-row").click();
+      await expect(page.getByTestId("health-history-popup")).toBeVisible();
+      await captureDiagnosticsScreenshot(page, testInfo, "03-summary/04-health-history.png");
+      await page.getByTestId("analytic-popup-close").click();
+      await expect(page.getByTestId("health-history-popup")).toBeHidden();
 
       await page.keyboard.press("Escape");
       await expect(dialog).toBeHidden();

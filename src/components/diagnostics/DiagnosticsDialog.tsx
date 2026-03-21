@@ -369,8 +369,11 @@ const ContributorRow = ({
       data-testid={`contributor-row-${contributorKey.toLowerCase()}`}
     >
       <span className="flex items-center gap-1.5">
-        <span className={cn("font-mono leading-none", HEALTH_STATE_COLOR[health.state])} aria-hidden="true">
-          {glyph}
+        <span
+          className="inline-flex w-4 shrink-0 items-center justify-center font-mono leading-none"
+          aria-hidden="true"
+        >
+          <span className={cn(HEALTH_STATE_COLOR[health.state])}>{glyph}</span>
         </span>
         <span className="font-medium">{contributorKey}</span>
         <span className="text-muted-foreground">·</span>
@@ -974,7 +977,11 @@ export function DiagnosticsDialog({
           statusGlyph: HEALTH_GLYPHS[healthState.state === "Idle" ? "Healthy" : healthState.state],
           statusGlyphClassName: "text-success",
           headline: connectedLabel,
-          supportingText: "All systems working",
+          supportingText: healthState.lastRestActivity
+            ? `${healthState.host} · Last check ${formatRelative(healthState.lastRestActivity.timestampMs)}`
+            : healthState.lastFtpActivity
+              ? `${healthState.host} · Last activity ${formatRelative(healthState.lastFtpActivity.timestampMs)}`
+              : healthState.host,
         };
 
   const scopeLabel = (() => {
@@ -1141,13 +1148,7 @@ export function DiagnosticsDialog({
                   )}
                   data-testid="diagnostics-details-layer"
                 >
-                  <span
-                    className="sr-only"
-                    role="status"
-                    aria-live="polite"
-                    aria-expanded="true"
-                    data-testid="technical-details-toggle"
-                  >
+                  <span className="sr-only" role="status" aria-live="polite" data-testid="technical-details-toggle">
                     Details open
                   </span>
                   <div data-testid="technical-details-card" className="space-y-4">

@@ -42,12 +42,6 @@ Date: 2026-03-21
 - [x] Test 6 - Overlay layering
 - [x] Test 7 - Back navigation
 
-## Phase 4 - Release Tag CI Hardening
-
-- [ ] Analyze the failed `0.6.4-rc3` iOS and web tag workflows
-- [ ] Fix the active branch so the next pre-release tag can publish cleanly
-- [ ] Revalidate screenshots and tag-sensitive release metadata before tagging
-
 ## Acceptance Criteria
 
 - [x] All target spec rules satisfied
@@ -58,4 +52,3 @@ Date: 2026-03-21
 - [x] Healthy state is calm and minimal
 - [x] Progressive disclosure strictly enforced
 - [x] Overlay hierarchy is unambiguous
-- [ ] Future pre-release tagging path is validated for iOS and web
