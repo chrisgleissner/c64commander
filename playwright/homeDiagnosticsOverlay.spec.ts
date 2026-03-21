@@ -167,7 +167,7 @@ test.describe("Home diagnostics overlay", () => {
     await historyPopup.locator('[data-testid^="health-history-segment-"]').last().click();
     await expect(historyPopup.getByTestId("health-history-selection-overlay")).toBeVisible();
     await expect(historyPopup.getByTestId("health-history-selection-reason")).toBeVisible();
-    await historyPopup.getByTestId("health-history-selection-dismiss").click();
+    await historyPopup.getByRole("button", { name: "Dismiss" }).click();
     await expect(historyPopup.getByTestId("health-history-selection-overlay")).toBeHidden();
     await snap(page, testInfo, "history-popup");
     await historyPopup.getByRole("button", { name: /Close/i }).click();

@@ -132,9 +132,11 @@ test.describe("Settings diagnostics workflows", () => {
     await filterSurface.getByRole("button", { name: "Close" }).click();
     await expect(filterSurface).toBeHidden();
 
-    const apiRequestEntry = dialog.getByText("C64 API request", { exact: true }).first();
-    await expect(apiRequestEntry).toBeVisible();
-    const apiRequestRow = page.locator('[data-testid^="evidence-row-"]').filter({ has: apiRequestEntry });
+    const apiRequestRow = dialog
+      .locator('[data-testid^="evidence-row-"]')
+      .filter({ hasText: "C64 API request" })
+      .first();
+    await expect(apiRequestRow).toBeVisible();
     await expect(apiRequestRow.locator('[aria-label="debug"]')).toBeVisible();
     await snap(page, testInfo, "debug-log-entry");
 
@@ -204,6 +206,23 @@ test.describe("Settings diagnostics workflows", () => {
         tracing?.seedTraces?.(seedEvents);
       });
     }, traceSeed);
+
+    // Seed log entries with known IDs so dense-row assertions are deterministic
+    await page.evaluate(() => {
+      return new Promise<void>((resolve) => {
+        const handler = () => {
+          window.removeEventListener("c64u-logs-updated", handler);
+          setTimeout(resolve, 50);
+        };
+        window.addEventListener("c64u-logs-updated", handler);
+        const logEntries = [
+          { id: "1", level: "error", message: "Test error entry", timestamp: new Date().toISOString() },
+          { id: "log-1", level: "debug", message: "Test debug entry", timestamp: new Date().toISOString() },
+        ];
+        localStorage.setItem("c64u_app_logs", JSON.stringify(logEntries));
+        window.dispatchEvent(new CustomEvent("c64u-logs-updated"));
+      });
+    });
 
     await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: /Diagnostics|Logs/i });
