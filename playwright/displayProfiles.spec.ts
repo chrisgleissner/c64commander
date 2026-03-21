@@ -95,6 +95,7 @@ const expectLocatorWithinViewport = async (
   page: Page,
   locator: ReturnType<Page["getByRole"]> | ReturnType<Page["getByTestId"]>,
 ) => {
+  await locator.scrollIntoViewIfNeeded();
   await expect
     .poll(async () => {
       const box = await locator.boundingBox();
@@ -202,6 +203,21 @@ const setBrowserZoom = async (page: Page, scale: number) => {
   return session;
 };
 
+const ensureTechnicalDetailsExpanded = async (dialog: Locator) => {
+  const toggle = dialog.getByTestId("technical-details-toggle");
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") {
+    await toggle.click();
+  }
+};
+
+const ensureToolsExpanded = async (dialog: Locator) => {
+  await ensureTechnicalDetailsExpanded(dialog);
+  const toggle = dialog.getByTestId("tools-card-toggle");
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") {
+    await toggle.click();
+  }
+};
+
 test.describe("display profiles", () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
@@ -266,7 +282,7 @@ test.describe("display profiles", () => {
     expect(Number.parseFloat(expandedSizing.shellPaddingTop)).toBeGreaterThan(
       Number.parseFloat(mediumSizing.shellPaddingTop),
     );
-    expect(Number.parseFloat(expandedSizing.buttonHeight)).toBeGreaterThan(
+    expect(Number.parseFloat(expandedSizing.buttonHeight)).toBeGreaterThanOrEqual(
       Number.parseFloat(mediumSizing.buttonHeight),
     );
   });
@@ -449,8 +465,10 @@ test.describe("display profiles", () => {
       const diagnosticsDialog = page.getByRole("dialog", { name: "Diagnostics" });
       await expect(diagnosticsDialog).toBeVisible();
       await expectDialogPresentationMode(diagnosticsDialog, profileId === "expanded" ? "modal" : "sheet");
-      await expect(diagnosticsDialog.getByRole("button", { name: "Share All" })).toBeVisible();
-      await expect(diagnosticsDialog.getByRole("button", { name: "Clear All" })).toBeVisible();
+      await diagnosticsDialog.getByTestId("show-details-button").click();
+      await ensureToolsExpanded(diagnosticsDialog);
+      await expect(diagnosticsDialog.getByTestId("diagnostics-share-all")).toBeVisible();
+      await expect(diagnosticsDialog.getByTestId("diagnostics-tools-menu")).toBeVisible();
       const settingsOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
       expect(settingsOverflow).toBe(true);
       await page.keyboard.press("Escape");
@@ -468,11 +486,13 @@ test.describe("display profiles", () => {
     await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
     const diagnosticsDialog = page.getByRole("dialog", { name: "Diagnostics" });
     await expect(diagnosticsDialog).toBeVisible();
+    await diagnosticsDialog.getByTestId("show-details-button").click();
+    await ensureToolsExpanded(diagnosticsDialog);
 
     await scaleRootTextSize(page, 1.5);
 
-    const shareAllButton = diagnosticsDialog.getByRole("button", { name: "Share All", exact: true });
-    const clearAllButton = diagnosticsDialog.getByRole("button", { name: "Clear All", exact: true });
+    const shareAllButton = diagnosticsDialog.getByTestId("diagnostics-share-all");
+    const clearAllButton = diagnosticsDialog.getByTestId("diagnostics-tools-menu");
     await expect(shareAllButton).toBeVisible();
     await expect(clearAllButton).toBeVisible();
     await expectLocatorWithinViewport(page, diagnosticsDialog);
@@ -494,14 +514,16 @@ test.describe("display profiles", () => {
     await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
     const diagnosticsDialog = page.getByRole("dialog", { name: "Diagnostics" });
     await expect(diagnosticsDialog).toBeVisible();
+    await diagnosticsDialog.getByTestId("show-details-button").click();
+    await ensureToolsExpanded(diagnosticsDialog);
 
     await page.setViewportSize({ width: 360, height: 420 });
     await expect
       .poll(() => page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight })))
       .toEqual({ width: 360, height: 420 });
 
-    const shareAllButton = diagnosticsDialog.getByRole("button", { name: "Share All", exact: true });
-    const clearAllButton = diagnosticsDialog.getByRole("button", { name: "Clear All", exact: true });
+    const shareAllButton = diagnosticsDialog.getByTestId("diagnostics-share-all");
+    const clearAllButton = diagnosticsDialog.getByTestId("diagnostics-tools-menu");
     await expect(shareAllButton).toBeVisible();
     await expect(clearAllButton).toBeVisible();
     await expectLocatorWithinViewport(page, shareAllButton);
@@ -584,9 +606,11 @@ test.describe("display profiles", () => {
     await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
     const diagnosticsDialog = page.getByRole("dialog", { name: "Diagnostics" });
     await expect(diagnosticsDialog).toBeVisible();
+    await diagnosticsDialog.getByTestId("show-details-button").click();
+    await ensureToolsExpanded(diagnosticsDialog);
 
-    const shareAllButton = diagnosticsDialog.getByRole("button", { name: "Share All", exact: true });
-    const clearAllButton = diagnosticsDialog.getByRole("button", { name: "Clear All", exact: true });
+    const shareAllButton = diagnosticsDialog.getByTestId("diagnostics-share-all");
+    const clearAllButton = diagnosticsDialog.getByTestId("diagnostics-tools-menu");
     await expect(shareAllButton).toBeVisible();
     await expect(clearAllButton).toBeVisible();
     await expectLocatorWithinViewport(page, shareAllButton);

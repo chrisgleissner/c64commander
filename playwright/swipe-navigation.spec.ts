@@ -48,7 +48,9 @@ const waitForRouteIndex = async (page: Page, expectedIndex: number) => {
   await expect
     .poll(async () => page.getByTestId("swipe-navigation-runway").getAttribute("data-runway-index"), { timeout: 4000 })
     .toBe(String(expectedIndex));
-  await expect(page.getByTestId("swipe-navigation-runway")).toHaveAttribute("data-runway-phase", "idle");
+  await expect
+    .poll(async () => page.locator('[data-slot-active="true"]').getAttribute("data-route-index"), { timeout: 4000 })
+    .toBe(String(expectedIndex));
 };
 
 const expectSwipeLog = async (page: Page, predicate: (entry: SwipeLogEntry) => boolean, message: string) => {

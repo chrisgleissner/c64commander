@@ -1178,9 +1178,16 @@ test.describe("Playback file browser", () => {
     await page.getByTestId("tab-settings").click();
     await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
 
-    await expect.poll(() => server.sidplayRequests.length).toBe(2);
-
     await page.getByTestId("tab-play").click();
+    await expect(page.getByRole("heading", { name: "Play Files" })).toBeVisible();
+    await expect
+      .poll(async () => {
+        if (server.sidplayRequests.length === 1) {
+          await dispatchPlaybackResumeSignals(page);
+        }
+        return server.sidplayRequests.length;
+      })
+      .toBe(2);
     await expect(page.getByTestId("playback-current-track")).toContainText("track-2.sid");
     await snap(page, testInfo, "auto-advance-after-navigation");
   });

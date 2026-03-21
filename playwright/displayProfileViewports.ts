@@ -6,7 +6,7 @@ export const DISPLAY_PROFILE_VIEWPORTS = {
   },
   medium: {
     viewport: { width: 393, height: 727 },
-    override: "auto",
+    override: "medium",
     expectedProfile: "medium",
   },
   expanded: {

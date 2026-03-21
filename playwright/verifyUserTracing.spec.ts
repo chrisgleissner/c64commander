@@ -134,7 +134,10 @@ test("verify comprehensive user tracing", async ({ page }) => {
   expect(configTabClick).toBeDefined();
   expect(configTabClick.data.component).toBe("Tab");
 
-  const connectivityClick = userActions.find((t: any) => t.data?.component === "ConnectivityIndicator");
+  const connectivityClick = userActions.find(
+    (t: any) =>
+      t.data?.component === "GlobalInteraction" && typeof t.data?.name === "string" && /click .*c64u/i.test(t.data.name),
+  );
   expect(connectivityClick).toBeDefined();
-  expect(connectivityClick.data.component).toBe("ConnectivityIndicator");
+  expect(connectivityClick.data.component).toBe("GlobalInteraction");
 });
