@@ -32,14 +32,14 @@ describe("diagnosticsOverlay", () => {
   });
 
   describe("requestDiagnosticsOpen", () => {
-    it("persists tab to sessionStorage and dispatches event", () => {
-      requestDiagnosticsOpen("logs");
-      expect(sessionStorage.setItem).toHaveBeenCalledWith("c64u_diagnostics_open_tab", "logs");
+    it("persists preset to sessionStorage and dispatches event", () => {
+      requestDiagnosticsOpen("header");
+      expect(sessionStorage.setItem).toHaveBeenCalledWith("c64u_diagnostics_open_preset", "header");
 
       expect(window.dispatchEvent).toHaveBeenCalledTimes(1);
       const event = vi.mocked(window.dispatchEvent).mock.calls[0][0] as any;
       expect(event.type).toBe("c64u-diagnostics-open-request");
-      expect(event.detail).toEqual({ tab: "logs" });
+      expect(event.detail).toEqual({ preset: "header" });
     });
 
     it("handles sessionStorage errors gracefully", () => {
@@ -48,7 +48,7 @@ describe("diagnosticsOverlay", () => {
         throw new Error("QuotaExceeded");
       });
 
-      requestDiagnosticsOpen("logs");
+      requestDiagnosticsOpen("header");
 
       expect(warnSpy).toHaveBeenCalledWith("Unable to persist diagnostics open request:", expect.any(Error));
       expect(window.dispatchEvent).toHaveBeenCalled(); // Should still dispatch
@@ -56,20 +56,20 @@ describe("diagnosticsOverlay", () => {
 
     it("does nothing if window is undefined", () => {
       vi.stubGlobal("window", undefined);
-      requestDiagnosticsOpen("logs");
+      requestDiagnosticsOpen("header");
       // If window is undefined, it should just return.
       // We can't easily assert "nothing happened" other than no side effects on globals we just removed.
     });
   });
 
   describe("consumeDiagnosticsOpenRequest", () => {
-    it("retrieves and removes tab from sessionStorage", () => {
-      vi.mocked(sessionStorage.getItem).mockReturnValue("logs");
+    it("retrieves and removes preset from sessionStorage", () => {
+      vi.mocked(sessionStorage.getItem).mockReturnValue("header");
 
       const result = consumeDiagnosticsOpenRequest();
 
-      expect(result).toBe("logs");
-      expect(sessionStorage.removeItem).toHaveBeenCalledWith("c64u_diagnostics_open_tab");
+      expect(result).toBe("header");
+      expect(sessionStorage.removeItem).toHaveBeenCalledWith("c64u_diagnostics_open_preset");
     });
 
     it("returns null if no tab in storage", () => {

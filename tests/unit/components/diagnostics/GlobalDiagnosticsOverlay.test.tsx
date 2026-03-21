@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GlobalDiagnosticsOverlay } from "@/components/diagnostics/GlobalDiagnosticsOverlay";
 import { reportUserError } from "@/lib/uiErrors";
 import { shareAllDiagnosticsZip } from "@/lib/diagnostics/diagnosticsExport";
+import { DIAGNOSTICS_TEST_OVERLAY_STATE_EVENT } from "@/lib/diagnostics/diagnosticsTestBridge";
 
 const consumeDiagnosticsOpenRequestMock = vi.fn();
 
@@ -89,14 +90,35 @@ vi.mock("@/lib/diagnostics/diagnosticsOverlay", () => ({
   consumeDiagnosticsOpenRequest: () => consumeDiagnosticsOpenRequestMock(),
 }));
 
+vi.mock("@/hooks/useHealthState", () => ({
+  useHealthState: () => ({
+    state: "Idle",
+    connectivity: "Offline",
+    connectedDeviceLabel: null,
+    problemCount: 0,
+    host: null,
+    contributors: {
+      App: { state: "Idle", problemCount: 0, totalOperations: 0, failedOperations: 0 },
+      REST: { state: "Idle", problemCount: 0, totalOperations: 0, failedOperations: 0 },
+      FTP: { state: "Idle", problemCount: 0, totalOperations: 0, failedOperations: 0 },
+    },
+    lastRestActivity: null,
+    lastFtpActivity: null,
+    primaryProblem: null,
+  }),
+}));
+
 vi.mock("@/lib/diagnostics/diagnosticsOverlayState", () => ({
   setDiagnosticsOverlayActive: vi.fn(),
   withDiagnosticsTraceOverride: (fn: () => unknown) => fn(),
+  subscribeDiagnosticsSuppression: () => () => {},
+  isDiagnosticsOverlaySuppressionArmed: () => false,
 }));
 
 vi.mock("@/lib/diagnostics/diagnosticsSeverity", () => ({
   resolveLogSeverity: vi.fn(() => "error"),
   resolveTraceSeverity: vi.fn(() => "info"),
+  resolveActionSeverity: vi.fn(() => "info"),
 }));
 
 vi.mock("@/components/diagnostics/DiagnosticsListItem", () => ({
@@ -120,10 +142,26 @@ const renderOverlay = (initialPath = "/") =>
     </MemoryRouter>,
   );
 
+const expandDiagnosticsTools = () => {
+  fireEvent.click(screen.getByTestId("show-details-button"));
+  fireEvent.click(screen.getByTestId("technical-details-toggle"));
+  fireEvent.click(screen.getByTestId("tools-card-toggle"));
+};
+
+const expandTechnicalDetails = () => {
+  fireEvent.click(screen.getByTestId("show-details-button"));
+  fireEvent.click(screen.getByTestId("technical-details-toggle"));
+};
+
 describe("GlobalDiagnosticsOverlay", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     consumeDiagnosticsOpenRequestMock.mockReturnValue("actions");
+    delete (
+      window as Window & {
+        __c64uDiagnosticsTestBridge?: { getOverlayStateSnapshot?: () => Record<string, unknown> };
+      }
+    ).__c64uDiagnosticsTestBridge;
   });
 
   it("opens from a pending diagnostics request and shares all diagnostics", async () => {
@@ -132,6 +170,7 @@ describe("GlobalDiagnosticsOverlay", () => {
     renderOverlay();
 
     const dialog = await screen.findByRole("dialog");
+    expandDiagnosticsTools();
     expect(within(dialog).getByRole("button", { name: /^share all$/i })).toBeInTheDocument();
 
     fireEvent.click(within(dialog).getByRole("button", { name: /^share all$/i }));
@@ -144,7 +183,7 @@ describe("GlobalDiagnosticsOverlay", () => {
         actions: expect.any(Array),
       }),
     );
-  });
+  }, 10_000);
 
   it("reports share-all failures", async () => {
     vi.mocked(shareAllDiagnosticsZip).mockRejectedValue(new Error("zip failed"));
@@ -152,6 +191,7 @@ describe("GlobalDiagnosticsOverlay", () => {
     renderOverlay();
 
     const dialog = await screen.findByRole("dialog");
+    expandDiagnosticsTools();
     fireEvent.click(within(dialog).getByRole("button", { name: /^share all$/i }));
 
     await waitFor(() => {
@@ -178,11 +218,77 @@ describe("GlobalDiagnosticsOverlay", () => {
     await act(async () => {
       window.dispatchEvent(
         new CustomEvent("c64u-diagnostics-open-request", {
-          detail: { tab: "traces" },
+          detail: { preset: "header" },
         }),
       );
     });
 
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("applies seeded health-check overlay state from the diagnostics bridge and runtime events", async () => {
+    const seededResult = {
+      runId: "hc-seeded",
+      startTimestamp: "2024-01-01T00:00:00.000Z",
+      endTimestamp: "2024-01-01T00:00:01.000Z",
+      totalDurationMs: 1000,
+      overallHealth: "Healthy",
+      probes: {
+        REST: { probe: "REST", outcome: "Success", durationMs: 100, reason: null, startMs: 0 },
+        FTP: { probe: "FTP", outcome: "Success", durationMs: 100, reason: null, startMs: 0 },
+        CONFIG: { probe: "CONFIG", outcome: "Success", durationMs: 100, reason: null, startMs: 0 },
+        RASTER: { probe: "RASTER", outcome: "Success", durationMs: 100, reason: null, startMs: 0 },
+        JIFFY: { probe: "JIFFY", outcome: "Success", durationMs: 100, reason: null, startMs: 0 },
+      },
+      latency: { p50: 10, p90: 20, p99: 30 },
+      deviceInfo: null,
+    };
+
+    (
+      window as Window & {
+        __c64uDiagnosticsTestBridge?: { getOverlayStateSnapshot?: () => Record<string, unknown> };
+      }
+    ).__c64uDiagnosticsTestBridge = {
+      getOverlayStateSnapshot: () => ({
+        healthCheckRunning: false,
+        lastHealthCheckResult: seededResult,
+        liveHealthCheckProbes: null,
+      }),
+    };
+
+    renderOverlay();
+
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expandTechnicalDetails();
+    expect(screen.getByTestId("open-health-check-detail")).toBeInTheDocument();
+
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent(DIAGNOSTICS_TEST_OVERLAY_STATE_EVENT, {
+          detail: {
+            healthCheckRunning: true,
+            lastHealthCheckResult: null,
+            liveHealthCheckProbes: null,
+          },
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("technical-run-health-check-button")).toHaveTextContent("Running health check…");
+    });
+    expect(screen.queryByTestId("open-health-check-detail")).not.toBeInTheDocument();
+  });
+
+  it("ignores runtime diagnostics open requests without a preset", async () => {
+    consumeDiagnosticsOpenRequestMock.mockReturnValue(null);
+
+    renderOverlay();
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent("c64u-diagnostics-open-request", { detail: {} }));
+    });
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 });

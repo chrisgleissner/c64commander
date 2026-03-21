@@ -31,10 +31,8 @@ vi.mock("@/components/ThemeProvider", () => ({
   }),
 }));
 
-vi.mock("@/components/DiagnosticsActivityIndicator", () => ({
-  DiagnosticsActivityIndicator: ({ onClick }: { onClick: () => void }) => (
-    <button type="button" onClick={onClick} data-testid="diagnostics-activity-indicator" />
-  ),
+vi.mock("@/components/UnifiedHealthBadge", () => ({
+  UnifiedHealthBadge: () => null,
 }));
 
 vi.mock("@/hooks/useC64Connection", () => ({

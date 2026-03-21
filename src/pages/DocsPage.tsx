@@ -10,6 +10,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronDown, ExternalLink, Wifi, Settings, Play, Home, Disc, Sliders, Activity } from "lucide-react";
 import { AppBar } from "@/components/AppBar";
+import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
 import { SOURCE_EXPLANATIONS, SOURCE_LABELS } from "@/lib/sourceNavigation/sourceTerms";
 import { wrapUserEvent } from "@/lib/tracing/userTrace";
 
@@ -286,8 +287,9 @@ function DocSectionCard({ section }: { section: DocSection }) {
 }
 
 export default function DocsPage() {
+  const pageShellClassName = usePrimaryPageShellClassName("pb-24");
   return (
-    <div className="min-h-screen pb-24 pt-[var(--app-bar-height)]">
+    <div className={pageShellClassName}>
       <AppBar title="Docs" subtitle="How to use this app" />
 
       <main className="app-shell-container py-6 space-y-4">

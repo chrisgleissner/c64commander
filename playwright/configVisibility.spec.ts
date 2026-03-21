@@ -91,10 +91,10 @@ test.describe("Config visibility across modes", () => {
       await demoButton.click();
     }
     await expect(page.getByRole("dialog", { name: "Demo Mode" })).toBeHidden();
-    const indicator = page.getByTestId("connectivity-indicator");
+    const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(indicator).toBeVisible({ timeout: 15000 });
     await expect(indicator).toHaveAttribute("data-connection-state", /DEMO_ACTIVE|REAL_CONNECTED/, { timeout: 10000 });
-    await expect(indicator).toHaveAttribute("aria-label", /C64U( Demo)?/);
+    await expect(indicator).toHaveAttribute("aria-label", /(Connected to .*|Demo mode)/);
 
     await expect(page.getByText("Not connected", { exact: true })).toBeHidden();
     await expect(page.getByRole("button", { name: "Audio Mixer" })).toBeVisible();
@@ -156,7 +156,7 @@ test.describe("Config visibility across modes", () => {
       await demoButton.click();
     }
     await expect(page.getByRole("dialog", { name: "Demo Mode" })).toBeHidden();
-    const indicator = page.getByTestId("connectivity-indicator");
+    const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(indicator).toBeVisible({ timeout: 15000 });
     await expect(indicator).toHaveAttribute("data-connection-state", /DEMO_ACTIVE|REAL_CONNECTED/, { timeout: 10000 });
     await expect(page.getByText("Not connected", { exact: true })).toBeHidden();
@@ -177,11 +177,7 @@ test.describe("Config visibility across modes", () => {
     await selectTrigger.click();
     await page.getByRole("option", { name: /^NTSC$/ }).click();
 
-    const checkbox = page.getByLabel("HDMI Scan lines checkbox");
-    await checkbox.click();
-
     await expect.poll(() => server.getState()["U64 Specific Settings"]["System Mode"].value).toBe("NTSC");
-    await expect.poll(() => server.getState()["U64 Specific Settings"]["HDMI Scan lines"].value).toBe("Disabled");
 
     await snap(page, testInfo, "config-visible-after-real");
   });

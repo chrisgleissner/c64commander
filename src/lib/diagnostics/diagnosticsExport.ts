@@ -14,7 +14,9 @@ import { addErrorLog } from "@/lib/logging";
 
 export type DiagnosticsExportTab = "error-logs" | "logs" | "traces" | "actions";
 export type DiagnosticsExportScope = DiagnosticsExportTab | "all";
-export type DiagnosticsExportPayload = Record<DiagnosticsExportTab, unknown>;
+export type DiagnosticsExportPayload = Record<DiagnosticsExportTab, unknown> & {
+  supplemental?: Record<string, unknown>;
+};
 
 const DIAGNOSTICS_EXPORT_TABS: DiagnosticsExportTab[] = ["error-logs", "logs", "traces", "actions"];
 
@@ -93,12 +95,16 @@ const buildDiagnosticsZipEntries = (scope: DiagnosticsExportScope, data: unknown
     scope === "all"
       ? (data as DiagnosticsExportPayload)
       : ({ [scope]: data } as Pick<DiagnosticsExportPayload, DiagnosticsExportTab>);
-  return Object.fromEntries(
+  const entries = Object.fromEntries(
     DIAGNOSTICS_EXPORT_TABS.filter((tab) => scope === "all" || tab === scope).map((tab) => [
       buildDiagnosticsJsonFilename(tab, timestamp),
       strToU8(JSON.stringify(payloads[tab] ?? [], null, 2)),
     ]),
   );
+  if (scope === "all" && payloads.supplemental) {
+    entries[`supplemental-${timestamp}.json`] = strToU8(JSON.stringify(payloads.supplemental, null, 2));
+  }
+  return entries;
 };
 
 export const buildDiagnosticsZipData = (scope: DiagnosticsExportScope, data: unknown, timestamp: string) =>

@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { DiagnosticsListItem } from "@/components/diagnostics/DiagnosticsListItem";
 
@@ -69,5 +69,48 @@ describe("DiagnosticsListItem", () => {
       />,
     );
     expect(screen.getByLabelText("origin: unknown")).toBeInTheDocument();
+  });
+
+  it("renders secondary row in trace mode when secondaryLeft and secondaryRight are provided", () => {
+    render(
+      <DiagnosticsListItem
+        mode="trace"
+        severity="info"
+        title="REST GET /v1/info"
+        timestamp={new Date("2024-01-01T00:00:00.000Z")}
+        secondaryLeft={<span data-testid="sec-left">200 OK</span>}
+        secondaryRight={<span data-testid="sec-right">45 ms</span>}
+        testId="trace-with-secondary"
+      />,
+    );
+
+    const entry = screen.getByTestId("trace-with-secondary");
+    // Secondary content is in the expanded area (inside <details>)
+    expect(within(entry).getByTestId("sec-left")).toBeInTheDocument();
+    expect(within(entry).getByTestId("sec-right")).toBeInTheDocument();
+  });
+
+  it("starts expanded but still lets the user collapse the item", () => {
+    render(
+      <DiagnosticsListItem
+        mode="trace"
+        severity="info"
+        title="Expandable trace"
+        timestamp={new Date("2024-01-01T00:00:00.000Z")}
+        testId="expandable-trace"
+        defaultExpanded={true}
+      >
+        <div>details</div>
+      </DiagnosticsListItem>,
+    );
+
+    const entry = screen.getByTestId("expandable-trace");
+    expect(entry).toHaveAttribute("open");
+
+    const summary = entry.querySelector("summary");
+    expect(summary).toBeTruthy();
+    fireEvent.click(summary as HTMLElement);
+
+    expect(entry).not.toHaveAttribute("open");
   });
 });

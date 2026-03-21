@@ -55,8 +55,11 @@ import { normalizeOptionToken } from "./home/utils/uiLogic";
 import { buildConfigKey, readItemOptions, resolveTurboControlValue } from "./home/utils/HomeConfigUtils";
 
 import { SectionHeader } from "@/components/SectionHeader";
+import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
 import { cn } from "@/lib/utils";
 import { PageContainer, PageStack, ProfileActionGrid, ProfileSplitSection } from "@/components/layout/PageContainer";
+import { useInteractiveConfigWrite } from "@/hooks/useInteractiveConfigWrite";
+import { useLightingStudio } from "@/hooks/useLightingStudio";
 
 export default function HomePage() {
   return (
@@ -151,6 +154,17 @@ function HomePageContent() {
   const [applyingConfigId, setApplyingConfigId] = useState<string | null>(null);
 
   const { configWritePending, updateConfigValue, resolveConfigValue } = useSharedConfigActions();
+  const {
+    openStudio,
+    openContextLens,
+    resolved: lightingResolved,
+    manualLockEnabled,
+    lockCurrentLook,
+    unlockCurrentLook,
+    markManualLightingChange,
+    isActiveProfileModified,
+  } = useLightingStudio();
+  const { write: interactiveWriteU64 } = useInteractiveConfigWrite({ category: "U64 Specific Settings" });
   const [activeSliders, setActiveSliders] = useState<Record<string, number>>({});
 
   const machineTaskBusy = machineTaskId !== null || pauseResumePending;
@@ -259,6 +273,23 @@ function HomePageContent() {
     resolveConfigValue(u64Category, "U64 Specific Settings", "UserPort Power Enable", unavailableLabel),
   );
 
+  const handleTurboControlAutoAdjust = useCallback(
+    async (cpuSpeedVal: string) => {
+      if (turboControlOptions.length === 0) return;
+      const desiredTurbo = resolveTurboControlValue(cpuSpeedVal, turboControlOptions);
+      if (normalizeOptionToken(desiredTurbo) === normalizeOptionToken(turboControlValue)) return;
+      await updateConfigValue(
+        "U64 Specific Settings",
+        "Turbo Control",
+        desiredTurbo,
+        "HOME_TURBO_CONTROL",
+        "Turbo control updated",
+        { suppressToast: true },
+      );
+    },
+    [turboControlOptions, turboControlValue, updateConfigValue],
+  );
+
   const handleCpuSpeedChange = trace(async function handleCpuSpeedChange(
     nextValue: string,
     options?: { suppressToast?: boolean },
@@ -266,32 +297,26 @@ function HomePageContent() {
     await updateConfigValue("U64 Specific Settings", "CPU Speed", nextValue, "HOME_CPU_SPEED", "CPU speed updated", {
       suppressToast: options?.suppressToast,
     });
-
-    if (turboControlOptions.length === 0) return;
-    const desiredTurbo = resolveTurboControlValue(nextValue, turboControlOptions);
-    if (normalizeOptionToken(desiredTurbo) === normalizeOptionToken(turboControlValue)) return;
-    await updateConfigValue(
-      "U64 Specific Settings",
-      "Turbo Control",
-      desiredTurbo,
-      "HOME_TURBO_CONTROL",
-      "Turbo control updated",
-      { suppressToast: true },
-    );
+    await handleTurboControlAutoAdjust(nextValue);
   });
 
   const handleCpuSpeedPreviewChange = useCallback(
     (nextValue: string) => {
-      void handleCpuSpeedChange(nextValue, { suppressToast: true });
+      // Interactive write bypasses the queue for instant hardware feedback.
+      interactiveWriteU64({ "CPU Speed": nextValue });
     },
-    [handleCpuSpeedChange],
+    [interactiveWriteU64],
   );
 
   const handleCpuSpeedCommitChange = useCallback(
     (nextValue: string) => {
-      void handleCpuSpeedChange(nextValue);
+      // Commit via interactive write for the slider value, then trigger the
+      // Turbo Control auto-adjustment as a one-shot deliberate write without
+      // re-writing CPU Speed through the global queue.
+      interactiveWriteU64({ "CPU Speed": nextValue });
+      void handleTurboControlAutoAdjust(nextValue);
     },
-    [handleCpuSpeedChange],
+    [interactiveWriteU64, handleTurboControlAutoAdjust],
   );
 
   const handleSaveToApp = trace(async function handleSaveToApp(name: string) {
@@ -435,9 +460,10 @@ function HomePageContent() {
   const ramExpansionAvailable =
     ramExpansionOptions.length > 0 && ramExpansionModeToken !== normalizeOptionToken(unavailableLabel);
   const reuSizeVisible = isActive && ramExpansionAvailable && ramExpansionModeToken === normalizeOptionToken("Enabled");
+  const pageShellClassName = usePrimaryPageShellClassName("pb-24");
 
   return (
-    <div className="min-h-screen pb-24 pt-[var(--app-bar-height)]">
+    <div className={pageShellClassName}>
       <AppBar
         title="Home"
         leading={
@@ -791,12 +817,59 @@ function HomePageContent() {
                   testIdPrefix="home-user-interface"
                 />
                 <div data-testid="home-lighting-group">
-                  <SectionHeader title="LED LIGHTING" className="pt-1" />
+                  <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-border/60 bg-card/50 p-3">
+                    <div className="space-y-2">
+                      <SectionHeader title="LED LIGHTING" className="pt-0" />
+                      <div className="flex flex-wrap gap-2 text-xs">
+                        <span
+                          className="rounded-full border border-border/60 bg-background/80 px-2.5 py-1"
+                          data-testid="home-lighting-profile-chip"
+                        >
+                          {lightingResolved.activeProfile
+                            ? `${lightingResolved.activeProfile.name}${isActiveProfileModified ? " *" : ""}`
+                            : "Device look"}
+                        </span>
+                        {lightingResolved.activeAutomationChip ? (
+                          <span
+                            className="rounded-full border border-border/60 bg-background/80 px-2.5 py-1"
+                            data-testid="home-lighting-automation-chip"
+                          >
+                            {lightingResolved.activeAutomationChip}
+                          </span>
+                        ) : null}
+                        {manualLockEnabled ? (
+                          <span
+                            className="rounded-full border border-border/60 bg-background/80 px-2.5 py-1"
+                            data-testid="home-lighting-lock-chip"
+                          >
+                            Manual lock
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button variant="outline" size="sm" onClick={openContextLens} data-testid="home-lighting-why">
+                        Why this look?
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={manualLockEnabled ? unlockCurrentLook : lockCurrentLook}
+                        data-testid="home-lighting-lock-toggle"
+                      >
+                        {manualLockEnabled ? "Resume auto" : "Hold look"}
+                      </Button>
+                      <Button size="sm" onClick={openStudio} data-testid="home-lighting-studio">
+                        Studio
+                      </Button>
+                    </div>
+                  </div>
                 </div>
                 <LightingSummaryCard
                   category="LED Strip Settings"
                   config={ledStripConfig}
                   isActive={isActive}
+                  onManualLightingChange={markManualLightingChange}
                   operationPrefix="HOME_LED"
                   sectionLabel="Case Light"
                   selectTriggerClassName={inlineSelectTriggerClass}
@@ -807,6 +880,7 @@ function HomePageContent() {
                   category="Keyboard Lighting"
                   config={keyboardLightingConfig}
                   isActive={isActive}
+                  onManualLightingChange={markManualLightingChange}
                   operationPrefix="HOME_KEYBOARD_LIGHTING"
                   sectionLabel="Keyboard Light"
                   selectTriggerClassName={inlineSelectTriggerClass}

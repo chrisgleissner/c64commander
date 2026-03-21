@@ -57,4 +57,14 @@ describe("getCurrentPlaybackSnapshotLabel", () => {
       expect.objectContaining({ error: expect.any(String) }),
     );
   });
+
+  it("returns undefined when the session payload is a JSON primitive (not an object)", () => {
+    sessionStorage.setItem(PLAYBACK_SESSION_KEY, '"just-a-string"');
+    expect(getCurrentPlaybackSnapshotLabel()).toBeUndefined();
+  });
+
+  it("returns undefined when currentItemLabel is not a string", () => {
+    sessionStorage.setItem(PLAYBACK_SESSION_KEY, JSON.stringify({ currentItemLabel: 42 }));
+    expect(getCurrentPlaybackSnapshotLabel()).toBeUndefined();
+  });
 });

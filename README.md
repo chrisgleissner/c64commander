@@ -29,6 +29,7 @@ C64 Commander lets you control and manage a C64 Ultimate from Android, iOS, or a
     - [First Connection Checklist](#first-connection-checklist)
   - [🧩 What You Can Do](#-what-you-can-do)
     - [Home](#home)
+    - [Lighting Studio](#lighting-studio)
     - [Play](#play)
     - [Disks](#disks)
     - [Configuration](#configuration)
@@ -131,13 +132,29 @@ Then launch C64 Commander by opening http://`<host-ip>`:8064 in a browser.
 
 ### First Connection Checklist
 
-1. Power on the C64 Ultimate.
-2. Ensure C64 Commander and C64U are on the same network.
-3. In C64 Commander open **Settings → Device → Connection**.
-4. Enter the correct C64U IP address or hostname.
-5. Check that the C64U logo on the top-right of C64 Commander turns green.
+Before you connect C64 Commander to your device, make sure the C64 Ultimate is visible on your local network and has the required services enabled.
 
-🎉 **DONE!** C64 Commander is now connected to your C64 Ultimate.
+![Network services & timezone menu](doc/img/setup/enable_services.png)
+
+Quick checks on the C64 Ultimate:
+
+- Press **CBM+Restore**.
+- Open **Network services & timezone**.
+- Enable **REST**. Enable **FTP** too if you want to browse files or build disk and playlist collections.
+- Connect the device to your LAN using **WI-FI Network Setup** or Ethernet.
+- Note the IP address shown in **Wired Network Setup** or **WI-FI Network Setup**.
+
+Then connect in C64 Commander:
+
+1. Power on the C64 Ultimate.
+2. Make sure C64 Commander and the C64 Ultimate are on the same network.
+3. In C64 Commander, open **Settings → Device → Connection**.
+4. Enter the C64 Ultimate IP address or hostname.
+5. Confirm a green status dot appears next to the C64U logo in the top-right:
+
+![Connected](doc/img/app/details/page-headers/home/header.png)
+
+🎉 **DONE!** Enjoy controlling your C64 Ultimate via C64 Commander.
 
 ## 🧩 What You Can Do
 
@@ -242,13 +259,13 @@ Track actions, inspect traces, and export logs when it is time for serious troub
 
 <table>
   <tr>
-    <td><img src="doc/img/app/diagnostics/01-actions-detail.png" alt="Diagnostics actions" width="360"/></td>
-    <td><img src="doc/img/app/diagnostics/02-traces-detail.png" alt="Diagnostics traces" width="360"/></td>
-    <td><img src="doc/img/app/diagnostics/03-logs.png" alt="Diagnostics logs" width="360"/></td>
+    <td><img src="doc/img/app/diagnostics/01-entry/01-overview.png" alt="Diagnostics overview" width="360"/></td>
+    <td><img src="doc/img/app/diagnostics/02-activity/04-rest-trace-detail.png" alt="Diagnostics traces" width="360"/></td>
+    <td><img src="doc/img/app/diagnostics/03-summary/03-latency-analysis.png" alt="Diagnostics latency analysis" width="360"/></td>
   </tr>
 </table>
 
-Full screenshot set: [doc/img/app/](doc/img/app/)
+Full screenshot set: [doc/img/app/diagnostics/](doc/img/app/diagnostics/)
 
 Profile-specific screenshots:
 

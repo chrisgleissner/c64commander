@@ -8,6 +8,7 @@
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { createPortal } from "react-dom";
 
 export type AddItemsProgressState = {
   status: "idle" | "scanning" | "error" | "done";
@@ -42,7 +43,7 @@ export const AddItemsProgressOverlay = ({
   if (visible === false) return null;
   if (visible !== true && progress.status !== "scanning") return null;
 
-  return (
+  const overlay = (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
       data-testid={testId}
@@ -74,4 +75,10 @@ export const AddItemsProgressOverlay = ({
       </div>
     </div>
   );
+
+  if (typeof document === "undefined") {
+    return overlay;
+  }
+
+  return createPortal(overlay, document.body);
 };

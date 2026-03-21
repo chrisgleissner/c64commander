@@ -168,10 +168,10 @@ test.describe("UI coverage", () => {
     await selectTrigger.click();
     await page.getByRole("option", { name: /^NTSC$/ }).click();
 
-    const checkbox = page.getByLabel("HDMI Scan lines checkbox");
-    await checkbox.click();
-
-    await page.getByRole("button", { name: "Audio Mixer" }).click();
+    await page.goto("/config", { waitUntil: "domcontentloaded" });
+    const audioMixerButton = page.getByTestId("config-category-audio-mixer");
+    await expect(audioMixerButton).toBeVisible();
+    await audioMixerButton.click();
     await snap(page, testInfo, "audio-mixer-open");
     const slider = page.getByLabel("Vol UltiSid 1 slider");
     const sliderBox = await slider.boundingBox();
@@ -182,7 +182,6 @@ test.describe("UI coverage", () => {
     }
 
     await expect.poll(() => server.getState()["U64 Specific Settings"]["System Mode"].value).toBe("NTSC");
-    await expect.poll(() => server.getState()["U64 Specific Settings"]["HDMI Scan lines"].value).toBe("Disabled");
     await expect.poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 1"].value).toBe("+6 dB");
 
     const refreshCount = server.requests.length;

@@ -290,6 +290,16 @@ jobs:
             VITE_COVERAGE=true VITE_ENABLE_TEST_PROBES=1 npm run build
           fi
 
+      - name: Install tesseract-ocr
+        run: |
+          if command -v sudo >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends tesseract-ocr
+          else
+            apt-get update
+            apt-get install -y --no-install-recommends tesseract-ocr
+          fi
+
       - name: Prepare coverage output
         run: |
           mkdir -p .nyc_output

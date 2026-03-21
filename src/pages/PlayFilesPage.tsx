@@ -51,6 +51,7 @@ import { startBackgroundExecution, stopBackgroundExecution } from "@/lib/native/
 import { BackgroundExecution, onBackgroundAutoSkipDue } from "@/lib/native/backgroundExecution";
 
 import { AppBar } from "@/components/AppBar";
+import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
 import { FileOriginIcon } from "@/components/FileOriginIcon";
 import { SOURCE_LABELS } from "@/lib/sourceNavigation/sourceTerms";
 import { VolumeControls } from "@/pages/playFiles/components/VolumeControls";
@@ -77,6 +78,8 @@ import type { PlaylistItemRecord, TrackRecord } from "@/lib/playlistRepository";
 import { createAddFileSelectionsHandler } from "@/pages/playFiles/handlers/addFileSelections";
 import { resolveVolumeSyncDecision } from "@/pages/playFiles/playbackGuards";
 import type { PlayableEntry, PlaylistItem, StoredPlaybackSession, StoredPlaylistState } from "@/pages/playFiles/types";
+import { useLightingStudio } from "@/hooks/useLightingStudio";
+import { LightingAutomationCue } from "@/components/lighting/LightingStudioDialog";
 import {
   CATEGORY_OPTIONS,
   DEFAULT_SONG_DURATION_MS,
@@ -571,6 +574,7 @@ export default function PlayFilesPage() {
   }, [syncPlaybackTimeline]);
 
   const currentItem = playlist[currentIndex];
+  const { setPlaybackContext, resolved: lightingResolved, openStudio, openContextLens } = useLightingStudio();
   const currentDurationMs = currentItem ? playlistItemDuration(currentItem, currentIndex) : undefined;
   const sourceKind = useMemo<TraceSourceKind | null>(() => {
     if (!currentItem) return null;
@@ -612,6 +616,20 @@ export default function PlayFilesPage() {
   }, [playbackTraceContext]);
 
   useEffect(() => () => setPlaybackTraceSnapshot(null), []);
+  useEffect(() => {
+    setPlaybackContext({
+      sourceBucket:
+        isPlaying && currentItem
+          ? currentItem.request.source === "ultimate"
+            ? "c64u"
+            : currentItem.request.source
+          : null,
+      activeItemLabel: isPlaying && currentItem ? currentItem.label : null,
+    });
+    return () => {
+      setPlaybackContext({ sourceBucket: null, activeItemLabel: null });
+    };
+  }, [currentItem, isPlaying, setPlaybackContext]);
   const currentDurationLabel = formatTime(currentDurationMs);
   const progressPercent = currentDurationMs ? Math.min(100, (elapsedMs / currentDurationMs) * 100) : 0;
   const remainingMs = currentDurationMs !== undefined ? Math.max(0, currentDurationMs - elapsedMs) : undefined;
@@ -933,9 +951,10 @@ export default function PlayFilesPage() {
     getParentPath,
     currentPlayingItemId,
   });
+  const pageShellClassName = usePrimaryPageShellClassName("bg-gradient-to-b from-background to-background/95");
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-background/95 pt-[var(--app-bar-height)]">
+    <div className={pageShellClassName}>
       <AppBar
         title="Play Files"
         subtitle={
@@ -950,6 +969,13 @@ export default function PlayFilesPage() {
       />
       <PageContainer>
         <PageStack>
+          {lightingResolved.sourceCue ? (
+            <LightingAutomationCue
+              label={lightingResolved.sourceCue.label}
+              onOpenStudio={openStudio}
+              onOpenContextLens={openContextLens}
+            />
+          ) : null}
           <ProfileSplitSection minColumnWidth="22rem" testId="play-primary-layout">
             <div
               className="bg-card border border-border rounded-xl p-4 space-y-4"

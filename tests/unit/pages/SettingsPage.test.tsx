@@ -126,10 +126,8 @@ vi.mock("@/components/ThemeProvider", () => ({
   }),
 }));
 
-vi.mock("@/components/DiagnosticsActivityIndicator", () => ({
-  DiagnosticsActivityIndicator: ({ onClick }: { onClick: () => void }) => (
-    <button type="button" onClick={onClick} data-testid="diagnostics-activity-indicator" />
-  ),
+vi.mock("@/components/UnifiedHealthBadge", () => ({
+  UnifiedHealthBadge: () => null,
 }));
 
 vi.mock("@/hooks/useDeveloperMode", () => ({
@@ -190,6 +188,25 @@ const renderSettingsPageWithDisplayProfileProvider = () =>
       />
     </DisplayProfileProvider>,
   );
+
+const openDiagnosticsTools = async () => {
+  fireEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
+  const dialog = await screen.findByRole("dialog");
+
+  fireEvent.click(within(dialog).getByTestId("show-details-button"));
+
+  const technicalDetailsToggle = within(dialog).getByTestId("technical-details-toggle");
+  if (technicalDetailsToggle.getAttribute("aria-expanded") !== "true") {
+    fireEvent.click(technicalDetailsToggle);
+  }
+
+  const toolsToggle = within(dialog).getByTestId("tools-card-toggle");
+  if (toolsToggle.getAttribute("aria-expanded") !== "true") {
+    fireEvent.click(toolsToggle);
+  }
+
+  return dialog;
+};
 
 vi.mock("@/lib/uiErrors", () => ({
   reportUserError: vi.fn(),
@@ -276,6 +293,18 @@ vi.mock("@/lib/config/appSettings", () => ({
   saveDebugLoggingEnabled: vi.fn(),
   saveDiskAutostartMode: vi.fn(),
   saveVolumeSliderPreviewIntervalMs: vi.fn(),
+  loadNotificationVisibility: vi.fn(() => "errors-only"),
+  saveNotificationVisibility: vi.fn(),
+  loadNotificationDurationMs: vi.fn(() => 4000),
+  saveNotificationDurationMs: vi.fn(),
+  NOTIFICATION_DURATION_MIN_MS: 2000,
+  NOTIFICATION_DURATION_MAX_MS: 8000,
+  loadAutoRotationEnabled: vi.fn(() => false),
+  saveAutoRotationEnabled: vi.fn(),
+  APP_SETTINGS_KEYS: {
+    NOTIFICATION_DURATION_MS_KEY: "c64u_notification_duration_ms",
+    AUTO_ROTATION_ENABLED_KEY: "c64u_auto_rotation_enabled",
+  },
 }));
 
 vi.mock("@/lib/hvsc/hvscReleaseService", () => ({
@@ -574,49 +603,47 @@ describe("SettingsPage", () => {
     expect(screen.getByText(/real device detected during probe/i)).toBeInTheDocument();
   });
 
-  it("shows diagnostics tabs in required order", async () => {
+  it("shows evidence type toggles in required order", async () => {
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
-    const dialog = await screen.findByRole("dialog");
-    const tabLabels = within(dialog)
-      .getAllByRole("tab")
-      .map((tab) => tab.textContent);
+    const dialog = await openDiagnosticsTools();
 
-    expect(tabLabels).toEqual(["Errors", "Logs", "Traces", "Actions"]);
+    expect(within(dialog).getByTestId("evidence-toggle-problems")).toBeInTheDocument();
+    expect(within(dialog).getByTestId("evidence-toggle-actions")).toBeInTheDocument();
+    expect(within(dialog).getByTestId("evidence-toggle-logs")).toBeInTheDocument();
+    expect(within(dialog).getByTestId("evidence-toggle-traces")).toBeInTheDocument();
   });
 
-  it("opens diagnostics on Actions tab when requested", async () => {
+  it("opens diagnostics from a preset request event", async () => {
     renderSettingsPage();
 
     await act(async () => {
       window.dispatchEvent(
         new CustomEvent("c64u-diagnostics-open-request", {
-          detail: { tab: "actions" },
+          detail: { preset: "settings" },
         }),
       );
     });
 
-    const dialog = await screen.findByRole("dialog");
-    const actionsTab = within(dialog).getByRole("tab", { name: /actions/i });
-    await waitFor(() => expect(actionsTab).toHaveAttribute("aria-selected", "true"));
+    await screen.findByRole("dialog");
   });
 
-  it("renders a single diagnostics action bar", async () => {
+  it("renders the diagnostics toolbar with share and clear buttons", async () => {
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await openDiagnosticsTools();
 
-    expect(within(dialog).getByRole("button", { name: /clear all/i })).toBeInTheDocument();
-    expect(within(dialog).queryByRole("button", { name: /share\s*\/\s*export/i })).not.toBeInTheDocument();
+    expect(within(dialog).getByTestId("diagnostics-share-all")).toBeInTheDocument();
+    expect(within(dialog).getByTestId("diagnostics-share-filtered")).toBeInTheDocument();
+    fireEvent.pointerDown(within(dialog).getByTestId("diagnostics-tools-menu"));
+    expect(await screen.findByTestId("diagnostics-clear-all-trigger")).toBeInTheDocument();
     expect(within(dialog).queryByRole("button", { name: /clear logs/i })).not.toBeInTheDocument();
     expect(within(dialog).queryByRole("button", { name: /clear traces/i })).not.toBeInTheDocument();
     expect(within(dialog).queryByRole("button", { name: /share redacted/i })).not.toBeInTheDocument();
     expect(within(dialog).queryByRole("button", { name: /email/i })).not.toBeInTheDocument();
   });
 
-  it("filters diagnostics entries per tab and restores on clear", async () => {
+  it("filters diagnostics entries using search text and restores on clear", async () => {
     vi.mocked(getErrorLogs).mockReturnValue([
       {
         id: "err-1",
@@ -633,70 +660,60 @@ describe("SettingsPage", () => {
         details: { code: "E-2" },
       },
     ] as any);
-    vi.mocked(getLogs).mockReturnValue([
-      {
-        id: "log-1",
-        level: "info",
-        message: "Connection ready",
-        timestamp: "2024-01-01T00:00:02.000Z",
-      },
-    ] as any);
 
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await openDiagnosticsTools();
 
-    const errorsTab = within(dialog).getByRole("tab", { name: /^Errors$/i });
-    fireEvent.mouseDown(errorsTab);
-    fireEvent.click(errorsTab);
-    await waitFor(() => expect(errorsTab).toHaveAttribute("aria-selected", "true"));
+    // Problems are active by default — both error entries are visible
+    expect((await within(dialog).findAllByText("Disk error")).length).toBeGreaterThan(0);
+    expect((await within(dialog).findAllByText("Network failure")).length).toBeGreaterThan(0);
 
+    // Filter by "network" — only matching entry remains
     const filterInput = within(dialog).getByTestId("diagnostics-filter-input");
     fireEvent.change(filterInput, { target: { value: "network" } });
     expect((await within(dialog).findAllByText("Network failure")).length).toBeGreaterThan(0);
     expect(within(dialog).queryByText("Disk error")).not.toBeInTheDocument();
 
+    // Clear filter — both entries visible again
     fireEvent.click(within(dialog).getByRole("button", { name: /clear filter/i }));
     expect((await within(dialog).findAllByText("Disk error")).length).toBeGreaterThan(0);
-
-    const logsTab = within(dialog).getByRole("tab", { name: /^Logs$/i });
-    fireEvent.mouseDown(logsTab);
-    fireEvent.click(logsTab);
-    await waitFor(() => expect(logsTab).toHaveAttribute("aria-selected", "true"));
-    expect(within(dialog).getByTestId("diagnostics-filter-input")).toHaveValue("");
-    expect((await within(dialog).findAllByText("Connection ready")).length).toBeGreaterThan(0);
   });
 
-  it("filters diagnostics entries case-insensitively across timestamps and details", async () => {
+  it("filters diagnostics entries case-insensitively across message and level fields", async () => {
     vi.mocked(getLogs).mockReturnValue([
       {
-        id: "log-1",
-        level: "info",
-        message: "System boot",
+        id: "log-unique-42",
+        level: "warn",
+        message: "SYSTEM Boot Complete",
         timestamp: "2024-01-01T01:02:03.004Z",
-        details: { note: "MiXeDCase" },
       },
     ] as any);
 
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
-    const dialog = await screen.findByRole("dialog");
-    const logsTab = within(dialog).getByRole("tab", { name: /^Logs$/i });
-    fireEvent.mouseDown(logsTab);
-    fireEvent.click(logsTab);
-    await waitFor(() => expect(logsTab).toHaveAttribute("aria-selected", "true"));
+    const dialog = await openDiagnosticsTools();
+
+    // Enable Logs toggle
+    fireEvent.click(within(dialog).getByTestId("evidence-toggle-logs"));
 
     const filterInput = within(dialog).getByTestId("diagnostics-filter-input");
-    fireEvent.change(filterInput, { target: { value: "mixedcase" } });
-    expect((await within(dialog).findAllByText("System boot")).length).toBeGreaterThan(0);
 
-    fireEvent.change(filterInput, { target: { value: "01:02:03.004" } });
-    expect((await within(dialog).findAllByText("System boot")).length).toBeGreaterThan(0);
+    // Case-insensitive match on message
+    fireEvent.change(filterInput, { target: { value: "system boot" } });
+    expect((await within(dialog).findAllByText("SYSTEM Boot Complete")).length).toBeGreaterThan(0);
 
-    fireEvent.change(filterInput, { target: { value: "missing" } });
-    expect(within(dialog).queryByText("System boot")).not.toBeInTheDocument();
+    // Case-insensitive match on level
+    fireEvent.change(filterInput, { target: { value: "WARN" } });
+    expect((await within(dialog).findAllByText("SYSTEM Boot Complete")).length).toBeGreaterThan(0);
+
+    // Match on id
+    fireEvent.change(filterInput, { target: { value: "log-unique-42" } });
+    expect((await within(dialog).findAllByText("SYSTEM Boot Complete")).length).toBeGreaterThan(0);
+
+    // No match — entry hidden
+    fireEvent.change(filterInput, { target: { value: "zz-no-match-zz" } });
+    expect(within(dialog).queryByText("SYSTEM Boot Complete")).toBeNull();
   });
 
   it("clears diagnostics after confirmation", async () => {
@@ -705,67 +722,23 @@ describe("SettingsPage", () => {
         id: "err-1",
         level: "error",
         message: "Error entry",
-        timestamp: Date.now(),
+        timestamp: new Date().toISOString(),
         details: { boom: true },
       },
     ] as any);
 
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
-    const dialog = await screen.findByRole("dialog");
-    const errorsTab = within(dialog).getByRole("tab", { name: /^Errors$/i });
-    fireEvent.mouseDown(errorsTab);
-    fireEvent.click(errorsTab);
-    await waitFor(() => expect(errorsTab).toHaveAttribute("aria-selected", "true"));
+    const dialog = await openDiagnosticsTools();
+
+    // Problems active by default — error entry visible
     expect((await within(dialog).findAllByText("Error entry")).length).toBeGreaterThan(0);
 
-    const logsTab = within(dialog).getByRole("tab", { name: /^Logs$/i });
-    fireEvent.mouseDown(logsTab);
-    fireEvent.click(logsTab);
-    await waitFor(() => expect(logsTab).toHaveAttribute("aria-selected", "true"));
-    vi.mocked(getLogs).mockReturnValue([
-      {
-        id: "log-1",
-        level: "info",
-        message: "Log entry",
-        timestamp: Date.now(),
-        details: { ok: true },
-      },
-    ] as any);
-    await act(async () => {
-      window.dispatchEvent(new Event("c64u-logs-updated"));
-    });
-    expect((await within(dialog).findAllByText("Log entry")).length).toBeGreaterThan(0);
-
-    const tracesTab = within(dialog).getByRole("tab", { name: /traces/i });
-    fireEvent.mouseDown(tracesTab);
-    fireEvent.click(tracesTab);
-    await waitFor(() => expect(tracesTab).toHaveAttribute("aria-selected", "true"));
-    vi.mocked(getTraceEvents).mockReturnValue([
-      {
-        id: "trace-1",
-        timestamp: new Date().toISOString(),
-        relativeMs: 0,
-        type: "rest-request",
-        origin: "user",
-        correlationId: "COR-0000",
-        data: { method: "GET", url: "/v1/info" },
-      },
-    ] as any);
-    await act(async () => {
-      window.dispatchEvent(new Event("c64u-traces-updated"));
-    });
-    expect(await within(dialog).findByText(/REST GET/i)).toBeInTheDocument();
-
-    fireEvent.click(within(dialog).getByRole("button", { name: /clear all/i }));
-    const confirm = await screen.findByRole("alertdialog", {
-      name: /clear diagnostics/i,
-    });
-    expect(confirm).toHaveTextContent(
-      "This will permanently clear all warning/error logs, logs, traces, and actions. This cannot be undone.",
-    );
-    fireEvent.click(within(confirm).getByRole("button", { name: /clear/i }));
+    // Click clear all trigger, confirm
+    fireEvent.pointerDown(within(dialog).getByTestId("diagnostics-tools-menu"));
+    fireEvent.click(await screen.findByTestId("diagnostics-clear-all-trigger"));
+    const confirm = await screen.findByRole("alertdialog");
+    fireEvent.click(within(confirm).getByTestId("diagnostics-clear-all-confirm"));
 
     expect(clearTraceEvents).toHaveBeenCalled();
     expect(clearLogs).toHaveBeenCalled();
@@ -775,13 +748,11 @@ describe("SettingsPage", () => {
   it("requires confirmation to clear diagnostics", async () => {
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await openDiagnosticsTools();
 
-    fireEvent.click(within(dialog).getByRole("button", { name: /clear all/i }));
-    const confirm = await screen.findByRole("alertdialog", {
-      name: /clear diagnostics/i,
-    });
+    fireEvent.pointerDown(within(dialog).getByTestId("diagnostics-tools-menu"));
+    fireEvent.click(await screen.findByTestId("diagnostics-clear-all-trigger"));
+    const confirm = await screen.findByRole("alertdialog");
     fireEvent.click(within(confirm).getByRole("button", { name: /cancel/i }));
 
     expect(clearTraceEvents).not.toHaveBeenCalled();
@@ -866,17 +837,14 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
-    const dialog = await screen.findByRole("dialog");
-    const actionsTab = within(dialog).getByRole("tab", { name: /actions/i });
-    fireEvent.mouseDown(actionsTab);
-    fireEvent.click(actionsTab);
-    await waitFor(() => expect(actionsTab).toHaveAttribute("aria-selected", "true"));
+    const dialog = await openDiagnosticsTools();
 
+    // Dispatch trace update so action summaries are derived from mock trace events
     await act(async () => {
       window.dispatchEvent(new Event("c64u-traces-updated"));
     });
 
+    // Actions are active by default — action-summary-COR-0001 appears in unified stream
     const summary = await within(dialog).findByTestId("action-summary-COR-0001");
     expect(within(summary).getByLabelText("origin: user")).toHaveClass("bg-diagnostics-user");
     expect(within(summary).getByTestId("action-rest-count-COR-0001")).toHaveClass("text-diagnostics-rest");
@@ -930,26 +898,20 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await openDiagnosticsTools();
 
+    // Dispatch trace update so trace events and action summaries are updated
     await act(async () => {
       window.dispatchEvent(new Event("c64u-traces-updated"));
     });
 
-    const tracesTab = within(dialog).getByRole("tab", { name: /traces/i });
-    fireEvent.mouseDown(tracesTab);
-    fireEvent.click(tracesTab);
-    await waitFor(() => expect(tracesTab).toHaveAttribute("aria-selected", "true"));
+    // Enable Traces toggle (Traces not active by default)
+    fireEvent.click(within(dialog).getByTestId("evidence-toggle-traces"));
 
-    const traceItem = await within(dialog).findByTestId("trace-item-trace-1");
+    const traceItem = await within(dialog).findByTestId("trace-trace-1");
     expect(traceItem.querySelector('[data-testid="diagnostics-summary-grid"]')).toBeTruthy();
 
-    const actionsTab = within(dialog).getByRole("tab", { name: /actions/i });
-    fireEvent.mouseDown(actionsTab);
-    fireEvent.click(actionsTab);
-    await waitFor(() => expect(actionsTab).toHaveAttribute("aria-selected", "true"));
-
+    // Actions active by default — action-summary renders in unified stream
     const actionItem = await within(dialog).findByTestId("action-summary-COR-0100");
     expect(actionItem.querySelector('[data-testid="diagnostics-summary-grid"]')).toBeTruthy();
     expect(within(actionItem).getByTestId("action-trigger-COR-0100")).toHaveTextContent(
@@ -957,40 +919,28 @@ describe("SettingsPage", () => {
     );
   });
 
-  it("exports active diagnostics tab and reports failures", async () => {
-    vi.mocked(shareDiagnosticsZip).mockImplementation(() => undefined);
+  it("exports filtered diagnostics and reports failures", async () => {
+    vi.mocked(shareDiagnosticsZip).mockResolvedValue(undefined);
+    vi.mocked(getErrorLogs).mockReturnValue([
+      { id: "err-x1", level: "error", message: "Export test error", timestamp: new Date().toISOString() },
+    ] as any);
 
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
-    const dialog = await screen.findByRole("dialog");
-    const tracesTab = within(dialog).getByRole("tab", { name: /traces/i });
-    fireEvent.mouseDown(tracesTab);
-    fireEvent.click(tracesTab);
-    await waitFor(() => expect(tracesTab).toHaveAttribute("aria-selected", "true"));
-    vi.mocked(getTraceEvents).mockReturnValue([
-      {
-        id: "trace-1",
-        timestamp: new Date().toISOString(),
-        relativeMs: 0,
-        type: "rest-request",
-        origin: "user",
-        correlationId: "COR-0000",
-        data: { method: "GET", url: "/v1/info" },
-      },
-    ] as any);
-    await act(async () => {
-      window.dispatchEvent(new Event("c64u-traces-updated"));
-    });
-    fireEvent.click(await within(dialog).findByTestId("diagnostics-share-traces"));
+    const dialog = await openDiagnosticsTools();
 
-    expect(shareDiagnosticsZip).toHaveBeenCalledWith("traces", expect.any(Array));
+    // Wait for the error entry so Share filtered is enabled
+    await within(dialog).findByTestId("problem-err-x1");
 
-    vi.mocked(shareDiagnosticsZip).mockImplementation(() => {
-      throw new Error("export failed");
+    fireEvent.click(within(dialog).getByTestId("diagnostics-share-filtered"));
+
+    await waitFor(() => {
+      expect(shareDiagnosticsZip).toHaveBeenCalledWith("actions", expect.any(Array));
     });
 
-    fireEvent.click(await within(dialog).findByTestId("diagnostics-share-traces"));
+    vi.mocked(shareDiagnosticsZip).mockRejectedValue(new Error("export failed"));
+
+    fireEvent.click(within(dialog).getByTestId("diagnostics-share-filtered"));
 
     await waitFor(() => {
       expect(reportUserError).toHaveBeenCalledWith(
@@ -1006,8 +956,7 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await openDiagnosticsTools();
     const shareAllButton = within(dialog).getByRole("button", { name: /^share all$/i });
 
     fireEvent.click(shareAllButton);
@@ -1254,20 +1203,18 @@ describe("SettingsPage", () => {
     expect(loadSpy.mock.calls.length).toBeGreaterThan(callsBefore);
   });
 
-  it("handles diagnostics open request event with tab detail", async () => {
+  it("handles diagnostics open request event with preset detail", async () => {
     renderSettingsPage();
 
     await act(async () => {
       window.dispatchEvent(
         new CustomEvent("c64u-diagnostics-open-request", {
-          detail: { tab: "traces" },
+          detail: { preset: "settings" },
         }),
       );
     });
 
-    const dialog = await screen.findByRole("dialog");
-    const tracesTab = within(dialog).getByRole("tab", { name: /traces/i });
-    await waitFor(() => expect(tracesTab).toHaveAttribute("aria-selected", "true"));
+    await screen.findByRole("dialog");
   });
 
   it("ignores diagnostics open request event without tab", async () => {
@@ -1352,81 +1299,85 @@ describe("SettingsPage", () => {
   });
 
   it("filters traces tab entries with non-empty filter text", async () => {
+    const base = new Date("2024-06-01T10:00:00.000Z").getTime();
     vi.mocked(getTraceEvents).mockReturnValue([
       {
-        id: "trace-1",
-        timestamp: new Date().toISOString(),
+        id: "trace-filter-a",
+        timestamp: new Date(base).toISOString(),
         relativeMs: 0,
         type: "rest-request",
         origin: "user",
-        correlationId: "COR-0001",
+        correlationId: "COR-FILTER-1",
         data: { method: "GET", url: "/v1/info" },
       },
       {
-        id: "trace-2",
-        timestamp: new Date().toISOString(),
-        relativeMs: 100,
-        type: "action-start",
-        origin: "system",
-        correlationId: "COR-0002",
-        data: { actionName: "HealthCheck" },
+        id: "trace-filter-b",
+        timestamp: new Date(base + 10).toISOString(),
+        relativeMs: 10,
+        type: "rest-request",
+        origin: "user",
+        correlationId: "COR-FILTER-2",
+        data: { method: "POST", url: "/v1/machine:writemem" },
       },
     ] as any);
 
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
-    const dialog = await screen.findByRole("dialog");
-    const tracesTab = within(dialog).getByRole("tab", { name: /traces/i });
-    fireEvent.mouseDown(tracesTab);
-    fireEvent.click(tracesTab);
-    await waitFor(() => expect(tracesTab).toHaveAttribute("aria-selected", "true"));
+    const dialog = await openDiagnosticsTools();
 
+    // Dispatch update so state picks up mocked traces
+    await act(async () => {
+      window.dispatchEvent(new Event("c64u-traces-updated"));
+    });
+
+    // Enable Traces evidence type
+    fireEvent.click(within(dialog).getByTestId("evidence-toggle-traces"));
+
+    // Both traces should appear
+    await within(dialog).findByTestId("trace-trace-filter-a");
+    expect(within(dialog).getByTestId("trace-trace-filter-b")).toBeTruthy();
+
+    // Filter by trace id — only trace-filter-a matches
     const filterInput = within(dialog).getByTestId("diagnostics-filter-input");
-    fireEvent.change(filterInput, { target: { value: "COR-0001" } });
+    fireEvent.change(filterInput, { target: { value: "trace-filter-a" } });
 
-    // Only trace-1 should now be visible (filter match)
     await waitFor(() => {
-      expect(within(dialog).queryByText(/COR-0001/)).toBeTruthy();
+      expect(within(dialog).getByTestId("trace-trace-filter-a")).toBeTruthy();
+      expect(within(dialog).queryByTestId("trace-trace-filter-b")).toBeNull();
     });
   }, 15000);
 
   it("filters actions tab entries with non-empty filter text", async () => {
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
-    const dialog = await screen.findByRole("dialog");
-    const actionsTab = within(dialog).getByRole("tab", { name: /^Actions$/i });
-    fireEvent.mouseDown(actionsTab);
-    fireEvent.click(actionsTab);
-    await waitFor(() => expect(actionsTab).toHaveAttribute("aria-selected", "true"));
+    const dialog = await openDiagnosticsTools();
 
-    // Type a filter — covers the actions filter useMemo non-empty filterText branch
+    // Actions are active by default — type a filter that matches nothing
     const filterInput = within(dialog).getByTestId("diagnostics-filter-input");
     fireEvent.change(filterInput, { target: { value: "nonexistent-action" } });
 
-    // No actions should match
-    expect(within(dialog).queryAllByTestId(/^action-item-/)).toHaveLength(0);
+    // No action summaries should match
+    expect(within(dialog).queryAllByTestId(/^action-/)).toHaveLength(0);
   }, 15000);
 
-  it("exports diagnostics from actions tab", async () => {
-    vi.mocked(shareDiagnosticsZip).mockImplementation(() => undefined);
+  it("exports filtered diagnostics from the share-filtered button", async () => {
+    vi.mocked(shareDiagnosticsZip).mockResolvedValue(undefined);
+    vi.mocked(getErrorLogs).mockReturnValue([
+      { id: "err-sf1", level: "error", message: "Share filtered test", timestamp: new Date().toISOString() },
+    ] as any);
 
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
-    const dialog = await screen.findByRole("dialog");
-    const actionsTab = within(dialog).getByRole("tab", { name: /^Actions$/i });
-    fireEvent.mouseDown(actionsTab);
-    fireEvent.click(actionsTab);
-    await waitFor(() => expect(actionsTab).toHaveAttribute("aria-selected", "true"));
+    const dialog = await openDiagnosticsTools();
 
-    // Share button covers the 'actions' branch in handleShareDiagnostics (line 470)
-    const shareBtn = within(dialog).queryByTestId("diagnostics-share-actions");
-    if (shareBtn) {
-      fireEvent.click(shareBtn);
-      expect(shareDiagnosticsZip).toHaveBeenCalledWith("actions", expect.any(Array));
-    }
+    // Wait for visible entry so the button is enabled
+    await within(dialog).findByTestId("problem-err-sf1");
+
+    fireEvent.click(within(dialog).getByTestId("diagnostics-share-filtered"));
+
+    await waitFor(() => {
+      expect(shareDiagnosticsZip).toHaveBeenCalled();
+    });
   }, 15000);
 
   it("handles non-finite input for discovery timing fields (uses fallback)", async () => {

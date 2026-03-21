@@ -65,6 +65,8 @@ vi.mock("@/lib/diagnostics/diagnosticsOverlayState", () => ({
   isDiagnosticsOverlayActive: () => false,
   subscribeDiagnosticsOverlay: () => () => {},
   shouldSuppressDiagnosticsSideEffects: () => false,
+  subscribeDiagnosticsSuppression: () => () => {},
+  isDiagnosticsOverlaySuppressionArmed: () => false,
 }));
 
 // Mock ConfigActionsContext

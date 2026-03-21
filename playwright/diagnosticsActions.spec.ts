@@ -24,6 +24,21 @@ const waitForTracing = async (page: Page) => {
   );
 };
 
+const ensureTechnicalDetailsExpanded = async (dialog: Page) => {
+  const toggle = dialog.getByTestId("technical-details-toggle");
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") {
+    await toggle.click();
+  }
+};
+
+const ensureToolsExpanded = async (dialog: Page) => {
+  await ensureTechnicalDetailsExpanded(dialog);
+  const toggle = dialog.getByTestId("tools-card-toggle");
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") {
+    await toggle.click();
+  }
+};
+
 test.describe("Diagnostics Actions tab", () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
@@ -173,11 +188,13 @@ test.describe("Diagnostics Actions tab", () => {
     await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
     await expect(page.getByRole("dialog", { name: "Diagnostics" })).toBeVisible();
     await snap(page, testInfo, "diagnostics-open");
+    await page.getByTestId("show-details-button").click();
+    await ensureToolsExpanded(page);
 
-    // Navigate to Actions tab
-    await page.getByRole("tab", { name: "Actions" }).click();
+    // Actions evidence filter is active by default – verify before inspecting content
+    await expect(page.getByTestId("evidence-toggle-actions")).toHaveAttribute("aria-pressed", "true");
 
-    // Wait for the actions tab to render and verify action summary is visible
+    // Verify action summary is visible
     await expect(page.getByTestId("action-summary-COR-0900")).toBeVisible();
 
     // Verify badge counts
@@ -186,8 +203,11 @@ test.describe("Diagnostics Actions tab", () => {
     await expect(page.getByTestId("action-error-count-COR-0900")).toHaveText("ERR×1");
     await snap(page, testInfo, "actions-tab");
 
-    // Expand the action details
-    await page.getByTestId("action-summary-COR-0900").locator("summary").click();
+    // Expand the action details - use evaluate to bypass sticky action shelf coordinate interception
+    await page
+      .getByTestId("action-summary-COR-0900")
+      .locator("summary")
+      .evaluate((el) => (el as HTMLElement).click());
     await expect(page.getByTestId("action-rest-effect-COR-0900-0")).toBeVisible();
     await expect(page.getByTestId("action-ftp-effect-COR-0900-0")).toBeVisible();
     await expect(page.getByTestId("action-error-effect-COR-0900-0")).toBeVisible();
@@ -368,11 +388,15 @@ test.describe("Diagnostics Actions tab", () => {
 
     await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
     await expect(page.getByRole("dialog", { name: "Diagnostics" })).toBeVisible();
-    await page.getByRole("tab", { name: "Actions" }).click();
+    // Expand to full details before checking filters and action summaries
+    await page.getByTestId("show-details-button").click();
+    await ensureToolsExpanded(page);
+    // Actions evidence filter is active by default
+    await expect(page.getByTestId("evidence-toggle-actions")).toHaveAttribute("aria-pressed", "true");
 
-    await page.getByTestId("action-summary-COR-0700").locator("summary").click();
-    await page.getByTestId("action-summary-COR-0710").locator("summary").click();
-    await page.getByTestId("action-summary-COR-0720").locator("summary").click();
+    for (const id of ["COR-0700", "COR-0710", "COR-0720"]) {
+      await page.getByTestId(`action-summary-${id}`).locator("summary").click({ force: true });
+    }
 
     await expect(page.getByTestId("action-rest-effect-COR-0700-0")).toContainText("target: demo");
     await expect(page.getByTestId("action-rest-effect-COR-0710-0")).toContainText("target: sandbox");

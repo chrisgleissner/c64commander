@@ -596,9 +596,21 @@ const checkHorizontalOverflow = async (page: Page, testInfo: TestInfo) => {
             '[data-sonner-toast], [data-sonner-toaster], .toaster, .toast, [role="status"], [data-state="open"].destructive, [aria-label="Notifications (F8)"], [data-radix-toast-viewport]',
           ),
         );
+      // Skip elements whose overflow is clipped by an ancestor — they cannot visually overflow the viewport.
+      // This avoids false positives from intentional offscreen containers (e.g. swipe-navigation runway).
+      const isClippedByAncestor = (element: Element): boolean => {
+        let parent = element.parentElement;
+        while (parent) {
+          const overflowX = window.getComputedStyle(parent).overflowX;
+          if (overflowX === "hidden" || overflowX === "clip") return true;
+          parent = parent.parentElement;
+        }
+        return false;
+      };
 
       elements.forEach((element) => {
         if (isToastElement(element)) return;
+        if (isClippedByAncestor(element)) return;
         const rect = element.getBoundingClientRect();
         if (rect.width > config.maxWidth + config.tolerance || rect.right > config.maxWidth + config.tolerance) {
           const tag = element.tagName.toLowerCase();

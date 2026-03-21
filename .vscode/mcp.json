@@ -14,7 +14,7 @@
     },
     "c64scope": {
       "command": "npx",
-      "args": ["-y", "tsx", "${workspaceFolder}/c64scope/src/index.ts"],
+      "args": ["-y", "tsx", "c64scope/src/index.ts"],
       "type": "stdio"
     }
   }

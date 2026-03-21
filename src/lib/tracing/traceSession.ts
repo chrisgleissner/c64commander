@@ -26,6 +26,7 @@ import { resolveBackendTarget } from "@/lib/tracing/traceTargets";
 import { getPlatform } from "@/lib/native/platform";
 import { getCurrentTraceIdCounters, nextTraceEventId, resetTraceIds, setTraceIdCounters } from "@/lib/tracing/traceIds";
 import { shouldSuppressDiagnosticsSideEffects } from "@/lib/diagnostics/diagnosticsOverlayState";
+import { recordLatencySample } from "@/lib/diagnostics/latencyTracker";
 
 const RETENTION_WINDOW_MS = 30 * 60 * 1000;
 const MAX_EVENT_COUNT = 25_000;
@@ -314,6 +315,9 @@ export const recordDeviceGuard = (action: TraceActionContext, payload: Record<st
 export const recordRestResponse = (
   action: TraceActionContext,
   payload: {
+    method?: string | null;
+    path?: string | null;
+    url?: string | null;
     status: number | null;
     headers: TraceHeaders;
     body: unknown;
@@ -324,7 +328,11 @@ export const recordRestResponse = (
   },
 ) => {
   const errorMessage = payload.errorMessage ?? (payload.error ? payload.error.message : null);
+  const normalizedPath = payload.path ?? payload.url ?? "";
   appendEvent("rest-response", action.origin, action.correlationId, {
+    method: payload.method ?? null,
+    path: normalizedPath || null,
+    url: payload.url ?? null,
     status: payload.status,
     headers: redactHeaders(payload.headers),
     body: redactPayload(payload.body ?? null),
@@ -332,6 +340,9 @@ export const recordRestResponse = (
     durationMs: payload.durationMs,
     error: errorMessage ? redactErrorMessage(errorMessage) : null,
   });
+  if (normalizedPath && Number.isFinite(payload.durationMs)) {
+    recordLatencySample("REST", normalizedPath, payload.durationMs);
+  }
 };
 
 export const recordFtpOperation = (
@@ -339,6 +350,7 @@ export const recordFtpOperation = (
   payload: {
     operation: string;
     path: string;
+    durationMs?: number | null;
     result: "success" | "failure";
     error: Error | null;
     requestPayload?: unknown;
@@ -352,6 +364,7 @@ export const recordFtpOperation = (
   appendEvent("ftp-operation", action.origin, action.correlationId, {
     operation: payload.operation,
     path: payload.path,
+    durationMs: payload.durationMs ?? null,
     result: payload.result,
     requestPayload: payload.requestPayload ?? null,
     requestPayloadPreview: payload.requestPayloadPreview ?? null,
@@ -360,6 +373,9 @@ export const recordFtpOperation = (
     error: payload.error ? redactErrorMessage(payload.error.message) : null,
     target,
   });
+  if (Number.isFinite(payload.durationMs)) {
+    recordLatencySample("FTP", payload.path, payload.durationMs ?? 0);
+  }
 };
 
 export const recordTraceError = (action: TraceActionContext, error: Error, classification?: FailureClassification) => {

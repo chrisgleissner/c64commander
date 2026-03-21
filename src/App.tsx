@@ -12,7 +12,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
-import React, { Suspense, lazy, useEffect, useRef, useState } from "react";
+import React, { Suspense, lazy, useEffect } from "react";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { TabBar } from "@/components/TabBar";
 import { ConnectionController } from "@/components/ConnectionController";
@@ -32,18 +32,14 @@ import { registerGlobalButtonInteractionModel } from "@/lib/ui/buttonInteraction
 import { installConsoleDiagnosticsBridge } from "@/lib/diagnostics/logger";
 import { invalidateForVisibilityResume } from "@/lib/query/c64QueryInvalidation";
 import { useNavigationGuardBlocker } from "@/lib/navigation/navigationGuards";
+import { tabIndexForPath } from "@/lib/navigation/tabRoutes";
 import { t } from "@/lib/i18n";
 import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
-import { ScreenActivityProvider } from "@/hooks/useScreenActivity";
+import { SwipeNavigationLayer } from "@/components/SwipeNavigationLayer";
+import { LightingStudioProvider } from "@/hooks/useLightingStudio";
+import { LightingStudioDialog } from "@/components/lighting/LightingStudioDialog";
 
-const HomePage = lazy(() => import("./pages/HomePage"));
-const ConfigBrowserPage = lazy(() => import("./pages/ConfigBrowserPage"));
-const SettingsPage = lazy(() => import("./pages/SettingsPage"));
-const OpenSourceLicensesPage = lazy(() => import("./pages/OpenSourceLicensesPage"));
-const DocsPage = lazy(() => import("./pages/DocsPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
-const PlayFilesPage = lazy(() => import("./pages/PlayFilesPage"));
-const DisksPage = lazy(() => import("./pages/DisksPage"));
 const CoverageProbePage = lazy(() => import("./pages/CoverageProbePage"));
 
 const queryClient = new QueryClient({
@@ -78,7 +74,7 @@ const GlobalNavigationBlocker = () => {
   return null;
 };
 
-const shouldEnableCoverageProbe = () => {
+export const shouldEnableCoverageProbe = () => {
   if (import.meta.env.VITE_ENABLE_TEST_PROBES === "1") return true;
   if (typeof window !== "undefined") {
     return Boolean((window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled);
@@ -92,118 +88,42 @@ const RouteLoadingFallback = () => (
   </div>
 );
 
-const HomeLoadingFallback = () => (
-  <div className="flex min-h-[calc(100vh-8rem)] items-center justify-center px-6 py-10 text-sm text-muted-foreground">
-    {t("app.loadingHome", "Loading home...")}
-  </div>
-);
-
-const ConfigLoadingFallback = () => (
-  <div className="flex min-h-[calc(100vh-8rem)] items-center justify-center px-6 py-10 text-sm text-muted-foreground">
-    {t("app.loadingConfig", "Loading config...")}
-  </div>
-);
-
-const PlayLoadingFallback = () => (
-  <div className="flex min-h-[calc(100vh-8rem)] items-center justify-center px-6 py-10 text-sm text-muted-foreground">
-    {t("app.loadingPlay", "Loading files...")}
-  </div>
-);
-
-const PersistentPlayFilesBoundary = () => {
+/**
+ * Renders NotFound only for genuinely unknown paths — not for primary tab routes
+ * or known sub-routes (which are rendered inside the SwipeNavigationLayer slots).
+ */
+export const NotFoundForUnknownPaths = () => {
   const location = useLocation();
-
-  return (
-    <PageErrorBoundary active={location.pathname === "/play"}>
-      <Suspense fallback={<PlayLoadingFallback />}>
-        <PersistentPlayFilesRoute />
-      </Suspense>
-    </PageErrorBoundary>
-  );
-};
-
-const PersistentPlayFilesRoute = () => {
-  const location = useLocation();
-  const [hasVisitedPlay, setHasVisitedPlay] = useState(location.pathname === "/play");
-
-  useEffect(() => {
-    if (location.pathname === "/play") {
-      setHasVisitedPlay(true);
-    }
-  }, [location.pathname]);
-
-  if (!hasVisitedPlay) return null;
-
-  const isVisible = location.pathname === "/play";
-
-  return (
-    <ScreenActivityProvider active={isVisible}>
-      <div
-        className={isVisible ? "contents" : "hidden"}
-        data-testid="persistent-play-files-route"
-        aria-hidden={!isVisible}
-      >
-        <PlayFilesPage />
-      </div>
-    </ScreenActivityProvider>
-  );
+  if (tabIndexForPath(location.pathname) >= 0) return null;
+  return <NotFound />;
 };
 
 const AppRoutes = () => {
   const coverageProbeEnabled = shouldEnableCoverageProbe();
   return (
     <BrowserRouter>
-      <GlobalErrorListener />
-      <GlobalButtonInteractionModel />
-      <GlobalNavigationBlocker />
-      <RouteRefresher />
-      <DebugStartupLogger />
-      <DiagnosticsRuntimeBridge />
-      <TraceContextBridge />
-      <GlobalDiagnosticsOverlay />
-      <ConnectionController />
-      <DemoModeInterstitial />
-      {coverageProbeEnabled && <TestHeartbeat />}
-      <Suspense fallback={<RouteLoadingFallback />}>
-        <PersistentPlayFilesBoundary />
-        <Routes>
-          {coverageProbeEnabled ? <Route path="/__coverage__" element={<CoverageProbePage />} /> : null}
-          <Route
-            path="/"
-            element={
-              <PageErrorBoundary>
-                <Suspense fallback={<HomeLoadingFallback />}>
-                  <HomePage />
-                </Suspense>
-              </PageErrorBoundary>
-            }
-          />
-          <Route
-            path="/config"
-            element={
-              <PageErrorBoundary>
-                <Suspense fallback={<ConfigLoadingFallback />}>
-                  <ConfigBrowserPage />
-                </Suspense>
-              </PageErrorBoundary>
-            }
-          />
-          <Route path="/play" element={null} />
-          <Route path="/disks" element={<DisksPage />} />
-          <Route
-            path="/settings"
-            element={
-              <PageErrorBoundary>
-                <SettingsPage />
-              </PageErrorBoundary>
-            }
-          />
-          <Route path="/settings/open-source-licenses" element={<OpenSourceLicensesPage />} />
-          <Route path="/docs" element={<DocsPage />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </Suspense>
-      <TabBar />
+      <LightingStudioProvider>
+        <GlobalErrorListener />
+        <GlobalButtonInteractionModel />
+        <GlobalNavigationBlocker />
+        <RouteRefresher />
+        <DebugStartupLogger />
+        <DiagnosticsRuntimeBridge />
+        <TraceContextBridge />
+        <GlobalDiagnosticsOverlay />
+        <ConnectionController />
+        <DemoModeInterstitial />
+        <LightingStudioDialog />
+        {coverageProbeEnabled && <TestHeartbeat />}
+        <Suspense fallback={<RouteLoadingFallback />}>
+          <SwipeNavigationLayer />
+          <Routes>
+            {coverageProbeEnabled ? <Route path="/__coverage__" element={<CoverageProbePage />} /> : null}
+            <Route path="*" element={<NotFoundForUnknownPaths />} />
+          </Routes>
+        </Suspense>
+        <TabBar />
+      </LightingStudioProvider>
     </BrowserRouter>
   );
 };

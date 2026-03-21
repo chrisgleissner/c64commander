@@ -28,9 +28,13 @@ const SHORT_PAUSE_MS = 800;
 const SCROLL_DURATION_MS = 9000;
 
 const waitForConnected = async (page: Page) => {
-  await expect(page.getByTestId("connectivity-indicator")).toHaveAttribute("data-connection-state", "REAL_CONNECTED", {
-    timeout: 10000,
-  });
+  await expect(page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge")).toHaveAttribute(
+    "data-connection-state",
+    "REAL_CONNECTED",
+    {
+      timeout: 10000,
+    },
+  );
 };
 
 const pauseAtTop = async (page: Page, delayMs = TOP_PAUSE_MS) => {
@@ -75,6 +79,21 @@ const smoothScrollToLocator = async (page: Page, locator: ReturnType<Page["locat
 const smoothScrollToBottom = async (page: Page, durationMs: number) => {
   const targetY = await page.evaluate(() => document.body.scrollHeight - window.innerHeight);
   await smoothScrollTo(page, targetY, durationMs);
+};
+
+const ensureTechnicalDetailsExpanded = async (dialog: ReturnType<Page["getByRole"]>) => {
+  const toggle = dialog.getByTestId("technical-details-toggle");
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") {
+    await toggle.click();
+  }
+};
+
+const ensureToolsExpanded = async (dialog: ReturnType<Page["getByRole"]>) => {
+  await ensureTechnicalDetailsExpanded(dialog);
+  const toggle = dialog.getByTestId("tools-card-toggle");
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") {
+    await toggle.click();
+  }
 };
 
 const openAndCloseSelect = async (page: Page, trigger: ReturnType<Page["locator"]>) => {
@@ -238,11 +257,13 @@ const tourSettings = async (page: Page) => {
   const dialog = page.getByRole("dialog", { name: "Diagnostics" });
   await expect(dialog).toBeVisible();
   await page.waitForTimeout(SHORT_PAUSE_MS);
-  await dialog.getByRole("tab", { name: "Traces" }).click();
+  await dialog.getByTestId("show-details-button").click();
+  await ensureToolsExpanded(dialog);
+  await dialog.getByTestId("evidence-toggle-traces").click();
   await page.waitForTimeout(SHORT_PAUSE_MS);
-  await dialog.getByRole("tab", { name: "Logs" }).click();
+  await dialog.getByTestId("evidence-toggle-logs").click();
   await page.waitForTimeout(SHORT_PAUSE_MS);
-  await dialog.getByRole("tab", { name: "Errors" }).click();
+  await dialog.getByTestId("evidence-toggle-problems").click();
   await page.waitForTimeout(SHORT_PAUSE_MS);
   await page.keyboard.press("Escape");
   await page.waitForTimeout(SHORT_PAUSE_MS);

@@ -146,12 +146,6 @@ vi.mock("@/components/ThemeProvider", () => ({
   }),
 }));
 
-vi.mock("@/components/DiagnosticsActivityIndicator", () => ({
-  DiagnosticsActivityIndicator: ({ onClick }: { onClick: () => void }) => (
-    <button type="button" onClick={onClick} data-testid="diagnostics-activity-indicator" />
-  ),
-}));
-
 const buildRouter = (ui: JSX.Element) =>
   createMemoryRouter([{ path: "*", element: ui }], {
     initialEntries: ["/"],
@@ -194,6 +188,8 @@ const CPU_SPEED_OPTIONS = ["1", "2", "3", "4", "6", "8", "10", "12", "14", "16",
 const COLOR_SCHEME_OPTIONS = ["Commodore Blue", "Ultimate Black", "Commodore 1", "Commodore 2", "Commodore 3"];
 
 const buildLightingPayload = ({
+  autoSidMode = "Enabled",
+  autoSidModeOptions = ["Disabled", "Enabled"],
   mode = "Fixed Color",
   modeOptions = ["Off", "Fixed Color", "Rainbow"],
   pattern = "SingleColor",
@@ -206,6 +202,8 @@ const buildLightingPayload = ({
   tint = "Pure",
   tintOptions = ["Pure", "Warm"],
 }: {
+  autoSidMode?: string;
+  autoSidModeOptions?: string[];
   fixedColor?: string;
   fixedColorOptions?: string[];
   intensity?: string;
@@ -222,6 +220,10 @@ const buildLightingPayload = ({
     "LedStrip Mode": {
       selected: mode,
       options: modeOptions,
+    },
+    "LedStrip Auto SID Mode": {
+      selected: autoSidMode,
+      options: autoSidModeOptions,
     },
     "LedStrip Pattern": {
       selected: pattern,
@@ -395,6 +397,7 @@ const expectLightingControls = (prefix: string, title: string) => {
   const section = screen.getByTestId(`${prefix}-summary`);
   expect(within(section).getByText(title)).toBeTruthy();
   expect(screen.getByTestId(`${prefix}-mode`)).toBeTruthy();
+  expect(screen.getByTestId(`${prefix}-auto-sid`)).toBeTruthy();
   expect(screen.getByTestId(`${prefix}-pattern`)).toBeTruthy();
   expect(screen.getByTestId(`${prefix}-color`)).toBeTruthy();
   expect(screen.getByTestId(`${prefix}-color-slider`)).toBeTruthy();
@@ -404,7 +407,7 @@ const expectLightingControls = (prefix: string, title: string) => {
   expect(screen.getByTestId(`${prefix}-tint`)).toBeTruthy();
 
   const labels = Array.from(section.querySelectorAll(".text-muted-foreground")).map((node) => node.textContent);
-  expect(labels).toEqual(["Mode", "Pattern", "Color", "Brightness", "Tint", "SID Select"]);
+  expect(labels).toEqual(["Mode", "Auto SID", "Pattern", "Color", "Brightness", "Tint", "SID Select"]);
 };
 
 const expectUserInterfaceControls = (prefix: string) => {
@@ -555,6 +558,8 @@ vi.mock("@/lib/diagnostics/diagnosticsOverlayState", () => ({
   isDiagnosticsOverlayActive: () => false,
   subscribeDiagnosticsOverlay: () => () => {},
   shouldSuppressDiagnosticsSideEffects: () => false,
+  subscribeDiagnosticsSuppression: () => () => {},
+  isDiagnosticsOverlaySuppressionArmed: () => false,
 }));
 
 vi.mock("@/lib/uiErrors", () => ({
@@ -563,6 +568,10 @@ vi.mock("@/lib/uiErrors", () => ({
 
 vi.mock("@/lib/c64api", () => ({
   getC64API: () => c64ApiMockRef.current,
+}));
+
+vi.mock("@/hooks/useInteractiveConfigWrite", () => ({
+  useInteractiveConfigWrite: () => ({ write: vi.fn(), isPending: false }),
 }));
 
 beforeEach(() => {
@@ -1191,7 +1200,11 @@ describe("HomePage SID status", () => {
     expect(screen.getByTestId("home-cpu-speed-value").textContent).toBe("2");
 
     await waitFor(() =>
-      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith("U64 Specific Settings", "CPU Speed", "2"),
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
+        "U64 Specific Settings",
+        "Turbo Control",
+        "Manual",
+      ),
     );
   });
 
@@ -1315,9 +1328,9 @@ describe("HomePage SID status", () => {
 
     fireEvent.keyDown(thumb!, { key: "ArrowRight" });
 
-    await waitFor(() =>
-      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith("U64 Specific Settings", "CPU Speed", "2"),
-    );
+    // CPU speed commit goes via interactive write; setConfigValue is not used for CPU Speed changes.
+    // With no turbo options, no setConfigValue call of any kind should happen.
+    await waitFor(() => expect(screen.getByTestId("home-cpu-speed-value").textContent).toBe("2"));
     expect(c64ApiMockRef.current.setConfigValue).not.toHaveBeenCalledWith(
       "U64 Specific Settings",
       "Turbo Control",
@@ -1340,9 +1353,9 @@ describe("HomePage SID status", () => {
 
     fireEvent.keyDown(thumb!, { key: "ArrowRight" });
 
-    await waitFor(() =>
-      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith("U64 Specific Settings", "CPU Speed", "3"),
-    );
+    // CPU speed commit goes via interactive write; only Turbo Control auto-adjust uses setConfigValue.
+    // Turbo is already "Manual", so no redundant write should happen.
+    await waitFor(() => expect(screen.getByTestId("home-cpu-speed-value").textContent).toBe("3"));
     expect(c64ApiMockRef.current.setConfigValue).not.toHaveBeenCalledWith(
       "U64 Specific Settings",
       "Turbo Control",
@@ -1532,6 +1545,8 @@ describe("HomePage SID status", () => {
     fireEvent.click(screen.getByTestId("home-led-mode"));
     fireEvent.click(await screen.findByRole("option", { name: /Rainbow/i }));
 
+    fireEvent.click(screen.getByTestId("home-led-auto-sid"));
+
     fireEvent.click(screen.getByTestId("home-led-pattern"));
     fireEvent.click(await screen.findByRole("option", { name: /Outward/i }));
 
@@ -1562,6 +1577,8 @@ describe("HomePage SID status", () => {
     fireEvent.click(screen.getByTestId("home-keyboard-lighting-mode"));
     fireEvent.click(await screen.findByRole("option", { name: /Rainbow/i }));
 
+    fireEvent.click(screen.getByTestId("home-keyboard-lighting-auto-sid"));
+
     fireEvent.click(screen.getByTestId("home-keyboard-lighting-pattern"));
     fireEvent.click(await screen.findByRole("option", { name: /Circular/i }));
 
@@ -1583,7 +1600,7 @@ describe("HomePage SID status", () => {
         "Turbo Control",
         "C64U Turbo Registers",
       );
-      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith("U64 Specific Settings", "CPU Speed", "2");
+      // CPU Speed commit goes via interactive write; not via setConfigValue
       expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
         "U64 Specific Settings",
         "Turbo Control",
@@ -1672,6 +1689,11 @@ describe("HomePage SID status", () => {
       );
       expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
         "LED Strip Settings",
+        "LedStrip Auto SID Mode",
+        "Disabled",
+      );
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
+        "LED Strip Settings",
         "LedStrip Pattern",
         "Outward",
       );
@@ -1686,6 +1708,11 @@ describe("HomePage SID status", () => {
         "Keyboard Lighting",
         "LedStrip Mode",
         "Rainbow",
+      );
+      expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
+        "Keyboard Lighting",
+        "LedStrip Auto SID Mode",
+        "Disabled",
       );
       expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
         "Keyboard Lighting",

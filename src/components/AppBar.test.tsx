@@ -2,38 +2,19 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { AppBar } from "@/components/AppBar";
+import { AppChromeModeProvider } from "@/components/layout/AppChromeContext";
 import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
+import { ScreenActivityProvider } from "@/hooks/useScreenActivity";
 
-vi.mock("@/components/ConnectivityIndicator", () => ({
-  ConnectivityIndicator: () => <div data-testid="connectivity-indicator" />,
-}));
-
-vi.mock("@/components/DiagnosticsActivityIndicator", () => ({
-  DiagnosticsActivityIndicator: ({ onClick }: { onClick: () => void }) => (
-    <button type="button" onClick={onClick} data-testid="diagnostics-activity-indicator" />
-  ),
-}));
-
-vi.mock("@/lib/diagnostics/diagnosticsOverlay", () => ({
-  requestDiagnosticsOpen: vi.fn(),
+vi.mock("@/components/UnifiedHealthBadge", () => ({
+  UnifiedHealthBadge: () => <div data-testid="unified-health-badge" />,
 }));
 
 vi.mock("@/lib/diagnostics/diagnosticsOverlayState", () => ({
   isDiagnosticsOverlayActive: () => false,
   subscribeDiagnosticsOverlay: () => () => undefined,
-}));
-
-vi.mock("@/hooks/useDiagnosticsActivity", () => ({
-  useDiagnosticsActivity: () => ({ restInFlight: 0 }),
-}));
-
-vi.mock("@/hooks/use-toast", () => ({
-  toast: vi.fn(() => ({
-    id: "rest-toast",
-    dismiss: vi.fn(),
-    update: vi.fn(),
-  })),
-  useToast: () => ({ toasts: [] }),
+  subscribeDiagnosticsSuppression: () => () => {},
+  isDiagnosticsOverlaySuppressionArmed: () => false,
 }));
 
 const setViewportWidth = (width: number) => {
@@ -79,5 +60,39 @@ describe("AppBar", () => {
     expect(header?.className).toContain("pt-safe");
     expect(shell?.className).toContain("py-4");
     expect(screen.getByRole("heading", { name: "Settings" })).toBeVisible();
+  });
+
+  it("renders the unified health badge as the sole diagnostic/connectivity element", () => {
+    localStorage.clear();
+    setViewportWidth(600);
+
+    render(
+      <DisplayProfileProvider>
+        <AppBar title="Play" />
+      </DisplayProfileProvider>,
+    );
+
+    expect(screen.getByTestId("unified-health-badge")).toBeVisible();
+  });
+
+  it("uses sticky chrome inside the swipe runway", () => {
+    localStorage.clear();
+    setViewportWidth(390);
+
+    const { container } = render(
+      <DisplayProfileProvider>
+        <ScreenActivityProvider active>
+          <AppChromeModeProvider mode="sticky">
+            <AppBar title="Docs" subtitle="How to use this app" />
+          </AppChromeModeProvider>
+        </ScreenActivityProvider>
+      </DisplayProfileProvider>,
+    );
+
+    const header = container.querySelector("header");
+    expect(header?.getAttribute("data-app-chrome-mode")).toBe("sticky");
+    expect(header?.className).toContain("sticky");
+    expect(header?.className).not.toContain("fixed");
+    expect(screen.getByRole("heading", { name: "Docs" })).toBeVisible();
   });
 });

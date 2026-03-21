@@ -2,7 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getLedColorRgb, rgbToCss } from "@/lib/config/ledColors";
-import { buildConfigKey, parseNumericValue, readItemDetails, readItemOptions } from "../utils/HomeConfigUtils";
+import {
+  buildConfigKey,
+  parseNumericValue,
+  readItemDetails,
+  readItemOptions,
+  readItemValue,
+} from "../utils/HomeConfigUtils";
 import {
   clampToRange,
   formatSelectOptionLabel,
@@ -12,6 +18,8 @@ import {
   resolveSelectValue,
 } from "../utils/uiLogic";
 import { useSharedConfigActions } from "../hooks/ConfigActionsContext";
+import { useInteractiveConfigWrite } from "@/hooks/useInteractiveConfigWrite";
+import { SummaryConfigControlRow } from "./SummaryConfigCard";
 
 const formatLightingPatternLabel = (value: string) => {
   if (normalizeOptionToken(value) === "singlecolor") return "Single Color";
@@ -22,6 +30,7 @@ type LightingSummaryCardProps = {
   category: string;
   config: Record<string, unknown> | undefined;
   isActive: boolean;
+  onManualLightingChange?: () => void;
   operationPrefix: string;
   sectionLabel: string;
   selectTriggerClassName: string;
@@ -33,6 +42,7 @@ export function LightingSummaryCard({
   category,
   config,
   isActive,
+  onManualLightingChange,
   operationPrefix,
   sectionLabel,
   selectTriggerClassName,
@@ -40,6 +50,7 @@ export function LightingSummaryCard({
   testIdPrefix,
 }: LightingSummaryCardProps) {
   const { configWritePending, resolveConfigValue, updateConfigValue } = useSharedConfigActions();
+  const { write: interactiveWrite } = useInteractiveConfigWrite({ category });
   const unavailableLabel = "Not available";
 
   const [fixedColorDraftIndex, setFixedColorDraftIndex] = useState<number | null>(null);
@@ -52,10 +63,12 @@ export function LightingSummaryCard({
   const modeOptions = readOptions("LedStrip Mode");
   const patternOptions = readOptions("LedStrip Pattern");
   const fixedColorOptions = readOptions("Fixed Color");
+  const autoSidModeOptions = readOptions("LedStrip Auto SID Mode");
   const sidSelectOptions = readOptions("LedStrip SID Select");
   const tintOptions = readOptions("Color tint");
 
   const modeValue = resolveValue("LedStrip Mode", "Off");
+  const autoSidModeValue = resolveValue("LedStrip Auto SID Mode", "Disabled");
   const patternValue = resolveValue("LedStrip Pattern", unavailableLabel);
   const fixedColorValue = resolveValue("Fixed Color", unavailableLabel);
   const sidSelectValue = resolveValue("LedStrip SID Select", unavailableLabel);
@@ -85,6 +98,10 @@ export function LightingSummaryCard({
   const modeSelectOptions = normalizeSelectOptions(effectiveModeOptions, modeValue);
   const patternSelectOptions = normalizeSelectOptions(effectivePatternOptions, patternValue);
   const fixedColorSelectOptions = normalizeSelectOptions(effectiveFixedColorOptions, fixedColorValue);
+  const autoSidModeSelectOptions = normalizeSelectOptions(
+    autoSidModeOptions.length ? autoSidModeOptions : [autoSidModeValue],
+    autoSidModeValue,
+  );
   const sidSelectSelectOptions = normalizeSelectOptions(effectiveSidSelectOptions, sidSelectValue);
   const tintSelectOptions = normalizeSelectOptions(effectiveTintOptions, tintValue);
 
@@ -93,6 +110,8 @@ export function LightingSummaryCard({
   const fixedColorSelectValue = normalizeSelectValue(fixedColorValue);
   const sidSelectSelectValue = normalizeSelectValue(sidSelectValue);
   const tintSelectValue = normalizeSelectValue(tintValue);
+  const showAutoSidMode =
+    autoSidModeOptions.length > 0 || readItemValue(config, category, "LedStrip Auto SID Mode") !== undefined;
 
   const fixedColorSliderOptions = fixedColorSelectOptions.length ? fixedColorSelectOptions : [fixedColorValue];
   const fixedColorSliderMax = Math.max(0, fixedColorSliderOptions.length - 1);
@@ -125,7 +144,17 @@ export function LightingSummaryCard({
     operationSuffix: string,
     successMessage: string,
     options?: { suppressToast?: boolean },
-  ) => updateConfigValue(category, itemName, value, `${operationPrefix}_${operationSuffix}`, successMessage, options);
+  ) => {
+    onManualLightingChange?.();
+    return updateConfigValue(
+      category,
+      itemName,
+      value,
+      `${operationPrefix}_${operationSuffix}`,
+      successMessage,
+      options,
+    );
+  };
 
   return (
     <div
@@ -161,6 +190,25 @@ export function LightingSummaryCard({
             </SelectContent>
           </Select>
         </div>
+
+        {showAutoSidMode ? (
+          <SummaryConfigControlRow
+            disabled={!isActive || isPending("LedStrip Auto SID Mode")}
+            label="Auto SID"
+            options={autoSidModeSelectOptions}
+            selectTriggerClassName={selectTriggerClassName}
+            testId={`${testIdPrefix}-auto-sid`}
+            value={autoSidModeValue}
+            onValueChange={(value) =>
+              void updateLightingConfig(
+                "LedStrip Auto SID Mode",
+                resolveSelectValue(value),
+                "AUTO_SID_MODE",
+                `${successLabel} Auto SID updated`,
+              )
+            }
+          />
+        ) : null}
 
         <div className="flex items-center justify-between gap-2">
           <span className="text-muted-foreground">Pattern</span>
@@ -249,20 +297,15 @@ export function LightingSummaryCard({
             const nextIndex = clampToRange(values[0] ?? 0, 0, fixedColorSliderMax);
             setFixedColorDraftIndex(nextIndex);
           }}
-          onValueCommit={() => {
-            setFixedColorDraftIndex(null);
-          }}
           onValueChangeAsync={(nextValue) => {
             const nextIndex = clampToRange(nextValue, 0, fixedColorSliderMax);
-            const nextOption = resolveFixedColorOption(nextIndex);
-            void updateLightingConfig("Fixed Color", nextOption, "COLOR", `${successLabel} color updated`, {
-              suppressToast: true,
-            });
+            onManualLightingChange?.();
+            interactiveWrite({ "Fixed Color": resolveFixedColorOption(nextIndex) });
           }}
           onValueCommitAsync={(nextValue) => {
             const nextIndex = clampToRange(nextValue, 0, fixedColorSliderMax);
-            const nextOption = resolveFixedColorOption(nextIndex);
-            void updateLightingConfig("Fixed Color", nextOption, "COLOR", `${successLabel} color updated`);
+            onManualLightingChange?.();
+            interactiveWrite({ "Fixed Color": resolveFixedColorOption(nextIndex) });
           }}
           disabled={fixedColorSliderDisabled}
           valueFormatter={(value) => formatSelectOptionLabel(resolveFixedColorOption(value))}
@@ -288,27 +331,15 @@ export function LightingSummaryCard({
             const nextValue = clampToRange(values[0] ?? intensityMin, intensityMin, intensityMax);
             setIntensityDraft(nextValue);
           }}
-          onValueCommit={() => {
-            setIntensityDraft(null);
-          }}
           onValueChangeAsync={(nextValue) => {
             const clamped = clampToRange(nextValue, intensityMin, intensityMax);
-            void updateLightingConfig(
-              "Strip Intensity",
-              Math.round(clamped),
-              "INTENSITY",
-              `${successLabel} intensity updated`,
-              { suppressToast: true },
-            );
+            onManualLightingChange?.();
+            interactiveWrite({ "Strip Intensity": Math.round(clamped) });
           }}
           onValueCommitAsync={(nextValue) => {
             const clamped = clampToRange(nextValue, intensityMin, intensityMax);
-            void updateLightingConfig(
-              "Strip Intensity",
-              Math.round(clamped),
-              "INTENSITY",
-              `${successLabel} intensity updated`,
-            );
+            onManualLightingChange?.();
+            interactiveWrite({ "Strip Intensity": Math.round(clamped) });
           }}
           disabled={!isActive || isPending("Strip Intensity")}
           data-testid={`${testIdPrefix}-intensity-slider`}

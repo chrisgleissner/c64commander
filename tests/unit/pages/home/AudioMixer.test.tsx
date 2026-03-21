@@ -71,6 +71,8 @@ vi.mock("@/lib/diagnostics/diagnosticsOverlayState", () => ({
   isDiagnosticsOverlayActive: () => false,
   subscribeDiagnosticsOverlay: () => () => {},
   shouldSuppressDiagnosticsSideEffects: () => false,
+  subscribeDiagnosticsSuppression: () => () => {},
+  isDiagnosticsOverlaySuppressionArmed: () => false,
 }));
 
 // Mock the ConfigActionsContext to provide shared config actions
@@ -153,6 +155,11 @@ vi.mock("@/pages/home/SidCard", () => ({
   ),
 }));
 
+const interactiveWriteSpy = vi.fn();
+vi.mock("@/hooks/useInteractiveConfigWrite", () => ({
+  useInteractiveConfigWrite: () => ({ write: interactiveWriteSpy, isPending: false }),
+}));
+
 vi.mock("@/components/SectionHeader", () => ({
   SectionHeader: (props: any) => (
     <div data-testid={props.resetTestId}>
@@ -184,6 +191,7 @@ const baseSidEntry = (key: string, label: string) => ({
 describe("AudioMixer", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    interactiveWriteSpy.mockReset();
     mockSidControlEntries.mockReturnValue({
       sidControlEntries: [baseSidEntry("socket1", "SID Socket 1")],
       sidSilenceTargets: [],
@@ -306,29 +314,18 @@ describe("AudioMixer", () => {
       // Clears active slider; no updateConfigValue call
     });
 
-    it("handles volume async change (suppressToast)", () => {
+    it("handles volume async change via interactive write (no toast)", () => {
       render(<AudioMixer {...defaultProps} />);
       fireEvent.click(screen.getByTestId("volume-async-change"));
-      expect(updateConfigValueSpy).toHaveBeenCalledWith(
-        "Audio Mixer",
-        "Vol SID Socket 1",
-        expect.any(String),
-        "HOME_SID_VOLUME",
-        expect.stringContaining("volume updated"),
-        { suppressToast: true },
-      );
+      expect(interactiveWriteSpy).toHaveBeenCalledWith({ "Vol SID Socket 1": expect.any(String) });
+      expect(updateConfigValueSpy).not.toHaveBeenCalled();
     });
 
-    it("handles volume async commit (with toast)", () => {
+    it("handles volume async commit via interactive write (no toast)", () => {
       render(<AudioMixer {...defaultProps} />);
       fireEvent.click(screen.getByTestId("volume-async-commit"));
-      expect(updateConfigValueSpy).toHaveBeenCalledWith(
-        "Audio Mixer",
-        "Vol SID Socket 1",
-        expect.any(String),
-        "HOME_SID_VOLUME",
-        expect.stringContaining("volume updated"),
-      );
+      expect(interactiveWriteSpy).toHaveBeenCalledWith({ "Vol SID Socket 1": expect.any(String) });
+      expect(updateConfigValueSpy).not.toHaveBeenCalled();
     });
   });
 
@@ -343,29 +340,18 @@ describe("AudioMixer", () => {
       fireEvent.click(screen.getByTestId("pan-commit"));
     });
 
-    it("handles pan async change", () => {
+    it("handles pan async change via interactive write (no toast)", () => {
       render(<AudioMixer {...defaultProps} />);
       fireEvent.click(screen.getByTestId("pan-async-change"));
-      expect(updateConfigValueSpy).toHaveBeenCalledWith(
-        "Audio Mixer",
-        "Pan SID Socket 1",
-        expect.any(String),
-        "HOME_SID_PAN",
-        expect.stringContaining("pan updated"),
-        { suppressToast: true },
-      );
+      expect(interactiveWriteSpy).toHaveBeenCalledWith({ "Pan SID Socket 1": expect.any(String) });
+      expect(updateConfigValueSpy).not.toHaveBeenCalled();
     });
 
-    it("handles pan async commit", () => {
+    it("handles pan async commit via interactive write (no toast)", () => {
       render(<AudioMixer {...defaultProps} />);
       fireEvent.click(screen.getByTestId("pan-async-commit"));
-      expect(updateConfigValueSpy).toHaveBeenCalledWith(
-        "Audio Mixer",
-        "Pan SID Socket 1",
-        expect.any(String),
-        "HOME_SID_PAN",
-        expect.stringContaining("pan updated"),
-      );
+      expect(interactiveWriteSpy).toHaveBeenCalledWith({ "Pan SID Socket 1": expect.any(String) });
+      expect(updateConfigValueSpy).not.toHaveBeenCalled();
     });
   });
 

@@ -154,11 +154,11 @@ This architecture preserves a single routed codebase. The audited pages reuse sh
   - `docs/diagnostics/index.md:1-13`
   - `doc/img/app/diagnostics/`
 - Evidence:
-  - `README.md` now references the newer `*-detail.png` diagnostics screenshots, but the supporting diagnostics index and duplicate assets under `doc/img/app/diagnostics/` still preserve the legacy `*-expanded.png` naming.
+  - `README.md` and the diagnostics index now reference the diagnostics gallery under `doc/img/app/diagnostics/`, where numbered folders map the overlay entry point, activity stream, summary drill-downs, and tools.
 - UX impact:
-  - End-user documentation is aligned, but the remaining duplicate filenames still make the screenshot corpus harder to reason about because `expanded` can describe either an expanded row state or the Expanded display profile.
+  - The diagnostics screenshot corpus is easier to reason about when the overlay gallery lives inside the app screenshot tree and uses numbered folders that mirror the click path.
 - Proposed fix:
-  - Keep converged docs on the `*-detail.png` naming and clean up the remaining duplicate `*-expanded.png` assets in a focused follow-up.
+  - Keep diagnostics screenshots in `doc/img/app/diagnostics/` and remove the obsolete legacy folder.
 
 ## UX Risks For Small Displays
 

@@ -47,4 +47,20 @@ describe("calculatePlaylistTotals", () => {
     expect(totals.total).toBe(0);
     expect(totals.remaining).toBe(0);
   });
+
+  it("computes correct totals for 100k entries without degradation", () => {
+    const count = 100_000;
+    const durationMs = 180_000; // 3 minutes each
+    const durations = Array.from({ length: count }, () => durationMs);
+    const playedMs = 5 * durationMs; // 5 songs played
+
+    const start = performance.now();
+    const totals = calculatePlaylistTotals(durations, playedMs);
+    const elapsed = performance.now() - start;
+
+    expect(totals.total).toBe(count * durationMs);
+    expect(totals.remaining).toBe((count - 5) * durationMs);
+    // Must complete in under 500ms even on slow CI
+    expect(elapsed).toBeLessThan(500);
+  });
 });

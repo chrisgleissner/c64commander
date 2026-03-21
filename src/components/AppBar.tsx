@@ -7,15 +7,12 @@
  */
 
 import type { ReactNode } from "react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ConnectivityIndicator } from "@/components/ConnectivityIndicator";
-import { DiagnosticsActivityIndicator } from "@/components/DiagnosticsActivityIndicator";
+import { useLayoutEffect, useRef } from "react";
+import { UnifiedHealthBadge } from "@/components/UnifiedHealthBadge";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
-import { requestDiagnosticsOpen } from "@/lib/diagnostics/diagnosticsOverlay";
-import { isDiagnosticsOverlayActive, subscribeDiagnosticsOverlay } from "@/lib/diagnostics/diagnosticsOverlayState";
-import { useDiagnosticsActivity } from "@/hooks/useDiagnosticsActivity";
-import { toast, useToast } from "@/hooks/use-toast";
+import { useScreenActivity } from "@/hooks/useScreenActivity";
 import { cn } from "@/lib/utils";
+import { useAppChromeMode } from "@/components/layout/AppChromeContext";
 
 type Props = {
   title: ReactNode;
@@ -26,15 +23,14 @@ type Props = {
 
 export function AppBar({ title, subtitle, leading, children }: Props) {
   const headerRef = useRef<HTMLElement | null>(null);
-  const restToastRef = useRef<ReturnType<typeof toast> | null>(null);
   const { profile, tokens } = useDisplayProfile();
-  const { restInFlight } = useDiagnosticsActivity();
-  const { toasts } = useToast();
-  const [diagnosticsOverlayActive, setDiagnosticsOverlayActive] = useState(isDiagnosticsOverlayActive());
+  const screenActive = useScreenActivity();
+  const appChromeMode = useAppChromeMode();
   const compact = profile === "compact";
 
   useLayoutEffect(() => {
     if (typeof window === "undefined") return;
+    if (!screenActive) return;
     const element = headerRef.current;
     if (!element) return;
 
@@ -58,53 +54,17 @@ export function AppBar({ title, subtitle, leading, children }: Props) {
       observer?.disconnect();
       window.removeEventListener("resize", updateHeight);
     };
-  }, []);
-
-  useEffect(() => {
-    const unsubscribe = subscribeDiagnosticsOverlay((active) => {
-      setDiagnosticsOverlayActive(active);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    const restToastId = restToastRef.current?.id;
-    const hasOtherToast = toasts.some((entry) => entry.id !== restToastId);
-    if (diagnosticsOverlayActive || restInFlight === 0 || hasOtherToast) {
-      if (restToastRef.current) {
-        restToastRef.current.dismiss();
-        restToastRef.current = null;
-      }
-      return;
-    }
-
-    const description = restInFlight === 1 ? "1 request in flight." : `${restInFlight} requests in flight.`;
-
-    if (!restToastRef.current) {
-      restToastRef.current = toast({
-        title: "REST activity",
-        description,
-      });
-      return;
-    }
-
-    restToastRef.current.update({
-      title: "REST activity",
-      description,
-    });
-  }, [diagnosticsOverlayActive, restInFlight, toasts]);
-
-  const handleDiagnosticsOpen = () => {
-    requestDiagnosticsOpen("actions");
-  };
+  }, [screenActive]);
 
   return (
     <header
       ref={headerRef}
       className={cn(
-        "fixed left-0 top-0 z-40 w-screen max-w-screen bg-background/80 border-b border-border backdrop-blur-lg",
+        "top-0 z-40 bg-background/80 border-b border-border backdrop-blur-lg",
+        appChromeMode === "sticky" ? "sticky w-full max-w-full" : "fixed left-0 w-screen max-w-screen",
         !compact && "pt-safe",
       )}
+      data-app-chrome-mode={appChromeMode}
     >
       <div
         className={cn("app-shell-container", compact ? "space-y-2" : "py-4 space-y-3")}
@@ -121,10 +81,8 @@ export function AppBar({ title, subtitle, leading, children }: Props) {
               </>
             )}
           </div>
-          <div className="flex items-center gap-3">
-            <DiagnosticsActivityIndicator onClick={handleDiagnosticsOpen} />
-            <ConnectivityIndicator />
-          </div>
+          {/* §8.1 — Unified badge: sole diagnostic/connectivity element in AppBar */}
+          <UnifiedHealthBadge />
         </div>
         {children ? <div className="min-w-0">{children}</div> : null}
       </div>

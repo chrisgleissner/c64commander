@@ -511,6 +511,25 @@ export const downloadArchive = async (options: DownloadArchiveOptions): Promise<
     } finally {
       if (pollingTimer) clearInterval(pollingTimer);
     }
+    let nativeDownloadedSize: number | null = null;
+    try {
+      const postStat = await Filesystem.stat({
+        directory: Directory.Data,
+        path: `${cacheDir}/${archivePath}`,
+      });
+      nativeDownloadedSize = postStat.size ?? null;
+    } catch (statError) {
+      addLog("warn", "Failed to stat native download for size validation", {
+        archivePath,
+        error: (statError as Error).message,
+      });
+    }
+    if (totalBytesHint && nativeDownloadedSize !== null && nativeDownloadedSize < totalBytesHint * 0.99) {
+      await deleteCachedArchive(archivePath);
+      throw new Error(
+        `HVSC archive is corrupt or truncated: native download for "${archiveName}" wrote ${nativeDownloadedSize} bytes, expected ~${totalBytesHint}. Please re-download.`,
+      );
+    }
   } else {
     ensureNotCancelled();
     const response = await fetch(downloadUrl, { cache: "no-store" });

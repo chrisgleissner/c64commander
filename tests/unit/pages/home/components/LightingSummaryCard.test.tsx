@@ -25,6 +25,11 @@ vi.mock("@/pages/home/hooks/ConfigActionsContext", () => ({
   }),
 }));
 
+const interactiveWriteSpy = vi.fn();
+vi.mock("@/hooks/useInteractiveConfigWrite", () => ({
+  useInteractiveConfigWrite: () => ({ write: interactiveWriteSpy, isPending: false }),
+}));
+
 vi.mock("@/lib/config/ledColors", () => ({
   getLedColorRgb: (value: string) => (value === "Red" ? { r: 255, g: 0, b: 0 } : null),
   rgbToCss: ({ r, g, b }: { r: number; g: number; b: number }) => `rgb(${r},${g},${b})`,
@@ -67,13 +72,31 @@ vi.mock("@/components/ui/slider", () => ({
       >
         Drag
       </button>
+      <button
+        onClick={() => {
+          onValueChange?.([]);
+          onValueCommit?.([]);
+          onValueChangeAsync?.(undefined);
+          onValueCommitAsync?.(undefined);
+        }}
+        data-testid={`${testId}-drag-empty`}
+      >
+        Drag Empty
+      </button>
     </div>
   ),
 }));
 
 const defaultProps = {
   category: "LED Strip",
-  config: undefined,
+  config: {
+    items: {
+      "LedStrip Auto SID Mode": {
+        selected: "Enabled",
+        options: ["Disabled", "Enabled"],
+      },
+    },
+  },
   isActive: true,
   operationPrefix: "HOME_LED_STRIP",
   sectionLabel: "LED Strip",
@@ -100,9 +123,10 @@ describe("LightingSummaryCard", () => {
     expect(screen.getByText("LED Strip")).toBeInTheDocument();
   });
 
-  it("renders mode, pattern, color, tint, and sid-select selects", () => {
+  it("renders mode, auto-sid, pattern, color, tint, and sid-select controls", () => {
     render(<LightingSummaryCard {...defaultProps} />);
     expect(screen.getByTestId("led-strip-mode")).toBeInTheDocument();
+    expect(screen.getByTestId("led-strip-auto-sid")).toBeInTheDocument();
     expect(screen.getByTestId("led-strip-pattern")).toBeInTheDocument();
     expect(screen.getByTestId("led-strip-color")).toBeInTheDocument();
     expect(screen.getByTestId("led-strip-tint")).toBeInTheDocument();
@@ -136,11 +160,32 @@ describe("LightingSummaryCard", () => {
     );
   });
 
-  it("calls updateConfigValue when intensity slider is moved", () => {
+  it("calls updateConfigValue when auto SID mode changes", () => {
+    render(<LightingSummaryCard {...defaultProps} />);
+    fireEvent.click(screen.getByTestId("led-strip-auto-sid"));
+    expect(updateConfigValueSpy).toHaveBeenCalledWith(
+      "LED Strip",
+      "LedStrip Auto SID Mode",
+      "Enabled",
+      "HOME_LED_STRIP_AUTO_SID_MODE",
+      "LED strip Auto SID updated",
+      undefined,
+    );
+  });
+
+  it("calls interactiveWrite when intensity slider is moved", () => {
     render(<LightingSummaryCard {...defaultProps} />);
     fireEvent.click(screen.getByTestId("led-strip-intensity-slider-drag"));
-    // onValueCommitAsync triggers updateConfigValue
-    expect(updateConfigValueSpy).toHaveBeenCalled();
+    // onValueChangeAsync and onValueCommitAsync trigger interactiveWrite
+    expect(interactiveWriteSpy).toHaveBeenCalled();
+    expect(updateConfigValueSpy).not.toHaveBeenCalled();
+  });
+
+  it("passes through NaN when slider callbacks report no concrete value", () => {
+    render(<LightingSummaryCard {...defaultProps} />);
+    fireEvent.click(screen.getByTestId("led-strip-intensity-slider-drag-empty"));
+    const payload = interactiveWriteSpy.mock.calls.at(-1)?.[0] as Record<string, number>;
+    expect(Number.isNaN(payload["Strip Intensity"])).toBe(true);
   });
 
   it("shows intensity value from resolved config", () => {
@@ -161,5 +206,10 @@ describe("LightingSummaryCard", () => {
   it("disables intensity slider when isActive=false", () => {
     render(<LightingSummaryCard {...defaultProps} isActive={false} />);
     expect(screen.getByTestId("led-strip-intensity-slider")).toHaveAttribute("data-disabled", "true");
+  });
+
+  it("hides auto SID mode when the config item is unavailable", () => {
+    render(<LightingSummaryCard {...defaultProps} config={undefined} />);
+    expect(screen.queryByTestId("led-strip-auto-sid")).toBeNull();
   });
 });

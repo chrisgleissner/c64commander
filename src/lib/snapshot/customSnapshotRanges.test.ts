@@ -19,6 +19,12 @@ describe("customSnapshotRanges", () => {
     expect(sanitizeHexAddressInput("$0aZf1!")).toBe("0AF1");
   });
 
+  it("normalizeCustomSnapshotRangeDraft uses empty string defaults when start/end are undefined", () => {
+    const result = normalizeCustomSnapshotRangeDraft({});
+    expect(result.start).toBe("");
+    expect(result.end).toBe("");
+  });
+
   it("normalizes both draft fields", () => {
     expect(normalizeCustomSnapshotRangeDraft({ start: "$0400", end: "d8zz" })).toEqual({
       start: "0400",

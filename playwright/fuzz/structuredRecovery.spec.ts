@@ -42,7 +42,7 @@ test.describe("Fuzz structured recovery", () => {
 
   test("recovery completes save dialog with unique name", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByTestId("connectivity-indicator")).toHaveAttribute(
+    await expect(page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge")).toHaveAttribute(
       "data-connection-state",
       /(REAL_CONNECTED|DEMO_ACTIVE)/,
     );

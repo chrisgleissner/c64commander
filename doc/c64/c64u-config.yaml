@@ -1,10 +1,10 @@
 config:
   general:
-    base_url: http://192.168.1.15
+    base_url: http://c64u
     rest_api_version: "0.1"
     device_type: "C64 Ultimate"
-    firmware_version: "3.14"
-    fetched_at: "2026-03-13T22:34:01.591213+00:00"
+    firmware_version: 1.1.0
+    fetched_at: "2026-03-19T19:10:35.263951+00:00"
   categories:
     Audio Mixer:
       items:
@@ -838,12 +838,12 @@ config:
     SID Sockets Configuration:
       items:
         SID Socket 1:
-          selected: Disabled
+          selected: Enabled
           options:
             - Disabled
             - Enabled
         SID Socket 2:
-          selected: Disabled
+          selected: Enabled
           options:
             - Disabled
             - Enabled
@@ -1204,8 +1204,14 @@ config:
             - NTSC-50
             - PAL-60/L
             - NTSC-50/L
+        HDMI Tx Swing:
+          selected: 8
+          details:
+            min: 0
+            max: 15
+            format: "%d"
         HDMI Scan Resolution:
-          selected: "SD (480p/576p)"
+          selected: "PC 1024 x 768"
           options:
             - SD (480p/576p)
             - HD (720p)
@@ -1213,12 +1219,6 @@ config:
             - PC 800 x 600
             - PC 1024 x 768
             - PC 1280 x 1024
-        HDMI Tx Swing:
-          selected: 8
-          details:
-            min: 0
-            max: 15
-            format: "%d"
         Joystick Swapper:
           selected: Normal
           options:
@@ -1325,7 +1325,7 @@ config:
             - "No"
             - "Yes"
         Turbo Control:
-          selected: "Off"
+          selected: Manual
           options:
             - "Off"
             - Manual
@@ -1418,13 +1418,13 @@ config:
             presets:
               - ""
         RAM Expansion Unit:
-          selected: Disabled
+          selected: Enabled
           options:
             - Disabled
             - Enabled
             - GeoRAM Mode
         REU Size:
-          selected: 2 MB
+          selected: 16 MB
           options:
             - 128 KB
             - 256 KB
@@ -1454,7 +1454,7 @@ config:
             - 8 MB
             - 16 MB
         Map Ultimate Audio $DF20-DFFF:
-          selected: Disabled
+          selected: Enabled
           options:
             - Disabled
             - Enabled
@@ -1465,7 +1465,7 @@ config:
             max: 31
             format: "%d"
         Command Interface:
-          selected: Disabled
+          selected: Enabled
           options:
             - Disabled
             - Enabled
@@ -1569,7 +1569,7 @@ config:
     Network Settings:
       items:
         Host Name:
-          selected: c64ufe
+          selected: c64u
         Unique ID:
           selected: Default
           details:
@@ -1705,6 +1705,11 @@ config:
             - Rainbow Sparkle
             - Sparkle
             - Default
+        LedStrip Auto SID Mode:
+          selected: Enabled
+          options:
+            - Disabled
+            - Enabled
         LedStrip Pattern:
           selected: SingleColor
           options:
@@ -1731,7 +1736,7 @@ config:
             max: 31
             format: "%d"
         Fixed Color:
-          selected: Scarlet
+          selected: Indigo
           options:
             - Red
             - Scarlet
@@ -1768,7 +1773,7 @@ config:
     Keyboard Lighting:
       items:
         LedStrip Mode:
-          selected: "Fixed Color"
+          selected: Default
           options:
             - "Off"
             - Fixed Color
@@ -1776,6 +1781,11 @@ config:
             - Rainbow
             - Rainbow Sparkle
             - Default
+        LedStrip Auto SID Mode:
+          selected: Enabled
+          options:
+            - Disabled
+            - Enabled
         LedStrip Pattern:
           selected: "Single Color"
           options:
@@ -1796,13 +1806,13 @@ config:
             - UltiSID2-C
             - UltiSID2-D
         Strip Intensity:
-          selected: 8
+          selected: 6
           details:
             min: 0
             max: 31
             format: "%d"
         Fixed Color:
-          selected: Magenta
+          selected: "Royal Blue"
           options:
             - Red
             - Scarlet
@@ -1830,7 +1840,7 @@ config:
             - Cerise
             - White
         Color tint:
-          selected: Whisper
+          selected: Pure
           options:
             - Pure
             - Bright
@@ -2074,12 +2084,17 @@ config:
             - Inactive (High)
             - Act. when connecting
             - Inact. when connecting
+        Automatic Rx Pushback:
+          selected: Disabled
+          options:
+            - Disabled
+            - Enabled
         Modem Offline Text:
-          selected: /USB0/offline.txt
+          selected: /flash/offline.txt
         Modem Connect Text:
-          selected: /USB0/welcome.txt
+          selected: /flash/welcome.txt
         Modem Busy Text:
-          selected: /USB0/busy.txt
+          selected: /flash/busy.txt
         Set Socket Opt TCP_NODELAY:
           selected: Disabled
           options:
@@ -2094,7 +2109,7 @@ config:
     User Interface Settings:
       items:
         Interface Type:
-          selected: "Overlay on HDMI"
+          selected: Freeze
           options:
             - Freeze
             - Overlay on HDMI
@@ -2104,7 +2119,7 @@ config:
             - Quick Search
             - WASD Cursors
         Color Scheme:
-          selected: "Commodore Blue"
+          selected: "Ultimate Black"
           options:
             - Commodore Blue
             - Ultimate Black

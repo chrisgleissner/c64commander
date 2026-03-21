@@ -7,6 +7,7 @@
  */
 
 import type { ReactNode } from "react";
+import { useState } from "react";
 import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DiagnosticsTimestamp } from "@/components/diagnostics/DiagnosticsTimestamp";
@@ -24,6 +25,8 @@ type Props = {
   secondaryRight?: ReactNode;
   children?: ReactNode;
   testId?: string;
+  /** §13.4 — Auto-expand on open (compact primary problem) */
+  defaultExpanded?: boolean;
 };
 
 export const DiagnosticsListItem = ({
@@ -36,6 +39,7 @@ export const DiagnosticsListItem = ({
   secondaryRight,
   children,
   testId,
+  defaultExpanded,
 }: Props) => {
   const showOrigin = mode === "action";
   const originClass =
@@ -43,9 +47,15 @@ export const DiagnosticsListItem = ({
   const severityMeta = getDiagnosticsSeverityMeta(severity);
   const hasSecondary = Boolean(secondaryLeft || secondaryRight);
   const isActionMode = mode === "action";
+  const [isOpen, setIsOpen] = useState(Boolean(defaultExpanded));
 
   return (
-    <details className="group rounded-lg border border-border" data-testid={testId}>
+    <details
+      className="group rounded-lg border border-border"
+      data-testid={testId}
+      open={isOpen || undefined}
+      onToggle={(event) => setIsOpen(event.currentTarget.open)}
+    >
       <summary className="list-none cursor-pointer select-none px-2 py-0.5 [&::-webkit-details-marker]:hidden">
         <div
           className="grid grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-2"

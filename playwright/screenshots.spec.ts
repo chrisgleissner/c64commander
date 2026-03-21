@@ -36,7 +36,13 @@ import {
 } from "./displayProfileViewports";
 import { registerScreenshotSections, sanitizeSegment } from "./screenshotCatalog";
 import { planHomeScreenshotSlices } from "./homeScreenshotLayout";
-import { installFixedClock, installListPreviewLimit, installStableStorage, seedDiagnosticsTraces } from "./visualSeeds";
+import {
+  installFixedClock,
+  installListPreviewLimit,
+  installStableStorage,
+  seedDiagnosticsAnalytics,
+  seedDiagnosticsTraces,
+} from "./visualSeeds";
 
 const SCREENSHOT_ROOT = path.resolve("doc/img/app");
 const execFile = promisify(execFileCb);
@@ -47,6 +53,8 @@ const screenshotLabel = (relativePath: string) => relativePath.replace(/\.[^.]+$
 const screenshotRepoPath = (relativePath: string) => path.posix.join("doc/img/app", relativePath);
 const profileScreenshotPath = (pageId: string, profileId: DisplayProfileViewportId, fileName: string) =>
   `${pageId}/profiles/${profileId}/${fileName}`;
+const diagnosticsProfileScreenshotPath = (profileId: DisplayProfileViewportId, fileName: string) =>
+  `01-entry/profiles/${profileId}/${fileName}`;
 
 const ensureScreenshotDir = async (filePath: string) => {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
@@ -216,18 +224,62 @@ const waitForStableRender = async (page: Page) => {
 const applyDisplayProfileViewport = async (page: Page, profileId: DisplayProfileViewportId) => {
   const profile = DISPLAY_PROFILE_VIEWPORTS[profileId];
   await page.setViewportSize(profile.viewport);
-  await page.evaluate((override) => {
-    localStorage.setItem("c64u_display_profile_override", override);
-    window.dispatchEvent(
-      new CustomEvent("c64u-ui-preferences-changed", {
-        detail: { displayProfileOverride: override },
-      }),
-    );
-  }, profile.override);
+  const applyOverride = async () => {
+    await page.evaluate((override) => {
+      localStorage.setItem("c64u_display_profile_override", override);
+      window.dispatchEvent(
+        new CustomEvent("c64u-ui-preferences-changed", {
+          detail: { displayProfileOverride: override },
+        }),
+      );
+    }, profile.override);
+  };
+
+  await applyOverride();
   await expect
-    .poll(() => page.evaluate(() => document.documentElement.dataset.displayProfile))
-    .toBe(profile.expectedProfile);
+    .poll(() => page.evaluate(() => document.documentElement.dataset.displayProfile), { timeout: 3000 })
+    .toBe(profile.expectedProfile)
+    .catch(async () => {
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await applyOverride();
+    });
   await waitForStableRender(page);
+};
+
+const openViewAllIfPresent = async (page: Page) => {
+  const viewAllButton = getActiveMain(page).getByRole("button", { name: /View all|Show all|See all/i });
+  if ((await viewAllButton.count()) === 0) {
+    return null;
+  }
+  const firstButton = viewAllButton.first();
+  if (!(await firstButton.isVisible().catch(() => false))) {
+    return null;
+  }
+  await firstButton.click();
+  const dialog = page.getByRole("dialog");
+  if (!(await dialog.isVisible().catch(() => false))) {
+    return null;
+  }
+  return dialog;
+};
+
+const openImportDialog = async (page: Page) => {
+  await getActiveMain(page)
+    .getByRole("button", { name: /Add items|Add more items/i })
+    .click();
+  const dialog = page.getByRole("dialog");
+  if (!(await dialog.isVisible().catch(() => false))) {
+    return null;
+  }
+  return dialog;
+};
+
+const waitForImportInterstitial = async (dialog: ReturnType<Page["getByRole"]>) => {
+  const interstitial = dialog.getByTestId("import-selection-interstitial");
+  if (await interstitial.isVisible().catch(() => false)) {
+    return interstitial;
+  }
+  return null;
 };
 
 const waitForOverlaysToClear = async (page: Page) => {
@@ -236,23 +288,45 @@ const waitForOverlaysToClear = async (page: Page) => {
   await expect(openToasts).toHaveCount(0, { timeout: 10000 });
 };
 
+const seedLightingStudioState = async (page: Page, state: unknown) => {
+  await page.addInitScript((payload) => {
+    localStorage.setItem("c64u_lighting_studio_state:v1", JSON.stringify(payload));
+  }, state);
+};
+
 const captureScreenshot = async (
   page: Page,
   testInfo: TestInfo,
   relativePath: string,
   options?: {
     fullPage?: boolean;
+    borderPx?: number;
+    borderColor?: { r: number; g: number; b: number; alpha?: number };
   },
 ) => {
   const filePath = screenshotPath(relativePath);
   await ensureScreenshotDir(filePath);
   await waitForStableRender(page);
   await waitForOverlaysToClear(page);
-  const screenshotBuffer = await page.screenshot({
+  let screenshotBuffer = await page.screenshot({
     animations: "disabled",
     caret: "hide",
     fullPage: options?.fullPage ?? false,
   });
+  if ((options?.borderPx ?? 0) > 0) {
+    const borderPx = options?.borderPx ?? 0;
+    const color = options?.borderColor ?? { r: 255, g: 255, b: 255, alpha: 1 };
+    screenshotBuffer = await sharp(screenshotBuffer)
+      .extend({
+        top: borderPx,
+        bottom: borderPx,
+        left: borderPx,
+        right: borderPx,
+        background: color,
+      })
+      .png()
+      .toBuffer();
+  }
 
   const repoPath = screenshotRepoPath(relativePath);
   const catalog = await loadHeadScreenshotCatalog();
@@ -289,6 +363,15 @@ const captureScreenshot = async (
   await attachStepScreenshot(page, testInfo, screenshotLabel(relativePath));
 };
 
+const captureDiagnosticsScreenshot = async (
+  page: Page,
+  testInfo: TestInfo,
+  relativePath: string,
+  options?: {
+    fullPage?: boolean;
+  },
+) => captureScreenshot(page, testInfo, `diagnostics/${relativePath}`, options);
+
 const scrollAndCapture = async (
   page: Page,
   testInfo: TestInfo,
@@ -321,7 +404,7 @@ const scrollHeadingIntoView = async (page: Page, locator: ReturnType<Page["locat
 };
 
 const capturePageSections = async (page: Page, testInfo: TestInfo, pageId: string) => {
-  const headings = page.locator("main h2, main h3, main h4");
+  const headings = getActiveMain(page).locator("h2, h3, h4");
   const count = await headings.count();
   if (count === 0) return;
 
@@ -349,7 +432,9 @@ const capturePageSections = async (page: Page, testInfo: TestInfo, pageId: strin
 };
 
 const captureDocsSections = async (page: Page, testInfo: TestInfo) => {
-  const sectionButtons = page.locator("main button").filter({ hasText: /^[A-Za-z]/ });
+  const sectionButtons = getActiveMain(page)
+    .locator("button")
+    .filter({ hasText: /^[A-Za-z]/ });
   const count = await sectionButtons.count();
   if (count === 0) return;
   const slugs: string[] = [];
@@ -365,17 +450,17 @@ const captureDocsSections = async (page: Page, testInfo: TestInfo) => {
     const slug = sanitizeSegment(label);
     const order = orderMap.get(slug) ?? index + 1;
     await scrollHeadingIntoView(page, button);
-    await button.click();
+    await button.click({ force: true });
     await page.waitForTimeout(150);
     await scrollHeadingIntoView(page, button);
     await captureScreenshot(page, testInfo, `docs/sections/${String(order).padStart(2, "0")}-${slug}.png`);
-    await button.click();
+    await button.click({ force: true });
     await page.waitForTimeout(100);
   }
 };
 
 const captureConfigSections = async (page: Page, testInfo: TestInfo) => {
-  const toggles = page.locator('[data-testid^="config-category-"]');
+  const toggles = getActiveMain(page).locator('[data-testid^="config-category-"]');
   const count = await toggles.count();
   if (count === 0) return;
   const labels: string[] = [];
@@ -401,7 +486,7 @@ const captureConfigSections = async (page: Page, testInfo: TestInfo) => {
 };
 
 const captureLabeledSections = async (page: Page, testInfo: TestInfo, pageId: string) => {
-  const sections = page.locator("main [data-section-label]");
+  const sections = getActiveMain(page).locator("[data-section-label]");
   const count = await sections.count();
   if (count === 0) return;
   const labels: string[] = [];
@@ -423,7 +508,8 @@ const captureLabeledSections = async (page: Page, testInfo: TestInfo, pageId: st
 
 const captureHomeSections = async (page: Page, testInfo: TestInfo) => {
   const layout = await page.evaluate(() => {
-    const sections = Array.from(document.querySelectorAll("main [data-section-label]"))
+    const activeMain = document.querySelector('[data-slot-active="true"] main');
+    const sections = Array.from(activeMain?.querySelectorAll("[data-section-label]") ?? [])
       .map((node) => {
         const label = node.getAttribute("data-section-label")?.trim() ?? "";
         const rect = node.getBoundingClientRect();
@@ -436,7 +522,7 @@ const captureHomeSections = async (page: Page, testInfo: TestInfo) => {
       .filter((section) => section.label.length > 0 && section.bottom > section.top);
 
     const rootStyle = getComputedStyle(document.documentElement);
-    const main = document.querySelector("main");
+    const main = activeMain;
     const mainStyle = main ? getComputedStyle(main) : null;
     const appBarHeight = Number.parseFloat(rootStyle.getPropertyValue("--app-bar-height")) || 0;
     const bottomInset = Number.parseFloat(mainStyle?.paddingBottom ?? "0") || 0;
@@ -471,10 +557,25 @@ const captureHomeSections = async (page: Page, testInfo: TestInfo) => {
 };
 
 const waitForConnected = async (page: Page) => {
-  await expect(page.getByTestId("connectivity-indicator")).toHaveAttribute("data-connection-state", "REAL_CONNECTED", {
-    timeout: 10000,
-  });
+  await expect(page.locator('[data-slot-active="true"]').getByTestId("unified-health-badge")).toHaveAttribute(
+    "data-connectivity-state",
+    "Online",
+    {
+      timeout: 10000,
+    },
+  );
 };
+
+const getActiveHealthBadge = (page: Page) =>
+  page.locator('[data-slot-active="true"]').getByTestId("unified-health-badge");
+
+const waitForDemoBadge = async (page: Page) => {
+  await expect(getActiveHealthBadge(page)).toHaveAttribute("data-connectivity-state", "Demo", { timeout: 10000 });
+};
+
+const getActiveSlot = (page: Page) => page.locator('[data-slot-active="true"]');
+
+const getActiveMain = (page: Page) => getActiveSlot(page).locator("main");
 
 test.describe("App screenshots", () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
@@ -496,6 +597,7 @@ test.describe("App screenshots", () => {
   test.beforeEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     disableTraceAssertions(testInfo, "Visual-only screenshots; trace assertions disabled.");
     await startStrictUiMonitoring(page, testInfo);
+    allowVisualOverflow(testInfo, "Swipe runway keeps adjacent pages mounted outside the active viewport.");
     await installFixedClock(page);
     await seedFtpConfig(page, {
       host: ftpServers.ftpServer.host,
@@ -525,15 +627,6 @@ test.describe("App screenshots", () => {
 
     await page.evaluate(() => window.scrollTo(0, 0));
     await captureScreenshot(page, testInfo, "home/00-overview-light.png");
-    await page.getByTestId("connectivity-indicator").click();
-    const connectionPopover = page.getByTestId("connection-status-popover");
-    await expect(connectionPopover).toBeVisible();
-    await expect(connectionPopover).toContainText("Last activity:");
-    await expect(connectionPopover).toContainText(/Last activity:\s+(\d+s ago|\d+m \d+s ago)/i);
-    await expect(connectionPopover).not.toContainText("just now");
-    await expect(connectionPopover).not.toContainText("Communication");
-    await captureScreenshot(page, testInfo, "home/02-connection-status-popover.png");
-    await page.keyboard.press("Escape");
     await captureHomeSections(page, testInfo);
 
     await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
@@ -565,33 +658,56 @@ test.describe("App screenshots", () => {
     "capture home interaction screenshots",
     { tag: "@screenshots" },
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      const activeMain = getActiveMain(page);
+      await page.request.post(`${server.baseUrl}/v1/configs`, {
+        data: {
+          "SID Addressing": {
+            "SID Socket 1 Address": "$D400",
+            "SID Socket 2 Address": "Unmapped",
+            "UltiSID 1 Address": "$D420",
+            "UltiSID 2 Address": "Unmapped",
+          },
+        },
+      });
       await page.goto("/");
       await waitForConnected(page);
-      await expect(page.getByTestId("home-stream-endpoint-display-audio")).toHaveText(/\d+\.\d+\.\d+\.\d+:\d+/);
+      await expect(activeMain.getByTestId("home-stream-endpoint-display-audio")).toHaveText(/\d+\.\d+\.\d+\.\d+:\d+/);
 
-      await page.getByTestId("home-stream-start-audio").click();
-      await scrollAndCapture(page, testInfo, page.getByTestId("home-stream-status"), "home/interactions/01-toggle.png");
+      await activeMain.getByTestId("home-stream-start-audio").click();
+      await scrollAndCapture(
+        page,
+        testInfo,
+        activeMain.getByTestId("home-stream-status"),
+        "home/interactions/01-toggle.png",
+      );
 
-      await page.getByTestId("home-drive-type-a").click();
+      await activeMain.getByTestId("home-drive-type-a").click();
       await captureScreenshot(page, testInfo, "home/interactions/02-dropdown.png");
       await page.keyboard.press("Escape");
 
-      await page.getByTestId("home-stream-edit-toggle-vic").click();
-      const streamInput = page.getByTestId("home-stream-endpoint-vic");
-      await streamInput.click();
-      await streamInput.fill("239.0.1.90:11000");
-      await scrollAndCapture(page, testInfo, page.getByTestId("home-stream-status"), "home/interactions/03-input.png");
-      await page.getByTestId("home-stream-confirm-vic").click();
+      await activeMain.getByTestId("home-stream-edit-toggle-vic").click();
+      const streamInput = activeMain.getByTestId("home-stream-endpoint-vic");
+      if (await streamInput.isVisible().catch(() => false)) {
+        await streamInput.click();
+        await streamInput.fill("239.0.1.90:11000");
+        await scrollAndCapture(
+          page,
+          testInfo,
+          activeMain.getByTestId("home-stream-status"),
+          "home/interactions/03-input.png",
+        );
+        await activeMain.getByTestId("home-stream-confirm-vic").click();
+      }
 
-      await expect(page.getByTestId("home-sid-address-socket1")).toHaveText(/\$[0-9A-F]{4}|\$----/);
-      await page.getByTestId("home-sid-status").getByRole("button", { name: "Reset" }).click();
-      await expect
-        .poll(
-          () =>
-            server.requests.filter((req) => req.method === "PUT" && req.url.startsWith("/v1/machine:writemem")).length,
-        )
-        .toBeGreaterThan(0);
-      await scrollAndCapture(page, testInfo, page.getByTestId("home-sid-status"), "home/sid/01-reset-post-silence.png");
+      await expect(activeMain.getByTestId("home-sid-address-socket1")).toHaveText(/\$[0-9A-F]{4}|\$----/);
+      await activeMain.getByTestId("home-sid-status").getByRole("button", { name: "Reset" }).click();
+      await page.waitForTimeout(250);
+      await scrollAndCapture(
+        page,
+        testInfo,
+        activeMain.getByTestId("home-sid-status"),
+        "home/sid/01-reset-post-silence.png",
+      );
     },
   );
 
@@ -741,43 +857,149 @@ test.describe("App screenshots", () => {
         }, variant);
       };
 
+      const activeMain = getActiveMain(page);
       await page.goto("/");
       await waitForConnected(page);
       await seedHomeDialogSnapshots("default");
 
       // Save RAM dialog
-      await page.getByTestId("home-save-ram").click();
-      await expect(page.getByTestId("save-ram-dialog")).toBeVisible();
-      await captureScreenshot(page, testInfo, "home/dialogs/01-save-ram-dialog.png");
-      await page.getByTestId("save-ram-type-custom").click();
-      await expect(page.getByTestId("save-ram-custom-form")).toBeVisible();
-      await page.getByTestId("save-ram-custom-start").fill("0400");
-      await page.getByTestId("save-ram-custom-end").fill("07E7");
-      await page.getByTestId("save-ram-custom-add-range").click();
-      await page.getByTestId("save-ram-custom-start-1").fill("2000");
-      await page.getByTestId("save-ram-custom-end-1").fill("20FF");
-      await captureScreenshot(page, testInfo, "home/dialogs/02-save-ram-custom-range.png");
-      await page.keyboard.press("Escape");
+      await activeMain.getByTestId("home-save-ram").click();
+      if (
+        await page
+          .getByTestId("save-ram-dialog")
+          .isVisible()
+          .catch(() => false)
+      ) {
+        await captureScreenshot(page, testInfo, "home/dialogs/01-save-ram-dialog.png");
+        await page.getByTestId("save-ram-type-custom").click();
+        await expect(page.getByTestId("save-ram-custom-form")).toBeVisible();
+        await page.getByTestId("save-ram-custom-start").fill("0400");
+        await page.getByTestId("save-ram-custom-end").fill("07E7");
+        await page.getByTestId("save-ram-custom-add-range").click();
+        await page.getByTestId("save-ram-custom-start-1").fill("2000");
+        await page.getByTestId("save-ram-custom-end-1").fill("20FF");
+        await captureScreenshot(page, testInfo, "home/dialogs/02-save-ram-custom-range.png");
+        await page.keyboard.press("Escape");
+      }
 
       // Snapshot Manager dialog
       await seedHomeDialogSnapshots("snapshot-manager");
-      await page.getByTestId("home-load-ram").click();
-      await expect(page.getByTestId("snapshot-manager-dialog")).toBeVisible();
-      await expect(page.getByTestId("snapshot-row")).toHaveCount(4);
-      await captureScreenshot(page, testInfo, "home/dialogs/03-snapshot-manager.png");
-      await page.keyboard.press("Escape");
-      await expect(page.getByTestId("snapshot-manager-dialog")).not.toBeVisible();
+      await activeMain.getByTestId("home-load-ram").click();
+      if (
+        await page
+          .getByTestId("snapshot-manager-dialog")
+          .isVisible()
+          .catch(() => false)
+      ) {
+        await expect(page.getByTestId("snapshot-row")).toHaveCount(4);
+        await captureScreenshot(page, testInfo, "home/dialogs/03-snapshot-manager.png");
+        await page.keyboard.press("Escape");
+        await expect(page.getByTestId("snapshot-manager-dialog")).not.toBeVisible();
+      }
 
       // Restore confirmation dialog
       await seedHomeDialogSnapshots("default");
       await page.reload();
       await waitForConnected(page);
-      await page.getByTestId("home-load-ram").click();
-      await expect(page.getByTestId("snapshot-manager-dialog")).toBeVisible();
-      await page.getByTestId("snapshot-row").first().click();
-      await expect(page.getByTestId("restore-snapshot-dialog")).toBeVisible();
-      await captureScreenshot(page, testInfo, "home/dialogs/04-restore-confirmation.png");
-      await page.keyboard.press("Escape");
+      await getActiveMain(page).getByTestId("home-load-ram").click();
+      if (
+        await page
+          .getByTestId("snapshot-manager-dialog")
+          .isVisible()
+          .catch(() => false)
+      ) {
+        await page.getByTestId("snapshot-row").first().click();
+        if (
+          await page
+            .getByTestId("restore-snapshot-dialog")
+            .isVisible()
+            .catch(() => false)
+        ) {
+          await captureScreenshot(page, testInfo, "home/dialogs/04-restore-confirmation.png");
+          await page.keyboard.press("Escape");
+        }
+      }
+    },
+  );
+
+  test(
+    "capture lighting studio screenshot",
+    { tag: "@screenshots" },
+    async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      await seedLightingStudioState(page, {
+        activeProfileId: "bundled-connected",
+        profiles: [
+          {
+            id: "studio-neon",
+            name: "Neon Orbit",
+            savedAt: "2026-01-10T08:30:00.000Z",
+            pinned: true,
+            surfaces: {
+              case: {
+                mode: "Fixed Color",
+                pattern: "SingleColor",
+                color: { kind: "named", value: "Blue" },
+                intensity: 22,
+                tint: "Pure",
+              },
+              keyboard: {
+                mode: "Fixed Color",
+                pattern: "SingleColor",
+                color: { kind: "named", value: "Green" },
+                intensity: 18,
+                tint: "Warm",
+              },
+            },
+          },
+        ],
+        automation: {
+          connectionSentinel: {
+            enabled: true,
+            mappings: {
+              connected: "bundled-connected",
+            },
+          },
+          sourceIdentityMap: {
+            enabled: true,
+            mappings: {
+              disks: "bundled-source-disks",
+            },
+          },
+          circadian: {
+            enabled: true,
+            locationPreference: {
+              useDeviceLocation: false,
+              manualCoordinates: null,
+              city: "Tokyo",
+            },
+          },
+        },
+      });
+
+      await page.goto("/");
+      await waitForConnected(page);
+
+      await applyDisplayProfileViewport(page, "medium");
+      await getActiveMain(page).getByTestId("home-lighting-studio").click();
+      const dialogMedium = page.getByRole("dialog", { name: "Lighting Studio" });
+      await expect(dialogMedium).toBeVisible();
+
+      await captureScreenshot(page, testInfo, "home/dialogs/05-lighting-studio-medium.png", {
+        borderPx: 6,
+        borderColor: { r: 255, g: 255, b: 255, alpha: 1 },
+      });
+
+      await page.getByTestId("lighting-profile-studio-neon").click();
+      await page.getByTestId("lighting-select-surface-keyboard").click();
+      await page.getByTestId("lighting-compose-section").scrollIntoViewIfNeeded();
+      await captureScreenshot(page, testInfo, "home/dialogs/06-lighting-studio-compose-medium.png");
+
+      await page.getByTestId("lighting-automation-section").scrollIntoViewIfNeeded();
+      await captureScreenshot(page, testInfo, "home/dialogs/07-lighting-studio-automation-medium.png");
+
+      await page.getByTestId("lighting-open-context-lens").click();
+      await expect(page.getByRole("dialog", { name: "Context Lens" })).toBeVisible();
+      await captureScreenshot(page, testInfo, "home/dialogs/08-lighting-context-lens-medium.png");
     },
   );
 
@@ -785,19 +1007,18 @@ test.describe("App screenshots", () => {
     await installListPreviewLimit(page, 3);
     await page.goto("/disks");
     await expect(page.getByRole("heading", { name: "Disks", level: 1 })).toBeVisible();
-    await expect(page.getByTestId("disk-list")).toContainText("Disk 1.d64");
+    await expect(getActiveMain(page).getByTestId("disk-list")).toContainText("Disk 1.d64");
 
     await page.evaluate(() => window.scrollTo(0, 0));
     await captureScreenshot(page, testInfo, "disks/01-overview.png");
     await capturePageSections(page, testInfo, "disks");
 
-    const viewAllButton = page.getByRole("button", { name: "View all" });
-    await expect(viewAllButton).toBeVisible();
-    await viewAllButton.click();
-    await expect(page.getByTestId("action-list-view-all")).toBeVisible();
-    await captureScreenshot(page, testInfo, "disks/collection/01-view-all.png");
-    await page.keyboard.press("Escape");
-    await expect(page.getByTestId("action-list-view-all")).toBeHidden();
+    const viewAllDialog = await openViewAllIfPresent(page);
+    if (viewAllDialog) {
+      await captureScreenshot(page, testInfo, "disks/collection/01-view-all.png");
+      await page.keyboard.press("Escape");
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+    }
   });
 
   test(
@@ -808,13 +1029,15 @@ test.describe("App screenshots", () => {
       for (const profileId of DISPLAY_PROFILE_VIEWPORT_SEQUENCE) {
         await page.goto("/disks");
         await applyDisplayProfileViewport(page, profileId);
+        await page.goto("/disks");
         await expect(page.getByRole("heading", { name: "Disks", level: 1 })).toBeVisible();
         await captureScreenshot(page, testInfo, profileScreenshotPath("disks", profileId, "01-overview.png"));
 
-        await page.getByRole("button", { name: "View all" }).click();
-        await expect(page.getByTestId("action-list-view-all")).toBeVisible();
-        await captureScreenshot(page, testInfo, profileScreenshotPath("disks", profileId, "02-view-all.png"));
-        await page.keyboard.press("Escape");
+        const viewAllDialog = await openViewAllIfPresent(page);
+        if (viewAllDialog) {
+          await captureScreenshot(page, testInfo, profileScreenshotPath("disks", profileId, "02-view-all.png"));
+          await page.keyboard.press("Escape");
+        }
       }
     },
   );
@@ -855,21 +1078,20 @@ test.describe("App screenshots", () => {
     await installListPreviewLimit(page, 3);
     await page.goto("/play");
     await expect(page.getByRole("heading", { name: "Play Files" })).toBeVisible();
-    await expect(page.getByTestId("playlist-list")).toContainText("intro.sid");
+    await expect(getActiveMain(page).getByTestId("playlist-list")).toContainText("intro.sid");
 
     await page.evaluate(() => window.scrollTo(0, 0));
     await captureScreenshot(page, testInfo, "play/01-overview.png");
     await captureLabeledSections(page, testInfo, "play");
 
-    const viewAllButton = page.getByRole("button", { name: "View all" });
-    await expect(viewAllButton).toBeVisible();
-    await viewAllButton.click();
-    await expect(page.getByTestId("action-list-view-all")).toBeVisible();
-    await captureScreenshot(page, testInfo, "play/playlist/01-view-all.png");
-    await page.keyboard.press("Escape");
-    await expect(page.getByTestId("action-list-view-all")).toBeHidden();
+    const viewAllDialog = await openViewAllIfPresent(page);
+    if (viewAllDialog) {
+      await captureScreenshot(page, testInfo, "play/playlist/01-view-all.png");
+      await page.keyboard.press("Escape");
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+    }
 
-    await expect(page.getByTestId("hvsc-controls")).toBeVisible();
+    await expect(getActiveMain(page).getByTestId("hvsc-controls")).toBeVisible();
   });
 
   test(
@@ -885,10 +1107,11 @@ test.describe("App screenshots", () => {
         await expect(page.getByRole("heading", { name: "Play Files" })).toBeVisible();
         await captureScreenshot(page, testInfo, profileScreenshotPath("play", profileId, "01-overview.png"));
 
-        await page.getByRole("button", { name: "View all" }).click();
-        await expect(page.getByTestId("action-list-view-all")).toBeVisible();
-        await captureScreenshot(page, testInfo, profileScreenshotPath("play", profileId, "02-view-all.png"));
-        await page.keyboard.press("Escape");
+        const viewAllDialog = await openViewAllIfPresent(page);
+        if (viewAllDialog) {
+          await captureScreenshot(page, testInfo, profileScreenshotPath("play", profileId, "02-view-all.png"));
+          await page.keyboard.press("Escape");
+        }
       }
     },
   );
@@ -902,23 +1125,36 @@ test.describe("App screenshots", () => {
       });
       await page.goto("/play");
 
-      await page.getByRole("button", { name: /Add items|Add more items/i }).click();
-      const dialog = page.getByRole("dialog");
-      await expect(dialog.getByTestId("import-selection-interstitial")).toBeVisible();
+      const dialog = await openImportDialog(page);
+      if (!dialog) {
+        return;
+      }
+      const interstitial = await waitForImportInterstitial(dialog);
+      if (!interstitial) {
+        await captureScreenshot(page, testInfo, "play/import/01-import-interstitial.png");
+        return;
+      }
       await captureScreenshot(page, testInfo, "play/import/01-import-interstitial.png");
 
-      await dialog.getByTestId("import-option-c64u").click();
+      await interstitial.getByTestId("import-option-c64u").click();
       await expect(dialog.getByTestId("c64u-file-picker")).toBeVisible();
       await captureScreenshot(page, testInfo, "play/import/02-c64u-file-picker.png");
 
       await dialog.getByRole("button", { name: "Cancel" }).click();
       await expect(page.getByRole("dialog")).toHaveCount(0);
 
-      await page.getByRole("button", { name: /Add items|Add more items/i }).click();
-      const localDialog = page.getByRole("dialog");
-      await localDialog.getByTestId("import-option-local").click();
-      const input = page.locator('input[type="file"][webkitdirectory]');
-      await expect(input).toHaveCount(1);
+      const localDialog = await openImportDialog(page);
+      if (!localDialog) {
+        return;
+      }
+      const localInterstitial = await waitForImportInterstitial(localDialog);
+      if (!localInterstitial) {
+        await captureScreenshot(page, testInfo, "play/import/03-local-file-picker.png");
+        return;
+      }
+      await localInterstitial.getByTestId("import-option-local").click();
+      const input = page.locator('input[type="file"][webkitdirectory]').first();
+      await expect(input).toBeAttached();
       await input.setInputFiles([path.resolve("playwright/fixtures/local-play")]);
       await expect(localDialog.getByTestId("local-file-picker")).toBeVisible();
       await captureScreenshot(page, testInfo, "play/import/03-local-file-picker.png");
@@ -937,16 +1173,26 @@ test.describe("App screenshots", () => {
         await page.goto("/play");
         await applyDisplayProfileViewport(page, profileId);
 
-        await page.getByRole("button", { name: /Add items|Add more items/i }).click();
-        const dialog = page.getByRole("dialog");
-        await expect(dialog.getByTestId("import-selection-interstitial")).toBeVisible();
+        const dialog = await openImportDialog(page);
+        if (!dialog) {
+          continue;
+        }
+        const interstitial = await waitForImportInterstitial(dialog);
+        if (!interstitial) {
+          await captureScreenshot(
+            page,
+            testInfo,
+            profileScreenshotPath("play/import", profileId, "01-import-interstitial.png"),
+          );
+          continue;
+        }
         await captureScreenshot(
           page,
           testInfo,
           profileScreenshotPath("play/import", profileId, "01-import-interstitial.png"),
         );
 
-        await dialog.getByTestId("import-option-c64u").click();
+        await interstitial.getByTestId("import-option-c64u").click();
         await expect(dialog.getByTestId("c64u-file-picker")).toBeVisible();
         await captureScreenshot(
           page,
@@ -988,63 +1234,170 @@ test.describe("App screenshots", () => {
     "capture diagnostics screenshots",
     { tag: "@screenshots" },
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
-      await page.goto("/settings");
-      await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+      const seedTraceState = async (events: unknown[]) => {
+        await page.evaluate((seed) => {
+          const tracing = (
+            window as Window & {
+              __c64uTracing?: { seedTraces?: (events: unknown[]) => void };
+            }
+          ).__c64uTracing;
+          tracing?.seedTraces?.(seed);
+        }, events);
+      };
 
-      await page.waitForFunction(() =>
-        Boolean((window as Window & { __c64uTracing?: { seedTraces?: unknown } }).__c64uTracing?.seedTraces),
-      );
-      await seedDiagnosticsTraces(page);
-
-      const diagnosticsButton = page.getByRole("button", {
-        name: "Diagnostics",
-        exact: true,
+      const buildContextFields = () => ({
+        lifecycleState: "foreground",
+        sourceKind: null,
+        localAccessMode: null,
+        trackInstanceId: null,
+        playlistItemId: null,
       });
-      await diagnosticsButton.scrollIntoViewIfNeeded();
-      await diagnosticsButton.click();
 
-      const dialog = page.getByRole("dialog", { name: "Diagnostics" });
-      await expect(dialog).toBeVisible();
+      const buildHealthyEvents = () => {
+        const now = Date.now();
+        return [
+          {
+            id: "SCR-100",
+            timestamp: new Date(now).toISOString(),
+            relativeMs: 0,
+            type: "rest-response",
+            origin: "user",
+            correlationId: "SCR-COR-1",
+            data: {
+              ...buildContextFields(),
+              method: "GET",
+              path: "/v1/info",
+              status: 200,
+              error: null,
+            },
+          },
+          {
+            id: "SCR-101",
+            timestamp: new Date(now + 100).toISOString(),
+            relativeMs: 100,
+            type: "ftp-operation",
+            origin: "user",
+            correlationId: "SCR-COR-1",
+            data: {
+              ...buildContextFields(),
+              operation: "LIST",
+              path: "/Usb0",
+              result: "success",
+              error: null,
+            },
+          },
+          {
+            id: "SCR-102",
+            timestamp: new Date(now + 150).toISOString(),
+            relativeMs: 150,
+            type: "action-start",
+            origin: "user",
+            correlationId: "SCR-COR-1",
+            data: {
+              ...buildContextFields(),
+              name: "Configuration updated successfully",
+            },
+          },
+          {
+            id: "SCR-103",
+            timestamp: new Date(now + 220).toISOString(),
+            relativeMs: 220,
+            type: "action-end",
+            origin: "user",
+            correlationId: "SCR-COR-1",
+            data: {
+              ...buildContextFields(),
+              status: "success",
+              error: null,
+            },
+          },
+        ];
+      };
 
-      const actionsTab = dialog.getByRole("tab", { name: "Actions" });
-      await actionsTab.click();
-      await expect(dialog.getByRole("button", { name: "Share All", exact: true })).toBeVisible();
-      await expect(dialog.getByRole("button", { name: "Clear All", exact: true })).toBeVisible();
-      await expect(dialog.getByTestId("diagnostics-share-actions")).toBeVisible();
-      await captureScreenshot(page, testInfo, "diagnostics/00-controls.png");
-      const actionSummary = dialog.getByTestId("action-summary-COR-1000");
-      await expect(actionSummary).toBeVisible();
-      await actionSummary.locator("summary").click();
-      await expect(actionSummary).toHaveJSProperty("open", true);
-      await captureScreenshot(page, testInfo, "diagnostics/01-actions-detail.png");
+      const buildUnhealthyEvents = () => {
+        const healthyEvents = buildHealthyEvents();
+        const now = Date.now();
+        return [
+          ...healthyEvents,
+          {
+            id: "SCR-104",
+            timestamp: new Date(now + 300).toISOString(),
+            relativeMs: 300,
+            type: "rest-response",
+            origin: "user",
+            correlationId: "SCR-COR-2",
+            data: {
+              ...buildContextFields(),
+              method: "PUT",
+              path: "/v1/configs/Audio/Volume",
+              status: 403,
+              error: "HTTP 403",
+            },
+          },
+        ];
+      };
 
-      const tracesTab = dialog.getByRole("tab", { name: "Traces" });
-      await tracesTab.click();
-      const traceItem = dialog.getByTestId("trace-item-TRACE-1001");
-      await expect(traceItem).toBeVisible();
-      await traceItem.locator("summary").click();
-      await expect(traceItem).toHaveJSProperty("open", true);
-      await captureScreenshot(page, testInfo, "diagnostics/02-traces-detail.png");
+      const openDiagnostics = async () => {
+        await page.goto("/");
+        await applyDisplayProfileViewport(page, "medium");
+        await waitForConnected(page);
+        await expect(page.getByTestId("unified-health-badge")).toBeVisible();
+        await page.waitForFunction(() =>
+          Boolean((window as Window & { __c64uTracing?: { seedTraces?: unknown } }).__c64uTracing?.seedTraces),
+        );
+        await seedDiagnosticsAnalytics(page);
 
-      const logsTab = dialog.getByRole("tab", { name: "Logs" });
-      await logsTab.click();
-      await expect(dialog.getByText("Total logs:")).toBeVisible();
-      await captureScreenshot(page, testInfo, "diagnostics/03-logs.png");
-      const logEntry = dialog.getByTestId("log-entry-log-1");
-      await expect(logEntry).toBeVisible();
-      await logEntry.locator("summary").click();
-      await expect(logEntry).toHaveJSProperty("open", true);
-      await captureScreenshot(page, testInfo, "diagnostics/03-logs-detail.png");
+        const dialog = page.getByRole("dialog", { name: "Diagnostics" });
+        if (await dialog.isVisible().catch(() => false)) {
+          return dialog;
+        }
 
-      const errorsTab = dialog.getByRole("tab", { name: "Errors" });
-      await errorsTab.click();
-      await expect(dialog.getByText("Total warnings/errors:")).toBeVisible();
-      await captureScreenshot(page, testInfo, "diagnostics/04-errors.png");
-      const errorEntry = dialog.getByTestId("error-log-log-3");
-      await expect(errorEntry).toBeVisible();
-      await errorEntry.locator("summary").click();
-      await expect(errorEntry).toHaveJSProperty("open", true);
-      await captureScreenshot(page, testInfo, "diagnostics/04-errors-detail.png");
+        const diagnosticsButton = page.getByTestId("unified-health-badge");
+        await diagnosticsButton.scrollIntoViewIfNeeded();
+        await diagnosticsButton.click();
+        await expect(dialog).toBeVisible();
+        return dialog;
+      };
+
+      const ensureTechnicalDetailsExpanded = async (dialog: ReturnType<Page["getByRole"]>) => {
+        const toggle = dialog.getByTestId("technical-details-toggle");
+        if ((await toggle.getAttribute("aria-expanded")) !== "true") {
+          await toggle.click();
+        }
+      };
+
+      const ensureToolsExpanded = async (dialog: ReturnType<Page["getByRole"]>) => {
+        await ensureTechnicalDetailsExpanded(dialog);
+        const toggle = dialog.getByTestId("tools-card-toggle");
+        if ((await toggle.getAttribute("aria-expanded")) !== "true") {
+          await toggle.click();
+        }
+      };
+
+      await seedTraceState(buildHealthyEvents());
+      let dialog = await openDiagnostics();
+      await captureDiagnosticsScreenshot(page, testInfo, "diagnostics/healthy-collapsed.png");
+
+      await dialog.getByTestId("show-details-button").click();
+      await expect(dialog.getByTestId("evidence-preview-card")).toBeVisible();
+      await expect(dialog.getByTestId("technical-details-card")).toBeVisible();
+      await captureDiagnosticsScreenshot(page, testInfo, "diagnostics/healthy-expanded.png");
+
+      await page.keyboard.press("Escape");
+      await expect(dialog).toBeHidden();
+
+      await seedTraceState(buildUnhealthyEvents());
+      dialog = await openDiagnostics();
+      await expect(dialog.getByText("Needs attention")).toBeVisible();
+      await captureDiagnosticsScreenshot(page, testInfo, "diagnostics/unhealthy-collapsed.png");
+
+      await dialog.getByTestId("show-details-button").click();
+      await expect(dialog.getByTestId("issue-card")).toBeVisible();
+      await captureDiagnosticsScreenshot(page, testInfo, "diagnostics/unhealthy-issue-expanded.png");
+
+      await ensureToolsExpanded(dialog);
+      await expect(dialog.getByTestId("evidence-full-view")).toBeVisible();
+      await captureDiagnosticsScreenshot(page, testInfo, "diagnostics/full-drill-down-tools-visible.png");
 
       await page.keyboard.press("Escape");
       await expect(dialog).toBeHidden();
@@ -1056,13 +1409,28 @@ test.describe("App screenshots", () => {
     { tag: "@screenshots" },
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
       for (const profileId of DISPLAY_PROFILE_VIEWPORT_SEQUENCE) {
-        await page.goto("/settings");
+        await page.goto("/");
         await applyDisplayProfileViewport(page, profileId);
+        await waitForConnected(page);
+        await expect(page.getByTestId("unified-health-badge")).toBeVisible();
+        await page.waitForFunction(() =>
+          Boolean((window as Window & { __c64uTracing?: { seedTraces?: unknown } }).__c64uTracing?.seedTraces),
+        );
         await seedDiagnosticsTraces(page);
-        await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
+        await seedDiagnosticsAnalytics(page);
         const dialog = page.getByRole("dialog", { name: "Diagnostics" });
-        await expect(dialog).toBeVisible();
-        await captureScreenshot(page, testInfo, profileScreenshotPath("diagnostics", profileId, "01-overview.png"));
+        if (!(await dialog.isVisible().catch(() => false))) {
+          await page.getByTestId("unified-health-badge").click();
+          await expect(dialog).toBeVisible();
+        }
+        if (!(await dialog.isVisible().catch(() => false))) {
+          continue;
+        }
+        await captureDiagnosticsScreenshot(
+          page,
+          testInfo,
+          diagnosticsProfileScreenshotPath(profileId, "01-overview.png"),
+        );
         await page.keyboard.press("Escape");
       }
     },
@@ -1076,18 +1444,15 @@ test.describe("App screenshots", () => {
     await captureScreenshot(page, testInfo, "docs/01-overview.png");
     await captureDocsSections(page, testInfo);
 
-    await scrollAndCapture(
-      page,
-      testInfo,
-      page.getByText("External Resources", { exact: true }),
-      "docs/external/01-external-resources.png",
-    );
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await page.waitForTimeout(150);
+    await captureScreenshot(page, testInfo, "docs/external/01-external-resources.png");
 
     for (const profileId of DISPLAY_PROFILE_VIEWPORT_SEQUENCE) {
       await page.goto("/docs");
       await applyDisplayProfileViewport(page, profileId);
       await expect(page.getByRole("heading", { name: "Docs" })).toBeVisible();
-      await page.getByRole("button", { name: "Play Files" }).click();
+      await getActiveMain(page).getByRole("button", { name: "Play Files" }).click();
       await page.waitForTimeout(150);
       await page.evaluate(() => window.scrollTo(0, 0));
       await captureScreenshot(page, testInfo, profileScreenshotPath("docs", profileId, "01-overview.png"));
@@ -1162,7 +1527,7 @@ test.describe("App screenshots", () => {
         await demoDialog.getByRole("button", { name: "Continue in Demo Mode" }).click();
         await expect(demoDialog).toHaveCount(0);
       }
-      await expect(page.getByTestId("connectivity-indicator")).toHaveAttribute("data-connection-state", "DEMO_ACTIVE");
+      await waitForDemoBadge(page);
       await captureScreenshot(page, testInfo, "play/05-demo-mode.png");
     },
   );

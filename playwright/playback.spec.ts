@@ -37,8 +37,9 @@ const openAddItemsDialog = async (page: Page) => {
 const addLocalFolder = async (page: Page, folderPath: string) => {
   await openAddItemsDialog(page);
   await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
-  const input = page.locator('input[type="file"][webkitdirectory]');
-  await expect(input).toHaveCount(1);
+  // Scope to the active swipe slot — SwipeNavigationLayer renders 3 panels simultaneously
+  // so un-scoped selectors would match inputs from adjacent (inactive) slots too.
+  const input = page.locator('[data-slot-active="true"] input[type="file"][webkitdirectory]');
   await input.setInputFiles([folderPath]);
   await expect(page.getByRole("dialog")).toBeHidden();
 };
@@ -499,7 +500,7 @@ test.describe("Playback file browser", () => {
 
   test("local SID playback uploads before play", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/play");
-    const indicator = page.getByTestId("connectivity-indicator");
+    const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 5000 });
     await addLocalFolder(page, path.resolve("playwright/fixtures/local-play-sids"));
     await snap(page, testInfo, "local-playlist-ready");
@@ -520,7 +521,7 @@ test.describe("Playback file browser", () => {
 
   test("local SID playback does not throw unavailable error", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/play");
-    const indicator = page.getByTestId("connectivity-indicator");
+    const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 5000 });
     await addLocalFolder(page, path.resolve("playwright/fixtures/local-play-sids"));
     await expect(page.getByTestId("playlist-item")).toHaveCount(2);
@@ -970,7 +971,7 @@ test.describe("Playback file browser", () => {
     await snap(page, testInfo, "play-open");
     await openAddItemsDialog(page);
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
-    const input = page.locator('input[type="file"][webkitdirectory]');
+    const input = page.locator('[data-slot-active="true"] input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play-songlengths")]);
     await expect(page.getByRole("dialog")).toBeHidden();
     await snap(page, testInfo, "playlist-ready");
@@ -1037,7 +1038,7 @@ test.describe("Playback file browser", () => {
     await page.goto("/play");
     await openAddItemsDialog(page);
     await clickSourceSelectionButton(page.getByRole("dialog"), "This device");
-    const input = page.locator('input[type="file"][webkitdirectory]');
+    const input = page.locator('[data-slot-active="true"] input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve("playwright/fixtures/local-play-songlengths")]);
     await expect(page.getByRole("dialog")).toBeHidden();
 
@@ -1177,9 +1178,16 @@ test.describe("Playback file browser", () => {
     await page.getByTestId("tab-settings").click();
     await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
 
-    await expect.poll(() => server.sidplayRequests.length).toBe(2);
-
     await page.getByTestId("tab-play").click();
+    await expect(page.getByRole("heading", { name: "Play Files" })).toBeVisible();
+    await expect
+      .poll(async () => {
+        if (server.sidplayRequests.length === 1) {
+          await dispatchPlaybackResumeSignals(page);
+        }
+        return server.sidplayRequests.length;
+      })
+      .toBe(2);
     await expect(page.getByTestId("playback-current-track")).toContainText("track-2.sid");
     await snap(page, testInfo, "auto-advance-after-navigation");
   });

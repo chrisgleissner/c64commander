@@ -1,225 +1,234 @@
-# C64U File Validation Plan
+# Diagnostics Overlay Redesign Plan
 
-Classification: `CODE_CHANGE`, `UI_CHANGE`
-
-## Objective
-
-Implement strict structural validation for all spec-covered files before they are transmitted to the C64 Ultimate via REST upload endpoints.
-
-## Authoritative Spec
-
-- `doc/c64/c64-file-validation-spec.md`
-
-## Interpretation Notes
-
-- [x] Treat the spec as authoritative only for the explicitly listed formats: `D64`, `D71`, `D81`, `PRG`, `SID`, `MOD`, `CRT`.
-- [x] Determine file type from bytes and structural rules, not filename extension alone.
-- [x] Treat the internally generated SID song-length sidecar payload as out of scope for structural validation because the spec defines no format rules for it. It is not a user-supplied C64 artefact.
-- [x] Resolve the spec's result-code inconsistency by honoring the specific per-format failure code named in each rule when present, even where the summary list omits it.
-- [x] Resolve disk block-count inconsistencies by treating the listed valid file sizes as authoritative and deriving image block counts with integer truncation where the spec mixes exact-image bytes with extra error-info bytes.
-- [x] Confirm whether any other REST file upload payloads exist outside the centralized API upload methods.
-
-## Phases
-
-### Phase 1 - Discovery
-
-- [x] Read repository instructions, README, UX guidance, and the validation spec.
-- [x] Identify all upload/send code paths that transmit files to C64U over REST.
-- [x] Verify the lowest common transmission boundary to enforce validation once.
-
-### Phase 2 - Validation Design
-
-- [x] Add reusable validation types and error model.
-- [x] Add deterministic file type detection using byte signatures and structural rules.
-- [x] Add a validator registry for all spec-covered formats.
-- [x] Implement defensive bounds-checked validators for `D64`, `D71`, `D81`, `PRG`, `SID`, `MOD`, and `CRT`.
-- [x] Add normalized validation failure reasons suitable for logs and user messaging.
-
-### Phase 3 - Transmission Guard Integration
-
-- [x] Add a transmission guard at the REST upload boundary in the C64 API client.
-- [x] Ensure blocked files never reach `fetch`.
-- [x] Include attempted operation context and filename in rejection handling.
-- [x] Avoid duplicate user-visible error popups when higher layers also catch errors.
-
-### Phase 4 - Logging And UX
-
-- [x] Emit structured log entries with event type `FILE_VALIDATION_FAILED`.
-- [x] Include timestamp, filename, detected type, validation error, and attempted operation context.
-- [x] Show a destructive top-of-screen popup for every rejection.
-- [x] Make the popup text state that transmission was aborted.
-
-### Phase 5 - Regression Tests
-
-- [x] Add unit tests for valid samples for every supported format.
-- [x] Add invalid-case tests for corrupted headers, truncated inputs, invalid offsets, and illegal sizes.
-- [x] Add fuzz-style random input rejection tests that prove deterministic non-crashing behavior.
-- [x] Add API boundary tests proving invalid files do not trigger REST requests.
-- [x] Add tests proving rejection logs and top toast reporting occur.
-
-### Phase 6 - Validation
-
-- [x] Run relevant linting.
-- [x] Run targeted tests.
-- [x] Run coverage and confirm validation code is `>= 90%` covered.
-- [x] Run build.
-
-## Work Log
-
-- 2026-03-16 00:00 UTC: Classified the task as `CODE_CHANGE` plus `UI_CHANGE`.
-- 2026-03-16 00:05 UTC: Read `README.md`, `doc/ux-guidelines.md`, and `doc/c64/c64-file-validation-spec.md`.
-- 2026-03-16 00:10 UTC: Confirmed the centralized REST upload methods are in `src/lib/c64api.ts`: `mountDriveUpload`, `playSidUpload`, `playModUpload`, `runPrgUpload`, `loadPrgUpload`, and `runCartridgeUpload`.
-- 2026-03-16 00:14 UTC: Confirmed the app already has a top-of-screen toast system via `src/components/ui/toast.tsx` and `src/hooks/use-toast.ts`.
-- 2026-03-16 00:18 UTC: Confirmed the active logging system stores ISO timestamps automatically in `src/lib/logging.ts` and can carry structured details.
-- 2026-03-16 00:22 UTC: Documented the spec ambiguity around the internally generated SID `.ssl` sidecar and decided not to invent unsupported validation rules.
-- 2026-03-16 00:24 UTC: Noted that the spec's final result-code summary omits some per-format codes used earlier in the document. Decision: use the rule-local code names for those failures.
-- 2026-03-16 00:31 UTC: Noted that some disk-size and block-count pairs are inconsistent when extra error-info bytes are present. Decision: keep the listed sizes authoritative and compute block counts with integer truncation for validation.
-- 2026-03-16 12:40 UTC: Added the reusable validation module, centralized upload guard integration, filename-aware rejection reporting, and duplicate UI error suppression.
-- 2026-03-16 13:05 UTC: Added targeted validator and API-boundary regression tests, then upgraded older upload tests to use structurally valid D64/D71/D81/PRG/SID/MOD/CRT fixtures instead of placeholder blobs.
-- 2026-03-16 13:15 UTC: Verified the CRT validator accepts `0x0100`, `0x0101`, and `0x0200`, then amended the tests to lock those versions in.
-- 2026-03-16 13:30 UTC: Full unit suite passed (`337` files, `3822` tests) and production build passed.
-- 2026-03-16 13:35 UTC: Focused validation coverage for `src/lib/fileValidation.ts` reached `90.27%` statements/lines and `85.31%` branches.
-- 2026-03-16 13:37 UTC: Re-ran targeted regression suites after formatting changed files; `168` tests passed. Repository lint still fails because 12 unrelated files outside this task remain unformatted in the worktree.
-
----
-
-# Review 10 Remediation Plan Execution
-
-**Branch:** `fix/strict-typing`
-**PR:** #145
-**Date:** 2026-03-17
+Status: DONE
+Classification: UI_CHANGE + DOC_PLUS_CODE
+Owner: GitHub Copilot
+Date: 2026-03-20
 
 ## Objective
 
-Execute all incomplete items in `doc/research/review-10/plan.md`. Verify already-complete items from code evidence. Update checkboxes to reflect reality. Ensure `npm run lint`, `build`, `test`, `test:coverage` all pass with >= 91% branch coverage.
+Redesign the Diagnostics overlay so it behaves like a calm, hobby-friendly status surface rather than a diagnostics console.
 
-## Constraints
+Required outcomes:
 
-- No `any` types or silent catch blocks
-- > = 91% branch coverage required
-- All TS/TSX/JSON must be Prettier-formatted
-- Minimal scope — only what the plan requires
+- first-open state answers device health in under 2 seconds
+- strict progressive disclosure from summary to tools
+- visual alignment with the rest of the app
+- zero loss of existing diagnostics capabilities or data access
+- updated unit tests, Playwright coverage, screenshots, build, and validation
 
-## Ordered Task List
+## Non-Negotiable UX Rules
 
-1. Fix PR #145 review comment: wrap ConfigBrowserPage in PageErrorBoundary — DONE
-2. Verify Phase 1.1 (strict TS) — verify from tsconfig.app.json
-3. Verify Phase 1.2 (as any removal) — verify from source
-4. Verify Phase 1.3 (configValueExtractor) — verify file exists and is used
-5. Verify Phase 1.4 (fetch error UX) — verify fetchError in hook and UI
-6. Assess Phase 1.5 (console.\* replacement) — check remaining console calls
-7. Verify Phase 1.6 (useCallback deps) — verify comment in ConfigBrowserPage
-8. Verify Phase 1.7 (yieldToRenderer) — verify extracted constant
-9. Assess Phase 1.8 (housekeeping: TODOs, allowJs)
-10. Verify Phase 1.9 (dead files deleted)
-11. Verify Phase 2.1 (MusicPlayerPage cascade)
-12. Update plan.md checkboxes based on evidence
-13. Run lint, build, test, coverage
-14. Commit and push
-15. Reply to PR review comment
+- First-open healthy state shows one dominant card only.
+- First-open unhealthy state shows one dominant card only.
+- First-open offline state shows one dominant card only.
+- No filters, raw logs, evidence stream, or tools are visible on first open.
+- Evidence preview is collapsed by default and may not exceed three human-readable items.
+- Raw diagnostics activity and filters appear only after explicit layer expansion.
+- No child layer is visible before its parent is expanded.
 
-## Verification Commands
+## Authoritative Phase Plan
 
-```bash
-npm run lint
-npm run build
-npm run test
-npm run test:coverage
-```
+| Phase | Name | Scope | Status | Verification Gate |
+| --- | --- | --- | --- | --- |
+| 1 | Audit | Inspect current diagnostics dialog, tests, screenshots, and UX constraints. No product code changes. | DONE | Current behavior, gaps, and impacted files documented in WORKLOG. |
+| 2 | Data Mapping | Map existing diagnostics data and capabilities into summary, issue, evidence, technical, and tools layers. | DONE | Every existing capability has a destination layer. |
+| 3 | UX Definition | Lock exact healthy, unhealthy, offline, and expansion behavior plus component contract. | DONE | Component responsibilities and disclosure rules documented in WORKLOG. |
+| 4 | Implementation | Refactor dialog and add new card components with app-aligned layout. | DONE | Overlay renders required layered structure. |
+| 5 | State Logic | Enforce progressive disclosure and preserve all existing actions, detail views, and advanced tools. | DONE | No forbidden first-open content remains. |
+| 6 | Testing | Update unit and Playwright tests for new structure and flows. | DONE | Required tests exist and pass locally. |
+| 7 | Screenshots | Regenerate targeted diagnostics screenshots for required states only. | DONE | Required screenshot set updated under doc/img/app/diagnostics. |
+| 8 | Validation | Run lint, unit tests, coverage, build, and targeted Playwright validations. | DONE | Validation commands pass with required coverage threshold. |
+| 9 | UX Consistency Audit | Review rendered diagnostics UI against Home, Play, Disks, and Settings language. | DONE | WORKLOG records final UX audit findings and any corrective fixes. |
+| 10 | CI Green | Confirm repo is green for touched scope and close execution. | DONE | All plan rows marked DONE and WORKLOG contains proof. |
 
-## Evidence
+## Atomic Task Breakdown
 
-### Phase 1.1 — TypeScript config
+### Phase 1 - Audit
 
-- `tsconfig.app.json` has `"strict": true`, `"noFallthroughCasesInSwitch": true`
-- `allowJs` is NOT in `tsconfig.app.json` (it's in root `tsconfig.json` for tooling)
-- **Status: COMPLETE**
+| ID | Task | Status |
+| --- | --- | --- |
+| P1.1 | Read repo instructions, UX guidance, current diagnostics dialog, related tests, and screenshot harness. | DONE |
+| P1.2 | Identify current anti-patterns against requested UX. | DONE |
+| P1.3 | List impacted files and validation obligations. | DONE |
 
-### Phase 1.2 — as any removal
+### Phase 2 - Data Mapping
 
-- `grep "as any" src/ -r | grep -v test`: only 4 instances remain
-  - `c64api.ts:181`: `(window as any)?.Capacitor` — documented exception (platform detection)
-  - `c64api.ts:1443,1445`: `(sidFile as any).name`, `(sslFile as any).name` — File type extension workaround
-  - `localSourcesStore.ts:226`: `(dirHandle as any).entries()` — FileSystemDirectoryHandle API workaround
-- These are all documented exceptions or platform API workarounds
-- **Status: COMPLETE**
+| ID | Task | Status |
+| --- | --- | --- |
+| P2.1 | Inventory existing diagnostics inputs, actions, popups, detail views, filters, and exports. | DONE |
+| P2.2 | Map each current capability to one of the five disclosure layers. | DONE |
+| P2.3 | Define which data becomes human-readable summary copy versus technical detail copy. | DONE |
 
-### Phase 1.3 — configValueExtractor
+### Phase 3 - UX Definition
 
-- `src/lib/config/configValueExtractor.ts` exists with `extractConfigValue` export
-- **Status: COMPLETE**
+| ID | Task | Status |
+| --- | --- | --- |
+| P3.1 | Define SummaryCard behavior for healthy, unhealthy, and offline modes. | DONE |
+| P3.2 | Define IssueCard visibility and copy rules. | DONE |
+| P3.3 | Define EvidencePreviewCard, EvidenceFullView, TechnicalDetailsCard, and ToolsCard expansion rules. | DONE |
+| P3.4 | Define required test IDs and expansion flow contract. | DONE |
 
-### Phase 1.4 — fetch error UX
+### Phase 4 - Implementation
 
-- `fetchError` state in `useAppConfigState.ts` (line 119)
-- Logged at ERROR level (line 168)
-- Exposed from hook (line 278)
-- Rendered in HomePage
-- **Status: COMPLETE**
+| ID | Task | Status |
+| --- | --- | --- |
+| P4.1 | Add SummaryCard component. | DONE |
+| P4.2 | Add IssueCard component. | DONE |
+| P4.3 | Add EvidencePreviewCard component. | DONE |
+| P4.4 | Add EvidenceFullView component. | DONE |
+| P4.5 | Add TechnicalDetailsCard component. | DONE |
+| P4.6 | Add ToolsCard component. | DONE |
+| P4.7 | Refactor DiagnosticsDialog to render strict parent-child layers only. | DONE |
 
-### Phase 1.5 — console.\* replacement
+### Phase 5 - State Logic
 
-- Many console.warn calls remain, but they are all in contexts where addLog isn't available (tracing low-level, fallback logging, fuzz mode)
-- HomeDiskManager.tsx was updated (per worklog)
-- useActionTrace.ts was updated
-- NotFound.tsx was updated
-- Remaining console.warn in tracing/fuzz/songlengthService are intentional fallback logging
-- **Status: COMPLETE (intentional remaining uses)**
+| ID | Task | Status |
+| --- | --- | --- |
+| P5.1 | Remove first-open filters, raw stream, and tools from initial view. | DONE |
+| P5.2 | Preserve issue drill-down, health check, connection recovery, device detail, history, latency, config drift, heat maps, sharing, and clear actions. | DONE |
+| P5.3 | Ensure evidence preview shows at most three human-readable entries. | DONE |
+| P5.4 | Ensure filters appear only inside ToolsCard. | DONE |
+| P5.5 | Ensure layer visibility obeys parent expansion rules. | DONE |
 
-### Phase 1.6 — useCallback deps
+### Phase 6 - Testing
 
-- `ConfigBrowserPage.tsx` line 185: comment explaining why audioConfiguredRef omitted
-- **Status: COMPLETE**
+| ID | Task | Status |
+| --- | --- | --- |
+| P6.1 | Update unit tests for healthy first-open state. | DONE |
+| P6.2 | Update unit tests for unhealthy first-open state. | DONE |
+| P6.3 | Update unit tests for disclosure flow and Tools-only filters. | DONE |
+| P6.4 | Update GlobalDiagnosticsOverlay tests if dialog contract changes. | DONE |
+| P6.5 | Update Playwright diagnostics tests for new expansion flow. | DONE |
 
-### Phase 1.7 — yieldToRenderer
+### Phase 7 - Screenshots
 
-- `HomeDiskManager.tsx` line 115: `const yieldToRenderer = () => new Promise<void>(...)`
-- Used at lines 746, 1098, 1112
-- Two other `setTimeout` calls at lines 925, 991 are for different purposes (min duration waits)
-- **Status: COMPLETE**
+| ID | Task | Status |
+| --- | --- | --- |
+| P7.1 | Capture healthy collapsed screenshot. | DONE |
+| P7.2 | Capture healthy expanded screenshot. | DONE |
+| P7.3 | Capture unhealthy collapsed screenshot. | DONE |
+| P7.4 | Capture unhealthy issue-expanded screenshot. | DONE |
+| P7.5 | Capture full drill-down screenshot with tools visible. | DONE |
 
-### Phase 1.9 — dead files
+### Phase 8 - Validation
 
-- All 7 files listed are confirmed NOT FOUND
-- **Status: COMPLETE**
+| ID | Task | Status |
+| --- | --- | --- |
+| P8.1 | Run lint. | DONE |
+| P8.2 | Run unit tests. | DONE |
+| P8.3 | Run coverage and confirm global branch coverage >= 91%. | DONE |
+| P8.4 | Run build. | DONE |
+| P8.5 | Run targeted Playwright diagnostics coverage. | DONE |
 
-### Phase 2.1 — MusicPlayerPage cascade
+### Phase 9 - UX Consistency Audit
 
-- MusicPlayerPage.tsx: NOT FOUND
-- playwright/musicPlayer.spec.ts: NOT FOUND
-- useSidPlayer.tsx: NOT FOUND
-- tests/unit/hooks/useSidPlayer.test.tsx: NOT FOUND
-- App.tsx: no SidPlayerProvider or MusicPlayerPage references remain
-- .github/copilot-instructions.md: no stale MusicPlayerPage/useSidPlayer references remain
-- CLAUDE.md: no stale MusicPlayerPage/useSidPlayer references remain
-- **Status: COMPLETE**
+| ID | Task | Status |
+| --- | --- | --- |
+| P9.1 | Compare diagnostics spacing, card structure, and actions against the app’s existing pages. | DONE |
+| P9.2 | Fix any remaining console-like or cluttered behavior. | DONE |
 
-### PR Comment
+### Phase 10 - CI Green
 
-- ConfigBrowserPage was not wrapped in PageErrorBoundary at line 173
-- Fixed: wrapped in PageErrorBoundary in src/App.tsx
-- **Status: DONE**
+| ID | Task | Status |
+| --- | --- | --- |
+| P10.1 | Verify all plan tasks are DONE and WORKLOG proof is complete. | DONE |
+| P10.2 | Summarize completed validation and screenshot scope accurately. | DONE |
 
-## Live Status
+## Phase 1 Audit Findings
 
-| Task                                            | Status                   |
-| ----------------------------------------------- | ------------------------ |
-| PR #145 ConfigBrowserPage PageErrorBoundary fix | DONE                     |
-| Phase 1.1 TypeScript strict config              | VERIFIED COMPLETE        |
-| Phase 1.2 as any removal                        | VERIFIED COMPLETE        |
-| Phase 1.3 configValueExtractor                  | VERIFIED COMPLETE        |
-| Phase 1.4 fetch error UX                        | VERIFIED COMPLETE        |
-| Phase 1.5 console.\* replacement                | VERIFIED MOSTLY COMPLETE |
-| Phase 1.6 useCallback deps                      | VERIFIED COMPLETE        |
-| Phase 1.7 yieldToRenderer                       | VERIFIED COMPLETE        |
-| Phase 1.8 housekeeping                          | IN PROGRESS              |
-| Phase 1.9 dead file deletion                    | VERIFIED COMPLETE        |
-| Phase 2.1 MusicPlayerPage cascade               | VERIFIED COMPLETE        |
-| Phase 5.1-5.4 splits                            | DEFERRED (too large)     |
-| Phase 6 profiling                               | DEFERRED (runtime)       |
-| Phase 7.6 optimistic updates                    | DEFERRED                 |
-| Phase 7.7 skeleton screens                      | DEFERRED                 |
-| plan.md checkbox updates                        | IN PROGRESS              |
-| lint/build/test/coverage                        | PENDING                  |
-| Commit and push                                 | PENDING                  |
-| PR comment reply                                | PENDING                  |
+- Current first-open state still renders more than one conceptual block: the dominant status card, an optional standalone problem spotlight, and an evidence preview card.
+- Current first-open state violates the requested healthy-mode rule because healthy sessions can immediately show recent activity.
+- Current full-details state still uses a filter-first mental model with QuickFocusControls placed before the evidence stream.
+- Filters are available before the deepest tool layer, which violates the requested disclosure hierarchy.
+- Existing technical data and advanced capabilities are already present and should be preserved, not reimplemented from scratch.
+
+## Phase 2 Data Mapping
+
+| Current capability | Target layer | Notes |
+| --- | --- | --- |
+| Overall health state, connectivity, host, connected device label | Layer 1 - SummaryCard | First-answer content only; human-readable copy. |
+| Primary problem title and cause hint | Layer 1 summary copy and Layer 2 IssueCard | Summary gets plain-language headline; IssueCard gets fuller explanation. |
+| Run health check | Layer 1 primary action in healthy mode, Layer 2 secondary action in unhealthy mode | Last health check detail remains deeper. |
+| Retry connection and switch device | Layer 1 offline actions and Layer 4 technical access | Recovery stays available without exposing tools first. |
+| Device detail view, health check detail view | Layer 4 - TechnicalDetailsCard | Kept as navigable detail views from deeper layer. |
+| Last REST and FTP activity | Layer 4 - TechnicalDetailsCard | Technical phrasing stays out of the first-open surface. |
+| Contributor health rows | Layer 4 - TechnicalDetailsCard | Remains available as technical breakdown. |
+| Latency percentiles and latency popup | Layer 4 - TechnicalDetailsCard | Shown only after explicit expansion. |
+| Health history shortcut and popup | Layer 4 - TechnicalDetailsCard | Shown only after explicit expansion. |
+| Evidence preview | Layer 3 - EvidencePreviewCard | Human-readable top three entries, collapsed by default. |
+| Full evidence stream | Layer 5 - ToolsCard via EvidenceFullView | Existing stream preserved in deep view. |
+| Filters, search, severity, contributor, origin toggles | Layer 5 - ToolsCard | No longer visible before tools expansion. |
+| Share all, share filtered, config drift, heat maps, clear all | Layer 5 - ToolsCard | Advanced actions remain grouped at the deepest layer. |
+
+## Phase 3 UX Definition
+
+### Disclosure contract
+
+- First open renders SummaryCard only.
+- Clicking the healthy summary link reveals Layer 3 and Layer 4 as collapsed cards.
+- Clicking the unhealthy primary action reveals Layer 2, then Layer 3 and Layer 4 beneath it.
+- Layer 5 is rendered only inside Layer 4 after TechnicalDetailsCard is expanded.
+- Filters and the raw event stream are rendered only inside ToolsCard.
+
+### Component contract
+
+- SummaryCard
+	- healthy: title `Healthy`, calm copy, primary `Run health check`, secondary `Show details`
+	- unhealthy: title `Needs attention`, plain-language issue headline, secondary technical cause, primary `View issue`, secondary `Run health check`
+	- offline: title `Device not reachable`, host target, primary `Retry connection`, secondary `Switch device`
+- IssueCard
+	- visible only for unhealthy states after disclosure
+	- repeats the problem in clear language and optionally exposes the technical cause
+- EvidencePreviewCard
+	- collapsed by default
+	- when expanded, shows up to three human-readable items only
+	- contains CTA `View all activity` to reveal ToolsCard
+- TechnicalDetailsCard
+	- collapsed by default
+	- contains contributor breakdown, REST/FTP activity, latency, health history, device detail, and health-check detail access
+- ToolsCard
+	- collapsed by default and visible only from inside an expanded TechnicalDetailsCard
+	- contains filters, EvidenceFullView, sharing actions, advanced tools, and destructive clear action
+
+### Test contract
+
+- `status-summary-card` remains the first-open anchor test id.
+- `show-details-button` remains the disclosure control for healthy mode and secondary disclosure flows.
+- add `issue-card`, `evidence-preview-card`, `technical-details-card`, `tools-card`, and `evidence-full-view` test ids.
+- `refine-button` and `diagnostics-filter-input` must not exist in the DOM until ToolsCard is expanded.
+
+## Impacted Files
+
+- src/components/diagnostics/DiagnosticsDialog.tsx
+- src/components/diagnostics/GlobalDiagnosticsOverlay.tsx
+- src/components/diagnostics/ConnectionActionsRegion.tsx
+- src/components/diagnostics/DiagnosticsListItem.tsx
+- src/components/diagnostics/ActionSummaryListItem.tsx
+- src/components/diagnostics/DeviceDetailView.tsx
+- src/components/diagnostics/HealthCheckDetailView.tsx
+- src/components/diagnostics/HealthHistoryPopup.tsx
+- src/components/diagnostics/LatencyAnalysisPopup.tsx
+- src/components/diagnostics/ConfigDriftView.tsx
+- src/components/diagnostics/HeatMapPopup.tsx
+- src/components/diagnostics/DiagnosticsDialog.test.tsx
+- tests/unit/components/diagnostics/GlobalDiagnosticsOverlay.test.tsx
+- playwright/homeDiagnosticsOverlay.spec.ts
+- playwright/settingsDiagnostics.spec.ts
+- playwright/diagnosticsActions.spec.ts
+- playwright/screenshots.spec.ts
+- playwright/visualSeeds.ts
+- doc/img/app/diagnostics/*
+- WORKLOG.md
+
+## Completion Gate
+
+This plan is complete only when all of the following are true:
+
+- all phase and task rows are marked DONE
+- WORKLOG contains verification proof for every completed phase
+- healthy first-open view contains one dominant card only
+- filters and raw logs are absent until the tools layer is opened
+- all existing diagnostics capabilities remain accessible
+- targeted diagnostics screenshots are updated
+- lint, tests, coverage, Playwright, and build pass

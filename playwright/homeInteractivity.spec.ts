@@ -19,9 +19,13 @@ const hasRequest = (
 ) => requests.some(predicate);
 
 const waitForConnected = async (page: Page) => {
-  await expect(page.getByTestId("connectivity-indicator")).toHaveAttribute("data-connection-state", "REAL_CONNECTED", {
-    timeout: 10000,
-  });
+  await expect(page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge")).toHaveAttribute(
+    "data-connection-state",
+    "REAL_CONNECTED",
+    {
+      timeout: 10000,
+    },
+  );
 };
 
 const waitForStreamsReady = async (page: Page) => {
@@ -114,20 +118,13 @@ test.describe("Home interactions", () => {
       )
       .toBe(true);
 
+    const sidEntry = page.getByTestId("home-sid-entry-socket1");
     const sidToggle = page.getByTestId("home-sid-toggle-socket1");
+    await expect(sidEntry).toBeVisible();
     await expect(sidToggle).toBeVisible();
+    await expect(sidToggle).toHaveText("ON");
     await sidToggle.click();
-
-    await expect
-      .poll(() =>
-        hasRequest(
-          server.requests,
-          (req) =>
-            req.method === "PUT" &&
-            req.url.includes("/v1/configs/SID%20Sockets%20Configuration/SID%20Socket%201?value=Disabled"),
-        ),
-      )
-      .toBe(true);
+    await expect(sidEntry).toHaveCount(0);
   });
 
   test("machine quick actions issue the expected home control requests", async ({ page }: { page: Page }) => {
@@ -351,11 +348,11 @@ test.describe("Home interactions", () => {
 
     const caseLight = page.getByTestId("home-led-summary");
     const caseLightLabels = await caseLight.locator(".text-muted-foreground").allTextContents();
-    expect(caseLightLabels).toEqual(["Mode", "Pattern", "Color", "Brightness", "Tint", "SID Select"]);
+    expect(caseLightLabels).toEqual(["Mode", "Auto SID", "Pattern", "Color", "Brightness", "Tint", "SID Select"]);
 
     const keyboardLight = page.getByTestId("home-keyboard-lighting-summary");
     const keyboardLightLabels = await keyboardLight.locator(".text-muted-foreground").allTextContents();
-    expect(keyboardLightLabels).toEqual(["Mode", "Pattern", "Color", "Brightness", "Tint", "SID Select"]);
+    expect(keyboardLightLabels).toEqual(["Mode", "Auto SID", "Pattern", "Color", "Brightness", "Tint", "SID Select"]);
 
     await expect(page.getByTestId("home-led-pattern")).toHaveText(/Single Color/);
     await expect(page.getByTestId("home-keyboard-lighting-pattern")).toHaveText(/Single Color/);

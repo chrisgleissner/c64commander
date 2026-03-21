@@ -697,6 +697,9 @@ export class C64API {
                   const err = new Error(`HTTP ${response.status}: ${response.statusText}`);
                   const failure = classifyError(err, "integration");
                   recordRestResponse(action, {
+                    method,
+                    path,
+                    url,
                     status: response.status,
                     headers: responseTrace.headers,
                     body: responseTrace.body,
@@ -711,6 +714,9 @@ export class C64API {
 
                 const parsedBody = await this.parseResponseJson<T>(response, path);
                 recordRestResponse(action, {
+                  method,
+                  path,
+                  url,
                   status: response.status,
                   headers: responseTrace.headers,
                   body: responseTrace.body ?? parsedBody,
@@ -741,6 +747,9 @@ export class C64API {
                 if (!responseRecorded) {
                   const failure = classifyError(error);
                   recordRestResponse(action, {
+                    method,
+                    path,
+                    url,
                     status: status === "error" ? null : status,
                     headers: {},
                     body: null,
@@ -942,6 +951,9 @@ export class C64API {
             );
             const responseTrace = await inspectResponsePayload(response);
             recordRestResponse(action, {
+              method,
+              path: normalizeUrlPath(url),
+              url,
               status: response.status,
               headers: responseTrace.headers,
               body: responseTrace.body,
@@ -961,6 +973,9 @@ export class C64API {
             );
             const failure = classifyError(error);
             recordRestResponse(action, {
+              method,
+              path: normalizeUrlPath(url),
+              url,
               status: null,
               headers: {},
               body: null,

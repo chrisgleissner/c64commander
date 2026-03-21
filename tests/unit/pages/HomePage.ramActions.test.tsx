@@ -121,12 +121,6 @@ vi.mock("@/components/ThemeProvider", () => ({
   }),
 }));
 
-vi.mock("@/components/DiagnosticsActivityIndicator", () => ({
-  DiagnosticsActivityIndicator: ({ onClick }: { onClick: () => void }) => (
-    <button type="button" onClick={onClick} data-testid="diagnostics-activity-indicator" />
-  ),
-}));
-
 const buildRouter = (ui: JSX.Element) =>
   createMemoryRouter([{ path: "*", element: ui }], {
     initialEntries: ["/"],
@@ -160,6 +154,10 @@ vi.mock("@/lib/uiErrors", () => ({
 
 vi.mock("@/lib/c64api", () => ({
   getC64API: () => ({}),
+}));
+
+vi.mock("@/hooks/useInteractiveConfigWrite", () => ({
+  useInteractiveConfigWrite: () => ({ write: vi.fn(), isPending: false }),
 }));
 
 vi.mock("@/lib/machine/ramOperations", () => ({

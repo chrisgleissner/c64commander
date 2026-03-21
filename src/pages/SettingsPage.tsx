@@ -8,10 +8,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Wifi, Moon, Sun, Monitor, Lock, RefreshCw, ExternalLink, Info, FileText, Cpu, Play } from "lucide-react";
+import { Wifi, Moon, Sun, Monitor, Lock, RefreshCw, ExternalLink, Info, FileText, Cpu, Play, Bell } from "lucide-react";
 import { useC64Connection } from "@/hooks/useC64Connection";
 import { C64_DEFAULTS, getDeviceHostFromBaseUrl, resolveDeviceHostFromStorage } from "@/lib/c64api";
 import { AppBar } from "@/components/AppBar";
+import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
 import { useThemeContext } from "@/components/ThemeProvider";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -40,7 +41,8 @@ import { clearTraceEvents, getTraceEvents } from "@/lib/tracing/traceSession";
 import { DiagnosticsDialog } from "@/components/diagnostics/DiagnosticsDialog";
 import { shareAllDiagnosticsZip, shareDiagnosticsZip } from "@/lib/diagnostics/diagnosticsExport";
 import { resetDiagnosticsActivity } from "@/lib/diagnostics/diagnosticsActivity";
-import { consumeDiagnosticsOpenRequest, type DiagnosticsTabKey } from "@/lib/diagnostics/diagnosticsOverlay";
+import { consumeDiagnosticsOpenRequest, type DiagnosticsEntryPreset } from "@/lib/diagnostics/diagnosticsOverlay";
+import { useHealthState } from "@/hooks/useHealthState";
 import {
   primeDiagnosticsOverlaySuppression,
   setDiagnosticsOverlayActive,
@@ -76,7 +78,16 @@ import {
   saveDebugLoggingEnabled,
   saveDiskAutostartMode,
   saveVolumeSliderPreviewIntervalMs,
+  loadNotificationVisibility,
+  saveNotificationVisibility,
+  loadNotificationDurationMs,
+  saveNotificationDurationMs,
+  NOTIFICATION_DURATION_MIN_MS,
+  NOTIFICATION_DURATION_MAX_MS,
+  loadAutoRotationEnabled,
+  saveAutoRotationEnabled,
   type DiskAutostartMode,
+  type NotificationVisibility,
 } from "@/lib/config/appSettings";
 import {
   loadDeviceSafetyConfig,
@@ -150,13 +161,7 @@ export default function SettingsPage() {
   const lastProbeFailedAtMs = connectionSnapshot.lastProbeFailedAtMs;
   const [isSaving, setIsSaving] = useState(false);
   const [logsDialogOpen, setLogsDialogOpen] = useState(false);
-  const [diagnosticsTab, setDiagnosticsTab] = useState<DiagnosticsTabKey>("actions");
-  const [diagnosticsFilters, setDiagnosticsFilters] = useState<Record<DiagnosticsTabKey, string>>({
-    "error-logs": "",
-    logs: "",
-    traces: "",
-    actions: "",
-  });
+  const healthState = useHealthState();
   const [logs, setLogs] = useState(getLogs());
   const [errorLogs, setErrorLogs] = useState(getErrorLogs());
   const [traceEvents, setTraceEvents] = useState(getTraceEvents());
@@ -197,6 +202,10 @@ export default function SettingsPage() {
   const [circuitCooldownInput, setCircuitCooldownInput] = useState(String(deviceSafetyConfig.circuitBreakerCooldownMs));
   const [probeIntervalInput, setProbeIntervalInput] = useState(String(deviceSafetyConfig.discoveryProbeIntervalMs));
   const [allowCircuitOverride, setAllowCircuitOverride] = useState(deviceSafetyConfig.allowUserOverrideCircuit);
+  const [notificationVisibility, setNotificationVisibility] =
+    useState<NotificationVisibility>(loadNotificationVisibility);
+  const [notificationDurationMs, setNotificationDurationMs] = useState(loadNotificationDurationMs);
+  const [autoRotationEnabled, setAutoRotationEnabled] = useState(loadAutoRotationEnabled);
   const [safUris, setSafUris] = useState<SafPersistedUri[]>([]);
   const [safEntries, setSafEntries] = useState<Array<{ name: string; path: string; type: string }>>([]);
   const [safBusy, setSafBusy] = useState(false);
@@ -311,14 +320,12 @@ export default function SettingsPage() {
 
   useEffect(() => {
     const handleDiagnosticsRequest = (event: Event) => {
-      const detail = (event as CustomEvent).detail as { tab?: DiagnosticsTabKey } | undefined;
-      if (!detail?.tab) return;
-      setDiagnosticsTab(detail.tab);
+      const detail = (event as CustomEvent).detail as { preset?: DiagnosticsEntryPreset } | undefined;
+      if (!detail?.preset) return;
       setDiagnosticsDialogOpen(true);
     };
     const pending = consumeDiagnosticsOpenRequest();
     if (pending) {
-      setDiagnosticsTab(pending);
       setDiagnosticsDialogOpen(true);
     }
     window.addEventListener("c64u-diagnostics-open-request", handleDiagnosticsRequest);
@@ -388,10 +395,11 @@ export default function SettingsPage() {
     [actionSummaries, errorLogs, logs, traceEvents],
   );
 
-  const handleShareDiagnostics = trace(async function handleShareDiagnostics() {
-    const data = diagnosticsExportData[diagnosticsTab];
+  const handleShareFilteredDiagnostics = trace(async function handleShareFilteredDiagnostics(
+    filteredEntries: unknown[],
+  ) {
     try {
-      await shareDiagnosticsZip(diagnosticsTab, data);
+      await shareDiagnosticsZip("actions", filteredEntries);
     } catch (error) {
       reportUserError({
         operation: "DIAGNOSTICS_EXPORT",
@@ -593,9 +601,10 @@ export default function SettingsPage() {
       });
     }
   });
+  const pageShellClassName = usePrimaryPageShellClassName("pb-24");
 
   return (
-    <div className="min-h-screen pb-24 pt-[var(--app-bar-height)]">
+    <div className={pageShellClassName}>
       <AppBar title="Settings" subtitle="Connection & appearance" />
 
       <PageContainer size="reading">
@@ -661,6 +670,26 @@ export default function SettingsPage() {
                   Auto currently resolves to {DISPLAY_PROFILE_OVERRIDE_LABELS[autoProfile]}. Use an override to preview
                   or lock a profile explicitly.
                 </p>
+              </div>
+
+              <div className="flex items-start justify-between gap-3 min-w-0">
+                <div className="space-y-1 min-w-0">
+                  <Label htmlFor="auto-rotation" className="font-medium">
+                    Adapt layout on screen rotation
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    When enabled, the display profile adjusts automatically when the device is rotated. Off by default.
+                  </p>
+                </div>
+                <Checkbox
+                  id="auto-rotation"
+                  checked={autoRotationEnabled}
+                  onCheckedChange={(checked) => {
+                    const enabled = checked === true;
+                    setAutoRotationEnabled(enabled);
+                    saveAutoRotationEnabled(enabled);
+                  }}
+                />
               </div>
             </motion.div>
 
@@ -1571,6 +1600,61 @@ export default function SettingsPage() {
             </div>
           </motion.div>
 
+          {/* Notifications */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.38 }}
+            className="bg-card border border-border rounded-xl p-4 space-y-4"
+          >
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Bell className="h-5 w-5 text-primary" />
+              </div>
+              <h2 className="font-medium">Notifications</h2>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label className="font-medium">Visibility</Label>
+                <Select
+                  value={notificationVisibility}
+                  onValueChange={(value) => {
+                    const v = value as NotificationVisibility;
+                    setNotificationVisibility(v);
+                    saveNotificationVisibility(v);
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="errors-only">Errors only</SelectItem>
+                    <SelectItem value="all">All</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Tap a notification to open Diagnostics. Swipe to dismiss.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="font-medium">Duration: {(notificationDurationMs / 1000).toFixed(1)}s</Label>
+                <Slider
+                  min={NOTIFICATION_DURATION_MIN_MS}
+                  max={NOTIFICATION_DURATION_MAX_MS}
+                  step={500}
+                  value={[notificationDurationMs]}
+                  onValueChange={([value]) => {
+                    setNotificationDurationMs(value);
+                    saveNotificationDurationMs(value);
+                  }}
+                />
+                <p className="text-xs text-muted-foreground">Default 4s. Range 2–8s.</p>
+              </div>
+            </div>
+          </motion.div>
+
           {/* Last. About */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -1656,22 +1740,15 @@ export default function SettingsPage() {
       <DiagnosticsDialog
         open={logsDialogOpen}
         onOpenChange={setDiagnosticsDialogOpen}
-        diagnosticsTab={diagnosticsTab}
-        onDiagnosticsTabChange={setDiagnosticsTab}
-        diagnosticsFilters={diagnosticsFilters}
-        onDiagnosticsFilterChange={(tab, value) =>
-          setDiagnosticsFilters((prev) => ({
-            ...prev,
-            [tab]: value,
-          }))
-        }
+        healthState={healthState}
         logs={logs}
         errorLogs={errorLogs}
         traceEvents={traceEvents}
         actionSummaries={actionSummaries}
-        onShareCurrentTab={() => withDiagnosticsTraceOverride(handleShareDiagnostics)}
+        onShareFiltered={(entries) => withDiagnosticsTraceOverride(() => handleShareFilteredDiagnostics(entries))}
         onShareAll={() => withDiagnosticsTraceOverride(handleShareAllDiagnostics)}
         onClearAll={handleClearAllDiagnostics}
+        onRetryConnection={() => void discoverConnection("manual")}
       />
     </div>
   );

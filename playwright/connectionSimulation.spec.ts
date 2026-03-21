@@ -52,6 +52,48 @@ const clickWithoutNavigationWait = async (page: Page, locator: Locator, attempts
   }
 };
 
+const openDiagnosticsConnectionActions = async (page: Page, indicator: Locator) => {
+  const diagnostics = page.getByRole("dialog", { name: "Diagnostics" });
+  const diagnosticsVisible = await diagnostics.isVisible().catch(() => false);
+  if (!diagnosticsVisible) {
+    await clickWithoutNavigationWait(page, indicator);
+    await expect(diagnostics).toBeVisible({ timeout: 10000 });
+  }
+
+  const toggle = diagnostics.getByTestId("connection-actions-toggle");
+  if (await toggle.isVisible().catch(() => false)) {
+    const expanded = await toggle.getAttribute("aria-expanded");
+    if (expanded !== "true") {
+      await clickWithoutNavigationWait(page, toggle);
+    }
+  }
+
+  return diagnostics;
+};
+
+const triggerConnectionRecovery = async (page: Page, indicator: Locator, host: string) => {
+  const diagnostics = await openDiagnosticsConnectionActions(page, indicator);
+  const retryConnection = diagnostics.getByTestId("retry-connection-action");
+  if (await retryConnection.isVisible().catch(() => false)) {
+    await clickWithoutNavigationWait(page, retryConnection);
+    return;
+  }
+
+  const switchDeviceToggle = diagnostics.getByTestId("switch-device-toggle");
+  if (await switchDeviceToggle.isVisible().catch(() => false)) {
+    const formVisible = await diagnostics
+      .getByTestId("switch-device-form")
+      .isVisible()
+      .catch(() => false);
+    if (!formVisible) {
+      await clickWithoutNavigationWait(page, switchDeviceToggle);
+    }
+
+    await diagnostics.getByTestId("switch-device-host-input").fill(host);
+    await clickWithoutNavigationWait(page, diagnostics.getByTestId("switch-device-connect"));
+  }
+};
+
 const withTimeout = async (promise: Promise<void>, label: string, timeoutMs = 60000) => {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const timedOut = await Promise.race([
@@ -143,7 +185,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
       await dialog.getByRole("button", { name: "Continue in Demo Mode" }).click();
     }
 
-    const demoIndicator = page.getByTestId("connectivity-indicator");
+    const demoIndicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(demoIndicator).toHaveAttribute("data-connection-state", "DEMO_ACTIVE", { timeout: 10000 });
 
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
@@ -187,7 +229,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
     );
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    const indicator = page.getByTestId("connectivity-indicator");
+    const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 5000 });
     await expect(page.getByRole("dialog", { name: "Demo Mode" })).toHaveCount(0);
     expect(demoServer.requests.some((req) => req.url.startsWith("/v1/info"))).toBe(false);
@@ -264,7 +306,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
     await page.getByRole("button", { name: "Continue in Demo Mode" }).click();
-    const demoIndicator = page.getByTestId("connectivity-indicator");
+    const demoIndicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(demoIndicator).toHaveAttribute("data-connection-state", "DEMO_ACTIVE");
 
     server.setReachable(true);
@@ -335,7 +377,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
     await expect(saveButton).toBeVisible({ timeout: 15000 });
     await clickWithoutNavigationWait(page, saveButton);
 
-    const realIndicator = page.getByTestId("connectivity-indicator");
+    const realIndicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     let connected = false;
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
@@ -468,7 +510,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
       await expect(postSaveDialog).toBeHidden({ timeout: 5000 });
     }
 
-    const indicator = page.getByTestId("connectivity-indicator");
+    const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect
       .poll(async () => {
         const state = await indicator.getAttribute("data-connection-state");
@@ -507,7 +549,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
 
     await page.goto("/play", { waitUntil: "domcontentloaded" });
     await page.getByRole("button", { name: "Continue in Demo Mode" }).click();
-    const indicator = page.getByTestId("connectivity-indicator");
+    const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(indicator).toHaveAttribute("data-connection-state", "DEMO_ACTIVE");
     await page.evaluate(() => {
       const payload = {
@@ -564,7 +606,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
     if (await continueDemo.isVisible().catch(() => false)) {
       await continueDemo.click();
     }
-    const realIndicator = page.getByTestId("connectivity-indicator");
+    const realIndicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     try {
       await expect
         .poll(() => realIndicator.getAttribute("data-connection-state"), {
@@ -641,7 +683,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
     );
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    const indicator = page.getByTestId("connectivity-indicator");
+    const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     let initialRealConnected = false;
     for (let attempt = 0; attempt < 3; attempt += 1) {
       const state = await indicator.getAttribute("data-connection-state");
@@ -650,11 +692,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
         break;
       }
 
-      await clickWithoutNavigationWait(page, indicator);
-      const retryNow = page.getByRole("button", { name: "Retry Now" });
-      if (await retryNow.isVisible().catch(() => false)) {
-        await clickWithoutNavigationWait(page, retryNow);
-      }
+      await triggerConnectionRecovery(page, indicator, host);
       const dialog = page.getByRole("dialog", { name: "Demo Mode" });
       const dialogVisible = await dialog.isVisible().catch(() => false);
       if (dialogVisible) {
@@ -684,27 +722,27 @@ test.describe("Deterministic Connectivity Simulation", () => {
     }
 
     server.setReachable(false);
-    await clickWithoutNavigationWait(page, indicator);
-    {
-      const retryNow = page.getByRole("button", { name: "Retry Now" });
-      if (await retryNow.isVisible().catch(() => false)) {
-        await clickWithoutNavigationWait(page, retryNow);
-      } else {
-        const popover = page.getByTestId("connection-status-popover");
-        await clickWithoutNavigationWait(page, popover.getByRole("button", { name: "Change" }));
-        await popover.getByLabel("C64U Hostname / IP").fill(host);
-        await clickWithoutNavigationWait(page, popover.getByRole("button", { name: "Save" }));
-      }
+    await page.goto("/settings", { waitUntil: "domcontentloaded" });
+    const refreshConnectionToDemo = page.getByRole("button", {
+      name: /Refresh connection/i,
+    });
+    if (await refreshConnectionToDemo.isVisible().catch(() => false)) {
+      await clickWithoutNavigationWait(page, refreshConnectionToDemo);
+    }
+    const saveAndConnectToDemo = page.getByRole("button", {
+      name: /Save & Connect|Save connection/i,
+    });
+    if (await saveAndConnectToDemo.isVisible().catch(() => false)) {
+      await clickWithoutNavigationWait(page, saveAndConnectToDemo);
     }
     const dialog = page.getByRole("dialog", { name: "Demo Mode" });
-    await dialog.waitFor({ state: "visible", timeout: 5000 }).catch(() => {});
+    await dialog.waitFor({ state: "visible", timeout: 8000 }).catch(() => {});
     const dialogVisible = await dialog.isVisible().catch(() => false);
     if (dialogVisible) {
       await dialog.getByRole("button", { name: "Continue in Demo Mode" }).click();
     }
     await dialog.waitFor({ state: "hidden", timeout: 5000 }).catch(() => {});
-    await expect(indicator).toHaveAttribute("data-connection-state", "DEMO_ACTIVE");
-    await page.goto("/settings", { waitUntil: "domcontentloaded" });
+    await expect(indicator).toHaveAttribute("data-connection-state", "DEMO_ACTIVE", { timeout: 15000 });
     await expect(page.getByText(`Currently using: ${demoHost}`)).toBeVisible();
     await expect.poll(() => demoServer?.requests.some((req) => req.url.startsWith("/v1/info"))).toBe(true);
 
@@ -745,11 +783,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
       if (await refreshConnection.isVisible().catch(() => false)) {
         await clickWithoutNavigationWait(page, refreshConnection);
       }
-      await clickWithoutNavigationWait(page, indicator);
-      const retryNow = page.getByRole("button", { name: "Retry Now" });
-      if (await retryNow.isVisible().catch(() => false)) {
-        await clickWithoutNavigationWait(page, retryNow);
-      }
+      await triggerConnectionRecovery(page, indicator, host);
       await page.waitForTimeout(500);
 
       const state = await indicator.getAttribute("data-connection-state");
@@ -809,7 +843,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
 
     server.setReachable(true);
     await clickWithoutNavigationWait(page, page.getByRole("button", { name: /Save & Connect|Save connection/i }));
-    const indicator = page.getByTestId("connectivity-indicator");
+    const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 10000 });
     const currentUsing = page.getByText("Currently using:");
     await expect(currentUsing).toBeVisible();

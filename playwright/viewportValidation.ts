@@ -64,17 +64,25 @@ export const enforceVisualBoundaries = async (page: Page, testInfo: TestInfo) =>
       right: number;
       reason: string;
     }> = [];
+    const activeSwipeSlot =
+      document.querySelector<HTMLElement>('[data-testid^="swipe-slot-"][data-slot-active="true"]') ??
+      document.querySelector<HTMLElement>('[data-testid^="swipe-slot-"][data-panel-position="1"]');
+    const activeSwipeSlotRect = activeSwipeSlot?.getBoundingClientRect() ?? null;
     const isToastElement = (element: Element) =>
       Boolean(
         element.closest(
           '[data-sonner-toast], [data-sonner-toaster], .toaster, .toast, [role="status"], [data-state="open"].destructive, [aria-label="Notifications (F8)"], [data-radix-toast-viewport]',
         ),
       );
+    const isInsideSwipeRunway = (element: Element) =>
+      Boolean(element.closest('[data-testid="swipe-navigation-runway"]'));
+    const isInsideActiveSwipeSlot = (element: Element) => Boolean(activeSwipeSlot && activeSwipeSlot.contains(element));
 
     // Check all visible elements
     const elements = document.querySelectorAll("body *");
     elements.forEach((element) => {
       if (isToastElement(element)) return;
+      if (isInsideSwipeRunway(element) && !isInsideActiveSwipeSlot(element)) return;
       const rect = element.getBoundingClientRect();
       const style = window.getComputedStyle(element);
 
@@ -82,9 +90,16 @@ export const enforceVisualBoundaries = async (page: Page, testInfo: TestInfo) =>
       if (rect.width === 0 || rect.height === 0) return;
       if (style.display === "none" || style.visibility === "hidden") return;
 
+      const rightBoundary =
+        isInsideActiveSwipeSlot(element) && activeSwipeSlotRect
+          ? activeSwipeSlotRect.left + activeSwipeSlotRect.width
+          : maxWidth;
+      const widthBoundary =
+        isInsideActiveSwipeSlot(element) && activeSwipeSlotRect ? activeSwipeSlotRect.width : maxWidth;
+
       // Check if element extends beyond viewport
       const SUBPIXEL_TOLERANCE = 3; // Allow tolerance for subpixel rendering and rounding
-      if (rect.width > maxWidth + SUBPIXEL_TOLERANCE) {
+      if (rect.width > widthBoundary + SUBPIXEL_TOLERANCE) {
         const tag = element.tagName.toLowerCase();
         const id = element.id ? `#${element.id}` : "";
         const classes =
@@ -97,9 +112,9 @@ export const enforceVisualBoundaries = async (page: Page, testInfo: TestInfo) =>
           selector,
           width: rect.width,
           right: rect.right,
-          reason: `Element width (${rect.width}px) exceeds viewport width (${maxWidth}px)`,
+          reason: `Element width (${rect.width}px) exceeds active boundary width (${widthBoundary}px)`,
         });
-      } else if (rect.right > maxWidth + SUBPIXEL_TOLERANCE) {
+      } else if (rect.right > rightBoundary + SUBPIXEL_TOLERANCE) {
         // Allow tolerance for rounding and subpixel rendering
         const tag = element.tagName.toLowerCase();
         const id = element.id ? `#${element.id}` : "";
@@ -113,7 +128,7 @@ export const enforceVisualBoundaries = async (page: Page, testInfo: TestInfo) =>
           selector,
           width: rect.width,
           right: rect.right,
-          reason: `Element extends beyond right edge (right: ${rect.right}px, viewport: ${maxWidth}px)`,
+          reason: `Element extends beyond right edge (right: ${rect.right}px, boundary: ${rightBoundary}px)`,
         });
       }
     });
@@ -139,14 +154,36 @@ export const enforceVisualBoundaries = async (page: Page, testInfo: TestInfo) =>
 
   // Check for horizontal scroll
   const hasHorizontalScroll = await page.evaluate(() => {
+    const activeSlot =
+      document.querySelector<HTMLElement>('[data-testid^="swipe-slot-"][data-slot-active="true"]') ??
+      document.querySelector<HTMLElement>('[data-testid^="swipe-slot-"][data-panel-position="1"]');
+    if (activeSlot) {
+      return activeSlot.scrollWidth > activeSlot.clientWidth + 1;
+    }
     return document.documentElement.scrollWidth > document.documentElement.clientWidth;
   });
 
   if (hasHorizontalScroll) {
     const scrollInfo = await page.evaluate(() => ({
-      scrollWidth: document.documentElement.scrollWidth,
-      clientWidth: document.documentElement.clientWidth,
-      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      scrollWidth:
+        (
+          document.querySelector<HTMLElement>('[data-testid^="swipe-slot-"][data-slot-active="true"]') ??
+          document.querySelector<HTMLElement>('[data-testid^="swipe-slot-"][data-panel-position="1"]')
+        )?.scrollWidth ?? document.documentElement.scrollWidth,
+      clientWidth:
+        (
+          document.querySelector<HTMLElement>('[data-testid^="swipe-slot-"][data-slot-active="true"]') ??
+          document.querySelector<HTMLElement>('[data-testid^="swipe-slot-"][data-panel-position="1"]')
+        )?.clientWidth ?? document.documentElement.clientWidth,
+      overflow:
+        ((
+          document.querySelector<HTMLElement>('[data-testid^="swipe-slot-"][data-slot-active="true"]') ??
+          document.querySelector<HTMLElement>('[data-testid^="swipe-slot-"][data-panel-position="1"]')
+        )?.scrollWidth ?? document.documentElement.scrollWidth) -
+        ((
+          document.querySelector<HTMLElement>('[data-testid^="swipe-slot-"][data-slot-active="true"]') ??
+          document.querySelector<HTMLElement>('[data-testid^="swipe-slot-"][data-panel-position="1"]')
+        )?.clientWidth ?? document.documentElement.clientWidth),
     }));
 
     throw new Error(

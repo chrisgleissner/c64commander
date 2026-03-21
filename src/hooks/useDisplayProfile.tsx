@@ -12,6 +12,7 @@ import {
   getDisplayProfileOverride,
   setDisplayProfileOverride as persistDisplayProfileOverride,
 } from "@/lib/uiPreferences";
+import { APP_SETTINGS_KEYS, loadAutoRotationEnabled } from "@/lib/config/appSettings";
 
 type DisplayProfileContextValue = {
   viewportWidth: number;
@@ -132,14 +133,14 @@ const restoreRootState = (snapshot: RootSnapshot | null) => {
 export function DisplayProfileProvider({ children }: { children: React.ReactNode }) {
   const [override, setOverrideState] = React.useState<DisplayProfileOverride>(() => getDisplayProfileOverride());
   const [viewportWidth, setViewportWidth] = React.useState(() => readViewportWidth());
+  const [autoRotationEnabled, setAutoRotationEnabled] = React.useState(() => loadAutoRotationEnabled());
 
+  // Permanent effect: root state snapshot/restore, preferences, storage,
+  // and settings events. Runs once on mount.
   React.useEffect(() => {
     if (typeof window === "undefined") return undefined;
     const rootSnapshot = snapshotRootState();
-    const handleResize = () => {
-      setViewportWidth(readViewportWidth());
-      applyViewportTokens();
-    };
+
     const handlePreferences = (event: Event) => {
       const detail = (event as CustomEvent<{ displayProfileOverride?: DisplayProfileOverride }>).detail;
       if (detail?.displayProfileOverride) {
@@ -150,19 +151,65 @@ export function DisplayProfileProvider({ children }: { children: React.ReactNode
       if (!shouldRefreshOverrideFromStorage(event)) return;
       setOverrideState(getDisplayProfileOverride());
     };
-    window.addEventListener("resize", handleResize, { passive: true });
-    window.addEventListener("orientationchange", handleResize);
+    const handleSettingsUpdate = (e: Event) => {
+      const detail = (e as CustomEvent<{ key: string; value: unknown }>).detail;
+      if (detail.key === APP_SETTINGS_KEYS.AUTO_ROTATION_ENABLED_KEY) {
+        setAutoRotationEnabled(Boolean(detail.value));
+      }
+    };
+
     window.addEventListener("c64u-ui-preferences-changed", handlePreferences as EventListener);
     window.addEventListener("storage", handleStorage);
-    handleResize();
+    window.addEventListener("c64u-app-settings-updated", handleSettingsUpdate);
+
+    // Set initial viewport width and tokens regardless of rotation setting.
+    setViewportWidth(readViewportWidth());
+    applyViewportTokens();
+
     return () => {
-      window.removeEventListener("resize", handleResize);
-      window.removeEventListener("orientationchange", handleResize);
       window.removeEventListener("c64u-ui-preferences-changed", handlePreferences as EventListener);
       window.removeEventListener("storage", handleStorage);
+      window.removeEventListener("c64u-app-settings-updated", handleSettingsUpdate);
       restoreRootState(rootSnapshot);
     };
   }, []);
+
+  // Resize/orientation effect: only active when auto-rotation is enabled.
+  // When disabled, viewport width is frozen at the initial mount value so
+  // device rotation never changes the display profile.
+  // orientationchange uses a short timeout so the browser has time to update
+  // viewport dimensions before we read them (fixes the "stuck in landscape"
+  // revert bug on Android).
+  React.useEffect(() => {
+    if (typeof window === "undefined" || !autoRotationEnabled) return undefined;
+
+    const handleResize = () => {
+      setViewportWidth(readViewportWidth());
+      applyViewportTokens();
+    };
+
+    let orientationTimer: ReturnType<typeof setTimeout> | null = null;
+    const handleOrientationChange = () => {
+      if (orientationTimer !== null) clearTimeout(orientationTimer);
+      orientationTimer = setTimeout(() => {
+        orientationTimer = null;
+        setViewportWidth(readViewportWidth());
+        applyViewportTokens();
+      }, 150);
+    };
+
+    window.addEventListener("resize", handleResize, { passive: true });
+    window.addEventListener("orientationchange", handleOrientationChange);
+
+    // Snap to current viewport immediately when auto-rotation is enabled.
+    handleResize();
+
+    return () => {
+      if (orientationTimer !== null) clearTimeout(orientationTimer);
+      window.removeEventListener("resize", handleResize);
+      window.removeEventListener("orientationchange", handleOrientationChange);
+    };
+  }, [autoRotationEnabled]);
 
   const setOverride = React.useCallback((next: DisplayProfileOverride) => {
     setOverrideState(next);

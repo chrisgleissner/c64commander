@@ -9,6 +9,7 @@
 import * as React from "react";
 
 import type { ToastActionElement, ToastProps } from "@/components/ui/toast";
+import { loadNotificationVisibility } from "@/lib/config/appSettings";
 
 const TOAST_LIMIT = 1;
 const TOAST_REMOVE_DELAY = 1000000;
@@ -143,6 +144,11 @@ function dispatch(action: Action) {
 type Toast = Omit<ToasterToast, "id">;
 
 function toast({ ...props }: Toast) {
+  // Suppress non-error notifications when visibility is set to errors-only.
+  if (loadNotificationVisibility() === "errors-only" && props.variant !== "destructive") {
+    return { id: "" as const, dismiss: () => {}, update: () => {} };
+  }
+
   const id = genId();
 
   const update = (props: ToasterToast) =>

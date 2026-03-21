@@ -32,7 +32,7 @@ test("debug demo dialog timing", async ({ page }: { page: Page }) => {
   });
 
   await page.goto("/", { waitUntil: "domcontentloaded" });
-  const indicator = page.getByTestId("connectivity-indicator");
+  const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
   await expect(indicator).toBeVisible();
   await expect(indicator).toHaveAttribute("data-connection-state", /DEMO_ACTIVE|DISCOVERING|OFFLINE_NO_DEMO/, {
     timeout: 15000,

@@ -14,46 +14,43 @@ test.afterEach(async ({ page }, testInfo) => {
 });
 
 test("verify comprehensive user tracing", async ({ page }) => {
-  const dismissDialogIfPresent = async (dialog: ReturnType<typeof page.getByRole>) => {
-    const isVisible = await dialog.isVisible().catch(() => false);
-    if (!isVisible) {
-      return false;
+  const waitForBackdropToClear = async () => {
+    const backdrop = page.locator('div[data-state="open"][aria-hidden="true"][data-aria-hidden="true"]').last();
+    if (await backdrop.isVisible().catch(() => false)) {
+      // Press Escape as a last-resort fallback to dismiss any overlay whose
+      // close button wasn't found by dismissBlockingDialogIfPresent.
+      await page.keyboard.press("Escape");
+      await expect(backdrop).toBeHidden({ timeout: 10000 });
     }
-
-    const continueInDemoMode = dialog.getByRole("button", { name: /continue in demo mode/i }).first();
-    if (await continueInDemoMode.isVisible().catch(() => false)) {
-      await continueInDemoMode.click();
-      await expect(dialog).toBeHidden({ timeout: 10000 });
-      return true;
-    }
-
-    const closeButton = dialog.getByRole("button", { name: /close|dismiss|ok|cancel/i }).first();
-    if (await closeButton.isVisible().catch(() => false)) {
-      await closeButton.click();
-      await expect(dialog).toBeHidden({ timeout: 10000 });
-      return true;
-    }
-
-    await page.keyboard.press("Escape");
-    await expect(dialog).toBeHidden({ timeout: 10000 });
-    return true;
   };
 
   const dismissBlockingDialogIfPresent = async () => {
-    const dialog = page.getByRole("dialog").last();
-    const alertDialog = page.getByRole("alertdialog").last();
-    const dialogClosed = await dismissDialogIfPresent(dialog);
-    if (dialogClosed) return;
-    await dismissDialogIfPresent(alertDialog);
+    const continueInDemoMode = page.getByRole("button", { name: /continue in demo mode/i }).first();
+    if (await continueInDemoMode.isVisible().catch(() => false)) {
+      await continueInDemoMode.click();
+      await waitForBackdropToClear();
+      return;
+    }
+
+    const closeButton = page
+      .getByRole("dialog")
+      .getByRole("button", { name: /close|dismiss|ok|cancel/i })
+      .first();
+    if (await closeButton.isVisible().catch(() => false)) {
+      await closeButton.click();
+      await waitForBackdropToClear();
+    }
   };
 
   const clickWithRetry = async (locator: ReturnType<typeof page.locator>, label: string) => {
     for (let attempt = 0; attempt < 2; attempt += 1) {
       await dismissBlockingDialogIfPresent();
-      await locator.scrollIntoViewIfNeeded();
-      await expect(locator).toBeVisible();
+      await waitForBackdropToClear();
+      const target = locator.first();
+      await expect(target).toBeVisible();
+      await target.scrollIntoViewIfNeeded();
       try {
-        await locator.click({ timeout: 10000 });
+        await target.click({ timeout: 10000 });
         return;
       } catch (error) {
         if (attempt === 0) {
@@ -70,18 +67,7 @@ test("verify comprehensive user tracing", async ({ page }) => {
   // Wait for tracing bridge
   await page.waitForFunction(() => (window as any).__c64uTracing);
 
-  const dismissDemoInterstitialIfPresent = async () => {
-    const dialog = page.getByRole("dialog");
-    const demoBtn = page.getByRole("button", {
-      name: /continue in demo mode/i,
-    });
-    const visible = await demoBtn.isVisible().catch(() => false);
-    if (!visible) {
-      return;
-    }
-    await demoBtn.click();
-    await dialog.waitFor({ state: "hidden", timeout: 15000 });
-  };
+  const dismissDemoInterstitialIfPresent = dismissBlockingDialogIfPresent;
 
   // Handle discovery dialog if it appears (can show after initial load)
   await dismissDemoInterstitialIfPresent();
@@ -91,19 +77,20 @@ test("verify comprehensive user tracing", async ({ page }) => {
 
   // 1. Navigate via tab bar to Disks
   await dismissDemoInterstitialIfPresent();
-  await clickWithRetry(page.locator(".tab-item").filter({ hasText: "Disks" }), "Disks tab");
+  await clickWithRetry(page.getByTestId("tab-disks"), "Disks tab");
   await page.waitForURL("**/disks");
 
   // 2. Click Tab Bar "Config" (TabBar)
   await dismissDemoInterstitialIfPresent();
-  await clickWithRetry(page.locator(".tab-item").filter({ hasText: "Config" }), "Config tab");
+  await clickWithRetry(page.getByTestId("tab-config"), "Config tab");
   await page.waitForURL("**/config");
+  await dismissDemoInterstitialIfPresent();
+  await waitForBackdropToClear();
 
   // 3. Open diagnostics from header indicator
-  const connectivityIndicator = page.getByTestId("connectivity-indicator");
   for (let attempt = 0; attempt < 2; attempt += 1) {
     await dismissBlockingDialogIfPresent();
-    await connectivityIndicator.scrollIntoViewIfNeeded();
+    const connectivityIndicator = page.locator('[data-slot-active="true"]').getByTestId("unified-health-badge");
     await expect(connectivityIndicator).toBeVisible();
     try {
       await connectivityIndicator.click({ timeout: 10000 });
@@ -134,7 +121,12 @@ test("verify comprehensive user tracing", async ({ page }) => {
   expect(configTabClick).toBeDefined();
   expect(configTabClick.data.component).toBe("Tab");
 
-  const connectivityClick = userActions.find((t: any) => t.data?.component === "ConnectivityIndicator");
+  const connectivityClick = userActions.find(
+    (t: any) =>
+      t.data?.component === "GlobalInteraction" &&
+      typeof t.data?.name === "string" &&
+      /click .*(c64u|demo mode|system unhealthy)/i.test(t.data.name),
+  );
   expect(connectivityClick).toBeDefined();
-  expect(connectivityClick.data.component).toBe("ConnectivityIndicator");
+  expect(connectivityClick.data.component).toBe("GlobalInteraction");
 });

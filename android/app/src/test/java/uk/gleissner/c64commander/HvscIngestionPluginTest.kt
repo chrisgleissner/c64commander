@@ -234,4 +234,61 @@ class HvscIngestionPluginTest {
     verify(call).reject("offsetBytes must be >= 0")
     verify(call, never()).resolve(any(JSObject::class.java))
   }
+
+  @Test
+  fun buildIngestionFailureMessageDescribesCorruptArchiveOnOffsetBytesError() {
+    val method: Method =
+            HvscIngestionPlugin::class.java.getDeclaredMethod(
+                    "buildIngestionFailureMessage",
+                    Exception::class.java,
+            )
+    method.isAccessible = true
+
+    val result =
+            method.invoke(
+                    plugin,
+                    java.io.IOException("offset bytes must be larger equal zero"),
+            ) as
+                    String
+
+    assertEquals("HVSC archive is corrupt or truncated; please re-download", result)
+  }
+
+  @Test
+  fun buildIngestionFailureMessageDescribesCorruptArchiveOnUnexpectedEofError() {
+    val method: Method =
+            HvscIngestionPlugin::class.java.getDeclaredMethod(
+                    "buildIngestionFailureMessage",
+                    Exception::class.java,
+            )
+    method.isAccessible = true
+
+    val result =
+            method.invoke(
+                    plugin,
+                    java.io.IOException("unexpected end of archive reading header"),
+            ) as
+                    String
+
+    assertEquals("HVSC archive is corrupt or truncated; please re-download", result)
+  }
+
+  @Test
+  fun buildIngestionFailureMessagePassesThroughUnrecognisedErrors() {
+    val method: Method =
+            HvscIngestionPlugin::class.java.getDeclaredMethod(
+                    "buildIngestionFailureMessage",
+                    Exception::class.java,
+            )
+    method.isAccessible = true
+
+    val result =
+            method.invoke(
+                    plugin,
+                    RuntimeException("something entirely unrelated"),
+            ) as
+                    String
+
+    assertEquals("something entirely unrelated", result)
+  }
 }

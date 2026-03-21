@@ -103,7 +103,7 @@ test.describe("CTA highlight proof", () => {
     await page.goto("/");
     await dismissDemoInterstitial(page);
 
-    const target = page.getByTestId("connectivity-indicator");
+    const target = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(target).toBeVisible();
 
     const duration = await measureFlashDuration(target, () => target.click({ force: true, timeout: 60000 }));
@@ -118,7 +118,7 @@ test.describe("CTA highlight proof", () => {
     await page.goto("/");
     await dismissDemoInterstitial(page);
 
-    const target = page.getByTestId("connectivity-indicator");
+    const target = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(target).toBeVisible();
 
     for (let attempt = 0; attempt < 5; attempt += 1) {

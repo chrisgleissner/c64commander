@@ -14,8 +14,16 @@ const BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY = "c64u_background_rediscovery_inte
 const DISCOVERY_PROBE_TIMEOUT_MS_KEY = "c64u_discovery_probe_timeout_ms";
 const DISK_AUTOSTART_MODE_KEY = "c64u_disk_autostart_mode";
 const VOLUME_SLIDER_PREVIEW_INTERVAL_MS_KEY = "c64u_volume_slider_preview_interval_ms";
+const NOTIFICATION_VISIBILITY_KEY = "c64u_notification_visibility";
+const NOTIFICATION_DURATION_MS_KEY = "c64u_notification_duration_ms";
+const AUTO_ROTATION_ENABLED_KEY = "c64u_auto_rotation_enabled";
 
-export const DEFAULT_CONFIG_WRITE_INTERVAL_MS = 500;
+export const DEFAULT_CONFIG_WRITE_INTERVAL_MS = 200;
+export type NotificationVisibility = "errors-only" | "all";
+export const DEFAULT_NOTIFICATION_VISIBILITY: NotificationVisibility = "errors-only";
+export const DEFAULT_NOTIFICATION_DURATION_MS = 4000;
+export const NOTIFICATION_DURATION_MIN_MS = 2000;
+export const NOTIFICATION_DURATION_MAX_MS = 8000;
 export const DEFAULT_AUTO_DEMO_MODE_ENABLED = true;
 export const DEFAULT_STARTUP_DISCOVERY_WINDOW_MS = 3000;
 export const DEFAULT_BACKGROUND_REDISCOVERY_INTERVAL_MS = 5000;
@@ -50,6 +58,11 @@ const clampDiscoveryProbeTimeoutMsInternal = (value: number) => {
 const clampVolumeSliderPreviewIntervalMsInternal = (value: number) => {
   if (Number.isNaN(value)) return DEFAULT_VOLUME_SLIDER_PREVIEW_INTERVAL_MS;
   return Math.min(500, Math.max(100, Math.round(value)));
+};
+
+const clampNotificationDurationMsInternal = (value: number) => {
+  if (Number.isNaN(value)) return DEFAULT_NOTIFICATION_DURATION_MS;
+  return Math.min(NOTIFICATION_DURATION_MAX_MS, Math.max(NOTIFICATION_DURATION_MIN_MS, Math.round(value / 500) * 500));
 };
 
 const readBoolean = (key: string, fallback: boolean) => {
@@ -167,6 +180,40 @@ export const saveVolumeSliderPreviewIntervalMs = (value: number) => {
 
 export const clampVolumeSliderPreviewIntervalMs = (value: number) => clampVolumeSliderPreviewIntervalMsInternal(value);
 
+export const loadNotificationVisibility = (): NotificationVisibility => {
+  if (typeof localStorage === "undefined") return DEFAULT_NOTIFICATION_VISIBILITY;
+  const raw = localStorage.getItem(NOTIFICATION_VISIBILITY_KEY);
+  return raw === "all" ? "all" : DEFAULT_NOTIFICATION_VISIBILITY;
+};
+
+export const saveNotificationVisibility = (value: NotificationVisibility) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(NOTIFICATION_VISIBILITY_KEY, value);
+  broadcast(NOTIFICATION_VISIBILITY_KEY, value);
+};
+
+export const loadNotificationDurationMs = () =>
+  clampNotificationDurationMsInternal(readNumber(NOTIFICATION_DURATION_MS_KEY, DEFAULT_NOTIFICATION_DURATION_MS));
+
+export const saveNotificationDurationMs = (value: number) => {
+  if (typeof localStorage === "undefined") return;
+  const clamped = clampNotificationDurationMsInternal(value);
+  localStorage.setItem(NOTIFICATION_DURATION_MS_KEY, String(clamped));
+  broadcast(NOTIFICATION_DURATION_MS_KEY, clamped);
+};
+
+export const clampNotificationDurationMs = (value: number) => clampNotificationDurationMsInternal(value);
+
+export const DEFAULT_AUTO_ROTATION_ENABLED = false;
+
+export const loadAutoRotationEnabled = () => readBoolean(AUTO_ROTATION_ENABLED_KEY, DEFAULT_AUTO_ROTATION_ENABLED);
+
+export const saveAutoRotationEnabled = (enabled: boolean) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(AUTO_ROTATION_ENABLED_KEY, enabled ? "1" : "0");
+  broadcast(AUTO_ROTATION_ENABLED_KEY, enabled);
+};
+
 export const APP_SETTINGS_KEYS = {
   DEBUG_LOGGING_KEY,
   CONFIG_WRITE_INTERVAL_KEY,
@@ -176,4 +223,7 @@ export const APP_SETTINGS_KEYS = {
   DISCOVERY_PROBE_TIMEOUT_MS_KEY,
   DISK_AUTOSTART_MODE_KEY,
   VOLUME_SLIDER_PREVIEW_INTERVAL_MS_KEY,
+  NOTIFICATION_VISIBILITY_KEY,
+  NOTIFICATION_DURATION_MS_KEY,
+  AUTO_ROTATION_ENABLED_KEY,
 };

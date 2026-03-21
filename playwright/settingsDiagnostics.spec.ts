@@ -19,6 +19,21 @@ const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
 };
 
+const ensureTechnicalDetailsExpanded = async (dialog: Locator) => {
+  const toggle = dialog.getByTestId("technical-details-toggle");
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") {
+    await toggle.click();
+  }
+};
+
+const ensureToolsExpanded = async (dialog: Locator) => {
+  await ensureTechnicalDetailsExpanded(dialog);
+  const toggle = dialog.getByTestId("tools-card-toggle");
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") {
+    await toggle.click();
+  }
+};
+
 test.describe("Settings diagnostics workflows", () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
@@ -79,7 +94,9 @@ test.describe("Settings diagnostics workflows", () => {
     await expect(dialog).toBeVisible();
     await snap(page, testInfo, "dialog-open");
 
-    await dialog.getByRole("tab", { name: "Logs", exact: true }).click();
+    await dialog.getByTestId("show-details-button").click();
+    await ensureToolsExpanded(dialog);
+    await dialog.getByTestId("evidence-toggle-logs").click();
 
     // Check if logs are shown (they may not be if not loaded from storage)
     const logText = await dialog
@@ -118,7 +135,9 @@ test.describe("Settings diagnostics workflows", () => {
     await expect(dialog).toBeVisible();
     await snap(page, testInfo, "diagnostics-open");
 
-    await dialog.getByRole("tab", { name: "Logs", exact: true }).click();
+    await dialog.getByTestId("show-details-button").click();
+    await ensureToolsExpanded(dialog);
+    await dialog.getByTestId("evidence-toggle-logs").click();
     const apiRequestEntry = dialog.getByText("C64 API request", { exact: true }).first();
     await expect(apiRequestEntry).toBeVisible();
     const apiRequestRow = apiRequestEntry.locator("xpath=ancestor::details");
@@ -195,6 +214,8 @@ test.describe("Settings diagnostics workflows", () => {
     await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: /Diagnostics|Logs/i });
     await expect(dialog).toBeVisible();
+    await dialog.getByTestId("show-details-button").click();
+    await ensureToolsExpanded(dialog);
 
     const getPadding = async (summary: Locator) =>
       summary.evaluate((node) => {
@@ -217,8 +238,20 @@ test.describe("Settings diagnostics workflows", () => {
         };
       });
 
+    const filterTestIdMap: Record<string, string> = {
+      Errors: "evidence-toggle-problems",
+      Logs: "evidence-toggle-logs",
+      Traces: "evidence-toggle-traces",
+      Actions: "evidence-toggle-actions",
+    };
+
     const checkTab = async (tabName: string, entryLocator: Locator) => {
-      await dialog.getByRole("tab", { name: tabName, exact: true }).click();
+      const filterTestId = filterTestIdMap[tabName];
+      const filterBtn = dialog.getByTestId(filterTestId);
+      const isActive = (await filterBtn.getAttribute("aria-pressed")) === "true";
+      if (!isActive) {
+        await filterBtn.click();
+      }
       await expect(entryLocator).toBeVisible();
 
       const summary = entryLocator.locator("summary");
@@ -245,9 +278,9 @@ test.describe("Settings diagnostics workflows", () => {
       };
     };
 
-    const errorsMetrics = await checkTab("Errors", dialog.getByTestId("error-log-log-1"));
-    const logsMetrics = await checkTab("Logs", dialog.getByTestId("log-entry-log-1"));
-    const tracesMetrics = await checkTab("Traces", dialog.getByTestId("trace-item-TRACE-0100"));
+    const errorsMetrics = await checkTab("Errors", dialog.getByTestId("problem-log-1"));
+    const logsMetrics = await checkTab("Logs", dialog.getByTestId("log-log-1"));
+    const tracesMetrics = await checkTab("Traces", dialog.getByTestId("trace-TRACE-0100"));
     const actionsMetrics = await checkTab("Actions", dialog.getByTestId("action-summary-COR-0100"));
 
     expect(logsMetrics.padding).toEqual(errorsMetrics.padding);
@@ -269,10 +302,12 @@ test.describe("Settings diagnostics workflows", () => {
 
     await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
     await snap(page, testInfo, "dialog-open");
+    await page.getByTestId("show-details-button").click();
+    await ensureToolsExpanded(page.getByRole("dialog", { name: /Diagnostics|Logs/i }));
 
-    await expect(page.getByRole("button", { name: /Clear All/i })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Share All", exact: true })).toBeVisible();
-    await expect(page.getByTestId("diagnostics-share-actions")).toBeVisible();
+    await expect(page.getByTestId("diagnostics-share-all")).toBeVisible();
+    await expect(page.getByTestId("diagnostics-share-filtered")).toBeVisible();
+    await expect(page.getByTestId("diagnostics-tools-menu")).toBeVisible();
   });
 
   test("clear all diagnostics empties log storage", async ({ page }: { page: Page }, testInfo: TestInfo) => {
@@ -281,16 +316,17 @@ test.describe("Settings diagnostics workflows", () => {
 
     await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
     await snap(page, testInfo, "dialog-open");
+    await page.getByTestId("show-details-button").click();
+    await ensureToolsExpanded(page.getByRole("dialog", { name: /Diagnostics|Logs/i }));
 
-    const clearButton = page.getByRole("button", { name: /Clear All/i });
+    // Clear All is now inside the Tools dropdown
+    await page.getByTestId("diagnostics-tools-menu").click();
+    const clearButton = page.getByTestId("diagnostics-clear-all-trigger");
 
     if (await clearButton.isVisible({ timeout: 2000 }).catch(() => false)) {
       const beforeLogs = await page.evaluate(() => localStorage.getItem("c64u_app_logs"));
       await clearButton.click();
-      const confirm = page.getByRole("alertdialog", {
-        name: /Clear diagnostics/i,
-      });
-      await confirm.getByRole("button", { name: /Clear/i }).click();
+      await page.getByTestId("diagnostics-clear-all-confirm").click();
       await snap(page, testInfo, "clear-clicked");
 
       await expect

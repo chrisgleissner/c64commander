@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-import { execFile as execFileCb } from 'node:child_process';
-import { promisify } from 'node:util';
-import { readFile } from 'node:fs/promises';
-import sharp from 'sharp';
+import { execFile as execFileCb } from "node:child_process";
+import { promisify } from "node:util";
+import { readFile } from "node:fs/promises";
+import sharp from "sharp";
 
 const execFile = promisify(execFileCb);
 
@@ -28,28 +28,15 @@ const toGreyscale = async (input) => {
 
 const listModifiedPngFiles = async () => {
   const [unstaged, staged] = await Promise.all([
-    execFile('git', [
-      'diff',
-      '--name-only',
-      '--diff-filter=AM',
-      '--',
-      'doc/img/app',
-    ]),
-    execFile('git', [
-      'diff',
-      '--name-only',
-      '--cached',
-      '--diff-filter=AM',
-      '--',
-      'doc/img/app',
-    ]),
+    execFile("git", ["diff", "--name-only", "--diff-filter=AM", "--", "doc/img/app"]),
+    execFile("git", ["diff", "--name-only", "--cached", "--diff-filter=AM", "--", "doc/img/app"]),
   ]);
 
   const files = new Set(
     `${unstaged.stdout}\n${staged.stdout}`
-      .split('\n')
+      .split("\n")
       .map((line) => line.trim())
-      .filter((line) => line.endsWith('.png')),
+      .filter((line) => line.endsWith(".png")),
   );
 
   return [...files];
@@ -57,16 +44,13 @@ const listModifiedPngFiles = async () => {
 
 const loadHeadBlob = async (filePath) => {
   try {
-    const { stdout } = await execFile('git', ['show', `HEAD:${filePath}`], {
-      encoding: 'buffer',
+    const { stdout } = await execFile("git", ["show", `HEAD:${filePath}`], {
+      encoding: "buffer",
       maxBuffer: 64 * 1024 * 1024,
     });
     return stdout;
   } catch (error) {
-    console.error(
-      `[png-prune] Failed to read HEAD blob for ${filePath}:`,
-      error,
-    );
+    console.error(`[png-prune] Failed to read HEAD blob for ${filePath}:`, error);
     return null;
   }
 };
@@ -76,10 +60,7 @@ const isFuzzyIdenticalToHead = async (filePath) => {
   if (!headBlob) return false; // new file — not identical to HEAD
 
   try {
-    const [head, working] = await Promise.all([
-      toGreyscale(headBlob),
-      toGreyscale(await readFile(filePath)),
-    ]);
+    const [head, working] = await Promise.all([toGreyscale(headBlob), toGreyscale(await readFile(filePath))]);
 
     if (head.total !== working.total) return false; // dimensions changed
 
@@ -90,24 +71,14 @@ const isFuzzyIdenticalToHead = async (filePath) => {
 
     return sumDiff / head.total < GRAYSCALE_MAE_THRESHOLD;
   } catch (error) {
-    console.error(
-      `[png-prune] Failed to compare pixels for ${filePath}:`,
-      error,
-    );
+    console.error(`[png-prune] Failed to compare pixels for ${filePath}:`, error);
     return false; // err on caution
   }
 };
 
 const revertFile = async (filePath) => {
   try {
-    await execFile('git', [
-      'restore',
-      '--source=HEAD',
-      '--staged',
-      '--worktree',
-      '--',
-      filePath,
-    ]);
+    await execFile("git", ["restore", "--source=HEAD", "--staged", "--worktree", "--", filePath]);
     return true;
   } catch (error) {
     console.error(`[png-prune] Failed to revert ${filePath}:`, error);
@@ -118,7 +89,7 @@ const revertFile = async (filePath) => {
 const run = async () => {
   const modifiedFiles = await listModifiedPngFiles();
   if (modifiedFiles.length === 0) {
-    console.log('[png-prune] No modified screenshot PNG files detected.');
+    console.log("[png-prune] No modified screenshot PNG files detected.");
     return;
   }
 
@@ -138,12 +109,10 @@ const run = async () => {
     }
   }
 
-  console.log(
-    `[png-prune] scanned=${modifiedFiles.length} reverted=${reverted} kept=${kept}`,
-  );
+  console.log(`[png-prune] scanned=${modifiedFiles.length} reverted=${reverted} kept=${kept}`);
 };
 
 run().catch((error) => {
-  console.error('[png-prune] Unexpected failure:', error);
+  console.error("[png-prune] Unexpected failure:", error);
   process.exitCode = 1;
 });
