@@ -257,4 +257,28 @@ describe("SwipeNavigationLayer", () => {
       expect.objectContaining({ message: "docs render failed" }),
     );
   });
+
+  it("forces idle via fallback timeout when transitionend never fires", async () => {
+    // Render and find elements with real timers first so async queries work normally.
+    renderLayer("/");
+    const runway = await screen.findByTestId("swipe-navigation-runway");
+
+    vi.useFakeTimers();
+    try {
+      act(() => {
+        capturedCallbacks?.onCommit(1, { dx: -120, dy: 0, velocityX: -1 });
+      });
+      expect(runway).toHaveAttribute("data-runway-phase", "transitioning");
+
+      // Do NOT fire transitionEnd — simulate the CSS engine not delivering the event.
+      act(() => {
+        vi.advanceTimersByTime(3000);
+      });
+
+      expect(runway).toHaveAttribute("data-runway-phase", "idle");
+      expect(mocks.addLog).toHaveBeenCalledWith("warn", "[SwipeNav] transition-end-fallback", expect.any(Object));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

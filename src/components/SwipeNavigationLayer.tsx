@@ -202,6 +202,22 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
     setRunway(buildIdleState(current.targetIndex));
   }, []);
 
+  // Fallback: force idle if transitionend never fires (e.g. headless CSS engine
+  // on CI does not always deliver the event reliably). The timeout is generous
+  // enough to cover both normal (~280ms) and test-probe (1200ms) durations.
+  useEffect(() => {
+    if (runway.phase !== "transitioning") return;
+    const timer = setTimeout(() => {
+      const current = runwayRef.current;
+      if (current.phase !== "transitioning") return;
+      addLog("warn", "[SwipeNav] transition-end-fallback", {
+        to: TAB_ROUTES[current.targetIndex].label,
+      });
+      setRunway(buildIdleState(current.targetIndex));
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [runway.phase, runway.targetIndex]);
+
   const onProgress = useCallback((dx: number, velocityX: number) => {
     const current = runwayRef.current;
     if (current.phase === "transitioning") return;

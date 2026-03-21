@@ -17,6 +17,9 @@ test("verify comprehensive user tracing", async ({ page }) => {
   const waitForBackdropToClear = async () => {
     const backdrop = page.locator('div[data-state="open"][aria-hidden="true"][data-aria-hidden="true"]').last();
     if (await backdrop.isVisible().catch(() => false)) {
+      // Press Escape as a last-resort fallback to dismiss any overlay whose
+      // close button wasn't found by dismissBlockingDialogIfPresent.
+      await page.keyboard.press("Escape");
       await expect(backdrop).toBeHidden({ timeout: 10000 });
     }
   };
