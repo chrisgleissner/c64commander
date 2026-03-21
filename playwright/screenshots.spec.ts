@@ -1234,109 +1234,6 @@ test.describe("App screenshots", () => {
     "capture diagnostics screenshots",
     { tag: "@screenshots" },
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
-      const seedTraceState = async (events: unknown[]) => {
-        await page.evaluate((seed) => {
-          const tracing = (
-            window as Window & {
-              __c64uTracing?: { seedTraces?: (events: unknown[]) => void };
-            }
-          ).__c64uTracing;
-          tracing?.seedTraces?.(seed);
-        }, events);
-      };
-
-      const buildContextFields = () => ({
-        lifecycleState: "foreground",
-        sourceKind: null,
-        localAccessMode: null,
-        trackInstanceId: null,
-        playlistItemId: null,
-      });
-
-      const buildHealthyEvents = () => {
-        const now = Date.now();
-        return [
-          {
-            id: "SCR-100",
-            timestamp: new Date(now).toISOString(),
-            relativeMs: 0,
-            type: "rest-response",
-            origin: "user",
-            correlationId: "SCR-COR-1",
-            data: {
-              ...buildContextFields(),
-              method: "GET",
-              path: "/v1/info",
-              status: 200,
-              error: null,
-            },
-          },
-          {
-            id: "SCR-101",
-            timestamp: new Date(now + 100).toISOString(),
-            relativeMs: 100,
-            type: "ftp-operation",
-            origin: "user",
-            correlationId: "SCR-COR-1",
-            data: {
-              ...buildContextFields(),
-              operation: "LIST",
-              path: "/Usb0",
-              result: "success",
-              error: null,
-            },
-          },
-          {
-            id: "SCR-102",
-            timestamp: new Date(now + 150).toISOString(),
-            relativeMs: 150,
-            type: "action-start",
-            origin: "user",
-            correlationId: "SCR-COR-1",
-            data: {
-              ...buildContextFields(),
-              name: "Configuration updated successfully",
-            },
-          },
-          {
-            id: "SCR-103",
-            timestamp: new Date(now + 220).toISOString(),
-            relativeMs: 220,
-            type: "action-end",
-            origin: "user",
-            correlationId: "SCR-COR-1",
-            data: {
-              ...buildContextFields(),
-              status: "success",
-              error: null,
-            },
-          },
-        ];
-      };
-
-      const buildUnhealthyEvents = () => {
-        const healthyEvents = buildHealthyEvents();
-        const now = Date.now();
-        return [
-          ...healthyEvents,
-          {
-            id: "SCR-104",
-            timestamp: new Date(now + 300).toISOString(),
-            relativeMs: 300,
-            type: "rest-response",
-            origin: "user",
-            correlationId: "SCR-COR-2",
-            data: {
-              ...buildContextFields(),
-              method: "PUT",
-              path: "/v1/configs/Audio/Volume",
-              status: 403,
-              error: "HTTP 403",
-            },
-          },
-        ];
-      };
-
       const openDiagnostics = async () => {
         await page.goto("/");
         await applyDisplayProfileViewport(page, "medium");
@@ -1359,82 +1256,37 @@ test.describe("App screenshots", () => {
         return dialog;
       };
 
-      const ensureTechnicalDetailsExpanded = async (dialog: ReturnType<Page["getByRole"]>) => {
-        if (!(await dialog.getByTestId("diagnostics-details-layer").isVisible())) {
-          await dialog.getByTestId("show-details-button").click();
-          await expect(dialog.getByTestId("diagnostics-details-layer")).toBeVisible();
-        }
-      };
+      const dialog = await openDiagnostics();
 
-      const ensureToolsExpanded = async (dialog: ReturnType<Page["getByRole"]>) => {
-        await ensureTechnicalDetailsExpanded(dialog);
-        const toggle = dialog.getByTestId("tools-card-toggle");
-        if ((await toggle.getAttribute("aria-expanded")) !== "true") {
-          await toggle.click();
-        }
-      };
+      await captureDiagnosticsScreenshot(page, testInfo, "activity-collapsed.png");
+      await captureDiagnosticsScreenshot(page, testInfo, "evidence-visible.png");
+      await captureDiagnosticsScreenshot(page, testInfo, "filters-collapsed.png");
+      await captureDiagnosticsScreenshot(page, testInfo, "wording-fixed.png");
 
-      await seedTraceState(buildHealthyEvents());
-      let dialog = await openDiagnostics();
-      await captureDiagnosticsScreenshot(page, testInfo, "diagnostics/healthy-collapsed.png");
+      await dialog.getByTestId("diagnostics-device-line").dispatchEvent("pointerdown");
+      await dialog.getByTestId("diagnostics-device-line").dispatchEvent("pointerup");
+      await expect(page.getByTestId("connection-view-surface")).toBeVisible();
+      await captureDiagnosticsScreenshot(page, testInfo, "connection-view.png");
 
-      await dialog.getByTestId("show-details-button").click();
-      await expect(dialog.getByTestId("diagnostics-details-layer")).toBeVisible();
-      await expect(dialog.getByTestId("technical-details-card")).toBeVisible();
-      await captureDiagnosticsScreenshot(page, testInfo, "diagnostics/healthy-expanded.png");
+      await page.getByTestId("connection-view-edit").click();
+      await expect(page.getByTestId("connection-edit-surface")).toBeVisible();
+      await captureDiagnosticsScreenshot(page, testInfo, "connection-edit.png");
+      await page.getByTestId("connection-edit-surface").getByRole("button", { name: "Close" }).click();
 
-      await page.keyboard.press("Escape");
-      await expect(dialog).toBeHidden();
+      await dialog.getByTestId("open-filters-editor").click();
+      await expect(page.getByTestId("filters-editor-surface")).toBeVisible();
+      await captureDiagnosticsScreenshot(page, testInfo, "filters-editor.png");
+      await page.getByTestId("filters-editor-surface").getByRole("button", { name: "Close" }).click();
 
-      await seedTraceState(buildUnhealthyEvents());
-      dialog = await openDiagnostics();
-      await expect(dialog.getByRole("heading", { name: "Unhealthy" })).toBeVisible();
-      await captureDiagnosticsScreenshot(page, testInfo, "diagnostics/unhealthy-collapsed.png");
-
-      await dialog.getByTestId("show-details-button").click();
-      await expect(dialog.getByTestId("issue-card")).toBeVisible();
-      await captureDiagnosticsScreenshot(page, testInfo, "diagnostics/unhealthy-issue-expanded.png");
-
-      await ensureToolsExpanded(dialog);
-      await expect(dialog.getByTestId("evidence-full-view")).toBeVisible();
-      await captureDiagnosticsScreenshot(page, testInfo, "diagnostics/full-drill-down-tools-visible.png");
-
-      await page.keyboard.press("Escape");
-      await expect(dialog).toBeHidden();
-
-      // 03-summary sub-view screenshots (healthy state with details expanded)
-      dialog = await openDiagnostics();
-      await dialog.getByTestId("show-details-button").click();
-      await expect(dialog.getByTestId("diagnostics-details-layer")).toBeVisible();
-
-      await dialog.getByTestId("open-device-detail").click();
-      await expect(dialog.getByTestId("device-detail-back")).toBeVisible();
-      await captureDiagnosticsScreenshot(page, testInfo, "03-summary/01-device-detail.png");
-      await dialog.getByTestId("device-detail-back").click();
-
-      if (await dialog.getByTestId("open-health-check-detail").isVisible()) {
-        await dialog.getByTestId("open-health-check-detail").click();
-        await expect(dialog.getByTestId("health-check-detail-back")).toBeVisible();
-        await captureDiagnosticsScreenshot(page, testInfo, "03-summary/02-health-check-detail.png");
-        await dialog.getByTestId("health-check-detail-back").click();
-      }
-
-      if (await dialog.getByTestId("latency-summary-row").isVisible()) {
-        await dialog.getByTestId("latency-summary-row").click();
-        await expect(page.getByTestId("latency-analysis-popup")).toBeVisible();
-        await captureDiagnosticsScreenshot(page, testInfo, "03-summary/03-latency-analysis.png");
-        await page.getByTestId("analytic-popup-close").click();
-        await expect(page.getByTestId("latency-analysis-popup")).toBeHidden();
-      }
-
-      await dialog.getByTestId("health-history-row").click();
-      await expect(page.getByTestId("health-history-popup")).toBeVisible();
-      await captureDiagnosticsScreenshot(page, testInfo, "03-summary/04-health-history.png");
+      await dialog.getByTestId("open-latency-screen").click();
+      await expect(page.getByTestId("latency-analysis-popup")).toBeVisible();
+      await captureDiagnosticsScreenshot(page, testInfo, "latency-clean.png");
       await page.getByTestId("analytic-popup-close").click();
-      await expect(page.getByTestId("health-history-popup")).toBeHidden();
 
-      await page.keyboard.press("Escape");
-      await expect(dialog).toBeHidden();
+      await dialog.getByTestId("open-timeline-screen").click();
+      await expect(page.getByTestId("health-history-popup")).toBeVisible();
+      await captureDiagnosticsScreenshot(page, testInfo, "timeline-full.png");
+      await page.getByTestId("analytic-popup-close").click();
     },
   );
 

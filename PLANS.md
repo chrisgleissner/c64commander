@@ -1,54 +1,104 @@
-# Diagnostics Overlay Convergence Plan
+# Diagnostics Overlay Redesign Plan
 
-Status: IN PROGRESS
+Status: COMPLETE
 Classification: UI_CHANGE + DOC_PLUS_CODE
 Date: 2026-03-21
 
-## Phase 1 - Plan
+## Objective
 
-- [x] Simplify healthy state
-- [x] Fix unhealthy state clarity
-- [x] Restructure summary
-- [x] Enforce disclosure layers
-- [x] Remove duplication
-- [x] Remove early technical detail
-- [x] Improve drill-down clarity
-- [x] Implement overlay layering rules
-- [x] Add focus headers
-- [x] Add scope labels
-- [x] Validate all acceptance criteria
+Deliver a diagnostics experience that surfaces evidence first, keeps configuration secondary, removes redundant wording, and converges through deterministic tests and screenshots.
 
-## Phase 2 - Implement Target Spec
+## Phases
 
-- [x] Make healthy first-open state summary-only with one optional action
-- [x] Make unhealthy first-open state show contributor, issue, and one dominant action
-- [x] Collapse summary into one coherent block in fixed order
-- [x] Hide layer 2 and layer 3 content until explicit user intent
-- [x] Remove duplicated counts, timestamps, and repeated signals
-- [x] Keep raw technical lines out of the default view
-- [x] Add focused purpose and interpretation lines to drill-downs
-- [x] Distinguish base overlay, inline expansion, and nested analytic overlay visually
-- [x] Add nested overlay return-anchor headers
-- [x] Show conditional scope labels only for focused or filtered states
-- [x] Enforce deterministic back navigation order
+### Phase 1 - Audit
 
-## Phase 3 - Validation
+- Identify current layout violations against the target overlay structure.
+- Identify redundant copy, duplicated state, and nested-surface confusion.
+- Map deterministic seed points for evidence, latency, and health history.
 
-- [x] Test 1 - Healthy state
-- [x] Test 2 - Unhealthy state
-- [x] Test 3 - Progressive disclosure
-- [x] Test 4 - Duplication
-- [x] Test 5 - Summary coherence
-- [x] Test 6 - Overlay layering
-- [x] Test 7 - Back navigation
+Acceptance criteria:
 
-## Acceptance Criteria
+- Existing diagnostics surfaces and screenshot hooks are mapped.
+- Violations are recorded in this plan and then addressed in later phases.
 
-- [x] All target spec rules satisfied
-- [x] All validation tests pass
-- [x] PLANS.md fully completed
-- [x] WORKLOG.md complete
-- [x] No duplicated UI signals remain
-- [x] Healthy state is calm and minimal
-- [x] Progressive disclosure strictly enforced
-- [x] Overlay hierarchy is unambiguous
+### Phase 2 - Header + Connection
+
+- Replace the header with the required four-line compact health block.
+- Make the health block collapsible and default-collapsed in activity scenarios.
+- Implement tap-to-view and long-press-to-edit connection details.
+- Stage host, HTTP port, and FTP port changes and save atomically.
+
+Acceptance criteria:
+
+- Header matches the required structure.
+- Connection details open in view mode on tap and edit mode on long press.
+- Host and port validation rejects invalid input.
+
+### Phase 3 - Filter System
+
+- Replace inline filter expansion with a one-line collapsed filter bar.
+- Add a dedicated filter editor surface.
+- Keep state visibility separate from configuration.
+
+Acceptance criteria:
+
+- Filter chips are visible in one line.
+- Filter editor opens in one tap.
+- Mobile uses a sheet and expanded layouts use a side panel.
+
+### Phase 4 - Evidence Visibility
+
+- Reorder the overlay to header, evidence, then controls.
+- Keep evidence visible in the default screenshot without scrolling.
+- Keep Problems and Actions useful by default while Logs and Traces remain opt-in.
+
+Acceptance criteria:
+
+- Evidence is visible without scrolling.
+- Controls do not obscure the evidence panel.
+
+### Phase 5 - Text Cleanup + Latency
+
+- Remove all explanatory prose and duplicated labels.
+- Rename surfaces to Diagnostics, Evidence, and Latency.
+- Simplify latency to chart plus P50, P90, and P99 with filter sheet access.
+
+Acceptance criteria:
+
+- No diagnostic UI contains purpose, interpretation, in view, or current scope wording.
+- Latency contains zero descriptive paragraphs.
+
+### Phase 6 - Timeline + Data
+
+- Use deterministic diagnostics seeds with realistic severity variation.
+- Render continuous health bars with healthy, degraded, unhealthy, and recovery segments.
+- Show timestamp and cause on timeline selection.
+
+Acceptance criteria:
+
+- Timeline contains realistic variation and at least one unhealthy segment.
+- Selected timeline segments show timestamp and cause.
+
+### Phase 7 - Screenshots + Validation
+
+- Update screenshot capture flow for the required diagnostics artifacts.
+- Add and update unit tests for the new overlay behavior.
+- Run targeted UI validation plus repository-required validation.
+
+Acceptance criteria:
+
+- Required screenshots are generated.
+- Relevant unit tests, coverage, lint, and build pass.
+- Diagnostics-specific Playwright validation passes.
+
+## Risks
+
+- Existing diagnostics tests and screenshots are coupled to the previous summary/details/tools model.
+- Connection state currently stores HTTP host and port together, so the edit sheet must split and recompose safely.
+- Evidence visibility can regress across compact and medium layouts if sheet height is not controlled tightly.
+
+## Rollback Strategy
+
+- Revert the diagnostics component files and screenshot capture changes as one unit.
+- Restore the previous diagnostics test expectations if the redesign must be backed out.
+- Keep storage keys unchanged so rollback does not require migration.

@@ -19,7 +19,7 @@ type Props = {
   open: boolean;
   onClose: () => void;
   title: string;
-  description: string;
+  description?: string;
   children: React.ReactNode;
   contentClassName?: string;
   "data-testid"?: string;
@@ -85,6 +85,9 @@ export function AnalyticPopup({
             e.preventDefault();
           }}
         >
+          <DialogPrimitive.Description className={description ? "text-xs text-muted-foreground sr-only" : "sr-only"}>
+            {description ?? `${title} details.`}
+          </DialogPrimitive.Description>
           {/* Header */}
           <div className="flex shrink-0 items-start justify-between gap-4 border-b border-border px-4 py-3">
             <div className="min-w-0 space-y-1.5">
@@ -102,9 +105,11 @@ export function AnalyticPopup({
                   {title}
                 </DialogPrimitive.Title>
               </div>
-              <DialogPrimitive.Description className="text-xs text-muted-foreground">
-                {description}
-              </DialogPrimitive.Description>
+              {description ? (
+                <DialogPrimitive.Description className="text-xs text-muted-foreground" aria-hidden="true">
+                  {description}
+                </DialogPrimitive.Description>
+              ) : null}
             </div>
             <button
               type="button"

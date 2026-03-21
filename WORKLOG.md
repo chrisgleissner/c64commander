@@ -1,40 +1,51 @@
-# Diagnostics Overlay Convergence Worklog
+# Diagnostics Overlay Worklog
 
 Status: COMPLETE
 Date: 2026-03-21
 
-## Step 1 - Replace planning artifacts
+## 2026-03-21T00:00:00Z - Step 1 - Reset execution artifacts
 
-- Change made: Replaced the existing top-level plan and worklog with files aligned to the current convergence brief.
-- Reason: The previous files documented a different diagnostics redesign and could not serve as deterministic proof for this task.
-- Before vs after: Before, both files described a summary-preview-tools redesign; after, both files track the required three phases and acceptance checks from this convergence task.
-- Validation result: Complete.
+- Decision: Replace the existing diagnostics convergence plan and worklog because they describe a different UX target.
+- High-level diff: Replaced top-level planning artifacts with phase-based execution files for the current redesign.
+- Validation: Artifact update only.
+- Screenshot references: None.
 
-## Step 2 - Refactor diagnostics overlay
+## 2026-03-21T00:05:00Z - Step 2 - Audit current diagnostics implementation
 
-- Change made: Completed the diagnostics overlay convergence refactor.
-- Reason: Refactor the overlay to the target `summary -> details -> analyse` structure with strict progressive disclosure.
-- Before vs after: Before, the overlay exposed multiple adjacent summary surfaces and a tools-heavy deeper flow; after, it opens as a single summary block, reveals details only after explicit intent, reveals analysis only after explicit analysis intent, and distinguishes nested analytic overlays with an explicit return anchor.
-- Validation result: Passed through unit, coverage, build, lint, and targeted Playwright validation.
+- Decision: Replace the current summary/details/tools model instead of layering the new spec onto it.
+- High-level diff: Audited DiagnosticsDialog, analytics popups, diagnostics seeds, storage seams, and screenshot hooks to identify the minimum file set for the redesign.
+- Validation: Context audit complete.
+- Screenshot references: Existing diagnostics screenshot flow reviewed for replacement.
 
-## Step 3 - Validate acceptance criteria
+## 2026-03-21T00:45:00Z - Step 3 - Rebuild diagnostics surfaces
 
-- Change made: Completed the required validation and regression coverage for the convergence brief.
-- Reason: Verify healthy state, unhealthy state, progressive disclosure, duplication removal, summary coherence, overlay layering, and back navigation.
-- Before vs after: Before, the repository had no proof tied to this brief; after, the repository has targeted diagnostics dialog regressions, a health-check FTP host normalization regression, a clean targeted Playwright flow, and a full coverage run above the repository threshold.
-- Validation result: Passed.
+- Decision: Replace the old summary-first diagnostics overlay with an evidence-first sheet and dedicated nested surfaces for filters, latency, timeline, and connection editing.
+- High-level diff: Rewrote DiagnosticsDialog, LatencyAnalysisPopup, HealthHistoryPopup, and screenshot capture flows to match the new header, evidence, filter, and progressive-disclosure model.
+- Validation: Targeted diagnostics unit coverage added and iterated until the new surfaces were stable.
+- Screenshot references: Replaced legacy diagnostics screenshot flow with the required artifact list.
 
-## Validation Evidence
+## 2026-03-21T01:20:00Z - Step 4 - Relocate diagnostics tests into tests/
 
-- `npx vitest run src/components/diagnostics/DiagnosticsDialog.test.tsx src/lib/diagnostics/healthCheckEngine.test.ts`
-  Result: Passed.
-- `npx vitest run src/lib/diagnostics/healthCheckEngine.test.ts tests/unit/components/diagnostics/DiagnosticsDialog.test.tsx tests/unit/components/diagnostics/GlobalDiagnosticsOverlay.test.tsx`
-  Result: Passed.
-- `npx playwright test playwright/homeDiagnosticsOverlay.spec.ts -g "supports switch-device recovery, health checks, analytics, export enrichment, and clear-all"`
-  Result: Passed.
-- `npm run lint`
-  Result: Passed.
-- `npm run build`
-  Result: Passed.
-- `npm run test:coverage`
-  Result: Passed with global branch coverage at 91.01%.
+- Decision: Apply the new repository test-location rule to the diagnostics scope immediately instead of leaving new coverage in src.
+- High-level diff: Moved diagnostics component tests from src/components/diagnostics into tests/unit/components/diagnostics and updated stale SettingsPage and GlobalDiagnosticsOverlay expectations to the new UX.
+- Validation: Diagnostics unit suites, SettingsPage diagnostics coverage, and GlobalDiagnosticsOverlay coverage passed after the move.
+- Screenshot references: None.
+
+## 2026-03-21T01:55:00Z - Step 5 - Eliminate dialog accessibility noise
+
+- Decision: Fix the Radix dialog warnings at the component level instead of suppressing them in Playwright.
+- High-level diff: Added hidden titles and descriptions to diagnostics-owned dialog and sheet surfaces, then tightened screenshot interactions to use deterministic pointer events and scoped close-button selectors.
+- Validation: Diagnostics screenshot Playwright slice passed without the prior DialogTitle and Description warnings leaking into diagnostics evidence.
+- Screenshot references: activity-collapsed.png, evidence-visible.png, filters-collapsed.png, wording-fixed.png, connection-view.png, connection-edit.png, filters-editor.png, latency-clean.png, timeline-full.png.
+
+## 2026-03-21T02:20:00Z - Step 6 - Final validation
+
+- Decision: Re-run repository-required validation after the last accessibility and screenshot fixes instead of relying on earlier green runs.
+- High-level diff: Confirmed the final diagnostics implementation, screenshot flow, and test relocations on the branch state that will be reported complete.
+- Validation:
+  - runTests: DiagnosticsDialog, LatencyAnalysisPopup, HealthHistoryPopup unit suites passed.
+  - Playwright: targeted diagnostics screenshot capture passed on PLAYWRIGHT_PORT=4174.
+  - Build: npm run build passed.
+  - Lint: npm run lint passed with existing generated-report warnings under .cov-unit only.
+  - Coverage: npm run test:coverage passed with 4469 tests green and 91.13% branch coverage.
+- Screenshot references: doc/img/app/diagnostics/\*.png refreshed for the redesigned diagnostics flow.

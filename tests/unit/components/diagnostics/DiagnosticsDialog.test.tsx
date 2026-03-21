@@ -1,565 +1,290 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v3.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import { DiagnosticsDialog } from "@/components/diagnostics/DiagnosticsDialog";
+import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
 import type { OverallHealthState } from "@/lib/diagnostics/healthModel";
+import { buildBaseUrlFromDeviceHost, updateC64APIConfig } from "@/lib/c64api";
+import { setStoredFtpPort } from "@/lib/ftp/ftpConfig";
 
-vi.mock("@/components/ui/app-surface", () => ({
-  AppSheet: ({ children, open }: any) => (open ? <div role="dialog">{children}</div> : null),
-  AppSheetContent: ({ children }: any) => <div>{children}</div>,
-  AppSheetHeader: ({ children }: any) => <div>{children}</div>,
-  AppSheetTitle: ({ children }: any) => <div>{children}</div>,
-  AppSheetDescription: ({ children }: any) => <div>{children}</div>,
-}));
+const setViewportWidth = (width: number) => {
+  Object.defineProperty(window, "innerWidth", {
+    configurable: true,
+    writable: true,
+    value: width,
+  });
+};
 
-vi.mock("@/components/ui/alert-dialog", () => ({
-  AlertDialog: ({ children }: any) => <div>{children}</div>,
-  AlertDialogTrigger: ({ children, asChild }: any) => (asChild ? children : <div>{children}</div>),
-  AlertDialogContent: ({ children }: any) => <div role="alertdialog">{children}</div>,
-  AlertDialogHeader: ({ children }: any) => <div>{children}</div>,
-  AlertDialogTitle: ({ children }: any) => <div>{children}</div>,
-  AlertDialogDescription: ({ children }: any) => <div>{children}</div>,
-  AlertDialogFooter: ({ children }: any) => <div>{children}</div>,
-  AlertDialogCancel: ({ children }: any) => <button>{children}</button>,
-  AlertDialogAction: ({ children, onClick }: any) => <button onClick={onClick}>{children}</button>,
-}));
+const renderDialog = (props?: Partial<typeof defaultProps>) =>
+  render(
+    <DisplayProfileProvider>
+      <DiagnosticsDialog {...defaultProps} {...props} />
+    </DisplayProfileProvider>,
+  );
 
-vi.mock("@/components/ui/dropdown-menu", () => ({
-  DropdownMenu: ({ children }: any) => <div>{children}</div>,
-  DropdownMenuTrigger: ({ children, asChild }: any) => (asChild ? children : <div>{children}</div>),
-  DropdownMenuContent: ({ children }: any) => <div>{children}</div>,
-  DropdownMenuItem: ({ children, onSelect, ...props }: any) => (
-    <button
-      onClick={(event) => {
-        onSelect?.(event);
-      }}
-      {...props}
-    >
-      {children}
-    </button>
-  ),
-  DropdownMenuSeparator: () => <div />,
-}));
-
-vi.mock("@/components/ui/tooltip", () => ({
-  TooltipProvider: ({ children }: any) => <>{children}</>,
-  Tooltip: ({ children }: any) => <>{children}</>,
-  TooltipTrigger: ({ children, asChild }: any) => (asChild ? children : <div>{children}</div>),
-  TooltipContent: ({ children }: any) => <div>{children}</div>,
-}));
-
-vi.mock("@/components/ui/button", () => ({
-  Button: ({ children, onClick, disabled, ...props }: any) => (
-    <button onClick={onClick} disabled={disabled} {...props}>
-      {children}
-    </button>
-  ),
-}));
-
-vi.mock("@/components/ui/input", () => ({
-  Input: (props: any) => <input {...props} />,
-}));
-
-vi.mock("@/components/diagnostics/DiagnosticsListItem", () => ({
-  DiagnosticsListItem: ({ children, testId }: any) => <div data-testid={testId}>{children}</div>,
-}));
-
-vi.mock("@/components/diagnostics/ActionSummaryListItem", () => ({
-  ActionSummaryListItem: ({ summary }: any) => (
-    <div data-testid={`action-${summary.correlationId}`}>{summary.actionName}</div>
-  ),
-}));
-
-vi.mock("@/lib/diagnostics/timeFormat", () => ({
-  formatDiagnosticsTimestamp: (value: string) => value,
-}));
-
-vi.mock("@/lib/tracing/traceFormatter", () => ({
-  getTraceTitle: (entry: any) => entry.title ?? entry.id,
-}));
-
-vi.mock("@/lib/diagnostics/diagnosticsSeverity", () => ({
-  resolveLogSeverity: () => "info",
-  resolveTraceSeverity: () => "info",
-  resolveActionSeverity: () => "info",
-}));
-
-let currentDialogProfile: "compact" | "medium" | "expanded" = "medium";
-
-vi.mock("@/hooks/useDisplayProfile", () => ({
-  useDisplayProfile: () => ({ profile: currentDialogProfile }),
-}));
-
-const idleHealthState: OverallHealthState = {
-  state: "Idle",
-  connectivity: "Not yet connected",
+const healthyHealthState: OverallHealthState = {
+  state: "Healthy",
+  connectivity: "Online",
   host: "c64u",
+  connectedDeviceLabel: "C64U",
   problemCount: 0,
   contributors: {
-    App: { state: "Idle", problemCount: 0, totalOperations: 0, failedOperations: 0 },
-    REST: { state: "Idle", problemCount: 0, totalOperations: 0, failedOperations: 0 },
-    FTP: { state: "Idle", problemCount: 0, totalOperations: 0, failedOperations: 0 },
+    App: { state: "Healthy", problemCount: 0, totalOperations: 3, failedOperations: 0 },
+    REST: { state: "Healthy", problemCount: 0, totalOperations: 4, failedOperations: 0 },
+    FTP: { state: "Healthy", problemCount: 0, totalOperations: 2, failedOperations: 0 },
   },
-  lastRestActivity: null,
-  lastFtpActivity: null,
+  lastRestActivity: { operation: "GET /v1/info", result: "200", timestampMs: Date.now() - 5_000 },
+  lastFtpActivity: { operation: "LIST /Usb0", result: "success", timestampMs: Date.now() - 8_000 },
   primaryProblem: null,
 };
 
-const primaryProblemHealthState: OverallHealthState = {
+const unhealthyHealthState: OverallHealthState = {
+  ...healthyHealthState,
   state: "Unhealthy",
-  connectivity: "Online",
-  host: "c64u",
   problemCount: 1,
   contributors: {
-    App: { state: "Idle", problemCount: 0, totalOperations: 0, failedOperations: 0 },
-    REST: { state: "Unhealthy", problemCount: 1, totalOperations: 2, failedOperations: 2 },
-    FTP: { state: "Idle", problemCount: 0, totalOperations: 0, failedOperations: 0 },
+    ...healthyHealthState.contributors,
+    REST: { state: "Unhealthy", problemCount: 1, totalOperations: 4, failedOperations: 2 },
   },
-  lastRestActivity: null,
-  lastFtpActivity: null,
   primaryProblem: {
     id: "problem-1",
-    title: "GET /v1/info failed",
+    title: "PUT /v1/configs/Audio/Volume failed",
     contributor: "REST",
-    timestampMs: Date.now() - 1000,
+    timestampMs: Date.now() - 10_000,
     impactLevel: 2,
-    causeHint: "HTTP 503",
+    causeHint: "HTTP 403",
   },
+};
+
+const defaultProps = {
+  open: true,
+  onOpenChange: vi.fn(),
+  healthState: healthyHealthState,
+  logs: [
+    {
+      id: "log-1",
+      level: "info" as const,
+      message: "Configuration updated successfully",
+      timestamp: new Date(Date.now() - 4_000).toISOString(),
+    },
+  ],
+  errorLogs: [
+    {
+      id: "error-1",
+      level: "error" as const,
+      message: "Failed to save audio profile",
+      timestamp: new Date(Date.now() - 6_000).toISOString(),
+      details: { code: "E_AUDIO" },
+    },
+  ],
+  traceEvents: [
+    {
+      id: "trace-1",
+      timestamp: new Date(Date.now() - 5_000).toISOString(),
+      relativeMs: 0,
+      type: "rest-response" as const,
+      origin: "user" as const,
+      correlationId: "action-1",
+      data: {
+        lifecycleState: "foreground" as const,
+        sourceKind: null,
+        localAccessMode: null,
+        trackInstanceId: null,
+        playlistItemId: null,
+        method: "GET",
+        path: "/v1/info",
+        status: 200,
+      },
+    },
+  ],
+  actionSummaries: [
+    {
+      correlationId: "action-1",
+      actionName: "Configuration updated successfully",
+      origin: "user" as const,
+      originalOrigin: "user" as const,
+      startTimestamp: new Date(Date.now() - 7_000).toISOString(),
+      endTimestamp: new Date(Date.now() - 6_500).toISOString(),
+      durationMs: 500,
+      outcome: "success" as const,
+      startRelativeMs: 0,
+      effects: [
+        {
+          type: "REST" as const,
+          label: "Save",
+          method: "PUT",
+          path: "/v1/configs",
+          target: null,
+          status: 200,
+          durationMs: 500,
+        },
+      ],
+    },
+  ],
+  onShareAll: vi.fn(),
+  onShareFiltered: vi.fn(),
+  onClearAll: vi.fn(),
+  onRetryConnection: vi.fn(),
+  connectionCallbacks: {
+    onRetryConnection: vi.fn().mockResolvedValue({ success: true, message: "Connected to c64u" }),
+    onSwitchDevice: vi.fn().mockResolvedValue({ success: true, message: "Switched to c64u-backup" }),
+  },
+  deviceInfo: null,
+  healthCheckRunning: false,
+  onRunHealthCheck: vi.fn(),
+  lastHealthCheckResult: {
+    runId: "hc-1",
+    startTimestamp: new Date(Date.now() - 60_000).toISOString(),
+    endTimestamp: new Date(Date.now() - 59_000).toISOString(),
+    totalDurationMs: 1000,
+    overallHealth: "Healthy" as const,
+    probes: {
+      REST: { probe: "REST" as const, outcome: "Success" as const, durationMs: 100, reason: null, startMs: 0 },
+      FTP: { probe: "FTP" as const, outcome: "Success" as const, durationMs: 100, reason: null, startMs: 100 },
+      CONFIG: { probe: "CONFIG" as const, outcome: "Success" as const, durationMs: 100, reason: null, startMs: 200 },
+      RASTER: { probe: "RASTER" as const, outcome: "Success" as const, durationMs: 100, reason: null, startMs: 300 },
+      JIFFY: { probe: "JIFFY" as const, outcome: "Success" as const, durationMs: 100, reason: null, startMs: 400 },
+    },
+    latency: { p50: 10, p90: 20, p99: 30 },
+    deviceInfo: null,
+  },
+  liveHealthCheckProbes: null,
 };
 
 describe("DiagnosticsDialog", () => {
   beforeEach(() => {
-    currentDialogProfile = "medium";
+    localStorage.clear();
+    vi.clearAllMocks();
+    updateC64APIConfig(buildBaseUrlFromDeviceHost("c64u:80"), undefined, "c64u:80");
+    setStoredFtpPort(21);
   });
 
-  const renderDialog = (overrides: Partial<React.ComponentProps<typeof DiagnosticsDialog>> = {}) => {
-    const props: React.ComponentProps<typeof DiagnosticsDialog> = {
-      open: true,
-      onOpenChange: vi.fn(),
-      healthState: idleHealthState,
-      logs: [],
-      errorLogs: [],
-      traceEvents: [],
-      actionSummaries: [],
-      onShareFiltered: vi.fn(),
-      onShareAll: vi.fn(),
-      onClearAll: vi.fn(),
-      onRetryConnection: vi.fn(),
-      ...overrides,
-    };
-    return { props, ...render(<DiagnosticsDialog {...props} />) };
-  };
+  afterEach(() => {
+    vi.useRealTimers();
+  });
 
-  const openToolsView = () => {
-    fireEvent.click(screen.getByTestId("show-details-button"));
+  it("shows evidence immediately with a collapsed filter bar and corrected wording", () => {
+    setViewportWidth(600);
 
-    const technicalDetailsToggle = screen.getByTestId("technical-details-toggle");
-    if (technicalDetailsToggle.getAttribute("aria-expanded") !== "true") {
-      fireEvent.click(technicalDetailsToggle);
-    }
+    renderDialog();
 
-    const toolsToggle = screen.getByTestId("tools-card-toggle");
-    if (toolsToggle.getAttribute("aria-expanded") !== "true") {
-      fireEvent.click(toolsToggle);
-    }
-  };
+    expect(screen.getByTestId("diagnostics-header")).toBeVisible();
+    expect(screen.getByTestId("evidence-panel")).toBeVisible();
+    expect(screen.getByTestId("evidence-heading")).toHaveTextContent("1 problem");
+    expect(screen.getByTestId("filters-collapsed-bar")).toBeVisible();
+    expect(screen.queryByText(/in view/i)).toBeNull();
+    expect(screen.queryByTestId("filters-editor-surface")).toBeNull();
+  });
 
-  it("shows logs and filters them by search text", () => {
+  it("opens connection view on tap and connection edit on long press", async () => {
+    setViewportWidth(600);
+    vi.useFakeTimers();
+
+    renderDialog();
+
+    fireEvent.pointerDown(screen.getByTestId("diagnostics-device-line"));
+    fireEvent.pointerUp(screen.getByTestId("diagnostics-device-line"));
+
+    expect(screen.getByTestId("connection-view-surface")).toBeVisible();
+    expect(screen.getByText("c64u")).toBeVisible();
+
+    fireEvent.click(screen.getByTestId("connection-view-edit"));
+    expect(screen.getByTestId("connection-edit-surface")).toBeVisible();
+
+    fireEvent.click(within(screen.getByTestId("connection-edit-surface")).getByRole("button", { name: "Close" }));
+
+    fireEvent.pointerDown(screen.getByTestId("diagnostics-device-line"));
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(screen.getByTestId("connection-edit-surface")).toBeVisible();
+
+    vi.useRealTimers();
+  });
+
+  it("persists connection edits and retries the connection", async () => {
+    setViewportWidth(600);
+    const onRetryConnection = vi.fn();
+
+    renderDialog({ onRetryConnection });
+
+    fireEvent.contextMenu(screen.getByTestId("diagnostics-device-line"));
+
+    fireEvent.change(screen.getByTestId("connection-edit-host"), { target: { value: "ultimate.local" } });
+    fireEvent.change(screen.getByTestId("connection-edit-http"), { target: { value: "8081" } });
+    fireEvent.change(screen.getByTestId("connection-edit-ftp"), { target: { value: "2121" } });
+    fireEvent.click(screen.getByTestId("connection-edit-save"));
+
+    await waitFor(() => {
+      expect(onRetryConnection).toHaveBeenCalledTimes(1);
+    });
+
+    expect(localStorage.getItem("c64u_device_host")).toBe("ultimate.local:8081");
+    expect(localStorage.getItem("c64u_ftp_port")).toBe("2121");
+  });
+
+  it("keeps filter configuration separate from filter visibility", () => {
+    setViewportWidth(600);
+
+    renderDialog();
+
+    fireEvent.click(screen.getByTestId("open-filters-editor"));
+
+    expect(screen.getByTestId("filters-editor-surface")).toBeVisible();
+    fireEvent.click(screen.getByLabelText("Logs"));
+    fireEvent.click(screen.getByLabelText("Problems"));
+
+    expect(screen.getByTestId("evidence-tab-problems")).toHaveClass("opacity-45");
+    expect(screen.getByTestId("evidence-heading")).toHaveTextContent("1 action");
+    expect(screen.getByTestId("filters-collapsed-bar")).toHaveTextContent("Actions");
+  });
+
+  it("opens latency and history screens without descriptive copy and closes them when the sheet closes", async () => {
+    setViewportWidth(600);
+    const { rerender } = renderDialog({ healthState: unhealthyHealthState });
+
+    fireEvent.click(screen.getByTestId("open-latency-screen"));
+    expect(screen.getByTestId("latency-analysis-popup")).toBeVisible();
+    expect(screen.queryByText(/Purpose:/i)).toBeNull();
+    expect(screen.queryByText(/Interpretation:/i)).toBeNull();
+
+    fireEvent.click(screen.getByTestId("analytic-popup-close"));
+    fireEvent.click(screen.getByTestId("open-timeline-screen"));
+    expect(screen.getByTestId("health-history-popup")).toBeVisible();
+
+    rerender(
+      <DisplayProfileProvider>
+        <DiagnosticsDialog {...defaultProps} open={false} />
+      </DisplayProfileProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("health-history-popup")).toBeNull();
+    });
+  });
+
+  it("shares only the filtered evidence set", () => {
+    setViewportWidth(600);
     const onShareFiltered = vi.fn();
-    renderDialog({
-      // activate Logs type from the start
-      defaultEvidenceTypes: new Set(["Logs"]),
-      logs: [
-        { id: "log-1", level: "info", message: "Ready", timestamp: "2024-01-01T00:00:00.000Z" },
-        { id: "log-2", level: "warn", message: "Ignored", timestamp: "2024-01-01T00:00:01.000Z" },
-      ],
-      onShareFiltered,
-    });
 
-    openToolsView();
+    renderDialog({ onShareFiltered });
 
-    // Both entries visible initially
-    expect(screen.getByTestId("log-log-1")).toBeInTheDocument();
-    expect(screen.getByTestId("log-log-2")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("open-filters-editor"));
+    fireEvent.click(screen.getByLabelText("Logs"));
+    fireEvent.click(screen.getByLabelText("Problems"));
+    fireEvent.click(screen.getByLabelText("Actions"));
 
-    // Type in filter — only matching entry remains
-    fireEvent.change(screen.getByTestId("diagnostics-filter-input"), { target: { value: "ready" } });
-    expect(screen.getByTestId("log-log-1")).toBeInTheDocument();
-    expect(screen.queryByTestId("log-log-2")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("diagnostics-share-filtered"));
 
-    // Clear filter
-    fireEvent.click(screen.getByRole("button", { name: /clear filter/i }));
-    expect(screen.getByTestId("log-log-1")).toBeInTheDocument();
-    expect(screen.getByTestId("log-log-2")).toBeInTheDocument();
-  });
-
-  it("shows action summaries and filters by search text", () => {
-    renderDialog({
-      defaultEvidenceTypes: new Set(["Actions"]),
-      actionSummaries: [
-        {
-          correlationId: "act-1",
-          actionName: "Upload",
-          origin: "user",
-          originalOrigin: "user",
-          outcome: "success",
-          startTimestamp: "2024-01-01T00:00:00.000Z",
-          durationMs: null,
-        },
-        {
-          correlationId: "act-2",
-          actionName: "Ignore",
-          origin: "system",
-          originalOrigin: "system",
-          outcome: "success",
-          startTimestamp: "2024-01-01T00:00:01.000Z",
-          durationMs: 12,
-        },
-      ],
-    });
-
-    openToolsView();
-
-    expect(screen.getByTestId("action-act-1")).toBeInTheDocument();
-    expect(screen.getByTestId("action-act-2")).toBeInTheDocument();
-
-    fireEvent.change(screen.getByTestId("diagnostics-filter-input"), { target: { value: "upload" } });
-    expect(screen.getByTestId("action-act-1")).toBeInTheDocument();
-    expect(screen.queryByTestId("action-act-2")).not.toBeInTheDocument();
-  });
-
-  it("surfaces REST failures as problem entries when Problems filter is active", () => {
-    renderDialog({
-      defaultEvidenceTypes: new Set(["Problems"]),
-      traceEvents: [
-        {
-          id: "rest-fail-1",
-          timestamp: "2024-01-01T00:00:05.000Z",
-          type: "rest-response",
-          data: { method: "GET", path: "/v1/machine", status: 500 },
-        },
-      ],
-    });
-
-    openToolsView();
-
-    // REST failure should appear as a problem entry
-    expect(screen.getByTestId("problem-rest-fail-1")).toBeInTheDocument();
-  });
-
-  it("surfaces FTP failures as problem entries when Problems filter is active", () => {
-    renderDialog({
-      defaultEvidenceTypes: new Set(["Problems"]),
-      traceEvents: [
-        {
-          id: "ftp-fail-1",
-          timestamp: "2024-01-01T00:00:05.000Z",
-          type: "ftp-operation",
-          data: { operation: "STOR", path: "/test.sid", result: "failure" },
-        },
-      ],
-    });
-    openToolsView();
-    expect(screen.getByTestId("problem-ftp-fail-1")).toBeInTheDocument();
-  });
-
-  it("uses the technical health-check controls and shows the last-check shortcut when a result exists", () => {
-    currentDialogProfile = "compact";
-
-    renderDialog({
-      onRunHealthCheck: vi.fn(),
-      lastHealthCheckResult: {
-        runId: "hc-1",
-        startTimestamp: "2024-01-01T00:00:00.000Z",
-        endTimestamp: "2024-01-01T00:00:01.000Z",
-        totalDurationMs: 1000,
-        overallHealth: "Healthy",
-        probes: {
-          REST: { probe: "REST", outcome: "Success", durationMs: 100, reason: null, startMs: 0 },
-          FTP: { probe: "FTP", outcome: "Success", durationMs: 100, reason: null, startMs: 0 },
-          CONFIG: { probe: "CONFIG", outcome: "Success", durationMs: 100, reason: null, startMs: 0 },
-          RASTER: { probe: "RASTER", outcome: "Success", durationMs: 100, reason: null, startMs: 0 },
-          JIFFY: { probe: "JIFFY", outcome: "Success", durationMs: 100, reason: null, startMs: 0 },
-        },
-        latency: { p50: 10, p90: 20, p99: 30 },
-        deviceInfo: null,
-      },
-    });
-
-    openToolsView();
-    expect(screen.getByTestId("technical-run-health-check-button")).toHaveTextContent("Run health check");
-    expect(screen.getByTestId("open-health-check-detail")).toHaveTextContent("Health check detail");
-  });
-
-  it("shows the running health-check label when a check is already in progress", () => {
-    currentDialogProfile = "compact";
-
-    renderDialog({
-      onRunHealthCheck: vi.fn(),
-      healthCheckRunning: true,
-    });
-
-    openToolsView();
-    expect(screen.getByTestId("technical-run-health-check-button")).toHaveTextContent("Running health check…");
-    expect(screen.getByTestId("technical-run-health-check-button")).toBeDisabled();
-    expect(screen.queryByTestId("open-health-check-detail")).not.toBeInTheDocument();
-  });
-
-  it("does not duplicate failed traces as both problem and trace entries", () => {
-    renderDialog({
-      defaultEvidenceTypes: new Set(["Problems", "Traces"]),
-      traceEvents: [
-        {
-          id: "rest-fail-2",
-          timestamp: "2024-01-01T00:00:05.000Z",
-          type: "rest-response",
-          data: { method: "PUT", path: "/v1/config", status: 502 },
-        },
-      ],
-    });
-
-    openToolsView();
-    // Should appear as a problem, not duplicated as a trace
-    expect(screen.getByTestId("problem-rest-fail-2")).toBeInTheDocument();
-    expect(screen.queryByTestId("trace-rest-fail-2")).not.toBeInTheDocument();
-  });
-
-  it("shows contributor badge on problem entries", () => {
-    renderDialog({
-      defaultEvidenceTypes: new Set(["Problems"]),
-      errorLogs: [{ id: "err-app-1", message: "App crash", timestamp: "2024-01-01T00:00:00.000Z" }],
-      traceEvents: [
-        {
-          id: "rest-fail-3",
-          timestamp: "2024-01-01T00:00:05.000Z",
-          type: "rest-response",
-          data: { method: "GET", path: "/v1/info", status: 503 },
-        },
-      ],
-    });
-
-    openToolsView();
-    const appProblem = screen.getByTestId("problem-err-app-1");
-    expect(appProblem.textContent).toContain("App");
-
-    const restProblem = screen.getByTestId("problem-rest-fail-3");
-    expect(restProblem.textContent).toContain("REST");
-  });
-
-  it("filters traces by indicator — excludes traces whose contributor does not match", () => {
-    currentDialogProfile = "expanded";
-    // We need to open the dialog with Traces active and set an indicatorFilter.
-    // The indicator filter is controlled via the contributor rows in the health summary.
-    // We test that with Traces active, a REST-type trace survives while an FTP-type trace is excluded
-    // when the REST indicator row is clicked.
-    renderDialog({
-      defaultEvidenceTypes: new Set(["Traces"]),
-      traceEvents: [
-        {
-          id: "trace-rest-1",
-          timestamp: "2024-01-01T00:00:01.000Z",
-          title: "REST request",
-          type: "rest-request",
-        },
-        {
-          id: "trace-ftp-1",
-          timestamp: "2024-01-01T00:00:02.000Z",
-          title: "FTP operation",
-          type: "ftp-operation",
-          data: { operation: "STOR", path: "/test.sid", result: "success" },
-        },
-        {
-          id: "trace-unknown-1",
-          timestamp: "2024-01-01T00:00:03.000Z",
-          title: "Unknown trace",
-          type: "action-start",
-        },
-      ],
-    });
-
-    openToolsView();
-    // All three visible initially (no indicator filter)
-    expect(screen.getByTestId("trace-trace-rest-1")).toBeInTheDocument();
-    expect(screen.getByTestId("trace-trace-ftp-1")).toBeInTheDocument();
-    expect(screen.getByTestId("trace-trace-unknown-1")).toBeInTheDocument();
-    // Click the REST contributor row to set indicatorFilter = "REST"
-    fireEvent.click(screen.getByTestId("contributor-row-rest"));
-
-    // REST trace stays; FTP trace and unknown-contributor trace are filtered out
-    expect(screen.getByTestId("trace-trace-rest-1")).toBeInTheDocument();
-    expect(screen.queryByTestId("trace-trace-ftp-1")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("trace-trace-unknown-1")).not.toBeInTheDocument();
-  });
-
-  it("filters problem entries from trace events by origin when one origin filter is active", () => {
-    renderDialog({
-      defaultEvidenceTypes: new Set(["Problems"]),
-      traceEvents: [
-        {
-          id: "rest-fail-user",
-          timestamp: "2024-01-01T00:00:01.000Z",
-          type: "rest-response",
-          origin: "user",
-          data: { method: "GET", path: "/v1/info", status: 500 },
-        },
-        {
-          id: "rest-fail-system",
-          timestamp: "2024-01-01T00:00:02.000Z",
-          type: "rest-response",
-          origin: "system",
-          data: { method: "GET", path: "/v1/config", status: 500 },
-        },
-      ],
-    });
-
-    openToolsView();
-    // Both problem entries visible initially
-    expect(screen.getByTestId("problem-rest-fail-user")).toBeInTheDocument();
-    expect(screen.getByTestId("problem-rest-fail-system")).toBeInTheDocument();
-
-    // Open Refine (medium profile) and activate System origin filter only
-    fireEvent.click(screen.getByTestId("refine-button"));
-    fireEvent.click(screen.getByTestId("origin-toggle-system"));
-
-    // Only system-origin problem remains
-    expect(screen.queryByTestId("problem-rest-fail-user")).not.toBeInTheDocument();
-    expect(screen.getByTestId("problem-rest-fail-system")).toBeInTheDocument();
-  });
-
-  it("filters action summaries by origin when one origin filter is active", () => {
-    renderDialog({
-      defaultEvidenceTypes: new Set(["Actions"]),
-      actionSummaries: [
-        {
-          correlationId: "act-user",
-          actionName: "UserAction",
-          origin: "user",
-          originalOrigin: "user",
-          outcome: "success",
-          startTimestamp: "2024-01-01T00:00:01.000Z",
-          durationMs: null,
-        },
-        {
-          correlationId: "act-system",
-          actionName: "SystemAction",
-          origin: "system",
-          originalOrigin: "system",
-          outcome: "success",
-          startTimestamp: "2024-01-01T00:00:02.000Z",
-          durationMs: null,
-        },
-      ],
-    });
-
-    openToolsView();
-    // Both actions visible initially
-    expect(screen.getByTestId("action-act-user")).toBeInTheDocument();
-    expect(screen.getByTestId("action-act-system")).toBeInTheDocument();
-
-    // Activate User origin filter only
-    fireEvent.click(screen.getByTestId("refine-button"));
-    fireEvent.click(screen.getByTestId("origin-toggle-user"));
-
-    // Only user-origin action remains
-    expect(screen.getByTestId("action-act-user")).toBeInTheDocument();
-    expect(screen.queryByTestId("action-act-system")).not.toBeInTheDocument();
-  });
-
-  it("filters traces by origin when one origin filter is active", () => {
-    renderDialog({
-      defaultEvidenceTypes: new Set(["Traces"]),
-      traceEvents: [
-        {
-          id: "trace-user-1",
-          timestamp: "2024-01-01T00:00:01.000Z",
-          title: "User trace",
-          type: "rest-request",
-          origin: "user",
-        },
-        {
-          id: "trace-system-1",
-          timestamp: "2024-01-01T00:00:02.000Z",
-          title: "System trace",
-          type: "rest-request",
-          origin: "system",
-        },
-      ],
-    });
-
-    openToolsView();
-    // Both visible initially
-    expect(screen.getByTestId("trace-trace-user-1")).toBeInTheDocument();
-    expect(screen.getByTestId("trace-trace-system-1")).toBeInTheDocument();
-
-    // Open Refine panel and click User origin filter
-    fireEvent.click(screen.getByTestId("refine-button"));
-    fireEvent.click(screen.getByTestId("origin-toggle-user"));
-
-    // Only user-origin trace remains
-    expect(screen.getByTestId("trace-trace-user-1")).toBeInTheDocument();
-    expect(screen.queryByTestId("trace-trace-system-1")).not.toBeInTheDocument();
-  });
-
-  it("reveals the issue card from the compact unhealthy summary after disclosure", () => {
-    currentDialogProfile = "compact";
-    renderDialog({
-      healthState: primaryProblemHealthState,
-      defaultEvidenceTypes: new Set(["Actions"]),
-      errorLogs: [
-        {
-          id: "problem-1",
-          message: "GET /v1/info failed",
-          timestamp: new Date(Date.now() - 1000).toISOString(),
-        },
-      ],
-    });
-
-    fireEvent.click(screen.getByTestId("show-details-button"));
-
-    expect(screen.getByTestId("issue-card")).toBeInTheDocument();
-  });
-
-  it("keeps problem entries visible after disclosure when problems are already active", () => {
-    currentDialogProfile = "medium";
-    renderDialog({
-      healthState: primaryProblemHealthState,
-      defaultEvidenceTypes: new Set(["Problems"]),
-      errorLogs: [
-        {
-          id: "problem-1",
-          message: "GET /v1/info failed",
-          timestamp: new Date(Date.now() - 1000).toISOString(),
-        },
-      ],
-    });
-
-    openToolsView();
-
-    expect(screen.getByTestId("problem-problem-1")).toBeInTheDocument();
-  });
-
-  it("invokes share-all, share-filtered, and clear-all actions", async () => {
-    const onShareAll = vi.fn();
-    const onShareFiltered = vi.fn();
-    const onClearAll = vi.fn();
-    renderDialog({
-      defaultEvidenceTypes: new Set(["Problems"]),
-      errorLogs: [{ id: "err-1", message: "Broken export", timestamp: "2024-01-01T00:00:00.000Z" }],
-      onShareAll,
-      onShareFiltered,
-      onClearAll,
-    });
-
-    openToolsView();
-    const dialog = screen.getByRole("dialog");
-    fireEvent.click(within(dialog).getByTestId("diagnostics-share-all"));
-    fireEvent.click(within(dialog).getByTestId("diagnostics-share-filtered"));
-    fireEvent.click(within(dialog).getByTestId("diagnostics-tools-menu"));
-    fireEvent.click(screen.getByTestId("diagnostics-clear-all-trigger"));
-    // The confirm button in AlertDialog
-    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: /^clear$/i }));
-
-    expect(onShareAll).toHaveBeenCalled();
-    expect(onShareFiltered).toHaveBeenCalled();
-    expect(onClearAll).toHaveBeenCalled();
+    expect(onShareFiltered).toHaveBeenCalledTimes(1);
+    expect(onShareFiltered.mock.calls[0][0]).toHaveLength(1);
+    expect(onShareFiltered.mock.calls[0][0][0]).toMatchObject({ message: "Configuration updated successfully" });
   });
 });

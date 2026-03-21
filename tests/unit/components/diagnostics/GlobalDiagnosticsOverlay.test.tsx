@@ -116,7 +116,7 @@ vi.mock("@/hooks/useHealthState", () => ({
 vi.mock("@/lib/diagnostics/diagnosticsOverlayState", () => ({
   setDiagnosticsOverlayActive: vi.fn(),
   withDiagnosticsTraceOverride: (fn: () => unknown) => fn(),
-  subscribeDiagnosticsSuppression: () => () => {},
+  subscribeDiagnosticsSuppression: () => () => { },
   isDiagnosticsOverlaySuppressionArmed: () => false,
 }));
 
@@ -147,15 +147,8 @@ const renderOverlay = (initialPath = "/") =>
     </MemoryRouter>,
   );
 
-const expandDiagnosticsTools = () => {
-  fireEvent.click(screen.getByTestId("show-details-button"));
-  fireEvent.click(screen.getByTestId("technical-details-toggle"));
-  fireEvent.click(screen.getByTestId("tools-card-toggle"));
-};
-
-const expandTechnicalDetails = () => {
-  fireEvent.click(screen.getByTestId("show-details-button"));
-  fireEvent.click(screen.getByTestId("technical-details-toggle"));
+const expandDiagnosticsHeader = () => {
+  fireEvent.click(screen.getByTestId("diagnostics-header-toggle"));
 };
 
 describe("GlobalDiagnosticsOverlay", () => {
@@ -175,7 +168,6 @@ describe("GlobalDiagnosticsOverlay", () => {
     renderOverlay();
 
     const dialog = await screen.findByRole("dialog");
-    expandDiagnosticsTools();
     expect(within(dialog).getByRole("button", { name: /^share all$/i })).toBeInTheDocument();
 
     fireEvent.click(within(dialog).getByRole("button", { name: /^share all$/i }));
@@ -196,7 +188,6 @@ describe("GlobalDiagnosticsOverlay", () => {
     renderOverlay();
 
     const dialog = await screen.findByRole("dialog");
-    expandDiagnosticsTools();
     fireEvent.click(within(dialog).getByRole("button", { name: /^share all$/i }));
 
     await waitFor(() => {
@@ -264,8 +255,8 @@ describe("GlobalDiagnosticsOverlay", () => {
     renderOverlay();
 
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
-    expandTechnicalDetails();
-    expect(screen.getByTestId("open-health-check-detail")).toBeInTheDocument();
+    expandDiagnosticsHeader();
+    expect(screen.getByTestId("diagnostics-header-expanded")).toHaveTextContent("P50 10ms");
 
     await act(async () => {
       window.dispatchEvent(
@@ -280,9 +271,9 @@ describe("GlobalDiagnosticsOverlay", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByTestId("technical-run-health-check-button")).toHaveTextContent("Running health check…");
+      expect(screen.getByTestId("run-health-check")).toHaveTextContent("Running health check");
     });
-    expect(screen.queryByTestId("open-health-check-detail")).not.toBeInTheDocument();
+    expect(screen.getByTestId("run-health-check")).toBeDisabled();
   });
 
   it("ignores runtime diagnostics open requests without a preset", async () => {

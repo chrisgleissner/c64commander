@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v3.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -92,13 +100,12 @@ describe("HealthHistoryPopup", () => {
 
     const overlay = screen.getByTestId("health-history-selection-overlay");
     expect(overlay).toBeInTheDocument();
-    expect(within(overlay).getByText("Segment detail")).toBeInTheDocument();
     expect(within(overlay).getByText("Unhealthy")).toBeInTheDocument();
     expect(within(overlay).getByTestId("health-history-selection-reason")).toHaveTextContent("REST timeout");
-    expect(within(overlay).getByTestId("health-history-selection-error")).toHaveTextContent("REST timeout");
+    expect(within(overlay).getByTestId("health-history-selection-subsystem")).toHaveTextContent("REST");
   });
 
-  it("shows aggregated interval metadata when a compressed mixed-state column is tapped", () => {
+  it("shows the worst event when a compressed mixed-state column is tapped", () => {
     vi.mocked(getHealthHistory).mockReturnValue([
       makeEntry(60, "Healthy"),
       makeEntry(40, "Idle"),
@@ -125,23 +132,8 @@ describe("HealthHistoryPopup", () => {
     fireEvent.click(segment!);
 
     const overlay = screen.getByTestId("health-history-selection-overlay");
-    expect(within(overlay).getByText("Aggregated interval")).toBeInTheDocument();
-    expect(within(overlay).getByText(/Worst state/i)).toBeInTheDocument();
-    expect(within(overlay).getByText(/^Events$/i, { selector: "p" })).toBeInTheDocument();
-  });
-
-  it("renders a color-only legend with no glyph text", () => {
-    vi.mocked(getHealthHistory).mockReturnValue([makeEntry(60, "Healthy"), makeEntry(20, "Degraded")]);
-
-    render(<HealthHistoryPopup open={true} onClose={vi.fn()} />);
-
-    const legend = screen.getByTestId("health-history-legend");
-    expect(legend).toHaveTextContent("Healthy");
-    expect(legend).toHaveTextContent("Degraded");
-    expect(legend).toHaveTextContent("Unhealthy");
-    expect(legend).not.toHaveTextContent("●");
-    expect(legend).not.toHaveTextContent("▲");
-    expect(legend).not.toHaveTextContent("◆");
+    expect(within(overlay).getByText(/Cause/i)).toBeInTheDocument();
+    expect(within(overlay).getByText(/Subsystem/i)).toBeInTheDocument();
   });
 
   it("shows the empty state when no health history is available", () => {
@@ -149,8 +141,7 @@ describe("HealthHistoryPopup", () => {
 
     render(<HealthHistoryPopup open={true} onClose={vi.fn()} />);
 
-    expect(screen.getByText("No health check history yet.")).toBeInTheDocument();
-    expect(screen.getByText("Run a health check to start recording history.")).toBeInTheDocument();
+    expect(screen.getByText("No data")).toBeInTheDocument();
     expect(screen.queryByTestId("health-history-track")).not.toBeInTheDocument();
   });
 
@@ -160,10 +151,10 @@ describe("HealthHistoryPopup", () => {
 
     render(<HealthHistoryPopup open={true} onClose={vi.fn()} />);
 
-    expect(screen.getByText(/Visible window 4h/i)).toBeInTheDocument();
+    expect(screen.getByText("4h")).toBeInTheDocument();
     fireEvent.click(screen.getByTestId("health-history-zoom-in"));
-    expect(screen.getByText(/Visible window 2h/i)).toBeInTheDocument();
+    expect(screen.getByText("2h")).toBeInTheDocument();
     fireEvent.click(screen.getByTestId("health-history-zoom-out"));
-    expect(screen.getByText(/Visible window 4h/i)).toBeInTheDocument();
+    expect(screen.getByText("4h")).toBeInTheDocument();
   });
 });

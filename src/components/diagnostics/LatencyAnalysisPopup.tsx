@@ -6,15 +6,10 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-// §12 — Latency analysis nested analytic popup.
-// Shows P50/P90/P99 over time with checkbox-based scope filters.
-
 import { AnalyticPopup } from "@/components/diagnostics/AnalyticPopup";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
+import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import {
-  classifyEndpoint,
   computeLatencyPercentiles,
   getLatencySamples,
   type EndpointClass,
@@ -22,12 +17,11 @@ import {
   type TransportFamily,
 } from "@/lib/diagnostics/latencyTracker";
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { useCallback, useMemo, useState } from "react";
-import { cn } from "@/lib/utils";
+import { useMemo, useState } from "react";
 import { formatDiagnosticsTimestamp } from "@/lib/diagnostics/timeFormat";
-import { BarChart2 } from "lucide-react";
+import { BarChart2, Filter } from "lucide-react";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
 
-// §12.7 — Checkbox order per spec
 const TRANSPORT_FAMILIES: TransportFamily[] = ["REST", "FTP"];
 const ENDPOINT_CLASSES: EndpointClass[] = [
   "Info",
@@ -92,29 +86,151 @@ const buildTimePoints = (samples: Readonly<LatencySample[]>): TimePoint[] => {
   return result;
 };
 
-type CheckboxRowProps = {
-  id: string;
+type FilterToggleProps = {
   label: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
-  disabled?: boolean;
-  indent?: boolean;
 };
 
-const CheckboxRow = ({ id, label, checked, onChange, disabled, indent }: CheckboxRowProps) => (
-  <div className={cn("flex items-center gap-2", indent && "ml-4")}>
-    <Checkbox
-      id={id}
-      checked={checked}
-      onCheckedChange={(v) => onChange(Boolean(v))}
-      disabled={disabled}
-      className="h-3.5 w-3.5"
-    />
-    <Label htmlFor={id} className="text-xs cursor-pointer select-none">
-      {label}
-    </Label>
+const FilterToggle = ({ label, checked, onChange }: FilterToggleProps) => (
+  <label className="flex items-center gap-2 text-sm">
+    <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} className="h-4 w-4" />
+    <span>{label}</span>
+  </label>
+);
+
+const FilterChip = ({ label }: { label: string }) => (
+  <span className="rounded-full border border-border/70 bg-background px-2 py-0.5 text-[11px] font-medium leading-5">
+    {label}
+  </span>
+);
+
+const SurfaceHeader = ({ title, onClose }: { title: string; onClose: () => void }) => (
+  <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+    <h2 className="text-base font-semibold">{title}</h2>
+    <Button type="button" size="sm" variant="ghost" onClick={onClose}>
+      Close
+    </Button>
   </div>
 );
+
+const endpointTransport = (endpoint: EndpointClass): TransportFamily =>
+  endpoint === "FTP list" || endpoint === "FTP read" ? "FTP" : "REST";
+
+const FilterEditorSurface = ({
+  open,
+  onOpenChange,
+  compact,
+  filters,
+  onFiltersChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  compact: boolean;
+  filters: FilterState;
+  onFiltersChange: (filters: FilterState) => void;
+}) => {
+  const contentClassName = compact
+    ? "fixed inset-x-0 bottom-0 top-[12dvh] z-[62] flex flex-col overflow-hidden rounded-t-[28px] border border-b-0 bg-background shadow-2xl"
+    : "fixed bottom-4 right-4 top-4 z-[62] flex w-[24rem] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-[28px] border bg-background shadow-2xl";
+
+  const updateTransports = (transport: TransportFamily, checked: boolean) => {
+    const transports = new Set(filters.transports);
+    if (checked) {
+      transports.add(transport);
+    } else {
+      transports.delete(transport);
+    }
+
+    const endpoints = new Set(
+      [...filters.endpoints].filter((endpoint) => transport !== endpointTransport(endpoint) || checked),
+    );
+
+    onFiltersChange({
+      allCallTypes: false,
+      transports,
+      endpoints,
+    });
+  };
+
+  const updateEndpoints = (endpoint: EndpointClass, checked: boolean) => {
+    const endpoints = new Set(filters.endpoints);
+    if (checked) {
+      endpoints.add(endpoint);
+    } else {
+      endpoints.delete(endpoint);
+    }
+
+    onFiltersChange({
+      allCallTypes: false,
+      transports: new Set(filters.transports),
+      endpoints,
+    });
+  };
+
+  return (
+    <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className="fixed inset-0 z-[61] bg-black/70" />
+        <DialogPrimitive.Content className={contentClassName} data-testid="latency-filters-editor">
+          <DialogPrimitive.Title className="sr-only">Latency filters</DialogPrimitive.Title>
+          <DialogPrimitive.Description className="sr-only">
+            Filter latency samples by transport and endpoint class.
+          </DialogPrimitive.Description>
+          <SurfaceHeader title="Latency filters" onClose={() => onOpenChange(false)} />
+          <div className="flex-1 overflow-y-auto px-4 py-4">
+            <div className="space-y-5">
+              <section className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Scope</p>
+                <FilterToggle
+                  label="All call types"
+                  checked={filters.allCallTypes}
+                  onChange={(checked) => {
+                    if (checked) {
+                      onFiltersChange(defaultFilters());
+                      return;
+                    }
+                    onFiltersChange({ ...filters, allCallTypes: false });
+                  }}
+                />
+              </section>
+
+              <section className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Transport</p>
+                {TRANSPORT_FAMILIES.map((transport) => (
+                  <FilterToggle
+                    key={transport}
+                    label={transport}
+                    checked={filters.allCallTypes || filters.transports.has(transport)}
+                    onChange={(checked) => updateTransports(transport, checked)}
+                  />
+                ))}
+              </section>
+
+              <section className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Endpoint</p>
+                {ENDPOINT_CLASSES.map((endpoint) => (
+                  <FilterToggle
+                    key={endpoint}
+                    label={endpoint}
+                    checked={filters.allCallTypes || filters.endpoints.has(endpoint)}
+                    onChange={(checked) => updateEndpoints(endpoint, checked)}
+                  />
+                ))}
+              </section>
+
+              <div className="flex items-center gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => onFiltersChange(defaultFilters())}>
+                  Reset
+                </Button>
+              </div>
+            </div>
+          </div>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
+  );
+};
 
 type Props = {
   open: boolean;
@@ -122,58 +238,17 @@ type Props = {
 };
 
 export function LatencyAnalysisPopup({ open, onClose }: Props) {
+  const { profile } = useDisplayProfile();
   const [filters, setFilters] = useState<FilterState>(defaultFilters);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
-  const applyFilters = useCallback((update: Partial<FilterState>) => {
-    setFilters((prev) => ({ ...prev, ...update }));
-  }, []);
+  const resetFilters = () => setFilters(defaultFilters());
 
-  const handleAllCallTypes = useCallback(
-    (checked: boolean) => {
-      if (!checked) {
-        // Must keep at least one — keep all families enabled instead
-        applyFilters({ allCallTypes: false, transports: new Set(TRANSPORT_FAMILIES), endpoints: new Set() });
-        return;
-      }
-      applyFilters({ allCallTypes: true, transports: new Set(), endpoints: new Set() });
-    },
-    [applyFilters],
-  );
+  const activeFilterLabels = useMemo(() => {
+    if (filters.allCallTypes) return [] as string[];
+    return [...Array.from(filters.transports.values()), ...Array.from(filters.endpoints.values())];
+  }, [filters]);
 
-  const handleTransportToggle = useCallback((family: TransportFamily, checked: boolean) => {
-    setFilters((prev) => {
-      const next = new Set(prev.transports);
-      if (checked) {
-        next.add(family);
-      } else {
-        next.delete(family);
-        // §12.8 — prevent unchecking last transport when allCallTypes is off
-        if (!prev.allCallTypes && next.size === 0 && prev.endpoints.size === 0) {
-          return prev; // disallow
-        }
-      }
-      return { ...prev, allCallTypes: false, transports: next };
-    });
-  }, []);
-
-  const handleEndpointToggle = useCallback((ep: EndpointClass, checked: boolean) => {
-    setFilters((prev) => {
-      const next = new Set(prev.endpoints);
-      if (checked) {
-        next.add(ep);
-      } else {
-        next.delete(ep);
-        if (!prev.allCallTypes && prev.transports.size === 0 && next.size === 0) {
-          return prev; // disallow last uncheck
-        }
-      }
-      return { ...prev, allCallTypes: false, endpoints: next };
-    });
-  }, []);
-
-  const resetFilters = useCallback(() => setFilters(defaultFilters()), []);
-
-  // Build filtered samples
   const filteredSamples = useMemo(() => {
     if (filters.allCallTypes) return getLatencySamples();
     const options: Parameters<typeof getLatencySamples>[0] = {};
@@ -194,125 +269,75 @@ export function LatencyAnalysisPopup({ open, onClose }: Props) {
 
   const isEmpty = filteredSamples.length === 0;
 
-  // §12.6 — Is a given transport implied by checked endpoints
-  const isTransportChecked = (t: TransportFamily) => {
-    if (filters.allCallTypes) return true;
-    if (filters.transports.has(t)) return true;
-    // endpoint implies its parent transport
-    if (t === "REST") {
-      return (
-        filters.endpoints.has("Info") ||
-        filters.endpoints.has("Configs (full tree)") ||
-        filters.endpoints.has("Config items") ||
-        filters.endpoints.has("Drives") ||
-        filters.endpoints.has("Machine control")
-      );
-    }
-    return filters.endpoints.has("FTP list") || filters.endpoints.has("FTP read");
-  };
-
   return (
-    <AnalyticPopup
-      open={open}
-      onClose={onClose}
-      title="Latency analysis"
-      description="Request latency over time for the current diagnostics session."
-      contentClassName={isEmpty ? "h-auto max-h-[min(72dvh,38rem)]" : undefined}
-      data-testid="latency-analysis-popup"
-    >
-      <div className="flex flex-1 min-h-0 flex-col sm:flex-row">
-        {/* §12.7 — Filter panel */}
-        <aside className="shrink-0 border-b sm:border-b-0 sm:border-r border-border p-3 space-y-2 sm:w-44 sm:overflow-y-auto">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Filters</p>
-          <CheckboxRow
-            id="filter-all"
-            label="All call types"
-            checked={filters.allCallTypes}
-            onChange={handleAllCallTypes}
-          />
-          <div className="border-t border-border pt-1.5 space-y-1.5">
-            {TRANSPORT_FAMILIES.map((t) => (
-              <CheckboxRow
-                key={t}
-                id={`filter-transport-${t}`}
-                label={t}
-                checked={isTransportChecked(t)}
-                onChange={(c) => handleTransportToggle(t, c)}
-                disabled={filters.allCallTypes}
-                indent
-              />
-            ))}
-          </div>
-          <div className="border-t border-border pt-1.5 space-y-1.5">
-            {ENDPOINT_CLASSES.map((ep) => (
-              <CheckboxRow
-                key={ep}
-                id={`filter-ep-${ep}`}
-                label={ep}
-                checked={
-                  filters.allCallTypes ||
-                  filters.endpoints.has(ep) ||
-                  (ep.startsWith("FTP")
-                    ? filters.transports.has("FTP")
-                    : ["Info", "Configs (full tree)", "Config items", "Drives", "Machine control"].includes(ep)
-                      ? filters.transports.has("REST")
-                      : false)
-                }
-                onChange={(c) => handleEndpointToggle(ep, c)}
-                disabled={filters.allCallTypes}
-                indent
-              />
-            ))}
-          </div>
-          {!filters.allCallTypes && (
-            <Button size="sm" variant="ghost" onClick={resetFilters} className="w-full text-xs">
-              Reset filters
+    <>
+      <AnalyticPopup
+        open={open}
+        onClose={onClose}
+        title="Latency"
+        contentClassName={isEmpty ? "h-auto max-h-[min(72dvh,38rem)]" : undefined}
+        data-testid="latency-analysis-popup"
+      >
+        <div className="flex min-h-0 flex-1 flex-col p-4">
+          <div
+            className="flex items-center gap-2 overflow-hidden rounded-full border border-border/70 bg-card px-3 py-2 text-xs"
+            data-testid="latency-filter-bar"
+          >
+            <span className="shrink-0 font-semibold text-foreground">Filters</span>
+            <span className="shrink-0 text-muted-foreground">·</span>
+            <span className="shrink-0 text-muted-foreground" data-testid="latency-sample-count">
+              {summary.sampleCount} sample{summary.sampleCount === 1 ? "" : "s"}
+            </span>
+            <div className="min-w-0 flex-1 overflow-hidden whitespace-nowrap">
+              <div className="flex items-center gap-1 overflow-hidden">
+                {activeFilterLabels.length === 0 ? <FilterChip label="All call types" /> : null}
+                {activeFilterLabels.slice(0, 2).map((label) => (
+                  <FilterChip key={label} label={label} />
+                ))}
+                {activeFilterLabels.length > 2 ? <FilterChip label={`+${activeFilterLabels.length - 2}`} /> : null}
+              </div>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0"
+              onClick={() => setFiltersOpen(true)}
+              data-testid="open-latency-filters"
+            >
+              <Filter className="h-4 w-4" />
             </Button>
-          )}
-        </aside>
-
-        {/* Chart area */}
-        <div className="flex flex-1 min-h-0 flex-col p-3">
-          <div className="mb-3 space-y-1 rounded-lg border border-border/60 bg-background/70 p-3 text-xs">
-            <p className="font-medium text-foreground">
-              Purpose: Shows request latency over time for the active diagnostics scope.
-            </p>
-            <p className="text-muted-foreground">
-              Interpretation: Higher percentiles indicate slower or less predictable request performance.
-            </p>
           </div>
-          {/* Summary row */}
-          <div className="flex items-center gap-4 mb-3 shrink-0">
-            <div className="text-xs">
-              <span className="text-muted-foreground">P50 </span>
-              <span className="font-mono font-semibold">{summary.p50}ms</span>
+
+          <div
+            className="mt-3 grid grid-cols-2 gap-3 rounded-2xl border border-border/70 bg-card p-3 text-sm sm:grid-cols-4"
+            data-testid="latency-summary-metrics"
+          >
+            <div>
+              <p className="text-xs text-muted-foreground">P50</p>
+              <p className="font-mono font-semibold">{summary.p50}ms</p>
             </div>
-            <div className="text-xs">
-              <span className="text-muted-foreground">P90 </span>
-              <span className="font-mono font-semibold">{summary.p90}ms</span>
+            <div>
+              <p className="text-xs text-muted-foreground">P90</p>
+              <p className="font-mono font-semibold">{summary.p90}ms</p>
             </div>
-            <div className="text-xs">
-              <span className="text-muted-foreground">P99 </span>
-              <span className="font-mono font-semibold">{summary.p99}ms</span>
+            <div>
+              <p className="text-xs text-muted-foreground">P99</p>
+              <p className="font-mono font-semibold">{summary.p99}ms</p>
             </div>
-            <div className="text-xs text-muted-foreground ml-auto">
-              {summary.sampleCount} sample{summary.sampleCount !== 1 ? "s" : ""}
+            <div>
+              <p className="text-xs text-muted-foreground">Samples</p>
+              <p className="font-mono font-semibold">{summary.sampleCount}</p>
             </div>
           </div>
 
-          {/* §12.10 — Empty state */}
           {isEmpty ? (
-            <div className="flex flex-1 items-center justify-center py-2">
+            <div className="flex flex-1 items-center justify-center py-4">
               <div className="flex min-h-40 w-full max-w-xl flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border/70 bg-muted/15 px-5 py-6 text-center">
                 <BarChart2 className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
                 <div className="space-y-1">
                   <p className="text-sm font-medium text-foreground">
                     {filters.allCallTypes ? "No latency samples yet" : "No latency samples match these filters"}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {filters.allCallTypes
-                      ? "Run a health check or keep using the app to populate the chart."
-                      : "Widen the selected call types to bring latency history back into view."}
                   </p>
                 </div>
                 {!filters.allCallTypes && (
@@ -323,84 +348,95 @@ export function LatencyAnalysisPopup({ open, onClose }: Props) {
               </div>
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height={240}>
-              <LineChart data={timePoints} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
-                <XAxis
-                  dataKey="time"
-                  tickFormatter={(v: string) => {
-                    const d = new Date(v);
-                    return `${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
-                  }}
-                  tick={{ fontSize: 10 }}
-                  className="text-muted-foreground"
-                />
-                <YAxis unit="ms" tick={{ fontSize: 10 }} width={48} className="text-muted-foreground" />
-                <Tooltip
-                  content={({ active, payload, label }) => {
-                    if (!active || !payload?.length) return null;
-                    return (
-                      <div className="rounded border bg-popover px-2 py-1.5 text-xs shadow-md">
-                        <p className="font-medium mb-1">
-                          {typeof label === "string" ? formatDiagnosticsTimestamp(label) : label}
-                        </p>
-                        {payload.map((p) => (
-                          <p key={p.name} style={{ color: p.color }}>
-                            {p.name}: {p.value ?? "—"}ms
+            <div
+              className="mt-3 min-h-0 flex-1 rounded-2xl border border-border/70 bg-card p-3"
+              data-testid="latency-chart-panel"
+            >
+              <ResponsiveContainer width="100%" height={240}>
+                <LineChart data={timePoints} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
+                  <XAxis
+                    dataKey="time"
+                    tickFormatter={(v: string) => {
+                      const d = new Date(v);
+                      return `${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
+                    }}
+                    tick={{ fontSize: 10 }}
+                    className="text-muted-foreground"
+                  />
+                  <YAxis unit="ms" tick={{ fontSize: 10 }} width={48} className="text-muted-foreground" />
+                  <Tooltip
+                    content={({ active, payload, label }) => {
+                      if (!active || !payload?.length) return null;
+                      return (
+                        <div className="rounded border bg-popover px-2 py-1.5 text-xs shadow-md">
+                          <p className="mb-1 font-medium">
+                            {typeof label === "string" ? formatDiagnosticsTimestamp(label) : label}
                           </p>
-                        ))}
-                        {payload[0]?.payload?.count != null && (
-                          <p className="text-muted-foreground mt-1">
-                            {(payload[0].payload as TimePoint).count} samples
-                          </p>
-                        )}
-                      </div>
-                    );
-                  }}
-                />
-                {/* §12.5 — Distinct stroke patterns as secondary carriers */}
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Line
-                  type="monotone"
-                  dataKey="p50"
-                  name="P50"
-                  stroke="hsl(var(--primary))"
-                  strokeWidth={2}
-                  dot={false}
-                  connectNulls={false}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="p90"
-                  name="P90"
-                  stroke="hsl(var(--chart-2, 160 60% 45%))"
-                  strokeWidth={2}
-                  strokeDasharray="5 3"
-                  dot={false}
-                  connectNulls={false}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="p99"
-                  name="P99"
-                  stroke="hsl(var(--destructive))"
-                  strokeWidth={2}
-                  strokeDasharray="2 2"
-                  dot={false}
-                  connectNulls={false}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+                          {payload.map((p) => (
+                            <p key={p.name} style={{ color: p.color }}>
+                              {p.name}: {p.value ?? "—"}ms
+                            </p>
+                          ))}
+                          {payload[0]?.payload?.count != null ? (
+                            <p className="mt-1 text-muted-foreground">
+                              {(payload[0].payload as TimePoint).count} samples
+                            </p>
+                          ) : null}
+                        </div>
+                      );
+                    }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Line
+                    type="monotone"
+                    dataKey="p50"
+                    name="P50"
+                    stroke="hsl(var(--primary))"
+                    strokeWidth={2}
+                    dot={false}
+                    connectNulls={false}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="p90"
+                    name="P90"
+                    stroke="hsl(var(--chart-2, 160 60% 45%))"
+                    strokeWidth={2}
+                    strokeDasharray="5 3"
+                    dot={false}
+                    connectNulls={false}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="p99"
+                    name="P99"
+                    stroke="hsl(var(--destructive))"
+                    strokeWidth={2}
+                    strokeDasharray="2 2"
+                    dot={false}
+                    connectNulls={false}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
           )}
 
-          {/* Sparse annotation */}
           {!isEmpty && filteredSamples.length < 5 && (
-            <p className="text-xs text-muted-foreground mt-2 shrink-0">
+            <p className="mt-2 shrink-0 text-xs text-muted-foreground">
               Percentile lines are based on limited samples.
             </p>
           )}
         </div>
-      </div>
-    </AnalyticPopup>
+      </AnalyticPopup>
+
+      <FilterEditorSurface
+        open={open && filtersOpen}
+        onOpenChange={setFiltersOpen}
+        compact={profile !== "expanded"}
+        filters={filters}
+        onFiltersChange={setFilters}
+      />
+    </>
   );
 }
