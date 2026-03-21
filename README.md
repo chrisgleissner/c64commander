@@ -35,7 +35,7 @@ C64 Commander lets you control and manage a C64 Ultimate from Android, iOS, or a
     - [Settings](#settings)
     - [Docs](#docs)
     - [Diagnostics](#diagnostics)
-  - [📱🖥️ Display Profiles](#-display-profiles)
+  - [📱🖥️ Display Profiles](#display-profiles)
   - [🛟 Troubleshooting](#-troubleshooting)
     - [Connectivity](#connectivity)
       - [Can’t reach the device](#cant-reach-the-device)
@@ -262,7 +262,7 @@ Profile-specific screenshots:
 - Screenshots outside `profiles/` folders show the default Standard display documentation profile unless the caption says otherwise.
 - Profile-specific screenshots live under `doc/img/app/<page>/profiles/compact/`, `doc/img/app/<page>/profiles/medium/`, and `doc/img/app/<page>/profiles/expanded/` when the visible layout differs from the default profile.
 
-## 📱🖥️ Display Profiles
+## 📱🖥️ Display Profiles {#display-profiles}
 
 C64 Commander uses **Display Profiles** so the interface remains comfortable to use on a wide range of screens, from small phones to tablets and desktop browsers:
 
