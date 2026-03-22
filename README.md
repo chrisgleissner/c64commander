@@ -240,9 +240,9 @@ Built-in guides for setup, workflows, and practical day-to-day usage.
 
 ### Diagnostics
 
-Diagnostics is the app's troubleshooting workspace.
+Diagnostics are reachable via the C64U connectivity badge at the top right of the screen.
 
-Start with a quick health check, inspect recent activity, narrow the view with filters, verify the active connection, then move into latency and history analysis as needed.
+Start with a quick health check of your Commodore 64 Ultimate, then inspect recent activity, narrow the view with filters, verify the active connection, and finally move into latency and history analysis if needed.
 
 <table>
   <tr>
