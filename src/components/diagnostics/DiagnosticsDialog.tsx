@@ -1180,7 +1180,6 @@ export function DiagnosticsDialog({
                     <div className="absolute bottom-full right-0 z-10 mb-1 min-w-[10rem] rounded-lg border border-border bg-background py-1 shadow-lg">
                       <button
                         type="button"
-                        open-latency-screen
                         className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
                         onClick={() => {
                           setOverflowOpen(false);
