@@ -6,6 +6,7 @@ import {
   ocrContainsHeaderHealthState,
   ocrContainsSystemLabel,
   pickBestHeaderOcrCandidate,
+  resolveTesseractCommand,
   scoreHeaderOcrCandidate,
 } from "../../../src/lib/pageHeaderOcr";
 
@@ -43,5 +44,19 @@ describe("pageHeaderOcr", () => {
     );
 
     expect(best.label).toBe("strong");
+  });
+
+  it("prefers the configured tesseract path when provided", () => {
+    expect(resolveTesseractCommand("/custom/tesseract", () => false)).toBe("/custom/tesseract");
+  });
+
+  it("falls back to a known absolute tesseract path when present", () => {
+    expect(resolveTesseractCommand(undefined, (candidate) => candidate === "/usr/bin/tesseract")).toBe(
+      "/usr/bin/tesseract",
+    );
+  });
+
+  it("falls back to the bare tesseract command when no absolute path exists", () => {
+    expect(resolveTesseractCommand(undefined, () => false)).toBe("tesseract");
   });
 });

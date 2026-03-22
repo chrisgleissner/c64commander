@@ -20,6 +20,7 @@ import {
   ocrContainsHeaderHealthState,
   ocrContainsSystemLabel,
   pickBestHeaderOcrCandidate,
+  resolveTesseractCommand,
   type HeaderOcrCandidate,
 } from "../src/lib/pageHeaderOcr";
 import { seedUiMocks } from "./uiMocks";
@@ -42,6 +43,7 @@ const HEADER_CASES = [
 ] as const;
 
 const artifactRoot = path.resolve("doc/img/app/details/page-headers");
+const tesseractCommand = resolveTesseractCommand();
 
 const waitForPageVisualReady = async (page: Page) => {
   await page.waitForFunction(() => document.readyState === "complete");
@@ -61,7 +63,7 @@ const waitForPageVisualReady = async (page: Page) => {
 };
 
 const readHeaderTextWithOcr = async (headerImagePath: string, pageSegmentationMode: "6" | "7") => {
-  const raw = execFileSync("tesseract", [headerImagePath, "stdout", "--psm", pageSegmentationMode], {
+  const raw = execFileSync(tesseractCommand, [headerImagePath, "stdout", "--psm", pageSegmentationMode], {
     encoding: "utf8",
   });
   return String(raw).trim();

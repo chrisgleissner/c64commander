@@ -1,7 +1,11 @@
+import { existsSync } from "node:fs";
+
 export type HeaderOcrCandidate = {
   label: string;
   text: string;
 };
+
+const DEFAULT_TESSERACT_PATHS = ["/usr/bin/tesseract", "/usr/local/bin/tesseract"];
 
 const normalizeAlphaNumericWhitespace = (value: string) =>
   value
@@ -57,4 +61,15 @@ export const pickBestHeaderOcrCandidate = (candidates: HeaderOcrCandidate[], exp
     if (scoreDelta !== 0) return scoreDelta;
     return normalizeAlphaNumericWhitespace(right.text).length - normalizeAlphaNumericWhitespace(left.text).length;
   })[0];
+};
+
+export const resolveTesseractCommand = (
+  configuredPath = process.env.TESSERACT_PATH,
+  fileExists: (path: string) => boolean = existsSync,
+) => {
+  if (configuredPath && configuredPath.trim().length > 0) {
+    return configuredPath;
+  }
+
+  return DEFAULT_TESSERACT_PATHS.find((candidate) => fileExists(candidate)) ?? "tesseract";
 };
