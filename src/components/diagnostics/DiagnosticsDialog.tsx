@@ -831,7 +831,8 @@ export function DiagnosticsDialog({
   const totalCount = allEntries.length;
   const displayEntries = filteredEntries.slice(0, 8);
   const lastCheckTimestamp = getLastCheckTimestamp(lastHealthCheckResult, healthState);
-  const healthDetailAvailable = headerExpanded || healthCheckRunning || liveHealthCheckProbes !== null || lastHealthCheckResult !== null;
+  const healthDetailAvailable =
+    headerExpanded || healthCheckRunning || liveHealthCheckProbes !== null || lastHealthCheckResult !== null;
   const connectionLabel = `${healthState.connectedDeviceLabel ?? "C64U"} · ${connectionDraft.host}:${connectionDraft.httpPort}`;
   const activeFilterLabels = useMemo(() => {
     const labels: string[] = [];
@@ -981,7 +982,11 @@ export function DiagnosticsDialog({
                     data-testid="diagnostics-header-toggle"
                     aria-expanded={headerExpanded}
                   >
-                    {headerExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                    {headerExpanded ? (
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    ) : (
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    )}
                   </Button>
                 ) : null}
               </div>
@@ -1091,7 +1096,7 @@ export function DiagnosticsDialog({
                   {overflowOpen ? (
                     <div className="absolute bottom-full right-0 z-10 mb-1 min-w-[10rem] rounded-lg border border-border bg-background py-1 shadow-lg">
                       <button
-                        type="button"
+                        type="button"open-latency-screen
                         className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
                         onClick={() => {
                           setOverflowOpen(false);

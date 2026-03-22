@@ -33,3 +33,11 @@ Date: 2026-03-22
   - The active gesture hook in `src/hooks/useSwipeGesture.ts` only starts gestures for primary left-button interactions, which is overly mouse-centric for touch-origin pointer events.
   - The repository has model-level wrap-around tests, but it lacks a regression that proves real touch-origin page transitions work through the runtime app shell.
 - Next step: Relax touch-origin gesture admission without weakening mouse safeguards, then add touch and wrap-around regression tests.
+
+  ## 2026-03-22T01:05:00Z - Step 4 - Diagnostics screenshot evidence plan
+  - Decision: Extend the existing Playwright diagnostics screenshot flow instead of adding a second diagnostics-specific screenshot spec. The current gallery already owns diagnostics overview, header, activity, filters, connection, analysis, and tools coverage.
+  - Findings:
+    - The existing diagnostics screenshot run already seeds deterministic analytics and overlay state, so completed health-check detail can be captured without invoking live network behavior.
+    - The diagnostics test bridge also supports direct overlay-state injection, which makes it possible to capture an in-flight health-check progress view with stable probe states.
+    - The current gallery proves the collapsed activity list, but it does not yet prove expandable-row behavior or the richer header detail now exposed by the diagnostics dialog.
+  - Next step: Add screenshot outputs for expanded activity detail, second-tap collapse, completed health-check detail, and live health-check progress, then refresh the diagnostics screenshot index.

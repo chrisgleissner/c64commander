@@ -11,15 +11,19 @@ This directory holds the current diagnostics overlay screenshots used for docume
 ### Header (`doc/img/app/diagnostics/header/`)
 
 - `01-expanded.png`: expanded health summary header with seeded latency percentiles visible.
+- `02-health-check-detail.png`: completed health-check detail showing REST, FTP, CONFIG, RASTER, and JIFFY outcomes with latency and overall result.
+- `03-health-check-live-progress.png`: in-flight health-check detail showing completed, running, and pending probes in the documented execution order.
 
 ### Activity (`doc/img/app/diagnostics/activity/`)
 
 - `01-visible-list.png`: activity list with mixed action, REST, and FTP entries visible.
-- `02-problems-only.png`: activity list filtered to diagnostics problems only.
-- `03-actions-only.png`: activity list filtered to action summaries only.
-- `04-logs-only.png`: activity list filtered to logs only.
-- `05-traces-only.png`: activity list filtered to traces only.
-- `06-errors-only.png`: activity list filtered to error-severity entries across activity types.
+- `02-expanded-detail.png`: activity list with an expanded action row showing the full compact detail payload.
+- `03-collapsed-after-toggle.png`: the same list after a second tap collapses the expanded row.
+- `04-problems-only.png`: activity list filtered to diagnostics problems only.
+- `05-actions-only.png`: activity list filtered to action summaries only.
+- `06-logs-only.png`: activity list filtered to logs only.
+- `07-traces-only.png`: activity list filtered to traces only.
+- `08-errors-only.png`: activity list filtered to error-severity entries across activity types.
 
 ### Filters (`doc/img/app/diagnostics/filters/`)
 

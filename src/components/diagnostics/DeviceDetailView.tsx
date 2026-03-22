@@ -62,12 +62,7 @@ export function DeviceDetailView({ info, onBack }: Props) {
         </Button>
         <div className="space-y-0.5">
           <h3 className="text-sm font-semibold text-foreground">Device Detail</h3>
-          <p className="text-xs text-muted-foreground">
-            Purpose: Shows the live device identity and runtime build details.
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Interpretation: Use this to confirm which device and runtime are currently active.
-          </p>
+          <p className="text-xs text-muted-foreground">Shows the live device identity and runtime build details.</p>
         </div>
       </div>
 

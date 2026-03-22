@@ -54,12 +54,7 @@ export function HealthCheckDetailView({ result, liveProbes, isRunning, onBack }:
         </Button>
         <div className="space-y-0.5">
           <h3 className="text-sm font-semibold text-foreground">Health Check Detail</h3>
-          <p className="text-xs text-muted-foreground">
-            Purpose: Shows probe-by-probe results from the latest health check.
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Interpretation: Failed or partial probes identify the subsystem driving current health.
-          </p>
+          <p className="text-xs text-muted-foreground">Shows probe-by-probe results from the latest health check.</p>
         </div>
       </div>
 

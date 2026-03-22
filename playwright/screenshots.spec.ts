@@ -56,6 +56,41 @@ const profileScreenshotPath = (pageId: string, profileId: DisplayProfileViewport
 const diagnosticsProfileScreenshotPath = (profileId: DisplayProfileViewportId, fileName: string) =>
   `profiles/${profileId}/${fileName}`;
 
+const seedLiveDiagnosticsHealthProgress = async (page: Page) => {
+  await page.waitForFunction(() => typeof window.__c64uDiagnosticsTestBridge?.seedOverlayState === "function");
+  await page.evaluate(() => {
+    window.__c64uDiagnosticsTestBridge?.seedOverlayState({
+      healthCheckRunning: true,
+      lastHealthCheckResult: null,
+      liveHealthCheckProbes: {
+        REST: {
+          probe: "REST",
+          outcome: "Success",
+          durationMs: 54,
+          reason: null,
+          startMs: Date.now() - 420,
+        },
+        FTP: {
+          probe: "FTP",
+          outcome: "Success",
+          durationMs: 128,
+          reason: null,
+          startMs: Date.now() - 280,
+        },
+      },
+    });
+  });
+};
+
+const clearLiveDiagnosticsHealthProgress = async (page: Page) => {
+  await page.evaluate(() => {
+    window.__c64uDiagnosticsTestBridge?.seedOverlayState({
+      healthCheckRunning: false,
+      liveHealthCheckProbes: null,
+    });
+  });
+};
+
 const ensureScreenshotDir = async (filePath: string) => {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
 };
@@ -1281,24 +1316,44 @@ test.describe("App screenshots", () => {
       await dialog.getByTestId("diagnostics-header-toggle").click();
       await expect(dialog.getByTestId("diagnostics-header-expanded")).toBeVisible();
       await captureDiagnosticsScreenshot(page, testInfo, "header/01-expanded.png");
+      await expect(dialog.getByTestId("health-check-probe-rest")).toBeVisible();
+      await captureDiagnosticsScreenshot(page, testInfo, "header/02-health-check-detail.png");
+
+      await seedLiveDiagnosticsHealthProgress(page);
+      await expect(dialog.getByTestId("health-check-probe-config")).toHaveAttribute("data-live-status", "running");
+      await expect(dialog.getByTestId("health-check-probe-raster")).toHaveAttribute("data-live-status", "pending");
+      await captureDiagnosticsScreenshot(page, testInfo, "header/03-health-check-live-progress.png");
+      await clearLiveDiagnosticsHealthProgress(page);
+      await seedDiagnosticsAnalytics(page);
+      await expect(dialog.getByTestId("health-check-probe-rest")).toBeVisible();
+
       await dialog.getByTestId("diagnostics-header-toggle").click();
       await expect(dialog.getByTestId("diagnostics-header-expanded")).toBeHidden();
 
       await captureDiagnosticsScreenshot(page, testInfo, "activity/01-visible-list.png");
+
+      const expandableRow = dialog.locator('[data-testid^="evidence-row-"][aria-expanded]').first();
+      await expect(expandableRow).toBeVisible();
+      await expandableRow.click();
+      await expect(expandableRow).toHaveAttribute("aria-expanded", "true");
+      await captureDiagnosticsScreenshot(page, testInfo, "activity/02-expanded-detail.png");
+      await expandableRow.click();
+      await expect(expandableRow).toHaveAttribute("aria-expanded", "false");
+      await captureDiagnosticsScreenshot(page, testInfo, "activity/03-collapsed-after-toggle.png");
 
       await applyActivityFilter(async () => {
         await activityTypesSection()
           .getByRole("button", { name: /Actions/ })
           .click();
       });
-      await captureDiagnosticsScreenshot(page, testInfo, "activity/02-problems-only.png");
+      await captureDiagnosticsScreenshot(page, testInfo, "activity/04-problems-only.png");
 
       await applyActivityFilter(async () => {
         await activityTypesSection()
           .getByRole("button", { name: /Problems/ })
           .click();
       });
-      await captureDiagnosticsScreenshot(page, testInfo, "activity/03-actions-only.png");
+      await captureDiagnosticsScreenshot(page, testInfo, "activity/05-actions-only.png");
 
       await applyActivityFilter(async () => {
         await activityTypesSection()
@@ -1309,7 +1364,7 @@ test.describe("App screenshots", () => {
           .click();
         await activityTypesSection().getByRole("button", { name: /Logs/ }).click();
       });
-      await captureDiagnosticsScreenshot(page, testInfo, "activity/04-logs-only.png");
+      await captureDiagnosticsScreenshot(page, testInfo, "activity/06-logs-only.png");
 
       await applyActivityFilter(async () => {
         await activityTypesSection()
@@ -1322,14 +1377,14 @@ test.describe("App screenshots", () => {
           .getByRole("button", { name: /Traces/ })
           .click();
       });
-      await captureDiagnosticsScreenshot(page, testInfo, "activity/05-traces-only.png");
+      await captureDiagnosticsScreenshot(page, testInfo, "activity/07-traces-only.png");
 
       await dialog.getByTestId("open-filters-editor").click();
       await expect(page.getByTestId("filters-editor-surface")).toBeVisible();
       await page.getByTestId("filters-editor-surface").getByTestId("quick-filter-errors").click();
       await page.getByTestId("filters-editor-surface").getByRole("button", { name: "Close" }).click();
       await expect(page.getByTestId("filters-editor-surface")).toBeHidden();
-      await captureDiagnosticsScreenshot(page, testInfo, "activity/06-errors-only.png");
+      await captureDiagnosticsScreenshot(page, testInfo, "activity/08-errors-only.png");
 
       await applyActivityFilter(async () => {
         // Reset back to the default Problems + Actions view before capturing the rest of the surfaces.

@@ -127,9 +127,7 @@ const AppSheetFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivEle
     <div
       className={cn(
         "shrink-0 border-t border-border bg-background/95 px-4 pt-3 backdrop-blur supports-[backdrop-filter]:bg-background/85",
-        mode === "sheet"
-          ? "pb-[max(1rem,env(safe-area-inset-bottom))]"
-          : "pb-[calc(1rem+env(safe-area-inset-bottom))]",
+        mode === "sheet" ? "pb-[max(1rem,env(safe-area-inset-bottom))]" : "pb-[calc(1rem+env(safe-area-inset-bottom))]",
         className,
       )}
       {...props}

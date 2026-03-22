@@ -255,7 +255,6 @@ describe("DiagnosticsDialog", () => {
     fireEvent.click(screen.getByTestId("open-latency-screen"));
     expect(screen.getByTestId("latency-analysis-popup")).toBeVisible();
     expect(screen.queryByText(/Purpose:/i)).toBeNull();
-    expect(screen.queryByText(/Interpretation:/i)).toBeNull();
 
     fireEvent.click(screen.getByTestId("analytic-popup-close"));
     fireEvent.click(screen.getByTestId("open-timeline-screen"));
