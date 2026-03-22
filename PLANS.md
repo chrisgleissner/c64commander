@@ -1,131 +1,87 @@
-# Diagnostics UX Production-Grade Plan
+# Deep Dive Audit — Execution Plan
 
-Status: COMPLETE
-Classification: UI_CHANGE
-Date: 2026-03-21
+**Started:** 2026-03-22
+**Target output:** `doc/research/review-11/findings.md`
 
-## Objective
+## Phase 0 — Setup and Discovery
 
-Fix all remaining Diagnostics UX and layout issues to production-grade quality by enforcing evidence-first layout, unified filtering, maximum density, strict progressive disclosure, zero redundant text, and deterministic testable UI behavior.
+- [x] Scan existing research docs (review-1 through review-10) for numbering and style
+- [x] Catalog all screenshot PNGs (173 files across 8 top-level folders)
+- [ ] Validate Pixel 4 ADB connectivity
+- [ ] Validate hostname `c64u` resolution; fallback to IP 192.168.1.167 if needed
+- [ ] Create temporary directory for scaled screenshots (`tmp/llm-image-scaling/`)
+- [ ] Preprocess oversized screenshots into scaled copies
 
-## Phases
+## Phase 1 — Repository and Feature Scan
 
-### Phase 1 - Header Replacement
+- [ ] Read `doc/ux-guidelines.md`, `doc/ux-interactions.md`, `doc/architecture.md`
+- [ ] Read `doc/features-by-page.md` fully
+- [ ] Scan all page components: HomePage, PlayFilesPage, DisksPage, ConfigBrowserPage, SettingsPage, DocsPage
+- [ ] Review HVSC module: `src/lib/hvsc/`, `src/pages/playFiles/hooks/useHvscLibrary.ts`
+- [ ] Review connection management: `src/lib/connection/`, hostname resolution
+- [ ] Review native bridges: `src/lib/native/`, `src/lib/hvsc/native/`
+- [ ] Review Android-specific code: `android/app/src/main/java/com/c64/commander/hvsc/`
+- [ ] Catalog all hooks in `src/hooks/`
 
-- Replace header with compact 4-line block: health glyph+state, device+address, last check time, run health check button.
-- Remove "Diagnostics" subtitle, "Health summary", "Technical details" from default view.
-- Header default: collapsed. Tap to expand for latency percentiles.
+## Phase 2 — ADB Device Validation and HVSC Flow
 
-Acceptance criteria:
+- [ ] Verify Pixel 4 is connected and app is installed
+- [ ] Configure C64U hostname/IP in the app on device
+- [ ] Test connectivity to C64U from the app
+- [ ] Execute HVSC download on device
+- [ ] Execute HVSC ingestion on device
+- [ ] Navigate HVSC library
+- [ ] Play a SID file from HVSC
+- [ ] Document timing, errors, and UI states at each step
 
-- Header matches 4-line spec exactly.
-- No legacy header elements remain.
+## Phase 3 — Screenshot Analysis
 
-### Phase 2 - Evidence-First Layout
+- [ ] Scale all oversized screenshots to <2000px max dimension
+- [ ] Analyze home page screenshots for UX consistency
+- [ ] Analyze play page screenshots
+- [ ] Analyze config page screenshots
+- [ ] Analyze disks page screenshots
+- [ ] Analyze settings page screenshots
+- [ ] Analyze diagnostics page screenshots
+- [ ] Analyze docs page screenshots
+- [ ] Analyze display profile variations (compact/medium/expanded)
+- [ ] Cross-reference with UX guidelines
 
-- Strict vertical order: header (collapsed ~80px), evidence (immediately visible), controls.
-- Remove latency summary and technical details from top.
-- Evidence shows at least 2 entries without scrolling on compact viewport.
+## Phase 4 — Cross-Platform and Code Analysis
 
-Acceptance criteria:
+- [ ] Identify platform-specific code paths (Android vs iOS vs Web)
+- [ ] Review iOS native plugin implementations for feature parity
+- [ ] Review Web platform differences
+- [ ] Identify feature gaps across platforms
 
-- Evidence visible without scrolling.
-- No placeholder rows.
+## Phase 5 — Performance Audit
 
-### Phase 3 - Filter System Unification
+- [ ] Inspect code for blocking operations
+- [ ] Review HVSC ingestion pipeline performance characteristics
+- [ ] Review rendering patterns for large lists
+- [ ] Review network call patterns and caching
+- [ ] Check for unnecessary re-renders
 
-- Remove tabs (Problems/Actions/Logs/Traces).
-- Remove inline severity and contributor filters.
-- Replace with single collapsed filter bar with chips.
-- Max 2 visible chips, overflow as +N.
+## Phase 6 — Documentation Audit
 
-Acceptance criteria:
+- [ ] Review README.md accuracy
+- [ ] Review in-app docs page content
+- [ ] Review API documentation
+- [ ] Review developer documentation
+- [ ] Identify missing troubleshooting guidance
 
-- Only ONE filtering mechanism exists.
-- No wrapping, no horizontal scroll.
+## Phase 7 — Edge Cases and Failure Modes
 
-### Phase 4 - Filter Editor (Bottom Sheet)
+- [ ] Review error handling in connection management
+- [ ] Review network failure handling
+- [ ] Review HVSC partial download/interruption handling
+- [ ] Review empty state handling across pages
+- [ ] Review rapid navigation patterns
 
-- Keep bottom sheet pattern.
-- Show count summary, type/contributor/severity chips (inline layout).
-- Add quick filters: Errors only, Problems only, Reset.
-- Immediate apply (no Apply button).
-- Reduce vertical spacing ~30%.
+## Phase 8 — Research Document Production
 
-Acceptance criteria:
-
-- Filter editor dense and non-scrolling on standard mobile.
-- No explanatory text.
-
-### Phase 5 - Text Elimination
-
-- Remove all explanatory/descriptive text.
-- Remove "Showing X of Y", "Latest HH:MM", "Purpose", "Interpretation", etc.
-- Replace "Recent evidence" with "Evidence".
-
-Acceptance criteria:
-
-- Zero explanatory sentences in any diagnostics surface.
-
-### Phase 6 - Density Optimization
-
-- Reduce vertical spacing globally ~20-30%.
-- Compact section headers.
-- Inline buttons where possible.
-- Move Share/Clear into overflow menu.
-
-Acceptance criteria:
-
-- No visible empty vertical space > 25% of screen.
-
-### Phase 7 - Evidence List Cleanup
-
-- Remove letter + colored dot severity indicators.
-- Use severity color dot only.
-- Consistent alignment, minimal horizontal noise.
-
-Acceptance criteria:
-
-- No mixed severity indicators.
-
-### Phase 8 - Overlay Consistency
-
-- All secondary screens use back arrow + title header.
-- Consistent navigation style.
-
-Acceptance criteria:
-
-- No mixed modal + navigation patterns.
-
-### Phase 9 - Data Realism
-
-- Health history: ≥70% healthy, ≥2 degraded spikes, ≥1 unhealthy, recovery present.
-- Latency: non-zero realistic values, multiple percentiles.
-
-Acceptance criteria:
-
-- Data appears realistic and varied (already satisfied by existing seeds).
-
-### Phase 10 - Final Validation
-
-- Generate required screenshots.
-- Run lint, test, build, coverage.
-
-Acceptance criteria:
-
-- All screenshots pass.
-- Branch coverage ≥91%.
-
-## Risks
-
-- Tab removal affects evidence-tab test selectors in Playwright.
-- Filter unification changes test data-testid references.
-- Density changes may affect compact viewport evidence visibility.
-
-## Rollback Strategy
-
-Revert DiagnosticsDialog.tsx to prior commit. All changes are isolated to this component and its direct sub-components.
-
-- Revert the diagnostics component files and screenshot capture changes as one unit.
-- Restore the previous diagnostics test expectations if the redesign must be backed out.
-- Keep storage keys unchanged so rollback does not require migration.
+- [ ] Create `doc/research/review-11/findings.md`
+- [ ] Write all sections per the mandatory document structure
+- [ ] Include consolidated issue list with IDs
+- [ ] Include phased execution plan
+- [ ] Include cross-platform gap matrix
