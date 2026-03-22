@@ -600,7 +600,7 @@ Summary: 798 dependencies across NPM (781), Gradle (13), CocoaPods (4), SwiftPM 
 | NPM | object-keys | 1.1.1 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/object-keys/-/object-keys-1.1.1.tgz](https://registry.npmjs.org/object-keys/-/object-keys-1.1.1.tgz) |
 | NPM | once | 1.4.0 | [ISC](https://spdx.org/licenses/ISC.html) | [https://registry.npmjs.org/once/-/once-1.4.0.tgz](https://registry.npmjs.org/once/-/once-1.4.0.tgz) |
 | NPM | open | 7.4.2 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/open/-/open-7.4.2.tgz](https://registry.npmjs.org/open/-/open-7.4.2.tgz) |
-| NPM | openapi-client-axios | 7.8.0 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/openapi-client-axios/-/openapi-client-axios-7.8.0.tgz](https://registry.npmjs.org/openapi-client-axios/-/openapi-client-axios-7.8.0.tgz) |
+| NPM | openapi-client-axios | 7.9.0 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/openapi-client-axios/-/openapi-client-axios-7.9.0.tgz](https://registry.npmjs.org/openapi-client-axios/-/openapi-client-axios-7.9.0.tgz) |
 | NPM | openapi-types | 12.1.3 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/openapi-types/-/openapi-types-12.1.3.tgz](https://registry.npmjs.org/openapi-types/-/openapi-types-12.1.3.tgz) |
 | NPM | optionator | 0.9.4 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/optionator/-/optionator-0.9.4.tgz](https://registry.npmjs.org/optionator/-/optionator-0.9.4.tgz) |
 | NPM | p-limit | 2.3.0 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/p-limit/-/p-limit-2.3.0.tgz](https://registry.npmjs.org/p-limit/-/p-limit-2.3.0.tgz) |
