@@ -7,19 +7,8 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  Activity,
-  BarChart2,
-  CircleHelp,
-  Clock,
-  FilterX,
-  MoreHorizontal,
-  Search,
-  Share2,
-  SlidersHorizontal,
-  TriangleAlert,
-  X,
-} from "lucide-react";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
+import { ChevronDown, ChevronRight, Filter, MoreHorizontal, Share2, Trash2 } from "lucide-react";
 
 import {
   AlertDialog,
@@ -39,138 +28,52 @@ import {
   AppSheetHeader,
   AppSheetTitle,
 } from "@/components/ui/app-surface";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ActionSummaryListItem } from "@/components/diagnostics/ActionSummaryListItem";
-import {
-  ConnectionActionsRegion,
-  isRecoveryFirstState,
-  type ConnectionActionsCallbacks,
-} from "@/components/diagnostics/ConnectionActionsRegion";
-import { ConfigDriftView } from "@/components/diagnostics/ConfigDriftView";
-import { DeviceDetailView, type DeviceDetailInfo } from "@/components/diagnostics/DeviceDetailView";
-import { DiagnosticsListItem } from "@/components/diagnostics/DiagnosticsListItem";
-import { EvidenceFullView } from "@/components/diagnostics/EvidenceFullView";
-import { EvidencePreviewCard } from "@/components/diagnostics/EvidencePreviewCard";
-import { HealthCheckDetailView } from "@/components/diagnostics/HealthCheckDetailView";
-import { HealthHistoryPopup } from "@/components/diagnostics/HealthHistoryPopup";
-import { HeatMapPopup } from "@/components/diagnostics/HeatMapPopup";
-import { IssueCard } from "@/components/diagnostics/IssueCard";
-import { LatencyAnalysisPopup } from "@/components/diagnostics/LatencyAnalysisPopup";
-import { SummaryCard } from "@/components/diagnostics/SummaryCard";
-import { TechnicalDetailsCard } from "@/components/diagnostics/TechnicalDetailsCard";
-import { ToolsCard } from "@/components/diagnostics/ToolsCard";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import type { ActionSummary } from "@/lib/diagnostics/actionSummaries";
-import type { HeatMapVariant } from "@/lib/diagnostics/heatMapData";
-import {
-  HEALTH_GLYPHS,
-  getContributorSupportingPhrase,
-  type ConnectivityState,
-  type ContributorKey,
-  type HealthState,
-  type LastActivity,
-  type OverallHealthState,
-  type Problem,
-} from "@/lib/diagnostics/healthModel";
+import { getC64APIConfigSnapshot, updateC64APIConfig } from "@/lib/c64api";
+import { buildBaseUrlFromDeviceHost } from "@/lib/c64api";
 import type {
   HealthCheckProbeRecord,
   HealthCheckProbeType,
   HealthCheckRunResult,
 } from "@/lib/diagnostics/healthCheckEngine";
-import { computeLatencyPercentiles } from "@/lib/diagnostics/latencyTracker";
+import { getStoredFtpPort, setStoredFtpPort } from "@/lib/ftp/ftpConfig";
 import {
   resolveActionSeverity,
   resolveLogSeverity,
   resolveTraceSeverity,
   type DiagnosticsSeverity,
 } from "@/lib/diagnostics/diagnosticsSeverity";
+import { HEALTH_GLYPHS, type ContributorKey, type OverallHealthState } from "@/lib/diagnostics/healthModel";
 import { formatDiagnosticsTimestamp } from "@/lib/diagnostics/timeFormat";
 import type { LogEntry } from "@/lib/logging";
 import { getTraceTitle } from "@/lib/tracing/traceFormatter";
 import type { TraceEvent } from "@/lib/tracing/types";
 import { cn } from "@/lib/utils";
+import type { DeviceDetailInfo } from "@/components/diagnostics/DeviceDetailView";
+import { HealthHistoryPopup } from "./HealthHistoryPopup";
+import { LatencyAnalysisPopup } from "./LatencyAnalysisPopup";
 
 export type EvidenceType = "Problems" | "Actions" | "Logs" | "Traces";
-export type IndicatorFilter = ContributorKey | "All";
-type OriginFilter = "User" | "System";
 type SeverityFilter = "All" | "Errors" | "Warnings" | "Info";
-
-type DiagnosticsLogEntry = LogEntry;
-type DiagnosticsTraceEntry = TraceEvent;
-
-type ActivePopup = "latency" | "history" | `heatmap-${"REST" | "FTP" | "CONFIG"}` | null;
-type ActiveDetailView = "device" | "config-drift" | "health-check" | null;
-
-type StreamEntry =
-  | {
-      id: string;
-      kind: "problem";
-      timestamp: string;
-      contributor: ContributorKey;
-      origin: OriginFilter | null;
-      severity: DiagnosticsSeverity;
-      data: DiagnosticsLogEntry;
-    }
-  | {
-      id: string;
-      kind: "action";
-      timestamp: string;
-      contributor: ContributorKey | null;
-      origin: OriginFilter | null;
-      severity: DiagnosticsSeverity;
-      data: ActionSummary;
-    }
-  | {
-      id: string;
-      kind: "log";
-      timestamp: string;
-      contributor: ContributorKey | null;
-      origin: OriginFilter | null;
-      severity: DiagnosticsSeverity;
-      data: DiagnosticsLogEntry;
-    }
-  | {
-      id: string;
-      kind: "trace";
-      timestamp: string;
-      contributor: ContributorKey | null;
-      origin: OriginFilter | null;
-      severity: DiagnosticsSeverity;
-      data: DiagnosticsTraceEntry;
-    };
-
-type PreviewItem = {
-  id: string;
-  title: string;
-  supportingText: string;
-};
+type ContributorFilter = "All" | ContributorKey;
 
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   healthState: OverallHealthState;
-  logs: DiagnosticsLogEntry[];
-  errorLogs: DiagnosticsLogEntry[];
-  traceEvents: DiagnosticsTraceEntry[];
+  logs: LogEntry[];
+  errorLogs: LogEntry[];
+  traceEvents: TraceEvent[];
   actionSummaries: ActionSummary[];
   onShareAll: () => void | Promise<void>;
-  onShareFiltered: (
-    entries: Array<DiagnosticsLogEntry | ActionSummary | DiagnosticsTraceEntry>,
-  ) => void | Promise<void>;
+  onShareFiltered: (entries: Array<LogEntry | ActionSummary | TraceEvent>) => void | Promise<void>;
   onClearAll: () => void;
   onRetryConnection: () => void;
   defaultEvidenceTypes?: Set<EvidenceType>;
-  connectionCallbacks?: ConnectionActionsCallbacks;
+  connectionCallbacks?: unknown;
   deviceInfo?: DeviceDetailInfo | null;
   healthCheckRunning?: boolean;
   onRunHealthCheck?: () => void;
@@ -178,11 +81,26 @@ type Props = {
   liveHealthCheckProbes?: Partial<Record<HealthCheckProbeType, HealthCheckProbeRecord>> | null;
 };
 
-const CONTRIBUTOR_ORDER: ContributorKey[] = ["App", "REST", "FTP"];
-const PAGE_SIZE = 200;
-const SEVERITY_FILTERS: SeverityFilter[] = ["All", "Errors", "Warnings", "Info"];
+type EvidenceEntry = {
+  id: string;
+  type: EvidenceType;
+  title: string;
+  detail: string | null;
+  contributor: ContributorKey | null;
+  severity: DiagnosticsSeverity;
+  timestamp: string;
+  payload: LogEntry | ActionSummary | TraceEvent;
+};
 
-const HEALTH_STATE_COLOR: Record<HealthState, string> = {
+type ConnectionDraft = {
+  host: string;
+  httpPort: string;
+  ftpPort: string;
+};
+
+const EVIDENCE_ORDER: EvidenceType[] = ["Problems", "Actions", "Logs", "Traces"];
+const DEFAULT_TYPES = new Set<EvidenceType>(["Problems", "Actions"]);
+const HEADER_TONE: Record<OverallHealthState["state"], string> = {
   Healthy: "text-success",
   Degraded: "text-amber-500",
   Unhealthy: "text-destructive",
@@ -190,525 +108,471 @@ const HEALTH_STATE_COLOR: Record<HealthState, string> = {
   Unavailable: "text-muted-foreground",
 };
 
-const matchesSeverityFilter = (filter: SeverityFilter, severity: DiagnosticsSeverity) => {
+const SEVERITY_DOT_CLASS: Record<DiagnosticsSeverity, string> = {
+  error: "bg-destructive",
+  warn: "bg-amber-500",
+  info: "bg-blue-500",
+  debug: "bg-muted-foreground",
+};
+
+const formatRelativeTime = (timestampMs: number | null) => {
+  if (timestampMs === null || Number.isNaN(timestampMs)) return "Last check -";
+  const elapsedSeconds = Math.max(0, Math.floor((Date.now() - timestampMs) / 1000));
+  const minutes = Math.floor(elapsedSeconds / 60);
+  const seconds = elapsedSeconds % 60;
+  if (minutes === 0) {
+    return `Last check ${seconds}s ago`;
+  }
+  return `Last check ${minutes}m ${seconds}s ago`;
+};
+
+const matchesSeverity = (filter: SeverityFilter, severity: DiagnosticsSeverity) => {
   if (filter === "All") return true;
   if (filter === "Errors") return severity === "error";
   if (filter === "Warnings") return severity === "warn";
   return severity === "info" || severity === "debug";
 };
 
-const describeSeverityFilter = (filter: SeverityFilter) => {
-  if (filter === "Errors") return "Errors only";
-  if (filter === "Warnings") return "Warnings only";
-  if (filter === "Info") return "Info and debug";
-  return "Any severity";
-};
-
-const normalizeFilter = (value: string) => value.trim().toLowerCase();
-
-const matchesFilter = (filterText: string, fields: Array<string | null | undefined>) => {
-  const normalized = normalizeFilter(filterText);
-  if (!normalized) return true;
-  return fields.filter(Boolean).join(" ").toLowerCase().includes(normalized);
-};
-
-const formatRelative = (timestampMs: number) => {
-  const elapsed = Math.max(0, Math.floor((Date.now() - timestampMs) / 1000));
-  if (elapsed < 60) return `${elapsed}s ago`;
-  const minutes = Math.floor(elapsed / 60);
-  const seconds = elapsed % 60;
-  return `${minutes}m ${seconds}s ago`;
-};
-
-const formatStreamTimestamp = (timestamp: string | null) => {
-  if (!timestamp) return "No recent activity";
-  const parsed = new Date(timestamp);
-  if (Number.isNaN(parsed.getTime())) return formatDiagnosticsTimestamp(timestamp);
-  return parsed.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  });
-};
-
-const traceContributor = (entry: DiagnosticsTraceEntry): ContributorKey | null => {
-  const type = entry.type as string | undefined;
-  if (type === "rest-request" || type === "rest-response") return "REST";
-  if (type === "ftp-operation") return "FTP";
-  if (type === "error") return "App";
+const getTraceContributor = (entry: TraceEvent): ContributorKey | null => {
+  if (entry.type === "rest-request" || entry.type === "rest-response") return "REST";
+  if (entry.type === "ftp-operation") return "FTP";
+  if (entry.type === "error") return "App";
   return null;
 };
 
-const traceOrigin = (entry: DiagnosticsTraceEntry): OriginFilter | null => {
-  const origin = entry.origin as string | undefined;
-  if (origin === "user") return "User";
-  if (origin === "system" || origin === "automatic") return "System";
+const getActionContributor = (summary: ActionSummary): ContributorKey | null => {
+  if (!Array.isArray(summary.effects) || summary.effects.length === 0) return null;
+  if (summary.effects.some((effect) => effect.type === "ERROR")) return "App";
+  if (summary.effects.some((effect) => effect.type === "REST")) return "REST";
+  if (summary.effects.some((effect) => effect.type === "FTP")) return "FTP";
   return null;
 };
 
-const actionOrigin = (summary: ActionSummary): OriginFilter | null => {
-  if (summary.origin === "user") return "User";
-  if (summary.origin === "system") return "System";
-  return null;
-};
-
-const isTraceFailure = (entry: DiagnosticsTraceEntry) => {
-  const type = entry.type as string | undefined;
-  const data = entry.data as Record<string, unknown> | undefined;
-  if (type === "rest-response" && data) {
-    const status = typeof data.status === "number" ? data.status : null;
-    const hasError = typeof data.error === "string" && data.error.trim().length > 0;
-    return (status !== null && status >= 400) || hasError;
+const isTraceProblem = (entry: TraceEvent) => {
+  if (entry.type === "rest-response") {
+    const status = typeof entry.data.status === "number" ? entry.data.status : null;
+    const error = typeof entry.data.error === "string" ? entry.data.error.trim() : "";
+    return (status !== null && status >= 400) || error.length > 0;
   }
-  if (type === "ftp-operation" && data) {
-    const result = typeof data.result === "string" ? data.result : null;
-    const hasError = typeof data.error === "string" && data.error.trim().length > 0;
-    return result === "failure" || hasError;
+  if (entry.type === "ftp-operation") {
+    const result = typeof entry.data.result === "string" ? entry.data.result : "";
+    const error = typeof entry.data.error === "string" ? entry.data.error.trim() : "";
+    return result === "failure" || error.length > 0;
   }
   return false;
 };
 
-const traceProblemTitle = (entry: DiagnosticsTraceEntry) => {
-  const type = entry.type as string | undefined;
-  const data = entry.data as Record<string, unknown> | undefined;
-  if (type === "rest-response" && data) {
-    const method = typeof data.method === "string" ? data.method : "REST";
-    const path = typeof data.path === "string" ? data.path : "";
-    return `${method} ${path} failed`.trim().slice(0, 80);
+const getProblemTitle = (entry: TraceEvent) => {
+  if (entry.type === "rest-response") {
+    const method = typeof entry.data.method === "string" ? entry.data.method : "REST";
+    const path = typeof entry.data.path === "string" ? entry.data.path : "/";
+    return `${method} ${path}`.trim();
   }
-  if (type === "ftp-operation" && data) {
-    const operation = typeof data.operation === "string" ? data.operation : "FTP";
-    const path = typeof data.path === "string" ? data.path : "";
-    return `${operation} ${path} failed`.trim().slice(0, 80);
+  if (entry.type === "ftp-operation") {
+    const operation = typeof entry.data.operation === "string" ? entry.data.operation : "FTP";
+    const path = typeof entry.data.path === "string" ? entry.data.path : "/";
+    return `${operation} ${path}`.trim();
   }
-  return "Operation failed";
+  return "Problem";
 };
 
-const humanizeProblem = (problem: Problem | null) => {
-  if (!problem) {
+const summarizeAction = (summary: ActionSummary) => {
+  const restCount = summary.effects?.filter((effect) => effect.type === "REST").length ?? 0;
+  const ftpCount = summary.effects?.filter((effect) => effect.type === "FTP").length ?? 0;
+  const errCount = summary.effects?.filter((effect) => effect.type === "ERROR").length ?? 0;
+  const parts = [] as string[];
+  if (restCount > 0) parts.push(`REST ${restCount}`);
+  if (ftpCount > 0) parts.push(`FTP ${ftpCount}`);
+  if (errCount > 0) parts.push(`ERR ${errCount}`);
+  return parts.join(" · ") || summary.outcome;
+};
+
+const parseConnectionSnapshot = () => {
+  const snapshot = getC64APIConfigSnapshot();
+  const ftpPort = getStoredFtpPort();
+  const deviceHost = snapshot.deviceHost.replace(/^https?:\/\//, "");
+  const match = /^(.+):(\d+)$/.exec(deviceHost);
+  if (match) {
     return {
-      headline: "Something needs attention",
-      supportingText: null as string | null,
+      host: match[1],
+      httpPort: Number(match[2]),
+      ftpPort,
     };
   }
 
-  if (problem.contributor === "REST") {
-    const lowerTitle = problem.title.toLowerCase();
-    const headline = lowerTitle.includes("/v1/info")
-      ? "Could not reach the device"
-      : "A device request could not be completed";
+  try {
+    const url = new URL(snapshot.baseUrl, window.location.origin);
+    const derivedPort = url.port ? Number(url.port) : 80;
     return {
-      headline,
-      supportingText: problem.causeHint ?? problem.title,
+      host: deviceHost || url.hostname,
+      httpPort: derivedPort,
+      ftpPort,
+    };
+  } catch {
+    return {
+      host: deviceHost || "c64u",
+      httpPort: 80,
+      ftpPort,
     };
   }
+};
 
-  if (problem.contributor === "FTP") {
-    return {
-      headline: "A file transfer action could not be completed",
-      supportingText: problem.causeHint ?? problem.title,
-    };
+const isValidHostname = (value: string) => {
+  const trimmed = value.trim();
+  const ipv4 = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
+  const hostname =
+    /^(?=.{1,253}$)(localhost|[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)$/;
+  return ipv4.test(trimmed) || hostname.test(trimmed);
+};
+
+const isValidPort = (value: string) => {
+  const numeric = Number(value);
+  return Number.isInteger(numeric) && numeric >= 1 && numeric <= 65535;
+};
+
+const getLastCheckTimestamp = (
+  lastHealthCheckResult: HealthCheckRunResult | null | undefined,
+  healthState: OverallHealthState,
+) => {
+  if (lastHealthCheckResult?.endTimestamp) {
+    const parsed = Date.parse(lastHealthCheckResult.endTimestamp);
+    if (Number.isFinite(parsed)) return parsed;
   }
-
-  return {
-    headline: problem.title,
-    supportingText: problem.causeHint,
-  };
+  if (healthState.lastRestActivity) return healthState.lastRestActivity.timestampMs;
+  if (healthState.lastFtpActivity) return healthState.lastFtpActivity.timestampMs;
+  return null;
 };
 
-const describeActionOutcome = (summary: ActionSummary) => {
-  if (summary.outcome === "success") return "Completed successfully";
-  if (summary.outcome === "error") return "Needs attention";
-  if (summary.outcome === "blocked") return "Blocked before completion";
-  if (summary.outcome === "timeout") return "Timed out";
-  return "Recorded activity";
-};
-
-const describePreviewItem = (entry: StreamEntry): PreviewItem => {
-  if (entry.kind === "action") {
-    return {
-      id: entry.id,
-      title: entry.data.actionName,
-      supportingText: `${describeActionOutcome(entry.data)} · ${formatStreamTimestamp(entry.timestamp)}`,
-    };
-  }
-
-  if (entry.kind === "problem") {
-    const contributor = entry.contributor ?? "App";
-    return {
-      id: entry.id,
-      title: entry.data.message,
-      supportingText: `${contributor} · ${formatStreamTimestamp(entry.timestamp)}`,
-    };
-  }
-
-  if (entry.kind === "log") {
-    return {
-      id: entry.id,
-      title: entry.data.message,
-      supportingText: `Log entry · ${formatStreamTimestamp(entry.timestamp)}`,
-    };
-  }
-
-  return {
-    id: entry.id,
-    title: "Technical activity recorded",
-    supportingText: `${getTraceTitle(entry.data)} · ${formatStreamTimestamp(entry.timestamp)}`,
-  };
-};
-
-const derivePreviewItems = (entries: StreamEntry[]) => {
-  const highValueEntries = entries.filter((entry) => entry.kind === "action" || entry.kind === "problem");
-  const fallbackEntries = entries.filter((entry) => entry.kind === "log");
-  const traceEntries = entries.filter((entry) => entry.kind === "trace");
-  return [...highValueEntries, ...fallbackEntries, ...traceEntries].slice(0, 3).map(describePreviewItem);
-};
-
-const LastActivityRow = ({
-  label,
-  activity,
-  profile,
-}: {
-  label: string;
-  activity: LastActivity | null;
-  profile: "compact" | "medium" | "expanded";
-}) => {
-  const empty = label === "REST" ? "No REST activity yet" : "No FTP activity yet";
-  if (!activity) {
-    return (
-      <p className="text-xs text-muted-foreground">
-        <span className="font-medium">{label}:</span> {empty}
-      </p>
-    );
-  }
-
-  const relative = formatRelative(activity.timestampMs);
-  const absolute =
-    profile === "expanded" ? ` (${formatDiagnosticsTimestamp(new Date(activity.timestampMs).toISOString())})` : "";
-  return (
-    <p className="text-xs text-muted-foreground">
-      <span className="font-medium">{label}:</span> <span className="font-mono">{activity.operation}</span>
-      {" · "}
-      <span>{activity.result}</span>
-      {" · "}
-      <span>{relative}</span>
-      {absolute}
-    </p>
-  );
-};
-
-const ContributorRow = ({
-  contributorKey,
-  health,
-  isActive,
-  onClick,
-  profile,
-}: {
-  contributorKey: ContributorKey;
-  health: OverallHealthState["contributors"][ContributorKey];
-  isActive: boolean;
-  onClick: () => void;
-  profile: "compact" | "medium" | "expanded";
-}) => {
-  const glyph = HEALTH_GLYPHS[health.state];
-  const phrase = getContributorSupportingPhrase(contributorKey, health);
-  const sessionTotal =
-    profile === "expanded" && health.totalOperations > 0 ? ` · ${health.totalOperations} session total` : "";
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "flex w-full items-center justify-between gap-2 rounded-lg border border-border/60 bg-background/50 px-3 py-2 text-left text-xs transition-colors hover:border-primary/40",
-        isActive && "border-primary/40 bg-primary/5",
-      )}
-      aria-pressed={isActive}
-      data-testid={`contributor-row-${contributorKey.toLowerCase()}`}
-    >
-      <span className="flex items-center gap-1.5">
-        <span className={cn("font-mono leading-none", HEALTH_STATE_COLOR[health.state])} aria-hidden="true">
-          {glyph}
-        </span>
-        <span className="font-medium">{contributorKey}</span>
-        <span className="text-muted-foreground">·</span>
-        <span className="text-muted-foreground">{health.state}</span>
-      </span>
-      <span className="truncate text-muted-foreground">{`${phrase}${sessionTotal}`.trim()}</span>
-    </button>
-  );
-};
-
-const SectionHelp = ({ label, children, testId }: { label: string; children: string; testId?: string }) => (
-  <Tooltip>
-    <TooltipTrigger asChild>
-      <button
-        type="button"
-        className="inline-flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        aria-label={`${label} help`}
-        data-testid={testId}
-      >
-        <CircleHelp className="h-3.5 w-3.5" aria-hidden="true" />
-      </button>
-    </TooltipTrigger>
-    <TooltipContent className="max-w-xs text-xs leading-relaxed">{children}</TooltipContent>
-  </Tooltip>
+const SurfaceHeader = ({ title, onClose }: { title: string; onClose: () => void }) => (
+  <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-2">
+    <h2 className="text-sm font-semibold">{title}</h2>
+    <Button type="button" size="sm" variant="ghost" onClick={onClose}>
+      Close
+    </Button>
+  </div>
 );
 
-const QuickFocusControls = ({
-  activeTypes,
-  onToggle,
-  indicatorFilter,
-  onIndicatorFilterChange,
-  severityFilter,
-  onSeverityFilterChange,
-  searchText,
-  onSearchChange,
-  originFilters,
-  onOriginToggle,
-  isCompact,
-  isMedium,
-  refineCount,
-  entryCount,
+const FilterChip = ({ label }: { label: string }) => (
+  <span className="rounded-full border border-border/70 bg-background px-2 py-0.5 text-[11px] font-medium leading-4">
+    {label}
+  </span>
+);
+
+const FilterToggleChip = ({
+  label,
+  checked,
+  onChange,
 }: {
-  activeTypes: Set<EvidenceType>;
-  onToggle: (type: EvidenceType) => void;
-  indicatorFilter: IndicatorFilter;
-  onIndicatorFilterChange: (filter: IndicatorFilter) => void;
-  severityFilter: SeverityFilter;
-  onSeverityFilterChange: (filter: SeverityFilter) => void;
-  searchText: string;
-  onSearchChange: (value: string) => void;
-  originFilters: Set<OriginFilter>;
-  onOriginToggle: (origin: OriginFilter) => void;
-  isCompact: boolean;
-  isMedium: boolean;
-  refineCount: number;
-  entryCount: number;
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) => (
+  <button
+    type="button"
+    onClick={() => onChange(!checked)}
+    className={cn(
+      "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+      checked ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground",
+    )}
+  >
+    {checked ? "✓ " : ""}
+    {label}
+  </button>
+);
+
+const EvidenceRow = ({ entry }: { entry: EvidenceEntry }) => (
+  <div
+    className="flex items-start gap-2 rounded-lg border border-border/70 bg-background px-2.5 py-1.5"
+    data-testid={`evidence-row-${entry.id}`}
+  >
+    <span
+      className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", SEVERITY_DOT_CLASS[entry.severity])}
+      aria-label={entry.severity}
+    />
+    <div className="min-w-0 flex-1">
+      <p className="truncate text-sm font-medium text-foreground">{entry.title}</p>
+      {entry.detail ? <p className="truncate text-xs text-muted-foreground">{entry.detail}</p> : null}
+      <div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-muted-foreground">
+        <span>{entry.type}</span>
+        {entry.contributor ? <span>· {entry.contributor}</span> : null}
+        <span>· {formatDiagnosticsTimestamp(entry.timestamp)}</span>
+      </div>
+    </div>
+  </div>
+);
+
+const FilterEditorSurface = ({
+  open,
+  onOpenChange,
+  profile,
+  selectedTypes,
+  onSelectedTypesChange,
+  contributor,
+  onContributorChange,
+  severity,
+  onSeverityChange,
+  totalCount,
+  visibleCount,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  profile: "compact" | "medium" | "expanded";
+  selectedTypes: Set<EvidenceType>;
+  onSelectedTypesChange: (value: Set<EvidenceType>) => void;
+  contributor: ContributorFilter;
+  onContributorChange: (value: ContributorFilter) => void;
+  severity: SeverityFilter;
+  onSeverityChange: (value: SeverityFilter) => void;
+  totalCount: number;
+  visibleCount: number;
 }) => {
-  const [refineOpen, setRefineOpen] = useState(false);
-  const types: EvidenceType[] = ["Problems", "Actions", "Logs", "Traces"];
-  const origins: OriginFilter[] = ["User", "System"];
-  const contributors: IndicatorFilter[] = ["All", "App", "REST", "FTP"];
-  const showRefineButton = isCompact || isMedium;
-  const showSearchInline = !isCompact;
-  const showAdvancedInline = !isCompact && !isMedium;
+  const isSidePanel = profile === "expanded";
 
-  const renderFilterButton = <T extends string>(
-    value: T,
-    label: string,
-    active: boolean,
-    onClick: () => void,
-    testId: string,
-  ) => (
-    <button
-      key={value}
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      data-testid={testId}
-      className={cn(
-        "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
-        active
-          ? "border-primary bg-primary/10 text-primary"
-          : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground",
-      )}
-    >
-      {label}
-    </button>
-  );
+  const toggleType = (type: EvidenceType, checked: boolean) => {
+    const next = new Set(selectedTypes);
+    if (checked) {
+      next.add(type);
+    } else {
+      next.delete(type);
+    }
+    if (next.size === 0) return;
+    onSelectedTypesChange(next);
+  };
 
-  const contributorControls = (
-    <div className="flex flex-wrap items-center gap-1.5">
-      {contributors.map((filter) =>
-        renderFilterButton(
-          filter,
-          filter,
-          indicatorFilter === filter,
-          () => onIndicatorFilterChange(filter),
-          `indicator-toggle-${filter.toLowerCase()}`,
-        ),
-      )}
-    </div>
-  );
-
-  const originControls = (
-    <div className="flex flex-wrap items-center gap-1.5">
-      {origins.map((origin) =>
-        renderFilterButton(
-          origin,
-          origin,
-          originFilters.has(origin),
-          () => onOriginToggle(origin),
-          `origin-toggle-${origin.toLowerCase()}`,
-        ),
-      )}
-    </div>
-  );
-
-  const severityControls = (
-    <div className="flex flex-wrap items-center gap-1.5">
-      {SEVERITY_FILTERS.map((filter) =>
-        renderFilterButton(
-          filter,
-          filter,
-          severityFilter === filter,
-          () => onSeverityFilterChange(filter),
-          `severity-toggle-${filter.toLowerCase()}`,
-        ),
-      )}
-    </div>
-  );
+  const contentClassName = isSidePanel
+    ? "fixed bottom-4 right-4 top-4 z-[60] flex w-[22rem] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-[28px] border bg-background shadow-2xl"
+    : "fixed inset-x-0 bottom-0 z-[60] flex max-h-[70dvh] flex-col overflow-hidden rounded-t-[28px] border border-b-0 bg-background shadow-2xl";
 
   return (
-    <section
-      className={cn("rounded-xl border border-border/70 bg-muted/20", isCompact ? "p-3 space-y-3" : "p-4 space-y-3")}
-    >
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Filters</p>
-          <SectionHelp label="Filters" testId="filters-help">
-            Choose evidence types and narrow the visible activity by contributor, origin, severity, or text.
-          </SectionHelp>
-          <Badge variant="outline" className="border-border bg-background/80 text-muted-foreground">
-            {entryCount} match{entryCount === 1 ? "" : "es"}
-          </Badge>
-        </div>
+    <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className="fixed inset-0 z-[59] bg-black/70" />
+        <DialogPrimitive.Content className={contentClassName} data-testid="filters-editor-surface">
+          <DialogPrimitive.Title className="sr-only">Diagnostics filters</DialogPrimitive.Title>
+          <DialogPrimitive.Description className="sr-only">
+            Filter diagnostics evidence by type, contributor, and severity.
+          </DialogPrimitive.Description>
+          <SurfaceHeader title="Filters" onClose={() => onOpenChange(false)} />
+          <div className="flex-1 overflow-y-auto px-4 py-3">
+            <p className="mb-3 text-xs text-muted-foreground" data-testid="filters-result-count">
+              {visibleCount} of {totalCount}
+            </p>
 
-        {showRefineButton ? (
-          <button
-            type="button"
-            onClick={() => setRefineOpen((value) => !value)}
-            aria-pressed={refineOpen}
-            data-testid="refine-button"
-            className={cn(
-              "shrink-0 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
-              refineOpen
-                ? "border-primary bg-primary/10 text-primary"
-                : "border-border text-muted-foreground hover:border-primary/40",
-            )}
-          >
-            <SlidersHorizontal className="mr-1 inline-block h-3 w-3" aria-hidden="true" />
-            More filters
-            {refineCount > 0 ? (
-              <span className="ml-1 inline-flex min-w-4 items-center justify-center rounded-full bg-primary/15 px-1 text-[10px] leading-4 text-primary">
-                {refineCount}
-              </span>
-            ) : null}
-          </button>
-        ) : null}
-      </div>
+            <div className="space-y-3">
+              <section className="space-y-1.5">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Type</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {EVIDENCE_ORDER.map((type) => (
+                    <FilterToggleChip
+                      key={type}
+                      label={type}
+                      checked={selectedTypes.has(type)}
+                      onChange={(checked) => toggleType(type, checked)}
+                    />
+                  ))}
+                </div>
+              </section>
 
-      <div className="flex flex-wrap items-center gap-1.5">
-        {types.map((type) => (
-          <button
-            key={type}
-            type="button"
-            onClick={() => onToggle(type)}
-            aria-pressed={activeTypes.has(type)}
-            data-testid={`evidence-toggle-${type.toLowerCase()}`}
-            className={cn(
-              "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
-              activeTypes.has(type)
-                ? "border-primary bg-primary/10 text-primary"
-                : "border-border text-muted-foreground hover:border-primary/40",
-            )}
-          >
-            {type}
-          </button>
-        ))}
-      </div>
+              <section className="space-y-1.5">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Contributor</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {(["All", "App", "REST", "FTP"] as const).map((option) => (
+                    <FilterToggleChip
+                      key={option}
+                      label={option}
+                      checked={contributor === option}
+                      onChange={(checked) => {
+                        if (!checked) return;
+                        onContributorChange(option);
+                      }}
+                    />
+                  ))}
+                </div>
+              </section>
 
-      {showSearchInline ? (
-        <div className="relative">
-          <Search
-            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden="true"
-          />
-          <Input
-            type="text"
-            placeholder="Filter entries"
-            value={searchText}
-            onChange={(event) => onSearchChange(event.target.value)}
-            className="h-8 pl-9 pr-9 text-xs"
-            data-testid="diagnostics-filter-input"
-          />
-          {searchText ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onSearchChange("")}
-              className="absolute right-1 top-1/2 h-6 w-6 -translate-y-1/2 p-0"
-              aria-label="Clear filter"
-            >
-              <X className="h-3.5 w-3.5" />
-            </Button>
-          ) : null}
-        </div>
-      ) : null}
+              <section className="space-y-1.5">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Severity</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {(["All", "Errors", "Warnings", "Info"] as const).map((option) => (
+                    <FilterToggleChip
+                      key={option}
+                      label={option}
+                      checked={severity === option}
+                      onChange={(checked) => {
+                        if (!checked) return;
+                        onSeverityChange(option);
+                      }}
+                    />
+                  ))}
+                </div>
+              </section>
 
-      {showAdvancedInline ? (
-        <div className="space-y-2">
-          <div className="space-y-1">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Contributor</p>
-            {contributorControls}
-          </div>
-          <div className="space-y-1">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Origin</p>
-            {originControls}
-          </div>
-          <div className="space-y-1">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Severity</p>
-            {severityControls}
-          </div>
-        </div>
-      ) : null}
-
-      {showRefineButton && refineOpen ? (
-        <div className="space-y-2" data-testid="refine-panel">
-          {isCompact ? (
-            <div className="relative">
-              <Search
-                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-                aria-hidden="true"
-              />
-              <Input
-                type="text"
-                placeholder="Filter entries"
-                value={searchText}
-                onChange={(event) => onSearchChange(event.target.value)}
-                className="h-8 pl-9 pr-9 text-xs"
-                data-testid="diagnostics-filter-input"
-              />
-              {searchText ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onSearchChange("")}
-                  className="absolute right-1 top-1/2 h-6 w-6 -translate-y-1/2 p-0"
-                  aria-label="Clear filter"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </Button>
-              ) : null}
+              <section className="space-y-1.5 border-t border-border/70 pt-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Quick filters</p>
+                <div className="flex flex-wrap gap-1.5">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => {
+                      onSeverityChange("Errors");
+                      onSelectedTypesChange(new Set(EVIDENCE_ORDER));
+                      onContributorChange("All");
+                    }}
+                    data-testid="quick-filter-errors"
+                  >
+                    Errors only
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => {
+                      onSeverityChange("All");
+                      onSelectedTypesChange(new Set<EvidenceType>(["Problems"]));
+                      onContributorChange("All");
+                    }}
+                    data-testid="quick-filter-problems"
+                  >
+                    Problems only
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => {
+                      onSeverityChange("All");
+                      onSelectedTypesChange(new Set(DEFAULT_TYPES));
+                      onContributorChange("All");
+                    }}
+                    data-testid="quick-filter-reset"
+                  >
+                    Reset
+                  </Button>
+                </div>
+              </section>
             </div>
-          ) : null}
-          <div className="space-y-1">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Contributor</p>
-            {contributorControls}
           </div>
-          <div className="space-y-1">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Origin</p>
-            {originControls}
-          </div>
-          <div className="space-y-1">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Severity</p>
-            {severityControls}
-          </div>
-        </div>
-      ) : null}
-    </section>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
+  );
+};
+
+const ConnectionSurface = ({
+  open,
+  onOpenChange,
+  mode,
+  draft,
+  setDraft,
+  onStartEdit,
+  onSave,
+  error,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  mode: "view" | "edit";
+  draft: ConnectionDraft;
+  setDraft: (value: ConnectionDraft) => void;
+  onStartEdit: () => void;
+  onSave: () => void;
+  error: string | null;
+}) => {
+  return (
+    <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className="fixed inset-0 z-[61] bg-black/70" />
+        <DialogPrimitive.Content
+          className="fixed inset-x-0 bottom-0 top-[16dvh] z-[62] flex flex-col overflow-hidden rounded-t-[28px] border border-b-0 bg-background shadow-2xl sm:left-1/2 sm:right-auto sm:top-1/2 sm:h-auto sm:max-h-[80dvh] sm:w-[28rem] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[28px] sm:border"
+          data-testid={mode === "view" ? "connection-view-surface" : "connection-edit-surface"}
+        >
+          <DialogPrimitive.Title className="sr-only">
+            {mode === "view" ? "Connection details" : "Edit connection"}
+          </DialogPrimitive.Title>
+          <DialogPrimitive.Description className="sr-only">
+            {mode === "view"
+              ? "Review the current host and ports used for the connected device."
+              : "Update the host and ports used for the connected device."}
+          </DialogPrimitive.Description>
+          <SurfaceHeader title="Connection" onClose={() => onOpenChange(false)} />
+          {mode === "view" ? (
+            <div className="space-y-3 px-4 py-3 text-sm">
+              <div className="grid grid-cols-[4rem_1fr] gap-y-2">
+                <span className="text-muted-foreground">Host</span>
+                <span className="font-medium text-foreground">{draft.host}</span>
+                <span className="text-muted-foreground">HTTP</span>
+                <span className="font-medium text-foreground">{draft.httpPort}</span>
+                <span className="text-muted-foreground">FTP</span>
+                <span className="font-medium text-foreground">{draft.ftpPort}</span>
+              </div>
+              <Button type="button" onClick={onStartEdit} data-testid="connection-view-edit">
+                Edit
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-3 px-4 py-3 text-sm">
+              <label className="block space-y-1">
+                <span className="text-muted-foreground">Host</span>
+                <Input
+                  value={draft.host}
+                  onChange={(event) => setDraft({ ...draft, host: event.target.value })}
+                  data-testid="connection-edit-host"
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-muted-foreground">HTTP</span>
+                <Input
+                  value={draft.httpPort}
+                  inputMode="numeric"
+                  onChange={(event) =>
+                    setDraft({
+                      ...draft,
+                      httpPort: event.target.value.replace(/[^0-9]/g, ""),
+                    })
+                  }
+                  data-testid="connection-edit-http"
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-muted-foreground">FTP</span>
+                <Input
+                  value={draft.ftpPort}
+                  inputMode="numeric"
+                  onChange={(event) =>
+                    setDraft({
+                      ...draft,
+                      ftpPort: event.target.value.replace(/[^0-9]/g, ""),
+                    })
+                  }
+                  data-testid="connection-edit-ftp"
+                />
+              </label>
+              {error ? (
+                <p className="text-sm text-destructive" data-testid="connection-edit-error">
+                  {error}
+                </p>
+              ) : null}
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => onOpenChange(false)}
+                  data-testid="connection-edit-cancel"
+                >
+                  Cancel
+                </Button>
+                <Button type="button" onClick={onSave} data-testid="connection-edit-save">
+                  Save
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 };
 
@@ -725,861 +589,481 @@ export function DiagnosticsDialog({
   onClearAll,
   onRetryConnection,
   defaultEvidenceTypes,
-  connectionCallbacks,
-  deviceInfo,
-  healthCheckRunning,
+  healthCheckRunning = false,
   onRunHealthCheck,
-  lastHealthCheckResult,
-  liveHealthCheckProbes,
+  lastHealthCheckResult = null,
 }: Props) {
   const { profile } = useDisplayProfile();
-  const isCompact = profile === "compact";
-  const isMedium = profile === "medium";
+  const [headerExpanded, setHeaderExpanded] = useState(false);
+  const [selectedTypes, setSelectedTypes] = useState<Set<EvidenceType>>(defaultEvidenceTypes ?? DEFAULT_TYPES);
+  const [contributor, setContributor] = useState<ContributorFilter>("All");
+  const [severity, setSeverity] = useState<SeverityFilter>("All");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [connectionMode, setConnectionMode] = useState<"view" | "edit">("view");
+  const [connectionOpen, setConnectionOpen] = useState(false);
+  const [connectionDraft, setConnectionDraft] = useState<ConnectionDraft>({
+    host: "c64u",
+    httpPort: "80",
+    ftpPort: "21",
+  });
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [latencyOpen, setLatencyOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [overflowOpen, setOverflowOpen] = useState(false);
+  const longPressTimerRef = useRef<number | null>(null);
+  const longPressHandledRef = useRef(false);
 
-  const [showDetails, setShowDetails] = useState(false);
-  const [evidencePreviewExpanded, setEvidencePreviewExpanded] = useState(false);
-  const [technicalDetailsExpanded, setTechnicalDetailsExpanded] = useState(false);
-  const [toolsExpanded, setToolsExpanded] = useState(false);
-  const [activePopup, setActivePopup] = useState<ActivePopup>(null);
-  const [activeDetailView, setActiveDetailView] = useState<ActiveDetailView>(null);
-  const [activeTypes, setActiveTypes] = useState<Set<EvidenceType>>(
-    () => defaultEvidenceTypes ?? new Set(["Problems", "Actions"]),
-  );
-  const [indicatorFilter, setIndicatorFilter] = useState<IndicatorFilter>("All");
-  const [severityFilter, setSeverityFilter] = useState<SeverityFilter>("All");
-  const [searchText, setSearchText] = useState("");
-  const [originFilters, setOriginFilters] = useState<Set<OriginFilter>>(() => new Set<OriginFilter>());
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
-  const [expandedProblemId, setExpandedProblemId] = useState<string | null>(null);
+  const allEntries = useMemo(() => {
+    const items: EvidenceEntry[] = [];
 
-  const streamRef = useRef<HTMLDivElement>(null);
-  const spotlightTargetRef = useRef<string | null>(null);
+    for (const entry of errorLogs) {
+      items.push({
+        id: `problem-log-${entry.id}`,
+        type: "Problems",
+        title: entry.message,
+        detail: entry.details ? JSON.stringify(entry.details) : null,
+        contributor: "App",
+        severity: resolveLogSeverity(entry.level),
+        timestamp: entry.timestamp,
+        payload: entry,
+      });
+    }
+
+    for (const entry of traceEvents) {
+      if (!isTraceProblem(entry)) continue;
+      const detail =
+        typeof entry.data.error === "string"
+          ? entry.data.error
+          : typeof entry.data.status === "number"
+            ? `HTTP ${entry.data.status}`
+            : null;
+      items.push({
+        id: `problem-trace-${entry.id}`,
+        type: "Problems",
+        title: getProblemTitle(entry),
+        detail,
+        contributor: getTraceContributor(entry),
+        severity: resolveTraceSeverity(entry),
+        timestamp: entry.timestamp,
+        payload: entry,
+      });
+    }
+
+    for (const summary of actionSummaries) {
+      items.push({
+        id: `action-${summary.correlationId}`,
+        type: "Actions",
+        title: summary.actionName,
+        detail: summarizeAction(summary),
+        contributor: getActionContributor(summary),
+        severity: resolveActionSeverity(summary.outcome),
+        timestamp: summary.startTimestamp ?? summary.endTimestamp ?? new Date(0).toISOString(),
+        payload: summary,
+      });
+    }
+
+    for (const entry of logs) {
+      items.push({
+        id: `log-${entry.id}`,
+        type: "Logs",
+        title: entry.message,
+        detail: entry.details ? JSON.stringify(entry.details) : null,
+        contributor: "App",
+        severity: resolveLogSeverity(entry.level),
+        timestamp: entry.timestamp,
+        payload: entry,
+      });
+    }
+
+    for (const entry of traceEvents) {
+      items.push({
+        id: `trace-${entry.id}`,
+        type: "Traces",
+        title: getTraceTitle(entry),
+        detail: null,
+        contributor: getTraceContributor(entry),
+        severity: resolveTraceSeverity(entry),
+        timestamp: entry.timestamp,
+        payload: entry,
+      });
+    }
+
+    return items.sort((left, right) => Date.parse(right.timestamp) - Date.parse(left.timestamp));
+  }, [actionSummaries, errorLogs, logs, traceEvents]);
 
   useEffect(() => {
     if (!open) return;
-    setShowDetails(false);
-    setEvidencePreviewExpanded(false);
-    setTechnicalDetailsExpanded(false);
-    setToolsExpanded(false);
-    setActivePopup(null);
-    setActiveDetailView(null);
-    setActiveTypes(defaultEvidenceTypes ?? new Set(["Problems", "Actions"]));
-    setIndicatorFilter("All");
-    setSeverityFilter("All");
-    setSearchText("");
-    setOriginFilters(new Set<OriginFilter>());
-    setVisibleCount(PAGE_SIZE);
-    setExpandedProblemId(null);
+    setHeaderExpanded(false);
+    setSelectedTypes(defaultEvidenceTypes ?? new Set(DEFAULT_TYPES));
+    setContributor("All");
+    setSeverity("All");
+    setFiltersOpen(false);
+    setConnectionOpen(false);
+    setConnectionMode("view");
+    setConnectionError(null);
+    setLatencyOpen(false);
+    setHistoryOpen(false);
+    setOverflowOpen(false);
+
+    const snapshot = parseConnectionSnapshot();
+    setConnectionDraft({
+      host: snapshot.host,
+      httpPort: String(snapshot.httpPort),
+      ftpPort: String(snapshot.ftpPort),
+    });
   }, [defaultEvidenceTypes, open]);
 
-  const handleOriginToggle = useCallback((origin: OriginFilter) => {
-    setOriginFilters((previous) => {
-      const next = new Set(previous);
-      if (next.has(origin)) {
-        next.delete(origin);
-      } else {
-        next.add(origin);
-      }
-      return next;
-    });
-  }, []);
-
-  const handleToggleType = useCallback((type: EvidenceType) => {
-    setActiveTypes((previous) => {
-      const next = new Set(previous);
-      if (next.has(type)) {
-        if (next.size === 1) return previous;
-        next.delete(type);
-      } else {
-        next.add(type);
-      }
-      return next;
-    });
-    setVisibleCount(PAGE_SIZE);
-  }, []);
-
-  const handleResetFilters = useCallback(() => {
-    setActiveTypes(new Set<EvidenceType>(["Problems", "Actions"]));
-    setIndicatorFilter("All");
-    setSeverityFilter("All");
-    setSearchText("");
-    setOriginFilters(new Set<OriginFilter>());
-    setVisibleCount(PAGE_SIZE);
-  }, []);
-
-  const allStreamEntries = useMemo(() => {
-    const entries: StreamEntry[] = [];
-    const originActive = originFilters.size === 0 || originFilters.size === 2;
-    const problemTraceIds = new Set<string>();
-
-    if (activeTypes.has("Problems")) {
-      for (const entry of traceEvents) {
-        if (!isTraceFailure(entry)) continue;
-        const contributor = traceContributor(entry);
-        if (!contributor || contributor === "App") continue;
-        if (indicatorFilter !== "All" && indicatorFilter !== contributor) continue;
-        const title = traceProblemTitle(entry);
-        if (!matchesFilter(searchText, [title, entry.id, entry.timestamp])) continue;
-        if (!originActive) {
-          const origin = traceOrigin(entry);
-          if (origin && !originFilters.has(origin)) continue;
-        }
-        const severity = resolveLogSeverity("error");
-        if (!matchesSeverityFilter(severityFilter, severity)) continue;
-        problemTraceIds.add(entry.id);
-        entries.push({
-          id: entry.id,
-          kind: "problem",
-          timestamp: entry.timestamp,
-          contributor,
-          origin: traceOrigin(entry),
-          severity,
-          data: { id: entry.id, message: title, timestamp: entry.timestamp, level: "error", details: entry.data },
-        });
-      }
-
-      for (const entry of errorLogs) {
-        const severity = resolveLogSeverity(entry.level);
-        if (!matchesSeverityFilter(severityFilter, severity)) continue;
-        if (indicatorFilter !== "All" && indicatorFilter !== "App") continue;
-        if (!matchesFilter(searchText, [entry.message, entry.level, entry.id])) continue;
-        entries.push({
-          id: entry.id,
-          kind: "problem",
-          timestamp: entry.timestamp,
-          contributor: "App",
-          origin: null,
-          severity,
-          data: entry,
-        });
-      }
-    }
-
-    if (activeTypes.has("Actions")) {
-      for (const summary of actionSummaries) {
-        const severity = resolveActionSeverity(summary.outcome);
-        if (!matchesSeverityFilter(severityFilter, severity)) continue;
-        if (indicatorFilter !== "All") {
-          const matchedContributor = summary.effects?.some((effect) => {
-            if (indicatorFilter === "REST") return effect.type === "REST";
-            if (indicatorFilter === "FTP") return effect.type === "FTP";
-            if (indicatorFilter === "App") return effect.type === "ERROR";
-            return false;
-          });
-          if (!matchedContributor) continue;
-        }
-        if (
-          !matchesFilter(searchText, [
-            summary.actionName,
-            summary.correlationId,
-            summary.origin,
-            summary.outcome,
-            formatDiagnosticsTimestamp(summary.startTimestamp),
-          ])
-        ) {
-          continue;
-        }
-        if (!originActive) {
-          const origin = actionOrigin(summary);
-          if (origin && !originFilters.has(origin)) continue;
-        }
-        entries.push({
-          id: summary.correlationId,
-          kind: "action",
-          timestamp: summary.startTimestamp ?? summary.endTimestamp ?? new Date(0).toISOString(),
-          contributor: null,
-          origin: actionOrigin(summary),
-          severity,
-          data: summary,
-        });
-      }
-    }
-
-    if (activeTypes.has("Logs")) {
-      for (const entry of logs) {
-        const severity = resolveLogSeverity(entry.level);
-        if (!matchesSeverityFilter(severityFilter, severity)) continue;
-        if (!matchesFilter(searchText, [entry.message, entry.level, entry.id])) continue;
-        entries.push({
-          id: entry.id,
-          kind: "log",
-          timestamp: entry.timestamp,
-          contributor: null,
-          origin: null,
-          severity,
-          data: entry,
-        });
-      }
-    }
-
-    if (activeTypes.has("Traces")) {
-      const recentEntries = traceEvents.slice(-200).reverse();
-      for (const entry of recentEntries) {
-        if (problemTraceIds.has(entry.id)) continue;
-        const severity = resolveTraceSeverity(entry);
-        if (!matchesSeverityFilter(severityFilter, severity)) continue;
-        if (!matchesFilter(searchText, [getTraceTitle(entry), entry.id, entry.timestamp])) continue;
-        if (indicatorFilter !== "All") {
-          const contributor = traceContributor(entry);
-          if (contributor !== indicatorFilter) continue;
-        }
-        if (!originActive) {
-          const origin = traceOrigin(entry);
-          if (origin && !originFilters.has(origin)) continue;
-        }
-        entries.push({
-          id: entry.id,
-          kind: "trace",
-          timestamp: entry.timestamp,
-          contributor: traceContributor(entry),
-          origin: traceOrigin(entry),
-          severity,
-          data: entry,
-        });
-      }
-    }
-
-    entries.sort((left, right) => (right.timestamp < left.timestamp ? -1 : right.timestamp > left.timestamp ? 1 : 0));
-
-    return entries;
-  }, [
-    actionSummaries,
-    activeTypes,
-    errorLogs,
-    indicatorFilter,
-    logs,
-    originFilters,
-    searchText,
-    severityFilter,
-    traceEvents,
-  ]);
-
-  const streamEntries = useMemo(() => allStreamEntries.slice(0, visibleCount), [allStreamEntries, visibleCount]);
-  const hasMoreEntries = allStreamEntries.length > visibleCount;
-  const hasVisibleEntries = streamEntries.length > 0;
-  const newestEntryTimestamp = streamEntries[0]?.timestamp ?? allStreamEntries[0]?.timestamp ?? null;
-  const previewItems = useMemo(() => derivePreviewItems(allStreamEntries), [allStreamEntries]);
-
-  const refineCount = originFilters.size + (searchText.trim() !== "" ? 1 : 0);
-  const entryFilterCount = refineCount + (indicatorFilter !== "All" ? 1 : 0) + (severityFilter !== "All" ? 1 : 0);
-  const isFiltersModified =
-    !activeTypes.has("Problems") ||
-    !activeTypes.has("Actions") ||
-    activeTypes.has("Logs") ||
-    activeTypes.has("Traces") ||
-    indicatorFilter !== "All" ||
-    severityFilter !== "All" ||
-    originFilters.size > 0 ||
-    searchText.trim() !== "";
-
-  const activeFilterPills = [
-    indicatorFilter !== "All" ? `Contributor: ${indicatorFilter}` : null,
-    severityFilter !== "All" ? describeSeverityFilter(severityFilter) : null,
-    originFilters.size > 0 ? `Origin: ${Array.from(originFilters).join(" + ")}` : null,
-    searchText.trim() !== "" ? `Search: “${searchText.trim()}”` : null,
-  ].filter(Boolean) as string[];
-
-  const handleShareFiltered = useCallback(() => {
-    void onShareFiltered(allStreamEntries.map((entry) => entry.data));
-  }, [allStreamEntries, onShareFiltered]);
-
-  const handleRevealDetails = useCallback(() => {
-    setShowDetails(true);
-  }, []);
-
-  const handleRevealTools = useCallback(() => {
-    setShowDetails(true);
-    setEvidencePreviewExpanded(true);
-    setTechnicalDetailsExpanded(true);
-    setToolsExpanded(true);
-  }, []);
-
-  const handleSpotlightSelect = useCallback(() => {
-    if (!healthState.primaryProblem) return;
-    spotlightTargetRef.current = `problem-${healthState.primaryProblem.id}`;
-    setExpandedProblemId(healthState.primaryProblem.id);
-    setShowDetails(true);
-    setEvidencePreviewExpanded(true);
-    setTechnicalDetailsExpanded(true);
-    setToolsExpanded(true);
-    setActiveTypes((previous) => {
-      if (previous.has("Problems")) return previous;
-      const next = new Set(previous);
-      next.add("Problems");
-      return next;
-    });
-    setIndicatorFilter("All");
-  }, [healthState.primaryProblem]);
-
   useEffect(() => {
-    const targetId = spotlightTargetRef.current;
-    if (!targetId || !streamRef.current) return;
-    spotlightTargetRef.current = null;
-    requestAnimationFrame(() => {
-      const element = streamRef.current?.querySelector(`[data-testid="${targetId}"]`);
-      element?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    });
-  });
+    if (!open) {
+      setFiltersOpen(false);
+      setConnectionOpen(false);
+      setLatencyOpen(false);
+      setHistoryOpen(false);
+      setOverflowOpen(false);
+    }
+  }, [open]);
 
-  const latency = computeLatencyPercentiles();
-  const hasLatencyData = latency.sampleCount > 0;
+  const filteredEntries = useMemo(
+    () =>
+      allEntries.filter((entry) => {
+        if (!selectedTypes.has(entry.type)) return false;
+        if (contributor !== "All" && entry.contributor !== contributor) return false;
+        return matchesSeverity(severity, entry.severity);
+      }),
+    [allEntries, contributor, selectedTypes, severity],
+  );
 
-  const isOffline = healthState.connectivity === "Offline" || healthState.connectivity === "Not yet connected";
-  const isUnhealthy = !isOffline && (healthState.state === "Unhealthy" || healthState.state === "Degraded");
-  const connectedLabel = healthState.connectedDeviceLabel ?? "C64U";
-  const humanizedProblem = humanizeProblem(healthState.primaryProblem);
+  const visibleCount = filteredEntries.length;
+  const totalCount = allEntries.length;
+  const displayEntries = filteredEntries.slice(0, 8);
+  const lastCheckTimestamp = getLastCheckTimestamp(lastHealthCheckResult, healthState);
+  const connectionLabel = `${healthState.connectedDeviceLabel ?? "C64U"} · ${connectionDraft.host}:${connectionDraft.httpPort}`;
+  const activeFilterLabels = useMemo(() => {
+    const labels: string[] = [];
+    if (severity !== "All") labels.push(severity);
+    const selectedTypeLabels = EVIDENCE_ORDER.filter((type) => selectedTypes.has(type));
+    if (selectedTypeLabels.length !== EVIDENCE_ORDER.length) {
+      labels.push(...selectedTypeLabels);
+    }
+    if (contributor !== "All") labels.push(contributor);
+    return labels;
+  }, [contributor, selectedTypes, severity]);
 
-  const summaryCard = isOffline
-    ? {
-        badgeLabel: "Connection target",
-        title: "Device not reachable",
-        titleToneClassName: "text-destructive",
-        statusGlyph: HEALTH_GLYPHS.Unavailable,
-        statusGlyphClassName: HEALTH_STATE_COLOR.Unavailable,
-        headline: healthState.host,
-        supportingText: "Cannot reach this device right now.",
-      }
-    : isUnhealthy
-      ? {
-          badgeLabel: "Device",
-          title: "Needs attention",
-          titleToneClassName: "text-amber-500",
-          statusGlyph: HEALTH_GLYPHS[healthState.state],
-          statusGlyphClassName: HEALTH_STATE_COLOR[healthState.state],
-          headline: humanizedProblem.headline,
-          supportingText: humanizedProblem.supportingText,
-        }
-      : {
-          badgeLabel: "Device",
-          title: "Healthy",
-          titleToneClassName: "text-success",
-          statusGlyph: HEALTH_GLYPHS[healthState.state === "Idle" ? "Healthy" : healthState.state],
-          statusGlyphClassName: "text-success",
-          headline: connectedLabel,
-          supportingText: "All systems working.",
-        };
+  const filterBarChips = activeFilterLabels.slice(0, 2);
+  const overflowChipCount = Math.max(0, activeFilterLabels.length - 2);
 
-  const technicalSummary = isOffline
-    ? "Connection history, device detail, and advanced diagnostics remain available here."
-    : "Contributor health, raw activity, and deeper diagnostics tools are available here.";
+  const openConnectionView = useCallback(() => {
+    setConnectionMode("view");
+    setConnectionError(null);
+    setConnectionOpen(true);
+  }, []);
 
-  const recoveryFirst = isRecoveryFirstState(healthState.connectivity);
+  const openConnectionEdit = useCallback(() => {
+    setConnectionMode("edit");
+    setConnectionError(null);
+    setConnectionOpen(true);
+  }, []);
+
+  const clearLongPress = useCallback(() => {
+    if (longPressTimerRef.current !== null) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
+
+  const handleDevicePointerDown = () => {
+    longPressHandledRef.current = false;
+    clearLongPress();
+    longPressTimerRef.current = window.setTimeout(() => {
+      longPressHandledRef.current = true;
+      openConnectionEdit();
+    }, 450);
+  };
+
+  const handleDevicePointerUp = () => {
+    if (longPressHandledRef.current) {
+      clearLongPress();
+      return;
+    }
+    clearLongPress();
+    openConnectionView();
+  };
+
+  const saveConnection = () => {
+    const nextHost = connectionDraft.host.trim();
+    if (!isValidHostname(nextHost)) {
+      setConnectionError("Enter a valid host.");
+      return;
+    }
+    if (!isValidPort(connectionDraft.httpPort)) {
+      setConnectionError("HTTP must be 1 to 65535.");
+      return;
+    }
+    if (!isValidPort(connectionDraft.ftpPort)) {
+      setConnectionError("FTP must be 1 to 65535.");
+      return;
+    }
+
+    const password = getC64APIConfigSnapshot().password;
+    const deviceHost = `${nextHost}:${connectionDraft.httpPort}`;
+    updateC64APIConfig(buildBaseUrlFromDeviceHost(deviceHost), password, deviceHost);
+    setStoredFtpPort(Number(connectionDraft.ftpPort));
+    setConnectionError(null);
+    setConnectionOpen(false);
+    onRetryConnection();
+  };
+
+  const handleShareFiltered = () => {
+    void onShareFiltered(filteredEntries.map((entry) => entry.payload));
+  };
 
   return (
-    <TooltipProvider delayDuration={150}>
+    <>
       <AppSheet open={open} onOpenChange={onOpenChange}>
-        <AppSheetContent
-          className={cn(
-            "flex min-h-0 flex-col overflow-hidden",
-            isCompact
-              ? "max-h-[calc(100dvh-max(3.25rem,calc(env(safe-area-inset-top)+2.75rem))-env(safe-area-inset-bottom)-4px)]"
-              : null,
-          )}
-          data-testid="diagnostics-sheet"
-        >
-          <AppSheetHeader
-            className={cn("shrink-0", isCompact ? "space-y-1.5 px-3 pb-2 pt-2.5" : "space-y-1.5 px-4 pb-2.5 pt-3.5")}
-          >
-            <div className="min-w-0 space-y-1">
-              <AppSheetTitle>Diagnostics</AppSheetTitle>
-              <AppSheetDescription
-                className={cn("max-w-full truncate whitespace-nowrap pr-8", !showDetails && "hidden")}
-                data-testid="diagnostics-subtitle"
-              >
-                Health, status, and recent evidence.
-              </AppSheetDescription>
-            </div>
+        <AppSheetContent className="flex min-h-0 flex-col overflow-hidden" data-testid="diagnostics-sheet">
+          <AppSheetHeader className="space-y-0 px-4 pb-2 pt-3">
+            <AppSheetTitle>Diagnostics</AppSheetTitle>
+            <AppSheetDescription className="sr-only">Diagnostic evidence and health status.</AppSheetDescription>
           </AppSheetHeader>
 
-          {activeDetailView ? (
-            <div className={cn("flex-1 overflow-auto", isCompact ? "px-3 pb-4 pt-2" : "px-4 pb-4 pt-3")}>
-              {activeDetailView === "device" ? (
-                <DeviceDetailView info={deviceInfo ?? null} onBack={() => setActiveDetailView(null)} />
-              ) : null}
-              {activeDetailView === "config-drift" ? (
-                <ConfigDriftView onBack={() => setActiveDetailView(null)} />
-              ) : null}
-              {activeDetailView === "health-check" ? (
-                <HealthCheckDetailView
-                  result={lastHealthCheckResult ?? null}
-                  liveProbes={liveHealthCheckProbes}
-                  isRunning={healthCheckRunning}
-                  onBack={() => setActiveDetailView(null)}
-                />
-              ) : null}
-            </div>
-          ) : (
-            <div className="flex-1 overflow-auto">
-              <div className={cn("space-y-3", isCompact ? "px-3 py-3" : "px-4 py-4")}>
-                <SummaryCard
-                  badgeLabel={summaryCard.badgeLabel}
-                  title={summaryCard.title}
-                  titleToneClassName={summaryCard.titleToneClassName}
-                  statusGlyph={summaryCard.statusGlyph}
-                  statusGlyphClassName={summaryCard.statusGlyphClassName}
-                  headline={summaryCard.headline}
-                  supportingText={summaryCard.supportingText}
-                  isCompact={isCompact}
-                  primaryAction={
-                    isOffline
-                      ? undefined
-                      : isUnhealthy
-                        ? { label: "View issue", onClick: handleRevealDetails, testId: "show-details-button" }
-                        : onRunHealthCheck
-                          ? {
-                              label: healthCheckRunning
-                                ? "Running health check…"
-                                : isCompact
-                                  ? "Run check"
-                                  : "Run health check",
-                              onClick: onRunHealthCheck,
-                              testId: "run-health-check-button",
-                            }
-                          : { label: "Show details", onClick: handleRevealDetails, testId: "show-details-button" }
-                  }
-                  secondaryAction={
-                    isUnhealthy && onRunHealthCheck
-                      ? {
-                          label: healthCheckRunning
-                            ? "Running health check…"
-                            : isCompact
-                              ? "Run check"
-                              : "Run health check",
-                          onClick: onRunHealthCheck,
-                          testId: "run-health-check-button",
-                          variant: "ghost",
-                        }
-                      : undefined
-                  }
-                  footerAction={
-                    isUnhealthy || (!isOffline && !onRunHealthCheck)
-                      ? undefined
-                      : { label: "Show details", onClick: handleRevealDetails, testId: "show-details-button" }
-                  }
-                >
-                  {isOffline && connectionCallbacks ? (
-                    <ConnectionActionsRegion
-                      connectivity={healthState.connectivity}
-                      currentHost={healthState.host}
-                      callbacks={connectionCallbacks}
-                      defaultExpanded={recoveryFirst}
-                      mode="summary"
-                    />
-                  ) : null}
-                </SummaryCard>
-
-                {showDetails && isUnhealthy && healthState.primaryProblem ? (
-                  <IssueCard
-                    title={humanizedProblem.headline}
-                    supportingText={healthState.primaryProblem.causeHint ?? humanizedProblem.supportingText}
-                    contributor={healthState.primaryProblem.contributor}
-                    isCompact={isCompact}
-                  />
-                ) : null}
-
-                {showDetails ? (
-                  <EvidencePreviewCard
-                    expanded={evidencePreviewExpanded}
-                    onToggle={() => setEvidencePreviewExpanded((value) => !value)}
-                    onViewAll={handleRevealTools}
-                    items={previewItems}
-                    isCompact={isCompact}
-                  />
-                ) : null}
-
-                {showDetails ? (
-                  <TechnicalDetailsCard
-                    expanded={technicalDetailsExpanded}
-                    onToggle={() => setTechnicalDetailsExpanded((value) => !value)}
-                    summary={technicalSummary}
-                    isCompact={isCompact}
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-4">
+            {/* Phase 1: Compact header */}
+            <section className="shrink-0 rounded-xl border border-border/70 bg-card" data-testid="diagnostics-header">
+              <div className="flex items-start justify-between gap-2 px-3 py-2">
+                <div className="min-w-0 flex-1 space-y-0.5">
+                  <p
+                    className={cn("text-sm font-semibold", HEADER_TONE[healthState.state])}
+                    data-testid="diagnostics-health-line"
                   >
-                    <div className="space-y-3">
-                      <div className="rounded-lg border border-border/60 bg-background/50 p-3">
-                        <div className="flex flex-wrap items-start justify-between gap-2">
-                          <div className="space-y-1">
-                            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                              Connection
-                            </p>
-                            <p className="text-sm font-medium text-foreground">{healthState.host}</p>
-                            <p className="text-xs text-muted-foreground">{connectedLabel}</p>
-                          </div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setActiveDetailView("device")}
-                              data-testid="open-device-detail"
-                            >
-                              <Activity className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
-                              Device detail
-                            </Button>
-                            {lastHealthCheckResult ? (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => setActiveDetailView("health-check")}
-                                data-testid="open-health-check-detail"
-                              >
-                                Last health check
-                              </Button>
-                            ) : null}
-                          </div>
-                        </div>
-                      </div>
+                    {HEALTH_GLYPHS[healthState.state]} {healthState.state}
+                  </p>
+                  <button
+                    type="button"
+                    className="block truncate text-left text-xs font-medium text-foreground underline-offset-2 hover:underline"
+                    data-testid="diagnostics-device-line"
+                    onPointerDown={handleDevicePointerDown}
+                    onPointerUp={handleDevicePointerUp}
+                    onPointerLeave={clearLongPress}
+                    onPointerCancel={clearLongPress}
+                    onContextMenu={(event) => {
+                      event.preventDefault();
+                      openConnectionEdit();
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        openConnectionView();
+                      }
+                    }}
+                  >
+                    {connectionLabel}
+                  </button>
+                  <p className="text-xs text-muted-foreground" data-testid="diagnostics-last-check-line">
+                    {formatRelativeTime(lastCheckTimestamp)}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-1 h-7 text-xs"
+                    onClick={onRunHealthCheck}
+                    disabled={!onRunHealthCheck || healthCheckRunning}
+                    data-testid="run-health-check"
+                  >
+                    {healthCheckRunning ? "Running health check" : "Run health check"}
+                  </Button>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0"
+                  onClick={() => setHeaderExpanded((value) => !value)}
+                  data-testid="diagnostics-header-toggle"
+                  aria-expanded={headerExpanded}
+                >
+                  {headerExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                </Button>
+              </div>
+              {headerExpanded && lastHealthCheckResult ? (
+                <div className="border-t border-border/70 px-3 py-2" data-testid="diagnostics-header-expanded">
+                  <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                    <span>P50 {lastHealthCheckResult.latency.p50}ms</span>
+                    <span>· P90 {lastHealthCheckResult.latency.p90}ms</span>
+                    <span>· P99 {lastHealthCheckResult.latency.p99}ms</span>
+                  </div>
+                </div>
+              ) : null}
+            </section>
 
-                      <div className="rounded-lg border border-border/60 bg-background/50 p-3 space-y-2">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                          Technical activity
-                        </p>
-                        <div className="space-y-1.5">
-                          <LastActivityRow label="REST" activity={healthState.lastRestActivity} profile={profile} />
-                          <LastActivityRow label="FTP" activity={healthState.lastFtpActivity} profile={profile} />
-                        </div>
-                      </div>
+            {/* Phase 3: Unified filter bar */}
+            <div
+              className="mt-2 flex items-center gap-1.5 overflow-hidden rounded-full border border-border/70 bg-card px-2.5 py-1.5 text-xs"
+              data-testid="filters-collapsed-bar"
+            >
+              <span className="shrink-0 font-semibold text-foreground">Filters</span>
+              <span className="shrink-0 text-muted-foreground">·</span>
+              <span className="shrink-0 text-muted-foreground" data-testid="filters-result-count">
+                {visibleCount} of {totalCount}
+              </span>
+              <div className="min-w-0 flex-1 overflow-hidden whitespace-nowrap">
+                <div className="flex items-center gap-1 overflow-hidden">
+                  {filterBarChips.map((chip) => (
+                    <FilterChip key={chip} label={chip} />
+                  ))}
+                  {overflowChipCount > 0 ? <FilterChip label={`+${overflowChipCount}`} /> : null}
+                </div>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 p-0"
+                onClick={() => setFiltersOpen(true)}
+                data-testid="open-filters-editor"
+              >
+                <Filter className="h-3.5 w-3.5" />
+              </Button>
+            </div>
 
-                      <div className="space-y-2">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                          Contributors
-                        </p>
-                        <div className="space-y-2">
-                          {CONTRIBUTOR_ORDER.map((key) => (
-                            <ContributorRow
-                              key={key}
-                              contributorKey={key}
-                              health={healthState.contributors[key]}
-                              isActive={indicatorFilter === key}
-                              onClick={() => setIndicatorFilter(indicatorFilter === key ? "All" : key)}
-                              profile={profile}
-                            />
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        {onRunHealthCheck ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={onRunHealthCheck}
-                            disabled={healthCheckRunning}
-                            data-testid="technical-run-health-check-button"
-                          >
-                            {healthCheckRunning ? "Running health check…" : "Run health check"}
-                          </Button>
-                        ) : null}
-
-                        {hasLatencyData ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setActivePopup("latency")}
-                            data-testid="latency-summary-row"
-                          >
-                            <Clock className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
-                            P50 {latency.p50}ms · P90 {latency.p90}ms · P99 {latency.p99}ms
-                          </Button>
-                        ) : null}
-
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setActivePopup("history")}
-                          data-testid="health-history-row"
-                        >
-                          <BarChart2 className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
-                          Health history
-                        </Button>
-                      </div>
-
-                      {connectionCallbacks ? (
-                        <div className="rounded-lg border border-border/60 bg-background/50 p-3">
-                          <ConnectionActionsRegion
-                            connectivity={healthState.connectivity}
-                            currentHost={healthState.host}
-                            callbacks={connectionCallbacks}
-                            defaultExpanded={recoveryFirst}
-                          />
-                        </div>
-                      ) : healthState.connectivity === "Offline" || healthState.connectivity === "Not yet connected" ? (
-                        <div className="rounded-lg border border-border/60 bg-background/50 p-3">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={onRetryConnection}
-                            data-testid="retry-connection-button"
-                          >
-                            Retry connection
-                          </Button>
-                        </div>
-                      ) : null}
-
-                      <ToolsCard
-                        expanded={toolsExpanded}
-                        onToggle={() => setToolsExpanded((value) => !value)}
-                        summary="Filters, full activity, sharing, and advanced diagnostics tools."
-                        isCompact={isCompact}
-                      >
-                        <QuickFocusControls
-                          activeTypes={activeTypes}
-                          onToggle={handleToggleType}
-                          indicatorFilter={indicatorFilter}
-                          onIndicatorFilterChange={setIndicatorFilter}
-                          severityFilter={severityFilter}
-                          onSeverityFilterChange={setSeverityFilter}
-                          searchText={searchText}
-                          onSearchChange={setSearchText}
-                          originFilters={originFilters}
-                          onOriginToggle={handleOriginToggle}
-                          isCompact={isCompact}
-                          isMedium={isMedium}
-                          refineCount={refineCount}
-                          entryCount={allStreamEntries.length}
-                        />
-
-                        <EvidenceFullView
-                          totalCount={allStreamEntries.length}
-                          visibleCount={streamEntries.length}
-                          newestEntryLabel={formatStreamTimestamp(newestEntryTimestamp)}
-                          activeFilterPills={activeFilterPills}
-                          isFiltersModified={isFiltersModified}
-                          onResetFilters={handleResetFilters}
-                          isCompact={isCompact}
-                        >
-                          <div ref={streamRef} className="space-y-1.5" data-testid="diagnostics-stream-region">
-                            {streamEntries.length === 0 && !isFiltersModified ? (
-                              <p className="text-sm text-muted-foreground" data-testid="diagnostics-empty-message">
-                                No diagnostics yet. Health information will appear here after activity occurs.
-                              </p>
-                            ) : null}
-
-                            {streamEntries.length === 0 && isFiltersModified ? (
-                              <p className="text-sm text-muted-foreground" data-testid="diagnostics-no-results-message">
-                                No entries match the current filters.
-                              </p>
-                            ) : null}
-
-                            {streamEntries.map((entry) => {
-                              if (entry.kind === "problem") {
-                                const isExpanded = expandedProblemId === entry.data.id;
-                                return (
-                                  <DiagnosticsListItem
-                                    key={`problem-${entry.data.id}`}
-                                    testId={`problem-${entry.data.id}`}
-                                    mode="log"
-                                    severity={resolveLogSeverity(entry.data.level)}
-                                    title={entry.data.message}
-                                    timestamp={entry.data.timestamp}
-                                    defaultExpanded={isExpanded}
-                                  >
-                                    <div className="space-y-2">
-                                      <div className="flex items-center gap-2">
-                                        <p className="text-xs font-semibold uppercase tracking-wide text-destructive">
-                                          Problem
-                                        </p>
-                                        <span className="text-xs font-medium text-muted-foreground">
-                                          {entry.contributor}
-                                        </span>
-                                      </div>
-                                      <p className="text-sm font-medium break-words whitespace-normal">
-                                        {entry.data.message}
-                                      </p>
-                                      {entry.data.details ? (
-                                        <pre className="overflow-x-auto whitespace-pre text-xs text-muted-foreground">
-                                          {JSON.stringify(entry.data.details, null, 2)}
-                                        </pre>
-                                      ) : null}
-                                    </div>
-                                  </DiagnosticsListItem>
-                                );
-                              }
-
-                              if (entry.kind === "action") {
-                                return <ActionSummaryListItem key={entry.data.correlationId} summary={entry.data} />;
-                              }
-
-                              if (entry.kind === "log") {
-                                return (
-                                  <DiagnosticsListItem
-                                    key={`log-${entry.data.id}`}
-                                    testId={`log-${entry.data.id}`}
-                                    mode="log"
-                                    severity={resolveLogSeverity(entry.data.level)}
-                                    title={entry.data.message}
-                                    timestamp={entry.data.timestamp}
-                                  >
-                                    <div className="space-y-2">
-                                      <p className="text-sm font-medium break-words whitespace-normal">
-                                        {entry.data.message}
-                                      </p>
-                                      {entry.data.details ? (
-                                        <pre className="overflow-x-auto whitespace-pre text-xs text-muted-foreground">
-                                          {JSON.stringify(entry.data.details, null, 2)}
-                                        </pre>
-                                      ) : null}
-                                    </div>
-                                  </DiagnosticsListItem>
-                                );
-                              }
-
-                              return (
-                                <DiagnosticsListItem
-                                  key={`trace-${entry.data.id}`}
-                                  testId={`trace-${entry.data.id}`}
-                                  mode="trace"
-                                  severity={resolveTraceSeverity(entry.data)}
-                                  title={getTraceTitle(entry.data)}
-                                  timestamp={entry.data.timestamp}
-                                >
-                                  <pre className="overflow-x-auto whitespace-pre text-xs text-muted-foreground">
-                                    {JSON.stringify(entry.data, null, 2)}
-                                  </pre>
-                                </DiagnosticsListItem>
-                              );
-                            })}
-
-                            {hasMoreEntries ? (
-                              <div className="flex justify-center pt-2">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}
-                                  data-testid="load-older-entries"
-                                >
-                                  Load older entries
-                                </Button>
-                              </div>
-                            ) : null}
-                          </div>
-                        </EvidenceFullView>
-
-                        <div className="border-t border-border/70 pt-3" data-testid="diagnostics-action-shelf">
-                          <div
-                            className={cn(
-                              "items-center gap-1.5",
-                              isCompact ? "grid grid-cols-1" : "flex flex-wrap justify-end",
-                            )}
-                          >
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => void onShareAll()}
-                              data-testid="diagnostics-share-all"
-                              aria-label="Share all"
-                              className={cn("h-8 gap-1.5 px-2", isCompact && "w-full min-w-0 justify-center")}
-                            >
-                              <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
-                              {isCompact ? "All" : "Share all"}
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              disabled={!hasVisibleEntries}
-                              onClick={handleShareFiltered}
-                              data-testid="diagnostics-share-filtered"
-                              aria-label="Share filtered"
-                              className={cn("h-8 gap-1.5 px-2", isCompact && "w-full min-w-0 justify-center")}
-                            >
-                              <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
-                              {isCompact ? "Filtered" : "Share filtered"}
-                            </Button>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className={cn("h-8 gap-1.5 px-2", isCompact && "w-full min-w-0 justify-center")}
-                                  data-testid="diagnostics-tools-menu"
-                                >
-                                  <MoreHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
-                                  Tools
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-56">
-                                <DropdownMenuItem
-                                  onSelect={() => setActivePopup("heatmap-REST")}
-                                  data-testid="open-heatmap-rest"
-                                >
-                                  <BarChart2 className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
-                                  REST heat map
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onSelect={() => setActivePopup("heatmap-FTP")}
-                                  data-testid="open-heatmap-ftp"
-                                >
-                                  <BarChart2 className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
-                                  FTP heat map
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onSelect={() => setActivePopup("heatmap-CONFIG")}
-                                  data-testid="open-heatmap-config"
-                                >
-                                  <BarChart2 className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
-                                  Config heat map
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onSelect={() => setActiveDetailView("config-drift")}
-                                  data-testid="open-config-drift"
-                                >
-                                  <Activity className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
-                                  Config drift
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <AlertDialog>
-                                  <AlertDialogTrigger asChild>
-                                    <button
-                                      type="button"
-                                      className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm text-destructive outline-none transition-colors hover:bg-accent"
-                                      data-testid="diagnostics-clear-all-trigger"
-                                    >
-                                      <TriangleAlert className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
-                                      Clear all diagnostics
-                                    </button>
-                                  </AlertDialogTrigger>
-                                  <AlertDialogContent surface="confirmation">
-                                    <AlertDialogHeader>
-                                      <AlertDialogTitle>Clear all diagnostics?</AlertDialogTitle>
-                                      <AlertDialogDescription>
-                                        This removes health evidence, problems, actions, logs, and traces for the
-                                        current session.
-                                      </AlertDialogDescription>
-                                    </AlertDialogHeader>
-                                    <AlertDialogFooter>
-                                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                      <AlertDialogAction
-                                        onClick={onClearAll}
-                                        className="bg-destructive text-destructive-foreground"
-                                        data-testid="diagnostics-clear-all-confirm"
-                                      >
-                                        Clear
-                                      </AlertDialogAction>
-                                    </AlertDialogFooter>
-                                  </AlertDialogContent>
-                                </AlertDialog>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        </div>
-                      </ToolsCard>
-                    </div>
-                  </TechnicalDetailsCard>
+            {/* Phase 2: Evidence list (immediately visible) */}
+            <section className="mt-2 min-h-0 flex-1" data-testid="evidence-panel">
+              <p
+                className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+                data-testid="evidence-heading"
+              >
+                Evidence
+              </p>
+              <div className="max-h-72 space-y-1.5 overflow-y-auto" data-testid="evidence-list">
+                {displayEntries.map((entry) => (
+                  <EvidenceRow key={entry.id} entry={entry} />
+                ))}
+                {displayEntries.length === 0 ? (
+                  <p className="py-2 text-xs text-muted-foreground">No matching evidence.</p>
                 ) : null}
               </div>
-            </div>
-          )}
-        </AppSheetContent>
+            </section>
 
-        <LatencyAnalysisPopup open={activePopup === "latency"} onClose={() => setActivePopup(null)} />
-        <HealthHistoryPopup open={activePopup === "history"} onClose={() => setActivePopup(null)} />
-        {activePopup === "heatmap-REST" || activePopup === "heatmap-FTP" || activePopup === "heatmap-CONFIG" ? (
-          <HeatMapPopup
-            open
-            onClose={() => setActivePopup(null)}
-            variant={activePopup.replace("heatmap-", "") as HeatMapVariant}
-            traceEvents={traceEvents}
-          />
-        ) : null}
+            {/* Phase 6: Compact controls */}
+            <section className="mt-2 shrink-0 space-y-2" data-testid="diagnostics-controls">
+              <div className="flex flex-wrap gap-1.5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => setLatencyOpen(true)}
+                  data-testid="open-latency-screen"
+                >
+                  Latency
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => setHistoryOpen(true)}
+                  data-testid="open-timeline-screen"
+                >
+                  Health history
+                </Button>
+                <div className="relative">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    onClick={() => setOverflowOpen((v) => !v)}
+                    data-testid="diagnostics-overflow-menu"
+                  >
+                    <MoreHorizontal className="h-3.5 w-3.5" />
+                  </Button>
+                  {overflowOpen ? (
+                    <div className="absolute bottom-full right-0 z-10 mb-1 min-w-[10rem] rounded-lg border border-border bg-background py-1 shadow-lg">
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
+                        onClick={() => {
+                          setOverflowOpen(false);
+                          void onShareAll();
+                        }}
+                        data-testid="diagnostics-share-all"
+                      >
+                        <Share2 className="h-3.5 w-3.5" />
+                        Share all
+                      </button>
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
+                        onClick={() => {
+                          setOverflowOpen(false);
+                          handleShareFiltered();
+                        }}
+                        data-testid="diagnostics-share-filtered"
+                      >
+                        <Share2 className="h-3.5 w-3.5" />
+                        Share filtered
+                      </button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <button
+                            type="button"
+                            className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-destructive hover:bg-muted"
+                            data-testid="diagnostics-clear-all-trigger"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            Clear all
+                          </button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent surface="confirmation">
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Clear diagnostics?</AlertDialogTitle>
+                            <AlertDialogDescription>This removes current diagnostics entries.</AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={onClearAll} data-testid="diagnostics-clear-all-confirm">
+                              Clear
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </section>
+          </div>
+        </AppSheetContent>
       </AppSheet>
-    </TooltipProvider>
+
+      <FilterEditorSurface
+        open={open && filtersOpen}
+        onOpenChange={setFiltersOpen}
+        profile={profile}
+        selectedTypes={selectedTypes}
+        onSelectedTypesChange={setSelectedTypes}
+        contributor={contributor}
+        onContributorChange={setContributor}
+        severity={severity}
+        onSeverityChange={setSeverity}
+        totalCount={totalCount}
+        visibleCount={visibleCount}
+      />
+
+      <ConnectionSurface
+        open={open && connectionOpen}
+        onOpenChange={setConnectionOpen}
+        mode={connectionMode}
+        draft={connectionDraft}
+        setDraft={setConnectionDraft}
+        onStartEdit={() => setConnectionMode("edit")}
+        onSave={saveConnection}
+        error={connectionError}
+      />
+
+      <LatencyAnalysisPopup open={open && latencyOpen} onClose={() => setLatencyOpen(false)} />
+      <HealthHistoryPopup open={open && historyOpen} onClose={() => setHistoryOpen(false)} />
+    </>
   );
 }

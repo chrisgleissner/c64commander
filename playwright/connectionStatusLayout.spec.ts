@@ -27,11 +27,8 @@ const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   }
 };
 
-const ensureTechnicalDetailsExpanded = async (dialog: Locator) => {
-  const toggle = dialog.getByTestId("technical-details-toggle");
-  if ((await toggle.getAttribute("aria-expanded")) !== "true") {
-    await toggle.click();
-  }
+const ensureTechnicalDetailsExpanded = async (_dialog: Locator) => {
+  // no-op: technical details section removed from redesigned DiagnosticsDialog
 };
 
 test.describe("Connection Status diagnostics layout", () => {
@@ -43,7 +40,7 @@ test.describe("Connection Status diagnostics layout", () => {
       await assertNoUiIssues(page, testInfo);
     } finally {
       await finalizeEvidence(page, testInfo);
-      await server?.close?.().catch(() => {});
+      await server?.close?.().catch(() => { });
     }
   });
 
@@ -53,9 +50,7 @@ test.describe("Connection Status diagnostics layout", () => {
     await indicator.click();
     const dialog = page.getByRole("dialog", { name: "Diagnostics" });
     await expect(dialog).toBeVisible();
-    await dialog.getByTestId("show-details-button").click();
-    await ensureTechnicalDetailsExpanded(dialog);
-    await expect(dialog.getByTestId("technical-details-card")).toBeVisible();
+    await expect(dialog.getByTestId("diagnostics-health-line")).toBeVisible();
     return dialog;
   };
 
@@ -86,18 +81,18 @@ test.describe("Connection Status diagnostics layout", () => {
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
     const dialog = await openDiagnostics(page);
-    const restRow = dialog
-      .locator("p")
-      .filter({ hasText: /^REST:/ })
-      .first();
-    const ftpRow = dialog.locator("p").filter({ hasText: /^FTP:/ }).first();
 
-    const restBox = await restRow.boundingBox();
-    const ftpBox = await ftpRow.boundingBox();
+    const healthLine = dialog.getByTestId("diagnostics-health-line");
+    const deviceLine = dialog.getByTestId("diagnostics-device-line");
+    await expect(healthLine).toBeVisible();
+    await expect(deviceLine).toBeVisible();
 
-    expect(restBox).toBeTruthy();
-    expect(ftpBox).toBeTruthy();
-    expect(Math.abs((restBox?.x ?? 0) - (ftpBox?.x ?? 0))).toBeLessThanOrEqual(4);
+    const healthBox = await healthLine.boundingBox();
+    const deviceBox = await deviceLine.boundingBox();
+    expect(healthBox).toBeTruthy();
+    expect(deviceBox).toBeTruthy();
+    // Both health and device lines are left-aligned in the compact header
+    expect(Math.abs((healthBox?.x ?? 0) - (deviceBox?.x ?? 0))).toBeLessThanOrEqual(16);
 
     await snap(page, testInfo, "connection-status-layout-rhythm");
   });
@@ -120,11 +115,11 @@ test.describe("Connection Status diagnostics layout", () => {
     await page.goto("/", { waitUntil: "domcontentloaded" });
     const dialog = await openDiagnostics(page);
 
-    const deviceDetailButton = dialog.getByTestId("open-device-detail");
-    const connectionLabel = dialog.getByText("Connection", { exact: true });
+    const deviceDetailButton = dialog.getByTestId("diagnostics-device-line");
+    const healthLine = dialog.getByTestId("diagnostics-health-line");
 
     await expect(deviceDetailButton).toBeVisible();
-    await expect(connectionLabel).toBeVisible();
+    await expect(healthLine).toBeVisible();
 
     const tagName = await deviceDetailButton.evaluate((element) => element.tagName.toLowerCase());
     expect(tagName).toBe("button");
@@ -133,11 +128,12 @@ test.describe("Connection Status diagnostics layout", () => {
     const focused = await page.evaluate(() => document.activeElement?.tagName.toLowerCase());
     expect(focused).toBe("button");
 
-    const summaryBox = await connectionLabel.boundingBox();
+    const healthBox = await healthLine.boundingBox();
     const detailBox = await deviceDetailButton.boundingBox();
-    expect(summaryBox).not.toBeNull();
+    expect(healthBox).not.toBeNull();
     expect(detailBox).not.toBeNull();
-    expect(Math.abs((summaryBox?.y ?? 0) - (detailBox?.y ?? 0))).toBeLessThanOrEqual(6);
+    // Both lines are within the compact header region
+    expect(Math.abs((healthBox?.y ?? 0) - (detailBox?.y ?? 0))).toBeLessThanOrEqual(40);
   });
 
   test("contributor rows are flush-left aligned", async ({ page }: { page: Page }, testInfo: TestInfo) => {
@@ -154,15 +150,19 @@ test.describe("Connection Status diagnostics layout", () => {
     await page.goto("/", { waitUntil: "domcontentloaded" });
     const dialog = await openDiagnostics(page);
 
-    const appRow = await dialog.getByTestId("contributor-row-app").boundingBox();
-    const restRow = await dialog.getByTestId("contributor-row-rest").boundingBox();
-    const ftpRow = await dialog.getByTestId("contributor-row-ftp").boundingBox();
+    const evidenceList = dialog.getByTestId("evidence-list");
+    await expect(evidenceList).toBeVisible();
 
-    expect(appRow).not.toBeNull();
-    expect(restRow).not.toBeNull();
-    expect(ftpRow).not.toBeNull();
-    expect(Math.abs((appRow?.x ?? 0) - (restRow?.x ?? 0))).toBeLessThanOrEqual(5);
-    expect(Math.abs((appRow?.x ?? 0) - (ftpRow?.x ?? 0))).toBeLessThanOrEqual(5);
+    const evidenceRows = evidenceList.locator('[data-testid^="evidence-row-"]');
+    const rowCount = await evidenceRows.count();
+    expect(rowCount).toBeGreaterThan(0);
+
+    // All evidence rows should be flush-left aligned (within a small tolerance)
+    const firstBox = await evidenceRows.first().boundingBox();
+    const lastBox = await evidenceRows.last().boundingBox();
+    expect(firstBox).not.toBeNull();
+    expect(lastBox).not.toBeNull();
+    expect(Math.abs((firstBox?.x ?? 0) - (lastBox?.x ?? 0))).toBeLessThanOrEqual(5);
   });
 
   test("offline summary uses deterministic last-activity copy", async ({
@@ -178,20 +178,13 @@ test.describe("Connection Status diagnostics layout", () => {
     await indicator.click();
     const dialog = page.getByRole("dialog", { name: "Diagnostics" });
     await expect(dialog).toBeVisible();
-    await dialog.getByTestId("show-details-button").click();
-    await ensureTechnicalDetailsExpanded(dialog);
 
-    const restRow = dialog
-      .locator("p")
-      .filter({ hasText: /^REST:/ })
-      .first();
-    const ftpRow = dialog.locator("p").filter({ hasText: /^FTP:/ }).first();
-
-    await expect(restRow).toContainText(/REST:\s+(No REST activity yet|.+\s+·\s+.+\s+·\s+(\d+s ago|\d+m \d+s ago))/i);
-    await expect(ftpRow).toContainText(/FTP:\s+(No FTP activity yet|.+\s+·\s+.+\s+·\s+(\d+s ago|\d+m \d+s ago))/i);
-    await expect(restRow).not.toContainText("just now");
-    await expect(ftpRow).not.toContainText("just now");
-    await expect(dialog.getByTestId("technical-details-card")).not.toContainText("Communication");
+    await expect(dialog.getByTestId("diagnostics-health-line")).toContainText(/Unavailable/i);
+    // If a last-check line is visible it must not claim activity "just now"
+    const lastCheckLine = dialog.getByTestId("diagnostics-last-check-line");
+    if (await lastCheckLine.isVisible()) {
+      await expect(lastCheckLine).not.toContainText("just now");
+    }
   });
 
   test("close button closes the diagnostics dialog", async ({ page }: { page: Page }, testInfo: TestInfo) => {

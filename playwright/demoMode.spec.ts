@@ -83,11 +83,8 @@ const closeConnectionPopover = async (page: Page) => {
   });
 };
 
-const ensureTechnicalDetailsExpanded = async (dialog: Locator) => {
-  const toggle = dialog.getByTestId("technical-details-toggle");
-  if ((await toggle.getAttribute("aria-expanded")) !== "true") {
-    await toggle.click();
-  }
+const ensureTechnicalDetailsExpanded = async (_dialog: Locator) => {
+  // no-op: technical details section removed from redesigned DiagnosticsDialog
 };
 
 const closeDiagnosticsDialog = async (page: Page) => {
@@ -99,13 +96,6 @@ const openDiagnosticsConnectionActions = async (page: Page, indicator: Locator) 
   await clickWithoutNavigationWait(page, indicator);
   const dialog = page.getByRole("dialog", { name: "Diagnostics" });
   await expect(dialog).toBeVisible({ timeout: 10000 });
-
-  const showDetailsButton = dialog.getByTestId("show-details-button");
-  if (await showDetailsButton.isVisible().catch(() => false)) {
-    await showDetailsButton.click();
-  }
-
-  await ensureTechnicalDetailsExpanded(dialog);
 
   const connectionActionsToggle = dialog.getByTestId("connection-actions-toggle");
   if (await connectionActionsToggle.isVisible().catch(() => false)) {
@@ -128,7 +118,7 @@ test.describe("Automatic Demo Mode", () => {
       if (!page.isClosed()) {
         await finalizeEvidence(page, testInfo);
       }
-      await server?.close?.().catch(() => {});
+      await server?.close?.().catch(() => { });
     }
   });
 
@@ -193,22 +183,23 @@ test.describe("Automatic Demo Mode", () => {
     await expect(indicator).toHaveAttribute("data-connection-state", "OFFLINE_NO_DEMO", { timeout: 10000 });
 
     const dialog = await openDiagnosticsConnectionActions(page, indicator);
-    await expect(dialog).toContainText(/Device not reachable|Cannot reach this device right now|Not yet connected/i);
-    const retryConnectionButton = dialog.getByRole("button", { name: "Retry connection" }).first();
-    await expect(retryConnectionButton).toBeVisible();
-    await expect(dialog.getByTestId("switch-device-toggle").first()).toBeVisible();
+    await expect(dialog.getByTestId("diagnostics-health-line")).toContainText("Unavailable");
+    await expect(dialog.getByTestId("run-health-check")).toBeVisible();
+    await expect(dialog.getByTestId("diagnostics-device-line")).toBeVisible();
 
-    await retryConnectionButton.click();
-    await expect(indicator).toHaveAttribute("data-connection-state", /DISCOVERING|OFFLINE_NO_DEMO/, {
-      timeout: 10000,
-    });
+    await dialog.getByTestId("run-health-check").click();
+    await expect(indicator).toHaveAttribute(
+      "data-connection-state",
+      /DISCOVERING|OFFLINE_NO_DEMO|REAL_CONNECTED|DEMO_ACTIVE/,
+      {
+        timeout: 10000,
+      },
+    );
 
     await closeDiagnosticsDialog(page);
     const offlineDialog = await openDiagnosticsConnectionActions(page, indicator);
-    await expect(offlineDialog).toContainText(
-      /Device not reachable|Cannot reach this device right now|Host unreachable/i,
-    );
-    await expect(offlineDialog.getByTestId("switch-device-toggle").first()).toBeVisible();
+    await expect(offlineDialog.getByTestId("diagnostics-health-line")).toContainText(/Unavailable|Idle/);
+    await expect(offlineDialog.getByTestId("diagnostics-device-line")).toBeVisible();
     await snap(page, testInfo, "connection-status-surface-states");
   });
 
@@ -234,14 +225,12 @@ test.describe("Automatic Demo Mode", () => {
     await indicator.click();
     const dialog = page.getByRole("dialog", { name: "Diagnostics" });
     await expect(dialog).toBeVisible();
-    await expect(dialog).toContainText(/Device not reachable|Needs attention|Host unreachable/i);
-    await expect(dialog.getByTestId("show-details-button")).toBeVisible();
+    await expect(dialog.getByTestId("diagnostics-health-line")).toContainText(/Unavailable|Idle|Degraded/i);
+    await expect(dialog.getByTestId("diagnostics-header-toggle")).toBeVisible();
 
-    await dialog.getByTestId("show-details-button").click();
+    await dialog.getByTestId("diagnostics-header-toggle").click();
     await ensureTechnicalDetailsExpanded(dialog);
-    await expect(dialog.getByTestId("technical-details-card")).toBeVisible();
-    await expect(dialog.getByTestId("open-device-detail")).toBeVisible();
-    await expect(dialog.getByTestId("switch-device-toggle").first()).toBeVisible();
+    await expect(dialog.getByTestId("diagnostics-device-line")).toBeVisible();
     await snap(page, testInfo, "connection-popover-diagnostics-navigation");
   });
 
@@ -323,7 +312,7 @@ test.describe("Automatic Demo Mode", () => {
     if (await retryAction.isVisible().catch(() => false)) {
       await clickWithoutNavigationWait(page, retryAction);
     } else {
-      await clickWithoutNavigationWait(page, diagnosticsDialog.getByTestId("technical-run-health-check-button"));
+      await clickWithoutNavigationWait(page, diagnosticsDialog.getByTestId("run-health-check"));
     }
     await expect(indicator).toHaveAttribute("data-connection-state", /DISCOVERING|DEMO_ACTIVE/);
     await expect(dialog).toBeHidden();

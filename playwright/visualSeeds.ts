@@ -988,7 +988,14 @@ export const seedDiagnosticsAnalytics = async (page: Page) => {
           };
         }
       ).__c64uDiagnosticsTestBridge;
-      bridge?.seedAnalytics?.(seed);
+      // Remap health history timestamps to be relative to the browser's current time so
+      // the health history chart shows its full dataset regardless of when screenshots run.
+      const browserNow = Date.now();
+      const liveHealthHistory = seed.healthHistory.map((entry: { minutesAgo: number } & Record<string, unknown>) => ({
+        ...entry,
+        timestamp: new Date(browserNow - entry.minutesAgo * 60_000).toISOString(),
+      }));
+      bridge?.seedAnalytics?.({ ...seed, healthHistory: liveHealthHistory });
       bridge?.seedOverlayState?.({
         lastHealthCheckResult: seed.lastHealthCheckResult,
         healthCheckRunning: false,
@@ -996,7 +1003,10 @@ export const seedDiagnosticsAnalytics = async (page: Page) => {
       });
     },
     {
-      healthHistory: HEALTH_HISTORY_SEED,
+      healthHistory: HEALTH_HISTORY_SEED.map((entry, index) => ({
+        ...entry,
+        minutesAgo: 240 - index * 20,
+      })),
       latencySamples: LATENCY_SAMPLE_SEED.map((sample) => ({
         ...sample,
         timestampMs: FIXED_NOW_MS - sample.minutesAgo * 60_000,

@@ -1,3 +1,10 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v3.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
 export interface LightingCityEntry {
   name: string;
   country: string; // ISO 3166-1 alpha-2 code

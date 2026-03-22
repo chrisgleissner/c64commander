@@ -60,7 +60,15 @@ export function DeviceDetailView({ info, onBack }: Props) {
         >
           <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
         </Button>
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Device detail</p>
+        <div className="space-y-0.5">
+          <h3 className="text-sm font-semibold text-foreground">Device Detail</h3>
+          <p className="text-xs text-muted-foreground">
+            Purpose: Shows the live device identity and runtime build details.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Interpretation: Use this to confirm which device and runtime are currently active.
+          </p>
+        </div>
       </div>
 
       {!info ? (

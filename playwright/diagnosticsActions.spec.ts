@@ -24,19 +24,12 @@ const waitForTracing = async (page: Page) => {
   );
 };
 
-const ensureTechnicalDetailsExpanded = async (dialog: Page) => {
-  const toggle = dialog.getByTestId("technical-details-toggle");
-  if ((await toggle.getAttribute("aria-expanded")) !== "true") {
-    await toggle.click();
-  }
+const ensureTechnicalDetailsExpanded = async (_dialog: Page) => {
+  // no-op: technical details section removed from redesigned DiagnosticsDialog
 };
 
-const ensureToolsExpanded = async (dialog: Page) => {
-  await ensureTechnicalDetailsExpanded(dialog);
-  const toggle = dialog.getByTestId("tools-card-toggle");
-  if ((await toggle.getAttribute("aria-expanded")) !== "true") {
-    await toggle.click();
-  }
+const ensureToolsExpanded = async (_dialog: Page) => {
+  // no-op: tools expansion removed from redesigned DiagnosticsDialog
 };
 
 test.describe("Diagnostics Actions tab", () => {
@@ -188,33 +181,18 @@ test.describe("Diagnostics Actions tab", () => {
     await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
     await expect(page.getByRole("dialog", { name: "Diagnostics" })).toBeVisible();
     await snap(page, testInfo, "diagnostics-open");
-    await page.getByTestId("show-details-button").click();
-    await ensureToolsExpanded(page);
 
-    // Actions evidence filter is active by default – verify before inspecting content
-    await expect(page.getByTestId("evidence-toggle-actions")).toHaveAttribute("aria-pressed", "true");
-
-    // Verify action summary is visible
-    await expect(page.getByTestId("action-summary-COR-0900")).toBeVisible();
-
-    // Verify badge counts
-    await expect(page.getByTestId("action-rest-count-COR-0900")).toHaveText("REST×1");
-    await expect(page.getByTestId("action-ftp-count-COR-0900")).toHaveText("FTP×1");
-    await expect(page.getByTestId("action-error-count-COR-0900")).toHaveText("ERR×1");
+    // Actions are shown by default (“Problems” + “Actions” selected)
+    // Verify action entry is visible
+    await expect(page.getByTestId("evidence-row-action-COR-0900")).toBeVisible();
     await snap(page, testInfo, "actions-tab");
 
-    // Expand the action details - use evaluate to bypass sticky action shelf coordinate interception
-    await page
-      .getByTestId("action-summary-COR-0900")
-      .locator("summary")
-      .evaluate((el) => (el as HTMLElement).click());
-    await expect(page.getByTestId("action-rest-effect-COR-0900-0")).toBeVisible();
-    await expect(page.getByTestId("action-ftp-effect-COR-0900-0")).toBeVisible();
-    await expect(page.getByTestId("action-error-effect-COR-0900-0")).toBeVisible();
-    await expect(page.getByTestId("action-rest-effect-COR-0900-1")).toHaveCount(0);
-    await expect(page.getByTestId("action-ftp-effect-COR-0900-1")).toHaveCount(0);
-    await expect(page.getByText("No REST effects.")).toHaveCount(0);
-    await expect(page.getByText("No FTP effects.")).toHaveCount(0);
+    // Verify the action title and summary detail are rendered
+    const actionRow = page.getByTestId("evidence-row-action-COR-0900");
+    await expect(actionRow).toContainText("demo.action");
+    await expect(actionRow).toContainText("REST 1");
+    await expect(actionRow).toContainText("FTP 1");
+    await expect(actionRow).toContainText("ERR 1");
     await snap(page, testInfo, "actions-expanded");
   });
 
@@ -389,18 +367,12 @@ test.describe("Diagnostics Actions tab", () => {
     await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
     await expect(page.getByRole("dialog", { name: "Diagnostics" })).toBeVisible();
     // Expand to full details before checking filters and action summaries
-    await page.getByTestId("show-details-button").click();
-    await ensureToolsExpanded(page);
-    // Actions evidence filter is active by default
-    await expect(page.getByTestId("evidence-toggle-actions")).toHaveAttribute("aria-pressed", "true");
-
+    // Actions are shown by default
     for (const id of ["COR-0700", "COR-0710", "COR-0720"]) {
-      await page.getByTestId(`action-summary-${id}`).locator("summary").click({ force: true });
+      await expect(page.getByTestId(`evidence-row-action-${id}`)).toBeVisible();
     }
 
-    await expect(page.getByTestId("action-rest-effect-COR-0700-0")).toContainText("target: demo");
-    await expect(page.getByTestId("action-rest-effect-COR-0710-0")).toContainText("target: sandbox");
-    await expect(page.getByTestId("action-rest-effect-COR-0720-0")).toContainText("target: device");
+    // Verify targets are not labelled with internal "mock" wording
     await expect(page.getByText(/target:\s*mock\b/i)).toHaveCount(0);
     await snap(page, testInfo, "actions-target-labels");
   });

@@ -23,26 +23,31 @@ vi.mock("@/lib/uiErrors", () => ({
   reportUserError: vi.fn(),
 }));
 
-vi.mock("@/lib/logging", () => ({
-  clearLogs: vi.fn(),
-  getErrorLogs: vi.fn(() => [
-    {
-      id: "err-1",
-      level: "error",
-      message: "Broken export",
-      timestamp: "2024-01-01T00:00:00.000Z",
-      details: { code: "E1" },
-    },
-  ]),
-  getLogs: vi.fn(() => [
-    {
-      id: "log-1",
-      level: "info",
-      message: "Ready",
-      timestamp: "2024-01-01T00:00:01.000Z",
-    },
-  ]),
-}));
+vi.mock("@/lib/logging", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/logging")>("@/lib/logging");
+  return {
+    ...actual,
+    addLog: vi.fn(),
+    clearLogs: vi.fn(),
+    getErrorLogs: vi.fn(() => [
+      {
+        id: "err-1",
+        level: "error",
+        message: "Broken export",
+        timestamp: "2024-01-01T00:00:00.000Z",
+        details: { code: "E1" },
+      },
+    ]),
+    getLogs: vi.fn(() => [
+      {
+        id: "log-1",
+        level: "info",
+        message: "Ready",
+        timestamp: "2024-01-01T00:00:01.000Z",
+      },
+    ]),
+  };
+});
 
 vi.mock("@/lib/tracing/traceSession", () => ({
   clearTraceEvents: vi.fn(),
@@ -142,15 +147,8 @@ const renderOverlay = (initialPath = "/") =>
     </MemoryRouter>,
   );
 
-const expandDiagnosticsTools = () => {
-  fireEvent.click(screen.getByTestId("show-details-button"));
-  fireEvent.click(screen.getByTestId("technical-details-toggle"));
-  fireEvent.click(screen.getByTestId("tools-card-toggle"));
-};
-
-const expandTechnicalDetails = () => {
-  fireEvent.click(screen.getByTestId("show-details-button"));
-  fireEvent.click(screen.getByTestId("technical-details-toggle"));
+const expandDiagnosticsHeader = () => {
+  fireEvent.click(screen.getByTestId("diagnostics-header-toggle"));
 };
 
 describe("GlobalDiagnosticsOverlay", () => {
@@ -170,10 +168,10 @@ describe("GlobalDiagnosticsOverlay", () => {
     renderOverlay();
 
     const dialog = await screen.findByRole("dialog");
-    expandDiagnosticsTools();
-    expect(within(dialog).getByRole("button", { name: /^share all$/i })).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByTestId("diagnostics-overflow-menu"));
+    expect(within(dialog).getByTestId("diagnostics-share-all")).toBeInTheDocument();
 
-    fireEvent.click(within(dialog).getByRole("button", { name: /^share all$/i }));
+    fireEvent.click(within(dialog).getByTestId("diagnostics-share-all"));
 
     expect(shareAllDiagnosticsZip).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -191,8 +189,8 @@ describe("GlobalDiagnosticsOverlay", () => {
     renderOverlay();
 
     const dialog = await screen.findByRole("dialog");
-    expandDiagnosticsTools();
-    fireEvent.click(within(dialog).getByRole("button", { name: /^share all$/i }));
+    fireEvent.click(within(dialog).getByTestId("diagnostics-overflow-menu"));
+    fireEvent.click(within(dialog).getByTestId("diagnostics-share-all"));
 
     await waitFor(() => {
       expect(reportUserError).toHaveBeenCalledWith(
@@ -259,8 +257,8 @@ describe("GlobalDiagnosticsOverlay", () => {
     renderOverlay();
 
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
-    expandTechnicalDetails();
-    expect(screen.getByTestId("open-health-check-detail")).toBeInTheDocument();
+    expandDiagnosticsHeader();
+    expect(screen.getByTestId("diagnostics-header-expanded")).toHaveTextContent("P50 10ms");
 
     await act(async () => {
       window.dispatchEvent(
@@ -275,9 +273,9 @@ describe("GlobalDiagnosticsOverlay", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByTestId("technical-run-health-check-button")).toHaveTextContent("Running health check…");
+      expect(screen.getByTestId("run-health-check")).toHaveTextContent("Running health check");
     });
-    expect(screen.queryByTestId("open-health-check-detail")).not.toBeInTheDocument();
+    expect(screen.getByTestId("run-health-check")).toBeDisabled();
   });
 
   it("ignores runtime diagnostics open requests without a preset", async () => {

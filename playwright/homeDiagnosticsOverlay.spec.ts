@@ -35,19 +35,12 @@ const openDiagnosticsOverlay = async (page: Page) => {
   return sheet;
 };
 
-const ensureTechnicalDetailsExpanded = async (dialog: Locator) => {
-  const toggle = dialog.getByTestId("technical-details-toggle");
-  if ((await toggle.getAttribute("aria-expanded")) !== "true") {
-    await toggle.click();
-  }
+const ensureTechnicalDetailsExpanded = async (_dialog: Locator) => {
+  // no-op: technical details section removed from redesigned DiagnosticsDialog
 };
 
-const ensureToolsExpanded = async (dialog: Locator) => {
-  await ensureTechnicalDetailsExpanded(dialog);
-  const toggle = dialog.getByTestId("tools-card-toggle");
-  if ((await toggle.getAttribute("aria-expanded")) !== "true") {
-    await toggle.click();
-  }
+const ensureToolsExpanded = async (_dialog: Locator) => {
+  // no-op: tools expansion removed from redesigned DiagnosticsDialog
 };
 
 const installShareOverride = async (page: Page) => {
@@ -136,103 +129,51 @@ test.describe("Home diagnostics overlay", () => {
     await snap(page, testInfo, "overlay-open-home");
   });
 
-  test("supports switch-device recovery, health checks, analytics, export enrichment, and clear-all", async ({
+  test("supports health checks, analytics, export enrichment, and clear-all", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
-    const serverUrl = new URL(server.baseUrl);
-    const openToolsMenu = async () => {
-      await ensureToolsExpanded(dialog);
-      await dialog.getByTestId("diagnostics-tools-menu").click();
+    const openOverflowMenu = async () => {
+      await dialog.getByTestId("diagnostics-overflow-menu").click();
     };
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
     const dialog = await openDiagnosticsOverlay(page);
 
-    await dialog.getByTestId("show-details-button").click();
-    await ensureTechnicalDetailsExpanded(dialog);
-    await dialog.getByTestId("connection-actions-toggle").click();
-    await expect(dialog.getByTestId("connection-actions-expanded")).toBeVisible();
-    await dialog.getByTestId("switch-device-toggle").click();
-    await expect(dialog.getByTestId("switch-device-form")).toBeVisible();
-    await dialog.getByTestId("switch-device-host-input").fill(serverUrl.hostname);
-    await dialog.getByTestId("switch-device-port-input").fill(serverUrl.port);
-    await dialog.getByRole("button", { name: /^Connect$/i }).click();
-    await expect(dialog.getByText(new RegExp(`Switched to ${serverUrl.hostname}`))).toBeVisible();
     await expect(dialog).toBeVisible();
-    await snap(page, testInfo, "switch-device-success");
+    await snap(page, testInfo, "details-open");
 
-    await dialog.getByTestId("run-health-check-button").click();
-    await expect(dialog.getByTestId("run-health-check-button")).toHaveText("Running health check…");
-    await expect(dialog.getByTestId("run-health-check-button")).toHaveText("Run health check", { timeout: 15000 });
-    await dialog.getByTestId("show-details-button").click();
-    await ensureTechnicalDetailsExpanded(dialog);
-    await expect(dialog.getByTestId("open-health-check-detail")).toBeVisible();
+    // Run health check via always-visible button
+    const runHealthCheckBtn = dialog.getByTestId("run-health-check");
+    await expect(runHealthCheckBtn).toBeVisible();
+    await runHealthCheckBtn.click();
+    // Wait for health check to complete (button re-enables or label reverts)
+    await expect(runHealthCheckBtn).not.toHaveText("Running health check", { timeout: 15000 });
     await snap(page, testInfo, "health-check-finished");
 
-    await dialog.getByTestId("open-health-check-detail").click();
-    const healthCheckDetail = dialog.getByTestId("health-check-detail-view");
-    await expect(healthCheckDetail).toBeVisible();
-    await expect(healthCheckDetail.getByTestId("health-check-probe-rest")).toBeVisible();
-    await expect(healthCheckDetail.getByTestId("health-check-probe-jiffy")).toBeVisible();
-    await expect(healthCheckDetail.getByTestId("health-check-probe-config")).toBeVisible();
-    await expect(healthCheckDetail.getByTestId("health-check-probe-ftp")).toBeVisible();
-    await snap(page, testInfo, "health-check-detail");
-    await dialog.getByRole("button", { name: /Back to diagnostics summary/i }).click();
-    await expect(healthCheckDetail).toBeHidden();
-
-    await dialog.getByTestId("latency-summary-row").click();
+    await dialog.getByTestId("open-latency-screen").click();
     const latencyPopup = page.getByTestId("latency-analysis-popup");
     await expect(latencyPopup).toBeVisible();
     await expect(dialog).toBeVisible();
-    await latencyPopup.getByLabel("All call types").click();
-    await latencyPopup.getByLabel("REST").click();
     await expect(latencyPopup.getByText(/\d+ samples?/)).toBeVisible();
     await snap(page, testInfo, "latency-popup");
     await latencyPopup.getByRole("button", { name: /Close/i }).click();
     await expect(latencyPopup).toBeHidden();
 
-    await dialog.getByTestId("health-history-row").click();
+    await dialog.getByTestId("open-timeline-screen").click();
     const historyPopup = page.getByTestId("health-history-popup");
     await expect(historyPopup).toBeVisible();
-    await expect(historyPopup.getByText(/recorded health check|recorded health checks/i)).toBeVisible();
     await expect(historyPopup.getByTestId("health-history-zoom-in")).toBeVisible();
     await expect(historyPopup.getByTestId("health-history-track")).toBeVisible();
     await historyPopup.locator('[data-testid^="health-history-segment-"]').last().click();
     await expect(historyPopup.getByTestId("health-history-selection-overlay")).toBeVisible();
     await expect(historyPopup.getByTestId("health-history-selection-reason")).toBeVisible();
-    await historyPopup.getByTestId("health-history-selection-dismiss").click();
+    await historyPopup.getByRole("button", { name: "Dismiss" }).click();
     await expect(historyPopup.getByTestId("health-history-selection-overlay")).toBeHidden();
     await snap(page, testInfo, "history-popup");
     await historyPopup.getByRole("button", { name: /Close/i }).click();
     await expect(historyPopup).toBeHidden();
 
-    await openToolsMenu();
-    await page.getByTestId("open-heatmap-config").click();
-    const heatMapPopup = page.getByTestId("heat-map-popup-config");
-    await expect(heatMapPopup).toBeVisible();
-    await heatMapPopup.getByTestId("heat-metric-latency").click();
-    const firstHeatCell = heatMapPopup.locator('[data-testid^="heat-cell-"]').first();
-    await expect(firstHeatCell).toBeVisible();
-    await firstHeatCell.click();
-    await expect(heatMapPopup.getByTestId("heat-cell-detail")).toBeVisible();
-    await snap(page, testInfo, "config-heatmap");
-    await heatMapPopup.getByTestId("analytic-popup-close").click();
-    await expect(heatMapPopup).toBeHidden();
-
-    await openToolsMenu();
-    await page.getByTestId("open-config-drift").click();
-    const driftView = dialog.getByTestId("config-drift-view");
-    await expect(driftView).toBeVisible();
-    await expect(
-      driftView
-        .getByTestId("config-drift-no-drift")
-        .or(driftView.getByTestId("config-drift-results"))
-        .or(driftView.getByTestId("config-drift-error")),
-    ).toBeVisible();
-    await snap(page, testInfo, "config-drift");
-    await driftView.getByTestId("config-drift-back").click();
-    await expect(driftView).toBeHidden();
-
+    await openOverflowMenu();
     await dialog.getByTestId("diagnostics-share-all").click();
     const payloads = (await expect
       .poll(async () =>
@@ -270,11 +211,11 @@ test.describe("Home diagnostics overlay", () => {
     expect(Array.isArray(supplemental.latencySamples)).toBeTruthy();
     expect(Array.isArray(supplemental.recoveryEvidence)).toBeTruthy();
 
-    await openToolsMenu();
+    await openOverflowMenu();
     await page.getByTestId("diagnostics-clear-all-trigger").click();
     await page.getByTestId("diagnostics-clear-all-confirm").click();
-    await expect(dialog.getByTestId("diagnostics-empty-message")).toBeVisible();
-    await expect(dialog.getByTestId("open-health-check-detail")).toHaveCount(0);
+    await expect(dialog.getByText("No matching evidence.")).toBeVisible();
+    await expect(dialog.getByTestId("run-health-check")).toHaveCount(1);
     await snap(page, testInfo, "clear-all");
   });
 });

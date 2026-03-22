@@ -191,21 +191,12 @@ const renderSettingsPageWithDisplayProfileProvider = () =>
 
 const openDiagnosticsTools = async () => {
   fireEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
-  const dialog = await screen.findByRole("dialog");
+  return await screen.findByRole("dialog");
+};
 
-  fireEvent.click(within(dialog).getByTestId("show-details-button"));
-
-  const technicalDetailsToggle = within(dialog).getByTestId("technical-details-toggle");
-  if (technicalDetailsToggle.getAttribute("aria-expanded") !== "true") {
-    fireEvent.click(technicalDetailsToggle);
-  }
-
-  const toolsToggle = within(dialog).getByTestId("tools-card-toggle");
-  if (toolsToggle.getAttribute("aria-expanded") !== "true") {
-    fireEvent.click(toolsToggle);
-  }
-
-  return dialog;
+const openDiagnosticsFilters = async (dialog: HTMLElement) => {
+  fireEvent.click(within(dialog).getByTestId("open-filters-editor"));
+  return await screen.findByTestId("filters-editor-surface");
 };
 
 vi.mock("@/lib/uiErrors", () => ({
@@ -608,10 +599,8 @@ describe("SettingsPage", () => {
 
     const dialog = await openDiagnosticsTools();
 
-    expect(within(dialog).getByTestId("evidence-toggle-problems")).toBeInTheDocument();
-    expect(within(dialog).getByTestId("evidence-toggle-actions")).toBeInTheDocument();
-    expect(within(dialog).getByTestId("evidence-toggle-logs")).toBeInTheDocument();
-    expect(within(dialog).getByTestId("evidence-toggle-traces")).toBeInTheDocument();
+    expect(within(dialog).getByTestId("evidence-panel")).toBeInTheDocument();
+    expect(within(dialog).getByTestId("evidence-heading")).toBeInTheDocument();
   });
 
   it("opens diagnostics from a preset request event", async () => {
@@ -633,17 +622,13 @@ describe("SettingsPage", () => {
 
     const dialog = await openDiagnosticsTools();
 
+    fireEvent.click(within(dialog).getByTestId("diagnostics-overflow-menu"));
     expect(within(dialog).getByTestId("diagnostics-share-all")).toBeInTheDocument();
     expect(within(dialog).getByTestId("diagnostics-share-filtered")).toBeInTheDocument();
-    fireEvent.pointerDown(within(dialog).getByTestId("diagnostics-tools-menu"));
-    expect(await screen.findByTestId("diagnostics-clear-all-trigger")).toBeInTheDocument();
-    expect(within(dialog).queryByRole("button", { name: /clear logs/i })).not.toBeInTheDocument();
-    expect(within(dialog).queryByRole("button", { name: /clear traces/i })).not.toBeInTheDocument();
-    expect(within(dialog).queryByRole("button", { name: /share redacted/i })).not.toBeInTheDocument();
-    expect(within(dialog).queryByRole("button", { name: /email/i })).not.toBeInTheDocument();
+    expect(within(dialog).getByTestId("diagnostics-clear-all-trigger")).toBeInTheDocument();
   });
 
-  it("filters diagnostics entries using search text and restores on clear", async () => {
+  it("filters diagnostics entries by evidence type using the filter editor", async () => {
     vi.mocked(getErrorLogs).mockReturnValue([
       {
         id: "err-1",
@@ -664,56 +649,17 @@ describe("SettingsPage", () => {
     renderSettingsPage();
 
     const dialog = await openDiagnosticsTools();
+    const filters = await openDiagnosticsFilters(dialog);
 
-    // Problems are active by default — both error entries are visible
     expect((await within(dialog).findAllByText("Disk error")).length).toBeGreaterThan(0);
     expect((await within(dialog).findAllByText("Network failure")).length).toBeGreaterThan(0);
 
-    // Filter by "network" — only matching entry remains
-    const filterInput = within(dialog).getByTestId("diagnostics-filter-input");
-    fireEvent.change(filterInput, { target: { value: "network" } });
-    expect((await within(dialog).findAllByText("Network failure")).length).toBeGreaterThan(0);
+    fireEvent.click(within(filters).getByRole("button", { name: "Logs" }));
+    fireEvent.click(within(filters).getByRole("button", { name: "✓ Actions" }));
+    fireEvent.click(within(filters).getByRole("button", { name: "✓ Problems" }));
+
     expect(within(dialog).queryByText("Disk error")).not.toBeInTheDocument();
-
-    // Clear filter — both entries visible again
-    fireEvent.click(within(dialog).getByRole("button", { name: /clear filter/i }));
-    expect((await within(dialog).findAllByText("Disk error")).length).toBeGreaterThan(0);
-  });
-
-  it("filters diagnostics entries case-insensitively across message and level fields", async () => {
-    vi.mocked(getLogs).mockReturnValue([
-      {
-        id: "log-unique-42",
-        level: "warn",
-        message: "SYSTEM Boot Complete",
-        timestamp: "2024-01-01T01:02:03.004Z",
-      },
-    ] as any);
-
-    renderSettingsPage();
-
-    const dialog = await openDiagnosticsTools();
-
-    // Enable Logs toggle
-    fireEvent.click(within(dialog).getByTestId("evidence-toggle-logs"));
-
-    const filterInput = within(dialog).getByTestId("diagnostics-filter-input");
-
-    // Case-insensitive match on message
-    fireEvent.change(filterInput, { target: { value: "system boot" } });
-    expect((await within(dialog).findAllByText("SYSTEM Boot Complete")).length).toBeGreaterThan(0);
-
-    // Case-insensitive match on level
-    fireEvent.change(filterInput, { target: { value: "WARN" } });
-    expect((await within(dialog).findAllByText("SYSTEM Boot Complete")).length).toBeGreaterThan(0);
-
-    // Match on id
-    fireEvent.change(filterInput, { target: { value: "log-unique-42" } });
-    expect((await within(dialog).findAllByText("SYSTEM Boot Complete")).length).toBeGreaterThan(0);
-
-    // No match — entry hidden
-    fireEvent.change(filterInput, { target: { value: "zz-no-match-zz" } });
-    expect(within(dialog).queryByText("SYSTEM Boot Complete")).toBeNull();
+    expect(within(dialog).queryByText("Network failure")).not.toBeInTheDocument();
   });
 
   it("clears diagnostics after confirmation", async () => {
@@ -731,12 +677,10 @@ describe("SettingsPage", () => {
 
     const dialog = await openDiagnosticsTools();
 
-    // Problems active by default — error entry visible
     expect((await within(dialog).findAllByText("Error entry")).length).toBeGreaterThan(0);
 
-    // Click clear all trigger, confirm
-    fireEvent.pointerDown(within(dialog).getByTestId("diagnostics-tools-menu"));
-    fireEvent.click(await screen.findByTestId("diagnostics-clear-all-trigger"));
+    fireEvent.click(within(dialog).getByTestId("diagnostics-overflow-menu"));
+    fireEvent.click(within(dialog).getByTestId("diagnostics-clear-all-trigger"));
     const confirm = await screen.findByRole("alertdialog");
     fireEvent.click(within(confirm).getByTestId("diagnostics-clear-all-confirm"));
 
@@ -750,8 +694,8 @@ describe("SettingsPage", () => {
 
     const dialog = await openDiagnosticsTools();
 
-    fireEvent.pointerDown(within(dialog).getByTestId("diagnostics-tools-menu"));
-    fireEvent.click(await screen.findByTestId("diagnostics-clear-all-trigger"));
+    fireEvent.click(within(dialog).getByTestId("diagnostics-overflow-menu"));
+    fireEvent.click(within(dialog).getByTestId("diagnostics-clear-all-trigger"));
     const confirm = await screen.findByRole("alertdialog");
     fireEvent.click(within(confirm).getByRole("button", { name: /cancel/i }));
 
@@ -759,7 +703,7 @@ describe("SettingsPage", () => {
     expect(clearLogs).not.toHaveBeenCalled();
   });
 
-  it("renders action indicators with semantic colors", async () => {
+  it("renders action rows and trace rows after diagnostics updates", async () => {
     const base = new Date("2024-01-01T00:00:00.000Z").getTime();
     vi.mocked(getTraceEvents).mockReturnValue([
       {
@@ -838,85 +782,19 @@ describe("SettingsPage", () => {
     renderSettingsPage();
 
     const dialog = await openDiagnosticsTools();
+    const filters = await openDiagnosticsFilters(dialog);
 
-    // Dispatch trace update so action summaries are derived from mock trace events
     await act(async () => {
       window.dispatchEvent(new Event("c64u-traces-updated"));
     });
 
-    // Actions are active by default — action-summary-COR-0001 appears in unified stream
-    const summary = await within(dialog).findByTestId("action-summary-COR-0001");
-    expect(within(summary).getByLabelText("origin: user")).toHaveClass("bg-diagnostics-user");
-    expect(within(summary).getByTestId("action-rest-count-COR-0001")).toHaveClass("text-diagnostics-rest");
-    expect(within(summary).getByTestId("action-ftp-count-COR-0001")).toHaveClass("text-diagnostics-ftp");
-    expect(within(summary).getByTestId("action-error-count-COR-0001")).toHaveClass("text-diagnostics-error");
-    expect(within(summary).getByText(/\d+ms/, { selector: "div" })).toBeInTheDocument();
-    expect(within(summary).getAllByText(/target:\s*c64u/i)).toHaveLength(2);
-  });
+    expect(await within(dialog).findByTestId("evidence-row-action-COR-0001")).toBeInTheDocument();
 
-  it("uses shared renderer for traces and actions", async () => {
-    const base = new Date("2024-01-01T00:00:00.000Z").getTime();
-    vi.mocked(getTraceEvents).mockReturnValue([
-      {
-        id: "trace-1",
-        timestamp: new Date(base).toISOString(),
-        relativeMs: 0,
-        type: "rest-request",
-        origin: "user",
-        correlationId: "COR-0100",
-        data: { method: "GET", url: "/v1/info" },
-      },
-      {
-        id: "trace-2",
-        timestamp: new Date(base + 10).toISOString(),
-        relativeMs: 10,
-        type: "action-start",
-        origin: "user",
-        correlationId: "COR-0100",
-        data: {
-          name: "Inspect",
-          component: "Test",
-          context: {},
-          trigger: {
-            kind: "timer",
-            name: "connectivity.probe",
-            intervalMs: 5000,
-            details: null,
-          },
-        },
-      },
-      {
-        id: "trace-3",
-        timestamp: new Date(base + 20).toISOString(),
-        relativeMs: 20,
-        type: "action-end",
-        origin: "user",
-        correlationId: "COR-0100",
-        data: { status: "success", error: null },
-      },
-    ] as any);
+    fireEvent.click(within(filters).getByRole("button", { name: "Traces" }));
 
-    renderSettingsPage();
-
-    const dialog = await openDiagnosticsTools();
-
-    // Dispatch trace update so trace events and action summaries are updated
-    await act(async () => {
-      window.dispatchEvent(new Event("c64u-traces-updated"));
+    await waitFor(() => {
+      expect(within(dialog).queryAllByTestId(/^evidence-row-trace-/).length).toBeGreaterThan(0);
     });
-
-    // Enable Traces toggle (Traces not active by default)
-    fireEvent.click(within(dialog).getByTestId("evidence-toggle-traces"));
-
-    const traceItem = await within(dialog).findByTestId("trace-trace-1");
-    expect(traceItem.querySelector('[data-testid="diagnostics-summary-grid"]')).toBeTruthy();
-
-    // Actions active by default — action-summary renders in unified stream
-    const actionItem = await within(dialog).findByTestId("action-summary-COR-0100");
-    expect(actionItem.querySelector('[data-testid="diagnostics-summary-grid"]')).toBeTruthy();
-    expect(within(actionItem).getByTestId("action-trigger-COR-0100")).toHaveTextContent(
-      "trigger: timer (connectivity.probe) · 5000ms",
-    );
   });
 
   it("exports filtered diagnostics and reports failures", async () => {
@@ -929,9 +807,9 @@ describe("SettingsPage", () => {
 
     const dialog = await openDiagnosticsTools();
 
-    // Wait for the error entry so Share filtered is enabled
-    await within(dialog).findByTestId("problem-err-x1");
+    await within(dialog).findByText("Export test error");
 
+    fireEvent.click(within(dialog).getByTestId("diagnostics-overflow-menu"));
     fireEvent.click(within(dialog).getByTestId("diagnostics-share-filtered"));
 
     await waitFor(() => {
@@ -940,6 +818,7 @@ describe("SettingsPage", () => {
 
     vi.mocked(shareDiagnosticsZip).mockRejectedValue(new Error("export failed"));
 
+    fireEvent.click(within(dialog).getByTestId("diagnostics-overflow-menu"));
     fireEvent.click(within(dialog).getByTestId("diagnostics-share-filtered"));
 
     await waitFor(() => {
@@ -957,7 +836,8 @@ describe("SettingsPage", () => {
     renderSettingsPage();
 
     const dialog = await openDiagnosticsTools();
-    const shareAllButton = within(dialog).getByRole("button", { name: /^share all$/i });
+    fireEvent.click(within(dialog).getByTestId("diagnostics-overflow-menu"));
+    const shareAllButton = within(dialog).getByTestId("diagnostics-share-all");
 
     fireEvent.click(shareAllButton);
 
@@ -974,7 +854,8 @@ describe("SettingsPage", () => {
       throw new Error("share all failed");
     });
 
-    fireEvent.click(shareAllButton);
+    fireEvent.click(within(dialog).getByTestId("diagnostics-overflow-menu"));
+    fireEvent.click(within(dialog).getByTestId("diagnostics-share-all"));
 
     await waitFor(() => {
       expect(reportUserError).toHaveBeenCalledWith(
@@ -1298,7 +1179,7 @@ describe("SettingsPage", () => {
     localStorageSpy.mockRestore();
   });
 
-  it("filters traces tab entries with non-empty filter text", async () => {
+  it("shows traces after enabling the trace type in the filter editor", async () => {
     const base = new Date("2024-06-01T10:00:00.000Z").getTime();
     vi.mocked(getTraceEvents).mockReturnValue([
       {
@@ -1324,60 +1205,16 @@ describe("SettingsPage", () => {
     renderSettingsPage();
 
     const dialog = await openDiagnosticsTools();
+    const filters = await openDiagnosticsFilters(dialog);
 
-    // Dispatch update so state picks up mocked traces
     await act(async () => {
       window.dispatchEvent(new Event("c64u-traces-updated"));
     });
 
-    // Enable Traces evidence type
-    fireEvent.click(within(dialog).getByTestId("evidence-toggle-traces"));
+    fireEvent.click(within(filters).getByRole("button", { name: "Traces" }));
 
-    // Both traces should appear
-    await within(dialog).findByTestId("trace-trace-filter-a");
-    expect(within(dialog).getByTestId("trace-trace-filter-b")).toBeTruthy();
-
-    // Filter by trace id — only trace-filter-a matches
-    const filterInput = within(dialog).getByTestId("diagnostics-filter-input");
-    fireEvent.change(filterInput, { target: { value: "trace-filter-a" } });
-
-    await waitFor(() => {
-      expect(within(dialog).getByTestId("trace-trace-filter-a")).toBeTruthy();
-      expect(within(dialog).queryByTestId("trace-trace-filter-b")).toBeNull();
-    });
-  }, 15000);
-
-  it("filters actions tab entries with non-empty filter text", async () => {
-    renderSettingsPage();
-
-    const dialog = await openDiagnosticsTools();
-
-    // Actions are active by default — type a filter that matches nothing
-    const filterInput = within(dialog).getByTestId("diagnostics-filter-input");
-    fireEvent.change(filterInput, { target: { value: "nonexistent-action" } });
-
-    // No action summaries should match
-    expect(within(dialog).queryAllByTestId(/^action-/)).toHaveLength(0);
-  }, 15000);
-
-  it("exports filtered diagnostics from the share-filtered button", async () => {
-    vi.mocked(shareDiagnosticsZip).mockResolvedValue(undefined);
-    vi.mocked(getErrorLogs).mockReturnValue([
-      { id: "err-sf1", level: "error", message: "Share filtered test", timestamp: new Date().toISOString() },
-    ] as any);
-
-    renderSettingsPage();
-
-    const dialog = await openDiagnosticsTools();
-
-    // Wait for visible entry so the button is enabled
-    await within(dialog).findByTestId("problem-err-sf1");
-
-    fireEvent.click(within(dialog).getByTestId("diagnostics-share-filtered"));
-
-    await waitFor(() => {
-      expect(shareDiagnosticsZip).toHaveBeenCalled();
-    });
+    expect(await within(dialog).findByTestId("evidence-row-trace-trace-filter-a")).toBeInTheDocument();
+    expect(await within(dialog).findByTestId("evidence-row-trace-trace-filter-b")).toBeInTheDocument();
   }, 15000);
 
   it("handles non-finite input for discovery timing fields (uses fallback)", async () => {

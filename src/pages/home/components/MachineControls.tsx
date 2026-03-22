@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v3.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import { ReactNode } from "react";
 import { motion } from "framer-motion";
 import { RotateCcw, Power, PowerOff, Pause, Menu, Upload, Play, Download } from "lucide-react";

@@ -81,19 +81,12 @@ const smoothScrollToBottom = async (page: Page, durationMs: number) => {
   await smoothScrollTo(page, targetY, durationMs);
 };
 
-const ensureTechnicalDetailsExpanded = async (dialog: ReturnType<Page["getByRole"]>) => {
-  const toggle = dialog.getByTestId("technical-details-toggle");
-  if ((await toggle.getAttribute("aria-expanded")) !== "true") {
-    await toggle.click();
-  }
+const ensureTechnicalDetailsExpanded = async (_dialog: ReturnType<Page["getByRole"]>) => {
+  // no-op: technical details section removed from redesigned DiagnosticsDialog
 };
 
-const ensureToolsExpanded = async (dialog: ReturnType<Page["getByRole"]>) => {
-  await ensureTechnicalDetailsExpanded(dialog);
-  const toggle = dialog.getByTestId("tools-card-toggle");
-  if ((await toggle.getAttribute("aria-expanded")) !== "true") {
-    await toggle.click();
-  }
+const ensureToolsExpanded = async (_dialog: ReturnType<Page["getByRole"]>) => {
+  // no-op: tools expansion removed from redesigned DiagnosticsDialog
 };
 
 const openAndCloseSelect = async (page: Page, trigger: ReturnType<Page["locator"]>) => {
@@ -256,14 +249,6 @@ const tourSettings = async (page: Page) => {
   await diagnosticsButton.click();
   const dialog = page.getByRole("dialog", { name: "Diagnostics" });
   await expect(dialog).toBeVisible();
-  await page.waitForTimeout(SHORT_PAUSE_MS);
-  await dialog.getByTestId("show-details-button").click();
-  await ensureToolsExpanded(dialog);
-  await dialog.getByTestId("evidence-toggle-traces").click();
-  await page.waitForTimeout(SHORT_PAUSE_MS);
-  await dialog.getByTestId("evidence-toggle-logs").click();
-  await page.waitForTimeout(SHORT_PAUSE_MS);
-  await dialog.getByTestId("evidence-toggle-problems").click();
   await page.waitForTimeout(SHORT_PAUSE_MS);
   await page.keyboard.press("Escape");
   await page.waitForTimeout(SHORT_PAUSE_MS);
