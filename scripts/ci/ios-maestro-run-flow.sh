@@ -39,6 +39,9 @@ DEBUG_PAYLOAD_CURL_MAX_TIME_SECONDS="${IOS_DEBUG_PAYLOAD_CURL_MAX_TIME_SECONDS:-
 UNIFIED_LOG_PID=""
 INSTALL_START_MS=""
 INSTALL_END_MS=""
+FLOW_LIFECYCLE_DIR="${TELEMETRY_FLOW_LIFECYCLE_DIR:-}"
+FLOW_ACTIVE_FLAG="${FLOW_LIFECYCLE_DIR}/flow-active.flag"
+FLOW_COMPLETE_FLAG="${FLOW_LIFECYCLE_DIR}/flow-complete.flag"
 
 usage() {
   cat <<EOF
@@ -62,6 +65,32 @@ EOF
 
 log() {
   echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] $*" >&2
+}
+
+set_flow_lifecycle_state() {
+  local state="$1"
+  if [[ -z "$FLOW_LIFECYCLE_DIR" ]]; then
+    return 0
+  fi
+
+  mkdir -p "$FLOW_LIFECYCLE_DIR"
+  case "$state" in
+    active)
+      rm -f "$FLOW_COMPLETE_FLAG"
+      touch "$FLOW_ACTIVE_FLAG"
+      ;;
+    complete)
+      rm -f "$FLOW_ACTIVE_FLAG"
+      touch "$FLOW_COMPLETE_FLAG"
+      ;;
+    reset)
+      rm -f "$FLOW_ACTIVE_FLAG" "$FLOW_COMPLETE_FLAG"
+      ;;
+    *)
+      echo "Unknown flow lifecycle state: $state" >&2
+      return 1
+      ;;
+  esac
 }
 
 while [[ $# -gt 0 ]]; do
@@ -774,6 +803,8 @@ TJSON
   # Start video
   start_video "$flow" "$flow_dir"
 
+  set_flow_lifecycle_state active
+
   # Run Maestro
   log "Running Maestro flow: ${flow}"
   local attempt=1
@@ -804,6 +835,8 @@ TJSON
 
     break
   done
+
+  set_flow_lifecycle_state complete
 
   # Stop video
   stop_video
@@ -934,6 +967,8 @@ fi
 
 # Multi-flow mode
 log "Multi-flow mode: group=${GROUP}, flows=${FLOWS}"
+
+set_flow_lifecycle_state reset
 
 JOB_START_MS=$(ms_timestamp)
 BOOT_START_MS=$(ms_timestamp)

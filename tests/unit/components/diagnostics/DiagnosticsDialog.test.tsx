@@ -7,6 +7,7 @@
  */
 
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import type { ComponentProps } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DiagnosticsDialog } from "@/components/diagnostics/DiagnosticsDialog";
@@ -14,6 +15,8 @@ import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
 import type { OverallHealthState } from "@/lib/diagnostics/healthModel";
 import { buildBaseUrlFromDeviceHost, updateC64APIConfig } from "@/lib/c64api";
 import { setStoredFtpPort } from "@/lib/ftp/ftpConfig";
+
+type DiagnosticsDialogProps = ComponentProps<typeof DiagnosticsDialog>;
 
 const setViewportWidth = (width: number) => {
   Object.defineProperty(window, "innerWidth", {
@@ -23,7 +26,7 @@ const setViewportWidth = (width: number) => {
   });
 };
 
-const renderDialog = (props?: Partial<typeof defaultProps>) =>
+const renderDialog = (props?: Partial<DiagnosticsDialogProps>) =>
   render(
     <DisplayProfileProvider>
       <DiagnosticsDialog {...defaultProps} {...props} />
@@ -64,7 +67,7 @@ const unhealthyHealthState: OverallHealthState = {
   },
 };
 
-const defaultProps = {
+const defaultProps: DiagnosticsDialogProps = {
   open: true,
   onOpenChange: vi.fn(),
   healthState: healthyHealthState,
