@@ -556,7 +556,7 @@ Summary: 798 dependencies across NPM (781), Gradle (13), CocoaPods (4), SwiftPM 
 | NPM | loose-envify | 1.4.0 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/loose-envify/-/loose-envify-1.4.0.tgz](https://registry.npmjs.org/loose-envify/-/loose-envify-1.4.0.tgz) |
 | NPM | loupe | 3.2.1 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/loupe/-/loupe-3.2.1.tgz](https://registry.npmjs.org/loupe/-/loupe-3.2.1.tgz) |
 | NPM | lru-cache | 11.2.6 | [BlueOak-1.0.0](https://spdx.org/licenses/BlueOak-1.0.0.html) | [https://registry.npmjs.org/lru-cache/-/lru-cache-11.2.6.tgz](https://registry.npmjs.org/lru-cache/-/lru-cache-11.2.6.tgz) |
-| NPM | lucide-react | 0.462.0 | [ISC](https://spdx.org/licenses/ISC.html) | [https://registry.npmjs.org/lucide-react/-/lucide-react-0.462.0.tgz](https://registry.npmjs.org/lucide-react/-/lucide-react-0.462.0.tgz) |
+| NPM | lucide-react | 0.577.0 | [ISC](https://spdx.org/licenses/ISC.html) | [https://registry.npmjs.org/lucide-react/-/lucide-react-0.577.0.tgz](https://registry.npmjs.org/lucide-react/-/lucide-react-0.577.0.tgz) |
 | NPM | lz-string | 1.5.0 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/lz-string/-/lz-string-1.5.0.tgz](https://registry.npmjs.org/lz-string/-/lz-string-1.5.0.tgz) |
 | NPM | lz-utils | 2.1.0 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/lz-utils/-/lz-utils-2.1.0.tgz](https://registry.npmjs.org/lz-utils/-/lz-utils-2.1.0.tgz) |
 | NPM | magic-string | 0.30.21 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/magic-string/-/magic-string-0.30.21.tgz](https://registry.npmjs.org/magic-string/-/magic-string-0.30.21.tgz) |
