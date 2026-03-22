@@ -21,6 +21,7 @@ type EvidenceMetadata = {
   testTitle: string;
   testFile: string;
   status: string;
+  videoExpected: boolean;
 };
 
 /**
@@ -78,6 +79,7 @@ export const createEvidenceMetadata = async (
     testTitle: testInfo.title,
     testFile: testInfo.file,
     status: testInfo.status ?? "unknown",
+    videoExpected: isVideoExpected(testInfo),
   };
 
   const metaPath = path.join(evidencePath, "meta.json");
@@ -90,6 +92,20 @@ export const createEvidenceMetadata = async (
 const getDeviceScaleFactor = async (testInfo: TestInfo): Promise<number> => {
   const use = testInfo.project.use;
   return use?.deviceScaleFactor ?? 1;
+};
+
+const isVideoExpected = (testInfo: TestInfo): boolean => {
+  const configuredVideo = testInfo.project.use?.video;
+
+  if (configuredVideo === "off" || configuredVideo === false) {
+    return false;
+  }
+
+  if (configuredVideo === undefined) {
+    return process.env.PLAYWRIGHT_VIDEO_MODE !== "off";
+  }
+
+  return true;
 };
 
 /**
@@ -114,6 +130,7 @@ export const validateEvidenceStructure = async (testInfo: TestInfo): Promise<str
     if (meta.isMobile === undefined) errors.push("meta.json missing isMobile");
     if (!meta.playwrightProject) errors.push("meta.json missing playwrightProject");
     if (!meta.timestamp) errors.push("meta.json missing timestamp");
+    if (meta.videoExpected === undefined) errors.push("meta.json missing videoExpected");
   } catch (error) {
     errors.push(`meta.json missing or invalid: ${error}`);
   }
