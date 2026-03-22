@@ -190,14 +190,10 @@ test.describe("Primary page header OCR", () => {
         observedTitles[screen.slug] = ocrText;
       }
 
-      expect(observedTitles).toMatchObject({
-        home: expect.stringMatching(/home/i),
-        play: expect.stringMatching(/play/i),
-        disks: expect.stringMatching(/disks/i),
-        config: expect.stringMatching(/config/i),
-        settings: expect.stringMatching(/settings/i),
-        docs: expect.stringMatching(/docs/i),
-      });
+      expect(Object.keys(observedTitles)).toEqual(HEADER_CASES.map((screen) => screen.slug));
+      for (const screen of HEADER_CASES) {
+        expect(ocrContainsExpectedTitle(observedTitles[screen.slug], screen.expectedTitle)).toBe(true);
+      }
     },
   );
 });
