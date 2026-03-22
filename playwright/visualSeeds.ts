@@ -616,7 +616,7 @@ const buildTraceSeed = (): TraceEvent[] => {
       path: "/v1/diagnostics/snapshot",
       durationMs: 174,
       requestHeaders: {
-        authorization: "Bea...[redacted]",
+        authorization: "Bearer sec...[redacted]",
         "content-type": "application/json",
         "x-device-token": "c64...[redacted]",
       },

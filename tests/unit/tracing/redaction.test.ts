@@ -26,11 +26,17 @@ describe("redaction", () => {
 
     const redacted = redactHeaders(input);
 
-    expect(redacted.Authorization).toBe(`Bea${REDACTION.PARTIAL_SUFFIX}`);
+    expect(redacted.Authorization).toBe(`Bearer sec${REDACTION.PARTIAL_SUFFIX}`);
     expect(redacted["X-Password"]).toBe(`hun${REDACTION.PARTIAL_SUFFIX}`);
     expect(redacted["X-Token"]).toEqual([`tok${REDACTION.PARTIAL_SUFFIX}`, `tok${REDACTION.PARTIAL_SUFFIX}`]);
     expect(redacted["Content-Type"]).toBe("application/json");
     expect(redacted["X-Path"]).toBe("REDACTED_URI");
+  });
+
+  it("preserves basic auth scheme while redacting only the credential prefix", () => {
+    const redacted = redactHeaders({ Authorization: "Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==" });
+
+    expect(redacted.Authorization).toBe(`Basic QWx${REDACTION.PARTIAL_SUFFIX}`);
   });
 
   it("redacts nested payloads and arrays", () => {

@@ -1369,38 +1369,40 @@ test.describe("App screenshots", () => {
 
       const applyActivityFilter = applyEvidenceFilter;
       const activityTypesSection = () => page.getByTestId("filters-editor-surface").locator("section").first();
+      const activityTypeButton = (label: "Problems" | "Actions" | "Logs" | "Traces") =>
+        activityTypesSection().getByRole("button", { name: new RegExp(`^(?:✓\\s+)?${label}$`) });
+      const isActivityTypeSelected = async (label: "Problems" | "Actions" | "Logs" | "Traces") => {
+        const className = await activityTypeButton(label).evaluate((node) => node.className);
+        return className.includes("border-primary");
+      };
       const setActivityTypes = async (labels: Array<"Problems" | "Actions" | "Logs" | "Traces">) => {
-        const buttons = activityTypesSection().getByRole("button");
         const orderedLabels: Array<"Problems" | "Actions" | "Logs" | "Traces"> = [
           "Problems",
           "Actions",
           "Logs",
           "Traces",
         ];
-        for (let index = 0; index < orderedLabels.length; index += 1) {
-          const button = buttons.nth(index);
-          const text = (await button.innerText()).trim();
-          const isChecked = text.startsWith("✓");
-          const shouldBeChecked = labels.includes(orderedLabels[index]);
+        for (const label of orderedLabels) {
+          const isChecked = await isActivityTypeSelected(label);
+          const shouldBeChecked = labels.includes(label);
           if (!isChecked && shouldBeChecked) {
-            await button.click();
+            await activityTypeButton(label).click();
           }
         }
-        for (let index = 0; index < orderedLabels.length; index += 1) {
-          const button = buttons.nth(index);
-          const text = (await button.innerText()).trim();
-          const isChecked = text.startsWith("✓");
-          const shouldBeChecked = labels.includes(orderedLabels[index]);
+        for (const label of orderedLabels) {
+          const isChecked = await isActivityTypeSelected(label);
+          const shouldBeChecked = labels.includes(label);
           if (isChecked && !shouldBeChecked) {
-            await button.click();
+            await activityTypeButton(label).click();
           }
         }
         await expect
           .poll(async () => {
-            const texts = await activityTypesSection().getByRole("button").allInnerTexts();
-            return texts
-              .filter((text) => text.trim().startsWith("✓"))
-              .map((text) => text.replace(/^✓\s*/, "").trim())
+            const selectedLabels = await Promise.all(
+              orderedLabels.map(async (label) => ((await isActivityTypeSelected(label)) ? label : null)),
+            );
+            return selectedLabels
+              .filter((label): label is "Problems" | "Actions" | "Logs" | "Traces" => label !== null)
               .sort()
               .join(",");
           })

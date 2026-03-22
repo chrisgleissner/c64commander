@@ -10,6 +10,7 @@ import { redactTreeUri } from "@/lib/native/safUtils";
 
 const REDACTED = "[redacted]";
 const PARTIAL_SUFFIX = "...[redacted]";
+const AUTH_SCHEME_PREFIX_REGEX = /^(Bearer|Basic)(\s+)(.+)$/i;
 
 const isSensitiveKey = (key: string) => /password|token|authorization|auth|secret|credential|cookie/i.test(key);
 
@@ -29,6 +30,12 @@ const redactUri = (value: string) => {
 
 const partiallyRedactSecret = (value: string) => {
   if (!value) return REDACTED;
+  const authMatch = value.match(AUTH_SCHEME_PREFIX_REGEX);
+  if (authMatch) {
+    const [, scheme, whitespace, secret] = authMatch;
+    const redactedSecret = secret ? `${secret.slice(0, 3)}${PARTIAL_SUFFIX}` : REDACTED;
+    return `${scheme}${whitespace}${redactedSecret}`;
+  }
   return `${value.slice(0, 3)}${PARTIAL_SUFFIX}`;
 };
 

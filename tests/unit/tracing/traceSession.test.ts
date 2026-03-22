@@ -250,7 +250,7 @@ describe("traceSession", () => {
         type: "rest-response",
         data: expect.objectContaining({
           headers: {
-            authorization: "Bea...[redacted]",
+            authorization: "Bearer tok...[redacted]",
             "content-type": "application/json",
           },
           body: {
