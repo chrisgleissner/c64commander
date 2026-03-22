@@ -251,9 +251,18 @@ const matchesTrackedScreenshotAtAnotherPath = async (relativePath: string, scree
 };
 
 const waitForStableRender = async (page: Page) => {
+  await page.waitForFunction(() => document.readyState === "complete");
   await page.waitForLoadState("domcontentloaded");
   await page.waitForLoadState("networkidle");
   await page.waitForFunction(() => (document as any).fonts?.ready ?? true);
+  await page.waitForFunction(() => {
+    const animations = document.getAnimations();
+    return animations.every((animation) => {
+      if (animation.playState !== "running") return true;
+      const timing = animation.effect?.getComputedTiming();
+      return timing?.iterations === Infinity;
+    });
+  });
   await page.evaluate(() => new Promise(requestAnimationFrame));
   await page.evaluate(() => new Promise(requestAnimationFrame));
 };
@@ -350,10 +359,10 @@ const captureScreenshot = async (
   let screenshotBuffer = options?.locator
     ? await options.locator.screenshot({ animations: "disabled", caret: "hide" })
     : await page.screenshot({
-      animations: "disabled",
-      caret: "hide",
-      fullPage: options?.fullPage ?? false,
-    });
+        animations: "disabled",
+        caret: "hide",
+        fullPage: options?.fullPage ?? false,
+      });
   if ((options?.borderPx ?? 0) > 0) {
     const borderPx = options?.borderPx ?? 0;
     const color = options?.borderColor ?? { r: 255, g: 255, b: 255, alpha: 1 };
@@ -414,6 +423,7 @@ const captureDiagnosticsScreenshot = async (
   relativePath: string,
   options?: {
     fullPage?: boolean;
+    writeWhenTrackedDuplicate?: boolean;
   },
 ) => captureScreenshot(page, testInfo, `diagnostics/${relativePath}`, options);
 
@@ -477,30 +487,69 @@ const capturePageSections = async (page: Page, testInfo: TestInfo, pageId: strin
 };
 
 const captureDocsSections = async (page: Page, testInfo: TestInfo) => {
-  const sectionButtons = getActiveMain(page)
-    .locator("button")
-    .filter({ hasText: /^[A-Za-z]/ });
-  const count = await sectionButtons.count();
-  if (count === 0) return;
-  const slugs: string[] = [];
-  for (let index = 0; index < count; index += 1) {
-    const label = (await sectionButtons.nth(index).innerText()).split("\n")[0]?.trim() ?? "";
-    if (label) slugs.push(sanitizeSegment(label));
-  }
+  const sections = await page.evaluate(() =>
+    Array.from(document.querySelectorAll<HTMLButtonElement>('button[aria-controls^="docs-section-"]'))
+      .filter((button) => {
+        const rect = button.getBoundingClientRect();
+        const style = getComputedStyle(button);
+        return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+      })
+      .map((button) => ({
+        controlId: button.getAttribute("aria-controls") ?? "",
+        label: button.innerText.split("\n")[0]?.trim() ?? "",
+      }))
+      .filter((section) => section.controlId.length > 0 && section.label.length > 0),
+  );
+  if (sections.length === 0) return;
+  const slugs = sections.map((section) => sanitizeSegment(section.label));
   const orderMap = await registerScreenshotSections("docs", slugs);
-  for (let index = 0; index < count; index += 1) {
-    const button = sectionButtons.nth(index);
-    const label = (await button.innerText()).split("\n")[0]?.trim() ?? "";
-    if (!label) continue;
-    const slug = sanitizeSegment(label);
+  for (let index = 0; index < sections.length; index += 1) {
+    const section = sections[index];
+    const button = getActiveSlot(page).locator(`button[aria-controls="${section.controlId}"]`).first();
+    const sectionId = section.controlId.replace(/^docs-section-/, "");
+    const card = getActiveSlot(page).getByTestId(`docs-card-${sectionId}`).first();
+    const getVisibleButtonExpandedState = () =>
+      page.evaluate((visibleControlId) => {
+        const visibleButton = Array.from(
+          document.querySelectorAll<HTMLButtonElement>(`button[aria-controls="${visibleControlId}"]`),
+        ).find((candidate) => {
+          const rect = candidate.getBoundingClientRect();
+          const style = getComputedStyle(candidate);
+          return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+        });
+        return visibleButton?.getAttribute("aria-expanded") ?? null;
+      }, section.controlId);
+    const slug = sanitizeSegment(section.label);
     const order = orderMap.get(slug) ?? index + 1;
     await scrollHeadingIntoView(page, button);
-    await button.click({ force: true });
-    await page.waitForTimeout(150);
+    await page.evaluate((controlId) => {
+      const visibleButton = Array.from(
+        document.querySelectorAll<HTMLButtonElement>(`button[aria-controls="${controlId}"]`),
+      ).find((candidate) => {
+        const rect = candidate.getBoundingClientRect();
+        const style = getComputedStyle(candidate);
+        return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+      });
+      visibleButton?.click();
+    }, section.controlId);
+    await expect.poll(getVisibleButtonExpandedState).toBe("true");
+    await waitForStableRender(page);
     await scrollHeadingIntoView(page, button);
-    await captureScreenshot(page, testInfo, `docs/sections/${String(order).padStart(2, "0")}-${slug}.png`);
-    await button.click({ force: true });
-    await page.waitForTimeout(100);
+    await captureScreenshot(page, testInfo, `docs/sections/${String(order).padStart(2, "0")}-${slug}.png`, {
+      locator: card,
+    });
+    await page.evaluate((controlId) => {
+      const visibleButton = Array.from(
+        document.querySelectorAll<HTMLButtonElement>(`button[aria-controls="${controlId}"]`),
+      ).find((candidate) => {
+        const rect = candidate.getBoundingClientRect();
+        const style = getComputedStyle(candidate);
+        return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+      });
+      visibleButton?.click();
+    }, section.controlId);
+    await expect.poll(getVisibleButtonExpandedState).toBe("false");
+    await waitForStableRender(page);
   }
 };
 
@@ -522,11 +571,13 @@ const captureConfigSections = async (page: Page, testInfo: TestInfo) => {
     const order = orderMap.get(slug) ?? index + 1;
     await scrollHeadingIntoView(page, toggle);
     await toggle.click();
-    await page.waitForTimeout(150);
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await waitForStableRender(page);
     await scrollHeadingIntoView(page, toggle);
     await captureScreenshot(page, testInfo, `config/sections/${String(order).padStart(2, "0")}-${slug}.png`);
     await toggle.click();
-    await page.waitForTimeout(100);
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await waitForStableRender(page);
   }
 };
 
@@ -669,13 +720,11 @@ test.describe("App screenshots", () => {
     await page.goto("/");
     await waitForConnected(page);
     await expect(page.getByRole("button", { name: "Disks", exact: true })).toBeVisible();
-
-    await page.evaluate(() => window.scrollTo(0, 0));
-    await captureScreenshot(page, testInfo, "home/00-overview-light.png");
-    await captureHomeSections(page, testInfo);
-
-    await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
-    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.emulateMedia({
+      colorScheme: "dark",
+      reducedMotion: "reduce",
+    });
+    await waitForStableRender(page);
     await captureScreenshot(page, testInfo, "home/01-overview-dark.png");
     await page.emulateMedia({
       colorScheme: "light",
@@ -801,95 +850,95 @@ test.describe("App screenshots", () => {
           const snapshots =
             mode === "snapshot-manager"
               ? [
-                {
-                  id: "snap-1",
-                  filename: "c64-program-20260110-090000.c64snap",
-                  bytesBase64: buildSnap(0, 1736499600),
-                  createdAt: "2026-01-10T09:00:00.000Z",
-                  snapshotType: "program",
-                  metadata: {
-                    snapshot_type: "program",
-                    display_ranges: ["$0000\u2013$00FF", "$0200\u2013$FFFF"],
-                    created_at: "2026-01-10 09:00:00",
-                    label: "JupiterLander.crt",
+                  {
+                    id: "snap-1",
+                    filename: "c64-program-20260110-090000.c64snap",
+                    bytesBase64: buildSnap(0, 1736499600),
+                    createdAt: "2026-01-10T09:00:00.000Z",
+                    snapshotType: "program",
+                    metadata: {
+                      snapshot_type: "program",
+                      display_ranges: ["$0000\u2013$00FF", "$0200\u2013$FFFF"],
+                      created_at: "2026-01-10 09:00:00",
+                      label: "JupiterLander.crt",
+                    },
                   },
-                },
-                {
-                  id: "snap-2",
-                  filename: "c64-basic-20260110-080000.c64snap",
-                  bytesBase64: buildSnap(1, 1736496000),
-                  createdAt: "2026-01-10T08:00:00.000Z",
-                  snapshotType: "basic",
-                  metadata: {
-                    snapshot_type: "basic",
-                    display_ranges: ["$002B\u2013$0038", "$0801\u2013STREND"],
-                    created_at: "2026-01-10 08:00:00",
+                  {
+                    id: "snap-2",
+                    filename: "c64-basic-20260110-080000.c64snap",
+                    bytesBase64: buildSnap(1, 1736496000),
+                    createdAt: "2026-01-10T08:00:00.000Z",
+                    snapshotType: "basic",
+                    metadata: {
+                      snapshot_type: "basic",
+                      display_ranges: ["$002B\u2013$0038", "$0801\u2013STREND"],
+                      created_at: "2026-01-10 08:00:00",
+                    },
                   },
-                },
-                {
-                  id: "snap-3",
-                  filename: "c64-screen-20260110-070000.c64snap",
-                  bytesBase64: buildSnap(2, 1736492400),
-                  createdAt: "2026-01-10T07:00:00.000Z",
-                  snapshotType: "screen",
-                  metadata: {
-                    snapshot_type: "screen",
-                    display_ranges: ["VICBANK", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"],
-                    created_at: "2026-01-10 07:00:00",
+                  {
+                    id: "snap-3",
+                    filename: "c64-screen-20260110-070000.c64snap",
+                    bytesBase64: buildSnap(2, 1736492400),
+                    createdAt: "2026-01-10T07:00:00.000Z",
+                    snapshotType: "screen",
+                    metadata: {
+                      snapshot_type: "screen",
+                      display_ranges: ["VICBANK", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"],
+                      created_at: "2026-01-10 07:00:00",
+                    },
                   },
-                },
-                {
-                  id: "snap-4",
-                  filename: "c64-custom-20260110-060000.c64snap",
-                  bytesBase64: buildSnap(3, 1736488800),
-                  createdAt: "2026-01-10T06:00:00.000Z",
-                  snapshotType: "custom",
-                  metadata: {
-                    snapshot_type: "custom",
-                    display_ranges: ["$0400\u2013$07E7", "$2000\u2013$20FF"],
-                    created_at: "2026-01-10 06:00:00",
+                  {
+                    id: "snap-4",
+                    filename: "c64-custom-20260110-060000.c64snap",
+                    bytesBase64: buildSnap(3, 1736488800),
+                    createdAt: "2026-01-10T06:00:00.000Z",
+                    snapshotType: "custom",
+                    metadata: {
+                      snapshot_type: "custom",
+                      display_ranges: ["$0400\u2013$07E7", "$2000\u2013$20FF"],
+                      created_at: "2026-01-10 06:00:00",
+                    },
                   },
-                },
-              ]
+                ]
               : [
-                {
-                  id: "snap-1",
-                  filename: "c64-program-20260110-090000.c64snap",
-                  bytesBase64: buildSnap(0, 1736499600),
-                  createdAt: "2026-01-10T09:00:00.000Z",
-                  snapshotType: "program",
-                  metadata: {
-                    snapshot_type: "program",
-                    display_ranges: ["$0000\u2013$00FF", "$0200\u2013$FFFF"],
-                    created_at: "2026-01-10 09:00:00",
-                    label: "JupiterLander.crt",
+                  {
+                    id: "snap-1",
+                    filename: "c64-program-20260110-090000.c64snap",
+                    bytesBase64: buildSnap(0, 1736499600),
+                    createdAt: "2026-01-10T09:00:00.000Z",
+                    snapshotType: "program",
+                    metadata: {
+                      snapshot_type: "program",
+                      display_ranges: ["$0000\u2013$00FF", "$0200\u2013$FFFF"],
+                      created_at: "2026-01-10 09:00:00",
+                      label: "JupiterLander.crt",
+                    },
                   },
-                },
-                {
-                  id: "snap-2",
-                  filename: "c64-basic-20260110-080000.c64snap",
-                  bytesBase64: buildSnap(1, 1736496000),
-                  createdAt: "2026-01-10T08:00:00.000Z",
-                  snapshotType: "basic",
-                  metadata: {
-                    snapshot_type: "basic",
-                    display_ranges: ["$002B\u2013$0038", "$0801\u2013STREND"],
-                    created_at: "2026-01-10 08:00:00",
+                  {
+                    id: "snap-2",
+                    filename: "c64-basic-20260110-080000.c64snap",
+                    bytesBase64: buildSnap(1, 1736496000),
+                    createdAt: "2026-01-10T08:00:00.000Z",
+                    snapshotType: "basic",
+                    metadata: {
+                      snapshot_type: "basic",
+                      display_ranges: ["$002B\u2013$0038", "$0801\u2013STREND"],
+                      created_at: "2026-01-10 08:00:00",
+                    },
                   },
-                },
-                {
-                  id: "snap-3",
-                  filename: "c64-screen-20260110-070000.c64snap",
-                  bytesBase64: buildSnap(2, 1736492400),
-                  createdAt: "2026-01-10T07:00:00.000Z",
-                  snapshotType: "screen",
-                  metadata: {
-                    snapshot_type: "screen",
-                    display_ranges: ["VICBANK", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"],
-                    created_at: "2026-01-10 07:00:00",
+                  {
+                    id: "snap-3",
+                    filename: "c64-screen-20260110-070000.c64snap",
+                    bytesBase64: buildSnap(2, 1736492400),
+                    createdAt: "2026-01-10T07:00:00.000Z",
+                    snapshotType: "screen",
+                    metadata: {
+                      snapshot_type: "screen",
+                      display_ranges: ["VICBANK", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"],
+                      created_at: "2026-01-10 07:00:00",
+                    },
                   },
-                },
-              ];
+                ];
 
           localStorage.setItem(
             "c64u_snapshots:v1",
@@ -1095,6 +1144,7 @@ test.describe("App screenshots", () => {
       testInfo.setTimeout(240000);
       allowVisualOverflow(testInfo, "Audio mixer controls overflow on narrow screenshot viewport.");
       await page.goto("/config");
+      await waitForConnected(page);
       await expect(page.getByRole("heading", { name: "Config" })).toBeVisible();
       await expect.poll(async () => page.locator('[data-testid^="config-category-"]').count()).toBeGreaterThan(0);
 
@@ -1113,6 +1163,7 @@ test.describe("App screenshots", () => {
       for (const profileId of DISPLAY_PROFILE_VIEWPORT_SEQUENCE) {
         await page.goto("/config");
         await applyDisplayProfileViewport(page, profileId);
+        await waitForConnected(page);
         await expect(page.getByRole("heading", { name: "Config" })).toBeVisible();
         await captureScreenshot(page, testInfo, profileScreenshotPath("config", profileId, "01-overview.png"));
       }
@@ -1122,6 +1173,7 @@ test.describe("App screenshots", () => {
   test("capture play screenshots", { tag: "@screenshots" }, async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await installListPreviewLimit(page, 3);
     await page.goto("/play");
+    await waitForConnected(page);
     await expect(page.getByRole("heading", { name: "Play Files" })).toBeVisible();
     await expect(getActiveMain(page).getByTestId("playlist-list")).toContainText("intro.sid");
 
@@ -1149,6 +1201,7 @@ test.describe("App screenshots", () => {
         await applyDisplayProfileViewport(page, profileId);
         await page.getByTestId("tab-play").click();
         await expect(page).toHaveURL(/\/play$/);
+        await waitForConnected(page);
         await expect(page.getByRole("heading", { name: "Play Files" })).toBeVisible();
         await captureScreenshot(page, testInfo, profileScreenshotPath("play", profileId, "01-overview.png"));
 
@@ -1254,6 +1307,7 @@ test.describe("App screenshots", () => {
     { tag: "@screenshots" },
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
       await page.goto("/settings");
+      await waitForConnected(page);
       await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
 
       await page.evaluate(() => window.scrollTo(0, 0));
@@ -1269,6 +1323,7 @@ test.describe("App screenshots", () => {
       for (const profileId of DISPLAY_PROFILE_VIEWPORT_SEQUENCE) {
         await page.goto("/settings");
         await applyDisplayProfileViewport(page, profileId);
+        await waitForConnected(page);
         await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
         await captureScreenshot(page, testInfo, profileScreenshotPath("settings", profileId, "01-overview.png"));
       }
@@ -1314,6 +1369,43 @@ test.describe("App screenshots", () => {
 
       const applyActivityFilter = applyEvidenceFilter;
       const activityTypesSection = () => page.getByTestId("filters-editor-surface").locator("section").first();
+      const setActivityTypes = async (labels: Array<"Problems" | "Actions" | "Logs" | "Traces">) => {
+        const buttons = activityTypesSection().getByRole("button");
+        const orderedLabels: Array<"Problems" | "Actions" | "Logs" | "Traces"> = [
+          "Problems",
+          "Actions",
+          "Logs",
+          "Traces",
+        ];
+        for (let index = 0; index < orderedLabels.length; index += 1) {
+          const button = buttons.nth(index);
+          const text = (await button.innerText()).trim();
+          const isChecked = text.startsWith("✓");
+          const shouldBeChecked = labels.includes(orderedLabels[index]);
+          if (!isChecked && shouldBeChecked) {
+            await button.click();
+          }
+        }
+        for (let index = 0; index < orderedLabels.length; index += 1) {
+          const button = buttons.nth(index);
+          const text = (await button.innerText()).trim();
+          const isChecked = text.startsWith("✓");
+          const shouldBeChecked = labels.includes(orderedLabels[index]);
+          if (isChecked && !shouldBeChecked) {
+            await button.click();
+          }
+        }
+        await expect
+          .poll(async () => {
+            const texts = await activityTypesSection().getByRole("button").allInnerTexts();
+            return texts
+              .filter((text) => text.trim().startsWith("✓"))
+              .map((text) => text.replace(/^✓\s*/, "").trim())
+              .sort()
+              .join(",");
+          })
+          .toBe([...labels].sort().join(","));
+      };
       const firstExpandableActivityRow = () => dialog.locator('[data-testid^="evidence-row-"][aria-expanded]').first();
       const activityRowByLabel = (label: string) =>
         dialog.locator('[data-testid^="evidence-row-"][aria-expanded]').filter({ hasText: label }).first();
@@ -1428,9 +1520,7 @@ test.describe("App screenshots", () => {
 
       await seedDiagnosticsLogs(page);
       await captureExpandedActivityType("activity/02-expanded-problems.png", async () => {
-        await activityTypesSection()
-          .getByRole("button", { name: /Actions/ })
-          .click();
+        await setActivityTypes(["Problems"]);
       });
 
       await seedDiagnosticsTracesForAction(page, "diagnostics.snapshot");
@@ -1439,9 +1529,7 @@ test.describe("App screenshots", () => {
       await captureExpandedActivityType(
         "activity/03-expanded-actions.png",
         async () => {
-          await activityTypesSection()
-            .getByRole("button", { name: /Problems/ })
-            .click();
+          await setActivityTypes(["Actions"]);
         },
         {
           rowLabel: "diagnostics.snapshot",
@@ -1458,13 +1546,7 @@ test.describe("App screenshots", () => {
         "activity/04-expanded-logs.png",
         async () => {
           await seedDiagnosticsLogs(page);
-          await activityTypesSection()
-            .getByRole("button", { name: /Problems/ })
-            .click();
-          await activityTypesSection().getByRole("button", { name: /Logs/ }).click();
-          await activityTypesSection()
-            .getByRole("button", { name: /Actions/ })
-            .click();
+          await setActivityTypes(["Logs"]);
         },
         {
           rowLabel: "ERROR FTP disk import failed",
@@ -1475,15 +1557,7 @@ test.describe("App screenshots", () => {
       );
 
       await captureExpandedActivityType("activity/05-expanded-traces.png", async () => {
-        await activityTypesSection()
-          .getByRole("button", { name: /Problems/ })
-          .click();
-        await activityTypesSection()
-          .getByRole("button", { name: /Traces/ })
-          .click();
-        await activityTypesSection()
-          .getByRole("button", { name: /Actions/ })
-          .click();
+        await setActivityTypes(["Traces"]);
       });
 
       await applyActivityFilter(async () => {
@@ -1499,9 +1573,7 @@ test.describe("App screenshots", () => {
 
       await seedDiagnosticsLogs(page);
       await applyActivityFilter(async () => {
-        await activityTypesSection()
-          .getByRole("button", { name: /Actions/ })
-          .click();
+        await setActivityTypes(["Problems"]);
       });
       await expect(dialog.getByText("ERROR FTP disk import failed")).toBeVisible();
       await expect(dialog.getByText("GET /v1/runners/script/status")).toBeVisible();
@@ -1509,20 +1581,12 @@ test.describe("App screenshots", () => {
 
       await seedDiagnosticsLogs(page);
       await applyActivityFilter(async () => {
-        await activityTypesSection()
-          .getByRole("button", { name: /Problems/ })
-          .click();
+        await setActivityTypes(["Actions"]);
       });
       await captureDiagnosticsScreenshot(page, testInfo, "activity/08-actions-only.png");
 
       await applyActivityFilter(async () => {
-        await activityTypesSection()
-          .getByRole("button", { name: /Problems/ })
-          .click();
-        await activityTypesSection().getByRole("button", { name: /Logs/ }).click();
-        await activityTypesSection()
-          .getByRole("button", { name: /Actions/ })
-          .click();
+        await setActivityTypes(["Logs"]);
       });
       await expect(dialog.getByTestId("filters-collapsed-bar")).toContainText("Logs");
       await expect(dialog.getByTestId("filters-collapsed-bar")).not.toContainText("Actions");
@@ -1533,15 +1597,7 @@ test.describe("App screenshots", () => {
       await captureDiagnosticsScreenshot(page, testInfo, "activity/09-logs-only.png");
 
       await applyActivityFilter(async () => {
-        await activityTypesSection()
-          .getByRole("button", { name: /Problems/ })
-          .click();
-        await activityTypesSection()
-          .getByRole("button", { name: /Traces/ })
-          .click();
-        await activityTypesSection()
-          .getByRole("button", { name: /Actions/ })
-          .click();
+        await setActivityTypes(["Traces"]);
       });
       await captureDiagnosticsScreenshot(page, testInfo, "activity/10-traces-only.png");
 
@@ -1626,22 +1682,31 @@ test.describe("App screenshots", () => {
 
   test("capture docs screenshots", { tag: "@screenshots" }, async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/docs");
+    await expect(page).toHaveURL(/\/docs$/);
+    await waitForConnected(page);
     await expect(page.getByRole("heading", { name: "Docs" })).toBeVisible();
 
     await page.evaluate(() => window.scrollTo(0, 0));
     await captureScreenshot(page, testInfo, "docs/01-overview.png");
     await captureDocsSections(page, testInfo);
 
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-    await page.waitForTimeout(150);
-    await captureScreenshot(page, testInfo, "docs/external/01-external-resources.png");
+    const externalResources = page.getByTestId("docs-external-resources");
+    await externalResources.scrollIntoViewIfNeeded();
+    await waitForStableRender(page);
+    await captureScreenshot(page, testInfo, "docs/external/01-external-resources.png", {
+      locator: externalResources,
+    });
 
     for (const profileId of DISPLAY_PROFILE_VIEWPORT_SEQUENCE) {
       await page.goto("/docs");
+      await expect(page).toHaveURL(/\/docs$/);
       await applyDisplayProfileViewport(page, profileId);
+      await waitForConnected(page);
       await expect(page.getByRole("heading", { name: "Docs" })).toBeVisible();
-      await getActiveMain(page).getByRole("button", { name: "Play Files" }).click();
-      await page.waitForTimeout(150);
+      const playFilesButton = getActiveSlot(page).locator('button[aria-controls="docs-section-play"]').first();
+      await playFilesButton.click();
+      await expect(playFilesButton).toHaveAttribute("aria-expanded", "true");
+      await waitForStableRender(page);
       await page.evaluate(() => window.scrollTo(0, 0));
       await captureScreenshot(page, testInfo, profileScreenshotPath("docs", profileId, "01-overview.png"));
     }

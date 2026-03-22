@@ -254,12 +254,14 @@ const docSections: DocSection[] = [
 function DocSectionCard({ section }: { section: DocSection }) {
   const [isOpen, setIsOpen] = useState(false);
   const Icon = section.icon;
+  const contentId = `docs-section-${section.id}`;
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       className="bg-card border border-border rounded-xl overflow-hidden"
+      data-testid={`docs-card-${section.id}`}
     >
       <button
         onClick={wrapUserEvent(
@@ -270,6 +272,9 @@ function DocSectionCard({ section }: { section: DocSection }) {
           "DocsHeader",
         )}
         className="w-full flex items-center justify-between p-4 text-left"
+        aria-expanded={isOpen}
+        aria-controls={contentId}
+        data-testid={`docs-toggle-${section.id}`}
       >
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-primary/10">
@@ -285,6 +290,7 @@ function DocSectionCard({ section }: { section: DocSection }) {
       <AnimatePresence>
         {isOpen && (
           <motion.div
+            id={contentId}
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
@@ -322,14 +328,19 @@ export default function DocsPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: docSections.length * 0.05 }}
           className="bg-card border border-border rounded-xl p-4 space-y-3"
+          data-testid="docs-external-resources"
         >
           <h3 className="font-medium">External Resources</h3>
+          <p className="text-sm text-muted-foreground">
+            These links point to the upstream device manuals and API references used throughout C64 Commander.
+          </p>
           <div className="space-y-2">
             <a
               href="https://1541u-documentation.readthedocs.io/"
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-2 text-sm text-primary hover:underline"
+              data-testid="docs-external-resource-docs"
             >
               <ExternalLink className="h-4 w-4" />
               Ultimate Documentation
@@ -339,6 +350,7 @@ export default function DocsPage() {
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-2 text-sm text-primary hover:underline"
+              data-testid="docs-external-resource-api"
             >
               <ExternalLink className="h-4 w-4" />
               REST API Reference
@@ -348,6 +360,7 @@ export default function DocsPage() {
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-2 text-sm text-primary hover:underline"
+              data-testid="docs-external-resource-site"
             >
               <ExternalLink className="h-4 w-4" />
               Ultimate 64 Official Site

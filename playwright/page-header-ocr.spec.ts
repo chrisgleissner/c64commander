@@ -36,6 +36,23 @@ const artifactRoot = path.resolve("doc/img/app/details/page-headers");
 
 const normalizeOcr = (value: string) => value.replace(/\s+/g, " ").trim().toLowerCase();
 
+const waitForPageVisualReady = async (page: Page) => {
+  await page.waitForFunction(() => document.readyState === "complete");
+  await page.waitForLoadState("domcontentloaded");
+  await page.waitForLoadState("networkidle");
+  await page.waitForFunction(() => (document as any).fonts?.ready ?? true);
+  await page.waitForFunction(() => {
+    const animations = document.getAnimations({ subtree: true });
+    return animations.every((animation) => {
+      if (animation.playState !== "running") return true;
+      const timing = animation.effect?.getComputedTiming();
+      return timing?.iterations === Infinity;
+    });
+  });
+  await page.evaluate(() => new Promise(requestAnimationFrame));
+  await page.evaluate(() => new Promise(requestAnimationFrame));
+};
+
 const readHeaderTextWithOcr = async (headerImagePath: string) => {
   const raw = execFileSync("tesseract", [headerImagePath, "stdout", "--psm", "6"], {
     encoding: "utf8",
@@ -47,6 +64,7 @@ const captureScreenArtifacts = async (page: Page, testInfo: TestInfo, slug: stri
   const activeHeader = page.locator('[data-slot-active="true"] header');
   await expect(activeHeader).toBeVisible();
   await expect(activeHeader.getByRole("heading", { name: expectedTitle })).toBeVisible();
+  await waitForPageVisualReady(page);
 
   const artifactDir = path.join(artifactRoot, slug);
   await fs.mkdir(artifactDir, { recursive: true });
@@ -80,6 +98,7 @@ test.describe("Primary page header OCR", () => {
     allowVisualOverflow(testInfo, "Swipe runway keeps adjacent pages mounted outside the active viewport.");
     server = await createMockC64Server();
     await seedUiMocks(page, server.baseUrl);
+    await page.emulateMedia({ reducedMotion: "reduce", colorScheme: "light" });
   });
 
   test.afterEach(async ({ page }, testInfo) => {
@@ -92,22 +111,26 @@ test.describe("Primary page header OCR", () => {
     }
   });
 
-  test("all primary screens render a non-blank header with OCR-visible titles", async ({ page }, testInfo) => {
-    const observedTitles: Record<string, string> = {};
+  test(
+    "all primary screens render a non-blank header with OCR-visible titles",
+    { tag: "@screenshots" },
+    async ({ page }, testInfo) => {
+      const observedTitles: Record<string, string> = {};
 
-    for (const screen of HEADER_CASES) {
-      await page.goto(screen.route);
-      const { ocrText } = await captureScreenArtifacts(page, testInfo, screen.slug, screen.expectedTitle);
-      observedTitles[screen.slug] = ocrText;
-    }
+      for (const screen of HEADER_CASES) {
+        await page.goto(screen.route);
+        const { ocrText } = await captureScreenArtifacts(page, testInfo, screen.slug, screen.expectedTitle);
+        observedTitles[screen.slug] = ocrText;
+      }
 
-    expect(observedTitles).toMatchObject({
-      home: expect.stringMatching(/home/i),
-      play: expect.stringMatching(/play/i),
-      disks: expect.stringMatching(/disks/i),
-      config: expect.stringMatching(/config/i),
-      settings: expect.stringMatching(/settings/i),
-      docs: expect.stringMatching(/docs/i),
-    });
-  });
+      expect(observedTitles).toMatchObject({
+        home: expect.stringMatching(/home/i),
+        play: expect.stringMatching(/play/i),
+        disks: expect.stringMatching(/disks/i),
+        config: expect.stringMatching(/config/i),
+        settings: expect.stringMatching(/settings/i),
+        docs: expect.stringMatching(/docs/i),
+      });
+    },
+  );
 });

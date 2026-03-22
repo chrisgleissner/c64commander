@@ -448,6 +448,7 @@ function CategorySection({
   };
 
   const displayItems = isAudioMixer && audioConfiguredItems.length ? audioConfiguredItems : items;
+  const sectionId = `config-section-${categoryName.toLowerCase().replace(/\s+/g, "-")}`;
 
   return (
     <motion.div
@@ -465,6 +466,8 @@ function CategorySection({
         )}
         className="w-full flex items-center justify-between px-4 py-3 text-left"
         data-testid={`config-category-${categoryName.toLowerCase().replace(/\s+/g, "-")}`}
+        aria-expanded={isOpen}
+        aria-controls={sectionId}
       >
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-muted">
@@ -480,6 +483,7 @@ function CategorySection({
       <AnimatePresence>
         {isOpen && (
           <motion.div
+            id={sectionId}
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
