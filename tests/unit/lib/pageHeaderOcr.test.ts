@@ -27,6 +27,11 @@ describe("pageHeaderOcr", () => {
     expect(scoreHeaderOcrCandidate(sample, "Play Files")).toBeGreaterThanOrEqual(7);
   });
 
+  it("accepts minor OCR substitutions in title tokens", () => {
+    expect(ocrContainsExpectedTitle("MOME C64U HEALTHY", "Home")).toBe(true);
+    expect(ocrContainsExpectedTitle("PLAY FIIES C64U HEALTHY", "Play Files")).toBe(true);
+  });
+
   it("rejects candidates that miss title tokens", () => {
     const sample = "PLAY C64U HEALTHY";
 
