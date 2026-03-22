@@ -314,37 +314,30 @@ describe("App runtime wiring", () => {
     const container = screen.getByTestId("swipe-navigation-container");
     const runway = screen.getByTestId("swipe-navigation-runway");
 
-    container.dispatchEvent(
-      new PointerEvent("pointerdown", {
-        bubbles: true,
-        button: -1,
-        pointerId: 91,
-        isPrimary: true,
-        pointerType: "touch",
-        clientX: 220,
-        clientY: 180,
-      }),
-    );
-    container.dispatchEvent(
-      new PointerEvent("pointermove", {
-        bubbles: true,
-        pointerId: 91,
-        pointerType: "touch",
-        clientX: 120,
-        clientY: 184,
-      }),
-    );
-    container.dispatchEvent(
-      new PointerEvent("pointerup", {
-        bubbles: true,
-        pointerId: 91,
-        pointerType: "touch",
-        clientX: 120,
-        clientY: 184,
-      }),
-    );
+    fireEvent.pointerDown(container, {
+      button: -1,
+      pointerId: 91,
+      isPrimary: true,
+      pointerType: "touch",
+      clientX: 220,
+      clientY: 180,
+    });
+    fireEvent.pointerMove(container, {
+      pointerId: 91,
+      pointerType: "touch",
+      clientX: 120,
+      clientY: 184,
+    });
+    fireEvent.pointerUp(container, {
+      pointerId: 91,
+      pointerType: "touch",
+      clientX: 120,
+      clientY: 184,
+    });
 
-    expect(runway).toHaveAttribute("data-runway-phase", "transitioning");
+    await waitFor(() => {
+      expect(runway).toHaveAttribute("data-runway-phase", "transitioning");
+    });
 
     fireEvent.transitionEnd(runway, { target: runway });
 

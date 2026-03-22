@@ -60,14 +60,11 @@ export function DeviceDetailView({ info, onBack }: Props) {
         >
           <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
         </Button>
-        <div className="space-y-0.5">
-          <h3 className="text-sm font-semibold text-foreground">Device Detail</h3>
-          <p className="text-xs text-muted-foreground">Shows the live device identity and runtime build details.</p>
-        </div>
+        <h3 className="text-sm font-semibold text-foreground">Device Detail</h3>
       </div>
 
       {!info ? (
-        <p className="text-xs text-muted-foreground">Run a health check to populate device details.</p>
+        <p className="text-xs text-muted-foreground">Run a health check to load device info.</p>
       ) : (
         <div className="rounded border border-border p-2 space-y-0.5">
           <DetailRow label="Product" value={info.product} />

@@ -128,13 +128,15 @@ Acceptance criteria:
 Implementation targets:
 
 - Extend the diagnostics screenshot flow so the existing gallery proves activity-row expansion and second-tap collapse.
-- Capture an expanded activity row that shows the full internally available detail in the same compact overlay layout used at runtime.
+- Capture one expanded screenshot for each activity entry type that can disclose detail: Problems, Actions, Logs, and Traces.
 - Capture both the completed health-check detail state and an in-flight health-check progress state so the gallery shows probe order, per-probe outcomes, durations, pending/running status, and overall latency/result detail.
 - Keep the screenshot set minimal by adding only the diagnostics images made inaccurate or incomplete by the new diagnostics interaction behavior.
+- Keep in-app diagnostics labels short and move longer explanatory text to the Docs page.
 
 Acceptance criteria:
 
 - The diagnostics activity gallery includes a collapsed baseline, an expanded-detail state, and a recollapsed state after the second tap.
+- The diagnostics activity gallery includes one expanded screenshot for Problems, Actions, Logs, and Traces.
 - The diagnostics header gallery includes a completed health-check detail screenshot showing REST, FTP, CONFIG, RASTER, and JIFFY plus latency and overall result.
 - The diagnostics header gallery includes a live progress screenshot showing the same probe order with completed, running, and pending states.
 - Screenshot file names and documentation index entries match the generated `doc/img/app/diagnostics/**` output.

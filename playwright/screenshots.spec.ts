@@ -1308,6 +1308,17 @@ test.describe("App screenshots", () => {
 
       const applyActivityFilter = applyEvidenceFilter;
       const activityTypesSection = () => page.getByTestId("filters-editor-surface").locator("section").first();
+      const firstExpandableActivityRow = () => dialog.locator('[data-testid^="evidence-row-"][aria-expanded]').first();
+      const captureExpandedActivityType = async (path: string, configure: () => Promise<void>) => {
+        await applyActivityFilter(configure);
+        const row = firstExpandableActivityRow();
+        await expect(row).toBeVisible();
+        await row.click();
+        await expect(row).toHaveAttribute("aria-expanded", "true");
+        await captureDiagnosticsScreenshot(page, testInfo, path);
+        await row.click();
+        await expect(row).toHaveAttribute("aria-expanded", "false");
+      };
 
       const dialog = await openDiagnostics();
 
@@ -1332,28 +1343,64 @@ test.describe("App screenshots", () => {
 
       await captureDiagnosticsScreenshot(page, testInfo, "activity/01-visible-list.png");
 
-      const expandableRow = dialog.locator('[data-testid^="evidence-row-"][aria-expanded]').first();
+      await captureExpandedActivityType("activity/02-expanded-problems.png", async () => {
+        await activityTypesSection()
+          .getByRole("button", { name: /Actions/ })
+          .click();
+      });
+
+      await captureExpandedActivityType("activity/03-expanded-actions.png", async () => {
+        await activityTypesSection()
+          .getByRole("button", { name: /Problems/ })
+          .click();
+      });
+
+      await captureExpandedActivityType("activity/04-expanded-logs.png", async () => {
+        await activityTypesSection()
+          .getByRole("button", { name: /Problems/ })
+          .click();
+        await activityTypesSection()
+          .getByRole("button", { name: /Actions/ })
+          .click();
+        await activityTypesSection().getByRole("button", { name: /Logs/ }).click();
+      });
+
+      await captureExpandedActivityType("activity/05-expanded-traces.png", async () => {
+        await activityTypesSection()
+          .getByRole("button", { name: /Problems/ })
+          .click();
+        await activityTypesSection()
+          .getByRole("button", { name: /Actions/ })
+          .click();
+        await activityTypesSection()
+          .getByRole("button", { name: /Traces/ })
+          .click();
+      });
+
+      await applyActivityFilter(async () => {
+        // Reset back to the default Problems + Actions view for collapse evidence.
+      });
+      const expandableRow = firstExpandableActivityRow();
       await expect(expandableRow).toBeVisible();
       await expandableRow.click();
       await expect(expandableRow).toHaveAttribute("aria-expanded", "true");
-      await captureDiagnosticsScreenshot(page, testInfo, "activity/02-expanded-detail.png");
       await expandableRow.click();
       await expect(expandableRow).toHaveAttribute("aria-expanded", "false");
-      await captureDiagnosticsScreenshot(page, testInfo, "activity/03-collapsed-after-toggle.png");
+      await captureDiagnosticsScreenshot(page, testInfo, "activity/06-collapsed-after-toggle.png");
 
       await applyActivityFilter(async () => {
         await activityTypesSection()
           .getByRole("button", { name: /Actions/ })
           .click();
       });
-      await captureDiagnosticsScreenshot(page, testInfo, "activity/04-problems-only.png");
+      await captureDiagnosticsScreenshot(page, testInfo, "activity/07-problems-only.png");
 
       await applyActivityFilter(async () => {
         await activityTypesSection()
           .getByRole("button", { name: /Problems/ })
           .click();
       });
-      await captureDiagnosticsScreenshot(page, testInfo, "activity/05-actions-only.png");
+      await captureDiagnosticsScreenshot(page, testInfo, "activity/08-actions-only.png");
 
       await applyActivityFilter(async () => {
         await activityTypesSection()
@@ -1364,7 +1411,7 @@ test.describe("App screenshots", () => {
           .click();
         await activityTypesSection().getByRole("button", { name: /Logs/ }).click();
       });
-      await captureDiagnosticsScreenshot(page, testInfo, "activity/06-logs-only.png");
+      await captureDiagnosticsScreenshot(page, testInfo, "activity/09-logs-only.png");
 
       await applyActivityFilter(async () => {
         await activityTypesSection()
@@ -1377,14 +1424,14 @@ test.describe("App screenshots", () => {
           .getByRole("button", { name: /Traces/ })
           .click();
       });
-      await captureDiagnosticsScreenshot(page, testInfo, "activity/07-traces-only.png");
+      await captureDiagnosticsScreenshot(page, testInfo, "activity/10-traces-only.png");
 
       await dialog.getByTestId("open-filters-editor").click();
       await expect(page.getByTestId("filters-editor-surface")).toBeVisible();
       await page.getByTestId("filters-editor-surface").getByTestId("quick-filter-errors").click();
       await page.getByTestId("filters-editor-surface").getByRole("button", { name: "Close" }).click();
       await expect(page.getByTestId("filters-editor-surface")).toBeHidden();
-      await captureDiagnosticsScreenshot(page, testInfo, "activity/08-errors-only.png");
+      await captureDiagnosticsScreenshot(page, testInfo, "activity/11-errors-only.png");
 
       await applyActivityFilter(async () => {
         // Reset back to the default Problems + Actions view before capturing the rest of the surfaces.

@@ -50,19 +50,19 @@ describe("HealthCheckDetailView", () => {
   describe("empty state", () => {
     it("shows placeholder when result is null and not running", () => {
       render(<HealthCheckDetailView result={null} onBack={vi.fn()} />);
-      expect(screen.getByText("Run a health check to inspect per-probe detail.")).toBeInTheDocument();
+      expect(screen.getByText("Run a health check to load probe detail.")).toBeInTheDocument();
     });
 
     it("shows dashboard when isRunning=true and liveProbes is an empty object", () => {
       render(<HealthCheckDetailView result={null} liveProbes={{}} isRunning={true} onBack={vi.fn()} />);
       // Not placeholder — probe rows are rendered
-      expect(screen.queryByText("Run a health check to inspect per-probe detail.")).not.toBeInTheDocument();
+      expect(screen.queryByText("Run a health check to load probe detail.")).not.toBeInTheDocument();
       expect(screen.getByTestId("health-check-probe-rest")).toBeInTheDocument();
     });
 
     it("shows placeholder when isRunning=true but liveProbes is null", () => {
       render(<HealthCheckDetailView result={null} liveProbes={null} isRunning={true} onBack={vi.fn()} />);
-      expect(screen.getByText("Run a health check to inspect per-probe detail.")).toBeInTheDocument();
+      expect(screen.getByText("Run a health check to load probe detail.")).toBeInTheDocument();
     });
   });
 
