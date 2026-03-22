@@ -126,7 +126,7 @@
     "date-fns": "^3.6.0",
     "embla-carousel-react": "^8.6.0",
     "fflate": "^0.8.2",
-    "framer-motion": "^12.26.2",
+    "framer-motion": "^12.38.0",
     "input-otp": "^1.4.2",
     "js-yaml": "^4.1.1",
     "lucide-react": "^0.462.0",
