@@ -333,6 +333,96 @@ describe("DiagnosticsDialog", () => {
     expect(row).not.toHaveAttribute("aria-expanded");
   });
 
+  it("renders canonical app log lines with exception details and stack traces", () => {
+    setViewportWidth(600);
+
+    renderDialog({
+      defaultEvidenceTypes: new Set(["Logs"]),
+      logs: [
+        {
+          id: "log-stack",
+          level: "error" as const,
+          message: "FTP disk import failed",
+          timestamp: new Date(Date.now() - 2_000).toISOString(),
+          details: {
+            path: "/Usb0/Games/Corrupt.d64",
+            error: {
+              name: "FtpDiskImportError",
+              message: "550 Corrupt disk image",
+              stack: "FtpDiskImportError: 550 Corrupt disk image\n    at importDisk (ftpDiskImport.ts:75:11)",
+            },
+            errorName: "FtpDiskImportError",
+            errorStack: "FtpDiskImportError: 550 Corrupt disk image\n    at importDisk (ftpDiskImport.ts:75:11)",
+          },
+        },
+      ],
+      errorLogs: [],
+      traceEvents: [],
+      actionSummaries: [],
+    });
+
+    const row = screen.getByTestId("evidence-row-log-log-stack");
+    expect(row).toHaveTextContent("ERROR FTP disk import failed");
+    expect(row).toHaveTextContent("FtpDiskImportError");
+
+    fireEvent.click(row);
+
+    const detail = screen.getByTestId("evidence-detail-log-log-stack");
+    expect(detail).toHaveTextContent("ERROR FTP disk import failed");
+    expect(detail).toHaveTextContent("Exception: FtpDiskImportError: 550 Corrupt disk image");
+    expect(detail).toHaveTextContent("Stack trace:");
+    expect(detail).toHaveTextContent("at importDisk (ftpDiskImport.ts:75:11)");
+  });
+
+  it("shows problem entries from both app logs and trace failures", () => {
+    setViewportWidth(600);
+
+    renderDialog({
+      defaultEvidenceTypes: new Set(["Problems"]),
+      logs: [],
+      errorLogs: [
+        {
+          id: "problem-log",
+          level: "error" as const,
+          message: "FTP disk import failed",
+          timestamp: new Date(Date.now() - 2_000).toISOString(),
+          details: {
+            errorName: "FtpDiskImportError",
+          },
+        },
+      ],
+      traceEvents: [
+        {
+          id: "trace-problem",
+          timestamp: new Date(Date.now() - 4_000).toISOString(),
+          relativeMs: 0,
+          type: "rest-response" as const,
+          origin: "user" as const,
+          correlationId: "trace-problem-correlation",
+          data: {
+            lifecycleState: "foreground" as const,
+            sourceKind: null,
+            localAccessMode: null,
+            trackInstanceId: null,
+            playlistItemId: null,
+            method: "GET",
+            path: "/v1/runners/script/status",
+            status: 503,
+            error: "Script runner unavailable",
+          },
+        },
+      ],
+      actionSummaries: [],
+    });
+
+    expect(screen.getByTestId("evidence-row-problem-log-problem-log")).toHaveTextContent(
+      "ERROR FTP disk import failed",
+    );
+    expect(screen.getByTestId("evidence-row-problem-trace-trace-problem")).toHaveTextContent(
+      "GET /v1/runners/script/status",
+    );
+  });
+
   it("auto-expands the health detail view when a health check starts", () => {
     setViewportWidth(600);
     const onRunHealthCheck = vi.fn();

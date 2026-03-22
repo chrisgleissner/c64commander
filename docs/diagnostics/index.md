@@ -17,14 +17,14 @@ This directory holds the current diagnostics overlay screenshots used for docume
 ### Activity (`doc/img/app/diagnostics/activity/`)
 
 - `01-visible-list.png`: activity list with mixed action, REST, and FTP entries visible.
-- `02-expanded-problems.png`: expanded problem entry showing the compact full-detail payload for diagnostics failures.
+- `02-expanded-problems.png`: expanded problem entry showing a canonical application error line with exception type, stack trace, and structured detail.
 - `03-expanded-actions.png`: expanded REST POST action showing request headers, request body, response headers, response body, response status, latency, and only partially redacted secret-like header values.
-- `04-expanded-logs.png`: expanded log entry showing structured app-log detail.
+- `04-expanded-logs.png`: expanded log entry showing level, message, exception type, full stack trace, and structured detail.
 - `05-expanded-traces.png`: expanded trace entry showing the traced request payload.
 - `06-collapsed-after-toggle.png`: the list after a second tap collapses the expanded row again.
-- `07-problems-only.png`: activity list filtered to diagnostics problems only.
+- `07-problems-only.png`: activity list filtered to mixed diagnostics problems from app logs and trace failures.
 - `08-actions-only.png`: activity list filtered to action summaries only.
-- `09-logs-only.png`: activity list filtered to logs only.
+- `09-logs-only.png`: activity list filtered to canonical app log lines with DEBUG, INFO, WARN, and ERROR entries.
 - `10-traces-only.png`: activity list filtered to traces only.
 - `11-errors-only.png`: activity list filtered to error-severity entries across activity types.
 

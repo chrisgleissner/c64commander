@@ -651,15 +651,15 @@ describe("SettingsPage", () => {
     const dialog = await openDiagnosticsTools();
     const filters = await openDiagnosticsFilters(dialog);
 
-    expect((await within(dialog).findAllByText("Disk error")).length).toBeGreaterThan(0);
-    expect((await within(dialog).findAllByText("Network failure")).length).toBeGreaterThan(0);
+    expect((await within(dialog).findAllByText("ERROR Disk error")).length).toBeGreaterThan(0);
+    expect((await within(dialog).findAllByText("ERROR Network failure")).length).toBeGreaterThan(0);
 
     fireEvent.click(within(filters).getByRole("button", { name: "Logs" }));
     fireEvent.click(within(filters).getByRole("button", { name: "✓ Actions" }));
     fireEvent.click(within(filters).getByRole("button", { name: "✓ Problems" }));
 
-    expect(within(dialog).queryByText("Disk error")).not.toBeInTheDocument();
-    expect(within(dialog).queryByText("Network failure")).not.toBeInTheDocument();
+    expect(within(dialog).queryByText("ERROR Disk error")).not.toBeInTheDocument();
+    expect(within(dialog).queryByText("ERROR Network failure")).not.toBeInTheDocument();
   });
 
   it("clears diagnostics after confirmation", async () => {
@@ -677,7 +677,7 @@ describe("SettingsPage", () => {
 
     const dialog = await openDiagnosticsTools();
 
-    expect((await within(dialog).findAllByText("Error entry")).length).toBeGreaterThan(0);
+    expect((await within(dialog).findAllByText("ERROR Error entry")).length).toBeGreaterThan(0);
 
     fireEvent.click(within(dialog).getByTestId("diagnostics-overflow-menu"));
     fireEvent.click(within(dialog).getByTestId("diagnostics-clear-all-trigger"));
@@ -807,7 +807,7 @@ describe("SettingsPage", () => {
 
     const dialog = await openDiagnosticsTools();
 
-    await within(dialog).findByText("Export test error");
+    await within(dialog).findByText("ERROR Export test error");
 
     fireEvent.click(within(dialog).getByTestId("diagnostics-overflow-menu"));
     fireEvent.click(within(dialog).getByTestId("diagnostics-share-filtered"));

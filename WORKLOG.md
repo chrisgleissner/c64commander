@@ -61,3 +61,12 @@ Date: 2026-03-22
   - Secret masking was still full-value replacement in redaction tests, and FTP trace payloads were not being redacted before persistence.
   - Binary payload previews were centrally capped below the newly requested 256-byte requirement.
 - Next step: Switch secret masking to first-3-character partial redaction, extend trace-session redaction to FTP payloads and preview regeneration for sensitive structured payloads, enrich the seeded POST/FTP diagnostics evidence, prune obsolete diagnostics activity screenshots, and rerun focused tests plus screenshot generation.
+
+## 2026-03-22T16:10:00Z - Step 7 - Diagnostics log evidence and problem coverage
+
+- Decision: Treat the misleading log screenshots as a product bug, not just a screenshot-seed defect. The diagnostics list must render canonical app log lines and expand into exception-aware detail with stack traces, and the Problems view must aggregate failures from both logs and trace events.
+- Findings:
+  - Log rows were rendering only `message` plus raw `details` JSON, which hid the log level and any exception metadata in the collapsed list.
+  - Expanded log detail reused raw JSON rather than a debugger-friendly view with level, message, exception type, and stack trace.
+  - The screenshot trace seeding path was not waiting for `c64u-traces-updated`, which made the Problems gallery prone to omitting trace-derived failures.
+- Next step: Render canonical log lines in the diagnostics list, add exception-aware expanded detail, make trace seeding deterministic, reseed screenshots with realistic DEBUG/INFO/WARN/ERROR samples plus stack traces, and rerun diagnostics screenshots and regression tests.

@@ -141,10 +141,12 @@ Acceptance criteria:
 - The diagnostics activity gallery includes a collapsed baseline, an expanded-detail state, and a recollapsed state after the second tap.
 - The diagnostics activity gallery includes one expanded screenshot for Problems, Actions, Logs, and Traces.
 - The expanded action screenshot shows a REST POST with request and response detail, with only security-sensitive header values partially redacted.
+- The diagnostics log screenshots show canonical app log lines including level, message, exception type when present, and full stack trace when present.
 - The diagnostics header gallery includes a completed health-check detail screenshot showing REST, FTP, CONFIG, RASTER, and JIFFY plus latency and overall result.
 - The diagnostics header gallery includes a live progress screenshot showing the same probe order with completed, running, and pending states.
 - Screenshot file names and documentation index entries match the generated `doc/img/app/diagnostics/**` output.
 - Binary preview evidence across traced HTTP and FTP flows is limited to 256 bytes while still showing total byte count.
+- The Problems gallery proves both log-derived and trace-derived failures are visible together.
 
 ## Phase 5 - Regression Coverage
 

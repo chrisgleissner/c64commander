@@ -217,12 +217,17 @@ const docSections: DocSection[] = [
           indicator.
         </p>
         <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-          <li>The in-app overlay keeps labels short. Explanations live here so the diagnostics sheet stays readable on small screens.</li>
           <li>
-            <strong>Health Check Detail</strong> shows probes in this order: REST, FTP, CONFIG, RASTER, JIFFY, followed by latency percentiles and the overall result.
+            The in-app overlay keeps labels short. Explanations live here so the diagnostics sheet stays readable on
+            small screens.
           </li>
           <li>
-            <strong>Expanded activity rows</strong> reveal the full payload for Problems, Actions, Logs, and Traces without opening another top-level screen.
+            <strong>Health Check Detail</strong> shows probes in this order: REST, FTP, CONFIG, RASTER, JIFFY, followed
+            by latency percentiles and the overall result.
+          </li>
+          <li>
+            <strong>Expanded activity rows</strong> reveal the full payload for Problems, Actions, Logs, and Traces
+            without opening another top-level screen.
           </li>
           <li>
             <strong>Actions</strong> summarizes user operations with REST/FTP counts and outcomes.

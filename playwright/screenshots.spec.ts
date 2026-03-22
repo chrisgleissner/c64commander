@@ -41,6 +41,7 @@ import {
   installListPreviewLimit,
   installStableStorage,
   seedDiagnosticsAnalytics,
+  seedDiagnosticsLogs,
   seedDiagnosticsTracesForAction,
   seedDiagnosticsTraces,
 } from "./visualSeeds";
@@ -349,10 +350,10 @@ const captureScreenshot = async (
   let screenshotBuffer = options?.locator
     ? await options.locator.screenshot({ animations: "disabled", caret: "hide" })
     : await page.screenshot({
-        animations: "disabled",
-        caret: "hide",
-        fullPage: options?.fullPage ?? false,
-      });
+      animations: "disabled",
+      caret: "hide",
+      fullPage: options?.fullPage ?? false,
+    });
   if ((options?.borderPx ?? 0) > 0) {
     const borderPx = options?.borderPx ?? 0;
     const color = options?.borderColor ?? { r: 255, g: 255, b: 255, alpha: 1 };
@@ -800,95 +801,95 @@ test.describe("App screenshots", () => {
           const snapshots =
             mode === "snapshot-manager"
               ? [
-                  {
-                    id: "snap-1",
-                    filename: "c64-program-20260110-090000.c64snap",
-                    bytesBase64: buildSnap(0, 1736499600),
-                    createdAt: "2026-01-10T09:00:00.000Z",
-                    snapshotType: "program",
-                    metadata: {
-                      snapshot_type: "program",
-                      display_ranges: ["$0000\u2013$00FF", "$0200\u2013$FFFF"],
-                      created_at: "2026-01-10 09:00:00",
-                      label: "JupiterLander.crt",
-                    },
+                {
+                  id: "snap-1",
+                  filename: "c64-program-20260110-090000.c64snap",
+                  bytesBase64: buildSnap(0, 1736499600),
+                  createdAt: "2026-01-10T09:00:00.000Z",
+                  snapshotType: "program",
+                  metadata: {
+                    snapshot_type: "program",
+                    display_ranges: ["$0000\u2013$00FF", "$0200\u2013$FFFF"],
+                    created_at: "2026-01-10 09:00:00",
+                    label: "JupiterLander.crt",
                   },
-                  {
-                    id: "snap-2",
-                    filename: "c64-basic-20260110-080000.c64snap",
-                    bytesBase64: buildSnap(1, 1736496000),
-                    createdAt: "2026-01-10T08:00:00.000Z",
-                    snapshotType: "basic",
-                    metadata: {
-                      snapshot_type: "basic",
-                      display_ranges: ["$002B\u2013$0038", "$0801\u2013STREND"],
-                      created_at: "2026-01-10 08:00:00",
-                    },
+                },
+                {
+                  id: "snap-2",
+                  filename: "c64-basic-20260110-080000.c64snap",
+                  bytesBase64: buildSnap(1, 1736496000),
+                  createdAt: "2026-01-10T08:00:00.000Z",
+                  snapshotType: "basic",
+                  metadata: {
+                    snapshot_type: "basic",
+                    display_ranges: ["$002B\u2013$0038", "$0801\u2013STREND"],
+                    created_at: "2026-01-10 08:00:00",
                   },
-                  {
-                    id: "snap-3",
-                    filename: "c64-screen-20260110-070000.c64snap",
-                    bytesBase64: buildSnap(2, 1736492400),
-                    createdAt: "2026-01-10T07:00:00.000Z",
-                    snapshotType: "screen",
-                    metadata: {
-                      snapshot_type: "screen",
-                      display_ranges: ["VICBANK", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"],
-                      created_at: "2026-01-10 07:00:00",
-                    },
+                },
+                {
+                  id: "snap-3",
+                  filename: "c64-screen-20260110-070000.c64snap",
+                  bytesBase64: buildSnap(2, 1736492400),
+                  createdAt: "2026-01-10T07:00:00.000Z",
+                  snapshotType: "screen",
+                  metadata: {
+                    snapshot_type: "screen",
+                    display_ranges: ["VICBANK", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"],
+                    created_at: "2026-01-10 07:00:00",
                   },
-                  {
-                    id: "snap-4",
-                    filename: "c64-custom-20260110-060000.c64snap",
-                    bytesBase64: buildSnap(3, 1736488800),
-                    createdAt: "2026-01-10T06:00:00.000Z",
-                    snapshotType: "custom",
-                    metadata: {
-                      snapshot_type: "custom",
-                      display_ranges: ["$0400\u2013$07E7", "$2000\u2013$20FF"],
-                      created_at: "2026-01-10 06:00:00",
-                    },
+                },
+                {
+                  id: "snap-4",
+                  filename: "c64-custom-20260110-060000.c64snap",
+                  bytesBase64: buildSnap(3, 1736488800),
+                  createdAt: "2026-01-10T06:00:00.000Z",
+                  snapshotType: "custom",
+                  metadata: {
+                    snapshot_type: "custom",
+                    display_ranges: ["$0400\u2013$07E7", "$2000\u2013$20FF"],
+                    created_at: "2026-01-10 06:00:00",
                   },
-                ]
+                },
+              ]
               : [
-                  {
-                    id: "snap-1",
-                    filename: "c64-program-20260110-090000.c64snap",
-                    bytesBase64: buildSnap(0, 1736499600),
-                    createdAt: "2026-01-10T09:00:00.000Z",
-                    snapshotType: "program",
-                    metadata: {
-                      snapshot_type: "program",
-                      display_ranges: ["$0000\u2013$00FF", "$0200\u2013$FFFF"],
-                      created_at: "2026-01-10 09:00:00",
-                      label: "JupiterLander.crt",
-                    },
+                {
+                  id: "snap-1",
+                  filename: "c64-program-20260110-090000.c64snap",
+                  bytesBase64: buildSnap(0, 1736499600),
+                  createdAt: "2026-01-10T09:00:00.000Z",
+                  snapshotType: "program",
+                  metadata: {
+                    snapshot_type: "program",
+                    display_ranges: ["$0000\u2013$00FF", "$0200\u2013$FFFF"],
+                    created_at: "2026-01-10 09:00:00",
+                    label: "JupiterLander.crt",
                   },
-                  {
-                    id: "snap-2",
-                    filename: "c64-basic-20260110-080000.c64snap",
-                    bytesBase64: buildSnap(1, 1736496000),
-                    createdAt: "2026-01-10T08:00:00.000Z",
-                    snapshotType: "basic",
-                    metadata: {
-                      snapshot_type: "basic",
-                      display_ranges: ["$002B\u2013$0038", "$0801\u2013STREND"],
-                      created_at: "2026-01-10 08:00:00",
-                    },
+                },
+                {
+                  id: "snap-2",
+                  filename: "c64-basic-20260110-080000.c64snap",
+                  bytesBase64: buildSnap(1, 1736496000),
+                  createdAt: "2026-01-10T08:00:00.000Z",
+                  snapshotType: "basic",
+                  metadata: {
+                    snapshot_type: "basic",
+                    display_ranges: ["$002B\u2013$0038", "$0801\u2013STREND"],
+                    created_at: "2026-01-10 08:00:00",
                   },
-                  {
-                    id: "snap-3",
-                    filename: "c64-screen-20260110-070000.c64snap",
-                    bytesBase64: buildSnap(2, 1736492400),
-                    createdAt: "2026-01-10T07:00:00.000Z",
-                    snapshotType: "screen",
-                    metadata: {
-                      snapshot_type: "screen",
-                      display_ranges: ["VICBANK", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"],
-                      created_at: "2026-01-10 07:00:00",
-                    },
+                },
+                {
+                  id: "snap-3",
+                  filename: "c64-screen-20260110-070000.c64snap",
+                  bytesBase64: buildSnap(2, 1736492400),
+                  createdAt: "2026-01-10T07:00:00.000Z",
+                  snapshotType: "screen",
+                  metadata: {
+                    snapshot_type: "screen",
+                    display_ranges: ["VICBANK", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"],
+                    created_at: "2026-01-10 07:00:00",
                   },
-                ];
+                },
+              ];
 
           localStorage.setItem(
             "c64u_snapshots:v1",
@@ -1425,6 +1426,7 @@ test.describe("App screenshots", () => {
 
       await captureDiagnosticsScreenshot(page, testInfo, "activity/01-visible-list.png");
 
+      await seedDiagnosticsLogs(page);
       await captureExpandedActivityType("activity/02-expanded-problems.png", async () => {
         await activityTypesSection()
           .getByRole("button", { name: /Actions/ })
@@ -1432,6 +1434,7 @@ test.describe("App screenshots", () => {
       });
 
       await seedDiagnosticsTracesForAction(page, "diagnostics.snapshot");
+      await seedDiagnosticsLogs(page);
       await seedDiagnosticsAnalytics(page);
       await captureExpandedActivityType(
         "activity/03-expanded-actions.png",
@@ -1448,27 +1451,38 @@ test.describe("App screenshots", () => {
         },
       );
       await seedDiagnosticsTraces(page);
+      await seedDiagnosticsLogs(page);
       await seedDiagnosticsAnalytics(page);
 
-      await captureExpandedActivityType("activity/04-expanded-logs.png", async () => {
-        await activityTypesSection()
-          .getByRole("button", { name: /Problems/ })
-          .click();
-        await activityTypesSection()
-          .getByRole("button", { name: /Actions/ })
-          .click();
-        await activityTypesSection().getByRole("button", { name: /Logs/ }).click();
-      });
+      await captureExpandedActivityType(
+        "activity/04-expanded-logs.png",
+        async () => {
+          await seedDiagnosticsLogs(page);
+          await activityTypesSection()
+            .getByRole("button", { name: /Problems/ })
+            .click();
+          await activityTypesSection().getByRole("button", { name: /Logs/ }).click();
+          await activityTypesSection()
+            .getByRole("button", { name: /Actions/ })
+            .click();
+        },
+        {
+          rowLabel: "ERROR FTP disk import failed",
+          captureExpandedRowOnly: true,
+          unclipDiagnosticsSheet: true,
+          hideDiagnosticsControls: true,
+        },
+      );
 
       await captureExpandedActivityType("activity/05-expanded-traces.png", async () => {
         await activityTypesSection()
           .getByRole("button", { name: /Problems/ })
           .click();
         await activityTypesSection()
-          .getByRole("button", { name: /Actions/ })
+          .getByRole("button", { name: /Traces/ })
           .click();
         await activityTypesSection()
-          .getByRole("button", { name: /Traces/ })
+          .getByRole("button", { name: /Actions/ })
           .click();
       });
 
@@ -1483,13 +1497,17 @@ test.describe("App screenshots", () => {
       await expect(expandableRow).toHaveAttribute("aria-expanded", "false");
       await captureDiagnosticsScreenshot(page, testInfo, "activity/06-collapsed-after-toggle.png");
 
+      await seedDiagnosticsLogs(page);
       await applyActivityFilter(async () => {
         await activityTypesSection()
           .getByRole("button", { name: /Actions/ })
           .click();
       });
+      await expect(dialog.getByText("ERROR FTP disk import failed")).toBeVisible();
+      await expect(dialog.getByText("GET /v1/runners/script/status")).toBeVisible();
       await captureDiagnosticsScreenshot(page, testInfo, "activity/07-problems-only.png");
 
+      await seedDiagnosticsLogs(page);
       await applyActivityFilter(async () => {
         await activityTypesSection()
           .getByRole("button", { name: /Problems/ })
@@ -1501,11 +1519,17 @@ test.describe("App screenshots", () => {
         await activityTypesSection()
           .getByRole("button", { name: /Problems/ })
           .click();
+        await activityTypesSection().getByRole("button", { name: /Logs/ }).click();
         await activityTypesSection()
           .getByRole("button", { name: /Actions/ })
           .click();
-        await activityTypesSection().getByRole("button", { name: /Logs/ }).click();
       });
+      await expect(dialog.getByTestId("filters-collapsed-bar")).toContainText("Logs");
+      await expect(dialog.getByTestId("filters-collapsed-bar")).not.toContainText("Actions");
+      await expect(dialog.getByText("ERROR FTP disk import failed")).toBeVisible();
+      await expect(dialog.getByText("WARN Lighting Studio circadian resolution failed")).toBeVisible();
+      await expect(dialog.getByText("INFO REST config refresh completed")).toBeVisible();
+      await expect(dialog.getByText("DEBUG Cache warmup finished")).toBeVisible();
       await captureDiagnosticsScreenshot(page, testInfo, "activity/09-logs-only.png");
 
       await applyActivityFilter(async () => {
@@ -1513,10 +1537,10 @@ test.describe("App screenshots", () => {
           .getByRole("button", { name: /Problems/ })
           .click();
         await activityTypesSection()
-          .getByRole("button", { name: /Actions/ })
+          .getByRole("button", { name: /Traces/ })
           .click();
         await activityTypesSection()
-          .getByRole("button", { name: /Traces/ })
+          .getByRole("button", { name: /Actions/ })
           .click();
       });
       await captureDiagnosticsScreenshot(page, testInfo, "activity/10-traces-only.png");

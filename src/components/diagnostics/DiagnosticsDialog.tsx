@@ -283,15 +283,94 @@ const FilterToggleChip = ({
 );
 
 const formatJsonBlock = (value: unknown) => {
+  if (value == null) return null;
   const formatted = JSON.stringify(value, null, 2);
   if (!formatted || formatted === "{}" || formatted === "[]") return null;
   return formatted;
 };
 
+const getLogDetailsRecord = (entry: LogEntry) => {
+  if (!entry.details || typeof entry.details !== "object" || Array.isArray(entry.details)) return null;
+  return { ...(entry.details as Record<string, unknown>) };
+};
+
+const getLogErrorInfo = (entry: LogEntry) => {
+  const details = getLogDetailsRecord(entry);
+  const nestedError =
+    details?.error && typeof details.error === "object" && !Array.isArray(details.error)
+      ? { ...(details.error as Record<string, unknown>) }
+      : null;
+  const errorName =
+    typeof details?.errorName === "string"
+      ? details.errorName
+      : typeof nestedError?.name === "string"
+        ? nestedError.name
+        : null;
+  const errorMessage = typeof nestedError?.message === "string" ? nestedError.message : null;
+  const errorStack =
+    typeof details?.errorStack === "string"
+      ? details.errorStack
+      : typeof nestedError?.stack === "string"
+        ? nestedError.stack
+        : null;
+
+  if (details) {
+    delete details.errorName;
+    delete details.errorStack;
+  }
+
+  if (nestedError && details) {
+    delete nestedError.name;
+    delete nestedError.message;
+    delete nestedError.stack;
+    if (Object.keys(nestedError).length > 0) {
+      details.error = nestedError;
+    } else {
+      delete details.error;
+    }
+  }
+
+  return { details, errorMessage, errorName, errorStack };
+};
+
+const formatLogHeadline = (entry: LogEntry) => `${entry.level.toUpperCase()} ${entry.message || "(empty message)"}`;
+
+const getLogSecondaryDetail = (entry: LogEntry) => {
+  const { errorMessage, errorName } = getLogErrorInfo(entry);
+  if (errorName) return errorName;
+  if (errorMessage && errorMessage !== entry.message) return errorMessage;
+  return null;
+};
+
+const formatLogExpandedDetail = (entry: LogEntry) => {
+  const { details, errorMessage, errorName, errorStack } = getLogErrorInfo(entry);
+  const sections = [formatLogHeadline(entry)];
+
+  if (errorName) {
+    sections.push(
+      errorMessage && errorMessage !== entry.message
+        ? `Exception: ${errorName}: ${errorMessage}`
+        : `Exception: ${errorName}`,
+    );
+  } else if (errorMessage && errorMessage !== entry.message) {
+    sections.push(`Exception message: ${errorMessage}`);
+  }
+
+  if (errorStack) {
+    sections.push(`Stack trace:\n${errorStack}`);
+  }
+
+  const formattedDetails = formatJsonBlock(details);
+  if (formattedDetails) {
+    sections.push(`Details:\n${formattedDetails}`);
+  }
+
+  return sections.length > 1 ? sections.join("\n\n") : null;
+};
+
 const getEntryExpandedDetail = (entry: EvidenceEntry): ReactNode | null => {
   if (entry.type === "Logs" || (entry.type === "Problems" && "level" in entry.payload)) {
-    const details = (entry.payload as LogEntry).details;
-    return details ? formatJsonBlock(details) : null;
+    return formatLogExpandedDetail(entry.payload as LogEntry);
   }
 
   if (entry.type === "Actions") {
@@ -711,8 +790,8 @@ export function DiagnosticsDialog({
       items.push({
         id: `problem-log-${entry.id}`,
         type: "Problems",
-        title: entry.message,
-        detail: entry.details ? JSON.stringify(entry.details) : null,
+        title: formatLogHeadline(entry),
+        detail: getLogSecondaryDetail(entry),
         contributor: "App",
         severity: resolveLogSeverity(entry.level),
         timestamp: entry.timestamp,
@@ -757,8 +836,8 @@ export function DiagnosticsDialog({
       items.push({
         id: `log-${entry.id}`,
         type: "Logs",
-        title: entry.message,
-        detail: entry.details ? JSON.stringify(entry.details) : null,
+        title: formatLogHeadline(entry),
+        detail: getLogSecondaryDetail(entry),
         contributor: "App",
         severity: resolveLogSeverity(entry.level),
         timestamp: entry.timestamp,

@@ -136,25 +136,56 @@ export const PLAYLIST_SEED = {
 
 export const LOG_SEED = [
   {
-    id: "log-1",
+    id: "log-debug-cache-warmup",
+    level: "debug",
+    message: "Cache warmup finished",
+    timestamp: "2024-03-20T12:17:20.000Z",
+    details: { cache: "source-index", entries: 42, durationMs: 36 },
+  },
+  {
+    id: "log-info-config-refresh",
     level: "info",
-    message: "Config refresh complete",
-    timestamp: "2024-03-20T11:58:20.000Z",
+    message: "REST config refresh completed",
+    timestamp: "2024-03-20T12:18:10.000Z",
     details: { endpoint: "/v1/configs", durationMs: 180 },
   },
   {
-    id: "log-2",
+    id: "log-warn-circadian",
     level: "warn",
-    message: "Background probe slow",
-    timestamp: "2024-03-20T11:59:10.000Z",
-    details: { timeoutMs: 1200 },
+    message: "Lighting Studio circadian resolution failed",
+    timestamp: "2024-03-20T12:19:10.000Z",
+    details: {
+      profile: "sunrise",
+      fallback: "static palette",
+      error: {
+        name: "RangeError",
+        message: "invalid sunrise offset",
+        stack:
+          "RangeError: invalid sunrise offset\n    at resolveCircadianPalette (src/hooks/useLightingStudio.ts:395:13)\n    at applyCircadianPreset (src/hooks/useLightingStudio.ts:500:9)\n    at async saveLightingProfile (src/hooks/useLightingStudio.ts:518:7)",
+      },
+      errorName: "RangeError",
+      errorStack:
+        "RangeError: invalid sunrise offset\n    at resolveCircadianPalette (src/hooks/useLightingStudio.ts:395:13)\n    at applyCircadianPreset (src/hooks/useLightingStudio.ts:500:9)\n    at async saveLightingProfile (src/hooks/useLightingStudio.ts:518:7)",
+    },
   },
   {
-    id: "log-3",
+    id: "log-error-disk-import",
     level: "error",
-    message: "Disk mount failed",
-    timestamp: "2024-03-20T12:00:05.000Z",
-    details: { drive: "A", reason: "Disk not found" },
+    message: "FTP disk import failed",
+    timestamp: "2024-03-20T12:20:05.000Z",
+    details: {
+      path: "/Usb0/Games/Corrupt.d64",
+      code: "E_FTP_IMPORT",
+      error: {
+        name: "FtpDiskImportError",
+        message: "550 Corrupt disk image",
+        stack:
+          "FtpDiskImportError: 550 Corrupt disk image\n    at importDisk (src/lib/disks/ftpDiskImport.ts:75:11)\n    at async loadDisk (src/components/disks/HomeDiskManager.tsx:860:19)\n    at async onSelectDisk (src/components/disks/HomeDiskManager.tsx:908:17)\n    at async HTMLButtonElement.handleImportClick (src/components/disks/HomeDiskManager.tsx:940:13)",
+      },
+      errorName: "FtpDiskImportError",
+      errorStack:
+        "FtpDiskImportError: 550 Corrupt disk image\n    at importDisk (src/lib/disks/ftpDiskImport.ts:75:11)\n    at async loadDisk (src/components/disks/HomeDiskManager.tsx:860:19)\n    at async onSelectDisk (src/components/disks/HomeDiskManager.tsx:908:17)\n    at async HTMLButtonElement.handleImportClick (src/components/disks/HomeDiskManager.tsx:940:13)",
+    },
   },
 ];
 
@@ -569,10 +600,13 @@ const buildTraceSeed = (): TraceEvent[] => {
     }),
     createRestScenario({ minutesAgo: 30, actionName: "stream.latency", path: "/v1/streams/latency", durationMs: 86 }),
     createRestScenario({
-      minutesAgo: 24,
+      minutesAgo: 22,
       actionName: "runner.status",
       path: "/v1/runners/script/status",
+      status: 503,
       durationMs: 132,
+      error: "Script runner unavailable",
+      errorMessage: "Script runner unavailable during diagnostics collection",
     }),
     createRestScenario({
       minutesAgo: 18,
@@ -1022,12 +1056,29 @@ export const installListPreviewLimit = async (page: Page, limit: number) => {
 
 export const seedDiagnosticsTraces = async (page: Page) => {
   await page.evaluate((seed) => {
-    const tracing = (
-      window as Window & {
-        __c64uTracing?: { seedTraces?: (events: TraceEvent[]) => void };
+    return new Promise<void>((resolve) => {
+      const handler = () => {
+        window.clearTimeout(timeout);
+        window.removeEventListener("c64u-traces-updated", handler);
+        setTimeout(resolve, 50);
+      };
+      const timeout = window.setTimeout(() => {
+        window.removeEventListener("c64u-traces-updated", handler);
+        resolve();
+      }, 250);
+      window.addEventListener("c64u-traces-updated", handler);
+      const tracing = (
+        window as Window & {
+          __c64uTracing?: { seedTraces?: (events: TraceEvent[]) => void };
+        }
+      ).__c64uTracing;
+      tracing?.seedTraces?.(seed as TraceEvent[]);
+      if (!tracing?.seedTraces) {
+        window.clearTimeout(timeout);
+        window.removeEventListener("c64u-traces-updated", handler);
+        resolve();
       }
-    ).__c64uTracing;
-    tracing?.seedTraces?.(seed as TraceEvent[]);
+    });
   }, TRACE_SEED);
 };
 
@@ -1039,13 +1090,49 @@ export const seedDiagnosticsTracesForAction = async (page: Page, actionName: str
   );
   const filteredSeed = TRACE_SEED.filter((event) => correlationIds.has(event.correlationId));
   await page.evaluate((seed) => {
-    const tracing = (
-      window as Window & {
-        __c64uTracing?: { seedTraces?: (events: TraceEvent[]) => void };
+    return new Promise<void>((resolve) => {
+      const handler = () => {
+        window.clearTimeout(timeout);
+        window.removeEventListener("c64u-traces-updated", handler);
+        setTimeout(resolve, 50);
+      };
+      const timeout = window.setTimeout(() => {
+        window.removeEventListener("c64u-traces-updated", handler);
+        resolve();
+      }, 250);
+      window.addEventListener("c64u-traces-updated", handler);
+      const tracing = (
+        window as Window & {
+          __c64uTracing?: { seedTraces?: (events: TraceEvent[]) => void };
+        }
+      ).__c64uTracing;
+      tracing?.seedTraces?.(seed as TraceEvent[]);
+      if (!tracing?.seedTraces) {
+        window.clearTimeout(timeout);
+        window.removeEventListener("c64u-traces-updated", handler);
+        resolve();
       }
-    ).__c64uTracing;
-    tracing?.seedTraces?.(seed as TraceEvent[]);
+    });
   }, filteredSeed);
+};
+
+export const seedDiagnosticsLogs = async (page: Page) => {
+  await page.evaluate((seedLogs) => {
+    return new Promise<void>((resolve) => {
+      const handler = () => {
+        window.clearTimeout(timeout);
+        window.removeEventListener("c64u-logs-updated", handler);
+        setTimeout(resolve, 50);
+      };
+      const timeout = window.setTimeout(() => {
+        window.removeEventListener("c64u-logs-updated", handler);
+        resolve();
+      }, 250);
+      window.addEventListener("c64u-logs-updated", handler);
+      localStorage.setItem("c64u_app_logs", JSON.stringify(seedLogs));
+      window.dispatchEvent(new CustomEvent("c64u-logs-updated"));
+    });
+  }, LOG_SEED);
 };
 
 export const seedDiagnosticsAnalytics = async (page: Page) => {
