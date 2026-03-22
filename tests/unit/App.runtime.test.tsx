@@ -305,6 +305,53 @@ describe("App runtime wiring", () => {
     expect(screen.getByTestId("swipe-slot-settings")).toHaveAttribute("data-slot-active", "true");
   });
 
+  it("wraps from the last page to the first page on a touch swipe left", async () => {
+    window.history.pushState({}, "", "/docs");
+    render(<App />);
+
+    expect(await screen.findByText("Docs Page")).toBeInTheDocument();
+
+    const container = screen.getByTestId("swipe-navigation-container");
+    const runway = screen.getByTestId("swipe-navigation-runway");
+
+    container.dispatchEvent(
+      new PointerEvent("pointerdown", {
+        bubbles: true,
+        button: -1,
+        pointerId: 91,
+        isPrimary: true,
+        pointerType: "touch",
+        clientX: 220,
+        clientY: 180,
+      }),
+    );
+    container.dispatchEvent(
+      new PointerEvent("pointermove", {
+        bubbles: true,
+        pointerId: 91,
+        pointerType: "touch",
+        clientX: 120,
+        clientY: 184,
+      }),
+    );
+    container.dispatchEvent(
+      new PointerEvent("pointerup", {
+        bubbles: true,
+        pointerId: 91,
+        pointerType: "touch",
+        clientX: 120,
+        clientY: 184,
+      }),
+    );
+
+    expect(runway).toHaveAttribute("data-runway-phase", "transitioning");
+
+    fireEvent.transitionEnd(runway, { target: runway });
+
+    expect(await screen.findByText("Home Page")).toBeInTheDocument();
+    expect(screen.getByTestId("swipe-slot-home")).toHaveAttribute("data-slot-active", "true");
+  });
+
   it("invalidates visible-route queries on visibility resume", async () => {
     window.history.pushState({}, "", "/settings");
     const originalHidden = Object.getOwnPropertyDescriptor(document, "hidden");

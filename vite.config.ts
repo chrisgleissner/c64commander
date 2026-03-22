@@ -12,7 +12,7 @@ import istanbul from "vite-plugin-istanbul";
 import path from "path";
 import fs from "fs";
 import { spawnSync } from "child_process";
-import { resolveBuildAppVersion } from "./src/lib/buildVersion";
+import { hasInjectedBuildVersion, resolveBuildAppVersion } from "./src/lib/buildVersion";
 import { deriveVersionLabel } from "./src/lib/versionLabel";
 
 const pkg = JSON.parse(fs.readFileSync(new URL("./package.json", import.meta.url), "utf-8"));
@@ -50,12 +50,16 @@ const resolveAppVersion = () =>
     packageVersion: pkg.version || "",
   });
 
-const resolveAppVersionLabel = (gitDescribeValue: string, gitShaValue: string, fallbackVersion: string) =>
-  deriveVersionLabel({
+const resolveAppVersionLabel = (gitDescribeValue: string, gitShaValue: string, fallbackVersion: string) => {
+  if (hasInjectedBuildVersion(process.env)) {
+    return fallbackVersion;
+  }
+  return deriveVersionLabel({
     gitDescribe: gitDescribeValue,
     gitSha: gitShaValue,
     fallbackVersion,
   });
+};
 
 const resolveServiceWorkerBuildId = (appVersion: string, gitShaValue: string, buildTimeValue: string) => {
   const envBuildId = process.env.VITE_SW_BUILD_ID || process.env.SW_BUILD_ID || "";

@@ -22,6 +22,7 @@ vi.mock("@/hooks/useC64Connection", () => ({
 
 vi.mock("@/lib/buildInfo", () => ({
   getBuildInfo: () => ({
+    appVersion: "1.2.3-exact",
     versionLabel: "1.2.3",
     gitShaShort: "abc123",
     buildTimeUtc: "2026-01-01T00:00:00Z",
@@ -46,7 +47,7 @@ describe("SystemInfo", () => {
     });
     render(<SystemInfo />);
     expect(screen.getAllByText("Not connected").length).toBeGreaterThan(0);
-    expect(screen.getByTestId("home-system-version")).toHaveTextContent("1.2.3");
+    expect(screen.getByTestId("home-system-version")).toHaveTextContent("1.2.3-exact");
   });
 
   it("shows device hostname and firmware when connected", () => {

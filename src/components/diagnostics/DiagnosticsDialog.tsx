@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { ChevronDown, ChevronRight, Filter, MoreHorizontal, Share2, Trash2 } from "lucide-react";
 
@@ -53,6 +53,7 @@ import { getTraceTitle } from "@/lib/tracing/traceFormatter";
 import type { TraceEvent } from "@/lib/tracing/types";
 import { cn } from "@/lib/utils";
 import type { DeviceDetailInfo } from "@/components/diagnostics/DeviceDetailView";
+import { HealthCheckDetailView } from "./HealthCheckDetailView";
 import { HealthHistoryPopup } from "./HealthHistoryPopup";
 import { LatencyAnalysisPopup } from "./LatencyAnalysisPopup";
 
@@ -280,26 +281,108 @@ const FilterToggleChip = ({
   </button>
 );
 
-const EvidenceRow = ({ entry }: { entry: EvidenceEntry }) => (
-  <div
-    className="flex items-start gap-2 rounded-lg border border-border/70 bg-background px-2.5 py-1.5"
-    data-testid={`evidence-row-${entry.id}`}
-  >
-    <span
-      className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", SEVERITY_DOT_CLASS[entry.severity])}
-      aria-label={entry.severity}
-    />
-    <div className="min-w-0 flex-1">
-      <p className="truncate text-sm font-medium text-foreground">{entry.title}</p>
-      {entry.detail ? <p className="truncate text-xs text-muted-foreground">{entry.detail}</p> : null}
-      <div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-muted-foreground">
-        <span>{entry.type}</span>
-        {entry.contributor ? <span>· {entry.contributor}</span> : null}
-        <span>· {formatDiagnosticsTimestamp(entry.timestamp)}</span>
+const formatJsonBlock = (value: unknown) => {
+  const formatted = JSON.stringify(value, null, 2);
+  if (!formatted || formatted === "{}" || formatted === "[]") return null;
+  return formatted;
+};
+
+const getEntryExpandedDetail = (entry: EvidenceEntry) => {
+  if (entry.type === "Logs" || (entry.type === "Problems" && "level" in entry.payload)) {
+    const details = (entry.payload as LogEntry).details;
+    return details ? formatJsonBlock(details) : null;
+  }
+
+  if (entry.type === "Actions") {
+    const summary = entry.payload as ActionSummary;
+    return formatJsonBlock({
+      outcome: summary.outcome,
+      durationMs: summary.durationMs,
+      startTimestamp: summary.startTimestamp,
+      endTimestamp: summary.endTimestamp,
+      effects: summary.effects,
+    });
+  }
+
+  const trace = entry.payload as TraceEvent;
+  return formatJsonBlock({
+    type: trace.type,
+    origin: trace.origin,
+    correlationId: trace.correlationId,
+    data: trace.data,
+  });
+};
+
+const EvidenceRow = ({
+  entry,
+  expanded,
+  onToggle,
+}: {
+  entry: EvidenceEntry;
+  expanded: boolean;
+  onToggle: () => void;
+}) => {
+  const expandedDetail = getEntryExpandedDetail(entry);
+  const canExpand = expandedDetail !== null;
+
+  const content = (
+    <>
+      <span
+        className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", SEVERITY_DOT_CLASS[entry.severity])}
+        aria-label={entry.severity}
+      />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium text-foreground">{entry.title}</p>
+            {entry.detail ? <p className="truncate text-xs text-muted-foreground">{entry.detail}</p> : null}
+            <div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-muted-foreground">
+              <span>{entry.type}</span>
+              {entry.contributor ? <span>· {entry.contributor}</span> : null}
+              <span>· {formatDiagnosticsTimestamp(entry.timestamp)}</span>
+            </div>
+          </div>
+          {canExpand ? (
+            <span className="mt-0.5 shrink-0 text-muted-foreground" aria-hidden="true">
+              {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+            </span>
+          ) : null}
+        </div>
+        {expanded && expandedDetail ? (
+          <pre
+            className="mt-2 overflow-x-auto rounded-md border border-border/70 bg-muted/30 p-2 text-[11px] leading-4 text-foreground"
+            data-testid={`evidence-detail-${entry.id}`}
+          >
+            {expandedDetail}
+          </pre>
+        ) : null}
       </div>
-    </div>
-  </div>
-);
+    </>
+  );
+
+  if (!canExpand) {
+    return (
+      <div
+        className="flex items-start gap-2 rounded-lg border border-border/70 bg-background px-2.5 py-1.5"
+        data-testid={`evidence-row-${entry.id}`}
+      >
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      className="flex w-full items-start gap-2 rounded-lg border border-border/70 bg-background px-2.5 py-1.5 text-left"
+      data-testid={`evidence-row-${entry.id}`}
+      onClick={onToggle}
+      aria-expanded={expanded}
+    >
+      {content}
+    </button>
+  );
+};
 
 const FilterEditorSurface = ({
   open,
@@ -594,9 +677,11 @@ export function DiagnosticsDialog({
   healthCheckRunning = false,
   onRunHealthCheck,
   lastHealthCheckResult = null,
+  liveHealthCheckProbes = null,
 }: Props) {
   const { profile } = useDisplayProfile();
   const [headerExpanded, setHeaderExpanded] = useState(false);
+  const [expandedEvidenceId, setExpandedEvidenceId] = useState<string | null>(null);
   const [selectedTypes, setSelectedTypes] = useState<Set<EvidenceType>>(defaultEvidenceTypes ?? DEFAULT_TYPES);
   const [contributor, setContributor] = useState<ContributorFilter>("All");
   const [severity, setSeverity] = useState<SeverityFilter>("All");
@@ -706,6 +791,7 @@ export function DiagnosticsDialog({
     setLatencyOpen(false);
     setHistoryOpen(false);
     setOverflowOpen(false);
+    setExpandedEvidenceId(null);
 
     const snapshot = parseConnectionSnapshot();
     setConnectionDraft({
@@ -725,6 +811,12 @@ export function DiagnosticsDialog({
     }
   }, [open]);
 
+  useEffect(() => {
+    if (healthCheckRunning) {
+      setHeaderExpanded(true);
+    }
+  }, [healthCheckRunning]);
+
   const filteredEntries = useMemo(
     () =>
       allEntries.filter((entry) => {
@@ -739,6 +831,7 @@ export function DiagnosticsDialog({
   const totalCount = allEntries.length;
   const displayEntries = filteredEntries.slice(0, 8);
   const lastCheckTimestamp = getLastCheckTimestamp(lastHealthCheckResult, healthState);
+  const healthDetailAvailable = headerExpanded || healthCheckRunning || liveHealthCheckProbes !== null || lastHealthCheckResult !== null;
   const connectionLabel = `${healthState.connectedDeviceLabel ?? "C64U"} · ${connectionDraft.host}:${connectionDraft.httpPort}`;
   const activeFilterLabels = useMemo(() => {
     const labels: string[] = [];
@@ -868,32 +961,38 @@ export function DiagnosticsDialog({
                     variant="outline"
                     size="sm"
                     className="mt-1 h-7 text-xs"
-                    onClick={onRunHealthCheck}
+                    onClick={() => {
+                      setHeaderExpanded(true);
+                      onRunHealthCheck?.();
+                    }}
                     disabled={!onRunHealthCheck || healthCheckRunning}
                     data-testid="run-health-check"
                   >
                     {healthCheckRunning ? "Running health check" : "Run health check"}
                   </Button>
                 </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 w-7 p-0"
-                  onClick={() => setHeaderExpanded((value) => !value)}
-                  data-testid="diagnostics-header-toggle"
-                  aria-expanded={headerExpanded}
-                >
-                  {headerExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-                </Button>
+                {lastHealthCheckResult || liveHealthCheckProbes !== null || healthCheckRunning ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    onClick={() => setHeaderExpanded((value) => !value)}
+                    data-testid="diagnostics-header-toggle"
+                    aria-expanded={headerExpanded}
+                  >
+                    {headerExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                  </Button>
+                ) : null}
               </div>
-              {headerExpanded && lastHealthCheckResult ? (
+              {headerExpanded && healthDetailAvailable ? (
                 <div className="border-t border-border/70 px-3 py-2" data-testid="diagnostics-header-expanded">
-                  <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                    <span>P50 {lastHealthCheckResult.latency.p50}ms</span>
-                    <span>· P90 {lastHealthCheckResult.latency.p90}ms</span>
-                    <span>· P99 {lastHealthCheckResult.latency.p99}ms</span>
-                  </div>
+                  <HealthCheckDetailView
+                    result={lastHealthCheckResult}
+                    liveProbes={liveHealthCheckProbes}
+                    isRunning={healthCheckRunning}
+                    onBack={() => setHeaderExpanded(false)}
+                  />
                 </div>
               ) : null}
             </section>
@@ -941,7 +1040,13 @@ export function DiagnosticsDialog({
               </p>
               <div className="max-h-72 space-y-1.5 overflow-y-auto" data-testid="evidence-list">
                 {displayEntries.map((entry) => (
-                  <EvidenceRow key={entry.id} entry={entry} />
+                  <Fragment key={entry.id}>
+                    <EvidenceRow
+                      entry={entry}
+                      expanded={expandedEvidenceId === entry.id}
+                      onToggle={() => setExpandedEvidenceId((current) => (current === entry.id ? null : entry.id))}
+                    />
+                  </Fragment>
                 ))}
                 {displayEntries.length === 0 ? (
                   <p className="py-2 text-xs text-muted-foreground">No matching activity.</p>

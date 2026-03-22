@@ -8,6 +8,9 @@ import {
 } from "@/lib/startup/serviceWorkerRegistration";
 import { addErrorLog } from "@/lib/logging";
 
+const appVersion = (globalThis as { __APP_VERSION__?: string }).__APP_VERSION__ ?? "0.0.0";
+const swBuildId = (globalThis as { __SW_BUILD_ID__?: string }).__SW_BUILD_ID__ ?? `${appVersion}-test-build`;
+
 const isNativePlatformMock = vi.fn(() => false);
 
 vi.mock("@/lib/native/platform", () => ({
@@ -55,7 +58,7 @@ describe("serviceWorkerRegistration", () => {
     window.dispatchEvent(new Event("load"));
     await Promise.resolve();
 
-    expect(registerMock).toHaveBeenCalledWith("/sw.js?v=0.6.4-rc4-test-build");
+    expect(registerMock).toHaveBeenCalledWith(`/sw.js?v=${swBuildId}`);
     expect(vi.mocked(addErrorLog)).toHaveBeenCalledWith(
       "Service worker registration failed",
       expect.objectContaining({
@@ -75,6 +78,6 @@ describe("serviceWorkerRegistration", () => {
   });
 
   it("builds a versioned service worker script url", () => {
-    expect(getServiceWorkerScriptUrl()).toBe("/sw.js?v=0.6.4-rc4-test-build");
+    expect(getServiceWorkerScriptUrl()).toBe(`/sw.js?v=${swBuildId}`);
   });
 });

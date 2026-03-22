@@ -590,6 +590,62 @@ describe("useSwipeGesture integration", () => {
     expect(callbacks.onCancel).not.toHaveBeenCalled();
   });
 
+  it("accepts primary touch-origin pointer gestures even when button is not the mouse primary button", () => {
+    const callbacks = {
+      onProgress: vi.fn(),
+      onCommit: vi.fn(),
+      onCancel: vi.fn(),
+    };
+
+    render(React.createElement(GestureHarness, { callbacks }));
+    const surface = screen.getByTestId("gesture-surface");
+
+    surface.dispatchEvent(
+      createPointerEvent("pointerdown", {
+        bubbles: true,
+        button: -1,
+        pointerId: 9,
+        isPrimary: true,
+        pointerType: "touch",
+        clientX: 180,
+        clientY: 20,
+      }),
+    );
+    surface.dispatchEvent(
+      createPointerEvent(
+        "pointermove",
+        {
+          bubbles: true,
+          pointerId: 9,
+          pointerType: "touch",
+          clientX: 110,
+          clientY: 24,
+        },
+        20,
+      ),
+    );
+    surface.dispatchEvent(
+      createPointerEvent(
+        "pointerup",
+        {
+          bubbles: true,
+          pointerId: 9,
+          pointerType: "touch",
+          clientX: 110,
+          clientY: 24,
+        },
+        40,
+      ),
+    );
+
+    expect(callbacks.onProgress).toHaveBeenCalledWith(-70, expect.any(Number));
+    expect(callbacks.onCommit).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({ dx: -70, dy: 4, velocityX: expect.any(Number) }),
+    );
+    expect(callbacks.onCancel).not.toHaveBeenCalled();
+  });
+
   it("does not call setPointerCapture on pointerdown — defers capture until horizontal intent confirmed", () => {
     // Regression: capturing on pointerdown routes the subsequent pointerup to the
     // container, so React click handlers on buttons inside the swipe surface never

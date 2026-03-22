@@ -287,4 +287,83 @@ describe("DiagnosticsDialog", () => {
     expect(onShareFiltered.mock.calls[0][0]).toHaveLength(1);
     expect(onShareFiltered.mock.calls[0][0][0]).toMatchObject({ message: "Configuration updated successfully" });
   });
+
+  it("expands and collapses activity rows when extra detail exists", () => {
+    setViewportWidth(600);
+
+    renderDialog();
+
+    const row = screen.getByTestId("evidence-row-action-action-1");
+    expect(row).toHaveAttribute("aria-expanded", "false");
+
+    fireEvent.click(row);
+
+    expect(row).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByTestId("evidence-detail-action-action-1")).toHaveTextContent('"effects"');
+
+    fireEvent.click(row);
+
+    expect(row).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByTestId("evidence-detail-action-action-1")).toBeNull();
+  });
+
+  it("hides activity expand affordance when no additional detail exists", () => {
+    setViewportWidth(600);
+
+    renderDialog({
+      defaultEvidenceTypes: new Set(["Logs"]),
+      logs: [
+        {
+          id: "log-plain",
+          level: "info" as const,
+          message: "Background refresh complete",
+          timestamp: new Date(Date.now() - 2_000).toISOString(),
+        },
+      ],
+      errorLogs: [],
+      traceEvents: [],
+      actionSummaries: [],
+    });
+
+    const row = screen.getByTestId("evidence-row-log-log-plain");
+    expect(row.tagName).toBe("DIV");
+    expect(row.querySelector("svg")).toBeNull();
+    expect(row).not.toHaveAttribute("aria-expanded");
+  });
+
+  it("auto-expands the health detail view when a health check starts", () => {
+    setViewportWidth(600);
+    const onRunHealthCheck = vi.fn();
+
+    renderDialog({
+      onRunHealthCheck,
+      lastHealthCheckResult: null,
+      liveHealthCheckProbes: {},
+      healthCheckRunning: true,
+    });
+
+    expect(screen.getByTestId("diagnostics-header-expanded")).toBeVisible();
+    expect(screen.getByTestId("health-check-detail-view")).toBeVisible();
+    expect(screen.getByTestId("health-check-probe-raster")).toHaveTextContent("Pending");
+    expect(screen.getByTestId("health-check-probe-jiffy")).toHaveTextContent("Pending");
+
+    fireEvent.click(screen.getByTestId("run-health-check"));
+    expect(onRunHealthCheck).not.toHaveBeenCalled();
+  });
+
+  it("opens the latest health detail when the run button is pressed", () => {
+    setViewportWidth(600);
+    const onRunHealthCheck = vi.fn();
+
+    renderDialog({ onRunHealthCheck });
+
+    expect(screen.queryByTestId("diagnostics-header-expanded")).toBeNull();
+
+    fireEvent.click(screen.getByTestId("run-health-check"));
+
+    expect(onRunHealthCheck).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("diagnostics-header-expanded")).toBeVisible();
+    expect(screen.getByTestId("health-check-probe-raster")).toHaveTextContent("Success");
+    expect(screen.getByTestId("health-check-probe-jiffy")).toHaveTextContent("Success");
+  });
 });
