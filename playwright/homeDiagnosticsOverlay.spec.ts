@@ -214,7 +214,8 @@ test.describe("Home diagnostics overlay", () => {
     await openOverflowMenu();
     await page.getByTestId("diagnostics-clear-all-trigger").click();
     await page.getByTestId("diagnostics-clear-all-confirm").click();
-    await expect(dialog.getByText("No matching evidence.")).toBeVisible();
+    await expect(dialog.getByTestId("filters-result-count")).toHaveText("0 of 0");
+    await expect(dialog.getByTestId("evidence-list")).toContainText("No matching activity.");
     await expect(dialog.getByTestId("run-health-check")).toHaveCount(1);
     await snap(page, testInfo, "clear-all");
   });
