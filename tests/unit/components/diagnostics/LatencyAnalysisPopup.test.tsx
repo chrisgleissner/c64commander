@@ -16,7 +16,7 @@ import { clearLatencySamples, recordLatencySample } from "@/lib/diagnostics/late
 const renderPopup = () =>
   render(
     <DisplayProfileProvider>
-      <LatencyAnalysisPopup open onClose={() => { }} />
+      <LatencyAnalysisPopup open onClose={() => {}} />
     </DisplayProfileProvider>,
   );
 

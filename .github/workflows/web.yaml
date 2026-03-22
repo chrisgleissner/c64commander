@@ -47,6 +47,25 @@ jobs:
           node-version: 24
           cache: npm
 
+      - name: Resolve app version
+        id: resolve_version
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF_TYPE:-}" == "tag" && -n "${GITHUB_REF_NAME:-}" ]]; then
+            APP_VERSION="${GITHUB_REF_NAME#v}"
+          else
+            APP_VERSION="$(node -p "require('./package.json').version")"
+          fi
+          BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "APP_VERSION=$APP_VERSION" >> "$GITHUB_ENV"
+          echo "VITE_APP_VERSION=$APP_VERSION" >> "$GITHUB_ENV"
+          echo "VITE_GIT_SHA=${CI_SHA}" >> "$GITHUB_ENV"
+          echo "VITE_BUILD_TIME=$BUILD_TIME" >> "$GITHUB_ENV"
+          echo "app_version=$APP_VERSION" >> "$GITHUB_OUTPUT"
+          echo "git_sha=${CI_SHA}" >> "$GITHUB_OUTPUT"
+          echo "build_time=$BUILD_TIME" >> "$GITHUB_OUTPUT"
+
       - name: Install dependencies
         run: npm ci
 
@@ -71,6 +90,9 @@ jobs:
           docker buildx build \
             --platform "${{ matrix.platform }}" \
             --load \
+            --build-arg VITE_APP_VERSION="${VITE_APP_VERSION}" \
+            --build-arg VITE_GIT_SHA="${VITE_GIT_SHA}" \
+            --build-arg VITE_BUILD_TIME="${VITE_BUILD_TIME}" \
             -f web/Dockerfile \
             -t c64commander:ci \
             .
@@ -268,6 +290,25 @@ jobs:
           node-version: 24
           cache: npm
 
+      - name: Resolve app version
+        id: resolve_version
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF_TYPE:-}" == "tag" && -n "${GITHUB_REF_NAME:-}" ]]; then
+            APP_VERSION="${GITHUB_REF_NAME#v}"
+          else
+            APP_VERSION="$(node -p "require('./package.json').version")"
+          fi
+          BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "APP_VERSION=$APP_VERSION" >> "$GITHUB_ENV"
+          echo "VITE_APP_VERSION=$APP_VERSION" >> "$GITHUB_ENV"
+          echo "VITE_GIT_SHA=${CI_SHA}" >> "$GITHUB_ENV"
+          echo "VITE_BUILD_TIME=$BUILD_TIME" >> "$GITHUB_ENV"
+          echo "app_version=$APP_VERSION" >> "$GITHUB_OUTPUT"
+          echo "git_sha=${CI_SHA}" >> "$GITHUB_OUTPUT"
+          echo "build_time=$BUILD_TIME" >> "$GITHUB_OUTPUT"
+
       - name: Verify publish tag format
         id: verify_tag
         shell: bash
@@ -284,12 +325,6 @@ jobs:
           IS_RC="false"
           if printf '%s\n' "$TAG" | grep -Eq -- '-rc[0-9]+$'; then
             IS_RC="true"
-          fi
-
-          PKG_VERSION="$(node -p "require('./package.json').version")"
-          if [ "$TAG" != "$PKG_VERSION" ]; then
-            echo "Tag/package version differ: tag=$TAG package.json=$PKG_VERSION"
-            exit 1
           fi
 
           echo "normalized_tag=$TAG" >> "$GITHUB_OUTPUT"
@@ -316,6 +351,10 @@ jobs:
           file: web/Dockerfile
           push: true
           platforms: linux/amd64,linux/arm64
+          build-args: |
+            VITE_APP_VERSION=${{ steps.resolve_version.outputs.app_version }}
+            VITE_GIT_SHA=${{ steps.resolve_version.outputs.git_sha }}
+            VITE_BUILD_TIME=${{ steps.resolve_version.outputs.build_time }}
           tags: |
             ${{ env.IMAGE_NAME }}:${{ steps.verify_tag.outputs.normalized_tag }}
             ${{ steps.verify_tag.outputs.raw_tag != steps.verify_tag.outputs.normalized_tag && format('{0}:{1}', env.IMAGE_NAME, steps.verify_tag.outputs.raw_tag) || '' }}

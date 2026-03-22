@@ -2,6 +2,9 @@
 
 FROM node:24-trixie-slim AS build
 WORKDIR /app
+ARG VITE_APP_VERSION
+ARG VITE_GIT_SHA
+ARG VITE_BUILD_TIME
 COPY package*.json ./
 RUN npm ci
 COPY index.html ./
@@ -15,6 +18,9 @@ COPY src ./src
 COPY public ./public
 COPY doc/c64 ./doc/c64
 COPY web ./web
+ENV VITE_APP_VERSION=$VITE_APP_VERSION
+ENV VITE_GIT_SHA=$VITE_GIT_SHA
+ENV VITE_BUILD_TIME=$VITE_BUILD_TIME
 ENV VITE_WEB_PLATFORM=1
 RUN npm run build && npm run build:web-server
 
