@@ -12,6 +12,7 @@ import istanbul from "vite-plugin-istanbul";
 import path from "path";
 import fs from "fs";
 import { spawnSync } from "child_process";
+import { resolveBuildAppVersion } from "./src/lib/buildVersion";
 import { deriveVersionLabel } from "./src/lib/versionLabel";
 
 const pkg = JSON.parse(fs.readFileSync(new URL("./package.json", import.meta.url), "utf-8"));
@@ -43,7 +44,11 @@ const resolveGitSha = () =>
 
 const sanitizeBuildToken = (value: string) => value.replace(/[^a-zA-Z0-9._-]+/g, "-");
 
-const resolveAppVersion = () => pkg.version || "";
+const resolveAppVersion = () =>
+  resolveBuildAppVersion({
+    env: process.env,
+    packageVersion: pkg.version || "",
+  });
 
 const resolveAppVersionLabel = (gitDescribeValue: string, gitShaValue: string, fallbackVersion: string) =>
   deriveVersionLabel({
@@ -115,14 +120,14 @@ export default defineConfig(() => ({
     react(),
     ...(enableCoverageInstrumentation
       ? [
-          istanbul({
-            include: "src/**/*",
-            exclude: ["node_modules", "test/", "tests/", "playwright/"],
-            extension: [".js", ".ts", ".tsx"],
-            requireEnv: true,
-            forceBuildInstrument: true,
-          }),
-        ]
+        istanbul({
+          include: "src/**/*",
+          exclude: ["node_modules", "test/", "tests/", "playwright/"],
+          extension: [".js", ".ts", ".tsx"],
+          requireEnv: true,
+          forceBuildInstrument: true,
+        }),
+      ]
       : []),
   ],
   define: {
