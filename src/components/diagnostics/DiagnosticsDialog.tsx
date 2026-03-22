@@ -350,7 +350,7 @@ const FilterEditorSurface = ({
         <DialogPrimitive.Content className={contentClassName} data-testid="filters-editor-surface">
           <DialogPrimitive.Title className="sr-only">Diagnostics filters</DialogPrimitive.Title>
           <DialogPrimitive.Description className="sr-only">
-            Filter diagnostics evidence by type, contributor, and severity.
+            Filter diagnostics activity by type, contributor, and severity.
           </DialogPrimitive.Description>
           <SurfaceHeader title="Filters" onClose={() => onOpenChange(false)} />
           <div className="flex-1 overflow-y-auto px-4 py-3">
@@ -360,7 +360,9 @@ const FilterEditorSurface = ({
 
             <div className="space-y-3">
               <section className="space-y-1.5">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Type</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Activity types
+                </p>
                 <div className="flex flex-wrap gap-1.5">
                   {EVIDENCE_ORDER.map((type) => (
                     <FilterToggleChip
@@ -823,7 +825,7 @@ export function DiagnosticsDialog({
         <AppSheetContent className="flex min-h-0 flex-col overflow-hidden" data-testid="diagnostics-sheet">
           <AppSheetHeader className="space-y-0 px-4 pb-2 pt-3">
             <AppSheetTitle>Diagnostics</AppSheetTitle>
-            <AppSheetDescription className="sr-only">Diagnostic evidence and health status.</AppSheetDescription>
+            <AppSheetDescription className="sr-only">Diagnostic activity and health status.</AppSheetDescription>
           </AppSheetHeader>
 
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-4">
@@ -932,14 +934,17 @@ export function DiagnosticsDialog({
                 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
                 data-testid="evidence-heading"
               >
-                Evidence
+                Activity
+              </p>
+              <p className="mb-2 text-[11px] text-muted-foreground" data-testid="activity-kinds-line">
+                Problems, actions, logs, and traces
               </p>
               <div className="max-h-72 space-y-1.5 overflow-y-auto" data-testid="evidence-list">
                 {displayEntries.map((entry) => (
                   <EvidenceRow key={entry.id} entry={entry} />
                 ))}
                 {displayEntries.length === 0 ? (
-                  <p className="py-2 text-xs text-muted-foreground">No matching evidence.</p>
+                  <p className="py-2 text-xs text-muted-foreground">No matching activity.</p>
                 ) : null}
               </div>
             </section>

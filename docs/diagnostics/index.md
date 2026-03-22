@@ -1,24 +1,47 @@
 # Diagnostics Screenshots
 
-This directory holds the current diagnostics overlay screenshots used for documentation and review evidence.
+This directory holds the current diagnostics overlay screenshots used for documentation and review.
 
 ## Contents
 
-- `doc/img/app/diagnostics/01-entry/01-overview.png`: primary diagnostics layout with the sticky action shelf and seeded REST and FTP recency.
-- `doc/img/app/diagnostics/01-entry/profiles/compact/01-overview.png`: compact display profile overview.
-- `doc/img/app/diagnostics/01-entry/profiles/medium/01-overview.png`: medium display profile overview.
-- `doc/img/app/diagnostics/01-entry/profiles/expanded/01-overview.png`: expanded display profile overview.
-- `doc/img/app/diagnostics/02-activity/01-actions-detail.png`: expanded action summary with REST, FTP, and failure evidence.
-- `doc/img/app/diagnostics/02-activity/02-logs-errors-filtered.png`: logs narrowed to the error-focused view.
-- `doc/img/app/diagnostics/02-activity/03-rest-traces-filtered.png`: traces filtered to REST evidence.
-- `doc/img/app/diagnostics/02-activity/04-rest-trace-detail.png`: expanded raw trace payload detail.
-- `doc/img/app/diagnostics/02-activity/05-problems-detail.png`: problem-focused view with expanded failure detail.
-- `doc/img/app/diagnostics/03-summary/01-device-detail.png`: inline device details opened from the diagnostics summary.
-- `doc/img/app/diagnostics/03-summary/02-health-check-detail.png`: per-probe health check results.
-- `doc/img/app/diagnostics/03-summary/03-latency-analysis.png`: latency analysis overlay.
-- `doc/img/app/diagnostics/03-summary/04-health-history.png`: health history overlay.
-- `doc/img/app/diagnostics/04-tools/01-heat-maps/01-rest-heat-map.png`: REST heat map with expanded endpoint families.
-- `doc/img/app/diagnostics/04-tools/01-heat-maps/02-ftp-heat-map.png`: FTP heat map with visible browse, read, write, manage, and session activity.
-- `doc/img/app/diagnostics/04-tools/01-heat-maps/03-config-heat-map.png`: config heat map with broad category coverage.
-- `doc/img/app/diagnostics/04-tools/02-config/01-config-drift.png`: config drift detail view.
-- `doc/img/app/diagnostics/04-tools/03-clear/01-clear-confirmation.png`: destructive clear confirmation state.
+### Overview (`doc/img/app/diagnostics/`)
+
+- `01-overview.png`: default diagnostics overlay showing health summary, filters, activity, and analysis controls together.
+
+### Header (`doc/img/app/diagnostics/header/`)
+
+- `01-expanded.png`: expanded health summary header with seeded latency percentiles visible.
+
+### Activity (`doc/img/app/diagnostics/activity/`)
+
+- `01-visible-list.png`: activity list with mixed action, REST, and FTP entries visible.
+- `02-problems-only.png`: activity list filtered to diagnostics problems only.
+- `03-actions-only.png`: activity list filtered to action summaries only.
+- `04-logs-only.png`: activity list filtered to logs only.
+- `05-traces-only.png`: activity list filtered to traces only.
+- `06-errors-only.png`: activity list filtered to error-severity entries across activity types.
+
+### Filters (`doc/img/app/diagnostics/filters/`)
+
+- `01-summary-bar.png`: compact filter summary bar visible in the main overlay.
+- `02-editor.png`: filter editor sheet with activity type, contributor, and severity controls.
+
+### Connection (`doc/img/app/diagnostics/connection/`)
+
+- `01-view.png`: connection view showing the current device target and ports.
+- `02-edit.png`: connection editor with host and port fields ready to update.
+
+### Analysis (`doc/img/app/diagnostics/analysis/`)
+
+- `01-latency.png`: latency analysis popup with request timing percentiles and chart.
+- `02-history.png`: health history timeline with seeded state transitions.
+
+### Tools (`doc/img/app/diagnostics/tools/`)
+
+- `01-menu.png`: overflow tools menu with export and clear actions visible.
+
+### Profile-specific screenshots (`doc/img/app/diagnostics/profiles/`)
+
+- `profiles/compact/01-overview.png`: compact display profile overview.
+- `profiles/medium/01-overview.png`: medium display profile overview.
+- `profiles/expanded/01-overview.png`: expanded display profile overview.

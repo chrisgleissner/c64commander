@@ -54,7 +54,7 @@ const screenshotRepoPath = (relativePath: string) => path.posix.join("doc/img/ap
 const profileScreenshotPath = (pageId: string, profileId: DisplayProfileViewportId, fileName: string) =>
   `${pageId}/profiles/${profileId}/${fileName}`;
 const diagnosticsProfileScreenshotPath = (profileId: DisplayProfileViewportId, fileName: string) =>
-  `01-entry/profiles/${profileId}/${fileName}`;
+  `profiles/${profileId}/${fileName}`;
 
 const ensureScreenshotDir = async (filePath: string) => {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
@@ -302,6 +302,7 @@ const captureScreenshot = async (
     fullPage?: boolean;
     borderPx?: number;
     borderColor?: { r: number; g: number; b: number; alpha?: number };
+    writeWhenTrackedDuplicate?: boolean;
   },
 ) => {
   const filePath = screenshotPath(relativePath);
@@ -353,7 +354,11 @@ const captureScreenshot = async (
     // New file (not yet in HEAD): compare against disk to avoid redundant writes.
     if (await hasPixelDiffAgainstExisting(filePath, screenshotBuffer)) {
       if (await matchesTrackedScreenshotAtAnotherPath(relativePath, screenshotBuffer)) {
-        console.info(`[screenshots] Skipped ${relativePath}; pixels match an existing tracked screenshot.`);
+        if (options?.writeWhenTrackedDuplicate) {
+          await fs.writeFile(filePath, screenshotBuffer);
+        } else {
+          console.info(`[screenshots] Skipped ${relativePath}; pixels match an existing tracked screenshot.`);
+        }
       } else {
         await fs.writeFile(filePath, screenshotBuffer);
       }
@@ -756,95 +761,95 @@ test.describe("App screenshots", () => {
           const snapshots =
             mode === "snapshot-manager"
               ? [
-                  {
-                    id: "snap-1",
-                    filename: "c64-program-20260110-090000.c64snap",
-                    bytesBase64: buildSnap(0, 1736499600),
-                    createdAt: "2026-01-10T09:00:00.000Z",
-                    snapshotType: "program",
-                    metadata: {
-                      snapshot_type: "program",
-                      display_ranges: ["$0000\u2013$00FF", "$0200\u2013$FFFF"],
-                      created_at: "2026-01-10 09:00:00",
-                      label: "JupiterLander.crt",
-                    },
+                {
+                  id: "snap-1",
+                  filename: "c64-program-20260110-090000.c64snap",
+                  bytesBase64: buildSnap(0, 1736499600),
+                  createdAt: "2026-01-10T09:00:00.000Z",
+                  snapshotType: "program",
+                  metadata: {
+                    snapshot_type: "program",
+                    display_ranges: ["$0000\u2013$00FF", "$0200\u2013$FFFF"],
+                    created_at: "2026-01-10 09:00:00",
+                    label: "JupiterLander.crt",
                   },
-                  {
-                    id: "snap-2",
-                    filename: "c64-basic-20260110-080000.c64snap",
-                    bytesBase64: buildSnap(1, 1736496000),
-                    createdAt: "2026-01-10T08:00:00.000Z",
-                    snapshotType: "basic",
-                    metadata: {
-                      snapshot_type: "basic",
-                      display_ranges: ["$002B\u2013$0038", "$0801\u2013STREND"],
-                      created_at: "2026-01-10 08:00:00",
-                    },
+                },
+                {
+                  id: "snap-2",
+                  filename: "c64-basic-20260110-080000.c64snap",
+                  bytesBase64: buildSnap(1, 1736496000),
+                  createdAt: "2026-01-10T08:00:00.000Z",
+                  snapshotType: "basic",
+                  metadata: {
+                    snapshot_type: "basic",
+                    display_ranges: ["$002B\u2013$0038", "$0801\u2013STREND"],
+                    created_at: "2026-01-10 08:00:00",
                   },
-                  {
-                    id: "snap-3",
-                    filename: "c64-screen-20260110-070000.c64snap",
-                    bytesBase64: buildSnap(2, 1736492400),
-                    createdAt: "2026-01-10T07:00:00.000Z",
-                    snapshotType: "screen",
-                    metadata: {
-                      snapshot_type: "screen",
-                      display_ranges: ["VICBANK", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"],
-                      created_at: "2026-01-10 07:00:00",
-                    },
+                },
+                {
+                  id: "snap-3",
+                  filename: "c64-screen-20260110-070000.c64snap",
+                  bytesBase64: buildSnap(2, 1736492400),
+                  createdAt: "2026-01-10T07:00:00.000Z",
+                  snapshotType: "screen",
+                  metadata: {
+                    snapshot_type: "screen",
+                    display_ranges: ["VICBANK", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"],
+                    created_at: "2026-01-10 07:00:00",
                   },
-                  {
-                    id: "snap-4",
-                    filename: "c64-custom-20260110-060000.c64snap",
-                    bytesBase64: buildSnap(3, 1736488800),
-                    createdAt: "2026-01-10T06:00:00.000Z",
-                    snapshotType: "custom",
-                    metadata: {
-                      snapshot_type: "custom",
-                      display_ranges: ["$0400\u2013$07E7", "$2000\u2013$20FF"],
-                      created_at: "2026-01-10 06:00:00",
-                    },
+                },
+                {
+                  id: "snap-4",
+                  filename: "c64-custom-20260110-060000.c64snap",
+                  bytesBase64: buildSnap(3, 1736488800),
+                  createdAt: "2026-01-10T06:00:00.000Z",
+                  snapshotType: "custom",
+                  metadata: {
+                    snapshot_type: "custom",
+                    display_ranges: ["$0400\u2013$07E7", "$2000\u2013$20FF"],
+                    created_at: "2026-01-10 06:00:00",
                   },
-                ]
+                },
+              ]
               : [
-                  {
-                    id: "snap-1",
-                    filename: "c64-program-20260110-090000.c64snap",
-                    bytesBase64: buildSnap(0, 1736499600),
-                    createdAt: "2026-01-10T09:00:00.000Z",
-                    snapshotType: "program",
-                    metadata: {
-                      snapshot_type: "program",
-                      display_ranges: ["$0000\u2013$00FF", "$0200\u2013$FFFF"],
-                      created_at: "2026-01-10 09:00:00",
-                      label: "JupiterLander.crt",
-                    },
+                {
+                  id: "snap-1",
+                  filename: "c64-program-20260110-090000.c64snap",
+                  bytesBase64: buildSnap(0, 1736499600),
+                  createdAt: "2026-01-10T09:00:00.000Z",
+                  snapshotType: "program",
+                  metadata: {
+                    snapshot_type: "program",
+                    display_ranges: ["$0000\u2013$00FF", "$0200\u2013$FFFF"],
+                    created_at: "2026-01-10 09:00:00",
+                    label: "JupiterLander.crt",
                   },
-                  {
-                    id: "snap-2",
-                    filename: "c64-basic-20260110-080000.c64snap",
-                    bytesBase64: buildSnap(1, 1736496000),
-                    createdAt: "2026-01-10T08:00:00.000Z",
-                    snapshotType: "basic",
-                    metadata: {
-                      snapshot_type: "basic",
-                      display_ranges: ["$002B\u2013$0038", "$0801\u2013STREND"],
-                      created_at: "2026-01-10 08:00:00",
-                    },
+                },
+                {
+                  id: "snap-2",
+                  filename: "c64-basic-20260110-080000.c64snap",
+                  bytesBase64: buildSnap(1, 1736496000),
+                  createdAt: "2026-01-10T08:00:00.000Z",
+                  snapshotType: "basic",
+                  metadata: {
+                    snapshot_type: "basic",
+                    display_ranges: ["$002B\u2013$0038", "$0801\u2013STREND"],
+                    created_at: "2026-01-10 08:00:00",
                   },
-                  {
-                    id: "snap-3",
-                    filename: "c64-screen-20260110-070000.c64snap",
-                    bytesBase64: buildSnap(2, 1736492400),
-                    createdAt: "2026-01-10T07:00:00.000Z",
-                    snapshotType: "screen",
-                    metadata: {
-                      snapshot_type: "screen",
-                      display_ranges: ["VICBANK", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"],
-                      created_at: "2026-01-10 07:00:00",
-                    },
+                },
+                {
+                  id: "snap-3",
+                  filename: "c64-screen-20260110-070000.c64snap",
+                  bytesBase64: buildSnap(2, 1736492400),
+                  createdAt: "2026-01-10T07:00:00.000Z",
+                  snapshotType: "screen",
+                  metadata: {
+                    snapshot_type: "screen",
+                    display_ranges: ["VICBANK", "$D000\u2013$D02E", "$D800\u2013$DBFF", "$DD00\u2013$DD0F"],
+                    created_at: "2026-01-10 07:00:00",
                   },
-                ];
+                },
+              ];
 
           localStorage.setItem(
             "c64u_snapshots:v1",
@@ -1256,37 +1261,111 @@ test.describe("App screenshots", () => {
         return dialog;
       };
 
+      const applyEvidenceFilter = async (configure: () => Promise<void>) => {
+        await dialog.getByTestId("open-filters-editor").click();
+        const filterSurface = page.getByTestId("filters-editor-surface");
+        await expect(filterSurface).toBeVisible();
+        await filterSurface.getByTestId("quick-filter-reset").click();
+        await configure();
+        await filterSurface.getByRole("button", { name: "Close" }).click();
+        await expect(filterSurface).toBeHidden();
+      };
+
+      const applyActivityFilter = applyEvidenceFilter;
+      const activityTypesSection = () => page.getByTestId("filters-editor-surface").locator("section").first();
+
       const dialog = await openDiagnostics();
 
-      await captureDiagnosticsScreenshot(page, testInfo, "activity-collapsed.png");
-      await captureDiagnosticsScreenshot(page, testInfo, "evidence-visible.png");
-      await captureDiagnosticsScreenshot(page, testInfo, "filters-collapsed.png");
-      await captureDiagnosticsScreenshot(page, testInfo, "wording-clean.png");
-      await captureDiagnosticsScreenshot(page, testInfo, "header-correct.png");
+      await captureDiagnosticsScreenshot(page, testInfo, "01-overview.png");
+
+      await dialog.getByTestId("diagnostics-header-toggle").click();
+      await expect(dialog.getByTestId("diagnostics-header-expanded")).toBeVisible();
+      await captureDiagnosticsScreenshot(page, testInfo, "header/01-expanded.png");
+      await dialog.getByTestId("diagnostics-header-toggle").click();
+      await expect(dialog.getByTestId("diagnostics-header-expanded")).toBeHidden();
+
+      await captureDiagnosticsScreenshot(page, testInfo, "activity/01-visible-list.png");
+
+      await applyActivityFilter(async () => {
+        await activityTypesSection()
+          .getByRole("button", { name: /Actions/ })
+          .click();
+      });
+      await captureDiagnosticsScreenshot(page, testInfo, "activity/02-problems-only.png");
+
+      await applyActivityFilter(async () => {
+        await activityTypesSection()
+          .getByRole("button", { name: /Problems/ })
+          .click();
+      });
+      await captureDiagnosticsScreenshot(page, testInfo, "activity/03-actions-only.png");
+
+      await applyActivityFilter(async () => {
+        await activityTypesSection()
+          .getByRole("button", { name: /Problems/ })
+          .click();
+        await activityTypesSection()
+          .getByRole("button", { name: /Actions/ })
+          .click();
+        await activityTypesSection().getByRole("button", { name: /Logs/ }).click();
+      });
+      await captureDiagnosticsScreenshot(page, testInfo, "activity/04-logs-only.png");
+
+      await applyActivityFilter(async () => {
+        await activityTypesSection()
+          .getByRole("button", { name: /Problems/ })
+          .click();
+        await activityTypesSection()
+          .getByRole("button", { name: /Actions/ })
+          .click();
+        await activityTypesSection()
+          .getByRole("button", { name: /Traces/ })
+          .click();
+      });
+      await captureDiagnosticsScreenshot(page, testInfo, "activity/05-traces-only.png");
+
+      await dialog.getByTestId("open-filters-editor").click();
+      await expect(page.getByTestId("filters-editor-surface")).toBeVisible();
+      await page.getByTestId("filters-editor-surface").getByTestId("quick-filter-errors").click();
+      await page.getByTestId("filters-editor-surface").getByRole("button", { name: "Close" }).click();
+      await expect(page.getByTestId("filters-editor-surface")).toBeHidden();
+      await captureDiagnosticsScreenshot(page, testInfo, "activity/06-errors-only.png");
+
+      await applyActivityFilter(async () => {
+        // Reset back to the default Problems + Actions view before capturing the rest of the surfaces.
+      });
+
+      await captureDiagnosticsScreenshot(page, testInfo, "filters/01-summary-bar.png");
 
       await dialog.getByTestId("diagnostics-device-line").dispatchEvent("pointerdown");
       await dialog.getByTestId("diagnostics-device-line").dispatchEvent("pointerup");
       await expect(page.getByTestId("connection-view-surface")).toBeVisible();
-      await captureDiagnosticsScreenshot(page, testInfo, "connection-view.png");
+      await captureDiagnosticsScreenshot(page, testInfo, "connection/01-view.png");
 
       await page.getByTestId("connection-view-edit").click();
       await expect(page.getByTestId("connection-edit-surface")).toBeVisible();
-      await captureDiagnosticsScreenshot(page, testInfo, "connection-edit.png");
+      await captureDiagnosticsScreenshot(page, testInfo, "connection/02-edit.png");
       await page.getByTestId("connection-edit-surface").getByRole("button", { name: "Close" }).click();
 
       await dialog.getByTestId("open-filters-editor").click();
       await expect(page.getByTestId("filters-editor-surface")).toBeVisible();
-      await captureDiagnosticsScreenshot(page, testInfo, "filters-editor.png");
+      await captureDiagnosticsScreenshot(page, testInfo, "filters/02-editor.png");
       await page.getByTestId("filters-editor-surface").getByRole("button", { name: "Close" }).click();
+
+      await dialog.getByTestId("diagnostics-overflow-menu").click();
+      await expect(page.getByTestId("diagnostics-share-all")).toBeVisible();
+      await captureDiagnosticsScreenshot(page, testInfo, "tools/01-menu.png");
+      await dialog.getByTestId("diagnostics-overflow-menu").click();
+      await expect(page.getByTestId("diagnostics-share-all")).toBeHidden();
 
       await dialog.getByTestId("open-latency-screen").click();
       await expect(page.getByTestId("latency-analysis-popup")).toBeVisible();
-      await captureDiagnosticsScreenshot(page, testInfo, "latency-clean.png");
+      await captureDiagnosticsScreenshot(page, testInfo, "analysis/01-latency.png");
       await page.getByTestId("analytic-popup-close").click();
 
       await dialog.getByTestId("open-timeline-screen").click();
       await expect(page.getByTestId("health-history-popup")).toBeVisible();
-      await captureDiagnosticsScreenshot(page, testInfo, "timeline-realistic.png");
+      await captureDiagnosticsScreenshot(page, testInfo, "analysis/02-history.png");
       await page.getByTestId("analytic-popup-close").click();
     },
   );
@@ -1317,6 +1396,7 @@ test.describe("App screenshots", () => {
           page,
           testInfo,
           diagnosticsProfileScreenshotPath(profileId, "01-overview.png"),
+          { writeWhenTrackedDuplicate: true },
         );
         await page.keyboard.press("Escape");
       }

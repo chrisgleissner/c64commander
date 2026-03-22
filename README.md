@@ -28,14 +28,13 @@ C64 Commander lets you control and manage a C64 Ultimate from Android, iOS, or a
     - [First Connection Checklist](#first-connection-checklist)
   - [🧩 What You Can Do](#-what-you-can-do)
     - [Home](#home)
-    - [Lighting Studio](#lighting-studio)
     - [Play](#play)
     - [Disks](#disks)
     - [Configuration](#configuration)
     - [Settings](#settings)
     - [Docs](#docs)
     - [Diagnostics](#diagnostics)
-  - [📱🖥️ Display Profiles](#display-profiles)
+  - [📱🖥️ Display Profiles](#️-display-profiles)
   - [🛟 Troubleshooting](#-troubleshooting)
     - [Connectivity](#connectivity)
       - [Can’t reach the device](#cant-reach-the-device)
@@ -241,40 +240,21 @@ Built-in guides for setup, workflows, and practical day-to-day usage.
 
 ### Diagnostics
 
-Track actions, inspect traces, and export logs when it is time for serious troubleshooting.
+Diagnostics is the app's troubleshooting workspace.
 
-- `Share` exports the active diagnostics tab as a ZIP containing one timestamped JSON file.
-- `Share All` exports errors, logs, traces, and action summaries together in a single ZIP with a shared UTC timestamp in every filename.
+Start with a quick health check, inspect recent activity, narrow the view with filters, verify the active connection, then move into latency and history analysis as needed.
 
 <table>
   <tr>
-    <td><img src="doc/img/app/diagnostics/01-entry/01-overview.png" alt="Diagnostics overview" width="360"/></td>
-    <td><img src="doc/img/app/diagnostics/02-activity/04-rest-trace-detail.png" alt="Diagnostics traces" width="360"/></td>
-    <td><img src="doc/img/app/diagnostics/03-summary/03-latency-analysis.png" alt="Diagnostics latency analysis" width="360"/></td>
+    <td><img src="doc/img/app/diagnostics/tools/01-menu.png" alt="Diagnostics overview" width="360"/></td>
+    <td><img src="doc/img/app/diagnostics/activity/02-problems-only.png" alt="Diagnostics activity list" width="360"/></td>
+    <td><img src="doc/img/app/diagnostics/filters/02-editor.png" alt="Diagnostics filter editor" width="360"/></td>
   </tr>
 </table>
 
-Full screenshot set: [doc/img/app/diagnostics/](doc/img/app/diagnostics/)
-
-Profile-specific screenshots:
-
-- See [Display Profiles](#display-profiles) for the naming and automatic-selection model used throughout this README.
-- Screenshots outside `profiles/` folders show the default Standard display documentation profile unless the caption says otherwise.
-- Profile-specific screenshots live under `doc/img/app/<page>/profiles/compact/`, `doc/img/app/<page>/profiles/medium/`, and `doc/img/app/<page>/profiles/expanded/` when the visible layout differs from the default profile.
-
 ## 📱🖥️ Display Profiles
 
-C64 Commander uses **Display Profiles** so the interface remains comfortable to use on a wide range of screens, from small phones to tablets and desktop browsers:
-
-| Profile name     | Profile ID | Device Type                           |
-| ---------------- | ---------- | ------------------------------------- |
-| Small display    | compact    | Narrow screens such as smaller phones |
-| Standard display | medium     | Most phones                           |
-| Large display    | expanded   | Tablets or wide browser windows       |
-
-When **Settings → Appearance → Display profile** is set to **Auto**, C64 Commander automatically chooses the most suitable profile based on the **available width of the app window**.
-
-The following screenshots show the same **Home page** rendered with the three display profiles:
+Automatically selected display profiles ensure that C64 Commander is easy to use on a wide range of screens, from small phones to tablets and desktop browsers.
 
 <table>
   <thead>
