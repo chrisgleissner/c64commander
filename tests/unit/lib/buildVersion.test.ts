@@ -62,6 +62,28 @@ describe("buildVersion", () => {
       ).toBe("0.6.4-rc4");
     });
 
+    it("falls back to VERSION_NAME when VITE_APP_VERSION is absent", () => {
+      expect(
+        resolveBuildAppVersion({
+          env: {
+            VERSION_NAME: " v0.6.4-android ",
+          },
+          packageVersion: "0.6.4-rc4",
+        }),
+      ).toBe("v0.6.4-android");
+    });
+
+    it("falls back to APP_VERSION when no higher-priority injected version exists", () => {
+      expect(
+        resolveBuildAppVersion({
+          env: {
+            APP_VERSION: " 0.6.4-web ",
+          },
+          packageVersion: "0.6.4-rc4",
+        }),
+      ).toBe("0.6.4-web");
+    });
+
     it("detects injected build versions from tag context", () => {
       expect(
         hasInjectedBuildVersion({
@@ -78,6 +100,14 @@ describe("buildVersion", () => {
           GITHUB_REF_NAME: "main",
         }),
       ).toBe(false);
+    });
+
+    it("treats APP_VERSION as an injected build version", () => {
+      expect(
+        hasInjectedBuildVersion({
+          APP_VERSION: "0.6.4-web",
+        }),
+      ).toBe(true);
     });
   });
 });

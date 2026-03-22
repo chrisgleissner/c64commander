@@ -11,6 +11,12 @@ import { describe, expect, it, vi } from "vitest";
 import { SystemInfo } from "@/pages/home/components/SystemInfo";
 
 const mockUseC64Connection = vi.fn();
+const mockGetBuildInfo = vi.fn(() => ({
+  appVersion: "1.2.3-exact",
+  versionLabel: "1.2.3",
+  gitShaShort: "abc123",
+  buildTimeUtc: "2026-01-01T00:00:00Z",
+}));
 
 vi.mock("@/hooks/useC64Connection", () => ({
   VISIBLE_C64_QUERY_OPTIONS: {
@@ -21,12 +27,7 @@ vi.mock("@/hooks/useC64Connection", () => ({
 }));
 
 vi.mock("@/lib/buildInfo", () => ({
-  getBuildInfo: () => ({
-    appVersion: "1.2.3-exact",
-    versionLabel: "1.2.3",
-    gitShaShort: "abc123",
-    buildTimeUtc: "2026-01-01T00:00:00Z",
-  }),
+  getBuildInfo: () => mockGetBuildInfo(),
 }));
 
 // framer-motion: render children directly
@@ -41,6 +42,38 @@ vi.mock("framer-motion", () => ({
 }));
 
 describe("SystemInfo", () => {
+  it("falls back to versionLabel when appVersion is empty", () => {
+    mockUseC64Connection.mockReturnValue({
+      status: { isConnected: false, deviceInfo: null },
+    });
+    mockGetBuildInfo.mockReturnValueOnce({
+      appVersion: "",
+      versionLabel: "1.2.3-label",
+      gitShaShort: "abc123",
+      buildTimeUtc: "2026-01-01T00:00:00Z",
+    });
+
+    render(<SystemInfo />);
+
+    expect(screen.getByTestId("home-system-version")).toHaveTextContent("1.2.3-label");
+  });
+
+  it("shows Not available when both appVersion and versionLabel are empty", () => {
+    mockUseC64Connection.mockReturnValue({
+      status: { isConnected: false, deviceInfo: null },
+    });
+    mockGetBuildInfo.mockReturnValueOnce({
+      appVersion: "",
+      versionLabel: "",
+      gitShaShort: "abc123",
+      buildTimeUtc: "2026-01-01T00:00:00Z",
+    });
+
+    render(<SystemInfo />);
+
+    expect(screen.getByTestId("home-system-version")).toHaveTextContent("Not available");
+  });
+
   it("shows Not connected when disconnected", () => {
     mockUseC64Connection.mockReturnValue({
       status: { isConnected: false, deviceInfo: null },
@@ -79,6 +112,20 @@ describe("SystemInfo", () => {
     render(<SystemInfo />);
     expect(screen.getByTestId("home-system-device")).toHaveTextContent("Ultimate 64");
     expect(screen.getByTestId("home-system-firmware")).toHaveTextContent("Not available");
+  });
+
+  it("shows Not available when connected device identity is missing", () => {
+    mockUseC64Connection.mockReturnValue({
+      status: {
+        isConnected: true,
+        deviceInfo: { hostname: null, product: null, firmware_version: "3.11" },
+      },
+    });
+
+    render(<SystemInfo />);
+
+    expect(screen.getByTestId("home-system-device")).toHaveTextContent("Not available");
+    expect(screen.getByTestId("home-system-firmware")).toHaveTextContent("3.11");
   });
 
   it("shows expanded details with device info on click", () => {
