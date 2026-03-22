@@ -467,7 +467,7 @@ Summary: 798 dependencies across NPM (781), Gradle (13), CocoaPods (4), SwiftPM 
 | NPM | foreground-child | 2.0.0 | [ISC](https://spdx.org/licenses/ISC.html) | [https://registry.npmjs.org/foreground-child/-/foreground-child-2.0.0.tgz](https://registry.npmjs.org/foreground-child/-/foreground-child-2.0.0.tgz) |
 | NPM | form-data | 4.0.5 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/form-data/-/form-data-4.0.5.tgz](https://registry.npmjs.org/form-data/-/form-data-4.0.5.tgz) |
 | NPM | fraction.js | 4.3.7 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/fraction.js/-/fraction.js-4.3.7.tgz](https://registry.npmjs.org/fraction.js/-/fraction.js-4.3.7.tgz) |
-| NPM | framer-motion | 12.26.2 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/framer-motion/-/framer-motion-12.26.2.tgz](https://registry.npmjs.org/framer-motion/-/framer-motion-12.26.2.tgz) |
+| NPM | framer-motion | 12.38.0 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/framer-motion/-/framer-motion-12.38.0.tgz](https://registry.npmjs.org/framer-motion/-/framer-motion-12.38.0.tgz) |
 | NPM | fromentries | 1.3.2 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/fromentries/-/fromentries-1.3.2.tgz](https://registry.npmjs.org/fromentries/-/fromentries-1.3.2.tgz) |
 | NPM | fs-extra | 10.1.0 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/fs-extra/-/fs-extra-10.1.0.tgz](https://registry.npmjs.org/fs-extra/-/fs-extra-10.1.0.tgz) |
 | NPM | fs.realpath | 1.0.0 | [ISC](https://spdx.org/licenses/ISC.html) | [https://registry.npmjs.org/fs.realpath/-/fs.realpath-1.0.0.tgz](https://registry.npmjs.org/fs.realpath/-/fs.realpath-1.0.0.tgz) |
@@ -577,8 +577,8 @@ Summary: 798 dependencies across NPM (781), Gradle (13), CocoaPods (4), SwiftPM 
 | NPM | moment | 2.30.1 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/moment/-/moment-2.30.1.tgz](https://registry.npmjs.org/moment/-/moment-2.30.1.tgz) |
 | NPM | monocart-coverage-reports | 2.12.9 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/monocart-coverage-reports/-/monocart-coverage-reports-2.12.9.tgz](https://registry.npmjs.org/monocart-coverage-reports/-/monocart-coverage-reports-2.12.9.tgz) |
 | NPM | monocart-locator | 1.0.2 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/monocart-locator/-/monocart-locator-1.0.2.tgz](https://registry.npmjs.org/monocart-locator/-/monocart-locator-1.0.2.tgz) |
-| NPM | motion-dom | 12.26.2 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/motion-dom/-/motion-dom-12.26.2.tgz](https://registry.npmjs.org/motion-dom/-/motion-dom-12.26.2.tgz) |
-| NPM | motion-utils | 12.24.10 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/motion-utils/-/motion-utils-12.24.10.tgz](https://registry.npmjs.org/motion-utils/-/motion-utils-12.24.10.tgz) |
+| NPM | motion-dom | 12.38.0 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/motion-dom/-/motion-dom-12.38.0.tgz](https://registry.npmjs.org/motion-dom/-/motion-dom-12.38.0.tgz) |
+| NPM | motion-utils | 12.36.0 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/motion-utils/-/motion-utils-12.36.0.tgz](https://registry.npmjs.org/motion-utils/-/motion-utils-12.36.0.tgz) |
 | NPM | ms | 2.1.3 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/ms/-/ms-2.1.3.tgz](https://registry.npmjs.org/ms/-/ms-2.1.3.tgz) |
 | NPM | mute-stream | 3.0.0 | [ISC](https://spdx.org/licenses/ISC.html) | [https://registry.npmjs.org/mute-stream/-/mute-stream-3.0.0.tgz](https://registry.npmjs.org/mute-stream/-/mute-stream-3.0.0.tgz) |
 | NPM | mv | 2.1.1 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/mv/-/mv-2.1.1.tgz](https://registry.npmjs.org/mv/-/mv-2.1.1.tgz) |
