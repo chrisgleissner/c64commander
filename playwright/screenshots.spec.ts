@@ -7,7 +7,7 @@
  */
 
 import { test, expect } from "@playwright/test";
-import type { Page, TestInfo } from "@playwright/test";
+import type { Locator, Page, TestInfo } from "@playwright/test";
 import { saveCoverageFromPage } from "./withCoverage";
 import { execFile as execFileCb } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -41,6 +41,7 @@ import {
   installListPreviewLimit,
   installStableStorage,
   seedDiagnosticsAnalytics,
+  seedDiagnosticsTracesForAction,
   seedDiagnosticsTraces,
 } from "./visualSeeds";
 
@@ -335,6 +336,7 @@ const captureScreenshot = async (
   relativePath: string,
   options?: {
     fullPage?: boolean;
+    locator?: Locator;
     borderPx?: number;
     borderColor?: { r: number; g: number; b: number; alpha?: number };
     writeWhenTrackedDuplicate?: boolean;
@@ -344,11 +346,13 @@ const captureScreenshot = async (
   await ensureScreenshotDir(filePath);
   await waitForStableRender(page);
   await waitForOverlaysToClear(page);
-  let screenshotBuffer = await page.screenshot({
-    animations: "disabled",
-    caret: "hide",
-    fullPage: options?.fullPage ?? false,
-  });
+  let screenshotBuffer = options?.locator
+    ? await options.locator.screenshot({ animations: "disabled", caret: "hide" })
+    : await page.screenshot({
+        animations: "disabled",
+        caret: "hide",
+        fullPage: options?.fullPage ?? false,
+      });
   if ((options?.borderPx ?? 0) > 0) {
     const borderPx = options?.borderPx ?? 0;
     const color = options?.borderColor ?? { r: 255, g: 255, b: 255, alpha: 1 };
@@ -1282,6 +1286,7 @@ test.describe("App screenshots", () => {
         await page.waitForFunction(() =>
           Boolean((window as Window & { __c64uTracing?: { seedTraces?: unknown } }).__c64uTracing?.seedTraces),
         );
+        await seedDiagnosticsTraces(page);
         await seedDiagnosticsAnalytics(page);
 
         const dialog = page.getByRole("dialog", { name: "Diagnostics" });
@@ -1309,13 +1314,90 @@ test.describe("App screenshots", () => {
       const applyActivityFilter = applyEvidenceFilter;
       const activityTypesSection = () => page.getByTestId("filters-editor-surface").locator("section").first();
       const firstExpandableActivityRow = () => dialog.locator('[data-testid^="evidence-row-"][aria-expanded]').first();
-      const captureExpandedActivityType = async (path: string, configure: () => Promise<void>) => {
+      const activityRowByLabel = (label: string) =>
+        dialog.locator('[data-testid^="evidence-row-"][aria-expanded]').filter({ hasText: label }).first();
+      const withExpandedDiagnosticsEvidence = async (
+        callback: () => Promise<void>,
+        options?: {
+          hideControls?: boolean;
+        },
+      ) => {
+        await page.evaluate((hideControls: boolean) => {
+          const sheet = document.querySelector<HTMLElement>('[data-testid="diagnostics-sheet"]');
+          const evidenceList = document.querySelector<HTMLElement>('[data-testid="evidence-list"]');
+          const controls = document.querySelector<HTMLElement>('[data-testid="diagnostics-controls"]');
+          if (sheet) {
+            sheet.dataset.screenshotOverflow = sheet.style.overflow;
+            sheet.style.overflow = "visible";
+          }
+          if (evidenceList) {
+            evidenceList.dataset.screenshotMaxHeight = evidenceList.style.maxHeight;
+            evidenceList.dataset.screenshotOverflow = evidenceList.style.overflow;
+            evidenceList.style.maxHeight = "none";
+            evidenceList.style.overflow = "visible";
+          }
+          if (hideControls && controls) {
+            controls.dataset.screenshotDisplay = controls.style.display;
+            controls.style.display = "none";
+          }
+        }, options?.hideControls ?? false);
+        try {
+          await callback();
+        } finally {
+          await page.evaluate(() => {
+            const sheet = document.querySelector<HTMLElement>('[data-testid="diagnostics-sheet"]');
+            const evidenceList = document.querySelector<HTMLElement>('[data-testid="evidence-list"]');
+            const controls = document.querySelector<HTMLElement>('[data-testid="diagnostics-controls"]');
+            if (sheet) {
+              sheet.style.overflow = sheet.dataset.screenshotOverflow ?? "";
+              delete sheet.dataset.screenshotOverflow;
+            }
+            if (evidenceList) {
+              evidenceList.style.maxHeight = evidenceList.dataset.screenshotMaxHeight ?? "";
+              evidenceList.style.overflow = evidenceList.dataset.screenshotOverflow ?? "";
+              delete evidenceList.dataset.screenshotMaxHeight;
+              delete evidenceList.dataset.screenshotOverflow;
+            }
+            if (controls) {
+              controls.style.display = controls.dataset.screenshotDisplay ?? "";
+              delete controls.dataset.screenshotDisplay;
+            }
+          });
+        }
+      };
+      const captureExpandedActivityType = async (
+        path: string,
+        configure: () => Promise<void>,
+        options?: {
+          rowLabel?: string;
+          captureExpandedRowOnly?: boolean;
+          unclipDiagnosticsSheet?: boolean;
+          hideDiagnosticsControls?: boolean;
+          captureLocator?: Locator;
+        },
+      ) => {
         await applyActivityFilter(configure);
-        const row = firstExpandableActivityRow();
+        const row = options?.rowLabel ? activityRowByLabel(options.rowLabel) : firstExpandableActivityRow();
         await expect(row).toBeVisible();
         await row.click();
         await expect(row).toHaveAttribute("aria-expanded", "true");
-        await captureDiagnosticsScreenshot(page, testInfo, path);
+        await row.evaluate((node) => {
+          node.scrollIntoView({ block: "start", inline: "nearest" });
+        });
+        if (options?.captureExpandedRowOnly) {
+          const capture = async () => {
+            await captureScreenshot(page, testInfo, `diagnostics/${path}`, { locator: options.captureLocator ?? row });
+          };
+          if (options.unclipDiagnosticsSheet) {
+            await withExpandedDiagnosticsEvidence(capture, {
+              hideControls: options.hideDiagnosticsControls,
+            });
+          } else {
+            await capture();
+          }
+        } else {
+          await captureDiagnosticsScreenshot(page, testInfo, path);
+        }
         await row.click();
         await expect(row).toHaveAttribute("aria-expanded", "false");
       };
@@ -1349,11 +1431,24 @@ test.describe("App screenshots", () => {
           .click();
       });
 
-      await captureExpandedActivityType("activity/03-expanded-actions.png", async () => {
-        await activityTypesSection()
-          .getByRole("button", { name: /Problems/ })
-          .click();
-      });
+      await seedDiagnosticsTracesForAction(page, "diagnostics.snapshot");
+      await seedDiagnosticsAnalytics(page);
+      await captureExpandedActivityType(
+        "activity/03-expanded-actions.png",
+        async () => {
+          await activityTypesSection()
+            .getByRole("button", { name: /Problems/ })
+            .click();
+        },
+        {
+          rowLabel: "diagnostics.snapshot",
+          captureExpandedRowOnly: true,
+          unclipDiagnosticsSheet: true,
+          hideDiagnosticsControls: true,
+        },
+      );
+      await seedDiagnosticsTraces(page);
+      await seedDiagnosticsAnalytics(page);
 
       await captureExpandedActivityType("activity/04-expanded-logs.png", async () => {
         await activityTypesSection()

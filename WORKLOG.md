@@ -51,3 +51,13 @@ Date: 2026-03-22
   - The Docs page already has a diagnostics section, so the richer explanation for probe order and expanded activity rows can live there without introducing another documentation surface.
   - The screenshot catalog still needs per-type expanded activity evidence for Problems, Actions, Logs, and Traces.
 - Next step: Shorten the remaining overlay copy, update tests, extend the screenshot catalog for each expanded activity type, and regenerate the screenshot set.
+
+## 2026-03-22T02:10:00Z - Step 6 - Diagnostics evidence hardening
+
+- Decision: Treat the diagnostics action screenshot and trace redaction as one integrity fix. The screenshot must reflect the same stored trace shape the app uses in production, including partial secret masking and binary preview limits.
+- Findings:
+  - The action-expanded UI already renders request headers, response headers, request body, response body, payload previews, status, and latency.
+  - The deterministic diagnostics seed did not yet include those richer request/response fields for the POST snapshot action, so the screenshot could not prove the documented behavior.
+  - Secret masking was still full-value replacement in redaction tests, and FTP trace payloads were not being redacted before persistence.
+  - Binary payload previews were centrally capped below the newly requested 256-byte requirement.
+- Next step: Switch secret masking to first-3-character partial redaction, extend trace-session redaction to FTP payloads and preview regeneration for sensitive structured payloads, enrich the seeded POST/FTP diagnostics evidence, prune obsolete diagnostics activity screenshots, and rerun focused tests plus screenshot generation.

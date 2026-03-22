@@ -300,7 +300,8 @@ describe("DiagnosticsDialog", () => {
     fireEvent.click(row);
 
     expect(row).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByTestId("evidence-detail-action-action-1")).toHaveTextContent('"effects"');
+    expect(screen.getByTestId("evidence-detail-action-action-1")).toHaveTextContent("PUT /v1/configs");
+    expect(screen.getByTestId("evidence-detail-action-action-1")).toHaveTextContent("status: 200");
 
     fireEvent.click(row);
 

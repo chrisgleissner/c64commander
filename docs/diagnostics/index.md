@@ -18,7 +18,7 @@ This directory holds the current diagnostics overlay screenshots used for docume
 
 - `01-visible-list.png`: activity list with mixed action, REST, and FTP entries visible.
 - `02-expanded-problems.png`: expanded problem entry showing the compact full-detail payload for diagnostics failures.
-- `03-expanded-actions.png`: expanded action entry showing outcome, duration, timestamps, and effect payload.
+- `03-expanded-actions.png`: expanded REST POST action showing request headers, request body, response headers, response body, response status, latency, and only partially redacted secret-like header values.
 - `04-expanded-logs.png`: expanded log entry showing structured app-log detail.
 - `05-expanded-traces.png`: expanded trace entry showing the traced request payload.
 - `06-collapsed-after-toggle.png`: the list after a second tap collapses the expanded row again.

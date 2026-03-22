@@ -26,9 +26,9 @@ describe("redaction", () => {
 
     const redacted = redactHeaders(input);
 
-    expect(redacted.Authorization).toBe(REDACTION.REDACTED);
-    expect(redacted["X-Password"]).toBe(REDACTION.REDACTED);
-    expect(redacted["X-Token"]).toBe(REDACTION.REDACTED);
+    expect(redacted.Authorization).toBe(`Bea${REDACTION.PARTIAL_SUFFIX}`);
+    expect(redacted["X-Password"]).toBe(`hun${REDACTION.PARTIAL_SUFFIX}`);
+    expect(redacted["X-Token"]).toEqual([`tok${REDACTION.PARTIAL_SUFFIX}`, `tok${REDACTION.PARTIAL_SUFFIX}`]);
     expect(redacted["Content-Type"]).toBe("application/json");
     expect(redacted["X-Path"]).toBe("REDACTED_URI");
   });
@@ -46,12 +46,18 @@ describe("redaction", () => {
     const redacted = redactPayload(payload);
 
     expect(redacted).toEqual({
-      token: REDACTION.REDACTED,
+      token: `abc${REDACTION.PARTIAL_SUFFIX}`,
       nested: {
-        auth: REDACTION.REDACTED,
+        auth: `sec${REDACTION.PARTIAL_SUFFIX}`,
         uri: "REDACTED_URI",
-        list: [{ password: REDACTION.REDACTED }, "REDACTED_URI"],
+        list: [{ password: `pw${REDACTION.PARTIAL_SUFFIX}` }, "REDACTED_URI"],
       },
+    });
+  });
+
+  it("redacts sensitive arrays while preserving array shape", () => {
+    expect(redactPayload({ tokens: ["alpha", "bravo"] })).toEqual({
+      tokens: [`alp${REDACTION.PARTIAL_SUFFIX}`, `bra${REDACTION.PARTIAL_SUFFIX}`],
     });
   });
 

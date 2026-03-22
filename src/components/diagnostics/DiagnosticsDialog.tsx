@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { ChevronDown, ChevronRight, Filter, MoreHorizontal, Share2, Trash2 } from "lucide-react";
 
@@ -53,6 +53,7 @@ import { getTraceTitle } from "@/lib/tracing/traceFormatter";
 import type { TraceEvent } from "@/lib/tracing/types";
 import { cn } from "@/lib/utils";
 import type { DeviceDetailInfo } from "@/components/diagnostics/DeviceDetailView";
+import { ActionExpandedContent } from "./ActionExpandedContent";
 import { HealthCheckDetailView } from "./HealthCheckDetailView";
 import { HealthHistoryPopup } from "./HealthHistoryPopup";
 import { LatencyAnalysisPopup } from "./LatencyAnalysisPopup";
@@ -287,7 +288,7 @@ const formatJsonBlock = (value: unknown) => {
   return formatted;
 };
 
-const getEntryExpandedDetail = (entry: EvidenceEntry) => {
+const getEntryExpandedDetail = (entry: EvidenceEntry): ReactNode | null => {
   if (entry.type === "Logs" || (entry.type === "Problems" && "level" in entry.payload)) {
     const details = (entry.payload as LogEntry).details;
     return details ? formatJsonBlock(details) : null;
@@ -295,13 +296,7 @@ const getEntryExpandedDetail = (entry: EvidenceEntry) => {
 
   if (entry.type === "Actions") {
     const summary = entry.payload as ActionSummary;
-    return formatJsonBlock({
-      outcome: summary.outcome,
-      durationMs: summary.durationMs,
-      startTimestamp: summary.startTimestamp,
-      endTimestamp: summary.endTimestamp,
-      effects: summary.effects,
-    });
+    return <ActionExpandedContent summary={summary} />;
   }
 
   const trace = entry.payload as TraceEvent;
@@ -349,12 +344,21 @@ const EvidenceRow = ({
           ) : null}
         </div>
         {expanded && expandedDetail ? (
-          <pre
-            className="mt-2 overflow-x-auto rounded-md border border-border/70 bg-muted/30 p-2 text-[11px] leading-4 text-foreground"
-            data-testid={`evidence-detail-${entry.id}`}
-          >
-            {expandedDetail}
-          </pre>
+          typeof expandedDetail === "string" ? (
+            <pre
+              className="mt-2 overflow-x-auto rounded-md border border-border/70 bg-muted/30 p-2 text-[11px] leading-4 text-foreground"
+              data-testid={`evidence-detail-${entry.id}`}
+            >
+              {expandedDetail}
+            </pre>
+          ) : (
+            <div
+              className="mt-2 rounded-md border border-border/70 bg-muted/30 p-2"
+              data-testid={`evidence-detail-${entry.id}`}
+            >
+              {expandedDetail}
+            </div>
+          )
         ) : null}
       </div>
     </>
@@ -1096,7 +1100,8 @@ export function DiagnosticsDialog({
                   {overflowOpen ? (
                     <div className="absolute bottom-full right-0 z-10 mb-1 min-w-[10rem] rounded-lg border border-border bg-background py-1 shadow-lg">
                       <button
-                        type="button"open-latency-screen
+                        type="button"
+                        open-latency-screen
                         className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
                         onClick={() => {
                           setOverflowOpen(false);

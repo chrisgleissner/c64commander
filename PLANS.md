@@ -129,17 +129,22 @@ Implementation targets:
 
 - Extend the diagnostics screenshot flow so the existing gallery proves activity-row expansion and second-tap collapse.
 - Capture one expanded screenshot for each activity entry type that can disclose detail: Problems, Actions, Logs, and Traces.
+- Make the expanded action evidence target a deterministic REST POST entry that shows request headers, request body, response headers, response body, response status, and latency.
 - Capture both the completed health-check detail state and an in-flight health-check progress state so the gallery shows probe order, per-probe outcomes, durations, pending/running status, and overall latency/result detail.
 - Keep the screenshot set minimal by adding only the diagnostics images made inaccurate or incomplete by the new diagnostics interaction behavior.
 - Keep in-app diagnostics labels short and move longer explanatory text to the Docs page.
+- For binary HTTP and FTP payload previews, show the first 256 bytes as hex and ASCII, plus the total byte count.
+- For any secret-like value that is redacted, preserve the first 3 characters and clearly mark the remainder as redacted.
 
 Acceptance criteria:
 
 - The diagnostics activity gallery includes a collapsed baseline, an expanded-detail state, and a recollapsed state after the second tap.
 - The diagnostics activity gallery includes one expanded screenshot for Problems, Actions, Logs, and Traces.
+- The expanded action screenshot shows a REST POST with request and response detail, with only security-sensitive header values partially redacted.
 - The diagnostics header gallery includes a completed health-check detail screenshot showing REST, FTP, CONFIG, RASTER, and JIFFY plus latency and overall result.
 - The diagnostics header gallery includes a live progress screenshot showing the same probe order with completed, running, and pending states.
 - Screenshot file names and documentation index entries match the generated `doc/img/app/diagnostics/**` output.
+- Binary preview evidence across traced HTTP and FTP flows is limited to 256 bytes while still showing total byte count.
 
 ## Phase 5 - Regression Coverage
 

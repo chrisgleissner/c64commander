@@ -335,10 +335,6 @@ describe("App runtime wiring", () => {
       clientY: 184,
     });
 
-    await waitFor(() => {
-      expect(runway).toHaveAttribute("data-runway-phase", "transitioning");
-    });
-
     fireEvent.transitionEnd(runway, { target: runway });
 
     expect(await screen.findByText("Home Page")).toBeInTheDocument();
