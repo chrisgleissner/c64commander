@@ -1249,137 +1249,137 @@ export function DiagnosticsDialog({
                 ) : null}
               </div>
             </section>
-
-            {/* Phase 6: Compact controls */}
-            <section className="mt-2 shrink-0 space-y-2" data-testid="diagnostics-controls">
-              <div className="flex flex-wrap gap-1.5">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-xs"
-                  onClick={() => setConfigDriftOpen(true)}
-                  data-testid="open-config-drift-screen"
-                >
-                  Config drift
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-xs"
-                  onClick={() => setLatencyOpen(true)}
-                  data-testid="open-latency-screen"
-                >
-                  Latency
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-xs"
-                  onClick={() => setHistoryOpen(true)}
-                  data-testid="open-timeline-screen"
-                >
-                  Health history
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-xs"
-                  onClick={() => setHeatMapVariant("REST")}
-                  data-testid="open-rest-heatmap-screen"
-                >
-                  REST heat map
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-xs"
-                  onClick={() => setHeatMapVariant("FTP")}
-                  data-testid="open-ftp-heatmap-screen"
-                >
-                  FTP heat map
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-xs"
-                  onClick={() => setHeatMapVariant("CONFIG")}
-                  data-testid="open-config-heatmap-screen"
-                >
-                  Config heat map
-                </Button>
-                <div className="relative">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-7 w-7 p-0"
-                    onClick={() => setOverflowOpen((v) => !v)}
-                    data-testid="diagnostics-overflow-menu"
-                  >
-                    <MoreHorizontal className="h-3.5 w-3.5" />
-                  </Button>
-                  {overflowOpen ? (
-                    <div className="absolute bottom-full right-0 z-10 mb-1 min-w-[10rem] rounded-lg border border-border bg-background py-1 shadow-lg">
-                      <button
-                        type="button"
-                        className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
-                        onClick={() => {
-                          setOverflowOpen(false);
-                          void onShareAll();
-                        }}
-                        data-testid="diagnostics-share-all"
-                      >
-                        <Share2 className="h-3.5 w-3.5" />
-                        Share all
-                      </button>
-                      <button
-                        type="button"
-                        className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
-                        onClick={() => {
-                          setOverflowOpen(false);
-                          handleShareFiltered();
-                        }}
-                        data-testid="diagnostics-share-filtered"
-                      >
-                        <Share2 className="h-3.5 w-3.5" />
-                        Share filtered
-                      </button>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <button
-                            type="button"
-                            className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-destructive hover:bg-muted"
-                            data-testid="diagnostics-clear-all-trigger"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                            Clear all
-                          </button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent surface="confirmation">
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Clear diagnostics?</AlertDialogTitle>
-                            <AlertDialogDescription>This removes current diagnostics entries.</AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={onClearAll} data-testid="diagnostics-clear-all-confirm">
-                              Clear
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            </section>
           </div>
+          {/* Phase 6: Compact controls — pinned outside the scroll area so the
+            overflow popup is always anchored within the visible viewport. */}
+          <section className="shrink-0 border-t border-border px-4 pb-4 pt-2" data-testid="diagnostics-controls">
+            <div className="flex flex-wrap gap-1.5">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => setConfigDriftOpen(true)}
+                data-testid="open-config-drift-screen"
+              >
+                Config drift
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => setLatencyOpen(true)}
+                data-testid="open-latency-screen"
+              >
+                Latency
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => setHistoryOpen(true)}
+                data-testid="open-timeline-screen"
+              >
+                Health history
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => setHeatMapVariant("REST")}
+                data-testid="open-rest-heatmap-screen"
+              >
+                REST heat map
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => setHeatMapVariant("FTP")}
+                data-testid="open-ftp-heatmap-screen"
+              >
+                FTP heat map
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => setHeatMapVariant("CONFIG")}
+                data-testid="open-config-heatmap-screen"
+              >
+                Config heat map
+              </Button>
+              <div className="relative">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 w-7 p-0"
+                  onClick={() => setOverflowOpen((v) => !v)}
+                  data-testid="diagnostics-overflow-menu"
+                >
+                  <MoreHorizontal className="h-3.5 w-3.5" />
+                </Button>
+                {overflowOpen ? (
+                  <div className="absolute bottom-full right-0 z-10 mb-1 min-w-[10rem] rounded-lg border border-border bg-background py-1 shadow-lg">
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
+                      onClick={() => {
+                        setOverflowOpen(false);
+                        void onShareAll();
+                      }}
+                      data-testid="diagnostics-share-all"
+                    >
+                      <Share2 className="h-3.5 w-3.5" />
+                      Share all
+                    </button>
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
+                      onClick={() => {
+                        setOverflowOpen(false);
+                        handleShareFiltered();
+                      }}
+                      data-testid="diagnostics-share-filtered"
+                    >
+                      <Share2 className="h-3.5 w-3.5" />
+                      Share filtered
+                    </button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <button
+                          type="button"
+                          className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-destructive hover:bg-muted"
+                          data-testid="diagnostics-clear-all-trigger"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          Clear all
+                        </button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent surface="confirmation">
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Clear diagnostics?</AlertDialogTitle>
+                          <AlertDialogDescription>This removes current diagnostics entries.</AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction onClick={onClearAll} data-testid="diagnostics-clear-all-confirm">
+                            Clear
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </section>
         </AppSheetContent>
       </AppSheet>
 
