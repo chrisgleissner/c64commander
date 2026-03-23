@@ -5,150 +5,78 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.en.html)
 [![Platform](https://img.shields.io/badge/platforms-Android%20%7C%20iOS%20%7C%20Web-blue)](https://github.com/chrisgleissner/c64commander/releases)
 
-Your C64 Ultimate command center in your pocket.
+Control and manage a C64 Ultimate from Android, iOS, or a self-hosted web deployment on your local network.
 
-<img src="./docs/play-store/feature-graphic-1024x500.png" alt="C64 Commander Logo" width="600"/>
+<img src="./docs/play-store/feature-graphic-1024x500.png" alt="C64 Commander" width="600"/>
 
-C64 Commander lets you control and manage a C64 Ultimate from Android, iOS, or a self-hosted Web deployment on your local network.
+## Features
 
-> [!NOTE]
-> This project is under active development, with frequent improvements across UX, stability, and feature depth.
+- **Cross-platform**: Native Android and iOS apps, plus a Docker-based web interface for macOS, Windows, or Linux.
+- **Dashboard**: Machine controls, quick config, drive status, SID mixer, and streams on a single page.
+- **Configuration**: Browse and edit the full C64 Ultimate configuration tree.
+- **Playlists**: Build playlists from local files, C64U storage, or the High Voltage SID Collection (HVSC). Autoplay, shuffle, and subsong selection.
+- **Disk management**: Mount, unmount, and rotate multi-disk groups across drives.
+- **Diagnostics**: Inspect activity logs, traces, latency, and connection health.
 
-## 📑 Contents
+## Quick Start
 
-- [C64 Commander](#c64-commander)
-  - [📑 Contents](#-contents)
-  - [✨ Why C64 Commander?](#-why-c64-commander)
-  - [🚀 Quick Start](#-quick-start)
-    - [Install on Android](#install-on-android)
-    - [Install on iOS](#install-on-ios)
-    - [Install for Web Access](#install-for-web-access)
-      - [Install Docker](#install-docker)
-      - [Run the Container](#run-the-container)
-    - [First Connection Checklist](#first-connection-checklist)
-  - [🧩 What You Can Do](#-what-you-can-do)
-    - [Home](#home)
-    - [Play](#play)
-    - [Disks](#disks)
-    - [Configuration](#configuration)
-    - [Settings](#settings)
-    - [Docs](#docs)
-    - [Diagnostics](#diagnostics)
-  - [📱🖥️ Display Profiles](#️-display-profiles)
-  - [🛟 Troubleshooting](#-troubleshooting)
-    - [Connectivity](#connectivity)
-      - [Can’t reach the device](#cant-reach-the-device)
-      - [Device becomes unresponsive](#device-becomes-unresponsive)
-    - [iOS specifics](#ios-specifics)
-  - [🔧 Advanced Topics](#-advanced-topics)
-    - [Advanced - Network Security](#advanced---network-security)
-    - [Web Server Details](#web-server-details)
-      - [Network password model](#network-password-model)
-      - [Web security](#web-security)
-      - [Web logging](#web-logging)
-      - [Update to a newer version](#update-to-a-newer-version)
-      - [Linux auto-update](#linux-auto-update)
-  - [🛠️ For Developers](#️-for-developers)
-  - [🙏 Acknowledgments](#-acknowledgments)
-    - [High Voltage SID Collection (HVSC)](#high-voltage-sid-collection-hvsc)
-    - [Commodore and the C64 Ultimate](#commodore-and-the-c64-ultimate)
-    - [Third-Party Libraries](#third-party-libraries)
-  - [⚖️ License](#️-license)
+### Android
 
-## ✨ Why C64 Commander?
+1. Download the latest APK from [Releases](https://github.com/chrisgleissner/c64commander/releases).
+2. Open the APK and allow installs from unknown sources if prompted.
+3. Tap **Install**.
 
-Because it gives you full control of your C64 Ultimate from any modern device:
-
-- **Cross-platform access**: Native Android and iOS apps, plus a web interface served via Docker on macOS, Windows, or Linux.
-- **Quick dashboard**: Access common actions and advanced controls in a clean mobile interface.
-- **Deep configuration**: Browse and edit the full C64 Ultimate configuration from one place.
-- **Explore your collection**: Build playlists from local files, C64 Ultimate storage, or the High Voltage SID Collection. Quickly find what you want with powerful search and filtering.
-- **Manage disks efficiently**: Mount, unmount, and handle drive workflows with fewer steps.
-- **Troubleshoot with confidence**: Inspect logs, traces, and activity when behavior needs a closer look.
-
-## 🚀 Quick Start
-
-### Install on Android
-
-1. Download the latest **APK** (for example, `c64commander-<version>-debug.apk` for debug builds or `c64commander-<version>.apk` for signed release builds) from the [Releases](https://github.com/chrisgleissner/c64commander/releases) page.
-2. Open the APK.
-3. Allow installs from unknown sources if prompted.
-4. Tap **Install** and launch C64 Commander.
-
-### Install on iOS
+### iOS
 
 1. Set up [SideStore](https://docs.sidestore.io/).
-2. Download the latest **IPA** (for example, `c64commander-<version>-ios.ipa`) from the [Releases](https://github.com/chrisgleissner/c64commander/releases) page.
-3. In **SideStore → My Apps**, tap **+** and select the IPA.
-4. Launch C64 Commander.
+2. Download the latest IPA from [Releases](https://github.com/chrisgleissner/c64commander/releases).
+3. In **SideStore > My Apps**, tap **+** and select the IPA.
 
-SideStore refreshes apps every 7 days to renew the signature automatically.
+SideStore refreshes the app signature automatically every 7 days.
 
-### Install for Web Access
+### Web (Docker)
 
-The Web version is self-hosted and intended for LAN use. The browser connects to a local C64 Commander server, which communicates with your C64U via REST/FTP.
+The web version is self-hosted for LAN use. Requirements: Docker on Windows, macOS, or Linux. A Raspberry Pi Zero 2W or 4B with 512 MiB RAM or more is sufficient.
 
-- Runs on Windows, macOS, or Linux.
-- Raspberry Pi Zero 2W, 4B, or similar with ≥ 512 MiB RAM recommended.
-- If a C64U network password is configured in Settings, it also protects the web interface.
-
-#### Install Docker
-
-- For Windows and macOS, install [Docker Desktop](https://docs.docker.com/desktop/).
-- For Linux, install the [Docker Engine](https://docs.docker.com/engine/install/).
-
-The Docker image supports both `linux/amd64` and `linux/arm64` architectures. Windows and macOS run the image via Docker Desktop virtualization.
-
-#### Run the Container
-
-Create a writable config directory:
+Install Docker: [Docker Desktop](https://docs.docker.com/desktop/) (Windows/macOS) or [Docker Engine](https://docs.docker.com/engine/install/) (Linux). The image supports `linux/amd64` and `linux/arm64`.
 
 ```bash
-mkdir -p ./c64commander-config
-chmod 0777 ./c64commander-config
-```
+mkdir -p ./c64commander-config && chmod 0777 ./c64commander-config
 
-Start the container:
-
-```bash
 docker run -d --name c64commander -p 8064:8064 \
   -v ./c64commander-config:/config --restart unless-stopped \
   ghcr.io/chrisgleissner/c64commander:<version>
 ```
 
-Then launch C64 Commander by opening http://`<host-ip>`:8064 in a browser.
+Open `http://<host-ip>:8064` in a browser.
 
-### First Connection Checklist
+If a network password is configured in **Settings > Device > Network password**, the web interface requires login with the same password.
 
-Before you connect C64 Commander to your device, make sure the C64 Ultimate is visible on your local network and has the required services enabled.
+### First Connection
+
+Ensure the C64 Ultimate is on your local network with required services enabled:
 
 ![Network services & timezone menu](doc/img/setup/enable_services.png)
 
-Quick checks on the C64 Ultimate:
+On the C64 Ultimate:
 
-- Press **CBM+Restore**.
-- Open **Network services & timezone**.
-- Enable **REST**. Enable **FTP** too if you want to browse files or build disk and playlist collections.
-- Connect the device to your LAN using **WI-FI Network Setup** or Ethernet.
-- Note the IP address shown in **Wired Network Setup** or **WI-FI Network Setup**.
+1. Press **CBM+Restore** and open **Network services & timezone**.
+2. Enable **REST**. Enable **FTP** if you want file browsing and disk/playlist collection support.
+3. Note the IP address from **Wired Network Setup** or **WI-FI Network Setup**.
 
-Then connect in C64 Commander:
+In C64 Commander:
 
-1. Power on the C64 Ultimate.
-2. Make sure C64 Commander and the C64 Ultimate are on the same network.
-3. In C64 Commander, open **Settings → Device → Connection**.
-4. Enter the C64 Ultimate IP address or hostname.
-5. Confirm a green status dot appears next to the C64U logo in the top-right:
+1. Open **Settings > Device > Connection**.
+2. Enter the C64 Ultimate IP address or hostname.
+3. A green status dot next to the C64U logo confirms the connection:
 
 ![Connected](doc/img/app/details/page-headers/home/header.png)
 
-🎉 **DONE!** Enjoy controlling your C64 Ultimate via C64 Commander.
-
-## 🧩 What You Can Do
+## Pages
 
 ### Home
 
-Your everyday dashboard: quick access to the controls you touch most often.
+Operational dashboard: machine controls, quick config, drives, printer, SID mixer, streams, and configuration snapshots.
 
 <table>
   <tr>
@@ -175,7 +103,7 @@ Your everyday dashboard: quick access to the controls you touch most often.
 
 ### Play
 
-Build playlists from local content, C64 Ultimate storage, or HVSC, then run autoplay or shuffle sessions.
+Build playlists from local files, C64U storage, or HVSC. Supports autoplay, shuffle, repeat, subsong selection, and duration overrides.
 
 <table>
   <tr>
@@ -187,7 +115,7 @@ Build playlists from local content, C64 Ultimate storage, or HVSC, then run auto
 
 ### Disks
 
-View drive state, mount images quickly, and browse disk collections in one place.
+View drive state, mount and eject images, and manage disk collections with multi-disk group rotation.
 
 <table>
   <tr>
@@ -199,7 +127,7 @@ View drive state, mount images quickly, and browse disk collections in one place
 
 ### Configuration
 
-Access full C64 Ultimate configuration pages, from basic tuning to hardware-specific settings.
+Browse and edit the full C64 Ultimate configuration: categories, items, sliders, toggles, and per-item refresh.
 
 <table>
   <tr>
@@ -211,7 +139,7 @@ Access full C64 Ultimate configuration pages, from basic tuning to hardware-spec
 
 ### Settings
 
-Tune appearance, connection behavior, diagnostics, playback defaults, HVSC integration, and device-safety limits.
+Connection, appearance, diagnostics, playback defaults, HVSC integration, and device-safety controls.
 
 <table>
   <tr>
@@ -228,7 +156,7 @@ Tune appearance, connection behavior, diagnostics, playback defaults, HVSC integ
 
 ### Docs
 
-Built-in guides for setup, workflows, and practical day-to-day usage.
+Built-in guides for setup, workflows, and day-to-day usage.
 
 <table>
   <tr>
@@ -240,21 +168,19 @@ Built-in guides for setup, workflows, and practical day-to-day usage.
 
 ### Diagnostics
 
-Diagnostics are reachable via the C64U connectivity badge at the top right of the screen.
-
-Start with a quick health check of your Commodore 64 Ultimate, then inspect recent activity, narrow the view with filters, verify the active connection, and finally move into latency and history analysis if needed.
+Accessible via the C64U connectivity badge in the top-right corner. Provides health checks, activity logs, trace inspection, filter editor, and latency analysis.
 
 <table>
   <tr>
     <td><img src="doc/img/app/diagnostics/tools/01-menu.png" alt="Diagnostics overview" width="360"/></td>
-    <td><img src="doc/img/app/diagnostics/activity/02-problems-only.png" alt="Diagnostics activity list" width="360"/></td>
+    <td><img src="doc/img/app/diagnostics/activity/07-problems-only.png" alt="Diagnostics activity list" width="360"/></td>
     <td><img src="doc/img/app/diagnostics/filters/02-editor.png" alt="Diagnostics filter editor" width="360"/></td>
   </tr>
 </table>
 
-## 📱🖥️ Display Profiles
+## Display Profiles
 
-Automatically selected display profiles ensure that C64 Commander is easy to use on a wide range of screens, from small phones to tablets and desktop browsers.
+The layout adapts automatically based on viewport width: Small (phones), Standard (large phones and small tablets), and Large (tablets and desktops). Override in **Settings > Display Profile**.
 
 <table>
   <thead>
@@ -288,70 +214,62 @@ Automatically selected display profiles ensure that C64 Commander is easy to use
   </tbody>
 </table>
 
-## 🛟 Troubleshooting
+## Troubleshooting
 
-### Connectivity
+### Can't reach the device
 
-#### Can’t reach the device
+- Confirm the C64 Ultimate and your device are on the same network.
+- Verify the IP address or hostname in **Settings > Device > Connection**.
 
-- Confirm your C64 Ultimate and mobile device are on the same network.
-- Confirm IP address / hostname in **Settings → Device → Connection**.
+### Device becomes unresponsive
 
-#### Device becomes unresponsive
+C64 Commander includes **Device Safety** controls under **Settings > Device Safety** to throttle REST and FTP traffic. REST mutations use a single in-flight lane; presets and advanced controls tune FTP concurrency and backoff behavior.
 
-C64 Commander includes configurable **Device Safety** controls under **Settings → Device Safety** to help avoid overload from REST and FTP traffic. REST mutations are fixed to a single in-flight lane; the presets and advanced controls tune the remaining pacing and FTP pressure. If you spot issues with the default **Balanced** preset, try **Conservative**.
-
-- **Presets**: Relaxed, Balanced (default), Conservative
-- **Advanced controls**: FTP concurrency, read coalescing windows, cooldowns, backoff strategy, circuit-breaker thresholds, discovery probe interval
-- **Important**: Relaxed settings can overwhelm some setups. Use carefully.
+- **Presets**: Relaxed, Balanced (default), Conservative.
+- **Advanced controls**: FTP concurrency, read coalescing, cooldowns, backoff strategy, circuit-breaker thresholds, discovery probe interval.
+- The Relaxed preset can overwhelm some setups. Start with Balanced or Conservative.
 
 ### iOS specifics
 
-- **App expired**: Apps installed via SideStore need a refresh every 7 days which should happen automatically.
+- **App expired**: SideStore refreshes every 7 days automatically.
 - **Account/App ID limits**: Remove unused sideloaded apps and retry.
-- **Install/signing errors**: Re-download the IPA and checksum, then verify again.
-- **Compatibility note**: CI runtime selection validates iOS `26 -> 18 -> 17`; iOS 17 and 18 are baseline support targets.
+- **Install/signing errors**: Re-download the IPA and verify its checksum.
 
-## 🔧 Advanced Topics
+## Advanced Topics
 
-### Advanced - Network Security
+### Network Security
 
-The C64 Ultimate firmware currently exposes REST over HTTP and file operations over plain FTP. C64 Commander follows that firmware model and does not add protocol-level encryption.
+The C64 Ultimate firmware exposes REST over HTTP and files over plain FTP. C64 Commander follows that model and does not add encryption.
 
-- Password authentication remains supported and enabled.
-- Device host configuration supports practical LAN usage patterns, including private IPs and local hostnames used in home/lab networks.
-- Diagnostics and traces redact sensitive values (including network password headers) before export/display.
+- Password authentication is supported.
+- Diagnostics and traces redact sensitive values (including network password headers) before export.
 
-Optional hardening you can apply in your environment:
+Optional hardening:
 
-1. Run C64 Commander Web behind an HTTPS reverse proxy (for example, on a Raspberry Pi with Caddy or Nginx).
-2. Keep C64 Ultimate and client devices on an isolated VLAN or a dedicated trusted LAN segment.
-3. Avoid exposing C64 Commander or C64 Ultimate directly to the public internet.
+1. Run C64 Commander Web behind an HTTPS reverse proxy (Caddy, Nginx).
+2. Keep C64 Ultimate and client devices on an isolated VLAN or dedicated LAN segment.
+3. Do not expose C64 Commander or C64 Ultimate to the public internet.
 
-### Web Server Details
+### Web Server
 
-#### Network password model
+#### Authentication
 
-- If no network password is configured, the UI opens directly.
-- If a network password is configured in **Settings → Device → Network password**, login is required and the server injects the password into proxied C64U requests.
-- After saving that setting, the web server persists it in `/config/web-config.json`; on the next access (or after logout), login is required with that same password.
-- Successful login creates an authenticated session cookie (`HttpOnly`, `SameSite=Lax`, optional `Secure`), so you do not re-enter the password on every request.
+- No network password configured: the UI opens directly.
+- Network password configured in **Settings > Device > Network password**: login is required. The server injects the password into proxied C64U requests.
+- The password is persisted in `/config/web-config.json`. Successful login creates an authenticated session cookie (`HttpOnly`, `SameSite=Lax`, optional `Secure`).
 
-#### Web security
+#### Security settings
 
-- `Secure` cookies are enabled automatically when `NODE_ENV=production` (override with `WEB_COOKIE_SECURE=true|false`).
-- FTP host override is disabled by default to prevent open-proxy behavior. Set `WEB_ALLOW_REMOTE_FTP_HOSTS=true` only in trusted/dev setups.
+- `Secure` cookies are enabled when `NODE_ENV=production`. Override with `WEB_COOKIE_SECURE=true|false`.
+- FTP host override is disabled by default. Set `WEB_ALLOW_REMOTE_FTP_HOSTS=true` only in trusted setups.
 
-#### Web logging
+#### Logging
 
-- Web server logs are emitted to container stdout/stderr (for Docker logs) and mirrored into the in-app diagnostics logs overlay.
-- `basic-ftp` is a runtime dependency because FTP list/read requests are executed by the web server process.
+Web server logs go to container stdout/stderr and are mirrored in the in-app diagnostics overlay.
 
-#### Update to a newer version
+#### Updating
 
-The web app shell is intentionally fetched from the network on each navigation, while hashed static assets roll forward with a build-specific service-worker cache. After deploying a new image, open the app once to let the new service worker activate. If a browser tab is still holding the old shell in memory, reload the tab.
-
-Rollback uses the same flow: redeploy the older image, open the app, and reload once so the browser activates the matching service worker and clears the newer asset cache.
+After deploying a new image, open the app once to activate the new service worker. Reload any tabs still holding the old shell.
 
 ```bash
 docker pull ghcr.io/chrisgleissner/c64commander:<version>
@@ -359,25 +277,24 @@ docker rm -f c64commander
 docker run -d --name c64commander -p 8064:8064 -v ./c64commander-config:/config --restart unless-stopped ghcr.io/chrisgleissner/c64commander:<version>
 ```
 
+Rollback: redeploy the older image and reload.
+
 #### Linux auto-update
 
-For Linux hosts (including Raspberry Pi), an updater script is available at [scripts/web-auto-update.sh](scripts/web-auto-update.sh).
+An updater script is available at [scripts/web-auto-update.sh](scripts/web-auto-update.sh).
 
-Recommended mode (`tags`) tracks new GitHub release tags and restarts the container only when a new release appears.
-
-Development mode (`ref`) tracks any branch/ref commit and rebuilds from source on update.
+- `--track tags` (recommended): tracks GitHub release tags.
+- `--track ref`: tracks a branch/ref and rebuilds from source on update.
 
 > [!IMPORTANT]
-> Use `--track tags` for normal deployments. Use `--track ref` only when developing/testing branch changes.
-
-Prepare once:
+> Use `--track tags` for normal deployments. Use `--track ref` only for development.
 
 ```bash
 chmod +x scripts/web-auto-update.sh
 mkdir -p ./c64commander-config
 ```
 
-Run in release-tag mode (recommended):
+Release-tag mode:
 
 ```bash
 ./scripts/web-auto-update.sh \
@@ -387,7 +304,7 @@ Run in release-tag mode (recommended):
   --config-dir ./c64commander-config
 ```
 
-Run in branch/ref mode (development):
+Branch/ref mode:
 
 ```bash
 ./scripts/web-auto-update.sh \
@@ -398,7 +315,7 @@ Run in branch/ref mode (development):
   --config-dir ./c64commander-config-dev
 ```
 
-Run as a systemd service (Linux):
+systemd service:
 
 ```bash
 sudo tee /etc/systemd/system/c64commander-updater.service >/dev/null <<'EOF'
@@ -424,43 +341,36 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now c64commander-updater.service
 ```
 
-Optional GitHub API token (helps with rate limits):
+Optional GitHub API token (avoids rate limits):
 
 ```bash
 export GITHUB_TOKEN=<your-token>
 ```
 
-## 🛠️ For Developers
+## For Developers
 
-If you want to build, test, or contribute:
+- [Documentation index](doc/index.md)
+- [Developer guide](doc/developer.md)
+- [Chaos/fuzz testing](doc/testing/chaos-fuzz.md)
 
-- Documentation index: [doc/index.md](doc/index.md)
-- Developer guide: [doc/developer.md](doc/developer.md)
-- Chaos/fuzz testing docs: [doc/testing/chaos-fuzz.md](doc/testing/chaos-fuzz.md)
-- Web server runtime dependency note: `basic-ftp` is in `dependencies` because the web server uses it at runtime inside the Docker image.
-- OSS compliance / notices (Linux-friendly):
-  - `npm run notices:generate` to regenerate `THIRD_PARTY_NOTICES.md` at repo root from dependency metadata
-  - `npm run notices:check` to enforce deterministic root notice output
-  - `npm run build` automatically refreshes notices and packages `THIRD_PARTY_NOTICES.md` into `dist/` for web / Android / iOS app bundles
+Third-party notices: `npm run notices:generate` regenerates [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). `npm run build` packages notices into distribution bundles automatically.
 
-## 🙏 Acknowledgments
-
-This project would not be possible without the following:
+## Acknowledgments
 
 ### High Voltage SID Collection (HVSC)
 
-The [High Voltage SID Collection](https://hvsc.c64.org) is an amazing archive of C64 music, preserving decades of SID chip artistry. C64 Commander uses HVSC to provide access to thousands of SID tunes, making it easy to explore and enjoy the rich history of C64 music.
+The [High Voltage SID Collection](https://hvsc.c64.org) is an archive of C64 SID music. C64 Commander integrates HVSC for browsing, searching, and playing SID tunes with metadata and song-length support.
 
 ### Commodore and the C64 Ultimate
 
-Heartfelt thanks to [Commodore](https://commodore.net) for creating the Commodore 64, a machine that defined a generation of computing and gaming. Special recognition goes to the creators of the C64 Ultimate (Ultimate 64) for breathing new life into this classic platform with modern hardware that maintains the authentic C64 experience while adding powerful new capabilities.
+Thanks to [Commodore](https://commodore.net) for creating the Commodore 64 and to the creators of the C64 Ultimate for extending the platform with modern hardware.
 
-Commodore and Commodore 64 are trademarks of their respective owners. C64 Commander is an independent project and is not affiliated with, endorsed by, or sponsored by Commodore or C64 Ultimate rights holders.
+Commodore and Commodore 64 are trademarks of their respective owners. C64 Commander is an independent project, not affiliated with or endorsed by Commodore or C64 Ultimate rights holders.
 
 ### Third-Party Libraries
 
-C64 Commander builds on many excellent open-source projects. Notices are generated via `scripts/generate-third-party-notices.mjs` and published as [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+C64 Commander uses many open-source libraries. Notices are generated via `scripts/generate-third-party-notices.mjs` and published as [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-## ⚖️ License
+## License
 
-This project is licensed under GPL v3. See [LICENSE](LICENSE) for details.
+GPL v3. See [LICENSE](LICENSE).
