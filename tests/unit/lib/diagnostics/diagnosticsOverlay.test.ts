@@ -34,12 +34,15 @@ describe("diagnosticsOverlay", () => {
   describe("requestDiagnosticsOpen", () => {
     it("persists preset to sessionStorage and dispatches event", () => {
       requestDiagnosticsOpen("header");
-      expect(sessionStorage.setItem).toHaveBeenCalledWith("c64u_diagnostics_open_preset", "header");
+      expect(sessionStorage.setItem).toHaveBeenCalledWith(
+        "c64u_diagnostics_open_preset",
+        JSON.stringify({ preset: "header", panel: null }),
+      );
 
       expect(window.dispatchEvent).toHaveBeenCalledTimes(1);
       const event = vi.mocked(window.dispatchEvent).mock.calls[0][0] as any;
       expect(event.type).toBe("c64u-diagnostics-open-request");
-      expect(event.detail).toEqual({ preset: "header" });
+      expect(event.detail).toEqual({ preset: "header", panel: null });
     });
 
     it("handles sessionStorage errors gracefully", () => {
@@ -64,12 +67,34 @@ describe("diagnosticsOverlay", () => {
 
   describe("consumeDiagnosticsOpenRequest", () => {
     it("retrieves and removes preset from sessionStorage", () => {
-      vi.mocked(sessionStorage.getItem).mockReturnValue("header");
+      vi.mocked(sessionStorage.getItem).mockReturnValue(JSON.stringify({ preset: "header", panel: null }));
 
       const result = consumeDiagnosticsOpenRequest();
 
-      expect(result).toBe("header");
+      expect(result).toEqual({ preset: "header", panel: null });
       expect(sessionStorage.removeItem).toHaveBeenCalledWith("c64u_diagnostics_open_preset");
+    });
+
+    it("logs malformed structured requests and still supports legacy preset strings", () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      vi.mocked(sessionStorage.getItem).mockReturnValue("header");
+
+      expect(consumeDiagnosticsOpenRequest()).toEqual({ preset: "header", panel: null });
+      expect(warnSpy).toHaveBeenCalledWith(
+        "Unable to parse diagnostics open request, evaluating legacy preset fallback:",
+        expect.any(Error),
+      );
+    });
+
+    it("returns null for malformed requests that are not legacy presets", () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      vi.mocked(sessionStorage.getItem).mockReturnValue("{bad-json}");
+
+      expect(consumeDiagnosticsOpenRequest()).toBeNull();
+      expect(warnSpy).toHaveBeenCalledWith(
+        "Unable to parse diagnostics open request, evaluating legacy preset fallback:",
+        expect.any(Error),
+      );
     });
 
     it("returns null if no tab in storage", () => {

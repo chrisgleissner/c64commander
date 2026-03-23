@@ -194,6 +194,22 @@ const normalizeTracePath = (pathname: string | null, query: string | null) => {
   return `${pathname}${query ?? ""}`;
 };
 
+const splitTracePath = (rawPath: string | null | undefined) => {
+  if (!rawPath) {
+    return { path: null, query: null };
+  }
+  const questionMarkIndex = rawPath.indexOf("?");
+  if (questionMarkIndex < 0) {
+    return { path: rawPath, query: null };
+  }
+  const path = rawPath.slice(0, questionMarkIndex) || "/";
+  const searchPart = rawPath.slice(questionMarkIndex + 1);
+  return {
+    path,
+    query: searchPart ? `?${searchPart}` : null,
+  };
+};
+
 const resolveRestTraceLocation = (payload: {
   url?: string | null;
   normalizedUrl?: string | null;
@@ -204,8 +220,9 @@ const resolveRestTraceLocation = (payload: {
   const protocol = parsed?.protocol ? parsed.protocol.replace(/:$/, "") : null;
   const hostname = parsed?.hostname ?? null;
   const port = parsed?.port ? Number(parsed.port) || null : null;
-  const path = payload.path ?? parsed?.pathname ?? null;
-  const query = payload.query ?? parsed?.search ?? null;
+  const derivedPath = splitTracePath(payload.path ?? null);
+  const path = parsed?.pathname ?? derivedPath.path;
+  const query = parsed?.search ?? payload.query ?? derivedPath.query;
   const normalizedPath = payload.normalizedUrl ?? normalizeTracePath(path, query);
   return {
     protocol,

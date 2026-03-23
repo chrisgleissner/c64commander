@@ -8,6 +8,7 @@ import { DIAGNOSTICS_TEST_OVERLAY_STATE_EVENT } from "@/lib/diagnostics/diagnost
 import { resetHealthCheckStateSnapshot } from "@/lib/diagnostics/healthCheckState";
 
 const consumeDiagnosticsOpenRequestMock = vi.fn();
+const clearDiagnosticsOpenRequestMock = vi.fn();
 
 vi.mock("@/hooks/use-toast", () => ({
   toast: vi.fn(),
@@ -93,6 +94,7 @@ vi.mock("@/lib/diagnostics/diagnosticsActivity", () => ({
 }));
 
 vi.mock("@/lib/diagnostics/diagnosticsOverlay", () => ({
+  clearDiagnosticsOpenRequest: clearDiagnosticsOpenRequestMock,
   consumeDiagnosticsOpenRequest: () => consumeDiagnosticsOpenRequestMock(),
 }));
 
@@ -117,7 +119,7 @@ vi.mock("@/hooks/useHealthState", () => ({
 vi.mock("@/lib/diagnostics/diagnosticsOverlayState", () => ({
   setDiagnosticsOverlayActive: vi.fn(),
   withDiagnosticsTraceOverride: (fn: () => unknown) => fn(),
-  subscribeDiagnosticsSuppression: () => () => { },
+  subscribeDiagnosticsSuppression: () => () => {},
   isDiagnosticsOverlaySuppressionArmed: () => false,
 }));
 
@@ -213,6 +215,25 @@ describe("GlobalDiagnosticsOverlay", () => {
     expect(screen.getByTestId("health-history-popup")).toBeVisible();
   });
 
+  it.each([
+    ["/diagnostics", null],
+    ["/diagnostics/", null],
+    ["/diagnostics/latency", "latency-analysis-popup"],
+    ["/diagnostics/config-drift", "config-drift-surface"],
+    ["/diagnostics/heatmap/rest", "heat-map-popup-rest"],
+    ["/diagnostics/heatmap/ftp", "heat-map-popup-ftp"],
+    ["/diagnostics/heatmap/config", "heat-map-popup-config"],
+  ])("opens diagnostics deep link %s", async (path, surfaceTestId) => {
+    consumeDiagnosticsOpenRequestMock.mockReturnValue(null);
+
+    renderOverlay(path);
+
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    if (surfaceTestId) {
+      expect(screen.getByTestId(surfaceTestId)).toBeVisible();
+    }
+  });
+
   it("opens from a runtime diagnostics request event", async () => {
     consumeDiagnosticsOpenRequestMock.mockReturnValue(null);
 
@@ -227,6 +248,7 @@ describe("GlobalDiagnosticsOverlay", () => {
     });
 
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(clearDiagnosticsOpenRequestMock).toHaveBeenCalledTimes(1);
   });
 
   it("applies seeded health-check overlay state from the diagnostics bridge and runtime events", async () => {

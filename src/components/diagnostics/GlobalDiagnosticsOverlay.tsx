@@ -24,6 +24,7 @@ import { DiagnosticsDialog } from "@/components/diagnostics/DiagnosticsDialog";
 import { shareAllDiagnosticsZip, shareDiagnosticsZip } from "@/lib/diagnostics/diagnosticsExport";
 import { resetDiagnosticsActivity } from "@/lib/diagnostics/diagnosticsActivity";
 import {
+  clearDiagnosticsOpenRequest,
   consumeDiagnosticsOpenRequest,
   type DiagnosticsEntryPreset,
   type DiagnosticsPanelKey,
@@ -125,6 +126,7 @@ export const GlobalDiagnosticsOverlay = () => {
     (open: boolean) => {
       if (!open && routePanel !== null) {
         setRequestedPanel(null);
+        setDialogOpen(false);
         navigate("/settings");
         return;
       }
@@ -157,6 +159,7 @@ export const GlobalDiagnosticsOverlay = () => {
         | { preset?: DiagnosticsEntryPreset; panel?: DiagnosticsPanelKey | null }
         | undefined;
       if (!detail?.preset) return;
+      clearDiagnosticsOpenRequest();
       setRequestedPanel(detail.panel ?? null);
       setDialogOpen(true);
     };

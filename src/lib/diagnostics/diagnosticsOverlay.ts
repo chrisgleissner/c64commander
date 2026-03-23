@@ -31,6 +31,15 @@ export type DiagnosticsOpenRequest = {
 
 const DIAGNOSTICS_OPEN_KEY = "c64u_diagnostics_open_preset";
 
+export const clearDiagnosticsOpenRequest = () => {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.removeItem(DIAGNOSTICS_OPEN_KEY);
+  } catch (error) {
+    console.warn("Unable to clear diagnostics open request:", error);
+  }
+};
+
 export const requestDiagnosticsOpen = (preset: DiagnosticsEntryPreset, panel?: DiagnosticsPanelKey | null) => {
   if (typeof window === "undefined") return;
   primeDiagnosticsOverlaySuppression();
@@ -51,12 +60,15 @@ export const consumeDiagnosticsOpenRequest = (): DiagnosticsOpenRequest | null =
   try {
     const stored = sessionStorage.getItem(DIAGNOSTICS_OPEN_KEY);
     if (stored) {
-      sessionStorage.removeItem(DIAGNOSTICS_OPEN_KEY);
+      clearDiagnosticsOpenRequest();
       try {
         const parsed = JSON.parse(stored) as DiagnosticsOpenRequest;
         if (parsed?.preset) return parsed;
-      } catch {
-        return { preset: stored as DiagnosticsEntryPreset, panel: null };
+      } catch (error) {
+        console.warn("Unable to parse diagnostics open request, evaluating legacy preset fallback:", error);
+        if (stored === "header" || stored === "settings") {
+          return { preset: stored, panel: null };
+        }
       }
     }
   } catch (error) {

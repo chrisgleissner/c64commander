@@ -337,14 +337,14 @@ describe("useSwipeGesture integration", () => {
       { ref, "data-testid": "gesture-surface" },
       withExcludedChild
         ? React.createElement(
-          "button",
-          {
-            type: "button",
-            "data-testid": "excluded-origin",
-            "data-swipe-exclude": "true",
-          },
-          "Excluded",
-        )
+            "button",
+            {
+              type: "button",
+              "data-testid": "excluded-origin",
+              "data-swipe-exclude": "true",
+            },
+            "Excluded",
+          )
         : null,
     );
   };

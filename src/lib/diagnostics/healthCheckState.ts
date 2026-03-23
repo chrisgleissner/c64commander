@@ -8,52 +8,52 @@
 
 import { useSyncExternalStore } from "react";
 import type {
-    HealthCheckProbeRecord,
-    HealthCheckProbeType,
-    HealthCheckRunResult,
+  HealthCheckProbeRecord,
+  HealthCheckProbeType,
+  HealthCheckRunResult,
 } from "@/lib/diagnostics/healthCheckEngine";
 
 export type HealthCheckStateSnapshot = {
-    running: boolean;
-    liveProbes: Partial<Record<HealthCheckProbeType, HealthCheckProbeRecord>> | null;
-    latestResult: HealthCheckRunResult | null;
+  running: boolean;
+  liveProbes: Partial<Record<HealthCheckProbeType, HealthCheckProbeRecord>> | null;
+  latestResult: HealthCheckRunResult | null;
 };
 
 let snapshot: HealthCheckStateSnapshot = {
-    running: false,
-    liveProbes: null,
-    latestResult: null,
+  running: false,
+  liveProbes: null,
+  latestResult: null,
 };
 
 const listeners = new Set<() => void>();
 
 const emit = () => {
-    listeners.forEach((listener) => listener());
+  listeners.forEach((listener) => listener());
 };
 
 export const getHealthCheckStateSnapshot = () => snapshot;
 
 export const subscribeHealthCheckState = (listener: () => void) => {
-    listeners.add(listener);
-    return () => listeners.delete(listener);
+  listeners.add(listener);
+  return () => listeners.delete(listener);
 };
 
 export const setHealthCheckStateSnapshot = (next: Partial<HealthCheckStateSnapshot>) => {
-    snapshot = {
-        ...snapshot,
-        ...next,
-    };
-    emit();
+  snapshot = {
+    ...snapshot,
+    ...next,
+  };
+  emit();
 };
 
 export const resetHealthCheckStateSnapshot = () => {
-    snapshot = {
-        running: false,
-        liveProbes: null,
-        latestResult: null,
-    };
-    emit();
+  snapshot = {
+    running: false,
+    liveProbes: null,
+    latestResult: null,
+  };
+  emit();
 };
 
 export const useHealthCheckState = () =>
-    useSyncExternalStore(subscribeHealthCheckState, getHealthCheckStateSnapshot, getHealthCheckStateSnapshot);
+  useSyncExternalStore(subscribeHealthCheckState, getHealthCheckStateSnapshot, getHealthCheckStateSnapshot);

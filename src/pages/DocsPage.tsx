@@ -252,10 +252,10 @@ const docSections: DocSection[] = [
           </li>
         </ul>
         <p className="text-muted-foreground">
-          Deep links: <strong>/diagnostics</strong>, <strong>/diagnostics/latency</strong>,
-          <strong> /diagnostics/history</strong>, <strong>/diagnostics/config-drift</strong>,
-          <strong> /diagnostics/heatmap/rest</strong>, <strong>/diagnostics/heatmap/ftp</strong>, and
-          <strong> /diagnostics/heatmap/config</strong>. Closing a deep-linked diagnostics view returns to Settings.
+          Deep links: <strong>/diagnostics</strong>, <strong>/diagnostics/latency</strong>,{" "}
+          <strong>/diagnostics/history</strong>, <strong>/diagnostics/config-drift</strong>,{" "}
+          <strong>/diagnostics/heatmap/rest</strong>, <strong>/diagnostics/heatmap/ftp</strong>, and{" "}
+          <strong>/diagnostics/heatmap/config</strong>. Closing a deep-linked diagnostics view returns to Settings.
         </p>
         <p className="text-muted-foreground">
           Use the per-tab filter to narrow results, <strong>Run health check</strong> to refresh the authoritative

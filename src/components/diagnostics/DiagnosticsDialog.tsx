@@ -228,9 +228,13 @@ const buildActionTitle = (summary: ActionSummary) => {
 const buildActionDetail = (summary: ActionSummary) => {
   const primary = getActionPrimaryEffect(summary);
   const parts: string[] = [];
+  const effectSummary = summarizeAction(summary);
   const title = buildActionTitle(summary);
   if (summary.actionName !== title) {
     parts.push(summary.actionName);
+  }
+  if (effectSummary !== summary.outcome) {
+    parts.push(effectSummary);
   }
   if (primary?.type === "REST") {
     if (typeof primary.status === "number") parts.push(`HTTP ${primary.status}`);
@@ -243,7 +247,7 @@ const buildActionDetail = (summary: ActionSummary) => {
     const duration = formatActionDuration(primary.durationMs);
     if (duration) parts.push(duration);
   }
-  return parts.join(" · ") || summarizeAction(summary);
+  return parts.join(" · ") || effectSummary;
 };
 
 const parseConnectionSnapshot = () => {

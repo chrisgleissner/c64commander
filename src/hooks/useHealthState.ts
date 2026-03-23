@@ -80,14 +80,14 @@ export function useHealthState(): OverallHealthState {
         lastFtpActivity: deriveLastFtpActivity(traceEvents),
         primaryProblem: firstFailedProbe
           ? {
-            id: `${latestHealthCheck.runId}-${firstFailedProbe.probe}`,
-            title: `${firstFailedProbe.probe} health check failed`,
-            contributor:
-              firstFailedProbe.probe === "REST" ? "REST" : firstFailedProbe.probe === "FTP" ? "FTP" : "App",
-            timestampMs: Date.parse(latestHealthCheck.endTimestamp),
-            impactLevel: latestHealthCheck.overallHealth === "Unhealthy" ? 2 : 1,
-            causeHint: firstFailedProbe.reason,
-          }
+              id: `${latestHealthCheck.runId}-${firstFailedProbe.probe}`,
+              title: `${firstFailedProbe.probe} health check failed`,
+              contributor:
+                firstFailedProbe.probe === "REST" ? "REST" : firstFailedProbe.probe === "FTP" ? "FTP" : "App",
+              timestampMs: Date.parse(latestHealthCheck.endTimestamp),
+              impactLevel: latestHealthCheck.overallHealth === "Unhealthy" ? 2 : 1,
+              causeHint: firstFailedProbe.reason,
+            }
           : null,
       };
     }
