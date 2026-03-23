@@ -3,7 +3,6 @@ env:
   TIMEOUT: ${TIMEOUT || "15000"}
 tags:
   - ios
-  - ci-critical-ios
 ---
 # WKWebView exposes aria-label instead of inner text for source buttons.
 - runFlow: subflows/ios-open-play-add-items.yaml

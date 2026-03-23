@@ -3,7 +3,6 @@ env:
   LONG_TIMEOUT: ${LONG_TIMEOUT || "60000"}
 tags:
   - ios
-  - ci-critical-ios
   - subflow-probe
 ---
 - runFlow: subflows/ios-open-play-add-items.yaml

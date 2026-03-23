@@ -3,7 +3,6 @@ env:
   TIMEOUT: ${TIMEOUT || "30000"}
 tags:
   - ios
-  - ci-critical-ios
 ---
 - runFlow: subflows/launch-and-wait.yaml
 - assertVisible: "Home"

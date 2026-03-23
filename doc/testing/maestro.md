@@ -1,6 +1,6 @@
 # Maestro Commands (LLM syntax)
 
-Source: https://docs.maestro.dev/api-reference/commands
+Source: <https://docs.maestro.dev/api-reference/commands>
 
 ## Format
 
@@ -15,11 +15,11 @@ Source: https://docs.maestro.dev/api-reference/commands
 
 ## Platform Comparison Matrix
 
-| Platform                           | CI runner                                                 | Flows executed in CI                                                                                                                                                                                        | High-level description                                                                                                                                                                                                                               |
-| ---------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Android                            | `scripts/run-maestro-gating.sh` with `CI=true`            | `.maestro/smoke-launch.yaml`, `.maestro/smoke-hvsc.yaml`                                                                                                                                                    | `smoke-launch` validates app launch and primary shell availability. `smoke-hvsc` validates core HVSC browsing/import path on device.                                                                                                                 |
-| iPhone (iOS simulator)             | `.github/workflows/ios.yaml` matrix (`ios-maestro-tests`) | `ios-smoke-launch`, `ios-playback-basics`, `ios-diagnostics-export`, `ios-ftp-browse`, `ios-local-import`, `ios-secure-storage-persist`, `ios-import-playback`, `ios-hvsc-browse`, `ios-config-persistence` | Covers launch stability, playback controls, diagnostics dialog export path, FTP browsing, local source option visibility, secure-storage persistence, import-to-playback path, HVSC controls visibility, and config persistence across app restarts. |
-| Web (Docker route via Android app) | `./build --test-maestro-docker`                           | `.maestro/smoke-launch.yaml`, `.maestro/smoke-hvsc.yaml` (CI-tag subset)                                                                                                                                    | Builds/starts Docker web server and runs Android Maestro CI flows with app target set to `real` and host default `10.0.2.2:<docker-port>`, exercising the web route through the native client path.                                                  |
+| Platform | CI runner | Flows executed in CI | High-level description |
+| --- | --- | --- | --- |
+| Android | `scripts/run-maestro-gating.sh` with `CI=true` | `.maestro/smoke-launch.yaml`, `.maestro/smoke-hvsc.yaml` | `smoke-launch` validates app launch and primary shell availability. `smoke-hvsc` validates core HVSC browsing/import path on device. |
+| iPhone (iOS simulator) | `.github/workflows/ios.yaml` single-lane `ios-maestro-tests` job | `ios-ci-smoke`, `ios-secure-storage-persist`, `ios-config-persistence` | Covers one end-to-end iOS smoke path plus the two persistence behaviors that are materially iOS-specific: secure storage across relaunch and settings persistence across restart. |
+| Web (Docker route via Android app) | `./build --test-maestro-docker` | `.maestro/smoke-launch.yaml`, `.maestro/smoke-hvsc.yaml` (CI-tag subset) | Builds/starts Docker web server and runs Android Maestro CI flows with app target set to `real` and host default `10.0.2.2:<docker-port>`, exercising the web route through the native client path. |
 
 ## Build helper Maestro modes
 
@@ -35,15 +35,11 @@ Source: https://docs.maestro.dev/api-reference/commands
 
 ### iPhone flow details (CI)
 
-- `ios-smoke-launch`: Confirms app launches and primary navigation shell is reachable.
-- `ios-playback-basics`: Validates basic transport/playback controls and state transitions.
-- `ios-diagnostics-export`: Opens diagnostics UI and checks export-capable dialog path.
-- `ios-ftp-browse`: Validates FTP source browsing behavior on iOS selectors.
-- `ios-local-import`: Verifies deterministic local import source option visibility.
-- `ios-secure-storage-persist`: Ensures secure-storage values persist across relaunch.
-- `ios-import-playback`: Confirms import-to-playback happy path in iOS flow.
-- `ios-hvsc-browse`: Validates HVSC section visibility and key actions.
-- `ios-config-persistence`: Verifies settings persistence after restart.
+- `ios-ci-smoke`: Launches the app, proves Settings and Play are reachable on iOS, and verifies the source chooser exposes the expected Local and C64U options.
+- `ios-secure-storage-persist`: Ensures secure-storage-backed source affordances persist across relaunch.
+- `ios-config-persistence`: Verifies the HVSC downloads setting remains enabled after restart on native iOS builds.
+
+Non-retained iOS flows remain available for manual diagnostics and local investigation, but they are not part of the default GitHub Actions gate.
 
 ### Tag tests for CI optimization
 
@@ -57,6 +53,8 @@ Use tags to control which tests run on CI versus locally:
 - **`file-picker`**: Tests using the native Android file picker. Subset of `device` tests.
 
 The script `run-maestro-gating.sh` automatically uses `ci-critical` filter when `CI=true`.
+
+For iOS, the reduced CI lane keeps `ci-critical-ios` scoped to the retained suite only. Additional iOS flows should stay off that tag unless they cover behavior that is both iOS-specific and gating-critical.
 
 ### Build helper flags
 

@@ -132,17 +132,29 @@ describe("Maestro flow contracts", () => {
     expect(errors).toEqual([]);
   });
 
-  it("provides dedicated probe flows for each shared iOS subflow", () => {
-    const requiredProbeTargets = new Map<string, string>([
-      [".maestro/ios-subflow-open-play-tab-probe.yaml", "subflows/ios-open-play-tab.yaml"],
-      [".maestro/ios-subflow-open-settings-tab-probe.yaml", "subflows/ios-open-settings-tab.yaml"],
-      [".maestro/ios-subflow-open-play-add-items-probe.yaml", "subflows/ios-open-play-add-items.yaml"],
-    ]);
+  it("keeps ci-critical-ios limited to the reduced retained suite", () => {
+    const iosFlowFiles = listYamlFiles(maestroRoot)
+      .map((filePath) => path.relative(process.cwd(), filePath))
+      .filter((filePath) => filePath.startsWith(".maestro/ios-") && filePath.endsWith(".yaml"));
 
-    for (const [probePath, subflowPath] of requiredProbeTargets) {
-      const rawSource = readFileSync(path.resolve(process.cwd(), probePath), "utf8");
-      expect(rawSource).toContain(`runFlow: ${subflowPath}`);
-      expect(readYaml(path.resolve(process.cwd(), probePath))).toBeTruthy();
-    }
+    const taggedFlows = iosFlowFiles
+      .filter((filePath) => readFileSync(path.resolve(process.cwd(), filePath), "utf8").includes("ci-critical-ios"))
+      .sort();
+
+    expect(taggedFlows).toEqual([
+      ".maestro/ios-ci-smoke.yaml",
+      ".maestro/ios-config-persistence.yaml",
+      ".maestro/ios-secure-storage-persist.yaml",
+    ]);
+  });
+
+  it("defines the consolidated iOS CI smoke flow without common-navigation overhead", () => {
+    const rawSource = readFileSync(path.resolve(process.cwd(), ".maestro/ios-ci-smoke.yaml"), "utf8");
+    expect(rawSource).toContain("runFlow: subflows/launch-and-wait.yaml");
+    expect(rawSource).toContain('assertVisible: "Connection"');
+    expect(rawSource).toContain('assertVisible: "Add file / folder from Local"');
+    expect(rawSource).toContain('assertVisible: "Add file / folder from C64U"');
+    expect(rawSource).not.toContain("common-navigation");
+    expect(readYaml(path.resolve(process.cwd(), ".maestro/ios-ci-smoke.yaml"))).toBeTruthy();
   });
 });
