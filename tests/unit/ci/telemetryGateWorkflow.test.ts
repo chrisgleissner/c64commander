@@ -44,7 +44,7 @@ describe("telemetry release gate workflow rules", () => {
 
   it("uploads iOS telemetry and diagnostics artifacts on failure", () => {
     const workflow = readWorkflow("ios.yaml");
-    expect(workflow).toContain("- name: Upload iOS failure diagnostics (${{ matrix.group.name }})");
+    expect(workflow).toContain("- name: Upload iOS failure diagnostics");
     expect(workflow).toContain("if: failure()");
     expect(workflow).toContain("artifacts/ios/_infra/telemetry/events.log");
     expect(workflow).toContain("artifacts/ios/_infra/simulator/**");
