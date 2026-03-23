@@ -8,26 +8,26 @@ tags:
 ---
 - runFlow: launch-and-wait.yaml
 - retry:
-  maxRetries: 3
-  commands:
-    - tapOn:
-      id: "tab-settings"
-      optional: true
-    - tapOn:
-      text: "Settings"
-      optional: true
-    - tapOn:
-      point: "75%,95%"
-      optional: true
-    - waitForAnimationToEnd
-    - extendedWaitUntil:
-      visible: "Connection"
-      timeout: ${LONG_TIMEOUT}
+    maxRetries: 3
+    commands:
+      - tapOn:
+          id: "tab-settings"
+          optional: true
+      - tapOn:
+          text: "Settings"
+          optional: true
+      - tapOn:
+          point: "75%,95%"
+          optional: true
+      - waitForAnimationToEnd
+      - extendedWaitUntil:
+          visible: "Connection"
+          timeout: ${LONG_TIMEOUT}
 - extendedWaitUntil:
-  visible: "Settings"
-  timeout: ${LONG_TIMEOUT}
+    visible: "Settings"
+    timeout: ${LONG_TIMEOUT}
 - extendedWaitUntil:
-  visible: "Connection"
-  timeout: ${LONG_TIMEOUT}
+    visible: "Connection"
+    timeout: ${LONG_TIMEOUT}
 - assertVisible: "Settings"
 - assertVisible: "Connection"
