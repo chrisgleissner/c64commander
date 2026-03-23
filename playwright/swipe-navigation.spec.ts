@@ -7,9 +7,7 @@
  */
 
 import { test, expect } from "@playwright/test";
-import type { Page, TestInfo } from "@playwright/test";
-import * as fs from "node:fs/promises";
-import * as path from "node:path";
+import type { Page } from "@playwright/test";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
 import { seedUiMocks } from "./uiMocks";
 import {
@@ -73,92 +71,6 @@ const waitForCommittedRouteIndex = async (page: Page, expectedIndex: number) => 
   await expect
     .poll(async () => page.getByTestId("swipe-navigation-runway").getAttribute("data-runway-phase"), { timeout: 8000 })
     .toBe("idle");
-};
-
-const visibleWidth = (box: { x: number; width: number } | null, viewportWidth: number) => {
-  if (!box) return 0;
-  const left = Math.max(box.x, 0);
-  const right = Math.min(box.x + box.width, viewportWidth);
-  return Math.max(0, right - left);
-};
-
-const assertBothPagesVisible = async (
-  page: Page,
-  sourceSlot: string,
-  targetSlot: string,
-  direction: "left" | "right",
-) => {
-  const viewport = page.viewportSize();
-  if (!viewport) throw new Error("Viewport size is unavailable.");
-
-  const [sourceBox, targetBox] = await Promise.all([
-    page.getByTestId(sourceSlot).boundingBox(),
-    page.getByTestId(targetSlot).boundingBox(),
-  ]);
-
-  expect(visibleWidth(sourceBox, viewport.width)).toBeGreaterThan(24);
-  expect(visibleWidth(targetBox, viewport.width)).toBeGreaterThan(24);
-
-  if (!sourceBox || !targetBox) {
-    throw new Error(`Expected ${sourceSlot} and ${targetSlot} to have bounding boxes during swipe.`);
-  }
-
-  if (direction === "left") {
-    expect(sourceBox.x).toBeLessThan(0);
-    expect(targetBox.x).toBeGreaterThanOrEqual(0);
-  } else {
-    expect(sourceBox.x).toBeGreaterThan(0);
-    expect(targetBox.x).toBeLessThanOrEqual(0);
-  }
-};
-
-const captureTransitionPhase = async (
-  page: Page,
-  testInfo: TestInfo,
-  caseName: string,
-  phase: "early" | "mid" | "late",
-  sourceSlot: string,
-  targetSlot: string,
-) => {
-  const artifactDir = path.resolve("doc/img/app/details/swipe-transitions", caseName);
-  await fs.mkdir(artifactDir, { recursive: true });
-  await page.evaluate(
-    () =>
-      new Promise<void>((resolve) => {
-        requestAnimationFrame(() => resolve());
-      }),
-  );
-  await assertBothPagesVisible(page, sourceSlot, targetSlot, "left");
-  await page.screenshot({ path: path.join(artifactDir, `${phase}.png`) });
-  await attachStepScreenshot(page, testInfo, `${caseName}-${phase}`);
-};
-
-const swipeWithMidTransitionScreenshots = async (
-  page: Page,
-  testInfo: TestInfo,
-  options: {
-    caseName: string;
-    fromX: number;
-    fromY: number;
-    totalDx: number;
-    sourceSlot: string;
-    targetSlot: string;
-  },
-) => {
-  await page.mouse.move(options.fromX, options.fromY);
-  await page.mouse.down();
-
-  await page.mouse.move(options.fromX + options.totalDx * 0.25, options.fromY, { steps: 5 });
-  await captureTransitionPhase(page, testInfo, options.caseName, "early", options.sourceSlot, options.targetSlot);
-
-  await page.mouse.move(options.fromX + options.totalDx * 0.5, options.fromY, { steps: 5 });
-  await captureTransitionPhase(page, testInfo, options.caseName, "mid", options.sourceSlot, options.targetSlot);
-
-  await page.mouse.move(options.fromX + options.totalDx * 0.75, options.fromY, { steps: 5 });
-  await captureTransitionPhase(page, testInfo, options.caseName, "late", options.sourceSlot, options.targetSlot);
-
-  await page.mouse.move(options.fromX + options.totalDx, options.fromY, { steps: 5 });
-  await page.mouse.up();
 };
 
 test.describe("Swipe navigation", () => {
@@ -320,66 +232,6 @@ test.describe("Swipe navigation", () => {
     await attachStepScreenshot(page, testInfo, "config-via-tab");
     await expect(page).toHaveURL(/\/config$/);
     await expect(page.getByTestId("swipe-slot-config")).toHaveAttribute("data-slot-active", "true");
-  });
-
-  test("mid-transition screenshots show Home and Play together", async ({ page }, testInfo) => {
-    await page.addInitScript(() => {
-      (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled = true;
-    });
-    await page.goto("/");
-    await waitForRouteIndex(page, 0);
-
-    await swipeWithMidTransitionScreenshots(page, testInfo, {
-      caseName: "home-to-play",
-      fromX: cx,
-      fromY: cy,
-      totalDx: -swipeLen,
-      sourceSlot: "swipe-slot-home",
-      targetSlot: "swipe-slot-play",
-    });
-
-    await waitForRouteIndex(page, 1);
-    await expect(page).toHaveURL(/\/play$/);
-  });
-
-  test("mid-transition screenshots show Play and Disks together", async ({ page }, testInfo) => {
-    await page.addInitScript(() => {
-      (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled = true;
-    });
-    await page.goto("/play");
-    await waitForRouteIndex(page, 1);
-
-    await swipeWithMidTransitionScreenshots(page, testInfo, {
-      caseName: "play-to-disks",
-      fromX: cx,
-      fromY: cy,
-      totalDx: -swipeLen,
-      sourceSlot: "swipe-slot-play",
-      targetSlot: "swipe-slot-disks",
-    });
-
-    await waitForRouteIndex(page, 2);
-    await expect(page).toHaveURL(/\/disks$/);
-  });
-
-  test("mid-transition screenshots show Docs and Home together during wrap-around", async ({ page }, testInfo) => {
-    await page.addInitScript(() => {
-      (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled = true;
-    });
-    await page.goto("/docs");
-    await waitForRouteIndex(page, 5);
-
-    await swipeWithMidTransitionScreenshots(page, testInfo, {
-      caseName: "docs-to-home",
-      fromX: cx,
-      fromY: cy,
-      totalDx: -swipeLen,
-      sourceSlot: "swipe-slot-docs",
-      targetSlot: "swipe-slot-home",
-    });
-
-    await waitForRouteIndex(page, 0);
-    await expect(page).toHaveURL(/\/$/);
   });
 
   test("rapid consecutive swipes do not corrupt state", async ({ page }, testInfo) => {

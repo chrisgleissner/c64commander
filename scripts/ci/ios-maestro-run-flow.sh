@@ -33,6 +33,7 @@ MAESTRO_DRIVER_STARTUP_TIMEOUT_MS="${MAESTRO_DRIVER_STARTUP_TIMEOUT:-300000}"
 IOS_MAESTRO_RECORD_VIDEO="${IOS_MAESTRO_RECORD_VIDEO:-0}"
 MAESTRO_MAX_ATTEMPTS="${MAESTRO_MAX_ATTEMPTS:-3}"
 MAESTRO_DRIVER_RETRY_BOOT_TIMEOUT_SECONDS="${MAESTRO_DRIVER_RETRY_BOOT_TIMEOUT_SECONDS:-240}"
+IOS_MAESTRO_HEARTBEAT_SECONDS="${IOS_MAESTRO_HEARTBEAT_SECONDS:-15}"
 DEBUG_PAYLOAD_MAX_ATTEMPTS="${IOS_DEBUG_PAYLOAD_MAX_ATTEMPTS:-3}"
 DEBUG_PAYLOAD_CONNECT_TIMEOUT_SECONDS="${IOS_DEBUG_PAYLOAD_CONNECT_TIMEOUT_SECONDS:-1}"
 DEBUG_PAYLOAD_CURL_MAX_TIME_SECONDS="${IOS_DEBUG_PAYLOAD_CURL_MAX_TIME_SECONDS:-3}"
@@ -149,6 +150,11 @@ seconds_since() {
   local end_ms
   end_ms=$(ms_timestamp)
   echo $(( (end_ms - start_ms) / 1000 ))
+}
+
+log_elapsed() {
+  local start_ms="$1"
+  echo "$(seconds_since "$start_ms")s"
 }
 
 trace_event() {
@@ -272,12 +278,127 @@ start_unified_log_capture() {
 stop_unified_log_capture() {
   local flow_dir="$1"
   if [[ -n "$UNIFIED_LOG_PID" ]]; then
+    local started_ms
+    started_ms=$(ms_timestamp)
     local stopped_pid="$UNIFIED_LOG_PID"
+    log "Stopping unified iOS log capture for ${flow_dir} (pid=${stopped_pid})"
     kill -INT "$UNIFIED_LOG_PID" 2>/dev/null || true
     wait "$UNIFIED_LOG_PID" 2>/dev/null || true
     UNIFIED_LOG_PID=""
     trace_event "$flow_dir" "ios.unified_log.stop" "runner" "{\"pid\":${stopped_pid}}"
+    log "Unified iOS log capture stopped for ${flow_dir} (pid=${stopped_pid}, elapsed=$(log_elapsed "$started_ms"))"
   fi
+}
+
+write_fallback_debug_payload() {
+  local endpoint="$1"
+  local outfile="$2"
+  local flow_dir="$3"
+
+  log "Writing fallback debug payload for debug/${endpoint} -> ${outfile}"
+
+  python3 - "$endpoint" "$outfile" "$flow_dir" <<'PY'
+import json
+import os
+import sys
+
+endpoint, outfile, flow_dir = sys.argv[1:4]
+
+
+def load_json(path):
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, encoding="utf-8") as handle:
+            return json.load(handle)
+    except Exception:
+        return None
+
+
+def load_jsonl_lines(path, limit=20):
+    rows = []
+    if not os.path.exists(path):
+        return rows
+    with open(path, encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rows.append(json.loads(line))
+            except Exception:
+                continue
+    return rows[-limit:]
+
+
+def load_text_tail(path, limit=20):
+    if not os.path.exists(path):
+        return []
+    with open(path, encoding="utf-8", errors="replace") as handle:
+        lines = [line.rstrip("\n") for line in handle]
+    return lines[-limit:]
+
+
+meta = load_json(os.path.join(flow_dir, "meta.json")) or {}
+timing_trace = load_json(os.path.join(flow_dir, "timing-trace.json")) or {"events": []}
+raw_log = load_jsonl_lines(os.path.join(flow_dir, "maestro-raw.jsonl"))
+unified_log = load_text_tail(os.path.join(flow_dir, "ios-unified.log"))
+
+fallback_meta = {
+    "fallback": True,
+    "endpoint": endpoint,
+    "reason": "debug-endpoint-unavailable",
+    "meta": meta,
+}
+
+if endpoint == "actions":
+    payload = {
+        "actions": [
+            {
+                "type": "runner-fallback",
+                "outcome": "unavailable",
+                "endpoint": endpoint,
+                "detail": "Maestro debug endpoint was unavailable; use raw runner evidence attached to this flow.",
+                "rawLogExcerpt": [entry.get("line", "") for entry in raw_log[-10:]],
+            }
+        ],
+        "fallback": fallback_meta,
+    }
+elif endpoint == "network":
+    payload = {
+        "requests": [
+            {
+                "url": "http://127.0.0.1:39877/debug/network",
+                "method": "GET",
+                "outcome": "unavailable",
+                "reason": "debug-endpoint-unavailable",
+            }
+        ],
+        "successCount": 0,
+        "failureCount": 0,
+        "fallback": fallback_meta,
+    }
+elif endpoint == "event":
+    payload = {
+        "events": timing_trace.get("events", [])[-20:],
+        "fallback": fallback_meta,
+    }
+else:
+    payload = [
+        {
+            "type": "runner-fallback",
+            "endpoint": endpoint,
+            "reason": "debug-endpoint-unavailable",
+            "timingEventExcerpt": timing_trace.get("events", [])[-10:],
+            "rawLogExcerpt": [entry.get("line", "") for entry in raw_log[-10:]],
+            "unifiedLogExcerpt": unified_log[-10:],
+        }
+    ]
+
+with open(outfile, "w", encoding="utf-8") as handle:
+    json.dump(payload, handle, indent=2, sort_keys=True)
+    handle.write("\n")
+PY
 }
 
 capture_accessibility_snapshot() {
@@ -285,7 +406,11 @@ capture_accessibility_snapshot() {
   local snapshot_name="$2"
   local out_dir="${flow_dir}/accessibility"
   local out_file="${out_dir}/${snapshot_name}.txt"
+  local started_ms
+  started_ms=$(ms_timestamp)
   mkdir -p "$out_dir"
+
+  log "Capturing accessibility snapshot ${snapshot_name} -> ${out_file}"
 
   if "$MAESTRO_BIN" hierarchy --device "$UDID" > "$out_file" 2>&1; then
     trace_event "$flow_dir" "app.accessibility.snapshot" "maestro" "{\"name\":\"${snapshot_name}\",\"status\":\"ok\"}"
@@ -293,8 +418,10 @@ capture_accessibility_snapshot() {
       touch "${flow_dir}/.a11y-first"
       trace_event "$flow_dir" "app.accessibility.first_available" "maestro" "{\"name\":\"${snapshot_name}\"}"
     fi
+    log "Accessibility snapshot ${snapshot_name} captured successfully (elapsed=$(log_elapsed "$started_ms"))"
   else
     trace_event "$flow_dir" "app.accessibility.snapshot" "maestro" "{\"name\":\"${snapshot_name}\",\"status\":\"error\"}"
+    log "Accessibility snapshot ${snapshot_name} failed (elapsed=$(log_elapsed "$started_ms"))"
   fi
 }
 
@@ -306,15 +433,27 @@ run_maestro_and_capture() {
   local raw_log_file="${flow_dir}/maestro-raw-attempt-${attempt}.jsonl"
   local raw_log_latest_file="${flow_dir}/maestro-raw.jsonl"
   local flow_yaml=".maestro/${flow}.yaml"
+  local heartbeat_seconds="$IOS_MAESTRO_HEARTBEAT_SECONDS"
 
-  python3 - "$MAESTRO_BIN" "$flow_yaml" "$UDID" "$junit_file" "$raw_log_file" <<'PY'
+  log "Launching Maestro attempt ${attempt}/${MAESTRO_MAX_ATTEMPTS} for ${flow} (yaml=${flow_yaml}, junit=${junit_file}, rawLog=${raw_log_file}, heartbeat=${heartbeat_seconds}s)"
+
+  python3 - "$MAESTRO_BIN" "$flow_yaml" "$UDID" "$junit_file" "$raw_log_file" "$attempt" "$heartbeat_seconds" <<'PY'
 import json
+import os
 import subprocess
 import sys
+import threading
 import time
 import xml.etree.ElementTree as ET
 
-maestro_bin, flow_yaml, udid, junit_file, raw_log_file = sys.argv[1:6]
+maestro_bin, flow_yaml, udid, junit_file, raw_log_file, attempt_raw, heartbeat_raw = sys.argv[1:8]
+flow_name = os.path.splitext(os.path.basename(flow_yaml))[0]
+attempt = int(attempt_raw)
+try:
+    heartbeat_seconds = max(1, int(heartbeat_raw))
+except Exception:
+    heartbeat_seconds = 15
+
 cmd = [
     maestro_bin,
     "test",
@@ -327,14 +466,72 @@ cmd = [
     junit_file,
 ]
 
+def emit(message: str) -> None:
+    ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    print(f"[{ts}] {message}", flush=True)
+
 process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+start_time = time.time()
+emit(
+    "Maestro subprocess started: "
+    f"flow={flow_name} attempt={attempt} udid={udid} junit={junit_file} rawLog={raw_log_file}"
+)
+emit(f"Maestro command: {' '.join(cmd)}")
+
 with open(raw_log_file, "w", encoding="utf-8") as handle:
+    stop_heartbeat = threading.Event()
+
+    def heartbeat() -> None:
+        while not stop_heartbeat.wait(heartbeat_seconds):
+            elapsed = int(time.time() - start_time)
+            emit(
+                f"Maestro still running: flow={flow_name} attempt={attempt} elapsed={elapsed}s rawLog={raw_log_file}"
+            )
+
+    heartbeat_thread = threading.Thread(target=heartbeat, daemon=True)
+    heartbeat_thread.start()
     for line in iter(process.stdout.readline, ""):
         now_ms = int(time.time() * 1000)
         entry = {"tsMs": now_ms, "line": line.rstrip("\n")}
         handle.write(json.dumps(entry, sort_keys=True) + "\n")
+        handle.flush()
         print(line, end="")
-exit_code = process.wait()
+    exit_code = process.wait()
+    stop_heartbeat.set()
+    heartbeat_thread.join(timeout=1)
+
+elapsed_seconds = int(time.time() - start_time)
+emit(f"Maestro subprocess finished: flow={flow_name} attempt={attempt} exit={exit_code} elapsed={elapsed_seconds}s")
+
+def raw_log_excerpt(path: str, limit: int = 40) -> str:
+  lines = []
+  try:
+    with open(path, encoding="utf-8") as handle:
+      for line in handle:
+        line = line.rstrip("\n")
+        if line:
+          lines.append(line)
+  except FileNotFoundError:
+    return ""
+  return "\n".join(lines[-limit:])
+
+def write_fallback_junit_report(path: str, reason: str, process_exit_code: int) -> None:
+  suite = ET.Element(
+      "testsuite",
+      name=flow_name,
+      tests="1",
+      failures="1",
+      errors="0",
+      skipped="0",
+      time="0",
+  )
+  case = ET.SubElement(suite, "testcase", classname="maestro", name=flow_name, time="0")
+  failure = ET.SubElement(case, "failure", message=reason, type="MaestroFailure")
+  excerpt = raw_log_excerpt(raw_log_file)
+  failure.text = f"processExit={process_exit_code}"
+  if excerpt:
+    failure.text = f"{failure.text}\n{excerpt}"
+  ET.ElementTree(suite).write(path, xml_declaration=True, encoding="unicode")
 
 def summarize_junit(path: str) -> tuple[int, int, int]:
   tree = ET.parse(path)
@@ -359,11 +556,16 @@ def summarize_junit(path: str) -> tuple[int, int, int]:
   raise ValueError(f"Unexpected JUnit root element: {root.tag}")
 
 junit_status = 0
+needs_fallback_junit = False
 try:
   tests, failures, errors = summarize_junit(junit_file)
+  emit(
+      f"Maestro JUnit summary: flow={flow_name} attempt={attempt} tests={tests} failures={failures} errors={errors} file={junit_file}"
+  )
   if tests == 0:
     print(f"Maestro JUnit report contains zero tests: {junit_file}")
     junit_status = 1
+    needs_fallback_junit = True
   elif failures > 0 or errors > 0:
     if exit_code == 0:
       print(
@@ -379,9 +581,19 @@ try:
 except FileNotFoundError:
   print(f"Maestro JUnit report missing: {junit_file}")
   junit_status = 1
+  needs_fallback_junit = True
 except Exception as exc:
   print(f"Failed to parse Maestro JUnit report {junit_file}: {exc}")
   junit_status = 1
+  needs_fallback_junit = True
+
+if needs_fallback_junit:
+  write_fallback_junit_report(
+      junit_file,
+      "Maestro failed before producing a valid JUnit report.",
+      exit_code,
+  )
+  emit(f"Wrote fallback JUnit report for flow={flow_name} attempt={attempt} -> {junit_file}")
 
 if exit_code != 0:
   sys.exit(exit_code)
@@ -389,6 +601,7 @@ sys.exit(junit_status)
 PY
 
   cp "$raw_log_file" "$raw_log_latest_file"
+  log "Completed Maestro attempt ${attempt}/${MAESTRO_MAX_ATTEMPTS} for ${flow} (copied latest raw log to ${raw_log_latest_file})"
 }
 
 is_driver_startup_timeout_failure() {
@@ -432,7 +645,11 @@ preflight_maestro_driver_retry() {
     return 1
   fi
 
-  seed_smoke_config "$flow" || true
+  if ! seed_smoke_config "$flow"; then
+    trace_event "$flow_dir" "maestro.driver.preflight.seed_smoke_config" "runner" '{"status":"failed"}'
+    log "Smoke config seeding failed during retry preflight (${flow})"
+    return 1
+  fi
   xcrun simctl launch "$UDID" "$APP_ID" >/dev/null 2>&1 || true
   sleep 5
   xcrun simctl terminate "$UDID" "$APP_ID" >/dev/null 2>&1 || true
@@ -593,11 +810,12 @@ seed_smoke_config() {
   fi
 
   local payload='{"target":"mock","readOnly":false,"debugLogging":true}'
+  log "Smoke config payload for ${flow}: ${payload}"
   mkdir -p "$app_data_dir/Documents" "$app_data_dir/Library/NoCloud" "$app_data_dir/Library/Application Support"
   printf '%s' "$payload" > "$app_data_dir/Documents/c64u-smoke.json"
   printf '%s' "$payload" > "$app_data_dir/Library/NoCloud/c64u-smoke.json"
   printf '%s' "$payload" > "$app_data_dir/Library/Application Support/c64u-smoke.json"
-  log "Smoke config seeded in ${app_data_dir}"
+  log "Smoke config seeded in ${app_data_dir} (Documents, Library/NoCloud, Library/Application Support)"
 }
 
 # ── Connectivity Probe ─────────────────────────────────────────
@@ -611,6 +829,7 @@ connectivity_probe() {
   local attempt=0
   local max_attempts=10
   while [[ $attempt -lt $max_attempts ]]; do
+    log "Connectivity probe attempt $((attempt + 1))/${max_attempts} for 127.0.0.1:${MOCK_PORT}/v1/info"
     if xcrun simctl spawn "$UDID" /usr/bin/curl --silent --fail "http://127.0.0.1:${MOCK_PORT}/v1/info" > /dev/null 2>&1; then
       log "Mock server reachable from simulator"
       return 0
@@ -638,7 +857,9 @@ collect_debug_payloads() {
     local endpoint="${endpoints[$i]}"
     local filename="${filenames[$i]}"
     local attempt=0
+    log "Collecting debug/${endpoint} for ${flow} -> ${flow_dir}/${filename}"
     while [[ $attempt -lt "$DEBUG_PAYLOAD_MAX_ATTEMPTS" ]]; do
+      log "debug/${endpoint} fetch attempt $((attempt + 1))/${DEBUG_PAYLOAD_MAX_ATTEMPTS}"
       if xcrun simctl spawn "$UDID" /usr/bin/curl --silent --show-error --fail \
         --connect-timeout "$DEBUG_PAYLOAD_CONNECT_TIMEOUT_SECONDS" \
         --max-time "$DEBUG_PAYLOAD_CURL_MAX_TIME_SECONDS" \
@@ -649,14 +870,16 @@ collect_debug_payloads() {
       sleep 1
     done
     if [[ $attempt -ge "$DEBUG_PAYLOAD_MAX_ATTEMPTS" ]]; then
-      echo "[]" > "${flow_dir}/${filename}"
-      log "Failed to collect debug/${endpoint} — wrote empty array"
+      write_fallback_debug_payload "$endpoint" "${flow_dir}/${filename}" "$flow_dir"
+      log "Failed to collect debug/${endpoint} — wrote fallback payload"
     fi
   done
 
   # Collect network.json if available
   local net_attempt=0
+  log "Collecting debug/network for ${flow} -> ${flow_dir}/network.json"
   while [[ $net_attempt -lt "$DEBUG_PAYLOAD_MAX_ATTEMPTS" ]]; do
+    log "debug/network fetch attempt $((net_attempt + 1))/${DEBUG_PAYLOAD_MAX_ATTEMPTS}"
     if xcrun simctl spawn "$UDID" /usr/bin/curl --silent --show-error --fail \
       --connect-timeout "$DEBUG_PAYLOAD_CONNECT_TIMEOUT_SECONDS" \
       --max-time "$DEBUG_PAYLOAD_CURL_MAX_TIME_SECONDS" \
@@ -667,12 +890,12 @@ collect_debug_payloads() {
     sleep 1
   done
   if [[ $net_attempt -ge "$DEBUG_PAYLOAD_MAX_ATTEMPTS" ]]; then
-    echo '{"requests":[],"successCount":0,"failureCount":0}' > "${flow_dir}/network.json"
-    log "No network.json endpoint — wrote empty stub"
+    write_fallback_debug_payload "network" "${flow_dir}/network.json" "$flow_dir"
+    log "No network.json endpoint — wrote fallback payload"
   fi
 
-  # Produce event.json stub (Maestro events are in junit)
-  echo '[]' > "${flow_dir}/event.json"
+  log "Writing event fallback payload for ${flow} -> ${flow_dir}/event.json"
+  write_fallback_debug_payload "event" "${flow_dir}/event.json" "$flow_dir"
 }
 
 # ── Video Recording ────────────────────────────────────────────
@@ -703,9 +926,11 @@ prepare_app_for_flow() {
   local flow="$1"
   local flow_dir="$2"
 
+  log "Resetting app state before flow ${flow}"
   trace_event "$flow_dir" "app.reset.before_flow" "runner" "{\"flow\":\"${flow}\"}"
   xcrun simctl terminate "$UDID" "$APP_ID" >/dev/null 2>&1 || true
   sleep 2
+  log "App state reset completed for ${flow}"
 }
 
 # ── Infra Diagnostics (on failure) ─────────────────────────────
@@ -750,6 +975,7 @@ run_single_flow() {
   mkdir -p "${flow_dir}/screenshots" "${flow_dir}/video"
 
   log "Starting flow: ${flow}"
+  log "Flow ${flow} artifacts directory: ${flow_dir}"
   flow_start=$(ms_timestamp)
 
   trace_event "$flow_dir" "maestro.flow.start" "runner" "{\"flow\":\"${flow}\",\"group\":\"${GROUP}\"}"
@@ -798,6 +1024,7 @@ TJSON
   prepare_app_for_flow "$flow" "$flow_dir"
 
   capture_accessibility_snapshot "$flow_dir" "pre-flow"
+  log "Starting unified log capture for ${flow}"
   start_unified_log_capture "$flow_dir"
 
   # Start video
@@ -810,6 +1037,7 @@ TJSON
   local attempt=1
   local max_attempts="$MAESTRO_MAX_ATTEMPTS"
   while [[ $attempt -le $max_attempts ]]; do
+    log "Flow ${flow}: starting Maestro attempt ${attempt}/${max_attempts}"
     trace_event "$flow_dir" "maestro.command.first_sent" "runner" "{\"command\":\"maestro test\",\"attempt\":${attempt}}"
     MAESTRO_CLI_NO_ANALYTICS=1 \
     MAESTRO_LOG_LEVEL="$MAESTRO_LOG_LEVEL" \
@@ -836,10 +1064,13 @@ TJSON
     break
   done
 
+  log "Flow ${flow}: Maestro loop finished with exit=${flow_exit} after ${attempt} attempt(s)"
+
   set_flow_lifecycle_state complete
 
   # Stop video
   stop_video
+  log "Stopping unified log capture for ${flow}"
   stop_unified_log_capture "$flow_dir"
 
   extract_maestro_markers "$flow_dir"
@@ -849,13 +1080,12 @@ TJSON
 
   # Capture screenshot
   if [[ $flow_exit -eq 0 ]]; then
+    log "Capturing success screenshot for ${flow}"
     xcrun simctl io "$UDID" screenshot "${flow_dir}/screenshots/${flow}-final.png" || true
   else
+    log "Capturing failure screenshot for ${flow}"
     xcrun simctl io "$UDID" screenshot "${flow_dir}/screenshots/${flow}-failure.png" || true
   fi
-
-  # Collect debug payloads
-  collect_debug_payloads "$flow" "$flow_dir"
 
   # On failure, capture infra diagnostics
   if [[ $flow_exit -ne 0 ]]; then
@@ -879,6 +1109,11 @@ TJSON
 TJSON
 
   emit_timing_trace "$flow" "$flow_dir"
+
+  # Collect debug payloads after timing trace exists so fallback payloads can
+  # embed real runner evidence instead of empty placeholders.
+  log "Collecting debug payloads for ${flow}"
+  collect_debug_payloads "$flow" "$flow_dir"
 
   log "Flow ${flow} completed in ${flow_duration_ms}ms (exit=${flow_exit})"
   return $flow_exit
@@ -959,6 +1194,7 @@ if [[ ${#FLOW_ARRAY[@]} -eq 1 && -n "$FLOW" ]]; then
   INSTALL_START_MS=$(ms_timestamp)
   xcrun simctl install "$UDID" "$APP_PATH"
   INSTALL_END_MS=$(ms_timestamp)
+  log "Installed app in simulator ${UDID} (elapsed=$(log_elapsed "$INSTALL_START_MS"))"
 
   # Run the flow
   run_single_flow "$FLOW"
@@ -967,6 +1203,7 @@ fi
 
 # Multi-flow mode
 log "Multi-flow mode: group=${GROUP}, flows=${FLOWS}"
+log "Runner configuration: udid=${UDID} appPath=${APP_PATH} attempts=${MAESTRO_MAX_ATTEMPTS} heartbeat=${IOS_MAESTRO_HEARTBEAT_SECONDS}s driverTimeoutMs=${MAESTRO_DRIVER_STARTUP_TIMEOUT_MS}"
 
 set_flow_lifecycle_state reset
 
@@ -982,14 +1219,16 @@ INSTALL_START_MS=$(ms_timestamp)
 xcrun simctl install "$UDID" "$APP_PATH"
 INSTALL_END_MS=$(ms_timestamp)
 INSTALL_SECONDS=$(( (INSTALL_END_MS - INSTALL_START_MS) / 1000 ))
+log "Installed app in simulator ${UDID} for group ${GROUP} (elapsed=${INSTALL_SECONDS}s)"
 
 # Boot time is from job start to install complete (approximation)
 BOOT_SECONDS=$(( (INSTALL_START_MS - JOB_START_MS) / 1000 ))
 
 # Run each flow
 FLOW_EXITS=()
-for flow in "${FLOW_ARRAY[@]}"; do
-  log "Running flow ${flow} in group ${GROUP}"
+for flow_index in "${!FLOW_ARRAY[@]}"; do
+  flow="${FLOW_ARRAY[$flow_index]}"
+  log "Running flow ${flow} in group ${GROUP} ($((flow_index + 1))/${#FLOW_ARRAY[@]})"
   flow_exit=0
   if run_single_flow "$flow"; then
     flow_exit=0

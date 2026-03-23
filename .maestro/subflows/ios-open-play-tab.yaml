@@ -13,6 +13,9 @@ tags:
             visible: "Continue in Demo Mode"
           file: continue-demo.yaml
       - tapOn:
+          id: "tab-play"
+          optional: true
+      - tapOn:
           text: "Continue in Demo Mode"
           optional: true
       - waitForAnimationToEnd
@@ -21,11 +24,13 @@ tags:
             text: "Play"
           timeout: ${TIMEOUT}
 - tapOn:
+    id: "tab-play"
+    optional: true
+- tapOn:
     text: "Play"
-- scrollUntilVisible:
-  element:
-    text: "Playlist"
-  direction: UP
-  speed: 80
-  timeout: ${TIMEOUT}
+    optional: true
+- extendedWaitUntil:
+    visible:
+      text: "Playlist"
+    timeout: ${TIMEOUT}
 - assertVisible: "Playlist"
