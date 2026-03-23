@@ -7,7 +7,7 @@
  */
 
 import { test, expect } from "@playwright/test";
-import type { Page, TestInfo } from "@playwright/test";
+import type { Locator, Page, TestInfo } from "@playwright/test";
 import { saveCoverageFromPage } from "./withCoverage";
 import { execFile as execFileCb } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -41,6 +41,8 @@ import {
   installListPreviewLimit,
   installStableStorage,
   seedDiagnosticsAnalytics,
+  seedDiagnosticsLogs,
+  seedDiagnosticsTracesForAction,
   seedDiagnosticsTraces,
 } from "./visualSeeds";
 
@@ -55,6 +57,41 @@ const profileScreenshotPath = (pageId: string, profileId: DisplayProfileViewport
   `${pageId}/profiles/${profileId}/${fileName}`;
 const diagnosticsProfileScreenshotPath = (profileId: DisplayProfileViewportId, fileName: string) =>
   `profiles/${profileId}/${fileName}`;
+
+const seedLiveDiagnosticsHealthProgress = async (page: Page) => {
+  await page.waitForFunction(() => typeof window.__c64uDiagnosticsTestBridge?.seedOverlayState === "function");
+  await page.evaluate(() => {
+    window.__c64uDiagnosticsTestBridge?.seedOverlayState({
+      healthCheckRunning: true,
+      lastHealthCheckResult: null,
+      liveHealthCheckProbes: {
+        REST: {
+          probe: "REST",
+          outcome: "Success",
+          durationMs: 54,
+          reason: null,
+          startMs: Date.now() - 420,
+        },
+        FTP: {
+          probe: "FTP",
+          outcome: "Success",
+          durationMs: 128,
+          reason: null,
+          startMs: Date.now() - 280,
+        },
+      },
+    });
+  });
+};
+
+const clearLiveDiagnosticsHealthProgress = async (page: Page) => {
+  await page.evaluate(() => {
+    window.__c64uDiagnosticsTestBridge?.seedOverlayState({
+      healthCheckRunning: false,
+      liveHealthCheckProbes: null,
+    });
+  });
+};
 
 const ensureScreenshotDir = async (filePath: string) => {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
@@ -214,9 +251,18 @@ const matchesTrackedScreenshotAtAnotherPath = async (relativePath: string, scree
 };
 
 const waitForStableRender = async (page: Page) => {
+  await page.waitForFunction(() => document.readyState === "complete");
   await page.waitForLoadState("domcontentloaded");
   await page.waitForLoadState("networkidle");
   await page.waitForFunction(() => (document as any).fonts?.ready ?? true);
+  await page.waitForFunction(() => {
+    const animations = document.getAnimations();
+    return animations.every((animation) => {
+      if (animation.playState !== "running") return true;
+      const timing = animation.effect?.getComputedTiming();
+      return timing?.iterations === Infinity;
+    });
+  });
   await page.evaluate(() => new Promise(requestAnimationFrame));
   await page.evaluate(() => new Promise(requestAnimationFrame));
 };
@@ -300,6 +346,7 @@ const captureScreenshot = async (
   relativePath: string,
   options?: {
     fullPage?: boolean;
+    locator?: Locator;
     borderPx?: number;
     borderColor?: { r: number; g: number; b: number; alpha?: number };
     writeWhenTrackedDuplicate?: boolean;
@@ -309,11 +356,13 @@ const captureScreenshot = async (
   await ensureScreenshotDir(filePath);
   await waitForStableRender(page);
   await waitForOverlaysToClear(page);
-  let screenshotBuffer = await page.screenshot({
-    animations: "disabled",
-    caret: "hide",
-    fullPage: options?.fullPage ?? false,
-  });
+  let screenshotBuffer = options?.locator
+    ? await options.locator.screenshot({ animations: "disabled", caret: "hide" })
+    : await page.screenshot({
+        animations: "disabled",
+        caret: "hide",
+        fullPage: options?.fullPage ?? false,
+      });
   if ((options?.borderPx ?? 0) > 0) {
     const borderPx = options?.borderPx ?? 0;
     const color = options?.borderColor ?? { r: 255, g: 255, b: 255, alpha: 1 };
@@ -374,6 +423,7 @@ const captureDiagnosticsScreenshot = async (
   relativePath: string,
   options?: {
     fullPage?: boolean;
+    writeWhenTrackedDuplicate?: boolean;
   },
 ) => captureScreenshot(page, testInfo, `diagnostics/${relativePath}`, options);
 
@@ -437,30 +487,69 @@ const capturePageSections = async (page: Page, testInfo: TestInfo, pageId: strin
 };
 
 const captureDocsSections = async (page: Page, testInfo: TestInfo) => {
-  const sectionButtons = getActiveMain(page)
-    .locator("button")
-    .filter({ hasText: /^[A-Za-z]/ });
-  const count = await sectionButtons.count();
-  if (count === 0) return;
-  const slugs: string[] = [];
-  for (let index = 0; index < count; index += 1) {
-    const label = (await sectionButtons.nth(index).innerText()).split("\n")[0]?.trim() ?? "";
-    if (label) slugs.push(sanitizeSegment(label));
-  }
+  const sections = await page.evaluate(() =>
+    Array.from(document.querySelectorAll<HTMLButtonElement>('button[aria-controls^="docs-section-"]'))
+      .filter((button) => {
+        const rect = button.getBoundingClientRect();
+        const style = getComputedStyle(button);
+        return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+      })
+      .map((button) => ({
+        controlId: button.getAttribute("aria-controls") ?? "",
+        label: button.innerText.split("\n")[0]?.trim() ?? "",
+      }))
+      .filter((section) => section.controlId.length > 0 && section.label.length > 0),
+  );
+  if (sections.length === 0) return;
+  const slugs = sections.map((section) => sanitizeSegment(section.label));
   const orderMap = await registerScreenshotSections("docs", slugs);
-  for (let index = 0; index < count; index += 1) {
-    const button = sectionButtons.nth(index);
-    const label = (await button.innerText()).split("\n")[0]?.trim() ?? "";
-    if (!label) continue;
-    const slug = sanitizeSegment(label);
+  for (let index = 0; index < sections.length; index += 1) {
+    const section = sections[index];
+    const button = getActiveSlot(page).locator(`button[aria-controls="${section.controlId}"]`).first();
+    const sectionId = section.controlId.replace(/^docs-section-/, "");
+    const card = getActiveSlot(page).getByTestId(`docs-card-${sectionId}`).first();
+    const getVisibleButtonExpandedState = () =>
+      page.evaluate((visibleControlId) => {
+        const visibleButton = Array.from(
+          document.querySelectorAll<HTMLButtonElement>(`button[aria-controls="${visibleControlId}"]`),
+        ).find((candidate) => {
+          const rect = candidate.getBoundingClientRect();
+          const style = getComputedStyle(candidate);
+          return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+        });
+        return visibleButton?.getAttribute("aria-expanded") ?? null;
+      }, section.controlId);
+    const slug = sanitizeSegment(section.label);
     const order = orderMap.get(slug) ?? index + 1;
     await scrollHeadingIntoView(page, button);
-    await button.click({ force: true });
-    await page.waitForTimeout(150);
+    await page.evaluate((controlId) => {
+      const visibleButton = Array.from(
+        document.querySelectorAll<HTMLButtonElement>(`button[aria-controls="${controlId}"]`),
+      ).find((candidate) => {
+        const rect = candidate.getBoundingClientRect();
+        const style = getComputedStyle(candidate);
+        return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+      });
+      visibleButton?.click();
+    }, section.controlId);
+    await expect.poll(getVisibleButtonExpandedState).toBe("true");
+    await waitForStableRender(page);
     await scrollHeadingIntoView(page, button);
-    await captureScreenshot(page, testInfo, `docs/sections/${String(order).padStart(2, "0")}-${slug}.png`);
-    await button.click({ force: true });
-    await page.waitForTimeout(100);
+    await captureScreenshot(page, testInfo, `docs/sections/${String(order).padStart(2, "0")}-${slug}.png`, {
+      locator: card,
+    });
+    await page.evaluate((controlId) => {
+      const visibleButton = Array.from(
+        document.querySelectorAll<HTMLButtonElement>(`button[aria-controls="${controlId}"]`),
+      ).find((candidate) => {
+        const rect = candidate.getBoundingClientRect();
+        const style = getComputedStyle(candidate);
+        return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+      });
+      visibleButton?.click();
+    }, section.controlId);
+    await expect.poll(getVisibleButtonExpandedState).toBe("false");
+    await waitForStableRender(page);
   }
 };
 
@@ -482,11 +571,13 @@ const captureConfigSections = async (page: Page, testInfo: TestInfo) => {
     const order = orderMap.get(slug) ?? index + 1;
     await scrollHeadingIntoView(page, toggle);
     await toggle.click();
-    await page.waitForTimeout(150);
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await waitForStableRender(page);
     await scrollHeadingIntoView(page, toggle);
     await captureScreenshot(page, testInfo, `config/sections/${String(order).padStart(2, "0")}-${slug}.png`);
     await toggle.click();
-    await page.waitForTimeout(100);
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await waitForStableRender(page);
   }
 };
 
@@ -629,13 +720,11 @@ test.describe("App screenshots", () => {
     await page.goto("/");
     await waitForConnected(page);
     await expect(page.getByRole("button", { name: "Disks", exact: true })).toBeVisible();
-
-    await page.evaluate(() => window.scrollTo(0, 0));
-    await captureScreenshot(page, testInfo, "home/00-overview-light.png");
-    await captureHomeSections(page, testInfo);
-
-    await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
-    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.emulateMedia({
+      colorScheme: "dark",
+      reducedMotion: "reduce",
+    });
+    await waitForStableRender(page);
     await captureScreenshot(page, testInfo, "home/01-overview-dark.png");
     await page.emulateMedia({
       colorScheme: "light",
@@ -1055,6 +1144,7 @@ test.describe("App screenshots", () => {
       testInfo.setTimeout(240000);
       allowVisualOverflow(testInfo, "Audio mixer controls overflow on narrow screenshot viewport.");
       await page.goto("/config");
+      await waitForConnected(page);
       await expect(page.getByRole("heading", { name: "Config" })).toBeVisible();
       await expect.poll(async () => page.locator('[data-testid^="config-category-"]').count()).toBeGreaterThan(0);
 
@@ -1073,6 +1163,7 @@ test.describe("App screenshots", () => {
       for (const profileId of DISPLAY_PROFILE_VIEWPORT_SEQUENCE) {
         await page.goto("/config");
         await applyDisplayProfileViewport(page, profileId);
+        await waitForConnected(page);
         await expect(page.getByRole("heading", { name: "Config" })).toBeVisible();
         await captureScreenshot(page, testInfo, profileScreenshotPath("config", profileId, "01-overview.png"));
       }
@@ -1082,6 +1173,7 @@ test.describe("App screenshots", () => {
   test("capture play screenshots", { tag: "@screenshots" }, async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await installListPreviewLimit(page, 3);
     await page.goto("/play");
+    await waitForConnected(page);
     await expect(page.getByRole("heading", { name: "Play Files" })).toBeVisible();
     await expect(getActiveMain(page).getByTestId("playlist-list")).toContainText("intro.sid");
 
@@ -1109,6 +1201,7 @@ test.describe("App screenshots", () => {
         await applyDisplayProfileViewport(page, profileId);
         await page.getByTestId("tab-play").click();
         await expect(page).toHaveURL(/\/play$/);
+        await waitForConnected(page);
         await expect(page.getByRole("heading", { name: "Play Files" })).toBeVisible();
         await captureScreenshot(page, testInfo, profileScreenshotPath("play", profileId, "01-overview.png"));
 
@@ -1214,6 +1307,7 @@ test.describe("App screenshots", () => {
     { tag: "@screenshots" },
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
       await page.goto("/settings");
+      await waitForConnected(page);
       await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
 
       await page.evaluate(() => window.scrollTo(0, 0));
@@ -1229,6 +1323,7 @@ test.describe("App screenshots", () => {
       for (const profileId of DISPLAY_PROFILE_VIEWPORT_SEQUENCE) {
         await page.goto("/settings");
         await applyDisplayProfileViewport(page, profileId);
+        await waitForConnected(page);
         await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
         await captureScreenshot(page, testInfo, profileScreenshotPath("settings", profileId, "01-overview.png"));
       }
@@ -1247,6 +1342,7 @@ test.describe("App screenshots", () => {
         await page.waitForFunction(() =>
           Boolean((window as Window & { __c64uTracing?: { seedTraces?: unknown } }).__c64uTracing?.seedTraces),
         );
+        await seedDiagnosticsTraces(page);
         await seedDiagnosticsAnalytics(page);
 
         const dialog = page.getByRole("dialog", { name: "Diagnostics" });
@@ -1273,6 +1369,133 @@ test.describe("App screenshots", () => {
 
       const applyActivityFilter = applyEvidenceFilter;
       const activityTypesSection = () => page.getByTestId("filters-editor-surface").locator("section").first();
+      const activityTypeButton = (label: "Problems" | "Actions" | "Logs" | "Traces") =>
+        activityTypesSection().getByRole("button", { name: new RegExp(`^(?:✓\\s+)?${label}$`) });
+      const isActivityTypeSelected = async (label: "Problems" | "Actions" | "Logs" | "Traces") => {
+        const className = await activityTypeButton(label).evaluate((node) => node.className);
+        return className.includes("border-primary");
+      };
+      const setActivityTypes = async (labels: Array<"Problems" | "Actions" | "Logs" | "Traces">) => {
+        const orderedLabels: Array<"Problems" | "Actions" | "Logs" | "Traces"> = [
+          "Problems",
+          "Actions",
+          "Logs",
+          "Traces",
+        ];
+        for (const label of orderedLabels) {
+          const isChecked = await isActivityTypeSelected(label);
+          const shouldBeChecked = labels.includes(label);
+          if (!isChecked && shouldBeChecked) {
+            await activityTypeButton(label).click();
+          }
+        }
+        for (const label of orderedLabels) {
+          const isChecked = await isActivityTypeSelected(label);
+          const shouldBeChecked = labels.includes(label);
+          if (isChecked && !shouldBeChecked) {
+            await activityTypeButton(label).click();
+          }
+        }
+        await expect
+          .poll(async () => {
+            const selectedLabels = await Promise.all(
+              orderedLabels.map(async (label) => ((await isActivityTypeSelected(label)) ? label : null)),
+            );
+            return selectedLabels
+              .filter((label): label is "Problems" | "Actions" | "Logs" | "Traces" => label !== null)
+              .sort()
+              .join(",");
+          })
+          .toBe([...labels].sort().join(","));
+      };
+      const firstExpandableActivityRow = () => dialog.locator('[data-testid^="evidence-row-"][aria-expanded]').first();
+      const activityRowByLabel = (label: string) =>
+        dialog.locator('[data-testid^="evidence-row-"][aria-expanded]').filter({ hasText: label }).first();
+      const withExpandedDiagnosticsEvidence = async (
+        callback: () => Promise<void>,
+        options?: {
+          hideControls?: boolean;
+        },
+      ) => {
+        await page.evaluate((hideControls: boolean) => {
+          const sheet = document.querySelector<HTMLElement>('[data-testid="diagnostics-sheet"]');
+          const evidenceList = document.querySelector<HTMLElement>('[data-testid="evidence-list"]');
+          const controls = document.querySelector<HTMLElement>('[data-testid="diagnostics-controls"]');
+          if (sheet) {
+            sheet.dataset.screenshotOverflow = sheet.style.overflow;
+            sheet.style.overflow = "visible";
+          }
+          if (evidenceList) {
+            evidenceList.dataset.screenshotMaxHeight = evidenceList.style.maxHeight;
+            evidenceList.dataset.screenshotOverflow = evidenceList.style.overflow;
+            evidenceList.style.maxHeight = "none";
+            evidenceList.style.overflow = "visible";
+          }
+          if (hideControls && controls) {
+            controls.dataset.screenshotDisplay = controls.style.display;
+            controls.style.display = "none";
+          }
+        }, options?.hideControls ?? false);
+        try {
+          await callback();
+        } finally {
+          await page.evaluate(() => {
+            const sheet = document.querySelector<HTMLElement>('[data-testid="diagnostics-sheet"]');
+            const evidenceList = document.querySelector<HTMLElement>('[data-testid="evidence-list"]');
+            const controls = document.querySelector<HTMLElement>('[data-testid="diagnostics-controls"]');
+            if (sheet) {
+              sheet.style.overflow = sheet.dataset.screenshotOverflow ?? "";
+              delete sheet.dataset.screenshotOverflow;
+            }
+            if (evidenceList) {
+              evidenceList.style.maxHeight = evidenceList.dataset.screenshotMaxHeight ?? "";
+              evidenceList.style.overflow = evidenceList.dataset.screenshotOverflow ?? "";
+              delete evidenceList.dataset.screenshotMaxHeight;
+              delete evidenceList.dataset.screenshotOverflow;
+            }
+            if (controls) {
+              controls.style.display = controls.dataset.screenshotDisplay ?? "";
+              delete controls.dataset.screenshotDisplay;
+            }
+          });
+        }
+      };
+      const captureExpandedActivityType = async (
+        path: string,
+        configure: () => Promise<void>,
+        options?: {
+          rowLabel?: string;
+          captureExpandedRowOnly?: boolean;
+          unclipDiagnosticsSheet?: boolean;
+          hideDiagnosticsControls?: boolean;
+          captureLocator?: Locator;
+        },
+      ) => {
+        await applyActivityFilter(configure);
+        const row = options?.rowLabel ? activityRowByLabel(options.rowLabel) : firstExpandableActivityRow();
+        await expect(row).toBeVisible();
+        await row.click();
+        await expect(row).toHaveAttribute("aria-expanded", "true");
+        await row.evaluate((node) => {
+          node.scrollIntoView({ block: "start", inline: "nearest" });
+        });
+        if (options?.captureExpandedRowOnly) {
+          const capture = async () => {
+            await captureScreenshot(page, testInfo, `diagnostics/${path}`, { locator: options.captureLocator ?? row });
+          };
+          if (options.unclipDiagnosticsSheet) {
+            await withExpandedDiagnosticsEvidence(capture, {
+              hideControls: options.hideDiagnosticsControls,
+            });
+          } else {
+            await capture();
+          }
+        } else {
+          await captureDiagnosticsScreenshot(page, testInfo, path);
+        }
+        await row.click();
+        await expect(row).toHaveAttribute("aria-expanded", "false");
+      };
 
       const dialog = await openDiagnostics();
 
@@ -1281,55 +1504,111 @@ test.describe("App screenshots", () => {
       await dialog.getByTestId("diagnostics-header-toggle").click();
       await expect(dialog.getByTestId("diagnostics-header-expanded")).toBeVisible();
       await captureDiagnosticsScreenshot(page, testInfo, "header/01-expanded.png");
+      await expect(dialog.getByTestId("health-check-probe-rest")).toBeVisible();
+      await captureDiagnosticsScreenshot(page, testInfo, "header/02-health-check-detail.png");
+
+      await seedLiveDiagnosticsHealthProgress(page);
+      await expect(dialog.getByTestId("health-check-probe-config")).toHaveAttribute("data-live-status", "running");
+      await expect(dialog.getByTestId("health-check-probe-raster")).toHaveAttribute("data-live-status", "pending");
+      await captureDiagnosticsScreenshot(page, testInfo, "header/03-health-check-live-progress.png");
+      await clearLiveDiagnosticsHealthProgress(page);
+      await seedDiagnosticsAnalytics(page);
+      await expect(dialog.getByTestId("health-check-probe-rest")).toBeVisible();
+
       await dialog.getByTestId("diagnostics-header-toggle").click();
       await expect(dialog.getByTestId("diagnostics-header-expanded")).toBeHidden();
 
       await captureDiagnosticsScreenshot(page, testInfo, "activity/01-visible-list.png");
 
-      await applyActivityFilter(async () => {
-        await activityTypesSection()
-          .getByRole("button", { name: /Actions/ })
-          .click();
+      await seedDiagnosticsLogs(page);
+      await captureExpandedActivityType("activity/02-expanded-problems.png", async () => {
+        await setActivityTypes(["Problems"]);
       });
-      await captureDiagnosticsScreenshot(page, testInfo, "activity/02-problems-only.png");
+
+      await seedDiagnosticsTracesForAction(page, "diagnostics.snapshot");
+      await seedDiagnosticsLogs(page);
+      await seedDiagnosticsAnalytics(page);
+      await captureExpandedActivityType(
+        "activity/03-expanded-actions.png",
+        async () => {
+          await setActivityTypes(["Actions"]);
+        },
+        {
+          rowLabel: "diagnostics.snapshot",
+          captureExpandedRowOnly: true,
+          unclipDiagnosticsSheet: true,
+          hideDiagnosticsControls: true,
+        },
+      );
+      await seedDiagnosticsTraces(page);
+      await seedDiagnosticsLogs(page);
+      await seedDiagnosticsAnalytics(page);
+
+      await captureExpandedActivityType(
+        "activity/04-expanded-logs.png",
+        async () => {
+          await seedDiagnosticsLogs(page);
+          await setActivityTypes(["Logs"]);
+        },
+        {
+          rowLabel: "ERROR FTP disk import failed",
+          captureExpandedRowOnly: true,
+          unclipDiagnosticsSheet: true,
+          hideDiagnosticsControls: true,
+        },
+      );
+
+      await captureExpandedActivityType("activity/05-expanded-traces.png", async () => {
+        await setActivityTypes(["Traces"]);
+      });
 
       await applyActivityFilter(async () => {
-        await activityTypesSection()
-          .getByRole("button", { name: /Problems/ })
-          .click();
+        // Reset back to the default Problems + Actions view for collapse evidence.
       });
-      await captureDiagnosticsScreenshot(page, testInfo, "activity/03-actions-only.png");
+      const expandableRow = firstExpandableActivityRow();
+      await expect(expandableRow).toBeVisible();
+      await expandableRow.click();
+      await expect(expandableRow).toHaveAttribute("aria-expanded", "true");
+      await expandableRow.click();
+      await expect(expandableRow).toHaveAttribute("aria-expanded", "false");
+      await captureDiagnosticsScreenshot(page, testInfo, "activity/06-collapsed-after-toggle.png");
+
+      await seedDiagnosticsLogs(page);
+      await applyActivityFilter(async () => {
+        await setActivityTypes(["Problems"]);
+      });
+      await expect(dialog.getByText("ERROR FTP disk import failed")).toBeVisible();
+      await expect(dialog.getByText("GET /v1/runners/script/status")).toBeVisible();
+      await captureDiagnosticsScreenshot(page, testInfo, "activity/07-problems-only.png");
+
+      await seedDiagnosticsLogs(page);
+      await applyActivityFilter(async () => {
+        await setActivityTypes(["Actions"]);
+      });
+      await captureDiagnosticsScreenshot(page, testInfo, "activity/08-actions-only.png");
 
       await applyActivityFilter(async () => {
-        await activityTypesSection()
-          .getByRole("button", { name: /Problems/ })
-          .click();
-        await activityTypesSection()
-          .getByRole("button", { name: /Actions/ })
-          .click();
-        await activityTypesSection().getByRole("button", { name: /Logs/ }).click();
+        await setActivityTypes(["Logs"]);
       });
-      await captureDiagnosticsScreenshot(page, testInfo, "activity/04-logs-only.png");
+      await expect(dialog.getByTestId("filters-collapsed-bar")).toContainText("Logs");
+      await expect(dialog.getByTestId("filters-collapsed-bar")).not.toContainText("Actions");
+      await expect(dialog.getByText("ERROR FTP disk import failed")).toBeVisible();
+      await expect(dialog.getByText("WARN Lighting Studio circadian resolution failed")).toBeVisible();
+      await expect(dialog.getByText("INFO REST config refresh completed")).toBeVisible();
+      await expect(dialog.getByText("DEBUG Cache warmup finished")).toBeVisible();
+      await captureDiagnosticsScreenshot(page, testInfo, "activity/09-logs-only.png");
 
       await applyActivityFilter(async () => {
-        await activityTypesSection()
-          .getByRole("button", { name: /Problems/ })
-          .click();
-        await activityTypesSection()
-          .getByRole("button", { name: /Actions/ })
-          .click();
-        await activityTypesSection()
-          .getByRole("button", { name: /Traces/ })
-          .click();
+        await setActivityTypes(["Traces"]);
       });
-      await captureDiagnosticsScreenshot(page, testInfo, "activity/05-traces-only.png");
+      await captureDiagnosticsScreenshot(page, testInfo, "activity/10-traces-only.png");
 
       await dialog.getByTestId("open-filters-editor").click();
       await expect(page.getByTestId("filters-editor-surface")).toBeVisible();
       await page.getByTestId("filters-editor-surface").getByTestId("quick-filter-errors").click();
       await page.getByTestId("filters-editor-surface").getByRole("button", { name: "Close" }).click();
       await expect(page.getByTestId("filters-editor-surface")).toBeHidden();
-      await captureDiagnosticsScreenshot(page, testInfo, "activity/06-errors-only.png");
+      await captureDiagnosticsScreenshot(page, testInfo, "activity/11-errors-only.png");
 
       await applyActivityFilter(async () => {
         // Reset back to the default Problems + Actions view before capturing the rest of the surfaces.
@@ -1405,22 +1684,31 @@ test.describe("App screenshots", () => {
 
   test("capture docs screenshots", { tag: "@screenshots" }, async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/docs");
+    await expect(page).toHaveURL(/\/docs$/);
+    await waitForConnected(page);
     await expect(page.getByRole("heading", { name: "Docs" })).toBeVisible();
 
     await page.evaluate(() => window.scrollTo(0, 0));
     await captureScreenshot(page, testInfo, "docs/01-overview.png");
     await captureDocsSections(page, testInfo);
 
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-    await page.waitForTimeout(150);
-    await captureScreenshot(page, testInfo, "docs/external/01-external-resources.png");
+    const externalResources = page.getByTestId("docs-external-resources");
+    await externalResources.scrollIntoViewIfNeeded();
+    await waitForStableRender(page);
+    await captureScreenshot(page, testInfo, "docs/external/01-external-resources.png", {
+      locator: externalResources,
+    });
 
     for (const profileId of DISPLAY_PROFILE_VIEWPORT_SEQUENCE) {
       await page.goto("/docs");
+      await expect(page).toHaveURL(/\/docs$/);
       await applyDisplayProfileViewport(page, profileId);
+      await waitForConnected(page);
       await expect(page.getByRole("heading", { name: "Docs" })).toBeVisible();
-      await getActiveMain(page).getByRole("button", { name: "Play Files" }).click();
-      await page.waitForTimeout(150);
+      const playFilesButton = getActiveSlot(page).locator('button[aria-controls="docs-section-play"]').first();
+      await playFilesButton.click();
+      await expect(playFilesButton).toHaveAttribute("aria-expanded", "true");
+      await waitForStableRender(page);
       await page.evaluate(() => window.scrollTo(0, 0));
       await captureScreenshot(page, testInfo, profileScreenshotPath("docs", profileId, "01-overview.png"));
     }

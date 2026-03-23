@@ -47,5 +47,5 @@ tags:
           optional: true
       - waitForAnimationToEnd
       - extendedWaitUntil:
-          visible: "Quick Config"
+          visible: "C64 Commander"
           timeout: ${LONG_TIMEOUT}

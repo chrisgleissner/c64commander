@@ -258,7 +258,9 @@ describe("GlobalDiagnosticsOverlay", () => {
 
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
     expandDiagnosticsHeader();
-    expect(screen.getByTestId("diagnostics-header-expanded")).toHaveTextContent("P50 10ms");
+    expect(screen.getByTestId("diagnostics-header-expanded")).toHaveTextContent(
+      /Latency:\s*p50 10ms\s*·\s*p90 20ms\s*·\s*p99 30ms/i,
+    );
 
     await act(async () => {
       window.dispatchEvent(

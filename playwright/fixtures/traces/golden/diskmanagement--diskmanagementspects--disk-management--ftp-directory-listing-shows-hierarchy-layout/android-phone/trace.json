@@ -1,11 +1,55 @@
 [
   {
     "id": "EVT-0000",
-    "timestamp": "2026-03-16T14:12:43.728Z",
-    "relativeMs": 90,
+    "timestamp": "2026-03-22T17:11:10.846Z",
+    "relativeMs": 4,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0000",
+    "data": {
+      "name": "startup.bootstrap_complete",
+      "component": null,
+      "context": {
+        "ui": {
+          "route": "/",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {},
+        "playback": null,
+        "device": null
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0001",
+    "timestamp": "2026-03-22T17:11:10.847Z",
+    "relativeMs": 5,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0000",
+    "data": {
+      "status": "success",
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0002",
+    "timestamp": "2026-03-22T17:11:10.954Z",
+    "relativeMs": 112,
+    "type": "action-start",
+    "origin": "system",
+    "correlationId": "COR-0001",
     "data": {
       "name": "rest.get",
       "component": null,
@@ -32,12 +76,44 @@
     }
   },
   {
-    "id": "EVT-0001",
-    "timestamp": "2026-03-16T14:12:43.729Z",
-    "relativeMs": 91,
+    "id": "EVT-0003",
+    "timestamp": "2026-03-22T17:11:10.956Z",
+    "relativeMs": 114,
+    "type": "action-start",
+    "origin": "system",
+    "correlationId": "COR-0002",
+    "data": {
+      "name": "rest.get",
+      "component": null,
+      "context": {
+        "ui": {
+          "route": "/disks",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": null,
+        "device": {
+          "deviceId": null,
+          "connectionState": "DISCOVERING"
+        }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0004",
+    "timestamp": "2026-03-22T17:11:10.956Z",
+    "relativeMs": 114,
     "type": "backend-decision",
     "origin": "system",
-    "correlationId": "COR-0000",
+    "correlationId": "COR-0001",
     "data": {
       "selectedTarget": "external-mock",
       "reason": "test-mode",
@@ -49,19 +125,19 @@
     }
   },
   {
-    "id": "EVT-0002",
-    "timestamp": "2026-03-16T14:12:43.729Z",
-    "relativeMs": 91,
+    "id": "EVT-0005",
+    "timestamp": "2026-03-22T17:11:10.956Z",
+    "relativeMs": 114,
     "type": "rest-request",
     "origin": "system",
-    "correlationId": "COR-0000",
+    "correlationId": "COR-0001",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:35651/v1/info",
-      "normalizedUrl": "/v1/info",
+      "url": "http://127.0.0.1:44443/v1/configs/LED%20Strip%20Settings",
+      "normalizedUrl": "/v1/configs/LED%20Strip%20Settings",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:35651"
+        "X-C64U-Host": "127.0.0.1:44443"
       },
       "body": null,
       "payloadPreview": null,
@@ -74,13 +150,1120 @@
     }
   },
   {
-    "id": "EVT-0003",
-    "timestamp": "2026-03-16T14:12:43.777Z",
-    "relativeMs": 139,
+    "id": "EVT-0006",
+    "timestamp": "2026-03-22T17:11:10.957Z",
+    "relativeMs": 115,
+    "type": "backend-decision",
+    "origin": "system",
+    "correlationId": "COR-0002",
+    "data": {
+      "selectedTarget": "external-mock",
+      "reason": "test-mode",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0007",
+    "timestamp": "2026-03-22T17:11:10.957Z",
+    "relativeMs": 115,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0002",
+    "data": {
+      "method": "GET",
+      "url": "http://127.0.0.1:44443/v1/configs/Keyboard%20Lighting",
+      "normalizedUrl": "/v1/configs/Keyboard%20Lighting",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:44443"
+      },
+      "body": null,
+      "payloadPreview": null,
+      "target": "external-mock",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0008",
+    "timestamp": "2026-03-22T17:11:10.958Z",
+    "relativeMs": 116,
+    "type": "action-start",
+    "origin": "system",
+    "correlationId": "COR-0003",
+    "data": {
+      "name": "rest.get",
+      "component": null,
+      "context": {
+        "ui": {
+          "route": "/disks",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": null,
+        "device": {
+          "deviceId": null,
+          "connectionState": "DISCOVERING"
+        }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0009",
+    "timestamp": "2026-03-22T17:11:10.958Z",
+    "relativeMs": 116,
+    "type": "backend-decision",
+    "origin": "system",
+    "correlationId": "COR-0003",
+    "data": {
+      "selectedTarget": "external-mock",
+      "reason": "test-mode",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0010",
+    "timestamp": "2026-03-22T17:11:10.958Z",
+    "relativeMs": 116,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0003",
+    "data": {
+      "method": "GET",
+      "url": "http://127.0.0.1:44443/v1/info",
+      "normalizedUrl": "/v1/info",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:44443"
+      },
+      "body": null,
+      "payloadPreview": null,
+      "target": "external-mock",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0011",
+    "timestamp": "2026-03-22T17:11:10.997Z",
+    "relativeMs": 155,
     "type": "rest-response",
     "origin": "system",
-    "correlationId": "COR-0000",
+    "correlationId": "COR-0001",
     "data": {
+      "method": "GET",
+      "path": "/v1/configs/LED%20Strip%20Settings",
+      "url": "http://127.0.0.1:44443/v1/configs/LED%20Strip%20Settings",
+      "status": 200,
+      "headers": {
+        "content-length": "1011",
+        "content-type": "application/json"
+      },
+      "body": {
+        "LED Strip Settings": {
+          "items": {
+            "LedStrip Mode": {
+              "selected": "Fixed Color",
+              "options": ["Off", "Fixed Color", "SID Music", "Rainbow", "Rainbow Sparkle", "Sparkle", "Default"]
+            },
+            "LedStrip Auto SID Mode": {
+              "selected": "Enabled",
+              "options": ["Disabled", "Enabled"]
+            },
+            "LedStrip Pattern": {
+              "selected": "SingleColor",
+              "options": ["SingleColor", "Left to Right", "Right to Left", "Serpentine", "Outward"]
+            },
+            "LedStrip SID Select": {
+              "selected": "UltiSID1-A",
+              "options": [
+                "UltiSID1-A",
+                "UltiSID1-B",
+                "UltiSID1-C",
+                "UltiSID1-D",
+                "UltiSID2-A",
+                "UltiSID2-B",
+                "UltiSID2-C",
+                "UltiSID2-D"
+              ]
+            },
+            "Strip Intensity": {
+              "selected": 25,
+              "options": [],
+              "details": {
+                "min": 0,
+                "max": 31,
+                "format": "%d"
+              }
+            },
+            "Fixed Color": {
+              "selected": "Indigo",
+              "options": [
+                "Red",
+                "Scarlet",
+                "Orange",
+                "Amber",
+                "Yellow",
+                "Lemon-Lime",
+                "Chartreuse",
+                "Lime",
+                "Green",
+                "Jade",
+                "Spring Green",
+                "Aquamarine",
+                "Cyan",
+                "Deep Sky Blue",
+                "Azure",
+                "Royal Blue",
+                "Blue",
+                "Indigo",
+                "Violet",
+                "Purple",
+                "Magenta",
+                "Fuchsia",
+                "Rose",
+                "Cerise",
+                "White"
+              ]
+            },
+            "Color tint": {
+              "selected": "Pure",
+              "options": ["Pure", "Bright", "Pastel", "Whisper"]
+            }
+          }
+        },
+        "errors": []
+      },
+      "payloadPreview": {
+        "byteCount": 1011,
+        "previewByteCount": 256,
+        "hex": "7b 22 4c 45 44 20 53 74 72 69 70 20 53 65 74 74 69 6e 67 73 22 3a 7b 22 69 74 65 6d 73 22 3a 7b 22 4c 65 64 53 74 72 69 70 20 4d 6f 64 65 22 3a 7b 22 73 65 6c 65 63 74 65 64 22 3a 22 46 69 78 65 64 20 43 6f 6c 6f 72 22 2c 22 6f 70 74 69 6f 6e 73 22 3a 5b 22 4f 66 66 22 2c 22 46 69 78 65 64 20 43 6f 6c 6f 72 22 2c 22 53 49 44 20 4d 75 73 69 63 22 2c 22 52 61 69 6e 62 6f 77 22 2c 22 52 61 69 6e 62 6f 77 20 53 70 61 72 6b 6c 65 22 2c 22 53 70 61 72 6b 6c 65 22 2c 22 44 65 66 61 75 6c 74 22 5d 7d 2c 22 4c 65 64 53 74 72 69 70 20 41 75 74 6f 20 53 49 44 20 4d 6f 64 65 22 3a 7b 22 73 65 6c 65 63 74 65 64 22 3a 22 45 6e 61 62 6c 65 64 22 2c 22 6f 70 74 69 6f 6e 73 22 3a 5b 22 44 69 73 61 62 6c 65 64 22 2c 22 45 6e 61 62 6c 65 64 22 5d 7d 2c 22 4c 65 64 53 74 72 69",
+        "ascii": "{\"LED Strip Settings\":{\"items\":{\"LedStrip Mode\":{\"selected\":\"Fixed Color\",\"options\":[\"Off\",\"Fixed Color\",\"SID Music\",\"Rainbow\",\"Rainbow Sparkle\",\"Sparkle\",\"Default\"]},\"LedStrip Auto SID Mode\":{\"selected\":\"Enabled\",\"options\":[\"Disabled\",\"Enabled\"]},\"LedStri",
+        "truncated": true
+      },
+      "durationMs": 20,
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0012",
+    "timestamp": "2026-03-22T17:11:10.998Z",
+    "relativeMs": 156,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0001",
+    "data": {
+      "status": "success",
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0013",
+    "timestamp": "2026-03-22T17:11:10.998Z",
+    "relativeMs": 156,
+    "type": "action-start",
+    "origin": "system",
+    "correlationId": "COR-0004",
+    "data": {
+      "name": "rest.get",
+      "component": null,
+      "context": {
+        "ui": {
+          "route": "/disks",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": null,
+        "device": {
+          "deviceId": null,
+          "connectionState": "DISCOVERING"
+        }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0014",
+    "timestamp": "2026-03-22T17:11:10.998Z",
+    "relativeMs": 156,
+    "type": "action-start",
+    "origin": "system",
+    "correlationId": "COR-0005",
+    "data": {
+      "name": "rest.get",
+      "component": null,
+      "context": {
+        "ui": {
+          "route": "/disks",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": null,
+        "device": {
+          "deviceId": null,
+          "connectionState": "DISCOVERING"
+        }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0015",
+    "timestamp": "2026-03-22T17:11:10.998Z",
+    "relativeMs": 156,
+    "type": "action-start",
+    "origin": "system",
+    "correlationId": "COR-0006",
+    "data": {
+      "name": "rest.get",
+      "component": null,
+      "context": {
+        "ui": {
+          "route": "/disks",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": null,
+        "device": {
+          "deviceId": null,
+          "connectionState": "DISCOVERING"
+        }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0016",
+    "timestamp": "2026-03-22T17:11:10.999Z",
+    "relativeMs": 157,
+    "type": "action-start",
+    "origin": "system",
+    "correlationId": "COR-0007",
+    "data": {
+      "name": "rest.get",
+      "component": null,
+      "context": {
+        "ui": {
+          "route": "/disks",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": null,
+        "device": {
+          "deviceId": null,
+          "connectionState": "DISCOVERING"
+        }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0017",
+    "timestamp": "2026-03-22T17:11:10.999Z",
+    "relativeMs": 157,
+    "type": "action-start",
+    "origin": "system",
+    "correlationId": "COR-0008",
+    "data": {
+      "name": "rest.get",
+      "component": null,
+      "context": {
+        "ui": {
+          "route": "/disks",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": null,
+        "device": {
+          "deviceId": null,
+          "connectionState": "DISCOVERING"
+        }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0018",
+    "timestamp": "2026-03-22T17:11:10.999Z",
+    "relativeMs": 157,
+    "type": "backend-decision",
+    "origin": "system",
+    "correlationId": "COR-0004",
+    "data": {
+      "selectedTarget": "external-mock",
+      "reason": "test-mode",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0019",
+    "timestamp": "2026-03-22T17:11:10.999Z",
+    "relativeMs": 157,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0004",
+    "data": {
+      "method": "GET",
+      "url": "http://127.0.0.1:44443/v1/configs/LED%20Strip%20Settings/Fixed%20Color%20Red",
+      "normalizedUrl": "/v1/configs/LED%20Strip%20Settings/Fixed%20Color%20Red",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:44443"
+      },
+      "body": null,
+      "payloadPreview": null,
+      "target": "external-mock",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0020",
+    "timestamp": "2026-03-22T17:11:10.999Z",
+    "relativeMs": 157,
+    "type": "backend-decision",
+    "origin": "system",
+    "correlationId": "COR-0005",
+    "data": {
+      "selectedTarget": "external-mock",
+      "reason": "test-mode",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0021",
+    "timestamp": "2026-03-22T17:11:10.999Z",
+    "relativeMs": 157,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0005",
+    "data": {
+      "method": "GET",
+      "url": "http://127.0.0.1:44443/v1/configs/LED%20Strip%20Settings/Fixed%20Color%20Green",
+      "normalizedUrl": "/v1/configs/LED%20Strip%20Settings/Fixed%20Color%20Green",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:44443"
+      },
+      "body": null,
+      "payloadPreview": null,
+      "target": "external-mock",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0022",
+    "timestamp": "2026-03-22T17:11:11.000Z",
+    "relativeMs": 158,
+    "type": "backend-decision",
+    "origin": "system",
+    "correlationId": "COR-0006",
+    "data": {
+      "selectedTarget": "external-mock",
+      "reason": "test-mode",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0023",
+    "timestamp": "2026-03-22T17:11:11.000Z",
+    "relativeMs": 158,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0006",
+    "data": {
+      "method": "GET",
+      "url": "http://127.0.0.1:44443/v1/configs/LED%20Strip%20Settings/Fixed%20Color%20Blue",
+      "normalizedUrl": "/v1/configs/LED%20Strip%20Settings/Fixed%20Color%20Blue",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:44443"
+      },
+      "body": null,
+      "payloadPreview": null,
+      "target": "external-mock",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0024",
+    "timestamp": "2026-03-22T17:11:11.000Z",
+    "relativeMs": 158,
+    "type": "backend-decision",
+    "origin": "system",
+    "correlationId": "COR-0007",
+    "data": {
+      "selectedTarget": "external-mock",
+      "reason": "test-mode",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0025",
+    "timestamp": "2026-03-22T17:11:11.000Z",
+    "relativeMs": 158,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0007",
+    "data": {
+      "method": "GET",
+      "url": "http://127.0.0.1:44443/v1/configs/LED%20Strip%20Settings/LedStrip%20Type",
+      "normalizedUrl": "/v1/configs/LED%20Strip%20Settings/LedStrip%20Type",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:44443"
+      },
+      "body": null,
+      "payloadPreview": null,
+      "target": "external-mock",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0026",
+    "timestamp": "2026-03-22T17:11:11.000Z",
+    "relativeMs": 158,
+    "type": "backend-decision",
+    "origin": "system",
+    "correlationId": "COR-0008",
+    "data": {
+      "selectedTarget": "external-mock",
+      "reason": "test-mode",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0027",
+    "timestamp": "2026-03-22T17:11:11.001Z",
+    "relativeMs": 159,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0008",
+    "data": {
+      "method": "GET",
+      "url": "http://127.0.0.1:44443/v1/configs/LED%20Strip%20Settings/LedStrip%20Length",
+      "normalizedUrl": "/v1/configs/LED%20Strip%20Settings/LedStrip%20Length",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:44443"
+      },
+      "body": null,
+      "payloadPreview": null,
+      "target": "external-mock",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0028",
+    "timestamp": "2026-03-22T17:11:11.006Z",
+    "relativeMs": 164,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0002",
+    "data": {
+      "method": "GET",
+      "path": "/v1/configs/Keyboard%20Lighting",
+      "url": "http://127.0.0.1:44443/v1/configs/Keyboard%20Lighting",
+      "status": 200,
+      "headers": {
+        "content-length": "999",
+        "content-type": "application/json"
+      },
+      "body": {
+        "Keyboard Lighting": {
+          "items": {
+            "LedStrip Mode": {
+              "selected": "Default",
+              "options": ["Off", "Fixed Color", "SID Music", "Rainbow", "Rainbow Sparkle", "Default"]
+            },
+            "LedStrip Auto SID Mode": {
+              "selected": "Enabled",
+              "options": ["Disabled", "Enabled"]
+            },
+            "LedStrip Pattern": {
+              "selected": "Single Color",
+              "options": ["Single Color", "Left to Right", "Right to Left", "Outward", "Circular"]
+            },
+            "LedStrip SID Select": {
+              "selected": "UltiSID1-A",
+              "options": [
+                "UltiSID1-A",
+                "UltiSID1-B",
+                "UltiSID1-C",
+                "UltiSID1-D",
+                "UltiSID2-A",
+                "UltiSID2-B",
+                "UltiSID2-C",
+                "UltiSID2-D"
+              ]
+            },
+            "Strip Intensity": {
+              "selected": 6,
+              "options": [],
+              "details": {
+                "min": 0,
+                "max": 31,
+                "format": "%d"
+              }
+            },
+            "Fixed Color": {
+              "selected": "Royal Blue",
+              "options": [
+                "Red",
+                "Scarlet",
+                "Orange",
+                "Amber",
+                "Yellow",
+                "Lemon-Lime",
+                "Chartreuse",
+                "Lime",
+                "Green",
+                "Jade",
+                "Spring Green",
+                "Aquamarine",
+                "Cyan",
+                "Deep Sky Blue",
+                "Azure",
+                "Royal Blue",
+                "Blue",
+                "Indigo",
+                "Violet",
+                "Purple",
+                "Magenta",
+                "Fuchsia",
+                "Rose",
+                "Cerise",
+                "White"
+              ]
+            },
+            "Color tint": {
+              "selected": "Pure",
+              "options": ["Pure", "Bright", "Pastel", "Whisper"]
+            }
+          }
+        },
+        "errors": []
+      },
+      "payloadPreview": {
+        "byteCount": 999,
+        "previewByteCount": 256,
+        "hex": "7b 22 4b 65 79 62 6f 61 72 64 20 4c 69 67 68 74 69 6e 67 22 3a 7b 22 69 74 65 6d 73 22 3a 7b 22 4c 65 64 53 74 72 69 70 20 4d 6f 64 65 22 3a 7b 22 73 65 6c 65 63 74 65 64 22 3a 22 44 65 66 61 75 6c 74 22 2c 22 6f 70 74 69 6f 6e 73 22 3a 5b 22 4f 66 66 22 2c 22 46 69 78 65 64 20 43 6f 6c 6f 72 22 2c 22 53 49 44 20 4d 75 73 69 63 22 2c 22 52 61 69 6e 62 6f 77 22 2c 22 52 61 69 6e 62 6f 77 20 53 70 61 72 6b 6c 65 22 2c 22 44 65 66 61 75 6c 74 22 5d 7d 2c 22 4c 65 64 53 74 72 69 70 20 41 75 74 6f 20 53 49 44 20 4d 6f 64 65 22 3a 7b 22 73 65 6c 65 63 74 65 64 22 3a 22 45 6e 61 62 6c 65 64 22 2c 22 6f 70 74 69 6f 6e 73 22 3a 5b 22 44 69 73 61 62 6c 65 64 22 2c 22 45 6e 61 62 6c 65 64 22 5d 7d 2c 22 4c 65 64 53 74 72 69 70 20 50 61 74 74 65 72 6e 22 3a 7b 22 73 65",
+        "ascii": "{\"Keyboard Lighting\":{\"items\":{\"LedStrip Mode\":{\"selected\":\"Default\",\"options\":[\"Off\",\"Fixed Color\",\"SID Music\",\"Rainbow\",\"Rainbow Sparkle\",\"Default\"]},\"LedStrip Auto SID Mode\":{\"selected\":\"Enabled\",\"options\":[\"Disabled\",\"Enabled\"]},\"LedStrip Pattern\":{\"se",
+        "truncated": true
+      },
+      "durationMs": 22,
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0029",
+    "timestamp": "2026-03-22T17:11:11.006Z",
+    "relativeMs": 164,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0002",
+    "data": {
+      "status": "success",
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0030",
+    "timestamp": "2026-03-22T17:11:11.007Z",
+    "relativeMs": 165,
+    "type": "action-start",
+    "origin": "system",
+    "correlationId": "COR-0009",
+    "data": {
+      "name": "rest.get",
+      "component": null,
+      "context": {
+        "ui": {
+          "route": "/disks",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": null,
+        "device": {
+          "deviceId": null,
+          "connectionState": "DISCOVERING"
+        }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0031",
+    "timestamp": "2026-03-22T17:11:11.007Z",
+    "relativeMs": 165,
+    "type": "action-start",
+    "origin": "system",
+    "correlationId": "COR-0010",
+    "data": {
+      "name": "rest.get",
+      "component": null,
+      "context": {
+        "ui": {
+          "route": "/disks",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": null,
+        "device": {
+          "deviceId": null,
+          "connectionState": "DISCOVERING"
+        }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0032",
+    "timestamp": "2026-03-22T17:11:11.007Z",
+    "relativeMs": 165,
+    "type": "action-start",
+    "origin": "system",
+    "correlationId": "COR-0011",
+    "data": {
+      "name": "rest.get",
+      "component": null,
+      "context": {
+        "ui": {
+          "route": "/disks",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": null,
+        "device": {
+          "deviceId": null,
+          "connectionState": "DISCOVERING"
+        }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0033",
+    "timestamp": "2026-03-22T17:11:11.007Z",
+    "relativeMs": 165,
+    "type": "action-start",
+    "origin": "system",
+    "correlationId": "COR-0012",
+    "data": {
+      "name": "rest.get",
+      "component": null,
+      "context": {
+        "ui": {
+          "route": "/disks",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": null,
+        "device": {
+          "deviceId": null,
+          "connectionState": "DISCOVERING"
+        }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0034",
+    "timestamp": "2026-03-22T17:11:11.007Z",
+    "relativeMs": 165,
+    "type": "action-start",
+    "origin": "system",
+    "correlationId": "COR-0013",
+    "data": {
+      "name": "rest.get",
+      "component": null,
+      "context": {
+        "ui": {
+          "route": "/disks",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": null,
+        "device": {
+          "deviceId": null,
+          "connectionState": "DISCOVERING"
+        }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0035",
+    "timestamp": "2026-03-22T17:11:11.007Z",
+    "relativeMs": 165,
+    "type": "backend-decision",
+    "origin": "system",
+    "correlationId": "COR-0009",
+    "data": {
+      "selectedTarget": "external-mock",
+      "reason": "test-mode",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0036",
+    "timestamp": "2026-03-22T17:11:11.007Z",
+    "relativeMs": 165,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0009",
+    "data": {
+      "method": "GET",
+      "url": "http://127.0.0.1:44443/v1/configs/Keyboard%20Lighting/Fixed%20Color%20Red",
+      "normalizedUrl": "/v1/configs/Keyboard%20Lighting/Fixed%20Color%20Red",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:44443"
+      },
+      "body": null,
+      "payloadPreview": null,
+      "target": "external-mock",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0037",
+    "timestamp": "2026-03-22T17:11:11.008Z",
+    "relativeMs": 166,
+    "type": "backend-decision",
+    "origin": "system",
+    "correlationId": "COR-0010",
+    "data": {
+      "selectedTarget": "external-mock",
+      "reason": "test-mode",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0038",
+    "timestamp": "2026-03-22T17:11:11.008Z",
+    "relativeMs": 166,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0010",
+    "data": {
+      "method": "GET",
+      "url": "http://127.0.0.1:44443/v1/configs/Keyboard%20Lighting/Fixed%20Color%20Green",
+      "normalizedUrl": "/v1/configs/Keyboard%20Lighting/Fixed%20Color%20Green",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:44443"
+      },
+      "body": null,
+      "payloadPreview": null,
+      "target": "external-mock",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0039",
+    "timestamp": "2026-03-22T17:11:11.008Z",
+    "relativeMs": 166,
+    "type": "backend-decision",
+    "origin": "system",
+    "correlationId": "COR-0011",
+    "data": {
+      "selectedTarget": "external-mock",
+      "reason": "test-mode",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0040",
+    "timestamp": "2026-03-22T17:11:11.008Z",
+    "relativeMs": 166,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0011",
+    "data": {
+      "method": "GET",
+      "url": "http://127.0.0.1:44443/v1/configs/Keyboard%20Lighting/Fixed%20Color%20Blue",
+      "normalizedUrl": "/v1/configs/Keyboard%20Lighting/Fixed%20Color%20Blue",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:44443"
+      },
+      "body": null,
+      "payloadPreview": null,
+      "target": "external-mock",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0041",
+    "timestamp": "2026-03-22T17:11:11.008Z",
+    "relativeMs": 166,
+    "type": "backend-decision",
+    "origin": "system",
+    "correlationId": "COR-0012",
+    "data": {
+      "selectedTarget": "external-mock",
+      "reason": "test-mode",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0042",
+    "timestamp": "2026-03-22T17:11:11.008Z",
+    "relativeMs": 166,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0012",
+    "data": {
+      "method": "GET",
+      "url": "http://127.0.0.1:44443/v1/configs/Keyboard%20Lighting/LedStrip%20Type",
+      "normalizedUrl": "/v1/configs/Keyboard%20Lighting/LedStrip%20Type",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:44443"
+      },
+      "body": null,
+      "payloadPreview": null,
+      "target": "external-mock",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0043",
+    "timestamp": "2026-03-22T17:11:11.009Z",
+    "relativeMs": 167,
+    "type": "backend-decision",
+    "origin": "system",
+    "correlationId": "COR-0013",
+    "data": {
+      "selectedTarget": "external-mock",
+      "reason": "test-mode",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0044",
+    "timestamp": "2026-03-22T17:11:11.009Z",
+    "relativeMs": 167,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0013",
+    "data": {
+      "method": "GET",
+      "url": "http://127.0.0.1:44443/v1/configs/Keyboard%20Lighting/LedStrip%20Length",
+      "normalizedUrl": "/v1/configs/Keyboard%20Lighting/LedStrip%20Length",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:44443"
+      },
+      "body": null,
+      "payloadPreview": null,
+      "target": "external-mock",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0045",
+    "timestamp": "2026-03-22T17:11:11.009Z",
+    "relativeMs": 167,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0003",
+    "data": {
+      "method": "GET",
+      "path": "/v1/info",
+      "url": "http://127.0.0.1:44443/v1/info",
       "status": 200,
       "headers": {
         "content-length": "153",
@@ -97,12 +1280,12 @@
       },
       "payloadPreview": {
         "byteCount": 153,
-        "previewByteCount": 64,
-        "hex": "7b 22 70 72 6f 64 75 63 74 22 3a 22 43 36 34 20 55 6c 74 69 6d 61 74 65 22 2c 22 66 69 72 6d 77 61 72 65 5f 76 65 72 73 69 6f 6e 22 3a 22 33 2e 31 32 2e 30 22 2c 22 66 70 67 61 5f 76 65 72 73",
-        "ascii": "{\"product\":\"C64 Ultimate\",\"firmware_version\":\"3.12.0\",\"fpga_vers",
-        "truncated": true
+        "previewByteCount": 153,
+        "hex": "7b 22 70 72 6f 64 75 63 74 22 3a 22 43 36 34 20 55 6c 74 69 6d 61 74 65 22 2c 22 66 69 72 6d 77 61 72 65 5f 76 65 72 73 69 6f 6e 22 3a 22 33 2e 31 32 2e 30 22 2c 22 66 70 67 61 5f 76 65 72 73 69 6f 6e 22 3a 22 31 2e 30 2e 30 22 2c 22 63 6f 72 65 5f 76 65 72 73 69 6f 6e 22 3a 22 31 2e 30 2e 30 22 2c 22 68 6f 73 74 6e 61 6d 65 22 3a 22 63 36 34 75 22 2c 22 75 6e 69 71 75 65 5f 69 64 22 3a 22 54 45 53 54 2d 31 32 33 22 2c 22 65 72 72 6f 72 73 22 3a 5b 5d 7d",
+        "ascii": "{\"product\":\"C64 Ultimate\",\"firmware_version\":\"3.12.0\",\"fpga_version\":\"1.0.0\",\"core_version\":\"1.0.0\",\"hostname\":\"c64u\",\"unique_id\":\"TEST-123\",\"errors\":[]}",
+        "truncated": false
       },
-      "durationMs": 18,
+      "durationMs": 22,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": null,
@@ -112,12 +1295,12 @@
     }
   },
   {
-    "id": "EVT-0004",
-    "timestamp": "2026-03-16T14:12:43.777Z",
-    "relativeMs": 139,
+    "id": "EVT-0046",
+    "timestamp": "2026-03-22T17:11:11.009Z",
+    "relativeMs": 167,
     "type": "action-end",
     "origin": "system",
-    "correlationId": "COR-0000",
+    "correlationId": "COR-0003",
     "data": {
       "status": "success",
       "error": null,
@@ -129,12 +1312,12 @@
     }
   },
   {
-    "id": "EVT-0005",
-    "timestamp": "2026-03-16T14:12:43.779Z",
-    "relativeMs": 141,
+    "id": "EVT-0047",
+    "timestamp": "2026-03-22T17:11:11.013Z",
+    "relativeMs": 171,
     "type": "action-start",
     "origin": "system",
-    "correlationId": "COR-0001",
+    "correlationId": "COR-0014",
     "data": {
       "name": "rest.get",
       "component": null,
@@ -150,7 +1333,7 @@
         "playback": null,
         "device": {
           "deviceId": null,
-          "connectionState": "CONNECTING"
+          "connectionState": "BUSY"
         }
       },
       "lifecycleState": "foreground",
@@ -161,12 +1344,12 @@
     }
   },
   {
-    "id": "EVT-0006",
-    "timestamp": "2026-03-16T14:12:43.780Z",
-    "relativeMs": 142,
+    "id": "EVT-0048",
+    "timestamp": "2026-03-22T17:11:11.015Z",
+    "relativeMs": 173,
     "type": "backend-decision",
     "origin": "system",
-    "correlationId": "COR-0001",
+    "correlationId": "COR-0014",
     "data": {
       "selectedTarget": "external-mock",
       "reason": "test-mode",
@@ -178,19 +1361,19 @@
     }
   },
   {
-    "id": "EVT-0007",
-    "timestamp": "2026-03-16T14:12:43.780Z",
-    "relativeMs": 142,
+    "id": "EVT-0049",
+    "timestamp": "2026-03-22T17:11:11.015Z",
+    "relativeMs": 173,
     "type": "rest-request",
     "origin": "system",
-    "correlationId": "COR-0001",
+    "correlationId": "COR-0014",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:35651/v1/info",
+      "url": "http://127.0.0.1:44443/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:35651"
+        "X-C64U-Host": "127.0.0.1:44443"
       },
       "body": null,
       "payloadPreview": null,
@@ -203,12 +1386,12 @@
     }
   },
   {
-    "id": "EVT-0008",
-    "timestamp": "2026-03-16T14:12:43.817Z",
-    "relativeMs": 179,
+    "id": "EVT-0050",
+    "timestamp": "2026-03-22T17:11:11.057Z",
+    "relativeMs": 215,
     "type": "action-start",
     "origin": "system",
-    "correlationId": "COR-0002",
+    "correlationId": "COR-0015",
     "data": {
       "name": "rest.get",
       "component": null,
@@ -235,12 +1418,12 @@
     }
   },
   {
-    "id": "EVT-0009",
-    "timestamp": "2026-03-16T14:12:43.818Z",
-    "relativeMs": 180,
+    "id": "EVT-0051",
+    "timestamp": "2026-03-22T17:11:11.058Z",
+    "relativeMs": 216,
     "type": "action-start",
     "origin": "system",
-    "correlationId": "COR-0003",
+    "correlationId": "COR-0016",
     "data": {
       "name": "rest.get",
       "component": null,
@@ -267,12 +1450,12 @@
     }
   },
   {
-    "id": "EVT-0010",
-    "timestamp": "2026-03-16T14:12:43.818Z",
-    "relativeMs": 180,
+    "id": "EVT-0052",
+    "timestamp": "2026-03-22T17:11:11.058Z",
+    "relativeMs": 216,
     "type": "action-start",
     "origin": "system",
-    "correlationId": "COR-0004",
+    "correlationId": "COR-0017",
     "data": {
       "name": "rest.get",
       "component": null,
@@ -299,12 +1482,12 @@
     }
   },
   {
-    "id": "EVT-0011",
-    "timestamp": "2026-03-16T14:12:43.818Z",
-    "relativeMs": 180,
+    "id": "EVT-0053",
+    "timestamp": "2026-03-22T17:11:11.058Z",
+    "relativeMs": 216,
     "type": "action-start",
     "origin": "system",
-    "correlationId": "COR-0005",
+    "correlationId": "COR-0018",
     "data": {
       "name": "rest.get",
       "component": null,
@@ -331,12 +1514,12 @@
     }
   },
   {
-    "id": "EVT-0012",
-    "timestamp": "2026-03-16T14:12:43.837Z",
-    "relativeMs": 199,
+    "id": "EVT-0054",
+    "timestamp": "2026-03-22T17:11:11.074Z",
+    "relativeMs": 232,
     "type": "backend-decision",
     "origin": "system",
-    "correlationId": "COR-0002",
+    "correlationId": "COR-0015",
     "data": {
       "selectedTarget": "external-mock",
       "reason": "test-mode",
@@ -348,19 +1531,19 @@
     }
   },
   {
-    "id": "EVT-0013",
-    "timestamp": "2026-03-16T14:12:43.837Z",
-    "relativeMs": 199,
+    "id": "EVT-0055",
+    "timestamp": "2026-03-22T17:11:11.074Z",
+    "relativeMs": 232,
     "type": "rest-request",
     "origin": "system",
-    "correlationId": "COR-0002",
+    "correlationId": "COR-0015",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:35651/v1/drives",
+      "url": "http://127.0.0.1:44443/v1/drives",
       "normalizedUrl": "/v1/drives",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:35651"
+        "X-C64U-Host": "127.0.0.1:44443"
       },
       "body": null,
       "payloadPreview": null,
@@ -373,12 +1556,12 @@
     }
   },
   {
-    "id": "EVT-0014",
-    "timestamp": "2026-03-16T14:12:43.837Z",
-    "relativeMs": 199,
+    "id": "EVT-0056",
+    "timestamp": "2026-03-22T17:11:11.075Z",
+    "relativeMs": 233,
     "type": "backend-decision",
     "origin": "system",
-    "correlationId": "COR-0003",
+    "correlationId": "COR-0016",
     "data": {
       "selectedTarget": "external-mock",
       "reason": "test-mode",
@@ -390,19 +1573,19 @@
     }
   },
   {
-    "id": "EVT-0015",
-    "timestamp": "2026-03-16T14:12:43.837Z",
-    "relativeMs": 199,
+    "id": "EVT-0057",
+    "timestamp": "2026-03-22T17:11:11.075Z",
+    "relativeMs": 233,
     "type": "rest-request",
     "origin": "system",
-    "correlationId": "COR-0003",
+    "correlationId": "COR-0016",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:35651/v1/configs/Drive%20A%20Settings",
+      "url": "http://127.0.0.1:44443/v1/configs/Drive%20A%20Settings",
       "normalizedUrl": "/v1/configs/Drive%20A%20Settings",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:35651"
+        "X-C64U-Host": "127.0.0.1:44443"
       },
       "body": null,
       "payloadPreview": null,
@@ -415,12 +1598,12 @@
     }
   },
   {
-    "id": "EVT-0016",
-    "timestamp": "2026-03-16T14:12:43.837Z",
-    "relativeMs": 199,
+    "id": "EVT-0058",
+    "timestamp": "2026-03-22T17:11:11.075Z",
+    "relativeMs": 233,
     "type": "backend-decision",
     "origin": "system",
-    "correlationId": "COR-0004",
+    "correlationId": "COR-0017",
     "data": {
       "selectedTarget": "external-mock",
       "reason": "test-mode",
@@ -432,19 +1615,19 @@
     }
   },
   {
-    "id": "EVT-0017",
-    "timestamp": "2026-03-16T14:12:43.837Z",
-    "relativeMs": 199,
+    "id": "EVT-0059",
+    "timestamp": "2026-03-22T17:11:11.075Z",
+    "relativeMs": 233,
     "type": "rest-request",
     "origin": "system",
-    "correlationId": "COR-0004",
+    "correlationId": "COR-0017",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:35651/v1/configs/Drive%20B%20Settings",
+      "url": "http://127.0.0.1:44443/v1/configs/Drive%20B%20Settings",
       "normalizedUrl": "/v1/configs/Drive%20B%20Settings",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:35651"
+        "X-C64U-Host": "127.0.0.1:44443"
       },
       "body": null,
       "payloadPreview": null,
@@ -457,12 +1640,12 @@
     }
   },
   {
-    "id": "EVT-0018",
-    "timestamp": "2026-03-16T14:12:43.838Z",
-    "relativeMs": 200,
+    "id": "EVT-0060",
+    "timestamp": "2026-03-22T17:11:11.076Z",
+    "relativeMs": 234,
     "type": "backend-decision",
     "origin": "system",
-    "correlationId": "COR-0005",
+    "correlationId": "COR-0018",
     "data": {
       "selectedTarget": "external-mock",
       "reason": "test-mode",
@@ -474,19 +1657,19 @@
     }
   },
   {
-    "id": "EVT-0019",
-    "timestamp": "2026-03-16T14:12:43.838Z",
-    "relativeMs": 200,
+    "id": "EVT-0061",
+    "timestamp": "2026-03-22T17:11:11.076Z",
+    "relativeMs": 234,
     "type": "rest-request",
     "origin": "system",
-    "correlationId": "COR-0005",
+    "correlationId": "COR-0018",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:35651/v1/configs/SoftIEC%20Drive%20Settings",
+      "url": "http://127.0.0.1:44443/v1/configs/SoftIEC%20Drive%20Settings",
       "normalizedUrl": "/v1/configs/SoftIEC%20Drive%20Settings",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:35651"
+        "X-C64U-Host": "127.0.0.1:44443"
       },
       "body": null,
       "payloadPreview": null,
@@ -499,13 +1682,556 @@
     }
   },
   {
-    "id": "EVT-0020",
-    "timestamp": "2026-03-16T14:12:43.857Z",
-    "relativeMs": 219,
+    "id": "EVT-0062",
+    "timestamp": "2026-03-22T17:11:11.099Z",
+    "relativeMs": 257,
     "type": "rest-response",
     "origin": "system",
-    "correlationId": "COR-0001",
+    "correlationId": "COR-0005",
     "data": {
+      "method": "GET",
+      "path": "/v1/configs/LED%20Strip%20Settings/Fixed%20Color%20Green",
+      "url": "http://127.0.0.1:44443/v1/configs/LED%20Strip%20Settings/Fixed%20Color%20Green",
+      "status": 200,
+      "headers": {
+        "content-length": "95",
+        "content-type": "application/json"
+      },
+      "body": {
+        "LED Strip Settings": {
+          "items": {
+            "Fixed Color Green": {
+              "selected": "",
+              "options": []
+            }
+          }
+        },
+        "errors": []
+      },
+      "payloadPreview": {
+        "byteCount": 95,
+        "previewByteCount": 95,
+        "hex": "7b 22 4c 45 44 20 53 74 72 69 70 20 53 65 74 74 69 6e 67 73 22 3a 7b 22 69 74 65 6d 73 22 3a 7b 22 46 69 78 65 64 20 43 6f 6c 6f 72 20 47 72 65 65 6e 22 3a 7b 22 73 65 6c 65 63 74 65 64 22 3a 22 22 2c 22 6f 70 74 69 6f 6e 73 22 3a 5b 5d 7d 7d 7d 2c 22 65 72 72 6f 72 73 22 3a 5b 5d 7d",
+        "ascii": "{\"LED Strip Settings\":{\"items\":{\"Fixed Color Green\":{\"selected\":\"\",\"options\":[]}}},\"errors\":[]}",
+        "truncated": false
+      },
+      "durationMs": 30,
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0063",
+    "timestamp": "2026-03-22T17:11:11.099Z",
+    "relativeMs": 257,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0005",
+    "data": {
+      "status": "success",
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0064",
+    "timestamp": "2026-03-22T17:11:11.099Z",
+    "relativeMs": 257,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0006",
+    "data": {
+      "method": "GET",
+      "path": "/v1/configs/LED%20Strip%20Settings/Fixed%20Color%20Blue",
+      "url": "http://127.0.0.1:44443/v1/configs/LED%20Strip%20Settings/Fixed%20Color%20Blue",
+      "status": 200,
+      "headers": {
+        "content-length": "94",
+        "content-type": "application/json"
+      },
+      "body": {
+        "LED Strip Settings": {
+          "items": {
+            "Fixed Color Blue": {
+              "selected": "",
+              "options": []
+            }
+          }
+        },
+        "errors": []
+      },
+      "payloadPreview": {
+        "byteCount": 94,
+        "previewByteCount": 94,
+        "hex": "7b 22 4c 45 44 20 53 74 72 69 70 20 53 65 74 74 69 6e 67 73 22 3a 7b 22 69 74 65 6d 73 22 3a 7b 22 46 69 78 65 64 20 43 6f 6c 6f 72 20 42 6c 75 65 22 3a 7b 22 73 65 6c 65 63 74 65 64 22 3a 22 22 2c 22 6f 70 74 69 6f 6e 73 22 3a 5b 5d 7d 7d 7d 2c 22 65 72 72 6f 72 73 22 3a 5b 5d 7d",
+        "ascii": "{\"LED Strip Settings\":{\"items\":{\"Fixed Color Blue\":{\"selected\":\"\",\"options\":[]}}},\"errors\":[]}",
+        "truncated": false
+      },
+      "durationMs": 29,
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0065",
+    "timestamp": "2026-03-22T17:11:11.099Z",
+    "relativeMs": 257,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0006",
+    "data": {
+      "status": "success",
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0066",
+    "timestamp": "2026-03-22T17:11:11.099Z",
+    "relativeMs": 257,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0004",
+    "data": {
+      "method": "GET",
+      "path": "/v1/configs/LED%20Strip%20Settings/Fixed%20Color%20Red",
+      "url": "http://127.0.0.1:44443/v1/configs/LED%20Strip%20Settings/Fixed%20Color%20Red",
+      "status": 200,
+      "headers": {
+        "content-length": "93",
+        "content-type": "application/json"
+      },
+      "body": {
+        "LED Strip Settings": {
+          "items": {
+            "Fixed Color Red": {
+              "selected": "",
+              "options": []
+            }
+          }
+        },
+        "errors": []
+      },
+      "payloadPreview": {
+        "byteCount": 93,
+        "previewByteCount": 93,
+        "hex": "7b 22 4c 45 44 20 53 74 72 69 70 20 53 65 74 74 69 6e 67 73 22 3a 7b 22 69 74 65 6d 73 22 3a 7b 22 46 69 78 65 64 20 43 6f 6c 6f 72 20 52 65 64 22 3a 7b 22 73 65 6c 65 63 74 65 64 22 3a 22 22 2c 22 6f 70 74 69 6f 6e 73 22 3a 5b 5d 7d 7d 7d 2c 22 65 72 72 6f 72 73 22 3a 5b 5d 7d",
+        "ascii": "{\"LED Strip Settings\":{\"items\":{\"Fixed Color Red\":{\"selected\":\"\",\"options\":[]}}},\"errors\":[]}",
+        "truncated": false
+      },
+      "durationMs": 31,
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0067",
+    "timestamp": "2026-03-22T17:11:11.100Z",
+    "relativeMs": 258,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0004",
+    "data": {
+      "status": "success",
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0068",
+    "timestamp": "2026-03-22T17:11:11.100Z",
+    "relativeMs": 258,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0007",
+    "data": {
+      "method": "GET",
+      "path": "/v1/configs/LED%20Strip%20Settings/LedStrip%20Type",
+      "url": "http://127.0.0.1:44443/v1/configs/LED%20Strip%20Settings/LedStrip%20Type",
+      "status": 200,
+      "headers": {
+        "content-length": "91",
+        "content-type": "application/json"
+      },
+      "body": {
+        "LED Strip Settings": {
+          "items": {
+            "LedStrip Type": {
+              "selected": "",
+              "options": []
+            }
+          }
+        },
+        "errors": []
+      },
+      "payloadPreview": {
+        "byteCount": 91,
+        "previewByteCount": 91,
+        "hex": "7b 22 4c 45 44 20 53 74 72 69 70 20 53 65 74 74 69 6e 67 73 22 3a 7b 22 69 74 65 6d 73 22 3a 7b 22 4c 65 64 53 74 72 69 70 20 54 79 70 65 22 3a 7b 22 73 65 6c 65 63 74 65 64 22 3a 22 22 2c 22 6f 70 74 69 6f 6e 73 22 3a 5b 5d 7d 7d 7d 2c 22 65 72 72 6f 72 73 22 3a 5b 5d 7d",
+        "ascii": "{\"LED Strip Settings\":{\"items\":{\"LedStrip Type\":{\"selected\":\"\",\"options\":[]}}},\"errors\":[]}",
+        "truncated": false
+      },
+      "durationMs": 30,
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0069",
+    "timestamp": "2026-03-22T17:11:11.100Z",
+    "relativeMs": 258,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0007",
+    "data": {
+      "status": "success",
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0070",
+    "timestamp": "2026-03-22T17:11:11.106Z",
+    "relativeMs": 264,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0008",
+    "data": {
+      "method": "GET",
+      "path": "/v1/configs/LED%20Strip%20Settings/LedStrip%20Length",
+      "url": "http://127.0.0.1:44443/v1/configs/LED%20Strip%20Settings/LedStrip%20Length",
+      "status": 200,
+      "headers": {
+        "content-length": "93",
+        "content-type": "application/json"
+      },
+      "body": {
+        "LED Strip Settings": {
+          "items": {
+            "LedStrip Length": {
+              "selected": "",
+              "options": []
+            }
+          }
+        },
+        "errors": []
+      },
+      "payloadPreview": {
+        "byteCount": 93,
+        "previewByteCount": 93,
+        "hex": "7b 22 4c 45 44 20 53 74 72 69 70 20 53 65 74 74 69 6e 67 73 22 3a 7b 22 69 74 65 6d 73 22 3a 7b 22 4c 65 64 53 74 72 69 70 20 4c 65 6e 67 74 68 22 3a 7b 22 73 65 6c 65 63 74 65 64 22 3a 22 22 2c 22 6f 70 74 69 6f 6e 73 22 3a 5b 5d 7d 7d 7d 2c 22 65 72 72 6f 72 73 22 3a 5b 5d 7d",
+        "ascii": "{\"LED Strip Settings\":{\"items\":{\"LedStrip Length\":{\"selected\":\"\",\"options\":[]}}},\"errors\":[]}",
+        "truncated": false
+      },
+      "durationMs": 36,
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0071",
+    "timestamp": "2026-03-22T17:11:11.106Z",
+    "relativeMs": 264,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0008",
+    "data": {
+      "status": "success",
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0072",
+    "timestamp": "2026-03-22T17:11:11.123Z",
+    "relativeMs": 281,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0009",
+    "data": {
+      "method": "GET",
+      "path": "/v1/configs/Keyboard%20Lighting/Fixed%20Color%20Red",
+      "url": "http://127.0.0.1:44443/v1/configs/Keyboard%20Lighting/Fixed%20Color%20Red",
+      "status": 200,
+      "headers": {
+        "content-length": "92",
+        "content-type": "application/json"
+      },
+      "body": {
+        "Keyboard Lighting": {
+          "items": {
+            "Fixed Color Red": {
+              "selected": "",
+              "options": []
+            }
+          }
+        },
+        "errors": []
+      },
+      "payloadPreview": {
+        "byteCount": 92,
+        "previewByteCount": 92,
+        "hex": "7b 22 4b 65 79 62 6f 61 72 64 20 4c 69 67 68 74 69 6e 67 22 3a 7b 22 69 74 65 6d 73 22 3a 7b 22 46 69 78 65 64 20 43 6f 6c 6f 72 20 52 65 64 22 3a 7b 22 73 65 6c 65 63 74 65 64 22 3a 22 22 2c 22 6f 70 74 69 6f 6e 73 22 3a 5b 5d 7d 7d 7d 2c 22 65 72 72 6f 72 73 22 3a 5b 5d 7d",
+        "ascii": "{\"Keyboard Lighting\":{\"items\":{\"Fixed Color Red\":{\"selected\":\"\",\"options\":[]}}},\"errors\":[]}",
+        "truncated": false
+      },
+      "durationMs": 78,
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0073",
+    "timestamp": "2026-03-22T17:11:11.123Z",
+    "relativeMs": 281,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0009",
+    "data": {
+      "status": "success",
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0074",
+    "timestamp": "2026-03-22T17:11:11.123Z",
+    "relativeMs": 281,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0010",
+    "data": {
+      "method": "GET",
+      "path": "/v1/configs/Keyboard%20Lighting/Fixed%20Color%20Green",
+      "url": "http://127.0.0.1:44443/v1/configs/Keyboard%20Lighting/Fixed%20Color%20Green",
+      "status": 200,
+      "headers": {
+        "content-length": "94",
+        "content-type": "application/json"
+      },
+      "body": {
+        "Keyboard Lighting": {
+          "items": {
+            "Fixed Color Green": {
+              "selected": "",
+              "options": []
+            }
+          }
+        },
+        "errors": []
+      },
+      "payloadPreview": {
+        "byteCount": 94,
+        "previewByteCount": 94,
+        "hex": "7b 22 4b 65 79 62 6f 61 72 64 20 4c 69 67 68 74 69 6e 67 22 3a 7b 22 69 74 65 6d 73 22 3a 7b 22 46 69 78 65 64 20 43 6f 6c 6f 72 20 47 72 65 65 6e 22 3a 7b 22 73 65 6c 65 63 74 65 64 22 3a 22 22 2c 22 6f 70 74 69 6f 6e 73 22 3a 5b 5d 7d 7d 7d 2c 22 65 72 72 6f 72 73 22 3a 5b 5d 7d",
+        "ascii": "{\"Keyboard Lighting\":{\"items\":{\"Fixed Color Green\":{\"selected\":\"\",\"options\":[]}}},\"errors\":[]}",
+        "truncated": false
+      },
+      "durationMs": 78,
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0075",
+    "timestamp": "2026-03-22T17:11:11.123Z",
+    "relativeMs": 281,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0010",
+    "data": {
+      "status": "success",
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0076",
+    "timestamp": "2026-03-22T17:11:11.123Z",
+    "relativeMs": 281,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0011",
+    "data": {
+      "method": "GET",
+      "path": "/v1/configs/Keyboard%20Lighting/Fixed%20Color%20Blue",
+      "url": "http://127.0.0.1:44443/v1/configs/Keyboard%20Lighting/Fixed%20Color%20Blue",
+      "status": 200,
+      "headers": {
+        "content-length": "93",
+        "content-type": "application/json"
+      },
+      "body": {
+        "Keyboard Lighting": {
+          "items": {
+            "Fixed Color Blue": {
+              "selected": "",
+              "options": []
+            }
+          }
+        },
+        "errors": []
+      },
+      "payloadPreview": {
+        "byteCount": 93,
+        "previewByteCount": 93,
+        "hex": "7b 22 4b 65 79 62 6f 61 72 64 20 4c 69 67 68 74 69 6e 67 22 3a 7b 22 69 74 65 6d 73 22 3a 7b 22 46 69 78 65 64 20 43 6f 6c 6f 72 20 42 6c 75 65 22 3a 7b 22 73 65 6c 65 63 74 65 64 22 3a 22 22 2c 22 6f 70 74 69 6f 6e 73 22 3a 5b 5d 7d 7d 7d 2c 22 65 72 72 6f 72 73 22 3a 5b 5d 7d",
+        "ascii": "{\"Keyboard Lighting\":{\"items\":{\"Fixed Color Blue\":{\"selected\":\"\",\"options\":[]}}},\"errors\":[]}",
+        "truncated": false
+      },
+      "durationMs": 78,
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0077",
+    "timestamp": "2026-03-22T17:11:11.123Z",
+    "relativeMs": 281,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0011",
+    "data": {
+      "status": "success",
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0078",
+    "timestamp": "2026-03-22T17:11:11.123Z",
+    "relativeMs": 281,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0012",
+    "data": {
+      "method": "GET",
+      "path": "/v1/configs/Keyboard%20Lighting/LedStrip%20Type",
+      "url": "http://127.0.0.1:44443/v1/configs/Keyboard%20Lighting/LedStrip%20Type",
+      "status": 200,
+      "headers": {
+        "content-length": "90",
+        "content-type": "application/json"
+      },
+      "body": {
+        "Keyboard Lighting": {
+          "items": {
+            "LedStrip Type": {
+              "selected": "",
+              "options": []
+            }
+          }
+        },
+        "errors": []
+      },
+      "payloadPreview": {
+        "byteCount": 90,
+        "previewByteCount": 90,
+        "hex": "7b 22 4b 65 79 62 6f 61 72 64 20 4c 69 67 68 74 69 6e 67 22 3a 7b 22 69 74 65 6d 73 22 3a 7b 22 4c 65 64 53 74 72 69 70 20 54 79 70 65 22 3a 7b 22 73 65 6c 65 63 74 65 64 22 3a 22 22 2c 22 6f 70 74 69 6f 6e 73 22 3a 5b 5d 7d 7d 7d 2c 22 65 72 72 6f 72 73 22 3a 5b 5d 7d",
+        "ascii": "{\"Keyboard Lighting\":{\"items\":{\"LedStrip Type\":{\"selected\":\"\",\"options\":[]}}},\"errors\":[]}",
+        "truncated": false
+      },
+      "durationMs": 78,
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0079",
+    "timestamp": "2026-03-22T17:11:11.124Z",
+    "relativeMs": 282,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0012",
+    "data": {
+      "status": "success",
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0080",
+    "timestamp": "2026-03-22T17:11:11.124Z",
+    "relativeMs": 282,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0014",
+    "data": {
+      "method": "GET",
+      "path": "/v1/info",
+      "url": "http://127.0.0.1:44443/v1/info",
       "status": 200,
       "headers": {
         "content-length": "153",
@@ -522,12 +2248,12 @@
       },
       "payloadPreview": {
         "byteCount": 153,
-        "previewByteCount": 64,
-        "hex": "7b 22 70 72 6f 64 75 63 74 22 3a 22 43 36 34 20 55 6c 74 69 6d 61 74 65 22 2c 22 66 69 72 6d 77 61 72 65 5f 76 65 72 73 69 6f 6e 22 3a 22 33 2e 31 32 2e 30 22 2c 22 66 70 67 61 5f 76 65 72 73",
-        "ascii": "{\"product\":\"C64 Ultimate\",\"firmware_version\":\"3.12.0\",\"fpga_vers",
-        "truncated": true
+        "previewByteCount": 153,
+        "hex": "7b 22 70 72 6f 64 75 63 74 22 3a 22 43 36 34 20 55 6c 74 69 6d 61 74 65 22 2c 22 66 69 72 6d 77 61 72 65 5f 76 65 72 73 69 6f 6e 22 3a 22 33 2e 31 32 2e 30 22 2c 22 66 70 67 61 5f 76 65 72 73 69 6f 6e 22 3a 22 31 2e 30 2e 30 22 2c 22 63 6f 72 65 5f 76 65 72 73 69 6f 6e 22 3a 22 31 2e 30 2e 30 22 2c 22 68 6f 73 74 6e 61 6d 65 22 3a 22 63 36 34 75 22 2c 22 75 6e 69 71 75 65 5f 69 64 22 3a 22 54 45 53 54 2d 31 32 33 22 2c 22 65 72 72 6f 72 73 22 3a 5b 5d 7d",
+        "ascii": "{\"product\":\"C64 Ultimate\",\"firmware_version\":\"3.12.0\",\"fpga_version\":\"1.0.0\",\"core_version\":\"1.0.0\",\"hostname\":\"c64u\",\"unique_id\":\"TEST-123\",\"errors\":[]}",
+        "truncated": false
       },
-      "durationMs": 20,
+      "durationMs": 72,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": null,
@@ -537,12 +2263,12 @@
     }
   },
   {
-    "id": "EVT-0021",
-    "timestamp": "2026-03-16T14:12:43.857Z",
-    "relativeMs": 219,
+    "id": "EVT-0081",
+    "timestamp": "2026-03-22T17:11:11.124Z",
+    "relativeMs": 282,
     "type": "action-end",
     "origin": "system",
-    "correlationId": "COR-0001",
+    "correlationId": "COR-0014",
     "data": {
       "status": "success",
       "error": null,
@@ -554,13 +2280,76 @@
     }
   },
   {
-    "id": "EVT-0022",
-    "timestamp": "2026-03-16T14:12:43.881Z",
-    "relativeMs": 243,
+    "id": "EVT-0082",
+    "timestamp": "2026-03-22T17:11:11.124Z",
+    "relativeMs": 282,
     "type": "rest-response",
     "origin": "system",
-    "correlationId": "COR-0002",
+    "correlationId": "COR-0013",
     "data": {
+      "method": "GET",
+      "path": "/v1/configs/Keyboard%20Lighting/LedStrip%20Length",
+      "url": "http://127.0.0.1:44443/v1/configs/Keyboard%20Lighting/LedStrip%20Length",
+      "status": 200,
+      "headers": {
+        "content-length": "92",
+        "content-type": "application/json"
+      },
+      "body": {
+        "Keyboard Lighting": {
+          "items": {
+            "LedStrip Length": {
+              "selected": "",
+              "options": []
+            }
+          }
+        },
+        "errors": []
+      },
+      "payloadPreview": {
+        "byteCount": 92,
+        "previewByteCount": 92,
+        "hex": "7b 22 4b 65 79 62 6f 61 72 64 20 4c 69 67 68 74 69 6e 67 22 3a 7b 22 69 74 65 6d 73 22 3a 7b 22 4c 65 64 53 74 72 69 70 20 4c 65 6e 67 74 68 22 3a 7b 22 73 65 6c 65 63 74 65 64 22 3a 22 22 2c 22 6f 70 74 69 6f 6e 73 22 3a 5b 5d 7d 7d 7d 2c 22 65 72 72 6f 72 73 22 3a 5b 5d 7d",
+        "ascii": "{\"Keyboard Lighting\":{\"items\":{\"LedStrip Length\":{\"selected\":\"\",\"options\":[]}}},\"errors\":[]}",
+        "truncated": false
+      },
+      "durationMs": 78,
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0083",
+    "timestamp": "2026-03-22T17:11:11.124Z",
+    "relativeMs": 282,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0013",
+    "data": {
+      "status": "success",
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0084",
+    "timestamp": "2026-03-22T17:11:11.138Z",
+    "relativeMs": 296,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0015",
+    "data": {
+      "method": "GET",
+      "path": "/v1/drives",
+      "url": "http://127.0.0.1:44443/v1/drives",
       "status": 200,
       "headers": {
         "content-length": "328",
@@ -607,12 +2396,12 @@
       },
       "payloadPreview": {
         "byteCount": 328,
-        "previewByteCount": 64,
-        "hex": "7b 22 64 72 69 76 65 73 22 3a 5b 7b 22 61 22 3a 7b 22 65 6e 61 62 6c 65 64 22 3a 74 72 75 65 2c 22 62 75 73 5f 69 64 22 3a 38 2c 22 74 79 70 65 22 3a 22 31 35 34 31 22 7d 7d 2c 7b 22 62 22 3a",
-        "ascii": "{\"drives\":[{\"a\":{\"enabled\":true,\"bus_id\":8,\"type\":\"1541\"}},{\"b\":",
+        "previewByteCount": 256,
+        "hex": "7b 22 64 72 69 76 65 73 22 3a 5b 7b 22 61 22 3a 7b 22 65 6e 61 62 6c 65 64 22 3a 74 72 75 65 2c 22 62 75 73 5f 69 64 22 3a 38 2c 22 74 79 70 65 22 3a 22 31 35 34 31 22 7d 7d 2c 7b 22 62 22 3a 7b 22 65 6e 61 62 6c 65 64 22 3a 66 61 6c 73 65 2c 22 62 75 73 5f 69 64 22 3a 39 2c 22 74 79 70 65 22 3a 22 31 35 34 31 22 7d 7d 2c 7b 22 49 45 43 20 44 72 69 76 65 22 3a 7b 22 65 6e 61 62 6c 65 64 22 3a 66 61 6c 73 65 2c 22 62 75 73 5f 69 64 22 3a 31 31 2c 22 74 79 70 65 22 3a 22 44 4f 53 20 65 6d 75 6c 61 74 69 6f 6e 22 2c 22 6c 61 73 74 5f 65 72 72 6f 72 22 3a 22 37 33 2c 55 36 34 49 45 43 20 55 4c 54 49 4d 41 54 45 20 44 4f 53 20 56 31 2e 31 2c 30 30 2c 30 30 22 2c 22 70 61 72 74 69 74 69 6f 6e 73 22 3a 5b 7b 22 69 64 22 3a 30 2c 22 70 61 74 68 22 3a 22 2f 55 53 42",
+        "ascii": "{\"drives\":[{\"a\":{\"enabled\":true,\"bus_id\":8,\"type\":\"1541\"}},{\"b\":{\"enabled\":false,\"bus_id\":9,\"type\":\"1541\"}},{\"IEC Drive\":{\"enabled\":false,\"bus_id\":11,\"type\":\"DOS emulation\",\"last_error\":\"73,U64IEC ULTIMATE DOS V1.1,00,00\",\"partitions\":[{\"id\":0,\"path\":\"/USB",
         "truncated": true
       },
-      "durationMs": 18,
+      "durationMs": 28,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": null,
@@ -622,12 +2411,12 @@
     }
   },
   {
-    "id": "EVT-0023",
-    "timestamp": "2026-03-16T14:12:43.881Z",
-    "relativeMs": 243,
+    "id": "EVT-0085",
+    "timestamp": "2026-03-22T17:11:11.138Z",
+    "relativeMs": 296,
     "type": "action-end",
     "origin": "system",
-    "correlationId": "COR-0002",
+    "correlationId": "COR-0015",
     "data": {
       "status": "success",
       "error": null,
@@ -639,13 +2428,16 @@
     }
   },
   {
-    "id": "EVT-0024",
-    "timestamp": "2026-03-16T14:12:43.882Z",
-    "relativeMs": 244,
+    "id": "EVT-0086",
+    "timestamp": "2026-03-22T17:11:11.138Z",
+    "relativeMs": 296,
     "type": "rest-response",
     "origin": "system",
-    "correlationId": "COR-0003",
+    "correlationId": "COR-0016",
     "data": {
+      "method": "GET",
+      "path": "/v1/configs/Drive%20A%20Settings",
+      "url": "http://127.0.0.1:44443/v1/configs/Drive%20A%20Settings",
       "status": 200,
       "headers": {
         "content-length": "1113",
@@ -731,12 +2523,12 @@
       },
       "payloadPreview": {
         "byteCount": 1113,
-        "previewByteCount": 64,
-        "hex": "7b 22 44 72 69 76 65 20 41 20 53 65 74 74 69 6e 67 73 22 3a 7b 22 69 74 65 6d 73 22 3a 7b 22 44 72 69 76 65 22 3a 7b 22 73 65 6c 65 63 74 65 64 22 3a 22 45 6e 61 62 6c 65 64 22 2c 22 6f 70 74",
-        "ascii": "{\"Drive A Settings\":{\"items\":{\"Drive\":{\"selected\":\"Enabled\",\"opt",
+        "previewByteCount": 256,
+        "hex": "7b 22 44 72 69 76 65 20 41 20 53 65 74 74 69 6e 67 73 22 3a 7b 22 69 74 65 6d 73 22 3a 7b 22 44 72 69 76 65 22 3a 7b 22 73 65 6c 65 63 74 65 64 22 3a 22 45 6e 61 62 6c 65 64 22 2c 22 6f 70 74 69 6f 6e 73 22 3a 5b 22 44 69 73 61 62 6c 65 64 22 2c 22 45 6e 61 62 6c 65 64 22 5d 7d 2c 22 44 72 69 76 65 20 54 79 70 65 22 3a 7b 22 73 65 6c 65 63 74 65 64 22 3a 22 31 35 34 31 22 2c 22 6f 70 74 69 6f 6e 73 22 3a 5b 22 31 35 34 31 22 2c 22 31 35 37 31 22 2c 22 31 35 38 31 22 5d 7d 2c 22 44 72 69 76 65 20 42 75 73 20 49 44 22 3a 7b 22 73 65 6c 65 63 74 65 64 22 3a 38 2c 22 6f 70 74 69 6f 6e 73 22 3a 5b 5d 2c 22 64 65 74 61 69 6c 73 22 3a 7b 22 6d 69 6e 22 3a 38 2c 22 6d 61 78 22 3a 31 31 2c 22 66 6f 72 6d 61 74 22 3a 22 25 64 22 7d 7d 2c 22 52 4f 4d 20 66 6f 72 20 31",
+        "ascii": "{\"Drive A Settings\":{\"items\":{\"Drive\":{\"selected\":\"Enabled\",\"options\":[\"Disabled\",\"Enabled\"]},\"Drive Type\":{\"selected\":\"1541\",\"options\":[\"1541\",\"1571\",\"1581\"]},\"Drive Bus ID\":{\"selected\":8,\"options\":[],\"details\":{\"min\":8,\"max\":11,\"format\":\"%d\"}},\"ROM for 1",
         "truncated": true
       },
-      "durationMs": 19,
+      "durationMs": 28,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": null,
@@ -746,12 +2538,12 @@
     }
   },
   {
-    "id": "EVT-0025",
-    "timestamp": "2026-03-16T14:12:43.883Z",
-    "relativeMs": 245,
+    "id": "EVT-0087",
+    "timestamp": "2026-03-22T17:11:11.139Z",
+    "relativeMs": 297,
     "type": "action-end",
     "origin": "system",
-    "correlationId": "COR-0003",
+    "correlationId": "COR-0016",
     "data": {
       "status": "success",
       "error": null,
@@ -763,13 +2555,16 @@
     }
   },
   {
-    "id": "EVT-0026",
-    "timestamp": "2026-03-16T14:12:43.903Z",
-    "relativeMs": 265,
+    "id": "EVT-0088",
+    "timestamp": "2026-03-22T17:11:11.139Z",
+    "relativeMs": 297,
     "type": "rest-response",
     "origin": "system",
-    "correlationId": "COR-0004",
+    "correlationId": "COR-0017",
     "data": {
+      "method": "GET",
+      "path": "/v1/configs/Drive%20B%20Settings",
+      "url": "http://127.0.0.1:44443/v1/configs/Drive%20B%20Settings",
       "status": 200,
       "headers": {
         "content-length": "1114",
@@ -855,12 +2650,12 @@
       },
       "payloadPreview": {
         "byteCount": 1114,
-        "previewByteCount": 64,
-        "hex": "7b 22 44 72 69 76 65 20 42 20 53 65 74 74 69 6e 67 73 22 3a 7b 22 69 74 65 6d 73 22 3a 7b 22 44 72 69 76 65 22 3a 7b 22 73 65 6c 65 63 74 65 64 22 3a 22 44 69 73 61 62 6c 65 64 22 2c 22 6f 70",
-        "ascii": "{\"Drive B Settings\":{\"items\":{\"Drive\":{\"selected\":\"Disabled\",\"op",
+        "previewByteCount": 256,
+        "hex": "7b 22 44 72 69 76 65 20 42 20 53 65 74 74 69 6e 67 73 22 3a 7b 22 69 74 65 6d 73 22 3a 7b 22 44 72 69 76 65 22 3a 7b 22 73 65 6c 65 63 74 65 64 22 3a 22 44 69 73 61 62 6c 65 64 22 2c 22 6f 70 74 69 6f 6e 73 22 3a 5b 22 44 69 73 61 62 6c 65 64 22 2c 22 45 6e 61 62 6c 65 64 22 5d 7d 2c 22 44 72 69 76 65 20 54 79 70 65 22 3a 7b 22 73 65 6c 65 63 74 65 64 22 3a 22 31 35 34 31 22 2c 22 6f 70 74 69 6f 6e 73 22 3a 5b 22 31 35 34 31 22 2c 22 31 35 37 31 22 2c 22 31 35 38 31 22 5d 7d 2c 22 44 72 69 76 65 20 42 75 73 20 49 44 22 3a 7b 22 73 65 6c 65 63 74 65 64 22 3a 39 2c 22 6f 70 74 69 6f 6e 73 22 3a 5b 5d 2c 22 64 65 74 61 69 6c 73 22 3a 7b 22 6d 69 6e 22 3a 38 2c 22 6d 61 78 22 3a 31 31 2c 22 66 6f 72 6d 61 74 22 3a 22 25 64 22 7d 7d 2c 22 52 4f 4d 20 66 6f 72 20",
+        "ascii": "{\"Drive B Settings\":{\"items\":{\"Drive\":{\"selected\":\"Disabled\",\"options\":[\"Disabled\",\"Enabled\"]},\"Drive Type\":{\"selected\":\"1541\",\"options\":[\"1541\",\"1571\",\"1581\"]},\"Drive Bus ID\":{\"selected\":9,\"options\":[],\"details\":{\"min\":8,\"max\":11,\"format\":\"%d\"}},\"ROM for ",
         "truncated": true
       },
-      "durationMs": 23,
+      "durationMs": 31,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": null,
@@ -870,12 +2665,12 @@
     }
   },
   {
-    "id": "EVT-0027",
-    "timestamp": "2026-03-16T14:12:43.903Z",
-    "relativeMs": 265,
+    "id": "EVT-0089",
+    "timestamp": "2026-03-22T17:11:11.139Z",
+    "relativeMs": 297,
     "type": "action-end",
     "origin": "system",
-    "correlationId": "COR-0004",
+    "correlationId": "COR-0017",
     "data": {
       "status": "success",
       "error": null,
@@ -887,13 +2682,16 @@
     }
   },
   {
-    "id": "EVT-0028",
-    "timestamp": "2026-03-16T14:12:43.922Z",
-    "relativeMs": 284,
+    "id": "EVT-0090",
+    "timestamp": "2026-03-22T17:11:11.151Z",
+    "relativeMs": 309,
     "type": "rest-response",
     "origin": "system",
-    "correlationId": "COR-0005",
+    "correlationId": "COR-0018",
     "data": {
+      "method": "GET",
+      "path": "/v1/configs/SoftIEC%20Drive%20Settings",
+      "url": "http://127.0.0.1:44443/v1/configs/SoftIEC%20Drive%20Settings",
       "status": 200,
       "headers": {
         "content-length": "261",
@@ -925,12 +2723,12 @@
       },
       "payloadPreview": {
         "byteCount": 261,
-        "previewByteCount": 64,
-        "hex": "7b 22 53 6f 66 74 49 45 43 20 44 72 69 76 65 20 53 65 74 74 69 6e 67 73 22 3a 7b 22 69 74 65 6d 73 22 3a 7b 22 49 45 43 20 44 72 69 76 65 22 3a 7b 22 73 65 6c 65 63 74 65 64 22 3a 22 44 69 73",
-        "ascii": "{\"SoftIEC Drive Settings\":{\"items\":{\"IEC Drive\":{\"selected\":\"Dis",
+        "previewByteCount": 256,
+        "hex": "7b 22 53 6f 66 74 49 45 43 20 44 72 69 76 65 20 53 65 74 74 69 6e 67 73 22 3a 7b 22 69 74 65 6d 73 22 3a 7b 22 49 45 43 20 44 72 69 76 65 22 3a 7b 22 73 65 6c 65 63 74 65 64 22 3a 22 44 69 73 61 62 6c 65 64 22 2c 22 6f 70 74 69 6f 6e 73 22 3a 5b 22 44 69 73 61 62 6c 65 64 22 2c 22 45 6e 61 62 6c 65 64 22 5d 7d 2c 22 53 6f 66 74 20 44 72 69 76 65 20 42 75 73 20 49 44 22 3a 7b 22 73 65 6c 65 63 74 65 64 22 3a 31 31 2c 22 6f 70 74 69 6f 6e 73 22 3a 5b 5d 2c 22 64 65 74 61 69 6c 73 22 3a 7b 22 6d 69 6e 22 3a 38 2c 22 6d 61 78 22 3a 33 30 2c 22 66 6f 72 6d 61 74 22 3a 22 25 64 22 7d 7d 2c 22 44 65 66 61 75 6c 74 20 50 61 74 68 22 3a 7b 22 73 65 6c 65 63 74 65 64 22 3a 22 2f 55 53 42 30 2f 22 2c 22 6f 70 74 69 6f 6e 73 22 3a 5b 5d 7d 7d 7d 2c 22 65 72 72 6f 72 73",
+        "ascii": "{\"SoftIEC Drive Settings\":{\"items\":{\"IEC Drive\":{\"selected\":\"Disabled\",\"options\":[\"Disabled\",\"Enabled\"]},\"Soft Drive Bus ID\":{\"selected\":11,\"options\":[],\"details\":{\"min\":8,\"max\":30,\"format\":\"%d\"}},\"Default Path\":{\"selected\":\"/USB0/\",\"options\":[]}}},\"errors",
         "truncated": true
       },
-      "durationMs": 33,
+      "durationMs": 34,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": null,
@@ -940,12 +2738,12 @@
     }
   },
   {
-    "id": "EVT-0029",
-    "timestamp": "2026-03-16T14:12:43.923Z",
-    "relativeMs": 285,
+    "id": "EVT-0091",
+    "timestamp": "2026-03-22T17:11:11.151Z",
+    "relativeMs": 309,
     "type": "action-end",
     "origin": "system",
-    "correlationId": "COR-0005",
+    "correlationId": "COR-0018",
     "data": {
       "status": "success",
       "error": null,
@@ -957,61 +2755,12 @@
     }
   },
   {
-    "id": "EVT-0030",
-    "timestamp": "2026-03-16T14:12:44.028Z",
-    "relativeMs": 390,
+    "id": "EVT-0092",
+    "timestamp": "2026-03-22T17:11:11.382Z",
+    "relativeMs": 540,
     "type": "action-start",
     "origin": "system",
-    "correlationId": "COR-0006",
-    "data": {
-      "name": "startup.bootstrap_complete",
-      "component": null,
-      "context": {
-        "ui": {
-          "route": "/disks",
-          "query": ""
-        },
-        "platform": "web",
-        "featureFlags": {
-          "hvsc_enabled": true
-        },
-        "playback": null,
-        "device": {
-          "deviceId": null,
-          "connectionState": "READY"
-        }
-      },
-      "lifecycleState": "foreground",
-      "sourceKind": null,
-      "localAccessMode": null,
-      "trackInstanceId": null,
-      "playlistItemId": null
-    }
-  },
-  {
-    "id": "EVT-0031",
-    "timestamp": "2026-03-16T14:12:44.028Z",
-    "relativeMs": 390,
-    "type": "action-end",
-    "origin": "system",
-    "correlationId": "COR-0006",
-    "data": {
-      "status": "success",
-      "error": null,
-      "lifecycleState": "foreground",
-      "sourceKind": null,
-      "localAccessMode": null,
-      "trackInstanceId": null,
-      "playlistItemId": null
-    }
-  },
-  {
-    "id": "EVT-0032",
-    "timestamp": "2026-03-16T14:12:44.470Z",
-    "relativeMs": 832,
-    "type": "action-start",
-    "origin": "system",
-    "correlationId": "COR-0008",
+    "correlationId": "COR-0020",
     "data": {
       "name": "startup.first_meaningful_interaction",
       "component": null,
@@ -1038,12 +2787,12 @@
     }
   },
   {
-    "id": "EVT-0033",
-    "timestamp": "2026-03-16T14:12:44.470Z",
-    "relativeMs": 832,
+    "id": "EVT-0093",
+    "timestamp": "2026-03-22T17:11:11.383Z",
+    "relativeMs": 541,
     "type": "action-start",
     "origin": "user",
-    "correlationId": "COR-0007",
+    "correlationId": "COR-0019",
     "data": {
       "name": "click Add disks",
       "component": "GlobalInteraction",
@@ -1070,12 +2819,12 @@
     }
   },
   {
-    "id": "EVT-0034",
-    "timestamp": "2026-03-16T14:12:44.471Z",
-    "relativeMs": 833,
+    "id": "EVT-0094",
+    "timestamp": "2026-03-22T17:11:11.383Z",
+    "relativeMs": 541,
     "type": "action-end",
     "origin": "system",
-    "correlationId": "COR-0008",
+    "correlationId": "COR-0020",
     "data": {
       "status": "success",
       "error": null,
@@ -1087,12 +2836,12 @@
     }
   },
   {
-    "id": "EVT-0035",
-    "timestamp": "2026-03-16T14:12:44.648Z",
-    "relativeMs": 1010,
+    "id": "EVT-0095",
+    "timestamp": "2026-03-22T17:11:11.419Z",
+    "relativeMs": 577,
     "type": "action-end",
     "origin": "user",
-    "correlationId": "COR-0007",
+    "correlationId": "COR-0019",
     "data": {
       "status": "success",
       "error": null,
@@ -1104,12 +2853,12 @@
     }
   },
   {
-    "id": "EVT-0036",
-    "timestamp": "2026-03-16T14:12:44.840Z",
-    "relativeMs": 1202,
+    "id": "EVT-0096",
+    "timestamp": "2026-03-22T17:11:11.582Z",
+    "relativeMs": 740,
     "type": "action-start",
     "origin": "user",
-    "correlationId": "COR-0009",
+    "correlationId": "COR-0021",
     "data": {
       "name": "click Add file / folder from C64U",
       "component": "GlobalInteraction",
@@ -1136,12 +2885,12 @@
     }
   },
   {
-    "id": "EVT-0037",
-    "timestamp": "2026-03-16T14:12:44.936Z",
-    "relativeMs": 1298,
+    "id": "EVT-0097",
+    "timestamp": "2026-03-22T17:11:11.606Z",
+    "relativeMs": 764,
     "type": "action-end",
     "origin": "user",
-    "correlationId": "COR-0009",
+    "correlationId": "COR-0021",
     "data": {
       "status": "success",
       "error": null,
@@ -1153,12 +2902,12 @@
     }
   },
   {
-    "id": "EVT-0038",
-    "timestamp": "2026-03-16T14:12:44.945Z",
-    "relativeMs": 1307,
+    "id": "EVT-0098",
+    "timestamp": "2026-03-22T17:11:11.610Z",
+    "relativeMs": 768,
     "type": "backend-decision",
     "origin": "user",
-    "correlationId": "COR-0009",
+    "correlationId": "COR-0021",
     "data": {
       "selectedTarget": "real-device",
       "reason": "reachable",
@@ -1170,36 +2919,36 @@
     }
   },
   {
-    "id": "EVT-0039",
-    "timestamp": "2026-03-16T14:12:44.945Z",
-    "relativeMs": 1307,
+    "id": "EVT-0099",
+    "timestamp": "2026-03-22T17:11:11.610Z",
+    "relativeMs": 768,
     "type": "rest-request",
     "origin": "user",
-    "correlationId": "COR-0009",
+    "correlationId": "COR-0021",
     "data": {
       "method": "POST",
-      "url": "http://127.0.0.1:42529/v1/ftp/list",
+      "url": "http://127.0.0.1:44019/v1/ftp/list",
       "normalizedUrl": "/v1/ftp/list",
       "headers": {
         "Content-Type": "application/json"
       },
       "body": {
         "host": "127.0.0.1",
-        "port": 39771,
-        "password": "***",
+        "port": 35317,
+        "password": "[redacted]",
         "path": "/",
         "traceContext": {
-          "correlationId": "COR-0009",
+          "correlationId": "COR-0021",
           "trackInstanceId": null,
           "playlistItemId": null
         }
       },
       "payloadPreview": {
-        "byteCount": 147,
-        "previewByteCount": 64,
-        "hex": "7b 22 68 6f 73 74 22 3a 22 31 32 37 2e 30 2e 30 2e 31 22 2c 22 70 6f 72 74 22 3a 33 39 37 37 31 2c 22 70 61 73 73 77 6f 72 64 22 3a 22 22 2c 22 70 61 74 68 22 3a 22 2f 22 2c 22 74 72 61 63 65",
-        "ascii": "{\"host\":\"127.0.0.1\",\"port\":39771,\"password\":\"\",\"path\":\"/\",\"trace",
-        "truncated": true
+        "byteCount": 157,
+        "previewByteCount": 157,
+        "hex": "7b 22 68 6f 73 74 22 3a 22 31 32 37 2e 30 2e 30 2e 31 22 2c 22 70 6f 72 74 22 3a 33 35 33 31 37 2c 22 70 61 73 73 77 6f 72 64 22 3a 22 5b 72 65 64 61 63 74 65 64 5d 22 2c 22 70 61 74 68 22 3a 22 2f 22 2c 22 74 72 61 63 65 43 6f 6e 74 65 78 74 22 3a 7b 22 63 6f 72 72 65 6c 61 74 69 6f 6e 49 64 22 3a 22 43 4f 52 2d 30 30 32 31 22 2c 22 74 72 61 63 6b 49 6e 73 74 61 6e 63 65 49 64 22 3a 6e 75 6c 6c 2c 22 70 6c 61 79 6c 69 73 74 49 74 65 6d 49 64 22 3a 6e 75 6c 6c 7d 7d",
+        "ascii": "{\"host\":\"127.0.0.1\",\"port\":35317,\"password\":\"[redacted]\",\"path\":\"/\",\"traceContext\":{\"correlationId\":\"COR-0021\",\"trackInstanceId\":null,\"playlistItemId\":null}}",
+        "truncated": false
       },
       "target": "real-device",
       "lifecycleState": "foreground",
@@ -1210,13 +2959,16 @@
     }
   },
   {
-    "id": "EVT-0040",
-    "timestamp": "2026-03-16T14:12:45.197Z",
-    "relativeMs": 1559,
+    "id": "EVT-0100",
+    "timestamp": "2026-03-22T17:11:11.739Z",
+    "relativeMs": 897,
     "type": "rest-response",
     "origin": "user",
-    "correlationId": "COR-0009",
+    "correlationId": "COR-0021",
     "data": {
+      "method": null,
+      "path": null,
+      "url": null,
       "status": 200,
       "headers": {
         "content-type": "application/json"
@@ -1239,12 +2991,12 @@
       },
       "payloadPreview": {
         "byteCount": 145,
-        "previewByteCount": 64,
-        "hex": "7b 22 65 6e 74 72 69 65 73 22 3a 5b 7b 22 6e 61 6d 65 22 3a 22 2e 66 69 78 74 75 72 65 2d 73 65 65 64 65 64 22 2c 22 70 61 74 68 22 3a 22 2f 2e 66 69 78 74 75 72 65 2d 73 65 65 64 65 64 22 2c",
-        "ascii": "{\"entries\":[{\"name\":\".fixture-seeded\",\"path\":\"/.fixture-seeded\",",
-        "truncated": true
+        "previewByteCount": 145,
+        "hex": "7b 22 65 6e 74 72 69 65 73 22 3a 5b 7b 22 6e 61 6d 65 22 3a 22 2e 66 69 78 74 75 72 65 2d 73 65 65 64 65 64 22 2c 22 70 61 74 68 22 3a 22 2f 2e 66 69 78 74 75 72 65 2d 73 65 65 64 65 64 22 2c 22 74 79 70 65 22 3a 22 66 69 6c 65 22 2c 22 73 69 7a 65 22 3a 32 34 7d 2c 7b 22 6e 61 6d 65 22 3a 22 55 73 62 30 22 2c 22 70 61 74 68 22 3a 22 2f 55 73 62 30 22 2c 22 74 79 70 65 22 3a 22 64 69 72 22 2c 22 73 69 7a 65 22 3a 31 30 30 7d 5d 7d",
+        "ascii": "{\"entries\":[{\"name\":\".fixture-seeded\",\"path\":\"/.fixture-seeded\",\"type\":\"file\",\"size\":24},{\"name\":\"Usb0\",\"path\":\"/Usb0\",\"type\":\"dir\",\"size\":100}]}",
+        "truncated": false
       },
-      "durationMs": 232,
+      "durationMs": 129,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": null,
@@ -1254,33 +3006,34 @@
     }
   },
   {
-    "id": "EVT-0041",
-    "timestamp": "2026-03-16T14:12:45.207Z",
-    "relativeMs": 1569,
+    "id": "EVT-0101",
+    "timestamp": "2026-03-22T17:11:11.742Z",
+    "relativeMs": 900,
     "type": "ftp-operation",
     "origin": "user",
-    "correlationId": "COR-0009",
+    "correlationId": "COR-0021",
     "data": {
       "operation": "list",
       "path": "/",
+      "durationMs": 158,
       "result": "success",
       "requestPayload": {
         "host": "127.0.0.1",
-        "port": 39771,
-        "password": "",
+        "port": 35317,
+        "password": "[redacted]",
         "path": "/",
         "traceContext": {
-          "correlationId": "COR-0009",
+          "correlationId": "COR-0021",
           "trackInstanceId": null,
           "playlistItemId": null
         }
       },
       "requestPayloadPreview": {
-        "byteCount": 147,
-        "previewByteCount": 64,
-        "hex": "7b 22 68 6f 73 74 22 3a 22 31 32 37 2e 30 2e 30 2e 31 22 2c 22 70 6f 72 74 22 3a 33 39 37 37 31 2c 22 70 61 73 73 77 6f 72 64 22 3a 22 22 2c 22 70 61 74 68 22 3a 22 2f 22 2c 22 74 72 61 63 65",
-        "ascii": "{\"host\":\"127.0.0.1\",\"port\":39771,\"password\":\"\",\"path\":\"/\",\"trace",
-        "truncated": true
+        "byteCount": 157,
+        "previewByteCount": 157,
+        "hex": "7b 22 68 6f 73 74 22 3a 22 31 32 37 2e 30 2e 30 2e 31 22 2c 22 70 6f 72 74 22 3a 33 35 33 31 37 2c 22 70 61 73 73 77 6f 72 64 22 3a 22 5b 72 65 64 61 63 74 65 64 5d 22 2c 22 70 61 74 68 22 3a 22 2f 22 2c 22 74 72 61 63 65 43 6f 6e 74 65 78 74 22 3a 7b 22 63 6f 72 72 65 6c 61 74 69 6f 6e 49 64 22 3a 22 43 4f 52 2d 30 30 32 31 22 2c 22 74 72 61 63 6b 49 6e 73 74 61 6e 63 65 49 64 22 3a 6e 75 6c 6c 2c 22 70 6c 61 79 6c 69 73 74 49 74 65 6d 49 64 22 3a 6e 75 6c 6c 7d 7d",
+        "ascii": "{\"host\":\"127.0.0.1\",\"port\":35317,\"password\":\"[redacted]\",\"path\":\"/\",\"traceContext\":{\"correlationId\":\"COR-0021\",\"trackInstanceId\":null,\"playlistItemId\":null}}",
+        "truncated": false
       },
       "responsePayload": {
         "entries": [
@@ -1300,10 +3053,10 @@
       },
       "responsePayloadPreview": {
         "byteCount": 145,
-        "previewByteCount": 64,
-        "hex": "7b 22 65 6e 74 72 69 65 73 22 3a 5b 7b 22 6e 61 6d 65 22 3a 22 2e 66 69 78 74 75 72 65 2d 73 65 65 64 65 64 22 2c 22 70 61 74 68 22 3a 22 2f 2e 66 69 78 74 75 72 65 2d 73 65 65 64 65 64 22 2c",
-        "ascii": "{\"entries\":[{\"name\":\".fixture-seeded\",\"path\":\"/.fixture-seeded\",",
-        "truncated": true
+        "previewByteCount": 145,
+        "hex": "7b 22 65 6e 74 72 69 65 73 22 3a 5b 7b 22 6e 61 6d 65 22 3a 22 2e 66 69 78 74 75 72 65 2d 73 65 65 64 65 64 22 2c 22 70 61 74 68 22 3a 22 2f 2e 66 69 78 74 75 72 65 2d 73 65 65 64 65 64 22 2c 22 74 79 70 65 22 3a 22 66 69 6c 65 22 2c 22 73 69 7a 65 22 3a 32 34 7d 2c 7b 22 6e 61 6d 65 22 3a 22 55 73 62 30 22 2c 22 70 61 74 68 22 3a 22 2f 55 73 62 30 22 2c 22 74 79 70 65 22 3a 22 64 69 72 22 2c 22 73 69 7a 65 22 3a 31 30 30 7d 5d 7d",
+        "ascii": "{\"entries\":[{\"name\":\".fixture-seeded\",\"path\":\"/.fixture-seeded\",\"type\":\"file\",\"size\":24},{\"name\":\"Usb0\",\"path\":\"/Usb0\",\"type\":\"dir\",\"size\":100}]}",
+        "truncated": false
       },
       "error": null,
       "target": "external-mock",
@@ -1315,12 +3068,12 @@
     }
   },
   {
-    "id": "EVT-0042",
-    "timestamp": "2026-03-16T14:12:46.126Z",
-    "relativeMs": 2488,
+    "id": "EVT-0102",
+    "timestamp": "2026-03-22T17:11:12.227Z",
+    "relativeMs": 1385,
     "type": "action-start",
     "origin": "user",
-    "correlationId": "COR-0010",
+    "correlationId": "COR-0022",
     "data": {
       "name": "click Open Usb0",
       "component": "GlobalInteraction",
@@ -1347,12 +3100,12 @@
     }
   },
   {
-    "id": "EVT-0043",
-    "timestamp": "2026-03-16T14:12:46.128Z",
-    "relativeMs": 2490,
+    "id": "EVT-0103",
+    "timestamp": "2026-03-22T17:11:12.229Z",
+    "relativeMs": 1387,
     "type": "backend-decision",
     "origin": "user",
-    "correlationId": "COR-0010",
+    "correlationId": "COR-0022",
     "data": {
       "selectedTarget": "real-device",
       "reason": "reachable",
@@ -1364,36 +3117,36 @@
     }
   },
   {
-    "id": "EVT-0044",
-    "timestamp": "2026-03-16T14:12:46.128Z",
-    "relativeMs": 2490,
+    "id": "EVT-0104",
+    "timestamp": "2026-03-22T17:11:12.230Z",
+    "relativeMs": 1388,
     "type": "rest-request",
     "origin": "user",
-    "correlationId": "COR-0010",
+    "correlationId": "COR-0022",
     "data": {
       "method": "POST",
-      "url": "http://127.0.0.1:42529/v1/ftp/list",
+      "url": "http://127.0.0.1:44019/v1/ftp/list",
       "normalizedUrl": "/v1/ftp/list",
       "headers": {
         "Content-Type": "application/json"
       },
       "body": {
         "host": "127.0.0.1",
-        "port": 39771,
-        "password": "***",
+        "port": 35317,
+        "password": "[redacted]",
         "path": "/Usb0",
         "traceContext": {
-          "correlationId": "COR-0010",
+          "correlationId": "COR-0022",
           "trackInstanceId": null,
           "playlistItemId": null
         }
       },
       "payloadPreview": {
-        "byteCount": 151,
-        "previewByteCount": 64,
-        "hex": "7b 22 68 6f 73 74 22 3a 22 31 32 37 2e 30 2e 30 2e 31 22 2c 22 70 6f 72 74 22 3a 33 39 37 37 31 2c 22 70 61 73 73 77 6f 72 64 22 3a 22 22 2c 22 70 61 74 68 22 3a 22 2f 55 73 62 30 22 2c 22 74",
-        "ascii": "{\"host\":\"127.0.0.1\",\"port\":39771,\"password\":\"\",\"path\":\"/Usb0\",\"t",
-        "truncated": true
+        "byteCount": 161,
+        "previewByteCount": 161,
+        "hex": "7b 22 68 6f 73 74 22 3a 22 31 32 37 2e 30 2e 30 2e 31 22 2c 22 70 6f 72 74 22 3a 33 35 33 31 37 2c 22 70 61 73 73 77 6f 72 64 22 3a 22 5b 72 65 64 61 63 74 65 64 5d 22 2c 22 70 61 74 68 22 3a 22 2f 55 73 62 30 22 2c 22 74 72 61 63 65 43 6f 6e 74 65 78 74 22 3a 7b 22 63 6f 72 72 65 6c 61 74 69 6f 6e 49 64 22 3a 22 43 4f 52 2d 30 30 32 32 22 2c 22 74 72 61 63 6b 49 6e 73 74 61 6e 63 65 49 64 22 3a 6e 75 6c 6c 2c 22 70 6c 61 79 6c 69 73 74 49 74 65 6d 49 64 22 3a 6e 75 6c 6c 7d 7d",
+        "ascii": "{\"host\":\"127.0.0.1\",\"port\":35317,\"password\":\"[redacted]\",\"path\":\"/Usb0\",\"traceContext\":{\"correlationId\":\"COR-0022\",\"trackInstanceId\":null,\"playlistItemId\":null}}",
+        "truncated": false
       },
       "target": "real-device",
       "lifecycleState": "foreground",
@@ -1404,12 +3157,12 @@
     }
   },
   {
-    "id": "EVT-0045",
-    "timestamp": "2026-03-16T14:12:46.137Z",
-    "relativeMs": 2499,
+    "id": "EVT-0105",
+    "timestamp": "2026-03-22T17:11:12.241Z",
+    "relativeMs": 1399,
     "type": "action-end",
     "origin": "user",
-    "correlationId": "COR-0010",
+    "correlationId": "COR-0022",
     "data": {
       "status": "success",
       "error": null,
@@ -1421,13 +3174,16 @@
     }
   },
   {
-    "id": "EVT-0046",
-    "timestamp": "2026-03-16T14:12:46.225Z",
-    "relativeMs": 2587,
+    "id": "EVT-0106",
+    "timestamp": "2026-03-22T17:11:12.324Z",
+    "relativeMs": 1482,
     "type": "rest-response",
     "origin": "user",
-    "correlationId": "COR-0010",
+    "correlationId": "COR-0022",
     "data": {
+      "method": null,
+      "path": null,
+      "url": null,
       "status": 200,
       "headers": {
         "content-type": "application/json"
@@ -1456,12 +3212,12 @@
       },
       "payloadPreview": {
         "byteCount": 249,
-        "previewByteCount": 64,
-        "hex": "7b 22 65 6e 74 72 69 65 73 22 3a 5b 7b 22 6e 61 6d 65 22 3a 22 44 65 6d 6f 73 22 2c 22 70 61 74 68 22 3a 22 2f 55 73 62 30 2f 44 65 6d 6f 73 22 2c 22 74 79 70 65 22 3a 22 64 69 72 22 2c 22 73",
-        "ascii": "{\"entries\":[{\"name\":\"Demos\",\"path\":\"/Usb0/Demos\",\"type\":\"dir\",\"s",
-        "truncated": true
+        "previewByteCount": 249,
+        "hex": "7b 22 65 6e 74 72 69 65 73 22 3a 5b 7b 22 6e 61 6d 65 22 3a 22 44 65 6d 6f 73 22 2c 22 70 61 74 68 22 3a 22 2f 55 73 62 30 2f 44 65 6d 6f 73 22 2c 22 74 79 70 65 22 3a 22 64 69 72 22 2c 22 73 69 7a 65 22 3a 38 30 7d 2c 7b 22 6e 61 6d 65 22 3a 22 47 61 6d 65 73 22 2c 22 70 61 74 68 22 3a 22 2f 55 73 62 30 2f 47 61 6d 65 73 22 2c 22 74 79 70 65 22 3a 22 64 69 72 22 2c 22 73 69 7a 65 22 3a 31 30 30 7d 2c 7b 22 6e 61 6d 65 22 3a 22 4c 6f 6e 67 2d 4e 61 6d 65 73 2d 46 6f 72 2d 4f 76 65 72 66 6c 6f 77 2d 54 65 73 74 69 6e 67 22 2c 22 70 61 74 68 22 3a 22 2f 55 73 62 30 2f 4c 6f 6e 67 2d 4e 61 6d 65 73 2d 46 6f 72 2d 4f 76 65 72 66 6c 6f 77 2d 54 65 73 74 69 6e 67 22 2c 22 74 79 70 65 22 3a 22 64 69 72 22 2c 22 73 69 7a 65 22 3a 38 30 7d 5d 7d",
+        "ascii": "{\"entries\":[{\"name\":\"Demos\",\"path\":\"/Usb0/Demos\",\"type\":\"dir\",\"size\":80},{\"name\":\"Games\",\"path\":\"/Usb0/Games\",\"type\":\"dir\",\"size\":100},{\"name\":\"Long-Names-For-Overflow-Testing\",\"path\":\"/Usb0/Long-Names-For-Overflow-Testing\",\"type\":\"dir\",\"size\":80}]}",
+        "truncated": false
       },
-      "durationMs": 96,
+      "durationMs": 94,
       "error": null,
       "lifecycleState": "foreground",
       "sourceKind": null,
@@ -1471,33 +3227,34 @@
     }
   },
   {
-    "id": "EVT-0047",
-    "timestamp": "2026-03-16T14:12:46.226Z",
-    "relativeMs": 2588,
+    "id": "EVT-0107",
+    "timestamp": "2026-03-22T17:11:12.329Z",
+    "relativeMs": 1487,
     "type": "ftp-operation",
     "origin": "user",
-    "correlationId": "COR-0010",
+    "correlationId": "COR-0022",
     "data": {
       "operation": "list",
       "path": "/Usb0",
+      "durationMs": 100,
       "result": "success",
       "requestPayload": {
         "host": "127.0.0.1",
-        "port": 39771,
-        "password": "",
+        "port": 35317,
+        "password": "[redacted]",
         "path": "/Usb0",
         "traceContext": {
-          "correlationId": "COR-0010",
+          "correlationId": "COR-0022",
           "trackInstanceId": null,
           "playlistItemId": null
         }
       },
       "requestPayloadPreview": {
-        "byteCount": 151,
-        "previewByteCount": 64,
-        "hex": "7b 22 68 6f 73 74 22 3a 22 31 32 37 2e 30 2e 30 2e 31 22 2c 22 70 6f 72 74 22 3a 33 39 37 37 31 2c 22 70 61 73 73 77 6f 72 64 22 3a 22 22 2c 22 70 61 74 68 22 3a 22 2f 55 73 62 30 22 2c 22 74",
-        "ascii": "{\"host\":\"127.0.0.1\",\"port\":39771,\"password\":\"\",\"path\":\"/Usb0\",\"t",
-        "truncated": true
+        "byteCount": 161,
+        "previewByteCount": 161,
+        "hex": "7b 22 68 6f 73 74 22 3a 22 31 32 37 2e 30 2e 30 2e 31 22 2c 22 70 6f 72 74 22 3a 33 35 33 31 37 2c 22 70 61 73 73 77 6f 72 64 22 3a 22 5b 72 65 64 61 63 74 65 64 5d 22 2c 22 70 61 74 68 22 3a 22 2f 55 73 62 30 22 2c 22 74 72 61 63 65 43 6f 6e 74 65 78 74 22 3a 7b 22 63 6f 72 72 65 6c 61 74 69 6f 6e 49 64 22 3a 22 43 4f 52 2d 30 30 32 32 22 2c 22 74 72 61 63 6b 49 6e 73 74 61 6e 63 65 49 64 22 3a 6e 75 6c 6c 2c 22 70 6c 61 79 6c 69 73 74 49 74 65 6d 49 64 22 3a 6e 75 6c 6c 7d 7d",
+        "ascii": "{\"host\":\"127.0.0.1\",\"port\":35317,\"password\":\"[redacted]\",\"path\":\"/Usb0\",\"traceContext\":{\"correlationId\":\"COR-0022\",\"trackInstanceId\":null,\"playlistItemId\":null}}",
+        "truncated": false
       },
       "responsePayload": {
         "entries": [
@@ -1523,13 +3280,145 @@
       },
       "responsePayloadPreview": {
         "byteCount": 249,
-        "previewByteCount": 64,
-        "hex": "7b 22 65 6e 74 72 69 65 73 22 3a 5b 7b 22 6e 61 6d 65 22 3a 22 44 65 6d 6f 73 22 2c 22 70 61 74 68 22 3a 22 2f 55 73 62 30 2f 44 65 6d 6f 73 22 2c 22 74 79 70 65 22 3a 22 64 69 72 22 2c 22 73",
-        "ascii": "{\"entries\":[{\"name\":\"Demos\",\"path\":\"/Usb0/Demos\",\"type\":\"dir\",\"s",
-        "truncated": true
+        "previewByteCount": 249,
+        "hex": "7b 22 65 6e 74 72 69 65 73 22 3a 5b 7b 22 6e 61 6d 65 22 3a 22 44 65 6d 6f 73 22 2c 22 70 61 74 68 22 3a 22 2f 55 73 62 30 2f 44 65 6d 6f 73 22 2c 22 74 79 70 65 22 3a 22 64 69 72 22 2c 22 73 69 7a 65 22 3a 38 30 7d 2c 7b 22 6e 61 6d 65 22 3a 22 47 61 6d 65 73 22 2c 22 70 61 74 68 22 3a 22 2f 55 73 62 30 2f 47 61 6d 65 73 22 2c 22 74 79 70 65 22 3a 22 64 69 72 22 2c 22 73 69 7a 65 22 3a 31 30 30 7d 2c 7b 22 6e 61 6d 65 22 3a 22 4c 6f 6e 67 2d 4e 61 6d 65 73 2d 46 6f 72 2d 4f 76 65 72 66 6c 6f 77 2d 54 65 73 74 69 6e 67 22 2c 22 70 61 74 68 22 3a 22 2f 55 73 62 30 2f 4c 6f 6e 67 2d 4e 61 6d 65 73 2d 46 6f 72 2d 4f 76 65 72 66 6c 6f 77 2d 54 65 73 74 69 6e 67 22 2c 22 74 79 70 65 22 3a 22 64 69 72 22 2c 22 73 69 7a 65 22 3a 38 30 7d 5d 7d",
+        "ascii": "{\"entries\":[{\"name\":\"Demos\",\"path\":\"/Usb0/Demos\",\"type\":\"dir\",\"size\":80},{\"name\":\"Games\",\"path\":\"/Usb0/Games\",\"type\":\"dir\",\"size\":100},{\"name\":\"Long-Names-For-Overflow-Testing\",\"path\":\"/Usb0/Long-Names-For-Overflow-Testing\",\"type\":\"dir\",\"size\":80}]}",
+        "truncated": false
       },
       "error": null,
       "target": "external-mock",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0108",
+    "timestamp": "2026-03-22T17:11:12.624Z",
+    "relativeMs": 1782,
+    "type": "action-start",
+    "origin": "system",
+    "correlationId": "COR-0023",
+    "data": {
+      "name": "rest.get",
+      "component": null,
+      "context": {
+        "ui": {
+          "route": "/disks",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": null,
+        "device": {
+          "deviceId": null,
+          "connectionState": "READY"
+        }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0109",
+    "timestamp": "2026-03-22T17:11:12.624Z",
+    "relativeMs": 1782,
+    "type": "backend-decision",
+    "origin": "system",
+    "correlationId": "COR-0023",
+    "data": {
+      "selectedTarget": "external-mock",
+      "reason": "test-mode",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0110",
+    "timestamp": "2026-03-22T17:11:12.625Z",
+    "relativeMs": 1783,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0023",
+    "data": {
+      "method": "GET",
+      "url": "http://127.0.0.1:44443/v1/info",
+      "normalizedUrl": "/v1/info",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:44443"
+      },
+      "body": null,
+      "payloadPreview": null,
+      "target": "external-mock",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0111",
+    "timestamp": "2026-03-22T17:11:12.632Z",
+    "relativeMs": 1790,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0023",
+    "data": {
+      "method": "GET",
+      "path": "/v1/info",
+      "url": "http://127.0.0.1:44443/v1/info",
+      "status": 200,
+      "headers": {
+        "content-length": "153",
+        "content-type": "application/json"
+      },
+      "body": {
+        "product": "C64 Ultimate",
+        "firmware_version": "3.12.0",
+        "fpga_version": "1.0.0",
+        "core_version": "1.0.0",
+        "hostname": "c64u",
+        "unique_id": "TEST-123",
+        "errors": []
+      },
+      "payloadPreview": {
+        "byteCount": 153,
+        "previewByteCount": 153,
+        "hex": "7b 22 70 72 6f 64 75 63 74 22 3a 22 43 36 34 20 55 6c 74 69 6d 61 74 65 22 2c 22 66 69 72 6d 77 61 72 65 5f 76 65 72 73 69 6f 6e 22 3a 22 33 2e 31 32 2e 30 22 2c 22 66 70 67 61 5f 76 65 72 73 69 6f 6e 22 3a 22 31 2e 30 2e 30 22 2c 22 63 6f 72 65 5f 76 65 72 73 69 6f 6e 22 3a 22 31 2e 30 2e 30 22 2c 22 68 6f 73 74 6e 61 6d 65 22 3a 22 63 36 34 75 22 2c 22 75 6e 69 71 75 65 5f 69 64 22 3a 22 54 45 53 54 2d 31 32 33 22 2c 22 65 72 72 6f 72 73 22 3a 5b 5d 7d",
+        "ascii": "{\"product\":\"C64 Ultimate\",\"firmware_version\":\"3.12.0\",\"fpga_version\":\"1.0.0\",\"core_version\":\"1.0.0\",\"hostname\":\"c64u\",\"unique_id\":\"TEST-123\",\"errors\":[]}",
+        "truncated": false
+      },
+      "durationMs": 7,
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "localAccessMode": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0112",
+    "timestamp": "2026-03-22T17:11:12.633Z",
+    "relativeMs": 1791,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0023",
+    "data": {
+      "status": "success",
+      "error": null,
       "lifecycleState": "foreground",
       "sourceKind": null,
       "localAccessMode": null,

@@ -1,17 +1,10 @@
 #!/usr/bin/env node
-import { promises as fs } from 'node:fs';
-import path from 'node:path';
+import { promises as fs } from "node:fs";
+import path from "node:path";
 
-const evidenceRoot = path.resolve(
-  process.cwd(),
-  'test-results',
-  'evidence',
-  'playwright',
-);
+const evidenceRoot = path.resolve(process.cwd(), "test-results", "evidence", "playwright");
 
-const pngSignature = Buffer.from([
-  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
-]);
+const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const webmSignature = Buffer.from([0x1a, 0x45, 0xdf, 0xa3]);
 const zipSignature = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
 
@@ -26,7 +19,7 @@ const statSafe = async (target) => {
 };
 
 const readHeader = async (filePath, bytes) => {
-  const handle = await fs.open(filePath, 'r');
+  const handle = await fs.open(filePath, "r");
   try {
     const buffer = Buffer.alloc(bytes);
     await handle.read(buffer, 0, bytes, 0);
@@ -38,17 +31,17 @@ const readHeader = async (filePath, bytes) => {
 
 const validateSignature = async (filePath) => {
   const ext = path.extname(filePath).toLowerCase();
-  if (ext === '.png') {
+  if (ext === ".png") {
     const header = await readHeader(filePath, pngSignature.length);
     if (!header.equals(pngSignature)) {
       errors.push(`Invalid PNG signature: ${filePath}`);
     }
-  } else if (ext === '.webm') {
+  } else if (ext === ".webm") {
     const header = await readHeader(filePath, webmSignature.length);
     if (!header.equals(webmSignature)) {
       errors.push(`Invalid WEBM signature: ${filePath}`);
     }
-  } else if (ext === '.zip') {
+  } else if (ext === ".zip") {
     const header = await readHeader(filePath, zipSignature.length);
     if (!header.equals(zipSignature)) {
       errors.push(`Invalid ZIP signature: ${filePath}`);
@@ -71,9 +64,7 @@ const validateFile = async (filePath) => {
 
 const listDirs = async (dirPath) => {
   const entries = await fs.readdir(dirPath, { withFileTypes: true });
-  return entries
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => path.join(dirPath, entry.name));
+  return entries.filter((entry) => entry.isDirectory()).map((entry) => path.join(dirPath, entry.name));
 };
 
 const listFiles = async (dirPath) => {
@@ -82,9 +73,9 @@ const listFiles = async (dirPath) => {
 };
 
 const readMetaSafe = async (folderPath) => {
-  const metaPath = path.join(folderPath, 'meta.json');
+  const metaPath = path.join(folderPath, "meta.json");
   try {
-    const raw = await fs.readFile(metaPath, 'utf8');
+    const raw = await fs.readFile(metaPath, "utf8");
     return JSON.parse(raw);
   } catch {
     return null;
@@ -93,38 +84,33 @@ const readMetaSafe = async (folderPath) => {
 
 const isScreenshotEvidenceFolder = async (folderPath) => {
   const testId = path.basename(path.dirname(folderPath));
-  if (testId.startsWith('screenshots--')) {
+  if (testId.startsWith("screenshots--")) {
     return true;
   }
 
   const meta = await readMetaSafe(folderPath);
-  if (!meta || typeof meta.testFile !== 'string') {
+  if (meta && typeof meta.videoExpected === "boolean") {
+    return meta.videoExpected === false;
+  }
+  if (!meta || typeof meta.testFile !== "string") {
     return false;
   }
 
-  const normalizedTestFile = meta.testFile.replace(/\\/g, '/');
-  return normalizedTestFile.endsWith('/playwright/screenshots.spec.ts');
+  const normalizedTestFile = meta.testFile.replace(/\\/g, "/");
+  return normalizedTestFile.endsWith("/playwright/screenshots.spec.ts");
 };
 
 const getEvidenceLeafFolders = async (rootPath) => {
   const entries = await fs.readdir(rootPath, { withFileTypes: true });
-  const hasScreenshotsDir = entries.some(
-    (entry) => entry.isDirectory() && entry.name === 'screenshots',
-  );
-  const hasPng = entries.some(
-    (entry) => entry.isFile() && entry.name.toLowerCase().endsWith('.png'),
-  );
-  const hasVideo = entries.some(
-    (entry) => entry.isFile() && entry.name.toLowerCase() === 'video.webm',
-  );
+  const hasScreenshotsDir = entries.some((entry) => entry.isDirectory() && entry.name === "screenshots");
+  const hasPng = entries.some((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".png"));
+  const hasVideo = entries.some((entry) => entry.isFile() && entry.name.toLowerCase() === "video.webm");
 
   if (hasScreenshotsDir || hasPng || hasVideo) {
     return [rootPath];
   }
 
-  const subdirs = entries
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => path.join(rootPath, entry.name));
+  const subdirs = entries.filter((entry) => entry.isDirectory()).map((entry) => path.join(rootPath, entry.name));
   if (subdirs.length === 0) {
     return [rootPath];
   }
@@ -133,7 +119,7 @@ const getEvidenceLeafFolders = async (rootPath) => {
 
 const validateEvidenceFolder = async (folderPath) => {
   const files = await listFiles(folderPath);
-  const screenshotsDir = path.join(folderPath, 'screenshots');
+  const screenshotsDir = path.join(folderPath, "screenshots");
   const screenshotsStat = await statSafe(screenshotsDir);
   const isScreenshotEvidence = await isScreenshotEvidenceFolder(folderPath);
 
@@ -141,33 +127,25 @@ const validateEvidenceFolder = async (folderPath) => {
   if (screenshotsStat?.isDirectory()) {
     const screenshotFiles = await listFiles(screenshotsDir);
     pngs = screenshotFiles
-      .filter((file) => file.toLowerCase().endsWith('.png'))
+      .filter((file) => file.toLowerCase().endsWith(".png"))
       .map((file) => path.join(screenshotsDir, file));
   } else {
-    pngs = files
-      .filter((file) => file.toLowerCase().endsWith('.png'))
-      .map((file) => path.join(folderPath, file));
+    pngs = files.filter((file) => file.toLowerCase().endsWith(".png")).map((file) => path.join(folderPath, file));
   }
 
-  const videos = files
-    .filter((file) => file.toLowerCase() === 'video.webm')
-    .map((file) => path.join(folderPath, file));
+  const videos = files.filter((file) => file.toLowerCase() === "video.webm").map((file) => path.join(folderPath, file));
 
   if (pngs.length === 0) {
     errors.push(`No PNG screenshots in ${folderPath}`);
   }
   if (videos.length > 1) {
-    errors.push(
-      `Expected exactly one video.webm in ${folderPath}, found ${videos.length}`,
-    );
+    errors.push(`Expected exactly one video.webm in ${folderPath}, found ${videos.length}`);
   }
   if (!isScreenshotEvidence && videos.length !== 1) {
-    errors.push(
-      `Expected exactly one video.webm in ${folderPath}, found ${videos.length}`,
-    );
+    errors.push(`Expected exactly one video.webm in ${folderPath}, found ${videos.length}`);
   }
 
-  const metaPath = path.join(folderPath, 'meta.json');
+  const metaPath = path.join(folderPath, "meta.json");
   const metaStat = await statSafe(metaPath);
   if (screenshotsStat?.isDirectory() && !metaStat) {
     errors.push(`Missing meta.json in ${folderPath}`);
@@ -177,9 +155,7 @@ const validateEvidenceFolder = async (folderPath) => {
     [
       ...pngs,
       ...videos,
-      ...files
-        .filter((file) => file.toLowerCase().endsWith('.zip'))
-        .map((file) => path.join(folderPath, file)),
+      ...files.filter((file) => file.toLowerCase().endsWith(".zip")).map((file) => path.join(folderPath, file)),
       ...(metaStat ? [metaPath] : []),
     ].map((filePath) => validateFile(filePath)),
   );
@@ -192,19 +168,14 @@ const main = async () => {
   } else {
     const folders = await listDirs(evidenceRoot);
     if (folders.length === 0) {
-      errors.push('No evidence folders found.');
+      errors.push("No evidence folders found.");
     }
 
     // Check for flat structure folders (device prefix format)
     for (const folder of folders) {
       const folderName = path.basename(folder);
-      if (
-        folderName.startsWith('android-phone__') ||
-        folderName.startsWith('android-tablet__')
-      ) {
-        errors.push(
-          `Found flat structure folder (should use canonical structure): ${folderName}`,
-        );
+      if (folderName.startsWith("android-phone__") || folderName.startsWith("android-tablet__")) {
+        errors.push(`Found flat structure folder (should use canonical structure): ${folderName}`);
       }
     }
 
@@ -217,15 +188,13 @@ const main = async () => {
   }
 
   if (errors.length) {
-    console.error(
-      'Playwright evidence validation failed:\n' + errors.join('\n'),
-    );
+    console.error("Playwright evidence validation failed:\n" + errors.join("\n"));
     process.exit(1);
   }
-  console.log('Playwright evidence validation passed.');
+  console.log("Playwright evidence validation passed.");
 };
 
 main().catch((error) => {
-  console.error('Validation failed with error:', error);
+  console.error("Validation failed with error:", error);
   process.exit(1);
 });

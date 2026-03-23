@@ -27,6 +27,12 @@ const ensureToolsExpanded = async (_dialog: Locator) => {
   // no-op: tools expansion removed from redesigned DiagnosticsDialog
 };
 
+const scrollRowIntoView = async (entry: Locator) => {
+  await expect(entry).toHaveCount(1);
+  await entry.scrollIntoViewIfNeeded();
+  await expect(entry).toBeVisible();
+};
+
 test.describe("Settings diagnostics workflows", () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
@@ -150,7 +156,7 @@ test.describe("Settings diagnostics workflows", () => {
     await page.goto("/settings");
     await snap(page, testInfo, "settings-open");
 
-    const now = Date.now();
+    const now = Date.now() + 60_000;
     const traceSeed = [
       {
         id: "TRACE-0100",
@@ -216,8 +222,18 @@ test.describe("Settings diagnostics workflows", () => {
         };
         window.addEventListener("c64u-logs-updated", handler);
         const logEntries = [
-          { id: "1", level: "error", message: "Test error entry", timestamp: new Date().toISOString() },
-          { id: "log-1", level: "debug", message: "Test debug entry", timestamp: new Date().toISOString() },
+          {
+            id: "1",
+            level: "error",
+            message: "Test error entry",
+            timestamp: new Date(Date.now() + 60_000).toISOString(),
+          },
+          {
+            id: "log-1",
+            level: "debug",
+            message: "Test debug entry",
+            timestamp: new Date(Date.now() + 59_000).toISOString(),
+          },
         ];
         localStorage.setItem("c64u_app_logs", JSON.stringify(logEntries));
         window.dispatchEvent(new CustomEvent("c64u-logs-updated"));
@@ -243,10 +259,10 @@ test.describe("Settings diagnostics workflows", () => {
     const traceEntry = dialog.getByTestId("evidence-row-trace-TRACE-0100");
     const actionEntry = dialog.getByTestId("evidence-row-action-COR-0100");
 
-    await expect(problemEntry).toBeVisible();
-    await expect(logEntry).toBeVisible();
-    await expect(traceEntry).toBeVisible();
-    await expect(actionEntry).toBeVisible();
+    await scrollRowIntoView(problemEntry);
+    await scrollRowIntoView(logEntry);
+    await scrollRowIntoView(traceEntry);
+    await scrollRowIntoView(actionEntry);
 
     // All EvidenceRow entries use the same component – padding must be identical
     const getPadding = async (entry: Locator) =>

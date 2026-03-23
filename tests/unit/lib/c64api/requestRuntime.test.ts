@@ -20,7 +20,7 @@ import {
   readResponseBody,
   waitWithAbortSignal,
 } from "@/lib/c64api/requestRuntime";
-import { collectTraceHeaders } from "@/lib/tracing/payloadPreview";
+import { collectTraceHeaders, TRACE_PAYLOAD_PREVIEW_BYTE_LIMIT } from "@/lib/tracing/payloadPreview";
 
 describe("requestRuntime", () => {
   beforeEach(() => {
@@ -386,5 +386,26 @@ describe("requestRuntime", () => {
     expect(extractRequestBody({ ok: true })).toEqual({ ok: true });
     await expect(readResponseBody(new Response("ok"))).resolves.toBeNull();
     await expect(readResponseBody(new Response(null))).resolves.toBeNull();
+  });
+
+  it("limits binary previews to the first 256 bytes while keeping total size", async () => {
+    const bytes = Uint8Array.from({ length: TRACE_PAYLOAD_PREVIEW_BYTE_LIMIT + 44 }, (_, index) => index % 256);
+
+    const requestTrace = await inspectRequestPayload(bytes);
+
+    expect(requestTrace.payloadPreview).toEqual(
+      expect.objectContaining({
+        byteCount: TRACE_PAYLOAD_PREVIEW_BYTE_LIMIT + 44,
+        previewByteCount: TRACE_PAYLOAD_PREVIEW_BYTE_LIMIT,
+        truncated: true,
+        ascii: expect.stringMatching(new RegExp(`^.{${TRACE_PAYLOAD_PREVIEW_BYTE_LIMIT}}$`, "s")),
+      }),
+    );
+    expect(requestTrace.payloadPreview?.hex.split(" ")).toHaveLength(TRACE_PAYLOAD_PREVIEW_BYTE_LIMIT);
+    expect(requestTrace.payloadPreview?.ascii).toBe(
+      Array.from(bytes.slice(0, TRACE_PAYLOAD_PREVIEW_BYTE_LIMIT))
+        .map((value) => (value >= 32 && value <= 126 ? String.fromCharCode(value) : "."))
+        .join(""),
+    );
   });
 });

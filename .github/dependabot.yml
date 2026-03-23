@@ -1,9 +1,12 @@
 version: 2
 
 multi-ecosystem-groups:
-  routine-updates:
+  weekly-rollup:
     schedule:
       interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: UTC
     commit-message:
       prefix: deps
     labels:
@@ -12,17 +15,10 @@ multi-ecosystem-groups:
 updates:
   - package-ecosystem: npm
     directory: /
-    multi-ecosystem-group: routine-updates
+    multi-ecosystem-group: weekly-rollup
     patterns:
       - "*"
     open-pull-requests-limit: 1
-    groups:
-      routine-updates:
-        patterns:
-          - "*"
-        update-types:
-          - minor
-          - patch
     ignore:
       - dependency-name: "*"
         update-types:
@@ -30,7 +26,7 @@ updates:
 
   - package-ecosystem: github-actions
     directory: /
-    multi-ecosystem-group: routine-updates
+    multi-ecosystem-group: weekly-rollup
     patterns:
       - "*"
     open-pull-requests-limit: 1
@@ -45,17 +41,10 @@ updates:
 
   - package-ecosystem: gradle
     directory: /android
-    multi-ecosystem-group: routine-updates
+    multi-ecosystem-group: weekly-rollup
     patterns:
       - "*"
     open-pull-requests-limit: 1
-    groups:
-      routine-updates:
-        patterns:
-          - "*"
-        update-types:
-          - minor
-          - patch
     ignore:
       - dependency-name: "*"
         update-types:

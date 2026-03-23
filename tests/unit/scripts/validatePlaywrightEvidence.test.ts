@@ -26,7 +26,7 @@ const writeWebm = (filePath: string) => {
   writeFileSync(filePath, webmHeader);
 };
 
-const writeMeta = (folderPath: string, testFile: string) => {
+const writeMeta = (folderPath: string, testFile: string, videoExpected: boolean) => {
   writeFileSync(
     path.join(folderPath, "meta.json"),
     JSON.stringify(
@@ -41,6 +41,7 @@ const writeMeta = (folderPath: string, testFile: string) => {
         testTitle: "sample test",
         testFile,
         status: "passed",
+        videoExpected,
       },
       null,
       2,
@@ -55,18 +56,20 @@ const createEvidenceFolder = ({
   deviceId = "android-phone",
   testFile,
   withVideo,
+  videoExpected = withVideo,
 }: {
   root: string;
   testId: string;
   deviceId?: string;
   testFile: string;
   withVideo: boolean;
+  videoExpected?: boolean;
 }) => {
   const folder = path.join(root, "test-results", "evidence", "playwright", testId, deviceId);
   const screenshotsDir = path.join(folder, "screenshots");
   mkdirSync(screenshotsDir, { recursive: true });
   writePng(path.join(screenshotsDir, "01-final-state.png"));
-  writeMeta(folder, testFile);
+  writeMeta(folder, testFile, videoExpected);
   if (withVideo) {
     writeWebm(path.join(folder, "video.webm"));
   }
@@ -96,6 +99,7 @@ describe("validate-playwright-evidence", () => {
       testId: "screenshots--screenshotsspects--app-screenshots--capture-home-screenshots",
       testFile: "/tmp/repo/playwright/screenshots.spec.ts",
       withVideo: false,
+      videoExpected: false,
     });
 
     const result = runValidator(root);
@@ -110,10 +114,27 @@ describe("validate-playwright-evidence", () => {
       testId: "playback--playbackspects--playlist-view-all-sheet-stays-viewport-safe-and-scrollable",
       testFile: "/tmp/repo/playwright/playback.spec.ts",
       withVideo: false,
+      videoExpected: true,
     });
 
     const result = runValidator(root);
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("Expected exactly one video.webm");
+  });
+
+  it("accepts tagged screenshot evidence from non-screenshots spec files when video is disabled", () => {
+    const root = createRoot("validate-playwright-evidence-ocr-");
+    createEvidenceFolder({
+      root,
+      testId:
+        "page-header-ocr--primary-page-header-ocr--all-primary-screens-render-a-non-blank-header-with-ocr-visible-titles",
+      testFile: "/tmp/repo/playwright/page-header-ocr.spec.ts",
+      withVideo: false,
+      videoExpected: false,
+    });
+
+    const result = runValidator(root);
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("Playwright evidence validation passed.");
   });
 });

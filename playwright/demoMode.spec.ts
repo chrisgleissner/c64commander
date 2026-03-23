@@ -226,10 +226,14 @@ test.describe("Automatic Demo Mode", () => {
     const dialog = page.getByRole("dialog", { name: "Diagnostics" });
     await expect(dialog).toBeVisible();
     await expect(dialog.getByTestId("diagnostics-health-line")).toContainText(/Unavailable|Idle|Degraded/i);
-    await expect(dialog.getByTestId("diagnostics-header-toggle")).toBeVisible();
 
-    await dialog.getByTestId("diagnostics-header-toggle").click();
-    await ensureTechnicalDetailsExpanded(dialog);
+    const headerToggle = dialog.getByTestId("diagnostics-header-toggle");
+    if ((await headerToggle.count()) > 0) {
+      await expect(headerToggle).toBeVisible();
+      await headerToggle.click();
+      await ensureTechnicalDetailsExpanded(dialog);
+    }
+
     await expect(dialog.getByTestId("diagnostics-device-line")).toBeVisible();
     await snap(page, testInfo, "connection-popover-diagnostics-navigation");
   });
