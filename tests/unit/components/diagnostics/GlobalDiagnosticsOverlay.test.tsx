@@ -7,8 +7,10 @@ import { shareAllDiagnosticsZip } from "@/lib/diagnostics/diagnosticsExport";
 import { DIAGNOSTICS_TEST_OVERLAY_STATE_EVENT } from "@/lib/diagnostics/diagnosticsTestBridge";
 import { resetHealthCheckStateSnapshot } from "@/lib/diagnostics/healthCheckState";
 
-const consumeDiagnosticsOpenRequestMock = vi.fn();
-const clearDiagnosticsOpenRequestMock = vi.fn();
+const { consumeDiagnosticsOpenRequestMock, clearDiagnosticsOpenRequestMock } = vi.hoisted(() => ({
+  consumeDiagnosticsOpenRequestMock: vi.fn(),
+  clearDiagnosticsOpenRequestMock: vi.fn(),
+}));
 
 vi.mock("@/hooks/use-toast", () => ({
   toast: vi.fn(),
