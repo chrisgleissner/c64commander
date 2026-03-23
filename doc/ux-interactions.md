@@ -201,7 +201,7 @@ This document provides a comprehensive inventory of all user-facing interactions
 | CTA             | Label                 | Purpose                | Importance | Test Coverage | Test File     | Notes       |
 | --------------- | --------------------- | ---------------------- | ---------- | ------------- | ------------- | ----------- |
 | Button/Card     | "About" section       | Show version info      | **LOW**    | ⚠️ PARTIAL    | ui.spec.ts    | Information |
-| Secret Tap (5x) | Developer mode toggle | Enable hidden features | **LOW**    | ⚠️ PARTIAL    | ui.spec.ts:61 | Easter egg  |
+| Secret Tap (7x) | Developer mode toggle | Enable hidden features | **LOW**    | ⚠️ PARTIAL    | ui.spec.ts:61 | Easter egg  |
 
 ---
 
