@@ -65,6 +65,18 @@ describe("pageHeaderOcr", () => {
     expect(best.label).toBe("strong");
   });
 
+  it("breaks equal OCR scores by preferring the longer normalized candidate", () => {
+    const best = pickBestHeaderOcrCandidate(
+      [
+        { label: "short", text: "HOME C64U" },
+        { label: "long", text: "HOME C64U STATUS OK" },
+      ],
+      "Home",
+    );
+
+    expect(best.label).toBe("long");
+  });
+
   it("throws when no OCR candidates are available", () => {
     expect(() => pickBestHeaderOcrCandidate([], "Home")).toThrow(/No OCR candidates were produced/);
   });
