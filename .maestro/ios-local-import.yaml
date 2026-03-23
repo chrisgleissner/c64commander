@@ -12,7 +12,6 @@ env:
   TIMEOUT: ${TIMEOUT || "15000"}
 tags:
   - ios
-  - ci-critical-ios
 ---
 - runFlow: subflows/ios-open-play-add-items.yaml
 
