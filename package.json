@@ -27,7 +27,7 @@
     "build:dev": "node scripts/run-vite.mjs build --mode development",
     "lint": "npm run format:check:ts && eslint . && npm run lint:display-profiles",
     "lint:display-profiles": "node scripts/check-display-profile-breakpoints.mjs",
-    "postinstall": "patch-package && node --input-type=module -e \"import { existsSync } from 'node:fs'; if (existsSync('./scripts/install-git-hooks.mjs')) await import('./scripts/install-git-hooks.mjs');\"",
+    "postinstall": "patch-package && npm install --prefix c64scope && node --input-type=module -e \"import { existsSync } from 'node:fs'; if (existsSync('./scripts/install-git-hooks.mjs')) await import('./scripts/install-git-hooks.mjs');\"",
     "preview": "node scripts/run-vite.mjs preview",
     "start:web": "node web/server/dist/index.js",
     "test": "vitest run",
