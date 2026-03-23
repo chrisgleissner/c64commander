@@ -280,6 +280,111 @@ stop_unified_log_capture() {
   fi
 }
 
+  write_fallback_debug_payload() {
+    local endpoint="$1"
+    local outfile="$2"
+    local flow_dir="$3"
+
+    python3 - "$endpoint" "$outfile" "$flow_dir" <<'PY'
+  import json
+  import os
+  import sys
+
+  endpoint, outfile, flow_dir = sys.argv[1:4]
+
+  def load_json(path):
+    if not os.path.exists(path):
+      return None
+    try:
+      with open(path, encoding="utf-8") as handle:
+        return json.load(handle)
+    except Exception:
+      return None
+
+  def load_jsonl_lines(path, limit=20):
+    rows = []
+    if not os.path.exists(path):
+      return rows
+    with open(path, encoding="utf-8", errors="replace") as handle:
+      for line in handle:
+        line = line.strip()
+        if not line:
+          continue
+        try:
+          rows.append(json.loads(line))
+        except Exception:
+          continue
+    return rows[-limit:]
+
+  def load_text_tail(path, limit=20):
+    if not os.path.exists(path):
+      return []
+    with open(path, encoding="utf-8", errors="replace") as handle:
+      lines = [line.rstrip("\n") for line in handle]
+    return lines[-limit:]
+
+  meta = load_json(os.path.join(flow_dir, "meta.json")) or {}
+  timing_trace = load_json(os.path.join(flow_dir, "timing-trace.json")) or {"events": []}
+  raw_log = load_jsonl_lines(os.path.join(flow_dir, "maestro-raw.jsonl"))
+  unified_log = load_text_tail(os.path.join(flow_dir, "ios-unified.log"))
+
+  fallback_meta = {
+    "fallback": True,
+    "endpoint": endpoint,
+    "reason": "debug-endpoint-unavailable",
+    "meta": meta,
+  }
+
+  if endpoint == "actions":
+    payload = {
+      "actions": [
+        {
+          "type": "runner-fallback",
+          "outcome": "unavailable",
+          "endpoint": endpoint,
+          "detail": "Maestro debug endpoint was unavailable; use raw runner evidence attached to this flow.",
+          "rawLogExcerpt": [entry.get("line", "") for entry in raw_log[-10:]],
+        }
+      ],
+      "fallback": fallback_meta,
+    }
+  elif endpoint == "network":
+    payload = {
+      "requests": [
+        {
+          "url": "http://127.0.0.1:39877/debug/network",
+          "method": "GET",
+          "outcome": "unavailable",
+          "reason": "debug-endpoint-unavailable",
+        }
+      ],
+      "successCount": 0,
+      "failureCount": 0,
+      "fallback": fallback_meta,
+    }
+  elif endpoint == "event":
+    payload = {
+      "events": timing_trace.get("events", [])[-20:],
+      "fallback": fallback_meta,
+    }
+  else:
+    payload = [
+      {
+        "type": "runner-fallback",
+        "endpoint": endpoint,
+        "reason": "debug-endpoint-unavailable",
+        "timingEventExcerpt": timing_trace.get("events", [])[-10:],
+        "rawLogExcerpt": [entry.get("line", "") for entry in raw_log[-10:]],
+        "unifiedLogExcerpt": unified_log[-10:],
+      }
+    ]
+
+  with open(outfile, "w", encoding="utf-8") as handle:
+    json.dump(payload, handle, indent=2, sort_keys=True)
+    handle.write("\n")
+  PY
+  }
+
 capture_accessibility_snapshot() {
   local flow_dir="$1"
   local snapshot_name="$2"
@@ -309,12 +414,14 @@ run_maestro_and_capture() {
 
   python3 - "$MAESTRO_BIN" "$flow_yaml" "$UDID" "$junit_file" "$raw_log_file" <<'PY'
 import json
+import os
 import subprocess
 import sys
 import time
 import xml.etree.ElementTree as ET
 
 maestro_bin, flow_yaml, udid, junit_file, raw_log_file = sys.argv[1:6]
+flow_name = os.path.splitext(os.path.basename(flow_yaml))[0]
 cmd = [
     maestro_bin,
     "test",
@@ -335,6 +442,36 @@ with open(raw_log_file, "w", encoding="utf-8") as handle:
         handle.write(json.dumps(entry, sort_keys=True) + "\n")
         print(line, end="")
 exit_code = process.wait()
+
+def raw_log_excerpt(path: str, limit: int = 40) -> str:
+  lines = []
+  try:
+    with open(path, encoding="utf-8") as handle:
+      for line in handle:
+        line = line.rstrip("\n")
+        if line:
+          lines.append(line)
+  except FileNotFoundError:
+    return ""
+  return "\n".join(lines[-limit:])
+
+def write_fallback_junit_report(path: str, reason: str, process_exit_code: int) -> None:
+  suite = ET.Element(
+      "testsuite",
+      name=flow_name,
+      tests="1",
+      failures="1",
+      errors="0",
+      skipped="0",
+      time="0",
+  )
+  case = ET.SubElement(suite, "testcase", classname="maestro", name=flow_name, time="0")
+  failure = ET.SubElement(case, "failure", message=reason, type="MaestroFailure")
+  excerpt = raw_log_excerpt(raw_log_file)
+  failure.text = f"processExit={process_exit_code}"
+  if excerpt:
+    failure.text = f"{failure.text}\n{excerpt}"
+  ET.ElementTree(suite).write(path, xml_declaration=True, encoding="unicode")
 
 def summarize_junit(path: str) -> tuple[int, int, int]:
   tree = ET.parse(path)
@@ -359,11 +496,13 @@ def summarize_junit(path: str) -> tuple[int, int, int]:
   raise ValueError(f"Unexpected JUnit root element: {root.tag}")
 
 junit_status = 0
+needs_fallback_junit = False
 try:
   tests, failures, errors = summarize_junit(junit_file)
   if tests == 0:
     print(f"Maestro JUnit report contains zero tests: {junit_file}")
     junit_status = 1
+    needs_fallback_junit = True
   elif failures > 0 or errors > 0:
     if exit_code == 0:
       print(
@@ -379,9 +518,18 @@ try:
 except FileNotFoundError:
   print(f"Maestro JUnit report missing: {junit_file}")
   junit_status = 1
+  needs_fallback_junit = True
 except Exception as exc:
   print(f"Failed to parse Maestro JUnit report {junit_file}: {exc}")
   junit_status = 1
+  needs_fallback_junit = True
+
+if needs_fallback_junit:
+  write_fallback_junit_report(
+      junit_file,
+      "Maestro failed before producing a valid JUnit report.",
+      exit_code,
+  )
 
 if exit_code != 0:
   sys.exit(exit_code)
@@ -432,7 +580,11 @@ preflight_maestro_driver_retry() {
     return 1
   fi
 
-  seed_smoke_config "$flow" || true
+  if ! seed_smoke_config "$flow"; then
+    trace_event "$flow_dir" "maestro.driver.preflight.seed_smoke_config" "runner" '{"status":"failed"}'
+    log "Smoke config seeding failed during retry preflight (${flow})"
+    return 1
+  fi
   xcrun simctl launch "$UDID" "$APP_ID" >/dev/null 2>&1 || true
   sleep 5
   xcrun simctl terminate "$UDID" "$APP_ID" >/dev/null 2>&1 || true
@@ -649,8 +801,8 @@ collect_debug_payloads() {
       sleep 1
     done
     if [[ $attempt -ge "$DEBUG_PAYLOAD_MAX_ATTEMPTS" ]]; then
-      echo "[]" > "${flow_dir}/${filename}"
-      log "Failed to collect debug/${endpoint} — wrote empty array"
+      write_fallback_debug_payload "$endpoint" "${flow_dir}/${filename}" "$flow_dir"
+      log "Failed to collect debug/${endpoint} — wrote fallback payload"
     fi
   done
 
@@ -667,12 +819,11 @@ collect_debug_payloads() {
     sleep 1
   done
   if [[ $net_attempt -ge "$DEBUG_PAYLOAD_MAX_ATTEMPTS" ]]; then
-    echo '{"requests":[],"successCount":0,"failureCount":0}' > "${flow_dir}/network.json"
-    log "No network.json endpoint — wrote empty stub"
+    write_fallback_debug_payload "network" "${flow_dir}/network.json" "$flow_dir"
+    log "No network.json endpoint — wrote fallback payload"
   fi
 
-  # Produce event.json stub (Maestro events are in junit)
-  echo '[]' > "${flow_dir}/event.json"
+  write_fallback_debug_payload "event" "${flow_dir}/event.json" "$flow_dir"
 }
 
 # ── Video Recording ────────────────────────────────────────────
@@ -854,9 +1005,6 @@ TJSON
     xcrun simctl io "$UDID" screenshot "${flow_dir}/screenshots/${flow}-failure.png" || true
   fi
 
-  # Collect debug payloads
-  collect_debug_payloads "$flow" "$flow_dir"
-
   # On failure, capture infra diagnostics
   if [[ $flow_exit -ne 0 ]]; then
     log "Flow ${flow} failed (exit=${flow_exit}) — capturing diagnostics"
@@ -879,6 +1027,10 @@ TJSON
 TJSON
 
   emit_timing_trace "$flow" "$flow_dir"
+
+  # Collect debug payloads after timing trace exists so fallback payloads can
+  # embed real runner evidence instead of empty placeholders.
+  collect_debug_payloads "$flow" "$flow_dir"
 
   log "Flow ${flow} completed in ${flow_duration_ms}ms (exit=${flow_exit})"
   return $flow_exit

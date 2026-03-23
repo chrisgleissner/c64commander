@@ -1,0 +1,13 @@
+appId: uk.gleissner.c64commander
+env:
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "60000"}
+tags:
+  - ios
+  - ci-critical-ios
+  - subflow-probe
+---
+- runFlow: subflows/ios-open-play-add-items.yaml
+- extendedWaitUntil:
+    visible: "Add file / folder from Local"
+    timeout: ${LONG_TIMEOUT}
+- assertVisible: "Add file / folder from Local"

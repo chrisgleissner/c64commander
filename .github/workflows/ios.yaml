@@ -466,14 +466,35 @@ jobs:
             exit "$maestro_status"
           fi
 
+      - name: Validate shared iOS subflows
+        if: matrix.group.name == 'group-1'
+        env:
+          IOS_MAESTRO_MOCK_PORT: ${{ vars.IOS_MAESTRO_MOCK_PORT || '' }}
+        run: |
+          set -euo pipefail
+          shared_subflow_cmd=(
+            bash scripts/ci/validate-ios-maestro-shared-subflows.sh
+            --udid "${{ steps.simulator.outputs.udid }}"
+            --app-path "App.app"
+          )
+          if [[ -n "${IOS_MAESTRO_MOCK_PORT:-}" ]]; then
+            shared_subflow_cmd+=(--mock-port "${IOS_MAESTRO_MOCK_PORT}")
+          fi
+          "${shared_subflow_cmd[@]}"
+
       - name: Validate connectivity (${{ matrix.group.name }})
         if: always()
         run: |
+          set -euo pipefail
+          connectivity_status=0
           # Validate connectivity for each flow in the group
           IFS=',' read -ra FLOW_ARRAY <<< "${{ matrix.group.flows }}"
           for flow in "${FLOW_ARRAY[@]}"; do
-            bash scripts/ci/validate-ios-connectivity.sh "artifacts/ios/${flow}" || true
+            if ! bash scripts/ci/validate-ios-connectivity.sh "artifacts/ios/${flow}"; then
+              connectivity_status=1
+            fi
           done
+          exit "$connectivity_status"
 
       - name: Stop iOS telemetry monitor
         if: always()
@@ -684,7 +705,10 @@ jobs:
             # Copy infra diagnostics
             if [[ -d "$artifact_root/_infra" ]]; then
               mkdir -p "artifacts/ios/_infra"
-              cp -r "$artifact_root/_infra"/* "artifacts/ios/_infra/" 2>/dev/null || true
+              infra_entries=("$artifact_root/_infra"/*)
+              if [[ ${#infra_entries[@]} -gt 0 ]]; then
+                cp -r "${infra_entries[@]}" "artifacts/ios/_infra/"
+              fi
             fi
           done
           shopt -u nullglob
