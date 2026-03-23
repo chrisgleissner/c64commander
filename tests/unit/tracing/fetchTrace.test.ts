@@ -150,13 +150,13 @@ describe("fetchTrace", () => {
     expect(recordRestRequestMock).toHaveBeenCalledTimes(1);
   });
 
-  it("extracts headers and blob body from Request inputs", async () => {
+  it("extracts headers and stream body from Request inputs", async () => {
     registerFetchTrace();
 
     const request = new Request("http://localhost/api/rest/v1/info", {
       method: "PUT",
       headers: new Headers({ "x-upload": "1" }),
-      body: new Blob(["abc"], { type: "text/plain" }),
+      body: "abc",
     });
 
     await window.fetch(request);

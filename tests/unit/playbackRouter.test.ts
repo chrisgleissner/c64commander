@@ -669,8 +669,8 @@ describe("playbackRouter", () => {
     await executePlayPlan(api as any, plan);
     const blob1 = api.playSidUpload.mock.calls[0][0] as Blob;
     const blob2 = api.playSidUpload.mock.calls[1][0] as Blob;
-    const bytes1 = new Uint8Array(await new Response(blob1).arrayBuffer());
-    const bytes2 = new Uint8Array(await new Response(blob2).arrayBuffer());
+    const bytes1 = new Uint8Array(await blob1.arrayBuffer());
+    const bytes2 = new Uint8Array(await blob2.arrayBuffer());
     expect(bytes1).toEqual(bytes2);
   });
 
