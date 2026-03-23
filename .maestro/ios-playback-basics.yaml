@@ -9,6 +9,6 @@ tags:
 - assertVisible:
     text: "Playlist"
 - assertVisible:
-    text: "Add items"
+    text: "Add items to playlist"
     optional: true
 - takeScreenshot: ios-playback-basics-controls

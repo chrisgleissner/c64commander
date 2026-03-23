@@ -1,0 +1,13 @@
+appId: uk.gleissner.c64commander
+env:
+  TIMEOUT: ${TIMEOUT || "15000"}
+tags:
+  - ios
+  - ci-critical-ios
+  - subflow-probe
+---
+- runFlow: subflows/ios-open-settings-tab.yaml
+- extendedWaitUntil:
+    visible: "Connection"
+    timeout: ${TIMEOUT}
+- assertVisible: "Connection"

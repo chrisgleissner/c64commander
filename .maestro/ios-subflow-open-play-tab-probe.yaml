@@ -1,0 +1,13 @@
+appId: uk.gleissner.c64commander
+env:
+  TIMEOUT: ${TIMEOUT || "15000"}
+tags:
+  - ios
+  - ci-critical-ios
+  - subflow-probe
+---
+- runFlow: subflows/ios-open-play-tab.yaml
+- extendedWaitUntil:
+    visible: "Playlist"
+    timeout: ${TIMEOUT}
+- assertVisible: "Playlist"

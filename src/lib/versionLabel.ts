@@ -15,7 +15,7 @@ type VersionLabelInput = {
 const TAGGED_DESCRIBE_PATTERN = /^(?<tag>.+)-(?<distance>\d+)-g(?<sha>[0-9a-f]+)(?<dirty>-dirty)?$/i;
 const BARE_SHA_PATTERN = /^(?<sha>[0-9a-f]+)(?<dirty>-dirty)?$/i;
 
-export const shortenGitId = (gitSha: string, length = 3) => gitSha.trim().slice(0, Math.max(0, length));
+export const shortenGitId = (gitSha: string, length = 5) => gitSha.trim().slice(0, Math.max(0, length));
 
 export const deriveVersionLabel = ({
   gitDescribe = "",

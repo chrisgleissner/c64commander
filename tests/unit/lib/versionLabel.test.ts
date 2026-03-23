@@ -12,8 +12,8 @@ import { deriveVersionLabel, shortenGitId } from "@/lib/versionLabel";
 
 describe("versionLabel", () => {
   describe("shortenGitId", () => {
-    it("returns the first three git id characters by default", () => {
-      expect(shortenGitId("b1141986")).toBe("b11");
+    it("returns the first five git id characters by default", () => {
+      expect(shortenGitId("b1141986")).toBe("b1141");
     });
   });
 
@@ -28,24 +28,24 @@ describe("versionLabel", () => {
       ).toBe("0.6.4-rc4");
     });
 
-    it("appends the first three git id characters when commits exist after the latest tag", () => {
+    it("appends the first five git id characters when commits exist after the latest tag", () => {
       expect(
         deriveVersionLabel({
           gitDescribe: "0.6.4-rc4-13-gb1141986",
           gitSha: "b1141986f00d",
           fallbackVersion: "0.1.0",
         }),
-      ).toBe("0.6.4-rc4-b11");
+      ).toBe("0.6.4-rc4-b1141");
     });
 
-    it("appends the first three git id characters when the tag commit has additional uncommitted changes", () => {
+    it("appends the first five git id characters when the tag commit has additional uncommitted changes", () => {
       expect(
         deriveVersionLabel({
           gitDescribe: "0.6.4-rc4-0-gb1141986-dirty",
           gitSha: "b1141986f00d",
           fallbackVersion: "0.1.0",
         }),
-      ).toBe("0.6.4-rc4-b11");
+      ).toBe("0.6.4-rc4-b1141");
     });
 
     it("falls back to the package version when git describe does not resolve a tag", () => {
@@ -64,27 +64,27 @@ describe("versionLabel", () => {
           gitDescribe: "0.6.4-rc4-3-gabc1234",
           gitSha: "",
         }),
-      ).toBe("0.6.4-rc4-abc");
+      ).toBe("0.6.4-rc4-abc12");
     });
 
-    it("falls back to the sha from the bare-sha describe when gitSha and fallbackVersion are absent", () => {
+    it("falls back to the first five sha characters from the bare-sha describe when gitSha and fallbackVersion are absent", () => {
       expect(
         deriveVersionLabel({
           gitDescribe: "abc1234",
           gitSha: "",
           fallbackVersion: "",
         }),
-      ).toBe("abc");
+      ).toBe("abc12");
     });
 
-    it("uses the gitSha over the sha captured in a bare describe", () => {
+    it("uses the gitSha over the sha captured in a bare describe and keeps five characters", () => {
       expect(
         deriveVersionLabel({
           gitDescribe: "abc1234",
           gitSha: "def5678",
           fallbackVersion: "",
         }),
-      ).toBe("def");
+      ).toBe("def56");
     });
 
     it("returns the describe string verbatim when it does not match any known pattern", () => {

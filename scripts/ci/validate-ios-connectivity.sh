@@ -25,6 +25,24 @@ check_error_log() {
     return 0
   fi
 
+  local is_fallback
+  is_fallback=$(python3 -c "
+import json
+try:
+    data = json.load(open('${error_log}'))
+    if isinstance(data, list):
+        print(any(isinstance(entry, dict) and entry.get('reason') == 'debug-endpoint-unavailable' for entry in data))
+    else:
+        print(bool(data.get('fallback')) if isinstance(data, dict) else False)
+except Exception:
+    print(False)
+" 2>/dev/null || echo "False")
+
+  if [[ "$is_fallback" == "True" ]]; then
+    log "errorLog.json is runner fallback evidence — skipping fatal pattern scan"
+    return 0
+  fi
+
   local fatal_patterns=(
     "plugin is not implemented"
     "Unhandled promise rejection"
@@ -91,6 +109,21 @@ check_network_log() {
   local network_log="${FLOW_DIR}/network.json"
   if [[ ! -f "$network_log" ]]; then
     log "No network.json found — skipping"
+    return 0
+  fi
+
+  local is_fallback
+  is_fallback=$(python3 -c "
+import json
+try:
+    data = json.load(open('${network_log}'))
+    print(bool(data.get('fallback')) if isinstance(data, dict) else False)
+except Exception:
+    print(False)
+" 2>/dev/null || echo "False")
+
+  if [[ "$is_fallback" == "True" ]]; then
+    log "network.json is runner fallback evidence — skipping network success assertions"
     return 0
   fi
 
