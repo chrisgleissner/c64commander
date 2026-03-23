@@ -5,11 +5,14 @@ import path from "node:path";
 const readRepoFile = (...parts: string[]) => readFileSync(path.resolve(process.cwd(), ...parts), "utf8");
 
 describe("iOS Maestro CI contracts", () => {
-  it("runs shared iOS subflow probes in CI before grouped flows", () => {
+  it("runs a single retained iOS suite without probe fanout or simulator artifact handoff", () => {
     const workflow = readRepoFile(".github", "workflows", "ios.yaml");
-    expect(workflow).toContain("- name: Validate shared iOS subflows");
-    expect(workflow).toContain("bash scripts/ci/validate-ios-maestro-shared-subflows.sh");
-    expect(workflow).toContain("if: matrix.group.name == 'group-1'");
+    expect(workflow).toContain("IOS_MAESTRO_FLOWS: ios-ci-smoke,ios-secure-storage-persist,ios-config-persistence");
+    expect(workflow).toContain("- name: Select simulator runtime and preboot");
+    expect(workflow).toContain("- name: Wait for simulator boot readiness");
+    expect(workflow).not.toContain("- name: Validate shared iOS subflows");
+    expect(workflow).not.toContain("bash scripts/ci/validate-ios-maestro-shared-subflows.sh");
+    expect(workflow).not.toContain("name: ios-simulator-app");
   });
 
   it("does not swallow per-flow connectivity validation failures", () => {

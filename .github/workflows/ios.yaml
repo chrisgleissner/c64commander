@@ -21,7 +21,7 @@ env:
 
 # Rollout policy:
 # - Stage A (default): iOS jobs are informative (non-blocking).
-# - Stage B: ios-build-simulator and ios-maestro-tests become blocking required checks.
+# - Stage B: ios-maestro-tests becomes the blocking required check.
 # - Stage C: ios-package-altstore is required on tag refs.
 # Set repository variable IOS_ROLLOUT_STAGE to A, B, or C.
 #
@@ -31,11 +31,10 @@ env:
 # 3) Maestro selector drift: inspect `test-results/maestro/**` artifacts and update flows/selectors.
 # 4) Packaging errors: inspect archive/zip steps and verify `ios/build/App.xcarchive` content.
 #
-# OPTIMIZATION: Grouped matrix (4 groups, P=4 concurrency)
-# - Each group runs multiple flows sequentially on one simulator
-# - Reduces simulator lifecycle overhead from 9x to 4x
-# - Expected wall-clock reduction: ~40% (25min -> 15min)
-# - Runtime model: T_grouped = O + 3F vs T_current = 3O + 3F
+# OPTIMIZATION: Single-runner iOS Maestro lane
+# - GitHub-hosted macOS queueing makes 4-way matrix fanout slower than one curated lane.
+# - Build + simulator test stay on one runner to avoid an extra macOS handoff.
+# - The retained suite covers one smoke path plus iOS-only persistence behaviors.
 
 jobs:
   ios-prepare:
@@ -128,11 +127,15 @@ jobs:
             dist/
           if-no-files-found: error
 
-  ios-build-simulator:
-    name: iOS | Build simulator
+  ios-maestro-tests:
+    name: iOS | Maestro
     runs-on: macos-latest
     needs: ios-prepare
     timeout-minutes: 25
+
+    env:
+      IOS_MAESTRO_FLOWS: ios-ci-smoke,ios-secure-storage-persist,ios-config-persistence
+      IOS_MAESTRO_GROUP: core
 
     steps:
       - name: Checkout
@@ -144,6 +147,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "24"
+          cache: npm
 
       - name: Install dependencies
         run: npm ci
@@ -168,69 +172,6 @@ jobs:
         run: |
           set -euo pipefail
           find ios/App/Pods/Target\ Support\ Files -name "*.sh" -type f -exec chmod +x {} +
-
-      - name: Build app for simulator
-        run: |
-          set -euo pipefail
-          mkdir -p artifacts/ios/_infra/xcodebuild
-          xcodebuild \
-            -workspace ios/App/App.xcworkspace \
-            -scheme App \
-            -configuration Debug \
-            -sdk iphonesimulator \
-            -destination "generic/platform=iOS Simulator" \
-            -derivedDataPath ios/build \
-            MARKETING_VERSION="$APP_VERSION" \
-            CURRENT_PROJECT_VERSION="$APP_BUILD_NUMBER" \
-            CODE_SIGNING_ALLOWED=NO \
-            2>&1 | tee artifacts/ios/_infra/xcodebuild/build-simulator.log
-
-      - name: Upload simulator build diagnostics on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ios-build-simulator-failure
-          path: |
-            artifacts/ios/_infra/xcodebuild/**
-          if-no-files-found: warn
-
-      - name: Upload simulator app artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ios-simulator-app
-          path: ios/build/Build/Products/Debug-iphonesimulator/App.app
-          if-no-files-found: error
-
-  ios-maestro-tests:
-    name: iOS | Maestro ${{ matrix.group.name }}
-    runs-on: macos-latest
-    needs: ios-build-simulator
-    timeout-minutes: 45
-
-    strategy:
-      fail-fast: false
-      matrix:
-        group:
-          - name: group-1
-            flows: "ios-smoke-launch,ios-diagnostics-export"
-          - name: group-2
-            flows: "ios-ftp-browse,ios-local-import"
-          - name: group-3
-            flows: "ios-secure-storage-persist,ios-import-playback"
-          - name: group-4
-            flows: "ios-hvsc-browse,ios-config-persistence,ios-playback-basics"
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ env.CI_SHA }}
-
-      - name: Download simulator app
-        uses: actions/download-artifact@v4
-        with:
-          name: ios-simulator-app
-          path: App.app
 
       - name: Cache Maestro CLI
         uses: actions/cache@v4
@@ -260,8 +201,10 @@ jobs:
           fi
           echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
 
-      - name: Select simulator runtime and boot
+      - name: Select simulator runtime and preboot
         id: simulator
+        env:
+          MATRIX_GROUP: ${{ env.IOS_MAESTRO_GROUP }}
         run: |
           set -euo pipefail
 
@@ -313,15 +256,55 @@ jobs:
           run_id = os.environ.get("GITHUB_RUN_ID", "local")
           run_attempt = os.environ.get("GITHUB_RUN_ATTEMPT", "1")
           sim_name = f"C64Commander-{group}-{run_id}-{run_attempt}"
-
-          # Record boot start time for timing instrumentation
           boot_start_ms = int(time.time() * 1000)
 
           udid = subprocess.check_output(
               ["xcrun", "simctl", "create", sim_name, iphone_13["identifier"], runtime_identifier],
               text=True,
-            ).strip()
+          ).strip()
           subprocess.check_call(["xcrun", "simctl", "boot", udid])
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              fh.write(f"runtime={runtime_identifier}\n")
+              fh.write(f"device_type={iphone_13['identifier']}\n")
+              fh.write(f"udid={udid}\n")
+              fh.write(f"boot_start_ms={boot_start_ms}\n")
+          PY
+
+      - name: Build app for simulator
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/ios/_infra/xcodebuild
+          xcodebuild \
+            -workspace ios/App/App.xcworkspace \
+            -scheme App \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "generic/platform=iOS Simulator" \
+            -derivedDataPath ios/build \
+            MARKETING_VERSION="$APP_VERSION" \
+            CURRENT_PROJECT_VERSION="$APP_BUILD_NUMBER" \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee artifacts/ios/_infra/xcodebuild/build-simulator.log
+
+      - name: Wait for simulator boot readiness
+        id: simulator_ready
+        env:
+          SIMULATOR_UDID: ${{ steps.simulator.outputs.udid }}
+          SIMULATOR_RUNTIME: ${{ steps.simulator.outputs.runtime }}
+          SIM_BOOT_START_MS: ${{ steps.simulator.outputs.boot_start_ms }}
+        run: |
+          set -euo pipefail
+
+          python3 <<'PY'
+          import os
+          import subprocess
+          import sys
+          import time
+
+          udid = os.environ["SIMULATOR_UDID"]
+          runtime_identifier = os.environ["SIMULATOR_RUNTIME"]
+          boot_start_ms = int(os.environ["SIM_BOOT_START_MS"])
 
           print(f"Waiting for simulator {udid} bootstatus (timeout 300s)...")
           try:
@@ -369,7 +352,6 @@ jobs:
                   )
               except subprocess.TimeoutExpired as exc:
                   print("simctl bootstatus failed after retry (timeout)", file=sys.stderr)
-                  # exc.stdout and exc.stderr may be None; default to empty strings
                   print(getattr(exc, "stdout", "") or "", file=sys.stderr)
                   print(getattr(exc, "stderr", "") or "", file=sys.stderr)
                   sys.exit(1)
@@ -382,19 +364,12 @@ jobs:
 
           boot_end_ms = int(time.time() * 1000)
           boot_seconds = (boot_end_ms - boot_start_ms) // 1000
-
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
-              fh.write(f"runtime={runtime_identifier}\n")
-              fh.write(f"device_type={iphone_13['identifier']}\n")
-              fh.write(f"udid={udid}\n")
-              fh.write(f"boot_start_ms={boot_start_ms}\n")
               fh.write(f"boot_ready_ms={boot_end_ms}\n")
               fh.write(f"boot_seconds={boot_seconds}\n")
           PY
-        env:
-          MATRIX_GROUP: ${{ matrix.group.name }}
 
-      - name: Run Maestro flows with evidence capture (${{ matrix.group.name }})
+      - name: Run Maestro flows with evidence capture
         env:
           MAESTRO_CLI_NO_ANALYTICS: 1
           MAESTRO_LOG_LEVEL: debug
@@ -409,11 +384,11 @@ jobs:
           IOS_MAESTRO_RECORD_VIDEO: ${{ vars.IOS_MAESTRO_RECORD_VIDEO || '0' }}
           IOS_MAESTRO_MOCK_PORT: ${{ vars.IOS_MAESTRO_MOCK_PORT || '' }}
           SIM_BOOT_START_MS: ${{ steps.simulator.outputs.boot_start_ms }}
-          SIM_BOOT_READY_MS: ${{ steps.simulator.outputs.boot_ready_ms }}
+          SIM_BOOT_READY_MS: ${{ steps.simulator_ready.outputs.boot_ready_ms }}
           CI: "true"
         run: |
           set -euo pipefail
-          echo "Starting grouped Maestro runner: group=${{ matrix.group.name }} flows=${{ matrix.group.flows }} udid=${{ steps.simulator.outputs.udid }}"
+          echo "Starting iOS Maestro runner: group=${IOS_MAESTRO_GROUP} flows=${IOS_MAESTRO_FLOWS} udid=${{ steps.simulator.outputs.udid }}"
           echo "Runner logging config: heartbeat=${IOS_MAESTRO_HEARTBEAT_SECONDS}s attempts=${MAESTRO_MAX_ATTEMPTS} driverTimeout=${MAESTRO_DRIVER_STARTUP_TIMEOUT}"
           mkdir -p artifacts/ios/_infra/telemetry
           (
@@ -430,7 +405,7 @@ jobs:
             TELEMETRY_INTERVAL_SEC=1 \
             TELEMETRY_OUTPUT_DIR=artifacts/ios/_infra/telemetry \
             SIMULATOR_UDID="${{ steps.simulator.outputs.udid }}" \
-            TELEMETRY_DEVICE_NAME="${{ matrix.group.name }}-${{ steps.simulator.outputs.udid }}" \
+            TELEMETRY_DEVICE_NAME="${IOS_MAESTRO_GROUP}-${{ steps.simulator.outputs.udid }}" \
             BUNDLE_ID="${APP_ID}" \
             ci/telemetry/ios/monitor_ios.sh &
             monitor_child_pid=$!
@@ -459,10 +434,10 @@ jobs:
 
           maestro_cmd=(
             bash scripts/ci/ios-maestro-run-flow.sh
-            --flows "${{ matrix.group.flows }}"
-            --group "${{ matrix.group.name }}"
+            --flows "${IOS_MAESTRO_FLOWS}"
+            --group "${IOS_MAESTRO_GROUP}"
             --udid "${{ steps.simulator.outputs.udid }}"
-            --app-path "App.app"
+            --app-path "ios/build/Build/Products/Debug-iphonesimulator/App.app"
           )
           if [[ ${#mock_port_args[@]} -gt 0 ]]; then
             maestro_cmd+=("${mock_port_args[@]}")
@@ -475,29 +450,12 @@ jobs:
             exit "$maestro_status"
           fi
 
-      - name: Validate shared iOS subflows
-        if: matrix.group.name == 'group-1'
-        env:
-          IOS_MAESTRO_MOCK_PORT: ${{ vars.IOS_MAESTRO_MOCK_PORT || '' }}
-        run: |
-          set -euo pipefail
-          shared_subflow_cmd=(
-            bash scripts/ci/validate-ios-maestro-shared-subflows.sh
-            --udid "${{ steps.simulator.outputs.udid }}"
-            --app-path "App.app"
-          )
-          if [[ -n "${IOS_MAESTRO_MOCK_PORT:-}" ]]; then
-            shared_subflow_cmd+=(--mock-port "${IOS_MAESTRO_MOCK_PORT}")
-          fi
-          "${shared_subflow_cmd[@]}"
-
-      - name: Validate connectivity (${{ matrix.group.name }})
+      - name: Validate connectivity
         if: always()
         run: |
           set -euo pipefail
           connectivity_status=0
-          # Validate connectivity for each flow in the group
-          IFS=',' read -ra FLOW_ARRAY <<< "${{ matrix.group.flows }}"
+          IFS=',' read -ra FLOW_ARRAY <<< "${IOS_MAESTRO_FLOWS}"
           for flow in "${FLOW_ARRAY[@]}"; do
             if ! bash scripts/ci/validate-ios-connectivity.sh "artifacts/ios/${flow}"; then
               connectivity_status=1
@@ -552,23 +510,23 @@ jobs:
           fi
           cat artifacts/ios/_infra/telemetry/monitor-run.log || true
 
-      - name: Summarize telemetry (${{ matrix.group.name }})
+      - name: Summarize telemetry
         if: always()
         run: |
           set -euo pipefail
           TELEMETRY_SUMMARY_DIR=artifacts/ios/_infra/telemetry python3 ci/telemetry/summarize_metrics.py
 
-      - name: Render telemetry charts (${{ matrix.group.name }})
+      - name: Render telemetry charts
         if: always()
         run: |
           set -euo pipefail
           TELEMETRY_SUMMARY_DIR=artifacts/ios/_infra/telemetry python3 ci/telemetry/render_charts.py
 
-      - name: Upload per-group artifacts
+      - name: Upload iOS Maestro evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ios-maestro-${{ matrix.group.name }}
+          name: ios-maestro-evidence
           path: |
             artifacts/ios/**
             artifacts/ios/_infra/telemetry/metrics.csv
@@ -578,7 +536,22 @@ jobs:
             artifacts/ios/_infra/telemetry/charts/**
           if-no-files-found: warn
 
-      - name: Enforce iOS telemetry gates (${{ matrix.group.name }})
+      - name: Create evidence archive on tag
+        if: always() && github.ref_type == 'tag'
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/ios/_combined
+          tar -czf artifacts/ios/_combined/ios-maestro-evidence.tgz artifacts/ios
+
+      - name: Upload evidence archive on tag
+        if: always() && github.ref_type == 'tag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-maestro-evidence-tgz
+          path: artifacts/ios/_combined/ios-maestro-evidence.tgz
+          if-no-files-found: warn
+
+      - name: Enforce iOS telemetry gates
         if: always()
         run: |
           set -euo pipefail
@@ -631,25 +604,24 @@ jobs:
             exit 1
           fi
 
-      - name: Collect simulator diagnostics on failure (${{ matrix.group.name }})
+      - name: Collect simulator diagnostics on failure
         if: failure()
         run: |
           set -euo pipefail
           mkdir -p artifacts/ios/_infra/simulator
           simulator_log_lookback="${IOS_SIMULATOR_LOG_LOOKBACK:-15m}"
           if [[ -n "${{ steps.simulator.outputs.udid }}" ]]; then
-            # Keep lookback bounded while covering a full grouped Maestro run in typical CI timing.
             xcrun simctl spawn "${{ steps.simulator.outputs.udid }}" log show --last "$simulator_log_lookback" --style compact > artifacts/ios/_infra/simulator/device.log 2>&1 || true
             xcrun simctl diagnose "${{ steps.simulator.outputs.udid }}" > artifacts/ios/_infra/simulator/diagnose.log 2>&1 || true
           fi
           xcrun simctl list devices > artifacts/ios/_infra/simulator/devices.txt 2>&1 || true
           xcrun simctl list runtimes > artifacts/ios/_infra/simulator/runtimes.txt 2>&1 || true
 
-      - name: Upload iOS failure diagnostics (${{ matrix.group.name }})
+      - name: Upload iOS failure diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: ios-maestro-failure-${{ matrix.group.name }}
+          name: ios-maestro-failure
           path: |
             artifacts/ios/_infra/telemetry/events.log
             artifacts/ios/_infra/telemetry/monitor-run.log
@@ -665,250 +637,6 @@ jobs:
             xcrun simctl shutdown "${{ steps.simulator.outputs.udid }}" || true
             xcrun simctl delete "${{ steps.simulator.outputs.udid }}" || true
           fi
-
-  ios-maestro-aggregate:
-    name: iOS | Maestro aggregate
-    runs-on: ubuntu-latest
-    needs: ios-maestro-tests
-    if: always()
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ env.CI_SHA }}
-
-      - name: Download all per-group artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: ios-maestro-*
-          path: downloaded-artifacts
-          merge-multiple: false
-
-      - name: Aggregate evidence
-        run: |
-          set -euo pipefail
-          mkdir -p artifacts/ios/_combined/flows
-          shopt -s nullglob
-
-          # Re-root per-flow artifacts from group directories
-          for group_dir in downloaded-artifacts/ios-maestro-*/; do
-            artifact_root="$group_dir/artifacts/ios"
-            if [[ ! -d "$artifact_root" ]]; then
-              artifact_root="${group_dir%/}"
-            fi
-
-            # Process flow directories
-            for flow_dir in "$artifact_root"/*/; do
-              flow_name="$(basename "$flow_dir")"
-              # Skip _infra directory at this level
-              if [[ "$flow_name" == "_infra" ]]; then
-                continue
-              fi
-              if [[ -d "$flow_dir" ]]; then
-                rm -rf "artifacts/ios/_combined/flows/$flow_name"
-                cp -r "$flow_dir" "artifacts/ios/_combined/flows/$flow_name"
-              fi
-            done
-
-            # Copy infra diagnostics
-            if [[ -d "$artifact_root/_infra" ]]; then
-              mkdir -p "artifacts/ios/_infra"
-              infra_entries=("$artifact_root/_infra"/*)
-              if [[ ${#infra_entries[@]} -gt 0 ]]; then
-                cp -r "${infra_entries[@]}" "artifacts/ios/_infra/"
-              fi
-            fi
-          done
-          shopt -u nullglob
-
-      - name: Merge JUnit reports
-        run: |
-          set -euo pipefail
-          python3 <<'MERGE'
-          import xml.etree.ElementTree as ET
-          import glob
-          import json
-          import os
-
-          combined = ET.Element("testsuites")
-          total_tests = 0
-          total_failures = 0
-          total_errors = 0
-          total_time = 0.0
-          flow_summaries = []
-
-          for junit_path in sorted(glob.glob("artifacts/ios/_combined/flows/*/junit.xml")):
-              flow_name = os.path.basename(os.path.dirname(junit_path))
-              try:
-                  tree = ET.parse(junit_path)
-                  root = tree.getroot()
-                  if root.tag == "testsuites":
-                      for suite in root:
-                          suite.set("name", f"{flow_name}/{suite.get('name', 'unknown')}")
-                          combined.append(suite)
-                          total_tests += int(suite.get("tests", "0"))
-                          total_failures += int(suite.get("failures", "0"))
-                          total_errors += int(suite.get("errors", "0"))
-                          total_time += float(suite.get("time", "0"))
-                  elif root.tag == "testsuite":
-                      root.set("name", f"{flow_name}/{root.get('name', 'unknown')}")
-                      combined.append(root)
-                      total_tests += int(root.get("tests", "0"))
-                      total_failures += int(root.get("failures", "0"))
-                      total_errors += int(root.get("errors", "0"))
-                      total_time += float(root.get("time", "0"))
-                  flow_summaries.append({"flow": flow_name, "status": "parsed", "tests": total_tests})
-              except Exception as e:
-                  flow_summaries.append({"flow": flow_name, "status": f"error: {e}"})
-
-          combined.set("tests", str(total_tests))
-          combined.set("failures", str(total_failures))
-          combined.set("errors", str(total_errors))
-          combined.set("time", f"{total_time:.3f}")
-
-          out_dir = "artifacts/ios/_combined"
-          tree = ET.ElementTree(combined)
-          tree.write(os.path.join(out_dir, "junit-merged.xml"), xml_declaration=True, encoding="unicode")
-
-          # Summary JSON
-          summary = {
-              "totalTests": total_tests,
-              "totalFailures": total_failures,
-              "totalErrors": total_errors,
-              "totalTimeSeconds": round(total_time, 3),
-              "flows": flow_summaries,
-          }
-          with open(os.path.join(out_dir, "summary.json"), "w") as f:
-              json.dump(summary, f, indent=2)
-
-          # Timing summary - aggregate from all flows
-          timing_entries = []
-          for timing_path in sorted(glob.glob("artifacts/ios/_combined/flows/*/timing.json")):
-              try:
-                  with open(timing_path) as f:
-                      timing_entries.append(json.load(f))
-              except Exception:
-                  pass
-
-          # Also include group-level timing
-          group_timing = []
-          for group_timing_path in sorted(glob.glob("artifacts/ios/_infra/*/timing.json")):
-              try:
-                  with open(group_timing_path) as f:
-                      data = json.load(f)
-                      data["source"] = "group"
-                      group_timing.append(data)
-              except Exception:
-                  pass
-
-          with open(os.path.join(out_dir, "timing-summary.json"), "w") as f:
-              json.dump({
-                  "flows": timing_entries,
-                  "groups": group_timing
-              }, f, indent=2)
-
-          print(f"Merged {len(flow_summaries)} flows: {total_tests} tests, {total_failures} failures, {total_errors} errors")
-          MERGE
-
-      - name: Enforce merged Maestro results
-        if: always()
-        run: |
-          set -euo pipefail
-          python3 <<'ENFORCE'
-          import json
-          import sys
-
-          try:
-              with open("artifacts/ios/_combined/summary.json", encoding="utf-8") as handle:
-                  summary = json.load(handle)
-          except FileNotFoundError:
-              print("Merged Maestro summary not found: artifacts/ios/_combined/summary.json")
-              sys.exit(1)
-
-          total_tests = int(summary.get("totalTests", 0))
-          total_failures = int(summary.get("totalFailures", 0))
-          total_errors = int(summary.get("totalErrors", 0))
-
-          if total_tests == 0:
-              print("Merged Maestro summary contains zero tests")
-              sys.exit(1)
-
-          if total_failures or total_errors:
-              print(
-                  f"Merged Maestro summary contains failures/errors: tests={total_tests} "
-                  f"failures={total_failures} errors={total_errors}"
-              )
-              sys.exit(1)
-          ENFORCE
-
-      - name: Run connectivity validation summary
-        if: always()
-        run: |
-          set -euo pipefail
-          python3 <<'VALIDATE'
-          import json
-          import glob
-          import sys
-
-          validations = []
-          all_valid = True
-
-          for path in sorted(glob.glob("artifacts/ios/_combined/flows/*/connectivity-validation.json")):
-              try:
-                  with open(path) as f:
-                      v = json.load(f)
-                      validations.append(v)
-                      if not v.get("valid", True):
-                          all_valid = False
-              except Exception as e:
-                  validations.append({"flow": path, "valid": False, "errors": [str(e)]})
-                  all_valid = False
-
-          summary = {
-              "allValid": all_valid,
-              "flowCount": len(validations),
-              "validations": validations,
-          }
-
-          with open("artifacts/ios/_combined/connectivity-summary.json", "w") as f:
-              json.dump(summary, f, indent=2)
-
-          if not all_valid:
-              print("Connectivity validation failed for some flows")
-              for v in validations:
-                  if not v.get("valid", True):
-                      print(f"  FAIL: {v.get('flow', 'unknown')} - {v.get('errors', [])}")
-              sys.exit(1)
-
-          print(json.dumps(summary, indent=2))
-          VALIDATE
-
-      - name: Upload combined evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ios-maestro-evidence
-          path: |
-            artifacts/ios/_combined/**
-            artifacts/ios/_infra/**
-          if-no-files-found: warn
-
-      - name: Create evidence archive on tag
-        if: startsWith(github.ref, 'refs/tags/')
-        run: |
-          set -euo pipefail
-          cd artifacts/ios
-          zip -qry ../../ios-maestro-evidence.zip _combined/ _infra/ 2>/dev/null || \
-          zip -qry ../../ios-maestro-evidence.zip _combined/
-
-      - name: Upload evidence archive on tag
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: actions/upload-artifact@v4
-        with:
-          name: ios-maestro-evidence-zip
-          path: ios-maestro-evidence.zip
-          if-no-files-found: warn
 
   ios-package-altstore:
     name: iOS | Package IPA

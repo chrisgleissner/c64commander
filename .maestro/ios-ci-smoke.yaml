@@ -1,0 +1,53 @@
+appId: uk.gleissner.c64commander
+env:
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "20000"}
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
+  TIMEOUT: ${TIMEOUT || "15000"}
+tags:
+  - ios
+  - ci-critical-ios
+---
+- runFlow: subflows/launch-and-wait.yaml
+- assertVisible: "Home"
+- tapOn:
+    id: "tab-settings"
+    optional: true
+- tapOn:
+    text: "Settings"
+    optional: true
+- tapOn:
+    point: "75%,95%"
+    optional: true
+- extendedWaitUntil:
+    visible: "Connection"
+    timeout: ${LONG_TIMEOUT}
+- assertVisible: "Settings"
+- assertVisible: "Connection"
+- tapOn:
+    id: "tab-play"
+    optional: true
+- tapOn:
+    text: "Play"
+    optional: true
+- tapOn:
+    point: "25%,95%"
+    optional: true
+- extendedWaitUntil:
+    visible: "Playlist"
+    timeout: ${TIMEOUT}
+- assertVisible: "Playlist"
+- scrollUntilVisible:
+    element:
+      text: "Add items to playlist"
+    direction: DOWN
+    timeout: ${TIMEOUT}
+- assertVisible: "Add items to playlist"
+- tapOn:
+    text: "Add items to playlist"
+    optional: true
+- extendedWaitUntil:
+    visible: "Choose source"
+    timeout: ${TIMEOUT}
+- assertVisible: "Add file / folder from Local"
+- assertVisible: "Add file / folder from C64U"
+- takeScreenshot: ios-ci-smoke-source-options

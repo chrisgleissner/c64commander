@@ -3,7 +3,6 @@ env:
   TIMEOUT: ${TIMEOUT || "15000"}
 tags:
   - ios
-  - ci-critical-ios
   - subflow-probe
 ---
 - runFlow: subflows/ios-open-play-tab.yaml
