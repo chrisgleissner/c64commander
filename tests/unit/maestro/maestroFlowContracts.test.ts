@@ -10,87 +10,87 @@ const maestroRoot = path.resolve(process.cwd(), ".maestro");
 const readYaml = (filePath: string): JsonValue => loadAll(readFileSync(filePath, "utf8")) as JsonValue;
 
 const listYamlFiles = (dirPath: string): string[] => {
-    const entries = readdirSync(dirPath).sort();
-    const results: string[] = [];
-    for (const entry of entries) {
-        const fullPath = path.join(dirPath, entry);
-        const stats = statSync(fullPath);
-        if (stats.isDirectory()) {
-            results.push(...listYamlFiles(fullPath));
-            continue;
-        }
-        if (entry.endsWith(".yaml") || entry.endsWith(".yml")) {
-            results.push(fullPath);
-        }
+  const entries = readdirSync(dirPath).sort();
+  const results: string[] = [];
+  for (const entry of entries) {
+    const fullPath = path.join(dirPath, entry);
+    const stats = statSync(fullPath);
+    if (stats.isDirectory()) {
+      results.push(...listYamlFiles(fullPath));
+      continue;
     }
-    return results;
+    if (entry.endsWith(".yaml") || entry.endsWith(".yml")) {
+      results.push(fullPath);
+    }
+  }
+  return results;
 };
 
 const collectScrollUntilVisibleErrors = (
-    value: JsonValue,
-    filePath: string,
-    errors: string[],
-    trail: string[] = [],
+  value: JsonValue,
+  filePath: string,
+  errors: string[],
+  trail: string[] = [],
 ) => {
-    if (Array.isArray(value)) {
-        value.forEach((entry, index) => collectScrollUntilVisibleErrors(entry, filePath, errors, [...trail, `[${index}]`]));
-        return;
-    }
+  if (Array.isArray(value)) {
+    value.forEach((entry, index) => collectScrollUntilVisibleErrors(entry, filePath, errors, [...trail, `[${index}]`]));
+    return;
+  }
 
-    if (!value || typeof value !== "object") {
-        return;
-    }
+  if (!value || typeof value !== "object") {
+    return;
+  }
 
-    for (const [key, child] of Object.entries(value)) {
-        const nextTrail = [...trail, key];
-        if (key === "scrollUntilVisible") {
-            if (!child || typeof child !== "object" || Array.isArray(child)) {
-                errors.push(`${filePath}: ${nextTrail.join(".")} must be a mapping with explicit options`);
-            } else {
-                const config = child as Record<string, unknown>;
-                const element = config.element;
-                const hasValidElement =
-                    typeof element === "string" || (!!element && typeof element === "object" && !Array.isArray(element));
-                if (!hasValidElement) {
-                    errors.push(`${filePath}: ${nextTrail.join(".")} must define an unambiguous element selector`);
-                }
-                if (typeof config.direction !== "string") {
-                    errors.push(`${filePath}: ${nextTrail.join(".")} must define direction`);
-                }
-                if (config.timeout === undefined || config.timeout === null) {
-                    errors.push(`${filePath}: ${nextTrail.join(".")} must define timeout`);
-                }
-            }
+  for (const [key, child] of Object.entries(value)) {
+    const nextTrail = [...trail, key];
+    if (key === "scrollUntilVisible") {
+      if (!child || typeof child !== "object" || Array.isArray(child)) {
+        errors.push(`${filePath}: ${nextTrail.join(".")} must be a mapping with explicit options`);
+      } else {
+        const config = child as Record<string, unknown>;
+        const element = config.element;
+        const hasValidElement =
+          typeof element === "string" || (!!element && typeof element === "object" && !Array.isArray(element));
+        if (!hasValidElement) {
+          errors.push(`${filePath}: ${nextTrail.join(".")} must define an unambiguous element selector`);
         }
-
-        collectScrollUntilVisibleErrors(child as JsonValue, filePath, errors, nextTrail);
+        if (typeof config.direction !== "string") {
+          errors.push(`${filePath}: ${nextTrail.join(".")} must define direction`);
+        }
+        if (config.timeout === undefined || config.timeout === null) {
+          errors.push(`${filePath}: ${nextTrail.join(".")} must define timeout`);
+        }
+      }
     }
+
+    collectScrollUntilVisibleErrors(child as JsonValue, filePath, errors, nextTrail);
+  }
 };
 
 describe("Maestro flow contracts", () => {
-    it("parses every Maestro YAML file and hardens scrollUntilVisible usage", () => {
-        const files = listYamlFiles(maestroRoot);
-        const errors: string[] = [];
+  it("parses every Maestro YAML file and hardens scrollUntilVisible usage", () => {
+    const files = listYamlFiles(maestroRoot);
+    const errors: string[] = [];
 
-        for (const filePath of files) {
-            const parsed = readYaml(filePath);
-            collectScrollUntilVisibleErrors(parsed, path.relative(process.cwd(), filePath), errors);
-        }
+    for (const filePath of files) {
+      const parsed = readYaml(filePath);
+      collectScrollUntilVisibleErrors(parsed, path.relative(process.cwd(), filePath), errors);
+    }
 
-        expect(errors).toEqual([]);
-    });
+    expect(errors).toEqual([]);
+  });
 
-    it("provides dedicated probe flows for each shared iOS subflow", () => {
-        const requiredProbeTargets = new Map<string, string>([
-            [".maestro/ios-subflow-open-play-tab-probe.yaml", "subflows/ios-open-play-tab.yaml"],
-            [".maestro/ios-subflow-open-settings-tab-probe.yaml", "subflows/ios-open-settings-tab.yaml"],
-            [".maestro/ios-subflow-open-play-add-items-probe.yaml", "subflows/ios-open-play-add-items.yaml"],
-        ]);
+  it("provides dedicated probe flows for each shared iOS subflow", () => {
+    const requiredProbeTargets = new Map<string, string>([
+      [".maestro/ios-subflow-open-play-tab-probe.yaml", "subflows/ios-open-play-tab.yaml"],
+      [".maestro/ios-subflow-open-settings-tab-probe.yaml", "subflows/ios-open-settings-tab.yaml"],
+      [".maestro/ios-subflow-open-play-add-items-probe.yaml", "subflows/ios-open-play-add-items.yaml"],
+    ]);
 
-        for (const [probePath, subflowPath] of requiredProbeTargets) {
-            const rawSource = readFileSync(path.resolve(process.cwd(), probePath), "utf8");
-            expect(rawSource).toContain(`runFlow: ${subflowPath}`);
-            expect(readYaml(path.resolve(process.cwd(), probePath))).toBeTruthy();
-        }
-    });
+    for (const [probePath, subflowPath] of requiredProbeTargets) {
+      const rawSource = readFileSync(path.resolve(process.cwd(), probePath), "utf8");
+      expect(rawSource).toContain(`runFlow: ${subflowPath}`);
+      expect(readYaml(path.resolve(process.cwd(), probePath))).toBeTruthy();
+    }
+  });
 });

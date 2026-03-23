@@ -83,7 +83,8 @@ const readGeneratedVersionLabel = (): string => {
       return "";
     }
     console.warn(
-      `[build] Failed to read generated version label from ${versionTsPath}: ${(error && error.message) || String(error)
+      `[build] Failed to read generated version label from ${versionTsPath}: ${
+        (error && error.message) || String(error)
       }`,
     );
     return "";
@@ -169,14 +170,14 @@ export default defineConfig(() => ({
     react(),
     ...(enableCoverageInstrumentation
       ? [
-        istanbul({
-          include: "src/**/*",
-          exclude: ["node_modules", "test/", "tests/", "playwright/"],
-          extension: [".js", ".ts", ".tsx"],
-          requireEnv: true,
-          forceBuildInstrument: true,
-        }),
-      ]
+          istanbul({
+            include: "src/**/*",
+            exclude: ["node_modules", "test/", "tests/", "playwright/"],
+            extension: [".js", ".ts", ".tsx"],
+            requireEnv: true,
+            forceBuildInstrument: true,
+          }),
+        ]
       : []),
   ],
   define: {
