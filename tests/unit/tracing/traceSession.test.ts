@@ -155,6 +155,9 @@ describe("traceSession", () => {
     });
     recordFtpOperation(action, {
       operation: "list",
+      command: "LIST",
+      hostname: "c64u",
+      port: 21,
       path: "/dir",
       result: "success",
       requestPayload: { path: "/dir" },
@@ -179,6 +182,101 @@ describe("traceSession", () => {
           payloadPreview: expect.objectContaining({ ascii: '{"ok":true}' }),
         }),
       }),
+    );
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "ftp-operation",
+        data: expect.objectContaining({
+          command: "LIST",
+          hostname: "c64u",
+          port: 21,
+        }),
+      }),
+    );
+  });
+
+  it("records structured REST network location fields", () => {
+    vi.stubGlobal("window", {
+      dispatchEvent: vi.fn(),
+      setTimeout: vi.fn(),
+      CustomEvent: class {},
+      location: { origin: "http://app.local" },
+    });
+
+    recordRestRequest(action, {
+      method: "GET",
+      url: "http://c64u:8080/v1/info?detail=full",
+      normalizedUrl: "/v1/info?detail=full",
+      headers: {},
+      body: null,
+    });
+
+    recordRestResponse(action, {
+      method: "GET",
+      url: "http://c64u:8080/v1/info?detail=full",
+      status: 200,
+      headers: {},
+      body: { ok: true },
+      durationMs: 42,
+      error: null,
+    });
+
+    expect(getTraceEvents()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "rest-request",
+          data: expect.objectContaining({
+            protocol: "http",
+            hostname: "c64u",
+            port: 8080,
+            path: "/v1/info",
+            query: "?detail=full",
+            normalizedUrl: "/v1/info?detail=full",
+          }),
+        }),
+        expect.objectContaining({
+          type: "rest-response",
+          data: expect.objectContaining({
+            protocol: "http",
+            hostname: "c64u",
+            port: 8080,
+            path: "/v1/info",
+            query: "?detail=full",
+            normalizedUrl: "/v1/info?detail=full",
+          }),
+        }),
+      ]),
+    );
+  });
+
+  it("splits query parameters from payload paths when the parsed URL is unavailable", () => {
+    vi.stubGlobal("window", {
+      dispatchEvent: vi.fn(),
+      setTimeout: vi.fn(),
+      CustomEvent: class {},
+    });
+
+    recordRestResponse(action, {
+      method: "GET",
+      path: "/v1/info?detail=full",
+      status: 200,
+      headers: {},
+      body: { ok: true },
+      durationMs: 42,
+      error: null,
+    });
+
+    expect(getTraceEvents()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "rest-response",
+          data: expect.objectContaining({
+            path: "/v1/info",
+            query: "?detail=full",
+            normalizedUrl: "/v1/info?detail=full",
+          }),
+        }),
+      ]),
     );
   });
 

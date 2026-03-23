@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { RotateCcw, Save, RefreshCw, Trash2, Upload, Download, FolderOpen, AlertCircle } from "lucide-react";
 import { useC64ConfigItems, useC64Connection, VISIBLE_C64_QUERY_OPTIONS } from "@/hooks/useC64Connection";
@@ -148,7 +148,8 @@ function HomePageContent() {
   const [saveRamDialogOpen, setSaveRamDialogOpen] = useState(false);
   const [snapshotManagerOpen, setSnapshotManagerOpen] = useState(false);
   const [restoreTarget, setRestoreTarget] = useState<SnapshotStorageEntry | null>(null);
-  const [cpuSpeedDraftIndex, setCpuSpeedDraftIndex] = useState<number | null>(null);
+  const [cpuSpeedOptimisticValue, setCpuSpeedOptimisticValue] = useState<string | null>(null);
+  const cpuSpeedDraggingRef = useRef(false);
   const { snapshots } = useSnapshotStore();
 
   const [applyingConfigId, setApplyingConfigId] = useState<string | null>(null);
@@ -366,19 +367,38 @@ function HomePageContent() {
   const effectiveCartridgePreferenceOptions = cartridgePreferenceOptions.length
     ? cartridgePreferenceOptions
     : [cartridgePreferenceValue];
+  const cpuSpeedPending = Boolean(configWritePending[buildConfigKey("U64 Specific Settings", "CPU Speed")]);
+  const turboControlPending = Boolean(configWritePending[buildConfigKey("U64 Specific Settings", "Turbo Control")]);
+  const badlineTimingPending = Boolean(configWritePending[buildConfigKey("U64 Specific Settings", "Badline Timing")]);
+  const superCpuDetectPending = Boolean(
+    configWritePending[buildConfigKey("U64 Specific Settings", "SuperCPU Detect (D0BC)")],
+  );
+  const videoModePending = Boolean(configWritePending[buildConfigKey("U64 Specific Settings", "System Mode")]);
+  const hdmiResolutionPending = Boolean(
+    configWritePending[buildConfigKey("U64 Specific Settings", "HDMI Scan Resolution")],
+  );
+  const analogVideoPending = Boolean(configWritePending[buildConfigKey("U64 Specific Settings", "Analog Video Mode")]);
+  const digitalVideoPending = Boolean(
+    configWritePending[buildConfigKey("U64 Specific Settings", "Digital Video Mode")],
+  );
   const effectiveCpuSpeedOptions = cpuSpeedOptions.length ? cpuSpeedOptions : [cpuSpeedValue];
   const cpuSpeedSliderOptions = effectiveCpuSpeedOptions;
   const cpuSpeedSliderIndex = Math.max(
     0,
     cpuSpeedSliderOptions.findIndex((option) => option === cpuSpeedValue),
   );
-  const cpuSpeedDisplayIndex = cpuSpeedDraftIndex ?? cpuSpeedSliderIndex;
+  const cpuSpeedDisplayValue = cpuSpeedOptimisticValue ?? cpuSpeedValue;
+  const cpuSpeedDisplayIndex = Math.max(
+    0,
+    cpuSpeedSliderOptions.findIndex((option) => option === cpuSpeedDisplayValue),
+  );
   const resolveCpuSpeedOption = (index: number) =>
     cpuSpeedSliderOptions[Math.round(index)] ?? cpuSpeedSliderOptions[0] ?? "1";
 
   useEffect(() => {
-    setCpuSpeedDraftIndex(null);
-  }, [cpuSpeedValue]);
+    if (cpuSpeedDraggingRef.current || cpuSpeedPending) return;
+    setCpuSpeedOptimisticValue(cpuSpeedValue);
+  }, [cpuSpeedPending, cpuSpeedValue]);
   const effectiveTurboControlOptions = turboControlOptions.length ? turboControlOptions : [turboControlValue];
   const effectiveBadlineTimingOptions = badlineTimingOptions.length ? badlineTimingOptions : [badlineTimingValue];
   const effectiveSuperCpuDetectOptions = superCpuDetectOptions.length ? superCpuDetectOptions : [superCpuDetectValue];
@@ -426,21 +446,6 @@ function HomePageContent() {
         {folderTaskPending ? "Changing…" : ramDumpFolderLabel}
       </Button>
     </div>
-  );
-
-  const cpuSpeedPending = Boolean(configWritePending[buildConfigKey("U64 Specific Settings", "CPU Speed")]);
-  const turboControlPending = Boolean(configWritePending[buildConfigKey("U64 Specific Settings", "Turbo Control")]);
-  const badlineTimingPending = Boolean(configWritePending[buildConfigKey("U64 Specific Settings", "Badline Timing")]);
-  const superCpuDetectPending = Boolean(
-    configWritePending[buildConfigKey("U64 Specific Settings", "SuperCPU Detect (D0BC)")],
-  );
-  const videoModePending = Boolean(configWritePending[buildConfigKey("U64 Specific Settings", "System Mode")]);
-  const hdmiResolutionPending = Boolean(
-    configWritePending[buildConfigKey("U64 Specific Settings", "HDMI Scan Resolution")],
-  );
-  const analogVideoPending = Boolean(configWritePending[buildConfigKey("U64 Specific Settings", "Analog Video Mode")]);
-  const digitalVideoPending = Boolean(
-    configWritePending[buildConfigKey("U64 Specific Settings", "Digital Video Mode")],
   );
   const hdmiScanPending = Boolean(configWritePending[buildConfigKey("U64 Specific Settings", "HDMI Scan lines")]);
   const joystickSwapPending = Boolean(configWritePending[buildConfigKey("U64 Specific Settings", "Joystick Swapper")]);
@@ -552,16 +557,20 @@ function HomePageContent() {
                       step={1}
                       disabled={!isActive || cpuSpeedPending || cpuSpeedSliderOptions.length <= 1}
                       onValueChange={(values) => {
-                        setCpuSpeedDraftIndex(values[0] ?? 0);
+                        const nextValue = resolveCpuSpeedOption(values[0] ?? 0);
+                        cpuSpeedDraggingRef.current = true;
+                        setCpuSpeedOptimisticValue(nextValue);
                       }}
                       onValueCommit={() => {
-                        setCpuSpeedDraftIndex(null);
+                        cpuSpeedDraggingRef.current = false;
                       }}
                       onValueChangeAsync={(nextIndex) => {
                         handleCpuSpeedPreviewChange(String(resolveCpuSpeedOption(nextIndex)));
                       }}
                       onValueCommitAsync={(nextIndex) => {
-                        handleCpuSpeedCommitChange(String(resolveCpuSpeedOption(nextIndex)));
+                        const nextValue = String(resolveCpuSpeedOption(nextIndex));
+                        setCpuSpeedOptimisticValue(nextValue);
+                        handleCpuSpeedCommitChange(nextValue);
                       }}
                       valueFormatter={(index) => resolveCpuSpeedOption(index)}
                       data-testid="home-cpu-speed-slider"

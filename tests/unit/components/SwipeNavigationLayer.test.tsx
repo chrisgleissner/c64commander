@@ -122,6 +122,14 @@ describe("SwipeNavigationLayer", () => {
     expect(screen.getByTestId("swipe-slot-config")).toHaveAttribute("inert", "");
   });
 
+  it("maps diagnostics deep links into the settings slot", async () => {
+    renderLayer("/diagnostics/history");
+
+    expect(await screen.findByText("Settings Page")).toBeInTheDocument();
+    expect(screen.getByTestId("swipe-slot-settings")).toHaveAttribute("data-slot-active", "true");
+    expect(screen.getByTestId("location-probe")).toHaveTextContent("/diagnostics/history");
+  });
+
   it("tracks drag progress and cancels back to the same page", async () => {
     renderLayer("/play");
     const runway = await screen.findByTestId("swipe-navigation-runway");

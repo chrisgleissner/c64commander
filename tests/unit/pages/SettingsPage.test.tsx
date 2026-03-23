@@ -16,12 +16,12 @@ import { FolderPicker } from "@/lib/native/folderPicker";
 import { discoverConnection } from "@/lib/connection/connectionManager";
 import { toast } from "@/hooks/use-toast";
 import { addErrorLog, clearLogs, getErrorLogs, getLogs } from "@/lib/logging";
-import { clearTraceEvents, getTraceEvents } from "@/lib/tracing/traceSession";
-import { shareAllDiagnosticsZip, shareDiagnosticsZip } from "@/lib/diagnostics/diagnosticsExport";
+import { requestDiagnosticsOpen } from "@/lib/diagnostics/diagnosticsOverlay";
 import {
   saveAutomaticDemoModeEnabled,
   saveBackgroundRediscoveryIntervalMs,
   saveDebugLoggingEnabled,
+  saveDiscoveryProbeTimeoutMs,
   saveStartupDiscoveryWindowMs,
   saveVolumeSliderPreviewIntervalMs,
 } from "@/lib/config/appSettings";
@@ -64,6 +64,8 @@ const {
   mockUpdateConfig,
   mockRefetch,
   mockEnableDeveloperMode,
+  mockPrimeDiagnosticsOverlaySuppression,
+  mockRequestDiagnosticsOpen,
   mockSetFeatureFlag,
   mockSetTheme,
   mockSetListPreviewLimit,
@@ -75,6 +77,8 @@ const {
   mockUpdateConfig: vi.fn(),
   mockRefetch: vi.fn(),
   mockEnableDeveloperMode: vi.fn(),
+  mockPrimeDiagnosticsOverlaySuppression: vi.fn(),
+  mockRequestDiagnosticsOpen: vi.fn(),
   mockSetFeatureFlag: vi.fn(),
   mockSetTheme: vi.fn(),
   mockSetListPreviewLimit: vi.fn(),
@@ -189,23 +193,8 @@ const renderSettingsPageWithDisplayProfileProvider = () =>
     </DisplayProfileProvider>,
   );
 
-const openDiagnosticsTools = async () => {
-  fireEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
-  return await screen.findByRole("dialog");
-};
-
-const openDiagnosticsFilters = async (dialog: HTMLElement) => {
-  fireEvent.click(within(dialog).getByTestId("open-filters-editor"));
-  return await screen.findByTestId("filters-editor-surface");
-};
-
 vi.mock("@/lib/uiErrors", () => ({
   reportUserError: vi.fn(),
-}));
-
-vi.mock("@/lib/diagnostics/diagnosticsExport", () => ({
-  shareAllDiagnosticsZip: vi.fn(),
-  shareDiagnosticsZip: vi.fn(),
 }));
 
 vi.mock("@/lib/logging", () => ({
@@ -238,9 +227,16 @@ vi.mock("@/lib/connection/connectionManager", () => ({
   dismissDemoInterstitial: vi.fn(),
 }));
 
+vi.mock("@/lib/diagnostics/diagnosticsOverlay", () => ({
+  requestDiagnosticsOpen: mockRequestDiagnosticsOpen,
+}));
+
+vi.mock("@/lib/diagnostics/diagnosticsOverlayState", () => ({
+  primeDiagnosticsOverlaySuppression: mockPrimeDiagnosticsOverlaySuppression,
+  shouldSuppressDiagnosticsSideEffects: () => false,
+}));
+
 vi.mock("@/lib/tracing/traceSession", () => ({
-  clearTraceEvents: vi.fn(),
-  getTraceEvents: vi.fn(() => []),
   recordActionStart: vi.fn(),
   recordActionEnd: vi.fn(),
   recordActionScopeStart: vi.fn(),
@@ -331,9 +327,8 @@ beforeEach(() => {
   featureFlagValueRef.current = false;
   vi.mocked(getLogs).mockReturnValue([]);
   vi.mocked(getErrorLogs).mockReturnValue([]);
-  vi.mocked(getTraceEvents).mockReturnValue([]);
-  vi.mocked(shareAllDiagnosticsZip).mockReset();
-  vi.mocked(shareDiagnosticsZip).mockReset();
+  vi.mocked(requestDiagnosticsOpen).mockReset();
+  mockPrimeDiagnosticsOverlaySuppression.mockReset();
 });
 
 describe("SettingsPage", () => {
@@ -594,277 +589,172 @@ describe("SettingsPage", () => {
     expect(screen.getByText(/real device detected during probe/i)).toBeInTheDocument();
   });
 
-  it("shows evidence type toggles in required order", async () => {
+  it("shows waiting demo probe messaging before the first probe completes", () => {
+    connectionPayloadRef.current = {
+      ...connectionPayloadRef.current,
+      status: {
+        state: "DEMO_ACTIVE",
+        isConnected: true,
+        isConnecting: false,
+        error: null,
+        deviceInfo: null,
+      },
+    };
+    connectionStateRef.current = {
+      lastProbeSucceededAtMs: null,
+      lastProbeFailedAtMs: null,
+    };
+
     renderSettingsPage();
 
-    const dialog = await openDiagnosticsTools();
-
-    expect(within(dialog).getByTestId("evidence-panel")).toBeInTheDocument();
-    expect(within(dialog).getByTestId("evidence-heading")).toBeInTheDocument();
+    expect(screen.getByText(/waiting for initial probe/i)).toBeInTheDocument();
   });
 
-  it("opens diagnostics from a preset request event", async () => {
+  it("shows failed demo probe messaging after an unsuccessful probe", () => {
+    connectionPayloadRef.current = {
+      ...connectionPayloadRef.current,
+      status: {
+        state: "DEMO_ACTIVE",
+        isConnected: true,
+        isConnecting: false,
+        error: null,
+        deviceInfo: null,
+      },
+    };
+    connectionStateRef.current = {
+      lastProbeSucceededAtMs: null,
+      lastProbeFailedAtMs: Date.now(),
+    };
+
     renderSettingsPage();
 
-    await act(async () => {
-      window.dispatchEvent(
-        new CustomEvent("c64u-diagnostics-open-request", {
-          detail: { preset: "settings" },
-        }),
-      );
-    });
-
-    await screen.findByRole("dialog");
+    expect(screen.getByText(/no real device detected in recent probe/i)).toBeInTheDocument();
   });
 
-  it("renders the diagnostics toolbar with share and clear buttons", async () => {
+  it("shows the connected status message when a real device is connected", () => {
+    connectionPayloadRef.current = {
+      ...connectionPayloadRef.current,
+      status: {
+        state: "CONNECTED",
+        isConnected: true,
+        isConnecting: false,
+        error: null,
+        deviceInfo: null,
+      },
+      baseUrl: "http://c64u",
+    };
+
     renderSettingsPage();
 
-    const dialog = await openDiagnosticsTools();
-
-    fireEvent.click(within(dialog).getByTestId("diagnostics-overflow-menu"));
-    expect(within(dialog).getByTestId("diagnostics-share-all")).toBeInTheDocument();
-    expect(within(dialog).getByTestId("diagnostics-share-filtered")).toBeInTheDocument();
-    expect(within(dialog).getByTestId("diagnostics-clear-all-trigger")).toBeInTheDocument();
+    expect(screen.getByText("Connected to http://c64u")).toBeInTheDocument();
   });
 
-  it("filters diagnostics entries by evidence type using the filter editor", async () => {
-    vi.mocked(getErrorLogs).mockReturnValue([
-      {
-        id: "err-1",
-        level: "error",
-        message: "Disk error",
-        timestamp: "2024-01-01T00:00:00.000Z",
-        details: { code: "E-1" },
+  it("shows the connecting state and spinning refresh icon while connecting", () => {
+    connectionPayloadRef.current = {
+      ...connectionPayloadRef.current,
+      status: {
+        state: "CONNECTING",
+        isConnected: false,
+        isConnecting: true,
+        error: null,
+        deviceInfo: null,
       },
-      {
-        id: "err-2",
-        level: "error",
-        message: "Network failure",
-        timestamp: "2024-01-01T00:00:01.000Z",
-        details: { code: "E-2" },
-      },
-    ] as any);
+    };
 
     renderSettingsPage();
 
-    const dialog = await openDiagnosticsTools();
-    const filters = await openDiagnosticsFilters(dialog);
-
-    expect((await within(dialog).findAllByText("ERROR Disk error")).length).toBeGreaterThan(0);
-    expect((await within(dialog).findAllByText("ERROR Network failure")).length).toBeGreaterThan(0);
-
-    fireEvent.click(within(filters).getByRole("button", { name: "Logs" }));
-    fireEvent.click(within(filters).getByRole("button", { name: "✓ Actions" }));
-    fireEvent.click(within(filters).getByRole("button", { name: "✓ Problems" }));
-
-    expect(within(dialog).queryByText("ERROR Disk error")).not.toBeInTheDocument();
-    expect(within(dialog).queryByText("ERROR Network failure")).not.toBeInTheDocument();
+    expect(screen.getByText("Connecting...")).toBeInTheDocument();
+    expect(screen.getByLabelText("Refresh connection").querySelector("svg")).toHaveClass("animate-spin");
   });
 
-  it("clears diagnostics after confirmation", async () => {
-    vi.mocked(getErrorLogs).mockReturnValue([
-      {
-        id: "err-1",
-        level: "error",
-        message: "Error entry",
-        timestamp: new Date().toISOString(),
-        details: { boom: true },
-      },
-    ] as any);
+  it("uses the default device host when saving an empty hostname", async () => {
+    vi.mocked(discoverConnection).mockResolvedValue(undefined);
 
     renderSettingsPage();
 
-    const dialog = await openDiagnosticsTools();
-
-    expect((await within(dialog).findAllByText("ERROR Error entry")).length).toBeGreaterThan(0);
-
-    fireEvent.click(within(dialog).getByTestId("diagnostics-overflow-menu"));
-    fireEvent.click(within(dialog).getByTestId("diagnostics-clear-all-trigger"));
-    const confirm = await screen.findByRole("alertdialog");
-    fireEvent.click(within(confirm).getByTestId("diagnostics-clear-all-confirm"));
-
-    expect(clearTraceEvents).toHaveBeenCalled();
-    expect(clearLogs).toHaveBeenCalled();
-    expect(toast).toHaveBeenCalledWith({ title: "Diagnostics cleared" });
-  });
-
-  it("requires confirmation to clear diagnostics", async () => {
-    renderSettingsPage();
-
-    const dialog = await openDiagnosticsTools();
-
-    fireEvent.click(within(dialog).getByTestId("diagnostics-overflow-menu"));
-    fireEvent.click(within(dialog).getByTestId("diagnostics-clear-all-trigger"));
-    const confirm = await screen.findByRole("alertdialog");
-    fireEvent.click(within(confirm).getByRole("button", { name: /cancel/i }));
-
-    expect(clearTraceEvents).not.toHaveBeenCalled();
-    expect(clearLogs).not.toHaveBeenCalled();
-  });
-
-  it("renders action rows and trace rows after diagnostics updates", async () => {
-    const base = new Date("2024-01-01T00:00:00.000Z").getTime();
-    vi.mocked(getTraceEvents).mockReturnValue([
-      {
-        id: "evt-1",
-        timestamp: new Date(base).toISOString(),
-        relativeMs: 0,
-        type: "action-start",
-        origin: "user",
-        correlationId: "COR-0001",
-        data: { name: "Play song", component: "Test", context: {} },
-      },
-      {
-        id: "evt-2",
-        timestamp: new Date(base + 10).toISOString(),
-        relativeMs: 10,
-        type: "rest-request",
-        origin: "user",
-        correlationId: "COR-0001",
-        data: {
-          method: "GET",
-          url: "/v1/info",
-          normalizedUrl: "/v1/info",
-          headers: {},
-          body: null,
-          target: "real-device",
-        },
-      },
-      {
-        id: "evt-3",
-        timestamp: new Date(base + 25).toISOString(),
-        relativeMs: 25,
-        type: "rest-response",
-        origin: "user",
-        correlationId: "COR-0001",
-        data: {
-          status: 200,
-          durationMs: 15,
-          error: null,
-          body: { product: "c64u" },
-        },
-      },
-      {
-        id: "evt-4",
-        timestamp: new Date(base + 40).toISOString(),
-        relativeMs: 40,
-        type: "ftp-operation",
-        origin: "user",
-        correlationId: "COR-0001",
-        data: {
-          operation: "list",
-          path: "/",
-          result: "success",
-          target: "real-device",
-        },
-      },
-      {
-        id: "evt-5",
-        timestamp: new Date(base + 50).toISOString(),
-        relativeMs: 50,
-        type: "error",
-        origin: "user",
-        correlationId: "COR-0001",
-        data: { message: "Boom" },
-      },
-      {
-        id: "evt-6",
-        timestamp: new Date(base + 60).toISOString(),
-        relativeMs: 60,
-        type: "action-end",
-        origin: "user",
-        correlationId: "COR-0001",
-        data: { status: "success", error: null },
-      },
-    ] as any);
-
-    renderSettingsPage();
-
-    const dialog = await openDiagnosticsTools();
-    const filters = await openDiagnosticsFilters(dialog);
-
-    await act(async () => {
-      window.dispatchEvent(new Event("c64u-traces-updated"));
-    });
-
-    expect(await within(dialog).findByTestId("evidence-row-action-COR-0001")).toBeInTheDocument();
-
-    fireEvent.click(within(filters).getByRole("button", { name: "Traces" }));
+    const hostnameInput = screen.getByLabelText(/c64u hostname \/ ip/i);
+    fireEvent.change(hostnameInput, { target: { value: "   " } });
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
 
     await waitFor(() => {
-      expect(within(dialog).queryAllByTestId(/^evidence-row-trace-/).length).toBeGreaterThan(0);
+      expect(mockUpdateConfig).toHaveBeenCalledWith("c64u", undefined);
     });
   });
 
-  it("exports filtered diagnostics and reports failures", async () => {
-    vi.mocked(shareDiagnosticsZip).mockResolvedValue(undefined);
-    vi.mocked(getErrorLogs).mockReturnValue([
-      { id: "err-x1", level: "error", message: "Export test error", timestamp: new Date().toISOString() },
-    ] as any);
+  it("does not re-enable developer mode when it is already active", () => {
+    developerModeEnabledRef.current = true;
 
     renderSettingsPage();
 
-    const dialog = await openDiagnosticsTools();
+    const aboutCard = screen.getByRole("button", { name: /about/i });
+    for (let index = 0; index < 7; index += 1) {
+      fireEvent.click(aboutCard);
+    }
 
-    await within(dialog).findByText("ERROR Export test error");
-
-    fireEvent.click(within(dialog).getByTestId("diagnostics-overflow-menu"));
-    fireEvent.click(within(dialog).getByTestId("diagnostics-share-filtered"));
-
-    await waitFor(() => {
-      expect(shareDiagnosticsZip).toHaveBeenCalledWith("actions", expect.any(Array));
-    });
-
-    vi.mocked(shareDiagnosticsZip).mockRejectedValue(new Error("export failed"));
-
-    fireEvent.click(within(dialog).getByTestId("diagnostics-overflow-menu"));
-    fireEvent.click(within(dialog).getByTestId("diagnostics-share-filtered"));
-
-    await waitFor(() => {
-      expect(reportUserError).toHaveBeenCalledWith(
-        expect.objectContaining({
-          operation: "DIAGNOSTICS_EXPORT",
-        }),
-      );
-    });
+    expect(mockEnableDeveloperMode).not.toHaveBeenCalled();
   });
 
-  it("shares all diagnostics and reports share-all failures", async () => {
-    vi.mocked(shareAllDiagnosticsZip).mockImplementation(() => undefined);
+  it("commits a zero probe timeout when the number input is cleared", () => {
+    renderSettingsPage();
+
+    const input = screen.getByLabelText(/discovery probe timeout/i);
+    fireEvent.change(input, { target: { value: "not-a-number" } });
+    fireEvent.blur(input);
+
+    expect(saveDiscoveryProbeTimeoutMs).toHaveBeenCalledWith(0);
+  });
+
+  it("reports settings export failures", () => {
+    const createObjectURL = vi.fn(() => {
+      throw new Error("export blocked");
+    });
+    Object.defineProperty(URL, "createObjectURL", {
+      value: createObjectURL,
+      configurable: true,
+    });
 
     renderSettingsPage();
 
-    const dialog = await openDiagnosticsTools();
-    fireEvent.click(within(dialog).getByTestId("diagnostics-overflow-menu"));
-    const shareAllButton = within(dialog).getByTestId("diagnostics-share-all");
+    fireEvent.click(screen.getByRole("button", { name: /export settings/i }));
 
-    fireEvent.click(shareAllButton);
-
-    expect(shareAllDiagnosticsZip).toHaveBeenCalledWith(
+    expect(reportUserError).toHaveBeenCalledWith(
       expect.objectContaining({
-        "error-logs": expect.any(Array),
-        logs: expect.any(Array),
-        traces: expect.any(Array),
-        actions: expect.any(Array),
+        operation: "SETTINGS_EXPORT",
+        description: "export blocked",
       }),
     );
+  });
 
-    vi.mocked(shareAllDiagnosticsZip).mockImplementation(() => {
-      throw new Error("share all failed");
+  it("reports file read failures during settings import", async () => {
+    const file = new File(["{}"], "settings.json", { type: "application/json" });
+    Object.defineProperty(file, "text", {
+      value: vi.fn(async () => {
+        throw new Error("read failed");
+      }),
     });
 
-    fireEvent.click(within(dialog).getByTestId("diagnostics-overflow-menu"));
-    fireEvent.click(within(dialog).getByTestId("diagnostics-share-all"));
+    renderSettingsPage();
+
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(fileInput, { target: { files: buildFileList(file) } });
 
     await waitFor(() => {
       expect(reportUserError).toHaveBeenCalledWith(
         expect.objectContaining({
-          operation: "DIAGNOSTICS_EXPORT",
-          description: "share all failed",
+          operation: "SETTINGS_IMPORT",
+          description: "read failed",
         }),
       );
     });
+  });
+
+  it("requests the global diagnostics overlay from the settings trigger", () => {
+    renderSettingsPage();
+
+    fireEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
+
+    expect(mockPrimeDiagnosticsOverlaySuppression).toHaveBeenCalled();
+    expect(requestDiagnosticsOpen).toHaveBeenCalledWith("settings");
   });
 
   it("requires confirmation when switching into relaxed safety mode", async () => {
@@ -1084,30 +974,6 @@ describe("SettingsPage", () => {
     expect(loadSpy.mock.calls.length).toBeGreaterThan(callsBefore);
   });
 
-  it("handles diagnostics open request event with preset detail", async () => {
-    renderSettingsPage();
-
-    await act(async () => {
-      window.dispatchEvent(
-        new CustomEvent("c64u-diagnostics-open-request", {
-          detail: { preset: "settings" },
-        }),
-      );
-    });
-
-    await screen.findByRole("dialog");
-  });
-
-  it("ignores diagnostics open request event without tab", async () => {
-    renderSettingsPage();
-
-    await act(async () => {
-      window.dispatchEvent(new CustomEvent("c64u-diagnostics-open-request", { detail: {} }));
-    });
-
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-  });
-
   it("handles HVSC feature flag toggle storage error", () => {
     const setItemSpy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
       throw new DOMException("Storage quota exceeded", "QuotaExceededError");
@@ -1178,44 +1044,6 @@ describe("SettingsPage", () => {
     expect(localStorageSpy).toHaveBeenCalledWith("c64u_feature_flag:hvsc_enabled", "0");
     localStorageSpy.mockRestore();
   });
-
-  it("shows traces after enabling the trace type in the filter editor", async () => {
-    const base = new Date("2024-06-01T10:00:00.000Z").getTime();
-    vi.mocked(getTraceEvents).mockReturnValue([
-      {
-        id: "trace-filter-a",
-        timestamp: new Date(base).toISOString(),
-        relativeMs: 0,
-        type: "rest-request",
-        origin: "user",
-        correlationId: "COR-FILTER-1",
-        data: { method: "GET", url: "/v1/info" },
-      },
-      {
-        id: "trace-filter-b",
-        timestamp: new Date(base + 10).toISOString(),
-        relativeMs: 10,
-        type: "rest-request",
-        origin: "user",
-        correlationId: "COR-FILTER-2",
-        data: { method: "POST", url: "/v1/machine:writemem" },
-      },
-    ] as any);
-
-    renderSettingsPage();
-
-    const dialog = await openDiagnosticsTools();
-    const filters = await openDiagnosticsFilters(dialog);
-
-    await act(async () => {
-      window.dispatchEvent(new Event("c64u-traces-updated"));
-    });
-
-    fireEvent.click(within(filters).getByRole("button", { name: "Traces" }));
-
-    expect(await within(dialog).findByTestId("evidence-row-trace-trace-filter-a")).toBeInTheDocument();
-    expect(await within(dialog).findByTestId("evidence-row-trace-trace-filter-b")).toBeInTheDocument();
-  }, 15000);
 
   it("handles non-finite input for discovery timing fields (uses fallback)", async () => {
     renderSettingsPage();

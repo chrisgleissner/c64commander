@@ -176,6 +176,64 @@ const sanitizePayloadPreview = (preview: PayloadPreview | null | undefined, sour
   return preview;
 };
 
+const TRACE_URL_FALLBACK_BASE = "http://localhost";
+
+const parseTraceUrl = (url: string | null | undefined) => {
+  if (!url) return null;
+  try {
+    const base = typeof window !== "undefined" ? window.location.origin : TRACE_URL_FALLBACK_BASE;
+    return new URL(url, base);
+  } catch (error) {
+    console.warn("Failed to parse diagnostics URL", { url, error });
+    return null;
+  }
+};
+
+const normalizeTracePath = (pathname: string | null, query: string | null) => {
+  if (!pathname) return null;
+  return `${pathname}${query ?? ""}`;
+};
+
+const splitTracePath = (rawPath: string | null | undefined) => {
+  if (!rawPath) {
+    return { path: null, query: null };
+  }
+  const questionMarkIndex = rawPath.indexOf("?");
+  if (questionMarkIndex < 0) {
+    return { path: rawPath, query: null };
+  }
+  const path = rawPath.slice(0, questionMarkIndex) || "/";
+  const searchPart = rawPath.slice(questionMarkIndex + 1);
+  return {
+    path,
+    query: searchPart ? `?${searchPart}` : null,
+  };
+};
+
+const resolveRestTraceLocation = (payload: {
+  url?: string | null;
+  normalizedUrl?: string | null;
+  path?: string | null;
+  query?: string | null;
+}) => {
+  const parsed = parseTraceUrl(payload.url ?? null);
+  const protocol = parsed?.protocol ? parsed.protocol.replace(/:$/, "") : null;
+  const hostname = parsed?.hostname ?? null;
+  const port = parsed?.port ? Number(parsed.port) || null : null;
+  const derivedPath = splitTracePath(payload.path ?? null);
+  const path = parsed?.pathname ?? derivedPath.path;
+  const query = parsed?.search ?? payload.query ?? derivedPath.query;
+  const normalizedPath = payload.normalizedUrl ?? normalizeTracePath(path, query);
+  return {
+    protocol,
+    hostname,
+    port,
+    path,
+    query,
+    normalizedPath,
+  };
+};
+
 export const getTraceEvents = () => [...events];
 
 export const replaceTraceEvents = (nextEvents: TraceEvent[]) => {
@@ -326,6 +384,8 @@ export const recordRestRequest = (
     method: string;
     url: string;
     normalizedUrl: string;
+    path?: string | null;
+    query?: string | null;
     headers: TraceHeaders;
     body: unknown;
     payloadPreview?: PayloadPreview | null;
@@ -334,10 +394,16 @@ export const recordRestRequest = (
   const { target, reason } = resolveBackendTarget(payload.url);
   emitBackendDecision(action.origin, action.correlationId, target, reason);
   const redactedBody = redactPayload(payload.body ?? null);
+  const location = resolveRestTraceLocation(payload);
   appendEvent("rest-request", action.origin, action.correlationId, {
     method: payload.method,
     url: payload.url,
-    normalizedUrl: payload.normalizedUrl,
+    normalizedUrl: location.normalizedPath,
+    protocol: location.protocol,
+    hostname: location.hostname,
+    port: location.port,
+    path: location.path,
+    query: location.query,
     headers: redactHeaders(payload.headers),
     body: redactedBody,
     payloadPreview: sanitizePayloadPreview(payload.payloadPreview ?? null, payload.body ?? null),
@@ -353,7 +419,9 @@ export const recordRestResponse = (
   action: TraceActionContext,
   payload: {
     method?: string | null;
+    normalizedUrl?: string | null;
     path?: string | null;
+    query?: string | null;
     url?: string | null;
     status: number | null;
     headers: TraceHeaders;
@@ -365,11 +433,16 @@ export const recordRestResponse = (
   },
 ) => {
   const errorMessage = payload.errorMessage ?? (payload.error ? payload.error.message : null);
-  const normalizedPath = payload.path ?? payload.url ?? "";
   const redactedBody = redactPayload(payload.body ?? null);
+  const location = resolveRestTraceLocation(payload);
   appendEvent("rest-response", action.origin, action.correlationId, {
     method: payload.method ?? null,
-    path: normalizedPath || null,
+    normalizedUrl: location.normalizedPath,
+    protocol: location.protocol,
+    hostname: location.hostname,
+    port: location.port,
+    path: location.path,
+    query: location.query,
     url: payload.url ?? null,
     status: payload.status,
     headers: redactHeaders(payload.headers),
@@ -378,8 +451,8 @@ export const recordRestResponse = (
     durationMs: payload.durationMs,
     error: errorMessage ? redactErrorMessage(errorMessage) : null,
   });
-  if (normalizedPath && Number.isFinite(payload.durationMs)) {
-    recordLatencySample("REST", normalizedPath, payload.durationMs);
+  if (location.normalizedPath && Number.isFinite(payload.durationMs)) {
+    recordLatencySample("REST", location.normalizedPath, payload.durationMs);
   }
 };
 
@@ -387,6 +460,9 @@ export const recordFtpOperation = (
   action: TraceActionContext,
   payload: {
     operation: string;
+    command?: string | null;
+    hostname?: string | null;
+    port?: number | null;
     path: string;
     durationMs?: number | null;
     result: "success" | "failure";
@@ -403,6 +479,9 @@ export const recordFtpOperation = (
   const redactedResponsePayload = redactPayload(payload.responsePayload ?? null);
   appendEvent("ftp-operation", action.origin, action.correlationId, {
     operation: payload.operation,
+    command: payload.command ?? payload.operation.toUpperCase(),
+    hostname: payload.hostname ?? null,
+    port: payload.port ?? null,
     path: payload.path,
     durationMs: payload.durationMs ?? null,
     result: payload.result,

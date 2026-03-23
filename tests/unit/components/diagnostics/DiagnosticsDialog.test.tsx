@@ -270,6 +270,22 @@ describe("DiagnosticsDialog", () => {
     });
   });
 
+  it("surfaces config drift and heat maps from the main diagnostics controls", () => {
+    setViewportWidth(600);
+
+    renderDialog();
+
+    fireEvent.click(screen.getByTestId("open-config-drift-screen"));
+    expect(screen.getByTestId("config-drift-surface")).toBeVisible();
+
+    fireEvent.click(screen.getByTestId("open-rest-heatmap-screen"));
+    expect(screen.getByTestId("heat-map-popup-rest")).toBeVisible();
+
+    fireEvent.click(screen.getByTestId("analytic-popup-close"));
+    fireEvent.click(screen.getByTestId("open-config-heatmap-screen"));
+    expect(screen.getByTestId("heat-map-popup-config")).toBeVisible();
+  });
+
   it("shares only the filtered evidence set", () => {
     setViewportWidth(600);
     const onShareFiltered = vi.fn();
