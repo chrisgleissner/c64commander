@@ -23,8 +23,15 @@ describe("iOS Maestro CI contracts", () => {
         const runner = readRepoFile("scripts", "ci", "ios-maestro-run-flow.sh");
         expect(runner).toContain("write_fallback_junit_report");
         expect(runner).toContain("write_fallback_debug_payload");
+        expect(runner).toContain("Maestro still running:");
+        expect(runner).toContain("IOS_MAESTRO_HEARTBEAT_SECONDS");
         expect(runner).not.toContain("wrote empty array");
         expect(runner).not.toContain("wrote empty stub");
+    });
+
+    it("keeps the fallback payload heredoc terminated before later shell functions", () => {
+        const runner = readRepoFile("scripts", "ci", "ios-maestro-run-flow.sh");
+        expect(runner).toContain("\nPY\n}\n\ncapture_accessibility_snapshot() {");
     });
 
     it("treats fallback debug payloads as diagnostic evidence instead of connectivity failures", () => {

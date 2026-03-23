@@ -105,6 +105,8 @@ Date: 2026-03-23
 
 ## Verification Evidence
 
+- Follow-up root-cause fix: repaired an indented heredoc terminator in `scripts/ci/ios-maestro-run-flow.sh` that caused later shell functions to be swallowed into Python input on CI, producing `command not found` for `capture_accessibility_snapshot` and `run_maestro_and_capture`
+- Follow-up observability improvement: added heartbeat/progress logging for long-running Maestro attempts plus explicit step-level logs for accessibility snapshots, simulator debug payload collection, screenshots, and app install timing
 - Shell syntax checks: `bash -n scripts/ci/ios-maestro-run-flow.sh && bash -n scripts/ci/validate-ios-connectivity.sh && bash -n scripts/ci/validate-ios-maestro-shared-subflows.sh`
 - Focused regression tests: `npx vitest run tests/unit/maestro/maestroFlowContracts.test.ts tests/unit/ci/iosMaestroWorkflowContracts.test.ts tests/unit/ci/telemetryGateWorkflow.test.ts`
 - Focused regression result: 16 tests passed

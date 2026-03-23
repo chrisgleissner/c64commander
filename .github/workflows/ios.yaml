@@ -402,6 +402,7 @@ jobs:
           MAESTRO_DRIVER_STARTUP_TIMEOUT: "420000"
           MAESTRO_MAX_ATTEMPTS: "2"
           MAESTRO_DRIVER_RETRY_BOOT_TIMEOUT_SECONDS: "300"
+          IOS_MAESTRO_HEARTBEAT_SECONDS: "15"
           IOS_DEBUG_PAYLOAD_MAX_ATTEMPTS: "3"
           IOS_DEBUG_PAYLOAD_CONNECT_TIMEOUT_SECONDS: "1"
           IOS_DEBUG_PAYLOAD_CURL_MAX_TIME_SECONDS: "2"
@@ -412,6 +413,8 @@ jobs:
           CI: "true"
         run: |
           set -euo pipefail
+          echo "Starting grouped Maestro runner: group=${{ matrix.group.name }} flows=${{ matrix.group.flows }} udid=${{ steps.simulator.outputs.udid }}"
+          echo "Runner logging config: heartbeat=${IOS_MAESTRO_HEARTBEAT_SECONDS}s attempts=${MAESTRO_MAX_ATTEMPTS} driverTimeout=${MAESTRO_DRIVER_STARTUP_TIMEOUT}"
           mkdir -p artifacts/ios/_infra/telemetry
           (
             status=0
@@ -442,10 +445,14 @@ jobs:
             cat artifacts/ios/_infra/telemetry/monitor-run.log || true
             exit 1
           fi
+          echo "iOS telemetry monitor started with parent pid $(cat artifacts/ios/_infra/telemetry/monitor.pid)"
 
           mock_port_args=()
           if [[ -n "${IOS_MAESTRO_MOCK_PORT:-}" ]]; then
             mock_port_args=(--mock-port "${IOS_MAESTRO_MOCK_PORT}")
+            echo "Using external mock port ${IOS_MAESTRO_MOCK_PORT}"
+          else
+            echo "No external mock port configured for grouped Maestro run"
           fi
 
           export TELEMETRY_FLOW_LIFECYCLE_DIR="artifacts/ios/_infra/telemetry"
@@ -460,8 +467,10 @@ jobs:
           if [[ ${#mock_port_args[@]} -gt 0 ]]; then
             maestro_cmd+=("${mock_port_args[@]}")
           fi
+          echo "Invoking runner: ${maestro_cmd[*]}"
           maestro_status=0
           "${maestro_cmd[@]}" || maestro_status=$?
+          echo "Grouped Maestro runner exited with status ${maestro_status}"
           if [[ "$maestro_status" -ne 0 ]]; then
             exit "$maestro_status"
           fi
