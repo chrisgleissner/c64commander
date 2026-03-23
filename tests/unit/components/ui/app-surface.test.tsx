@@ -48,6 +48,10 @@ describe("App surface primitives", () => {
     expect(dialog).toHaveAttribute("data-app-surface", "sheet");
     expect(dialog).toHaveAttribute("data-sheet-presentation", "sheet");
     expect(dialog.className).toContain("rounded-t-[28px]");
+    expect(dialog.className).toContain("pb-[var(--app-sheet-bottom-clearance)]");
+    expect(dialog.getAttribute("style")).toContain(
+      "--app-sheet-bottom-clearance: calc(5rem + env(safe-area-inset-bottom))",
+    );
   });
 
   it("renders AppSheet as a centered modal on expanded widths", () => {

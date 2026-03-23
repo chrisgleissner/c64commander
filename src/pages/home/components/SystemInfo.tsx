@@ -35,7 +35,7 @@ export function SystemInfo() {
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px]">
         <span className="text-muted-foreground">App</span>
         <span className="font-semibold text-foreground" data-testid="home-system-version">
-          {buildInfo.versionLabel || "Not available"}
+          {buildInfo.appVersion || buildInfo.versionLabel || "Not available"}
         </span>
         <span className="text-muted-foreground">Device</span>
         <span className="font-semibold text-foreground" data-testid="home-system-device">

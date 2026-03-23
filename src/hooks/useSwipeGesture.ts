@@ -125,12 +125,15 @@ export function useSwipeGesture(
 
   const handlePointerDown = useCallback(
     (event: PointerEvent) => {
-      if (stateRef.current.active || !event.isPrimary || event.button !== 0) return;
+      const pointerType = event.pointerType || "mouse";
+      const requiresPrimaryMouseButton = pointerType === "mouse";
+      if (stateRef.current.active || !event.isPrimary || (requiresPrimaryMouseButton && event.button !== 0)) return;
 
       const excluded = isSwipeExcluded(event.target);
       addLog("debug", "[SwipeNav] gesture-start", {
         x: event.clientX,
         y: event.clientY,
+        pointerType,
         excluded,
       });
 

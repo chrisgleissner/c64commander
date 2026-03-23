@@ -51,15 +51,17 @@ describe("telemetry release gate workflow rules", () => {
     expect(workflow).toContain("artifacts/ios/_infra/xcodebuild/**");
   });
 
-  it("creates flow-active.flag before Maestro execution in iOS workflow", () => {
+  it("passes the telemetry lifecycle directory into the iOS Maestro runner", () => {
     const workflow = readWorkflow("ios.yaml");
-    expect(workflow).toContain("touch artifacts/ios/_infra/telemetry/flow-active.flag");
+    expect(workflow).toContain('export TELEMETRY_FLOW_LIFECYCLE_DIR="artifacts/ios/_infra/telemetry"');
   });
 
-  it("transitions lifecycle flags after Maestro execution in iOS workflow", () => {
-    const workflow = readWorkflow("ios.yaml");
-    expect(workflow).toContain("rm -f artifacts/ios/_infra/telemetry/flow-active.flag");
-    expect(workflow).toContain("touch artifacts/ios/_infra/telemetry/flow-complete.flag");
+  it("transitions lifecycle flags inside the per-flow iOS Maestro runner", () => {
+    const script = readFileSync(path.resolve(process.cwd(), "scripts/ci/ios-maestro-run-flow.sh"), "utf8");
+    expect(script).toContain('FLOW_LIFECYCLE_DIR="${TELEMETRY_FLOW_LIFECYCLE_DIR:-}"');
+    expect(script).toContain("set_flow_lifecycle_state active");
+    expect(script).toContain("set_flow_lifecycle_state complete");
+    expect(script).toContain("set_flow_lifecycle_state reset");
   });
 
   it("hardens fuzz monitor lifecycle to always persist exit codes", () => {

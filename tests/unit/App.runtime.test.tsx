@@ -7,7 +7,7 @@
  */
 
 import React from "react";
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -303,6 +303,42 @@ describe("App runtime wiring", () => {
     expect(await screen.findByText("Settings Page")).toBeInTheDocument();
     expect(screen.getByTestId("swipe-slot-play")).toHaveAttribute("data-slot-active", "false");
     expect(screen.getByTestId("swipe-slot-settings")).toHaveAttribute("data-slot-active", "true");
+  });
+
+  it("wraps from the last page to the first page on a touch swipe left", async () => {
+    window.history.pushState({}, "", "/docs");
+    render(<App />);
+
+    expect(await screen.findByText("Docs Page")).toBeInTheDocument();
+
+    const container = screen.getByTestId("swipe-navigation-container");
+    const runway = screen.getByTestId("swipe-navigation-runway");
+
+    fireEvent.pointerDown(container, {
+      button: -1,
+      pointerId: 91,
+      isPrimary: true,
+      pointerType: "touch",
+      clientX: 220,
+      clientY: 180,
+    });
+    fireEvent.pointerMove(container, {
+      pointerId: 91,
+      pointerType: "touch",
+      clientX: 120,
+      clientY: 184,
+    });
+    fireEvent.pointerUp(container, {
+      pointerId: 91,
+      pointerType: "touch",
+      clientX: 120,
+      clientY: 184,
+    });
+
+    fireEvent.transitionEnd(runway, { target: runway });
+
+    expect(await screen.findByText("Home Page")).toBeInTheDocument();
+    expect(screen.getByTestId("swipe-slot-home")).toHaveAttribute("data-slot-active", "true");
   });
 
   it("invalidates visible-route queries on visibility resume", async () => {

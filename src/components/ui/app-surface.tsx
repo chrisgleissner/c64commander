@@ -15,6 +15,8 @@ import { ModalCloseButton } from "@/components/ui/modal-close-button";
 
 type AppSheetMode = "sheet" | "modal";
 
+const APP_SHEET_BOTTOM_CLEARANCE = "calc(5rem + env(safe-area-inset-bottom))";
+
 const AppSheet = DialogPrimitive.Root;
 const AppDialog = DialogPrimitive.Root;
 
@@ -63,9 +65,16 @@ type AppSheetContentProps = React.ComponentPropsWithoutRef<typeof DialogPrimitiv
 };
 
 const AppSheetContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive.Content>, AppSheetContentProps>(
-  ({ className, children, showClose = true, closeTestId, ...props }, ref) => {
+  ({ className, children, showClose = true, closeTestId, style, ...props }, ref) => {
     const { profile } = useDisplayProfile();
     const mode: AppSheetMode = profile === "expanded" ? "modal" : "sheet";
+    const contentStyle =
+      mode === "sheet"
+        ? ({
+            ...((style as React.CSSProperties | undefined) ?? {}),
+            "--app-sheet-bottom-clearance": APP_SHEET_BOTTOM_CLEARANCE,
+          } as React.CSSProperties)
+        : style;
 
     return (
       <AppSheetModeContext.Provider value={mode}>
@@ -73,7 +82,12 @@ const AppSheetContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive
           <AppSurfaceOverlay />
           <DialogPrimitive.Content
             ref={ref}
-            className={cn(resolveAppSheetClassName(mode), className)}
+            className={cn(
+              resolveAppSheetClassName(mode),
+              mode === "sheet" ? "pb-[var(--app-sheet-bottom-clearance)]" : null,
+              className,
+            )}
+            style={contentStyle}
             data-app-surface="sheet"
             data-sheet-presentation={mode}
             {...props}
@@ -113,9 +127,7 @@ const AppSheetFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivEle
     <div
       className={cn(
         "shrink-0 border-t border-border bg-background/95 px-4 pt-3 backdrop-blur supports-[backdrop-filter]:bg-background/85",
-        mode === "sheet"
-          ? "pb-[calc(1rem+env(safe-area-inset-bottom))]"
-          : "pb-[calc(1rem+env(safe-area-inset-bottom))]",
+        mode === "sheet" ? "pb-[max(1rem,env(safe-area-inset-bottom))]" : "pb-[calc(1rem+env(safe-area-inset-bottom))]",
         className,
       )}
       {...props}

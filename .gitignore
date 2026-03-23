@@ -22,6 +22,7 @@ ci-artifacts/
 dist/
 dist-ssr/
 .tmp*
+vite.config.ts.timestamp-*.mjs
 nohup.out
 __pycache__/
 *.py[cod]

@@ -9,6 +9,7 @@
 import type { Page } from "@playwright/test";
 import type { TraceEvent } from "../src/lib/tracing/types";
 import type { HealthCheckRunResult } from "../src/lib/diagnostics/healthCheckEngine";
+import { buildPayloadPreviewFromBytes, buildPayloadPreviewFromJson } from "../src/lib/tracing/payloadPreview";
 
 export const FIXED_NOW_ISO = "2024-03-20T12:34:56.000Z";
 export const FIXED_NOW_MS = Date.parse(FIXED_NOW_ISO);
@@ -135,25 +136,56 @@ export const PLAYLIST_SEED = {
 
 export const LOG_SEED = [
   {
-    id: "log-1",
+    id: "log-debug-cache-warmup",
+    level: "debug",
+    message: "Cache warmup finished",
+    timestamp: "2024-03-20T12:17:20.000Z",
+    details: { cache: "source-index", entries: 42, durationMs: 36 },
+  },
+  {
+    id: "log-info-config-refresh",
     level: "info",
-    message: "Config refresh complete",
-    timestamp: "2024-03-20T11:58:20.000Z",
+    message: "REST config refresh completed",
+    timestamp: "2024-03-20T12:18:10.000Z",
     details: { endpoint: "/v1/configs", durationMs: 180 },
   },
   {
-    id: "log-2",
+    id: "log-warn-circadian",
     level: "warn",
-    message: "Background probe slow",
-    timestamp: "2024-03-20T11:59:10.000Z",
-    details: { timeoutMs: 1200 },
+    message: "Lighting Studio circadian resolution failed",
+    timestamp: "2024-03-20T12:19:10.000Z",
+    details: {
+      profile: "sunrise",
+      fallback: "static palette",
+      error: {
+        name: "RangeError",
+        message: "invalid sunrise offset",
+        stack:
+          "RangeError: invalid sunrise offset\n    at resolveCircadianPalette (src/hooks/useLightingStudio.ts:395:13)\n    at applyCircadianPreset (src/hooks/useLightingStudio.ts:500:9)\n    at async saveLightingProfile (src/hooks/useLightingStudio.ts:518:7)",
+      },
+      errorName: "RangeError",
+      errorStack:
+        "RangeError: invalid sunrise offset\n    at resolveCircadianPalette (src/hooks/useLightingStudio.ts:395:13)\n    at applyCircadianPreset (src/hooks/useLightingStudio.ts:500:9)\n    at async saveLightingProfile (src/hooks/useLightingStudio.ts:518:7)",
+    },
   },
   {
-    id: "log-3",
+    id: "log-error-disk-import",
     level: "error",
-    message: "Disk mount failed",
-    timestamp: "2024-03-20T12:00:05.000Z",
-    details: { drive: "A", reason: "Disk not found" },
+    message: "FTP disk import failed",
+    timestamp: "2024-03-20T12:20:05.000Z",
+    details: {
+      path: "/Usb0/Games/Corrupt.d64",
+      code: "E_FTP_IMPORT",
+      error: {
+        name: "FtpDiskImportError",
+        message: "550 Corrupt disk image",
+        stack:
+          "FtpDiskImportError: 550 Corrupt disk image\n    at importDisk (src/lib/disks/ftpDiskImport.ts:75:11)\n    at async loadDisk (src/components/disks/HomeDiskManager.tsx:860:19)\n    at async onSelectDisk (src/components/disks/HomeDiskManager.tsx:908:17)\n    at async HTMLButtonElement.handleImportClick (src/components/disks/HomeDiskManager.tsx:940:13)",
+      },
+      errorName: "FtpDiskImportError",
+      errorStack:
+        "FtpDiskImportError: 550 Corrupt disk image\n    at importDisk (src/lib/disks/ftpDiskImport.ts:75:11)\n    at async loadDisk (src/components/disks/HomeDiskManager.tsx:860:19)\n    at async onSelectDisk (src/components/disks/HomeDiskManager.tsx:908:17)\n    at async HTMLButtonElement.handleImportClick (src/components/disks/HomeDiskManager.tsx:940:13)",
+    },
   },
 ];
 
@@ -170,6 +202,12 @@ type SeedScenario = {
     status: number;
     durationMs: number;
     error: string | null;
+    requestHeaders?: Record<string, string | string[]>;
+    requestBody?: unknown;
+    requestPayloadPreview?: ReturnType<typeof buildPayloadPreviewFromJson>;
+    responseHeaders?: Record<string, string | string[]>;
+    responseBody?: unknown;
+    responsePayloadPreview?: ReturnType<typeof buildPayloadPreviewFromJson>;
   };
   ftp?: {
     operation: string;
@@ -177,6 +215,10 @@ type SeedScenario = {
     durationMs: number;
     result: "success" | "failure";
     error: string | null;
+    requestPayload?: unknown;
+    requestPayloadPreview?: ReturnType<typeof buildPayloadPreviewFromJson>;
+    responsePayload?: unknown;
+    responsePayloadPreview?: ReturnType<typeof buildPayloadPreviewFromBytes>;
   };
   errorMessage?: string;
 };
@@ -190,6 +232,12 @@ const createRestScenario = ({
   status = 200,
   durationMs,
   error = null,
+  requestHeaders,
+  requestBody,
+  requestPayloadPreview,
+  responseHeaders,
+  responseBody,
+  responsePayloadPreview,
   errorMessage,
 }: {
   minutesAgo: number;
@@ -200,6 +248,12 @@ const createRestScenario = ({
   status?: number;
   durationMs: number;
   error?: string | null;
+  requestHeaders?: SeedScenario["rest"]["requestHeaders"];
+  requestBody?: SeedScenario["rest"]["requestBody"];
+  requestPayloadPreview?: SeedScenario["rest"]["requestPayloadPreview"];
+  responseHeaders?: SeedScenario["rest"]["responseHeaders"];
+  responseBody?: SeedScenario["rest"]["responseBody"];
+  responsePayloadPreview?: SeedScenario["rest"]["responsePayloadPreview"];
   errorMessage?: string;
 }): SeedScenario => ({
   minutesAgo,
@@ -211,6 +265,12 @@ const createRestScenario = ({
     status,
     durationMs,
     error,
+    ...(requestHeaders ? { requestHeaders } : {}),
+    ...(requestBody !== undefined ? { requestBody } : {}),
+    ...(requestPayloadPreview ? { requestPayloadPreview } : {}),
+    ...(responseHeaders ? { responseHeaders } : {}),
+    ...(responseBody !== undefined ? { responseBody } : {}),
+    ...(responsePayloadPreview ? { responsePayloadPreview } : {}),
   },
   errorMessage,
 });
@@ -228,6 +288,10 @@ const createFtpScenario = ({
   ftpDurationMs,
   ftpResult = "success",
   ftpError = null,
+  ftpRequestPayload,
+  ftpRequestPayloadPreview,
+  ftpResponsePayload,
+  ftpResponsePayloadPreview,
   errorMessage,
 }: {
   minutesAgo: number;
@@ -242,6 +306,10 @@ const createFtpScenario = ({
   ftpDurationMs: number;
   ftpResult?: "success" | "failure";
   ftpError?: string | null;
+  ftpRequestPayload?: SeedScenario["ftp"]["requestPayload"];
+  ftpRequestPayloadPreview?: SeedScenario["ftp"]["requestPayloadPreview"];
+  ftpResponsePayload?: SeedScenario["ftp"]["responsePayload"];
+  ftpResponsePayloadPreview?: SeedScenario["ftp"]["responsePayloadPreview"];
   errorMessage?: string;
 }): SeedScenario => ({
   minutesAgo,
@@ -260,11 +328,23 @@ const createFtpScenario = ({
     durationMs: ftpDurationMs,
     result: ftpResult,
     error: ftpError,
+    ...(ftpRequestPayload !== undefined ? { requestPayload: ftpRequestPayload } : {}),
+    ...(ftpRequestPayloadPreview ? { requestPayloadPreview: ftpRequestPayloadPreview } : {}),
+    ...(ftpResponsePayload !== undefined ? { responsePayload: ftpResponsePayload } : {}),
+    ...(ftpResponsePayloadPreview ? { responsePayloadPreview: ftpResponsePayloadPreview } : {}),
   },
   errorMessage,
 });
 
 const buildTraceSeed = (): TraceEvent[] => {
+  const diagnosticsSnapshotRequestBody = {
+    includeRawTraces: true,
+    format: "zip",
+  };
+  const diagnosticsSnapshotResponseBody = {
+    snapshotId: "snap-2024-03-20-123456",
+  };
+  const ftpSidBytes = Uint8Array.from({ length: 320 }, (_, index) => (index * 37) % 256);
   const scenarios: SeedScenario[] = [
     createRestScenario({ minutesAgo: 236, actionName: "connection.poll", path: "/v1/info", durationMs: 58 }),
     createRestScenario({ minutesAgo: 228, actionName: "config.tree.sync", path: "/v1/configs", durationMs: 188 }),
@@ -520,10 +600,13 @@ const buildTraceSeed = (): TraceEvent[] => {
     }),
     createRestScenario({ minutesAgo: 30, actionName: "stream.latency", path: "/v1/streams/latency", durationMs: 86 }),
     createRestScenario({
-      minutesAgo: 24,
+      minutesAgo: 22,
       actionName: "runner.status",
       path: "/v1/runners/script/status",
+      status: 503,
       durationMs: 132,
+      error: "Script runner unavailable",
+      errorMessage: "Script runner unavailable during diagnostics collection",
     }),
     createRestScenario({
       minutesAgo: 18,
@@ -532,6 +615,17 @@ const buildTraceSeed = (): TraceEvent[] => {
       method: "POST",
       path: "/v1/diagnostics/snapshot",
       durationMs: 174,
+      requestHeaders: {
+        authorization: "Bearer sec...[redacted]",
+        "content-type": "application/json",
+        "x-device-token": "c64...[redacted]",
+      },
+      requestBody: diagnosticsSnapshotRequestBody,
+      responseHeaders: {
+        "content-type": "application/json",
+        "set-cookie": "SID=abc...[redacted]",
+      },
+      responseBody: diagnosticsSnapshotResponseBody,
     }),
     createFtpScenario({
       minutesAgo: 12,
@@ -550,6 +644,10 @@ const buildTraceSeed = (): TraceEvent[] => {
       ftpOperation: "RETR",
       ftpPath: "/Usb0/Music/intro.sid",
       ftpDurationMs: 186,
+      ftpRequestPayload: { host: "c64u", path: "/Usb0/Music/intro.sid" },
+      ftpRequestPayloadPreview: buildPayloadPreviewFromJson({ host: "c64u", path: "/Usb0/Music/intro.sid" }),
+      ftpResponsePayload: { sizeBytes: ftpSidBytes.byteLength, mimeType: "audio/prs.sid" },
+      ftpResponsePayloadPreview: buildPayloadPreviewFromBytes(ftpSidBytes),
     }),
     createFtpScenario({
       minutesAgo: 4,
@@ -611,6 +709,9 @@ const buildTraceSeed = (): TraceEvent[] => {
           path: scenario.rest.path,
           url: scenario.rest.path,
           normalizedUrl: scenario.rest.path,
+          headers: scenario.rest.requestHeaders ?? {},
+          body: scenario.rest.requestBody ?? null,
+          payloadPreview: scenario.rest.requestPayloadPreview ?? null,
           target: "real-device",
         },
       },
@@ -625,6 +726,9 @@ const buildTraceSeed = (): TraceEvent[] => {
           method: scenario.rest.method,
           path: scenario.rest.path,
           status: scenario.rest.status,
+          headers: scenario.rest.responseHeaders ?? {},
+          body: scenario.rest.responseBody ?? null,
+          payloadPreview: scenario.rest.responsePayloadPreview ?? null,
           durationMs: scenario.rest.durationMs,
           error: scenario.rest.error,
         },
@@ -644,6 +748,10 @@ const buildTraceSeed = (): TraceEvent[] => {
           path: scenario.ftp.path,
           durationMs: scenario.ftp.durationMs,
           result: scenario.ftp.result,
+          requestPayload: scenario.ftp.requestPayload ?? null,
+          requestPayloadPreview: scenario.ftp.requestPayloadPreview ?? null,
+          responsePayload: scenario.ftp.responsePayload ?? null,
+          responsePayloadPreview: scenario.ftp.responsePayloadPreview ?? null,
           error: scenario.ftp.error,
           target: "real-device",
         },
@@ -948,13 +1056,83 @@ export const installListPreviewLimit = async (page: Page, limit: number) => {
 
 export const seedDiagnosticsTraces = async (page: Page) => {
   await page.evaluate((seed) => {
-    const tracing = (
-      window as Window & {
-        __c64uTracing?: { seedTraces?: (events: TraceEvent[]) => void };
+    return new Promise<void>((resolve) => {
+      const handler = () => {
+        window.clearTimeout(timeout);
+        window.removeEventListener("c64u-traces-updated", handler);
+        setTimeout(resolve, 50);
+      };
+      const timeout = window.setTimeout(() => {
+        window.removeEventListener("c64u-traces-updated", handler);
+        resolve();
+      }, 250);
+      window.addEventListener("c64u-traces-updated", handler);
+      const tracing = (
+        window as Window & {
+          __c64uTracing?: { seedTraces?: (events: TraceEvent[]) => void };
+        }
+      ).__c64uTracing;
+      tracing?.seedTraces?.(seed as TraceEvent[]);
+      if (!tracing?.seedTraces) {
+        window.clearTimeout(timeout);
+        window.removeEventListener("c64u-traces-updated", handler);
+        resolve();
       }
-    ).__c64uTracing;
-    tracing?.seedTraces?.(seed as TraceEvent[]);
+    });
   }, TRACE_SEED);
+};
+
+export const seedDiagnosticsTracesForAction = async (page: Page, actionName: string) => {
+  const correlationIds = new Set(
+    TRACE_SEED.filter((event) => event.type === "action-start" && event.data.name === actionName).map(
+      (event) => event.correlationId,
+    ),
+  );
+  const filteredSeed = TRACE_SEED.filter((event) => correlationIds.has(event.correlationId));
+  await page.evaluate((seed) => {
+    return new Promise<void>((resolve) => {
+      const handler = () => {
+        window.clearTimeout(timeout);
+        window.removeEventListener("c64u-traces-updated", handler);
+        setTimeout(resolve, 50);
+      };
+      const timeout = window.setTimeout(() => {
+        window.removeEventListener("c64u-traces-updated", handler);
+        resolve();
+      }, 250);
+      window.addEventListener("c64u-traces-updated", handler);
+      const tracing = (
+        window as Window & {
+          __c64uTracing?: { seedTraces?: (events: TraceEvent[]) => void };
+        }
+      ).__c64uTracing;
+      tracing?.seedTraces?.(seed as TraceEvent[]);
+      if (!tracing?.seedTraces) {
+        window.clearTimeout(timeout);
+        window.removeEventListener("c64u-traces-updated", handler);
+        resolve();
+      }
+    });
+  }, filteredSeed);
+};
+
+export const seedDiagnosticsLogs = async (page: Page) => {
+  await page.evaluate((seedLogs) => {
+    return new Promise<void>((resolve) => {
+      const handler = () => {
+        window.clearTimeout(timeout);
+        window.removeEventListener("c64u-logs-updated", handler);
+        setTimeout(resolve, 50);
+      };
+      const timeout = window.setTimeout(() => {
+        window.removeEventListener("c64u-logs-updated", handler);
+        resolve();
+      }, 250);
+      window.addEventListener("c64u-logs-updated", handler);
+      localStorage.setItem("c64u_app_logs", JSON.stringify(seedLogs));
+      window.dispatchEvent(new CustomEvent("c64u-logs-updated"));
+    });
+  }, LOG_SEED);
 };
 
 export const seedDiagnosticsAnalytics = async (page: Page) => {

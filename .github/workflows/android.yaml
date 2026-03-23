@@ -181,6 +181,16 @@ jobs:
             npm run build
           fi
 
+      - name: Install tesseract-ocr
+        run: |
+          if command -v sudo >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends tesseract-ocr
+          else
+            apt-get update
+            apt-get install -y --no-install-recommends tesseract-ocr
+          fi
+
       - name: Run screenshot tests
         env:
           PLAYWRIGHT_SKIP_BUILD: "1"
@@ -489,16 +499,7 @@ jobs:
 
       - name: Resolve app version
         run: |
-          if [[ "${GITHUB_REF_TYPE}" == "tag" && -n "${GITHUB_REF_NAME}" ]]; then
-            APP_VERSION_RAW="${GITHUB_REF_NAME}"
-          else
-            APP_VERSION_RAW="$(git describe --tags --exact-match 2>/dev/null || true)"
-            if [[ -z "$APP_VERSION_RAW" ]]; then
-              APP_VERSION_RAW="$(node -p "require('./package.json').version" 2>/dev/null || true)"
-            fi
-          fi
-
-          APP_VERSION="${APP_VERSION_RAW#v}"
+          APP_VERSION="$(node scripts/resolve-build-version.mjs)"
           VERSION_CODE=$((1600 + GITHUB_RUN_NUMBER))
 
           echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
@@ -1231,16 +1232,7 @@ jobs:
 
       - name: Resolve app version
         run: |
-          if [[ "${GITHUB_REF_TYPE}" == "tag" && -n "${GITHUB_REF_NAME}" ]]; then
-            APP_VERSION_RAW="${GITHUB_REF_NAME}"
-          else
-            APP_VERSION_RAW="$(git describe --tags --exact-match 2>/dev/null || true)"
-            if [[ -z "$APP_VERSION_RAW" ]]; then
-              APP_VERSION_RAW="$(node -p "require('./package.json').version" 2>/dev/null || true)"
-            fi
-          fi
-
-          APP_VERSION="${APP_VERSION_RAW#v}"
+          APP_VERSION="$(node scripts/resolve-build-version.mjs)"
           VERSION_CODE=$((1600 + GITHUB_RUN_NUMBER))
 
           echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
@@ -1376,15 +1368,7 @@ jobs:
 
       - name: Resolve app version
         run: |
-          if [[ "${GITHUB_REF_TYPE}" == "tag" && -n "${GITHUB_REF_NAME}" ]]; then
-            APP_VERSION_RAW="${GITHUB_REF_NAME}"
-          else
-            APP_VERSION_RAW="$(git describe --tags --exact-match 2>/dev/null || true)"
-            if [[ -z "$APP_VERSION_RAW" ]]; then
-              APP_VERSION_RAW="$(node -p "require('./package.json').version" 2>/dev/null || true)"
-            fi
-          fi
-          APP_VERSION="${APP_VERSION_RAW#v}"
+          APP_VERSION="$(node scripts/resolve-build-version.mjs)"
           echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
 
       - name: Resolve signing availability

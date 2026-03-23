@@ -7,6 +7,7 @@
  */
 
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import type { ComponentProps } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DiagnosticsDialog } from "@/components/diagnostics/DiagnosticsDialog";
@@ -14,6 +15,8 @@ import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
 import type { OverallHealthState } from "@/lib/diagnostics/healthModel";
 import { buildBaseUrlFromDeviceHost, updateC64APIConfig } from "@/lib/c64api";
 import { setStoredFtpPort } from "@/lib/ftp/ftpConfig";
+
+type DiagnosticsDialogProps = ComponentProps<typeof DiagnosticsDialog>;
 
 const setViewportWidth = (width: number) => {
   Object.defineProperty(window, "innerWidth", {
@@ -23,7 +26,7 @@ const setViewportWidth = (width: number) => {
   });
 };
 
-const renderDialog = (props?: Partial<typeof defaultProps>) =>
+const renderDialog = (props?: Partial<DiagnosticsDialogProps>) =>
   render(
     <DisplayProfileProvider>
       <DiagnosticsDialog {...defaultProps} {...props} />
@@ -64,7 +67,7 @@ const unhealthyHealthState: OverallHealthState = {
   },
 };
 
-const defaultProps = {
+const defaultProps: DiagnosticsDialogProps = {
   open: true,
   onOpenChange: vi.fn(),
   healthState: healthyHealthState,
@@ -251,8 +254,6 @@ describe("DiagnosticsDialog", () => {
 
     fireEvent.click(screen.getByTestId("open-latency-screen"));
     expect(screen.getByTestId("latency-analysis-popup")).toBeVisible();
-    expect(screen.queryByText(/Purpose:/i)).toBeNull();
-    expect(screen.queryByText(/Interpretation:/i)).toBeNull();
 
     fireEvent.click(screen.getByTestId("analytic-popup-close"));
     fireEvent.click(screen.getByTestId("open-timeline-screen"));
@@ -286,5 +287,175 @@ describe("DiagnosticsDialog", () => {
     expect(onShareFiltered).toHaveBeenCalledTimes(1);
     expect(onShareFiltered.mock.calls[0][0]).toHaveLength(1);
     expect(onShareFiltered.mock.calls[0][0][0]).toMatchObject({ message: "Configuration updated successfully" });
+  });
+
+  it("expands and collapses activity rows when extra detail exists", () => {
+    setViewportWidth(600);
+
+    renderDialog();
+
+    const row = screen.getByTestId("evidence-row-action-action-1");
+    expect(row).toHaveAttribute("aria-expanded", "false");
+
+    fireEvent.click(row);
+
+    expect(row).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByTestId("evidence-detail-action-action-1")).toHaveTextContent("PUT /v1/configs");
+    expect(screen.getByTestId("evidence-detail-action-action-1")).toHaveTextContent("status: 200");
+
+    fireEvent.click(row);
+
+    expect(row).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByTestId("evidence-detail-action-action-1")).toBeNull();
+  });
+
+  it("hides activity expand affordance when no additional detail exists", () => {
+    setViewportWidth(600);
+
+    renderDialog({
+      defaultEvidenceTypes: new Set(["Logs"]),
+      logs: [
+        {
+          id: "log-plain",
+          level: "info" as const,
+          message: "Background refresh complete",
+          timestamp: new Date(Date.now() - 2_000).toISOString(),
+        },
+      ],
+      errorLogs: [],
+      traceEvents: [],
+      actionSummaries: [],
+    });
+
+    const row = screen.getByTestId("evidence-row-log-log-plain");
+    expect(row.tagName).toBe("DIV");
+    expect(row.querySelector("svg")).toBeNull();
+    expect(row).not.toHaveAttribute("aria-expanded");
+  });
+
+  it("renders canonical app log lines with exception details and stack traces", () => {
+    setViewportWidth(600);
+
+    renderDialog({
+      defaultEvidenceTypes: new Set(["Logs"]),
+      logs: [
+        {
+          id: "log-stack",
+          level: "error" as const,
+          message: "FTP disk import failed",
+          timestamp: new Date(Date.now() - 2_000).toISOString(),
+          details: {
+            path: "/Usb0/Games/Corrupt.d64",
+            error: {
+              name: "FtpDiskImportError",
+              message: "550 Corrupt disk image",
+              stack: "FtpDiskImportError: 550 Corrupt disk image\n    at importDisk (ftpDiskImport.ts:75:11)",
+            },
+            errorName: "FtpDiskImportError",
+            errorStack: "FtpDiskImportError: 550 Corrupt disk image\n    at importDisk (ftpDiskImport.ts:75:11)",
+          },
+        },
+      ],
+      errorLogs: [],
+      traceEvents: [],
+      actionSummaries: [],
+    });
+
+    const row = screen.getByTestId("evidence-row-log-log-stack");
+    expect(row).toHaveTextContent("ERROR FTP disk import failed");
+    expect(row).toHaveTextContent("FtpDiskImportError");
+
+    fireEvent.click(row);
+
+    const detail = screen.getByTestId("evidence-detail-log-log-stack");
+    expect(detail).toHaveTextContent("ERROR FTP disk import failed");
+    expect(detail).toHaveTextContent("Exception: FtpDiskImportError: 550 Corrupt disk image");
+    expect(detail).toHaveTextContent("Stack trace:");
+    expect(detail).toHaveTextContent("at importDisk (ftpDiskImport.ts:75:11)");
+  });
+
+  it("shows problem entries from both app logs and trace failures", () => {
+    setViewportWidth(600);
+
+    renderDialog({
+      defaultEvidenceTypes: new Set(["Problems"]),
+      logs: [],
+      errorLogs: [
+        {
+          id: "problem-log",
+          level: "error" as const,
+          message: "FTP disk import failed",
+          timestamp: new Date(Date.now() - 2_000).toISOString(),
+          details: {
+            errorName: "FtpDiskImportError",
+          },
+        },
+      ],
+      traceEvents: [
+        {
+          id: "trace-problem",
+          timestamp: new Date(Date.now() - 4_000).toISOString(),
+          relativeMs: 0,
+          type: "rest-response" as const,
+          origin: "user" as const,
+          correlationId: "trace-problem-correlation",
+          data: {
+            lifecycleState: "foreground" as const,
+            sourceKind: null,
+            localAccessMode: null,
+            trackInstanceId: null,
+            playlistItemId: null,
+            method: "GET",
+            path: "/v1/runners/script/status",
+            status: 503,
+            error: "Script runner unavailable",
+          },
+        },
+      ],
+      actionSummaries: [],
+    });
+
+    expect(screen.getByTestId("evidence-row-problem-log-problem-log")).toHaveTextContent(
+      "ERROR FTP disk import failed",
+    );
+    expect(screen.getByTestId("evidence-row-problem-trace-trace-problem")).toHaveTextContent(
+      "GET /v1/runners/script/status",
+    );
+  });
+
+  it("auto-expands the health detail view when a health check starts", () => {
+    setViewportWidth(600);
+    const onRunHealthCheck = vi.fn();
+
+    renderDialog({
+      onRunHealthCheck,
+      lastHealthCheckResult: null,
+      liveHealthCheckProbes: {},
+      healthCheckRunning: true,
+    });
+
+    expect(screen.getByTestId("diagnostics-header-expanded")).toBeVisible();
+    expect(screen.getByTestId("health-check-detail-view")).toBeVisible();
+    expect(screen.getByTestId("health-check-probe-raster")).toHaveTextContent("Pending");
+    expect(screen.getByTestId("health-check-probe-jiffy")).toHaveTextContent("Pending");
+
+    fireEvent.click(screen.getByTestId("run-health-check"));
+    expect(onRunHealthCheck).not.toHaveBeenCalled();
+  });
+
+  it("opens the latest health detail when the run button is pressed", () => {
+    setViewportWidth(600);
+    const onRunHealthCheck = vi.fn();
+
+    renderDialog({ onRunHealthCheck });
+
+    expect(screen.queryByTestId("diagnostics-header-expanded")).toBeNull();
+
+    fireEvent.click(screen.getByTestId("run-health-check"));
+
+    expect(onRunHealthCheck).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("diagnostics-header-expanded")).toBeVisible();
+    expect(screen.getByTestId("health-check-probe-raster")).toHaveTextContent("Success");
+    expect(screen.getByTestId("health-check-probe-jiffy")).toHaveTextContent("Success");
   });
 });

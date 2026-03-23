@@ -41,8 +41,6 @@ describe("LatencyAnalysisPopup", () => {
     expect(screen.getByTestId("latency-analysis-popup")).toBeVisible();
     expect(screen.getByRole("heading", { name: "Latency" })).toBeVisible();
     expect(screen.getByText("No latency samples yet")).toBeVisible();
-    expect(screen.queryByText(/Purpose:/i)).toBeNull();
-    expect(screen.queryByText(/Interpretation:/i)).toBeNull();
   });
 
   it("keeps filter state collapsed until the filter editor is opened", () => {

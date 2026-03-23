@@ -59,14 +59,7 @@ jobs:
 
       - name: Resolve app version
         run: |
-          if [[ "${GITHUB_REF_TYPE}" == "tag" && -n "${GITHUB_REF_NAME}" ]]; then
-            APP_VERSION="${GITHUB_REF_NAME}"
-          else
-            APP_VERSION="$(git describe --tags --exact-match 2>/dev/null || true)"
-            if [[ -z "$APP_VERSION" ]]; then
-              APP_VERSION="$(node -p "require('./package.json').version" 2>/dev/null || true)"
-            fi
-          fi
+          APP_VERSION="$(node scripts/resolve-build-version.mjs)"
           if [[ -z "$APP_VERSION" ]]; then
             APP_VERSION="0.0.${GITHUB_RUN_NUMBER}"
           fi
@@ -163,14 +156,7 @@ jobs:
 
       - name: Resolve app version
         run: |
-          if [[ "${GITHUB_REF_TYPE}" == "tag" && -n "${GITHUB_REF_NAME}" ]]; then
-            APP_VERSION="${GITHUB_REF_NAME}"
-          else
-            APP_VERSION="$(git describe --tags --exact-match 2>/dev/null || true)"
-            if [[ -z "$APP_VERSION" ]]; then
-              APP_VERSION="$(node -p "require('./package.json').version" 2>/dev/null || true)"
-            fi
-          fi
+          APP_VERSION="$(node scripts/resolve-build-version.mjs)"
           if [[ -z "$APP_VERSION" ]]; then
             APP_VERSION="0.0.${GITHUB_RUN_NUMBER}"
           fi
@@ -457,12 +443,12 @@ jobs:
             exit 1
           fi
 
-          touch artifacts/ios/_infra/telemetry/flow-active.flag
-
           mock_port_args=()
           if [[ -n "${IOS_MAESTRO_MOCK_PORT:-}" ]]; then
             mock_port_args=(--mock-port "${IOS_MAESTRO_MOCK_PORT}")
           fi
+
+          export TELEMETRY_FLOW_LIFECYCLE_DIR="artifacts/ios/_infra/telemetry"
 
           maestro_cmd=(
             bash scripts/ci/ios-maestro-run-flow.sh
@@ -476,8 +462,6 @@ jobs:
           fi
           maestro_status=0
           "${maestro_cmd[@]}" || maestro_status=$?
-          rm -f artifacts/ios/_infra/telemetry/flow-active.flag
-          touch artifacts/ios/_infra/telemetry/flow-complete.flag
           if [[ "$maestro_status" -ne 0 ]]; then
             exit "$maestro_status"
           fi
@@ -917,14 +901,7 @@ jobs:
 
       - name: Resolve app version
         run: |
-          if [[ "${GITHUB_REF_TYPE}" == "tag" && -n "${GITHUB_REF_NAME}" ]]; then
-            APP_VERSION="${GITHUB_REF_NAME}"
-          else
-            APP_VERSION="$(git describe --tags --exact-match 2>/dev/null || true)"
-            if [[ -z "$APP_VERSION" ]]; then
-              APP_VERSION="$(node -p "require('./package.json').version" 2>/dev/null || true)"
-            fi
-          fi
+          APP_VERSION="$(node scripts/resolve-build-version.mjs)"
           if [[ -z "$APP_VERSION" ]]; then
             APP_VERSION="0.0.${GITHUB_RUN_NUMBER}"
           fi

@@ -8,7 +8,7 @@
 
 import type { PayloadPreview, TraceHeaders, TraceHeaderValue } from "@/lib/tracing/types";
 
-export const TRACE_PAYLOAD_PREVIEW_BYTE_LIMIT = 64;
+export const TRACE_PAYLOAD_PREVIEW_BYTE_LIMIT = 256;
 
 const getTextEncoder = () => {
   if (typeof TextEncoder !== "undefined") {

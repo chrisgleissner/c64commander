@@ -27,6 +27,7 @@ import { getPlatform } from "@/lib/native/platform";
 import { getCurrentTraceIdCounters, nextTraceEventId, resetTraceIds, setTraceIdCounters } from "@/lib/tracing/traceIds";
 import { shouldSuppressDiagnosticsSideEffects } from "@/lib/diagnostics/diagnosticsOverlayState";
 import { recordLatencySample } from "@/lib/diagnostics/latencyTracker";
+import { buildPayloadPreviewFromJson, buildPayloadPreviewFromText } from "@/lib/tracing/payloadPreview";
 
 const RETENTION_WINDOW_MS = 30 * 60 * 1000;
 const MAX_EVENT_COUNT = 25_000;
@@ -138,6 +139,41 @@ const emitBackendDecision = (
     selectedTarget: target,
     reason,
   });
+};
+
+const isBinaryBodySummary = (value: unknown) => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  const type = record.type;
+  return (
+    typeof type === "string" &&
+    ["binary", "blob", "file", "array-buffer", "array-buffer-view"].includes(type) &&
+    typeof record.sizeBytes === "number"
+  );
+};
+
+const containsSensitiveKeys = (value: unknown): boolean => {
+  if (!value || typeof value !== "object") return false;
+  if (Array.isArray(value)) return value.some((entry) => containsSensitiveKeys(entry));
+  return Object.entries(value as Record<string, unknown>).some(
+    ([key, entry]) =>
+      /password|token|authorization|auth|secret|credential|cookie/i.test(key) || containsSensitiveKeys(entry),
+  );
+};
+
+const sanitizePayloadPreview = (preview: PayloadPreview | null | undefined, source: unknown) => {
+  if (!preview) return null;
+  if (!containsSensitiveKeys(source) || isBinaryBodySummary(source)) {
+    return preview;
+  }
+  const redactedSource = redactPayload(source);
+  if (typeof redactedSource === "string") {
+    return buildPayloadPreviewFromText(redactedSource);
+  }
+  if (redactedSource && typeof redactedSource === "object") {
+    return buildPayloadPreviewFromJson(redactedSource);
+  }
+  return preview;
 };
 
 export const getTraceEvents = () => [...events];
@@ -297,13 +333,14 @@ export const recordRestRequest = (
 ) => {
   const { target, reason } = resolveBackendTarget(payload.url);
   emitBackendDecision(action.origin, action.correlationId, target, reason);
+  const redactedBody = redactPayload(payload.body ?? null);
   appendEvent("rest-request", action.origin, action.correlationId, {
     method: payload.method,
     url: payload.url,
     normalizedUrl: payload.normalizedUrl,
     headers: redactHeaders(payload.headers),
-    body: redactPayload(payload.body ?? null),
-    payloadPreview: redactPayload(payload.payloadPreview ?? null),
+    body: redactedBody,
+    payloadPreview: sanitizePayloadPreview(payload.payloadPreview ?? null, payload.body ?? null),
     target,
   });
 };
@@ -329,14 +366,15 @@ export const recordRestResponse = (
 ) => {
   const errorMessage = payload.errorMessage ?? (payload.error ? payload.error.message : null);
   const normalizedPath = payload.path ?? payload.url ?? "";
+  const redactedBody = redactPayload(payload.body ?? null);
   appendEvent("rest-response", action.origin, action.correlationId, {
     method: payload.method ?? null,
     path: normalizedPath || null,
     url: payload.url ?? null,
     status: payload.status,
     headers: redactHeaders(payload.headers),
-    body: redactPayload(payload.body ?? null),
-    payloadPreview: redactPayload(payload.payloadPreview ?? null),
+    body: redactedBody,
+    payloadPreview: sanitizePayloadPreview(payload.payloadPreview ?? null, payload.body ?? null),
     durationMs: payload.durationMs,
     error: errorMessage ? redactErrorMessage(errorMessage) : null,
   });
@@ -361,15 +399,23 @@ export const recordFtpOperation = (
 ) => {
   const { target, reason } = resolveBackendTarget(null);
   emitBackendDecision(action.origin, action.correlationId, target, reason);
+  const redactedRequestPayload = redactPayload(payload.requestPayload ?? null);
+  const redactedResponsePayload = redactPayload(payload.responsePayload ?? null);
   appendEvent("ftp-operation", action.origin, action.correlationId, {
     operation: payload.operation,
     path: payload.path,
     durationMs: payload.durationMs ?? null,
     result: payload.result,
-    requestPayload: payload.requestPayload ?? null,
-    requestPayloadPreview: payload.requestPayloadPreview ?? null,
-    responsePayload: payload.responsePayload ?? null,
-    responsePayloadPreview: payload.responsePayloadPreview ?? null,
+    requestPayload: redactedRequestPayload,
+    requestPayloadPreview: sanitizePayloadPreview(
+      payload.requestPayloadPreview ?? null,
+      payload.requestPayload ?? null,
+    ),
+    responsePayload: redactedResponsePayload,
+    responsePayloadPreview: sanitizePayloadPreview(
+      payload.responsePayloadPreview ?? null,
+      payload.responsePayload ?? null,
+    ),
     error: payload.error ? redactErrorMessage(payload.error.message) : null,
     target,
   });

@@ -392,6 +392,16 @@ test.describe("Layout overflow safeguards", () => {
   });
 
   layoutTest("disk dialogs stay within viewport @layout", async ({ page }, testInfo) => {
+    const closeDialog = async (dialog: Locator) => {
+      const dismissButton = dialog.getByRole("button", { name: /^(Cancel|Close)$/ }).first();
+      if (await dismissButton.isVisible().catch(() => false)) {
+        await dismissButton.click();
+      } else {
+        await page.keyboard.press("Escape");
+      }
+      await expect(dialog).toBeHidden();
+    };
+
     await seedDiskLibrary(page, [
       {
         id: "local:/Extremely/Long/Path/With/Deep/Structure/And-A-Super-Long-Disk-Name-That-Should-Not-Overflow-Device-Width.d64",
@@ -411,7 +421,7 @@ test.describe("Layout overflow safeguards", () => {
     const addDialog = page.getByRole("dialog");
     await expectDialogWithinViewport(page, addDialog);
     await snap(page, testInfo, "disks-add-items-dialog");
-    await page.keyboard.press("Escape");
+    await closeDialog(addDialog);
 
     const row = page.getByTestId("disk-row").first();
     await row.getByRole("button", { name: "Item actions" }).click();
@@ -419,21 +429,21 @@ test.describe("Layout overflow safeguards", () => {
     const groupDialog = page.getByRole("dialog");
     await expectDialogWithinViewport(page, groupDialog);
     await snap(page, testInfo, "disk-group-dialog");
-    await page.keyboard.press("Escape");
+    await closeDialog(groupDialog);
 
     await row.getByRole("button", { name: "Item actions" }).click();
     await page.getByRole("menuitem", { name: "Rename disk…" }).click();
     const renameDialog = page.getByRole("dialog");
     await expectDialogWithinViewport(page, renameDialog);
     await snap(page, testInfo, "disk-rename-dialog");
-    await page.keyboard.press("Escape");
+    await closeDialog(renameDialog);
 
     await row.getByRole("button", { name: "Item actions" }).click();
     await page.getByRole("menuitem", { name: "Remove from collection" }).click();
     const deleteDialog = page.getByRole("dialog");
     await expectDialogWithinViewport(page, deleteDialog);
     await snap(page, testInfo, "disk-delete-dialog");
-    await page.keyboard.press("Escape");
+    await closeDialog(deleteDialog);
 
     await expectNoHorizontalOverflow(page);
   });

@@ -210,10 +210,10 @@ describe("traceSession", () => {
         data: expect.objectContaining({
           headers: {
             "content-type": "application/octet-stream",
-            "x-password": "***",
+            "x-password": "sec...[redacted]",
           },
           body: {
-            password: "***",
+            password: "sec...[redacted]",
             type: "blob",
             sizeBytes: 2,
           },
@@ -250,13 +250,50 @@ describe("traceSession", () => {
         type: "rest-response",
         data: expect.objectContaining({
           headers: {
-            authorization: "***",
+            authorization: "Bearer tok...[redacted]",
             "content-type": "application/json",
           },
           body: {
-            token: "***",
+            token: "sec...[redacted]",
             ok: true,
           },
+          payloadPreview: expect.objectContaining({ ascii: expect.stringContaining("sec...[redacted]") }),
+        }),
+      }),
+    );
+  });
+
+  it("redacts FTP payload secrets before persisting trace events", () => {
+    vi.stubGlobal("window", {
+      dispatchEvent: vi.fn(),
+      setTimeout: vi.fn(),
+      CustomEvent: class {},
+    });
+
+    recordFtpOperation(action, {
+      operation: "list",
+      path: "/private",
+      result: "success",
+      error: null,
+      requestPayload: { host: "c64u", password: "hunter2" },
+      requestPayloadPreview: {
+        byteCount: 37,
+        previewByteCount: 37,
+        hex: "7b 22 68 6f 73 74 22 3a 22 63 36 34 75 22 2c 22 70 61 73 73 77 6f 72 64 22 3a 22 68 75 6e 74 65 72 32 22 7d",
+        ascii: '{"host":"c64u","password":"hunter2"}',
+        truncated: false,
+      },
+    });
+
+    expect(getTraceEvents()).toContainEqual(
+      expect.objectContaining({
+        type: "ftp-operation",
+        data: expect.objectContaining({
+          requestPayload: {
+            host: "c64u",
+            password: "hun...[redacted]",
+          },
+          requestPayloadPreview: expect.objectContaining({ ascii: expect.stringContaining("hun...[redacted]") }),
         }),
       }),
     );
@@ -420,6 +457,7 @@ describe("traceSession", () => {
     });
     recordRestResponse(action, {
       status: 500,
+      headers: {},
       body: null,
       durationMs: 50,
       error: null,
@@ -438,6 +476,7 @@ describe("traceSession", () => {
     });
     recordRestResponse(action, {
       status: 500,
+      headers: {},
       body: null,
       durationMs: 50,
       error: new Error("from error obj"),
@@ -455,6 +494,7 @@ describe("traceSession", () => {
     });
     recordRestResponse(action, {
       status: 200,
+      headers: {},
       body: null,
       durationMs: 50,
       error: null,
@@ -487,7 +527,13 @@ describe("traceSession", () => {
         type: "backend-decision",
         origin: "user",
         correlationId: "D-1",
-        data: {},
+        data: {
+          lifecycleState: "foreground",
+          sourceKind: null,
+          localAccessMode: null,
+          trackInstanceId: null,
+          playlistItemId: null,
+        },
       },
     ]);
     // Recording another decision for same correlation should be suppressed
@@ -549,14 +595,18 @@ describe("traceSession", () => {
       setTimeout: vi.fn(),
       CustomEvent: class {},
     });
+    const textEncoderHolder = globalThis as typeof globalThis & { TextEncoder?: typeof TextEncoder };
     const origTE = globalThis.TextEncoder;
-    // @ts-expect-error -- deliberately removing TextEncoder
-    delete globalThis.TextEncoder;
+    delete textEncoderHolder.TextEncoder;
     try {
       recordActionStart(action);
       expect(getTraceEvents()).toHaveLength(1);
     } finally {
-      globalThis.TextEncoder = origTE;
+      if (origTE) {
+        textEncoderHolder.TextEncoder = origTE;
+      } else {
+        delete textEncoderHolder.TextEncoder;
+      }
     }
   });
 
@@ -619,6 +669,7 @@ describe("traceSession", () => {
     });
     recordRestResponse(action, {
       status: null,
+      headers: {},
       body: null,
       durationMs: 30,
       error: new Error("network error"),
