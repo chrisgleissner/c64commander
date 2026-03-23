@@ -54,17 +54,41 @@ const resolveAppVersion = () =>
 // Returns an empty string when the file has not been generated yet (e.g. dev mode
 // without a prior build, or direct vite invocations that bypass prebuild).
 const readGeneratedVersionLabel = (): string => {
+  const versionTsPath = path.resolve(__dirname, "src/version.ts");
   try {
-    const versionTsPath = path.resolve(__dirname, "src/version.ts");
-    if (fs.existsSync(versionTsPath)) {
-      const content = fs.readFileSync(versionTsPath, "utf-8");
-      const m = content.match(/APP_VERSION\s*=\s*'([^']*)'/);
-      return m?.[1] ?? "";
+    if (!fs.existsSync(versionTsPath)) {
+      // No generated version file yet (e.g. dev mode without a prior build).
+      return "";
     }
-  } catch {
-    // Fall through to the git-describe fallback below.
+    const content = fs.readFileSync(versionTsPath, "utf-8");
+    const m = content.match(/APP_VERSION\s*=\s*'([^']*)'/);
+    if (!m) {
+      console.warn(
+        `[build] ${versionTsPath} exists but APP_VERSION pattern was not found; falling back to git-derived version label.`,
+      );
+      return "";
+    }
+    const label = m[1];
+    if (!label) {
+      console.warn(
+        `[build] ${versionTsPath} contains an empty APP_VERSION; falling back to git-derived version label.`,
+      );
+      return "";
+    }
+    return label;
+  } catch (err) {
+    const error = err as NodeJS.ErrnoException;
+    if (error && error.code === "ENOENT") {
+      // Treat a missing file the same as "not generated yet".
+      return "";
+    }
+    console.warn(
+      `[build] Failed to read generated version label from ${versionTsPath}: ${
+        (error && error.message) || String(error)
+      }`,
+    );
+    return "";
   }
-  return "";
 };
 
 const resolveAppVersionLabel = (gitDescribeValue: string, gitShaValue: string, fallbackVersion: string) => {

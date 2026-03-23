@@ -19,7 +19,7 @@
     "format:check:yaml": "prettier --check \"**/*.{yaml,yml}\"",
     "format:check:ts": "prettier --check \"**/*.{ts,tsx,json}\"",
     "format:check:eslint": "eslint .",
-    "prebuild": "bash scripts/resolve-version.sh && npm run notices:generate",
+    "prebuild": "{ [ -n \"${VITE_APP_VERSION:-}\" ] || bash scripts/resolve-version.sh; } && npm run notices:generate",
     "postbuild": "bash scripts/package-third-party-notice.sh",
     "build": "node scripts/run-vite.mjs build",
     "build:web-server": "tsc -p web/server/tsconfig.json",
