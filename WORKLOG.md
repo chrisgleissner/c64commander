@@ -1,7 +1,33 @@
 # Release Pipeline, Telemetry, and Bottom-Sheet Worklog
 
 Status: IN_PROGRESS
-Date: 2026-03-22
+Date: 2026-03-22 (updated 2026-03-23)
+
+## 2026-03-23T00:00:00Z - Deterministic Git Versioning — Phase 1 (Analysis)
+
+- Classification: `CODE_CHANGE` (affects build scripts, vite.config, playwright test)
+- Findings:
+  - All generated files are already gitignored; no pathspec exclusion needed.
+  - `src/version.ts` does not yet exist (not tracked); it will be generated and gitignored.
+  - Current `vite.config.ts` uses `git describe --dirty --always` which is correct for all-tracked-files dirty detection, but uses a 3-char SHA suffix via `shortenGitId` — spec requires 5.
+  - Current test `resolveExpectedVersion()` accepts 8-char SHA suffix and arbitrary suffixes — spec requires strict 5-char lowercase hex or no suffix.
+  - `prebuild` only runs `notices:generate`; the version script must run before it.
+  - CI builds set `VITE_APP_VERSION` (web/android) which bypasses the version label derivation entirely and uses the exact tag — this path is correct and unchanged.
+  - Decision: introduce `scripts/resolve-version.sh`, gitignore `src/version.ts`, add script to `prebuild`, update vite.config.ts local path to prefer generated label, tighten playwright test to strict exact-match assertions.
+
+## 2026-03-23T00:15:00Z - Deterministic Git Versioning — Phase 2-8 (Implementation)
+
+- Created `scripts/resolve-version.sh` with:
+  - `git describe --tags --abbrev=0` for tag
+  - `git rev-parse --short=5 HEAD` for 5-char SHA
+  - `git diff --quiet HEAD --` for dirty detection (tracked files only)
+  - Guards: fail if no tag, fail if `src/version.ts` is tracked
+  - Generates `src/version.ts` and prints version to stdout
+- Updated `.gitignore` to add `src/version.ts`
+- Updated `package.json` `prebuild`: prepend `bash scripts/resolve-version.sh &&`
+- Updated `vite.config.ts`: added `readGeneratedVersionLabel()` that reads `src/version.ts`, used as primary version label for local builds (CI path unchanged)
+- Updated `playwright/ui.spec.ts` `resolveExpectedVersion()` to mirror script logic; updated assertion to strict exact text match
+- Ran `npm run lint && npm run test && npm run build` — all pass
 
 ## 2026-03-22T00:00:00Z - Step 1 - Phase 1 analysis
 

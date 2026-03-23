@@ -158,6 +158,9 @@ c64scope/**/logs/
 c64scope/**/dist/
 c64scope/**/node_modules/
 
+# Generated version file (written by scripts/resolve-version.sh at build time)
+src/version.ts
+
 # Symlinked projects
 1541ultimate
 android-mcp-server
